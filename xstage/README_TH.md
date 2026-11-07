@@ -1,5 +1,12 @@
 # X-Stage Karaoke Online
 
-หน้านี้ใช้ GitHub Pages, Google OAuth และ Google Drive ของผู้ใช้ โดยอ่าน `web-manifest.json` ที่สร้างจาก X-Stage Karaoke บน PC
+เว็บ static สำหรับ GitHub Pages ใช้ Google OAuth และ Google Drive ของผู้ใช้
 
-คัดลอก `config.js.example` เป็น `config.js` แล้วใส่ Google OAuth Web Client ID ก่อนใช้งาน
+1. ติดตั้งและตั้งค่า X-Stage Karaoke บน PC
+2. กดซิงก์เพื่อสร้าง `web-manifest.json` และชุดข้อมูลต่อผู้ใช้ใน Google Drive
+3. คัดลอก `config.js.example` เป็น `config.js` แล้วใส่ Google OAuth Web Client ID
+4. เผยแพร่โฟลเดอร์นี้บน GitHub Pages
+5. ผู้ใช้เปิดเว็บ ล็อกอิน Google และค้นหา/เล่นเพลงจาก Drive
+
+เว็บใช้ manifest สำหรับรายการเพลง และไม่เปิด SQLite จาก Drive โดยตรง
+
