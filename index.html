@@ -1,2 +1,40 @@
-<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>X-Stage Karaoke Online</title><link rel="stylesheet" href="style.css"></head><body><main><header><h1>X-Stage Karaoke Online</h1><button id="login">เข้าสู่ระบบ Google</button><span id="account"></span></header><p>เปิดคลังเพลงที่ซิงค์จาก X-Stage Karaoke สำหรับ Windows ผ่าน Google Drive ของคุณ</p><section id="status">กรุณาเข้าสู่ระบบเพื่อเปิดคลังเพลงของคุณ</section><section id="library" hidden><input id="search" placeholder="ค้นหาชื่อเพลง / นักร้อง"><div id="songs"></div><audio id="player" controls></audio></section><footer><p><a href="privacy.html">นโยบายความเป็นส่วนตัว</a></p></footer></main><script src="config.js"></script><script src="https://accounts.google.com/gsi/client" async defer></script><script src="app.js" defer></script></body></html>
-
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>X-Stage Karaoke Online</title>
+  <link rel="icon" href="assets/xstage-logo.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <img class="logo" src="assets/xstage-logo.jpg" alt="" width="54" height="54">
+      <div><strong>X-Stage Karaoke</strong><span class="eyebrow">ONLINE</span></div>
+      <a class="privacy" href="privacy.html">นโยบายความเป็นส่วนตัว</a>
+    </header>
+    <div class="stage" role="img" aria-label="เวทีและโลโก้ X-Stage Karaoke จากรุ่น Windows"></div>
+    <section class="panel access" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">GOOGLE DRIVE</p>
+        <h1 id="page-title">คลังเพลงของคุณ</h1>
+        <p>ค้นหาและเล่นเพลงที่ซิงก์จาก X-Stage Karaoke สำหรับ Windows</p>
+      </div>
+      <button id="login" type="button"><span aria-hidden="true">G</span> เข้าสู่ระบบ Google</button>
+      <div id="account"></div>
+      <p id="status" role="status">เข้าสู่ระบบเพื่อเปิดคลังเพลงใน Google Drive</p>
+    </section>
+    <section id="library" class="panel" hidden>
+      <label for="search">ค้นหาเพลง</label>
+      <input id="search" type="search" placeholder="ชื่อเพลง / นักร้อง / รหัสเพลง">
+      <audio id="player" controls></audio>
+      <div id="songs"></div>
+    </section>
+    <footer><a href="privacy.html">นโยบายความเป็นส่วนตัว</a></footer>
+  </main>
+  <script src="config.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
