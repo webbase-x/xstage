@@ -72,3 +72,6 @@
   .stage .search-dock #search{font-size:.72rem}
   .stage .stage-metrics{right:6px;padding:5px 6px}
 }
+
+/* Respect HTML hidden during remembered login and after successful authentication. */
+.login-gate[hidden]{display:none!important}
