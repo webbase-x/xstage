@@ -126,7 +126,8 @@ function login() {
         setStatus(error?.type === 'popup_closed' ? 'ปิดหน้าต่าง Google ก่อนเข้าสู่ระบบ' : 'เข้าสู่ระบบ Google ไม่สำเร็จ', 'error');
       }
     });
-    client.requestAccessToken({prompt:'consent'});
+    // Do not force Google's consent screen on every login. Google decides when re-consent is required.
+    client.requestAccessToken({prompt:''});
   } catch (e) { ui.login.disabled = ui.gateLogin.disabled = false; setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
