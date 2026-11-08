@@ -18,6 +18,9 @@ const state = {
   queue: [], history: [], current: null, lyrics: null, objectUrl: '',
   requestId: 0, controller: null, authId: 0, loading: false
 };
+const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
+function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
+function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
 const player = ui.player;
 player.volume = 0.8;
 
@@ -83,6 +86,7 @@ async function openDrive(token, authId) {
   if (authId !== state.authId) return;
   state.token = token;
   state.accountSub = account.sub;
+  rememberLogin(true);
   state.manifest = catalog;
   state.songs = catalog.songs.filter(playable);
   state.selectedIndex = 0;
@@ -98,7 +102,7 @@ async function openDrive(token, authId) {
   renderSongs(); renderQueue();
   ui.search.focus();
 }
-function login() {
+function login({automatic=false} = {}) {
   if (typeof google === 'undefined' || !google.accounts?.oauth2?.initTokenClient) {
     setStatus('ไม่สามารถโหลด Google Sign-In ได้ กรุณาตรวจอินเทอร์เน็ตและรีเฟรชหน้า', 'error'); return;
   }
@@ -106,7 +110,7 @@ function login() {
     setStatus('ยังไม่ได้กำหนด Google OAuth Web Client ID สำหรับเว็บไซต์นี้', 'error'); return;
   }
   ui.login.disabled = ui.gateLogin.disabled = true;
-  setStatus('กำลังเปิดการอนุญาต Google…');
+  setStatus(automatic?'กำลังเชื่อมต่อบัญชี Google ที่เคยใช้…':'กำลังเปิดการอนุญาต Google…');
   const authId = ++state.authId;
   try {
     const client = google.accounts.oauth2.initTokenClient({
@@ -115,7 +119,7 @@ function login() {
       callback: async result => {
         if (authId !== state.authId) return;
         ui.login.disabled = ui.gateLogin.disabled = false;
-        if (!result?.access_token) { setStatus('ไม่ได้รับสิทธิ์จาก Google กรุณาลองเข้าสู่ระบบใหม่', 'error'); return; }
+        if (!result?.access_token) { setStatus('กรุณากดเข้าสู่ระบบ Google เพื่อเชื่อมต่ออีกครั้ง', 'error'); return; }
         resetPrivate({revoke:false, keepAuth:true});
         try { await openDrive(result.access_token,authId); }
         catch (e) { if (authId === state.authId) setStatus(e.message, 'error'); }
@@ -131,6 +135,7 @@ function login() {
   } catch (e) { ui.login.disabled = ui.gateLogin.disabled = false; setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
+  if(revoke)rememberLogin(false);
   if (!keepAuth) state.authId++;
   const oldToken = state.token;
   state.requestId++;
@@ -335,7 +340,7 @@ function drawLyrics(){
 }
 
 // The stage clock runs independently in index.html.
-ui.login.addEventListener('click',login);ui.gateLogin.addEventListener('click',login);
+ui.login.addEventListener('click',()=>login());ui.gateLogin.addEventListener('click',()=>login());
 ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
 ui.search.addEventListener('input',()=>{state.selectedIndex=0;renderSongs();});
 ui.search.addEventListener('keydown',onSearchKey);
@@ -363,3 +368,17 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('beforeunload',()=>{state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
+// Revisit the stage immediately for returning users. Browser never stores access tokens.
+(function restoreRememberedLogin(){
+  if(!hasRememberedLogin())return;
+  ui.gate.hidden=true;
+  setStatus('กำลังตรวจสอบสิทธิ์ Google สำหรับคลังเพลงส่วนตัว…');
+  let attempts=0;
+  function attempt(){
+    if(state.token||state.authId)return;
+    if(typeof google!=='undefined'&&google.accounts?.oauth2?.initTokenClient){login({automatic:true});return;}
+    if(++attempts>=30){setStatus('เชื่อมต่อ Google อัตโนมัติไม่ได้ กรุณากดเข้าสู่ระบบ Google','error');return;}
+    setTimeout(attempt,200);
+  }
+  attempt();
+})();
