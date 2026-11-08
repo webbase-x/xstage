@@ -9,3 +9,28 @@
 @media (max-width:760px){.app-shell{padding:0 9px}.topbar{height:64px}.brand-mark{height:37px;width:37px}.brand-name strong{font-size:1rem}.brand-name small{font-size:.48rem}.account-name{max-width:100px;font-size:.63rem}.button-google{font-size:.72rem;padding:7px 9px}.studio-layout{display:flex;flex-direction:column;gap:10px}.stage-column{order:0}.search-dock{order:1}.queue-dock{order:2}.stage{min-height:410px;aspect-ratio:16/9;flex:none}.stage-label{top:10px;left:12px}.stage-caption{bottom:9px;left:12px}.dock{min-height:280px;max-height:none}.song-results{min-height:190px;max-height:330px}.queue-list{min-height:100px;max-height:240px}.transport-row{flex-direction:column;gap:9px}.transport-main{justify-content:center}.transport-right{justify-content:space-around}.transport-panel{padding:9px 12px}.gate-panel{padding:16px}.gate-panel h1{font-size:1.45rem}.gate-panel p{font-size:.77rem;margin-bottom:12px}.gate-panel small{font-size:.6rem}.gate-glow{font-size:.55rem}.stage-idle{bottom:22%}.bottom-bar{height:auto;min-height:42px;flex-wrap:wrap;gap:6px;padding:9px 2px}.bottom-bar span:first-child{display:none}}
 @media (max-width:400px){.brand-name small{display:none}.brand-mark{height:34px;width:34px}.account-name{display:none}.stage{min-height:390px}.speed-control{font-size:.62rem}.volume-control input{width:55px}.repeat-control{font-size:.62rem}}
 @media (prefers-reduced-motion:reduce){button:not(:disabled){transition:none}}
+/* X-Stage PC search overlay — results share the playing stage, not a left sidebar */
+.studio-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(235px,23%);grid-template-rows:minmax(0,1fr);grid-template-areas:none}
+.stage-column{grid-column:1;grid-area:auto}.queue-dock{grid-column:2;grid-area:auto;max-height:calc(100dvh - 141px)}
+.stage{position:relative}.stage .search-dock{position:absolute;z-index:8;top:12px;left:12px;right:12px;max-height:min(55vh,440px);min-height:0;width:auto;margin:0;display:flex;overflow:hidden;background:#061b2cf2;backdrop-filter:blur(15px);border:1px solid #30718f;border-radius:13px}
+.stage .search-dock .dock-head{padding:8px 12px 3px}.stage .search-dock h2,.stage .search-dock .overline{display:none}.stage .search-dock .search-box{margin:1px 11px 5px}.stage .search-dock #search{height:40px;font-size:1rem}.stage .search-dock .song-results{max-height:290px;min-height:0;flex:1;overflow-y:auto}.stage .search-dock .song-item{padding:7px 11px;margin:2px}.stage .search-dock .song-details strong{font-size:.84rem}
+.stage .search-dock:not(.pc-expanded) .song-results,.stage .search-dock:not(.pc-expanded) .library-hint,.stage .search-dock:not(.pc-expanded) .dock-foot{display:none}
+.stage .search-dock:not(.pc-expanded) .dock-head{display:none}
+.stage .search-dock.pc-expanded{box-shadow:0 16px 45px #000a}
+.stage-label{top:105px}.stage .search-dock.pc-expanded ~ .stage-label{opacity:.5}
+.pc-search-fold{border:1px solid #37798b;border-radius:7px;background:#153b54;color:#c0f5ff;min-width:33px;min-height:30px}
+.pc-favorite-toggle{display:inline-flex;align-items:center;gap:5px;color:#f8d38f;white-space:nowrap}.pc-favorite-toggle input{accent-color:#37dbce}
+.stage .search-dock .library-hint{display:flex;flex-wrap:wrap;gap:6px}.stage .search-dock .library-hint span:first-of-type{margin-left:auto}
+.pc-tools{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:7px 0 0}.pc-tools button,.pc-queue-files button{flex-shrink:0;border:1px solid #34637e;background:#102c44;color:#d8edf6;border-radius:7px;padding:7px 9px;font-size:.71rem}.pc-tools button:hover,.pc-queue-files button:hover{background:#1d5770}
+.pc-tools button.pc-active{border-color:#50dec4;color:#8affe3}
+.pc-queue-files{display:flex;gap:7px}.pc-queue-files button{flex:1}
+#pc-dialog{width:min(94vw,600px);max-height:82dvh;border-radius:15px;border:1px solid #32687f;background:#0c263a;color:#e2f3fc;padding:0;box-shadow:0 28px 100px #000c}#pc-dialog::backdrop{background:#000a;backdrop-filter:blur(4px)}
+#pc-dialog header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #2a5368;padding:13px 18px}
+#pc-dialog header button{border:0;background:#173e55;color:#fff;border-radius:7px;padding:6px 11px}
+#pc-dialog-body{max-height:70dvh;overflow:auto;padding:16px 19px;display:flex;flex-direction:column;gap:11px;font-size:.85rem}
+#pc-dialog-body label{display:flex;align-items:center;justify-content:space-between;gap:12px}#pc-dialog-body input[type=range]{width:60%;accent-color:#4ae5c9}#pc-dialog-body button{border:1px solid #3b7288;border-radius:7px;background:#174259;color:#fff;padding:8px 12px;text-align:left;cursor:pointer}
+#pc-dialog-body p{margin:0;line-height:1.7;color:#b3d4df}#pc-dialog-body .pc-history-row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #315166;padding:8px 0}
+#pc-dialog-body .pc-history-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stage.pc-bg-off{background-image:none!important;background-color:#020915!important}.login-gate{z-index:12}
+@media(max-width:1250px){.studio-layout{grid-template-columns:minmax(0,1fr) minmax(215px,27%);grid-template-rows:minmax(0,1fr);grid-template-areas:none}.stage-column{grid-area:auto;grid-column:1}.queue-dock{grid-area:auto;grid-column:2}.stage{min-height:390px}}
+@media(max-width:760px){.studio-layout{display:flex;flex-direction:column}.stage-column{order:0}.queue-dock{order:1;max-height:350px}.stage .search-dock{top:6px;left:6px;right:6px;max-height:330px}.stage .search-dock .song-results{max-height:195px}.stage .search-dock .library-hint span:last-child{display:none}.stage .search-dock #search{height:36px;font-size:.76rem}.pc-tools button{font-size:.69rem}.stage-label{top:84px}}
