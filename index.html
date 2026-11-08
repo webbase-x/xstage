@@ -7,7 +7,7 @@
   <meta name="description" content="X-Stage Karaoke Online – เล่นเพลงจาก Google Drive ส่วนตัว ค้นหาและจัดคิวในหน้าจอเดียว">
   <title>X-Stage Karaoke Online | คลังเพลงส่วนตัว</title>
   <link rel="icon" href="assets/xstage-logo.jpg" type="image/jpeg">
-  <link rel="stylesheet" href="style.css?v=0949">
+  <link rel="stylesheet" href="style.css?v=0950">
 </head>
 <body>
   <div class="app-shell">
@@ -57,8 +57,12 @@
     </div>
     <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog><footer class="bottom-bar"><span>© X-Stage Karaoke · Personal Google Drive Player</span><span id="connection"><span class="footer-dot"></span> Private & Secure</span><a href="privacy.html">ความเป็นส่วนตัว</a></footer>
   </div>
-  <script src="config.js"></script>
+  <script>
+// Standalone stage clock: survives player initialization or Google login failures.
+(function(){const clock=document.getElementById('stage-clock');if(!clock)return;const tick=()=>{clock.textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});};tick();setInterval(tick,1000);})();
+</script>
+<script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0949" defer></script><script src="pc-extensions.js?v=0949" defer></script>
+  <script src="app.js?v=0950" defer></script><script src="pc-extensions.js?v=0950" defer></script>
 </body>
 </html>
