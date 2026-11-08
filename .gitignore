@@ -1,0 +1,15 @@
+# Never commit credentials or private user song assets
+client_secret_*.json
+google-oauth-client.json
+*.token.json
+*.credentials.json
+.env
+.env.*
+Data/
+data/
+WebAssets/
+web-assets/
+*.m4a
+*.sf2
+*.sfz
+*.sqlite3
