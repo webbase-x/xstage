@@ -18,8 +18,8 @@ ui.songs.addEventListener('dblclick',()=>queueMicrotask(()=>expand(false)));
 document.addEventListener('keydown',e=>{
  if(e.key==='F3'&&state.token){e.preventDefault();focusSearch();return;}
  if(e.key==='Escape'&&dock.classList.contains('pc-expanded')){e.preventDefault();expand(false);return;}
- if(e.key==='F7'){e.preventDefault();if(state.queue.length)playNext();else stopSong();}
- if(!state.token||e.ctrlKey||e.altKey||e.metaKey||e.key.length!==1||!/[\\p{L}\\p{N}]/u.test(e.key))return;
+ if(e.key==='F7'){e.preventDefault();if(state.queue.length)playNext();else{stopSong();audio.pause();audio.removeAttribute('src');audio.load();state.current=null;state.lyrics=null;ui.nowPlaying.textContent='ยังไม่ได้เลือกเพลง';ui.nowArtist.textContent='X-Stage Karaoke Online';ui.stageCode.textContent='—';ui.stage.classList.remove('playing');ui.stageIdle.hidden=false;updateTransport();}}
+ if(!state.token||e.ctrlKey||e.altKey||e.metaKey||e.key.length!==1||!/[\p{L}\p{N}]/u.test(e.key))return;
  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
  e.preventDefault();expand(true);ui.search.focus();ui.search.value+=e.key;ui.search.dispatchEvent(new Event('input'));
 },true);
