@@ -334,23 +334,7 @@ function drawLyrics(){
   requestAnimationFrame(drawLyrics);
 }
 
-// Wall clock is local device time. Bar/beat are only shown when valid tempo metadata exists.
-const stageClock=$('stage-clock'),stageBar=$('stage-bar'),stageBeat=$('stage-beat');
-function musicalPosition(song,lyrics,seconds){
-  const bpm=Number(lyrics?.bpm ?? song?.bpm ?? song?.tempo);
-  const beatsPerBar=Number(lyrics?.beatsPerBar ?? song?.beatsPerBar ?? 4);
-  if(!Number.isFinite(bpm)||bpm<=0||bpm>400||!Number.isInteger(beatsPerBar)||beatsPerBar<1||beatsPerBar>16)return null;
-  const origin=Number(lyrics?.beatOffsetSeconds ?? song?.beatOffsetSeconds ?? 0);
-  const beatIndex=Math.max(0,Math.floor((Math.max(0,seconds)-origin)*bpm/60));
-  return {bar:Math.floor(beatIndex/beatsPerBar)+1,beat:beatIndex%beatsPerBar+1};
-}
-function updateStageMetrics(){
-  if(stageClock)stageClock.textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-  const m=state.current&&state.lyrics?musicalPosition(state.current,state.lyrics,player.currentTime):null;
-  if(stageBar)stageBar.textContent='ห้อง '+(m?m.bar:'—');
-  if(stageBeat)stageBeat.textContent='จังหวะ '+(m?m.beat:'—');
-}
-updateStageMetrics();setInterval(updateStageMetrics,250);
+// The stage clock runs independently in index.html.
 ui.login.addEventListener('click',login);ui.gateLogin.addEventListener('click',login);
 ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
 ui.search.addEventListener('input',()=>{state.selectedIndex=0;renderSongs();});
