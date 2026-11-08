@@ -106,3 +106,54 @@ $pc('pc-other-tools').onclick=()=>{const d=openDialog('ความสามา�
 ui.logout.addEventListener('click',()=>{favorites.clear();expand(false);abA=null;abB=null;updateAB();if(screen&&!screen.closed)screen.close();screen=null;});
 expand(false);
 })();
+
+/* Optional PC-style utilities: queue performer, LRC editor, stage effects and microphone recording. */
+(function(){
+const el=id=>document.getElementById(id),d=el('pc-dialog'),title=el('pc-dialog-title'),body=el('pc-dialog-body');
+function b(label,fn){const n=document.createElement('button');n.type='button';n.textContent=label;n.onclick=fn;return n;}
+function paragraph(text){const n=document.createElement('p');n.textContent=text;return n;}
+function show(titleText){title.textContent=titleText;body.replaceChildren();if(!d.open)d.showModal();}
+function saveFile(name,text,type='text/plain;charset=utf-8'){const url=URL.createObjectURL(new Blob([text],{type}));const link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
+const qRender=renderQueue;
+renderQueue=function(){qRender();[...ui.queue.querySelectorAll('.queue-item')].forEach((row,i)=>{
+ const song=state.queue[i],controls=row.querySelector('.queue-controls');if(!song||!controls)return;
+ const edit=b('✎',()=>queueEditor(i));edit.title='แก้ชื่อผู้ร้อง / ความเร็วเพลงนี้';controls.prepend(edit);
+ const small=row.querySelector('.queue-info small');if(small&&song.queueSinger)small.textContent+=(small.textContent?' · ':'')+'ผู้ร้อง '+song.queueSinger;
+ if(small&&song.queueSpeed&&song.queueSpeed!==1)small.textContent+=' · '+song.queueSpeed+'×';
+});};
+const originalPlay=playSong;
+playSong=function(song,opts){if(song?.queueSpeed&&[.75,.9,1,1.1,1.25,1.5].includes(Number(song.queueSpeed)))ui.speed.value=String(song.queueSpeed);return originalPlay(song,opts);};
+function queueEditor(index){const song=state.queue[index];if(!song)return;show('แก้ไขเพลงในคิว');
+ const singer=document.createElement('input');singer.type='text';singer.maxLength=80;singer.value=song.queueSinger||'';singer.placeholder='ชื่อผู้ร้อง';singer.style.cssText='color:white;background:#092d42;border:1px solid #3685a2;padding:8px;border-radius:7px';
+ const speed=document.createElement('select');for(const v of [.75,.9,1,1.1,1.25,1.5]){const o=document.createElement('option');o.value=String(v);o.textContent=v.toFixed(2)+'×';speed.append(o);}speed.value=String(song.queueSpeed||1);
+ const l=document.createElement('label');l.textContent='ผู้ร้อง';l.append(singer);const l2=document.createElement('label');l2.textContent='ความเร็ว';l2.append(speed);body.append(l,l2);
+ body.append(b('บันทึก',()=>{if(state.queue[index]===song){state.queue[index]={...song,queueSinger:singer.value.trim(),queueSpeed:Number(speed.value)};renderQueue();}d.close();}));
+}
+el('pc-export').onclick=()=>saveFile('xstage-web-queue.json',JSON.stringify({schemaVersion:1,source:'XStageWebQueue',songs:state.queue.map(song=>({id:songIdentity(song),singer:song.queueSinger||'',speed:Number(song.queueSpeed)||1}))},null,2),'application/json');
+el('pc-queue-file').onchange=async e=>{const f=e.target.files[0];if(!f||!state.token)return;try{if(f.size>1000000)throw Error('ไฟล์ใหญ่เกินไป');const data=JSON.parse(await f.text());if(data.source!=='XStageWebQueue'||!Array.isArray(data.songs)||data.songs.length>10000)throw Error('รูปแบบคิวไม่รองรับ');
+ const index=new Map(state.songs.filter(playable).map(song=>[songIdentity(song),song]));let count=0;for(const item of data.songs){const id=typeof item==='string'?item:String(item?.id||'');const song=index.get(id);if(song){state.queue.push({...song,queueSinger:typeof item?.singer==='string'?item.singer.slice(0,80):'',queueSpeed:[.75,.9,1,1.1,1.25,1.5].includes(Number(item?.speed))?Number(item.speed):1});count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' รายการ');}catch(e){setPlayStatus(e.message);}e.target.value='';};
+function stamp(seconds){const n=Math.max(0,Number(seconds)||0);return '['+String(Math.floor(n/60)).padStart(2,'0')+':'+(n%60).toFixed(2).padStart(5,'0')+']';}
+function lrcText(){return (state.lyrics?.lines||[]).map(line=>stamp(line.startTime)+String(line.text||'')).join('\n');}
+function parseLRC(text){
+ const entries=[];for(const line of text.split(/\r?\n/)){const marks=[...line.matchAll(/\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]/g)];const value=line.replace(/\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/g,'').trim();if(!value)continue;for(const m of marks)entries.push({start:Number(m[1])*60+Number(m[2]),text:value});}
+ entries.sort((a,b)=>a.start-b.start);if(!entries.length)throw Error('ไม่พบเวลา LRC ที่ถูกต้อง');
+ return {schemaVersion:1,audioOffsetMs:0,lines:entries.map((entry,i)=>{const end=Math.max(entry.start+.1,entries[i+1]?.start??entry.start+6);return {lineIndex:i,startTime:entry.start,endTime:end,text:entry.text,syllables:[{text:entry.text,start:entry.start,duration:end-entry.start}]};})};
+}
+function lyricEditor(){show('แก้ไข / นำเข้า LRC');if(!state.current){body.append(paragraph('กรุณาเลือกเพลงก่อน'));return;}body.append(paragraph('แก้ไขเฉพาะการเล่นครั้งนี้ ไม่เปลี่ยน JSON บน Drive; การนำเข้า LRC จะใช้เวลาระดับบรรทัด'));
+ const area=document.createElement('textarea');area.value=lrcText();area.rows=9;area.style.cssText='background:#051b2c;color:#fff;border:1px solid #366f85;border-radius:8px;padding:10px;width:100%;font:13px/1.6 monospace';body.append(area);
+ const uploader=document.createElement('input');uploader.type='file';uploader.accept='.lrc,text/plain';uploader.onchange=async()=>{const file=uploader.files[0];if(!file)return;if(file.size>250000){setPlayStatus('LRC ใหญ่เกินไป');return;}const bytes=await file.arrayBuffer();const decoded=new TextDecoder('utf-8').decode(bytes);area.value=decoded.includes('�')?new TextDecoder('windows-874').decode(bytes):decoded;};body.append(uploader);
+ body.append(b('ใช้เนื้อร้องฉบับนี้',()=>{try{state.lyrics=parseLRC(area.value);d.close();setPlayStatus('อัปเดตเนื้อร้อง LRC ในแท็บแล้ว');}catch(e){body.append(paragraph(e.message));}}),b('ดาวน์โหลด LRC',()=>saveFile((state.current.code||'song')+'.lrc',area.value)));
+}
+let rec=null;async function micRecording(){if(rec){const r=rec;rec=null;r.stop();setPlayStatus('หยุดบันทึกไมโครโฟนแล้ว');return;}try{if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')throw Error('เบราว์เซอร์ไม่รองรับบันทึกไมโครโฟน');
+ const stream=await navigator.mediaDevices.getUserMedia({audio:true});const recorder=new MediaRecorder(stream),parts=[];recorder.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
+ recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());if(parts.length){const url=URL.createObjectURL(new Blob(parts,{type:recorder.mimeType}));const link=document.createElement('a');link.href=url;link.download='xstage-mic.'+(recorder.mimeType.includes('ogg')?'ogg':'webm');link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}};
+ recorder.start();rec=recorder;setPlayStatus('กำลังบันทึกไมโครโฟน…');}catch(e){setPlayStatus(e.message);}
+}
+const effects=new Map();function stageEffects(){show('เสียงเอฟเฟกต์หน้าเวที (จากเครื่องนี้)');body.append(paragraph('เลือก WAV/MP3 ได้สูงสุด 10 ไฟล์เพื่อเล่นเฉพาะแท็บ ไม่อัปโหลดไป Drive'));
+ const input=document.createElement('input');input.type='file';input.accept='.mp3,.wav,audio/*';input.multiple=true;
+ const list=document.createElement('div');input.onchange=()=>{for(const url of effects.values())URL.revokeObjectURL(url);effects.clear();for(const [i,f] of [...input.files].slice(0,10).entries())effects.set(i,URL.createObjectURL(f));renderFx();};
+ function renderFx(){list.replaceChildren();for(const [i,url] of effects)list.append(b('เอฟเฟกต์ '+(i+1),()=>new Audio(url).play().catch(()=>{})));}body.append(input,list);renderFx();}
+const previousTools=el('pc-other-tools').onclick;
+el('pc-other-tools').onclick=()=>{previousTools?.();body.append(b('แก้ไข / นำเข้าเนื้อร้อง LRC',lyricEditor),b(rec?'หยุดบันทึกไมโครโฟน':'บันทึกไมโครโฟน',micRecording),b('เสียงเอฟเฟกต์หน้าเวที',stageEffects),b('สุ่มเพิ่มเพลง 5 รายการ',()=>{const pool=state.songs.filter(playable).slice().sort(()=>Math.random()-.5);for(const song of pool.slice(0,5))state.queue.push(song);renderQueue();d.close();}));};
+ui.logout.addEventListener('click',()=>{if(rec){const r=rec;rec=null;r.stop();}for(const url of effects.values())URL.revokeObjectURL(url);effects.clear();});
+})();
