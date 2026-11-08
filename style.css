@@ -65,3 +65,7 @@ footer { padding: 20px 0 26px; text-align: center; }
   .masthead { padding-block: 14px; }
   .stage { border-radius: 12px; }
 }
+
+/* X-Stage Web v0.9.44: private catalog / karaoke sweep */
+#lyrics{display:block;width:100%;height:auto;background:#07131f;border-radius:12px;margin:12px auto}
+#logout{margin:8px;cursor:pointer}

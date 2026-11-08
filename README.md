@@ -1,12 +1,12 @@
-# X-Stage Karaoke Online
+# X-Stage Karaoke Online (v0.9.44)
 
-เว็บ static สำหรับ GitHub Pages ใช้ Google OAuth และ Google Drive ของผู้ใช้
+หน้าเว็บ GitHub Pages นี้ไม่มีเพลงหรือฐานข้อมูลส่วนตัวอยู่ใน repository
 
-1. ติดตั้งและตั้งค่า X-Stage Karaoke บน PC
-2. กดซิงก์เพื่อสร้าง `web-manifest.json` และชุดข้อมูลต่อผู้ใช้ใน Google Drive
-3. คัดลอก `config.js.example` เป็น `config.js` แล้วใส่ Google OAuth Web Client ID
-4. เผยแพร่โฟลเดอร์นี้บน GitHub Pages
-5. ผู้ใช้เปิดเว็บ ล็อกอิน Google และค้นหา/เล่นเพลงจาก Drive
+1. ผู้ใช้ใช้ X-Stage Karaoke Windows v0.9.44 เพื่อสร้าง M4A/JSON และซิงก์ไปยังโฟลเดอร์ **XStageWeb** ใน Google Drive ของตน
+2. Windows อัปโหลดไฟล์เสียง/เนื้อร้องเป็นรายเพลง จากนั้นเผยแพร่ catalogs/database-*.json และอัปเดต current.json เป็นขั้นตอนสุดท้าย
+3. เว็บใช้ Google Identity Services และ scope drive.file เพื่ออ่านเฉพาะคลังที่บัญชีเข้าถึงได้ ไม่ใช้ web-manifest.json หรือ Backup SQLite เดิม
+4. Web Client ID เป็นข้อมูลสาธารณะ แต่ห้ามอัปโหลด Desktop Client Secret, tokens, เพลง, lyrics หรือ catalog ของผู้ใช้
+5. การใช้ drive.file ข้าม Desktop/Web OAuth Client ต้องอยู่ภายใต้ Google Cloud Project เดียวกัน และทดสอบกับบัญชีจริง
+6. ไฟล์บน Drive ไม่เปิดสาธารณะ; ผู้ใช้แต่ละคนใช้ Google Drive ของตนเอง
 
-เว็บใช้ manifest สำหรับรายการเพลง และไม่เปิด SQLite จาก Drive โดยตรง
-
+การส่ง M4A จาก Drive ไป Browser เป็นการดาวน์โหลด Blob พร้อม OAuth Token เหมาะกับการใช้งานส่วนตัวแบบจำกัด ไม่ใช่ CDN สาธารณะ

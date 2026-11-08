@@ -21,13 +21,13 @@
         <h1 id="page-title">คลังเพลงของคุณ</h1>
         <p>ค้นหาและเล่นเพลงที่ซิงก์จาก X-Stage Karaoke สำหรับ Windows</p>
       </div>
-      <button id="login" type="button"><span aria-hidden="true">G</span> เข้าสู่ระบบ Google</button>
+      <button id="login" type="button"><span aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><button id="logout" type="button">ออกจากระบบ / เปลี่ยนบัญชี</button>
       <div id="account"></div>
       <p id="status" role="status">เข้าสู่ระบบเพื่อเปิดคลังเพลงใน Google Drive</p>
     </section>
     <section id="library" class="panel" hidden>
       <div class="transport">
-        <h2 id="now-playing">ยังไม่ได้เลือกเพลง</h2>
+        <h2 id="now-playing">ยังไม่ได้เลือกเพลง</h2><canvas id="lyrics" width="1120" height="250" aria-label="เนื้อร้องคาราโอเกะ"></canvas>
         <audio id="player" controls></audio>
         <div class="controls">
           <button id="previous" type="button">เพลงก่อนหน้า</button>
