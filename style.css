@@ -44,3 +44,31 @@
 /* Ensure the stage HUD is not concealed by the login gate or overlays. */
 .stage .stage-metrics{z-index:8;isolation:isolate;visibility:visible;opacity:1}
 .stage .stage-metrics,.stage .stage-metrics *{pointer-events:none}
+
+/* Keep search and stage clock in separate, non-overlapping regions. */
+.stage .search-dock:not(.pc-expanded){
+  right:clamp(122px,13vw,176px);
+  width:auto;
+  max-width:none;
+}
+.stage .search-dock.pc-expanded{
+  top:clamp(62px,5.5vw,76px);
+  right:12px;
+  left:12px;
+  width:auto;
+  max-height:min(55vh,390px);
+}
+.stage .search-dock .search-box{min-width:0}
+.stage .search-dock #search{min-width:0;width:100%}
+.stage .stage-metrics{right:clamp(10px,2vw,22px);max-width:calc(100% - 20px)}
+@media(max-width:760px){
+  .stage .search-dock:not(.pc-expanded){left:6px;right:112px;top:6px}
+  .stage .search-dock.pc-expanded{top:53px;left:6px;right:6px;max-height:min(50vh,310px)}
+  .stage .search-dock .search-box{margin:1px 5px 5px;padding:1px 6px}
+  .stage .search-dock .search-box kbd{display:none}
+}
+@media(max-width:390px){
+  .stage .search-dock:not(.pc-expanded){right:103px}
+  .stage .search-dock #search{font-size:.72rem}
+  .stage .stage-metrics{right:6px;padding:5px 6px}
+}
