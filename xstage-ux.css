@@ -575,3 +575,15 @@ body.xstage-ui-v2 .stage-queue-toggle[aria-expanded="true"] span[aria-hidden="tr
 @media(max-width:620px){
   body.xstage-ui-v2 .stage-status-toast{bottom:calc(var(--xs-bottom) + 6px);padding:8px}
 }
+
+
+/* Advanced playback options live in the Tools flyout, not in the primary bottom row. */
+body.xstage-ui-v2 .stage-column.mobile-tools-expanded .pc-tools .speed-control,
+body.xstage-ui-v2 .stage-column.mobile-tools-expanded .pc-tools .repeat-control{
+  display:flex!important;align-items:center;gap:8px;
+  min-height:37px;padding:5px 10px;
+  background:#0f304b;border:1px solid #326784;border-radius:8px;
+  color:#e2f6ff;font-size:.79rem
+}
+body.xstage-ui-v2 .pc-tools .speed-control select{min-height:26px}
+body.xstage-ui-v2 .pc-tools .repeat-control input{accent-color:#38daba}
