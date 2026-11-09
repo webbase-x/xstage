@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=0960">
-  <link rel="stylesheet" href="xstage-ux.css?v=0960">
+  <link rel="stylesheet" href="style.css?v=0961">
+  <link rel="stylesheet" href="xstage-ux.css?v=0961">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -62,6 +62,7 @@
       </aside></div>
             <button id="toggle-keyboard" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="virtual-keyboard" aria-expanded="false" title="เปิดหรือซ่อนแป้นพิมพ์">⌨ <span>แป้นพิมพ์</span></button>
             <button id="toggle-remote" class="stage-action toolbar-button toolbar-aux qr-toolbar-button" type="button" aria-controls="remote-pair-panel" aria-expanded="false" title="เปิดหรือซ่อนรีโมท QR">▦ <span>รีโมท QR</span></button>
+            <button id="toolbar-stage-pop" class="toolbar-button toolbar-secondary toolbar-aux" type="button" title="เปิดจอร้องแยก">▣ <span>จอร้องแยก</span></button>
             <button id="toolbar-install-app" class="toolbar-button toolbar-install toolbar-aux" type="button" title="ติดตั้ง X-Stage Karaoke">↓ <span>ติดตั้งแอป</span></button>
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
@@ -70,7 +71,24 @@
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
             <button type="button" id="mobile-home-toggle">⌂ หน้าแรก</button>
             <button type="button" id="mobile-queue-toggle">♫ คิวเพลง <span id="mobile-queue-count">0</span></button>
+            <button type="button" id="mobile-stage-pop">▣ เปิดจอร้องแยก</button>
             <button type="button" id="mobile-tools-toggle">⚙ เครื่องมือและตั้งค่า</button>
+            <details class="stage-extra-tools" id="stage-extra-tools">
+              <summary>☷ ฟังก์ชันอื่น ๆ ทั้งหมด</summary>
+              <div class="stage-extra-tools-list">
+                <button type="button" id="mobile-random">⤨ สุ่มเพลงเพิ่มในคิว</button>
+                <button type="button" id="mobile-history">◷ ประวัติการเล่น</button>
+                <button type="button" id="mobile-favorites">★ เพลงโปรด</button>
+                <button type="button" id="mobile-lyrics">♫ ตั้งค่าเนื้อร้อง / พื้นหลัง</button>
+                <button type="button" id="mobile-eq">◉ อีควอไลเซอร์ EQ</button>
+                <button type="button" id="mobile-ab-a">⟵ ตั้งจุดวน A</button>
+                <button type="button" id="mobile-ab-b">⟶ ตั้งจุดวน B</button>
+                <button type="button" id="mobile-ab-clear">✕ ยกเลิกจุดวน A–B</button>
+                <button type="button" id="mobile-import-queue">⇣ นำเข้าคิวเพลง</button>
+                <button type="button" id="mobile-export-queue">⇡ ส่งออกคิวเพลง</button>
+                <button type="button" id="mobile-more-tools">⚒ เครื่องมือขั้นสูง / LRC / ไมโครโฟน</button>
+              </div>
+            </details>
             <button type="button" id="mobile-keyboard-toggle">⌨ แป้นพิมพ์บนจอ</button>
             <button type="button" id="mobile-remote-toggle" aria-controls="remote-pair-panel" aria-expanded="false">▦ รีโมทมือถือ QR</button>
             <button type="button" id="mobile-install-app">⬇ ติดตั้ง X-Stage เป็นแอป</button>
@@ -155,13 +173,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0960" defer></script><script src="pc-extensions.js?v=0960" defer></script>
+  <script src="app.js?v=0961" defer></script><script src="pc-extensions.js?v=0961" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0960" defer></script>
-  <script src="mobile-layout.js?v=0960" defer></script>
-  <script src="pwa-install.js?v=0960" defer></script>
+  <script src="stage-controls.js?v=0961" defer></script>
+  <script src="mobile-layout.js?v=0961" defer></script>
+  <script src="pwa-install.js?v=0961" defer></script>
 
-  <script src="stage-ui.js?v=0960" defer></script>
+  <script src="stage-ui.js?v=0961" defer></script>
 </body>
 </html>
