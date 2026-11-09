@@ -748,3 +748,48 @@ body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-medley-toggle[aria-pressed="
 body.xstage-ui-v2 .stage .remote-pair-box small{
   display:block;font-size:.67rem;color:#afd8d5;
 }
+
+
+/* v0964: translucent stage search keeps the neon background visible.
+   Expanded search results retain enough contrast for Thai song titles. */
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded){
+  background:rgba(5,19,40,.24)!important;
+  border-color:rgba(59,206,255,.9);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+  background:rgba(4,15,36,.82)!important;
+  backdrop-filter:blur(9px);
+  -webkit-backdrop-filter:blur(9px);
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box,
+body.xstage-ui-v2 .stage .stage-search-slot #search{
+  background:transparent!important;
+  box-shadow:none;
+}
+body.xstage-ui-v2 .stage .stage-search-slot #search::placeholder{
+  color:rgba(224,247,255,.76);
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-results{
+  background:rgba(4,15,38,.6);
+}
+body.xstage-ui-v2 .stage #remote-fullscreen-confirm{
+  position:absolute;z-index:85;left:50%;bottom:calc(var(--xs-bottom) + 14px);
+  transform:translateX(-50%);
+  max-width:min(94vw,520px);min-height:46px;
+  border:2px solid #52dbff;border-radius:12px;
+  padding:12px 17px;background:#063e6df5;color:#fff;
+  font-size:clamp(.75rem,1.6vw,.94rem);font-weight:850;
+  box-shadow:0 6px 28px #000c,0 0 17px #28bafd96;
+  text-align:center;white-space:normal;line-height:1.45;
+  cursor:pointer;
+}
+body.xstage-ui-v2 .stage #remote-fullscreen-confirm[hidden]{
+  display:none!important;
+}
+@media(max-width:620px){
+  body.xstage-ui-v2 .stage #remote-fullscreen-confirm{
+    bottom:calc(var(--xs-bottom) + 7px);padding:9px 10px;
+  }
+}
