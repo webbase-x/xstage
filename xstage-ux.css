@@ -913,3 +913,22 @@ body.xstage-ui-v2 .stage .transport-song-info{
     overflow-y:auto;
   }
 }
+
+/* Remote QR fits the stage without nested scrollbars, and permissions remain expandable. */
+body.xstage-ui-v2 .stage .remote-pair-panel{overflow:visible!important;
+  max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 12px)!important}
+body.xstage-ui-v2 .stage .remote-pair-box{gap:4px!important;padding:8px!important;
+  max-height:100%!important;overflow:visible!important}
+body.xstage-ui-v2 .stage .remote-pair-box canvas{
+  width:min(100%,clamp(92px,19vh,180px))!important;padding:4px!important}
+body.xstage-ui-v2 .stage .remote-settings{font-size:.73rem;color:#e9f6ff;min-width:0}
+body.xstage-ui-v2 .stage .remote-settings summary{cursor:pointer;padding:5px;border-radius:6px;background:#20445f}
+body.xstage-ui-v2 .stage .remote-settings[open]{
+  position:absolute;right:0;top:100%;width:min(340px,85vw);z-index:70;
+  background:#0b2439;border:1px solid #4789aa;border-radius:9px;padding:8px;
+  max-height:min(50vh,350px);overflow-y:auto}
+body.xstage-ui-v2 .stage .remote-settings-body{display:grid;gap:5px;padding:6px 0}
+body.xstage-ui-v2 .stage .remote-settings-option{display:flex;align-items:center;gap:7px}
+body.xstage-ui-v2 .stage .remote-permission-actions{display:flex;gap:5px;flex-wrap:wrap}
+body.xstage-ui-v2 .stage .remote-permission-actions button{font-size:.72rem;padding:5px}
+body.xstage-ui-v2 .volume-control span[role="button"]{user-select:none;min-width:25px;text-align:center}
