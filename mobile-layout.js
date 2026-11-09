@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const stage=$('stage'), menu=$('mobile-stage-menu'), toggle=$('mobile-menu-toggle');
   const queue=$('mobile-queue-toggle'), tools=$('mobile-tools-toggle');
-  const keyboard=$('mobile-keyboard-toggle'), remote=$('mobile-remote-toggle');
+  const keyboard=$('mobile-keyboard-toggle'), remote=$('toggle-remote');
   const fullscreen=$('mobile-fullscreen-toggle');
   const signin=$('mobile-login-toggle'), signout=$('mobile-logout-toggle');
   const queueDock=document.querySelector('.queue-dock');
@@ -44,7 +44,7 @@
     if(willShow)stageColumn.querySelector('.pc-tools')?.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
   keyboard.addEventListener('click',()=>{finish();$('toggle-keyboard')?.click();});
-  remote.addEventListener('click',()=>{finish();$('toggle-remote')?.click();});
+  remote.addEventListener('click',finish);
   fullscreen.addEventListener('click',()=>{finish();$('fullscreen')?.click();});
   signin.addEventListener('click',()=>{finish();$('login')?.click();});
   signout.addEventListener('click',()=>{finish();$('logout')?.click();});
