@@ -104,7 +104,7 @@
 - ก่อนเพลงจบประมาณ 25 วินาที โปรแกรมจะพยายามเตรียมเพลงถัดไปจาก Drive ในหน่วยความจำเท่านั้น หากโหลดไม่ทันจะโหลดตามปกติเมื่อจบเพลง ไม่มีการจับ BPM/MIDI หรือการมิกซ์จังหวะ
 - เปิด/ปิดเมดเลย์จากทั้งเมนูจอหลักและแท็บควบคุมของรีโมทมือถือ (ไม่มีการส่ง Google OAuth Token หรือไฟล์เพลงไปให้มือถือ)
 
-## v0.9.64 — Streaming catalog while Windows sync continues
+## v0.9.65 — Streaming catalog while Windows sync continues
 
 - Windows X-Stage Pipeline R7 publishes a **first verified catalog batch** during conversion/upload, before the full job finishes.
 - New catalog pointer fields: `catalogFileId` (immutable base snapshot) and optional `deltaFileIds` (verified incremental changes). The base snapshot remains compatible with previous schemaVersion 1.
