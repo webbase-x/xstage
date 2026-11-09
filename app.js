@@ -331,11 +331,16 @@ function login({automatic=false} = {}) {
       error_callback: error => {
         if (authId !== state.authId) return;
         ui.login.disabled = ui.gateLogin.disabled = false;
-        setStatus(error?.type === 'popup_closed' ? 'ปิดหน้าต่าง Google ก่อนเข้าสู่ระบบ' : 'เข้าสู่ระบบ Google ไม่สำเร็จ', 'error');
+        const type=String(error?.type||error?.error||'').trim();
+        setStatus(type==='popup_closed'
+          ? 'ปิดหน้าต่าง Google ก่อนเข้าสู่ระบบ'
+          : 'เข้าสู่ระบบ Google ไม่สำเร็จ'+(type?' · '+type:''), 'error');
       }
     });
-    // Do not force Google's consent screen on every login. Google decides when re-consent is required.
-    client.requestAccessToken({prompt:''});
+    // A manual click should always use Google's normal account chooser. An empty
+    // prompt is reserved for reconnecting an existing session and can leave a
+    // stale/invalid OAuth warning flow open in some multi-account browser sessions.
+    client.requestAccessToken(automatic?{prompt:''}:{prompt:'select_account'});
   } catch (e) { ui.login.disabled = ui.gateLogin.disabled = false; setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
