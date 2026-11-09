@@ -865,3 +865,51 @@ body.xstage-ui-v2 .stage .transport-panel .transport-time,
 body.xstage-ui-v2 .stage .transport-panel .transport-volume-value{
   text-shadow:0 1px 5px rgba(0,0,0,.94);
 }
+
+/* R12: keep the stage, search and transport inside very narrow or short
+   viewports without covering adjacent controls. Interactive panes may scroll. */
+body.xstage-ui-v2 .app-shell,
+body.xstage-ui-v2 .studio-layout,
+body.xstage-ui-v2 .stage-column,
+body.xstage-ui-v2 .stage,
+body.xstage-ui-v2 .stage .stage-toolbar,
+body.xstage-ui-v2 .stage .stage-search-slot,
+body.xstage-ui-v2 .stage .transport-panel{
+  box-sizing:border-box;
+  min-width:0;
+}
+body.xstage-ui-v2 .stage .search-dock,
+body.xstage-ui-v2 .stage .song-results,
+body.xstage-ui-v2 .stage .transport-song-info{
+  min-width:0;
+  max-width:100%;
+}
+@media(max-width:430px){
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock{
+    left:6px!important;
+    max-width:calc(100% - 12px)!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-box,
+  body.xstage-ui-v2 .stage .stage-search-slot #search{
+    min-width:0;
+    max-width:100%;
+  }
+  body.xstage-ui-v2 .stage .transport-panel{
+    max-width:100%;
+    gap:clamp(2px,1vw,6px);
+  }
+  body.xstage-ui-v2 .stage .transport-panel button{
+    min-width:0;
+    flex-shrink:1;
+  }
+  body.xstage-ui-v2 .stage .mobile-stage-menu{
+    max-height:calc(100dvh - 65px);
+    overflow-y:auto;
+  }
+}
+@media(max-height:480px) and (orientation:landscape){
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+    max-height:min(55dvh,calc(100% - 54px));
+    overflow-y:auto;
+  }
+}
