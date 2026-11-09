@@ -80,23 +80,23 @@ const originalDrawLine=drawLine;
 drawLine=function(text,y,maxWidth,fontSize,fill,progress,centerX){return originalDrawLine(text,y,maxWidth,fontSize*lyricScale,fill==='#ecf7ff'?lyricColor:fill,progress,centerX);};
 // Both bundled stage artworks are selectable independently for each display.
 const stageArtworks=[
-  ['assets/xstage-neon-stage.svg','แบบที่ 1 · เวทีนีออน'],
-  ['assets/xstage-background.jpg','แบบที่ 2 · ภาพเวที']
+  ['neon','แบบที่ 1 · เวทีนีออน'],
+  ['photo','แบบที่ 2 · ภาพเวที'],
+  ['deep-blue','แบบที่ 3 · สีน้ำเงินเข้ม']
 ];
 const backgroundPrefs={
-  main:stageArtworks[0][0],
-  singer:stageArtworks[1][0]
+  main:'neon',
+  singer:'photo'
 };
-function backgroundImage(value){
-  const path=stageArtworks.some(([v])=>v===value)?value:stageArtworks[0][0];
-  return 'linear-gradient(180deg,#0104123a,#07102e16 46%,#03071a56),url("'+path+'")';
-}
 function setMainBackground(value){
-  backgroundPrefs.main=value;
-  ui.stage.style.backgroundImage=backgroundImage(value);
+  const mode=stageArtworks.some(([v])=>v===value)?value:'neon';
+  backgroundPrefs.main=mode;
+  ui.stage.dataset.stageBackground=mode;
+  ui.stage.classList.toggle('stage-hero-hidden',mode==='photo');
 }
 function setSingerBackground(value){
-  backgroundPrefs.singer=value;
+  const mode=stageArtworks.some(([v])=>v===value)?value:'photo';
+  backgroundPrefs.singer=mode;
   sendBackgroundToSecondScreen();
 }
 function sendBackgroundToSecondScreen(){
@@ -104,6 +104,7 @@ function sendBackgroundToSecondScreen(){
     screen.postMessage({type:'xstage-background',value:backgroundPrefs.singer},location.origin);
   }catch{}
 }
+setMainBackground(backgroundPrefs.main);
 $pc('pc-lyrics-settings').onclick=()=>{
  const d=openDialog('เนื้อร้อง / พื้นหลัง');
  const scale=document.createElement('input');scale.type='range';scale.min='.7';scale.max='1.5';scale.step='.05';scale.value=String(lyricScale);scale.oninput=()=>lyricScale=+scale.value;
