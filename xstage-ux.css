@@ -1093,7 +1093,7 @@ body.xstage-ui-v2 .xstage-eq-band-light{
   box-shadow:inset 0 0 4px #000
 }
 body.xstage-ui-v2 .xstage-eq-band-light::after{
-  content:"";position:absolute;left:0;right:0;bottom:0;height:calc(var(--level,0)*100%);
+  content:"";position:absolute;left:0;right:0;bottom:0;height:var(--level-pct,0%);
   background:var(--band-color);box-shadow:0 0 8px var(--band-color);transition:height .06s linear
 }
 body.xstage-ui-v2 .xstage-eq-band input[type="range"]{
@@ -1154,14 +1154,14 @@ body.xstage-ui-v2 .xstage-eq-band-light{
 body.xstage-ui-v2 .xstage-eq-band-light::after{
   background:
     repeating-linear-gradient(to top,var(--band-color) 0 3px,transparent 3px 5px);
-  filter:brightness(calc(.75 + var(--level,0)*1.35));
-  box-shadow:0 0 calc(3px + var(--level,0)*9px) var(--band-color);
+  filter:brightness(calc(.75 + var(--glow,0)*1.35));
+  box-shadow:0 0 calc(3px + var(--glow,0)*9px) var(--band-color);
   transition:height .045s linear,filter .045s linear
 }
 body.xstage-ui-v2 .xstage-eq-band-light::before{
   content:"";position:absolute;z-index:2;left:-2px;right:-2px;height:2px;
-  bottom:calc(var(--peak,0)*100%);background:#fff;
-  box-shadow:0 0 5px var(--band-color);opacity:calc(.2 + var(--peak,0)*.8);
+  bottom:var(--peak-pct,0%);background:#fff;
+  box-shadow:0 0 5px var(--band-color);opacity:calc(.2 + var(--glow,0)*.8);
   transition:bottom .04s linear,opacity .08s linear
 }
 body.xstage-ui-v2 .xstage-eq-band input[type="range"]{width:142px}
