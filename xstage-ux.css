@@ -1309,3 +1309,16 @@ body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-moz-range-thumb{
   background:linear-gradient(180deg,#f6fbfd,#6e7c84 48%,#dfe9ed 50%,#68757c 54%,#eef6f9);
   box-shadow:0 2px 5px #000b,0 0 8px var(--band-color)
 }
+
+/* 0.9.83: contextual EQ display selector. */
+body.xstage-ui-v2 .xstage-eq-display-wrap{
+  display:flex;align-items:center;gap:6px;
+  margin-left:auto;padding-left:10px;border-left:1px solid #294150;
+  color:#a9c8d8;font-size:.68rem;font-weight:800;white-space:nowrap
+}
+body.xstage-ui-v2 .xstage-eq-display-wrap[hidden]{display:none!important}
+body.xstage-ui-v2 .xstage-eq-display-wrap select{
+  min-width:112px;background:#101c25;color:#e8f7ff;
+  border:1px solid #36596d;border-radius:6px;padding:5px 7px;font-size:.68rem
+}
+body.xstage-ui-v2 .xstage-eq-display-wrap + #xstage-eq-reset{margin-left:0}
