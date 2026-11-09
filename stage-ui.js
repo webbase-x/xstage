@@ -42,6 +42,15 @@
   }
   queueBtn.addEventListener('click',()=>$('mobile-queue-toggle')?.click());
   shuffle?.addEventListener('click',()=>$('pc-random')?.click());
+  const medleyMenu=$('mobile-medley-toggle');
+  function syncMedleyMenu(){
+    if(!medleyMenu)return;
+    medleyMenu.setAttribute('aria-pressed',String(!!state.medley));
+    medleyMenu.textContent=state.medley?'♫ ปิดเมดเลย์ต่อเพลง':'♫ เปิดเมดเลย์ต่อเพลง';
+  }
+  medleyMenu?.addEventListener('click',()=>{setMedleyMode(!state.medley);syncMedleyMenu();});
+  window.addEventListener('xstage:medleychange',syncMedleyMenu);
+  syncMedleyMenu();
   // Preserve every legacy X-Stage feature by routing visible commands to
   // the original handlers; no parallel playback/queue implementations.
   const closeMenu=()=>{
