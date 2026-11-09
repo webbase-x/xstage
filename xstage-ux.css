@@ -1421,3 +1421,16 @@ body.xstage-ui-v2 .xstage-context-menu button:hover,
 body.xstage-ui-v2 .xstage-context-menu button:focus-visible{
   background:#173247;color:#fff;outline:none
 }
+
+/* 0.9.91: visible mobile Google-auth progress inside the login gate. */
+body.xstage-ui-v2 .gate-auth-status{
+  margin-top:10px;min-height:1.5em;padding:7px 10px;
+  border-radius:8px;background:#07172499;border:1px solid #274b5e88;
+  color:#a9c8d8;font-size:.72rem;line-height:1.4;text-align:center
+}
+body.xstage-ui-v2 .gate-auth-status[data-kind="error"]{
+  color:#ffd2d2;border-color:#8f4a4a88;background:#2b111899
+}
+body.xstage-ui-v2 .gate-auth-status[data-kind="success"]{
+  color:#b9ffd8;border-color:#347a5a88;background:#0b251a99
+}
