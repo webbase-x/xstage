@@ -121,3 +121,20 @@
   .virtual-key{min-height:28px}
   .remote-pair-box canvas{width:min(140px,33vh)}
 }
+
+
+/* When typing, shorten and position search results above the actual keyboard height. */
+.stage.keyboard-open .search-dock.pc-expanded{
+  top:8px;left:8px;right:clamp(109px,13vw,175px);
+  max-height:max(66px,calc(100% - var(--virtual-keyboard-height,250px) - 18px));
+  min-height:0;
+}
+.stage.keyboard-open .search-dock .dock-head,
+.stage.keyboard-open .search-dock .library-hint,
+.stage.keyboard-open .search-dock .dock-foot{display:none!important}
+.stage.keyboard-open .search-dock .song-results{min-height:0;max-height:none}
+@media(max-width:500px){
+  .stage.keyboard-open .search-dock.pc-expanded{top:5px;left:5px;right:105px}
+  .stage.keyboard-open .search-dock .song-item{padding:4px 6px}
+  .stage.keyboard-open .search-dock .search-box{margin:1px 3px}
+}
