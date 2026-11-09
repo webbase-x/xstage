@@ -35,6 +35,11 @@
       ['z','x','c','v','b','n','m']
     ]
   };
+  // Reserve exactly the space occupied by the onscreen keyboard for search results.
+  function updateKeyboardHeight(){
+    if(!keyboard.hidden)stage.style.setProperty('--virtual-keyboard-height',Math.ceil(keyboard.getBoundingClientRect().height)+'px');
+  }
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(updateKeyboardHeight).observe(keyboard);
   let layout = 'th';
   let shift = false;
   function hideKeyboard(){
@@ -55,6 +60,7 @@
     search.readOnly = true;
     search.focus({preventScroll:true});
     search.dispatchEvent(new Event('input',{bubbles:true}));
+    updateKeyboardHeight();
   }
   function editSearch(value,action){
     if(!state.token) { hideKeyboard(); return; }
@@ -108,6 +114,7 @@
       },'wide key-enter')
     );
     kbKeys.append(row);
+    updateKeyboardHeight();
   }
   drawKeyboard();
   kbToggle.addEventListener('click',()=>keyboard.hidden?showKeyboard():hideKeyboard());
