@@ -3,8 +3,18 @@
 window.addEventListener('message',e=>{
  if(e.origin!==location.origin||e.source!==opener)return;
  if(e.data?.type==='xstage-background'){
-   const v=e.data.value;
-   document.querySelector('.stage').style.backgroundImage=v==='none'?'none':v?'url("'+String(v).replace(/"/g,'%22')+'")':'';
+   const v=String(e.data.value||'photo'),stage=document.querySelector('.stage');
+   if(v==='neon'){
+     stage.style.backgroundColor='#020817';
+     stage.style.backgroundImage="linear-gradient(180deg,#0104123a,#07102e16 46%,#03071a56),url('assets/xstage-neon-stage.svg')";
+   }else if(v==='deep-blue'){
+     stage.style.backgroundColor='#031633';
+     stage.style.backgroundImage="radial-gradient(circle at 50% 38%,rgba(28,86,160,.28),transparent 34%),linear-gradient(180deg,#0b2b5d 0%,#061d43 42%,#03142f 72%,#020b1d 100%)";
+   }else{
+     stage.style.backgroundColor='#020916';
+     stage.style.backgroundImage="linear-gradient(180deg,#02081862 0%,#06102c00 35%,#03081d12 65%,#02081970 100%),url('assets/xstage-background.jpg')";
+   }
+   stage.style.backgroundSize='cover';stage.style.backgroundPosition='center center';
    return;
  }
  if(e.data?.type!=='xstage-stage')return;lines=Array.isArray(e.data.lines)?e.data.lines:[];time=Number(e.data.time)||0;offset=Number(e.data.offset)||0;document.querySelector('#title').textContent=e.data.title||'พร้อมร้องเพลง';document.querySelector('#artist').textContent=e.data.artist||'';});
