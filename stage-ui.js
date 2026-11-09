@@ -46,7 +46,7 @@
   function syncMedleyMenu(){
     if(!medleyMenu)return;
     medleyMenu.setAttribute('aria-pressed',String(!!state.medley));
-    medleyMenu.textContent=state.medley?'♫ ปิดเมดเลย์ต่อเพลง':'♫ เปิดเมดเลย์ต่อเพลง';
+    medleyMenu.textContent=state.medley?'♫ ปิดเมดเลย์สุ่มเพลง':'♫ เปิดเมดเลย์สุ่มเพลงต่อเนื่อง';
   }
   medleyMenu?.addEventListener('click',()=>{setMedleyMode(!state.medley);syncMedleyMenu();});
   window.addEventListener('xstage:medleychange',syncMedleyMenu);
