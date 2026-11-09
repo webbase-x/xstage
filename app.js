@@ -20,7 +20,8 @@ const state = {
   requestId: 0, controller: null, authId: 0, loading: false,
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
-  userStopped: false, visualScale: 1
+  userStopped: false, visualScale: 1,
+  catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map()
 };
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
 const ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
@@ -88,6 +89,78 @@ async function privateJson(id, token, opts) {
   catch { throw Error('ไฟล์ JSON บน Drive ไม่ถูกต้อง'); }
 }
 
+// The Windows sync publisher switches current.json after each verified batch.
+// Older snapshots contain songs[]; newer pointers may include immutable deltas.
+// Catalog media URLs remain private and are never exposed outside this account.
+async function readPublishedCatalog(pointer,token){
+  if(pointer?.schemaVersion!==1 || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
+    throw Error('รูปแบบ current.json ไม่รองรับ');
+  const deltaIds=pointer.deltaFileIds||[];
+  if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
+    throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
+  async function fetchImmutable(id){
+    if(typeof id!=='string'||!id)throw Error('ฐานเพลงไม่มี Drive File ID');
+    if(state.catalogCache.has(id))return state.catalogCache.get(id);
+    const data=await privateJson(id,token);
+    state.catalogCache.set(id,data);
+    if(state.catalogCache.size>40){
+      const oldest=state.catalogCache.keys().next().value;
+      state.catalogCache.delete(oldest);
+    }
+    return data;
+  }
+  const base=await fetchImmutable(pointer.catalogFileId);
+  if(base?.schemaVersion!==1||!Array.isArray(base.songs))
+    throw Error('ฐานเพลงหลักบน Drive ไม่รองรับ');
+  if(!deltaIds.length)return base;
+  const songs=new Map();
+  for(const song of base.songs){
+    if(song && typeof song.webSongId==='string')songs.set(song.webSongId,song);
+  }
+  for(const id of deltaIds){
+    const delta=await fetchImmutable(id);
+    if(delta?.schemaVersion!==1 || !Array.isArray(delta.upserts)||!Array.isArray(delta.removes))
+      throw Error('ข้อมูลอัปเดตเพลงบางชุดไม่ถูกต้อง');
+    for(const key of delta.removes){
+      if(typeof key!=='string')throw Error('ข้อมูลลบเพลงไม่ถูกต้อง');
+      songs.delete(key);
+    }
+    for(const song of delta.upserts){
+      if(!song || typeof song.webSongId!=='string')throw Error('รายการเพลงที่อัปเดตไม่ถูกต้อง');
+      songs.set(song.webSongId,song);
+    }
+  }
+  if(Number.isSafeInteger(pointer.songCount) && songs.size!==pointer.songCount)
+    throw Error('จำนวนเพลงที่เผยแพร่บางชุดไม่ตรงกัน กรุณาตรวจการซิงค์');
+  return {schemaVersion:1,generation:pointer.generation,songs:[...songs.values()]};
+}
+async function pollPublishedCatalog(){
+  if(!state.token||!state.catalogPointerId||state.catalogPolling)return;
+  const authId=state.authId,token=state.token;
+  state.catalogPolling=true;
+  try{
+    const pointer=await privateJson(state.catalogPointerId,token);
+    if(authId!==state.authId||state.token!==token||!pointer?.generation||
+       pointer.generation===state.catalogGeneration)return;
+    const catalog=await readPublishedCatalog(pointer,token);
+    if(authId!==state.authId||state.token!==token)return;
+    const countBefore=state.songs.length;
+    state.manifest=catalog;
+    state.songs=catalog.songs.filter(playable);
+    state.catalogGeneration=pointer.generation;
+    state.medleyPoolSource=null;
+    ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
+    renderSongs();renderQueue();
+    setStatus(`ฐานเพลงอัปเดตระหว่างซิงค์: ${num(countBefore)} → ${num(state.songs.length)} เพลง`,'success');
+  }catch(error){
+    // Keep the last known good catalog playable if a batch is unreachable.
+    if(state.token===token&&authId===state.authId){
+      console.warn('X-Stage catalog refresh:',error?.message||error);
+    }
+  }finally{state.catalogPolling=false;}
+}
+setInterval(pollPublishedCatalog,45000);
+
 async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   setStatus('กำลังค้นหาคลัง XStageWeb ใน Google Drive ของคุณ…');
   const roots = (await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token));
@@ -96,9 +169,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   const pointers = await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
   if (pointers.length !== 1) throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
   const pointer = await privateJson(pointers[0].id, token);
-  if (pointer?.schemaVersion !== 1 || !getFileId({fileId:pointer.catalogFileId})) throw Error('รูปแบบ current.json ไม่รองรับ');
-  const catalog = await privateJson(pointer.catalogFileId, token);
-  if (catalog?.schemaVersion !== 1 || !Array.isArray(catalog.songs)) throw Error('รูปแบบฐานข้อมูลเพลงไม่รองรับ');
+  const catalog = await readPublishedCatalog(pointer,token);
   const accountResult = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'});
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
   const account = await accountResult.json();
@@ -110,6 +181,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   rememberLogin(true);
   saveTabAuth(token,tokenExpiresAt,account.sub);
   state.manifest = catalog;
+  state.catalogPointerId=pointers[0].id;
+  state.catalogGeneration=String(pointer.generation||'');
   state.songs = catalog.songs.filter(playable);
   state.selectedIndex = 0;
   ui.account.textContent = account.email || 'Google';
@@ -168,6 +241,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   state.objectUrl = ''; state.token = ''; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
+  state.catalogPointerId='';state.catalogGeneration='';state.catalogCache.clear();
   state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
   state.medleyPoolSource=null;state.medleyPool=[];state.medleyRecent=[];state.userStopped=false;
   state.current = null;state.lyrics = null;state.selectedIndex = 0;
