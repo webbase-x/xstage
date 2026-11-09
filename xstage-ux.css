@@ -932,3 +932,19 @@ body.xstage-ui-v2 .stage .remote-settings-option{display:flex;align-items:center
 body.xstage-ui-v2 .stage .remote-permission-actions{display:flex;gap:5px;flex-wrap:wrap}
 body.xstage-ui-v2 .stage .remote-permission-actions button{font-size:.72rem;padding:5px}
 body.xstage-ui-v2 .volume-control span[role="button"]{user-select:none;min-width:25px;text-align:center}
+
+/* 0.9.71: compact menu title with a dedicated close button. */
+body.xstage-ui-v2 .stage .mobile-stage-menu .mobile-menu-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:2px 4px 7px 12px;color:#e7f5ff;font-size:.87rem;font-weight:800;
+  border-bottom:1px solid #31537b
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-menu-close{
+  width:34px;min-width:34px;min-height:32px;padding:3px;
+  display:flex;justify-content:center;align-items:center;
+  background:#243e60;border:1px solid #5d7fa0;border-radius:8px;
+  color:#fff;font-size:1.12rem
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-menu-close:hover{
+  background:#66334b;border-color:#d2769d
+}
