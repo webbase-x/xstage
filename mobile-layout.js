@@ -45,6 +45,7 @@
   });
   keyboard.addEventListener('click',()=>{finish();$('toggle-keyboard')?.click();});
   remote.addEventListener('click',finish);
+  $('remote-request-toggle')?.addEventListener('click',finish);
   fullscreen.addEventListener('click',()=>{finish();$('fullscreen')?.click();});
   signin.addEventListener('click',()=>{finish();$('login')?.click();});
   signout.addEventListener('click',()=>{finish();$('logout')?.click();});
