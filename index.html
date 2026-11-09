@@ -7,7 +7,7 @@
   <meta name="description" content="X-Stage Karaoke Online – เล่นเพลงจาก Google Drive ส่วนตัว ค้นหาและจัดคิวในหน้าจอเดียว">
   <title>X-Stage Karaoke Online | คลังเพลงส่วนตัว</title>
   <link rel="icon" href="assets/xstage-logo.jpg" type="image/jpeg">
-  <link rel="stylesheet" href="style.css?v=0956">
+  <link rel="stylesheet" href="style.css?v=0957">
 </head>
 <body>
   <div class="app-shell">
@@ -37,6 +37,7 @@
               <img src="assets/xstage-logo.jpg" width="32" height="32" alt="">
               <span><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE</small></span>
             </a>
+            <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
             <button id="mobile-menu-toggle" class="mobile-menu-toggle" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
           </div>
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
@@ -99,14 +100,14 @@
   </div>
   <script>
 // Standalone stage clock: survives player initialization or Google login failures.
-(function(){const clock=document.getElementById('stage-clock');if(!clock)return;const tick=()=>{clock.textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});};tick();setInterval(tick,1000);})();
+(function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0956" defer></script><script src="pc-extensions.js?v=0956" defer></script>
+  <script src="app.js?v=0957" defer></script><script src="pc-extensions.js?v=0957" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0956" defer></script>
-  <script src="mobile-layout.js?v=0956" defer></script>
+  <script src="stage-controls.js?v=0957" defer></script>
+  <script src="mobile-layout.js?v=0957" defer></script>
 </body>
 </html>
