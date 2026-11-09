@@ -19,6 +19,43 @@
   const scanLink=document.createElement('a');
   scanLink.href='remote.html';scanLink.textContent='📷 สแกน QR ใหม่';
   scanLink.hidden=true;reconnectButton.after(scanLink);
+  // Camera QR scanning works on HTTPS browsers with BarcodeDetector; otherwise show guidance.
+  scanLink.href='#scan-qr';
+  scanLink.addEventListener('click',async event=>{
+    event.preventDefault();
+    if(!navigator.mediaDevices?.getUserMedia||typeof BarcodeDetector==='undefined'){
+      report('เบราว์เซอร์นี้ยังไม่รองรับสแกน QR ด้วยกล้อง กรุณาใช้กล้องมือถือสแกน QR บนจอหลัก');return;
+    }
+    let stream;
+    const video=document.createElement('video');video.autoplay=true;video.playsInline=true;
+    video.style.cssText='display:block;width:100%;max-height:250px;margin:10px 0;border-radius:10px';
+    const stop=document.createElement('button');stop.type='button';stop.textContent='ปิดกล้อง';
+    scanLink.after(video,stop);
+    let active=true;
+    const close=()=>{active=false;stream?.getTracks().forEach(track=>track.stop());video.remove();stop.remove();};
+    stop.addEventListener('click',close);
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+      video.srcObject=stream;await video.play();
+      const detector=new BarcodeDetector({formats:['qr_code']});
+      const check=async()=>{
+        if(!active)return;
+        try{
+          for(const code of await detector.detect(video)){
+            const url=new URL(code.rawValue,location.href);
+            const parsed=new URLSearchParams(url.hash.replace(/^#/,''));
+            if(url.origin===location.origin&&url.pathname.endsWith('/remote.html')
+               &&/^[a-f0-9]{48}$/i.test(parsed.get('k')||'')
+               &&/^[a-z0-9_-]+$/i.test(parsed.get('p')||'')){
+              close();location.assign(url.href);return;
+            }
+          }
+        }catch{}
+        if(active)setTimeout(check,300);
+      };
+      check();
+    }catch{close();report('ไม่สามารถเปิดกล้องได้ กรุณาตรวจสิทธิ์กล้อง หรือใช้แอปกล้องมือถือสแกน QR');}
+  });
   function disconnected(message){
     connected=false;ready=false;controls.hidden=true;
     reconnectButton.hidden=!hostId||!secret;
