@@ -75,3 +75,49 @@
 
 /* Respect HTML hidden during remembered login and after successful authentication. */
 .login-gate[hidden]{display:none!important}
+
+
+/* Responsive in-stage virtual keyboard and secure QR remote pairing (including :fullscreen). */
+.stage-quick-actions{position:absolute;z-index:16;right:clamp(7px,1vw,16px);bottom:clamp(54px,7vh,77px);display:flex;align-items:center;gap:7px;max-width:calc(100% - 14px)}
+.stage-action{border:1px solid #5ca6bc;border-radius:9px;background:#061d32ec;box-shadow:0 3px 14px #0008;color:#dcf9ff;font-weight:800;font-size:clamp(.64rem,.9vw,.81rem);padding:9px 10px;white-space:nowrap;min-height:36px;touch-action:manipulation}
+.stage-action.active{background:#17615e;color:#e5fff6}
+.virtual-keyboard[hidden],.remote-pair-panel[hidden]{display:none!important}
+.virtual-keyboard{position:absolute;z-index:19;left:clamp(5px,1vw,16px);right:clamp(5px,1vw,16px);bottom:clamp(5px,1vw,15px);max-height:min(55vh,330px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:7px;background:#071a2af5;border:1px solid #367a95;border-radius:13px;padding:clamp(6px,1vw,12px);box-shadow:0 8px 42px #000b}
+.virtual-key-head{display:flex;align-items:center;justify-content:space-between;gap:9px;color:#b9e5f3;font-size:clamp(.7rem,1vw,.9rem);padding:1px 5px}
+.virtual-key-head button,.remote-pair-top button{border:1px solid #427389;background:#13344a;color:#e4faff;padding:5px 9px;border-radius:7px;cursor:pointer}
+.virtual-keys{display:flex;flex-direction:column;gap:5px;min-width:0}
+.virtual-key-row{display:flex;justify-content:center;gap:clamp(2px,.45vw,6px);width:100%;min-width:0}
+.virtual-key{flex:1 1 0;min-width:0;min-height:clamp(31px,5.1vh,42px);padding:4px 0;border:1px solid #397389;background:#15364a;border-radius:6px;color:#f8fbff;font-size:clamp(.71rem,1.45vw,1.1rem);font-weight:750;text-align:center;touch-action:manipulation}
+.virtual-key:active{background:#256e74}
+.virtual-key.wide{flex:2.5 1 0;font-size:clamp(.61rem,1.1vw,.87rem)}
+.virtual-key.key-enter{background:#1b877f;border-color:#69e5d1;color:#fff}
+.stage.keyboard-open .stage-quick-actions{display:none}
+.stage.keyboard-open .stage-caption{opacity:.3}
+.remote-pair-panel{position:absolute;z-index:25;inset:0;display:flex;justify-content:center;align-items:center;padding:8px;background:#020b17eb;overflow:auto;overscroll-behavior:contain}
+.remote-pair-box{background:#0c273bee;border:1px solid #418299;box-shadow:0 12px 55px #000c;border-radius:15px;width:min(100%,385px);max-height:100%;overflow-y:auto;padding:clamp(10px,2vw,18px);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:#e3f4fa}
+.remote-pair-top{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;font-size:clamp(.83rem,1.5vw,1.06rem)}
+.remote-pair-box canvas{display:block;width:min(200px,45vh,63vw);height:auto;aspect-ratio:1/1;background:white;padding:6px;border-radius:8px}
+.remote-pair-box canvas[hidden]{display:none!important}
+.remote-pair-box p{font-size:.78rem;line-height:1.35;margin:2px 0;color:#a1e9d8}
+.remote-pair-box a{color:#7edcef;font-size:.76rem;overflow-wrap:anywhere}
+.remote-pair-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.remote-pair-actions button{border:1px solid #51899d;border-radius:7px;padding:7px 9px;background:#153b52;color:white;font-size:.78rem;cursor:pointer}
+.remote-pair-actions button[hidden]{display:none!important}
+#remote-approve{background:#147e69;color:#fff}
+#remote-reject{background:#793843;color:#fff}
+.remote-pair-box small{color:#a2bccb;font-size:.68rem;line-height:1.4}
+@media(max-width:600px){
+  .stage-quick-actions{bottom:51px;right:6px;gap:4px}
+  .stage-action{padding:6px 7px;min-height:32px;font-size:.66rem}
+  .virtual-keyboard{max-height:min(58vh,285px);gap:4px;padding:5px}
+  .virtual-keys{gap:4px}
+  .virtual-key-row{gap:2px}
+  .virtual-key{min-height:32px;font-size:clamp(.61rem,2.7vw,.85rem);border-radius:4px}
+  .virtual-key.wide{font-size:.61rem}
+}
+@media(max-height:510px){
+  .virtual-keyboard{max-height:68%;padding:4px}
+  .virtual-key-row{gap:2px}
+  .virtual-key{min-height:28px}
+  .remote-pair-box canvas{width:min(140px,33vh)}
+}
