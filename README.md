@@ -103,3 +103,12 @@
 - เลี่ยงสุ่มเพลงปัจจุบันหรือเพลงที่เพิ่งเล่นเมื่อมีเพลงอื่นให้เลือก เพลงที่กำลังเล่นจะเล่นจนจบ ไม่ตัดก่อนเวลา
 - ก่อนเพลงจบประมาณ 25 วินาที โปรแกรมจะพยายามเตรียมเพลงถัดไปจาก Drive ในหน่วยความจำเท่านั้น หากโหลดไม่ทันจะโหลดตามปกติเมื่อจบเพลง ไม่มีการจับ BPM/MIDI หรือการมิกซ์จังหวะ
 - เปิด/ปิดเมดเลย์จากทั้งเมนูจอหลักและแท็บควบคุมของรีโมทมือถือ (ไม่มีการส่ง Google OAuth Token หรือไฟล์เพลงไปให้มือถือ)
+
+## v0.9.64 — Streaming catalog while Windows sync continues
+
+- Windows X-Stage Pipeline R7 publishes a **first verified catalog batch** during conversion/upload, before the full job finishes.
+- New catalog pointer fields: `catalogFileId` (immutable base snapshot) and optional `deltaFileIds` (verified incremental changes). The base snapshot remains compatible with previous schemaVersion 1.
+- The browser loads base + deltas in order, checking `songCount` before using the combined catalog. Incomplete/invalid generations leave the last known-good playable songs unchanged.
+- While signed in, the web player checks `current.json` **every 45 seconds**. When the generation changes, it updates the searchable song catalog without interrupting audio playback or clearing the existing queue.
+- All media, lyrics, catalog and delta files are kept private in the owner's Google Drive. This feature does not expose them on GitHub Pages, and it never shares Google tokens with mobile remotes.
+- Each checkpoint switches `current.json` only **after M4A and Lyrics JSON are both uploaded and verified**. Interrupted Windows sync may be resumed later. The final Windows pass compacts deltas into one complete snapshot.
