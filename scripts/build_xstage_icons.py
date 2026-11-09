@@ -23,7 +23,7 @@ for size in (192, 512):
 # A dedicated maskable icon keeps the subject within the safe central region.
 mask_size = 512
 maskable = Image.new("RGB", (mask_size, mask_size), (5, 21, 33))
-subject_size = 360
+subject_size = 284
 subject = original.resize((subject_size, subject_size), RESAMPLE)
 margin = (mask_size - subject_size) // 2
 maskable.paste(subject, (margin, margin))
