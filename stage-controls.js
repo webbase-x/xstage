@@ -139,6 +139,11 @@
   const settingsDetails=document.createElement('details');settingsDetails.className='remote-settings';
   const summary=document.createElement('summary');summary.textContent='⚙ ตั้งค่าและสิทธิ์รีโมท';
   const settingsBody=document.createElement('div');settingsBody.className='remote-settings-body';
+  const settingsClose=document.createElement('button');
+  settingsClose.type='button';settingsClose.className='remote-settings-close';
+  settingsClose.textContent='✕';settingsClose.setAttribute('aria-label','ปิดการตั้งค่ารีโมท');
+  settingsClose.addEventListener('click',()=>{settingsDetails.open=false;});
+  settingsBody.append(settingsClose);
   settingsDetails.append(summary,settingsBody);
   qrPanel.querySelector('.remote-pair-box')?.append(settingsDetails);
   function option(label,checked,onChange){
