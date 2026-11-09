@@ -33,7 +33,6 @@
     }
   }
   queueBtn.addEventListener('click',()=>$('mobile-queue-toggle')?.click());
-  install?.addEventListener('click',()=>$('mobile-install-app')?.click());
   shuffle?.addEventListener('click',()=>$('pc-random')?.click());
   repeatBtn?.addEventListener('click',()=>{
     repeat.checked=!repeat.checked;
@@ -54,9 +53,10 @@
   home?.addEventListener('click',()=>{
     $('search').value='';
     $('search').dispatchEvent(new Event('input',{bubbles:true}));
-    $('pc-hide-search')?.click();
+    if($('pc-search')?.classList.contains('pc-expanded'))$('pc-hide-search')?.click();
     queueDock.classList.remove('mobile-expanded');
     document.querySelector('.stage-column')?.classList.remove('mobile-tools-expanded');
+    if($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true')$('mobile-menu-toggle').click();
   });
   about?.addEventListener('click',()=>{
     const dialog=$('pc-dialog'),title=$('pc-dialog-title'),body=$('pc-dialog-body');
@@ -70,8 +70,25 @@
     ]){
       const p=document.createElement('p');p.textContent=description;body.append(p);
     }
+    if($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true')$('mobile-menu-toggle').click();
     if(!dialog.open)dialog.showModal();
   });
+  // Show OAuth/Drive errors even when the legacy status strip is hidden.
+  const legacyStatus=$('status');
+  if(legacyStatus){
+    const notice=document.createElement('div');
+    notice.className='stage-status-toast';
+    notice.setAttribute('role','status');
+    notice.hidden=true;
+    stage.append(notice);
+    const sync=()=>{
+      const error=legacyStatus.classList.contains('error');
+      notice.hidden=!error;
+      if(error)notice.textContent=legacyStatus.textContent;
+    };
+    new MutationObserver(sync).observe(legacyStatus,{attributes:true,attributeFilter:['class'],childList:true,subtree:true,characterData:true});
+    sync();
+  }
   // A click outside transient panels closes the queue only if it is not the player/queue trigger.
   stage.addEventListener('pointerdown',event=>{
     if(queueDock.classList.contains('mobile-expanded')
