@@ -31,6 +31,13 @@
     tools.setAttribute('aria-expanded',String(stageColumn.classList.contains('mobile-tools-expanded')));
   }
   toggle.addEventListener('click',()=>{setMenu(menu.hidden);updateIndicators();});
+  // Menu actions close their menu unless the user is expanding a nested group.
+  menu.addEventListener('click',e=>{
+    const button=e.target.closest('button');
+    if(!button||!menu.contains(button))return;
+    if(button.closest('summary,details') && button.matches('summary'))return;
+    queueMicrotask(()=>{if(!menu.hidden)setMenu(false);});
+  });
   function finish(){setMenu(false);updateIndicators();}
   queue.addEventListener('click',async()=>{
     const willShow=!queueDock.classList.contains('mobile-expanded');
