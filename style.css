@@ -326,3 +326,119 @@
 @media(max-height:520px) and (pointer:coarse){
   .stage .search-dock.pc-expanded{max-height:min(120px,calc(100% - 70px))}
 }
+
+
+/* v0958: instant searchable list, keyboard selection, persistent clock-anchored QR. */
+#search[aria-expanded="true"]{outline:none}
+.stage .song-item.selected{
+  border-color:#67f1da;
+  background:linear-gradient(90deg,#1b6373,#133c58);
+  box-shadow:inset 3px 0 0 #4af4d2;
+}
+.song-match{
+  color:#071e2a;background:#f8dc80;
+  border-radius:3px;padding:0 1px;font-weight:900;
+}
+.stage .song-results{overscroll-behavior:contain;scrollbar-width:thin}
+
+/* The panel stays under the clock until explicitly toggled or closed.
+   It does not cover the entire stage or close when the search/keyboard opens. */
+.stage{
+  --remote-panel-width:clamp(170px,19vw,210px);
+  --remote-panel-right:clamp(10px,2vw,22px);
+}
+.stage .remote-pair-panel{
+  position:absolute;
+  z-index:23;
+  inset:auto;
+  top:clamp(62px,6vw,80px);
+  right:var(--remote-panel-right);
+  width:var(--remote-panel-width);
+  max-height:calc(100% - 86px);
+  overflow-y:auto;
+  background:transparent;
+  padding:0;
+  display:block;
+  border-radius:12px;
+  overscroll-behavior:contain;
+}
+.stage .remote-pair-box{
+  width:100%;
+  max-height:none;
+  overflow:visible;
+  gap:6px;
+  padding:9px;
+  border-radius:12px;
+  background:#071e31f7;
+  box-shadow:0 8px 26px #000b;
+}
+.stage .remote-pair-top{font-size:.75rem;line-height:1.2}
+.stage .remote-pair-top strong{min-width:0}
+.stage .remote-pair-top button{padding:3px 7px}
+.stage .remote-pair-box canvas{
+  width:min(100%,158px);
+  max-width:100%;
+  height:auto;
+  aspect-ratio:1/1;
+  padding:4px;
+}
+.stage .remote-pair-box p{font-size:.69rem;line-height:1.35}
+.stage .remote-pair-box a{font-size:.66rem}
+.stage .remote-pair-actions button{font-size:.67rem;padding:6px}
+.stage .remote-pair-box small{display:none}
+.stage.remote-visible .search-dock.pc-expanded,
+.stage.remote-visible .search-dock:not(.pc-expanded){
+  right:calc(var(--remote-panel-width) + var(--remote-panel-right) + 9px);
+}
+.stage.remote-visible .search-dock.pc-expanded{
+  max-height:min(64vh,calc(100% - 88px));
+}
+.stage.remote-visible .stage-quick-actions{right:calc(var(--remote-panel-width) + var(--remote-panel-right) + 10px)}
+/* Never stack an open QR beneath/behind the virtual keyboard. */
+.stage.remote-visible.keyboard-open .remote-pair-panel{max-height:calc(100% - var(--virtual-keyboard-height,260px) - 80px)}
+.stage.remote-visible.keyboard-open .search-dock.pc-expanded{
+  right:calc(var(--remote-panel-width) + var(--remote-panel-right) + 9px);
+}
+@media (max-width:820px), (max-height:520px) and (pointer:coarse){
+  .stage{
+    --remote-panel-width:clamp(150px,32vw,180px);
+    --remote-panel-right:clamp(7px,5vw,44px);
+  }
+  .stage .remote-pair-panel{
+    top:54px;
+    max-height:calc(100% - 62px);
+  }
+  .stage .remote-pair-box{gap:5px;padding:6px}
+  .stage .remote-pair-box canvas{width:min(100%,148px)}
+  .stage .remote-pair-top{font-size:.69rem}
+  .stage .remote-pair-box p{font-size:.63rem}
+  .stage.remote-visible .search-dock.pc-expanded,
+  .stage.remote-visible .search-dock:not(.pc-expanded),
+  .stage.remote-visible.keyboard-open .search-dock.pc-expanded{
+    right:calc(var(--remote-panel-width) + var(--remote-panel-right) + 6px);
+    left:7px;
+  }
+  .stage.remote-visible .search-dock.pc-expanded{
+    top:58px;
+    max-height:min(calc(100% - 75px),45dvh);
+  }
+  .stage.remote-visible.keyboard-open .search-dock.pc-expanded{
+    top:58px;
+    max-height:max(52px,calc(100% - var(--virtual-keyboard-height,250px) - 66px));
+  }
+  .stage.remote-visible .stage-quick-actions{display:none}
+}
+@media(max-width:420px){
+  .stage{--remote-panel-width:145px;--remote-panel-right:6px}
+  .stage .remote-pair-box canvas{width:min(100%,137px)}
+  .stage .remote-pair-box{padding:5px}
+  .stage .remote-pair-box p{font-size:.61rem}
+}
+@media(max-width:340px){
+  .stage{--remote-panel-width:132px;--remote-panel-right:5px}
+  .stage .remote-pair-box canvas{width:min(100%,124px)}
+}
+@media(max-height:520px) and (pointer:coarse){
+  .stage .remote-pair-panel{max-height:calc(100% - 62px)}
+  .stage.remote-visible .search-dock.pc-expanded{max-height:min(120px,calc(100% - 70px))}
+}
