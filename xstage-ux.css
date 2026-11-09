@@ -553,3 +553,25 @@ body.xstage-ui-v2 .stage.playing .stage-hero{opacity:.18}
 @media(max-height:530px) and (orientation:landscape){
   body.xstage-ui-v2 .stage-hero{top:52%;transform:translate(-50%,-50%) scale(.72)}
 }
+
+
+/* Inline feedback and visible active states. */
+body.xstage-ui-v2 .stage .stage-status-toast{
+  position:absolute;z-index:72;bottom:calc(var(--xs-bottom) + 13px);
+  left:50%;transform:translateX(-50%);
+  width:min(640px,calc(100% - 20px));padding:10px 14px;
+  border:1px solid #ed8188;border-radius:10px;
+  background:#381322ec;color:#ffe0df;text-align:center;
+  font-size:clamp(.76rem,1vw,.94rem);line-height:1.4;
+  box-shadow:0 7px 25px #000a;
+}
+body.xstage-ui-v2 .stage .stage-status-toast[hidden]{display:none!important}
+body.xstage-ui-v2 .stage-toolbar .toolbar-button[aria-expanded="true"]{
+  background:#123f5d;border-color:#64d4ef;box-shadow:0 0 11px #00b8eb65;
+}
+body.xstage-ui-v2 .stage-queue-toggle[aria-expanded="true"] span[aria-hidden="true"]{
+  display:inline-block;transform:rotate(180deg)
+}
+@media(max-width:620px){
+  body.xstage-ui-v2 .stage-status-toast{bottom:calc(var(--xs-bottom) + 6px);padding:8px}
+}
