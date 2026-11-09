@@ -108,8 +108,15 @@
       mute.setAttribute('aria-pressed',String(!!data.muted));
       mute.textContent=data.muted?'🔇 เปิดเสียง':'🔊 ปิดเสียง';
       const medley=$('remote-medley');medley.setAttribute('aria-pressed',String(!!data.medley));
-      medley.textContent=data.medley?'♫ ปิดเมดเลย์':'♫ เปิดเมดเลย์ต่อเพลงอัตโนมัติ';
-      $('remote-scale-label').textContent=Math.round((Number(data.scale)||1)*100)+'%';
+      medley.textContent=data.medley?'♫ ปิดสุ่มเพลงต่อเนื่อง':'♫ เปิดสุ่มเพลงต่อเนื่อง';
+      const full=!!data.fullscreen;
+      $('remote-screen-state').textContent=full
+        ?'จอหลักอยู่ในโหมด Fullscreen · กด “ย่อจอหลัก” เพื่อออก'
+        :data.fullscreenPending
+          ?'รอยืนยันเปิด Fullscreen · แตะปุ่มที่แสดงบนจอหลักหนึ่งครั้ง'
+          :'จอหลักแสดงแบบปกติ · กด “เต็มจอหลัก” เพื่อขอเปิด Fullscreen';
+      $('remote-fullscreen-on').disabled=full;
+      $('remote-fullscreen-off').disabled=!full&&!data.fullscreenPending;
       if(!ready && !status.textContent.includes('ยังไม่พร้อม'))
         report('เชื่อมต่อแล้ว · เจ้าของเวทีต้องเปิดคลัง Google Drive ก่อนขอเพลง');
     }else if(data.type==='results'){
@@ -135,18 +142,9 @@
   for(const [id,action] of [
     ['remote-playpause','playpause'],['remote-stop','stop'],['remote-next','next'],
     ['remote-vol-down','volume-down'],['remote-vol-up','volume-up'],
-    ['remote-mute','mute'],['remote-view-smaller','view-smaller'],
-    ['remote-view-bigger','view-bigger'],['remote-medley','medley']
+    ['remote-mute','mute'],['remote-fullscreen-on','fullscreen-on'],
+    ['remote-fullscreen-off','fullscreen-off'],['remote-medley','medley']
   ])$(id).addEventListener('click',()=>control(action));
-  $('remote-fullscreen').addEventListener('click',async()=>{
-    try{
-      if(document.fullscreenElement)await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen();
-    }catch{report('เบราว์เซอร์มือถือนี้ไม่รองรับการเปิดเต็มจอ');}
-  });
-  document.addEventListener('fullscreenchange',()=>{
-    $('remote-fullscreen').textContent=document.fullscreenElement?'⛶ ออกจากเต็มจอ':'⛶ เต็มจอมือถือ';
-  });
   if(!hostId||!secret||!/^[a-z0-9_-]+$/i.test(hostId)||!/^[a-f0-9]{48}$/i.test(secret)){
     report('QR ไม่ถูกต้อง กรุณาสแกน QR ใหม่จากจอ X-Stage');return;
   }
