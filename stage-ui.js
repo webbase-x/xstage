@@ -85,6 +85,37 @@
       closeMenu();
     });
   });
+
+  const contextMenu=$('xstage-context-menu');
+  function hideContextMenu(){if(contextMenu)contextMenu.hidden=true;}
+  document.addEventListener('contextmenu',event=>{
+    if(!contextMenu)return;
+    if(event.target.closest('input,textarea,select,[contenteditable="true"],.pc-dialog,.remote-pair-panel'))return;
+    if(event.target.closest('.song-item'))return;
+    const stageHit=event.target.closest('.stage,.stage-column,.transport-panel,.stage-toolbar,.mobile-stage-menu');
+    if(!stageHit)return;
+    event.preventDefault();
+    const pad=8,w=contextMenu.offsetWidth||190,h=contextMenu.offsetHeight||300;
+    contextMenu.hidden=false;
+    const left=Math.min(event.clientX,innerWidth-w-pad),top=Math.min(event.clientY,innerHeight-h-pad);
+    contextMenu.style.left=Math.max(pad,left)+'px';
+    contextMenu.style.top=Math.max(pad,top)+'px';
+  });
+  document.addEventListener('pointerdown',event=>{if(contextMenu&&!contextMenu.hidden&&!event.target.closest('#xstage-context-menu'))hideContextMenu();});
+  window.addEventListener('blur',hideContextMenu);
+  window.addEventListener('resize',hideContextMenu);
+  contextMenu?.addEventListener('click',event=>{
+    const button=event.target.closest('button[data-cmd]');if(!button)return;
+    const cmd=button.dataset.cmd;hideContextMenu();
+    if(cmd==='find')$('pc-find')?.click();
+    else if(cmd==='queue')$('stage-queue-toggle')?.click();
+    else if(cmd==='eq')$('pc-eq')?.click();
+    else if(cmd==='stage')$('pc-stage-pop')?.click();
+    else if(cmd==='medley')$('mobile-medley-toggle')?.click();
+    else if(cmd==='tools')$('stage-tools-toggle')?.click();
+    else if(cmd==='fullscreen')$('fullscreen')?.click();
+  });
+
   const favoriteToggle=$('pc-favorites-only'),favoriteMenu=$('mobile-favorites');
   favoriteMenu?.addEventListener('click',()=>{
     if(!favoriteToggle)return;
