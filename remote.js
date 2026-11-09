@@ -111,6 +111,18 @@
     if(!connected)return;
     if(data.type==='status'){
       ready=!!data.ready;
+      const showControls=data.showControls!==false;
+      $('remote-tab-control').hidden=!showControls;
+      if(!showControls&&activeTab==='control')setTab('search');
+      const perms=data.permissions||{};
+      for(const [id,key] of [['remote-playpause','playpause'],['remote-stop','stop'],['remote-next','next'],
+        ['remote-vol-down','volume-down'],['remote-vol-up','volume-up'],['remote-mute','mute'],
+        ['remote-fullscreen-on','fullscreen-on'],['remote-fullscreen-off','fullscreen-off'],['remote-medley','medley']]){
+        $(id).hidden=!showControls||perms[key]===false;
+      }
+      $('remote-search').disabled=perms.search===false;
+      if(perms.search===false){results.replaceChildren();results.textContent='เจ้าของเวทีปิดการค้นหาเพลง';}
+      document.querySelectorAll('.remote-request-button').forEach(b=>b.disabled=perms.request===false);
       nowTitle.textContent=String(data.now?.title||'ยังไม่ได้เลือกเพลง');
       nowArtist.textContent=String(data.now?.artist||'X-Stage Karaoke');
       drawQueue(data.queue,data.queueCount);
