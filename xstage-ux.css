@@ -1322,3 +1322,70 @@ body.xstage-ui-v2 .xstage-eq-display-wrap select{
   border:1px solid #36596d;border-radius:6px;padding:5px 7px;font-size:.68rem
 }
 body.xstage-ui-v2 .xstage-eq-display-wrap + #xstage-eq-reset{margin-left:0}
+
+/* 0.9.85: proportional resize from bottom-right with no internal scrollbars. */
+body.xstage-ui-v2 .xstage-eq-panel{
+  width:min(1160px,94vw);height:min(600px,78vh);
+  min-width:760px;min-height:460px;
+  overflow:hidden!important;resize:both;
+  grid-template-rows:42px 40px minmax(64px,14%) minmax(280px,1fr) 28px
+}
+body.xstage-ui-v2 .xstage-eq-rta-wrap,
+body.xstage-ui-v2 .xstage-eq-main,
+body.xstage-ui-v2 .xstage-eq-bands{
+  min-width:0;min-height:0;overflow:hidden!important
+}
+body.xstage-ui-v2 .xstage-eq-main{
+  grid-template-columns:minmax(0,1fr) clamp(60px,6.5%,76px);
+  gap:clamp(5px,.7vw,9px);padding:0 clamp(6px,.7vw,10px) 7px
+}
+body.xstage-ui-v2 .xstage-eq-bands{
+  grid-template-columns:repeat(31,minmax(0,1fr))!important;
+  gap:clamp(1px,.24vw,4px)!important;
+  padding:clamp(5px,.6vw,8px) 2px 4px!important;
+  border-right:1px solid #263a46
+}
+body.xstage-ui-v2 .xstage-eq-band{
+  min-width:0!important;
+  grid-template-rows:18px clamp(36px,10%,54px) minmax(170px,1fr) 20px;
+  gap:clamp(2px,.25vw,4px)
+}
+body.xstage-ui-v2 .xstage-eq-gain{
+  min-width:0;width:100%;overflow:hidden;text-align:center;
+  font-size:clamp(.42rem,.52vw,.56rem)
+}
+body.xstage-ui-v2 .xstage-eq-band-light{
+  width:clamp(5px,.62vw,9px);max-width:100%
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]{
+  width:clamp(16px,1.7vw,26px)!important;
+  min-width:0;min-height:0;height:100%
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-webkit-slider-thumb{
+  width:clamp(16px,1.55vw,22px);height:13px
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-moz-range-thumb{
+  width:clamp(16px,1.55vw,22px);height:13px
+}
+body.xstage-ui-v2 .xstage-eq-hz{
+  width:100%;overflow:hidden;text-overflow:clip;
+  font-size:clamp(.38rem,.48vw,.52rem)!important
+}
+body.xstage-ui-v2 .xstage-eq-meters-side{
+  min-width:0;padding:clamp(5px,.6vw,9px) 3px 5px;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(3px,.45vw,8px)
+}
+body.xstage-ui-v2 .xstage-eq-meters-side meter{
+  width:clamp(10px,1.1vw,16px);min-height:0;height:100%
+}
+body.xstage-ui-v2 .xstage-eq-toolbar{
+  min-width:0;overflow:hidden;gap:clamp(5px,.7vw,10px)
+}
+body.xstage-ui-v2 .xstage-eq-toolbar label,
+body.xstage-ui-v2 .xstage-eq-toolbar button,
+body.xstage-ui-v2 #xstage-eq-mode{flex:0 1 auto;min-width:0}
+body.xstage-ui-v2 .xstage-eq-toolbar select{min-width:0;max-width:190px}
+body.xstage-ui-v2 .xstage-eq-footer{overflow:hidden;white-space:nowrap}
+@media(max-width:900px){
+  body.xstage-ui-v2 .xstage-eq-panel{min-width:680px;min-height:430px}
+}
