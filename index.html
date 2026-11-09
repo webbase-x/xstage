@@ -4,18 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#071525">
-  <meta name="description" content="X-Stage Karaoke Online – เล่นเพลงจาก Google Drive ส่วนตัว ค้นหาและจัดคิวในหน้าจอเดียว">
-  <title>X-Stage Karaoke Online | คลังเพลงส่วนตัว</title>
+  <meta name="description" content="X-Stage Karaoke Online – เว็บแอปคาราโอเกะสำหรับคลังเพลง Google Drive ส่วนตัว">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="X-Stage">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>X-Stage Karaoke Online | เวทีคาราโอเกะส่วนตัว</title>
   <link rel="icon" href="assets/xstage-app-icon.svg" type="image/svg+xml">
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="X-Stage">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=0959">
+  <link rel="stylesheet" href="style.css?v=0960">
+  <link rel="stylesheet" href="xstage-ux.css?v=0960">
 </head>
-<body>
+<body class="xstage-ui-v2">
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
@@ -29,49 +30,44 @@
         <button id="logout" class="button button-ghost" type="button" hidden>ออกจากระบบ</button>
       </div>
     </header>
-
     <div id="status" class="status-line" role="status" aria-live="polite">เข้าสู่ระบบ Google เพื่อเปิดคลังเพลงส่วนตัว</div>
-
-    <div class="studio-layout" id="studio">
-      
-
+    <main class="studio-layout" id="studio">
       <section class="stage-column" aria-label="เวทีคาราโอเกะ">
         <div id="stage" class="stage" role="group" aria-label="เวที X-Stage Karaoke">
           <div class="stage-shade"></div>
-          <div class="mobile-stage-header">
-            <a class="mobile-stage-brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-              <img src="assets/xstage-logo.jpg" width="32" height="32" alt="">
-              <span><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE</small></span>
-            </a>
+          <div class="stage-ambience" aria-hidden="true"></div>
+          <header class="mobile-stage-header stage-toolbar" aria-label="คำสั่ง X-Stage">
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle toolbar-button" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
+            <div class="stage-search-slot"><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
+        <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
+        <label class="search-box" for="search"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="รหัส / ชื่อเพลง / ศิลปิน" aria-label="ค้นหาเพลง" disabled><kbd>Ctrl F</kbd></label>
+        <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
+        <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
+        <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
+      </aside></div>
+            <button id="toggle-keyboard" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="virtual-keyboard" aria-expanded="false" title="เปิดหรือซ่อนแป้นพิมพ์">⌨ <span>แป้นพิมพ์</span></button>
+            <button id="toggle-remote" class="stage-action toolbar-button toolbar-aux qr-toolbar-button" type="button" aria-controls="remote-pair-panel" aria-expanded="false" title="เปิดหรือซ่อนรีโมท QR">▦ <span>รีโมท QR</span></button>
+            <button id="toolbar-install-app" class="toolbar-button toolbar-install toolbar-aux" type="button" title="ติดตั้ง X-Stage Karaoke">↓ <span>ติดตั้งแอป</span></button>
+            <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
-            <button id="mobile-menu-toggle" class="mobile-menu-toggle" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
-          </div>
+          </header>
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
+            <button type="button" id="mobile-home-toggle">⌂ หน้าแรก</button>
             <button type="button" id="mobile-queue-toggle">♫ คิวเพลง <span id="mobile-queue-count">0</span></button>
             <button type="button" id="mobile-tools-toggle">⚙ เครื่องมือและตั้งค่า</button>
             <button type="button" id="mobile-keyboard-toggle">⌨ แป้นพิมพ์บนจอ</button>
             <button type="button" id="mobile-remote-toggle" aria-controls="remote-pair-panel" aria-expanded="false">▦ รีโมทมือถือ QR</button>
             <button type="button" id="mobile-install-app">⬇ ติดตั้ง X-Stage เป็นแอป</button>
             <button type="button" id="mobile-fullscreen-toggle">⛶ เต็มหน้าจอ / กลับ</button>
+            <button type="button" id="mobile-about-toggle">ⓘ เกี่ยวกับ X-Stage</button>
             <button type="button" id="mobile-login-toggle">G เข้าสู่ระบบ Google</button>
             <button type="button" id="mobile-logout-toggle" hidden>ออกจากระบบ Google</button>
           </nav>
-          <aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
-        <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
-        <label class="search-box" for="search"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="รหัส / ชื่อเพลง / ศิลปิน" aria-label="ค้นหาเพลง" disabled><kbd>Ctrl F</kbd></label>
-        <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
-        <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
-        <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
-      </aside>
           <div class="stage-metrics" aria-label="นาฬิกา"><time id="stage-clock" class="stage-clock">--:--:--</time></div>
           <div class="stage-label"><span class="on-air-dot"></span><span>NOW PLAYING</span><span id="stage-code" class="stage-code">—</span></div>
           <div id="stage-idle" class="stage-idle"><span class="stage-idle-icon" aria-hidden="true">♪</span><strong>พร้อมร้องเพลง</strong><span>ค้นหาเพลงและกด Enter เพื่อเริ่มเล่น</span></div>
           <canvas id="lyrics" aria-label="เนื้อร้องคาราโอเกะแสดงแบบไฮไลต์ตามเวลา" width="1200" height="300"></canvas>
-          <div class="stage-quick-actions" aria-label="เครื่องมือบนเวที">
-            <button id="toggle-keyboard" class="stage-action" type="button" aria-controls="virtual-keyboard" aria-expanded="false">⌨ แป้นพิมพ์</button>
-            <button id="toggle-remote" class="stage-action" type="button" aria-controls="remote-pair-panel" aria-expanded="false">▦ รีโมท QR</button>
-          </div>
           <section id="virtual-keyboard" class="virtual-keyboard" hidden aria-label="แป้นพิมพ์บนหน้าจอ">
             <div class="virtual-key-head"><strong id="virtual-language">ภาษาไทย</strong><button id="virtual-close" type="button">ซ่อนแป้นพิมพ์ ✕</button></div>
             <div id="virtual-keys" class="virtual-keys"></div>
@@ -95,20 +91,47 @@
             <div id="xstage-install-content"></div>
             <button type="button" id="xstage-install-close">ปิด</button>
           </dialog>
-          <div class="stage-caption"><div class="stage-caption-text"><strong id="now-playing">ยังไม่ได้เลือกเพลง</strong><small id="now-artist">X-Stage Karaoke Online</small></div><button id="fullscreen" class="icon-control" type="button" aria-label="แสดงเวทีเต็มหน้าจอ" title="เต็มหน้าจอ (F11)">⛶</button></div>
+          <div class="transport-panel" aria-label="แผงควบคุมเพลง">
+            <div class="transport-now">
+              <img class="transport-cover" src="assets/xstage-app-icon-192.png" width="58" height="58" alt="">
+              <div class="transport-song-info">
+                <span class="transport-now-caption">กำลังเล่น</span>
+                <strong id="now-playing">ยังไม่ได้เลือกเพลง</strong>
+                <small id="now-artist">X-Stage Karaoke Online</small>
+                <div class="timeline">
+                  <input id="seek" type="range" min="0" max="1000" value="0" aria-label="ตำแหน่งการเล่น" disabled>
+                  <span class="transport-time"><span id="elapsed">00:00</span><span aria-hidden="true"> / </span><span id="duration">00:00</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="transport-row">
+              <div class="transport-main">
+                <button id="stage-shuffle" class="icon-control" type="button" title="สุ่มเพลง" aria-label="สุ่มเพลง">⤨</button>
+                <button id="previous" class="icon-control" type="button" title="เพลงก่อนหน้า" aria-label="เพลงก่อนหน้า" disabled>⏮</button>
+                <button id="play-pause" class="big-play" type="button" title="เล่น/พัก (F5)" aria-label="เล่นหรือพัก" disabled>▶</button>
+                <button id="next" class="icon-control" type="button" title="เพลงถัดไป (F6)" aria-label="เพลงถัดไป" disabled>⏭</button>
+                <button id="stop" class="icon-control" type="button" title="หยุด (F8)" aria-label="หยุด" disabled>⏹</button>
+                <button id="stage-repeat" class="icon-control" type="button" title="เปิด/ปิดวนเพลง" aria-label="เปิด/ปิดวนเพลง" aria-pressed="false">⇄</button>
+              </div>
+              <div class="transport-right">
+                <label class="volume-control"><span aria-hidden="true">◖))</span><span class="sr-only">ระดับเสียง</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="ระดับเสียง"></label>
+                <span id="stage-volume-value" class="transport-volume-value">80%</span>
+                <label class="speed-control">ความเร็ว <select id="speed" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
+                <label class="repeat-control"><input id="repeat" type="checkbox"> วนเพลง</label>
+              </div>
+            </div>
+            <button id="stage-queue-toggle" class="stage-queue-toggle" type="button" aria-controls="stage-queue-panel" aria-expanded="false">☷ <span>คิวเพลง</span> <b id="stage-queue-count">0</b> <span aria-hidden="true">⌃</span></button>
+            <p id="play-status" class="play-status" role="status"></p>
+            <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-install-app">⬇ ติดตั้งแอป</button></nav>
+          </div>
+          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป · F8 หยุด</div></div></aside>
           <div id="gate" class="login-gate"><div class="gate-panel"><span class="gate-glow">✦ PRIVATE STAGE</span><h1>เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p>เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><small>ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small></div></div>
-        </div>
-        <div class="transport-panel">
-          <div class="timeline"><span id="elapsed">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="ตำแหน่งการเล่น" disabled><span id="duration">00:00</span></div>
-          <div class="transport-row"><div class="transport-main"><button id="previous" class="icon-control" type="button" title="เพลงก่อนหน้า" aria-label="เพลงก่อนหน้า" disabled>⏮</button><button id="play-pause" class="big-play" type="button" title="เล่น/พัก (F5)" aria-label="เล่นหรือพัก" disabled>▶</button><button id="stop" class="icon-control" type="button" title="หยุด (F8)" aria-label="หยุด" disabled>⏹</button><button id="next" class="icon-control" type="button" title="เพลงถัดไป (F6)" aria-label="เพลงถัดไป" disabled>⏭</button></div><div class="transport-right"><label class="volume-control"><span aria-hidden="true">◖</span><span class="sr-only">ระดับเสียง</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="ระดับเสียง"></label><label class="speed-control">ความเร็ว <select id="speed" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label><label class="repeat-control"><input id="repeat" type="checkbox"> วนเพลง</label></div></div>
-          <p id="play-status" class="play-status" role="status"></p><nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-install-app">⬇ ติดตั้งแอป</button></nav>
         </div>
         <audio id="player" preload="metadata" aria-label="เครื่องเล่นเสียง X-Stage"></audio>
       </section>
-
-      <aside class="dock queue-dock" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป · F8 หยุด</div></div></aside>
-    </div>
-    <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog><footer class="bottom-bar"><span>© X-Stage Karaoke · Personal Google Drive Player</span><span id="connection"><span class="footer-dot"></span> Private & Secure</span><a href="privacy.html">ความเป็นส่วนตัว</a></footer>
+    </main>
+    <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog>
+    <footer class="bottom-bar"><span>© X-Stage Karaoke · Personal Google Drive Player</span><span id="connection"><span class="footer-dot"></span> Private & Secure</span><a href="privacy.html">ความเป็นส่วนตัว</a></footer>
   </div>
   <script>
 // Standalone stage clock: survives player initialization or Google login failures.
@@ -116,11 +139,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0959" defer></script><script src="pc-extensions.js?v=0959" defer></script>
+  <script src="app.js?v=0960" defer></script><script src="pc-extensions.js?v=0960" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0959" defer></script>
-  <script src="mobile-layout.js?v=0959" defer></script>
-  <script src="pwa-install.js?v=0959" defer></script>
+  <script src="stage-controls.js?v=0960" defer></script>
+  <script src="mobile-layout.js?v=0960" defer></script>
+  <script src="pwa-install.js?v=0960" defer></script>
+
+  <script src="stage-ui.js?v=0960" defer></script>
 </body>
 </html>
