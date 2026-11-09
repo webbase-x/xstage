@@ -208,6 +208,15 @@ function buildEqBands(){
   const light=document.createElement('i');light.className='xstage-eq-band-light';light.style.setProperty('--level','0');
   const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='.5';input.value=String(saved[i]);input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz');
   input.addEventListener('input',()=>{eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='flat';gain.textContent=(+input.value>0?'+':'')+(+input.value).toFixed(1);if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
+  input.addEventListener('wheel',event=>{
+    event.preventDefault();
+    const step=Number(input.step)||0.5;
+    const min=Number(input.min),max=Number(input.max);
+    const next=Math.max(min,Math.min(max,Number(input.value)+(event.deltaY<0?step:-step)));
+    if(next===Number(input.value))return;
+    input.value=String(next);
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  },{passive:false});
   const hz=document.createElement('span');hz.className='xstage-eq-hz';hz.textContent=eqFreqLabel(freq);
   band.append(gain,light,input,hz);eqBands.append(band);eqBandInputs.push(input);eqBandLights.push(light);
  });
