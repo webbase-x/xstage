@@ -450,3 +450,118 @@
 .stage.remote-visible.keyboard-open .remote-pair-box canvas{
   width:min(100%,118px);
 }
+
+
+/* v0959: one stage header on every screen size; install UI inside the same menu. */
+.topbar{display:none!important}
+.mobile-stage-header{
+  position:absolute;z-index:18;top:0;left:0;right:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) max-content max-content;
+  align-items:center;gap:clamp(5px,1vw,12px);
+  min-height:54px;
+  padding:6px clamp(7px,1vw,14px);
+  background:linear-gradient(#041727f3,#061827da 78%,#06182700);
+}
+.mobile-stage-brand{display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden;color:#edfaff;text-decoration:none}
+.mobile-stage-brand img{
+  width:clamp(27px,2.3vw,39px);
+  height:clamp(27px,2.3vw,39px);
+  flex-shrink:0;object-fit:cover;border-radius:9px;
+  border:1px solid #58bbd5;
+}
+.mobile-stage-brand span{display:block;min-width:0;overflow:hidden}
+.mobile-stage-brand strong{
+  display:block;min-width:0;
+  font-size:clamp(.76rem,1.35vw,1.15rem);
+  letter-spacing:.01em;font-style:italic;white-space:nowrap;
+  text-overflow:ellipsis;overflow:hidden;
+}
+.mobile-stage-brand em{color:#f2c76c}
+.mobile-stage-brand small{display:none}
+.mobile-stage-clock{
+  display:block;position:static;
+  padding:5px 8px;border-radius:8px;
+  color:#fff;background:#071a2bdb;border:1px solid #356f84;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+  font-size:clamp(.69rem,1.1vw,.92rem);font-weight:900;letter-spacing:0;
+  text-shadow:0 2px 5px #000;
+}
+.mobile-menu-toggle{
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  min-height:36px;padding:6px 10px;
+  color:#e6fcff;background:#0b3145e8;
+  border:1px solid #428fa2;border-radius:9px;
+  font-size:.86rem;font-weight:850;white-space:nowrap;
+}
+.mobile-menu-toggle span{display:inline}
+.mobile-stage-menu{
+  position:absolute;z-index:24;top:57px;right:9px;
+  width:min(320px,calc(100% - 18px));
+  max-height:min(70dvh,calc(100% - 66px));
+  overflow-y:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:5px;
+  padding:9px;background:#081b2df6;
+  border:1px solid #44849d;border-radius:12px;
+  box-shadow:0 14px 46px #000c;
+  backdrop-filter:blur(10px);
+}
+.mobile-stage-menu[hidden]{display:none!important}
+.mobile-stage-menu button{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:10px;width:100%;min-height:38px;
+  text-align:left;padding:8px 11px;background:#102e44;
+  color:#e7faff;border:1px solid #325971;border-radius:8px;
+  font-size:.81rem;
+}
+.mobile-stage-menu button[hidden]{display:none!important}
+.mobile-stage-menu button:disabled{opacity:.6}
+#mobile-install-app{border-color:#51b1bc;background:#12475a;color:#aafbea}
+.mobile-menu-status{font-size:.72rem;color:#91bfd0;line-height:1.45;padding:4px 5px 8px;border-bottom:1px solid #36516a}
+.stage .stage-metrics{display:none!important}
+.stage .search-dock:not(.pc-expanded){
+  top:60px;left:12px;right:12px;max-height:54px;
+}
+.stage .search-dock.pc-expanded{
+  top:60px;left:12px;right:12px;
+  max-height:min(55vh,calc(100% - 74px));
+}
+.stage.keyboard-open .search-dock.pc-expanded{
+  top:60px;
+  max-height:max(56px,calc(100% - var(--virtual-keyboard-height,250px) - 70px));
+}
+.xstage-install-dialog{
+  position:fixed;inset:0;z-index:100;
+  width:min(92vw,435px);max-height:min(80dvh,550px);
+  border:1px solid #4aa0b0;border-radius:15px;
+  background:#071c2ff5;color:#eaf8ff;
+  padding:20px;box-shadow:0 20px 55px #000b;
+}
+.xstage-install-dialog::backdrop{background:#000b;backdrop-filter:blur(2px)}
+.xstage-install-dialog h2{font-size:1.16rem;margin:0 0 11px;color:#8dfff0}
+.xstage-install-dialog p{font-size:.84rem;line-height:1.6;margin:9px 0}
+.xstage-install-dialog ol{margin:8px 0 13px;padding-left:25px;line-height:1.65;font-size:.85rem}
+.xstage-install-dialog li{margin:7px 0}
+.xstage-install-dialog .xstage-install-note{font-size:.75rem;color:#a7c6d4}
+#xstage-install-close{margin-top:9px;border:1px solid #54a4a7;border-radius:8px;background:#11556a;color:#fff;padding:9px 25px}
+@media(max-width:820px),(max-height:520px) and (pointer:coarse){
+  .mobile-stage-header{min-height:52px}
+  .mobile-menu-toggle span{display:none}
+  .mobile-stage-clock{font-size:clamp(.65rem,2.25vw,.84rem);padding:5px}
+  .stage .search-dock:not(.pc-expanded),
+  .stage .search-dock.pc-expanded{top:58px;left:7px;right:7px}
+  .stage.keyboard-open .search-dock.pc-expanded{top:58px;left:7px;right:7px}
+  .stage.remote-visible .search-dock.pc-expanded,
+  .stage.remote-visible .search-dock:not(.pc-expanded),
+  .stage.remote-visible.keyboard-open .search-dock.pc-expanded{
+    right:calc(var(--remote-panel-width) + var(--remote-panel-right) + 6px)
+  }
+}
+@media(max-width:360px){
+  .mobile-stage-header{gap:4px;padding:5px}
+  .mobile-stage-brand{gap:4px}
+  .mobile-stage-brand strong{font-size:.67rem}
+  .mobile-stage-brand img{width:25px;height:25px}
+  .mobile-stage-clock{font-size:.63rem;padding:5px 4px}
+  .mobile-menu-toggle{min-width:30px;min-height:31px;padding:3px 6px}
+}
