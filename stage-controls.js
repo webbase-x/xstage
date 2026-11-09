@@ -133,6 +133,52 @@
   const requestClose=byId('remote-request-close');
   const activity=[];
   let session=null, sequence=0;
+  let fullscreenPending=false;
+  // A WebRTC command cannot grant the browser's fullscreen user activation.
+  // Exiting fullscreen works remotely; entering shows a one-tap button on stage.
+  const fullscreenConfirm=document.createElement('button');
+  fullscreenConfirm.id='remote-fullscreen-confirm';
+  fullscreenConfirm.type='button';
+  fullscreenConfirm.hidden=true;
+  fullscreenConfirm.textContent='⛶ มือถือขอเปิดเต็มจอ · กดที่จอหลักเพื่อยืนยัน';
+  stage.append(fullscreenConfirm);
+  function hideFullscreenConfirm(){
+    fullscreenPending=false;
+    fullscreenConfirm.hidden=true;
+  }
+  fullscreenConfirm.addEventListener('click',async ()=>{
+    try{
+      await stage.requestFullscreen();
+      hideFullscreenConfirm();
+      status('จอหลักเข้าสู่โหมดเต็มจอแล้ว');
+    }catch{
+      status('เบราว์เซอร์ไม่อนุญาตให้เปิดเต็มจอ กรุณาใช้ปุ่ม ⛶ บนจอหลัก');
+      hideFullscreenConfirm();
+    }
+    broadcastStatus();
+  });
+  document.addEventListener('fullscreenchange',()=>{
+    if(document.fullscreenElement===stage)hideFullscreenConfirm();
+    broadcastStatus();
+  });
+  async function setHostFullscreen(full){
+    if(full){
+      if(document.fullscreenElement===stage){hideFullscreenConfirm();broadcastStatus();return;}
+      if(typeof stage.requestFullscreen!=='function'){
+        status('เบราว์เซอร์จอหลักไม่รองรับโหมดเต็มจอ');
+      }else{
+        fullscreenPending=true;fullscreenConfirm.hidden=false;
+        status('มือถือขอเปิดเต็มจอ · แตะปุ่มยืนยันบนจอหลักหนึ่งครั้ง');
+      }
+    }else{
+      hideFullscreenConfirm();
+      if(document.fullscreenElement){
+        try{await document.exitFullscreen();}
+        catch{status('ออกจากเต็มจอไม่ได้ ให้กด Esc บนจอหลัก');}
+      }
+    }
+    broadcastStatus();
+  }
   function status(value){qrStatus.textContent=value;}
   function send(conn,data){if(conn?.open)try{conn.send(data);}catch{}}
   function randomSecret(){
@@ -147,7 +193,8 @@
     return {type:'status',ready:!!state.token,playing:!!ui.player.src&&!ui.player.paused,
       now:songSummary(state.current),queue:state.queue.slice(0,50).map(songSummary),
       queueCount:state.queue.length,volume:Math.round(Number(ui.volume.value)||0),
-      muted:ui.player.muted,medley:!!state.medley,scale:state.visualScale||1};
+      muted:ui.player.muted,medley:!!state.medley,
+      fullscreen:document.fullscreenElement===stage,fullscreenPending};
   }
   function broadcast(msg){
     if(!session)return;
@@ -160,6 +207,7 @@
     for(const entry of active.connections.values())try{entry.conn.close();}catch{}
     try{active.peer?.destroy();}catch{}
     qrApprove.hidden=true;qrReject.hidden=true;
+    hideFullscreenConfirm();
     qrLink.textContent='';qrLink.removeAttribute('href');qrCanvas.hidden=true;
     qrEnd.textContent='สร้าง QR ใหม่';status('ปิดการเชื่อมต่อรีโมทแล้ว');
   }
@@ -227,8 +275,10 @@
       audio.muted=false;
     }else if(action==='mute'){
       audio.muted=!audio.muted;
-    }else if(action==='view-bigger'||action==='view-smaller'){
-      setStageVisualScale((state.visualScale||1)+(action==='view-bigger'?.1:-.1));
+    }else if(action==='fullscreen-on'){
+      void setHostFullscreen(true);
+    }else if(action==='fullscreen-off'){
+      void setHostFullscreen(false);
     }else if(action==='medley'){
       setMedleyMode(!state.medley);
     }else return;
