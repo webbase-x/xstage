@@ -7,12 +7,12 @@ const dock=$pc('pc-search'),toggle=$pc('pc-hide-search'),dialog=$pc('pc-dialog')
 const favorites=new Set();
 let abA=null,abB=null,lyricScale=1,lyricColor='#ecf7ff';
 const audio=ui.player;
-function expand(open){dock.classList.toggle('pc-expanded',!!open);toggle.textContent=open?'▴':'▾';}
+function expand(open){dock.classList.toggle('pc-expanded',!!open);toggle.textContent=open?'▴':'▾';ui.search.setAttribute('aria-expanded',String(!!open));}
 function focusSearch(){if(!state.token)return;expand(true);ui.search.focus();ui.search.select();}
 $pc('pc-find').onclick=focusSearch;
 toggle.onclick=()=>expand(!dock.classList.contains('pc-expanded'));
 ui.search.addEventListener('focus',()=>{if(state.token)expand(true)});
-ui.search.addEventListener('input',()=>{if(state.token)expand(true)});
+ui.search.addEventListener('input',()=>{if(state.token){expand(true);selectSong(0,false);}});
 ui.search.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();expand(false);ui.search.blur();}if(e.key==='Enter')queueMicrotask(()=>expand(false));},true);
 ui.songs.addEventListener('dblclick',()=>queueMicrotask(()=>expand(false)));
 document.addEventListener('keydown',e=>{
