@@ -1,6 +1,6 @@
 /* X-Stage Karaoke Online – single-page private Drive player.
  * Only a short-lived Google access token is kept in sessionStorage until tab close/expiry;
- * songs and catalog data are never persisted by this client. */
+ * catalog metadata can be cached locally per verified Google account; media files remain private and transient. */
 'use strict';
 const cfg = window.XSTAGE_CONFIG || {};
 const $ = id => document.getElementById(id);
@@ -21,8 +21,61 @@ const state = {
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
   userStopped: false, visualScale: 1,
-  catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map()
+  catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
+  queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0
 };
+const CATALOG_DB_NAME='xstage-private-catalog-v1';
+const CATALOG_DB_STORE='catalogs';
+function openCatalogDatabase(){
+  return new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(Error('IndexedDB unavailable'));return;}
+    const request=indexedDB.open(CATALOG_DB_NAME,1);
+    request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(CATALOG_DB_STORE))request.result.createObjectStore(CATALOG_DB_STORE);};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||Error('IndexedDB unavailable'));
+  });
+}
+async function catalogStorage(action,key,value){
+  const db=await openCatalogDatabase();
+  try{return await new Promise((resolve,reject)=>{
+    const tx=db.transaction(CATALOG_DB_STORE,action==='get'?'readonly':'readwrite');
+    const store=tx.objectStore(CATALOG_DB_STORE);
+    const request=action==='get'?store.get(key):action==='delete'?store.delete(key):store.put(value,key);
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+    tx.onerror=()=>reject(tx.error);
+  });}finally{db.close();}
+}
+async function loadCachedCatalog(sub,pointer){
+  if(!sub||!pointer?.generation)return null;
+  try{
+    const saved=await catalogStorage('get',sub);
+    if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
+       JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
+    const catalog=saved.catalog;
+    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(Number.isSafeInteger(pointer.songCount)&&catalog.songs.length!==pointer.songCount)return null;
+    return catalog;
+  }catch{return null;}
+}
+async function saveCachedCatalog(sub,pointer,catalog){
+  if(!sub||!pointer?.generation||!Array.isArray(catalog?.songs))return;
+  try{await catalogStorage('put',sub,{
+    generation:String(pointer.generation),catalogFileId:pointer.catalogFileId,
+    deltaFileIds:pointer.deltaFileIds||[],catalog
+  });}catch(error){console.warn('X-Stage local catalog cache:',error?.message||error);}
+}
+async function clearCatalogStorage(){
+  try{
+    const db=await openCatalogDatabase();
+    db.close();
+    await new Promise((resolve,reject)=>{
+      const req=indexedDB.deleteDatabase(CATALOG_DB_NAME);
+      req.onsuccess=()=>resolve();req.onerror=()=>reject(req.error);
+      req.onblocked=()=>reject(Error('กรุณาปิดแท็บ X-Stage อื่นก่อน'));
+    });
+  }catch(error){throw Error('ล้างฐานเพลงแคชไม่ได้: '+(error?.message||error));}
+}
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
 const ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
@@ -152,6 +205,7 @@ async function pollPublishedCatalog(){
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);
     state.catalogGeneration=pointer.generation;
+    void saveCachedCatalog(state.accountSub,pointer,catalog);
     state.medleyPoolSource=null;
     ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
     renderSongs();renderQueue();
@@ -174,13 +228,17 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   const pointers = await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
   if (pointers.length !== 1) throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
   const pointer = await privateJson(pointers[0].id, token);
-  const catalog = await readPublishedCatalog(pointer,token);
   const accountResult = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'});
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
   const account = await accountResult.json();
   if (!account.email_verified || !account.sub) throw Error('ไม่สามารถยืนยันบัญชี Google ได้');
   if (expectedSub && account.sub!==expectedSub) throw Error('บัญชี Google ไม่ตรงกับเซสชันเดิม กรุณาเข้าสู่ระบบอีกครั้ง');
   if (authId !== state.authId) return;
+  setStatus('กำลังตรวจรุ่นฐานเพลงล่าสุด…');
+  const cached=await loadCachedCatalog(account.sub,pointer);
+  const catalog=cached||await readPublishedCatalog(pointer,token);
+  if(authId!==state.authId)return;
+  if(!cached)void saveCachedCatalog(account.sub,pointer,catalog);
   state.token = token;
   state.accountSub = account.sub;
   rememberLogin(true);
@@ -198,7 +256,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   ui.search.disabled = false;
   ui.libraryState.textContent = 'เข้าถึงเฉพาะคลังส่วนตัวของบัญชีที่ลงชื่อเข้าใช้';
   ui.songTotal.textContent = `${num(state.songs.length)} เพลง`;
-  setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลงในคลังส่วนตัว`, 'success');
+  setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลงในคลังส่วนตัว${cached?' (ฐานเพลงแคชล่าสุด)':' (ดาวน์โหลดฐานเพลงล่าสุด)'}`, 'success');
   renderSongs(); renderQueue();
   ui.search.focus();
 }
@@ -247,6 +305,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.objectUrl = ''; state.token = ''; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
   state.catalogPointerId='';state.catalogGeneration='';state.catalogCache.clear();
+  releaseQueuePreload();
   state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
   state.medleyPoolSource=null;state.medleyPool=[];state.medleyRecent=[];state.userStopped=false;
   state.current = null;state.lyrics = null;state.selectedIndex = 0;
@@ -403,6 +462,37 @@ function setStageVisualScale(value){
   ui.stage.style.setProperty('--xstage-visual-scale',String(state.visualScale));
   return state.visualScale;
 }
+function releaseQueuePreload(){
+  clearTimeout(state.queuePreloadTimer);state.queuePreloadTimer=null;
+  state.queuePreloadVersion++;
+  state.queuePreload?.controller.abort();
+  state.queuePreload=null;state.queuePrepared=null;
+}
+function scheduleQueuePreload(){
+  clearTimeout(state.queuePreloadTimer);
+  if(!state.token||!state.queue.length){releaseQueuePreload();return;}
+  const song=state.queue[0],token=state.token;
+  if(state.queuePrepared?.song===song&&state.queuePrepared.token===token)return;
+  if(state.queuePreload?.song===song&&state.queuePreload.token===token)return;
+  state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(song,token);},300);
+}
+async function preloadFirstQueueSong(song,token){
+  if(state.queue[0]!==song||state.token!==token)return;
+  const controller=new AbortController(),version=++state.queuePreloadVersion;
+  state.queuePreload?.controller.abort();
+  const task={song,token,controller};state.queuePreload=task;
+  try{
+    const [response,lyrics]=await Promise.all([
+      privateFile(song.audio.fileId,token,{signal:controller.signal}),
+      privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+    ]);
+    const blob=await response.blob();
+    if(version!==state.queuePreloadVersion||state.queue[0]!==song||state.token!==token||
+       !blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return;
+    state.queuePrepared={song,token,blob,lyrics};
+  }catch(error){if(error.name!=='AbortError')console.warn('X-Stage queue prefetch:',error.message);}
+  finally{if(state.queuePreload===task)state.queuePreload=null;}
+}
 function prefetchMedleyNext(){
   if(!state.medley||!state.token||state.loading)return;
   const song=nextMedleyCandidate(),token=state.token;
@@ -428,9 +518,10 @@ function medleyTick(){
 }
 function addToQueue(song) {
   if (!playable(song)) return;
-  state.queue.push(song);renderQueue();setPlayStatus(`เพิ่มเข้าคิว: ${song.title||song.code}`);
+  state.queue.push(song);renderQueue();scheduleQueuePreload();setPlayStatus(`เพิ่มเข้าคิว: ${song.title||song.code}`);
 }
 function renderQueue() {
+  scheduleQueuePreload();
   ui.queue.replaceChildren();ui.queueCount.textContent=String(state.queue.length);
   ui.clearQueue.disabled=!state.queue.length;
   ui.next.disabled=!state.queue.length;
@@ -453,6 +544,7 @@ function renderQueue() {
 function moveQueue(index,step){const target=index+step;if(target<0||target>=state.queue.length)return;[state.queue[index],state.queue[target]]=[state.queue[target],state.queue[index]];renderQueue();}
 function playNext(){
   const queued=state.queue.shift();
+  scheduleQueuePreload();
   const song=queued||(state.medley?nextMedleyCandidate():null);
   if(!queued)state.medleyUpcoming=null;
   state.userStopped=false;
@@ -487,6 +579,7 @@ function clearIdleStage(message){
   state.medleyCache=null;
   state.medleyPrefetch=null;
   state.medleyUpcoming=null;
+  releaseQueuePreload();
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
   ui.stageCode.textContent='—';
@@ -511,8 +604,9 @@ async function playSong(song,{remember=true}={}) {
   const token=state.token;
   state.loading=true;updateTransport();setPlayStatus('กำลังโหลดเพลงและเนื้อร้องจาก Drive ส่วนตัว…');
   try {
-    const prepared=state.medleyCache?.song===song&&state.token===token ? state.medleyCache : null;
-    if(prepared)state.medleyCache=null;
+    const prepared=(state.queuePrepared?.song===song&&state.queuePrepared.token===token
+      ?state.queuePrepared:state.medleyCache?.song===song&&state.token===token?state.medleyCache:null);
+    if(prepared){if(state.queuePrepared===prepared)state.queuePrepared=null;if(state.medleyCache===prepared)state.medleyCache=null;}
     const [audio,lyrics]=prepared
       ? [prepared.blob,prepared.lyrics]
       : await Promise.all([
