@@ -980,3 +980,58 @@ body.xstage-ui-v2 .stage.stage-hero-hidden .stage-hero{display:none!important}
 
 /* Playback state is already shown in the transport; remove the duplicate bottom-center status. */
 body.xstage-ui-v2 .transport-panel .play-status{display:none!important}
+
+/* 0.9.73: bottom transport layout — controls centered low, queue/tools paired at lower right. */
+body.xstage-ui-v2 .stage .transport-panel{
+  grid-template-columns:minmax(205px,1.35fr) minmax(260px,1.25fr) minmax(260px,.95fr)!important;
+}
+body.xstage-ui-v2 .stage .transport-row{
+  grid-column:2!important;grid-row:1!important;
+  align-self:end!important;justify-self:center!important;
+  width:auto!important;margin-bottom:2px!important;
+}
+body.xstage-ui-v2 .stage .transport-main{
+  justify-content:center!important;
+}
+body.xstage-ui-v2 .stage .transport-right-actions{
+  grid-column:3;grid-row:1;
+  display:flex;align-items:flex-end;justify-content:flex-end;gap:7px;
+  min-width:0;align-self:end
+}
+body.xstage-ui-v2 .stage .transport-right-actions .stage-queue-toggle,
+body.xstage-ui-v2 .stage .transport-right-actions .stage-tools-toggle{
+  min-height:43px;padding:7px 10px;border-radius:11px;
+  border:1px solid #456487;background:#0c1b34;color:#e5f4ff;
+  font-size:clamp(.68rem,.86vw,.88rem);font-weight:800;white-space:nowrap
+}
+body.xstage-ui-v2 .stage .transport-right-actions .stage-queue-toggle{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  width:auto;min-width:104px
+}
+body.xstage-ui-v2 .stage .transport-right-actions .stage-tools-toggle{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  min-width:142px
+}
+body.xstage-ui-v2 .stage .transport-right-actions .stage-tools-toggle[aria-expanded="true"]{
+  border-color:#59d7ec;background:#12466d
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .transport-panel{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto!important;
+  }
+  body.xstage-ui-v2 .stage .transport-now{grid-column:1;grid-row:1}
+  body.xstage-ui-v2 .stage .transport-row{
+    grid-column:1!important;grid-row:2!important;
+    justify-self:center!important;align-self:end!important
+  }
+  body.xstage-ui-v2 .stage .transport-right-actions{
+    grid-column:2;grid-row:1 / span 2;
+    align-self:end;flex-direction:column;gap:4px
+  }
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-queue-toggle,
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-tools-toggle{
+    min-height:32px;min-width:0;width:100%;padding:5px 7px
+  }
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-tools-toggle span{display:none}
+}
