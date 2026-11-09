@@ -442,3 +442,11 @@
   .stage .remote-pair-panel{max-height:calc(100% - 62px)}
   .stage.remote-visible .search-dock.pc-expanded{max-height:min(120px,calc(100% - 70px))}
 }
+
+/* Keep the QR visually present while the onscreen keyboard is open; never auto-collapse it. */
+.stage.remote-visible.keyboard-open .remote-pair-panel{
+  max-height:calc(100% - 62px);
+}
+.stage.remote-visible.keyboard-open .remote-pair-box canvas{
+  width:min(100%,118px);
+}
