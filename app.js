@@ -592,7 +592,7 @@ function drawLyrics(){
         const lines=state.lyrics.lines;
         let idx=-1;
         for(let i=0;i<lines.length;i++){if(Number(lines[i].startTime)<=when)idx=i;else break;}
-        const fontSize=Math.min(61,w*.055,h*.115);
+        const fontSize=Math.min(76,w*.062,h*.14);
         // Keep both lyric lines above the integrated transport/virtual keyboard.
         const density=Math.min(window.devicePixelRatio||1,2);
         const transportHeight=ui.stage.querySelector('.transport-panel')?.getBoundingClientRect().height||0;
@@ -628,7 +628,7 @@ function drawLyrics(){
         if(idx<0){drawLine(String(lines[0].text||''),Math.min(h*.72,currentY),lyricWidth,lyricFont,'#bfe2ef',null,lyricCenter);}
         else{
           const current=lines[idx];drawLine(String(current.text||''),currentY,lyricWidth,lyricFont,'#ecf7ff',lineProgress(current,when),lyricCenter);
-          const next=lines[idx+1];if(next)drawLine(String(next.text||''),nextY,lyricWidth,lyricFont*.77,'#b7d2e0',null,lyricCenter);
+          const next=lines[idx+1];if(next)drawLine(String(next.text||''),nextY,lyricWidth,lyricFont*.88,'#b7d2e0',null,lyricCenter);
         }
       }
     }
