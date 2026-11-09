@@ -5,7 +5,10 @@
 const $pc=id=>document.getElementById(id);
 const dock=$pc('pc-search'),toggle=$pc('pc-hide-search'),dialog=$pc('pc-dialog'),body=$pc('pc-dialog-body');
 const favorites=new Set();
-let abA=null,abB=null,lyricScale=1,lyricColor='#ecf7ff';
+const savedUiPrefs=window.XStageUiPrefs?.read?.()||{};
+let abA=null,abB=null,
+    lyricScale=Number.isFinite(Number(savedUiPrefs.lyricScale))?Math.max(.7,Math.min(1.5,Number(savedUiPrefs.lyricScale))):1,
+    lyricColor=/^#[0-9a-f]{6}$/i.test(String(savedUiPrefs.lyricColor||''))?savedUiPrefs.lyricColor:'#ecf7ff';
 const audio=ui.player;
 function expand(open){dock.classList.toggle('pc-expanded',!!open);toggle.textContent=open?'▴':'▾';ui.search.setAttribute('aria-expanded',String(!!open));}
 function focusSearch(){if(!state.token)return;expand(Boolean(ui.search.value.trim()));ui.search.focus();ui.search.select();}
@@ -85,18 +88,20 @@ const stageArtworks=[
   ['deep-blue','แบบที่ 3 · สีน้ำเงินเข้ม']
 ];
 const backgroundPrefs={
-  main:'neon',
-  singer:'photo'
+  main:['neon','photo','deep-blue'].includes(savedUiPrefs.mainBackground)?savedUiPrefs.mainBackground:'neon',
+  singer:['neon','photo','deep-blue'].includes(savedUiPrefs.singerBackground)?savedUiPrefs.singerBackground:'photo'
 };
 function setMainBackground(value){
   const mode=stageArtworks.some(([v])=>v===value)?value:'neon';
   backgroundPrefs.main=mode;
+  window.XStageUiPrefs?.save?.({mainBackground:mode});
   ui.stage.dataset.stageBackground=mode;
   ui.stage.classList.toggle('stage-hero-hidden',mode==='photo');
 }
 function setSingerBackground(value){
   const mode=stageArtworks.some(([v])=>v===value)?value:'photo';
   backgroundPrefs.singer=mode;
+  window.XStageUiPrefs?.save?.({singerBackground:mode});
   sendBackgroundToSecondScreen();
 }
 function sendBackgroundToSecondScreen(){
@@ -107,9 +112,9 @@ function sendBackgroundToSecondScreen(){
 setMainBackground(backgroundPrefs.main);
 $pc('pc-lyrics-settings').onclick=()=>{
  const d=openDialog('เนื้อร้อง / พื้นหลัง');
- const scale=document.createElement('input');scale.type='range';scale.min='.7';scale.max='1.5';scale.step='.05';scale.value=String(lyricScale);scale.oninput=()=>lyricScale=+scale.value;
+ const scale=document.createElement('input');scale.type='range';scale.min='.7';scale.max='1.5';scale.step='.05';scale.value=String(lyricScale);scale.oninput=()=>{lyricScale=+scale.value;window.XStageUiPrefs?.save?.({lyricScale});};
  const sl=document.createElement('label');sl.textContent='ขนาดตัวอักษร';sl.append(scale);d.append(sl);
- const col=document.createElement('input');col.type='color';col.value=lyricColor;col.oninput=()=>lyricColor=col.value;
+ const col=document.createElement('input');col.type='color';col.value=lyricColor;col.oninput=()=>{lyricColor=col.value;window.XStageUiPrefs?.save?.({lyricColor});};
  const cl=document.createElement('label');cl.textContent='สีเนื้อร้อง';cl.append(col);d.append(cl);
  const offset=document.createElement('input');offset.type='range';offset.min='-3000';offset.max='3000';offset.step='50';offset.value='0';
  offset.oninput=()=>{if(state.lyrics){state.lyrics.audioOffsetMs=(Number(state.lyrics.audioOffsetMs)||0)+(+offset.value-(+offset.dataset.before||0));offset.dataset.before=offset.value;}};
