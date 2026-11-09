@@ -146,7 +146,7 @@
   function snapshot(){
     return {type:'status',ready:!!state.token,playing:!!ui.player.src&&!ui.player.paused,
       now:songSummary(state.current),queue:state.queue.slice(0,50).map(songSummary),
-      queueCount:state.queue.length,volume:Math.round(ui.player.volume*100),
+      queueCount:state.queue.length,volume:Math.round(Number(ui.volume.value)||0),
       muted:ui.player.muted,medley:!!state.medley,scale:state.visualScale||1};
   }
   function broadcast(msg){
@@ -268,6 +268,10 @@
             send(conn,{type:'error',message:'เจ้าของเวทีกำลังอนุมัติมือถืออีกเครื่อง'});conn.close();return;
           }
           active.pending=entry;
+          // Make the approval buttons visible even if the QR panel was closed
+          // while the phone was scanning.
+          qrPanel.hidden=false;stage.classList.add('remote-visible');
+          qrToggle.setAttribute('aria-expanded','true');
           qrApprove.hidden=false;qrReject.hidden=false;
           status('มือถือขอเชื่อมต่อ · กด “อนุญาต” หนึ่งครั้ง');
           send(conn,{type:'pending'});
