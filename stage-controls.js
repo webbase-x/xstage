@@ -51,7 +51,6 @@
     search.blur();
   }
   function showKeyboard(){
-    qrPanel.hidden = true;
     keyboard.hidden = false;
     stage.classList.add('keyboard-open');
     kbToggle.setAttribute('aria-expanded','true');
@@ -105,6 +104,8 @@
       keyButton('TH / EN',()=>{layout=layout==='th'?'en':'th';drawKeyboard();},'wide'),
       keyButton('⇧',()=>{shift=!shift;drawKeyboard();},''),
       keyButton('เว้นวรรค',()=>editSearch(' '),'wide'),
+      keyButton('↑',()=>search.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true})),''),
+      keyButton('↓',()=>search.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true})),''),
       keyButton('⌫',()=>editSearch('', 'backspace'),''),
       keyButton('ล้าง',()=>editSearch('', 'clear'),''),
       keyButton('Enter',()=>{
@@ -226,12 +227,17 @@
     status('ปฏิเสธการเชื่อมต่อแล้ว');
   });
   qrEnd.addEventListener('click',createSession);
-  qrToggle.addEventListener('click',()=>{
-    hideKeyboard();
-    qrPanel.hidden=!qrPanel.hidden;
-    if(!qrPanel.hidden && !session)createSession();
-  });
-  qrClose.addEventListener('click',()=>{qrPanel.hidden=true;});
+  function showQR(open){
+    qrPanel.hidden=!open;
+    stage.classList.toggle('remote-visible',open);
+    qrToggle.setAttribute('aria-expanded',String(open));
+    qrToggle.classList.toggle('active',open);
+    const menuButton=byId('mobile-remote-toggle');
+    if(menuButton)menuButton.setAttribute('aria-expanded',String(open));
+    if(open&&!session)createSession();
+  }
+  qrToggle.addEventListener('click',()=>showQR(qrPanel.hidden));
+  qrClose.addEventListener('click',()=>showQR(false));
   function handleRemote(conn,msg){
     if(!msg||typeof msg!=='object'||!state.token)return;
     const type=msg.type;
