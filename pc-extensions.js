@@ -205,7 +205,7 @@ function buildEqBands(){
  EQ_FREQS.forEach((freq,i)=>{
   const band=document.createElement('label');band.className='xstage-eq-band';band.style.setProperty('--band-color',eqBandColor(freq));
   const gain=document.createElement('span');gain.className='xstage-eq-gain';gain.textContent=(saved[i]>0?'+':'')+saved[i].toFixed(1);
-  const light=document.createElement('i');light.className='xstage-eq-band-light';light.style.setProperty('--level','0');
+  const light=document.createElement('i');light.className='xstage-eq-band-light';light.style.setProperty('--level-pct','0%');light.style.setProperty('--peak-pct','0%');light.style.setProperty('--glow','0');
   const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='.5';input.value=String(saved[i]);input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz');
   input.addEventListener('input',()=>{eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='flat';gain.textContent=(+input.value>0?'+':'')+(+input.value).toFixed(1);if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
   input.addEventListener('wheel',event=>{
@@ -240,8 +240,8 @@ function drawEqRta(){
    const previous=eqVisualLevels[i]||0;
    const level=raw>=previous?raw:(previous*.86+raw*.14);
    eqVisualLevels[i]=level;levels.push(level);
-   eqBandLights[i]?.style.setProperty('--level',String(level));
-   eqBandLights[i]?.style.setProperty('--peak',String(Math.min(1,peak)));
+   eqBandLights[i]?.style.setProperty('--level-pct',(level*100).toFixed(1)+'%');eqBandLights[i]?.style.setProperty('--glow',String(level));
+   eqBandLights[i]?.style.setProperty('--peak-pct',(Math.min(1,peak)*100).toFixed(1)+'%');
    const x=i*canvas.width/EQ_FREQS.length,w=Math.max(2,canvas.width/EQ_FREQS.length-2),h=level*(canvas.height-8);
    ctx.fillStyle=eqBandColor(freq);ctx.globalAlpha=.26+.74*level;ctx.fillRect(x,canvas.height-h,w,h);
  });
