@@ -49,7 +49,14 @@ function button(label,handler){const b=document.createElement('button');b.type='
 function para(text){const p=document.createElement('p');p.textContent=text;return p;}
 function showSong(song){const d=openDialog('รายละเอียดเพลง');d.append(para([song.code,song.title,song.artist,song.type,'ระยะเวลา '+(song.duration||0)+' วินาที'].filter(Boolean).join(' · ')),button('เล่นทันที',()=>{dialog.close();playSong(song);expand(false);}),button('แทรกเป็นเพลงถัดไป',()=>{state.queue.unshift(song);renderQueue();dialog.close();}));}
 $pc('pc-history').onclick=()=>{const d=openDialog('ประวัติการเล่น (เซสชันนี้)');const songs=[...state.history];if(state.current)songs.push(state.current);if(!songs.length)d.append(para('ยังไม่มีประวัติการเล่น'));for(const s of songs.slice().reverse().slice(0,100)){const row=document.createElement('div');row.className='pc-history-row';const title=document.createElement('span');title.textContent=(s.code||'')+' · '+(s.title||'');row.append(title,button('เล่น',()=>{dialog.close();playSong(s);}));d.append(row);}};
-$pc('pc-random').onclick=()=>{if(!state.token)return;const songs=state.songs.filter(playable);if(!songs.length)return;const song=songs[Math.floor(Math.random()*songs.length)];state.queue.push(song);renderQueue();setPlayStatus('สุ่มเพิ่มเพลงเข้าคิว: '+song.title);};
+$pc('pc-random').onclick=()=>{
+  if(!state.token){setPlayStatus('กรุณาเข้าสู่ระบบก่อนสุ่มเพลง');return;}
+  // Random and medley both run shuffled tracks continuously until stopped.
+  if(state.medley){
+    const song=randomMedleySong();
+    if(song){state.medleyUpcoming=null;playSong(song);}
+  }else setMedleyMode(true);
+};
 function updateAB(){ $pc('pc-loop-a').classList.toggle('pc-active',abA!==null);$pc('pc-loop-b').classList.toggle('pc-active',abB!==null); }
 $pc('pc-loop-a').onclick=()=>{if(!state.current)return;abA=audio.currentTime;abB=null;updateAB();setPlayStatus('ตั้งจุด A '+timeLabel(abA));};
 $pc('pc-loop-b').onclick=()=>{if(abA===null||audio.currentTime<=abA+.15){setPlayStatus('ตั้งจุด A ก่อน และให้ B อยู่หลัง A');return;}abB=audio.currentTime;audio.loop=false;ui.repeat.checked=false;updateAB();setPlayStatus('กำลังวน A–B');};
@@ -58,18 +65,32 @@ audio.addEventListener('timeupdate',()=>{if(abA!==null&&abB!==null&&audio.curren
 audio.addEventListener('loadedmetadata',()=>{abA=null;abB=null;updateAB();});
 const originalDrawLine=drawLine;
 drawLine=function(text,y,maxWidth,fontSize,fill,progress,centerX){return originalDrawLine(text,y,maxWidth,fontSize*lyricScale,fill==='#ecf7ff'?lyricColor:fill,progress,centerX);};
-let bg=true;
- let stageBackground='';
- function setBackground(value){
-   stageBackground=value;
-   ui.stage.style.backgroundImage=value
-     ?(value==='none'?'none':'linear-gradient(180deg,#02081862,#06102c00 35%,#02081970 100%),url("'+value+'")')
-     :'';
-   if(value==='none')ui.stage.style.backgroundColor='#010814';
- }
- function sendBackgroundToSecondScreen(){
-   if(screen&&!screen.closed)try{screen.postMessage({type:'xstage-background',value:stageBackground},location.origin);}catch{}
- }
+// Both bundled stage artworks are selectable independently for each display.
+const stageArtworks=[
+  ['assets/xstage-neon-stage.svg','แบบที่ 1 · เวทีนีออน'],
+  ['assets/xstage-background.jpg','แบบที่ 2 · ภาพเวที']
+];
+const backgroundPrefs={
+  main:stageArtworks[0][0],
+  singer:stageArtworks[1][0]
+};
+function backgroundImage(value){
+  const path=stageArtworks.some(([v])=>v===value)?value:stageArtworks[0][0];
+  return 'linear-gradient(180deg,#0104123a,#07102e16 46%,#03071a56),url("'+path+'")';
+}
+function setMainBackground(value){
+  backgroundPrefs.main=value;
+  ui.stage.style.backgroundImage=backgroundImage(value);
+}
+function setSingerBackground(value){
+  backgroundPrefs.singer=value;
+  sendBackgroundToSecondScreen();
+}
+function sendBackgroundToSecondScreen(){
+  if(screen&&!screen.closed)try{
+    screen.postMessage({type:'xstage-background',value:backgroundPrefs.singer},location.origin);
+  }catch{}
+}
 $pc('pc-lyrics-settings').onclick=()=>{
  const d=openDialog('เนื้อร้อง / พื้นหลัง');
  const scale=document.createElement('input');scale.type='range';scale.min='.7';scale.max='1.5';scale.step='.05';scale.value=String(lyricScale);scale.oninput=()=>lyricScale=+scale.value;
@@ -79,22 +100,18 @@ $pc('pc-lyrics-settings').onclick=()=>{
  const offset=document.createElement('input');offset.type='range';offset.min='-3000';offset.max='3000';offset.step='50';offset.value='0';
  offset.oninput=()=>{if(state.lyrics){state.lyrics.audioOffsetMs=(Number(state.lyrics.audioOffsetMs)||0)+(+offset.value-(+offset.dataset.before||0));offset.dataset.before=offset.value;}};
  const ol=document.createElement('label');ol.textContent='ชดเชยเวลาเนื้อร้อง (ms)';ol.append(offset);d.append(ol);
- const backgroundSelect=document.createElement('select');
-  for(const [value,label] of [['','รูปเวที X-Stage เดิม'],['none','พื้นหลังสีดำ']]){
-    const item=document.createElement('option');item.value=value;item.textContent=label;backgroundSelect.append(item);
-  }
-  backgroundSelect.value=stageBackground==='none'?'none':'';
-  backgroundSelect.onchange=()=>{setBackground(backgroundSelect.value);sendBackgroundToSecondScreen();};
-  const backgroundLabel=document.createElement('label');backgroundLabel.textContent='พื้นหลังจอหลัก / จอร้อง';backgroundLabel.append(backgroundSelect);d.append(backgroundLabel);
-  const upload=document.createElement('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';
-  upload.onchange=()=>{
-    const file=upload.files?.[0];if(!file)return;
-    if(file.size>8*1024*1024){setPlayStatus('ภาพใหญ่เกิน 8 MB');return;}
-    const reader=new FileReader();
-    reader.onload=()=>{if(typeof reader.result==='string'){setBackground(reader.result);sendBackgroundToSecondScreen();}};
-    reader.readAsDataURL(file);
-  };
-  const custom=document.createElement('label');custom.textContent='เลือกรูปเวทีจากเครื่อง (ใช้เฉพาะครั้งนี้)';custom.append(upload);d.append(custom);
+ for(const [target,label,current,setValue] of [
+   ['main','พื้นหลังจอหลัก',backgroundPrefs.main,setMainBackground],
+   ['singer','พื้นหลังจอร้องแยก',backgroundPrefs.singer,setSingerBackground]
+ ]){
+   const select=document.createElement('select');
+   for(const [value,name] of stageArtworks){
+     const item=document.createElement('option');item.value=value;item.textContent=name;select.append(item);
+   }
+   select.value=current;
+   select.onchange=()=>setValue(select.value);
+   const row=document.createElement('label');row.textContent=label;row.append(select);d.append(row);
+ }
  d.append(para('การตั้งค่านี้ไม่แก้ไขเพลงหรือฐานข้อมูลใน Google Drive'));
 };
 let eqContext=null,eqNodes=[];
