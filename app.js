@@ -102,7 +102,27 @@ function setStatus(message, kind = '') {
   ui.status.textContent = message;
   ui.status.className = 'status-line' + (kind ? ' ' + kind : '');
 }
-function setPlayStatus(message) { ui.playStatus.textContent = message; }
+function setPlayStatus(message) {
+  // Track title and playback state already appear in the bottom transport.
+  // Keep only loading, errors and actionable notices in the status area.
+  ui.playStatus.textContent=/^กำลังเล่น\s*·/.test(String(message||''))?'':message;
+}
+async function clearPerformanceCache(){
+  // Never clear localStorage, sessionStorage or Google credentials.
+  releaseQueuePreload();
+  state.catalogCache.clear();
+  state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
+  await clearCatalogStorage();
+  if('caches' in window){
+    try{
+      const keys=await caches.keys();
+      await Promise.all(keys.filter(key=>/xstage/i.test(key)).map(key=>caches.delete(key)));
+    }catch(error){console.warn('Static cache cleanup:',error);}
+  }
+  setStatus('ล้างแคชฐานเพลงและไฟล์เว็บแล้ว · ยังลงชื่อเข้าใช้ Google อยู่', 'success');
+  return true;
+}
+window.XStageClearCache=clearPerformanceCache;
 function num(n) { return Number(n).toLocaleString('th-TH'); }
 function timeLabel(t) {
   if (!Number.isFinite(t) || t < 0) return '00:00';
