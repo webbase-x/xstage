@@ -165,50 +165,26 @@
   for(const key of permissionKeys)permissionInputs[key]=option(names[key],settings.permissions[key],v=>{settings.permissions[key]=v;});
   const activity=[];
   let session=null, sequence=0;
+  // Browsers may reject fullscreen calls from WebRTC because they are not
+  // user gestures. Never place a confirmation overlay on top of the QR panel.
   let fullscreenPending=false;
-  // A WebRTC command cannot grant the browser's fullscreen user activation.
-  // Exiting fullscreen works remotely; entering shows a one-tap button on stage.
-  const fullscreenConfirm=document.createElement('button');
-  fullscreenConfirm.id='remote-fullscreen-confirm';
-  fullscreenConfirm.type='button';
-  fullscreenConfirm.hidden=true;
-  fullscreenConfirm.textContent='⛶ มือถือขอเปิดเต็มจอ · กดที่จอหลักเพื่อยืนยัน';
-  stage.append(fullscreenConfirm);
-  function hideFullscreenConfirm(){
-    fullscreenPending=false;
-    fullscreenConfirm.hidden=true;
-  }
-  fullscreenConfirm.addEventListener('click',async ()=>{
-    try{
-      await stage.requestFullscreen();
-      hideFullscreenConfirm();
-      status('จอหลักเข้าสู่โหมดเต็มจอแล้ว');
-    }catch{
-      status('เบราว์เซอร์ไม่อนุญาตให้เปิดเต็มจอ กรุณาใช้ปุ่ม ⛶ บนจอหลัก');
-      hideFullscreenConfirm();
-    }
-    broadcastStatus();
-  });
-  document.addEventListener('fullscreenchange',()=>{
-    if(document.fullscreenElement===stage)hideFullscreenConfirm();
-    broadcastStatus();
-  });
-  async function setHostFullscreen(full){
+  function hideFullscreenConfirm(){fullscreenPending=false;}
+  document.addEventListener('fullscreenchange',broadcastStatus);
+  async function setHostFullscreen(full,conn){
     if(full){
-      if(document.fullscreenElement===stage){hideFullscreenConfirm();broadcastStatus();return;}
+      if(document.fullscreenElement===stage){send(conn,snapshot());return;}
       if(typeof stage.requestFullscreen!=='function'){
-        status('เบราว์เซอร์จอหลักไม่รองรับโหมดเต็มจอ');
+        send(conn,{type:'fullscreen-notice',message:'เบราว์เซอร์จอหลักไม่รองรับโหมดเต็มจอ'});
       }else{
-        try{await stage.requestFullscreen();hideFullscreenConfirm();}
-        catch{fullscreenPending=true;fullscreenConfirm.hidden=false;
-          status('เบราว์เซอร์ต้องการให้แตะยืนยันเต็มจอบนจอหลัก');}
+        try{
+          await stage.requestFullscreen();
+        }catch{
+          send(conn,{type:'fullscreen-notice',message:'เบราว์เซอร์จอหลักต้องให้กดปุ่ม ⛶ บนจอหลักโดยตรง (ไม่เกี่ยวกับสิทธิ์ QR)'});
+        }
       }
-    }else{
-      hideFullscreenConfirm();
-      if(document.fullscreenElement){
-        try{await document.exitFullscreen();}
-        catch{status('ออกจากเต็มจอไม่ได้ ให้กด Esc บนจอหลัก');}
-      }
+    }else if(document.fullscreenElement===stage){
+      try{await document.exitFullscreen();}
+      catch{send(conn,{type:'fullscreen-notice',message:'ออกจากเต็มจอไม่ได้ กรุณากด Esc บนจอหลัก'});}
     }
     broadcastStatus();
   }
@@ -312,9 +288,9 @@
     }else if(action==='mute'){
       audio.muted=!audio.muted;
     }else if(action==='fullscreen-on'){
-      void setHostFullscreen(true);
+      void setHostFullscreen(true,conn);
     }else if(action==='fullscreen-off'){
-      void setHostFullscreen(false);
+      void setHostFullscreen(false,conn);
     }else if(action==='medley'){
       setMedleyMode(!state.medley);
     }else return;
@@ -345,7 +321,7 @@
         await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
         if(session!==active)return;
         qrCanvas.hidden=false;
-        status('สแกน QR แล้วอนุมัติมือถือครั้งแรกบนจอหลัก');
+        status(settings.autoApprove?'สแกน QR เพื่อเชื่อมต่ออัตโนมัติ':'สแกน QR แล้วรออนุมัติบนจอหลัก');
       }catch{status('สร้าง QR ไม่สำเร็จ ใช้ลิงก์รีโมทแทน');}
     });
     peer.on('connection',conn=>{
