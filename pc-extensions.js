@@ -57,7 +57,7 @@ $pc('pc-loop-clear').onclick=()=>{abA=null;abB=null;updateAB();setPlayStatus('�
 audio.addEventListener('timeupdate',()=>{if(abA!==null&&abB!==null&&audio.currentTime>=abB)audio.currentTime=abA;});
 audio.addEventListener('loadedmetadata',()=>{abA=null;abB=null;updateAB();});
 const originalDrawLine=drawLine;
-drawLine=function(text,y,maxWidth,fontSize,fill,progress){return originalDrawLine(text,y,maxWidth,fontSize*lyricScale,fill==='#ecf7ff'?lyricColor:fill,progress);};
+drawLine=function(text,y,maxWidth,fontSize,fill,progress,centerX){return originalDrawLine(text,y,maxWidth,fontSize*lyricScale,fill==='#ecf7ff'?lyricColor:fill,progress,centerX);};
 let bg=true;
 $pc('pc-lyrics-settings').onclick=()=>{
  const d=openDialog('เนื้อร้อง / พื้นหลัง');
