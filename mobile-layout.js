@@ -31,6 +31,7 @@
     tools.setAttribute('aria-expanded',String(stageColumn.classList.contains('mobile-tools-expanded')));
   }
   toggle.addEventListener('click',()=>{setMenu(menu.hidden);updateIndicators();});
+  $('mobile-menu-close')?.addEventListener('click',()=>setMenu(false));
   // Menu actions close their menu unless the user is expanding a nested group.
   menu.addEventListener('click',e=>{
     const button=e.target.closest('button');
