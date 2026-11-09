@@ -1389,3 +1389,15 @@ body.xstage-ui-v2 .xstage-eq-footer{overflow:hidden;white-space:nowrap}
 @media(max-width:900px){
   body.xstage-ui-v2 .xstage-eq-panel{min-width:680px;min-height:430px}
 }
+
+/* 0.9.87: compact text transport actions. */
+body.xstage-ui-v2 .transport-text-action{
+  width:auto!important;min-width:58px!important;padding:0 10px!important;
+  font-size:.68rem!important;font-weight:900;letter-spacing:.01em;
+  border-radius:10px!important;white-space:nowrap
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .transport-text-action{
+    min-width:48px!important;padding:0 7px!important;font-size:.62rem!important
+  }
+}
