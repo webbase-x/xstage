@@ -7,7 +7,7 @@
   <meta name="description" content="X-Stage Karaoke Online – เล่นเพลงจาก Google Drive ส่วนตัว ค้นหาและจัดคิวในหน้าจอเดียว">
   <title>X-Stage Karaoke Online | คลังเพลงส่วนตัว</title>
   <link rel="icon" href="assets/xstage-logo.jpg" type="image/jpeg">
-  <link rel="stylesheet" href="style.css?v=0957">
+  <link rel="stylesheet" href="style.css?v=0958">
 </head>
 <body>
   <div class="app-shell">
@@ -45,14 +45,14 @@
             <button type="button" id="mobile-queue-toggle">♫ คิวเพลง <span id="mobile-queue-count">0</span></button>
             <button type="button" id="mobile-tools-toggle">⚙ เครื่องมือและตั้งค่า</button>
             <button type="button" id="mobile-keyboard-toggle">⌨ แป้นพิมพ์บนจอ</button>
-            <button type="button" id="mobile-remote-toggle">▦ รีโมทมือถือ QR</button>
+            <button type="button" id="mobile-remote-toggle" aria-controls="remote-pair-panel" aria-expanded="false">▦ รีโมทมือถือ QR</button>
             <button type="button" id="mobile-fullscreen-toggle">⛶ เต็มหน้าจอ / กลับ</button>
             <button type="button" id="mobile-login-toggle">G เข้าสู่ระบบ Google</button>
             <button type="button" id="mobile-logout-toggle" hidden>ออกจากระบบ Google</button>
           </nav>
           <aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
         <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
-        <label class="search-box" for="search"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" autocomplete="off" placeholder="รหัส / ชื่อเพลง / ศิลปิน" aria-label="ค้นหาเพลง" disabled><kbd>Ctrl F</kbd></label>
+        <label class="search-box" for="search"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="รหัส / ชื่อเพลง / ศิลปิน" aria-label="ค้นหาเพลง" disabled><kbd>Ctrl F</kbd></label>
         <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
@@ -63,7 +63,7 @@
           <canvas id="lyrics" aria-label="เนื้อร้องคาราโอเกะแสดงแบบไฮไลต์ตามเวลา" width="1200" height="300"></canvas>
           <div class="stage-quick-actions" aria-label="เครื่องมือบนเวที">
             <button id="toggle-keyboard" class="stage-action" type="button" aria-controls="virtual-keyboard" aria-expanded="false">⌨ แป้นพิมพ์</button>
-            <button id="toggle-remote" class="stage-action" type="button" aria-controls="remote-pair-panel">▦ รีโมท QR</button>
+            <button id="toggle-remote" class="stage-action" type="button" aria-controls="remote-pair-panel" aria-expanded="false">▦ รีโมท QR</button>
           </div>
           <section id="virtual-keyboard" class="virtual-keyboard" hidden aria-label="แป้นพิมพ์บนหน้าจอ">
             <div class="virtual-key-head"><strong id="virtual-language">ภาษาไทย</strong><button id="virtual-close" type="button">ซ่อนแป้นพิมพ์ ✕</button></div>
@@ -71,7 +71,7 @@
           </section>
           <section id="remote-pair-panel" class="remote-pair-panel" hidden aria-label="จับคู่รีโมทมือถือ">
             <div class="remote-pair-box">
-              <div class="remote-pair-top"><strong>รีโมทมือถือ · สแกน QR</strong><button id="remote-pair-close" type="button" aria-label="ปิดหน้าต่างจับคู่">✕</button></div>
+              <div class="remote-pair-top"><strong>รีโมท QR</strong><button id="remote-pair-close" type="button" aria-label="ปิดหน้าต่างจับคู่">✕</button></div>
               <canvas id="remote-qr" width="232" height="232" hidden aria-label="QR สำหรับเชื่อมต่อรีโมทมือถือ"></canvas>
               <p id="remote-pair-status" role="status" aria-live="polite">กำลังเตรียมรีโมท…</p>
               <a id="remote-link" target="_blank" rel="noopener noreferrer"></a>
@@ -104,10 +104,10 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0957" defer></script><script src="pc-extensions.js?v=0957" defer></script>
+  <script src="app.js?v=0958" defer></script><script src="pc-extensions.js?v=0958" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0957" defer></script>
-  <script src="mobile-layout.js?v=0957" defer></script>
+  <script src="stage-controls.js?v=0958" defer></script>
+  <script src="mobile-layout.js?v=0958" defer></script>
 </body>
 </html>
