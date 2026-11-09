@@ -345,10 +345,18 @@ function drawLyrics(){
         let idx=-1;
         for(let i=0;i<lines.length;i++){if(Number(lines[i].startTime)<=when)idx=i;else break;}
         const fontSize=Math.min(61,w*.055,h*.115);
-        if(idx<0){drawLine(String(lines[0].text||''),h*.72,w*.93,fontSize,'#bfe2ef');}
+        // Keep both lyric lines above the integrated transport/virtual keyboard.
+        const density=Math.min(window.devicePixelRatio||1,2);
+        const transportHeight=ui.stage.querySelector('.transport-panel')?.getBoundingClientRect().height||0;
+        const keyboard=ui.stage.querySelector('#virtual-keyboard');
+        const keyboardHeight=keyboard&&!keyboard.hidden?keyboard.getBoundingClientRect().height+7:0;
+        const usableBottom=h-(transportHeight+keyboardHeight+12)*density;
+        const nextY=Math.max(h*.33,Math.min(h*.83,usableBottom-fontSize*.8));
+        const currentY=Math.max(h*.19,Math.min(h*.66,nextY-fontSize*1.45));
+        if(idx<0){drawLine(String(lines[0].text||''),Math.min(h*.72,currentY),w*.93,fontSize,'#bfe2ef');}
         else{
-          const current=lines[idx];drawLine(String(current.text||''),h*.66,w*.93,fontSize,'#ecf7ff',lineProgress(current,when));
-          const next=lines[idx+1];if(next)drawLine(String(next.text||''),h*.83,w*.93,fontSize*.77,'#b7d2e0');
+          const current=lines[idx];drawLine(String(current.text||''),currentY,w*.93,fontSize,'#ecf7ff',lineProgress(current,when));
+          const next=lines[idx+1];if(next)drawLine(String(next.text||''),nextY,w*.93,fontSize*.77,'#b7d2e0');
         }
       }
     }
