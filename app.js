@@ -390,7 +390,9 @@ function login({automatic=false} = {}) {
         const type=String(error?.type||error?.error||'').trim();
         setStatus(type==='popup_closed'
           ? 'ปิดหน้าต่าง Google ก่อนเข้าสู่ระบบ'
-          : 'เข้าสู่ระบบ Google ไม่สำเร็จ'+(type?' · '+type:''), 'error');
+          : /popup|window|blocked/i.test(type)
+            ? 'เบราว์เซอร์บล็อกหน้าต่าง Google · กรุณาเปิด X-Stage ใน Safari, Chrome หรือ Edge แล้วลองใหม่'+(type?' · '+type:'')
+            : 'เข้าสู่ระบบ Google ไม่สำเร็จ'+(type?' · '+type:''), 'error');
       }
     });
     // A manual click should always use Google's normal account chooser. An empty
@@ -897,8 +899,8 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('beforeunload',()=>{state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
-// Restore only an unexpired token in the current browser tab. Token-model reauthorization
-// requires a user gesture after expiry; never open an unprompted OAuth popup on reload.
+// Restore a still-valid short-lived token from this browser. After Google expiry,
+// GIS token-model reauthorization still requires an explicit user gesture.
 (function restoreTabSession(){
   const saved=readActiveAuth();
   if(!saved){
