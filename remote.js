@@ -145,6 +145,9 @@
       send({type:'refresh'});return;
     }
     if(data.type==='error'){report(String(data.message||'เชื่อมต่อไม่ได้'));return;}
+    if(data.type==='fullscreen-notice'){
+      report(String(data.message||'ไม่สามารถเปิดเต็มจออัตโนมัติได้'));return;
+    }
     if(!connected)return;
     if(data.type==='status'){
       ready=!!data.ready;
@@ -173,11 +176,9 @@
       const full=!!data.fullscreen;
       $('remote-screen-state').textContent=full
         ?'จอหลักอยู่ในโหมด Fullscreen · กด “ย่อจอหลัก” เพื่อออก'
-        :data.fullscreenPending
-          ?'รอยืนยันเปิด Fullscreen · แตะปุ่มที่แสดงบนจอหลักหนึ่งครั้ง'
-          :'จอหลักแสดงแบบปกติ · กด “เต็มจอหลัก” เพื่อขอเปิด Fullscreen';
+        :'จอหลักแสดงแบบปกติ · รีโมทจะลองเปิดเต็มจอ หากเบราว์เซอร์ปฏิเสธ ให้ใช้ปุ่ม ⛶ ที่จอหลัก';
       $('remote-fullscreen-on').disabled=full;
-      $('remote-fullscreen-off').disabled=!full&&!data.fullscreenPending;
+      $('remote-fullscreen-off').disabled=!full;
       if(!ready && !status.textContent.includes('ยังไม่พร้อม'))
         report('เชื่อมต่อแล้ว · เจ้าของเวทีต้องเปิดคลัง Google Drive ก่อนขอเพลง');
     }else if(data.type==='results'){
