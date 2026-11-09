@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=0987">
-  <link rel="stylesheet" href="xstage-ux.css?v=0987">
+  <link rel="stylesheet" href="style.css?v=0988">
+  <link rel="stylesheet" href="xstage-ux.css?v=0988">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -64,6 +64,15 @@
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
           </header>
+          <div id="xstage-context-menu" class="xstage-context-menu" hidden role="menu" aria-label="เมนูคลิกขวา X-Stage">
+            <button type="button" data-cmd="find">⌕ ค้นหาเพลง</button>
+            <button type="button" data-cmd="queue">☷ คิวเพลง</button>
+            <button type="button" data-cmd="eq">◉ EQ</button>
+            <button type="button" data-cmd="stage">▣ จอร้องแยก</button>
+            <button type="button" data-cmd="medley">♫ เมดเลย์</button>
+            <button type="button" data-cmd="tools">⚙ เครื่องมือและตั้งค่า</button>
+            <button type="button" data-cmd="fullscreen">⛶ เต็มหน้าจอ</button>
+          </div>
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
             <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
@@ -225,13 +234,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0987" defer></script><script src="pc-extensions.js?v=0987" defer></script>
+  <script src="app.js?v=0988" defer></script><script src="pc-extensions.js?v=0988" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0987" defer></script>
-  <script src="mobile-layout.js?v=0987" defer></script>
-  <script src="pwa-install.js?v=0987" defer></script>
+  <script src="stage-controls.js?v=0988" defer></script>
+  <script src="mobile-layout.js?v=0988" defer></script>
+  <script src="pwa-install.js?v=0988" defer></script>
 
-  <script src="stage-ui.js?v=0987" defer></script>
+  <script src="stage-ui.js?v=0988" defer></script>
 </body>
 </html>
