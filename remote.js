@@ -209,7 +209,8 @@
     ['remote-fullscreen-off','fullscreen-off'],['remote-medley','medley']
   ])$(id).addEventListener('click',()=>control(action));
   if(!hostId||!secret||!/^[a-z0-9_-]+$/i.test(hostId)||!/^[a-f0-9]{48}$/i.test(secret)){
-    report('QR ไม่ถูกต้อง กรุณาสแกน QR ใหม่จากจอ X-Stage');return;
+    scanLink.hidden=false;reconnectButton.hidden=true;
+    report('ยังไม่มีรหัส QR · แตะ 📷 เพื่อสแกนจากจอหลัก');return;
   }
   if(typeof Peer!=='function'){report('โหลดระบบจับคู่ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
   report('กำลังเชื่อมต่อรีโมท X-Stage…');
