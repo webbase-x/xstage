@@ -1,6 +1,7 @@
 /* X-Stage Karaoke Online – single-page private Drive player.
- * Only a short-lived Google access token is kept in sessionStorage until tab close/expiry;
- * catalog metadata can be cached locally per verified Google account; media files remain private and transient. */
+ * A short-lived Google access token may be cached in this browser until its Google expiry
+ * so reopening the site does not force a repeat login. No password or refresh token is stored.
+ * Catalog metadata can be cached locally per verified Google account; media remain private/transient. */
 'use strict';
 const cfg = window.XSTAGE_CONFIG || {};
 const $ = id => document.getElementById(id);
@@ -15,7 +16,7 @@ const ui = {
   repeat: $('repeat'), fullscreen: $('fullscreen'), lyrics: $('lyrics')
 };
 const state = {
-  token: '', accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
+  token: '', tokenExpiresAt:0, accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
   queue: [], history: [], current: null, lyrics: null, objectUrl: '',
   requestId: 0, controller: null, authId: 0, loading: false,
   medley: false, medleyCache: null, medleyPrefetch: null,
@@ -93,21 +94,36 @@ function saveUiPrefs(patch){
 window.XStageUiPrefs={read:readUiPrefs,save:saveUiPrefs};
 const initialUiPrefs=readUiPrefs();
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
-const ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
+const ACTIVE_AUTH_KEY = 'xstage-google-token-v2';
+const LEGACY_ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
-function clearTabAuth(){try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);}catch{/* Blocked by browser settings. */}}
-function saveTabAuth(token,expiresAt,sub){
-  if(!token||!sub||!(expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS))return;
-  try{sessionStorage.setItem(ACTIVE_AUTH_KEY,JSON.stringify({token,expiresAt,sub}));}catch{/* Private browsing may block storage. */}
+function authRecordValid(current){
+  return !!(current&&typeof current.token==='string'&&current.token.length>25&&
+    typeof current.sub==='string'&&current.sub.length>0&&
+    Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS);
 }
-function readTabAuth(){
-  try{
-    const current=JSON.parse(sessionStorage.getItem(ACTIVE_AUTH_KEY)||'null');
-    if(current&&typeof current.token==='string'&&current.token.length>25&&
-      typeof current.sub==='string'&&current.sub.length>0&&
-      Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS)return current;
-  }catch{}
-  clearTabAuth();return null;
+function clearActiveAuth(){
+  try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);sessionStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
+  try{localStorage.removeItem(ACTIVE_AUTH_KEY);}catch{}
+}
+function saveActiveAuth(token,expiresAt,sub){
+  if(!authRecordValid({token,expiresAt,sub}))return;
+  const value=JSON.stringify({token,expiresAt,sub});
+  try{sessionStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
+  // This is still only Google's short-lived access token; never a password/refresh token.
+  try{localStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
+}
+function readActiveAuth(){
+  const stores=[];
+  try{stores.push(sessionStorage);}catch{}
+  try{stores.push(localStorage);}catch{}
+  for(const store of stores){
+    try{
+      const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||store.getItem(LEGACY_ACTIVE_AUTH_KEY)||'null');
+      if(authRecordValid(current))return current;
+    }catch{}
+  }
+  clearActiveAuth();return null;
 }
 function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
@@ -160,6 +176,34 @@ function getFileId(data) {
 }
 function playable(song) { return !!(getFileId(song?.audio) && getFileId(song?.lyrics)); }
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
+const GOOGLE_FETCH_TIMEOUT_MS=18_000;
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function googleFetch(url,options={},label='Google',retries=1){
+  const external=options.signal;
+  for(let attempt=0;;attempt++){
+    const controller=new AbortController();
+    const abortExternal=()=>controller.abort();
+    if(external?.aborted)throw new DOMException('Aborted','AbortError');
+    external?.addEventListener?.('abort',abortExternal,{once:true});
+    const timer=setTimeout(()=>controller.abort(),GOOGLE_FETCH_TIMEOUT_MS);
+    try{
+      const response=await fetch(url,{...options,signal:controller.signal});
+      if((response.status===429||response.status>=500)&&attempt<retries){
+        await delay(450*(attempt+1));continue;
+      }
+      return response;
+    }catch(error){
+      if(external?.aborted)throw new DOMException('Aborted','AbortError');
+      if(attempt<retries&&(error?.name==='AbortError'||error instanceof TypeError)){
+        await delay(450*(attempt+1));continue;
+      }
+      if(error?.name==='AbortError')throw Error(label+' ใช้เวลานานเกินไป กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่');
+      throw Error(label+' เชื่อมต่อไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่');
+    }finally{
+      clearTimeout(timer);external?.removeEventListener?.('abort',abortExternal);
+    }
+  }
+}
 function driveError(status, subject) {
   if (status === 401) return new Error('สิทธิ์ Google หมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
   if (status === 403) return new Error('บัญชีนี้ไม่มีสิทธิ์เข้าถึง ' + subject + ' (ตรวจสิทธิ์ drive.file และบัญชีที่ซิงก์)');
@@ -168,15 +212,15 @@ function driveError(status, subject) {
 }
 async function driveList(q, token) {
   const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents)',pageSize:'1000'});
-  const result = await fetch(`https://www.googleapis.com/drive/v3/files?${params}`, {headers: requestHeaders(token),cache:'no-store'});
+  const result = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params}`, {headers: requestHeaders(token),cache:'no-store'},'Google Drive');
   if (!result.ok) throw driveError(result.status, 'รายการไฟล์');
   const json = await result.json();
   return Array.isArray(json.files) ? json.files : [];
 }
 async function privateFile(id, token, opts = {}) {
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
+  const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
     headers: requestHeaders(token), cache:'no-store',signal:opts.signal
-  });
+  },'Google Drive');
   if (!r.ok) throw driveError(r.status, 'ไฟล์เพลงส่วนตัว');
   return r;
 }
@@ -272,7 +316,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   const pointers = await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
   if (pointers.length !== 1) throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
   const pointer = await privateJson(pointers[0].id, token);
-  const accountResult = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'});
+  setStatus('กำลังยืนยันบัญชี Google…');
+  const accountResult = await googleFetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'},'Google Account');
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
   const account = await accountResult.json();
   if (!account.email_verified || !account.sub) throw Error('ไม่สามารถยืนยันบัญชี Google ได้');
@@ -284,9 +329,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   if(authId!==state.authId)return;
   if(!cached)void saveCachedCatalog(account.sub,pointer,catalog);
   state.token = token;
+  state.tokenExpiresAt = tokenExpiresAt;
   state.accountSub = account.sub;
   rememberLogin(true);
-  saveTabAuth(token,tokenExpiresAt,account.sub);
+  saveActiveAuth(token,tokenExpiresAt,account.sub);
   state.manifest = catalog;
   state.catalogPointerId=pointers[0].id;
   state.catalogGeneration=String(pointer.generation||'');
@@ -305,6 +351,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   ui.search.focus();
 }
 function login({automatic=false} = {}) {
+  if(!navigator.onLine){setStatus('อุปกรณ์ออฟไลน์ · กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่','error');return;}
   if (typeof google === 'undefined' || !google.accounts?.oauth2?.initTokenClient) {
     setStatus('ไม่สามารถโหลด Google Sign-In ได้ กรุณาตรวจอินเทอร์เน็ตและรีเฟรชหน้า', 'error'); return;
   }
@@ -314,23 +361,32 @@ function login({automatic=false} = {}) {
   ui.login.disabled = ui.gateLogin.disabled = true;
   setStatus(automatic?'กำลังเชื่อมต่อบัญชี Google ที่เคยใช้…':'กำลังเปิดการอนุญาต Google…');
   const authId = ++state.authId;
+  let settled=false;
+  const finish=()=>{settled=true;clearTimeout(watchdog);ui.login.disabled=ui.gateLogin.disabled=false;};
+  const watchdog=setTimeout(()=>{
+    if(settled||authId!==state.authId)return;
+    state.authId++;
+    ui.login.disabled=ui.gateLogin.disabled=false;
+    setStatus('Google Sign-In ไม่ตอบกลับภายในเวลาที่กำหนด · ปิดหน้าต่าง Google ที่ค้างแล้วกดเข้าสู่ระบบอีกครั้ง','error');
+  },90_000);
   try {
     const client = google.accounts.oauth2.initTokenClient({
       client_id:cfg.googleClientId,
       scope:'openid email https://www.googleapis.com/auth/drive.file',
       callback: async result => {
         if (authId !== state.authId) return;
-        ui.login.disabled = ui.gateLogin.disabled = false;
-        if (!result?.access_token) { setStatus('กรุณากดเข้าสู่ระบบ Google เพื่อเชื่อมต่ออีกครั้ง', 'error'); return; }
+        finish();
+        if(result?.error){setStatus('Google ปฏิเสธการเข้าสู่ระบบ · '+String(result.error_description||result.error),'error');return;}
+        if (!result?.access_token) { setStatus('ไม่ได้รับสิทธิ์จาก Google · กรุณากดเข้าสู่ระบบอีกครั้ง', 'error'); return; }
         resetPrivate({revoke:false, keepAuth:true});
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
         try { await openDrive(result.access_token,authId,expiresAt); }
-        catch (e) { if (authId === state.authId) {clearTabAuth();resetPrivate({keepAuth:true});setStatus(e.message, 'error');} }
+        catch (e) { if (authId === state.authId) {clearActiveAuth();resetPrivate({keepAuth:true});setStatus(e.message, 'error');} }
       },
       error_callback: error => {
         if (authId !== state.authId) return;
-        ui.login.disabled = ui.gateLogin.disabled = false;
+        finish();
         const type=String(error?.type||error?.error||'').trim();
         setStatus(type==='popup_closed'
           ? 'ปิดหน้าต่าง Google ก่อนเข้าสู่ระบบ'
@@ -341,17 +397,17 @@ function login({automatic=false} = {}) {
     // prompt is reserved for reconnecting an existing session and can leave a
     // stale/invalid OAuth warning flow open in some multi-account browser sessions.
     client.requestAccessToken(automatic?{prompt:''}:{prompt:'select_account'});
-  } catch (e) { ui.login.disabled = ui.gateLogin.disabled = false; setStatus(e.message, 'error'); }
+  } catch (e) { finish();setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
-  if(revoke){rememberLogin(false);clearTabAuth();}
+  if(revoke){rememberLogin(false);clearActiveAuth();}
   if (!keepAuth) state.authId++;
   const oldToken = state.token;
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
   player.pause(); player.removeAttribute('src'); player.load();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
-  state.objectUrl = ''; state.token = ''; state.accountSub = ''; state.manifest = null;
+  state.objectUrl = ''; state.token = '';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
   state.catalogPointerId='';state.catalogGeneration='';state.catalogCache.clear();
   releaseQueuePreload();
@@ -844,7 +900,7 @@ renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
 // Restore only an unexpired token in the current browser tab. Token-model reauthorization
 // requires a user gesture after expiry; never open an unprompted OAuth popup on reload.
 (function restoreTabSession(){
-  const saved=readTabAuth();
+  const saved=readActiveAuth();
   if(!saved){
     if(hasRememberedLogin())setStatus('เคยเข้าสู่ระบบแล้ว · กรุณากดเชื่อมต่อ Google เมื่อเซสชันหมดอายุ');
     return;
@@ -855,10 +911,22 @@ renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
   const id=++state.authId;
   openDrive(saved.token,id,saved.expiresAt,saved.sub).catch(error=>{
     if(id!==state.authId)return;
-    clearTabAuth();
+    clearActiveAuth();
     resetPrivate({keepAuth:true});
     setStatus('เซสชันหมดอายุหรือเข้าถึงคลังไม่ได้: '+error.message,'error');
   }).finally(()=>{
     if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
   });
 })();
+window.addEventListener('offline',()=>setStatus('อุปกรณ์ออฟไลน์ · เพลงที่โหลดไว้แล้วอาจเล่นต่อได้ แต่ค้น/โหลดเพลงใหม่ไม่ได้','error'));
+window.addEventListener('online',()=>{
+  if(state.token)return;
+  const saved=readActiveAuth();
+  if(!saved){if(hasRememberedLogin())setStatus('กลับมาออนไลน์แล้ว · กดเข้าสู่ระบบ Google เพื่อเชื่อมต่ออีกครั้ง');return;}
+  ui.gate.hidden=true;ui.login.disabled=ui.gateLogin.disabled=true;
+  setStatus('กลับมาออนไลน์แล้ว · กำลังกู้คืนเซสชัน Google…');
+  const id=++state.authId;
+  openDrive(saved.token,id,saved.expiresAt,saved.sub).catch(error=>{
+    if(id!==state.authId)return;clearActiveAuth();resetPrivate({keepAuth:true});setStatus('กู้คืนเซสชันไม่สำเร็จ: '+error.message,'error');
+  }).finally(()=>{if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;});
+});
