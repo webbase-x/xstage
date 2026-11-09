@@ -953,3 +953,30 @@ body.xstage-ui-v2 .stage .remote-settings .remote-settings-close{
   justify-self:end;width:32px;height:29px;border:1px solid #6598b1;
   border-radius:7px;background:#25425c;color:white;cursor:pointer
 }
+
+/* 0.9.72: three built-in stage backgrounds. */
+body.xstage-ui-v2 .stage[data-stage-background="neon"]{
+  background-color:#020817!important;
+  background-image:
+    linear-gradient(180deg,#0104123a,#07102e16 46%,#03071a56),
+    url('assets/xstage-neon-stage.svg')!important;
+  background-size:cover!important;background-position:center center!important;
+}
+body.xstage-ui-v2 .stage[data-stage-background="photo"]{
+  background-color:#020916!important;
+  background-image:
+    linear-gradient(180deg,#02081862 0%,#06102c00 35%,#03081d12 65%,#02081970 100%),
+    url('assets/xstage-background.jpg')!important;
+  background-size:cover!important;background-position:center center!important;
+}
+body.xstage-ui-v2 .stage[data-stage-background="deep-blue"]{
+  background-color:#031633!important;
+  background-image:
+    radial-gradient(circle at 50% 38%,rgba(28,86,160,.28),transparent 34%),
+    linear-gradient(180deg,#0b2b5d 0%,#061d43 42%,#03142f 72%,#020b1d 100%)!important;
+  background-size:cover!important;background-position:center center!important;
+}
+body.xstage-ui-v2 .stage.stage-hero-hidden .stage-hero{display:none!important}
+
+/* Playback state is already shown in the transport; remove the duplicate bottom-center status. */
+body.xstage-ui-v2 .transport-panel .play-status{display:none!important}
