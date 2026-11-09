@@ -345,15 +345,15 @@ function resizeCanvas(){
   if(ui.lyrics.width!==w||ui.lyrics.height!==h){ui.lyrics.width=w;ui.lyrics.height=h;}
   return {w,h};
 }
-function drawLine(text,y,maxWidth,fontSize,fill,progress=null){
+function drawLine(text,y,maxWidth,fontSize,fill,progress=null,centerX=ui.lyrics.width/2){
   if(!text)return;
   const w=ui.lyrics.width;
   let sz=fontSize;
   do {pen.font=`900 ${Math.round(sz)}px "Leelawadee UI","Noto Sans Thai",Tahoma,sans-serif`;if(pen.measureText(text).width<=maxWidth)break;sz*=.92;}while(sz>14);
   pen.textAlign='center';pen.textBaseline='middle';
   pen.lineWidth=Math.max(3,sz*.13);pen.strokeStyle='#010613';pen.lineJoin='round';pen.shadowColor='#000';pen.shadowBlur=6;
-  pen.strokeText(text,w/2,y);pen.shadowBlur=0;pen.fillStyle=fill;pen.fillText(text,w/2,y);
-  if(progress!==null){const width=pen.measureText(text).width;pen.save();pen.beginPath();pen.rect(w/2-width/2-1,y-sz*.8,Math.max(0,Math.min(1,progress))*width+1,sz*1.65);pen.clip();pen.fillStyle='#ffd76a';pen.fillText(text,w/2,y);pen.restore();}
+  pen.strokeText(text,centerX,y);pen.shadowBlur=0;pen.fillStyle=fill;pen.fillText(text,centerX,y);
+  if(progress!==null){const width=pen.measureText(text).width;pen.save();pen.beginPath();pen.rect(centerX-width/2-1,y-sz*.8,Math.max(0,Math.min(1,progress))*width+1,sz*1.65);pen.clip();pen.fillStyle='#ffd76a';pen.fillText(text,centerX,y);pen.restore();}
 }
 function lineProgress(line,when){
   const units=Array.isArray(line.syllables)?line.syllables:[];
@@ -379,12 +379,36 @@ function drawLyrics(){
         const keyboard=ui.stage.querySelector('#virtual-keyboard');
         const keyboardHeight=keyboard&&!keyboard.hidden?keyboard.getBoundingClientRect().height+7:0;
         const usableBottom=h-(transportHeight+keyboardHeight+12)*density;
-        const nextY=Math.max(h*.33,Math.min(h*.83,usableBottom-fontSize*.8));
-        const currentY=Math.max(h*.19,Math.min(h*.66,nextY-fontSize*1.45));
-        if(idx<0){drawLine(String(lines[0].text||''),Math.min(h*.72,currentY),w*.93,fontSize,'#bfe2ef');}
+        let nextY=Math.max(h*.33,Math.min(h*.83,usableBottom-fontSize*.8));
+        let currentY=Math.max(h*.19,Math.min(h*.66,nextY-fontSize*1.45));
+        let lyricCenter=w/2,lyricWidth=w*.93,lyricFont=fontSize;
+        const qrPanel=ui.stage.querySelector('#remote-pair-panel');
+        if(qrPanel&&!qrPanel.hidden){
+          const canvasBox=ui.lyrics.getBoundingClientRect();
+          const qrBox=qrPanel.getBoundingClientRect();
+          const scale=w/Math.max(1,canvasBox.width);
+          const qrTop=(qrBox.top-canvasBox.top)*scale;
+          const qrBottom=(qrBox.bottom-canvasBox.top)*scale;
+          if(qrTop<nextY+fontSize*.8 && qrBottom>currentY-fontSize*.8){
+            // Prefer drawing below QR; on short landscape screens reserve the space to its left.
+            const afterCurrent=qrBottom+fontSize*.95;
+            const afterNext=afterCurrent+fontSize*1.5;
+            if(afterNext+fontSize*.7<usableBottom){
+              currentY=afterCurrent;nextY=afterNext;
+            }else{
+              const openWidth=Math.max(0,(qrBox.left-canvasBox.left)*scale-14*scale);
+              if(openWidth>w*.28){
+                lyricCenter=openWidth/2;
+                lyricWidth=openWidth*.94;
+                lyricFont=Math.min(fontSize,Math.max(12,openWidth*.075));
+              }
+            }
+          }
+        }
+        if(idx<0){drawLine(String(lines[0].text||''),Math.min(h*.72,currentY),lyricWidth,lyricFont,'#bfe2ef',null,lyricCenter);}
         else{
-          const current=lines[idx];drawLine(String(current.text||''),currentY,w*.93,fontSize,'#ecf7ff',lineProgress(current,when));
-          const next=lines[idx+1];if(next)drawLine(String(next.text||''),nextY,w*.93,fontSize*.77,'#b7d2e0');
+          const current=lines[idx];drawLine(String(current.text||''),currentY,lyricWidth,lyricFont,'#ecf7ff',lineProgress(current,when),lyricCenter);
+          const next=lines[idx+1];if(next)drawLine(String(next.text||''),nextY,lyricWidth,lyricFont*.77,'#b7d2e0',null,lyricCenter);
         }
       }
     }
