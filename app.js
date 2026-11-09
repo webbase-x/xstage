@@ -269,6 +269,7 @@ function setMedleyMode(enabled){
     player.volume=Number(ui.volume.value)/100;
   }
   setPlayStatus(state.medley?'เปิดเมดเลย์ M4A · เตรียมเพลงถัดไปอัตโนมัติ':'ปิดเมดเลย์');
+  window.dispatchEvent(new CustomEvent('xstage:medleychange',{detail:{enabled:state.medley}}));
   return state.medley;
 }
 function setStageVisualScale(value){
