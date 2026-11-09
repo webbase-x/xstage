@@ -76,6 +76,22 @@ async function clearCatalogStorage(){
     });
   }catch(error){throw Error('ล้างฐานเพลงแคชไม่ได้: '+(error?.message||error));}
 }
+const UI_PREFS_KEY='xstage-ui-settings-v1';
+function readUiPrefs(){
+  try{
+    const value=JSON.parse(localStorage.getItem(UI_PREFS_KEY)||'{}');
+    return value&&typeof value==='object'?value:{};
+  }catch{return {};}
+}
+function saveUiPrefs(patch){
+  try{
+    const next={...readUiPrefs(),...patch};
+    localStorage.setItem(UI_PREFS_KEY,JSON.stringify(next));
+    return next;
+  }catch{return readUiPrefs();}
+}
+window.XStageUiPrefs={read:readUiPrefs,save:saveUiPrefs};
+const initialUiPrefs=readUiPrefs();
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
 const ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
@@ -96,7 +112,15 @@ function readTabAuth(){
 function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
 const player = ui.player;
-player.volume = 0.8;
+const initialVolume=Math.max(0,Math.min(100,Number(initialUiPrefs.volume)));
+if(Number.isFinite(initialVolume)){
+  ui.volume.value=String(initialVolume);
+  player.volume=initialVolume/100;
+}else player.volume=0.8;
+if([.75,.9,1,1.1,1.25,1.5].includes(Number(initialUiPrefs.speed)))ui.speed.value=String(initialUiPrefs.speed);
+if(typeof initialUiPrefs.repeat==='boolean')ui.repeat.checked=initialUiPrefs.repeat;
+if(typeof initialUiPrefs.muted==='boolean')player.muted=initialUiPrefs.muted;
+if(Number.isFinite(Number(initialUiPrefs.visualScale)))setTimeout(()=>setStageVisualScale(Number(initialUiPrefs.visualScale)),0);
 
 function setStatus(message, kind = '') {
   ui.status.textContent = message;
@@ -480,6 +504,7 @@ function setMedleyMode(enabled){
 function setStageVisualScale(value){
   state.visualScale=Math.max(.7,Math.min(1.35,Math.round(Number(value)*100)/100));
   ui.stage.style.setProperty('--xstage-visual-scale',String(state.visualScale));
+  saveUiPrefs({visualScale:state.visualScale});
   return state.visualScale;
 }
 function releaseQueuePreload(){
@@ -771,9 +796,10 @@ ui.playPause.addEventListener('click',togglePlayback);
 ui.stop.addEventListener('click',stopSong);
 ui.previous.addEventListener('click',()=>{const old=state.history.pop();renderQueue();if(old)playSong(old,{remember:false});});
 ui.next.addEventListener('click',playNext);
-ui.speed.addEventListener('change',()=>{player.playbackRate=Number(ui.speed.value);});
-ui.volume.addEventListener('input',()=>{player.volume=Number(ui.volume.value)/100;});
-ui.repeat.addEventListener('change',()=>{player.loop=ui.repeat.checked;});
+ui.speed.addEventListener('change',()=>{player.playbackRate=Number(ui.speed.value);saveUiPrefs({speed:Number(ui.speed.value)});});
+ui.volume.addEventListener('input',()=>{player.volume=Number(ui.volume.value)/100;saveUiPrefs({volume:Number(ui.volume.value)});});
+ui.repeat.addEventListener('change',()=>{player.loop=ui.repeat.checked;saveUiPrefs({repeat:ui.repeat.checked});});
+player.addEventListener('volumechange',()=>saveUiPrefs({volume:Math.round(player.volume*100),muted:player.muted}));
 ui.seek.addEventListener('input',()=>{const d=Number.isFinite(player.duration)?player.duration:Number(state.current?.duration)||0;if(d>0)player.currentTime=d*Number(ui.seek.value)/1000;updateTransport();});
 ui.fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await ui.stage.requestFullscreen();}catch{setPlayStatus('อุปกรณ์นี้ไม่รองรับการแสดงเต็มหน้าจอ');}});
 player.addEventListener('timeupdate',updateTransport);player.addEventListener('timeupdate',medleyTick);player.addEventListener('loadedmetadata',updateTransport);
