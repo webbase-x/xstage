@@ -34,18 +34,11 @@
   function finish(){setMenu(false);updateIndicators();}
   queue.addEventListener('click',async()=>{
     const willShow=!queueDock.classList.contains('mobile-expanded');
-    if(document.fullscreenElement===stage){
-      try{await document.exitFullscreen();}catch{}
-    }
     queueDock.classList.toggle('mobile-expanded',willShow);
     finish();
-    if(willShow)queueDock.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
   tools.addEventListener('click',async()=>{
     const willShow=!stageColumn.classList.contains('mobile-tools-expanded');
-    if(document.fullscreenElement===stage){
-      try{await document.exitFullscreen();}catch{}
-    }
     stageColumn.classList.toggle('mobile-tools-expanded',willShow);
     finish();
     if(willShow)stageColumn.querySelector('.pc-tools')?.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -62,7 +55,6 @@
     if(e.key==='Escape'&&!menu.hidden){e.preventDefault();setMenu(false);toggle.focus();}
   });
   if(mq.addEventListener)mq.addEventListener('change',()=>{
-    if(!isCompact()){setMenu(false);queueDock.classList.remove('mobile-expanded');stageColumn.classList.remove('mobile-tools-expanded');}
     updateIndicators();
   });
   const observer=new MutationObserver(updateIndicators);
@@ -71,5 +63,5 @@
   if(accountLogout)observer.observe(accountLogout,{attributes:true,attributeFilter:['hidden']});
   if(queueCount)observer.observe(queueCount,{childList:true,subtree:true,characterData:true});
   if(line)observer.observe(line,{childList:true,subtree:true,characterData:true});
-  setMenu(false);updateIndicators();
+  setMenu(window.innerWidth>=1100);updateIndicators();
 })();
