@@ -461,11 +461,38 @@ function playNext(){
     }
     playSong(song);
   }else{
-    setPlayStatus('จบเพลงแล้ว · ไม่มีเพลงรอในคิว');
-    updateTransport();
+    clearIdleStage('จบเพลงแล้ว · ไม่มีเพลงรอในคิว');
   }
 }
-function stopSong(){state.userStopped=true;state.requestId++;state.controller?.abort();state.loading=false;player.pause();if(player.seekable?.length||player.readyState)player.currentTime=0;setPlayStatus('หยุดเล่นแล้ว');updateTransport();}
+// Release the finished media and lyrics, not merely the transport label.
+// Keeps the stage blank/idle even when the queue is empty and a user has
+// selected the previous song in the search results.
+function clearIdleStage(message){
+  state.userStopped=true;
+  state.requestId++;
+  state.controller?.abort();
+  state.controller=null;
+  state.loading=false;
+  player.pause();
+  player.removeAttribute('src');
+  player.load();
+  if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
+  state.objectUrl='';
+  state.current=null;
+  state.lyrics=null;
+  state.medleyCache=null;
+  state.medleyPrefetch=null;
+  state.medleyUpcoming=null;
+  ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
+  ui.nowArtist.textContent='';
+  ui.stageCode.textContent='—';
+  ui.stage.classList.remove('playing');
+  ui.stageIdle.hidden=false;
+  if(typeof pen!=='undefined')pen.clearRect(0,0,ui.lyrics.width,ui.lyrics.height);
+  setPlayStatus(message);
+  updateTransport();
+}
+function stopSong(){clearIdleStage('หยุดเล่นแล้ว');}
 function togglePlayback(){if(state.loading)return;if(!player.src){if(state.queue.length)playNext();else if(state.shown.length)playSong(state.shown[state.selectedIndex]);return;}if(player.paused){player.play().catch(()=>setPlayStatus('เบราว์เซอร์ไม่อนุญาตให้เริ่มเสียง กรุณากดเล่นอีกครั้ง'));}else player.pause();}
 
 async function playSong(song,{remember=true}={}) {
@@ -626,7 +653,7 @@ ui.seek.addEventListener('input',()=>{const d=Number.isFinite(player.duration)?p
 ui.fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await ui.stage.requestFullscreen();}catch{setPlayStatus('อุปกรณ์นี้ไม่รองรับการแสดงเต็มหน้าจอ');}});
 player.addEventListener('timeupdate',updateTransport);player.addEventListener('timeupdate',medleyTick);player.addEventListener('loadedmetadata',updateTransport);
 player.addEventListener('durationchange',updateTransport);player.addEventListener('play',updateTransport);
-player.addEventListener('pause',updateTransport);player.addEventListener('ended',()=>{if(!player.loop)playNext();});
+player.addEventListener('pause',updateTransport);player.addEventListener('ended',()=>{if(player.loop)return;if(state.queue.length)playNext();else clearIdleStage('จบเพลงแล้ว · คิวว่าง');});
 player.addEventListener('error',()=>{if(state.current)setPlayStatus('ไม่สามารถถอดรหัสไฟล์เสียงนี้ในเบราว์เซอร์ได้');});
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'&&state.token){e.preventDefault();ui.search.focus();ui.search.select();return;}
