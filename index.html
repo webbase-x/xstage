@@ -7,7 +7,7 @@
   <meta name="description" content="X-Stage Karaoke Online – เล่นเพลงจาก Google Drive ส่วนตัว ค้นหาและจัดคิวในหน้าจอเดียว">
   <title>X-Stage Karaoke Online | คลังเพลงส่วนตัว</title>
   <link rel="icon" href="assets/xstage-logo.jpg" type="image/jpeg">
-  <link rel="stylesheet" href="style.css?v=0955">
+  <link rel="stylesheet" href="style.css?v=0956">
 </head>
 <body>
   <div class="app-shell">
@@ -31,7 +31,24 @@
 
       <section class="stage-column" aria-label="เวทีคาราโอเกะ">
         <div id="stage" class="stage" role="group" aria-label="เวที X-Stage Karaoke">
-          <div class="stage-shade"></div><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
+          <div class="stage-shade"></div>
+          <div class="mobile-stage-header">
+            <a class="mobile-stage-brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
+              <img src="assets/xstage-logo.jpg" width="32" height="32" alt="">
+              <span><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE</small></span>
+            </a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
+          </div>
+          <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
+            <button type="button" id="mobile-queue-toggle">♫ คิวเพลง <span id="mobile-queue-count">0</span></button>
+            <button type="button" id="mobile-tools-toggle">⚙ เครื่องมือและตั้งค่า</button>
+            <button type="button" id="mobile-keyboard-toggle">⌨ แป้นพิมพ์บนจอ</button>
+            <button type="button" id="mobile-remote-toggle">▦ รีโมทมือถือ QR</button>
+            <button type="button" id="mobile-fullscreen-toggle">⛶ เต็มหน้าจอ / กลับ</button>
+            <button type="button" id="mobile-login-toggle">G เข้าสู่ระบบ Google</button>
+            <button type="button" id="mobile-logout-toggle" hidden>ออกจากระบบ Google</button>
+          </nav>
+          <aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
         <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
         <label class="search-box" for="search"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" autocomplete="off" placeholder="รหัส / ชื่อเพลง / ศิลปิน" aria-label="ค้นหาเพลง" disabled><kbd>Ctrl F</kbd></label>
         <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
@@ -85,9 +102,10 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0955" defer></script><script src="pc-extensions.js?v=0955" defer></script>
+  <script src="app.js?v=0956" defer></script><script src="pc-extensions.js?v=0956" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0955" defer></script>
+  <script src="stage-controls.js?v=0956" defer></script>
+  <script src="mobile-layout.js?v=0956" defer></script>
 </body>
 </html>
