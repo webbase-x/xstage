@@ -131,6 +131,38 @@
   const requestCount=byId('remote-request-count');
   const requestToggle=byId('remote-request-toggle');
   const requestClose=byId('remote-request-close');
+  const permissionKeys=['search','request','playpause','next','stop','volume-up','volume-down','mute','fullscreen-on','fullscreen-off','medley'];
+  const stored=(()=>{try{return JSON.parse(localStorage.getItem('xstage-remote-settings')||'{}');}catch{return {};}})();
+  const settings={autoApprove:!!stored.autoApprove,showControls:stored.showControls!==false,
+    permissions:Object.fromEntries(permissionKeys.map(k=>[k,stored.permissions?.[k]!==false]))};
+  function saveSettings(){try{localStorage.setItem('xstage-remote-settings',JSON.stringify(settings));}catch{}}
+  const settingsDetails=document.createElement('details');settingsDetails.className='remote-settings';
+  const summary=document.createElement('summary');summary.textContent='⚙ ตั้งค่าและสิทธิ์รีโมท';
+  const settingsBody=document.createElement('div');settingsBody.className='remote-settings-body';
+  settingsDetails.append(summary,settingsBody);
+  qrPanel.querySelector('.remote-pair-box')?.append(settingsDetails);
+  function option(label,checked,onChange){
+    const row=document.createElement('label');row.className='remote-settings-option';
+    const input=document.createElement('input');input.type='checkbox';input.checked=checked;
+    input.addEventListener('change',()=>{onChange(input.checked);saveSettings();broadcastStatus();});
+    row.append(input,document.createTextNode(' '+label));settingsBody.append(row);return input;
+  }
+  option('อนุมัติการเชื่อมต่ออัตโนมัติ',settings.autoApprove,v=>{
+    settings.autoApprove=v;if(v&&session?.pending)approveEntry(session.pending);
+  });
+  option('แสดงเมนูควบคุมบนมือถือ',settings.showControls,v=>{settings.showControls=v;});
+  const permissionInputs={};
+  const names={'search':'ค้นหาเพลง','request':'ขอเพลง','playpause':'เล่น / พัก','next':'เพลงถัดไป','stop':'หยุด',
+    'volume-up':'เพิ่มเสียง','volume-down':'ลดเสียง','mute':'ปิด / เปิดเสียง',
+    'fullscreen-on':'เต็มจอ','fullscreen-off':'ย่อจอ','medley':'เมดเลย์'};
+  const actions=document.createElement('div');actions.className='remote-permission-actions';
+  for(const [title,value] of [['อนุญาตทั้งหมด',true],['ไม่อนุญาตทั้งหมด',false]]){
+    const button=document.createElement('button');button.type='button';button.textContent=title;
+    button.addEventListener('click',()=>{for(const k of permissionKeys){settings.permissions[k]=value;permissionInputs[k].checked=value;}saveSettings();broadcastStatus();});
+    actions.append(button);
+  }
+  settingsBody.append(actions);
+  for(const key of permissionKeys)permissionInputs[key]=option(names[key],settings.permissions[key],v=>{settings.permissions[key]=v;});
   const activity=[];
   let session=null, sequence=0;
   let fullscreenPending=false;
@@ -167,8 +199,9 @@
       if(typeof stage.requestFullscreen!=='function'){
         status('เบราว์เซอร์จอหลักไม่รองรับโหมดเต็มจอ');
       }else{
-        fullscreenPending=true;fullscreenConfirm.hidden=false;
-        status('มือถือขอเปิดเต็มจอ · แตะปุ่มยืนยันบนจอหลักหนึ่งครั้ง');
+        try{await stage.requestFullscreen();hideFullscreenConfirm();}
+        catch{fullscreenPending=true;fullscreenConfirm.hidden=false;
+          status('เบราว์เซอร์ต้องการให้แตะยืนยันเต็มจอบนจอหลัก');}
       }
     }else{
       hideFullscreenConfirm();
@@ -194,7 +227,8 @@
       now:songSummary(state.current),queue:state.queue.slice(0,50).map(songSummary),
       queueCount:state.queue.length,volume:Math.round(Number(ui.volume.value)||0),
       muted:ui.player.muted,medley:!!state.medley,
-      fullscreen:document.fullscreenElement===stage,fullscreenPending};
+      fullscreen:document.fullscreenElement===stage,fullscreenPending,
+       showControls:settings.showControls,permissions:{...settings.permissions}};
   }
   function broadcast(msg){
     if(!session)return;
@@ -235,6 +269,7 @@
   });
   redrawActivity();
   function acceptRequest(conn,msg,limits){
+    if(!settings.permissions.request){send(conn,{type:'request-error',message:'เจ้าของเวทีปิดสิทธิ์ขอเพลง'});return;}
     if(!state.token){send(conn,{type:'request-error',message:'เจ้าของเวทียังไม่เปิดคลังเพลง'});return;}
     if(state.queue.length>=150){send(conn,{type:'request-error',message:'คิวเต็มแล้ว กรุณารอ'});return;}
     if(!Number.isSafeInteger(msg.index)||msg.index<0||msg.index>=state.songs.length)return;
@@ -264,6 +299,7 @@
     const now=Date.now();
     if(now-entry.lastControl<120)return;entry.lastControl=now;
     const action=String(msg.action||'');
+    if(!settings.showControls||!settings.permissions[action])return;
     const audio=ui.player;
     if(action==='playpause')togglePlayback();
     else if(action==='stop')stopSong();
@@ -283,6 +319,13 @@
       setMedleyMode(!state.medley);
     }else return;
     broadcastStatus();
+  }
+  function approveEntry(entry){
+    if(!entry?.conn?.open||!session)return;
+    if(session.pending===entry)session.pending=null;
+    entry.approved=true;qrApprove.hidden=true;qrReject.hidden=true;
+    send(entry.conn,{type:'ready'});send(entry.conn,snapshot());
+    status('เชื่อมต่อมือถือเรียบร้อยแล้ว');
   }
   async function createSession(){
     clearPeerSession();
@@ -317,6 +360,7 @@
           if(active.pending&&active.pending!==entry){
             send(conn,{type:'error',message:'เจ้าของเวทีกำลังอนุมัติมือถืออีกเครื่อง'});conn.close();return;
           }
+          if(settings.autoApprove){approveEntry(entry);return;}
           active.pending=entry;
           // Make the approval buttons visible even if the QR panel was closed
           // while the phone was scanning.
@@ -328,6 +372,7 @@
           return;
         }
         if(msg.type==='search'){
+          if(!settings.permissions.search){send(conn,{type:'results',items:[],query:String(msg.query||'').trim().toLocaleLowerCase('th')});return;}
           const now=Date.now();if(now-entry.lastSearch<150)return;entry.lastSearch=now;
           const term=String(msg.query||'').trim().slice(0,70).toLocaleLowerCase('th');
           const items=[];
@@ -367,11 +412,7 @@
   qrApprove.addEventListener('click',()=>{
     const entry=session?.pending;
     if(!entry||!entry.conn.open)return;
-    session.pending=null;entry.approved=true;
-    qrApprove.hidden=true;qrReject.hidden=true;
-    send(entry.conn,{type:'ready'});
-    send(entry.conn,snapshot());
-    status('อนุมัติแล้ว · มือถือสามารถขอเพลงและควบคุมการเล่นได้');
+    approveEntry(entry);
   });
   qrReject.addEventListener('click',()=>{
     const entry=session?.pending;
