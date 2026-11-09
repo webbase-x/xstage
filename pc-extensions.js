@@ -191,26 +191,27 @@ function autoPresetForSong(song){
 function setEqPreset(name,{save=true}={}){
  eqPreset=EQ_PRESETS[name]?name:name==='auto'?'auto':'flat';
  const actual=eqPreset==='auto'?autoPresetForSong(state.current):eqPreset;
- const gains=EQ_PRESETS[actual]||EQ_PRESETS.flat;
- eqBandInputs.forEach((input,i)=>input.value=String(gains[i]));
- eqNodes.forEach((node,i)=>node.gain.value=eqBypassed?0:gains[i]);
- if(eqPresetSelect)eqPresetSelect.value=eqPreset;
+ const gains=(EQ_PRESETS[actual]||EQ_PRESETS.flat).map(v=>Math.round(v));
+ eqBandInputs.forEach((input,i)=>input.value=String(Math.round(gains[i])));
+ eqNodes.forEach((node,i)=>node.gain.value=eqBypassed?0:Math.round(gains[i]));
+ if(eqPresetSelect)eqPresetSelect.value=eqPreset==='custom'?'custom':eqPreset;
  const label=$pc('xstage-eq-song-style');if(label)label.textContent=eqPreset==='auto'?'AUTO: '+actual.toUpperCase():'PRESET: '+eqPreset.toUpperCase();
- if(save)window.XStageUiPrefs?.save?.({eqPreset,eqGains:gains,eqBypassed});
+ if(save)window.XStageUiPrefs?.save?.({eqPreset,eqGains:gains.map(v=>Math.round(v)),eqBypassed});
  sendEqState();
 }
 function buildEqBands(){
  if(!eqBands||eqBands.children.length)return;
- const saved=savedEqGains()||EQ_PRESETS.flat;
+ const saved=(savedEqGains()||EQ_PRESETS.flat).map(v=>Math.round(v));
  EQ_FREQS.forEach((freq,i)=>{
   const band=document.createElement('label');band.className='xstage-eq-band';band.style.setProperty('--band-color',eqBandColor(freq));
-  const gain=document.createElement('span');gain.className='xstage-eq-gain';gain.textContent=(saved[i]>0?'+':'')+saved[i].toFixed(1);
+  const gain=document.createElement('span');gain.className='xstage-eq-gain';gain.textContent=(saved[i]>0?'+':'')+String(saved[i]);
   const light=document.createElement('i');light.className='xstage-eq-band-light';light.style.setProperty('--level-pct','0%');light.style.setProperty('--peak-pct','0%');light.style.setProperty('--glow','0');
-  const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='.5';input.value=String(saved[i]);input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz');
-  input.addEventListener('input',()=>{eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='flat';gain.textContent=(+input.value>0?'+':'')+(+input.value).toFixed(1);if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
+  const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='1';input.value=String(saved[i]);input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz');
+  input.addEventListener('input',()=>{eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='custom';gain.textContent=(+input.value>0?'+':'')+String(Math.round(+input.value));if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
+  input.addEventListener('dblclick',()=>{input.value='0';input.dispatchEvent(new Event('input',{bubbles:true}));});
   input.addEventListener('wheel',event=>{
     event.preventDefault();
-    const step=Number(input.step)||0.5;
+    const step=1;
     const min=Number(input.min),max=Number(input.max);
     const next=Math.max(min,Math.min(max,Number(input.value)+(event.deltaY<0?step:-step)));
     if(next===Number(input.value))return;
@@ -255,7 +256,7 @@ function sendEqState(){
 function openEq(){
  buildEqBands();if(!ensureEqAudio())return;eqContext.resume().catch(()=>{});
  eqPanel.hidden=false;eqPanel.classList.remove('is-minimized');
- if(eqPresetSelect)eqPresetSelect.value=EQ_PRESETS[eqPreset]||eqPreset==='auto'?eqPreset:'flat';
+ if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';
  if(eqPreset==='auto')setEqPreset('auto',{save:false});else applyEqGains(false);
  sendEqState();
 }
