@@ -997,9 +997,10 @@ function scheduleOAuthReturnRecovery(){
   oauthReturnRecoveryTimer=setTimeout(()=>{
     if(state.token)return;
     if(readPendingAuth())void recoverPendingGoogleAuth('กลับจาก Google แล้ว · กำลังเชื่อมต่อคลังเพลงต่อ…');
-    else if((ui.login.disabled||ui.gateLogin.disabled)&&hasRememberedLogin()){
+    else if(ui.login.disabled||ui.gateLogin.disabled){
+      state.authId++;
       ui.login.disabled=ui.gateLogin.disabled=false;
-      setStatus('กลับจาก Google แล้วแต่ยังไม่ได้รับสิทธิ์ · กรุณากดเข้าสู่ระบบอีกครั้ง','error');
+      setStatus('กลับจาก Google แล้วแต่ Safari ยังไม่ได้ส่งสิทธิ์กลับมา · กดเข้าสู่ระบบ Google อีกครั้งได้ทันที','error');
     }
   },2500);
 }
