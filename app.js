@@ -473,6 +473,7 @@ function scheduleQueuePreload(){
   if(!state.token||!state.queue.length){releaseQueuePreload();return;}
   const song=state.queue[0],token=state.token;
   if(state.queuePrepared?.song===song&&state.queuePrepared.token===token)return;
+  if(state.queuePrepared?.song!==song)state.queuePrepared=null;
   if(state.queuePreload?.song===song&&state.queuePreload.token===token)return;
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(song,token);},300);
 }
@@ -544,6 +545,8 @@ function renderQueue() {
 function moveQueue(index,step){const target=index+step;if(target<0||target>=state.queue.length)return;[state.queue[index],state.queue[target]]=[state.queue[target],state.queue[index]];renderQueue();}
 function playNext(){
   const queued=state.queue.shift();
+  const preparedQueued=queued&&state.queuePrepared?.song===queued?state.queuePrepared:null;
+  if(preparedQueued)state.queuePrepared=null;
   scheduleQueuePreload();
   const song=queued||(state.medley?nextMedleyCandidate():null);
   if(!queued)state.medleyUpcoming=null;
@@ -555,7 +558,7 @@ function playNext(){
       state.medleyRecent.push(song);
       if(state.medleyRecent.length>MEDLEY_RECENT_LIMIT)state.medleyRecent.shift();
     }
-    playSong(song);
+    playSong(song,{preloaded:preparedQueued});
   }else{
     clearIdleStage('จบเพลงแล้ว · ไม่มีเพลงรอในคิว');
   }
@@ -595,7 +598,7 @@ function stopSong(){
 }
 function togglePlayback(){if(state.loading)return;if(!player.src){if(state.queue.length)playNext();else if(state.shown.length)playSong(state.shown[state.selectedIndex]);return;}if(player.paused){player.play().catch(()=>setPlayStatus('เบราว์เซอร์ไม่อนุญาตให้เริ่มเสียง กรุณากดเล่นอีกครั้ง'));}else player.pause();}
 
-async function playSong(song,{remember=true}={}) {
+async function playSong(song,{remember=true,preloaded=null}={}) {
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
   if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มี M4A/JSON ที่พร้อมเล่น');return;}
@@ -604,7 +607,8 @@ async function playSong(song,{remember=true}={}) {
   const token=state.token;
   state.loading=true;updateTransport();setPlayStatus('กำลังโหลดเพลงและเนื้อร้องจาก Drive ส่วนตัว…');
   try {
-    const prepared=(state.queuePrepared?.song===song&&state.queuePrepared.token===token
+    const prepared=(preloaded?.song===song&&preloaded.token===token?preloaded
+      :state.queuePrepared?.song===song&&state.queuePrepared.token===token
       ?state.queuePrepared:state.medleyCache?.song===song&&state.token===token?state.medleyCache:null);
     if(prepared){if(state.queuePrepared===prepared)state.queuePrepared=null;if(state.medleyCache===prepared)state.medleyCache=null;}
     const [audio,lyrics]=prepared
