@@ -168,9 +168,20 @@ function control(label,handler,title = label) {
   const b = element('button','',label); b.type='button';b.title=title;b.setAttribute('aria-label',title);
   b.addEventListener('click',handler);return b;
 }
+function renderMatchedText(node, value, term) {
+  const raw=String(value ?? '');
+  const hit=term ? raw.toLocaleLowerCase('th').indexOf(term) : -1;
+  if(hit<0){node.textContent=raw;return;}
+  node.append(document.createTextNode(raw.slice(0,hit)));
+  const match=document.createElement('mark');
+  match.className='song-match';
+  match.textContent=raw.slice(hit,hit+term.length);
+  node.append(match,document.createTextNode(raw.slice(hit+term.length)));
+}
 function renderSongs() {
   ui.songs.replaceChildren();
   if (!state.token) {
+    ui.search.removeAttribute('aria-activedescendant');
     ui.songs.append(element('div','empty-state','เพลงจาก Google Drive ของคุณจะแสดงที่นี่'));
     return;
   }
@@ -181,16 +192,20 @@ function renderSongs() {
   state.selectedIndex = Math.max(0,Math.min(state.selectedIndex,state.shown.length - 1));
   ui.resultCount.textContent = `พบ ${num(matches.length)} เพลง${matches.length>120?' · แสดง 120 รายการแรก':''}`;
   if (!state.shown.length) {
+    ui.search.removeAttribute('aria-activedescendant');
     ui.songs.append(element('div','empty-state',term?'ไม่พบเพลงที่ค้นหา':'ยังไม่มีเพลงที่พร้อมเล่น'));return;
   }
   const fragment = document.createDocumentFragment();
   state.shown.forEach((song,i) => {
     const row=element('div','song-item'+(i===state.selectedIndex?' selected':''));
-    row.role='option';row.setAttribute('aria-selected',String(i===state.selectedIndex));
+    row.role='option';row.id='song-option-'+i;row.setAttribute('aria-selected',String(i===state.selectedIndex));
     row.tabIndex = -1;row.title='คลิกเลือก · ดับเบิลคลิกเล่นทันที';
     const details=element('div','song-details');
-    details.append(element('div','song-code',String(song.code||'—')),
-      element('strong','',song.title||'ไม่ระบุชื่อเพลง'),element('small','',song.artist||'ไม่ระบุศิลปิน'));
+    const code=element('div','song-code'),title=element('strong'),artist=element('small');
+    renderMatchedText(code,song.code||'—',term);
+    renderMatchedText(title,song.title||'ไม่ระบุชื่อเพลง',term);
+    renderMatchedText(artist,song.artist||'ไม่ระบุศิลปิน',term);
+    details.append(code,title,artist);
     const add=element('button','song-add','+');add.type='button';add.title='เพิ่มเพลงเข้าคิว';add.setAttribute('aria-label','เพิ่มเพลง '+(song.title||'')+' เข้าคิว');
     add.addEventListener('click',e=>{e.stopPropagation();selectSong(i,false);addToQueue(song);});
     row.append(details,add);
@@ -199,13 +214,15 @@ function renderSongs() {
     fragment.append(row);
   });
   ui.songs.append(fragment);
+  if(state.shown.length)ui.search.setAttribute('aria-activedescendant','song-option-'+state.selectedIndex);
+  else ui.search.removeAttribute('aria-activedescendant');
 }
 function selectSong(i,scroll=true) {
   if (i<0||i>=state.shown.length) return;
   state.selectedIndex = i;
   for (const [j,row] of [...ui.songs.querySelectorAll('.song-item')].entries()) {
     row.classList.toggle('selected',i===j);row.setAttribute('aria-selected',String(i===j));
-    if (scroll && i===j) row.scrollIntoView({block:'nearest'});
+    if(i===j){ui.search.setAttribute('aria-activedescendant',row.id);if(scroll)row.scrollIntoView({block:'nearest'});}
   }
 }
 function addToQueue(song) {
@@ -280,8 +297,8 @@ function updateTransport(){
   if (!ui.seek.matches(':active'))ui.seek.value=duration>0?String(Math.round((player.currentTime/duration)*1000)):'0';
 }
 function onSearchKey(e){
-  if(e.key==='ArrowDown'){e.preventDefault();selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
-  else if(e.key==='ArrowUp'){e.preventDefault();selectSong(Math.max(0,state.selectedIndex-1));}
+  if(e.key==='ArrowDown'){e.preventDefault();if(state.shown.length)selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
+  else if(e.key==='ArrowUp'){e.preventDefault();if(state.shown.length)selectSong(Math.max(0,state.selectedIndex-1));}
   else if(e.key==='Enter'){e.preventDefault();const song=state.shown[state.selectedIndex];if(!song)return;
     if(state.current||state.loading)addToQueue(song);else playSong(song);
   }
