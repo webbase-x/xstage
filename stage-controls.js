@@ -124,161 +124,207 @@
     if(e.key==='Escape'&&!keyboard.hidden)hideKeyboard();
   });
 
-  // The mobile page is a song-request terminal, never a playback remote.
-  // No mobile Google login, Drive token, file ID or media URL is sent over WebRTC.
+  // Guests approve connection once on the host, then can search, enqueue,
+  // and use a restricted player controller. No Google token or file URLs leave the host.
   const requestPanel=byId('remote-request-panel');
   const requestList=byId('remote-request-list');
   const requestCount=byId('remote-request-count');
   const requestToggle=byId('remote-request-toggle');
   const requestClose=byId('remote-request-close');
-  const requests=[];
-  let nextRequestId=0;
-  let session=null;
+  const activity=[];
+  let session=null, sequence=0;
   function status(value){qrStatus.textContent=value;}
   function send(conn,data){if(conn?.open)try{conn.send(data);}catch{}}
-  function snapshot(){return {type:'status',ready:!!state.token,requests:requests.length};}
   function randomSecret(){
     const bytes=new Uint8Array(24);crypto.getRandomValues(bytes);
     return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
   }
+  function songSummary(song){
+    return {title:String(song?.title||''),artist:String(song?.artist||''),code:String(song?.code||''),
+      singer:String(song?.queueSinger||'')};
+  }
+  function snapshot(){
+    return {type:'status',ready:!!state.token,playing:!!ui.player.src&&!ui.player.paused,
+      now:songSummary(state.current),queue:state.queue.slice(0,50).map(songSummary),
+      queueCount:state.queue.length,volume:Math.round(ui.player.volume*100),
+      muted:ui.player.muted,medley:!!state.medley,scale:state.visualScale||1};
+  }
+  function broadcast(msg){
+    if(!session)return;
+    for(const entry of session.connections.values())if(entry.approved)send(entry.conn,msg);
+  }
+  function broadcastStatus(){broadcast(snapshot());}
   function clearPeerSession(){
     if(!session)return;
     const active=session;session=null;
-    for(const conn of active.connections){try{conn.close();}catch{}}
+    for(const entry of active.connections.values())try{entry.conn.close();}catch{}
     try{active.peer?.destroy();}catch{}
+    qrApprove.hidden=true;qrReject.hidden=true;
     qrLink.textContent='';qrLink.removeAttribute('href');qrCanvas.hidden=true;
-    qrEnd.textContent='สร้าง QR ใหม่';
-    status('ปิดการเชื่อมต่อเดิมแล้ว');
+    qrEnd.textContent='สร้าง QR ใหม่';status('ปิดการเชื่อมต่อรีโมทแล้ว');
   }
-  function requestButton(text,action,variant){
-    const btn=document.createElement('button');
-    btn.type='button';btn.textContent=text;btn.className='request-action '+variant;
-    btn.addEventListener('click',action);return btn;
-  }
-  function redrawRequests(){
-    requestCount.textContent=String(requests.length);
+  function redrawActivity(){
+    requestCount.textContent=String(activity.length);
     requestList.replaceChildren();
-    if(!requests.length){
-      const p=document.createElement('p');
-      p.textContent='ยังไม่มีคำขอเพลงจากมือถือ';
+    if(!activity.length){
+      const p=document.createElement('p');p.textContent='ยังไม่มีรายการขอเพลง';
       requestList.append(p);return;
     }
-    for(const req of requests){
-      const item=document.createElement('div');item.className='request-item';
+    for(const item of activity.slice().reverse()){
+      const row=document.createElement('div');row.className='request-item';
       const info=document.createElement('div');info.className='request-info';
-      const title=document.createElement('strong');
-      title.textContent=String(req.song.code||'')+' · '+String(req.song.title||'');
-      const secondary=document.createElement('small');
-      secondary.textContent='ผู้ขอ: '+req.singer+(req.note?' · '+req.note:'');
-      info.append(title,secondary);
-      const actions=document.createElement('div');actions.className='request-actions';
-      const finish=(accepted)=>{
-        const index=requests.findIndex(entry=>entry.id===req.id);
-        if(index<0)return;
-        requests.splice(index,1);
-        if(accepted){
-          if(!state.token){status('เจ้าของคลังต้องเชื่อมต่อ Google Drive บนจอหลักก่อนเพิ่มคิว');redrawRequests();return;}
-          addToQueue(req.song);
-        }
-        send(req.conn,{type:'request-result',id:req.id,accepted});
-        redrawRequests();
-      };
-      actions.append(
-        requestButton('✓ เพิ่มคิว',()=>finish(true),'accept'),
-        requestButton('✕ ปฏิเสธ',()=>finish(false),'reject'));
-      item.append(info,actions);
-      requestList.append(item);
+      const title=document.createElement('strong');title.textContent=item.title;
+      const by=document.createElement('small');by.textContent=item.singer+' · '+item.result+(item.note?' · '+item.note:'');
+      info.append(title,by);row.append(info);requestList.append(row);
     }
   }
-  function showRequests(open){
-    requestPanel.hidden=!open;
-    requestToggle.setAttribute('aria-expanded',String(open));
+  requestToggle?.addEventListener('click',()=>{
+    requestPanel.hidden=!requestPanel.hidden;
+    requestToggle.setAttribute('aria-expanded',String(!requestPanel.hidden));
+  });
+  requestClose?.addEventListener('click',()=>{
+    requestPanel.hidden=true;requestToggle.setAttribute('aria-expanded','false');
+  });
+  redrawActivity();
+  function acceptRequest(conn,msg,limits){
+    if(!state.token){send(conn,{type:'request-error',message:'เจ้าของเวทียังไม่เปิดคลังเพลง'});return;}
+    if(state.queue.length>=150){send(conn,{type:'request-error',message:'คิวเต็มแล้ว กรุณารอ'});return;}
+    if(!Number.isSafeInteger(msg.index)||msg.index<0||msg.index>=state.songs.length)return;
+    const song=state.songs[msg.index];
+    if(!playable(song)){send(conn,{type:'request-error',message:'เพลงนี้ยังเล่นไม่ได้'});return;}
+    const now=Date.now();
+    while(limits.length&&now-limits[0]>60_000)limits.shift();
+    if(limits.length>=8){send(conn,{type:'request-error',message:'ขอเพลงบ่อยเกินไป กรุณารอสักครู่'});return;}
+    limits.push(now);
+    const singer=String(msg.singer||'ไม่ระบุชื่อ').trim().slice(0,45)||'ไม่ระบุชื่อ';
+    const note=String(msg.note||'').trim().slice(0,90);
+    const queued={...song,queueSinger:singer};
+    const wasEmpty=state.queue.length===0;
+    const inactive=!state.loading&&(!state.current||!ui.player.src||ui.player.ended||
+      (ui.player.paused&&ui.player.currentTime<.5));
+    addToQueue(queued);
+    const playImmediately=wasEmpty&&inactive;
+    if(playImmediately)playNext(); // Uses the original queue playback path.
+    activity.push({title:song.title||song.code,singer,note,result:playImmediately?'เล่นทันที':'เพิ่มเข้าคิว'});
+    if(activity.length>30)activity.shift();
+    redrawActivity();
+    send(conn,{type:'request-received',id:++sequence,title:String(song.title||''),
+      result:playImmediately?'playing':'queued'});
+    broadcastStatus();
   }
-  requestToggle.addEventListener('click',()=>showRequests(requestPanel.hidden));
-  requestClose.addEventListener('click',()=>showRequests(false));
-  redrawRequests();
+  function handleControl(conn,msg,entry){
+    const now=Date.now();
+    if(now-entry.lastControl<120)return;entry.lastControl=now;
+    const action=String(msg.action||'');
+    const audio=ui.player;
+    if(action==='playpause')togglePlayback();
+    else if(action==='stop')stopSong();
+    else if(action==='next')playNext();
+    else if(action==='volume-up'||action==='volume-down'){
+      const next=Math.max(0,Math.min(100,Math.round(Number(ui.volume.value)||
+        0)+(action==='volume-up'?5:-5)));
+      ui.volume.value=String(next);ui.volume.dispatchEvent(new Event('input',{bubbles:true}));
+      audio.muted=false;
+    }else if(action==='mute'){
+      audio.muted=!audio.muted;
+    }else if(action==='view-bigger'||action==='view-smaller'){
+      setStageVisualScale((state.visualScale||1)+(action==='view-bigger'?.1:-.1));
+    }else if(action==='medley'){
+      setMedleyMode(!state.medley);
+    }else return;
+    broadcastStatus();
+  }
   async function createSession(){
     clearPeerSession();
-    if(typeof Peer!=='function'){status('ไม่สามารถโหลดระบบเชื่อมต่อมือถือได้ กรุณาตรวจอินเทอร์เน็ต');return;}
-    if(!window.crypto?.getRandomValues){status('เบราว์เซอร์ไม่รองรับ QR ที่ปลอดภัย');return;}
-    const active={peer:null,secret:randomSecret(),connections:new Set()};
+    if(typeof Peer!=='function'){status('โหลดระบบเชื่อมต่อมือถือไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
+    if(!window.crypto?.getRandomValues){status('เบราว์เซอร์ไม่รองรับการเชื่อมต่ออย่างปลอดภัย');return;}
+    const active={peer:null,secret:randomSecret(),connections:new Map(),pending:null};
     session=active;qrEnd.textContent='เปลี่ยน QR';
-    status('กำลังเชื่อมต่อระบบรับคำขอเพลง…');
+    status('กำลังสร้าง QR เพื่อจับคู่รีโมท…');
     const peer=new Peer();active.peer=peer;
     peer.on('open',async id=>{
       if(session!==active)return;
       const url=new URL('remote.html',location.href);
       url.search='';url.hash='p='+encodeURIComponent(id)+'&k='+encodeURIComponent(active.secret);
-      qrLink.textContent='เปิดหน้ารีโมทขอเพลง';qrLink.href=url.href;
-      if(typeof QRCode==='undefined'){status('ไม่สามารถสร้าง QR ได้ ใช้ลิงก์แทน');return;}
+      qrLink.textContent='เปิดรีโมท X-Stage บนมือถือ';qrLink.href=url.href;
+      if(typeof QRCode==='undefined'){status('ไม่สามารถสร้าง QR ได้ ใช้ลิงก์รีโมทแทน');return;}
       try{
         await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
         if(session!==active)return;
         qrCanvas.hidden=false;
-        status('พร้อมรับคำขอเพลง · มือถือสแกน QR ได้โดยไม่ต้องล็อกอิน');
-      }catch{status('ไม่สามารถสร้าง QR ได้ ใช้ลิงก์แทน');}
+        status('สแกน QR แล้วอนุมัติมือถือครั้งแรกบนจอหลัก');
+      }catch{status('สร้าง QR ไม่สำเร็จ ใช้ลิงก์รีโมทแทน');}
     });
     peer.on('connection',conn=>{
       if(session!==active){conn.close();return;}
-      if(active.connections.size>=15){conn.close();return;}
-      active.connections.add(conn);
-      let authenticated=false,lastQueryAt=0;
-      const requestTimes=[];
-      conn.on('data',message=>{
-        if(session!==active||!message||typeof message!=='object')return;
-        if(!authenticated){
-          if(message.type!=='hello'||message.key!==active.secret){conn.close();return;}
-          authenticated=true;
-          send(conn,{type:'ready'});
-          send(conn,snapshot());
+      if(active.connections.size>=12){conn.close();return;}
+      const entry={conn,approved:false,lastSearch:0,lastControl:0,requests:[]};
+      active.connections.set(conn,entry);
+      conn.on('data',msg=>{
+        if(session!==active||!msg||typeof msg!=='object')return;
+        if(!entry.approved){
+          if(msg.type!=='hello'||msg.key!==active.secret){conn.close();return;}
+          if(active.pending&&active.pending!==entry){
+            send(conn,{type:'error',message:'เจ้าของเวทีกำลังอนุมัติมือถืออีกเครื่อง'});conn.close();return;
+          }
+          active.pending=entry;
+          qrApprove.hidden=false;qrReject.hidden=false;
+          status('มือถือขอเชื่อมต่อ · กด “อนุญาต” หนึ่งครั้ง');
+          send(conn,{type:'pending'});
           return;
         }
-        if(message.type==='search'){
-          const now=Date.now();if(now-lastQueryAt<120)return;lastQueryAt=now;
-          if(!state.token){send(conn,{type:'results',items:[],notReady:true});return;}
-          const term=String(message.query||'').slice(0,70).trim().toLocaleLowerCase('th');
+        if(msg.type==='search'){
+          const now=Date.now();if(now-entry.lastSearch<150)return;entry.lastSearch=now;
+          const term=String(msg.query||'').trim().slice(0,70).toLocaleLowerCase('th');
           const items=[];
-          if(term){
-            for(let i=0;i<state.songs.length&&items.length<25;i++){
+          if(term&&state.token){
+            for(let i=0;i<state.songs.length&&items.length<30;i++){
               const song=state.songs[i];
-              if([song.code,song.title,song.artist].some(v=>
+              if(playable(song)&&[song.code,song.title,song.artist].some(v=>
                 String(v||'').toLocaleLowerCase('th').includes(term))){
-                items.push({index:i,code:String(song.code||''),title:String(song.title||''),artist:String(song.artist||'')});
+                items.push({index:i,code:String(song.code||''),title:String(song.title||''),
+                  artist:String(song.artist||'')});
               }
             }
           }
-          send(conn,{type:'results',items});
-        }else if(message.type==='request'){
-          if(!state.token){send(conn,{type:'request-error',message:'จอหลักยังไม่พร้อมรับคำขอเพลง'});return;}
-          const i=message.index;
-          if(!Number.isSafeInteger(i)||i<0||i>=state.songs.length)return;
-          const song=state.songs[i];
-          if(!playable(song))return;
-          const singer=String(message.singer||'ไม่ระบุชื่อ').trim().slice(0,45)||'ไม่ระบุชื่อ';
-          const note=String(message.note||'').trim().slice(0,90);
-          const now=Date.now();
-          while(requestTimes.length&&now-requestTimes[0]>60_000)requestTimes.shift();
-          if(requestTimes.length>=5||requests.length>=40){
-            send(conn,{type:'request-error',message:'คำขอมากเกินไป กรุณารอสักครู่'});return;
-          }
-          if(requests.some(r=>r.conn===conn&&r.song===song&&r.singer===singer)){
-            send(conn,{type:'request-error',message:'เพลงนี้อยู่ระหว่างรอการอนุมัติแล้ว'});return;
-          }
-          requestTimes.push(now);
-          const id=++nextRequestId;
-          requests.push({id,song,singer,note,conn});
-          redrawRequests();
-          send(conn,{type:'request-received',id,title:String(song.title||'')});
-          status('มีคำขอเพลงใหม่ '+requests.length+' รายการ · เปิดเมนู “คำขอเพลง” เพื่อจัดคิว');
+          send(conn,{type:'results',items,query:term,notReady:!state.token});
+        }else if(msg.type==='request'){
+          acceptRequest(conn,msg,entry.requests);
+        }else if(msg.type==='control'){
+          handleControl(conn,msg,entry);
+        }else if(msg.type==='refresh'){
+          send(conn,snapshot());
         }
-        // No remote control/play/stop/volume commands are accepted.
       });
-      const cleanup=()=>active.connections.delete(conn);
+      const cleanup=()=>{
+        active.connections.delete(conn);
+        if(active.pending===entry){
+          active.pending=null;qrApprove.hidden=true;qrReject.hidden=true;
+          status('มือถือยกเลิกการเชื่อมต่อ');
+        }
+      };
       conn.on('close',cleanup);conn.on('error',cleanup);
     });
-    peer.on('error',err=>{if(session===active)status('ไม่สามารถเชื่อมต่อรีโมท: '+(err?.type||'เครือข่ายไม่พร้อม'));});
-    peer.on('disconnected',()=>{if(session===active)status('ระบบจับคู่ขาดการเชื่อมต่อ · กด “เปลี่ยน QR” เพื่อเชื่อมต่อใหม่');});
+    peer.on('error',err=>{if(session===active)status('เชื่อมต่อไม่ได้: '+(err?.type||'เครือข่ายไม่พร้อม'));});
+    peer.on('disconnected',()=>{
+      if(session===active)status('การจับคู่หลุด กรุณากด “เปลี่ยน QR” เมื่อเชื่อมต่อไม่ได้');
+    });
   }
+  qrApprove.addEventListener('click',()=>{
+    const entry=session?.pending;
+    if(!entry||!entry.conn.open)return;
+    session.pending=null;entry.approved=true;
+    qrApprove.hidden=true;qrReject.hidden=true;
+    send(entry.conn,{type:'ready'});
+    send(entry.conn,snapshot());
+    status('อนุมัติแล้ว · มือถือสามารถขอเพลงและควบคุมการเล่นได้');
+  });
+  qrReject.addEventListener('click',()=>{
+    const entry=session?.pending;
+    if(entry){session.pending=null;entry.conn.close();}
+    qrApprove.hidden=true;qrReject.hidden=true;
+    status('ปฏิเสธการเชื่อมต่อมือถือ');
+  });
   qrEnd.addEventListener('click',createSession);
   function showQR(open){
     qrPanel.hidden=!open;
@@ -289,16 +335,7 @@
   }
   qrToggle.addEventListener('click',()=>showQR(qrPanel.hidden));
   qrClose.addEventListener('click',()=>showQR(false));
-  // Pairing approval buttons are no longer needed: knowing the time-limited
-  // QR secret grants permission to submit a request, but not control playback.
-  qrApprove.hidden=true;qrReject.hidden=true;
-  setInterval(()=>{
-    if(session)for(const conn of session.connections)send(conn,snapshot());
-  },1400);
+  setInterval(broadcastStatus,1200);
   window.addEventListener('beforeunload',clearPeerSession);
-  ui.logout.addEventListener('click',()=>{
-    clearPeerSession();
-    requests.splice(0,requests.length);
-    redrawRequests();
-  });
+  ui.logout.addEventListener('click',clearPeerSession);
 })();
