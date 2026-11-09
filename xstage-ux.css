@@ -1401,3 +1401,23 @@ body.xstage-ui-v2 .transport-text-action{
     min-width:48px!important;padding:0 7px!important;font-size:.62rem!important
   }
 }
+
+/* 0.9.88: silent right-click context menu. */
+body.xstage-ui-v2 .xstage-context-menu{
+  position:fixed;z-index:240;display:grid;gap:2px;
+  width:min(220px,calc(100vw - 16px));padding:6px;
+  background:linear-gradient(180deg,#101a22f7,#070b0ff7);
+  border:1px solid #355266;border-radius:10px;
+  box-shadow:0 16px 42px #000b,0 0 0 1px #0cf1 inset;
+  backdrop-filter:blur(10px)
+}
+body.xstage-ui-v2 .xstage-context-menu[hidden]{display:none!important}
+body.xstage-ui-v2 .xstage-context-menu button{
+  min-height:34px;padding:7px 10px;text-align:left;
+  border:0;border-radius:7px;background:transparent;color:#e8f7ff;
+  font:800 .76rem/1.2 Inter,Tahoma,sans-serif;cursor:pointer
+}
+body.xstage-ui-v2 .xstage-context-menu button:hover,
+body.xstage-ui-v2 .xstage-context-menu button:focus-visible{
+  background:#173247;color:#fff;outline:none
+}
