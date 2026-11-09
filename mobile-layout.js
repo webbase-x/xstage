@@ -15,7 +15,6 @@
   const mq=window.matchMedia('(max-width: 820px), (max-height: 520px) and (pointer: coarse)');
   const isCompact=()=>mq.matches;
   function setMenu(open){
-    if(!isCompact())open=false;
     menu.hidden=!open;
     toggle.setAttribute('aria-expanded',String(open));
     toggle.setAttribute('aria-label',open?'ปิดเมนู':'เปิดเมนู');
