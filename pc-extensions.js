@@ -146,6 +146,7 @@ const EQ_PRESETS={
 };
 let eqContext=null,eqNodes=[],eqAnalyser=null,eqLeft=null,eqRight=null,eqSource=null,eqMeterSink=null;
 let eqBandInputs=[],eqBandLights=[],eqBypassed=false,eqPreset='auto',eqLastSong='',eqFrame=0;
+const eqVisualLevels=Array(31).fill(0);
 const eqPanel=$pc('xstage-eq-panel'),eqBands=$pc('xstage-eq-bands'),eqPresetSelect=$pc('xstage-eq-preset');
 const eqPrefs=window.XStageUiPrefs?.read?.()||{};
 if(typeof eqPrefs.eqPreset==='string')eqPreset=eqPrefs.eqPreset;
@@ -220,8 +221,22 @@ function drawEqRta(){
  const bins=new Uint8Array(eqAnalyser.frequencyBinCount);eqAnalyser.getByteFrequencyData(bins);
  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#02070d';ctx.fillRect(0,0,canvas.width,canvas.height);
  const sr=eqContext.sampleRate,ny=sr/2;const levels=[];
- EQ_FREQS.forEach((freq,i)=>{const bin=Math.max(0,Math.min(bins.length-1,Math.round(freq/ny*bins.length)));const level=bins[bin]/255;levels.push(level);eqBandLights[i]?.style.setProperty('--level',String(level));const x=i*canvas.width/EQ_FREQS.length,w=canvas.width/EQ_FREQS.length-2,h=level*(canvas.height-8);ctx.fillStyle=eqBandColor(freq);ctx.globalAlpha=.38+.62*level;ctx.fillRect(x,canvas.height-h,w,h);});
- ctx.globalAlpha=1;const l=rms(eqLeft),r=rms(eqRight);$pc('xstage-eq-meter-l').value=l;$pc('xstage-eq-meter-r').value=r;
+ EQ_FREQS.forEach((freq,i)=>{
+   const low=i===0?freq/Math.sqrt(EQ_FREQS[1]/freq):Math.sqrt(EQ_FREQS[i-1]*freq);
+   const high=i===EQ_FREQS.length-1?Math.min(ny,freq*Math.sqrt(freq/EQ_FREQS[i-1])):Math.sqrt(freq*EQ_FREQS[i+1]);
+   const from=Math.max(0,Math.floor(low/ny*bins.length)),to=Math.max(from+1,Math.min(bins.length,Math.ceil(high/ny*bins.length)));
+   let sum=0,peak=0,count=0;
+   for(let b=from;b<to;b++){const v=bins[b]/255;sum+=v*v;peak=Math.max(peak,v);count++;}
+   const raw=Math.min(1,(Math.sqrt(sum/Math.max(1,count))*.82)+(peak*.32));
+   const previous=eqVisualLevels[i]||0;
+   const level=raw>=previous?raw:(previous*.86+raw*.14);
+   eqVisualLevels[i]=level;levels.push(level);
+   eqBandLights[i]?.style.setProperty('--level',String(level));
+   eqBandLights[i]?.style.setProperty('--peak',String(Math.min(1,peak)));
+   const x=i*canvas.width/EQ_FREQS.length,w=Math.max(2,canvas.width/EQ_FREQS.length-2),h=level*(canvas.height-8);
+   ctx.fillStyle=eqBandColor(freq);ctx.globalAlpha=.26+.74*level;ctx.fillRect(x,canvas.height-h,w,h);
+ });
+ ctx.globalAlpha=1;const l=peakLevel(eqLeft),r=peakLevel(eqRight);$pc('xstage-eq-meter-l').value=l;$pc('xstage-eq-meter-r').value=r;
  if(screen&&!screen.closed)try{screen.postMessage({type:'xstage-eq-meter',levels,left:l,right:r},location.origin);}catch{}
  eqFrame=requestAnimationFrame(drawEqRta);
 }
