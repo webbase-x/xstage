@@ -352,8 +352,11 @@ function drawLine(text,y,maxWidth,fontSize,fill,progress=null,centerX=ui.lyrics.
   do {pen.font=`900 ${Math.round(sz)}px "Leelawadee UI","Noto Sans Thai",Tahoma,sans-serif`;if(pen.measureText(text).width<=maxWidth)break;sz*=.92;}while(sz>14);
   pen.textAlign='center';pen.textBaseline='middle';
   pen.lineWidth=Math.max(3,sz*.13);pen.strokeStyle='#010613';pen.lineJoin='round';pen.shadowColor='#000';pen.shadowBlur=6;
-  pen.strokeText(text,centerX,y);pen.shadowBlur=0;pen.fillStyle=fill;pen.fillText(text,centerX,y);
-  if(progress!==null){const width=pen.measureText(text).width;pen.save();pen.beginPath();pen.rect(centerX-width/2-1,y-sz*.8,Math.max(0,Math.min(1,progress))*width+1,sz*1.65);pen.clip();pen.fillStyle='#ffd76a';pen.fillText(text,centerX,y);pen.restore();}
+  // Canvas maxWidth keeps the entire text inside the reserved region even
+  // when its Thai glyphs cannot shrink further (e.g. QR beside lyrics).
+  const displayedWidth=Math.min(pen.measureText(text).width,maxWidth);
+  pen.strokeText(text,centerX,y,maxWidth);pen.shadowBlur=0;pen.fillStyle=fill;pen.fillText(text,centerX,y,maxWidth);
+  if(progress!==null){pen.save();pen.beginPath();pen.rect(centerX-displayedWidth/2-1,y-sz*.8,Math.max(0,Math.min(1,progress))*displayedWidth+1,sz*1.65);pen.clip();pen.fillStyle='#ffd76a';pen.fillText(text,centerX,y,maxWidth);pen.restore();}
 }
 function lineProgress(line,when){
   const units=Array.isArray(line.syllables)?line.syllables:[];
