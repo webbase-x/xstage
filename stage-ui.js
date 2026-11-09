@@ -95,8 +95,8 @@
     const stageHit=event.target.closest('.stage,.stage-column,.transport-panel,.stage-toolbar,.mobile-stage-menu');
     if(!stageHit)return;
     event.preventDefault();
-    const pad=8,w=contextMenu.offsetWidth||190,h=contextMenu.offsetHeight||300;
     contextMenu.hidden=false;
+    const pad=8,w=contextMenu.offsetWidth||190,h=contextMenu.offsetHeight||300;
     const left=Math.min(event.clientX,innerWidth-w-pad),top=Math.min(event.clientY,innerHeight-h-pad);
     contextMenu.style.left=Math.max(pad,left)+'px';
     contextMenu.style.top=Math.max(pad,top)+'px';
