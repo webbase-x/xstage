@@ -13,6 +13,17 @@
   let peer=null,conn=null,connected=false,ready=false;
   let searchTimer=null,querySequence=0,activeTab='search';
   const pendingButtons=new Set();
+  const reconnectButton=document.createElement('button');
+  reconnectButton.type='button';reconnectButton.textContent='↻ เชื่อมต่ออีกครั้ง';
+  reconnectButton.hidden=true;status.after(reconnectButton);
+  const scanLink=document.createElement('a');
+  scanLink.href='remote.html';scanLink.textContent='📷 สแกน QR ใหม่';
+  scanLink.hidden=true;reconnectButton.after(scanLink);
+  function disconnected(message){
+    connected=false;ready=false;controls.hidden=true;
+    reconnectButton.hidden=!hostId||!secret;
+    scanLink.hidden=false;report(message);
+  }
   function report(message){status.textContent=message;}
   function send(msg){if(connected&&conn?.open)try{conn.send(msg);}catch{}}
   function control(action){send({type:'control',action});}
@@ -91,6 +102,7 @@
     }
     if(data.type==='ready'){
       connected=true;controls.hidden=false;
+      reconnectButton.hidden=true;scanLink.hidden=true;
       report('เชื่อมต่อแล้ว · ขอเพลงและควบคุมเวทีได้ ไม่ต้องล็อกอิน Google');
       if(search.value.trim())search.dispatchEvent(new Event('input'));else drawResults([]);
       send({type:'refresh'});return;
@@ -124,6 +136,8 @@
       if(String(data.query||'')===search.value.trim().toLocaleLowerCase('th'))drawResults(data.items);
     }else if(data.type==='request-received'){
       resetButtons();
+      clearTimeout(searchTimer);querySequence++;
+      search.value='';results.replaceChildren();
       const outcome=data.result==='playing'?'เริ่มเล่นทันที':'เพิ่มเข้าคิวแล้ว';
       receipt('ส่งเพลง '+String(data.title||'')+' สำเร็จ · '+outcome);
       send({type:'refresh'});
@@ -150,7 +164,8 @@
   }
   if(typeof Peer!=='function'){report('โหลดระบบจับคู่ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
   report('กำลังเชื่อมต่อรีโมท X-Stage…');
-  try{
+  function connect(){
+    if(peer){try{peer.destroy();}catch{}}
     peer=new Peer();
     peer.on('open',()=>{
       conn=peer.connect(hostId,{reliable:true,serialization:'json'});
@@ -159,13 +174,12 @@
         conn.send({type:'hello',key:secret});
       });
       conn.on('data',handleMessage);
-      conn.on('close',()=>{
-        connected=false;ready=false;controls.hidden=true;
-        report('ขาดการเชื่อมต่อ · สแกน QR อีกครั้ง');
-      });
-      conn.on('error',()=>report('เชื่อมต่อกับเวทีไม่ได้'));
+      conn.on('close',()=>disconnected('ขาดการเชื่อมต่อ · เชื่อมต่ออีกครั้งหรือสแกน QR ใหม่'));
+      conn.on('error',()=>disconnected('เชื่อมต่อกับเวทีไม่ได้'));
     });
-    peer.on('error',err=>report('เครือข่ายไม่พร้อม: '+String(err?.type||'ไม่ทราบสาเหตุ')));
-  }catch{report('เริ่มระบบรีโมทไม่สำเร็จ');}
+    peer.on('error',err=>disconnected('เครือข่ายไม่พร้อม: '+String(err?.type||'ไม่ทราบสาเหตุ')));
+  }
+  reconnectButton.addEventListener('click',()=>{try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่อ…');}catch{disconnected('เชื่อมต่อไม่สำเร็จ');}});
+  try{connect();}catch{disconnected('เริ่มระบบรีโมทไม่สำเร็จ');}
   window.addEventListener('beforeunload',()=>{try{conn?.close();peer?.destroy();}catch{}});
 })();
