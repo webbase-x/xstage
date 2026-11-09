@@ -112,7 +112,11 @@ async function readPublishedCatalog(pointer,token){
   const base=await fetchImmutable(pointer.catalogFileId);
   if(base?.schemaVersion!==1||!Array.isArray(base.songs))
     throw Error('ฐานเพลงหลักบน Drive ไม่รองรับ');
-  if(!deltaIds.length)return base;
+  if(!deltaIds.length){
+    if(Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount)
+      throw Error('ฐานเพลงชุดนี้มีจำนวนเพลงไม่ตรงกับข้อมูลเผยแพร่');
+    return base;
+  }
   const songs=new Map();
   for(const song of base.songs){
     if(song && typeof song.webSongId==='string')songs.set(song.webSongId,song);
@@ -162,6 +166,7 @@ async function pollPublishedCatalog(){
 setInterval(pollPublishedCatalog,45000);
 
 async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
+  if(state.token && state.token!==token)state.catalogCache.clear();
   setStatus('กำลังค้นหาคลัง XStageWeb ใน Google Drive ของคุณ…');
   const roots = (await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token));
   if (authId !== state.authId) return;
