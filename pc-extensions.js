@@ -133,17 +133,125 @@ $pc('pc-lyrics-settings').onclick=()=>{
  }
  d.append(para('การตั้งค่านี้ไม่แก้ไขเพลงหรือฐานข้อมูลใน Google Drive'));
 };
-let eqContext=null,eqNodes=[];
-$pc('pc-eq').onclick=()=>{
- const d=openDialog('EQ เสียง M4A บนเว็บ');
- try{
-  if(!eqContext){const C=window.AudioContext||window.webkitAudioContext;if(!C)throw Error('Web Audio API ไม่รองรับ');eqContext=new C();const src=eqContext.createMediaElementSource(audio);eqNodes=[{freq:100,type:'lowshelf'},{freq:1000,type:'peaking'},{freq:8000,type:'highshelf'}].map(o=>{const n=eqContext.createBiquadFilter();n.type=o.type;n.frequency.value=o.freq;return n;});src.connect(eqNodes[0]);eqNodes[0].connect(eqNodes[1]);eqNodes[1].connect(eqNodes[2]);eqNodes[2].connect(eqContext.destination);}
-  eqContext.resume().catch(()=>{});
-  ['Bass 100 Hz','Mid 1 kHz','Treble 8 kHz'].forEach((name,i)=>{const r=document.createElement('input');r.type='range';r.min=-12;r.max=12;r.value=String(eqNodes[i].gain.value);r.oninput=()=>eqNodes[i].gain.value=Number(r.value);const l=document.createElement('label');l.textContent=name;l.append(r);d.append(l);});
-  d.append(button('คืนค่า EQ',()=>{eqNodes.forEach(n=>n.gain.value=0);dialog.close();}));
- }catch(e){d.append(para(e.message));}
- d.append(para('EQ นี้ไม่ใช่มิกเซอร์แยกเครื่องดนตรี MIDI ของรุ่น PC'));
+const EQ_FREQS=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
+const EQ_PRESETS={
+ flat:Array(31).fill(0),
+ pop:[1.5,1.5,1.5,2,2.5,3,3,2.5,2,1,.5,0,-.5,-1,-1,-.5,0,1,2,2.5,2.5,2,1.5,1,1,1.5,2,2.5,2.5,2,1],
+ rock:[3,3,3.5,4,4,3.5,3,2,1,0,-1,-1.5,-1.5,-1,0,1,2,2.5,3,3,2.5,2,2,2.5,3,3.5,4,4,3.5,3,2],
+ jazz:[2,2,2,1.5,1.5,1,0.5,0,0,0.5,1,1.5,1.5,1,0.5,0,0.5,1,1.5,2,2,1.5,1,0.5,1,1.5,2,2.5,3,3,2.5],
+ vocal:[-2,-2,-2,-1.5,-1.5,-1,-1,-.5,0,.5,1,1.5,2,2.5,3,3.5,4,4,4,3.5,3,2.5,2,1.5,1,.5,0,-.5,-1,-1.5,-2],
+ edm:[4,4,4.5,5,5,4.5,4,3,2,1,0,-1,-1.5,-1.5,-1,0,1,2,2.5,2.5,2,1,0,0.5,1.5,2.5,3.5,4,4.5,4,3],
+ acoustic:[1,1,1,1,1.5,1.5,1.5,1,0.5,0,0,0.5,1,1.5,2,2.5,3,3,2.5,2,1.5,1,1,1.5,2,2,2,1.5,1,0.5,0],
+ classical:[2,2,2,1.5,1,0.5,0,0,-0.5,-1,-1,-.5,0,.5,1,1.5,2,2.5,2.5,2,1.5,1,.5,.5,1,1.5,2,2.5,3,3,2.5]
 };
+let eqContext=null,eqNodes=[],eqAnalyser=null,eqLeft=null,eqRight=null,eqSource=null;
+let eqBandInputs=[],eqBandLights=[],eqBypassed=false,eqPreset='auto',eqLastSong='',eqFrame=0;
+const eqPanel=$pc('xstage-eq-panel'),eqBands=$pc('xstage-eq-bands'),eqPresetSelect=$pc('xstage-eq-preset');
+const eqPrefs=window.XStageUiPrefs?.read?.()||{};
+if(typeof eqPrefs.eqPreset==='string')eqPreset=eqPrefs.eqPreset;
+if(typeof eqPrefs.eqBypassed==='boolean')eqBypassed=eqPrefs.eqBypassed;
+function eqFreqLabel(f){return f>=1000?(f/1000).toFixed(f%1000?2:0).replace(/0$/,'')+'k':String(f);}
+function eqBandColor(f){return f<80?'#ff3b30':f<250?'#ff8a00':f<630?'#ffd400':f<1600?'#62e33c':f<4000?'#22d3a7':f<10000?'#18b7ff':'#755bff';}
+function ensureEqAudio(){
+ if(eqContext)return true;
+ const C=window.AudioContext||window.webkitAudioContext;if(!C){setPlayStatus('Web Audio API ไม่รองรับ EQ 31 Band');return false;}
+ eqContext=new C();eqSource=eqContext.createMediaElementSource(audio);
+ eqNodes=EQ_FREQS.map(freq=>{const n=eqContext.createBiquadFilter();n.type='peaking';n.frequency.value=freq;n.Q.value=4.318;return n;});
+ eqAnalyser=eqContext.createAnalyser();eqAnalyser.fftSize=4096;eqAnalyser.smoothingTimeConstant=.72;
+ eqLeft=eqContext.createAnalyser();eqRight=eqContext.createAnalyser();eqLeft.fftSize=512;eqRight.fftSize=512;
+ const splitter=eqContext.createChannelSplitter(2);
+ let node=eqSource;for(const filter of eqNodes){node.connect(filter);node=filter;}node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination);eqAnalyser.connect(splitter);splitter.connect(eqLeft,0);splitter.connect(eqRight,1);
+ applyEqGains(false);return true;
+}
+function savedEqGains(){
+ const v=(window.XStageUiPrefs?.read?.()||{}).eqGains;
+ return Array.isArray(v)&&v.length===31?v.map(x=>Math.max(-12,Math.min(12,Number(x)||0))):null;
+}
+function currentEqGains(){return eqBandInputs.length?eqBandInputs.map(i=>Number(i.value)):savedEqGains()||EQ_PRESETS.flat.slice();}
+function applyEqGains(save=true){
+ const values=currentEqGains();
+ eqNodes.forEach((n,i)=>n.gain.value=eqBypassed?0:values[i]);
+ eqBandInputs.forEach((input,i)=>input.value=String(values[i]));
+ $pc('xstage-eq-bypass')?.setAttribute('aria-pressed',String(eqBypassed));
+ if(save)window.XStageUiPrefs?.save?.({eqGains:values,eqPreset,eqBypassed});
+ sendEqState();
+}
+function autoPresetForSong(song){
+ const text=[song?.genre,song?.style,song?.type,song?.category].filter(Boolean).join(' ').toLowerCase();
+ if(/edm|dance|electro|house|techno|ดนตรีเต้น|แดนซ์/.test(text))return 'edm';
+ if(/rock|metal|alternative|ร็อก|ร็อค/.test(text))return 'rock';
+ if(/jazz|swing|blues|แจ๊ส/.test(text))return 'jazz';
+ if(/classic|orchestra|symph|คลาสสิก|ออร์เคสตรา/.test(text))return 'classical';
+ if(/acoustic|folk|country|อะคูสติก|โฟล์ค|ลูกทุ่ง/.test(text))return 'acoustic';
+ if(/vocal|ballad|ร้อง|เพลงช้า/.test(text))return 'vocal';
+ if(/pop|ป๊อป/.test(text))return 'pop';
+ return 'flat';
+}
+function setEqPreset(name,{save=true}={}){
+ eqPreset=EQ_PRESETS[name]?name:name==='auto'?'auto':'flat';
+ const actual=eqPreset==='auto'?autoPresetForSong(state.current):eqPreset;
+ const gains=EQ_PRESETS[actual]||EQ_PRESETS.flat;
+ eqBandInputs.forEach((input,i)=>input.value=String(gains[i]));
+ eqNodes.forEach((node,i)=>node.gain.value=eqBypassed?0:gains[i]);
+ if(eqPresetSelect)eqPresetSelect.value=eqPreset;
+ const label=$pc('xstage-eq-song-style');if(label)label.textContent=eqPreset==='auto'?'AUTO: '+actual.toUpperCase():'PRESET: '+eqPreset.toUpperCase();
+ if(save)window.XStageUiPrefs?.save?.({eqPreset,eqGains:gains,eqBypassed});
+ sendEqState();
+}
+function buildEqBands(){
+ if(!eqBands||eqBands.children.length)return;
+ const saved=savedEqGains()||EQ_PRESETS.flat;
+ EQ_FREQS.forEach((freq,i)=>{
+  const band=document.createElement('label');band.className='xstage-eq-band';band.style.setProperty('--band-color',eqBandColor(freq));
+  const gain=document.createElement('span');gain.className='xstage-eq-gain';gain.textContent=(saved[i]>0?'+':'')+saved[i].toFixed(1);
+  const light=document.createElement('i');light.className='xstage-eq-band-light';light.style.setProperty('--level','0');
+  const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='.5';input.value=String(saved[i]);input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz');
+  input.addEventListener('input',()=>{eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='flat';gain.textContent=(+input.value>0?'+':'')+(+input.value).toFixed(1);if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
+  const hz=document.createElement('span');hz.className='xstage-eq-hz';hz.textContent=eqFreqLabel(freq);
+  band.append(gain,light,input,hz);eqBands.append(band);eqBandInputs.push(input);eqBandLights.push(light);
+ });
+}
+function rms(analyser){
+ if(!analyser)return 0;const data=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(data);let sum=0;for(const x of data)sum+=x*x;return Math.min(1,Math.sqrt(sum/data.length)*2.8);
+}
+function drawEqRta(){
+ if(!eqPanel||eqPanel.hidden||!eqAnalyser){eqFrame=requestAnimationFrame(drawEqRta);return;}
+ const canvas=$pc('xstage-eq-rta'),ctx=canvas?.getContext('2d');if(!ctx){eqFrame=requestAnimationFrame(drawEqRta);return;}
+ const bins=new Uint8Array(eqAnalyser.frequencyBinCount);eqAnalyser.getByteFrequencyData(bins);
+ ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#02070d';ctx.fillRect(0,0,canvas.width,canvas.height);
+ const sr=eqContext.sampleRate,ny=sr/2;const levels=[];
+ EQ_FREQS.forEach((freq,i)=>{const bin=Math.max(0,Math.min(bins.length-1,Math.round(freq/ny*bins.length)));const level=bins[bin]/255;levels.push(level);eqBandLights[i]?.style.setProperty('--level',String(level));const x=i*canvas.width/EQ_FREQS.length,w=canvas.width/EQ_FREQS.length-2,h=level*(canvas.height-8);ctx.fillStyle=eqBandColor(freq);ctx.globalAlpha=.38+.62*level;ctx.fillRect(x,canvas.height-h,w,h);});
+ ctx.globalAlpha=1;const l=rms(eqLeft),r=rms(eqRight);$pc('xstage-eq-meter-l').value=l;$pc('xstage-eq-meter-r').value=r;
+ if(screen&&!screen.closed)try{screen.postMessage({type:'xstage-eq-meter',levels,left:l,right:r},location.origin);}catch{}
+ eqFrame=requestAnimationFrame(drawEqRta);
+}
+function sendEqState(){
+ if(!screen||screen.closed)return;try{screen.postMessage({type:'xstage-eq-state',open:!eqPanel.hidden,minimized:eqPanel.classList.contains('is-minimized'),expanded:eqPanel.classList.contains('is-expanded'),preset:eqPreset,bypassed:eqBypassed,gains:currentEqGains()},location.origin);}catch{}
+}
+function openEq(){
+ buildEqBands();if(!ensureEqAudio())return;eqContext.resume().catch(()=>{});
+ eqPanel.hidden=false;eqPanel.classList.remove('is-minimized');
+ if(eqPresetSelect)eqPresetSelect.value=EQ_PRESETS[eqPreset]||eqPreset==='auto'?eqPreset:'flat';
+ if(eqPreset==='auto')setEqPreset('auto',{save:false});else applyEqGains(false);
+ sendEqState();
+}
+$pc('pc-eq').onclick=openEq;
+$pc('xstage-eq-close')?.addEventListener('click',()=>{eqPanel.hidden=true;sendEqState();});
+$pc('xstage-eq-minimize')?.addEventListener('click',()=>{eqPanel.classList.toggle('is-minimized');sendEqState();});
+$pc('xstage-eq-expand')?.addEventListener('click',()=>{eqPanel.classList.toggle('is-expanded');sendEqState();});
+$pc('xstage-eq-bypass')?.addEventListener('click',()=>{eqBypassed=!eqBypassed;applyEqGains();});
+$pc('xstage-eq-reset')?.addEventListener('click',()=>setEqPreset('flat'));
+eqPresetSelect?.addEventListener('change',()=>setEqPreset(eqPresetSelect.value));
+(function makeEqDraggable(){
+ const handle=eqPanel?.querySelector('[data-eq-drag]');if(!handle)return;let drag=null;
+ handle.addEventListener('pointerdown',e=>{if(e.target.closest('button,select'))return;const r=eqPanel.getBoundingClientRect();drag={x:e.clientX-r.left,y:e.clientY-r.top};handle.setPointerCapture(e.pointerId);});
+ handle.addEventListener('pointermove',e=>{if(!drag||eqPanel.classList.contains('is-expanded'))return;const left=Math.max(0,Math.min(innerWidth-eqPanel.offsetWidth,e.clientX-drag.x)),top=Math.max(0,Math.min(innerHeight-eqPanel.offsetHeight,e.clientY-drag.y));eqPanel.style.left=left+'px';eqPanel.style.top=top+'px';eqPanel.style.right='auto';eqPanel.style.bottom='auto';});
+ handle.addEventListener('pointerup',()=>{if(!drag)return;window.XStageUiPrefs?.save?.({eqPosition:{left:eqPanel.style.left,top:eqPanel.style.top}});drag=null;});
+ const pos=eqPrefs.eqPosition;if(pos?.left&&pos?.top){eqPanel.style.left=pos.left;eqPanel.style.top=pos.top;eqPanel.style.right='auto';eqPanel.style.bottom='auto';}
+})();
+audio.addEventListener('play',()=>{if(eqPreset==='auto'&&state.current){const id=songIdentity(state.current);if(id!==eqLastSong){eqLastSong=id;setEqPreset('auto',{save:false});}}});
+window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen||e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq();else if(d.action==='close'){eqPanel.hidden=true;sendEqState();}else if(d.action==='preset')setEqPreset(String(d.value||'flat'));else if(d.action==='bypass'){eqBypassed=!!d.value;applyEqGains();}else if(d.action==='gain'&&Number.isInteger(d.index)&&eqBandInputs[d.index]){eqBandInputs[d.index].value=String(Math.max(-12,Math.min(12,Number(d.value)||0)));eqBandInputs[d.index].dispatchEvent(new Event('input',{bubbles:true}));}});
+buildEqBands();if(eqPresetSelect)eqPresetSelect.value=EQ_PRESETS[eqPreset]||eqPreset==='auto'?eqPreset:'flat';requestAnimationFrame(drawEqRta);
 function downloadQueue(){
  const data={schemaVersion:1,source:'XStageWebQueue',songs:state.queue.map(songIdentity)};
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
