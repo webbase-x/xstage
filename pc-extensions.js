@@ -144,7 +144,7 @@ const EQ_PRESETS={
  acoustic:[1,1,1,1,1.5,1.5,1.5,1,0.5,0,0,0.5,1,1.5,2,2.5,3,3,2.5,2,1.5,1,1,1.5,2,2,2,1.5,1,0.5,0],
  classical:[2,2,2,1.5,1,0.5,0,0,-0.5,-1,-1,-.5,0,.5,1,1.5,2,2.5,2.5,2,1.5,1,.5,.5,1,1.5,2,2.5,3,3,2.5]
 };
-let eqContext=null,eqNodes=[],eqAnalyser=null,eqLeft=null,eqRight=null,eqSource=null;
+let eqContext=null,eqNodes=[],eqAnalyser=null,eqLeft=null,eqRight=null,eqSource=null,eqMeterSink=null;
 let eqBandInputs=[],eqBandLights=[],eqBypassed=false,eqPreset='auto',eqLastSong='',eqFrame=0;
 const eqPanel=$pc('xstage-eq-panel'),eqBands=$pc('xstage-eq-bands'),eqPresetSelect=$pc('xstage-eq-preset');
 const eqPrefs=window.XStageUiPrefs?.read?.()||{};
@@ -159,8 +159,8 @@ function ensureEqAudio(){
  eqNodes=EQ_FREQS.map(freq=>{const n=eqContext.createBiquadFilter();n.type='peaking';n.frequency.value=freq;n.Q.value=4.318;return n;});
  eqAnalyser=eqContext.createAnalyser();eqAnalyser.fftSize=4096;eqAnalyser.smoothingTimeConstant=.72;
  eqLeft=eqContext.createAnalyser();eqRight=eqContext.createAnalyser();eqLeft.fftSize=512;eqRight.fftSize=512;
- const splitter=eqContext.createChannelSplitter(2);
- let node=eqSource;for(const filter of eqNodes){node.connect(filter);node=filter;}node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination);eqAnalyser.connect(splitter);splitter.connect(eqLeft,0);splitter.connect(eqRight,1);
+ const splitter=eqContext.createChannelSplitter(2);eqMeterSink=eqContext.createGain();eqMeterSink.gain.value=0;
+ let node=eqSource;for(const filter of eqNodes){node.connect(filter);node=filter;}node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination);eqAnalyser.connect(splitter);splitter.connect(eqLeft,0);splitter.connect(eqRight,1);eqLeft.connect(eqMeterSink);eqRight.connect(eqMeterSink);eqMeterSink.connect(eqContext.destination);
  applyEqGains(false);return true;
 }
 function savedEqGains(){
@@ -211,8 +211,8 @@ function buildEqBands(){
   band.append(gain,light,input,hz);eqBands.append(band);eqBandInputs.push(input);eqBandLights.push(light);
  });
 }
-function rms(analyser){
- if(!analyser)return 0;const data=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(data);let sum=0;for(const x of data)sum+=x*x;return Math.min(1,Math.sqrt(sum/data.length)*2.8);
+function peakLevel(analyser){
+ if(!analyser)return 0;const data=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(data);let peak=0;for(const x of data)peak=Math.max(peak,Math.abs(x));return Math.min(1,peak);
 }
 function drawEqRta(){
  if(!eqPanel||eqPanel.hidden||!eqAnalyser){eqFrame=requestAnimationFrame(drawEqRta);return;}
@@ -268,7 +268,7 @@ let screen=null;
 $pc('pc-stage-pop').onclick=()=>{
  if(screen&&!screen.closed){screen.focus();return;}screen=window.open('./stage.html','xstage-second-stage','width=1100,height=640');
  if(!screen)setPlayStatus('กรุณาอนุญาตให้เปิดหน้าต่างจอร้องแยก');
-  else screen.addEventListener('load',sendBackgroundToSecondScreen,{once:true});
+  else screen.addEventListener('load',()=>{sendBackgroundToSecondScreen();sendEqState();},{once:true});
 };
 setInterval(()=>{if(!screen||screen.closed)return;try{screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime},location.origin);}catch{}},200);
 $pc('pc-other-tools').onclick=()=>{const d=openDialog('ความสามารถ X-Stage Web');d.append(para('เว็บ: ค้นหาแบบเรียลไทม์, คิวเพลง, ประวัติ, เพลงโปรดในเซสชัน, สุ่มเพลง, A–B, EQ, ตั้งค่าเนื้อร้องและพื้นหลัง, จอร้องแยก, ส่งออก/นำเข้าคิว'));
