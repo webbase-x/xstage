@@ -6,7 +6,7 @@
 const cfg = window.XSTAGE_CONFIG || {};
 const $ = id => document.getElementById(id);
 const ui = {
-  status: $('status'), login: $('login'), gateLogin: $('gate-login'), logout: $('logout'), gate: $('gate'),
+  status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'),
   account: $('account'), libraryState: $('library-state'), songTotal: $('song-total'), resultCount: $('result-count'),
   search: $('search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
@@ -95,6 +95,7 @@ window.XStageUiPrefs={read:readUiPrefs,save:saveUiPrefs};
 const initialUiPrefs=readUiPrefs();
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
 const ACTIVE_AUTH_KEY = 'xstage-google-token-v2';
+const PENDING_AUTH_KEY = 'xstage-google-pending-token-v1';
 const LEGACY_ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
 function authRecordValid(current){
@@ -105,6 +106,25 @@ function authRecordValid(current){
 function clearActiveAuth(){
   try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);sessionStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
   try{localStorage.removeItem(ACTIVE_AUTH_KEY);}catch{}
+}
+function clearPendingAuth(){
+  try{sessionStorage.removeItem(PENDING_AUTH_KEY);}catch{}
+  try{localStorage.removeItem(PENDING_AUTH_KEY);}catch{}
+}
+function savePendingAuth(token,expiresAt){
+  if(!token||!(expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS))return;
+  const value=JSON.stringify({token,expiresAt});
+  try{sessionStorage.setItem(PENDING_AUTH_KEY,value);}catch{}
+  try{localStorage.setItem(PENDING_AUTH_KEY,value);}catch{}
+}
+function readPendingAuth(){
+  for(const store of [(()=>{try{return sessionStorage}catch{return null}})(),(()=>{try{return localStorage}catch{return null}})()].filter(Boolean)){
+    try{
+      const current=JSON.parse(store.getItem(PENDING_AUTH_KEY)||'null');
+      if(current&&typeof current.token==='string'&&current.token.length>25&&Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS)return current;
+    }catch{}
+  }
+  clearPendingAuth();return null;
 }
 function saveActiveAuth(token,expiresAt,sub){
   if(!authRecordValid({token,expiresAt,sub}))return;
@@ -141,6 +161,10 @@ if(Number.isFinite(Number(initialUiPrefs.visualScale)))setTimeout(()=>setStageVi
 function setStatus(message, kind = '') {
   ui.status.textContent = message;
   ui.status.className = 'status-line' + (kind ? ' ' + kind : '');
+  if(ui.gateStatus){
+    ui.gateStatus.textContent=message;
+    ui.gateStatus.dataset.kind=kind||'info';
+  }
 }
 function setPlayStatus(message) {
   // Track title and playback state already appear in the bottom transport.
@@ -333,6 +357,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   state.accountSub = account.sub;
   rememberLogin(true);
   saveActiveAuth(token,tokenExpiresAt,account.sub);
+  clearPendingAuth();
   state.manifest = catalog;
   state.catalogPointerId=pointers[0].id;
   state.catalogGeneration=String(pointer.generation||'');
@@ -381,8 +406,15 @@ function login({automatic=false} = {}) {
         resetPrivate({revoke:false, keepAuth:true});
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
+        savePendingAuth(result.access_token,expiresAt);
         try { await openDrive(result.access_token,authId,expiresAt); }
-        catch (e) { if (authId === state.authId) {clearActiveAuth();resetPrivate({keepAuth:true});setStatus(e.message, 'error');} }
+        catch (e) {
+          if (authId === state.authId) {
+            clearActiveAuth();resetPrivate({keepAuth:true});
+            if(!/เชื่อมต่อไม่สำเร็จ|ใช้เวลานาน|อินเทอร์เน็ต/.test(String(e.message||'')))clearPendingAuth();
+            setStatus(e.message, 'error');
+          }
+        }
       },
       error_callback: error => {
         if (authId !== state.authId) return;
@@ -402,7 +434,7 @@ function login({automatic=false} = {}) {
   } catch (e) { finish();setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
-  if(revoke){rememberLogin(false);clearActiveAuth();}
+  if(revoke){rememberLogin(false);clearActiveAuth();clearPendingAuth();}
   if (!keepAuth) state.authId++;
   const oldToken = state.token;
   state.requestId++;
@@ -901,10 +933,33 @@ window.addEventListener('beforeunload',()=>{state.controller?.abort();if(state.o
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
 // Restore a still-valid short-lived token from this browser. After Google expiry,
 // GIS token-model reauthorization still requires an explicit user gesture.
+async function recoverPendingGoogleAuth(reason='กำลังกู้คืนการเข้าสู่ระบบ Google…'){
+  if(state.token||state.authRecovering)return false;
+  const pending=readPendingAuth();if(!pending)return false;
+  state.authRecovering=true;
+  ui.gate.hidden=false;ui.login.disabled=ui.gateLogin.disabled=true;
+  setStatus(reason);
+  const id=++state.authId;
+  try{
+    await openDrive(pending.token,id,pending.expiresAt);
+    return !!state.token;
+  }catch(error){
+    if(id===state.authId){
+      resetPrivate({keepAuth:true});
+      if(!/เชื่อมต่อไม่สำเร็จ|ใช้เวลานาน|อินเทอร์เน็ต/.test(String(error.message||'')))clearPendingAuth();
+      setStatus('กู้คืนการเข้าสู่ระบบไม่สำเร็จ: '+error.message,'error');
+    }
+    return false;
+  }finally{
+    state.authRecovering=false;
+    if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
+  }
+}
 (function restoreTabSession(){
   const saved=readActiveAuth();
   if(!saved){
-    if(hasRememberedLogin())setStatus('เคยเข้าสู่ระบบแล้ว · กรุณากดเชื่อมต่อ Google เมื่อเซสชันหมดอายุ');
+    if(readPendingAuth()){void recoverPendingGoogleAuth();}
+    else if(hasRememberedLogin())setStatus('เคยเข้าสู่ระบบแล้ว · กรุณากดเชื่อมต่อ Google เมื่อเซสชันหมดอายุ');
     return;
   }
   ui.gate.hidden=true;
@@ -915,7 +970,8 @@ renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
     if(id!==state.authId)return;
     clearActiveAuth();
     resetPrivate({keepAuth:true});
-    setStatus('เซสชันหมดอายุหรือเข้าถึงคลังไม่ได้: '+error.message,'error');
+    if(readPendingAuth())void recoverPendingGoogleAuth('เซสชันเดิมใช้ไม่ได้ · กำลังกู้คืนการเข้าสู่ระบบ…');
+    else setStatus('เซสชันหมดอายุหรือเข้าถึงคลังไม่ได้: '+error.message,'error');
   }).finally(()=>{
     if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
   });
@@ -923,6 +979,7 @@ renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
 window.addEventListener('offline',()=>setStatus('อุปกรณ์ออฟไลน์ · เพลงที่โหลดไว้แล้วอาจเล่นต่อได้ แต่ค้น/โหลดเพลงใหม่ไม่ได้','error'));
 window.addEventListener('online',()=>{
   if(state.token)return;
+  if(readPendingAuth()){void recoverPendingGoogleAuth('กลับมาออนไลน์แล้ว · กำลังกู้คืนการเข้าสู่ระบบ Google…');return;}
   const saved=readActiveAuth();
   if(!saved){if(hasRememberedLogin())setStatus('กลับมาออนไลน์แล้ว · กดเข้าสู่ระบบ Google เพื่อเชื่อมต่ออีกครั้ง');return;}
   ui.gate.hidden=true;ui.login.disabled=ui.gateLogin.disabled=true;
@@ -932,3 +989,20 @@ window.addEventListener('online',()=>{
     if(id!==state.authId)return;clearActiveAuth();resetPrivate({keepAuth:true});setStatus('กู้คืนเซสชันไม่สำเร็จ: '+error.message,'error');
   }).finally(()=>{if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;});
 });
+
+let oauthReturnRecoveryTimer=0;
+function scheduleOAuthReturnRecovery(){
+  clearTimeout(oauthReturnRecoveryTimer);
+  if(document.hidden||state.token)return;
+  oauthReturnRecoveryTimer=setTimeout(()=>{
+    if(state.token)return;
+    if(readPendingAuth())void recoverPendingGoogleAuth('กลับจาก Google แล้ว · กำลังเชื่อมต่อคลังเพลงต่อ…');
+    else if((ui.login.disabled||ui.gateLogin.disabled)&&hasRememberedLogin()){
+      ui.login.disabled=ui.gateLogin.disabled=false;
+      setStatus('กลับจาก Google แล้วแต่ยังไม่ได้รับสิทธิ์ · กรุณากดเข้าสู่ระบบอีกครั้ง','error');
+    }
+  },2500);
+}
+document.addEventListener('visibilitychange',scheduleOAuthReturnRecovery);
+window.addEventListener('pageshow',scheduleOAuthReturnRecovery);
+window.addEventListener('focus',scheduleOAuthReturnRecovery);
