@@ -701,6 +701,7 @@ function onSearchKey(e){
   else if(e.key==='ArrowUp'){e.preventDefault();if(state.shown.length)selectSong(Math.max(0,state.selectedIndex-1));}
   else if(e.key==='Enter'){e.preventDefault();const song=state.shown[state.selectedIndex];if(!song)return;
     if(state.current||state.loading)addToQueue(song);else playSong(song);
+    ui.search.value='';state.shown=[];state.selectedIndex=0;renderSongs();ui.search.focus();
   }
 }
 
