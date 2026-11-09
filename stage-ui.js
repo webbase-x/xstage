@@ -112,11 +112,13 @@
   if(speaker){
     speaker.style.cursor='pointer';speaker.setAttribute('role','button');
     speaker.setAttribute('tabindex','0');speaker.setAttribute('aria-label','ปิดหรือเปิดเสียง');
-    function toggleMute(){const player=$('player');if(!player)return;
-      player.muted=!player.muted;speaker.textContent=player.muted?'🔇':'🔊';
+    function syncMute(){const player=$('player');if(!player)return;
+      speaker.textContent=player.muted?'🔇':'🔊';
       speaker.setAttribute('aria-pressed',String(player.muted));}
+    function toggleMute(){const player=$('player');if(!player)return;player.muted=!player.muted;syncMute();}
     speaker.addEventListener('click',toggleMute);
     speaker.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleMute();}});
+    $('player')?.addEventListener('volumechange',syncMute);syncMute();
   }
   repeat.addEventListener('change',syncRepeat);
   const queueCount=$('queue-count');
