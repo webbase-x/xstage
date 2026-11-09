@@ -43,6 +43,7 @@
     .control-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
     .control-row button{padding:10px 5px;min-height:52px;font-size:clamp(.77rem,3vw,.92rem)}
     .control-row .primary{background:#1269c4;border-color:#38b4ff}
+    .control-row.screen-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
     .control-row .active{background:#16836e;border-color:#8cf9cc}
     .control-title{font-size:.8rem;font-weight:900;color:#9dcad9}
     .remote-state{font-size:.8rem;color:#a4dcea;margin:0}
@@ -89,21 +90,21 @@
         <button id="remote-mute" type="button" aria-pressed="false">🔊 ปิดเสียง</button>
         <button id="remote-vol-up" type="button">+ เพิ่มเสียง</button>
       </div>
-      <div class="control-title">ขนาดภาพเวทีและเนื้อร้อง <span id="remote-scale-label">100%</span></div>
-      <div class="control-row">
-        <button id="remote-view-smaller" type="button">− ย่อภาพ</button>
-        <button id="remote-fullscreen" type="button">⛶ เต็มจอมือถือ</button>
-        <button id="remote-view-bigger" type="button">+ ขยายภาพ</button>
+      <div class="control-title">โหมดแสดงผลจอหลัก</div>
+      <div class="control-row screen-controls">
+        <button id="remote-fullscreen-on" type="button">⛶ เต็มจอหลัก</button>
+        <button id="remote-fullscreen-off" type="button">▣ ย่อจอหลัก</button>
       </div>
-      <div class="control-title">เมดเลย์ (M4A)</div>
-      <button id="remote-medley" type="button" aria-pressed="false">♫ เปิดเมดเลย์ต่อเพลงอัตโนมัติ</button>
-      <p class="remote-state">เมดเลย์จะเตรียมและต่อเพลงในคิวก่อนจบเพลงเดิมเมื่อโหลดทัน ไม่ใช่การจับจังหวะ MIDI/BPM</p>
+      <p id="remote-screen-state" class="remote-state">หากเบราว์เซอร์ต้องการการยืนยัน ให้แตะปุ่มบนจอหลักเพื่อเปิด Fullscreen</p>
+      <div class="control-title">เมดเลย์สุ่มเพลงต่อเนื่อง (M4A)</div>
+      <button id="remote-medley" type="button" aria-pressed="false">♫ เปิดสุ่มเพลงต่อเนื่อง</button>
+      <p class="remote-state">เมื่อคิวเพลงหมด ระบบสุ่มเพลงจากคลัง Google Drive มาเล่นต่อเนื่อง เพลงที่ขอไว้ในคิวจะได้เล่นก่อน</p>
     </div>
    </section>
   </section>
   <footer>เจ้าของเวทีอนุมัติอุปกรณ์ครั้งแรกก่อนใช้งาน · การเพิ่มเพลงไม่ต้องอนุมัติทีละเพลง · มือถือไม่เข้าถึง Google Drive โดยตรง</footer>
  </main>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
- <script src="remote.js?v=0963" defer></script>
+ <script src="remote.js?v=0964" defer></script>
 </body>
 </html>
