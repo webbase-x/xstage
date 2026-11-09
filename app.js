@@ -1,5 +1,6 @@
 /* X-Stage Karaoke Online – single-page private Drive player.
- * No song content, credentials, or tokens are persisted by this client. */
+ * Only a short-lived Google access token is kept in sessionStorage until tab close/expiry;
+ * songs and catalog data are never persisted by this client. */
 'use strict';
 const cfg = window.XSTAGE_CONFIG || {};
 const $ = id => document.getElementById(id);
@@ -19,6 +20,22 @@ const state = {
   requestId: 0, controller: null, authId: 0, loading: false
 };
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
+const ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
+const AUTH_EXPIRY_MARGIN_MS = 90_000;
+function clearTabAuth(){try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);}catch{/* Blocked by browser settings. */}}
+function saveTabAuth(token,expiresAt,sub){
+  if(!token||!sub||!(expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS))return;
+  try{sessionStorage.setItem(ACTIVE_AUTH_KEY,JSON.stringify({token,expiresAt,sub}));}catch{/* Private browsing may block storage. */}
+}
+function readTabAuth(){
+  try{
+    const current=JSON.parse(sessionStorage.getItem(ACTIVE_AUTH_KEY)||'null');
+    if(current&&typeof current.token==='string'&&current.token.length>25&&
+      typeof current.sub==='string'&&current.sub.length>0&&
+      Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS)return current;
+  }catch{}
+  clearTabAuth();return null;
+}
 function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
 const player = ui.player;
@@ -68,7 +85,7 @@ async function privateJson(id, token, opts) {
   catch { throw Error('ไฟล์ JSON บน Drive ไม่ถูกต้อง'); }
 }
 
-async function openDrive(token, authId) {
+async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   setStatus('กำลังค้นหาคลัง XStageWeb ใน Google Drive ของคุณ…');
   const roots = (await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token));
   if (authId !== state.authId) return;
@@ -83,10 +100,12 @@ async function openDrive(token, authId) {
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
   const account = await accountResult.json();
   if (!account.email_verified || !account.sub) throw Error('ไม่สามารถยืนยันบัญชี Google ได้');
+  if (expectedSub && account.sub!==expectedSub) throw Error('บัญชี Google ไม่ตรงกับเซสชันเดิม กรุณาเข้าสู่ระบบอีกครั้ง');
   if (authId !== state.authId) return;
   state.token = token;
   state.accountSub = account.sub;
   rememberLogin(true);
+  saveTabAuth(token,tokenExpiresAt,account.sub);
   state.manifest = catalog;
   state.songs = catalog.songs.filter(playable);
   state.selectedIndex = 0;
@@ -121,8 +140,10 @@ function login({automatic=false} = {}) {
         ui.login.disabled = ui.gateLogin.disabled = false;
         if (!result?.access_token) { setStatus('กรุณากดเข้าสู่ระบบ Google เพื่อเชื่อมต่ออีกครั้ง', 'error'); return; }
         resetPrivate({revoke:false, keepAuth:true});
-        try { await openDrive(result.access_token,authId); }
-        catch (e) { if (authId === state.authId) setStatus(e.message, 'error'); }
+        const expiresIn=Number(result.expires_in);
+        const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
+        try { await openDrive(result.access_token,authId,expiresAt); }
+        catch (e) { if (authId === state.authId) {clearTabAuth();resetPrivate({keepAuth:true});setStatus(e.message, 'error');} }
       },
       error_callback: error => {
         if (authId !== state.authId) return;
@@ -135,7 +156,7 @@ function login({automatic=false} = {}) {
   } catch (e) { ui.login.disabled = ui.gateLogin.disabled = false; setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
-  if(revoke)rememberLogin(false);
+  if(revoke){rememberLogin(false);clearTabAuth();}
   if (!keepAuth) state.authId++;
   const oldToken = state.token;
   state.requestId++;
@@ -186,6 +207,13 @@ function renderSongs() {
     return;
   }
   const term = ui.search.value.trim().toLocaleLowerCase('th');
+  if(!term){
+    // Empty search is not a request to list the complete private catalog.
+    state.shown=[];state.selectedIndex=0;
+    ui.resultCount.textContent='พิมพ์เพื่อค้นหาเพลง';
+    ui.search.removeAttribute('aria-activedescendant');
+    return;
+  }
   const matches = state.songs.filter(song =>
     [song.code,song.title,song.artist].some(v => String(v || '').toLocaleLowerCase('th').includes(term)));
   state.shown = matches.slice(0,120);
@@ -393,17 +421,24 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('beforeunload',()=>{state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
-// Revisit the stage immediately for returning users. Browser never stores access tokens.
-(function restoreRememberedLogin(){
-  if(!hasRememberedLogin())return;
-  ui.gate.hidden=true;
-  setStatus('กำลังตรวจสอบสิทธิ์ Google สำหรับคลังเพลงส่วนตัว…');
-  let attempts=0;
-  function attempt(){
-    if(state.token||state.authId)return;
-    if(typeof google!=='undefined'&&google.accounts?.oauth2?.initTokenClient){login({automatic:true});return;}
-    if(++attempts>=30){setStatus('เชื่อมต่อ Google อัตโนมัติไม่ได้ กรุณากดเข้าสู่ระบบ Google','error');return;}
-    setTimeout(attempt,200);
+// Restore only an unexpired token in the current browser tab. Token-model reauthorization
+// requires a user gesture after expiry; never open an unprompted OAuth popup on reload.
+(function restoreTabSession(){
+  const saved=readTabAuth();
+  if(!saved){
+    if(hasRememberedLogin())setStatus('เคยเข้าสู่ระบบแล้ว · กรุณากดเชื่อมต่อ Google เมื่อเซสชันหมดอายุ');
+    return;
   }
-  attempt();
+  ui.gate.hidden=true;
+  ui.login.disabled=ui.gateLogin.disabled=true;
+  setStatus('กำลังตรวจสอบเซสชัน Google เดิม…');
+  const id=++state.authId;
+  openDrive(saved.token,id,saved.expiresAt,saved.sub).catch(error=>{
+    if(id!==state.authId)return;
+    clearTabAuth();
+    resetPrivate({keepAuth:true});
+    setStatus('เซสชันหมดอายุหรือเข้าถึงคลังไม่ได้: '+error.message,'error');
+  }).finally(()=>{
+    if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
+  });
 })();
