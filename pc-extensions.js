@@ -8,11 +8,11 @@ const favorites=new Set();
 let abA=null,abB=null,lyricScale=1,lyricColor='#ecf7ff';
 const audio=ui.player;
 function expand(open){dock.classList.toggle('pc-expanded',!!open);toggle.textContent=open?'▴':'▾';ui.search.setAttribute('aria-expanded',String(!!open));}
-function focusSearch(){if(!state.token)return;expand(true);ui.search.focus();ui.search.select();}
+function focusSearch(){if(!state.token)return;expand(Boolean(ui.search.value.trim()));ui.search.focus();ui.search.select();}
 $pc('pc-find').onclick=focusSearch;
 toggle.onclick=()=>expand(!dock.classList.contains('pc-expanded'));
-ui.search.addEventListener('focus',()=>{if(state.token)expand(true)});
-ui.search.addEventListener('input',()=>{if(state.token){expand(true);selectSong(0,false);}});
+ui.search.addEventListener('focus',()=>{if(state.token)expand(Boolean(ui.search.value.trim()))});
+ui.search.addEventListener('input',()=>{if(state.token){expand(Boolean(ui.search.value.trim()));if(state.shown.length)selectSong(0,false);}});
 ui.search.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();expand(false);ui.search.blur();}if(e.key==='Enter')queueMicrotask(()=>expand(false));},true);
 ui.songs.addEventListener('dblclick',()=>queueMicrotask(()=>expand(false)));
 document.addEventListener('keydown',e=>{
@@ -39,7 +39,7 @@ renderSongs=function(){
 };
 $pc('pc-favorites-only').onchange=()=>{state.selectedIndex=0;renderSongs();};
 const loginObserver=new MutationObserver(()=>{
- if(state.token&&!dock.dataset.logged){dock.dataset.logged='yes';expand(true);}
+ if(state.token&&!dock.dataset.logged){dock.dataset.logged='yes';expand(Boolean(ui.search.value.trim()));}
  if(!state.token&&dock.dataset.logged){delete dock.dataset.logged;favorites.clear();expand(false);}
 });
 loginObserver.observe(ui.logout,{attributes:true,attributeFilter:['hidden']});
