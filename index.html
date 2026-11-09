@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=0961">
-  <link rel="stylesheet" href="xstage-ux.css?v=0961">
+  <link rel="stylesheet" href="style.css?v=0962">
+  <link rel="stylesheet" href="xstage-ux.css?v=0962">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -61,9 +61,6 @@
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
       </aside></div>
             <button id="toggle-keyboard" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="virtual-keyboard" aria-expanded="false" title="เปิดหรือซ่อนแป้นพิมพ์">⌨ <span>แป้นพิมพ์</span></button>
-            <button id="toggle-remote" class="stage-action toolbar-button toolbar-aux qr-toolbar-button" type="button" aria-controls="remote-pair-panel" aria-expanded="false" title="เปิดหรือซ่อนรีโมท QR">▦ <span>รีโมท QR</span></button>
-            <button id="toolbar-stage-pop" class="toolbar-button toolbar-secondary toolbar-aux" type="button" title="เปิดจอร้องแยก">▣ <span>จอร้องแยก</span></button>
-            <button id="toolbar-install-app" class="toolbar-button toolbar-install toolbar-aux" type="button" title="ติดตั้ง X-Stage Karaoke">↓ <span>ติดตั้งแอป</span></button>
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
           </header>
@@ -90,7 +87,8 @@
               </div>
             </details>
             <button type="button" id="mobile-keyboard-toggle">⌨ แป้นพิมพ์บนจอ</button>
-            <button type="button" id="mobile-remote-toggle" aria-controls="remote-pair-panel" aria-expanded="false">▦ รีโมทมือถือ QR</button>
+            <button type="button" id="toggle-remote" class="menu-direct" aria-controls="remote-pair-panel" aria-expanded="false">▦ รีโมทขอเพลง QR</button>
+            <button type="button" id="remote-request-toggle" aria-controls="remote-request-panel" aria-expanded="false">📥 คำขอเพลง <span id="remote-request-count">0</span></button>
             <button type="button" id="mobile-install-app">⬇ ติดตั้ง X-Stage เป็นแอป</button>
             <button type="button" id="mobile-fullscreen-toggle">⛶ เต็มหน้าจอ / กลับ</button>
             <button type="button" id="mobile-about-toggle">ⓘ เกี่ยวกับ X-Stage</button>
@@ -107,7 +105,7 @@
           </section>
           <section id="remote-pair-panel" class="remote-pair-panel" hidden aria-label="จับคู่รีโมทมือถือ">
             <div class="remote-pair-box">
-              <div class="remote-pair-top"><strong>รีโมท QR</strong><button id="remote-pair-close" type="button" aria-label="ปิดหน้าต่างจับคู่">✕</button></div>
+              <div class="remote-pair-top"><strong>รีโมทขอเพลง QR</strong><button id="remote-pair-close" type="button" aria-label="ปิดหน้าต่างจับคู่">✕</button></div>
               <canvas id="remote-qr" width="232" height="232" hidden aria-label="QR สำหรับเชื่อมต่อรีโมทมือถือ"></canvas>
               <p id="remote-pair-status" role="status" aria-live="polite">กำลังเตรียมรีโมท…</p>
               <a id="remote-link" target="_blank" rel="noopener noreferrer"></a>
@@ -116,8 +114,13 @@
                 <button id="remote-reject" type="button" hidden>✕ ปฏิเสธ</button>
                 <button id="remote-end" type="button">เปลี่ยน QR</button>
               </div>
-              <small>เฉพาะผู้ที่สแกน QR และได้รับอนุญาตเท่านั้นที่ควบคุมเพลงได้</small>
+              <small>มือถือใช้ค้นหาและส่งคำขอเพลงเท่านั้น ไม่ต้องล็อกอิน Google</small>
             </div>
+          </section>
+          <section id="remote-request-panel" class="remote-request-panel" hidden aria-label="คำขอเพลงจากมือถือ">
+            <header class="remote-request-heading"><strong>📥 คำขอเพลงจากมือถือ</strong><button type="button" id="remote-request-close" aria-label="ปิดคำขอเพลง">✕</button></header>
+            <div id="remote-request-list" class="remote-request-list" aria-live="polite"><p>ยังไม่มีคำขอเพลง</p></div>
+            <small>รับคำขอเพลงจากมือถือได้โดยไม่ต้องให้ผู้ขอเข้าสู่ระบบ Google</small>
           </section>
           <dialog id="xstage-install-dialog" class="xstage-install-dialog" aria-labelledby="xstage-install-title">
             <h2 id="xstage-install-title">ติดตั้ง X-Stage Karaoke</h2>
@@ -173,13 +176,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0961" defer></script><script src="pc-extensions.js?v=0961" defer></script>
+  <script src="app.js?v=0962" defer></script><script src="pc-extensions.js?v=0962" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0961" defer></script>
-  <script src="mobile-layout.js?v=0961" defer></script>
-  <script src="pwa-install.js?v=0961" defer></script>
+  <script src="stage-controls.js?v=0962" defer></script>
+  <script src="mobile-layout.js?v=0962" defer></script>
+  <script src="pwa-install.js?v=0962" defer></script>
 
-  <script src="stage-ui.js?v=0961" defer></script>
+  <script src="stage-ui.js?v=0962" defer></script>
 </body>
 </html>
