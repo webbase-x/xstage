@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=0982">
-  <link rel="stylesheet" href="xstage-ux.css?v=0982">
+  <link rel="stylesheet" href="style.css?v=0983">
+  <link rel="stylesheet" href="xstage-ux.css?v=0983">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -186,6 +186,13 @@
                 <option value="vocal">Vocal</option><option value="edm">Dance / EDM</option>
                 <option value="acoustic">Acoustic</option><option value="classical">Classical</option>
               </select></label>
+              <label id="xstage-eq-display-wrap" class="xstage-eq-display-wrap" hidden>แสดงที่
+                <select id="xstage-eq-display">
+                  <option value="main">จอหลัก</option>
+                  <option value="singer">จอร้อง</option>
+                  <option value="both">ทั้ง 2 จอ</option>
+                </select>
+              </label>
               <button type="button" id="xstage-eq-reset">FLAT 0 dB</button>
               <span id="xstage-eq-mode">31 BAND · 1/3 OCTAVE</span>
             </div>
@@ -216,13 +223,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0982" defer></script><script src="pc-extensions.js?v=0982" defer></script>
+  <script src="app.js?v=0983" defer></script><script src="pc-extensions.js?v=0983" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0982" defer></script>
-  <script src="mobile-layout.js?v=0982" defer></script>
-  <script src="pwa-install.js?v=0982" defer></script>
+  <script src="stage-controls.js?v=0983" defer></script>
+  <script src="mobile-layout.js?v=0983" defer></script>
+  <script src="pwa-install.js?v=0983" defer></script>
 
-  <script src="stage-ui.js?v=0982" defer></script>
+  <script src="stage-ui.js?v=0983" defer></script>
 </body>
 </html>
