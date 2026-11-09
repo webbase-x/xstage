@@ -41,6 +41,15 @@
     }
   }
   queueBtn.addEventListener('click',()=>$('mobile-queue-toggle')?.click());
+  const stageToolsBtn=$('stage-tools-toggle');
+  stageToolsBtn?.addEventListener('click',()=>{
+    const stageColumn=document.querySelector('.stage-column');
+    if(!stageColumn)return;
+    const willShow=!stageColumn.classList.contains('mobile-tools-expanded');
+    stageColumn.classList.toggle('mobile-tools-expanded',willShow);
+    stageToolsBtn.setAttribute('aria-expanded',String(willShow));
+    if(willShow)stageColumn.querySelector('.pc-tools')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
   shuffle?.addEventListener('click',()=>$('pc-random')?.click());
   const medleyMenu=$('mobile-medley-toggle');
   function syncMedleyMenu(){
