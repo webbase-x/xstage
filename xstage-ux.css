@@ -730,3 +730,21 @@ body.xstage-ui-v2 .request-actions .reject{background:#74354f}
     padding:9px
   }
 }
+
+
+/* v0963: remote-adjustable scale for visual stage signage; the lyric canvas
+   scales its rendered font separately to preserve layout and QR avoidance. */
+body.xstage-ui-v2 .stage-hero{
+  scale:var(--xstage-visual-scale,1);
+  transform-origin:center center;
+}
+body.xstage-ui-v2 .stage-ambience{
+  scale:var(--xstage-visual-scale,1);
+  transform-origin:center center;
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-medley-toggle[aria-pressed="true"]{
+  color:#baffdb;background:#145340;border-color:#33c18d;
+}
+body.xstage-ui-v2 .stage .remote-pair-box small{
+  display:block;font-size:.67rem;color:#afd8d5;
+}
