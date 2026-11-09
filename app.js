@@ -18,7 +18,9 @@ const state = {
   token: '', accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
   queue: [], history: [], current: null, lyrics: null, objectUrl: '',
   requestId: 0, controller: null, authId: 0, loading: false,
-  medley: false, medleyCache: null, medleyPrefetch: null, medleyTransitioning: false, visualScale: 1
+  medley: false, medleyCache: null, medleyPrefetch: null,
+  medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
+  userStopped: false, visualScale: 1
 };
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
 const ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
@@ -166,7 +168,8 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   state.objectUrl = ''; state.token = ''; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
-  state.medleyCache=null;state.medleyPrefetch=null;state.medleyTransitioning=false;
+  state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
+  state.medleyPoolSource=null;state.medleyPool=[];state.medleyRecent=[];state.userStopped=false;
   state.current = null;state.lyrics = null;state.selectedIndex = 0;
   ui.account.textContent = '';ui.account.hidden = true;ui.logout.hidden = true;ui.login.hidden = false;
   ui.gate.hidden = false;ui.search.disabled = true;ui.search.value = '';
@@ -255,8 +258,40 @@ function selectSong(i,scroll=true) {
     if(i===j){ui.search.setAttribute('aria-activedescendant',row.id);if(scroll)row.scrollIntoView({block:'nearest'});}
   }
 }
-// M4A medley: preload only the next private song and start it shortly before
-// the current song ends. No MIDI/BPM beat-matching or persistent audio cache.
+// X-Stage medley means shuffled, continuous music from the private M4A
+// catalog. Requested songs in the queue always take priority over random songs.
+// The next file is prepared in memory, but songs are never cached permanently.
+const MEDLEY_RECENT_LIMIT=10;
+function medleyPool(){
+  if(state.medleyPoolSource!==state.songs){
+    state.medleyPoolSource=state.songs;
+    state.medleyPool=state.songs.filter(playable);
+  }
+  return state.medleyPool;
+}
+function randomMedleySong(){
+  const pool=medleyPool();
+  if(!pool.length)return null;
+  const recent=new Set([state.current,...(state.medleyRecent||[])]);
+  let candidate=pool[Math.floor(Math.random()*pool.length)];
+  // Avoid repeating the active or recently played song when the library allows.
+  if(pool.length>recent.size){
+    for(let i=0;i<35&&recent.has(candidate);i++)
+      candidate=pool[Math.floor(Math.random()*pool.length)];
+    if(recent.has(candidate))candidate=pool.find(song=>!recent.has(song))||candidate;
+  }else if(pool.length>1&&candidate===state.current){
+    for(let i=0;i<20&&candidate===state.current;i++)
+      candidate=pool[Math.floor(Math.random()*pool.length)];
+  }
+  return candidate;
+}
+function nextMedleyCandidate(){
+  if(state.queue.length)return state.queue[0];
+  if(!state.medley)return null;
+  if(!state.medleyUpcoming||state.medleyUpcoming===state.current)
+    state.medleyUpcoming=randomMedleySong();
+  return state.medleyUpcoming;
+}
 function setMedleyMode(enabled){
   state.medley=!!enabled;
   if(state.medley&&ui.repeat.checked){
@@ -264,12 +299,20 @@ function setMedleyMode(enabled){
     ui.repeat.dispatchEvent(new Event('change',{bubbles:true}));
   }
   if(!state.medley){
-    state.medleyCache=null;
-    state.medleyPrefetch=null;
+    state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
     player.volume=Number(ui.volume.value)/100;
   }
-  setPlayStatus(state.medley?'เปิดเมดเลย์ M4A · เตรียมเพลงถัดไปอัตโนมัติ':'ปิดเมดเลย์');
-  window.dispatchEvent(new CustomEvent('xstage:medleychange',{detail:{enabled:state.medley}}));
+  setPlayStatus(state.medley
+    ?'เปิดเมดเลย์สุ่มเพลงต่อเนื่อง · เพลงที่ขอในคิวจะเล่นก่อน'
+    :'ปิดเมดเลย์สุ่มเพลง');
+  window.dispatchEvent(new CustomEvent('xstage:medleychange',
+    {detail:{enabled:state.medley}}));
+  // Start medley only when the player is genuinely idle; do not cut a paused song.
+  if(state.medley&&state.token&&!state.loading&&
+    (!state.current||!player.src||player.ended||state.userStopped)){
+    state.userStopped=false;
+    playNext();
+  }
   return state.medley;
 }
 function setStageVisualScale(value){
@@ -278,34 +321,27 @@ function setStageVisualScale(value){
   return state.visualScale;
 }
 function prefetchMedleyNext(){
-  if(!state.medley||!state.token||!state.queue.length||state.loading)return;
-  const song=state.queue[0],token=state.token;
-  if(state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
+  if(!state.medley||!state.token||state.loading)return;
+  const song=nextMedleyCandidate(),token=state.token;
+  if(!song||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
   const task={song,token};state.medleyPrefetch=task;
   Promise.all([privateFile(song.audio.fileId,token),privateJson(song.lyrics.fileId,token)])
     .then(async ([response,lyrics])=>{
       const blob=await response.blob();
-      if(state.medleyPrefetch!==task||state.token!==token||state.queue[0]!==song)return;
+      if(state.medleyPrefetch!==task||!state.medley||state.token!==token||
+          nextMedleyCandidate()!==song)return;
       if(!blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return;
       state.medleyCache={song,blob,lyrics};
     })
-    .catch(()=>{/* If prefetch fails, existing ended handler still plays next. */})
+    .catch(()=>{/* Playback falls back to loading the next song normally. */})
     .finally(()=>{if(state.medleyPrefetch===task)state.medleyPrefetch=null;});
 }
 function medleyTick(){
-  if(!state.medley||state.loading||state.medleyTransitioning||player.paused||!state.queue.length)return;
-  const d=player.duration;
-  if(!Number.isFinite(d)||d<=0)return;
-  const remaining=d-player.currentTime;
-  if(remaining<=16&&remaining>0)prefetchMedleyNext();
-  const ready=state.medleyCache?.song===state.queue[0];
-  if(!ready)return;
-  const base=Number(ui.volume.value)/100;
-  if(remaining>0&&remaining<3.0)player.volume=base*Math.max(.10,remaining/3);
-  if(remaining>0&&remaining<=.85){
-    state.medleyTransitioning=true;
-    playNext();
-  }
+  if(!state.medley||state.loading||player.paused)return;
+  const duration=player.duration;
+  if(!Number.isFinite(duration)||duration<=0)return;
+  // Keep the entire track; start the next random/queued song on the ended event.
+  if(duration-player.currentTime<=25)prefetchMedleyNext();
 }
 function addToQueue(song) {
   if (!playable(song)) return;
@@ -332,11 +368,29 @@ function renderQueue() {
   });
 }
 function moveQueue(index,step){const target=index+step;if(target<0||target>=state.queue.length)return;[state.queue[index],state.queue[target]]=[state.queue[target],state.queue[index]];renderQueue();}
-function playNext(){const song=state.queue.shift();renderQueue();if(song)playSong(song);else{setPlayStatus('จบเพลงแล้ว · ไม่มีเพลงรอในคิว');updateTransport();}}
-function stopSong(){state.requestId++;state.controller?.abort();state.loading=false;player.pause();if(player.seekable?.length||player.readyState)player.currentTime=0;setPlayStatus('หยุดเล่นแล้ว');updateTransport();}
+function playNext(){
+  const queued=state.queue.shift();
+  const song=queued||(state.medley?nextMedleyCandidate():null);
+  if(!queued)state.medleyUpcoming=null;
+  state.userStopped=false;
+  if(state.medleyCache&&state.medleyCache.song!==song)state.medleyCache=null;
+  renderQueue();
+  if(song){
+    if(state.medley){
+      state.medleyRecent.push(song);
+      if(state.medleyRecent.length>MEDLEY_RECENT_LIMIT)state.medleyRecent.shift();
+    }
+    playSong(song);
+  }else{
+    setPlayStatus('จบเพลงแล้ว · ไม่มีเพลงรอในคิว');
+    updateTransport();
+  }
+}
+function stopSong(){state.userStopped=true;state.requestId++;state.controller?.abort();state.loading=false;player.pause();if(player.seekable?.length||player.readyState)player.currentTime=0;setPlayStatus('หยุดเล่นแล้ว');updateTransport();}
 function togglePlayback(){if(state.loading)return;if(!player.src){if(state.queue.length)playNext();else if(state.shown.length)playSong(state.shown[state.selectedIndex]);return;}if(player.paused){player.play().catch(()=>setPlayStatus('เบราว์เซอร์ไม่อนุญาตให้เริ่มเสียง กรุณากดเล่นอีกครั้ง'));}else player.pause();}
 
 async function playSong(song,{remember=true}={}) {
+  state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
   if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มี M4A/JSON ที่พร้อมเล่น');return;}
   const request=++state.requestId;
@@ -367,7 +421,7 @@ async function playSong(song,{remember=true}={}) {
     try{await player.play();if(request===state.requestId)setPlayStatus('กำลังเล่น · '+(song.title||song.code));}
     catch{if(request===state.requestId)setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น');}
   }catch(e){if(request!==state.requestId || e.name==='AbortError')return;setPlayStatus(e.message||'ไม่สามารถเล่นเพลงได้');state.loading=false;updateTransport();}
-  finally{if(request===state.requestId){state.loading=false;state.controller=null;state.medleyTransitioning=false;updateTransport();}}
+  finally{if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}}
 }
 function updateTransport(){
   ui.playPause.disabled=state.loading||(!state.current&&!state.queue.length&&!state.shown.length);
@@ -493,7 +547,7 @@ ui.seek.addEventListener('input',()=>{const d=Number.isFinite(player.duration)?p
 ui.fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await ui.stage.requestFullscreen();}catch{setPlayStatus('อุปกรณ์นี้ไม่รองรับการแสดงเต็มหน้าจอ');}});
 player.addEventListener('timeupdate',updateTransport);player.addEventListener('timeupdate',medleyTick);player.addEventListener('loadedmetadata',updateTransport);
 player.addEventListener('durationchange',updateTransport);player.addEventListener('play',updateTransport);
-player.addEventListener('pause',updateTransport);player.addEventListener('ended',()=>{if(!state.medleyTransitioning&&!player.loop)playNext();});
+player.addEventListener('pause',updateTransport);player.addEventListener('ended',()=>{if(!player.loop)playNext();});
 player.addEventListener('error',()=>{if(state.current)setPlayStatus('ไม่สามารถถอดรหัสไฟล์เสียงนี้ในเบราว์เซอร์ได้');});
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'&&state.token){e.preventDefault();ui.search.focus();ui.search.select();return;}
