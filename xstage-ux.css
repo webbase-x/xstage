@@ -948,3 +948,8 @@ body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-menu-close{
 body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-menu-close:hover{
   background:#66334b;border-color:#d2769d
 }
+
+body.xstage-ui-v2 .stage .remote-settings .remote-settings-close{
+  justify-self:end;width:32px;height:29px;border:1px solid #6598b1;
+  border-radius:7px;background:#25425c;color:white;cursor:pointer
+}
