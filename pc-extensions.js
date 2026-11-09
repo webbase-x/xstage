@@ -59,6 +59,17 @@ audio.addEventListener('loadedmetadata',()=>{abA=null;abB=null;updateAB();});
 const originalDrawLine=drawLine;
 drawLine=function(text,y,maxWidth,fontSize,fill,progress,centerX){return originalDrawLine(text,y,maxWidth,fontSize*lyricScale,fill==='#ecf7ff'?lyricColor:fill,progress,centerX);};
 let bg=true;
+ let stageBackground='';
+ function setBackground(value){
+   stageBackground=value;
+   ui.stage.style.backgroundImage=value
+     ?(value==='none'?'none':'linear-gradient(180deg,#02081862,#06102c00 35%,#02081970 100%),url("'+value+'")')
+     :'';
+   if(value==='none')ui.stage.style.backgroundColor='#010814';
+ }
+ function sendBackgroundToSecondScreen(){
+   if(screen&&!screen.closed)try{screen.postMessage({type:'xstage-background',value:stageBackground},location.origin);}catch{}
+ }
 $pc('pc-lyrics-settings').onclick=()=>{
  const d=openDialog('เนื้อร้อง / พื้นหลัง');
  const scale=document.createElement('input');scale.type='range';scale.min='.7';scale.max='1.5';scale.step='.05';scale.value=String(lyricScale);scale.oninput=()=>lyricScale=+scale.value;
@@ -68,7 +79,22 @@ $pc('pc-lyrics-settings').onclick=()=>{
  const offset=document.createElement('input');offset.type='range';offset.min='-3000';offset.max='3000';offset.step='50';offset.value='0';
  offset.oninput=()=>{if(state.lyrics){state.lyrics.audioOffsetMs=(Number(state.lyrics.audioOffsetMs)||0)+(+offset.value-(+offset.dataset.before||0));offset.dataset.before=offset.value;}};
  const ol=document.createElement('label');ol.textContent='ชดเชยเวลาเนื้อร้อง (ms)';ol.append(offset);d.append(ol);
- d.append(button(bg?'ปิดพื้นหลังเวที':'ใช้พื้นหลัง X-STAGE',()=>{bg=!bg;ui.stage.classList.toggle('pc-bg-off',!bg);dialog.close();}));
+ const backgroundSelect=document.createElement('select');
+  for(const [value,label] of [['','รูปเวที X-Stage เดิม'],['none','พื้นหลังสีดำ']]){
+    const item=document.createElement('option');item.value=value;item.textContent=label;backgroundSelect.append(item);
+  }
+  backgroundSelect.value=stageBackground==='none'?'none':'';
+  backgroundSelect.onchange=()=>{setBackground(backgroundSelect.value);sendBackgroundToSecondScreen();};
+  const backgroundLabel=document.createElement('label');backgroundLabel.textContent='พื้นหลังจอหลัก / จอร้อง';backgroundLabel.append(backgroundSelect);d.append(backgroundLabel);
+  const upload=document.createElement('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';
+  upload.onchange=()=>{
+    const file=upload.files?.[0];if(!file)return;
+    if(file.size>8*1024*1024){setPlayStatus('ภาพใหญ่เกิน 8 MB');return;}
+    const reader=new FileReader();
+    reader.onload=()=>{if(typeof reader.result==='string'){setBackground(reader.result);sendBackgroundToSecondScreen();}};
+    reader.readAsDataURL(file);
+  };
+  const custom=document.createElement('label');custom.textContent='เลือกรูปเวทีจากเครื่อง (ใช้เฉพาะครั้งนี้)';custom.append(upload);d.append(custom);
  d.append(para('การตั้งค่านี้ไม่แก้ไขเพลงหรือฐานข้อมูลใน Google Drive'));
 };
 let eqContext=null,eqNodes=[];
@@ -98,6 +124,7 @@ let screen=null;
 $pc('pc-stage-pop').onclick=()=>{
  if(screen&&!screen.closed){screen.focus();return;}screen=window.open('./stage.html','xstage-second-stage','width=1100,height=640');
  if(!screen)setPlayStatus('กรุณาอนุญาตให้เปิดหน้าต่างจอร้องแยก');
+  else screen.addEventListener('load',sendBackgroundToSecondScreen,{once:true});
 };
 setInterval(()=>{if(!screen||screen.closed)return;try{screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime},location.origin);}catch{}},200);
 $pc('pc-other-tools').onclick=()=>{const d=openDialog('ความสามารถ X-Stage Web');d.append(para('เว็บ: ค้นหาแบบเรียลไทม์, คิวเพลง, ประวัติ, เพลงโปรดในเซสชัน, สุ่มเพลง, A–B, EQ, ตั้งค่าเนื้อร้องและพื้นหลัง, จอร้องแยก, ส่งออก/นำเข้าคิว'));
