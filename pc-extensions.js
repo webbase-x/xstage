@@ -146,10 +146,10 @@ const EQ_PRESETS={
 };
 let eqContext=null,eqNodes=[],eqAnalyser=null,eqLeft=null,eqRight=null,eqSource=null,eqMeterSink=null;
 let eqBandInputs=[],eqBandLights=[],eqBypassed=false,eqPreset='auto',eqLastSong='',eqFrame=0;
-let eqDisplayTarget=['main','singer','both'].includes(eqPrefs?.eqDisplayTarget)?eqPrefs.eqDisplayTarget:'main';
 const eqVisualLevels=Array(31).fill(0);
 const eqPanel=$pc('xstage-eq-panel'),eqBands=$pc('xstage-eq-bands'),eqPresetSelect=$pc('xstage-eq-preset'),eqDisplay=$pc('xstage-eq-display'),eqDisplayWrap=$pc('xstage-eq-display-wrap');
 const eqPrefs=window.XStageUiPrefs?.read?.()||{};
+let eqDisplayTarget=['main','singer','both'].includes(eqPrefs.eqDisplayTarget)?eqPrefs.eqDisplayTarget:'main';
 if(typeof eqPrefs.eqPreset==='string')eqPreset=eqPrefs.eqPreset;
 if(typeof eqPrefs.eqBypassed==='boolean')eqBypassed=eqPrefs.eqBypassed;
 function eqFreqLabel(f){return f>=1000?(f/1000).toFixed(f%1000?2:0).replace(/0$/,'')+'k':String(f);}
