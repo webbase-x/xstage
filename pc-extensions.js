@@ -227,7 +227,8 @@ function peakLevel(analyser){
  if(!analyser)return 0;const data=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(data);let peak=0;for(const x of data)peak=Math.max(peak,Math.abs(x));return Math.min(1,peak);
 }
 function drawEqRta(){
- if(!eqPanel||eqPanel.hidden||!eqAnalyser){eqFrame=requestAnimationFrame(drawEqRta);return;}
+ const visualActive=!!eqAnalyser&&(!eqPanel.hidden||(singerScreenAvailable()&&(eqDisplayTarget==='singer'||eqDisplayTarget==='both')));
+ if(!eqPanel||!visualActive){eqFrame=requestAnimationFrame(drawEqRta);return;}
  const canvas=$pc('xstage-eq-rta'),ctx=canvas?.getContext('2d');if(!ctx){eqFrame=requestAnimationFrame(drawEqRta);return;}
  const bins=new Uint8Array(eqAnalyser.frequencyBinCount);eqAnalyser.getByteFrequencyData(bins);
  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#02070d';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -277,7 +278,7 @@ function openEq(target){
  if(eqPreset==='auto')setEqPreset('auto',{save:false});else applyEqGains(false);
  applyEqVisibility();sendEqState();
 }
-$pc('pc-eq').onclick=()=>openEq();
+$pc('pc-eq').onclick=()=>openEq(eqPanel.hidden?'main':undefined);
 eqDisplay?.addEventListener('change',()=>{eqDisplayTarget=eqDisplay.value;window.XStageUiPrefs?.save?.({eqDisplayTarget});applyEqVisibility();sendEqState();});
 $pc('xstage-eq-close')?.addEventListener('click',()=>{eqPanel.hidden=true;if(singerScreenAvailable())try{screen.postMessage({type:'xstage-eq-visibility',open:false},location.origin);}catch{}});
 $pc('xstage-eq-minimize')?.addEventListener('click',()=>{eqPanel.classList.toggle('is-minimized');sendEqState();});
