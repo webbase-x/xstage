@@ -42,6 +42,40 @@
   }
   queueBtn.addEventListener('click',()=>$('mobile-queue-toggle')?.click());
   shuffle?.addEventListener('click',()=>$('pc-random')?.click());
+  // Preserve every legacy X-Stage feature by routing visible commands to
+  // the original handlers; no parallel playback/queue implementations.
+  const closeMenu=()=>{
+    if($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true')$('mobile-menu-toggle').click();
+  };
+  $('toolbar-stage-pop')?.addEventListener('click',()=>$('pc-stage-pop')?.click());
+  const legacyCommands={
+    'mobile-stage-pop':'pc-stage-pop',
+    'mobile-random':'pc-random',
+    'mobile-history':'pc-history',
+    'mobile-lyrics':'pc-lyrics-settings',
+    'mobile-eq':'pc-eq',
+    'mobile-ab-a':'pc-loop-a',
+    'mobile-ab-b':'pc-loop-b',
+    'mobile-ab-clear':'pc-loop-clear',
+    'mobile-import-queue':'pc-import',
+    'mobile-export-queue':'pc-export',
+    'mobile-more-tools':'pc-other-tools'
+  };
+  Object.entries(legacyCommands).forEach(([id,target])=>{
+    $(id)?.addEventListener('click',()=>{
+      $(target)?.click(); // Open the second screen synchronously within this user gesture.
+      closeMenu();
+    });
+  });
+  const favoriteToggle=$('pc-favorites-only'),favoriteMenu=$('mobile-favorites');
+  favoriteMenu?.addEventListener('click',()=>{
+    if(!favoriteToggle)return;
+    favoriteToggle.checked=!favoriteToggle.checked;
+    favoriteToggle.dispatchEvent(new Event('change',{bubbles:true}));
+    favoriteMenu.setAttribute('aria-pressed',String(favoriteToggle.checked));
+    favoriteMenu.textContent=favoriteToggle.checked?'★ เพลงโปรด (เปิดตัวกรอง)':'★ เพลงโปรด';
+    closeMenu();
+  });
   repeatBtn?.addEventListener('click',()=>{
     repeat.checked=!repeat.checked;
     repeat.dispatchEvent(new Event('change',{bubbles:true}));
