@@ -3,50 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#061626">
+  <meta name="theme-color" content="#061321">
   <meta name="robots" content="noindex,nofollow">
   <meta name="referrer" content="no-referrer">
-  <title>รีโมทมือถือ | X-Stage Karaoke Online</title>
-  <link rel="icon" href="assets/xstage-logo.jpg" type="image/jpeg">
+  <title>ขอเพลง | X-Stage Karaoke Online</title>
+  <link rel="icon" href="assets/xstage-app-icon.svg" type="image/svg+xml">
   <style>
     :root{font-family:"Leelawadee UI","Noto Sans Thai",Tahoma,system-ui,sans-serif;color:#eaf7ff;background:#061321;color-scheme:dark}
     *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -20%,#15536a,#071928 63%);padding:14px max(12px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom))}
     main{max-width:650px;margin:0 auto}header{display:flex;align-items:center;gap:12px;padding:7px 2px 15px}header img{width:48px;height:48px;border-radius:11px;object-fit:cover}header strong{font-size:1.15rem;display:block}header small{color:#8cbdca;font-size:.72rem;display:block;margin-top:2px}
     #remote-status{margin:0 0 14px;padding:12px 14px;background:#0e2d42;border:1px solid #275a72;border-radius:11px;color:#92f4d6;font-size:.87rem;line-height:1.5}
     #remote-controls[hidden]{display:none!important}
-    .current{padding:18px 16px;border:1px solid #316d86;border-radius:16px;background:#102b40;min-width:0}.current small{display:block;color:#7ef0d0;letter-spacing:.12em;font-size:.68rem}.current strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:8px;font-size:1.22rem}.current span{color:#9fbed0;font-size:.85rem;display:block;margin-top:5px}
-    .transport{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:15px 0}.transport button,.remote-song-actions button{touch-action:manipulation;cursor:pointer;background:#143e55;border:1px solid #3b7a97;border-radius:13px;color:#fff;font-size:1.65rem;min-height:61px}.transport #remote-play{background:#29bfb7;color:#052335;border-color:#6efbdf}
-    button:active{filter:brightness(1.3)}button:focus-visible,input:focus-visible{outline:2px solid #5ef2d5;outline-offset:3px}
-    .volume{display:flex;align-items:center;gap:13px;padding:12px 3px 20px;color:#aacbda;font-size:.8rem}.volume input{flex:1;accent-color:#3de2bd;min-width:0}
-    .search-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.search-title h2{font-size:1rem;margin:2px 0 12px}.queue-count{color:#86dcf1;font-size:.78rem}
-    #remote-search{width:100%;min-height:49px;background:#061a2b;color:white;border:1px solid #38758e;border-radius:12px;padding:11px 14px;font-size:1.05rem;outline:0}
-    #remote-results{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-bottom:30px}.remote-song{display:flex;align-items:center;gap:10px;padding:10px;border-radius:11px;border:1px solid #294e66;background:#10283d;min-width:0}
-    .remote-song-info{min-width:0;flex:1}.remote-song-info strong,.remote-song-info small{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.remote-song-info strong{font-size:.85rem}.remote-song-info small{font-size:.73rem;color:#93b7c8;margin-top:4px}
-    .remote-song-actions{display:flex;gap:6px}.remote-song-actions button{min-height:39px;min-width:40px;border-radius:8px;font-size:1.14rem}.remote-song-actions .remote-add-queue{background:#1a4d4e;color:#8af3da}
-    .remote-empty{color:#95bbcb;text-align:center;font-size:.85rem}
-    footer{color:#658ba2;font-size:.72rem;text-align:center;line-height:1.7;padding:12px}
+    .request-fields{padding:15px 13px;border:1px solid #316d86;border-radius:14px;background:#102b40;display:grid;gap:11px;margin-bottom:15px}
+    label{display:grid;gap:5px;font-size:.78rem;color:#bce1ee;font-weight:750}
+    input{width:100%;min-height:46px;border:1px solid #38758e;border-radius:10px;background:#061a2b;padding:9px 12px;font-size:1rem;color:white;outline:0}
+    input:focus-visible,button:focus-visible{outline:2px solid #5ef2d5;outline-offset:2px}
+    h2{font-size:1rem;margin:7px 0 12px}
+    #remote-results{display:flex;flex-direction:column;gap:8px;margin-top:11px}
+    .remote-song{display:flex;align-items:center;gap:9px;padding:10px;border-radius:12px;border:1px solid #294e66;background:#10283d;min-width:0}
+    .remote-song-info{min-width:0;flex:1}.remote-song-info strong,.remote-song-info small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.remote-song-info strong{font-size:.85rem}.remote-song-info small{font-size:.75rem;color:#93b7c8;margin-top:4px}
+    .remote-request-button{min-height:39px;min-width:80px;border:1px solid #59b5a3;background:#146a62;color:#f4fff7;border-radius:9px;font-size:.83rem;font-weight:850;cursor:pointer;touch-action:manipulation}
+    .remote-request-button:disabled{opacity:.6;cursor:default}.remote-empty{color:#95bbcb;text-align:center;font-size:.85rem}
+    #remote-request-history{margin-top:14px}.request-receipt{border:1px solid #2c806f;background:#103a35;color:#a7efdc;border-radius:8px;padding:10px;font-size:.75rem;line-height:1.5}
+    footer{color:#86a9ba;font-size:.72rem;text-align:center;line-height:1.7;padding:18px 5px}
   </style>
 </head>
 <body>
   <main>
-    <header><img src="assets/xstage-logo.jpg" alt=""><div><strong>X-STAGE REMOTE</strong><small>รีโมทมือถือสำหรับ Karaoke Online</small></div></header>
-    <p id="remote-status" role="status" aria-live="polite">กำลังเตรียมการเชื่อมต่อ…</p>
-    <section id="remote-controls" hidden aria-label="ควบคุม X-Stage">
-      <div class="current"><small>NOW PLAYING</small><strong id="remote-now">ยังไม่ได้เลือกเพลง</strong><span id="remote-artist">X-Stage Karaoke</span></div>
-      <div class="transport">
-        <button type="button" id="remote-prev" aria-label="เพลงก่อนหน้า">⏮</button>
-        <button type="button" id="remote-play" aria-label="เล่นหรือพัก">▶</button>
-        <button type="button" id="remote-stop" aria-label="หยุด">⏹</button>
-        <button type="button" id="remote-next" aria-label="เพลงถัดไป">⏭</button>
+    <header><img src="assets/xstage-app-icon-192.png" alt=""><div><strong>X-STAGE · ขอเพลง</strong><small>สแกน QR เพื่อขอเพลงได้ ไม่ต้องล็อกอิน Google</small></div></header>
+    <p id="remote-status" role="status" aria-live="polite">กำลังเตรียมเชื่อมต่อจอ X-Stage…</p>
+    <section id="remote-controls" hidden aria-label="ค้นหาและส่งคำขอเพลง">
+      <div class="request-fields">
+        <label for="remote-singer">ชื่อผู้ขอเพลง <input id="remote-singer" type="text" maxlength="45" autocomplete="name" placeholder="ชื่อเล่นของคุณ"></label>
+        <label for="remote-note">ข้อความถึงเจ้าของเวที (ไม่บังคับ) <input id="remote-note" type="text" maxlength="90" placeholder="เช่น ร้องคู่ / แทรกคิวเมื่อสะดวก"></label>
       </div>
-      <label class="volume" for="remote-volume"><span>🔊 เสียง</span><input id="remote-volume" type="range" min="0" max="100" value="80"></label>
-      <div class="search-title"><h2>ค้นหาเพลง</h2><span class="queue-count">คิวเพลง <strong id="remote-queue">0</strong></span></div>
-      <input id="remote-search" type="search" autocomplete="off" placeholder="รหัส / ชื่อเพลง / ศิลปิน" aria-label="ค้นหาเพลงบนจอหลัก">
+      <h2>ค้นหาเพลงที่ต้องการขอ</h2>
+      <input id="remote-search" type="search" maxlength="70" autocomplete="off" placeholder="ชื่อเพลง / รหัสเพลง / ศิลปิน" aria-label="ค้นหาเพลงเพื่อขอ">
       <div id="remote-results" aria-live="polite"></div>
+      <div id="remote-request-history" aria-live="polite"></div>
     </section>
-    <footer>มือถือเป็นเพียงรีโมทควบคุม จอหลักยังเป็นผู้เล่นและเข้าถึง Google Drive ส่วนตัวเท่านั้น</footer>
+    <footer>มือถือส่งคำขอเพลงเท่านั้น เจ้าของเวทีเป็นผู้อนุมัติและเพิ่มเข้าคิว ไม่มีการเปิดเผยบัญชี Google หรือไฟล์เพลงบนมือถือ</footer>
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
-  <script src="remote.js?v=0955" defer></script>
+  <script src="remote.js?v=0962" defer></script>
 </body>
 </html>
