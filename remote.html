@@ -6,45 +6,104 @@
   <meta name="theme-color" content="#061321">
   <meta name="robots" content="noindex,nofollow">
   <meta name="referrer" content="no-referrer">
-  <title>ขอเพลง | X-Stage Karaoke Online</title>
+  <title>X-Stage Remote | ขอเพลงและควบคุม</title>
   <link rel="icon" href="assets/xstage-app-icon.svg" type="image/svg+xml">
   <style>
     :root{font-family:"Leelawadee UI","Noto Sans Thai",Tahoma,system-ui,sans-serif;color:#eaf7ff;background:#061321;color-scheme:dark}
-    *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -20%,#15536a,#071928 63%);padding:14px max(12px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom))}
-    main{max-width:650px;margin:0 auto}header{display:flex;align-items:center;gap:12px;padding:7px 2px 15px}header img{width:48px;height:48px;border-radius:11px;object-fit:cover}header strong{font-size:1.15rem;display:block}header small{color:#8cbdca;font-size:.72rem;display:block;margin-top:2px}
-    #remote-status{margin:0 0 14px;padding:12px 14px;background:#0e2d42;border:1px solid #275a72;border-radius:11px;color:#92f4d6;font-size:.87rem;line-height:1.5}
-    #remote-controls[hidden]{display:none!important}
-    .request-fields{padding:15px 13px;border:1px solid #316d86;border-radius:14px;background:#102b40;display:grid;gap:11px;margin-bottom:15px}
-    label{display:grid;gap:5px;font-size:.78rem;color:#bce1ee;font-weight:750}
-    input{width:100%;min-height:46px;border:1px solid #38758e;border-radius:10px;background:#061a2b;padding:9px 12px;font-size:1rem;color:white;outline:0}
-    input:focus-visible,button:focus-visible{outline:2px solid #5ef2d5;outline-offset:2px}
-    h2{font-size:1rem;margin:7px 0 12px}
-    #remote-results{display:flex;flex-direction:column;gap:8px;margin-top:11px}
+    *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -20%,#15536a,#071928 63%);padding:14px max(12px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom))}
+    main{max-width:660px;margin:0 auto}header{display:flex;align-items:center;gap:12px;padding:7px 2px 15px}
+    header img{width:46px;height:46px;border-radius:11px;object-fit:cover}header strong{font-size:1.12rem;display:block}header small{color:#8cbdca;font-size:.73rem;display:block;margin-top:2px}
+    #remote-status{margin:0 0 13px;padding:12px;background:#0e2d42;border:1px solid #275a72;border-radius:11px;color:#aaf9dc;font-size:.88rem;line-height:1.6}
+    #remote-controls[hidden],.remote-tab-panel[hidden]{display:none!important}
+    button{touch-action:manipulation;cursor:pointer;border:1px solid #347991;border-radius:10px;background:#153950;color:#fff;padding:8px 11px;font-weight:800;font-size:.87rem;min-height:42px}
+    button:disabled{opacity:.57;cursor:default}button:active:not(:disabled){filter:brightness(1.2)}
+    button:focus-visible,input:focus-visible{outline:2px solid #5ef2d5;outline-offset:3px}
+    .remote-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:15px}
+    .remote-tabs button{padding:9px 4px;font-size:clamp(.71rem,3.2vw,.92rem)}
+    .remote-tabs button[aria-selected="true"]{background:#1069bb;border-color:#60e6ef;color:#fff;box-shadow:0 0 12px #0b90e258}
+    .remote-tab-panel{display:grid;gap:12px}
+    .request-fields{padding:13px;border:1px solid #316d86;border-radius:14px;background:#102b40;display:grid;gap:9px}
+    label{display:grid;gap:6px;font-size:.81rem;color:#bce1ee;font-weight:750}
+    input{width:100%;min-height:45px;border:1px solid #38758e;border-radius:10px;background:#061a2b;padding:9px 12px;font-size:1rem;color:white;outline:0}
+    h2{font-size:1rem;margin:10px 0 6px}
+    #remote-results{display:flex;flex-direction:column;gap:8px}
     .remote-song{display:flex;align-items:center;gap:9px;padding:10px;border-radius:12px;border:1px solid #294e66;background:#10283d;min-width:0}
     .remote-song-info{min-width:0;flex:1}.remote-song-info strong,.remote-song-info small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.remote-song-info strong{font-size:.85rem}.remote-song-info small{font-size:.75rem;color:#93b7c8;margin-top:4px}
-    .remote-request-button{min-height:39px;min-width:80px;border:1px solid #59b5a3;background:#146a62;color:#f4fff7;border-radius:9px;font-size:.83rem;font-weight:850;cursor:pointer;touch-action:manipulation}
-    .remote-request-button:disabled{opacity:.6;cursor:default}.remote-empty{color:#95bbcb;text-align:center;font-size:.85rem}
-    #remote-request-history{margin-top:14px}.request-receipt{border:1px solid #2c806f;background:#103a35;color:#a7efdc;border-radius:8px;padding:10px;font-size:.75rem;line-height:1.5}
+    .remote-request-button{min-width:70px;background:#126e62;border-color:#59b5a3}
+    .remote-empty{color:#95bbcb;text-align:center;font-size:.85rem}
+    #remote-request-history{display:grid;gap:6px}.request-receipt{margin:0;border:1px solid #2c806f;background:#103a35;color:#a7efdc;border-radius:8px;padding:10px;font-size:.75rem;line-height:1.5}
+    .now-card{background:#122c41;border:1px solid #38738e;border-radius:13px;padding:14px}
+    .now-card small{font-size:.73rem;color:#7ef0d0}.now-card strong{display:block;margin-top:5px;font-size:1.1rem;overflow-wrap:anywhere}
+    .now-card span{display:block;margin-top:5px;color:#b3c9dd;font-size:.8rem}
+    .queue-number{font-size:.78rem;font-weight:900;color:#86ddef}
+    .remote-queue-row{display:flex;align-items:center;gap:10px;min-width:0;padding:11px;border-radius:10px;border:1px solid #294e66;background:#10283d}
+    .remote-queue-row div{min-width:0;flex:1}.remote-queue-row strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.87rem}
+    .remote-queue-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:#a6bfd3;margin-top:4px}
+    .control-card{background:#0f2940;border:1px solid #36718d;border-radius:13px;padding:13px;display:grid;gap:13px}
+    .control-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .control-row button{padding:10px 5px;min-height:52px;font-size:clamp(.77rem,3vw,.92rem)}
+    .control-row .primary{background:#1269c4;border-color:#38b4ff}
+    .control-row .active{background:#16836e;border-color:#8cf9cc}
+    .control-title{font-size:.8rem;font-weight:900;color:#9dcad9}
+    .remote-state{font-size:.8rem;color:#a4dcea;margin:0}
+    .control-row button[aria-pressed="true"]{background:#127b64;border-color:#6bffe0}
     footer{color:#86a9ba;font-size:.72rem;text-align:center;line-height:1.7;padding:18px 5px}
+    @media(max-width:365px){.control-row{gap:5px}.control-row button{font-size:.72rem;padding:7px 2px}header strong{font-size:.95rem}}
   </style>
 </head>
 <body>
-  <main>
-    <header><img src="assets/xstage-app-icon-192.png" alt=""><div><strong>X-STAGE · ขอเพลง</strong><small>สแกน QR เพื่อขอเพลงได้ ไม่ต้องล็อกอิน Google</small></div></header>
-    <p id="remote-status" role="status" aria-live="polite">กำลังเตรียมเชื่อมต่อจอ X-Stage…</p>
-    <section id="remote-controls" hidden aria-label="ค้นหาและส่งคำขอเพลง">
-      <div class="request-fields">
-        <label for="remote-singer">ชื่อผู้ขอเพลง <input id="remote-singer" type="text" maxlength="45" autocomplete="name" placeholder="ชื่อเล่นของคุณ"></label>
-        <label for="remote-note">ข้อความถึงเจ้าของเวที (ไม่บังคับ) <input id="remote-note" type="text" maxlength="90" placeholder="เช่น ร้องคู่ / แทรกคิวเมื่อสะดวก"></label>
+ <main>
+  <header><img src="assets/xstage-app-icon-192.png" alt=""><div><strong>X-STAGE REMOTE</strong><small>ขอเพลง · คิวเพลง · ควบคุมเวที</small></div></header>
+  <p id="remote-status" role="status" aria-live="polite">กำลังเชื่อมต่อรีโมท…</p>
+  <section id="remote-controls" hidden aria-label="รีโมท X-Stage">
+   <nav class="remote-tabs" role="tablist" aria-label="หน้ารีโมท">
+    <button id="remote-tab-search" type="button" role="tab" aria-selected="true" aria-controls="remote-panel-search">🎵 ขอเพลง</button>
+    <button id="remote-tab-queue" type="button" role="tab" aria-selected="false" aria-controls="remote-panel-queue">☷ คิวเพลง</button>
+    <button id="remote-tab-control" type="button" role="tab" aria-selected="false" aria-controls="remote-panel-control">🎛 ควบคุม</button>
+   </nav>
+   <section id="remote-panel-search" class="remote-tab-panel" role="tabpanel">
+    <div class="request-fields">
+      <label for="remote-singer">ชื่อผู้ขอเพลง <input id="remote-singer" maxlength="45" type="text" autocomplete="name" placeholder="ชื่อเล่นของคุณ"></label>
+      <label for="remote-note">หมายเหตุ (ไม่บังคับ) <input id="remote-note" maxlength="90" type="text" placeholder="เช่น ร้องคู่"></label>
+    </div>
+    <label for="remote-search">ค้นหาเพลง <input id="remote-search" type="search" maxlength="70" autocomplete="off" placeholder="ชื่อเพลง / รหัสเพลง / ศิลปิน"></label>
+    <div id="remote-results" aria-live="polite"></div>
+    <div id="remote-request-history" aria-live="polite"></div>
+   </section>
+   <section id="remote-panel-queue" class="remote-tab-panel" role="tabpanel" hidden>
+    <div class="now-card"><small>กำลังเล่น</small><strong id="remote-now">ยังไม่ได้เลือกเพลง</strong><span id="remote-now-artist">X-Stage Karaoke</span></div>
+    <h2>คิวเพลงถัดไป <span id="remote-queue-count">0</span> รายการ</h2>
+    <div id="remote-queue-list" aria-live="polite"><p class="remote-empty">ยังไม่มีเพลงในคิว</p></div>
+   </section>
+   <section id="remote-panel-control" class="remote-tab-panel" role="tabpanel" hidden>
+    <div class="control-card">
+      <div class="control-title">ควบคุมการเล่น</div>
+      <div class="control-row">
+        <button id="remote-playpause" class="primary" type="button">▶ เล่น / พัก</button>
+        <button id="remote-next" type="button">⏭ ถัดไป</button>
+        <button id="remote-stop" type="button">⏹ หยุด</button>
       </div>
-      <h2>ค้นหาเพลงที่ต้องการขอ</h2>
-      <input id="remote-search" type="search" maxlength="70" autocomplete="off" placeholder="ชื่อเพลง / รหัสเพลง / ศิลปิน" aria-label="ค้นหาเพลงเพื่อขอ">
-      <div id="remote-results" aria-live="polite"></div>
-      <div id="remote-request-history" aria-live="polite"></div>
-    </section>
-    <footer>มือถือส่งคำขอเพลงเท่านั้น เจ้าของเวทีเป็นผู้อนุมัติและเพิ่มเข้าคิว ไม่มีการเปิดเผยบัญชี Google หรือไฟล์เพลงบนมือถือ</footer>
-  </main>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
-  <script src="remote.js?v=0962" defer></script>
+      <div class="control-title">ระดับเสียง <span id="remote-volume-label">80%</span></div>
+      <div class="control-row">
+        <button id="remote-vol-down" type="button">− ลดเสียง</button>
+        <button id="remote-mute" type="button" aria-pressed="false">🔊 ปิดเสียง</button>
+        <button id="remote-vol-up" type="button">+ เพิ่มเสียง</button>
+      </div>
+      <div class="control-title">ขนาดภาพเวทีและเนื้อร้อง <span id="remote-scale-label">100%</span></div>
+      <div class="control-row">
+        <button id="remote-view-smaller" type="button">− ย่อภาพ</button>
+        <button id="remote-fullscreen" type="button">⛶ เต็มจอมือถือ</button>
+        <button id="remote-view-bigger" type="button">+ ขยายภาพ</button>
+      </div>
+      <div class="control-title">เมดเลย์ (M4A)</div>
+      <button id="remote-medley" type="button" aria-pressed="false">♫ เปิดเมดเลย์ต่อเพลงอัตโนมัติ</button>
+      <p class="remote-state">เมดเลย์จะเตรียมและต่อเพลงในคิวก่อนจบเพลงเดิมเมื่อโหลดทัน ไม่ใช่การจับจังหวะ MIDI/BPM</p>
+    </div>
+   </section>
+  </section>
+  <footer>เจ้าของเวทีอนุมัติอุปกรณ์ครั้งแรกก่อนใช้งาน · การเพิ่มเพลงไม่ต้องอนุมัติทีละเพลง · มือถือไม่เข้าถึง Google Drive โดยตรง</footer>
+ </main>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
+ <script src="remote.js?v=0963" defer></script>
 </body>
 </html>
