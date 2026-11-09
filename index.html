@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=0962">
-  <link rel="stylesheet" href="xstage-ux.css?v=0962">
+  <link rel="stylesheet" href="style.css?v=0963">
+  <link rel="stylesheet" href="xstage-ux.css?v=0963">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -69,6 +69,7 @@
             <button type="button" id="mobile-home-toggle">⌂ หน้าแรก</button>
             <button type="button" id="mobile-queue-toggle">♫ คิวเพลง <span id="mobile-queue-count">0</span></button>
             <button type="button" id="mobile-stage-pop">▣ เปิดจอร้องแยก</button>
+            <button type="button" id="mobile-medley-toggle" aria-pressed="false">♫ เปิดเมดเลย์ต่อเพลง</button>
             <button type="button" id="mobile-tools-toggle">⚙ เครื่องมือและตั้งค่า</button>
             <details class="stage-extra-tools" id="stage-extra-tools">
               <summary>☷ ฟังก์ชันอื่น ๆ ทั้งหมด</summary>
@@ -103,9 +104,9 @@
             <div class="virtual-key-head"><strong id="virtual-language">ภาษาไทย</strong><button id="virtual-close" type="button">ซ่อนแป้นพิมพ์ ✕</button></div>
             <div id="virtual-keys" class="virtual-keys"></div>
           </section>
-          <section id="remote-pair-panel" class="remote-pair-panel" hidden aria-label="จับคู่รีโมทมือถือ">
+          <section id="remote-pair-panel" class="remote-pair-panel" hidden aria-label="จับคู่รีโมท X-Stage">
             <div class="remote-pair-box">
-              <div class="remote-pair-top"><strong>รีโมทขอเพลง QR</strong><button id="remote-pair-close" type="button" aria-label="ปิดหน้าต่างจับคู่">✕</button></div>
+              <div class="remote-pair-top"><strong>รีโมทมือถือ X-Stage QR</strong><button id="remote-pair-close" type="button" aria-label="ปิดหน้าต่างจับคู่">✕</button></div>
               <canvas id="remote-qr" width="232" height="232" hidden aria-label="QR สำหรับเชื่อมต่อรีโมทมือถือ"></canvas>
               <p id="remote-pair-status" role="status" aria-live="polite">กำลังเตรียมรีโมท…</p>
               <a id="remote-link" target="_blank" rel="noopener noreferrer"></a>
@@ -114,13 +115,13 @@
                 <button id="remote-reject" type="button" hidden>✕ ปฏิเสธ</button>
                 <button id="remote-end" type="button">เปลี่ยน QR</button>
               </div>
-              <small>มือถือใช้ค้นหาและส่งคำขอเพลงเท่านั้น ไม่ต้องล็อกอิน Google</small>
+              <small>อนุมัติการเชื่อมต่อครั้งแรก แล้วใช้ควบคุมและขอเพลงได้ · ไม่ต้องล็อกอิน Google บนมือถือ</small>
             </div>
           </section>
           <section id="remote-request-panel" class="remote-request-panel" hidden aria-label="คำขอเพลงจากมือถือ">
-            <header class="remote-request-heading"><strong>📥 คำขอเพลงจากมือถือ</strong><button type="button" id="remote-request-close" aria-label="ปิดคำขอเพลง">✕</button></header>
+            <header class="remote-request-heading"><strong>📥 เพลงที่ขอจากมือถือ</strong><button type="button" id="remote-request-close" aria-label="ปิดคำขอเพลง">✕</button></header>
             <div id="remote-request-list" class="remote-request-list" aria-live="polite"><p>ยังไม่มีคำขอเพลง</p></div>
-            <small>รับคำขอเพลงจากมือถือได้โดยไม่ต้องให้ผู้ขอเข้าสู่ระบบ Google</small>
+            <small>เจ้าของเวทีอนุมัติมือถือครั้งแรก · เพิ่มเพลงจากมือถือเข้าคิวได้โดยตรง</small>
           </section>
           <dialog id="xstage-install-dialog" class="xstage-install-dialog" aria-labelledby="xstage-install-title">
             <h2 id="xstage-install-title">ติดตั้ง X-Stage Karaoke</h2>
@@ -176,13 +177,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=0962" defer></script><script src="pc-extensions.js?v=0962" defer></script>
+  <script src="app.js?v=0963" defer></script><script src="pc-extensions.js?v=0963" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0962" defer></script>
-  <script src="mobile-layout.js?v=0962" defer></script>
-  <script src="pwa-install.js?v=0962" defer></script>
+  <script src="stage-controls.js?v=0963" defer></script>
+  <script src="mobile-layout.js?v=0963" defer></script>
+  <script src="pwa-install.js?v=0963" defer></script>
 
-  <script src="stage-ui.js?v=0962" defer></script>
+  <script src="stage-ui.js?v=0963" defer></script>
 </body>
 </html>
