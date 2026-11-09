@@ -10,7 +10,7 @@ const ui = {
   search: $('search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
   nowPlaying: $('now-playing'), nowArtist: $('now-artist'), playStatus: $('play-status'),
-  playPause: $('play-pause'), stop: $('stop'), previous: $('previous'), next: $('next'),
+  playPause: $('play-pause'), stop: $('stop'), cancelCurrent:$('cancel-current'), restartCurrent:$('restart-current'), previous: $('previous'), next: $('next'),
   seek: $('seek'), elapsed: $('elapsed'), duration: $('duration'), speed: $('speed'), volume: $('volume'),
   repeat: $('repeat'), fullscreen: $('fullscreen'), lyrics: $('lyrics')
 };
@@ -646,6 +646,17 @@ function stopSong(){
   if(state.medley)setMedleyMode(false);
   clearIdleStage('หยุดเล่นแล้ว');
 }
+function cancelCurrentSong(){
+  if(!state.current&&!state.loading)return;
+  if(state.queue.length||state.medley)playNext();
+  else clearIdleStage('ยกเลิกเพลงแล้ว · คิวว่าง');
+}
+function restartCurrentSong(){
+  if(!state.current||state.loading)return;
+  try{player.currentTime=0;}catch{}
+  player.play().catch(()=>setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น'));
+  updateTransport();
+}
 function togglePlayback(){if(state.loading)return;if(!player.src){if(state.queue.length)playNext();else if(state.shown.length)playSong(state.shown[state.selectedIndex]);return;}if(player.paused){player.play().catch(()=>setPlayStatus('เบราว์เซอร์ไม่อนุญาตให้เริ่มเสียง กรุณากดเล่นอีกครั้ง'));}else player.pause();}
 
 async function playSong(song,{remember=true,preloaded=null}={}) {
@@ -688,6 +699,8 @@ function updateTransport(){
   ui.playPause.disabled=state.loading||(!state.current&&!state.queue.length&&!state.shown.length);
   ui.playPause.textContent=player.src&&!player.paused?'Ⅱ':'▶';
   ui.stop.disabled=!state.current&&!state.loading;
+  ui.cancelCurrent.disabled=!state.current&&!state.loading;
+  ui.restartCurrent.disabled=!state.current||state.loading;
   ui.previous.disabled=!state.history.length;
   ui.next.disabled=!state.queue.length;
   const duration=Number.isFinite(player.duration)?player.duration:Number(state.current?.duration||0);
@@ -800,6 +813,8 @@ ui.search.addEventListener('keydown',onSearchKey);
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
 ui.playPause.addEventListener('click',togglePlayback);
 ui.stop.addEventListener('click',stopSong);
+ui.cancelCurrent.addEventListener('click',cancelCurrentSong);
+ui.restartCurrent.addEventListener('click',restartCurrentSong);
 ui.previous.addEventListener('click',()=>{const old=state.history.pop();renderQueue();if(old)playSong(old,{remember:false});});
 ui.next.addEventListener('click',playNext);
 ui.speed.addEventListener('change',()=>{player.playbackRate=Number(ui.speed.value);saveUiPrefs({speed:Number(ui.speed.value)});});
