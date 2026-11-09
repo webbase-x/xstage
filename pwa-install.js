@@ -6,6 +6,7 @@
   const $ = id => document.getElementById(id);
   const menuButton = $('mobile-install-app');
   const toolsButton = $('pc-install-app');
+  const toolbarButton = $('toolbar-install-app');
   const dialog = $('xstage-install-dialog');
   const content = $('xstage-install-content');
   const closeButton = $('xstage-install-close');
@@ -21,6 +22,10 @@
     if(toolsButton){
       toolsButton.textContent = installed ? '✓ ติดตั้งแล้ว' : '⬇ ติดตั้งแอป';
       toolsButton.disabled = installed;
+    }
+    if(toolbarButton){
+      toolbarButton.disabled = installed;
+      toolbarButton.title = installed ? 'X-Stage ติดตั้งแล้ว' : 'ติดตั้ง X-Stage Karaoke เป็นเว็บแอป';
     }
   }
   function information() {
@@ -69,6 +74,7 @@
   }
   menuButton.addEventListener('click',install);
   toolsButton?.addEventListener('click',install);
+  toolbarButton?.addEventListener('click',install);
   closeButton.addEventListener('click',()=>dialog.close());
   dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
   window.addEventListener('beforeinstallprompt',e=>{
