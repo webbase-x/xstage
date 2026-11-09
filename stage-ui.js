@@ -14,6 +14,14 @@
   const fullscreen=$('fullscreen');
   const shuffle=$('stage-shuffle');
   if(!stage||!queueDock||!queueBtn||!volume||!repeat)return;
+  // Speed and legacy repeat inputs remain available from the tools drawer.
+  const toolsNav=document.querySelector('.pc-tools');
+  if(toolsNav){
+    for(const selector of ['.speed-control','.repeat-control']){
+      const option=document.querySelector('.transport-right '+selector);
+      if(option)toolsNav.append(option);
+    }
+  }
 
   function syncQueue(){
     const n=$('queue-count')?.textContent?.trim()||'0';
