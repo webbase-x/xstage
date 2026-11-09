@@ -1,0 +1,472 @@
+/* X-Stage Karaoke v0.9.60 — full-viewport, reference-inspired player.
+ * Overrides legacy responsive layout without changing playback, OAuth or Drive logic.
+ */
+:root{--xs-midnight:#030a18;--xs-blue:#086fef;--xs-cyan:#36d9ff;--xs-purple:#b443ff;--xs-top:72px;--xs-bottom:118px}
+body.xstage-ui-v2{overflow:hidden;background:#030816;color:#f0f7ff}
+body.xstage-ui-v2 .app-shell{
+  position:relative;display:block;max-width:none;width:100%;
+  height:100dvh;min-height:0;padding:0;margin:0;overflow:hidden
+}
+body.xstage-ui-v2 .topbar,body.xstage-ui-v2 .status-line,
+body.xstage-ui-v2 .bottom-bar{display:none!important}
+body.xstage-ui-v2 .studio-layout{
+  display:block!important;position:relative;width:100%;height:100%;
+  min-height:0;max-height:none;padding:0;gap:0
+}
+body.xstage-ui-v2 .stage-column{
+  display:block!important;position:relative;width:100%;height:100%;
+  min-height:0;max-height:none;gap:0;order:0
+}
+body.xstage-ui-v2 .stage{
+  position:relative;display:block;width:100%;height:100%;min-height:0!important;
+  max-height:none;aspect-ratio:auto!important;margin:0;overflow:hidden;
+  border:none;border-radius:0;box-shadow:none;
+  background-color:#020916;
+  background-image:linear-gradient(180deg,#02081862 0%,#06102c00 35%,#03081d12 65%,#02081970 100%),url('assets/xstage-background.jpg');
+  background-size:cover;background-position:center center
+}
+body.xstage-ui-v2 .stage:fullscreen{
+  width:100vw;height:100dvh;min-height:0!important;border:none;
+  border-radius:0;background-size:cover
+}
+body.xstage-ui-v2 #player{position:absolute;left:-9999px;width:1px;height:1px}
+body.xstage-ui-v2 .stage-shade{
+  position:absolute;z-index:0;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,#010718aa 0%,#01091922 25%,transparent 60%,#01071b88 100%)
+}
+body.xstage-ui-v2 .stage.playing .stage-shade{background:linear-gradient(180deg,#01091992,#010a2570 54%,#010819c5)}
+body.xstage-ui-v2 .stage-ambience{
+  position:absolute;z-index:1;inset:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 24% 33% at 18% 49%,#173dff39,transparent 95%),
+    radial-gradient(ellipse 27% 35% at 83% 52%,#b517f530,transparent 95%),
+    radial-gradient(ellipse 52% 18% at 50% 88%,#10bdff44,transparent 85%),
+    linear-gradient(0deg,#090d30b8 0%,transparent 35%);
+}
+body.xstage-ui-v2 .stage-ambience::before{
+  content:"";position:absolute;left:9%;right:9%;bottom:13%;height:5%;
+  border:2px solid #1bafffc4;border-radius:50%;
+  box-shadow:0 0 26px #009cff,0 0 55px #9230ef,0 3px 26px #00bdfa inset;
+  transform:perspective(400px) rotateX(68deg)
+}
+body.xstage-ui-v2 .stage-ambience::after{
+  content:"Online";position:absolute;top:67%;left:50%;transform:translate(-50%,-50%) rotate(-5deg);
+  color:#88faff;text-shadow:0 0 12px #08d5ff,0 0 23px #0088ff,2px 3px 0 #09275b;
+  font-family:"Brush Script MT","Segoe Script",cursive;font-weight:bold;
+  font-size:clamp(24px,5.5vw,86px);font-style:italic;opacity:.92
+}
+body.xstage-ui-v2 .stage.playing .stage-ambience::after{opacity:.12}
+body.xstage-ui-v2 #lyrics{
+  position:absolute;z-index:4;inset:0;width:100%;height:100%;
+  pointer-events:none
+}
+body.xstage-ui-v2 .stage-label,body.xstage-ui-v2 .stage-idle{display:none!important}
+body.xstage-ui-v2 .stage .stage-metrics{display:none!important}
+
+/* Top toolbar, positioned on the stage for desktop and phone. */
+body.xstage-ui-v2 .stage .stage-toolbar{
+  position:absolute;z-index:55;top:0;left:0;right:0;
+  display:flex!important;align-items:center;gap:clamp(5px,.8vw,13px);
+  min-height:var(--xs-top);height:var(--xs-top);
+  padding:10px clamp(9px,1vw,18px);
+  background:linear-gradient(180deg,#020617f2,#040d21d8 78%,#071d3277);
+  border-bottom:1px solid #38679a51
+}
+body.xstage-ui-v2 .stage-toolbar .toolbar-button{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:48px;flex:none;padding:8px clamp(9px,1vw,19px);
+  color:#f3f8ff;font-size:clamp(.73rem,.91vw,1rem);font-weight:850;
+  border-radius:15px;border:1px solid #4b6eac;
+  background:linear-gradient(165deg,#111b42ef,#081228ef);
+  box-shadow:inset 0 0 1px 1px #628ce844,0 1px 8px #0008;
+  white-space:nowrap;touch-action:manipulation;
+}
+body.xstage-ui-v2 .stage-toolbar .toolbar-button:hover:not(:disabled){background:#132c53}
+body.xstage-ui-v2 .stage-toolbar .mobile-menu-toggle{
+  color:#f6f8ff;border-color:#6178ff;
+  box-shadow:0 0 10px #3d4dfd45,inset 0 0 8px #243cc946
+}
+body.xstage-ui-v2 .stage-toolbar .qr-toolbar-button{
+  border-color:#28d26f;box-shadow:0 0 10px #17dc7f26
+}
+body.xstage-ui-v2 .stage-toolbar .toolbar-install{
+  border-color:#11aefa;background:linear-gradient(135deg,#073a81,#0a1b46);
+  box-shadow:inset 0 0 8px #0b8df967
+}
+body.xstage-ui-v2 .stage-toolbar .toolbar-fullscreen{
+  padding:8px;min-width:48px;font-size:1.55rem
+}
+body.xstage-ui-v2 .stage-toolbar .mobile-stage-clock{
+  flex:none;position:static!important;display:block!important;
+  background:#081124de;border:1px solid #4b6087;border-radius:15px;
+  padding:11px clamp(8px,1vw,16px);min-height:48px;
+  color:#f7faff;font-size:clamp(.82rem,1.25vw,1.3rem);
+  font-variant-numeric:tabular-nums;font-weight:900;text-shadow:0 0 5px #000;
+  white-space:nowrap;letter-spacing:.015em;line-height:1.1
+}
+body.xstage-ui-v2 .stage-search-slot{
+  position:relative;z-index:66;flex:1 1 0;min-width:110px;align-self:stretch
+}
+/* Search input and live results are the same functional dock, styled as a floating dropdown. */
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock{
+  position:absolute!important;z-index:68;inset:0 0 auto 0!important;
+  width:100%!important;min-width:0;max-width:none!important;
+  height:50px;min-height:0!important;max-height:50px!important;
+  display:flex;flex-direction:column;gap:0;
+  margin:0;padding:0;overflow:hidden;
+  background:#0a1932f5;border:2px solid #24bcff;
+  border-radius:25px;box-shadow:0 0 0 1px #58dbff34,0 0 16px #168aff3b;
+  backdrop-filter:blur(10px)
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+  height:auto;max-height:min(475px,calc(100dvh - var(--xs-bottom) - 100px))!important;
+  border-radius:23px 23px 14px 14px;box-shadow:0 16px 40px #000c,0 0 14px #198bff74;
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock .dock-head,
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock .dock-foot{display:none!important}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box{
+  flex:none;order:0;display:flex!important;min-width:0;
+  height:46px;margin:0!important;padding:1px 12px;
+  border:none;border-radius:24px;background:transparent;box-shadow:none
+}
+body.xstage-ui-v2 .stage .stage-search-slot #search{
+  height:43px;min-width:0;width:100%;color:#fff;
+  font-size:clamp(.83rem,1.4vw,1.13rem)
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-icon{font-size:1.65rem}
+body.xstage-ui-v2 .stage .stage-search-slot .search-box kbd{display:none}
+body.xstage-ui-v2 .stage .stage-search-slot .song-results{
+  flex:1 1 auto;order:1;overflow-y:auto;overscroll-behavior:contain;
+  min-height:0!important;max-height:none!important;
+  margin:0;padding:4px 7px 8px;border-top:1px solid #4975ac5c;
+  scrollbar-color:#5482b4 #091a2a
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded) .song-results{display:none!important}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .song-results{display:block!important}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock .library-hint{order:2;flex:none;display:none}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .library-hint{
+  display:flex!important;align-items:center;justify-content:space-between;
+  gap:7px;margin:0;padding:9px 11px;color:#bcdaf7;font-size:.72rem;
+  border-top:1px solid #5075aa64;background:#0b1c37
+}
+body.xstage-ui-v2 .stage .stage-search-slot .library-hint .pc-favorite-toggle{display:none}
+body.xstage-ui-v2 .stage .stage-search-slot .library-hint span:last-child{font-size:.72rem}
+body.xstage-ui-v2 .stage .stage-search-slot .song-item{
+  display:flex;min-width:0;align-items:center;gap:8px;
+  padding:8px 10px;margin:1px 0;border-radius:8px;
+  color:#eff7ff;background:#0e1d35;border:1px solid transparent
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-item:hover{background:#1a3154}
+body.xstage-ui-v2 .stage .stage-search-slot .song-item.selected{
+  background:linear-gradient(90deg,#085ad6,#074ab5);
+  border-color:#267bff;box-shadow:inset 3px 0 0 #89daff
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-details{
+  display:flex;flex:1;align-items:baseline;min-width:0;gap:10px;overflow:hidden
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-code{
+  flex:none;min-width:50px;margin:0;color:#c9defd;font-size:.79rem;font-weight:850
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-details strong{
+  flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  font-size:clamp(.75rem,1vw,.9rem)
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-details small{
+  display:block;flex:0 1 auto;min-width:0;margin:0;white-space:nowrap;
+  font-size:.78rem;overflow:hidden;text-overflow:ellipsis;color:#c8d7ed
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-details small::before{content:"— ";color:#74abf0}
+body.xstage-ui-v2 .stage .stage-search-slot .song-item .pc-star{font-size:16px!important;padding:2px 4px!important}
+body.xstage-ui-v2 .stage .stage-search-slot .song-add{
+  flex:none;width:27px;height:27px;border-radius:7px;font-size:1.1rem
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-match{
+  background:#ffe47b;color:#07213e;border-radius:3px;font-weight:900
+}
+body.xstage-ui-v2 .stage .stage-search-slot .empty-state{min-height:80px;font-size:.85rem}
+
+/* Persistent sidebar drawer like the reference screenshot. */
+body.xstage-ui-v2 .stage .mobile-stage-menu{
+  position:absolute!important;z-index:62;top:calc(var(--xs-top) + 3px);left:7px;right:auto;
+  display:flex;flex-direction:column;gap:4px;width:clamp(210px,15vw,255px);
+  max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 8px);
+  overflow-y:auto;padding:10px 7px;border:1px solid #4a68a2;
+  border-radius:15px;background:linear-gradient(155deg,#0a1630f9,#08152cf8);
+  box-shadow:0 13px 42px #000a;backdrop-filter:blur(15px)
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu[hidden]{display:none!important}
+body.xstage-ui-v2 .stage .mobile-stage-menu .mobile-menu-status{
+  font-size:.7rem;min-height:0;max-height:2.7em;overflow:hidden;color:#9dcce4;
+  line-height:1.35;padding:4px 9px 9px
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu button{
+  display:flex;align-items:center;justify-content:flex-start;
+  gap:10px;width:100%;min-height:43px;padding:9px 13px;
+  color:#e7f0ff;border:1px solid transparent;background:transparent;
+  border-radius:9px;text-align:left;font-size:clamp(.77rem,.95vw,.97rem);font-weight:700
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu button:hover:not(:disabled),
+body.xstage-ui-v2 .stage .mobile-stage-menu button[aria-expanded="true"]{
+  background:#12365d;border-color:#1e61ae
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-install-app{
+  background:linear-gradient(105deg,#064ec5,#0868ef);
+  border-color:#2589ff;color:#fff
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-queue-count{margin-left:auto}
+
+/* QR stays open under the toolbar clock until explicitly dismissed. */
+body.xstage-ui-v2 .stage .remote-pair-panel{
+  position:absolute!important;z-index:53;inset:auto!important;
+  top:calc(var(--xs-top) + 12px)!important;right:clamp(9px,.8vw,16px)!important;
+  width:clamp(190px,18vw,290px)!important;
+  max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 20px)!important;
+  padding:0!important;overflow-y:auto!important;background:none!important
+}
+body.xstage-ui-v2 .stage .remote-pair-panel[hidden]{display:none!important}
+body.xstage-ui-v2 .stage .remote-pair-box{
+  display:flex;flex-direction:column;gap:9px;
+  padding:13px;background:#09162feF;border:2px solid #a84bff;
+  border-radius:18px;box-shadow:0 0 14px #ca54ff75,0 12px 34px #000b;
+  max-height:none!important;overflow:visible!important
+}
+body.xstage-ui-v2 .stage .remote-pair-top{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:clamp(.72rem,.9vw,.93rem)
+}
+body.xstage-ui-v2 .stage .remote-pair-top button{background:#b51b53;border-color:#fc6b82}
+body.xstage-ui-v2 .stage .remote-pair-box canvas{
+  width:min(100%,210px);height:auto;margin:0 auto;padding:7px;
+  background:#fff;border-radius:8px
+}
+body.xstage-ui-v2 .stage .remote-pair-box p{
+  color:#e0dcff;text-align:center;font-size:.75rem;line-height:1.3
+}
+body.xstage-ui-v2 .stage .remote-pair-box a{color:#7cf3ff;font-size:.7rem}
+body.xstage-ui-v2 .stage .remote-pair-actions{gap:5px}
+body.xstage-ui-v2 .stage .remote-pair-actions button{font-size:.72rem}
+body.xstage-ui-v2 .stage .remote-pair-box small{display:none}
+body.xstage-ui-v2 .stage.remote-visible .stage-search-slot .search-dock{
+  /* Search remains in its toolbar slot; the QR only overlaps stage visuals. */
+  right:0!important;max-width:none!important
+}
+
+/* Full-width integrated bottom player. */
+body.xstage-ui-v2 .stage .transport-panel{
+  position:absolute;z-index:40;bottom:0;left:0;right:0;
+  display:grid;grid-template-columns:minmax(205px,1.45fr) minmax(280px,1.5fr) minmax(105px,.47fr);
+  align-items:center;gap:clamp(8px,1.4vw,24px);
+  width:100%;height:var(--xs-bottom);min-height:0;max-height:none;
+  padding:12px clamp(9px,1.1vw,24px);
+  border:1px solid #3e568e;border-left:0;border-right:0;border-bottom:0;
+  border-radius:18px 18px 0 0;
+  background:linear-gradient(180deg,#0a152bf7,#040b1cfb);
+  box-shadow:0 -6px 25px #0207199c;
+}
+body.xstage-ui-v2 .transport-now{
+  display:flex;align-items:center;gap:12px;min-width:0;min-height:0
+}
+body.xstage-ui-v2 .transport-cover{
+  width:clamp(43px,4.7vw,65px);height:clamp(43px,4.7vw,65px);
+  object-fit:cover;border-radius:11px;flex:none;box-shadow:0 0 10px #0550a6a9
+}
+body.xstage-ui-v2 .transport-song-info{
+  display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;
+  color:#f8faff;text-shadow:0 1px 7px #000
+}
+body.xstage-ui-v2 .transport-now-caption{font-size:.76rem;color:#a4c5df}
+body.xstage-ui-v2 #now-playing{
+  display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:clamp(.8rem,1vw,1.03rem)
+}
+body.xstage-ui-v2 #now-artist{
+  color:#bad1e6;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+body.xstage-ui-v2 .transport-now .timeline{
+  display:flex;align-items:center;gap:8px;margin-top:5px;min-width:0
+}
+body.xstage-ui-v2 .transport-now .timeline input{
+  flex:1;min-width:0;height:6px;accent-color:#27c7ff;cursor:pointer
+}
+body.xstage-ui-v2 .transport-now .transport-time{
+  flex:none;color:#46d0ff;font-variant-numeric:tabular-nums;font-size:.72rem;font-weight:800
+}
+body.xstage-ui-v2 .transport-row{
+  display:flex;align-items:center;justify-content:center;
+  gap:clamp(6px,.8vw,12px);width:100%;min-width:0;margin:0
+}
+body.xstage-ui-v2 .transport-main{
+  display:flex;align-items:center;justify-content:center;gap:clamp(2px,.5vw,10px);
+  min-width:0;flex:none
+}
+body.xstage-ui-v2 .transport-main .icon-control{
+  width:clamp(31px,3.1vw,49px);height:clamp(32px,3.1vw,49px);
+  font-size:clamp(1.03rem,1.6vw,1.55rem);
+  color:#f1f7ff;background:#071426;border:1px solid #213c66;border-radius:50%
+}
+body.xstage-ui-v2 .transport-main .icon-control:hover:not(:disabled){background:#164a83}
+body.xstage-ui-v2 .transport-main .big-play{
+  display:grid;place-items:center;width:clamp(48px,5.1vw,71px);height:clamp(48px,5.1vw,71px);
+  flex:none;color:#fff;font-size:1.65rem;border:2px solid #3197ff;
+  background:linear-gradient(135deg,#1177f4,#054ac0);
+  border-radius:50%;box-shadow:0 0 14px #086bff6b
+}
+body.xstage-ui-v2 #stage-repeat[aria-pressed="true"]{color:#69f0d4;border-color:#1abbad;background:#134d4a}
+body.xstage-ui-v2 .transport-right{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  flex:1;min-width:100px;max-width:260px;width:auto
+}
+body.xstage-ui-v2 .volume-control{display:flex;align-items:center;gap:8px;min-width:0;width:100%;color:#eaf6ff}
+body.xstage-ui-v2 .volume-control span[aria-hidden]{font-size:1.23rem}
+body.xstage-ui-v2 .volume-control input{width:100%;min-width:48px;accent-color:#1686ff}
+body.xstage-ui-v2 .transport-volume-value{min-width:35px;text-align:right;font-size:.81rem;font-variant-numeric:tabular-nums}
+body.xstage-ui-v2 .transport-right .speed-control,body.xstage-ui-v2 .transport-right .repeat-control{display:none}
+body.xstage-ui-v2 .stage-queue-toggle{
+  grid-column:3;grid-row:1;justify-self:stretch;align-self:center;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  min-height:47px;min-width:0;padding:8px;
+  border:1px solid #456487;border-radius:12px;
+  background:#0c1b34;color:#e5f4ff;font-size:clamp(.69rem,.92vw,.92rem);font-weight:800;white-space:nowrap
+}
+body.xstage-ui-v2 .stage-queue-toggle[aria-expanded="true"]{border-color:#59d7ec;background:#12466d}
+body.xstage-ui-v2 .transport-panel .play-status{
+  position:absolute;left:24px;bottom:2px;right:24px;
+  height:auto;min-height:0;margin:0;overflow:hidden;text-align:center;
+  text-overflow:ellipsis;white-space:nowrap;font-size:.65rem;color:#8bdde3;
+  pointer-events:none
+}
+body.xstage-ui-v2 .transport-panel .pc-tools{display:none!important}
+body.xstage-ui-v2 .stage-column.mobile-tools-expanded .transport-panel .pc-tools{
+  position:absolute;z-index:42;bottom:calc(100% + 10px);right:12px;left:auto;
+  width:min(580px,calc(100vw - 24px));max-height:min(55dvh,330px);
+  padding:12px;display:flex!important;flex-wrap:wrap;overflow-y:auto;gap:7px;
+  background:#081a31ef;border:1px solid #4267ac;border-radius:12px;box-shadow:0 12px 40px #000a
+}
+
+/* Queue pops over the stage rather than using a permanent right-hand column. */
+body.xstage-ui-v2 .stage .queue-dock{display:none!important}
+body.xstage-ui-v2 .stage .queue-dock.mobile-expanded{
+  position:absolute;z-index:49;right:12px;bottom:calc(var(--xs-bottom) + 10px);
+  display:flex!important;flex-direction:column;
+  width:min(430px,calc(100% - 24px));max-width:none;
+  height:min(500px,calc(100% - var(--xs-top) - var(--xs-bottom) - 25px));
+  min-height:175px;max-height:none;
+  border-radius:14px;border:1px solid #427ea6;
+  background:#0b1a30f4;box-shadow:0 12px 34px #000b;
+  backdrop-filter:blur(13px)
+}
+body.xstage-ui-v2 .stage .queue-dock.mobile-expanded .queue-list{min-height:0;flex:1;max-height:none}
+
+/* Virtual keyboard is above transport, never covering playback buttons. */
+body.xstage-ui-v2 .stage .virtual-keyboard{
+  position:absolute;z-index:56;left:8px;right:8px;bottom:calc(var(--xs-bottom) + 9px);
+  max-height:min(310px,48dvh);
+}
+body.xstage-ui-v2 .stage.keyboard-open .stage-search-slot .search-dock.pc-expanded{
+  max-height:max(58px,calc(100dvh - var(--virtual-keyboard-height,250px) - var(--xs-top) - var(--xs-bottom) - 30px))!important
+}
+body.xstage-ui-v2 .stage .login-gate{
+  position:absolute;inset:var(--xs-top) 0 var(--xs-bottom) 0;z-index:34;
+  background:#030b1c7c;backdrop-filter:blur(3px)
+}
+body.xstage-ui-v2 .stage .login-gate[hidden]{display:none!important}
+body.xstage-ui-v2 .gate-panel{max-height:95%;overflow-y:auto}
+body.xstage-ui-v2 .stage .remote-pair-panel[hidden],body.xstage-ui-v2 .stage .virtual-keyboard[hidden]{display:none!important}
+
+/* Tablet and narrow notebook screens: icons retain menu access to all features. */
+@media(max-width:1230px){
+  body.xstage-ui-v2 .stage-toolbar .toolbar-button{padding:7px 10px;min-height:45px}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-button span{font-size:.72rem}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-install{padding:7px 9px}
+  body.xstage-ui-v2 .stage .transport-panel{grid-template-columns:minmax(180px,1.15fr) minmax(235px,1.4fr) 105px}
+  body.xstage-ui-v2 .transport-now .timeline{flex-wrap:wrap}
+  body.xstage-ui-v2 .transport-now .timeline input{width:100%}
+}
+@media(max-width:910px){
+  :root{--xs-top:62px;--xs-bottom:123px}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-aux span{display:none}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-button{min-height:42px;padding:6px 9px}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-fullscreen{min-width:40px}
+  body.xstage-ui-v2 .stage-toolbar .mobile-stage-clock{min-height:42px;padding:9px 7px;font-size:.76rem}
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock{height:44px;max-height:44px!important}
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box{height:40px}
+  body.xstage-ui-v2 .stage .stage-search-slot #search{height:39px;font-size:.87rem}
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{max-height:min(420px,calc(100dvh - 190px))!important}
+  body.xstage-ui-v2 .stage .transport-panel{grid-template-columns:minmax(160px,1fr) minmax(220px,1fr) 80px;padding:9px}
+  body.xstage-ui-v2 .transport-main .icon-control{width:35px;height:36px}
+  body.xstage-ui-v2 .transport-main .big-play{width:49px;height:49px}
+  body.xstage-ui-v2 .transport-right{display:none!important}
+  body.xstage-ui-v2 .stage .mobile-stage-menu{max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 8px)}
+}
+@media(max-width:620px){
+  :root{--xs-top:56px;--xs-bottom:145px}
+  body.xstage-ui-v2 .stage .stage-toolbar{gap:5px;padding:6px 5px}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-button{min-height:38px;padding:5px 7px;border-radius:10px}
+  body.xstage-ui-v2 .stage-toolbar .mobile-menu-toggle span{display:none}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-aux{display:none}
+  body.xstage-ui-v2 .stage-toolbar .toolbar-fullscreen{min-width:34px;font-size:1.1rem}
+  body.xstage-ui-v2 .stage-toolbar .mobile-stage-clock{min-height:38px;padding:6px;font-size:.65rem;border-radius:10px}
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock{height:39px;max-height:39px!important;border-radius:12px}
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+    max-height:min(320px,calc(100dvh - 205px))!important;border-radius:12px
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box{height:35px;padding:1px 5px}
+  body.xstage-ui-v2 .stage .stage-search-slot #search{height:33px;font-size:.75rem}
+  body.xstage-ui-v2 .stage .stage-search-slot .search-icon{font-size:1.3rem}
+  body.xstage-ui-v2 .stage .stage-search-slot .song-item{padding:7px 5px}
+  body.xstage-ui-v2 .stage .stage-search-slot .song-code{min-width:35px;font-size:.65rem}
+  body.xstage-ui-v2 .stage .stage-search-slot .song-details{gap:5px}
+  body.xstage-ui-v2 .stage .stage-search-slot .song-details strong{font-size:.72rem}
+  body.xstage-ui-v2 .stage .stage-search-slot .song-details small{display:none}
+  body.xstage-ui-v2 .stage .stage-search-slot .song-item .pc-star{display:none}
+  body.xstage-ui-v2 .stage .stage-search-slot .library-hint span:last-child{font-size:.63rem}
+  body.xstage-ui-v2 .stage .mobile-stage-menu{top:calc(var(--xs-top) + 3px);left:5px;width:min(260px,calc(100% - 10px));max-height:calc(100% - var(--xs-bottom) - var(--xs-top) - 8px)}
+  body.xstage-ui-v2 .stage .remote-pair-panel{
+    top:calc(var(--xs-top) + 7px)!important;width:min(210px,49vw)!important;right:6px!important
+  }
+  body.xstage-ui-v2 .stage .remote-pair-box{padding:7px;gap:5px}
+  body.xstage-ui-v2 .stage .remote-pair-box canvas{width:min(165px,100%)}
+  body.xstage-ui-v2 .stage .transport-panel{
+    grid-template-columns:minmax(0,1fr) auto;grid-template-rows:58px 60px;
+    align-items:center;gap:3px 10px;height:var(--xs-bottom);padding:7px 8px
+  }
+  body.xstage-ui-v2 .transport-now{grid-column:1/-1;grid-row:1;gap:8px}
+  body.xstage-ui-v2 .transport-cover{width:40px;height:40px}
+  body.xstage-ui-v2 .transport-now-caption{display:none}
+  body.xstage-ui-v2 #now-playing{font-size:.75rem}
+  body.xstage-ui-v2 #now-artist{font-size:.65rem}
+  body.xstage-ui-v2 .transport-now .timeline{margin-top:2px;flex-wrap:nowrap;gap:6px}
+  body.xstage-ui-v2 .transport-now .timeline input{width:auto;min-width:0}
+  body.xstage-ui-v2 .transport-now .transport-time{font-size:.63rem}
+  body.xstage-ui-v2 .transport-row{grid-column:1;grid-row:2;justify-content:flex-start}
+  body.xstage-ui-v2 .transport-main{justify-content:flex-start;gap:3px}
+  body.xstage-ui-v2 .transport-main .icon-control{width:32px;height:35px;font-size:.98rem}
+  body.xstage-ui-v2 .transport-main .big-play{width:43px;height:43px;font-size:1.2rem}
+  body.xstage-ui-v2 .stage-queue-toggle{grid-column:2;grid-row:2;min-height:38px;padding:5px 7px;gap:3px}
+  body.xstage-ui-v2 .stage-queue-toggle span{font-size:.65rem}
+  body.xstage-ui-v2 .stage .queue-dock.mobile-expanded{right:5px;bottom:calc(var(--xs-bottom) + 5px);width:calc(100% - 10px);height:min(300px,calc(100% - var(--xs-top) - var(--xs-bottom) - 16px))}
+  body.xstage-ui-v2 .stage .virtual-keyboard{bottom:calc(var(--xs-bottom) + 5px);max-height:min(280px,43dvh)}
+  body.xstage-ui-v2 .stage-ambience::after{top:62%}
+  body.xstage-ui-v2 .stage .login-gate{inset:var(--xs-top) 0 var(--xs-bottom) 0}
+}
+@media(max-width:375px){
+  body.xstage-ui-v2 .stage-toolbar .toolbar-fullscreen{display:none}
+  body.xstage-ui-v2 .transport-main #stage-shuffle{display:none}
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{max-height:min(290px,calc(100dvh - 210px))!important}
+}
+@media(max-height:530px) and (orientation:landscape){
+  :root{--xs-top:55px;--xs-bottom:86px}
+  body.xstage-ui-v2 .stage .transport-panel{display:flex;gap:6px;padding:5px 8px;height:var(--xs-bottom)}
+  body.xstage-ui-v2 .transport-now{flex:1;min-width:120px}
+  body.xstage-ui-v2 .transport-row{width:auto;flex:1;justify-content:center}
+  body.xstage-ui-v2 .stage-queue-toggle{width:auto;min-height:34px}
+  body.xstage-ui-v2 .transport-main .icon-control{width:29px;height:30px}
+  body.xstage-ui-v2 .transport-main .big-play{width:39px;height:39px}
+  body.xstage-ui-v2 .transport-cover{width:38px;height:38px}
+  body.xstage-ui-v2 .transport-right{display:none!important}
+  body.xstage-ui-v2 .stage .remote-pair-panel{max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 5px)!important}
+}
+/* Respect user setting for reduced animation. */
+@media(prefers-reduced-motion:reduce){
+  body.xstage-ui-v2 *,body.xstage-ui-v2 *::before,body.xstage-ui-v2 *::after{scroll-behavior:auto;animation:none}
+}
