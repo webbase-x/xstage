@@ -45,6 +45,19 @@ const loginObserver=new MutationObserver(()=>{
 loginObserver.observe(ui.logout,{attributes:true,attributeFilter:['hidden']});
 function openDialog(title){$pc('pc-dialog-title').textContent=title;body.replaceChildren();if(!dialog.open)dialog.showModal();return body;}
 $pc('pc-dialog-close').onclick=()=>dialog.close();
+function confirmClearCache(){
+ const d=openDialog('ล้างแคช X-Stage');
+ d.append(para('ล้างฐานเพลงที่ดาวน์โหลดไว้ในเครื่องและแคชไฟล์เว็บ โดยไม่ลบการลงชื่อเข้าใช้ Google หรือสิทธิ์รีโมท การเปิดเว็บครั้งถัดไปจะตรวจรุ่นฐานเพลงและดาวน์โหลดใหม่'));
+ const result=para('');d.append(result);
+ d.append(button('ยืนยันล้างแคช',async()=>{
+   result.textContent='กำลังล้างแคช…';
+   try{await window.XStageClearCache();result.textContent='ล้างแคชสำเร็จ · ยังเข้าสู่ระบบ Google อยู่';}
+   catch(e){result.textContent=e?.message||'ล้างแคชไม่สำเร็จ';}
+ }));
+}
+$pc('pc-clear-cache')?.addEventListener('click',confirmClearCache);
+$pc('mobile-clear-cache')?.addEventListener('click',confirmClearCache);
+
 function button(label,handler){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=handler;return b;}
 function para(text){const p=document.createElement('p');p.textContent=text;return p;}
 function showSong(song){const d=openDialog('รายละเอียดเพลง');d.append(para([song.code,song.title,song.artist,song.type,'ระยะเวลา '+(song.duration||0)+' วินาที'].filter(Boolean).join(' · ')),button('เล่นทันที',()=>{dialog.close();playSong(song);expand(false);}),button('แทรกเป็นเพลงถัดไป',()=>{state.queue.unshift(song);renderQueue();dialog.close();}));}
