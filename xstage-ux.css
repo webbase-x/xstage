@@ -1172,3 +1172,45 @@ body.xstage-ui-v2 .xstage-eq-meters meter{width:12px;min-height:74px}
   body.xstage-ui-v2 .xstage-eq-bands{grid-template-columns:repeat(31,26px)}
   body.xstage-ui-v2 .xstage-eq-band input[type="range"]{width:128px}
 }
+
+/* 0.9.80: corrected EQ geometry and native vertical faders. */
+body.xstage-ui-v2 .xstage-eq-panel{
+  width:min(1180px,95vw);height:min(610px,78vh);min-width:930px;min-height:500px;
+  grid-template-rows:42px 40px 86px minmax(300px,1fr) 28px
+}
+body.xstage-ui-v2 .xstage-eq-rta-wrap{grid-template-columns:minmax(0,1fr) 62px;min-height:0}
+body.xstage-ui-v2 #xstage-eq-rta{min-height:64px}
+body.xstage-ui-v2 .xstage-eq-bands{
+  grid-template-columns:repeat(31,minmax(26px,1fr));gap:4px;
+  padding:8px 12px 6px;overflow-x:auto;overflow-y:hidden
+}
+body.xstage-ui-v2 .xstage-eq-band{
+  grid-template-rows:18px 48px minmax(190px,1fr) 24px;
+  min-width:26px;gap:4px;font-size:.56rem
+}
+body.xstage-ui-v2 .xstage-eq-gain{
+  min-width:22px;text-align:center;font-size:.56rem;font-weight:800;color:#c7d9e3
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]{
+  appearance:auto;-webkit-appearance:auto;
+  writing-mode:vertical-lr;direction:rtl;
+  width:22px;height:100%;min-height:190px;
+  transform:none!important;transform-origin:center;
+  padding:0;margin:0;cursor:ns-resize;touch-action:none;
+  accent-color:var(--band-color);background:transparent
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-webkit-slider-runnable-track{
+  width:6px;height:auto;border-radius:5px;background:#33434d
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-webkit-slider-thumb{
+  width:20px;height:12px;margin:0;border-radius:3px;
+  border:1px solid #f4fbff;background:#dce9ef;box-shadow:0 0 6px var(--band-color)
+}
+body.xstage-ui-v2 .xstage-eq-hz{
+  transform:none!important;align-self:center;font-size:.52rem;line-height:1;
+  writing-mode:horizontal-tb;text-align:center
+}
+@media(max-width:1000px){
+  body.xstage-ui-v2 .xstage-eq-panel{min-width:0;width:97vw;left:1.5vw}
+  body.xstage-ui-v2 .xstage-eq-bands{grid-template-columns:repeat(31,28px)}
+}
