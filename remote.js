@@ -1,96 +1,173 @@
-/* X-Stage Guest Song Requests: mobile never authenticates to Google Drive.
- * A host paired by WebRTC returns only basic searchable song metadata. */
+/* X-Stage paired remote: host approves first connection. Commands are whitelisted
+ * on the host and never expose OAuth tokens, audio URLs, lyrics or Drive IDs. */
 'use strict';
 (function(){
   const $=id=>document.getElementById(id);
-  const status=$('remote-status'),controls=$('remote-controls'),search=$('remote-search');
-  const results=$('remote-results'),singer=$('remote-singer'),note=$('remote-note');
-  const requestHistory=$('remote-request-history');
+  const status=$('remote-status'),controls=$('remote-controls');
+  const search=$('remote-search'),results=$('remote-results');
+  const singer=$('remote-singer'),note=$('remote-note'),history=$('remote-request-history');
+  const queueList=$('remote-queue-list'),queueCount=$('remote-queue-count');
+  const nowTitle=$('remote-now'),nowArtist=$('remote-now-artist');
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
   const hostId=params.get('p'),secret=params.get('k');
-  let peer=null,conn=null,connected=false,ready=false,searchTimer=null,querySequence=0;
-  function report(value){status.textContent=value;}
-  function send(message){if(connected&&conn?.open){try{conn.send(message);}catch{}}}
+  let peer=null,conn=null,connected=false,ready=false;
+  let searchTimer=null,querySequence=0,activeTab='search';
+  const pendingButtons=new Set();
+  function report(message){status.textContent=message;}
+  function send(msg){if(connected&&conn?.open)try{conn.send(msg);}catch{}}
+  function control(action){send({type:'control',action});}
+  function setTab(tab){
+    activeTab=tab;
+    for(const id of ['search','queue','control']){
+      const visible=id===tab;
+      $('remote-panel-'+id).hidden=!visible;
+      $('remote-tab-'+id).setAttribute('aria-selected',String(visible));
+    }
+    if(tab==='queue')send({type:'refresh'});
+  }
+  for(const id of ['search','queue','control'])$('remote-tab-'+id).addEventListener('click',()=>setTab(id));
   controls.hidden=true;
-  function showResults(items){
-    results.replaceChildren();
+  setTab('search');
+  function resetButtons(){
+    for(const b of pendingButtons){b.disabled=false;b.textContent='ขอเพลง';}
+    pendingButtons.clear();
+  }
+  function drawResults(items){
+    results.replaceChildren();pendingButtons.clear();
     if(!Array.isArray(items)||!items.length){
       const p=document.createElement('p');p.className='remote-empty';
-      p.textContent=search.value.trim()?'ไม่พบเพลงที่ตรงกับคำค้น':'พิมพ์ชื่อเพลง รหัส หรือศิลปิน';
+      p.textContent=search.value.trim()?'ไม่พบเพลงที่ตรงกับคำค้น':'พิมพ์เพื่อค้นหาเพลง';
       results.append(p);return;
     }
-    for(const entry of items.slice(0,25)){
-      if(!Number.isSafeInteger(entry.index)||entry.index<0)continue;
+    for(const item of items.slice(0,30)){
+      if(!Number.isSafeInteger(item.index)||item.index<0)continue;
       const row=document.createElement('article');row.className='remote-song';
       const info=document.createElement('div');info.className='remote-song-info';
-      const name=document.createElement('strong');name.textContent=String(entry.code||'')+' · '+String(entry.title||'');
-      const artist=document.createElement('small');artist.textContent=String(entry.artist||'');
-      const btn=document.createElement('button');btn.type='button';btn.className='remote-request-button';btn.textContent='ขอเพลง';
+      const title=document.createElement('strong');
+      title.textContent=String(item.code||'')+' · '+String(item.title||'');
+      const artist=document.createElement('small');artist.textContent=String(item.artist||'');
+      const btn=document.createElement('button');btn.type='button';
+      btn.className='remote-request-button';btn.textContent='ขอเพลง';
       btn.addEventListener('click',()=>{
-        if(!ready){report('จอหลักยังไม่พร้อมรับคำขอเพลง');return;}
-        const person=String(singer.value||'').trim().slice(0,45);
-        if(!person){singer.focus();report('กรุณาระบุชื่อผู้ขอเพลงก่อน');return;}
-        btn.disabled=true;btn.textContent='ส่งแล้ว';
-        send({type:'request',index:entry.index,singer:person,note:String(note.value||'').trim().slice(0,90)});
+        if(!ready){report('จอหลักยังไม่พร้อม กรุณาให้เจ้าของเวทีเปิดคลังเพลง');return;}
+        if(!connected)return;
+        btn.disabled=true;btn.textContent='กำลังส่ง';
+        pendingButtons.add(btn);
+        send({type:'request',index:item.index,
+          singer:String(singer.value||'ไม่ระบุชื่อ').trim().slice(0,45)||'ไม่ระบุชื่อ',
+          note:String(note.value||'').trim().slice(0,90)});
       });
-      info.append(name,artist);row.append(info,btn);results.append(row);
+      info.append(title,artist);row.append(info,btn);results.append(row);
     }
   }
-  function onMessage(data){
+  function drawQueue(items,total){
+    queueCount.textContent=String(Number(total)||0);
+    queueList.replaceChildren();
+    if(!Array.isArray(items)||!items.length){
+      const empty=document.createElement('p');empty.className='remote-empty';
+      empty.textContent='คิวว่าง · เพลงใหม่จะเริ่มเล่นทันทีหากไม่มีเพลงกำลังเล่น';
+      queueList.append(empty);return;
+    }
+    items.slice(0,50).forEach((song,index)=>{
+      const row=document.createElement('article');row.className='remote-queue-row';
+      const number=document.createElement('span');number.className='queue-number';
+      number.textContent=String(index+1);
+      const info=document.createElement('div'),title=document.createElement('strong'),subtitle=document.createElement('small');
+      title.textContent=String(song?.title||song?.code||'ไม่ทราบชื่อเพลง');
+      subtitle.textContent=[song?.artist,song?.singer?'ผู้ขอ: '+song.singer:''].filter(Boolean).join(' · ');
+      info.append(title,subtitle);row.append(number,info);queueList.append(row);
+    });
+  }
+  function receipt(value){
+    const item=document.createElement('p');item.className='request-receipt';
+    item.textContent=value;history.prepend(item);
+    while(history.children.length>12)history.lastElementChild.remove();
+    report(value);
+  }
+  function handleMessage(data){
     if(!data||typeof data!=='object')return;
+    if(data.type==='pending'){
+      report('กำลังรอเจ้าของเวทีอนุมัติการเชื่อมต่อครั้งแรก…');return;
+    }
     if(data.type==='ready'){
       connected=true;controls.hidden=false;
-      report('เชื่อมต่อแล้ว · ค้นหาและส่งคำขอเพลงได้ ไม่ต้องล็อกอิน Google');
-      if(search.value.trim())search.dispatchEvent(new Event('input'));else showResults([]);
-      return;
+      report('เชื่อมต่อแล้ว · ขอเพลงและควบคุมเวทีได้ ไม่ต้องล็อกอิน Google');
+      if(search.value.trim())search.dispatchEvent(new Event('input'));else drawResults([]);
+      send({type:'refresh'});return;
     }
+    if(data.type==='error'){report(String(data.message||'เชื่อมต่อไม่ได้'));return;}
+    if(!connected)return;
     if(data.type==='status'){
       ready=!!data.ready;
-      if(!ready)report('เชื่อมต่อแล้ว · รอเจ้าของเวทีเปิดคลังเพลง Google Drive');
-      else if(controls.hidden===false&&status.textContent.includes('รอเจ้าของเวที'))
-        report('พร้อมขอเพลง · เลือกเพลงด้านล่าง');
+      nowTitle.textContent=String(data.now?.title||'ยังไม่ได้เลือกเพลง');
+      nowArtist.textContent=String(data.now?.artist||'X-Stage Karaoke');
+      drawQueue(data.queue,data.queueCount);
+      $('remote-playpause').textContent=data.playing?'⏸ พัก':'▶ เล่น';
+      $('remote-volume-label').textContent=String(Math.round(Number(data.volume)||0))+'%';
+      const mute=$('remote-mute');
+      mute.setAttribute('aria-pressed',String(!!data.muted));
+      mute.textContent=data.muted?'🔇 เปิดเสียง':'🔊 ปิดเสียง';
+      const medley=$('remote-medley');medley.setAttribute('aria-pressed',String(!!data.medley));
+      medley.textContent=data.medley?'♫ ปิดเมดเลย์':'♫ เปิดเมดเลย์ต่อเพลงอัตโนมัติ';
+      $('remote-scale-label').textContent=Math.round((Number(data.scale)||1)*100)+'%';
+      if(!ready && !status.textContent.includes('ยังไม่พร้อม'))
+        report('เชื่อมต่อแล้ว · เจ้าของเวทีต้องเปิดคลัง Google Drive ก่อนขอเพลง');
+    }else if(data.type==='results'){
+      if(data.notReady){report('จอหลักยังไม่ได้เปิดคลังเพลง');drawResults([]);return;}
+      if(String(data.query||'')===search.value.trim().toLocaleLowerCase('th'))drawResults(data.items);
+    }else if(data.type==='request-received'){
+      resetButtons();
+      const outcome=data.result==='playing'?'เริ่มเล่นทันที':'เพิ่มเข้าคิวแล้ว';
+      receipt('ส่งเพลง '+String(data.title||'')+' สำเร็จ · '+outcome);
+      send({type:'refresh'});
+    }else if(data.type==='request-error'){
+      resetButtons();
+      report(String(data.message||'ขอเพลงไม่สำเร็จ'));
     }
-    if(data.type==='results'){
-      if(data.notReady){report('เจ้าของเวทียังไม่ได้เปิดคลังเพลง');return;}
-      showResults(data.items);
-    }
-    if(data.type==='request-received'){
-      const text='ส่งคำขอเพลงแล้ว: '+String(data.title||'')+' · รอเจ้าของเวทีเพิ่มลงคิว';
-      const p=document.createElement('p');p.className='request-receipt';p.textContent=text;
-      requestHistory.prepend(p);report(text);
-    }
-    if(data.type==='request-result'){
-      const text=data.accepted?'เจ้าของเวทีรับคำขอและเพิ่มเพลงเข้าคิวแล้ว':'เจ้าของเวทีปฏิเสธคำขอเพลง';
-      const p=document.createElement('p');p.className='request-receipt';p.textContent=text;
-      requestHistory.prepend(p);report(text);
-    }
-    if(data.type==='request-error')report(String(data.message||'ส่งคำขอไม่สำเร็จ'));
   }
   search.addEventListener('input',()=>{
     clearTimeout(searchTimer);
-    const term=search.value.trim();
-    if(!term){results.replaceChildren();return;}
+    const term=search.value.trim().toLocaleLowerCase('th');
+    if(!term){querySequence++;results.replaceChildren();return;}
     const n=++querySequence;
     searchTimer=setTimeout(()=>{if(n===querySequence)send({type:'search',query:term.slice(0,70)});},250);
   });
+  for(const [id,action] of [
+    ['remote-playpause','playpause'],['remote-stop','stop'],['remote-next','next'],
+    ['remote-vol-down','volume-down'],['remote-vol-up','volume-up'],
+    ['remote-mute','mute'],['remote-view-smaller','view-smaller'],
+    ['remote-view-bigger','view-bigger'],['remote-medley','medley']
+  ])$(id).addEventListener('click',()=>control(action));
+  $('remote-fullscreen').addEventListener('click',async()=>{
+    try{
+      if(document.fullscreenElement)await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    }catch{report('เบราว์เซอร์มือถือนี้ไม่รองรับการเปิดเต็มจอ');}
+  });
+  document.addEventListener('fullscreenchange',()=>{
+    $('remote-fullscreen').textContent=document.fullscreenElement?'⛶ ออกจากเต็มจอ':'⛶ เต็มจอมือถือ';
+  });
   if(!hostId||!secret||!/^[a-z0-9_-]+$/i.test(hostId)||!/^[a-f0-9]{48}$/i.test(secret)){
-    report('ลิงก์ QR ไม่ถูกต้อง กรุณาสแกน QR ที่จอ X-Stage อีกครั้ง');return;
+    report('QR ไม่ถูกต้อง กรุณาสแกน QR ใหม่จากจอ X-Stage');return;
   }
-  if(typeof Peer!=='function'){report('โหลดการเชื่อมต่อรีโมทไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
-  report('กำลังเชื่อมต่อจอ X-Stage เพื่อส่งคำขอเพลง…');
+  if(typeof Peer!=='function'){report('โหลดระบบจับคู่ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
+  report('กำลังเชื่อมต่อรีโมท X-Stage…');
   try{
     peer=new Peer();
     peer.on('open',()=>{
       conn=peer.connect(hostId,{reliable:true,serialization:'json'});
       conn.on('open',()=>{
-        report('ตรวจสอบรหัส QR กับจอหลัก…');
+        report('กำลังยืนยัน QR กับจอหลัก…');
         conn.send({type:'hello',key:secret});
       });
-      conn.on('data',onMessage);
-      conn.on('close',()=>{connected=false;ready=false;controls.hidden=true;report('การเชื่อมต่อสิ้นสุด กรุณาสแกน QR ใหม่');});
-      conn.on('error',()=>{connected=false;controls.hidden=true;report('เชื่อมต่อจอหลักไม่สำเร็จ');});
+      conn.on('data',handleMessage);
+      conn.on('close',()=>{
+        connected=false;ready=false;controls.hidden=true;
+        report('ขาดการเชื่อมต่อ · สแกน QR อีกครั้ง');
+      });
+      conn.on('error',()=>report('เชื่อมต่อกับเวทีไม่ได้'));
     });
-    peer.on('error',err=>report('เชื่อมต่อไม่ได้: '+String(err?.type||'เครือข่ายไม่พร้อม')));
-  }catch{report('เริ่มระบบขอเพลงไม่สำเร็จ');}
+    peer.on('error',err=>report('เครือข่ายไม่พร้อม: '+String(err?.type||'ไม่ทราบสาเหตุ')));
+  }catch{report('เริ่มระบบรีโมทไม่สำเร็จ');}
   window.addEventListener('beforeunload',()=>{try{conn?.close();peer?.destroy();}catch{}});
 })();
