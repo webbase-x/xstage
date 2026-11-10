@@ -243,8 +243,88 @@ function eqFreqLabel(f){
   return (Number.isInteger(value)?String(value):String(Number(value.toFixed(2))))+'k';
 }
 function eqBandColor(f){return f<80?'#ff3b30':f<250?'#ff8a00':f<630?'#ffd400':f<1600?'#62e33c':f<4000?'#22d3a7':f<10000?'#18b7ff':'#755bff';}
+
+/* Live stage branding reuses the existing post-EQ analyser. No duplicate AudioContext/source. */
+let stageVizFrame=0,stageVizLastSingerPost=0;
+const stageVizSmooth=Array(28).fill(0);
+function stageVizPalette(theme=brandThemePrefs.main){
+  if(theme==='modern-concert')return {top:'#fff0a6',mid:'#ffad4d',bottom:'#ff4f91',wave:'#ffd06b',glow:'rgba(255,92,145,.58)'};
+  if(theme==='futuristic-audio-tech')return {top:'#d5fff9',mid:'#4fffe0',bottom:'#38aaff',wave:'#71ffe9',glow:'rgba(67,246,224,.58)'};
+  return {top:'#c8ffff',mid:'#42d8ff',bottom:'#825dff',wave:'#72efff',glow:'rgba(72,211,255,.58)'};
+}
+function resizeStageVizCanvas(canvas){
+  if(!canvas)return null;
+  const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);
+  const w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  return {w,h};
+}
+function stageFrequencyLevels(bins){
+  const sr=eqContext?.sampleRate||48000,ny=sr/2,lowHz=38,highHz=Math.min(16000,ny*.92),levels=[];
+  for(let i=0;i<stageVizSmooth.length;i++){
+    const f0=lowHz*Math.pow(highHz/lowHz,i/stageVizSmooth.length);
+    const f1=lowHz*Math.pow(highHz/lowHz,(i+1)/stageVizSmooth.length);
+    const from=Math.max(1,Math.floor(f0/ny*bins.length)),to=Math.max(from+1,Math.min(bins.length,Math.ceil(f1/ny*bins.length)));
+    let sum=0,peak=0,count=0;
+    for(let b=from;b<to;b++){const v=bins[b]/255;sum+=v*v;peak=Math.max(peak,v);count++;}
+    const raw=Math.min(1,Math.sqrt(sum/Math.max(1,count))*.82+peak*.35);
+    const previous=stageVizSmooth[i]||0;
+    const level=raw>=previous?previous*.25+raw*.75:previous*.84+raw*.16;
+    stageVizSmooth[i]=level;levels.push(level);
+  }
+  return levels;
+}
+function paintStageBars(canvas,levels,palette,mirror=false){
+  const size=resizeStageVizCanvas(canvas);if(!size)return;
+  const ctx=canvas.getContext('2d'),{w,h}=size;ctx.clearRect(0,0,w,h);
+  const count=levels.length,gap=Math.max(2,w*.012),barW=Math.max(2,(w-gap*(count-1))/count);
+  for(let i=0;i<count;i++){
+    const source=mirror?count-1-i:i,level=Math.max(.025,levels[source]||0);
+    const bh=Math.max(2,level*h*.96),x=i*(barW+gap),y=h-bh;
+    const gradient=ctx.createLinearGradient(0,y,0,h);
+    gradient.addColorStop(0,palette.top);gradient.addColorStop(.48,palette.mid);gradient.addColorStop(1,palette.bottom);
+    ctx.globalAlpha=.28+.72*level;ctx.fillStyle=gradient;ctx.shadowBlur=level>0.28?10:4;ctx.shadowColor=palette.glow;
+    const radius=Math.min(barW*.48,5);
+    ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,barW,bh,radius):ctx.rect(x,y,barW,bh);ctx.fill();
+  }
+  ctx.globalAlpha=1;ctx.shadowBlur=0;
+}
+function sampledStageWave(timeData,count=72){
+  const out=[],step=Math.max(1,Math.floor(timeData.length/count));
+  for(let i=0;i<count;i++)out.push(((timeData[Math.min(timeData.length-1,i*step)]||128)-128)/128);
+  return out;
+}
+function paintStageWave(canvas,wave,palette){
+  const size=resizeStageVizCanvas(canvas);if(!size)return;
+  const ctx=canvas.getContext('2d'),{w,h}=size;ctx.clearRect(0,0,w,h);
+  const mid=h/2,amp=h*.38;ctx.lineWidth=Math.max(2,h*.065);ctx.strokeStyle=palette.wave;ctx.shadowBlur=12;ctx.shadowColor=palette.glow;
+  ctx.beginPath();wave.forEach((v,i)=>{const x=(i/Math.max(1,wave.length-1))*w,y=mid+v*amp;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();
+  ctx.globalAlpha=.35;ctx.lineWidth=Math.max(1,h*.025);ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke();ctx.globalAlpha=1;ctx.shadowBlur=0;
+}
+function drawStageBrandVisualizer(now=performance.now()){
+  if(!eqAnalyser||!eqContext){stageVizFrame=0;return;}
+  const bins=new Uint8Array(eqAnalyser.frequencyBinCount),timeData=new Uint8Array(eqAnalyser.fftSize);
+  eqAnalyser.getByteFrequencyData(bins);eqAnalyser.getByteTimeDomainData(timeData);
+  const levels=stageFrequencyLevels(bins),wave=sampledStageWave(timeData);
+  const energy=levels.reduce((a,b)=>a+b,0)/Math.max(1,levels.length);
+  const bass=levels.slice(0,7).reduce((a,b)=>a+b,0)/7;
+  ui.stage.style.setProperty('--xstage-viz-energy',energy.toFixed(3));
+  ui.stage.style.setProperty('--xstage-viz-bass',bass.toFixed(3));
+  const palette=stageVizPalette();
+  paintStageBars($pc('stage-viz-left'),levels,palette,false);
+  paintStageBars($pc('stage-viz-right'),levels,palette,true);
+  paintStageWave($pc('stage-viz-wave'),wave,palette);
+  if(screen&&!screen.closed&&now-stageVizLastSingerPost>66){
+    stageVizLastSingerPost=now;
+    try{screen.postMessage({type:'xstage-brand-viz',levels:levels.map(v=>Math.round(v*1000)/1000),wave:wave.map(v=>Math.round(v*1000)/1000),energy,bass},location.origin);}catch{}
+  }
+  stageVizFrame=requestAnimationFrame(drawStageBrandVisualizer);
+}
+function startStageBrandVisualizer(){
+  if(!stageVizFrame&&eqAnalyser)stageVizFrame=requestAnimationFrame(drawStageBrandVisualizer);
+}
 function ensureEqAudio(){
- if(eqContext)return true;
+ if(eqContext){startStageBrandVisualizer();return true;}
  const C=window.AudioContext||window.webkitAudioContext;if(!C){setPlayStatus('Web Audio API ไม่รองรับ EQ 31 Band');return false;}
  eqContext=new C();eqSource=eqContext.createMediaElementSource(audio);
  eqContext.addEventListener?.('statechange',()=>{
@@ -259,11 +339,11 @@ function ensureEqAudio(){
  eqLeft=eqContext.createAnalyser();eqRight=eqContext.createAnalyser();eqLeft.fftSize=512;eqRight.fftSize=512;
  const splitter=eqContext.createChannelSplitter(2);eqMeterSink=eqContext.createGain();eqMeterSink.gain.value=0;
  let node=eqSource;for(const filter of eqNodes){node.connect(filter);node=filter;}node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination);eqAnalyser.connect(splitter);splitter.connect(eqLeft,0);splitter.connect(eqRight,1);eqLeft.connect(eqMeterSink);eqRight.connect(eqMeterSink);eqMeterSink.connect(eqContext.destination);
- applyEqGains(false);return true;
+ applyEqGains(false);startStageBrandVisualizer();return true;
 }
 
 window.XStageResumeAudioGraph=async function(){
-  if(!eqContext)return true;
+  if(!eqContext&&!ensureEqAudio())return false;
   if(eqContext.state==='running')return true;
   try{await eqContext.resume();return eqContext.state==='running';}
   catch{return false;}
