@@ -1,7 +1,12 @@
 {
-  "name": "ai-thai-browser",
+  "name": "xstage-karaoke-online",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.33",
   "type": "module",
-  "engines": { "node": ">=20" }
+  "scripts": {
+    "test": "node scripts/regression.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }
