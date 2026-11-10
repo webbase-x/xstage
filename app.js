@@ -47,6 +47,20 @@ async function catalogStorage(action,key,value){
     tx.onerror=()=>reject(tx.error);
   });}finally{db.close();}
 }
+async function loadLatestCachedCatalog(sub){
+  if(!sub)return null;
+  try{
+    const saved=await catalogStorage('get',sub);
+    const catalog=saved?.catalog;
+    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    return {
+      catalog,
+      generation:String(saved.generation||''),
+      catalogFileId:String(saved.catalogFileId||''),
+      deltaFileIds:Array.isArray(saved.deltaFileIds)?saved.deltaFileIds:[]
+    };
+  }catch{return null;}
+}
 async function loadCachedCatalog(sub,pointer){
   if(!sub||!pointer?.generation)return null;
   try{
@@ -348,55 +362,96 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   if (expectedSub && account.sub!==expectedSub) throw Error('บัญชี Google ไม่ตรงกับเซสชันเดิม กรุณาเข้าสู่ระบบอีกครั้ง');
   if (authId !== state.authId) return;
 
-  // Authentication is complete. Leave the login gate immediately; catalog work is a separate phase.
-  ui.account.textContent = account.email || 'Google';
-  ui.account.hidden = false;
-  ui.logout.hidden = false;
-  ui.login.hidden = true;
-  ui.gate.hidden = true;
-  ui.search.disabled = true;
-  ui.libraryState.textContent = 'เข้าสู่ระบบแล้ว · กำลังเตรียมฐานเพลง';
-  ui.songTotal.textContent = 'กำลังโหลด…';
-  ui.resultCount.textContent = 'กำลังค้นหาคลังเพลง';
-  showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังค้นหาคลัง XStageWeb ใน Google Drive…');
-  setStatus('เข้าสู่ระบบสำเร็จ · กำลังเตรียมฐานเพลง…','success');
-
-  const roots = await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
-  if (authId !== state.authId) return;
-  if (roots.length !== 1) throw Error(roots.length ? 'พบโฟลเดอร์ XStageWeb ซ้ำ กรุณาตรวจใน Drive' : 'ไม่พบโฟลเดอร์ XStageWeb กรุณาซิงก์เพลงจาก X-Stage บน Windows ก่อน');
-  ui.resultCount.textContent='กำลังตรวจข้อมูลฐานเพลง';
-  showCatalogLoading('พบคลัง XStageWeb','กำลังตรวจ current.json และรุ่นฐานเพลงล่าสุด…');
-  const pointers = await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
-  if (pointers.length !== 1) throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
-  const pointer = await privateJson(pointers[0].id, token);
-  setStatus('เข้าสู่ระบบแล้ว · กำลังตรวจรุ่นฐานเพลงล่าสุด…','success');
-  const cached=await loadCachedCatalog(account.sub,pointer);
-  if(cached){
-    showCatalogLoading('พบฐานเพลงในเครื่อง','กำลังเปิดฐานเพลงแคชล่าสุด…');
-  }else{
-    showCatalogLoading('กำลังโหลดฐานเพลง','ไม่ใช่อาการค้าง · กำลังดาวน์โหลดฐานเพลงล่าสุดจาก Google Drive…');
-  }
-  const catalog=cached||await readPublishedCatalog(pointer,token);
-  if(authId!==state.authId)return;
-  if(!cached)void saveCachedCatalog(account.sub,pointer,catalog);
-  state.token = token;
-  state.tokenExpiresAt = tokenExpiresAt;
-  state.accountSub = account.sub;
+  // Authentication is complete. Activate the account immediately.
+  state.token=token;
+  state.tokenExpiresAt=tokenExpiresAt;
+  state.accountSub=account.sub;
   rememberLogin(true);
   saveActiveAuth(token,tokenExpiresAt,account.sub);
   clearPendingAuth();
-  state.manifest = catalog;
-  state.catalogPointerId=pointers[0].id;
-  state.catalogGeneration=String(pointer.generation||'');
-  state.songs = catalog.songs.filter(playable);
-  state.selectedIndex = 0;
-  ui.search.disabled = false;
-  ui.libraryState.textContent = 'เข้าถึงเฉพาะคลังส่วนตัวของบัญชีที่ลงชื่อเข้าใช้';
-  ui.songTotal.textContent = `${num(state.songs.length)} เพลง`;
-  hideCatalogLoading();
-  setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลงในคลังส่วนตัว${cached?' (ฐานเพลงแคชล่าสุด)':' (ดาวน์โหลดฐานเพลงล่าสุด)'}`, 'success');
-  renderSongs(); renderQueue();
-  ui.search.focus();
+  ui.account.textContent=account.email||'Google';
+  ui.account.hidden=false;
+  ui.logout.hidden=false;
+  ui.login.hidden=true;
+  ui.gate.hidden=true;
+  ui.search.disabled=true;
+  ui.libraryState.textContent='เข้าสู่ระบบแล้ว · กำลังเปิดฐานเพลงในเครื่อง';
+  ui.songTotal.textContent='กำลังโหลด…';
+  ui.resultCount.textContent='กำลังเปิดฐานเพลง';
+  showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังเปิดฐานเพลงในเครื่อง…');
+
+  // Stale-while-revalidate: use the last verified local catalog before any Drive discovery.
+  const instant=await loadLatestCachedCatalog(account.sub);
+  if(authId!==state.authId)return;
+  if(instant){
+    state.manifest=instant.catalog;
+    state.catalogGeneration=instant.generation;
+    state.songs=instant.catalog.songs.filter(playable);
+    state.selectedIndex=0;
+    ui.search.disabled=false;
+    ui.libraryState.textContent='ฐานเพลงในเครื่องพร้อมใช้ · กำลังตรวจอัปเดตเบื้องหลัง';
+    ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
+    ui.resultCount.textContent='พิมพ์เพื่อค้นหาเพลง';
+    hideCatalogLoading();
+    renderSongs();renderQueue();
+    setStatus(`พร้อมใช้งานทันที · ${num(state.songs.length)} เพลงจากฐานในเครื่อง · กำลังตรวจอัปเดตเบื้องหลัง`,'success');
+    ui.search.focus();
+  }else{
+    showCatalogLoading('เข้าสู่ระบบสำเร็จ','ยังไม่มีฐานในเครื่อง · กำลังค้นหาคลัง XStageWeb…');
+    setStatus('เข้าสู่ระบบสำเร็จ · กำลังดาวน์โหลดฐานเพลงครั้งแรก…','success');
+  }
+
+  try{
+    const roots=await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+    if(authId!==state.authId)return;
+    if(roots.length!==1)throw Error(roots.length?'พบโฟลเดอร์ XStageWeb ซ้ำ กรุณาตรวจใน Drive':'ไม่พบโฟลเดอร์ XStageWeb กรุณาซิงก์เพลงจาก X-Stage บน Windows ก่อน');
+    const pointers=await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
+    if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
+    const pointer=await privateJson(pointers[0].id,token);
+    if(authId!==state.authId)return;
+
+    const sameAsInstant=!!instant&&
+      instant.generation===String(pointer.generation||'')&&
+      instant.catalogFileId===pointer.catalogFileId&&
+      JSON.stringify(instant.deltaFileIds||[])===JSON.stringify(pointer.deltaFileIds||[]);
+
+    let catalog=instant?.catalog||null;
+    let downloaded=false;
+    if(!sameAsInstant){
+      if(!instant)showCatalogLoading('กำลังโหลดฐานเพลง','กำลังดาวน์โหลดฐานเพลงล่าสุดจาก Google Drive…');
+      else setStatus(`กำลังอัปเดตฐานเพลงเบื้องหลัง · ยังใช้ ${num(state.songs.length)} เพลงเดิมได้ตามปกติ`);
+      catalog=await readPublishedCatalog(pointer,token);
+      downloaded=true;
+      if(authId!==state.authId)return;
+      void saveCachedCatalog(account.sub,pointer,catalog);
+    }
+
+    state.manifest=catalog;
+    state.catalogPointerId=pointers[0].id;
+    state.catalogGeneration=String(pointer.generation||'');
+    if(downloaded||!instant){
+      state.songs=catalog.songs.filter(playable);
+      state.selectedIndex=0;
+      ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
+      renderSongs();renderQueue();
+    }
+    ui.search.disabled=false;
+    ui.libraryState.textContent='เข้าถึงเฉพาะคลังส่วนตัวของบัญชีที่ลงชื่อเข้าใช้';
+    ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
+    hideCatalogLoading();
+    setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลงในคลังส่วนตัว${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
+    ui.search.focus();
+  }catch(error){
+    hideCatalogLoading();
+    if(instant&&state.token===token&&authId===state.authId){
+      // Local catalog stays usable when update checking is slow/offline/fails.
+      ui.search.disabled=false;
+      ui.libraryState.textContent='ใช้ฐานเพลงในเครื่อง · ตรวจอัปเดตภายหลัง';
+      setStatus(`พร้อมใช้งานจากฐานในเครื่อง · ตรวจอัปเดต Google Drive ไม่สำเร็จ: ${error.message}`,'success');
+      return;
+    }
+    throw error;
+  }
 }
 function login({automatic=false} = {}) {
   if(!navigator.onLine){setStatus('อุปกรณ์ออฟไลน์ · กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่','error');return;}
