@@ -308,8 +308,8 @@ function setSharedLibraryGate(active,message=''){
     ui.gate.hidden=false;
     ui.gateLogin.hidden=true;
     if(button)button.hidden=false;
-    if(copy)copy.textContent='บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงร่วมกัน กรุณาอนุญาตโฟลเดอร์ที่แชร์ให้ X-Stage หนึ่งครั้ง';
-    if(footnote)footnote.textContent='ใช้เฉพาะโฟลเดอร์ที่คุณเลือก · X-Stage ไม่ขอสิทธิ์อ่าน Google Drive ทั้งบัญชี';
+    if(copy)copy.textContent='บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงของผู้แชร์ กรุณาอนุญาต X-Stage ให้เปิดโฟลเดอร์นั้นหนึ่งครั้ง';
+    if(footnote)footnote.textContent='เล่นจาก Google Drive ของผู้แชร์โดยตรง · ไม่คัดลอกไฟล์ ไม่บันทึกเพลงลง Drive ของผู้รับ';
     if(message)ui.gateStatus.textContent=message;
   }else{
     if(button)button.hidden=true;
@@ -360,7 +360,7 @@ async function openSharedLibraryPicker(){
       .setDeveloperKey(key)
       .setAppId(appId)
       .setOrigin(location.origin)
-      .setTitle('เลือกโฟลเดอร์ XStageWeb ที่ได้รับแชร์')
+      .setTitle('ใช้ XStageWeb ของผู้แชร์โดยตรง · ไม่มีการคัดลอกไฟล์')
       .setCallback(async data=>{
         const action=data?.[google.picker.Response.ACTION];
         if(action===google.picker.Action.CANCEL){
@@ -554,7 +554,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       ui.songTotal.textContent='0 เพลง';
       ui.resultCount.textContent='รอเปิดคลังที่แชร์';
       ui.libraryState.textContent='บัญชี Google พร้อมแล้ว · ต้องอนุญาตโฟลเดอร์ที่แชร์ให้ X-Stage';
-      setStatus('เข้าสู่ระบบบัญชีผู้รับเชิญแล้ว · กรุณากด “เปิดคลังที่แชร์”','success');
+      setStatus('เข้าสู่ระบบบัญชีผู้รับเชิญแล้ว · กรุณากด “ใช้คลังเพลงจากผู้แชร์”','success');
       setSharedLibraryGate(true,'เข้าสู่ระบบสำเร็จ · เลือก XStageWeb ที่ได้รับแชร์');
       return;
     }
