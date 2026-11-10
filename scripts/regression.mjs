@@ -113,6 +113,9 @@ assert.ok(index.includes('id="stage-viz-left"'),'main stage must expose the left
 assert.ok(index.includes('id="stage-viz-right"'),'main stage must expose the right live visualizer canvas');
 assert.ok(index.includes('id="stage-viz-wave"'),'main stage must expose the center waveform canvas');
 assert.ok(index.includes('YOUR STAGE · YOUR MUSIC'),'redesigned X-Stage Online lockup must include the stage tagline');
+assert.ok(index.includes('<span class="stage-brand-stage">Stage</span>'),'main stage must display X-Stage in the correct case');
+assert.ok(index.includes('<div class="stage-brand-sub"><span>KARAOKE</span><i></i><span>ONLINE</span></div>'),'main stage brand must read X-Stage Karaoke Online in the correct order');
+assert.ok(singerStage.includes('<strong class="brand-title"><b>X</b>-Stage</strong><div class="brand-sub">KARAOKE · ONLINE</div>'),'singer screen brand must read X-Stage Karaoke Online in the correct order');
 assert.ok(pc.includes("['premium-neon','Premium Neon']"),'Premium Neon stage theme must exist');
 assert.ok(pc.includes("['modern-concert','Modern Concert']"),'Modern Concert stage theme must exist');
 assert.ok(pc.includes("['futuristic-audio-tech','Futuristic Audio Tech']"),'Futuristic Audio Tech stage theme must exist');
