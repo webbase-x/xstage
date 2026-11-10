@@ -6,7 +6,7 @@ on:
     paths:
       - ".github/workflows/build-xstage-pwa-icons.yml"
       - "scripts/build_xstage_icons.py"
-      - "assets/xstage-logo.jpg"
+      - "assets/xstage-app-icon.svg"
   workflow_dispatch:
 
 permissions:
@@ -25,14 +25,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install image tools
-        run: python -m pip install "Pillow>=10,<13"
-      - name: Generate X-Stage icons from the original logo
+        run: python -m pip install "Pillow>=10,<13" "CairoSVG>=2.7,<3"
+      - name: Generate X-Stage icons from the stage emblem
         run: python scripts/build_xstage_icons.py
       - name: Commit generated images
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/xstage-app-icon-192.png assets/xstage-app-icon-512.png assets/xstage-app-icon-maskable-512.png assets/xstage-apple-touch-icon.png
+          git add assets/xstage-favicon-32.png assets/xstage-app-icon-192.png assets/xstage-app-icon-512.png assets/xstage-app-icon-maskable-512.png assets/xstage-apple-touch-icon.png
           if ! git diff --cached --quiet; then
             git commit -m "build(pwa): update X-Stage Home Screen icons"
             git push
