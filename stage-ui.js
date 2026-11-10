@@ -51,6 +51,11 @@
   queueBtn.addEventListener('click',()=>$('mobile-queue-toggle')?.click());
   const stageToolsBtn=$('stage-tools-toggle');
   stageToolsBtn?.addEventListener('click',()=>{
+    if(window.matchMedia('(max-width:760px)').matches){
+      $('mobile-menu-toggle')?.click();
+      stageToolsBtn.setAttribute('aria-expanded',String($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true'));
+      return;
+    }
     const stageColumn=document.querySelector('.stage-column');
     if(!stageColumn)return;
     const willShow=!stageColumn.classList.contains('mobile-tools-expanded');
