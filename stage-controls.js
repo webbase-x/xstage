@@ -124,6 +124,30 @@
     if(e.key==='Escape'&&!keyboard.hidden)hideKeyboard();
   });
 
+  let remoteLibrariesPromise=null;
+  function loadRemoteScript(src,id,test){
+    if(test())return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      let script=document.getElementById(id);
+      if(script?.dataset.loaded==='1'&&test()){resolve();return;}
+      if(!script){
+        script=document.createElement('script');
+        script.id=id;script.src=src;script.async=true;document.head.append(script);
+      }
+      script.addEventListener('load',()=>{script.dataset.loaded='1';test()?resolve():reject(Error('ไลบรารีรีโมทไม่พร้อม'));},{once:true});
+      script.addEventListener('error',()=>reject(Error('โหลดระบบรีโมทไม่สำเร็จ')),{once:true});
+    });
+  }
+  async function ensureRemoteLibraries(){
+    if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
+    remoteLibrariesPromise ||= (async()=>{
+      await loadRemoteScript('https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js','xstage-qrcode',()=>typeof QRCode!=='undefined');
+    })();
+    try{await remoteLibrariesPromise;}
+    catch(error){remoteLibrariesPromise=null;throw error;}
+  }
+
   // Guests approve connection once on the host, then can search, enqueue,
   // and use a restricted player controller. No Google token or file URLs leave the host.
   const requestPanel=byId('remote-request-panel');
@@ -315,7 +339,10 @@
   }
   async function createSession(){
     clearPeerSession();
-    if(typeof Peer!=='function'){status('โหลดระบบเชื่อมต่อมือถือไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
+    status('กำลังเตรียมระบบรีโมท…');
+    try{await ensureRemoteLibraries();}
+    catch(error){status(error?.message||'โหลดระบบเชื่อมต่อมือถือไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
+    if(typeof Peer!=='function'||typeof QRCode==='undefined'){status('ระบบรีโมทยังไม่พร้อม กรุณาตรวจอินเทอร์เน็ต');return;}
     if(!window.crypto?.getRandomValues){status('เบราว์เซอร์ไม่รองรับการเชื่อมต่ออย่างปลอดภัย');return;}
     const active={peer:null,secret:randomSecret(),connections:new Map(),pending:null};
     session=active;qrEnd.textContent='เปลี่ยน QR';
