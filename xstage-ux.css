@@ -2186,3 +2186,19 @@ body.xstage-ui-v2 .stage .stage-search-slot .song-item{
   cursor:pointer;
   touch-action:manipulation
 }
+
+/* 1.0.11: keep X-Stage identity and karaoke lyrics in separate landscape zones. */
+@media(orientation:landscape){
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    top:18%!important;
+    transform:translate(-50%,-50%) scale(.46)!important;
+    opacity:.14!important;
+  }
+}
+@media(orientation:landscape) and (max-height:530px){
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    top:16%!important;
+    transform:translate(-50%,-50%) scale(.39)!important;
+    opacity:.12!important;
+  }
+}
