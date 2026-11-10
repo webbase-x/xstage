@@ -57,7 +57,7 @@ assert.ok(pc.includes("HISTORY_STORE='xstage-play-history-v1'"),'play history mu
 assert.ok(index.includes('id="library-select"'),'multi-library selector must exist');
 assert.ok(index.includes('id="gate-close"'),'login gate must be dismissible for stage preview');
 assert.ok(index.includes('property="og:title"'),'Open Graph title must exist');
-assert.ok(index.includes('src="assets/xstage-app-icon.svg?v=1047"'),'topbar must use the canonical stage emblem');
+assert.ok(index.includes(`src="assets/xstage-app-icon.svg?v=${version.build}"`),'topbar must use the canonical stage emblem at the current build');
 assert.ok(index.includes('assets/xstage-favicon-32.png'),'web favicon must use the stage-emblem icon set');
 assert.ok(!index.includes('xstage-logo.jpg'),'legacy photographic logo must not remain in the live page');
 assert.ok(iconSvg.includes('M18 18 78 78M78 18 18 78'),'canonical app icon must reuse the exact X geometry from the stage emblem');
