@@ -52,6 +52,14 @@
     $('mobile-menu-toggle')?.click();
     stageToolsBtn.setAttribute('aria-expanded',String($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true'));
   });
+  const mobileSpeed=$('mobile-speed-select');
+  function syncMobileSpeed(){if(mobileSpeed)mobileSpeed.value=String(ui.speed.value);}
+  mobileSpeed?.addEventListener('change',()=>{
+    ui.speed.value=String(mobileSpeed.value);
+    ui.speed.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  ui.speed?.addEventListener('change',syncMobileSpeed);
+  syncMobileSpeed();
   shuffle?.addEventListener('click',()=>$('pc-random')?.click());
   const medleyMenu=$('mobile-medley-toggle');
   function syncMedleyMenu(){
