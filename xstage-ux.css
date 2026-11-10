@@ -2397,3 +2397,102 @@ body.xstage-ui-v2 .share-library-dialog>small{
   }
   body.xstage-ui-v2 .share-library-actions{display:grid;grid-template-columns:1fr 1fr}
 }
+
+/* 1.0.28: responsive stage identity — size to the stage, never to the browser width alone. */
+body.xstage-ui-v2 .stage{
+  /* A real size container allows both portrait and landscape stage proportions. */
+  container-type:size;
+}
+body.xstage-ui-v2 .stage .stage-hero,
+body.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+  top:46%!important;
+  left:50%!important;
+  width:min(72cqw,670px)!important;
+  max-width:calc(100% - 32px)!important;
+  box-sizing:border-box;
+  padding:0 clamp(5px,1cqw,16px);
+  transform:translate(-50%,-50%)!important;
+  transform-origin:center center;
+  /* Keep the existing remote-controlled visual-size preference. */
+  scale:var(--xstage-visual-scale,1);
+}
+body.xstage-ui-v2 .stage-hero-emblem{
+  width:min(16cqw,20cqh,175px)!important;
+  height:min(16cqw,20cqh,175px)!important;
+  margin-bottom:clamp(-7px,-.6cqh,-2px)!important;
+}
+body.xstage-ui-v2 .stage-hero-x{
+  font-size:clamp(48px,min(18cqw,22cqh),210px)!important;
+}
+body.xstage-ui-v2 .stage-hero-mic{
+  width:clamp(20px,min(4cqw,6cqh),62px)!important;
+  height:clamp(29px,min(7cqw,10cqh),96px)!important;
+}
+body.xstage-ui-v2 .stage-hero-name{
+  max-width:100%;
+  font-size:clamp(28px,min(7.7cqw,12cqh),104px)!important;
+  letter-spacing:clamp(-3px,-.18cqw,-.5px)!important;
+}
+body.xstage-ui-v2 .stage-hero-karaoke{
+  box-sizing:border-box;
+  max-width:100%;
+  padding:2px clamp(8px,1.2cqw,22px) 3px!important;
+  font-size:clamp(15px,min(3.15cqw,5.5cqh),44px)!important;
+  letter-spacing:clamp(.06em,.18cqw,.2em)!important;
+  border-radius:clamp(7px,1.1cqw,16px)!important;
+  white-space:nowrap;
+}
+body.xstage-ui-v2 .stage-hero-online{
+  font-size:clamp(20px,min(4.2cqw,7.2cqh),62px)!important;
+}
+
+/* During playback the full logo becomes a modest sign below the toolbar.
+   The lyric canvas stays above it, with its bottom area reserved for lyrics. */
+body.xstage-ui-v2 .stage.playing .stage-hero{
+  top:calc(var(--xs-top) + 9px)!important;
+  left:50%!important;
+  width:min(48cqw,290px)!important;
+  max-width:calc(100% - 40px)!important;
+  padding:0 4px!important;
+  transform:translate(-50%,0)!important;
+  scale:1;
+  opacity:.58!important;
+}
+body.xstage-ui-v2 .stage.playing .stage-hero-emblem,
+body.xstage-ui-v2 .stage.playing .stage-hero-online{
+  display:none!important;
+}
+body.xstage-ui-v2 .stage.playing .stage-hero-name{
+  font-size:clamp(15px,min(2.3cqw,3.5cqh),27px)!important;
+  line-height:1.05;
+  letter-spacing:-.02em!important;
+}
+body.xstage-ui-v2 .stage.playing .stage-hero-karaoke{
+  font-size:clamp(10px,min(1.5cqw,2.2cqh),15px)!important;
+  letter-spacing:.14em!important;
+  padding:1px 8px 2px!important;
+  border-width:1px;
+  border-radius:7px!important;
+}
+@media (max-height:530px) and (orientation:landscape){
+  /* Very short TV/phone landscape areas: lyrics take absolute priority. */
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+    top:46%!important;
+  }
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-emblem,
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-online{
+    display:none!important;
+  }
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    display:none!important;
+  }
+}
+@media (max-height:370px) and (orientation:portrait){
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-emblem,
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-online{
+    display:none!important;
+  }
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    display:none!important;
+  }
+}
