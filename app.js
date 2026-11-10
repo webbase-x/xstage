@@ -959,7 +959,7 @@ async function playSong(song,{remember=true,preloaded=null}={}) {
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
-  state.loading=true;updateTransport();setPlayStatus('กำลังโหลดเพลงและเนื้อร้องจาก Drive ส่วนตัว…');
+  state.loading=true;updateTransport();setPlayStatus('');
   try {
     const prepared=(preloaded?.song===song&&preloaded.token===token?preloaded
       :state.queuePrepared?.song===song&&state.queuePrepared.token===token
@@ -990,6 +990,9 @@ async function playSong(song,{remember=true,preloaded=null}={}) {
   finally{if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}}
 }
 function updateTransport(){
+  ui.stage.classList.toggle('loading',!!state.loading);
+  const musicLoader=document.getElementById('music-loader');
+  if(musicLoader)musicLoader.setAttribute('aria-hidden',String(!state.loading));
   ui.playPause.disabled=state.loading||(!state.current&&!state.queue.length&&!state.shown.length);
   ui.playPause.textContent=player.src&&!player.paused?'Ⅱ':'▶';
   ui.stop.disabled=!state.current&&!state.loading;
