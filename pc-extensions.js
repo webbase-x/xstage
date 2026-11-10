@@ -473,7 +473,7 @@ function openEq(target){
  eqPanel.classList.remove('is-minimized');
  if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';
  if(eqPreset==='auto')setEqPreset('auto',{save:false});else applyEqGains(false);
- applyEqVisibility();sendEqState();
+ applyEqVisibility();requestAnimationFrame(fitEqPanelToViewport);sendEqState();
 }
 $pc('pc-eq').onclick=()=>openEq(eqPanel.hidden?'main':undefined);
 eqDisplay?.addEventListener('change',()=>{eqDisplayTarget=eqDisplay.value;window.XStageUiPrefs?.save?.({eqDisplayTarget});applyEqVisibility();sendEqState();});
@@ -483,12 +483,24 @@ $pc('xstage-eq-expand')?.addEventListener('click',()=>{eqPanel.classList.toggle(
 $pc('xstage-eq-bypass')?.addEventListener('click',()=>{eqBypassed=!eqBypassed;applyEqGains();});
 $pc('xstage-eq-reset')?.addEventListener('click',()=>setEqPreset('flat'));
 eqPresetSelect?.addEventListener('change',()=>setEqPreset(eqPresetSelect.value));
+function fitEqPanelToViewport(){
+ if(!eqPanel||eqPanel.hidden||eqPanel.classList.contains('is-expanded'))return;
+ const pad=4,r=eqPanel.getBoundingClientRect(),maxW=Math.max(220,innerWidth-pad*2),maxH=Math.max(240,innerHeight-pad*2);
+ if(r.width>maxW)eqPanel.style.width=maxW+'px';
+ if(r.height>maxH)eqPanel.style.height=maxH+'px';
+ const next=eqPanel.getBoundingClientRect();
+ eqPanel.style.left=Math.max(pad,Math.min(innerWidth-next.width-pad,next.left))+'px';
+ eqPanel.style.top=Math.max(pad,Math.min(innerHeight-next.height-pad,next.top))+'px';
+ eqPanel.style.right='auto';eqPanel.style.bottom='auto';
+}
 (function makeEqDraggable(){
  const handle=eqPanel?.querySelector('[data-eq-drag]');if(!handle)return;let drag=null;
  handle.addEventListener('pointerdown',e=>{if(e.target.closest('button,select'))return;const r=eqPanel.getBoundingClientRect();drag={x:e.clientX-r.left,y:e.clientY-r.top};handle.setPointerCapture(e.pointerId);});
  handle.addEventListener('pointermove',e=>{if(!drag||eqPanel.classList.contains('is-expanded'))return;const left=Math.max(0,Math.min(innerWidth-eqPanel.offsetWidth,e.clientX-drag.x)),top=Math.max(0,Math.min(innerHeight-eqPanel.offsetHeight,e.clientY-drag.y));eqPanel.style.left=left+'px';eqPanel.style.top=top+'px';eqPanel.style.right='auto';eqPanel.style.bottom='auto';});
- handle.addEventListener('pointerup',()=>{if(!drag)return;window.XStageUiPrefs?.save?.({eqPosition:{left:eqPanel.style.left,top:eqPanel.style.top}});drag=null;});
+ handle.addEventListener('pointerup',()=>{if(!drag)return;fitEqPanelToViewport();window.XStageUiPrefs?.save?.({eqPosition:{left:eqPanel.style.left,top:eqPanel.style.top}});drag=null;});
  const pos=eqPrefs.eqPosition;if(pos?.left&&pos?.top){eqPanel.style.left=pos.left;eqPanel.style.top=pos.top;eqPanel.style.right='auto';eqPanel.style.bottom='auto';}
+ window.addEventListener('resize',fitEqPanelToViewport);
+ window.addEventListener('orientationchange',()=>setTimeout(fitEqPanelToViewport,80));
 })();
 audio.addEventListener('play',()=>{if(eqPreset==='auto'&&state.current){const id=songIdentity(state.current);if(id!==eqLastSong){eqLastSong=id;setEqPreset('auto',{save:false});}}});
 let lastRecordedHistorySong='';
