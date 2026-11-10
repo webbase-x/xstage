@@ -25,7 +25,8 @@ const state = {
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
-  playbackRestoreAttempted:false
+  playbackRestoreAttempted:false,
+  awaitingSharedLibrary:false
 };
 const CATALOG_DB_NAME='xstage-private-catalog-v1';
 const CATALOG_DB_STORE='catalogs';
@@ -298,6 +299,103 @@ async function privateJson(id, token, opts) {
   catch { throw Error('ไฟล์ JSON บน Drive ไม่ถูกต้อง'); }
 }
 
+function setSharedLibraryGate(active,message=''){
+  const button=$('gate-shared-library');
+  const copy=$('gate-copy');
+  const footnote=$('gate-footnote');
+  state.awaitingSharedLibrary=!!active;
+  if(active){
+    ui.gate.hidden=false;
+    ui.gateLogin.hidden=true;
+    if(button)button.hidden=false;
+    if(copy)copy.textContent='บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงร่วมกัน กรุณาอนุญาตโฟลเดอร์ที่แชร์ให้ X-Stage หนึ่งครั้ง';
+    if(footnote)footnote.textContent='ใช้เฉพาะโฟลเดอร์ที่คุณเลือก · X-Stage ไม่ขอสิทธิ์อ่าน Google Drive ทั้งบัญชี';
+    if(message)ui.gateStatus.textContent=message;
+  }else{
+    if(button)button.hidden=true;
+    ui.gateLogin.hidden=false;
+    if(copy)copy.textContent='เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้';
+    if(footnote)footnote.textContent='ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น';
+  }
+}
+function loadGooglePickerApi(){
+  return new Promise((resolve,reject)=>{
+    if(window.google?.picker){resolve();return;}
+    if(typeof window.gapi==='undefined'){reject(Error('Google Picker ยังโหลดไม่พร้อม กรุณาลองอีกครั้ง'));return;}
+    let done=false;
+    const timer=setTimeout(()=>{if(!done){done=true;reject(Error('Google Picker ใช้เวลานานเกินไป กรุณาลองอีกครั้ง'));}},8000);
+    try{
+      gapi.load('picker',()=>{
+        if(done)return;
+        done=true;clearTimeout(timer);
+        if(window.google?.picker)resolve();
+        else reject(Error('ไม่สามารถเปิด Google Picker ได้'));
+      });
+    }catch(error){
+      if(!done){done=true;clearTimeout(timer);reject(error);}
+    }
+  });
+}
+async function openSharedLibraryPicker(){
+  if(!state.token){setSharedLibraryGate(true,'กรุณาเข้าสู่ระบบด้วยอีเมลที่ได้รับเชิญก่อน');return;}
+  const key=String(cfg.googlePickerApiKey||'').trim();
+  const appId=String(cfg.googleAppId||'').trim();
+  if(!key||!appId){
+    setSharedLibraryGate(true,'ระบบเลือกคลังที่แชร์ยังรอการตั้งค่า Google Picker API ของเจ้าของ X-Stage');
+    return;
+  }
+  ui.gateStatus.textContent='กำลังเปิดรายการโฟลเดอร์ที่แชร์…';
+  try{
+    await loadGooglePickerApi();
+    const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
+      .setIncludeFolders(true)
+      .setMimeTypes('application/vnd.google-apps.folder')
+      .setSelectFolderEnabled(true)
+      .setOwnedByMe(false)
+      .setQuery('XStageWeb')
+      .setMode(google.picker.DocsViewMode.LIST);
+    const picker=new google.picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(state.token)
+      .setDeveloperKey(key)
+      .setAppId(appId)
+      .setOrigin(location.origin)
+      .setTitle('เลือกโฟลเดอร์ XStageWeb ที่ได้รับแชร์')
+      .setCallback(async data=>{
+        const action=data?.[google.picker.Response.ACTION];
+        if(action===google.picker.Action.CANCEL){
+          ui.gateStatus.textContent='ยังไม่ได้เลือกคลังที่แชร์';
+          return;
+        }
+        if(action!==google.picker.Action.PICKED)return;
+        const doc=data?.[google.picker.Response.DOCUMENTS]?.[0];
+        const id=String(doc?.[google.picker.Document.ID]||'');
+        const name=String(doc?.[google.picker.Document.NAME]||'');
+        if(!id){
+          ui.gateStatus.textContent='ไม่ได้รับรหัสโฟลเดอร์จาก Google Picker';
+          return;
+        }
+        if(name&&name!=='XStageWeb'){
+          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ชื่อ XStageWeb ที่เจ้าของแชร์ให้';
+          return;
+        }
+        ui.gateStatus.textContent='อนุญาตคลังที่แชร์แล้ว · กำลังเปิดเพลง…';
+        setSharedLibraryGate(false);
+        const idNow=state.authId;
+        try{
+          await openDrive(state.token,idNow,state.tokenExpiresAt,state.accountSub);
+        }catch(error){
+          setSharedLibraryGate(true,error?.message||'ยังเปิดคลังที่แชร์ไม่ได้ กรุณาเลือก XStageWeb อีกครั้ง');
+        }
+      })
+      .build();
+    picker.setVisible(true);
+  }catch(error){
+    setSharedLibraryGate(true,error?.message||'ไม่สามารถเปิด Google Picker ได้');
+  }
+}
+$('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
+
 // The Windows sync publisher switches current.json after each verified batch.
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
@@ -447,7 +545,20 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     const roots=await driveList("name='XStageWeb' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
-    if(!roots.length)throw Error('ไม่พบโฟลเดอร์ XStageWeb ในบัญชีนี้หรือในรายการที่แชร์ให้บัญชีนี้');
+    if(!roots.length){
+      if(instant){
+        ui.libraryState.textContent='ใช้ฐานเพลงในเครื่อง · ยังไม่ได้อนุญาตคลังที่แชร์บนอุปกรณ์นี้';
+        return;
+      }
+      hideCatalogLoading();
+      ui.songTotal.textContent='0 เพลง';
+      ui.resultCount.textContent='รอเปิดคลังที่แชร์';
+      ui.libraryState.textContent='บัญชี Google พร้อมแล้ว · ต้องอนุญาตโฟลเดอร์ที่แชร์ให้ X-Stage';
+      setStatus('เข้าสู่ระบบบัญชีผู้รับเชิญแล้ว · กรุณากด “เปิดคลังที่แชร์”','success');
+      setSharedLibraryGate(true,'เข้าสู่ระบบสำเร็จ · เลือก XStageWeb ที่ได้รับแชร์');
+      return;
+    }
+    setSharedLibraryGate(false);
     const ownedRoots=roots.filter(item=>item.ownedByMe);
     const sharedRoots=roots.filter(item=>!item.ownedByMe).sort((a,b)=>String(b.sharedWithMeTime||'').localeCompare(String(a.sharedWithMeTime||'')));
     const root=ownedRoots[0]||sharedRoots[0]||roots[0];
@@ -557,6 +668,11 @@ function login({automatic=false} = {}) {
         try { await openDrive(result.access_token,authId,expiresAt); }
         catch (e) {
           if (authId === state.authId) {
+            if(state.awaitingSharedLibrary){
+              hideCatalogLoading();
+              setStatus('เข้าสู่ระบบบัญชีผู้รับเชิญแล้ว · กรุณาเปิดคลังที่แชร์','success');
+              return;
+            }
             clearActiveAuth();resetPrivate({keepAuth:true});
             if(!/เชื่อมต่อไม่สำเร็จ|ใช้เวลานาน|อินเทอร์เน็ต/.test(String(e.message||'')))clearPendingAuth();
             setStatus(e.message, 'error');
@@ -592,6 +708,8 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
   state.catalogPointerId='';state.catalogGeneration='';state.catalogCache.clear();
   state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';
+  state.awaitingSharedLibrary=false;
+  const sharedGate=$('gate-shared-library');if(sharedGate)sharedGate.hidden=true;
   releaseQueuePreload();
   state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
   state.medleyPoolSource=null;state.medleyPool=[];state.medleyRecent=[];state.userStopped=false;
