@@ -2392,6 +2392,7 @@ body.xstage-ui-v2 .stage{
   container-type:size;
 }
 body.xstage-ui-v2 .stage .stage-hero,
+body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
 body.xstage-ui-v2 .stage.playing .stage-hero{
   position:absolute!important;
   display:flex!important;
