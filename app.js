@@ -616,7 +616,7 @@ function savePlaybackResumeState(){
       songCode:String(state.current.code||''),
       songTitle:String(state.current.title||''),
       currentTime:Math.max(0,Number(player.currentTime)||0),
-      wasPlaying:!player.paused&&!state.userPaused&&!state.userStopped,
+      wasPlaying:!state.userPaused&&!state.userStopped&&(!player.paused||state.resumeAfterInterruption),
       queueKeys:state.queue.map(songIdentity)
     }));
   }catch{}
