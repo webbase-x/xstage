@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1021">
-  <link rel="stylesheet" href="xstage-ux.css?v=1021">
+  <link rel="stylesheet" href="style.css?v=1022">
+  <link rel="stylesheet" href="xstage-ux.css?v=1022">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -79,6 +79,7 @@
             <button type="button" data-cmd="stage">▣ จอร้องแยก</button>
             <button type="button" data-cmd="medley">♫ เมดเลย์</button>
             <button type="button" data-cmd="tools">⚙ เครื่องมือและตั้งค่า</button>
+            <button type="button" data-cmd="share">⇄ แชร์โฟลเดอร์เพลง</button>
             <button type="button" data-cmd="fullscreen">⛶ เต็มหน้าจอ</button>
           </div>
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
@@ -103,6 +104,7 @@
                 <button type="button" id="mobile-import-queue">⇣ นำเข้าคิวเพลง</button>
                 <button type="button" id="mobile-export-queue">⇡ ส่งออกคิวเพลง</button>
                 <button type="button" id="mobile-more-tools">⚒ เครื่องมือขั้นสูง / LRC / ไมโครโฟน</button>
+                <button type="button" id="mobile-share-library">⇄ แชร์โฟลเดอร์เพลง</button>
                 <button type="button" id="mobile-clear-cache">♻ เคลียร์แคช (คงล็อกอิน Google)</button>
               </div>
             </details>
@@ -182,7 +184,7 @@
               <button id="stage-tools-toggle" class="stage-tools-toggle" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เมนู" title="เมนู">☰ <span>เมนู</span></button>
             </div>
             <p id="play-status" class="play-status" role="status"></p>
-            <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button><button type="button" id="pc-install-app">⬇ ติดตั้งแอป</button></nav>
+            <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-share-library">⇄ แชร์โฟลเดอร์เพลง</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button><button type="button" id="pc-install-app">⬇ ติดตั้งแอป</button></nav>
           </div>
           <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
           <section id="xstage-eq-panel" class="xstage-eq-panel" hidden aria-label="EQ X-Stage Karaoke">
@@ -227,6 +229,24 @@
             <footer class="xstage-eq-footer"><span>±12 dB</span><span id="xstage-eq-song-style">AUTO: รอข้อมูลเพลง</span><span>RTA · L/R PEAK</span></footer>
           </section>
           <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog>
+          <dialog id="share-library-dialog" class="share-library-dialog" aria-labelledby="share-library-title">
+            <header><strong id="share-library-title">แชร์โฟลเดอร์เพลง X-Stage</strong><button id="share-library-close" type="button" aria-label="ปิด">✕</button></header>
+            <div class="share-library-warning">
+              <strong>คำเตือนเรื่องลิขสิทธิ์</strong>
+              <p>แชร์เฉพาะเพลงที่คุณมีสิทธิ์ครอบครอง ใช้งาน หรือได้รับอนุญาตให้แบ่งปันเท่านั้น เจ้าของบัญชีผู้แชร์เป็นผู้รับผิดชอบต่อสิทธิ์ในไฟล์ที่แชร์</p>
+              <p>ผู้รับจะได้รับสิทธิ์ดูและเล่นไฟล์ในโฟลเดอร์ XStageWeb แบบอ่านอย่างเดียว ไม่สามารถแก้ไขหรือลบไฟล์ของเจ้าของผ่าน X-Stage ได้</p>
+            </div>
+            <label class="share-library-email">อีเมล Google ของผู้รับ
+              <input id="share-library-email" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com">
+            </label>
+            <label class="share-library-ack"><input id="share-library-ack" type="checkbox"> ฉันยืนยันว่ามีสิทธิ์แชร์ไฟล์เหล่านี้ และรับผิดชอบเรื่องลิขสิทธิ์ของไฟล์ที่แชร์</label>
+            <div id="share-library-status" class="share-library-status" role="status" aria-live="polite"></div>
+            <div class="share-library-actions">
+              <button id="share-library-cancel" type="button">ยกเลิก</button>
+              <button id="share-library-submit" type="button" disabled>แชร์แบบอ่านอย่างเดียว</button>
+            </div>
+            <small>ผู้รับต้องเข้า X-Stage ด้วยบัญชี Google อีเมลเดียวกับที่ระบุไว้ข้างต้น</small>
+          </dialog>
           <div id="gate" class="login-gate"><div class="gate-panel"><span class="gate-glow">✦ PRIVATE STAGE</span><h1>เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p>เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><div id="gate-auth-status" class="gate-auth-status" role="status" aria-live="polite">พร้อมเชื่อมต่อ Google</div><small>ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small></div></div>
           <div id="catalog-loading" class="catalog-loading" hidden role="status" aria-live="polite">
             <span class="catalog-spinner" aria-hidden="true"></span>
@@ -252,13 +272,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=1021" defer></script><script src="pc-extensions.js?v=1021" defer></script>
+  <script src="app.js?v=1022" defer></script><script src="pc-extensions.js?v=1022" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=1021" defer></script>
-  <script src="mobile-layout.js?v=1021" defer></script>
-  <script src="pwa-install.js?v=1021" defer></script>
+  <script src="stage-controls.js?v=1022" defer></script>
+  <script src="mobile-layout.js?v=1022" defer></script>
+  <script src="pwa-install.js?v=1022" defer></script>
 
-  <script src="stage-ui.js?v=1021" defer></script>
+  <script src="stage-ui.js?v=1022" defer></script>
 </body>
 </html>
