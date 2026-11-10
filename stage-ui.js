@@ -188,8 +188,10 @@
     if(!dialog||!title||!body)return;
     title.textContent='เกี่ยวกับ X-Stage Karaoke Online';
     body.replaceChildren();
+    const release=window.XSTAGE_RELEASE||{version:'-',build:'-'};
     for(const description of [
-      'X-Stage Karaoke Online — เว็บแอปคาราโอเกะสำหรับคลังเพลง Google Drive ส่วนตัว',
+      'X-Stage Karaoke Online · Web '+release.version+' · Build '+release.build,
+      'เว็บแอปคาราโอเกะสำหรับคลังเพลง Google Drive ส่วนตัว',
       'ค้นหาเพลงแบบเรียลไทม์ด้วยรหัส ชื่อเพลง หรือศิลปิน · จัดคิว · แป้นพิมพ์บนเวที · รีโมทมือถือผ่าน QR',
       'ไฟล์เพลงและข้อมูล Google OAuth ไม่ได้ถูกเผยแพร่ใน GitHub Pages หรือส่งไปยังรีโมทมือถือ'
     ]){
