@@ -3147,10 +3147,9 @@ body.xstage-ui-v2 .xstage-eq-panel.is-expanded{
 }
 @media(max-width:900px),(max-height:620px){
   body.xstage-ui-v2 .xstage-eq-panel:not(.is-minimized):not(.is-expanded){
-    left:max(4px,env(safe-area-inset-left))!important;
-    top:max(4px,env(safe-area-inset-top))!important;
-    width:calc(100dvw - max(8px,env(safe-area-inset-left) + env(safe-area-inset-right)))!important;
-    height:calc(100dvh - max(8px,env(safe-area-inset-top) + env(safe-area-inset-bottom)))!important;
+    inset:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left))!important;
+    width:auto!important;
+    height:auto!important;
     max-width:none!important;
     max-height:none!important;
     resize:none!important;
