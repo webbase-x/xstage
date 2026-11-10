@@ -11,7 +11,7 @@ const ui = {
   search: $('search'), voiceSearch:$('voice-search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
   nowPlaying: $('now-playing'), nowArtist: $('now-artist'), playStatus: $('play-status'),
-  playPause: $('play-pause'), stop: $('stop'), cancelCurrent:$('cancel-current'), restartCurrent:$('restart-current'), previous: $('previous'), next: $('next'),
+  playPause: $('play-pause'), cancelCurrent:$('cancel-current'), restartCurrent:$('restart-current'), previous: $('previous'), next: $('next'),
   seek: $('seek'), elapsed: $('elapsed'), duration: $('duration'), speed: $('speed'), volume: $('volume'),
   repeat: $('repeat'), fullscreen: $('fullscreen'), lyrics: $('lyrics')
 };
@@ -1104,7 +1104,6 @@ function updateTransport(){
   if(musicLoader)musicLoader.setAttribute('aria-hidden',String(!state.loading));
   ui.playPause.disabled=state.loading||(!state.current&&!state.queue.length&&!state.shown.length);
   ui.playPause.textContent=player.src&&!player.paused?'Ⅱ':'▶';
-  ui.stop.disabled=!state.current&&!state.loading;
   ui.cancelCurrent.disabled=!state.current&&!state.loading;
   ui.restartCurrent.disabled=!state.current||state.loading;
   ui.previous.disabled=!state.history.length;
@@ -1442,7 +1441,6 @@ ui.search.addEventListener('blur',restoreViewportAfterKeyboard);
 
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
 ui.playPause.addEventListener('click',togglePlayback);
-ui.stop.addEventListener('click',stopSong);
 ui.cancelCurrent.addEventListener('click',cancelCurrentSong);
 ui.restartCurrent.addEventListener('click',restartCurrentSong);
 function playPrevious(){const old=state.history.pop();renderQueue();if(old)playSong(old,{remember:false});}
