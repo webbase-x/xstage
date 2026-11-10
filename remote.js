@@ -7,7 +7,7 @@
   const search=$('remote-search'),results=$('remote-results');
   const singer=$('remote-singer'),note=$('remote-note'),history=$('remote-request-history');
   const queueList=$('remote-queue-list'),queueCount=$('remote-queue-count');
-  const nowTitle=$('remote-now'),nowArtist=$('remote-now-artist');
+  const nowTitle=$('remote-now'),nowArtist=$('remote-now-artist'),nowTime=$('remote-now-time');
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
   const hostId=params.get('p'),secret=params.get('k');
   let peer=null,conn=null,connected=false,ready=false;
@@ -59,9 +59,18 @@
   function disconnected(message){
     connected=false;ready=false;controls.hidden=true;
     reconnectButton.hidden=!hostId||!secret;
-    scanLink.hidden=false;report(message);
+    scanLink.hidden=false;report(message,'disconnected');
   }
-  function report(message){status.textContent=message;}
+  function report(message,state='info'){
+    status.textContent=message;
+    status.dataset.state=state;
+  }
+  function timeLabel(value){
+    const n=Number(value);
+    if(!Number.isFinite(n)||n<0)return '--:--';
+    const total=Math.floor(n),h=Math.floor(total/3600),m=String(Math.floor(total/60)%60).padStart(2,'0'),sec=String(total%60).padStart(2,'0');
+    return h?String(h)+':'+m+':'+sec:m+':'+sec;
+  }
   function send(msg){if(connected&&conn?.open)try{conn.send(msg);}catch{}}
   function control(action){send({type:'control',action});}
   function setTab(tab){
@@ -135,18 +144,18 @@
   function handleMessage(data){
     if(!data||typeof data!=='object')return;
     if(data.type==='pending'){
-      report('กำลังรอเจ้าของเวทีอนุมัติการเชื่อมต่อครั้งแรก…');return;
+      report('กำลังรอเจ้าของเวทีอนุมัติการเชื่อมต่อครั้งแรก…','pending');return;
     }
     if(data.type==='ready'){
       connected=true;controls.hidden=false;
       reconnectButton.hidden=true;scanLink.hidden=true;
-      report('เชื่อมต่อแล้ว · ขอเพลงและควบคุมเวทีได้ ไม่ต้องล็อกอิน Google');
+      report('เชื่อมต่อแล้ว · ขอเพลงและควบคุมเวทีได้ ไม่ต้องล็อกอิน Google','connected');
       if(search.value.trim())search.dispatchEvent(new Event('input'));else drawResults([]);
       send({type:'refresh'});return;
     }
-    if(data.type==='error'){report(String(data.message||'เชื่อมต่อไม่ได้'));return;}
+    if(data.type==='error'){report(String(data.message||'เชื่อมต่อไม่ได้'),'error');return;}
     if(data.type==='fullscreen-notice'){
-      report(String(data.message||'ไม่สามารถเปิดเต็มจออัตโนมัติได้'));return;
+      report(String(data.message||'ไม่สามารถเปิดเต็มจออัตโนมัติได้'),'error');return;
     }
     if(!connected)return;
     if(data.type==='status'){
@@ -165,9 +174,11 @@
       document.querySelectorAll('.remote-request-button').forEach(b=>b.disabled=perms.request===false);
       nowTitle.textContent=String(data.now?.title||'ยังไม่ได้เลือกเพลง');
       nowArtist.textContent=String(data.now?.artist||'X-Stage Karaoke');
+      if(nowTime)nowTime.textContent=timeLabel(data.currentTime)+' / '+timeLabel(data.duration);
       drawQueue(data.queue,data.queueCount);
       $('remote-playpause').textContent=data.playing?'⏸ พัก':'▶ เล่น';
-      $('remote-volume-label').textContent=String(Math.round(Number(data.volume)||0))+'%';
+      const volumeText=String(Math.round(Number(data.volume)||0))+'%';
+      $('remote-volume-label').textContent=data.muted?'ปิดเสียง · '+volumeText:volumeText;
       const mute=$('remote-mute');
       mute.setAttribute('aria-pressed',String(!!data.muted));
       mute.textContent=data.muted?'🔇 เปิดเสียง':'🔊 ปิดเสียง';
@@ -180,7 +191,7 @@
       $('remote-fullscreen-on').disabled=full;
       $('remote-fullscreen-off').disabled=!full;
       if(!ready && !status.textContent.includes('ยังไม่พร้อม'))
-        report('เชื่อมต่อแล้ว · เจ้าของเวทีต้องเปิดคลัง Google Drive ก่อนขอเพลง');
+        report('เชื่อมต่อแล้ว · เจ้าของเวทีต้องเปิดคลัง Google Drive ก่อนขอเพลง','connected');
     }else if(data.type==='results'){
       if(data.notReady){report('จอหลักยังไม่ได้เปิดคลังเพลง');drawResults([]);return;}
       if(String(data.query||'')===search.value.trim().toLocaleLowerCase('th'))drawResults(data.items);
@@ -214,14 +225,14 @@
     report('ยังไม่มีรหัส QR · แตะ 📷 เพื่อสแกนจากจอหลัก');return;
   }
   if(typeof Peer!=='function'){report('โหลดระบบจับคู่ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
-  report('กำลังเชื่อมต่อรีโมท X-Stage…');
+  report('กำลังเชื่อมต่อรีโมท X-Stage…','connecting');
   function connect(){
     if(peer){try{peer.destroy();}catch{}}
     peer=new Peer();
     peer.on('open',()=>{
       conn=peer.connect(hostId,{reliable:true,serialization:'json'});
       conn.on('open',()=>{
-        report('กำลังยืนยัน QR กับจอหลัก…');
+        report('กำลังยืนยัน QR กับจอหลัก…','pending');
         conn.send({type:'hello',key:secret});
       });
       conn.on('data',handleMessage);
@@ -230,7 +241,7 @@
     });
     peer.on('error',err=>disconnected('เครือข่ายไม่พร้อม: '+String(err?.type||'ไม่ทราบสาเหตุ')));
   }
-  reconnectButton.addEventListener('click',()=>{try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่อ…');}catch{disconnected('เชื่อมต่อไม่สำเร็จ');}});
+  reconnectButton.addEventListener('click',()=>{try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่ออีกครั้ง…','reconnecting');}catch{disconnected('เชื่อมต่อไม่สำเร็จ');}});
   try{connect();}catch{disconnected('เริ่มระบบรีโมทไม่สำเร็จ');}
   window.addEventListener('beforeunload',()=>{try{conn?.close();peer?.destroy();}catch{}});
 })();
