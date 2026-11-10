@@ -581,13 +581,14 @@ async function pollPublishedCatalog(){
     const pointer=await privateJson(state.catalogPointerId,token);
     if(authId!==state.authId||state.token!==token||!pointer?.generation||
        pointer.generation===state.catalogGeneration)return;
-    const catalog=await readPublishedCatalog(pointer,token,{sub:state.accountSub});
+    const cacheOwner=libraryCacheOwner(state.accountSub,state.libraryRootId);
+    const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
     if(authId!==state.authId||state.token!==token)return;
     const countBefore=state.songs.length;
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);
     state.catalogGeneration=pointer.generation;
-    void saveCachedCatalog(state.accountSub,pointer,catalog);
+    void saveCachedCatalog(cacheOwner,pointer,catalog);
     state.medleyPoolSource=null;
     ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
     renderSongs();renderQueue();
@@ -600,6 +601,24 @@ async function pollPublishedCatalog(){
   }finally{state.catalogPolling=false;}
 }
 setInterval(pollPublishedCatalog,45000);
+
+function applyInstantCatalog(instant){
+  if(!instant)return false;
+  state.manifest=instant.catalog;
+  state.catalogGeneration=instant.generation;
+  state.songs=instant.catalog.songs.filter(playable);
+  state.selectedIndex=0;
+  ui.search.disabled=false;
+  ui.libraryState.textContent='ฐานเพลงในเครื่องพร้อมใช้ · กำลังตรวจอัปเดตเบื้องหลัง';
+  ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
+  ui.resultCount.textContent='พิมพ์เพื่อค้นหาเพลง';
+  hideCatalogLoading();
+  renderSongs();renderQueue();
+  setStatus(`พร้อมใช้งานทันที · ${num(state.songs.length)} เพลงจากฐานในเครื่อง · กำลังตรวจอัปเดตเบื้องหลัง`,'success');
+  void restorePlaybackAfterReload();
+  if(!readPlaybackResumeState())ui.search.focus();
+  return true;
+}
 
 async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   if(state.token && state.token!==token)state.catalogCache.clear();
@@ -629,24 +648,13 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   ui.resultCount.textContent='กำลังเปิดฐานเพลง';
   showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังตรวจฐานเพลงในเครื่อง…',6);
 
-  // Stale-while-revalidate: use the last verified local catalog before any Drive discovery.
-  const instant=await loadLatestCachedCatalog(account.sub);
+  // Use the last selected library's verified cache first. Legacy account-only
+  // cache remains a migration fallback until the first root-specific save.
+  const preferredRootId=readPreferredLibraryRoot(account.sub);
+  let instant=await loadLatestCachedCatalog(account.sub,preferredRootId);
+  if(!instant&&!preferredRootId)instant=await loadLatestCachedCatalog(account.sub);
   if(authId!==state.authId)return;
-  if(instant){
-    state.manifest=instant.catalog;
-    state.catalogGeneration=instant.generation;
-    state.songs=instant.catalog.songs.filter(playable);
-    state.selectedIndex=0;
-    ui.search.disabled=false;
-    ui.libraryState.textContent='ฐานเพลงในเครื่องพร้อมใช้ · กำลังตรวจอัปเดตเบื้องหลัง';
-    ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
-    ui.resultCount.textContent='พิมพ์เพื่อค้นหาเพลง';
-    hideCatalogLoading();
-    renderSongs();renderQueue();
-    setStatus(`พร้อมใช้งานทันที · ${num(state.songs.length)} เพลงจากฐานในเครื่อง · กำลังตรวจอัปเดตเบื้องหลัง`,'success');
-    void restorePlaybackAfterReload();
-    if(!readPlaybackResumeState())ui.search.focus();
-  }else{
+  if(!applyInstantCatalog(instant)){
     showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง XStageWeb…',12);
     setStatus('เข้าสู่ระบบสำเร็จ · กำลังดาวน์โหลดฐานเพลงครั้งแรก…','success');
   }
@@ -671,11 +679,24 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     setSharedLibraryGate(false);
     const ownedRoots=roots.filter(item=>item.ownedByMe);
     const sharedRoots=roots.filter(item=>!item.ownedByMe).sort((a,b)=>String(b.sharedWithMeTime||'').localeCompare(String(a.sharedWithMeTime||'')));
-    const root=ownedRoots[0]||sharedRoots[0]||roots[0];
+    const preferred=preferredRootId&&roots.find(item=>String(item.id)===preferredRootId);
+    const root=preferred||ownedRoots[0]||sharedRoots[0]||roots[0];
+    if(preferredRootId&&String(root.id)!==preferredRootId&&instant){
+      // Do not keep showing a cache for a library that is no longer accessible.
+      instant=null;
+      state.manifest=null;state.songs=[];state.shown=[];renderSongs();
+    }
     state.libraryRootId=root.id;
     state.libraryRootOwnedByMe=!!root.ownedByMe;
     state.libraryRootCanShare=!!root.capabilities?.canShare;
     state.libraryRootOwnerEmail=String(root.owners?.[0]?.emailAddress||'');
+    savePreferredLibraryRoot(account.sub,root.id);
+    renderLibrarySelector([...ownedRoots,...sharedRoots],root.id);
+    const cacheOwner=libraryCacheOwner(account.sub,root.id);
+    if(!instant){
+      const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
+      if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
+    }
     const pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
     if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
@@ -694,7 +715,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์ M4A',42);
       else setStatus(`กำลังอัปเดตฐานเพลงเบื้องหลัง · ยังใช้ ${num(state.songs.length)} เพลงเดิมได้ตามปกติ`);
       catalog=await readPublishedCatalog(pointer,token,{
-        sub:account.sub,
+        sub:cacheOwner,
         onProgress:info=>{
           if(instant)return;
           showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก',
@@ -706,9 +727,9 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       if(authId!==state.authId)return;
       if(!instant){
         showCatalogLoading('กำลังบันทึกฐานเพลง','จัดเก็บฐานไว้ในเครื่องสำหรับเปิดครั้งต่อไป…',96);
-        await saveCachedCatalog(account.sub,pointer,catalog);
+        await saveCachedCatalog(cacheOwner,pointer,catalog);
       }else{
-        void saveCachedCatalog(account.sub,pointer,catalog);
+        void saveCachedCatalog(cacheOwner,pointer,catalog);
       }
     }
 
@@ -728,7 +749,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
     if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
     hideCatalogLoading();
-    setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลงในคลังส่วนตัว${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
+    void saveCachedCatalog(cacheOwner,pointer,catalog);
+    setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลง · ${libraryLabel(root)}${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
     void restorePlaybackAfterReload();
     if(!readPlaybackResumeState())ui.search.focus();
   }catch(error){
