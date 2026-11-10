@@ -155,7 +155,7 @@
       $('remote-tab-control').hidden=!showControls;
       if(!showControls&&activeTab==='control')setTab('search');
       const perms=data.permissions||{};
-      for(const [id,key] of [['remote-playpause','playpause'],['remote-stop','stop'],['remote-next','next'],
+      for(const [id,key] of [['remote-playpause','playpause'],['remote-stop','cancel-current'],['remote-next','next'],
         ['remote-vol-down','volume-down'],['remote-vol-up','volume-up'],['remote-mute','mute'],
         ['remote-fullscreen-on','fullscreen-on'],['remote-fullscreen-off','fullscreen-off'],['remote-medley','medley']]){
         $(id).hidden=!showControls||perms[key]===false;
@@ -204,7 +204,7 @@
     searchTimer=setTimeout(()=>{if(n===querySequence)send({type:'search',query:term.slice(0,70)});},250);
   });
   for(const [id,action] of [
-    ['remote-playpause','playpause'],['remote-stop','stop'],['remote-next','next'],
+    ['remote-playpause','playpause'],['remote-stop','cancel-current'],['remote-next','next'],
     ['remote-vol-down','volume-down'],['remote-vol-up','volume-up'],
     ['remote-mute','mute'],['remote-fullscreen-on','fullscreen-on'],
     ['remote-fullscreen-off','fullscreen-off'],['remote-medley','medley']
