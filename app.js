@@ -623,6 +623,15 @@ function setLiveSearchExpanded(open){
   dock.classList.toggle('pc-expanded',!!open);
   ui.search.setAttribute('aria-expanded',String(!!open));
 }
+
+function clearSearchAfterChoice(){
+  ui.search.value='';
+  state.shown=[];
+  state.selectedIndex=0;
+  renderSongs();
+  setLiveSearchExpanded(false);
+  ui.search.focus();
+}
 function renderSongs() {
   ui.songs.replaceChildren();
   if (!state.token) {
@@ -662,10 +671,10 @@ function renderSongs() {
     renderMatchedText(artist,song.artist||'ไม่ระบุศิลปิน',term);
     details.append(code,title,artist);
     const add=element('button','song-add','+');add.type='button';add.title='เพิ่มเพลงเข้าคิว';add.setAttribute('aria-label','เพิ่มเพลง '+(song.title||'')+' เข้าคิว');
-    add.addEventListener('click',e=>{e.stopPropagation();selectSong(i,false);addToQueue(song);});
+    add.addEventListener('click',e=>{e.stopPropagation();selectSong(i,false);addToQueue(song);clearSearchAfterChoice();});
     row.append(details,add);
     row.addEventListener('click',()=>selectSong(i,false));
-    row.addEventListener('dblclick',()=>playSong(song));
+    row.addEventListener('dblclick',()=>{playSong(song);clearSearchAfterChoice();});
     fragment.append(row);
   });
   ui.songs.append(fragment);
@@ -981,7 +990,7 @@ function onSearchKey(e){
   else if(e.key==='ArrowUp'){e.preventDefault();if(state.shown.length)selectSong(Math.max(0,state.selectedIndex-1));}
   else if(e.key==='Enter'){e.preventDefault();const song=state.shown[state.selectedIndex];if(!song)return;
     if(state.current||state.loading)addToQueue(song);else playSong(song);
-    ui.search.value='';state.shown=[];state.selectedIndex=0;renderSongs();ui.search.focus();
+    clearSearchAfterChoice();
   }
 }
 
