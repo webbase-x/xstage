@@ -1,39 +1,50 @@
 #!/usr/bin/env python3
-"""Build brand-matched X-Stage PWA icons from the existing public X-Stage logo.
+"""Build all X-Stage web/app icons from the canonical stage emblem SVG.
 
-This script reads only assets/xstage-logo.jpg. It does not access user songs,
-Google Drive files, Google OAuth tokens, or private account content.
+The source is assets/xstage-app-icon.svg, which matches the X + microphone
+emblem used on the live karaoke stage. No user songs, Drive files, OAuth
+tokens, or account content are accessed.
 """
+from io import BytesIO
 from pathlib import Path
-from PIL import Image, ImageOps
+
+import cairosvg
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets"
-SOURCE = ASSETS / "xstage-logo.jpg"
+SOURCE = ASSETS / "xstage-app-icon.svg"
+BG = (7, 21, 37, 255)
 RESAMPLE = Image.Resampling.LANCZOS
 
-with Image.open(SOURCE) as image:
-    original = ImageOps.fit(image.convert("RGB"), (1600, 1600), method=RESAMPLE)
 
+def render_svg(size: int) -> Image.Image:
+    png = cairosvg.svg2png(url=str(SOURCE), output_width=size, output_height=size)
+    return Image.open(BytesIO(png)).convert("RGBA")
+
+
+# Browser favicon plus standard install/app icons.
+render_svg(32).save(ASSETS / "xstage-favicon-32.png", format="PNG", optimize=True)
 for size in (192, 512):
-    original.resize((size, size), RESAMPLE).save(
-        ASSETS / f"xstage-app-icon-{size}.png", format="PNG", optimize=True
-    )
+    render_svg(size).save(ASSETS / f"xstage-app-icon-{size}.png", format="PNG", optimize=True)
 
-# A dedicated maskable icon keeps the subject within the safe central region.
+# Maskable icon: keep the stage emblem inside the central safe region.
 mask_size = 512
-maskable = Image.new("RGB", (mask_size, mask_size), (5, 21, 33))
-subject_size = 284
-subject = original.resize((subject_size, subject_size), RESAMPLE)
-margin = (mask_size - subject_size) // 2
-maskable.paste(subject, (margin, margin))
-maskable.save(ASSETS / "xstage-app-icon-maskable-512.png", format="PNG", optimize=True)
+maskable = Image.new("RGBA", (mask_size, mask_size), BG)
+subject = render_svg(336).resize((336, 336), RESAMPLE)
+margin = (mask_size - 336) // 2
+maskable.alpha_composite(subject, (margin, margin))
+maskable.convert("RGB").save(
+    ASSETS / "xstage-app-icon-maskable-512.png", format="PNG", optimize=True
+)
 
-# Apple Home Screen icons need a dedicated high-resolution square image.
+# Apple Home Screen icon uses the same emblem at a near-full safe size.
 apple_size = 180
-apple = Image.new("RGB", (apple_size, apple_size), (5, 21, 33))
-apple_logo = original.resize((166, 166), RESAMPLE)
-apple.paste(apple_logo, (7, 7))
-apple.save(ASSETS / "xstage-apple-touch-icon.png", format="PNG", optimize=True)
+apple = Image.new("RGBA", (apple_size, apple_size), BG)
+apple_logo = render_svg(168).resize((168, 168), RESAMPLE)
+apple.alpha_composite(apple_logo, (6, 6))
+apple.convert("RGB").save(
+    ASSETS / "xstage-apple-touch-icon.png", format="PNG", optimize=True
+)
 
-print("Generated X-Stage PWA icons: 192, 512, maskable 512, Apple 180.")
+print("Generated X-Stage stage-emblem icons: favicon 32, app 192/512, maskable 512, Apple 180.")
