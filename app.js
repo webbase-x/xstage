@@ -6,7 +6,7 @@
 const cfg = window.XSTAGE_CONFIG || {};
 const $ = id => document.getElementById(id);
 const ui = {
-  status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'),
+  status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'), catalogProgress:$('catalog-progress'), catalogProgressValue:$('catalog-progress-value'),
   account: $('account'), libraryState: $('library-state'), songTotal: $('song-total'), resultCount: $('result-count'),
   search: $('search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
@@ -60,6 +60,18 @@ async function loadLatestCachedCatalog(sub){
       deltaFileIds:Array.isArray(saved.deltaFileIds)?saved.deltaFileIds:[]
     };
   }catch{return null;}
+}
+async function loadCatalogPiece(sub,id){
+  if(!sub||!id)return null;
+  try{
+    const saved=await catalogStorage('get','piece:'+sub+':'+id);
+    return saved?.data&&typeof saved.data==='object'?saved.data:null;
+  }catch{return null;}
+}
+async function saveCatalogPiece(sub,id,data){
+  if(!sub||!id||!data||typeof data!=='object')return;
+  try{await catalogStorage('put','piece:'+sub+':'+id,{data,savedAt:Date.now()});}
+  catch(error){console.warn('X-Stage catalog piece cache:',error?.message||error);}
 }
 async function loadCachedCatalog(sub,pointer){
   if(!sub||!pointer?.generation)return null;
@@ -180,12 +192,21 @@ function setStatus(message, kind = '') {
     ui.gateStatus.dataset.kind=kind||'info';
   }
 }
-function showCatalogLoading(title,detail){
+function showCatalogLoading(title,detail,progress=null){
   if(ui.catalogLoadingTitle)ui.catalogLoadingTitle.textContent=title||'กำลังเตรียมฐานเพลง';
   if(ui.catalogLoadingDetail)ui.catalogLoadingDetail.textContent=detail||'โปรดรอสักครู่…';
+  if(Number.isFinite(Number(progress))){
+    const value=Math.max(0,Math.min(100,Math.round(Number(progress))));
+    if(ui.catalogProgress)ui.catalogProgress.value=value;
+    if(ui.catalogProgressValue)ui.catalogProgressValue.textContent=value+'%';
+  }
   if(ui.catalogLoading)ui.catalogLoading.hidden=false;
 }
-function hideCatalogLoading(){if(ui.catalogLoading)ui.catalogLoading.hidden=true;}
+function hideCatalogLoading(){
+  if(ui.catalogLoading)ui.catalogLoading.hidden=true;
+  if(ui.catalogProgress)ui.catalogProgress.value=0;
+  if(ui.catalogProgressValue)ui.catalogProgressValue.textContent='0%';
+}
 
 function setPlayStatus(message) {
   // Track title and playback state already appear in the bottom transport.
@@ -278,24 +299,41 @@ async function privateJson(id, token, opts) {
 // The Windows sync publisher switches current.json after each verified batch.
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
-async function readPublishedCatalog(pointer,token){
+async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   if(pointer?.schemaVersion!==1 || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
     throw Error('รูปแบบ current.json ไม่รองรับ');
   const deltaIds=pointer.deltaFileIds||[];
   if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
     throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
-  async function fetchImmutable(id){
+  const totalPieces=1+deltaIds.length;
+  let completedPieces=0;
+  const report=(message,fromCache=false)=>{
+    completedPieces++;
+    if(typeof onProgress==='function')onProgress({
+      completed:completedPieces,total:totalPieces,message,fromCache,
+      percent:42+Math.round((completedPieces/Math.max(1,totalPieces))*48)
+    });
+  };
+  async function fetchImmutable(id,label){
     if(typeof id!=='string'||!id)throw Error('ฐานเพลงไม่มี Drive File ID');
-    if(state.catalogCache.has(id))return state.catalogCache.get(id);
+    if(state.catalogCache.has(id)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(id);}
+    const persisted=await loadCatalogPiece(sub,id);
+    if(persisted){
+      state.catalogCache.set(id,persisted);
+      report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
+      return persisted;
+    }
     const data=await privateJson(id,token);
     state.catalogCache.set(id,data);
+    void saveCatalogPiece(sub,id,data);
     if(state.catalogCache.size>40){
       const oldest=state.catalogCache.keys().next().value;
       state.catalogCache.delete(oldest);
     }
+    report(label+' · ดาวน์โหลดแล้ว',false);
     return data;
   }
-  const base=await fetchImmutable(pointer.catalogFileId);
+  const base=await fetchImmutable(pointer.catalogFileId,'ฐานหลัก');
   if(base?.schemaVersion!==1||!Array.isArray(base.songs))
     throw Error('ฐานเพลงหลักบน Drive ไม่รองรับ');
   if(!deltaIds.length){
@@ -307,8 +345,9 @@ async function readPublishedCatalog(pointer,token){
   for(const song of base.songs){
     if(song && typeof song.webSongId==='string')songs.set(song.webSongId,song);
   }
-  for(const id of deltaIds){
-    const delta=await fetchImmutable(id);
+  for(let deltaIndex=0;deltaIndex<deltaIds.length;deltaIndex++){
+    const id=deltaIds[deltaIndex];
+    const delta=await fetchImmutable(id,'ส่วนอัปเดต '+(deltaIndex+1)+'/'+deltaIds.length);
     if(delta?.schemaVersion!==1 || !Array.isArray(delta.upserts)||!Array.isArray(delta.removes))
       throw Error('ข้อมูลอัปเดตเพลงบางชุดไม่ถูกต้อง');
     for(const key of delta.removes){
@@ -332,7 +371,7 @@ async function pollPublishedCatalog(){
     const pointer=await privateJson(state.catalogPointerId,token);
     if(authId!==state.authId||state.token!==token||!pointer?.generation||
        pointer.generation===state.catalogGeneration)return;
-    const catalog=await readPublishedCatalog(pointer,token);
+    const catalog=await readPublishedCatalog(pointer,token,{sub:state.accountSub});
     if(authId!==state.authId||state.token!==token)return;
     const countBefore=state.songs.length;
     state.manifest=catalog;
@@ -378,7 +417,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   ui.libraryState.textContent='เข้าสู่ระบบแล้ว · กำลังเปิดฐานเพลงในเครื่อง';
   ui.songTotal.textContent='กำลังโหลด…';
   ui.resultCount.textContent='กำลังเปิดฐานเพลง';
-  showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังเปิดฐานเพลงในเครื่อง…');
+  showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังตรวจฐานเพลงในเครื่อง…',6);
 
   // Stale-while-revalidate: use the last verified local catalog before any Drive discovery.
   const instant=await loadLatestCachedCatalog(account.sub);
@@ -397,17 +436,20 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     setStatus(`พร้อมใช้งานทันที · ${num(state.songs.length)} เพลงจากฐานในเครื่อง · กำลังตรวจอัปเดตเบื้องหลัง`,'success');
     ui.search.focus();
   }else{
-    showCatalogLoading('เข้าสู่ระบบสำเร็จ','ยังไม่มีฐานในเครื่อง · กำลังค้นหาคลัง XStageWeb…');
+    showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง XStageWeb…',12);
     setStatus('เข้าสู่ระบบสำเร็จ · กำลังดาวน์โหลดฐานเพลงครั้งแรก…','success');
   }
 
   try{
     const roots=await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(roots.length!==1)throw Error(roots.length?'พบโฟลเดอร์ XStageWeb ซ้ำ กรุณาตรวจใน Drive':'ไม่พบโฟลเดอร์ XStageWeb กรุณาซิงก์เพลงจาก X-Stage บน Windows ก่อน');
     const pointers=await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
+    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
     if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
     const pointer=await privateJson(pointers[0].id,token);
+    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
     if(authId!==state.authId)return;
 
     const sameAsInstant=!!instant&&
@@ -418,11 +460,20 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     let catalog=instant?.catalog||null;
     let downloaded=false;
     if(!sameAsInstant){
-      if(!instant)showCatalogLoading('กำลังโหลดฐานเพลง','กำลังดาวน์โหลดฐานเพลงล่าสุดจาก Google Drive…');
+      if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์ M4A',42);
       else setStatus(`กำลังอัปเดตฐานเพลงเบื้องหลัง · ยังใช้ ${num(state.songs.length)} เพลงเดิมได้ตามปกติ`);
-      catalog=await readPublishedCatalog(pointer,token);
+      catalog=await readPublishedCatalog(pointer,token,{
+        sub:account.sub,
+        onProgress:info=>{
+          if(instant)return;
+          showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก',
+            info.message+' · '+info.completed+'/'+info.total+' ส่วน',
+            info.percent);
+        }
+      });
       downloaded=true;
       if(authId!==state.authId)return;
+      if(!instant)showCatalogLoading('กำลังบันทึกฐานเพลง','จัดเก็บฐานไว้ในเครื่องสำหรับเปิดครั้งต่อไป…',96);
       void saveCachedCatalog(account.sub,pointer,catalog);
     }
 
@@ -438,6 +489,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     ui.search.disabled=false;
     ui.libraryState.textContent='เข้าถึงเฉพาะคลังส่วนตัวของบัญชีที่ลงชื่อเข้าใช้';
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
+    if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
     hideCatalogLoading();
     setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลงในคลังส่วนตัว${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
     ui.search.focus();
