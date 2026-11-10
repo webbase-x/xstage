@@ -20,6 +20,7 @@
     toggle.setAttribute('aria-expanded',String(open));
     toggle.setAttribute('aria-label',open?'ปิดเมนู':'เปิดเมนู');
     toggle.firstChild.textContent=open?'✕ ':'☰ ';
+    $('stage-tools-toggle')?.setAttribute('aria-expanded',String(open));
     stage.classList.toggle('mobile-menu-open',open);
   }
   function updateIndicators(){
