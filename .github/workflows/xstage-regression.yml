@@ -1,0 +1,55 @@
+name: X-Stage web regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "config.js"
+      - "version.json"
+      - "app.js"
+      - "pc-extensions.js"
+      - "stage-controls.js"
+      - "stage-ui.js"
+      - "mobile-layout.js"
+      - "pwa-install.js"
+      - "remote.js"
+      - "remote.html"
+      - "sw.js"
+      - "xstage-ux.css"
+      - "package.json"
+      - "scripts/regression.mjs"
+      - ".github/workflows/xstage-regression.yml"
+  pull_request:
+    paths:
+      - "index.html"
+      - "config.js"
+      - "version.json"
+      - "app.js"
+      - "pc-extensions.js"
+      - "stage-controls.js"
+      - "stage-ui.js"
+      - "mobile-layout.js"
+      - "pwa-install.js"
+      - "remote.js"
+      - "remote.html"
+      - "sw.js"
+      - "xstage-ux.css"
+      - "package.json"
+      - "scripts/regression.mjs"
+      - ".github/workflows/xstage-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run X-Stage regression checks
+        run: npm test
