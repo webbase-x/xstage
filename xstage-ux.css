@@ -2169,3 +2169,20 @@ body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button.listening{
     font-size:.86rem
   }
 }
+
+/* 1.0.08: live-search dropdown must remain visible and tappable above the stage. */
+body.xstage-ui-v2 .stage .stage-search-slot{
+  overflow:visible!important
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+  z-index:120!important;
+  pointer-events:auto!important
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .song-results{
+  pointer-events:auto!important;
+  -webkit-overflow-scrolling:touch
+}
+body.xstage-ui-v2 .stage .stage-search-slot .song-item{
+  cursor:pointer;
+  touch-action:manipulation
+}
