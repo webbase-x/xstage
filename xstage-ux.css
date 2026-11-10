@@ -2507,3 +2507,236 @@ body.xstage-ui-v2 .stage .stage-search-slot #search::placeholder{
     font-size:19px!important;
   }
 }
+
+/* 1.0.31: professional X-Stage Karaoke Online stage identity. */
+body.xstage-ui-v2 .stage .stage-hero,
+body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+body.xstage-ui-v2 .stage.playing .stage-hero{
+  position:absolute!important;
+  top:40%!important;
+  left:50%!important;
+  width:min(76cqw,760px)!important;
+  max-width:calc(100% - 34px)!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0!important;
+  transform:translate(-50%,-50%)!important;
+  transform-origin:center center!important;
+  scale:var(--xstage-visual-scale,1);
+  opacity:1!important;
+  visibility:visible!important;
+  filter:none!important;
+  transition:none!important;
+  pointer-events:none!important;
+  z-index:2!important;
+}
+body.xstage-ui-v2 .stage .stage-brand-lockup{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:clamp(10px,1.8cqw,22px);
+  width:100%;
+  padding:clamp(8px,1.15cqw,13px) clamp(12px,1.7cqw,22px);
+  border:1px solid rgba(122,217,255,.22);
+  border-radius:clamp(14px,1.7cqw,22px);
+  background:
+    linear-gradient(110deg,rgba(4,17,38,.78),rgba(10,23,57,.5) 52%,rgba(17,10,51,.44));
+  box-shadow:
+    0 16px 42px rgba(0,0,0,.26),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 0 28px rgba(38,149,255,.08);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+}
+body.xstage-ui-v2 .stage .stage-brand-mark{
+  width:clamp(62px,min(10cqw,13cqh),112px);
+  aspect-ratio:1;
+  display:grid;
+  place-items:center;
+  flex:none;
+  border-radius:28%;
+  background:
+    radial-gradient(circle at 30% 22%,rgba(92,230,255,.18),transparent 45%),
+    linear-gradient(145deg,rgba(12,42,74,.78),rgba(8,14,40,.9));
+  border:1px solid rgba(112,220,255,.28);
+  box-shadow:
+    inset 0 0 22px rgba(85,134,255,.12),
+    0 0 22px rgba(45,196,255,.12);
+}
+body.xstage-ui-v2 .stage .stage-brand-mark svg{
+  display:block;
+  width:78%;
+  height:78%;
+  filter:drop-shadow(0 0 8px rgba(73,203,255,.35));
+}
+body.xstage-ui-v2 .stage .stage-brand-copy{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:flex-start;
+}
+body.xstage-ui-v2 .stage .stage-brand-word{
+  display:flex;
+  align-items:baseline;
+  min-width:0;
+  max-width:100%;
+  white-space:nowrap;
+  font-family:"Segoe UI Variable Display","Segoe UI",Arial,Helvetica,sans-serif;
+  font-size:clamp(36px,min(7.3cqw,11.5cqh),96px);
+  line-height:.9;
+  font-weight:830;
+  letter-spacing:-.045em;
+  text-shadow:0 5px 18px rgba(0,0,0,.42);
+}
+body.xstage-ui-v2 .stage .stage-brand-x{
+  background:linear-gradient(135deg,#a6fbff 0%,#42c9ff 38%,#7d83ff 70%,#b868ff 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+  font-weight:900;
+}
+body.xstage-ui-v2 .stage .stage-brand-dash{
+  margin:0 .025em;
+  color:#7cccf3;
+  font-weight:500;
+}
+body.xstage-ui-v2 .stage .stage-brand-stage{
+  background:linear-gradient(180deg,#ffffff 0%,#d8efff 48%,#9bbce1 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+body.xstage-ui-v2 .stage .stage-brand-sub{
+  margin-top:clamp(7px,1cqh,12px);
+  display:flex;
+  align-items:center;
+  gap:clamp(9px,1.15cqw,15px);
+  color:#cde8f5;
+  font-family:"Segoe UI",Arial,Helvetica,sans-serif;
+  font-size:clamp(11px,min(1.55cqw,2.7cqh),19px);
+  font-weight:760;
+  letter-spacing:clamp(.18em,.32cqw,.34em);
+  line-height:1;
+  white-space:nowrap;
+}
+body.xstage-ui-v2 .stage .stage-brand-sub span:last-child{
+  color:#82efff;
+}
+body.xstage-ui-v2 .stage .stage-brand-sub i{
+  width:clamp(28px,5.5cqw,76px);
+  height:1px;
+  display:block;
+  background:linear-gradient(90deg,rgba(89,220,255,.15),#6ee8ff 45%,rgba(168,98,255,.28));
+  box-shadow:0 0 8px rgba(80,214,255,.35);
+}
+body.xstage-ui-v2 .stage .stage-brand-spectrum{
+  height:clamp(12px,2.8cqh,24px);
+  margin-top:clamp(8px,1.2cqh,14px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(3px,.55cqw,7px);
+  opacity:.68;
+}
+body.xstage-ui-v2 .stage .stage-brand-spectrum i{
+  display:block;
+  width:clamp(2px,.28cqw,4px);
+  border-radius:999px;
+  background:linear-gradient(180deg,#77f5ff,#5ba8ff 56%,#9b6cff);
+  box-shadow:0 0 7px rgba(82,202,255,.28);
+}
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(1),
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(11){height:28%}
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(2),
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(10){height:45%}
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(3),
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(9){height:66%}
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(4),
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(8){height:88%}
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(5),
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(7){height:58%}
+body.xstage-ui-v2 .stage .stage-brand-spectrum i:nth-child(6){height:100%}
+
+/* Keep the brand fixed while singing; only make the glass slightly quieter. */
+body.xstage-ui-v2 .stage.playing .stage-brand-lockup{
+  background:
+    linear-gradient(110deg,rgba(4,17,38,.68),rgba(10,23,57,.42) 52%,rgba(17,10,51,.36));
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .stage-hero,
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    top:39%!important;
+    width:min(92cqw,690px)!important;
+    max-width:calc(100% - 20px)!important;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-lockup{
+    gap:10px;
+    padding:8px 11px;
+    border-radius:14px;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-mark{
+    width:clamp(54px,min(14cqw,12cqh),82px);
+  }
+  body.xstage-ui-v2 .stage .stage-brand-word{
+    font-size:clamp(31px,min(10cqw,10cqh),58px);
+  }
+  body.xstage-ui-v2 .stage .stage-brand-sub{
+    margin-top:6px;
+    gap:7px;
+    font-size:clamp(9px,min(2.7cqw,2.5cqh),13px);
+    letter-spacing:.18em;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-sub i{
+    width:clamp(18px,5cqw,34px);
+  }
+}
+@media(max-width:420px){
+  body.xstage-ui-v2 .stage .stage-brand-mark{
+    width:52px;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-word{
+    font-size:clamp(28px,9.5cqw,40px);
+  }
+  body.xstage-ui-v2 .stage .stage-brand-sub{
+    font-size:9px;
+    letter-spacing:.13em;
+    gap:5px;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-sub i{width:16px}
+  body.xstage-ui-v2 .stage .stage-brand-spectrum{margin-top:7px}
+}
+@media(orientation:landscape) and (max-height:530px){
+  body.xstage-ui-v2 .stage .stage-hero,
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    top:37%!important;
+    width:min(66cqw,620px)!important;
+    max-width:calc(100% - 28px)!important;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-lockup{
+    padding:6px 10px;
+    gap:9px;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-mark{
+    width:clamp(42px,10cqh,62px);
+  }
+  body.xstage-ui-v2 .stage .stage-brand-word{
+    font-size:clamp(28px,min(6.2cqw,10cqh),52px);
+  }
+  body.xstage-ui-v2 .stage .stage-brand-sub{
+    margin-top:4px;
+    font-size:clamp(8px,min(1.5cqw,2.5cqh),11px);
+    letter-spacing:.16em;
+  }
+  body.xstage-ui-v2 .stage .stage-brand-spectrum{
+    height:11px;
+    margin-top:5px;
+  }
+}
+body.xstage-ui-v2 .stage.stage-hero-hidden .stage-hero{
+  display:none!important;
+}
