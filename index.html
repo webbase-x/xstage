@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=0991">
-  <link rel="stylesheet" href="xstage-ux.css?v=0991">
+  <link rel="stylesheet" href="style.css?v=0992">
+  <link rel="stylesheet" href="xstage-ux.css?v=0992">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -221,6 +221,10 @@
           </section>
           <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog>
           <div id="gate" class="login-gate"><div class="gate-panel"><span class="gate-glow">✦ PRIVATE STAGE</span><h1>เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p>เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><div id="gate-auth-status" class="gate-auth-status" role="status" aria-live="polite">พร้อมเชื่อมต่อ Google</div><small>ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small></div></div>
+          <div id="catalog-loading" class="catalog-loading" hidden role="status" aria-live="polite">
+            <span class="catalog-spinner" aria-hidden="true"></span>
+            <div><strong id="catalog-loading-title">เข้าสู่ระบบสำเร็จ</strong><span id="catalog-loading-detail">กำลังเตรียมฐานเพลง…</span></div>
+          </div>
         </div>
         <audio id="player" preload="metadata" aria-label="เครื่องเล่นเสียง X-Stage"></audio>
       </section>
@@ -234,13 +238,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=0991" defer></script><script src="pc-extensions.js?v=0991" defer></script>
+  <script src="app.js?v=0992" defer></script><script src="pc-extensions.js?v=0992" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=0991" defer></script>
-  <script src="mobile-layout.js?v=0991" defer></script>
-  <script src="pwa-install.js?v=0991" defer></script>
+  <script src="stage-controls.js?v=0992" defer></script>
+  <script src="mobile-layout.js?v=0992" defer></script>
+  <script src="pwa-install.js?v=0992" defer></script>
 
-  <script src="stage-ui.js?v=0991" defer></script>
+  <script src="stage-ui.js?v=0992" defer></script>
 </body>
 </html>
