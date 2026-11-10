@@ -1492,3 +1492,24 @@ body.xstage-ui-v2 .transport-right-actions .stage-tools-toggle{
 body.xstage-ui-v2 .transport-right-actions .stage-tools-toggle span{
   display:none!important
 }
+
+/* 0.9.96: Fast First Start progress. */
+body.xstage-ui-v2 .catalog-loading-copy{display:grid;gap:4px;min-width:0;flex:1}
+body.xstage-ui-v2 .catalog-progress-row{
+  display:grid;grid-template-columns:minmax(120px,1fr) auto;align-items:center;gap:9px;margin-top:5px
+}
+body.xstage-ui-v2 .catalog-progress-row progress{
+  width:100%;height:8px;border:0;border-radius:999px;overflow:hidden;background:#0b2634
+}
+body.xstage-ui-v2 .catalog-progress-row progress::-webkit-progress-bar{
+  background:#0b2634;border-radius:999px;box-shadow:inset 0 0 4px #0008
+}
+body.xstage-ui-v2 .catalog-progress-row progress::-webkit-progress-value{
+  background:linear-gradient(90deg,#20bfe7,#67f3ff);border-radius:999px
+}
+body.xstage-ui-v2 .catalog-progress-row progress::-moz-progress-bar{
+  background:linear-gradient(90deg,#20bfe7,#67f3ff);border-radius:999px
+}
+body.xstage-ui-v2 .catalog-progress-row b{
+  min-width:34px;text-align:right;color:#dffbff;font-size:.7rem;font-variant-numeric:tabular-nums
+}
