@@ -1591,7 +1591,7 @@ function drawLyrics(){
 
         // Keep the stage identity stationary while lyrics paint above its dimmed sign.
         // Only reserve logo space if lyrics are being drawn without an active song stage.
-        if(matchMedia('(orientation: landscape)').matches && !ui.stage.classList.contains('playing')){
+        if(matchMedia('(orientation: landscape)').matches && !ui.stage.classList.contains('stage-hero-hidden')){
           const canvasBox=ui.lyrics.getBoundingClientRect();
           const hero=ui.stage.querySelector('.stage-hero');
           if(hero){
