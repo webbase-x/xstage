@@ -2323,3 +2323,77 @@ body.xstage-ui-v2 .music-loader-bars i:nth-child(5){animation-delay:-.24s}
   body.xstage-ui-v2 .music-loader-bars i:nth-child(4){height:23px}
   body.xstage-ui-v2 .music-loader-bars i:nth-child(3){height:30px}
 }
+
+/* 1.0.22: copyright-gated, email-specific song-library sharing. */
+body.xstage-ui-v2 .share-library-dialog{
+  width:min(560px,calc(100vw - 24px));
+  max-height:min(82dvh,720px);
+  padding:0;
+  border:1px solid rgba(90,179,224,.42);
+  border-radius:16px;
+  background:#071426;
+  color:#edf8ff;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);
+}
+body.xstage-ui-v2 .share-library-dialog::backdrop{
+  background:rgba(0,4,12,.68);
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+}
+body.xstage-ui-v2 .share-library-dialog header{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 16px;
+  border-bottom:1px solid rgba(107,184,222,.22);
+  background:linear-gradient(180deg,rgba(15,45,72,.96),rgba(7,20,38,.96));
+}
+body.xstage-ui-v2 .share-library-dialog header strong{font-size:1rem}
+body.xstage-ui-v2 .share-library-dialog header button{
+  width:36px;height:36px;border-radius:10px;
+}
+body.xstage-ui-v2 .share-library-warning{
+  margin:14px 16px 10px;padding:12px 13px;
+  border:1px solid rgba(255,184,80,.38);
+  border-radius:12px;
+  background:rgba(98,58,5,.22);
+}
+body.xstage-ui-v2 .share-library-warning strong{color:#ffd58a}
+body.xstage-ui-v2 .share-library-warning p{
+  margin:7px 0 0;color:#d8e6ee;font-size:.82rem;line-height:1.5
+}
+body.xstage-ui-v2 .share-library-email,
+body.xstage-ui-v2 .share-library-ack{
+  display:grid;gap:7px;margin:12px 16px;
+  color:#dbeef7;font-size:.84rem
+}
+body.xstage-ui-v2 .share-library-email input{
+  width:100%;min-height:44px;box-sizing:border-box;
+  padding:9px 11px;border-radius:10px;
+  border:1px solid #37647f;background:#091b2e;color:#fff;
+  font-size:16px
+}
+body.xstage-ui-v2 .share-library-ack{
+  grid-template-columns:22px minmax(0,1fr);align-items:start;line-height:1.45
+}
+body.xstage-ui-v2 .share-library-ack input{width:18px;height:18px;margin-top:2px}
+body.xstage-ui-v2 .share-library-status{
+  min-height:22px;margin:8px 16px;color:#9fe7ff;font-size:.8rem;line-height:1.4
+}
+body.xstage-ui-v2 .share-library-actions{
+  display:flex;justify-content:flex-end;gap:9px;padding:4px 16px 12px
+}
+body.xstage-ui-v2 .share-library-actions button{
+  min-height:42px;padding:8px 13px;border-radius:10px
+}
+body.xstage-ui-v2 .share-library-actions #share-library-submit:not(:disabled){
+  border-color:#4fd6ff;background:#0b5f7d;color:#fff
+}
+body.xstage-ui-v2 .share-library-dialog>small{
+  display:block;padding:0 16px 16px;color:#9ab5c4;line-height:1.4
+}
+@media(max-width:620px){
+  body.xstage-ui-v2 .share-library-dialog{
+    width:calc(100vw - 16px);
+    max-height:86dvh;
+  }
+  body.xstage-ui-v2 .share-library-actions{display:grid;grid-template-columns:1fr 1fr}
+}
