@@ -1434,3 +1434,28 @@ body.xstage-ui-v2 .gate-auth-status[data-kind="error"]{
 body.xstage-ui-v2 .gate-auth-status[data-kind="success"]{
   color:#b9ffd8;border-color:#347a5a88;background:#0b251a99
 }
+
+/* 0.9.92: clearly separate catalog preparation from Google login. */
+body.xstage-ui-v2 .catalog-loading{
+  position:absolute;z-index:58;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:flex;align-items:center;gap:12px;max-width:min(520px,88%);
+  padding:13px 16px;border:1px solid #2e6b83;border-radius:12px;
+  background:#071725e8;box-shadow:0 14px 42px #0009,0 0 20px #00d5ff22;
+  color:#eafaff;backdrop-filter:blur(10px);pointer-events:none
+}
+body.xstage-ui-v2 .catalog-loading[hidden]{display:none!important}
+body.xstage-ui-v2 .catalog-loading div{display:grid;gap:2px;min-width:0}
+body.xstage-ui-v2 .catalog-loading strong{font-size:.86rem}
+body.xstage-ui-v2 .catalog-loading span:not(.catalog-spinner){
+  color:#a9c8d8;font-size:.72rem;line-height:1.35
+}
+body.xstage-ui-v2 .catalog-spinner{
+  width:24px;height:24px;flex:0 0 auto;border:3px solid #17445a;
+  border-top-color:#55e6ff;border-radius:50%;animation:xstageCatalogSpin .8s linear infinite
+}
+@keyframes xstageCatalogSpin{to{transform:rotate(360deg)}}
+@media(max-width:620px){
+  body.xstage-ui-v2 .catalog-loading{
+    top:42%;width:min(430px,88%);padding:11px 13px;gap:10px
+  }
+}
