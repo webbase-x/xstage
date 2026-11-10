@@ -1473,3 +1473,22 @@ body.xstage-ui-v2.xstage-webapp-mode .transport-right-actions .stage-tools-toggl
 body.xstage-ui-v2.xstage-webapp-mode .transport-right-actions .stage-tools-toggle span{
   display:none!important
 }
+
+/* 0.9.94: capability-aware fullscreen and compact primary icons. */
+body.xstage-ui-v2.xstage-no-fullscreen #fullscreen,
+body.xstage-ui-v2.xstage-no-fullscreen #mobile-fullscreen-toggle,
+body.xstage-ui-v2.xstage-no-fullscreen #xstage-context-menu [data-cmd="fullscreen"]{
+  display:none!important
+}
+body.xstage-ui-v2 .stage-toolbar #toolbar-stage-pop{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:42px;min-width:42px;height:42px;padding:0;
+  font-size:1.05rem;border-radius:10px
+}
+body.xstage-ui-v2 .transport-right-actions .stage-tools-toggle{
+  width:48px!important;min-width:48px!important;max-width:48px!important;
+  padding:0!important;justify-content:center!important
+}
+body.xstage-ui-v2 .transport-right-actions .stage-tools-toggle span{
+  display:none!important
+}
