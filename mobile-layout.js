@@ -11,6 +11,7 @@
   const queueDock=document.querySelector('.queue-dock');
   const stageColumn=document.querySelector('.stage-column');
   const count=$('mobile-queue-count'), status=$('mobile-menu-status');
+  const pullRefresh=$('pull-refresh'), pullRefreshText=$('pull-refresh-text');
   if(!stage||!menu||!toggle||!queueDock||!stageColumn)return;
   const mq=window.matchMedia('(max-width: 820px), (max-height: 520px) and (pointer: coarse)');
   const isCompact=()=>mq.matches;
@@ -63,6 +64,60 @@
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&!menu.hidden){e.preventDefault();setMenu(false);toggle.focus();}
   });
+
+  // Pull-to-refresh for compact screens/Web App. Ignore all interactive/scrolling surfaces.
+  let pullStartY=0,pullDistance=0,pullActive=false,pullReady=false;
+  const pullThreshold=88;
+  const blockedPullTarget=target=>!!target.closest(
+    'button,input,select,textarea,a,[contenteditable="true"],.stage-toolbar,.transport-panel,.mobile-stage-menu,.search-dock,.queue-dock,.pc-tools,.remote-pair-panel,.remote-request-panel,.xstage-eq-panel,.virtual-keyboard,.pc-dialog'
+  );
+  function resetPullRefresh(){
+    pullActive=false;pullReady=false;pullDistance=0;
+    if(pullRefresh){
+      pullRefresh.hidden=true;
+      pullRefresh.classList.remove('ready','refreshing');
+      pullRefresh.style.setProperty('--pull-distance','0px');
+    }
+    if(pullRefreshText)pullRefreshText.textContent='ดึงลงเพื่อรีเฟรช';
+  }
+  stage.addEventListener('touchstart',event=>{
+    if(!isCompact()||event.touches.length!==1||blockedPullTarget(event.target))return;
+    pullStartY=event.touches[0].clientY;
+    pullDistance=0;pullActive=true;pullReady=false;
+  },{passive:true});
+  stage.addEventListener('touchmove',event=>{
+    if(!pullActive||event.touches.length!==1)return;
+    const dy=event.touches[0].clientY-pullStartY;
+    if(dy<=0){resetPullRefresh();return;}
+    pullDistance=Math.min(130,dy*.62);
+    if(dy>8)event.preventDefault();
+    if(pullRefresh){
+      pullRefresh.hidden=false;
+      pullRefresh.style.setProperty('--pull-distance',pullDistance+'px');
+    }
+    const ready=dy>=pullThreshold;
+    if(ready!==pullReady){
+      pullReady=ready;
+      pullRefresh?.classList.toggle('ready',ready);
+      if(pullRefreshText)pullRefreshText.textContent=ready?'ปล่อยเพื่อรีเฟรช':'ดึงลงเพื่อรีเฟรช';
+    }
+  },{passive:false});
+  stage.addEventListener('touchend',()=>{
+    if(!pullActive)return;
+    const refresh=pullReady;
+    pullActive=false;
+    if(refresh){
+      if(pullRefresh){
+        pullRefresh.hidden=false;
+        pullRefresh.classList.add('refreshing');
+        pullRefresh.classList.remove('ready');
+      }
+      if(pullRefreshText)pullRefreshText.textContent='กำลังรีเฟรช…';
+      setTimeout(()=>window.location.reload(),90);
+    }else resetPullRefresh();
+  },{passive:true});
+  stage.addEventListener('touchcancel',resetPullRefresh,{passive:true});
+
   if(mq.addEventListener)mq.addEventListener('change',()=>{
     updateIndicators();
   });
