@@ -55,31 +55,34 @@
           </div>
           <div class="stage-ambience" aria-hidden="true"></div>
           <div class="stage-hero" aria-hidden="true">
-            <div class="stage-brand-lockup">
-              <div class="stage-brand-mark">
-                <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" focusable="false">
-                  <defs>
-                    <linearGradient id="xstage-mark-a" x1="12" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
-                      <stop stop-color="#75f7ff"/><stop offset=".48" stop-color="#36a8ff"/><stop offset="1" stop-color="#a35cff"/>
-                    </linearGradient>
-                    <linearGradient id="xstage-mark-b" x1="28" y1="18" x2="68" y2="80" gradientUnits="userSpaceOnUse">
-                      <stop stop-color="#f7fdff"/><stop offset=".55" stop-color="#9bdcff"/><stop offset="1" stop-color="#8c74ff"/>
-                    </linearGradient>
-                  </defs>
-                  <path d="M18 18 78 78M78 18 18 78" fill="none" stroke="url(#xstage-mark-a)" stroke-width="11" stroke-linecap="round"/>
-                  <rect x="39" y="20" width="18" height="38" rx="9" fill="#071426" stroke="url(#xstage-mark-b)" stroke-width="4"/>
-                  <path d="M43 31h10M43 38h10M43 45h10" stroke="#dffaff" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
-                  <path d="M32 48v5a16 16 0 0 0 32 0v-5M48 69v10M38 80h20" fill="none" stroke="url(#xstage-mark-b)" stroke-width="4" stroke-linecap="round"/>
-                </svg>
+            <div class="stage-brand-scene">
+              <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
+              <div class="stage-brand-lockup">
+                <div class="stage-brand-mark">
+                  <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                    <defs>
+                      <linearGradient id="xstage-mark-a" x1="12" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#75f7ff"/><stop offset=".48" stop-color="#36a8ff"/><stop offset="1" stop-color="#a35cff"/>
+                      </linearGradient>
+                      <linearGradient id="xstage-mark-b" x1="28" y1="18" x2="68" y2="80" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#f7fdff"/><stop offset=".55" stop-color="#9bdcff"/><stop offset="1" stop-color="#8c74ff"/>
+                      </linearGradient>
+                    </defs>
+                    <path d="M18 18 78 78M78 18 18 78" fill="none" stroke="url(#xstage-mark-a)" stroke-width="11" stroke-linecap="round"/>
+                    <rect x="39" y="20" width="18" height="38" rx="9" fill="#071426" stroke="url(#xstage-mark-b)" stroke-width="4"/>
+                    <path d="M43 31h10M43 38h10M43 45h10" stroke="#dffaff" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
+                    <path d="M32 48v5a16 16 0 0 0 32 0v-5M48 69v10M38 80h20" fill="none" stroke="url(#xstage-mark-b)" stroke-width="4" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <div class="stage-brand-copy">
+                  <strong class="stage-brand-word"><span class="stage-brand-x">X</span><span class="stage-brand-dash">-</span><span class="stage-brand-stage">STAGE</span></strong>
+                  <div class="stage-brand-sub"><span>ONLINE</span><i></i><span>KARAOKE</span></div>
+                  <div class="stage-brand-tagline">YOUR STAGE · YOUR MUSIC</div>
+                </div>
               </div>
-              <div class="stage-brand-copy">
-                <strong class="stage-brand-word"><span class="stage-brand-x">X</span><span class="stage-brand-dash">-</span><span class="stage-brand-stage">Stage</span></strong>
-                <div class="stage-brand-sub"><span>KARAOKE</span><i></i><span>ONLINE</span></div>
-              </div>
+              <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
-            <div class="stage-brand-spectrum" aria-hidden="true">
-              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-            </div>
+            <canvas id="stage-viz-wave" class="stage-brand-spectrum" width="900" height="96"></canvas>
           </div>
           <header class="mobile-stage-header stage-toolbar" aria-label="คำสั่ง X-Stage">
             <button id="mobile-menu-toggle" class="mobile-menu-toggle toolbar-button" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
