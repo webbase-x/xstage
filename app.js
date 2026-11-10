@@ -428,10 +428,27 @@ function setSharedLibraryGate(active,message=''){
     if(footnote)footnote.textContent='ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น';
   }
 }
-function loadGooglePickerApi(){
+let googlePickerScriptPromise=null;
+function loadScriptOnce(src,id){
+  const existing=id?document.getElementById(id):null;
+  if(existing&&existing.dataset.loaded==='1')return Promise.resolve(existing);
   return new Promise((resolve,reject)=>{
-    if(window.google?.picker){resolve();return;}
-    if(typeof window.gapi==='undefined'){reject(Error('Google Picker ยังโหลดไม่พร้อม กรุณาลองอีกครั้ง'));return;}
+    const script=existing||document.createElement('script');
+    if(!existing){
+      script.src=src;script.async=true;if(id)script.id=id;document.head.append(script);
+    }
+    const done=()=>{script.dataset.loaded='1';resolve(script);};
+    script.addEventListener('load',done,{once:true});
+    script.addEventListener('error',()=>reject(Error('โหลดบริการ Google ไม่สำเร็จ')),{once:true});
+  });
+}
+async function loadGooglePickerApi(){
+  if(window.google?.picker)return;
+  if(typeof window.gapi==='undefined'){
+    googlePickerScriptPromise ||= loadScriptOnce('https://apis.google.com/js/api.js','xstage-google-api');
+    await googlePickerScriptPromise;
+  }
+  await new Promise((resolve,reject)=>{
     let done=false;
     const timer=setTimeout(()=>{if(!done){done=true;reject(Error('Google Picker ใช้เวลานานเกินไป กรุณาลองอีกครั้ง'));}},8000);
     try{
