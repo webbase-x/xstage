@@ -1045,8 +1045,16 @@ function setupVoiceSearch(){
   const touchDevice=window.matchMedia?.('(pointer:coarse)').matches||navigator.maxTouchPoints>0;
   if(typeof Recognition!=='function'||!touchDevice){button.hidden=true;return;}
   button.hidden=false;
-  let recognition=null,listening=false,voiceAutoChosen=false;
+
+  const isiOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||
+    (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  let recognition=null,listening=false,sessionId=0,watchdog=0,stopFallback=0,voiceAutoChosen=false;
   const originalPlaceholder=ui.search.placeholder;
+
+  const clearTimers=()=>{
+    if(watchdog){clearTimeout(watchdog);watchdog=0;}
+    if(stopFallback){clearTimeout(stopFallback);stopFallback=0;}
+  };
   const setListening=active=>{
     listening=active;
     button.classList.toggle('listening',active);
@@ -1058,58 +1066,158 @@ function setupVoiceSearch(){
   const showVoiceMessage=message=>{
     if(ui.resultCount)ui.resultCount.textContent=message;
   };
+  const finishSession=(rec,id)=>{
+    if(id!==sessionId)return;
+    clearTimers();
+    if(recognition===rec)recognition=null;
+    setListening(false);
+  };
+  const abortStale=()=>{
+    const old=recognition;
+    recognition=null;
+    clearTimers();
+    setListening(false);
+    if(old){try{old.abort();}catch{}}
+  };
+  const candidateScore=text=>{
+    const heard=normalizeVoiceExact(text);
+    if(!heard)return -1;
+    let best=-1;
+    for(const song of state.songs){
+      const fields=[song.code,song.title,song.artist].map(normalizeVoiceExact).filter(Boolean);
+      for(const field of fields){
+        if(field===heard)best=Math.max(best,10000);
+        else if(field.startsWith(heard)||heard.startsWith(field))best=Math.max(best,1800);
+        else if(field.includes(heard)||heard.includes(field))best=Math.max(best,900);
+      }
+      if(best===10000)break;
+    }
+    return best;
+  };
+  const chooseBestTranscript=event=>{
+    const candidates=[];
+    const results=event.results||[];
+    for(let i=0;i<results.length;i++){
+      const result=results[i];
+      for(let j=0;j<Math.min(result.length||0,5);j++){
+        const text=String(result[j]?.transcript||'').trim();
+        if(text)candidates.push({text,confidence:Number(result[j]?.confidence)||0});
+      }
+    }
+    if(!candidates.length)return '';
+    candidates.sort((a,b)=>{
+      const diff=candidateScore(b.text)-candidateScore(a.text);
+      return diff||b.confidence-a.confidence;
+    });
+    return candidates[0].text;
+  };
+  const exactSongFor=text=>{
+    const heard=normalizeVoiceExact(text);
+    if(!heard)return null;
+    return state.songs.find(song=>
+      [song.code,song.title,song.artist].some(value=>normalizeVoiceExact(value)===heard)
+    )||null;
+  };
+
   button.addEventListener('click',()=>{
-    if(listening){try{recognition?.stop();}catch{}return;}
     if(ui.search.disabled)return;
+    if(listening&&recognition){
+      const rec=recognition,id=sessionId;
+      try{rec.stop();}catch{finishSession(rec,id);return;}
+      stopFallback=setTimeout(()=>{
+        if(id!==sessionId)return;
+        try{rec.abort();}catch{}
+        finishSession(rec,id);
+      },900);
+      return;
+    }
+
+    abortStale();
+    const id=++sessionId;
+    voiceAutoChosen=false;
+    let rec;
     try{
-      voiceAutoChosen=false;
-      recognition=new Recognition();
-      recognition.lang='th-TH';
-      recognition.continuous=false;
-      recognition.interimResults=true;
-      recognition.maxAlternatives=3;
-      recognition.onstart=()=>{setListening(true);showVoiceMessage('กำลังฟัง… พูดชื่อเพลง ศิลปิน หรือรหัสเพลง');};
-      recognition.onresult=event=>{
-        let transcript='';
-        let final=true;
-        for(let i=0;i<(event.results?.length||0);i++){
-          const result=event.results[i];
-          transcript+=String(result?.[0]?.transcript||'');
-          if(!result?.isFinal)final=false;
-        }
-        transcript=transcript.trim();
+      rec=new Recognition();
+      recognition=rec;
+      rec.lang='th-TH';
+      rec.continuous=false;
+      // Safari/iPad is materially more reliable with final results only.
+      rec.interimResults=!isiOS;
+      rec.maxAlternatives=5;
+
+      rec.onstart=()=>{
+        if(id!==sessionId)return;
+        setListening(true);
+        showVoiceMessage('กำลังฟัง… พูดชื่อเพลง ศิลปิน หรือรหัสเพลง');
+        if(watchdog){clearTimeout(watchdog);watchdog=0;}
+        watchdog=setTimeout(()=>{
+          if(id!==sessionId||recognition!==rec)return;
+          try{rec.abort();}catch{}
+          finishSession(rec,id);
+          showVoiceMessage('แตะไมค์เพื่อค้นหาด้วยเสียงอีกครั้ง');
+        },12000);
+      };
+      rec.onresult=event=>{
+        if(id!==sessionId)return;
+        const transcript=chooseBestTranscript(event);
         if(!transcript)return;
         ui.search.value=transcript;
         state.selectedIndex=0;
         ui.search.dispatchEvent(new Event('input',{bubbles:true}));
         setLiveSearchExpanded(true);
+
+        let final=true;
+        for(let i=0;i<(event.results?.length||0);i++){
+          if(!event.results[i]?.isFinal){final=false;break;}
+        }
         if(final&&!voiceAutoChosen){
-          const exact=firstVoiceExactMatch(transcript);
+          const exact=exactSongFor(transcript);
           if(exact){
             voiceAutoChosen=true;
             chooseSearchSong(exact);
-            try{recognition?.stop();}catch{}
+            try{rec.stop();}catch{}
           }
         }
       };
-      recognition.onerror=event=>{
+      rec.onnomatch=()=>{
+        if(id!==sessionId)return;
+        showVoiceMessage('ไม่พบคำที่ตรง · แตะไมค์แล้วพูดใหม่ได้ทันที');
+      };
+      rec.onerror=event=>{
+        if(id!==sessionId)return;
         const code=String(event?.error||'');
+        finishSession(rec,id);
         if(code==='aborted')return;
         if(code==='no-speech')showVoiceMessage('ไม่ได้ยินเสียง · แตะไมค์แล้วลองพูดอีกครั้ง');
         else if(code==='not-allowed'||code==='service-not-allowed')showVoiceMessage('ไม่สามารถใช้ไมโครโฟนได้ · กรุณาอนุญาตไมโครโฟน/เปิด Siri แล้วลองใหม่');
         else if(code==='audio-capture')showVoiceMessage('ไม่พบไมโครโฟนที่พร้อมใช้งาน');
         else if(code==='network')showVoiceMessage('ค้นหาด้วยเสียงเชื่อมต่อไม่สำเร็จ · ตรวจอินเทอร์เน็ตแล้วลองใหม่');
-        else showVoiceMessage('ค้นหาด้วยเสียงไม่สำเร็จ · ลองอีกครั้ง');
+        else showVoiceMessage('ค้นหาด้วยเสียงไม่สำเร็จ · แตะไมค์เพื่อลองใหม่');
       };
-      recognition.onend=()=>{setListening(false);recognition=null;};
-      recognition.start();
+      rec.onend=()=>finishSession(rec,id);
+
+      // If Safari never fires onstart, release the stale session instead of
+      // leaving the microphone button stuck for the next attempt.
+      watchdog=setTimeout(()=>{
+        if(id!==sessionId||recognition!==rec||listening)return;
+        try{rec.abort();}catch{}
+        finishSession(rec,id);
+        showVoiceMessage('ไมโครโฟนยังไม่เริ่ม · แตะอีกครั้งเพื่อค้นหา');
+      },2800);
+      rec.start();
     }catch(error){
-      setListening(false);
-      showVoiceMessage('อุปกรณ์นี้ยังไม่พร้อมใช้การค้นหาด้วยเสียง');
+      if(rec){try{rec.abort();}catch{}}
+      finishSession(rec,id);
+      showVoiceMessage('อุปกรณ์นี้ยังไม่พร้อมใช้การค้นหาด้วยเสียง · แตะเพื่อลองใหม่');
       console.warn('X-Stage voice search:',error?.message||error);
     }
   });
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden&&recognition)abortStale();
+  });
 }
+
 setupVoiceSearch();
 
 // Draw timed karaoke lyrics on the same stage as the Windows player's background.
