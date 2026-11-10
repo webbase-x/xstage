@@ -325,7 +325,7 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     }
     const data=await privateJson(id,token);
     state.catalogCache.set(id,data);
-    void saveCatalogPiece(sub,id,data);
+    await saveCatalogPiece(sub,id,data);
     if(state.catalogCache.size>40){
       const oldest=state.catalogCache.keys().next().value;
       state.catalogCache.delete(oldest);
@@ -473,8 +473,12 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       });
       downloaded=true;
       if(authId!==state.authId)return;
-      if(!instant)showCatalogLoading('กำลังบันทึกฐานเพลง','จัดเก็บฐานไว้ในเครื่องสำหรับเปิดครั้งต่อไป…',96);
-      void saveCachedCatalog(account.sub,pointer,catalog);
+      if(!instant){
+        showCatalogLoading('กำลังบันทึกฐานเพลง','จัดเก็บฐานไว้ในเครื่องสำหรับเปิดครั้งต่อไป…',96);
+        await saveCachedCatalog(account.sub,pointer,catalog);
+      }else{
+        void saveCachedCatalog(account.sub,pointer,catalog);
+      }
     }
 
     state.manifest=catalog;
