@@ -2114,3 +2114,58 @@ body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .song-resul
     max-height:max(110px,min(48dvh,calc(100dvh - var(--xs-top) - var(--xs-bottom) - 12px)))!important;
   }
 }
+
+/* 1.0.07: touch voice search for phones, iPad and tablets. */
+body.xstage-ui-v2 .stage .stage-search-slot .search-box{
+  position:relative;
+  align-items:center;
+  gap:6px;
+}
+body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button{
+  flex:0 0 34px;
+  width:34px;height:34px;min-width:34px;min-height:34px;
+  display:grid;place-items:center;
+  padding:0;margin:0 1px 0 0;
+  border:1px solid rgba(87,214,255,.7);
+  border-radius:50%;
+  background:rgba(4,40,65,.72);
+  color:#effcff;
+  font-size:1rem;line-height:1;
+  box-shadow:0 0 9px rgba(45,207,255,.18);
+  touch-action:manipulation
+}
+body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button[hidden]{
+  display:none!important
+}
+body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button.listening{
+  border-color:#ff6c83;
+  background:rgba(109,15,36,.9);
+  box-shadow:0 0 0 4px rgba(255,73,103,.13),0 0 15px rgba(255,73,103,.42);
+  animation:xstageVoicePulse .9s ease-in-out infinite alternate
+}
+@keyframes xstageVoicePulse{
+  from{transform:scale(.96)}
+  to{transform:scale(1.06)}
+}
+@media(pointer:fine){
+  body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button{
+    display:none!important
+  }
+}
+@media(max-width:760px),(pointer:coarse){
+  body.xstage-ui-v2 .stage .stage-search-slot .search-box{
+    gap:4px!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button{
+    flex-basis:32px;
+    width:32px;height:32px;min-width:32px;min-height:32px;
+    font-size:.92rem
+  }
+}
+@media(max-width:390px){
+  body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button{
+    flex-basis:30px;
+    width:30px;height:30px;min-width:30px;min-height:30px;
+    font-size:.86rem
+  }
+}
