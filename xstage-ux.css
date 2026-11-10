@@ -1459,3 +1459,17 @@ body.xstage-ui-v2 .catalog-spinner{
     top:42%;width:min(430px,88%);padding:11px 13px;gap:10px
   }
 }
+
+/* 0.9.93: standalone Web App controls. */
+body.xstage-ui-v2.xstage-webapp-mode #fullscreen,
+body.xstage-ui-v2.xstage-webapp-mode #mobile-fullscreen-toggle,
+body.xstage-ui-v2.xstage-webapp-mode #xstage-context-menu [data-cmd="fullscreen"]{
+  display:none!important
+}
+body.xstage-ui-v2.xstage-webapp-mode .transport-right-actions .stage-tools-toggle{
+  width:48px!important;min-width:48px!important;max-width:48px!important;
+  padding:0!important;justify-content:center!important
+}
+body.xstage-ui-v2.xstage-webapp-mode .transport-right-actions .stage-tools-toggle span{
+  display:none!important
+}
