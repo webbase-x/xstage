@@ -2202,3 +2202,11 @@ body.xstage-ui-v2 .stage .stage-search-slot .song-item{
     opacity:.12!important;
   }
 }
+
+/* 1.0.13: prevent iOS/iPadOS focus zoom on the search field. */
+@media(pointer:coarse), (max-width:820px){
+  body.xstage-ui-v2 .stage .stage-search-slot #search{
+    font-size:16px!important;
+    line-height:1.2!important;
+  }
+}
