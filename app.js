@@ -616,21 +616,31 @@ function renderMatchedText(node, value, term) {
   match.textContent=raw.slice(hit,hit+term.length);
   node.append(match,document.createTextNode(raw.slice(hit+term.length)));
 }
+
+function setLiveSearchExpanded(open){
+  const dock=ui.search?.closest('.search-dock');
+  if(!dock)return;
+  dock.classList.toggle('pc-expanded',!!open);
+  ui.search.setAttribute('aria-expanded',String(!!open));
+}
 function renderSongs() {
   ui.songs.replaceChildren();
   if (!state.token) {
+    setLiveSearchExpanded(false);
     ui.search.removeAttribute('aria-activedescendant');
     ui.songs.append(element('div','empty-state','เพลงจาก Google Drive ของคุณจะแสดงที่นี่'));
     return;
   }
   const term = ui.search.value.trim().toLocaleLowerCase('th');
   if(!term){
+    setLiveSearchExpanded(false);
     // Empty search is not a request to list the complete private catalog.
     state.shown=[];state.selectedIndex=0;
     ui.resultCount.textContent='พิมพ์เพื่อค้นหาเพลง';
     ui.search.removeAttribute('aria-activedescendant');
     return;
   }
+  setLiveSearchExpanded(true);
   const matches = state.songs.filter(song =>
     [song.code,song.title,song.artist].some(v => String(v || '').toLocaleLowerCase('th').includes(term)));
   state.shown = matches.slice(0,120);
@@ -1126,7 +1136,11 @@ function drawLyrics(){
 // The stage clock runs independently in index.html.
 ui.login.addEventListener('click',()=>login());ui.gateLogin.addEventListener('click',()=>login());
 ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
-ui.search.addEventListener('input',()=>{state.selectedIndex=0;renderSongs();});
+ui.search.addEventListener('input',()=>{
+  state.selectedIndex=0;
+  renderSongs();
+  if(ui.search.value.trim())setLiveSearchExpanded(true);
+});
 ui.search.addEventListener('keydown',onSearchKey);
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
 ui.playPause.addEventListener('click',togglePlayback);
