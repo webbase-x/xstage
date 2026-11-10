@@ -21,7 +21,7 @@ const state = {
   requestId: 0, controller: null, authId: 0, loading: false,
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
-  userStopped: false, visualScale: 1,
+  userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0
 };
@@ -956,6 +956,8 @@ function clearIdleStage(message){
   updateTransport();
 }
 function stopSong(){
+  state.userPaused=true;
+  state.resumeAfterInterruption=false;
   if(state.medley)setMedleyMode(false);
   clearIdleStage('หยุดเล่นแล้ว');
 }
@@ -970,7 +972,22 @@ function restartCurrentSong(){
   player.play().catch(()=>setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น'));
   updateTransport();
 }
-function togglePlayback(){if(state.loading)return;if(!player.src){if(state.queue.length)playNext();else if(state.shown.length)playSong(state.shown[state.selectedIndex]);return;}if(player.paused){player.play().catch(()=>setPlayStatus('เบราว์เซอร์ไม่อนุญาตให้เริ่มเสียง กรุณากดเล่นอีกครั้ง'));}else player.pause();}
+async function resumePlaybackFromSystem(){
+  if(state.loading)return false;
+  if(!player.src){if(state.queue.length){playNext();return true;}return false;}
+  state.userPaused=false;
+  state.userStopped=false;
+  state.resumeAfterInterruption=false;
+  try{await window.XStageResumeAudioGraph?.();}catch{}
+  try{await player.play();updateTransport();return true;}
+  catch{state.resumeAfterInterruption=true;updateTransport();return false;}
+}
+function togglePlayback(){
+  if(state.loading)return;
+  if(!player.src){if(state.queue.length)playNext();else if(state.shown.length)playSong(state.shown[state.selectedIndex]);return;}
+  if(player.paused)resumePlaybackFromSystem();
+  else{state.userPaused=true;state.resumeAfterInterruption=false;player.pause();}
+}
 
 async function playSong(song,{remember=true,preloaded=null}={}) {
   state.userStopped=false;
@@ -1004,6 +1021,8 @@ async function playSong(song,{remember=true,preloaded=null}={}) {
     player.src=url;player.playbackRate=Number(ui.speed.value);player.loop=ui.repeat.checked;
     player.volume=Number(ui.volume.value)/100;
     state.loading=false;renderQueue();updateTransport();
+    state.userPaused=false;state.resumeAfterInterruption=false;
+    try{await window.XStageResumeAudioGraph?.();}catch{}
     try{await player.play();if(request===state.requestId)setPlayStatus('กำลังเล่น · '+(song.title||song.code));}
     catch{if(request===state.requestId)setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น');}
   }catch(e){if(request!==state.requestId || e.name==='AbortError')return;setPlayStatus(e.message||'ไม่สามารถเล่นเพลงได้');state.loading=false;updateTransport();}
@@ -1369,8 +1388,8 @@ ui.fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenEleme
 function setupMediaSession(){
   if(!('mediaSession' in navigator))return;
   const bind=(action,handler)=>{try{navigator.mediaSession.setActionHandler(action,handler);}catch{}};
-  bind('play',()=>{if(player.src)player.play().catch(()=>{});else if(state.queue.length)playNext();});
-  bind('pause',()=>player.pause());
+  bind('play',()=>{resumePlaybackFromSystem();});
+  bind('pause',()=>{state.userPaused=true;state.resumeAfterInterruption=false;player.pause();});
   bind('stop',stopSong);
   bind('nexttrack',()=>playNext());
   bind('previoustrack',playPrevious);
@@ -1380,9 +1399,25 @@ function setupMediaSession(){
 }
 setupMediaSession();
 
+function tryRecoverInterruptedPlayback(){
+  if(!state.resumeAfterInterruption||state.userPaused||state.userStopped||!state.current||state.loading)return;
+  setTimeout(()=>{if(state.resumeAfterInterruption&&!state.userPaused&&!state.userStopped)resumePlaybackFromSystem();},180);
+}
+window.addEventListener('xstage-audio-interrupted',()=>{state.resumeAfterInterruption=true;});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)tryRecoverInterruptedPlayback();});
+window.addEventListener('pageshow',tryRecoverInterruptedPlayback);
+window.addEventListener('focus',tryRecoverInterruptedPlayback);
+
 player.addEventListener('timeupdate',updateTransport);player.addEventListener('timeupdate',medleyTick);player.addEventListener('loadedmetadata',updateTransport);
-player.addEventListener('durationchange',updateTransport);player.addEventListener('play',updateTransport);
-player.addEventListener('pause',updateTransport);player.addEventListener('ended',()=>{
+player.addEventListener('durationchange',updateTransport);
+player.addEventListener('play',()=>{state.userPaused=false;state.resumeAfterInterruption=false;updateTransport();});
+player.addEventListener('pause',()=>{
+  if(state.current&&!state.loading&&!state.userPaused&&!state.userStopped&&!player.ended&&player.currentTime>0){
+    state.resumeAfterInterruption=true;
+  }
+  updateTransport();
+});
+player.addEventListener('ended',()=>{
   if(player.loop)return;
   if(state.queue.length||state.medley)playNext();
   else clearIdleStage('จบเพลงแล้ว · คิวว่าง');
