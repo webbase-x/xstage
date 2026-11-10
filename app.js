@@ -8,6 +8,7 @@ const $ = id => document.getElementById(id);
 const ui = {
   status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'), catalogProgress:$('catalog-progress'), catalogProgressValue:$('catalog-progress-value'),
   account: $('account'), libraryState: $('library-state'), songTotal: $('song-total'), resultCount: $('result-count'),
+  librarySelect:$('library-select'),librarySwitcher:$('library-switcher'),
   search: $('search'), voiceSearch:$('voice-search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
   nowPlaying: $('now-playing'), nowArtist: $('now-artist'), playStatus: $('play-status'),
@@ -23,7 +24,7 @@ const state = {
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
   userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
-  libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',
+  libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
   playbackRestoreAttempted:false,
   awaitingSharedLibrary:false,
@@ -110,10 +111,47 @@ async function catalogStorage(action,key,value){
     tx.onerror=()=>reject(tx.error);
   });}finally{db.close();}
 }
-async function loadLatestCachedCatalog(sub){
+const LIBRARY_PREF_KEY='xstage-library-choice-v1';
+function libraryCacheOwner(sub,rootId=''){
+  return rootId?sub+':root:'+rootId:sub;
+}
+function readPreferredLibraryRoot(sub){
+  if(!sub)return '';
+  try{
+    const map=JSON.parse(localStorage.getItem(LIBRARY_PREF_KEY)||'{}');
+    return String(map?.[sub]||'');
+  }catch{return '';}
+}
+function savePreferredLibraryRoot(sub,rootId){
+  if(!sub||!rootId)return;
+  try{
+    const map=JSON.parse(localStorage.getItem(LIBRARY_PREF_KEY)||'{}');
+    map[sub]=String(rootId);
+    localStorage.setItem(LIBRARY_PREF_KEY,JSON.stringify(map));
+  }catch{}
+}
+function libraryLabel(root){
+  if(root?.ownedByMe)return 'คลังของฉัน';
+  const owner=String(root?.owners?.[0]?.emailAddress||'').trim();
+  return owner?'แชร์โดย '+owner:'คลังที่แชร์ให้ฉัน';
+}
+function renderLibrarySelector(roots,activeId){
+  state.availableLibraries=Array.isArray(roots)?roots.slice():[];
+  if(!ui.librarySelect||!ui.librarySwitcher)return;
+  ui.librarySelect.replaceChildren();
+  for(const root of state.availableLibraries){
+    const option=document.createElement('option');
+    option.value=String(root.id||'');
+    option.textContent=libraryLabel(root);
+    ui.librarySelect.append(option);
+  }
+  if(activeId)ui.librarySelect.value=String(activeId);
+  ui.librarySwitcher.hidden=state.availableLibraries.length<2;
+}
+async function loadLatestCachedCatalog(sub,rootId=''){
   if(!sub)return null;
   try{
-    const saved=await catalogStorage('get',sub);
+    const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
     if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
     return {
@@ -136,10 +174,10 @@ async function saveCatalogPiece(sub,id,data){
   try{await catalogStorage('put','piece:'+sub+':'+id,{data,savedAt:Date.now()});}
   catch(error){console.warn('X-Stage catalog piece cache:',error?.message||error);}
 }
-async function loadCachedCatalog(sub,pointer){
-  if(!sub||!pointer?.generation)return null;
+async function loadCachedCatalog(ownerKey,pointer){
+  if(!ownerKey||!pointer?.generation)return null;
   try{
-    const saved=await catalogStorage('get',sub);
+    const saved=await catalogStorage('get',ownerKey);
     if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
        JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
     const catalog=saved.catalog;
@@ -148,9 +186,9 @@ async function loadCachedCatalog(sub,pointer){
     return catalog;
   }catch{return null;}
 }
-async function saveCachedCatalog(sub,pointer,catalog){
-  if(!sub||!pointer?.generation||!Array.isArray(catalog?.songs))return;
-  try{await catalogStorage('put',sub,{
+async function saveCachedCatalog(ownerKey,pointer,catalog){
+  if(!ownerKey||!pointer?.generation||!Array.isArray(catalog?.songs))return;
+  try{await catalogStorage('put',ownerKey,{
     generation:String(pointer.generation),catalogFileId:pointer.catalogFileId,
     deltaFileIds:pointer.deltaFileIds||[],catalog
   });}catch(error){console.warn('X-Stage local catalog cache:',error?.message||error);}
