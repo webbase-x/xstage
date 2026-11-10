@@ -2210,3 +2210,31 @@ body.xstage-ui-v2 .stage .stage-search-slot .song-item{
     line-height:1.2!important;
   }
 }
+
+/* 1.0.14: small screens keep only the search field in the upper toolbar. */
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-template-rows:42px!important;
+    column-gap:0!important;
+    padding-left:max(10px,env(safe-area-inset-left))!important;
+    padding-right:max(10px,env(safe-area-inset-right))!important;
+  }
+  body.xstage-ui-v2 .stage-toolbar .mobile-menu-toggle,
+  body.xstage-ui-v2 .stage-toolbar .mobile-stage-clock{
+    display:none!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot{
+    grid-column:1!important;
+    grid-row:1!important;
+    width:100%!important;
+    max-width:100%!important;
+  }
+}
+@media(max-width:390px){
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    grid-template-columns:minmax(0,1fr)!important;
+    padding-left:max(8px,env(safe-area-inset-left))!important;
+    padding-right:max(8px,env(safe-area-inset-right))!important;
+  }
+}
