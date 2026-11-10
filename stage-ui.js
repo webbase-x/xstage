@@ -125,6 +125,7 @@
     else if(cmd==='stage')$('pc-stage-pop')?.click();
     else if(cmd==='medley')$('mobile-medley-toggle')?.click();
     else if(cmd==='tools')$('stage-tools-toggle')?.click();
+    else if(cmd==='share')$('pc-share-library')?.click();
     else if(cmd==='fullscreen')$('fullscreen')?.click();
   });
 
