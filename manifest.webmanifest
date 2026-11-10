@@ -1,14 +1,49 @@
 {
-  "name": "AI Thai Browser",
-  "short_name": "AI Browser",
-  "start_url": "./",
+  "id": "/xstage/",
+  "name": "X-Stage Karaoke Online",
+  "short_name": "X-Stage",
+  "start_url": "./?source=installed",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0b1020",
-  "theme_color": "#111827",
+  "orientation": "any",
+  "background_color": "#061321",
+  "theme_color": "#071525",
   "lang": "th",
-  "description": "PWA browser shell with local favorites/history and live Thai dubbing backend adapter.",
+  "description": "เล่นคาราโอเกะจากคลังเพลง Google Drive ส่วนตัว พร้อมค้นหา คิวเพลง รีโมทมือถือ และฉากเวที X-Stage",
   "icons": [
-    { "src": "./assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "./assets/xstage-favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/xstage-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/xstage-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/xstage-app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./assets/xstage-app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": [
+    "music",
+    "entertainment"
   ]
 }
