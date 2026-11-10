@@ -45,19 +45,31 @@
           </div>
           <div class="stage-ambience" aria-hidden="true"></div>
           <div class="stage-hero" aria-hidden="true">
-            <div class="stage-hero-emblem">
-              <span class="stage-hero-x">X</span>
-              <svg class="stage-hero-mic" viewBox="0 0 72 112" xmlns="http://www.w3.org/2000/svg">
-                <defs><linearGradient id="mic-metal" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#83b7d8"/><stop offset=".48" stop-color="#fff"/><stop offset="1" stop-color="#4e85ac"/></linearGradient></defs>
-                <rect x="19" y="5" width="34" height="62" rx="17" fill="url(#mic-metal)" stroke="#163e67" stroke-width="3"/>
-                <path d="M24 22H48M22 32H50M22 42H50M25 52H47" stroke="#2a638d" stroke-width="3" opacity=".8"/>
-                <path d="M11 47V56A25 25 0 0 0 61 56V47" fill="none" stroke="#baf7ff" stroke-width="6" stroke-linecap="round"/>
-                <path d="M36 82V103M20 104H52" stroke="#ceeaff" stroke-width="7" stroke-linecap="round"/>
-              </svg>
+            <div class="stage-brand-lockup">
+              <div class="stage-brand-mark">
+                <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                  <defs>
+                    <linearGradient id="xstage-mark-a" x1="12" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
+                      <stop stop-color="#75f7ff"/><stop offset=".48" stop-color="#36a8ff"/><stop offset="1" stop-color="#a35cff"/>
+                    </linearGradient>
+                    <linearGradient id="xstage-mark-b" x1="28" y1="18" x2="68" y2="80" gradientUnits="userSpaceOnUse">
+                      <stop stop-color="#f7fdff"/><stop offset=".55" stop-color="#9bdcff"/><stop offset="1" stop-color="#8c74ff"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M18 18 78 78M78 18 18 78" fill="none" stroke="url(#xstage-mark-a)" stroke-width="11" stroke-linecap="round"/>
+                  <rect x="39" y="20" width="18" height="38" rx="9" fill="#071426" stroke="url(#xstage-mark-b)" stroke-width="4"/>
+                  <path d="M43 31h10M43 38h10M43 45h10" stroke="#dffaff" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
+                  <path d="M32 48v5a16 16 0 0 0 32 0v-5M48 69v10M38 80h20" fill="none" stroke="url(#xstage-mark-b)" stroke-width="4" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="stage-brand-copy">
+                <strong class="stage-brand-word"><span class="stage-brand-x">X</span><span class="stage-brand-dash">-</span><span class="stage-brand-stage">Stage</span></strong>
+                <div class="stage-brand-sub"><span>KARAOKE</span><i></i><span>ONLINE</span></div>
+              </div>
             </div>
-            <strong class="stage-hero-name">X-STAGE</strong>
-            <span class="stage-hero-karaoke">KARAOKE</span>
-            <em class="stage-hero-online">Online</em>
+            <div class="stage-brand-spectrum" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
           </div>
           <header class="mobile-stage-header stage-toolbar" aria-label="คำสั่ง X-Stage">
             <button id="mobile-menu-toggle" class="mobile-menu-toggle toolbar-button" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
