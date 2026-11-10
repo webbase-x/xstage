@@ -1961,3 +1961,107 @@ body.xstage-ui-v2 .transport-text-action .transport-action-icon{
   font-size:clamp(.95rem,1.35vw,1.2rem);
   line-height:1
 }
+
+/* 1.0.05: hard viewport lock — the app always opens exactly inside one screen. */
+html{
+  width:100%;height:100%;
+  margin:0;padding:0;
+  overflow:hidden!important;
+  overscroll-behavior:none;
+  background:#030816;
+}
+html body.xstage-ui-v2{
+  position:fixed!important;
+  inset:0!important;
+  width:100%!important;
+  height:100svh!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-width:100%!important;
+  max-height:100svh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  overscroll-behavior:none!important;
+}
+body.xstage-ui-v2 .app-shell{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+}
+body.xstage-ui-v2 .studio-layout,
+body.xstage-ui-v2 .stage-column{
+  position:relative!important;
+  width:100%!important;
+  height:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+}
+body.xstage-ui-v2 .stage{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  margin:0!important;
+  border-radius:0!important;
+  overflow:hidden!important;
+  contain:layout paint;
+}
+body.xstage-ui-v2 .stage-toolbar,
+body.xstage-ui-v2 .transport-panel,
+body.xstage-ui-v2 .stage-search-slot,
+body.xstage-ui-v2 .search-dock,
+body.xstage-ui-v2 .queue-dock,
+body.xstage-ui-v2 .mobile-stage-menu,
+body.xstage-ui-v2 .virtual-keyboard,
+body.xstage-ui-v2 .remote-pair-panel{
+  box-sizing:border-box!important;
+  min-width:0!important;
+  max-width:100%;
+}
+/* Keep overlays scrollable when their content is long, but never show scrollbar rails. */
+body.xstage-ui-v2 .song-results,
+body.xstage-ui-v2 .queue-list,
+body.xstage-ui-v2 .mobile-stage-menu,
+body.xstage-ui-v2 .virtual-keyboard,
+body.xstage-ui-v2 .remote-pair-panel,
+body.xstage-ui-v2 .gate-panel,
+body.xstage-ui-v2 #pc-dialog-body{
+  scrollbar-width:none!important;
+  -ms-overflow-style:none;
+}
+body.xstage-ui-v2 .song-results::-webkit-scrollbar,
+body.xstage-ui-v2 .queue-list::-webkit-scrollbar,
+body.xstage-ui-v2 .mobile-stage-menu::-webkit-scrollbar,
+body.xstage-ui-v2 .virtual-keyboard::-webkit-scrollbar,
+body.xstage-ui-v2 .remote-pair-panel::-webkit-scrollbar,
+body.xstage-ui-v2 .gate-panel::-webkit-scrollbar,
+body.xstage-ui-v2 #pc-dialog-body::-webkit-scrollbar{
+  width:0!important;height:0!important;display:none!important
+}
+/* Standalone/PWA has no browser chrome, so dynamic viewport height can safely fill it. */
+html.xstage-webapp-mode body.xstage-ui-v2,
+body.xstage-ui-v2.xstage-webapp-mode{
+  height:100dvh!important;
+  max-height:100dvh!important
+}
+@supports not (height:100svh){
+  html body.xstage-ui-v2{height:100vh!important;max-height:100vh!important}
+}
