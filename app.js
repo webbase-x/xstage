@@ -582,6 +582,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
   state.medleyPoolSource=null;state.medleyPool=[];state.medleyRecent=[];state.userStopped=false;
   state.current = null;state.lyrics = null;state.selectedIndex = 0;
+  clearMediaSession();
   ui.account.textContent = '';ui.account.hidden = true;ui.logout.hidden = true;ui.login.hidden = false;
   ui.gate.hidden = false;hideCatalogLoading();ui.search.disabled = true;ui.search.value = '';
   ui.songTotal.textContent = '0 เพลง';ui.resultCount.textContent = 'กรุณาเข้าสู่ระบบ';
@@ -846,7 +847,7 @@ function clearMediaSession(){
   try{navigator.mediaSession.playbackState='none';}catch{}
 }
 function syncMediaSessionMetadata(song){
-  if(!('mediaSession' in navigator)||!song)return;
+  if(!('mediaSession' in navigator)||typeof MediaMetadata!=='function'||!song)return;
   try{
     navigator.mediaSession.metadata=new MediaMetadata({
       title:song.title||song.code||'X-Stage Karaoke',
@@ -1086,7 +1087,7 @@ ui.fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenEleme
 function setupMediaSession(){
   if(!('mediaSession' in navigator))return;
   const bind=(action,handler)=>{try{navigator.mediaSession.setActionHandler(action,handler);}catch{}};
-  bind('play',()=>player.play().catch(()=>{}));
+  bind('play',()=>{if(player.src)player.play().catch(()=>{});else if(state.queue.length)playNext();});
   bind('pause',()=>player.pause());
   bind('stop',stopSong);
   bind('nexttrack',()=>playNext());
