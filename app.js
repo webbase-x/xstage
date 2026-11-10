@@ -623,19 +623,32 @@ function setLiveSearchExpanded(open){
   dock.classList.toggle('pc-expanded',!!open);
   ui.search.setAttribute('aria-expanded',String(!!open));
 }
+function restoreViewportAfterKeyboard(){
+  const settle=()=>{
+    try{window.scrollTo({left:0,top:0,behavior:'instant'});}catch{window.scrollTo(0,0);}
+    const vv=window.visualViewport;
+    if(!vv||vv.scale<=1.01)return;
+    const meta=document.querySelector('meta[name="viewport"]');
+    if(!meta)return;
+    const original=meta.getAttribute('content')||'width=device-width, initial-scale=1, viewport-fit=cover';
+    meta.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover');
+    setTimeout(()=>{
+      meta.setAttribute('content',original);
+      try{window.scrollTo(0,0);}catch{}
+    },140);
+  };
+  requestAnimationFrame(()=>setTimeout(settle,80));
+}
 function clearSearchAfterChoice(){
   ui.search.value='';
   state.shown=[];
   state.selectedIndex=0;
   renderSongs();
   setLiveSearchExpanded(false);
-  // Release the mobile/iPad software keyboard so the visual viewport returns
-  // to the full screen immediately after a song is chosen.
+  // Release the mobile/iPad software keyboard and restore the full visual viewport.
   if(document.activeElement===ui.search)ui.search.blur();
   else document.activeElement?.blur?.();
-  requestAnimationFrame(()=>{
-    try{window.scrollTo({left:0,top:0,behavior:'instant'});}catch{window.scrollTo(0,0);}
-  });
+  restoreViewportAfterKeyboard();
 }
 function renderSongs() {
   ui.songs.replaceChildren();
@@ -1189,6 +1202,8 @@ ui.search.addEventListener('input',()=>{
   if(ui.search.value.trim())setLiveSearchExpanded(true);
 });
 ui.search.addEventListener('keydown',onSearchKey);
+ui.search.addEventListener('blur',restoreViewportAfterKeyboard);
+
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
 ui.playPause.addEventListener('click',togglePlayback);
 ui.stop.addEventListener('click',stopSong);
