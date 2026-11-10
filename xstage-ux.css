@@ -1614,3 +1614,99 @@ body.xstage-ui-v2.xstage-webapp-mode .stage .stage-search-slot,
 body.xstage-ui-v2.xstage-webapp-mode .stage .search-dock{
   max-width:100%!important;min-width:0!important
 }
+
+/* 0.9.99: two-row small-screen toolbar, lower stage branding, icon-only bottom controls. */
+@media(max-width:760px){
+  :root{--xs-top:96px}
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    grid-template-columns:auto minmax(0,1fr) auto!important;
+    grid-template-rows:38px 42px!important;
+    align-content:start!important;
+    row-gap:6px!important;
+    padding-top:5px!important;
+    padding-bottom:5px!important;
+  }
+  body.xstage-ui-v2 .stage-toolbar .mobile-menu-toggle{
+    grid-column:1!important;grid-row:1!important;
+    align-self:center!important
+  }
+  body.xstage-ui-v2 .stage-toolbar .mobile-stage-clock{
+    grid-column:3!important;grid-row:1!important;
+    align-self:center!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot{
+    grid-column:1 / -1!important;
+    grid-row:2!important;
+    width:100%!important;
+    min-width:0!important;
+    align-self:stretch!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock,
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded){
+    height:42px!important;max-height:42px!important;
+    border-radius:12px!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box{
+    height:38px!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot #search{
+    height:36px!important
+  }
+
+  /* Idle app identity sits 40% down from the stage top. */
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+    top:40%!important
+  }
+
+  /* Bottom actions become icon-only on small screens. */
+  body.xstage-ui-v2 .transport-text-action{
+    width:34px!important;min-width:34px!important;max-width:34px!important;
+    height:34px!important;min-height:34px!important;
+    padding:0!important;border-radius:50%!important;
+    display:inline-grid!important;place-items:center!important
+  }
+  body.xstage-ui-v2 .transport-text-action .transport-action-label{
+    display:none!important
+  }
+  body.xstage-ui-v2 .transport-text-action .transport-action-icon{
+    display:inline!important;font-size:1rem;line-height:1
+  }
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-queue-toggle,
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-tools-toggle{
+    width:36px!important;min-width:36px!important;max-width:36px!important;
+    height:34px!important;min-height:34px!important;
+    padding:0!important;display:grid!important;place-items:center!important;
+    border-radius:10px!important
+  }
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-queue-toggle span,
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-queue-toggle b,
+  body.xstage-ui-v2 .stage .transport-right-actions .stage-tools-toggle span{
+    display:none!important
+  }
+}
+@media(max-width:390px){
+  :root{--xs-top:92px}
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    grid-template-rows:36px 40px!important;
+    row-gap:5px!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock,
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded){
+    height:40px!important;max-height:40px!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box{height:36px!important}
+  body.xstage-ui-v2 .stage .stage-search-slot #search{height:34px!important}
+}
+@media(max-height:530px) and (orientation:landscape) and (max-width:760px){
+  :root{--xs-top:88px}
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    grid-template-rows:34px 38px!important;
+    row-gap:4px!important;padding-top:4px!important;padding-bottom:4px!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock,
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded){
+    height:38px!important;max-height:38px!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box{height:34px!important}
+  body.xstage-ui-v2 .stage .stage-search-slot #search{height:32px!important}
+}
