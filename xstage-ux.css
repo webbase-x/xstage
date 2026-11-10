@@ -535,7 +535,7 @@ body.xstage-ui-v2 .stage-hero-online{
   color:#8efaff;text-shadow:0 0 10px #00e4fb,0 3px 0 #003fa4,0 0 24px #15a9ff;
   line-height:1.15;transform:rotate(-7deg)
 }
-body.xstage-ui-v2 .stage.playing .stage-hero{opacity:.18}
+/* unified with stationary hero below */
 @media(max-width:910px){
   body.xstage-ui-v2 .stage-hero{width:min(88vw,550px);top:49%}
   body.xstage-ui-v2 .stage-hero-emblem{margin-bottom:1px}
@@ -594,10 +594,7 @@ body.xstage-ui-v2 .stage-hero{
   top:34%;transform:translate(-50%,-50%) scale(.86);
   transform-origin:center center;
 }
-body.xstage-ui-v2 .stage.playing .stage-hero{
-  top:27%;opacity:.8;
-  transform:translate(-50%,-50%) scale(.64)
-}
+/* unified with stationary hero below */
 body.xstage-ui-v2 .stage .remote-pair-panel{
   max-height:min(380px,calc(100% - var(--xs-top) - var(--xs-bottom) - 16px))!important
 }
@@ -642,17 +639,15 @@ body.xstage-ui-v2 .stage-extra-tools-list #mobile-favorites[aria-pressed="true"]
 }
 @media(max-width:910px){
   body.xstage-ui-v2 .stage-hero{top:32%;transform:translate(-50%,-50%) scale(.77)}
-  body.xstage-ui-v2 .stage.playing .stage-hero{top:25%;transform:translate(-50%,-50%) scale(.56)}
+  /* unified with stationary hero below */
 }
 @media(max-width:620px){
   body.xstage-ui-v2 .stage-hero{top:31%;transform:translate(-50%,-50%) scale(.87)}
-  body.xstage-ui-v2 .stage.playing .stage-hero{
-    top:24%;opacity:.78;transform:translate(-50%,-50%) scale(.57)
-  }
+  /* unified with stationary hero below */
 }
 @media(max-height:530px) and (orientation:landscape){
   body.xstage-ui-v2 .stage-hero{top:33%;transform:translate(-50%,-50%) scale(.56)}
-  body.xstage-ui-v2 .stage.playing .stage-hero{top:24%;transform:translate(-50%,-50%) scale(.42)}
+  /* unified with stationary hero below */
   body.xstage-ui-v2 .stage .remote-pair-panel{
     max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 10px)!important
   }
@@ -2189,18 +2184,10 @@ body.xstage-ui-v2 .stage .stage-search-slot .song-item{
 
 /* 1.0.11: keep X-Stage identity and karaoke lyrics in separate landscape zones. */
 @media(orientation:landscape){
-  body.xstage-ui-v2 .stage.playing .stage-hero{
-    top:18%!important;
-    transform:translate(-50%,-50%) scale(.46)!important;
-    opacity:.14!important;
-  }
+  /* unified with stationary hero below */
 }
 @media(orientation:landscape) and (max-height:530px){
-  body.xstage-ui-v2 .stage.playing .stage-hero{
-    top:16%!important;
-    transform:translate(-50%,-50%) scale(.39)!important;
-    opacity:.12!important;
-  }
+  /* unified with stationary hero below */
 }
 
 /* 1.0.13: prevent iOS/iPadOS focus zoom on the search field. */
@@ -2398,42 +2385,57 @@ body.xstage-ui-v2 .share-library-dialog>small{
   body.xstage-ui-v2 .share-library-actions{display:grid;grid-template-columns:1fr 1fr}
 }
 
-/* 1.0.28: responsive stage identity — size to the stage, never to the browser width alone. */
+/* 1.0.30: Single consistent stage logo layout for idle and playing.
+   All four parts (X/microphone, X-STAGE, KARAOKE, Online) stay visible.
+   The entire sign remains stationary when playback begins. */
 body.xstage-ui-v2 .stage{
-  /* A real size container allows both portrait and landscape stage proportions. */
   container-type:size;
 }
 body.xstage-ui-v2 .stage .stage-hero,
-body.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+body.xstage-ui-v2 .stage.playing .stage-hero{
+  position:absolute!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  visibility:visible!important;
+  opacity:1!important;
+  z-index:2;
   top:46%!important;
   left:50%!important;
   width:min(72cqw,670px)!important;
   max-width:calc(100% - 32px)!important;
   box-sizing:border-box;
-  padding:0 clamp(5px,1cqw,16px);
+  padding:0 clamp(5px,1cqw,16px)!important;
   transform:translate(-50%,-50%)!important;
-  transform-origin:center center;
-  /* Keep the existing remote-controlled visual-size preference. */
+  transform-origin:center center!important;
   scale:var(--xstage-visual-scale,1);
+  transition:none!important;
+  pointer-events:none;
 }
-body.xstage-ui-v2 .stage-hero-emblem{
+body.xstage-ui-v2 .stage .stage-hero-emblem{
+  display:grid!important;
   width:min(16cqw,20cqh,175px)!important;
   height:min(16cqw,20cqh,175px)!important;
   margin-bottom:clamp(-7px,-.6cqh,-2px)!important;
 }
-body.xstage-ui-v2 .stage-hero-x{
+body.xstage-ui-v2 .stage .stage-hero-x{
+  display:block!important;
   font-size:clamp(48px,min(18cqw,22cqh),210px)!important;
 }
-body.xstage-ui-v2 .stage-hero-mic{
+body.xstage-ui-v2 .stage .stage-hero-mic{
+  display:block!important;
   width:clamp(20px,min(4cqw,6cqh),62px)!important;
   height:clamp(29px,min(7cqw,10cqh),96px)!important;
 }
-body.xstage-ui-v2 .stage-hero-name{
+body.xstage-ui-v2 .stage .stage-hero-name{
+  display:block!important;
   max-width:100%;
   font-size:clamp(28px,min(7.7cqw,12cqh),104px)!important;
   letter-spacing:clamp(-3px,-.18cqw,-.5px)!important;
 }
-body.xstage-ui-v2 .stage-hero-karaoke{
+body.xstage-ui-v2 .stage .stage-hero-karaoke{
+  display:block!important;
   box-sizing:border-box;
   max-width:100%;
   padding:2px clamp(8px,1.2cqw,22px) 3px!important;
@@ -2442,35 +2444,36 @@ body.xstage-ui-v2 .stage-hero-karaoke{
   border-radius:clamp(7px,1.1cqw,16px)!important;
   white-space:nowrap;
 }
-body.xstage-ui-v2 .stage-hero-online{
+body.xstage-ui-v2 .stage .stage-hero-online{
+  display:block!important;
   font-size:clamp(20px,min(4.2cqw,7.2cqh),62px)!important;
 }
-
-/* 1.0.29: keep the complete sign stationary throughout playback.
-   The lyrics canvas sits above this noninteractive sign. */
-body.xstage-ui-v2 .stage.playing .stage-hero{
-  top:46%!important;
-  left:50%!important;
-  width:min(72cqw,670px)!important;
-  max-width:calc(100% - 32px)!important;
-  box-sizing:border-box;
-  padding:0 clamp(5px,1cqw,16px)!important;
-  transform:translate(-50%,-50%)!important;
-  transform-origin:center center;
-  scale:var(--xstage-visual-scale,1);
-  opacity:.32!important;
-}
-body.xstage-ui-v2 .stage.playing .stage-hero-emblem{
-  display:grid!important;
-}
-body.xstage-ui-v2 .stage.playing .stage-hero-online{
-  display:block!important;
-}
-@media (max-height:530px) and (orientation:landscape){
-  /* A compact stage sign is fixed in the same place before and during songs. */
-  body.xstage-ui-v2 .stage .stage-hero,
-  body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
-  body.xstage-ui-v2 .stage.playing .stage-hero{
-    top:46%!important;
+@media(orientation:landscape) and (max-height:530px){
+  /* On short displays, reduce every part together instead of hiding any. */
+  body.xstage-ui-v2 .stage .stage-hero-emblem{
+    width:min(11cqw,11cqh,75px)!important;
+    height:min(11cqw,11cqh,75px)!important;
+    margin-bottom:0!important;
   }
+  body.xstage-ui-v2 .stage .stage-hero-x{
+    font-size:clamp(30px,min(12cqw,13cqh),75px)!important;
+  }
+  body.xstage-ui-v2 .stage .stage-hero-mic{
+    width:clamp(14px,3cqh,24px)!important;
+    height:clamp(22px,5cqh,38px)!important;
+  }
+  body.xstage-ui-v2 .stage .stage-hero-name{
+    font-size:clamp(21px,min(5cqw,7cqh),52px)!important;
+  }
+  body.xstage-ui-v2 .stage .stage-hero-karaoke{
+    font-size:clamp(12px,min(2.3cqw,4cqh),23px)!important;
+    padding:1px 8px 2px!important;
+  }
+  body.xstage-ui-v2 .stage .stage-hero-online{
+    font-size:clamp(15px,min(3cqw,5cqh),26px)!important;
+  }
+}
+/* Respect the user's explicit photo-background choice (logo-free mode). */
+body.xstage-ui-v2 .stage.stage-hero-hidden .stage-hero{
+  display:none!important;
 }
