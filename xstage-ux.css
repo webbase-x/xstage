@@ -2810,3 +2810,30 @@ body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .library-hi
     font-size:1.35rem!important;
   }
 }
+
+
+/* 1.0.45: one canonical utilities menu, clearer search refinement and mute state. */
+body.xstage-ui-v2 .transport-panel .pc-tools,
+body.xstage-ui-v2 .stage-column.mobile-tools-expanded .transport-panel .pc-tools{
+  display:none!important;
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-tools-toggle{
+  display:none!important;
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu .mobile-speed-control{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  min-height:43px;padding:8px 13px;margin:0;
+  color:#e7f0ff;border:1px solid transparent;border-radius:9px;
+  background:transparent;font-size:clamp(.77rem,.95vw,.97rem);font-weight:700;
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu .mobile-speed-control select{
+  min-width:88px;min-height:32px;padding:4px 7px;
+  border:1px solid #315b82;border-radius:7px;
+  background:#0a2039;color:#f4fbff;font-weight:800;
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-refine-hint{
+  color:#8fd9ff;font-weight:750;white-space:nowrap;
+}
+body.xstage-ui-v2 .transport-volume-value.is-muted{
+  color:#ffcf87;min-width:92px;font-weight:900;
+}

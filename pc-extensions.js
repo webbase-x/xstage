@@ -71,7 +71,7 @@ renderSongs=function(){
  try{baseRender();}finally{state.songs=saved;}
  [...ui.songs.querySelectorAll('.song-item')].forEach((row,i)=>{
   const song=state.shown[i];if(!song)return;
-  const star=document.createElement('button');star.type='button';star.className='pc-star';star.style.cssText='border:0;background:transparent;color:#ffd46a;font-size:20px;padding:3px 7px';star.textContent=favorites.has(songIdentity(song))?'★':'☆';star.title='เพลงโปรด (เฉพาะในแท็บนี้)';
+  const star=document.createElement('button');star.type='button';star.className='pc-star';star.style.cssText='border:0;background:transparent;color:#ffd46a;font-size:20px;padding:3px 7px';star.textContent=favorites.has(songIdentity(song))?'★':'☆';star.title='เพิ่ม/นำออกจากเพลงโปรด · บันทึกในเบราว์เซอร์นี้';
   star.onclick=e=>{e.stopPropagation();const id=songIdentity(song);if(favorites.has(id))favorites.delete(id);else favorites.add(id);saveFavorites();renderSongs();};
   row.insertBefore(star,row.lastElementChild);
   row.addEventListener('contextmenu',e=>{e.preventDefault();showSong(song);});
@@ -246,8 +246,12 @@ function applyEqGains(save=true){
  if(save)window.XStageUiPrefs?.save?.({eqGains:values,eqPreset,eqBypassed});
  sendEqState();
 }
+function autoPresetMetadata(song){
+ const text=[song?.genre,song?.style,song?.type,song?.category].filter(Boolean).join(' ').trim().toLowerCase();
+ return {text,hasMetadata:!!text};
+}
 function autoPresetForSong(song){
- const text=[song?.genre,song?.style,song?.type,song?.category].filter(Boolean).join(' ').toLowerCase();
+ const {text}=autoPresetMetadata(song);
  if(/edm|dance|electro|house|techno|ดนตรีเต้น|แดนซ์/.test(text))return 'edm';
  if(/rock|metal|alternative|ร็อก|ร็อค/.test(text))return 'rock';
  if(/jazz|swing|blues|แจ๊ส/.test(text))return 'jazz';
@@ -264,7 +268,16 @@ function setEqPreset(name,{save=true}={}){
  eqBandInputs.forEach((input,i)=>input.value=String(Math.round(gains[i])));
  eqNodes.forEach((node,i)=>node.gain.value=eqBypassed?0:Math.round(gains[i]));
  if(eqPresetSelect)eqPresetSelect.value=eqPreset==='custom'?'custom':eqPreset;
- const label=$pc('xstage-eq-song-style');if(label)label.textContent=eqPreset==='auto'?'AUTO: '+actual.toUpperCase():'PRESET: '+eqPreset.toUpperCase();
+ const label=$pc('xstage-eq-song-style');
+ if(label){
+   const meta=autoPresetMetadata(state.current);
+   label.textContent=eqPreset==='auto'
+     ? (meta.hasMetadata?'AUTO: '+actual.toUpperCase():'AUTO: FLAT · ไม่มีข้อมูลแนวเพลง')
+     : 'PRESET: '+eqPreset.toUpperCase();
+   label.title=eqPreset==='auto'&&!meta.hasMetadata
+     ? 'เพลงนี้ไม่มี genre/style/type/category ในฐาน จึงใช้ Flat โดยไม่วิเคราะห์เสียงอัตโนมัติ'
+     : '';
+ }
  if(save)window.XStageUiPrefs?.save?.({eqPreset,eqGains:gains.map(v=>Math.round(v)),eqBypassed});
  sendEqState();
 }
@@ -391,7 +404,7 @@ $pc('pc-stage-pop').onclick=()=>{
  if(!screen)setPlayStatus('กรุณาอนุญาตให้เปิดหน้าต่างจอร้องแยก');
   else screen.addEventListener('load',()=>{sendBackgroundToSecondScreen();syncEqDisplaySelector();sendEqState();applyEqVisibility();},{once:true});
 };
-setInterval(()=>{if(!screen||screen.closed){if(eqDisplayTarget!=='main'){eqDisplayTarget='main';syncEqDisplaySelector();eqPanel.hidden=false;}return;}try{screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime},location.origin);}catch{}},200);
+setInterval(()=>{if(!screen||screen.closed){if(eqDisplayTarget!=='main'){eqDisplayTarget='main';syncEqDisplaySelector();eqPanel.hidden=false;}return;}try{screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime,duration:Number.isFinite(audio.duration)?audio.duration:Number(state.current?.duration)||0,playing:!!audio.src&&!audio.paused,queueCount:state.queue.length},location.origin);}catch{}},200);
 $pc('pc-other-tools').onclick=()=>{const d=openDialog('ความสามารถ X-Stage Web');d.append(para('เว็บ: ค้นหาแบบเรียลไทม์, คิวเพลง, ประวัติ, เพลงโปรดในเซสชัน, สุ่มเพลง, A–B, EQ, ตั้งค่าเนื้อร้องและพื้นหลัง, จอร้องแยก, ส่งออก/นำเข้าคิว'));
  d.append(para('เฉพาะ Windows: MIDI Mixer / SoundFont แยกชิ้นดนตรี, GM Keyboard, ปิด Guide Melody, ASIO, ปรับคีย์ดนตรีอิสระจาก M4A และจัดการฐานเพลงในเครื่อง'));
 };

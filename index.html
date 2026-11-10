@@ -19,8 +19,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1044">
-  <link rel="stylesheet" href="xstage-ux.css?v=1044">
+  <link rel="stylesheet" href="style.css?v=1045">
+  <link rel="stylesheet" href="xstage-ux.css?v=1045">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -86,7 +86,7 @@
             <div class="stage-search-slot"><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
         <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
         <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-label="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false"><button id="voice-search" class="voice-search-button" type="button" aria-label="ค้นหาเพลงด้วยเสียง" title="ค้นหาด้วยเสียง" aria-pressed="false" hidden>🎙</button><kbd>Ctrl F</kbd></div>
-        <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
+        <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span id="search-refine-hint" class="search-refine-hint" hidden>พิมพ์เพิ่มเพื่อเจาะจงผลค้นหา</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
       </aside></div>
@@ -111,9 +111,10 @@
             <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
             <button type="button" id="mobile-stage-pop" aria-label="เปิดจอร้องแยก">เปิดจอร้องแยก</button>
             <button type="button" id="mobile-medley-toggle" aria-pressed="false" aria-label="เปิดเมดเลย์สุ่มเพลงต่อเนื่อง">เปิดเมดเลย์สุ่มเพลงต่อเนื่อง</button>
-            <button type="button" id="mobile-tools-toggle" aria-label="เครื่องมือและตั้งค่า">เครื่องมือและตั้งค่า</button>
+            <label class="mobile-speed-control" for="mobile-speed-select"><span>ความเร็วเพลง</span><select id="mobile-speed-select" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
+            <button type="button" id="mobile-tools-toggle" aria-label="เปิดเครื่องมือเพิ่มเติม">เครื่องมือเพิ่มเติม</button>
             <details class="stage-extra-tools" id="stage-extra-tools">
-              <summary>ฟังก์ชันอื่น ๆ ทั้งหมด</summary>
+              <summary>เครื่องมือทั้งหมด</summary>
               <div class="stage-extra-tools-list">
                 <button type="button" id="mobile-random">สุ่มเพลงเพิ่มในคิว</button>
                 <button type="button" id="mobile-history">ประวัติการเล่น</button>
@@ -248,7 +249,7 @@
                 <div><span>R</span><meter id="xstage-eq-meter-r" min="0" max="1" value="0"></meter></div>
               </div>
             </div>
-            <footer class="xstage-eq-footer"><span>±12 dB</span><span id="xstage-eq-song-style">AUTO: รอข้อมูลเพลง</span><span>RTA · L/R PEAK</span></footer>
+            <footer class="xstage-eq-footer"><span>±12 dB</span><span id="xstage-eq-song-style">AUTO: รอข้อมูลแนวเพลง</span><span>RTA · L/R PEAK</span></footer>
           </section>
           <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog>
           <dialog id="share-library-dialog" class="share-library-dialog" aria-labelledby="share-library-title">
@@ -292,13 +293,13 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script src="config.js?v=1044"></script>
+<script src="config.js?v=1045"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=1044" defer></script><script src="pc-extensions.js?v=1044" defer></script>
-  <script src="stage-controls.js?v=1044" defer></script>
-  <script src="mobile-layout.js?v=1044" defer></script>
-  <script src="pwa-install.js?v=1044" defer></script>
+  <script src="app.js?v=1045" defer></script><script src="pc-extensions.js?v=1045" defer></script>
+  <script src="stage-controls.js?v=1045" defer></script>
+  <script src="mobile-layout.js?v=1045" defer></script>
+  <script src="pwa-install.js?v=1045" defer></script>
 
-  <script src="stage-ui.js?v=1044" defer></script>
+  <script src="stage-ui.js?v=1045" defer></script>
 </body>
 </html>

@@ -233,12 +233,15 @@
       singer:String(song?.queueSinger||'')};
   }
   function snapshot(){
+    const duration=Number.isFinite(ui.player.duration)?ui.player.duration:Number(state.current?.duration)||0;
     return {type:'status',ready:!!state.token,playing:!!ui.player.src&&!ui.player.paused,
       now:songSummary(state.current),queue:state.queue.slice(0,50).map(songSummary),
       queueCount:state.queue.length,volume:Math.round(Number(ui.volume.value)||0),
       muted:ui.player.muted,medley:!!state.medley,
+      currentTime:Number.isFinite(ui.player.currentTime)?ui.player.currentTime:0,
+      duration:Number.isFinite(duration)?duration:0,
       fullscreen:document.fullscreenElement===stage,fullscreenPending,
-       showControls:settings.showControls,permissions:{...settings.permissions}};
+      showControls:settings.showControls,permissions:{...settings.permissions}};
   }
   function broadcast(msg){
     if(!session)return;
@@ -390,13 +393,15 @@
           const term=String(msg.query||'').trim().slice(0,70).toLocaleLowerCase('th');
           const items=[];
           if(term&&state.token){
-            for(let i=0;i<state.songs.length&&items.length<30;i++){
-              const song=state.songs[i];
-              if(playable(song)&&[song.code,song.title,song.artist].some(v=>
-                String(v||'').toLocaleLowerCase('th').includes(term))){
-                items.push({index:i,code:String(song.code||''),title:String(song.title||''),
-                  artist:String(song.artist||'')});
-              }
+            const ranked=typeof window.XStageRankSearch==='function'
+              ? window.XStageRankSearch(state.songs,term,200)
+              : state.songs.map((song,index)=>({song,index}));
+            for(const match of ranked){
+              const song=match.song;
+              if(!playable(song))continue;
+              items.push({index:match.index,code:String(song.code||''),title:String(song.title||''),
+                artist:String(song.artist||'')});
+              if(items.length>=30)break;
             }
           }
           send(conn,{type:'results',items,query:term,notReady:!state.token});

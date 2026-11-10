@@ -7,7 +7,7 @@ const cfg = window.XSTAGE_CONFIG || {};
 const $ = id => document.getElementById(id);
 const ui = {
   status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'), catalogProgress:$('catalog-progress'), catalogProgressValue:$('catalog-progress-value'),
-  account: $('account'), libraryState: $('library-state'), songTotal: $('song-total'), resultCount: $('result-count'),
+  account: $('account'), libraryState: $('library-state'), songTotal: $('song-total'), resultCount: $('result-count'), searchRefine:$('search-refine-hint'),
   librarySelect:$('library-select'),librarySwitcher:$('library-switcher'),
   search: $('search'), voiceSearch:$('voice-search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
@@ -432,6 +432,7 @@ async function privateJson(id, token, opts) {
 function sharedLibraryFeatureReady(){
   return !!(String(cfg.googlePickerApiKey||'').trim()&&String(cfg.googleAppId||'').trim());
 }
+window.XStageSharedLibraryReady=sharedLibraryFeatureReady;
 function setSharedLibraryGate(active,message=''){
   const button=$('gate-shared-library');
   const copy=$('gate-copy');
@@ -442,8 +443,9 @@ function setSharedLibraryGate(active,message=''){
     ui.gateLogin.hidden=true;
     const ready=sharedLibraryFeatureReady();
     if(button){
-      button.hidden=!ready;
+      button.hidden=false;
       button.disabled=!ready;
+      button.textContent=ready?'ใช้คลังเพลงจากผู้แชร์':'คลังที่แชร์ · ต้องตั้งค่า Google Picker';
     }
     if(copy)copy.textContent=ready
       ? 'บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงของผู้แชร์ กรุณาอนุญาต X-Stage ให้เปิดโฟลเดอร์นั้นหนึ่งครั้ง'
@@ -454,7 +456,7 @@ function setSharedLibraryGate(active,message=''){
     if(message)ui.gateStatus.textContent=message;
     else if(!ready)ui.gateStatus.textContent='ฟังก์ชันคลังที่แชร์ยังไม่พร้อมใช้งาน';
   }else{
-    if(button){button.hidden=true;button.disabled=false;}
+    if(button){button.hidden=true;button.disabled=false;button.textContent='ใช้คลังเพลงจากผู้แชร์';}
     ui.gateLogin.hidden=false;
     if(copy)copy.textContent='เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้';
     if(footnote)footnote.textContent='ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น';
@@ -500,7 +502,7 @@ async function openSharedLibraryPicker(){
   const key=String(cfg.googlePickerApiKey||'').trim();
   const appId=String(cfg.googleAppId||'').trim();
   if(!key||!appId){
-    setSharedLibraryGate(true,'ระบบเลือกคลังที่แชร์ยังรอการตั้งค่า Google Picker API ของเจ้าของ X-Stage');
+    setSharedLibraryGate(true,'คลังที่แชร์ยังไม่พร้อม · ต้องตั้งค่า Google Picker API key ที่จำกัดเฉพาะโดเมน X-Stage และ Google Picker/Drive API');
     return;
   }
   ui.gateStatus.textContent='กำลังเปิดรายการโฟลเดอร์ที่แชร์…';
@@ -1080,6 +1082,54 @@ function renderMatchedText(node, value, term) {
   node.append(match,document.createTextNode(raw.slice(hit+term.length)));
 }
 
+function normalizeSearchText(value){
+  return String(value??'')
+    .normalize('NFKC')
+    .toLocaleLowerCase('th')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+let searchIndexSource=null;
+let searchIndex=[];
+function indexedSongs(songs){
+  if(searchIndexSource===songs)return searchIndex;
+  searchIndexSource=songs;
+  searchIndex=(Array.isArray(songs)?songs:[]).map((song,index)=>{
+    const code=normalizeSearchText(song?.code);
+    const title=normalizeSearchText(song?.title);
+    const artist=normalizeSearchText(song?.artist);
+    return {song,index,code,title,artist,combined:[code,title,artist].filter(Boolean).join(' ')};
+  });
+  return searchIndex;
+}
+function searchScore(entry,term){
+  if(!term)return Number.POSITIVE_INFINITY;
+  if(entry.code===term)return 0;
+  if(entry.title===term)return 10;
+  if(entry.title.startsWith(term))return 20;
+  if(entry.code.startsWith(term))return 30;
+  if(entry.artist===term)return 40;
+  if(entry.artist.startsWith(term))return 50;
+  const words=term.split(' ').filter(Boolean);
+  if(words.length>1&&words.every(word=>entry.combined.includes(word)))return 55;
+  if(entry.title.includes(term))return 60;
+  if(entry.artist.includes(term))return 70;
+  if(entry.code.includes(term))return 80;
+  if(entry.combined.includes(term))return 90;
+  return Number.POSITIVE_INFINITY;
+}
+function rankedSearchEntries(songs,rawTerm){
+  const term=normalizeSearchText(rawTerm);
+  if(!term)return [];
+  return indexedSongs(songs)
+    .map(entry=>({entry,score:searchScore(entry,term)}))
+    .filter(item=>Number.isFinite(item.score))
+    .sort((a,b)=>a.score-b.score||a.entry.index-b.entry.index)
+    .map(item=>({...item.entry,score:item.score}));
+}
+window.XStageRankSearch=(songs,rawTerm,limit=5)=>
+  rankedSearchEntries(songs,rawTerm).slice(0,Math.max(0,Number(limit)||0));
+
 function setLiveSearchExpanded(open){
   const dock=ui.search?.closest('.search-dock');
   if(!dock)return;
@@ -1115,9 +1165,12 @@ function clearSearchAfterChoice(){
 }
 function renderSongs() {
   ui.songs.replaceChildren();
-  const term = ui.search.value.trim().toLocaleLowerCase('th');
+  const rawTerm=ui.search.value.trim();
+  const term=normalizeSearchText(rawTerm);
+  const highlightTerm=rawTerm.toLocaleLowerCase('th');
   if (!state.token) {
     state.shown=[];state.selectedIndex=0;
+    if(ui.searchRefine)ui.searchRefine.hidden=true;
     ui.search.removeAttribute('aria-activedescendant');
     if(term){
       setLiveSearchExpanded(true);
@@ -1134,17 +1187,22 @@ function renderSongs() {
     setLiveSearchExpanded(false);
     // Empty search is not a request to list the complete private catalog.
     state.shown=[];state.selectedIndex=0;
+    if(ui.searchRefine)ui.searchRefine.hidden=true;
     ui.resultCount.textContent='พิมพ์เพื่อค้นหาเพลง';
     ui.search.removeAttribute('aria-activedescendant');
     return;
   }
   setLiveSearchExpanded(true);
-  const matches = state.songs.filter(song =>
-    [song.code,song.title,song.artist].some(v => String(v || '').toLocaleLowerCase('th').includes(term)));
-  state.shown = matches.slice(0,5);
-  state.selectedIndex = Math.max(0,Math.min(state.selectedIndex,state.shown.length - 1));
-  ui.resultCount.textContent = `พบ ${num(matches.length)} เพลง${matches.length>5?' · แสดง 5 รายการแรก':''}`;
+  const ranked=rankedSearchEntries(state.songs,term);
+  state.shown=ranked.slice(0,5).map(item=>item.song);
+  state.selectedIndex=Math.max(0,Math.min(state.selectedIndex,state.shown.length-1));
+  ui.resultCount.textContent=`พบ ${num(ranked.length)} เพลง${ranked.length>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''}`;
+  if(ui.searchRefine){
+    ui.searchRefine.hidden=ranked.length<=5;
+    ui.searchRefine.textContent='พิมพ์เพิ่มเพื่อเจาะจงผลค้นหา';
+  }
   if (!state.shown.length) {
+    if(ui.searchRefine)ui.searchRefine.hidden=true;
     ui.search.removeAttribute('aria-activedescendant');
     ui.songs.append(element('div','empty-state',term?'ไม่พบเพลงที่ค้นหา':'ยังไม่มีเพลงที่พร้อมเล่น'));return;
   }
@@ -1155,9 +1213,9 @@ function renderSongs() {
     row.tabIndex = -1;row.title=state.current||state.loading?'เลือกเพื่อเพิ่มเข้าคิว':'เลือกเพื่อเล่นทันที';
     const details=element('div','song-details');
     const code=element('div','song-code'),title=element('strong'),artist=element('small');
-    renderMatchedText(code,song.code||'—',term);
-    renderMatchedText(title,song.title||'ไม่ระบุชื่อเพลง',term);
-    renderMatchedText(artist,song.artist||'ไม่ระบุศิลปิน',term);
+    renderMatchedText(code,song.code||'—',highlightTerm);
+    renderMatchedText(title,song.title||'ไม่ระบุชื่อเพลง',highlightTerm);
+    renderMatchedText(artist,song.artist||'ไม่ระบุศิลปิน',highlightTerm);
     details.append(code,title,artist);
     const add=element('button','song-add','+');add.type='button';add.title='เพิ่มเพลงเข้าคิว';add.setAttribute('aria-label','เพิ่มเพลง '+(song.title||'')+' เข้าคิว');
     add.addEventListener('click',e=>{e.stopPropagation();selectSong(i,false);addToQueue(song);clearSearchAfterChoice();});

@@ -15,6 +15,7 @@ const pkg=JSON.parse(read('package.json'));
 const remoteHtml=read('remote.html');
 const stageUi=read('stage-ui.js');
 const mobile=read('mobile-layout.js');
+const singerStage=read('stage.html');
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',read('pwa-install.js')]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
@@ -34,6 +35,8 @@ assert.match(app,/libraryCacheOwner\(sub,rootId/);
 assert.match(app,/xstage:librarychange/);
 assert.match(app,/checkAppVersion/);
 assert.match(app,/sharedLibraryFeatureReady/);
+assert.ok(app.includes('window.XStageSharedLibraryReady=sharedLibraryFeatureReady'),'shared-library readiness must be diagnosable without pretending Picker is configured');
+assert.ok(app.includes("คลังที่แชร์ · ต้องตั้งค่า Google Picker"),'missing Picker configuration must be explicit in the shared-library gate');
 
 assert.ok(!host.includes("action==='stop'"),'host must not expose legacy stop action');
 assert.ok(host.includes("action==='cancel-current'"),'host must cancel current song');
@@ -55,8 +58,13 @@ assert.ok(!index.includes('id="search" type="search" role="combobox" aria-autoco
 assert.ok(!app.includes("ui.search.addEventListener('focus',()=>{\n  if(state.token)return;\n  ui.gate.hidden=false"),'search focus must not reopen login gate');
 assert.ok(app.includes("const pendingSearch=keepAuth?String(ui.search?.value||''):''"),'typed search must survive Google auth handoff');
 assert.ok(app.includes("renderSongs();\n  updateTransport();\n  if(ui.search.value.trim())setLiveSearchExpanded(true);"),'typing must immediately resync the transport play button');
-assert.ok(app.includes("state.shown = matches.slice(0,5);"),'live search must show only five song results');
-assert.ok(app.includes("matches.length>5?' · แสดง 5 รายการแรก':''"),'search result summary must explicitly describe the five-result limit');
+assert.ok(app.includes('function normalizeSearchText'),'search text must be normalized once through the indexed search path');
+assert.ok(app.includes('function indexedSongs'),'catalog search index must exist for larger libraries');
+assert.ok(app.includes('function searchScore'),'search relevance scoring must exist');
+assert.ok(app.includes('function rankedSearchEntries'),'ranked search helper must exist');
+assert.ok(app.includes("state.shown=ranked.slice(0,5).map(item=>item.song);"),'live search must show only the five highest-ranked songs');
+assert.ok(app.includes("ranked.length>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''"),'search summary must describe ranked five-result output');
+assert.ok(index.includes('id="search-refine-hint"'),'search must offer a refinement hint when many songs match');
 assert.ok(!app.includes("matches.slice(0,120)"),'legacy 120-result live search limit must stay removed');
 assert.ok(css.includes("/* 1.0.44: karaoke-scale search input and five-result presentation. */"),'large karaoke search styling must exist');
 assert.ok(css.includes("font-size:clamp(1.28rem,2.15vw,1.85rem)!important"),'desktop typed search text must remain prominently sized');
@@ -83,6 +91,24 @@ assert.ok(mobile.includes("gate.hidden=false"),'drawer Google action must open t
 assert.ok(pc.includes('createMediaElementSource(audio)'),'player EQ must remain wired to HTML5 Audio through Web Audio');
 assert.ok(pc.includes('createAnalyser()'),'audio visualizer/analyser path must remain wired');
 assert.ok(!remoteHtml.includes('⏹ หยุด'),'remote UI must not expose redundant stop');
+assert.ok(pc.includes("เพิ่ม/นำออกจากเพลงโปรด · บันทึกในเบราว์เซอร์นี้"),'favorite tooltip must describe persistent browser storage accurately');
+assert.ok(pc.includes('function autoPresetMetadata'),'AUTO EQ must distinguish metadata-based selection from audio analysis');
+assert.ok(pc.includes('AUTO: FLAT · ไม่มีข้อมูลแนวเพลง'),'AUTO EQ must clearly explain metadata fallback');
+assert.ok(stageUi.includes("volumeLabel.textContent=muted?'ปิดเสียง · '+n+'%':n+'%'"),'main player must preserve volume while clearly labeling mute');
+assert.ok(css.includes('/* 1.0.45: one canonical utilities menu, clearer search refinement and mute state. */'),'1.0.45 utility menu polish must exist');
+assert.ok(css.includes('.stage-column.mobile-tools-expanded .transport-panel .pc-tools{\n  display:none!important;'),'duplicate legacy tools flyout must stay hidden');
+assert.ok(index.includes('id="mobile-speed-select"'),'playback speed must remain available after consolidating utilities');
+assert.ok(stageUi.includes("const mobileSpeed=$('mobile-speed-select')"),'canonical menu speed selector must stay synchronized');
+assert.ok(host.includes("window.XStageRankSearch(state.songs,term,200)"),'remote search must reuse ranked catalog search');
+assert.ok(host.includes('currentTime:Number.isFinite(ui.player.currentTime)?ui.player.currentTime:0'),'remote status must include playback position');
+assert.ok(host.includes('duration:Number.isFinite(duration)?duration:0'),'remote status must include track duration');
+assert.ok(remoteHtml.includes('id="remote-now-time"'),'remote queue view must show synchronized track time');
+assert.ok(remote.includes("nowTime.textContent=timeLabel(data.currentTime)+' / '+timeLabel(data.duration)"),'remote must render synchronized track time');
+assert.ok(remote.includes("status.dataset.state=state"),'remote connection state must have a visible semantic state');
+assert.ok(singerStage.includes('id="track-time"'),'separate singer screen must show playback time');
+assert.ok(singerStage.includes("document.querySelector('#play-state').textContent=e.data.playing?'กำลังเล่น':'พัก'"),'separate singer screen must show play/pause state');
+assert.ok(pc.includes('duration:Number.isFinite(audio.duration)?audio.duration:Number(state.current?.duration)||0'),'main stage must send duration to singer screen');
+assert.ok(mobile.includes("$('stage-tools-toggle')?.setAttribute('aria-expanded',String(open))"),'canonical utilities menu state must stay synchronized');
 
 assert.ok(index.includes('class="stage-brand-lockup"'),'professional stage brand lockup must exist');
 assert.ok(!index.includes('class="stage-hero-name"'),'obsolete hero markup must stay removed');
