@@ -131,10 +131,15 @@
   const requestCount=byId('remote-request-count');
   const requestToggle=byId('remote-request-toggle');
   const requestClose=byId('remote-request-close');
-  const permissionKeys=['search','request','playpause','next','stop','volume-up','volume-down','mute','fullscreen-on','fullscreen-off','medley'];
+  const permissionKeys=['search','request','playpause','next','cancel-current','volume-up','volume-down','mute','fullscreen-on','fullscreen-off','medley'];
   const stored=(()=>{try{return JSON.parse(localStorage.getItem('xstage-remote-settings')||'{}');}catch{return {};}})();
   const settings={autoApprove:!!stored.autoApprove,showControls:stored.showControls!==false,
-    permissions:Object.fromEntries(permissionKeys.map(k=>[k,stored.permissions?.[k]!==false]))};
+    permissions:Object.fromEntries(permissionKeys.map(k=>[
+      k,
+      k==='cancel-current'
+        ? (stored.permissions?.['cancel-current']??stored.permissions?.stop)!==false
+        : stored.permissions?.[k]!==false
+    ]))};
   function saveSettings(){try{localStorage.setItem('xstage-remote-settings',JSON.stringify(settings));}catch{}}
   const settingsDetails=document.createElement('details');settingsDetails.className='remote-settings';
   const summary=document.createElement('summary');summary.textContent='⚙ ตั้งค่าและสิทธิ์รีโมท';
@@ -157,7 +162,7 @@
   });
   option('แสดงเมนูควบคุมบนมือถือ',settings.showControls,v=>{settings.showControls=v;});
   const permissionInputs={};
-  const names={'search':'ค้นหาเพลง','request':'ขอเพลง','playpause':'เล่น / พัก','next':'เพลงถัดไป','stop':'หยุด',
+  const names={'search':'ค้นหาเพลง','request':'ขอเพลง','playpause':'เล่น / พัก','next':'เพลงถัดไป','cancel-current':'ยกเลิกเพลงปัจจุบัน',
     'volume-up':'เพิ่มเสียง','volume-down':'ลดเสียง','mute':'ปิด / เปิดเสียง',
     'fullscreen-on':'เต็มจอ','fullscreen-off':'ย่อจอ','medley':'เมดเลย์'};
   const actions=document.createElement('div');actions.className='remote-permission-actions';
@@ -283,7 +288,7 @@
     if(!settings.showControls||!settings.permissions[action])return;
     const audio=ui.player;
     if(action==='playpause')togglePlayback();
-    else if(action==='stop')stopSong();
+    else if(action==='cancel-current')cancelCurrentSong();
     else if(action==='next')playNext();
     else if(action==='volume-up'||action==='volume-down'){
       const next=Math.max(0,Math.min(100,Math.round(Number(ui.volume.value)||
