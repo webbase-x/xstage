@@ -13,8 +13,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1020">
-  <link rel="stylesheet" href="xstage-ux.css?v=1020">
+  <link rel="stylesheet" href="style.css?v=1021">
+  <link rel="stylesheet" href="xstage-ux.css?v=1021">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -167,7 +167,6 @@
                 <button id="play-pause" class="big-play" type="button" title="เล่น/พัก (F5)" aria-label="เล่นหรือพัก" disabled>▶</button>
                 <button id="cancel-current" class="icon-control transport-text-action" type="button" title="ยกเลิกเพลงปัจจุบันและเล่นคิวถัดไป" aria-label="ยกเลิกเพลงปัจจุบันและเล่นคิวถัดไป" disabled><span class="transport-action-icon" aria-hidden="true">⤼</span><span class="transport-action-label">ยกเลิก</span></button>
                 <button id="next" class="icon-control" type="button" title="เพลงถัดไป (F6)" aria-label="เพลงถัดไป" disabled>⏭</button>
-                <button id="stop" class="icon-control transport-text-action" type="button" title="หยุด (F8)" aria-label="หยุด" disabled><span class="transport-action-icon" aria-hidden="true">⏹</span><span class="transport-action-label">หยุด</span></button>
                 <button id="restart-current" class="icon-control transport-text-action" type="button" title="เริ่มเพลงปัจจุบันใหม่ตั้งแต่ต้น" aria-label="เริ่มเพลงใหม่ตั้งแต่ต้น" disabled><span class="transport-action-icon" aria-hidden="true">↺</span><span class="transport-action-label">เริ่มใหม่</span></button>
                 <button id="stage-repeat" class="icon-control" type="button" title="เปิด/ปิดวนเพลง" aria-label="เปิด/ปิดวนเพลง" aria-pressed="false">⇄</button>
               </div>
@@ -185,7 +184,7 @@
             <p id="play-status" class="play-status" role="status"></p>
             <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button><button type="button" id="pc-install-app">⬇ ติดตั้งแอป</button></nav>
           </div>
-          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป · F8 หยุด</div></div></aside>
+          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
           <section id="xstage-eq-panel" class="xstage-eq-panel" hidden aria-label="EQ X-Stage Karaoke">
             <header class="xstage-eq-head" data-eq-drag>
               <div class="xstage-eq-brand"><img src="assets/xstage-app-icon-192.png" alt=""><strong>EQ X-Stage Karaoke</strong></div>
@@ -253,13 +252,13 @@
 </script>
 <script src="config.js"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=1020" defer></script><script src="pc-extensions.js?v=1020" defer></script>
+  <script src="app.js?v=1021" defer></script><script src="pc-extensions.js?v=1021" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js" defer></script>
-  <script src="stage-controls.js?v=1020" defer></script>
-  <script src="mobile-layout.js?v=1020" defer></script>
-  <script src="pwa-install.js?v=1020" defer></script>
+  <script src="stage-controls.js?v=1021" defer></script>
+  <script src="mobile-layout.js?v=1021" defer></script>
+  <script src="pwa-install.js?v=1021" defer></script>
 
-  <script src="stage-ui.js?v=1020" defer></script>
+  <script src="stage-ui.js?v=1021" defer></script>
 </body>
 </html>
