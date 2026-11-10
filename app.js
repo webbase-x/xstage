@@ -623,22 +623,19 @@ function setLiveSearchExpanded(open){
   dock.classList.toggle('pc-expanded',!!open);
   ui.search.setAttribute('aria-expanded',String(!!open));
 }
-function clearSearchAfterChoice({focus=false}={}){
-  ui.search.value='';
-  state.shown=[];
-  state.selectedIndex=0;
-  renderSongs();
-  setLiveSearchExpanded(false);
-  if(focus)ui.search.focus();
-}
-
 function clearSearchAfterChoice(){
   ui.search.value='';
   state.shown=[];
   state.selectedIndex=0;
   renderSongs();
   setLiveSearchExpanded(false);
-  ui.search.focus();
+  // Release the mobile/iPad software keyboard so the visual viewport returns
+  // to the full screen immediately after a song is chosen.
+  if(document.activeElement===ui.search)ui.search.blur();
+  else document.activeElement?.blur?.();
+  requestAnimationFrame(()=>{
+    try{window.scrollTo({left:0,top:0,behavior:'instant'});}catch{window.scrollTo(0,0);}
+  });
 }
 function renderSongs() {
   ui.songs.replaceChildren();
