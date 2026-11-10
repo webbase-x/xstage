@@ -130,22 +130,32 @@ audio.addEventListener('timeupdate',()=>{if(abA!==null&&abB!==null&&audio.curren
 audio.addEventListener('loadedmetadata',()=>{abA=null;abB=null;updateAB();});
 const originalDrawLine=drawLine;
 drawLine=function(text,y,maxWidth,fontSize,fill,progress,centerX){return originalDrawLine(text,y,maxWidth,fontSize*lyricScale,fill==='#ecf7ff'?lyricColor:fill,progress,centerX);};
-// Both bundled stage artworks are selectable independently for each display.
+// Stage artworks and artistic X-Stage Online brand themes are selectable independently.
 const stageArtworks=[
   ['neon','แบบที่ 1 · เวทีนีออน'],
   ['photo','แบบที่ 2 · ภาพเวที'],
   ['deep-blue','แบบที่ 3 · สีน้ำเงินเข้ม']
 ];
+const stageBrandThemes=[
+  ['premium-neon','Premium Neon'],
+  ['modern-concert','Modern Concert'],
+  ['futuristic-audio-tech','Futuristic Audio Tech']
+];
 const backgroundPrefs={
   main:['neon','photo','deep-blue'].includes(savedUiPrefs.mainBackground)?savedUiPrefs.mainBackground:'neon',
   singer:['neon','photo','deep-blue'].includes(savedUiPrefs.singerBackground)?savedUiPrefs.singerBackground:'photo'
+};
+const brandThemePrefs={
+  main:stageBrandThemes.some(([v])=>v===savedUiPrefs.mainBrandTheme)?savedUiPrefs.mainBrandTheme:'premium-neon',
+  singer:stageBrandThemes.some(([v])=>v===savedUiPrefs.singerBrandTheme)?savedUiPrefs.singerBrandTheme:'premium-neon'
 };
 function setMainBackground(value){
   const mode=stageArtworks.some(([v])=>v===value)?value:'neon';
   backgroundPrefs.main=mode;
   window.XStageUiPrefs?.save?.({mainBackground:mode});
   ui.stage.dataset.stageBackground=mode;
-  ui.stage.classList.toggle('stage-hero-hidden',mode==='photo');
+  // The redesigned X-Stage Online identity stays visible on every artwork.
+  ui.stage.classList.remove('stage-hero-hidden');
 }
 function setSingerBackground(value){
   const mode=stageArtworks.some(([v])=>v===value)?value:'photo';
@@ -153,12 +163,25 @@ function setSingerBackground(value){
   window.XStageUiPrefs?.save?.({singerBackground:mode});
   sendBackgroundToSecondScreen();
 }
+function setMainBrandTheme(value){
+  const theme=stageBrandThemes.some(([v])=>v===value)?value:'premium-neon';
+  brandThemePrefs.main=theme;
+  ui.stage.dataset.brandTheme=theme;
+  window.XStageUiPrefs?.save?.({mainBrandTheme:theme});
+}
+function setSingerBrandTheme(value){
+  const theme=stageBrandThemes.some(([v])=>v===value)?value:'premium-neon';
+  brandThemePrefs.singer=theme;
+  window.XStageUiPrefs?.save?.({singerBrandTheme:theme});
+  sendBackgroundToSecondScreen();
+}
 function sendBackgroundToSecondScreen(){
   if(screen&&!screen.closed)try{
-    screen.postMessage({type:'xstage-background',value:backgroundPrefs.singer},location.origin);
+    screen.postMessage({type:'xstage-background',value:backgroundPrefs.singer,brandTheme:brandThemePrefs.singer},location.origin);
   }catch{}
 }
 setMainBackground(backgroundPrefs.main);
+setMainBrandTheme(brandThemePrefs.main);
 $pc('pc-lyrics-settings').onclick=()=>{
  const d=openDialog('เนื้อร้อง / พื้นหลัง');
  const scale=document.createElement('input');scale.type='range';scale.min='.7';scale.max='1.5';scale.step='.05';scale.value=String(lyricScale);scale.oninput=()=>{lyricScale=+scale.value;window.XStageUiPrefs?.save?.({lyricScale});};
@@ -168,18 +191,30 @@ $pc('pc-lyrics-settings').onclick=()=>{
  const offset=document.createElement('input');offset.type='range';offset.min='-3000';offset.max='3000';offset.step='50';offset.value='0';
  offset.oninput=()=>{if(state.lyrics){state.lyrics.audioOffsetMs=(Number(state.lyrics.audioOffsetMs)||0)+(+offset.value-(+offset.dataset.before||0));offset.dataset.before=offset.value;}};
  const ol=document.createElement('label');ol.textContent='ชดเชยเวลาเนื้อร้อง (ms)';ol.append(offset);d.append(ol);
- for(const [target,label,current,setValue] of [
-   ['main','พื้นหลังจอหลัก',backgroundPrefs.main,setMainBackground],
-   ['singer','พื้นหลังจอร้องแยก',backgroundPrefs.singer,setSingerBackground]
+ for(const [label,current,setValue] of [
+   ['พื้นหลังจอหลัก',backgroundPrefs.main,setMainBackground],
+   ['พื้นหลังจอร้องแยก',backgroundPrefs.singer,setSingerBackground]
  ]){
    const select=document.createElement('select');
    for(const [value,name] of stageArtworks){
      const item=document.createElement('option');item.value=value;item.textContent=name;select.append(item);
    }
-   select.value=current;
-   select.onchange=()=>setValue(select.value);
+   select.value=current;select.onchange=()=>setValue(select.value);
    const row=document.createElement('label');row.textContent=label;row.append(select);d.append(row);
  }
+ const themeHeading=document.createElement('p');themeHeading.className='pc-settings-section-title';themeHeading.textContent='ธีมโลโก้ X-Stage Online + Audio Visualizer';d.append(themeHeading);
+ for(const [label,current,setValue] of [
+   ['ธีมจอหลัก',brandThemePrefs.main,setMainBrandTheme],
+   ['ธีมจอร้องแยก',brandThemePrefs.singer,setSingerBrandTheme]
+ ]){
+   const select=document.createElement('select');
+   for(const [value,name] of stageBrandThemes){
+     const item=document.createElement('option');item.value=value;item.textContent=name;select.append(item);
+   }
+   select.value=current;select.onchange=()=>setValue(select.value);
+   const row=document.createElement('label');row.textContent=label;row.append(select);d.append(row);
+ }
+ d.append(para('Visualizer ใช้ข้อมูลเสียงจริงจาก Audio Analyser เดียวกับ EQ และไม่สร้างระบบเสียงซ้ำ'));
  d.append(para('การตั้งค่านี้ไม่แก้ไขเพลงหรือฐานข้อมูลใน Google Drive'));
 };
 let screen=null;
