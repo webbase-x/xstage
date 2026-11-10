@@ -432,6 +432,7 @@ async function privateJson(id, token, opts) {
 function sharedLibraryFeatureReady(){
   return !!(String(cfg.googlePickerApiKey||'').trim()&&String(cfg.googleAppId||'').trim());
 }
+window.XStageSharedLibraryReady=sharedLibraryFeatureReady;
 function setSharedLibraryGate(active,message=''){
   const button=$('gate-shared-library');
   const copy=$('gate-copy');
@@ -442,8 +443,9 @@ function setSharedLibraryGate(active,message=''){
     ui.gateLogin.hidden=true;
     const ready=sharedLibraryFeatureReady();
     if(button){
-      button.hidden=!ready;
+      button.hidden=false;
       button.disabled=!ready;
+      button.textContent=ready?'ใช้คลังเพลงจากผู้แชร์':'คลังที่แชร์ · ต้องตั้งค่า Google Picker';
     }
     if(copy)copy.textContent=ready
       ? 'บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงของผู้แชร์ กรุณาอนุญาต X-Stage ให้เปิดโฟลเดอร์นั้นหนึ่งครั้ง'
@@ -454,7 +456,7 @@ function setSharedLibraryGate(active,message=''){
     if(message)ui.gateStatus.textContent=message;
     else if(!ready)ui.gateStatus.textContent='ฟังก์ชันคลังที่แชร์ยังไม่พร้อมใช้งาน';
   }else{
-    if(button){button.hidden=true;button.disabled=false;}
+    if(button){button.hidden=true;button.disabled=false;button.textContent='ใช้คลังเพลงจากผู้แชร์';}
     ui.gateLogin.hidden=false;
     if(copy)copy.textContent='เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้';
     if(footnote)footnote.textContent='ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น';
@@ -500,7 +502,7 @@ async function openSharedLibraryPicker(){
   const key=String(cfg.googlePickerApiKey||'').trim();
   const appId=String(cfg.googleAppId||'').trim();
   if(!key||!appId){
-    setSharedLibraryGate(true,'ระบบเลือกคลังที่แชร์ยังรอการตั้งค่า Google Picker API ของเจ้าของ X-Stage');
+    setSharedLibraryGate(true,'คลังที่แชร์ยังไม่พร้อม · ต้องตั้งค่า Google Picker API key ที่จำกัดเฉพาะโดเมน X-Stage และ Google Picker/Drive API');
     return;
   }
   ui.gateStatus.textContent='กำลังเปิดรายการโฟลเดอร์ที่แชร์…';
