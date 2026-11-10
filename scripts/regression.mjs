@@ -11,6 +11,8 @@ const css=read('xstage-ux.css');
 const config=read('config.js');
 const sw=read('sw.js');
 const version=JSON.parse(read('version.json'));
+const pkg=JSON.parse(read('package.json'));
+const remoteHtml=read('remote.html');
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',read('stage-ui.js')],['mobile-layout.js',read('mobile-layout.js')],['pwa-install.js',read('pwa-install.js')]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
@@ -37,9 +39,16 @@ assert.ok(remote.includes("'cancel-current'"),'remote must request cancel-curren
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/qrcode'),'main page must lazy-load QRCode');
 assert.ok(!index.includes('apis.google.com/js/api.js'),'main page must lazy-load Google Picker API');
+assert.ok(pc.includes("FAVORITES_STORE='xstage-favorites-v2'"),'favorites must persist');
+assert.ok(pc.includes("HISTORY_STORE='xstage-play-history-v1'"),'play history must persist');
+assert.ok(index.includes('id="library-select"'),'multi-library selector must exist');
+assert.ok(!remoteHtml.includes('⏹ หยุด'),'remote UI must not expose redundant stop');
 
 assert.ok(index.includes('class="stage-brand-lockup"'),'professional stage brand lockup must exist');
 assert.ok(!index.includes('class="stage-hero-name"'),'obsolete hero markup must stay removed');
+for(const legacy of ['stage-hero-emblem','stage-hero-x','stage-hero-mic','stage-hero-name','stage-hero-karaoke','stage-hero-online'])
+  assert.ok(!css.includes(legacy),'obsolete '+legacy+' CSS must stay removed');
+assert.ok(css.includes('.stage.playing .stage-brand-lockup'),'playing brand priority rule must exist');
 assert.ok(css.includes('font-size:22px!important'),'desktop karaoke search text must stay large');
 assert.ok(css.includes('font-size:20px!important'),'touch karaoke search text must stay large');
 
@@ -54,5 +63,10 @@ const releaseMatch=config.match(/XSTAGE_RELEASE\s*=\s*\{\s*version:\s*'([^']+)',
 assert.ok(releaseMatch,'config release metadata must exist');
 assert.equal(version.version,releaseMatch[1],'version.json version must match config');
 assert.equal(Number(version.build),Number(releaseMatch[2]),'version.json build must match config');
+assert.equal(pkg.version,version.version,'package version must match release');
+assert.ok(sw.includes('xstage-shell-v'+String(version.build)),'service worker cache must match release build');
+const localBuildRefs=[...index.matchAll(/\?v=(\d+)/g)].map(m=>Number(m[1]));
+assert.ok(localBuildRefs.length>0,'index must version local assets');
+assert.ok(localBuildRefs.every(v=>v===Number(version.build)),'all index asset versions must match release build');
 
-console.log('X-Stage regression checks passed');
+console.log('X-Stage regression checks passed for '+version.version+' build '+version.build);
