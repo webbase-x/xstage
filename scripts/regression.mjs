@@ -35,6 +35,8 @@ assert.match(app,/libraryCacheOwner\(sub,rootId/);
 assert.match(app,/xstage:librarychange/);
 assert.match(app,/checkAppVersion/);
 assert.match(app,/sharedLibraryFeatureReady/);
+assert.ok(app.includes('window.XStageSharedLibraryReady=sharedLibraryFeatureReady'),'shared-library readiness must be diagnosable without pretending Picker is configured');
+assert.ok(app.includes("คลังที่แชร์ · ต้องตั้งค่า Google Picker"),'missing Picker configuration must be explicit in the shared-library gate');
 
 assert.ok(!host.includes("action==='stop'"),'host must not expose legacy stop action');
 assert.ok(host.includes("action==='cancel-current'"),'host must cancel current song');
