@@ -12,11 +12,18 @@
   const closeButton = $('xstage-install-close');
   if(!menuButton || !dialog || !content || !closeButton) return;
   let deferredPrompt = null;
+  const standaloneQuery=window.matchMedia('(display-mode: standalone)');
   const isInstalled = () =>
-    window.matchMedia('(display-mode: standalone)').matches ||
+    standaloneQuery.matches ||
     window.navigator.standalone === true;
+  function syncStandaloneUi(){
+    const installed=isInstalled();
+    document.body.classList.toggle('xstage-webapp-mode',installed);
+    document.documentElement.classList.toggle('xstage-webapp-mode',installed);
+    return installed;
+  }
   function updateButtons() {
-    const installed = isInstalled();
+    const installed = syncStandaloneUi();
     menuButton.textContent = installed ? '✓ X-Stage ติดตั้งแล้ว' : '⬇ ติดตั้ง X-Stage เป็นแอป';
     menuButton.disabled = installed;
     if(toolsButton){
@@ -87,5 +94,7 @@
     updateButtons();
     if(dialog.open)dialog.close();
   });
+  standaloneQuery.addEventListener?.('change',updateButtons);
+  window.addEventListener('pageshow',updateButtons);
   updateButtons();
 })();
