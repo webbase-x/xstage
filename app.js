@@ -973,10 +973,24 @@ function selectSong(i,scroll=true) {
   }
 }
 
+function playbackHasActiveIntent(){
+  return !!state.loading||!!(
+    state.current&&player.src&&!player.ended&&
+    (!player.paused||(state.resumeAfterInterruption&&!state.userPaused))
+  );
+}
 function chooseSearchSong(song){
   if(!song)return false;
-  if(state.current||state.loading)addToQueue(song);
-  else playSong(song);
+  // A direct tap is a valuable playback gesture on iPhone/iPad: wake the
+  // WebAudio/EQ graph immediately before any asynchronous Drive download.
+  if(!playbackHasActiveIntent()){
+    state.userPaused=false;
+    state.resumeAfterInterruption=false;
+    try{window.XStageResumeAudioGraph?.();}catch{}
+    void playSong(song);
+  }else{
+    addToQueue(song);
+  }
   clearSearchAfterChoice();
   return true;
 }
