@@ -2604,3 +2604,38 @@ body.xstage-ui-v2 .app-update-notice button:disabled{
     font-size:.68rem;
   }
 }
+
+/* 1.0.34: compact multi-library selector. */
+body.xstage-ui-v2 .stage .library-switcher{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-width:0;
+  color:#9fc8d9;
+  font-size:.68rem;
+  white-space:nowrap;
+}
+body.xstage-ui-v2 .stage .library-switcher[hidden]{display:none!important}
+body.xstage-ui-v2 .stage .library-switcher select{
+  min-width:120px;
+  max-width:230px;
+  height:28px;
+  padding:2px 24px 2px 7px;
+  border:1px solid rgba(77,174,211,.48);
+  border-radius:7px;
+  background:#0b263b;
+  color:#eaf8ff;
+  font-size:.69rem;
+  text-overflow:ellipsis;
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .library-switcher{
+    width:100%;
+    order:3;
+  }
+  body.xstage-ui-v2 .stage .library-switcher select{
+    flex:1;
+    max-width:none;
+    min-width:0;
+  }
+}
