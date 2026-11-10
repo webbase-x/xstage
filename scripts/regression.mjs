@@ -21,6 +21,10 @@ for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-contr
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
 }
 
+for(const [i,script] of [...singerStage.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).entries()){
+  assert.doesNotThrow(()=>new Function(script),'stage.html inline script '+i+' must parse');
+}
+
 const eqMatch=pc.match(/function eqFreqLabel\(f\)\{([\s\S]*?)\n\}/);
 assert.ok(eqMatch,'eqFreqLabel must exist');
 const eqFreqLabel=new Function('f',eqMatch[1]);
