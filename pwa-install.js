@@ -13,6 +13,22 @@
   if(!menuButton || !dialog || !content || !closeButton) return;
   let deferredPrompt = null;
   const standaloneQuery=window.matchMedia('(display-mode: standalone)');
+  async function ensureXStageServiceWorker(){
+    if(!('serviceWorker' in navigator))return null;
+    try{
+      const registration=await navigator.serviceWorker.register('./sw.js',{scope:'./',updateViaCache:'none'});
+      // Update in place; never reload automatically because audio may be playing.
+      void registration.update();
+      return registration;
+    }catch(error){
+      console.warn('X-Stage service worker:',error?.message||error);
+      return null;
+    }
+  }
+  let serviceWorkerRegistration=null;
+  void ensureXStageServiceWorker().then(registration=>{serviceWorkerRegistration=registration;});
+  setInterval(()=>{void serviceWorkerRegistration?.update?.();},30*60*1000);
+
   const isInstalled = () =>
     standaloneQuery.matches ||
     window.navigator.standalone === true;
