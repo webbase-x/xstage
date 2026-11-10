@@ -3018,3 +3018,9 @@ body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-
   body.xstage-ui-v2 .stage .stage-brand-spectrum{height:18px!important;margin-top:4px!important}
   body.xstage-ui-v2 .stage .stage-brand-tagline{display:none}
 }
+
+body.xstage-ui-v2 .pc-settings-section-title{
+  margin:14px 0 5px;padding-top:11px;
+  border-top:1px solid rgba(92,169,207,.28);
+  color:#8feeff;font-weight:900;letter-spacing:.02em;
+}
