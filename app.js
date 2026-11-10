@@ -300,9 +300,10 @@ function setStatus(message, kind = '') {
 function setSearchAvailability(ready,{busy=false}={}){
   if(!ui.search)return;
   ui.search.disabled=!!busy;
-  ui.search.readOnly=!ready;
-  ui.search.setAttribute('aria-disabled',String(!ready));
-  ui.search.placeholder=ready?'รหัส / ชื่อเพลง / ศิลปิน':'เข้าสู่ระบบ Google เพื่อค้นหาเพลง';
+  ui.search.readOnly=false;
+  ui.search.setAttribute('aria-disabled',String(!!busy));
+  ui.search.dataset.libraryReady=String(!!ready);
+  ui.search.placeholder='ค้นหาเพลง, ศิลปิน หรือรหัสเพลง...';
 }
 function syncLoginGateState(){
   const active=!!(ui.gate&&!ui.gate.hidden);
@@ -312,8 +313,8 @@ function dismissLoginGate(){
   if(!ui.gate||ui.gate.hidden)return;
   ui.gate.hidden=true;
   syncLoginGateState();
-  setStatus('โหมดชมหน้าเวที · เข้าสู่ระบบ Google เมื่อต้องการค้นหาและเล่นเพลง');
-  ui.login?.focus?.();
+  setStatus('โหมดชมหน้าเวที · พิมพ์คำค้นได้ทันที และเข้าสู่ระบบ Google เมื่อต้องการเปิดผลเพลง');
+  setTimeout(()=>ui.search?.focus?.(),0);
 }
 function showCatalogLoading(title,detail,progress=null){
   if(ui.catalogLoadingTitle)ui.catalogLoadingTitle.textContent=title||'กำลังเตรียมฐานเพลง';
@@ -806,6 +807,18 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     throw error;
   }
 }
+function googleAuthErrorMessage(error){
+  const type=String(error?.type||error?.error||'').trim();
+  const detail=String(error?.error_description||error?.message||'').trim();
+  if(type==='popup_closed')return 'ยกเลิกการเข้าสู่ระบบ Google แล้ว · กดเข้าสู่ระบบอีกครั้งเมื่อต้องการ';
+  if(/popup|window|blocked/i.test(type))return 'เบราว์เซอร์บล็อกหน้าต่าง Google · อนุญาต Pop-up สำหรับ X-Stage แล้วลองอีกครั้ง';
+  if(/access_denied|denied|cancel/i.test(type))return 'Google ไม่อนุญาตการเข้าถึง · กรุณาเลือกบัญชีและอนุญาตสิทธิ์ที่จำเป็น';
+  if(/invalid_client|origin|redirect/i.test(type+' '+detail))return 'การตั้งค่า Google OAuth ไม่ตรงกับเว็บไซต์นี้ · ตรวจ Authorized JavaScript origin: https://webbase-x.github.io';
+  if(detail&&detail!=='.')return 'เข้าสู่ระบบ Google ไม่สำเร็จ · '+detail;
+  if(type&&type!=='.')return 'เข้าสู่ระบบ Google ไม่สำเร็จ · '+type;
+  return 'เข้าสู่ระบบ Google ไม่สำเร็จ · กรุณาตรวจอินเทอร์เน็ต การอนุญาต Pop-up และการตั้งค่า OAuth แล้วลองอีกครั้ง';
+}
+
 function login({automatic=false} = {}) {
   if(!navigator.onLine){setStatus('อุปกรณ์ออฟไลน์ · กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่','error');return;}
   if (typeof google === 'undefined' || !google.accounts?.oauth2?.initTokenClient) {
@@ -832,7 +845,7 @@ function login({automatic=false} = {}) {
       callback: async result => {
         if (authId !== state.authId) return;
         finish();
-        if(result?.error){setStatus('Google ปฏิเสธการเข้าสู่ระบบ · '+String(result.error_description||result.error),'error');return;}
+        if(result?.error){setStatus(googleAuthErrorMessage(result),'error');return;}
         if (!result?.access_token) { setStatus('ไม่ได้รับสิทธิ์จาก Google · กรุณากดเข้าสู่ระบบอีกครั้ง', 'error'); return; }
         resetPrivate({revoke:false, keepAuth:true});
         const expiresIn=Number(result.expires_in);
@@ -855,12 +868,7 @@ function login({automatic=false} = {}) {
       error_callback: error => {
         if (authId !== state.authId) return;
         finish();
-        const type=String(error?.type||error?.error||'').trim();
-        setStatus(type==='popup_closed'
-          ? 'ปิดหน้าต่าง Google ก่อนเข้าสู่ระบบ'
-          : /popup|window|blocked/i.test(type)
-            ? 'เบราว์เซอร์บล็อกหน้าต่าง Google · กรุณาเปิด X-Stage ใน Safari, Chrome หรือ Edge แล้วลองใหม่'+(type?' · '+type:'')
-            : 'เข้าสู่ระบบ Google ไม่สำเร็จ'+(type?' · '+type:''), 'error');
+        setStatus(googleAuthErrorMessage(error),'error');
       }
     });
     // A manual click should always use Google's normal account chooser. An empty
@@ -872,6 +880,7 @@ function login({automatic=false} = {}) {
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
   if(revoke){rememberLogin(false);clearActiveAuth();clearPendingAuth();}
   if (!keepAuth) state.authId++;
+  const pendingSearch=keepAuth?String(ui.search?.value||''):'';
   const oldToken = state.token;
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
@@ -891,7 +900,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.current = null;state.lyrics = null;state.selectedIndex = 0;
   clearMediaSession();
   ui.account.textContent = '';ui.account.hidden = true;ui.logout.hidden = true;ui.login.hidden = false;
-  ui.gate.hidden = false;hideCatalogLoading();setSearchAvailability(false);ui.search.value = '';
+  ui.gate.hidden = false;hideCatalogLoading();setSearchAvailability(false);ui.search.value = pendingSearch;
   ui.songTotal.textContent = '0 เพลง';ui.resultCount.textContent = 'กรุณาเข้าสู่ระบบ';
   ui.libraryState.textContent = 'คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ';
   ui.nowPlaying.textContent = 'ยังไม่ได้เลือกเพลง';ui.nowArtist.textContent='X-Stage Karaoke Online';ui.stageCode.textContent='—';
@@ -1097,13 +1106,21 @@ function clearSearchAfterChoice(){
 }
 function renderSongs() {
   ui.songs.replaceChildren();
+  const term = ui.search.value.trim().toLocaleLowerCase('th');
   if (!state.token) {
-    setLiveSearchExpanded(false);
+    state.shown=[];state.selectedIndex=0;
     ui.search.removeAttribute('aria-activedescendant');
-    ui.songs.append(element('div','empty-state','เพลงจาก Google Drive ของคุณจะแสดงที่นี่'));
+    if(term){
+      setLiveSearchExpanded(true);
+      ui.resultCount.textContent='พิมพ์คำค้นไว้แล้ว · เข้าสู่ระบบ Google เพื่อค้นหาจากคลังส่วนตัว';
+      ui.songs.append(element('div','empty-state','เชื่อมต่อ Google Drive แล้วระบบจะค้นหาคำที่พิมพ์ไว้นี้ให้ทันที'));
+    }else{
+      setLiveSearchExpanded(false);
+      ui.resultCount.textContent='พิมพ์คำค้นได้ · เชื่อมต่อ Google เมื่อต้องการดูผลเพลง';
+      ui.songs.append(element('div','empty-state','ค้นหาด้วยชื่อเพลง ศิลปิน หรือรหัสเพลง'));
+    }
     return;
   }
-  const term = ui.search.value.trim().toLocaleLowerCase('th');
   if(!term){
     setLiveSearchExpanded(false);
     // Empty search is not a request to list the complete private catalog.
@@ -1519,8 +1536,9 @@ function updateTransport(){
   ui.previous.disabled=!state.history.length;
   ui.next.disabled=!state.queue.length;
   const duration=Number.isFinite(player.duration)?player.duration:Number(state.current?.duration||0);
-  ui.elapsed.textContent=timeLabel(player.currentTime);
-  ui.duration.textContent=timeLabel(duration);
+  const hasLoadedSong=!!state.current;
+  ui.elapsed.textContent=hasLoadedSong?timeLabel(player.currentTime):'--:--';
+  ui.duration.textContent=hasLoadedSong?timeLabel(duration):'--:--';
   ui.seek.disabled=!(duration>0&&state.current);
   if (!ui.seek.matches(':active'))ui.seek.value=duration>0?String(Math.round((player.currentTime/duration)*1000)):'0';
   if('mediaSession' in navigator){
@@ -1531,7 +1549,15 @@ function updateTransport(){
 function onSearchKey(e){
   if(e.key==='ArrowDown'){e.preventDefault();if(state.shown.length)selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
   else if(e.key==='ArrowUp'){e.preventDefault();if(state.shown.length)selectSong(Math.max(0,state.selectedIndex-1));}
-  else if(e.key==='Enter'){e.preventDefault();const song=state.shown[state.selectedIndex];if(!song)return;
+  else if(e.key==='Enter'){
+    e.preventDefault();
+    if(!state.token){
+      setStatus(ui.search.value.trim()
+        ? 'คำค้นถูกเก็บไว้แล้ว · เลือก “เข้าสู่ระบบ Google” จากเมนูเพื่อเปิดผลเพลง'
+        : 'พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลงก่อนค้นหา');
+      return;
+    }
+    const song=state.shown[state.selectedIndex];if(!song)return;
     chooseSearchSong(song);
   }
 }
@@ -1863,12 +1889,6 @@ ui.gate?.addEventListener('click',event=>{if(event.target===ui.gate)dismissLogin
 if(ui.gate)new MutationObserver(syncLoginGateState).observe(ui.gate,{attributes:true,attributeFilter:['hidden']});
 syncLoginGateState();
 ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});syncLoginGateState();setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
-ui.search.addEventListener('focus',()=>{
-  if(state.token)return;
-  ui.gate.hidden=false;
-  syncLoginGateState();
-  setStatus('กรุณาเข้าสู่ระบบ Google เพื่อค้นหาเพลงจากคลังส่วนตัว');
-});
 ui.search.addEventListener('input',()=>{
   state.selectedIndex=0;
   renderSongs();

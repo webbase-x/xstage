@@ -210,8 +210,10 @@
     stage.append(notice);
     const sync=()=>{
       const error=legacyStatus.classList.contains('error');
+      const raw=String(legacyStatus.textContent||'').trim();
+      const message=(!raw||raw==='.')?'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง':raw;
       notice.hidden=!error;
-      if(error)notice.textContent=legacyStatus.textContent;
+      if(error)notice.textContent=message;
     };
     new MutationObserver(sync).observe(legacyStatus,{attributes:true,attributeFilter:['class'],childList:true,subtree:true,characterData:true});
     sync();
