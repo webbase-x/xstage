@@ -992,8 +992,10 @@ function drawLyrics(){
         const keyboard=ui.stage.querySelector('#virtual-keyboard');
         const keyboardHeight=keyboard&&!keyboard.hidden?keyboard.getBoundingClientRect().height+7:0;
         const usableBottom=h-(transportHeight+keyboardHeight+12)*density;
-        let nextY=Math.max(h*.33,Math.min(h*.83,usableBottom-fontSize*.8));
-        let currentY=Math.max(h*.19,Math.min(h*.66,nextY-fontSize*1.45));
+        // Lift both karaoke rows by about one full lyric line while preserving spacing.
+        const lyricLift=fontSize*1.45;
+        let nextY=Math.max(h*.22,Math.min(h*.83,usableBottom-fontSize*.8)-lyricLift);
+        let currentY=Math.max(h*.10,Math.min(h*.66,nextY-fontSize*1.45));
         let lyricCenter=w/2,lyricWidth=w*.93,lyricFont=fontSize*state.visualScale;
         const qrPanel=ui.stage.querySelector('#remote-pair-panel');
         if(qrPanel&&!qrPanel.hidden){
