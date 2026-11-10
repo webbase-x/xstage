@@ -1572,7 +1572,7 @@ body.xstage-ui-v2 .stage .stage-search-slot #search{
     font-size:clamp(.58rem,2.8vw,.72rem)
   }
   body.xstage-ui-v2 .stage .stage-search-slot .search-dock{
-    inset:0!important;
+    top:0!important;left:0!important;right:0!important;bottom:auto!important;
   }
   body.xstage-ui-v2 .stage .stage-search-slot .search-box{
     padding-left:clamp(5px,1.8vw,8px);
