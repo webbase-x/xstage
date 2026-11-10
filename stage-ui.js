@@ -22,14 +22,7 @@
   }
   const shuffle=$('stage-shuffle');
   if(!stage||!queueDock||!queueBtn||!volume||!repeat)return;
-  // Speed and legacy repeat inputs remain available from the tools drawer.
-  const toolsNav=document.querySelector('.pc-tools');
-  if(toolsNav){
-    for(const selector of ['.speed-control','.repeat-control']){
-      const option=document.querySelector('.transport-right '+selector);
-      if(option)toolsNav.append(option);
-    }
-  }
+  // Keep speed and repeat beside the player. Utility commands live in one canonical menu.
 
   function syncQueue(){
     const n=$('queue-count')?.textContent?.trim()||'0';
@@ -40,7 +33,12 @@
   }
   function syncVolume(){
     const n=Math.round(Number(volume.value)||0);
-    if(volumeLabel)volumeLabel.textContent=n+'%';
+    const player=$('player');
+    const muted=!!player?.muted;
+    if(volumeLabel){
+      volumeLabel.textContent=muted?'ปิดเสียง · '+n+'%':n+'%';
+      volumeLabel.classList.toggle('is-muted',muted);
+    }
   }
   function syncRepeat(){
     if(repeatBtn){
@@ -51,17 +49,8 @@
   queueBtn.addEventListener('click',()=>$('mobile-queue-toggle')?.click());
   const stageToolsBtn=$('stage-tools-toggle');
   stageToolsBtn?.addEventListener('click',()=>{
-    if(window.matchMedia('(max-width:760px)').matches){
-      $('mobile-menu-toggle')?.click();
-      stageToolsBtn.setAttribute('aria-expanded',String($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true'));
-      return;
-    }
-    const stageColumn=document.querySelector('.stage-column');
-    if(!stageColumn)return;
-    const willShow=!stageColumn.classList.contains('mobile-tools-expanded');
-    stageColumn.classList.toggle('mobile-tools-expanded',willShow);
-    stageToolsBtn.setAttribute('aria-expanded',String(willShow));
-    if(willShow)stageColumn.querySelector('.pc-tools')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+    $('mobile-menu-toggle')?.click();
+    stageToolsBtn.setAttribute('aria-expanded',String($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true'));
   });
   shuffle?.addEventListener('click',()=>$('pc-random')?.click());
   const medleyMenu=$('mobile-medley-toggle');
@@ -143,6 +132,7 @@
     repeat.dispatchEvent(new Event('change',{bubbles:true}));
   });
   volume.addEventListener('input',syncVolume);
+  $('player')?.addEventListener('volumechange',syncVolume);
   // Wheel adjusts audio without scrolling the stage; never intercept normal page scrolling elsewhere.
   stage.addEventListener('wheel',event=>{
     if(event.ctrlKey||event.altKey||event.metaKey||event.target.closest('input,textarea,select,.remote-pair-panel,.mobile-stage-menu'))return;
@@ -158,7 +148,9 @@
     speaker.setAttribute('tabindex','0');speaker.setAttribute('aria-label','ปิดหรือเปิดเสียง');
     function syncMute(){const player=$('player');if(!player)return;
       speaker.textContent=player.muted?'🔇':'🔊';
-      speaker.setAttribute('aria-pressed',String(player.muted));}
+      speaker.setAttribute('aria-pressed',String(player.muted));
+      speaker.title=player.muted?'เปิดเสียง':'ปิดเสียง';
+      syncVolume();}
     function toggleMute(){const player=$('player');if(!player)return;player.muted=!player.muted;syncMute();}
     speaker.addEventListener('click',toggleMute);
     speaker.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleMute();}});
