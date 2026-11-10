@@ -247,7 +247,7 @@ function peakLevel(analyser){
 }
 function drawEqRta(){
  const visualActive=!!eqAnalyser&&(!eqPanel.hidden||(singerScreenAvailable()&&(eqDisplayTarget==='singer'||eqDisplayTarget==='both')));
- if(!eqPanel||!visualActive){eqFrame=requestAnimationFrame(drawEqRta);return;}
+ if(!eqPanel||!visualActive){eqFrame=0;return;}
  const canvas=$pc('xstage-eq-rta'),ctx=canvas?.getContext('2d');if(!ctx){eqFrame=requestAnimationFrame(drawEqRta);return;}
  const bins=new Uint8Array(eqAnalyser.frequencyBinCount);eqAnalyser.getByteFrequencyData(bins);
  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#02070d';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -290,6 +290,7 @@ function sendEqState(){
 }
 function openEq(target){
  buildEqBands();if(!ensureEqAudio())return;eqContext.resume().catch(()=>{});
+ if(!eqFrame)eqFrame=requestAnimationFrame(drawEqRta);
  if(target&&['main','singer','both'].includes(target)&&singerScreenAvailable())eqDisplayTarget=target;
  syncEqDisplaySelector();
  eqPanel.classList.remove('is-minimized');
@@ -314,7 +315,7 @@ eqPresetSelect?.addEventListener('change',()=>setEqPreset(eqPresetSelect.value))
 })();
 audio.addEventListener('play',()=>{if(eqPreset==='auto'&&state.current){const id=songIdentity(state.current);if(id!==eqLastSong){eqLastSong=id;setEqPreset('auto',{save:false});}}});
 window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen||e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq('singer');else if(d.action==='close'){eqDisplayTarget='main';syncEqDisplaySelector();applyEqVisibility();}else if(d.action==='preset')setEqPreset(String(d.value||'flat'));else if(d.action==='bypass'){eqBypassed=!!d.value;applyEqGains();}else if(d.action==='gain'&&Number.isInteger(d.index)&&eqBandInputs[d.index]){eqBandInputs[d.index].value=String(Math.max(-12,Math.min(12,Number(d.value)||0)));eqBandInputs[d.index].dispatchEvent(new Event('input',{bubbles:true}));}});
-buildEqBands();if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';syncEqDisplaySelector();requestAnimationFrame(drawEqRta);
+if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';syncEqDisplaySelector();
 function downloadQueue(){
  const data={schemaVersion:1,source:'XStageWebQueue',songs:state.queue.map(songIdentity)};
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
