@@ -23,11 +23,15 @@
     stage.classList.toggle('mobile-menu-open',open);
   }
   function updateIndicators(){
-    const loginButton=$('login'), logoutButton=$('logout');
-    signin.hidden=!!(loginButton?.hidden);
-    signout.hidden=!!(logoutButton?.hidden);
+    const logoutButton=$('logout');
+    const loggedIn=!!(logoutButton&&!logoutButton.hidden);
+    signin.hidden=loggedIn;
+    signout.hidden=!loggedIn;
     count.textContent=$('queue-count')?.textContent||'0';
-    status.textContent=$('status')?.textContent||'';
+    const total=String($('song-total')?.textContent||'').trim();
+    status.textContent=loggedIn
+      ? ('Google Drive พร้อมใช้งาน'+(total?' · '+total:''))
+      : 'ยังไม่ได้เชื่อมต่อ Google Drive';
     queue.setAttribute('aria-expanded',String(queueDock.classList.contains('mobile-expanded')));
     tools.setAttribute('aria-expanded',String(stageColumn.classList.contains('mobile-tools-expanded')));
   }
@@ -56,7 +60,14 @@
   remote.addEventListener('click',finish);
   $('remote-request-toggle')?.addEventListener('click',finish);
   fullscreen.addEventListener('click',()=>{finish();$('fullscreen')?.click();});
-  signin.addEventListener('click',()=>{finish();$('login')?.click();});
+  signin.addEventListener('click',()=>{
+    finish();
+    const gate=$('gate');
+    if(gate){
+      gate.hidden=false;
+      $('gate-login')?.focus();
+    }
+  });
   signout.addEventListener('click',()=>{finish();$('logout')?.click();});
   stage.addEventListener('pointerdown',e=>{
     if(!menu.hidden&&!menu.contains(e.target)&&!toggle.contains(e.target))setMenu(false);
@@ -136,10 +147,9 @@
     updateIndicators();
   });
   const observer=new MutationObserver(updateIndicators);
-  const accountLogin=$('login'),accountLogout=$('logout'),queueCount=$('queue-count'),line=$('status');
-  if(accountLogin)observer.observe(accountLogin,{attributes:true,attributeFilter:['hidden']});
+  const accountLogout=$('logout'),queueCount=$('queue-count'),songTotal=$('song-total');
   if(accountLogout)observer.observe(accountLogout,{attributes:true,attributeFilter:['hidden']});
   if(queueCount)observer.observe(queueCount,{childList:true,subtree:true,characterData:true});
-  if(line)observer.observe(line,{childList:true,subtree:true,characterData:true});
+  if(songTotal)observer.observe(songTotal,{childList:true,subtree:true,characterData:true});
   setMenu(window.innerWidth>=1100);updateIndicators();
 })();

@@ -13,8 +13,10 @@ const sw=read('sw.js');
 const version=JSON.parse(read('version.json'));
 const pkg=JSON.parse(read('package.json'));
 const remoteHtml=read('remote.html');
+const stageUi=read('stage-ui.js');
+const mobile=read('mobile-layout.js');
 
-for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',read('stage-ui.js')],['mobile-layout.js',read('mobile-layout.js')],['pwa-install.js',read('pwa-install.js')]]){
+for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',read('pwa-install.js')]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
 }
 
@@ -47,14 +49,33 @@ assert.ok(index.includes('property="og:title"'),'Open Graph title must exist');
 assert.ok(!index.includes('data-cmd="find">⌕'),'context menu must not depend on fragile symbol glyphs');
 assert.ok(app.includes('function setSearchAvailability'),'search auth state must be explicit');
 assert.ok(app.includes('function dismissLoginGate'),'login gate preview behavior must exist');
-assert.ok(index.includes('placeholder="ค้นหาเพลง, ศิลปิน หรือรหัสเพลง..."'),'search placeholder must describe karaoke search');
-assert.ok(!index.includes('id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง, ศิลปิน หรือรหัสเพลง..." aria-label="ค้นหาเพลง ศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false" readonly'),'search must not be readonly before login');
+assert.ok(index.includes('placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง"'),'search placeholder must stay readable without clipped punctuation');
+assert.ok(!index.includes('placeholder="ค้นหาเพลง, ศิลปิน หรือรหัสเพลง..."'),'legacy punctuation-heavy placeholder must stay removed');
+assert.ok(!index.includes('id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-label="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false" readonly'),'search must not be readonly before login');
 assert.ok(!app.includes("ui.search.addEventListener('focus',()=>{\n  if(state.token)return;\n  ui.gate.hidden=false"),'search focus must not reopen login gate');
 assert.ok(app.includes("const pendingSearch=keepAuth?String(ui.search?.value||''):''"),'typed search must survive Google auth handoff');
+assert.ok(app.includes("renderSongs();\n  updateTransport();\n  if(ui.search.value.trim())setLiveSearchExpanded(true);"),'typing must immediately resync the transport play button');
+assert.ok(app.includes("renderSongs();\n    updateTransport();\n    if(!state.token)"),'Enter must refresh current search results before choosing a song');
+assert.match(app,/if\(!player\.src\)\{if\(state\.queue\.length\)playNext\(\);else if\(state\.shown\.length\)playSong\(state\.shown\[state\.selectedIndex\]\)/);
 assert.ok(app.includes("ui.elapsed.textContent=hasLoadedSong?timeLabel(player.currentTime):'--:--'"),'idle player must not look stuck at 00:00');
+assert.ok(index.includes('<span class="transport-now-caption">สถานะเพลง</span>'),'idle player caption must not claim that audio is already playing');
 assert.ok(!index.includes('id="mobile-home-toggle">⌂'),'drawer should use explicit text labels instead of icon-only prefixes');
+assert.ok(index.includes('id="login" class="button button-google" type="button"><span class="google-g" aria-hidden="true">G</span> เชื่อมต่อ Google Drive'),'secondary account trigger must not duplicate the primary Google Sign-In CTA');
+assert.ok(index.includes('id="mobile-login-toggle">เชื่อมต่อ Google Drive</button>'),'drawer account trigger must route through the canonical login gate');
+assert.ok(index.includes('id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button>'),'PRIVATE STAGE must keep one primary Google Sign-In CTA');
 assert.ok(!css.includes('font:800 .76rem/1.2 Inter,Tahoma,sans-serif'),'context menu must use Thai-safe font stack');
 assert.ok(css.includes('"Noto Sans Thai"'),'Thai-safe fallback font must be present');
+assert.ok(css.includes('body.xstage-ui-v2 .stage .login-gate{\n  z-index:120!important;'),'PRIVATE STAGE must render above the persistent drawer');
+assert.ok(css.includes('body.xstage-ui-v2.xstage-gate-active .stage .mobile-stage-menu'),'drawer must be suppressed while PRIVATE STAGE is active');
+assert.ok(css.includes('.stage-search-slot #search::placeholder{\n  font-family:"Leelawadee UI","Noto Sans Thai"'),'search placeholder must force a Thai-safe font');
+assert.ok(app.includes('function cleanStatusMessage'),'status sanitizer must exist');
+assert.ok(app.includes('const punctuationOnly='),'punctuation-only auth errors must be rejected');
+assert.ok(stageUi.includes('const punctuationOnly='),'visible stage toast must independently reject punctuation-only errors');
+assert.ok(!mobile.includes("status.textContent=$('status')?.textContent||''"),'drawer must not copy raw auth/error status text');
+assert.ok(mobile.includes("'Google Drive พร้อมใช้งาน'"),'drawer must show a stable Google Drive summary');
+assert.ok(mobile.includes("gate.hidden=false"),'drawer Google action must open the canonical PRIVATE STAGE gate');
+assert.ok(pc.includes('createMediaElementSource(audio)'),'player EQ must remain wired to HTML5 Audio through Web Audio');
+assert.ok(pc.includes('createAnalyser()'),'audio visualizer/analyser path must remain wired');
 assert.ok(!remoteHtml.includes('⏹ หยุด'),'remote UI must not expose redundant stop');
 
 assert.ok(index.includes('class="stage-brand-lockup"'),'professional stage brand lockup must exist');

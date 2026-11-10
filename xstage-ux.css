@@ -2673,3 +2673,20 @@ body.xstage-ui-v2 .stage .mobile-stage-menu summary{
   overflow:visible!important;
   text-overflow:clip!important;
 }
+
+
+/* 1.0.43: keep PRIVATE STAGE above the persistent drawer and make Thai search text stable. */
+body.xstage-ui-v2 .stage .login-gate{
+  z-index:120!important;
+}
+body.xstage-ui-v2.xstage-gate-active .stage .mobile-stage-menu{
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+body.xstage-ui-v2 .stage .stage-status-toast{
+  z-index:140!important;
+}
+body.xstage-ui-v2 .stage .stage-search-slot #search,
+body.xstage-ui-v2 .stage .stage-search-slot #search::placeholder{
+  font-family:"Leelawadee UI","Noto Sans Thai",Tahoma,"Segoe UI",system-ui,sans-serif!important;
+}

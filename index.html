@@ -19,8 +19,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1042">
-  <link rel="stylesheet" href="xstage-ux.css?v=1042">
+  <link rel="stylesheet" href="style.css?v=1043">
+  <link rel="stylesheet" href="xstage-ux.css?v=1043">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -32,11 +32,11 @@
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
       <div class="account-tools">
         <span id="account" class="account-name" aria-label="บัญชี Google ปัจจุบัน" hidden></span>
-        <button id="login" class="button button-google" type="button"><span class="google-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button>
+        <button id="login" class="button button-google" type="button"><span class="google-g" aria-hidden="true">G</span> เชื่อมต่อ Google Drive</button>
         <button id="logout" class="button button-ghost" type="button" hidden>ออกจากระบบ</button>
       </div>
     </header>
-    <div id="status" class="status-line" role="status" aria-live="polite">เข้าสู่ระบบ Google เพื่อเปิดคลังเพลงส่วนตัว</div>
+    <div id="status" class="status-line" role="status" aria-live="polite">เชื่อมต่อ Google Drive เพื่อเปิดคลังเพลงส่วนตัว</div>
     <main class="studio-layout" id="studio">
       <section class="stage-column" aria-label="เวทีคาราโอเกะ">
         <div id="stage" class="stage" role="group" aria-label="เวที X-Stage Karaoke">
@@ -85,7 +85,7 @@
             <button id="mobile-menu-toggle" class="mobile-menu-toggle toolbar-button" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
             <div class="stage-search-slot"><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
         <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
-        <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง, ศิลปิน หรือรหัสเพลง..." aria-label="ค้นหาเพลง ศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false"><button id="voice-search" class="voice-search-button" type="button" aria-label="ค้นหาเพลงด้วยเสียง" title="ค้นหาด้วยเสียง" aria-pressed="false" hidden>🎙</button><kbd>Ctrl F</kbd></div>
+        <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-label="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false"><button id="voice-search" class="voice-search-button" type="button" aria-label="ค้นหาเพลงด้วยเสียง" title="ค้นหาด้วยเสียง" aria-pressed="false" hidden>🎙</button><kbd>Ctrl F</kbd></div>
         <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
@@ -136,7 +136,7 @@
             <button type="button" id="mobile-install-app">ติดตั้ง X-Stage เป็นแอป</button>
             <button type="button" id="mobile-fullscreen-toggle">เต็มหน้าจอ / กลับ</button>
             <button type="button" id="mobile-about-toggle">เกี่ยวกับ X-Stage</button>
-            <button type="button" id="mobile-login-toggle">เข้าสู่ระบบ Google</button>
+            <button type="button" id="mobile-login-toggle">เชื่อมต่อ Google Drive</button>
             <button type="button" id="mobile-logout-toggle" hidden>ออกจากระบบ Google</button>
           </nav>
           <div class="stage-metrics" aria-label="นาฬิกา"><time id="stage-clock" class="stage-clock">--:--:--</time></div>
@@ -175,12 +175,12 @@
             <div class="transport-now">
               <img class="transport-cover" src="assets/xstage-app-icon-192.png" width="58" height="58" alt="">
               <div class="transport-song-info">
-                <span class="transport-now-caption">กำลังเล่น</span>
+                <span class="transport-now-caption">สถานะเพลง</span>
                 <strong id="now-playing">ยังไม่ได้เลือกเพลง</strong>
                 <small id="now-artist">X-Stage Karaoke Online</small>
                 <div class="timeline">
                   <input id="seek" type="range" min="0" max="1000" value="0" aria-label="ตำแหน่งการเล่น" disabled>
-                  <span class="transport-time"><span id="elapsed">--:--</span><span aria-hidden="true"> / </span><span id="duration">--:--</span></span>
+                  <span class="transport-time" title="จะแสดงเวลาเมื่อโหลดเพลงจาก Google Drive"><span id="elapsed">--:--</span><span aria-hidden="true"> / </span><span id="duration">--:--</span></span>
                 </div>
               </div>
             </div>
@@ -292,13 +292,13 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script src="config.js?v=1042"></script>
+<script src="config.js?v=1043"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=1042" defer></script><script src="pc-extensions.js?v=1042" defer></script>
-  <script src="stage-controls.js?v=1042" defer></script>
-  <script src="mobile-layout.js?v=1042" defer></script>
-  <script src="pwa-install.js?v=1042" defer></script>
+  <script src="app.js?v=1043" defer></script><script src="pc-extensions.js?v=1043" defer></script>
+  <script src="stage-controls.js?v=1043" defer></script>
+  <script src="mobile-layout.js?v=1043" defer></script>
+  <script src="pwa-install.js?v=1043" defer></script>
 
-  <script src="stage-ui.js?v=1042" defer></script>
+  <script src="stage-ui.js?v=1043" defer></script>
 </body>
 </html>
