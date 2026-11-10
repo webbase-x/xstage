@@ -1141,9 +1141,9 @@ function renderSongs() {
   setLiveSearchExpanded(true);
   const matches = state.songs.filter(song =>
     [song.code,song.title,song.artist].some(v => String(v || '').toLocaleLowerCase('th').includes(term)));
-  state.shown = matches.slice(0,120);
+  state.shown = matches.slice(0,5);
   state.selectedIndex = Math.max(0,Math.min(state.selectedIndex,state.shown.length - 1));
-  ui.resultCount.textContent = `พบ ${num(matches.length)} เพลง${matches.length>120?' · แสดง 120 รายการแรก':''}`;
+  ui.resultCount.textContent = `พบ ${num(matches.length)} เพลง${matches.length>5?' · แสดง 5 รายการแรก':''}`;
   if (!state.shown.length) {
     ui.search.removeAttribute('aria-activedescendant');
     ui.songs.append(element('div','empty-state',term?'ไม่พบเพลงที่ค้นหา':'ยังไม่มีเพลงที่พร้อมเล่น'));return;
