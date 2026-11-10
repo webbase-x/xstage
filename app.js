@@ -623,6 +623,14 @@ function setLiveSearchExpanded(open){
   dock.classList.toggle('pc-expanded',!!open);
   ui.search.setAttribute('aria-expanded',String(!!open));
 }
+function clearSearchAfterChoice({focus=false}={}){
+  ui.search.value='';
+  state.shown=[];
+  state.selectedIndex=0;
+  renderSongs();
+  setLiveSearchExpanded(false);
+  if(focus)ui.search.focus();
+}
 
 function clearSearchAfterChoice(){
   ui.search.value='';
@@ -1021,17 +1029,19 @@ function setupVoiceSearch(){
       recognition=new Recognition();
       recognition.lang='th-TH';
       recognition.continuous=false;
-      recognition.interimResults=false;
+      recognition.interimResults=true;
       recognition.maxAlternatives=3;
       recognition.onstart=()=>{setListening(true);showVoiceMessage('กำลังฟัง… พูดชื่อเพลง ศิลปิน หรือรหัสเพลง');};
       recognition.onresult=event=>{
-        const result=event.results?.[event.resultIndex||0]||event.results?.[0];
-        const transcript=String(result?.[0]?.transcript||'').trim();
+        const start=Number(event.resultIndex)||0;
+        let transcript='';
+        for(let i=start;i<(event.results?.length||0);i++)transcript+=String(event.results[i]?.[0]?.transcript||'');
+        transcript=transcript.trim();
         if(!transcript)return;
         ui.search.value=transcript;
         state.selectedIndex=0;
         ui.search.dispatchEvent(new Event('input',{bubbles:true}));
-        ui.search.focus();
+        setLiveSearchExpanded(true);
       };
       recognition.onerror=event=>{
         const code=String(event?.error||'');
