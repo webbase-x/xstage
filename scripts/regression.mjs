@@ -42,6 +42,13 @@ assert.ok(!index.includes('apis.google.com/js/api.js'),'main page must lazy-load
 assert.ok(pc.includes("FAVORITES_STORE='xstage-favorites-v2'"),'favorites must persist');
 assert.ok(pc.includes("HISTORY_STORE='xstage-play-history-v1'"),'play history must persist');
 assert.ok(index.includes('id="library-select"'),'multi-library selector must exist');
+assert.ok(index.includes('id="gate-close"'),'login gate must be dismissible for stage preview');
+assert.ok(index.includes('property="og:title"'),'Open Graph title must exist');
+assert.ok(!index.includes('data-cmd="find">⌕'),'context menu must not depend on fragile symbol glyphs');
+assert.ok(app.includes('function setSearchAvailability'),'search auth state must be explicit');
+assert.ok(app.includes('function dismissLoginGate'),'login gate preview behavior must exist');
+assert.ok(!css.includes('font:800 .76rem/1.2 Inter,Tahoma,sans-serif'),'context menu must use Thai-safe font stack');
+assert.ok(css.includes('"Noto Sans Thai"'),'Thai-safe fallback font must be present');
 assert.ok(!remoteHtml.includes('⏹ หยุด'),'remote UI must not expose redundant stop');
 
 assert.ok(index.includes('class="stage-brand-lockup"'),'professional stage brand lockup must exist');

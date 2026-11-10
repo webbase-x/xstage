@@ -1,7 +1,7 @@
 /* X-Stage Karaoke Online service worker.
  * Code and navigation are network-first so deployed fixes are not trapped behind stale cache.
  * Private Google Drive media is cross-origin and is never cached here. */
-const CACHE='xstage-shell-v1040';
+const CACHE='xstage-shell-v1041';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());
@@ -11,7 +11,7 @@ self.addEventListener('activate',event=>{
   event.waitUntil((async()=>{
     const keys=await caches.keys();
     await Promise.all(keys
-      .filter(key=>key.startsWith('xstage-shell-')||key.startsWith('ai-thai-browser-'))
+      .filter(key=>key.startsWith('xstage-shell-'))
       .filter(key=>key!==CACHE)
       .map(key=>caches.delete(key)));
     await self.clients.claim();

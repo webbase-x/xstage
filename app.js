@@ -286,12 +286,34 @@ if(typeof initialUiPrefs.muted==='boolean')player.muted=initialUiPrefs.muted;
 if(Number.isFinite(Number(initialUiPrefs.visualScale)))setTimeout(()=>setStageVisualScale(Number(initialUiPrefs.visualScale)),0);
 
 function setStatus(message, kind = '') {
-  ui.status.textContent = message;
+  const raw=String(message??'').trim();
+  const safeMessage=(!raw||raw==='.')
+    ? (kind==='error'?'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง':'พร้อมใช้งาน')
+    : raw;
+  ui.status.textContent = safeMessage;
   ui.status.className = 'status-line' + (kind ? ' ' + kind : '');
   if(ui.gateStatus){
-    ui.gateStatus.textContent=message;
+    ui.gateStatus.textContent=safeMessage;
     ui.gateStatus.dataset.kind=kind||'info';
   }
+}
+function setSearchAvailability(ready,{busy=false}={}){
+  if(!ui.search)return;
+  ui.search.disabled=!!busy;
+  ui.search.readOnly=!ready;
+  ui.search.setAttribute('aria-disabled',String(!ready));
+  ui.search.placeholder=ready?'รหัส / ชื่อเพลง / ศิลปิน':'เข้าสู่ระบบ Google เพื่อค้นหาเพลง';
+}
+function syncLoginGateState(){
+  const active=!!(ui.gate&&!ui.gate.hidden);
+  document.body.classList.toggle('xstage-gate-active',active);
+}
+function dismissLoginGate(){
+  if(!ui.gate||ui.gate.hidden)return;
+  ui.gate.hidden=true;
+  syncLoginGateState();
+  setStatus('โหมดชมหน้าเวที · เข้าสู่ระบบ Google เมื่อต้องการค้นหาและเล่นเพลง');
+  ui.login?.focus?.();
 }
 function showCatalogLoading(title,detail,progress=null){
   if(ui.catalogLoadingTitle)ui.catalogLoadingTitle.textContent=title||'กำลังเตรียมฐานเพลง';
@@ -626,7 +648,7 @@ function applyInstantCatalog(instant){
   state.catalogGeneration=instant.generation;
   state.songs=instant.catalog.songs.filter(playable);
   state.selectedIndex=0;
-  ui.search.disabled=false;
+  setSearchAvailability(true);
   ui.libraryState.textContent='ฐานเพลงในเครื่องพร้อมใช้ · กำลังตรวจอัปเดตเบื้องหลัง';
   ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
   ui.resultCount.textContent='พิมพ์เพื่อค้นหาเพลง';
@@ -660,7 +682,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   ui.logout.hidden=false;
   ui.login.hidden=true;
   ui.gate.hidden=true;
-  ui.search.disabled=true;
+  setSearchAvailability(false,{busy:true});
   ui.libraryState.textContent='เข้าสู่ระบบแล้ว · กำลังเปิดฐานเพลงในเครื่อง';
   ui.songTotal.textContent='กำลังโหลด…';
   ui.resultCount.textContent='กำลังเปิดฐานเพลง';
@@ -763,7 +785,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
       renderSongs();renderQueue();
     }
-    ui.search.disabled=false;
+    setSearchAvailability(true);
     ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · พร้อมใช้งาน';
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
     if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
@@ -776,7 +798,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     hideCatalogLoading();
     if(instant&&state.token===token&&authId===state.authId){
       // Local catalog stays usable when update checking is slow/offline/fails.
-      ui.search.disabled=false;
+      setSearchAvailability(true);
       ui.libraryState.textContent='ใช้ฐานเพลงในเครื่อง · ตรวจอัปเดตภายหลัง';
       setStatus(`พร้อมใช้งานจากฐานในเครื่อง · ตรวจอัปเดต Google Drive ไม่สำเร็จ: ${error.message}`,'success');
       return;
@@ -869,7 +891,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.current = null;state.lyrics = null;state.selectedIndex = 0;
   clearMediaSession();
   ui.account.textContent = '';ui.account.hidden = true;ui.logout.hidden = true;ui.login.hidden = false;
-  ui.gate.hidden = false;hideCatalogLoading();ui.search.disabled = true;ui.search.value = '';
+  ui.gate.hidden = false;hideCatalogLoading();setSearchAvailability(false);ui.search.value = '';
   ui.songTotal.textContent = '0 เพลง';ui.resultCount.textContent = 'กรุณาเข้าสู่ระบบ';
   ui.libraryState.textContent = 'คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ';
   ui.nowPlaying.textContent = 'ยังไม่ได้เลือกเพลง';ui.nowArtist.textContent='X-Stage Karaoke Online';ui.stageCode.textContent='—';
@@ -1836,7 +1858,17 @@ ui.librarySelect?.addEventListener('change',()=>{
   location.reload();
 });
 ui.login.addEventListener('click',()=>login());ui.gateLogin.addEventListener('click',()=>login());
-ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
+$('gate-close')?.addEventListener('click',dismissLoginGate);
+ui.gate?.addEventListener('click',event=>{if(event.target===ui.gate)dismissLoginGate();});
+if(ui.gate)new MutationObserver(syncLoginGateState).observe(ui.gate,{attributes:true,attributeFilter:['hidden']});
+syncLoginGateState();
+ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});syncLoginGateState();setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
+ui.search.addEventListener('focus',()=>{
+  if(state.token)return;
+  ui.gate.hidden=false;
+  syncLoginGateState();
+  setStatus('กรุณาเข้าสู่ระบบ Google เพื่อค้นหาเพลงจากคลังส่วนตัว');
+});
 ui.search.addEventListener('input',()=>{
   state.selectedIndex=0;
   renderSongs();
