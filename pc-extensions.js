@@ -5,6 +5,43 @@
 const $pc=id=>document.getElementById(id);
 const dock=$pc('pc-search'),toggle=$pc('pc-hide-search'),dialog=$pc('pc-dialog'),body=$pc('pc-dialog-body');
 const favorites=new Set();
+const FAVORITES_STORE='xstage-favorites-v2';
+const HISTORY_STORE='xstage-play-history-v1';
+let persistentHistory=[],persistentScope='';
+function readLocalMap(key){try{const value=JSON.parse(localStorage.getItem(key)||'{}');return value&&typeof value==='object'?value:{};}catch{return {};}}
+function writeLocalMap(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}
+function currentPersistentScope(){
+  return state.accountSub&&state.libraryRootId?state.accountSub+'|'+state.libraryRootId:'';
+}
+function loadPersistentLibraryData(force=false){
+  const scope=currentPersistentScope();
+  if(!scope){persistentScope='';favorites.clear();persistentHistory=[];return;}
+  if(!force&&scope===persistentScope)return;
+  persistentScope=scope;
+  favorites.clear();
+  const favMap=readLocalMap(FAVORITES_STORE);
+  for(const id of Array.isArray(favMap[scope])?favMap[scope]:[])favorites.add(String(id));
+  const historyMap=readLocalMap(HISTORY_STORE);
+  persistentHistory=Array.isArray(historyMap[scope])?historyMap[scope].slice(0,200):[];
+}
+function saveFavorites(){
+  const scope=currentPersistentScope();if(!scope)return;
+  const map=readLocalMap(FAVORITES_STORE);
+  map[scope]=[...favorites].slice(0,5000);
+  writeLocalMap(FAVORITES_STORE,map);
+}
+function recordPersistentHistory(song){
+  const scope=currentPersistentScope();if(!scope||!song)return;
+  const id=songIdentity(song);
+  persistentHistory=persistentHistory.filter(item=>String(item.id)!==id);
+  persistentHistory.unshift({id,code:String(song.code||''),title:String(song.title||''),artist:String(song.artist||''),playedAt:Date.now()});
+  persistentHistory=persistentHistory.slice(0,200);
+  const map=readLocalMap(HISTORY_STORE);map[scope]=persistentHistory;writeLocalMap(HISTORY_STORE,map);
+}
+window.addEventListener('xstage:librarychange',()=>{
+  loadPersistentLibraryData(true);
+  queueMicrotask(()=>{if(state.token)renderSongs();});
+});
 const savedUiPrefs=window.XStageUiPrefs?.read?.()||{};
 let abA=null,abB=null,
     lyricScale=Number.isFinite(Number(savedUiPrefs.lyricScale))?Math.max(.7,Math.min(1.5,Number(savedUiPrefs.lyricScale))):1,
@@ -35,15 +72,15 @@ renderSongs=function(){
  [...ui.songs.querySelectorAll('.song-item')].forEach((row,i)=>{
   const song=state.shown[i];if(!song)return;
   const star=document.createElement('button');star.type='button';star.className='pc-star';star.style.cssText='border:0;background:transparent;color:#ffd46a;font-size:20px;padding:3px 7px';star.textContent=favorites.has(songIdentity(song))?'★':'☆';star.title='เพลงโปรด (เฉพาะในแท็บนี้)';
-  star.onclick=e=>{e.stopPropagation();const id=songIdentity(song);if(favorites.has(id))favorites.delete(id);else favorites.add(id);renderSongs();};
+  star.onclick=e=>{e.stopPropagation();const id=songIdentity(song);if(favorites.has(id))favorites.delete(id);else favorites.add(id);saveFavorites();renderSongs();};
   row.insertBefore(star,row.lastElementChild);
   row.addEventListener('contextmenu',e=>{e.preventDefault();showSong(song);});
  });
 };
 $pc('pc-favorites-only').onchange=()=>{state.selectedIndex=0;renderSongs();};
 const loginObserver=new MutationObserver(()=>{
- if(state.token&&!dock.dataset.logged){dock.dataset.logged='yes';expand(Boolean(ui.search.value.trim()));}
- if(!state.token&&dock.dataset.logged){delete dock.dataset.logged;favorites.clear();expand(false);}
+ if(state.token&&!dock.dataset.logged){dock.dataset.logged='yes';loadPersistentLibraryData(true);expand(Boolean(ui.search.value.trim()));}
+ if(!state.token&&dock.dataset.logged){delete dock.dataset.logged;favorites.clear();persistentHistory=[];persistentScope='';expand(false);}
 });
 loginObserver.observe(ui.logout,{attributes:true,attributeFilter:['hidden']});
 function openDialog(title){$pc('pc-dialog-title').textContent=title;body.replaceChildren();if(!dialog.open)dialog.showModal();return body;}
@@ -64,7 +101,19 @@ $pc('mobile-clear-cache')?.addEventListener('click',confirmClearCache);
 function button(label,handler){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=handler;return b;}
 function para(text){const p=document.createElement('p');p.textContent=text;return p;}
 function showSong(song){const d=openDialog('รายละเอียดเพลง');d.append(para([song.code,song.title,song.artist,song.type,'ระยะเวลา '+(song.duration||0)+' วินาที'].filter(Boolean).join(' · ')),button('เล่นทันที',()=>{dialog.close();playSong(song);expand(false);}),button('แทรกเป็นเพลงถัดไป',()=>{state.queue.unshift(song);renderQueue();dialog.close();}));}
-$pc('pc-history').onclick=()=>{const d=openDialog('ประวัติการเล่น (เซสชันนี้)');const songs=[...state.history];if(state.current)songs.push(state.current);if(!songs.length)d.append(para('ยังไม่มีประวัติการเล่น'));for(const s of songs.slice().reverse().slice(0,100)){const row=document.createElement('div');row.className='pc-history-row';const title=document.createElement('span');title.textContent=(s.code||'')+' · '+(s.title||'');row.append(title,button('เล่น',()=>{dialog.close();playSong(s);}));d.append(row);}};
+$pc('pc-history').onclick=()=>{
+ const d=openDialog('ประวัติการเล่น');
+ loadPersistentLibraryData();
+ const items=persistentHistory.slice(0,100);
+ if(!items.length)d.append(para('ยังไม่มีประวัติการเล่นในคลังนี้'));
+ for(const item of items){
+   const row=document.createElement('div');row.className='pc-history-row';
+   const title=document.createElement('span');title.textContent=[item.code,item.title,item.artist].filter(Boolean).join(' · ');
+   const song=state.songs.find(s=>songIdentity(s)===String(item.id));
+   const play=button(song?'เล่น':'ไม่พบในคลัง',()=>{if(song){dialog.close();playSong(song);}});
+   play.disabled=!song;row.append(title,play);d.append(row);
+ }
+};
 $pc('pc-random').onclick=()=>{
   if(!state.token){setPlayStatus('กรุณาเข้าสู่ระบบก่อนสุ่มเพลง');return;}
   // Random and medley both run shuffled tracks continuously until stopped.
@@ -314,6 +363,15 @@ eqPresetSelect?.addEventListener('change',()=>setEqPreset(eqPresetSelect.value))
  const pos=eqPrefs.eqPosition;if(pos?.left&&pos?.top){eqPanel.style.left=pos.left;eqPanel.style.top=pos.top;eqPanel.style.right='auto';eqPanel.style.bottom='auto';}
 })();
 audio.addEventListener('play',()=>{if(eqPreset==='auto'&&state.current){const id=songIdentity(state.current);if(id!==eqLastSong){eqLastSong=id;setEqPreset('auto',{save:false});}}});
+let lastRecordedHistorySong='';
+audio.addEventListener('play',()=>{
+  if(!state.current)return;
+  const id=songIdentity(state.current);
+  if(id===lastRecordedHistorySong)return;
+  lastRecordedHistorySong=id;
+  loadPersistentLibraryData();
+  recordPersistentHistory(state.current);
+});
 window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen||e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq('singer');else if(d.action==='close'){eqDisplayTarget='main';syncEqDisplaySelector();applyEqVisibility();}else if(d.action==='preset')setEqPreset(String(d.value||'flat'));else if(d.action==='bypass'){eqBypassed=!!d.value;applyEqGains();}else if(d.action==='gain'&&Number.isInteger(d.index)&&eqBandInputs[d.index]){eqBandInputs[d.index].value=String(Math.max(-12,Math.min(12,Number(d.value)||0)));eqBandInputs[d.index].dispatchEvent(new Event('input',{bubbles:true}));}});
 if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';syncEqDisplaySelector();
 function downloadQueue(){
@@ -337,7 +395,8 @@ setInterval(()=>{if(!screen||screen.closed){if(eqDisplayTarget!=='main'){eqDispl
 $pc('pc-other-tools').onclick=()=>{const d=openDialog('ความสามารถ X-Stage Web');d.append(para('เว็บ: ค้นหาแบบเรียลไทม์, คิวเพลง, ประวัติ, เพลงโปรดในเซสชัน, สุ่มเพลง, A–B, EQ, ตั้งค่าเนื้อร้องและพื้นหลัง, จอร้องแยก, ส่งออก/นำเข้าคิว'));
  d.append(para('เฉพาะ Windows: MIDI Mixer / SoundFont แยกชิ้นดนตรี, GM Keyboard, ปิด Guide Melody, ASIO, ปรับคีย์ดนตรีอิสระจาก M4A และจัดการฐานเพลงในเครื่อง'));
 };
-ui.logout.addEventListener('click',()=>{favorites.clear();expand(false);abA=null;abB=null;updateAB();if(screen&&!screen.closed)screen.close();screen=null;});
+ui.logout.addEventListener('click',()=>{favorites.clear();persistentHistory=[];persistentScope='';expand(false);abA=null;abB=null;updateAB();if(screen&&!screen.closed)screen.close();screen=null;});
+loadPersistentLibraryData();
 expand(false);
 })();
 
