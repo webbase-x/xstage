@@ -1118,6 +1118,37 @@ function drawLyrics(){
         let nextY=Math.max(h*.22,Math.min(h*.83,usableBottom-fontSize*.8)-lyricLift);
         let currentY=Math.max(h*.10,Math.min(h*.66,nextY-fontSize*1.45));
         let lyricCenter=w/2,lyricWidth=w*.93,lyricFont=fontSize*state.visualScale;
+
+        // In landscape, reserve the real rendered space occupied by the X-Stage identity.
+        // If two lyric rows cannot fit below it, reduce lyric size before ever allowing overlap.
+        if(matchMedia('(orientation: landscape)').matches){
+          const canvasBox=ui.lyrics.getBoundingClientRect();
+          const hero=ui.stage.querySelector('.stage-hero');
+          if(hero){
+            const heroBox=hero.getBoundingClientRect();
+            const scale=w/Math.max(1,canvasBox.width);
+            const heroBottom=(heroBox.bottom-canvasBox.top)*scale;
+            const gap=Math.max(10*density,fontSize*.22);
+            let minCurrentY=heroBottom+gap+lyricFont*.72;
+            let requiredNextY=minCurrentY+lyricFont*1.35;
+            const maxNextY=usableBottom-lyricFont*.72;
+            if(requiredNextY>maxNextY){
+              const available=Math.max(28,usableBottom-(heroBottom+gap));
+              lyricFont=Math.min(lyricFont,Math.max(18,available/2.75));
+              minCurrentY=heroBottom+gap+lyricFont*.7;
+              requiredNextY=minCurrentY+lyricFont*1.28;
+            }
+            if(currentY<minCurrentY){
+              currentY=minCurrentY;
+              nextY=Math.max(nextY,requiredNextY);
+            }
+            const finalMaxNext=usableBottom-lyricFont*.68;
+            if(nextY>finalMaxNext){
+              nextY=finalMaxNext;
+              currentY=Math.min(currentY,nextY-lyricFont*1.28);
+            }
+          }
+        }
         const qrPanel=ui.stage.querySelector('#remote-pair-panel');
         if(qrPanel&&!qrPanel.hidden){
           const canvasBox=ui.lyrics.getBoundingClientRect();
