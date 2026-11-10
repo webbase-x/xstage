@@ -2065,3 +2065,52 @@ body.xstage-ui-v2.xstage-webapp-mode{
 @supports not (height:100svh){
   html body.xstage-ui-v2{height:100vh!important;max-height:100vh!important}
 }
+
+/* 1.0.06: restore visible search results after the viewport-lock refactor. */
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+  height:auto!important;
+  min-height:42px!important;
+  max-height:min(475px,calc(100dvh - var(--xs-bottom) - 100px))!important;
+  overflow:hidden!important;
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .song-results{
+  display:block!important;
+  flex:1 1 auto!important;
+  min-height:0!important;
+  overflow-y:auto!important;
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded){
+    height:42px!important;
+    min-height:42px!important;
+    max-height:42px!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+    height:auto!important;
+    min-height:42px!important;
+    max-height:max(120px,min(52dvh,calc(100dvh - var(--xs-top) - var(--xs-bottom) - 16px)))!important;
+    border-radius:13px!important;
+    overflow:hidden!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .search-box{
+    flex:0 0 40px!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .song-results{
+    display:block!important;
+    min-height:72px!important;
+    max-height:none!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+  }
+}
+@media(max-width:390px){
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded){
+    height:42px!important;
+    min-height:42px!important;
+    max-height:42px!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+    min-height:42px!important;
+    max-height:max(110px,min(48dvh,calc(100dvh - var(--xs-top) - var(--xs-bottom) - 12px)))!important;
+  }
+}
