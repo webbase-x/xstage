@@ -1513,3 +1513,17 @@ body.xstage-ui-v2 .catalog-progress-row progress::-moz-progress-bar{
 body.xstage-ui-v2 .catalog-progress-row b{
   min-width:34px;text-align:right;color:#dffbff;font-size:.7rem;font-variant-numeric:tabular-nums
 }
+
+/* 0.9.97: small-screen/Web App toolbar cleanup. */
+@media(max-width:760px){
+  body.xstage-ui-v2 #fullscreen{
+    display:none!important
+  }
+}
+body.xstage-ui-v2.xstage-webapp-mode #fullscreen{
+  display:none!important
+}
+/* The singer-screen control stays in menus only; never replace the fullscreen slot. */
+body.xstage-ui-v2 .stage-toolbar #toolbar-stage-pop{
+  display:none!important
+}
