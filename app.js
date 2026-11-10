@@ -681,7 +681,7 @@ function renderSongs() {
   state.shown.forEach((song,i) => {
     const row=element('div','song-item'+(i===state.selectedIndex?' selected':''));
     row.role='option';row.id='song-option-'+i;row.setAttribute('aria-selected',String(i===state.selectedIndex));
-    row.tabIndex = -1;row.title='คลิกเลือก · ดับเบิลคลิกเล่นทันที';
+    row.tabIndex = -1;row.title=state.current||state.loading?'เลือกเพื่อเพิ่มเข้าคิว':'เลือกเพื่อเล่นทันที';
     const details=element('div','song-details');
     const code=element('div','song-code'),title=element('strong'),artist=element('small');
     renderMatchedText(code,song.code||'—',term);
@@ -691,8 +691,12 @@ function renderSongs() {
     const add=element('button','song-add','+');add.type='button';add.title='เพิ่มเพลงเข้าคิว';add.setAttribute('aria-label','เพิ่มเพลง '+(song.title||'')+' เข้าคิว');
     add.addEventListener('click',e=>{e.stopPropagation();selectSong(i,false);addToQueue(song);clearSearchAfterChoice();});
     row.append(details,add);
-    row.addEventListener('click',()=>selectSong(i,false));
-    row.addEventListener('dblclick',()=>{playSong(song);clearSearchAfterChoice();});
+    row.addEventListener('click',()=>{
+      selectSong(i,false);
+      if(state.current||state.loading)addToQueue(song);
+      else playSong(song);
+      clearSearchAfterChoice();
+    });
     fragment.append(row);
   });
   ui.songs.append(fragment);
