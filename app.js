@@ -285,11 +285,15 @@ if(typeof initialUiPrefs.repeat==='boolean')ui.repeat.checked=initialUiPrefs.rep
 if(typeof initialUiPrefs.muted==='boolean')player.muted=initialUiPrefs.muted;
 if(Number.isFinite(Number(initialUiPrefs.visualScale)))setTimeout(()=>setStageVisualScale(Number(initialUiPrefs.visualScale)),0);
 
-function setStatus(message, kind = '') {
+function cleanStatusMessage(message,kind=''){
   const raw=String(message??'').trim();
-  const safeMessage=(!raw||raw==='.')
-    ? (kind==='error'?'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง':'พร้อมใช้งาน')
+  const punctuationOnly=!raw||/^[\s.,;:!?'"“”‘’·…\-–—_/\\]+$/u.test(raw);
+  return punctuationOnly
+    ? (kind==='error'?'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง':'พร้อมใช้งาน')
     : raw;
+}
+function setStatus(message, kind = '') {
+  const safeMessage=cleanStatusMessage(message,kind);
   ui.status.textContent = safeMessage;
   ui.status.className = 'status-line' + (kind ? ' ' + kind : '');
   if(ui.gateStatus){
@@ -303,17 +307,22 @@ function setSearchAvailability(ready,{busy=false}={}){
   ui.search.readOnly=false;
   ui.search.setAttribute('aria-disabled',String(!!busy));
   ui.search.dataset.libraryReady=String(!!ready);
-  ui.search.placeholder='ค้นหาเพลง, ศิลปิน หรือรหัสเพลง...';
+  ui.search.placeholder='ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง';
 }
 function syncLoginGateState(){
   const active=!!(ui.gate&&!ui.gate.hidden);
   document.body.classList.toggle('xstage-gate-active',active);
+  if(ui.gate){
+    ui.gate.setAttribute('aria-hidden',String(!active));
+    if(active)ui.gate.removeAttribute('inert');
+    else ui.gate.setAttribute('inert','');
+  }
 }
 function dismissLoginGate(){
   if(!ui.gate||ui.gate.hidden)return;
   ui.gate.hidden=true;
   syncLoginGateState();
-  setStatus('โหมดชมหน้าเวที · พิมพ์คำค้นได้ทันที และเข้าสู่ระบบ Google เมื่อต้องการเปิดผลเพลง');
+  setStatus('โหมดชมหน้าเวที · พิมพ์คำค้นได้ทันที และเชื่อมต่อ Google Drive เมื่อต้องการเปิดผลเพลง');
   setTimeout(()=>ui.search?.focus?.(),0);
 }
 function showCatalogLoading(title,detail,progress=null){
@@ -1531,6 +1540,9 @@ function updateTransport(){
   if(musicLoader)musicLoader.setAttribute('aria-hidden',String(!state.loading));
   ui.playPause.disabled=state.loading||(!state.current&&!state.queue.length&&!state.shown.length);
   ui.playPause.textContent=player.src&&!player.paused?'Ⅱ':'▶';
+  const searchReady=!player.src&&!state.current&&!!state.shown.length;
+  ui.playPause.title=searchReady?'เล่นเพลงที่เลือกจากผลค้นหา':'เล่น/พัก (F5)';
+  ui.playPause.setAttribute('aria-label',searchReady?'เล่นเพลงที่เลือกจากผลค้นหา':'เล่นหรือพัก');
   ui.cancelCurrent.disabled=!state.current&&!state.loading;
   ui.restartCurrent.disabled=!state.current||state.loading;
   ui.previous.disabled=!state.history.length;
@@ -1550,14 +1562,21 @@ function onSearchKey(e){
   if(e.key==='ArrowDown'){e.preventDefault();if(state.shown.length)selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
   else if(e.key==='ArrowUp'){e.preventDefault();if(state.shown.length)selectSong(Math.max(0,state.selectedIndex-1));}
   else if(e.key==='Enter'){
+    if(e.isComposing)return;
     e.preventDefault();
+    renderSongs();
+    updateTransport();
     if(!state.token){
       setStatus(ui.search.value.trim()
-        ? 'คำค้นถูกเก็บไว้แล้ว · เลือก “เข้าสู่ระบบ Google” จากเมนูเพื่อเปิดผลเพลง'
+        ? 'เก็บคำค้นไว้แล้ว · เชื่อมต่อ Google Drive เพื่อค้นหาในคลังเพลงส่วนตัว'
         : 'พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลงก่อนค้นหา');
       return;
     }
-    const song=state.shown[state.selectedIndex];if(!song)return;
+    const song=state.shown[state.selectedIndex];
+    if(!song){
+      ui.resultCount.textContent=ui.search.value.trim()?'ไม่พบเพลงที่ตรงกับคำค้น':'พิมพ์เพื่อค้นหาเพลง';
+      return;
+    }
     chooseSearchSong(song);
   }
 }
@@ -1892,6 +1911,7 @@ ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});syncLoginGat
 ui.search.addEventListener('input',()=>{
   state.selectedIndex=0;
   renderSongs();
+  updateTransport();
   if(ui.search.value.trim())setLiveSearchExpanded(true);
 });
 ui.search.addEventListener('keydown',onSearchKey);
