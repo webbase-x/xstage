@@ -8,7 +8,7 @@ const $ = id => document.getElementById(id);
 const ui = {
   status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'), catalogProgress:$('catalog-progress'), catalogProgressValue:$('catalog-progress-value'),
   account: $('account'), libraryState: $('library-state'), songTotal: $('song-total'), resultCount: $('result-count'),
-  search: $('search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
+  search: $('search'), voiceSearch:$('voice-search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
   nowPlaying: $('now-playing'), nowArtist: $('now-artist'), playStatus: $('play-status'),
   playPause: $('play-pause'), stop: $('stop'), cancelCurrent:$('cancel-current'), restartCurrent:$('restart-current'), previous: $('previous'), next: $('next'),
@@ -974,6 +974,65 @@ function onSearchKey(e){
     ui.search.value='';state.shown=[];state.selectedIndex=0;renderSongs();ui.search.focus();
   }
 }
+
+function setupVoiceSearch(){
+  const button=ui.voiceSearch;
+  if(!button)return;
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const touchDevice=window.matchMedia?.('(pointer:coarse)').matches||navigator.maxTouchPoints>0;
+  if(typeof Recognition!=='function'||!touchDevice){button.hidden=true;return;}
+  button.hidden=false;
+  let recognition=null,listening=false;
+  const originalPlaceholder=ui.search.placeholder;
+  const setListening=active=>{
+    listening=active;
+    button.classList.toggle('listening',active);
+    button.setAttribute('aria-pressed',String(active));
+    button.title=active?'หยุดฟัง':'ค้นหาด้วยเสียง';
+    button.setAttribute('aria-label',active?'หยุดค้นหาด้วยเสียง':'ค้นหาเพลงด้วยเสียง');
+    ui.search.placeholder=active?'กำลังฟัง… พูดชื่อเพลงหรือศิลปิน':originalPlaceholder;
+  };
+  const showVoiceMessage=message=>{
+    if(ui.resultCount)ui.resultCount.textContent=message;
+  };
+  button.addEventListener('click',()=>{
+    if(listening){try{recognition?.stop();}catch{}return;}
+    if(ui.search.disabled)return;
+    try{
+      recognition=new Recognition();
+      recognition.lang='th-TH';
+      recognition.continuous=false;
+      recognition.interimResults=false;
+      recognition.maxAlternatives=3;
+      recognition.onstart=()=>{setListening(true);showVoiceMessage('กำลังฟัง… พูดชื่อเพลง ศิลปิน หรือรหัสเพลง');};
+      recognition.onresult=event=>{
+        const result=event.results?.[event.resultIndex||0]||event.results?.[0];
+        const transcript=String(result?.[0]?.transcript||'').trim();
+        if(!transcript)return;
+        ui.search.value=transcript;
+        state.selectedIndex=0;
+        ui.search.dispatchEvent(new Event('input',{bubbles:true}));
+        ui.search.focus();
+      };
+      recognition.onerror=event=>{
+        const code=String(event?.error||'');
+        if(code==='aborted')return;
+        if(code==='no-speech')showVoiceMessage('ไม่ได้ยินเสียง · แตะไมค์แล้วลองพูดอีกครั้ง');
+        else if(code==='not-allowed'||code==='service-not-allowed')showVoiceMessage('ไม่สามารถใช้ไมโครโฟนได้ · กรุณาอนุญาตไมโครโฟน/เปิด Siri แล้วลองใหม่');
+        else if(code==='audio-capture')showVoiceMessage('ไม่พบไมโครโฟนที่พร้อมใช้งาน');
+        else if(code==='network')showVoiceMessage('ค้นหาด้วยเสียงเชื่อมต่อไม่สำเร็จ · ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+        else showVoiceMessage('ค้นหาด้วยเสียงไม่สำเร็จ · ลองอีกครั้ง');
+      };
+      recognition.onend=()=>{setListening(false);recognition=null;};
+      recognition.start();
+    }catch(error){
+      setListening(false);
+      showVoiceMessage('อุปกรณ์นี้ยังไม่พร้อมใช้การค้นหาด้วยเสียง');
+      console.warn('X-Stage voice search:',error?.message||error);
+    }
+  });
+}
+setupVoiceSearch();
 
 // Draw timed karaoke lyrics on the same stage as the Windows player's background.
 const pen=ui.lyrics.getContext('2d');
