@@ -55,6 +55,12 @@ assert.ok(!index.includes('id="search" type="search" role="combobox" aria-autoco
 assert.ok(!app.includes("ui.search.addEventListener('focus',()=>{\n  if(state.token)return;\n  ui.gate.hidden=false"),'search focus must not reopen login gate');
 assert.ok(app.includes("const pendingSearch=keepAuth?String(ui.search?.value||''):''"),'typed search must survive Google auth handoff');
 assert.ok(app.includes("renderSongs();\n  updateTransport();\n  if(ui.search.value.trim())setLiveSearchExpanded(true);"),'typing must immediately resync the transport play button');
+assert.ok(app.includes("state.shown = matches.slice(0,5);"),'live search must show only five song results');
+assert.ok(app.includes("matches.length>5?' · แสดง 5 รายการแรก':''"),'search result summary must explicitly describe the five-result limit');
+assert.ok(!app.includes("matches.slice(0,120)"),'legacy 120-result live search limit must stay removed');
+assert.ok(css.includes("/* 1.0.44: karaoke-scale search input and five-result presentation. */"),'large karaoke search styling must exist');
+assert.ok(css.includes("font-size:clamp(1.28rem,2.15vw,1.85rem)!important"),'desktop typed search text must remain prominently sized');
+assert.ok(css.includes("font-size:clamp(1.12rem,1.8vw,1.5rem)!important"),'desktop song-title results must remain prominently sized');
 assert.ok(app.includes("renderSongs();\n    updateTransport();\n    if(!state.token)"),'Enter must refresh current search results before choosing a song');
 assert.match(app,/if\(!player\.src\)\{if\(state\.queue\.length\)playNext\(\);else if\(state\.shown\.length\)playSong\(state\.shown\[state\.selectedIndex\]\)/);
 assert.ok(app.includes("ui.elapsed.textContent=hasLoadedSong?timeLabel(player.currentTime):'--:--'"),'idle player must not look stuck at 00:00');
