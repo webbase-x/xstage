@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#071525">
   <meta name="description" content="X-Stage Karaoke Online – เว็บแอปคาราโอเกะสำหรับคลังเพลง Google Drive ส่วนตัว">
+  <meta property="og:title" content="X-Stage Karaoke Online">
+  <meta property="og:description" content="เวทีคาราโอเกะส่วนตัว ค้นหา จัดคิว และเล่นเพลงจาก Google Drive ของคุณ">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://webbase-x.github.io/xstage/">
+  <meta property="og:image" content="https://webbase-x.github.io/xstage/assets/xstage-app-icon-512.png">
+  <meta name="twitter:card" content="summary">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="X-Stage">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,8 +19,8 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1040">
-  <link rel="stylesheet" href="xstage-ux.css?v=1040">
+  <link rel="stylesheet" href="style.css?v=1041">
+  <link rel="stylesheet" href="xstage-ux.css?v=1041">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
@@ -79,7 +85,7 @@
             <button id="mobile-menu-toggle" class="mobile-menu-toggle toolbar-button" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
             <div class="stage-search-slot"><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
         <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
-        <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="รหัส / ชื่อเพลง / ศิลปิน" aria-label="ค้นหาเพลง" disabled><button id="voice-search" class="voice-search-button" type="button" aria-label="ค้นหาเพลงด้วยเสียง" title="ค้นหาด้วยเสียง" aria-pressed="false" hidden>🎙</button><kbd>Ctrl F</kbd></div>
+        <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="เข้าสู่ระบบ Google เพื่อค้นหาเพลง" aria-label="ค้นหาเพลง" aria-disabled="true" readonly><button id="voice-search" class="voice-search-button" type="button" aria-label="ค้นหาเพลงด้วยเสียง" title="ค้นหาด้วยเสียง" aria-pressed="false" hidden>🎙</button><kbd>Ctrl F</kbd></div>
         <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
@@ -89,14 +95,14 @@
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
           </header>
           <div id="xstage-context-menu" class="xstage-context-menu" hidden role="menu" aria-label="เมนูคลิกขวา X-Stage">
-            <button type="button" data-cmd="find">⌕ ค้นหาเพลง</button>
-            <button type="button" data-cmd="queue">☷ คิวเพลง</button>
-            <button type="button" data-cmd="eq">◉ EQ</button>
-            <button type="button" data-cmd="stage">▣ จอร้องแยก</button>
-            <button type="button" data-cmd="medley">♫ เมดเลย์</button>
-            <button type="button" data-cmd="tools">⚙ เครื่องมือและตั้งค่า</button>
-            <button type="button" data-cmd="share">⇄ แชร์โฟลเดอร์เพลง</button>
-            <button type="button" data-cmd="fullscreen">⛶ เต็มหน้าจอ</button>
+            <button type="button" data-cmd="find">ค้นหาเพลง</button>
+            <button type="button" data-cmd="queue">คิวเพลง</button>
+            <button type="button" data-cmd="eq">อีควอไลเซอร์ EQ</button>
+            <button type="button" data-cmd="stage">จอร้องแยก</button>
+            <button type="button" data-cmd="medley">เมดเลย์</button>
+            <button type="button" data-cmd="tools">เครื่องมือและตั้งค่า</button>
+            <button type="button" data-cmd="share">แชร์โฟลเดอร์เพลง</button>
+            <button type="button" data-cmd="fullscreen">เต็มหน้าจอ</button>
           </div>
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
             <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
@@ -208,9 +214,9 @@
               <div class="xstage-eq-brand"><img src="assets/xstage-app-icon-192.png" alt=""><strong>EQ X-Stage Karaoke</strong></div>
               <div class="xstage-eq-head-actions">
                 <button type="button" id="xstage-eq-bypass" aria-pressed="false" title="Bypass EQ">BYPASS</button>
-                <button type="button" id="xstage-eq-minimize" title="ย่อ">−</button>
-                <button type="button" id="xstage-eq-expand" title="ย่อ/ขยาย">⤢</button>
-                <button type="button" id="xstage-eq-close" title="ปิด">✕</button>
+                <button type="button" id="xstage-eq-minimize" title="ย่อ" aria-label="ย่อหน้าต่างอีควอไลเซอร์">−</button>
+                <button type="button" id="xstage-eq-expand" title="ย่อ/ขยาย" aria-label="ย่อหรือขยายหน้าต่างอีควอไลเซอร์">⤢</button>
+                <button type="button" id="xstage-eq-close" title="ปิด" aria-label="ปิดหน้าต่างอีควอไลเซอร์">✕</button>
               </div>
             </header>
             <div class="xstage-eq-toolbar">
@@ -263,7 +269,7 @@
             </div>
             <small>การแชร์นี้ให้สิทธิ์ Google Drive แก่อีเมลที่ระบุโดยตรง · ผู้รับต้องใช้บัญชี Google เดียวกัน และการเปิดคลังใน X-Stage ต้องเป็นไฟล์/โฟลเดอร์ที่ผู้รับอนุญาตให้ X-Stage เข้าถึงตามนโยบาย drive.file</small>
           </dialog>
-          <div id="gate" class="login-gate"><div class="gate-panel"><span class="gate-glow">✦ PRIVATE STAGE</span><h1>เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p id="gate-copy">เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><button id="gate-shared-library" class="button button-primary gate-shared-library" type="button" hidden>⇄ ใช้คลังเพลงจากผู้แชร์</button><div id="gate-auth-status" class="gate-auth-status" role="status" aria-live="polite">พร้อมเชื่อมต่อ Google</div><small id="gate-footnote">ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small></div></div>
+          <div id="gate" class="login-gate" role="dialog" aria-modal="false" aria-labelledby="gate-title"><div class="gate-panel"><button id="gate-close" class="gate-close" type="button" aria-label="ปิดหน้าต่างเข้าสู่ระบบและชมหน้าเวที" title="ชมหน้าเวทีก่อน">×</button><span class="gate-glow">✦ PRIVATE STAGE</span><h1 id="gate-title">เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p id="gate-copy">เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><button id="gate-shared-library" class="button button-primary gate-shared-library" type="button" hidden>ใช้คลังเพลงจากผู้แชร์</button><div id="gate-auth-status" class="gate-auth-status" role="status" aria-live="polite">พร้อมเชื่อมต่อ Google</div><small id="gate-footnote">ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small><small class="gate-preview-note">กด × เพื่อชมหน้าเวทีและเมนูก่อนได้ · การค้นหาและเล่นเพลงต้องเชื่อมต่อ Google Drive</small></div></div>
           <div id="catalog-loading" class="catalog-loading" hidden role="status" aria-live="polite">
             <span class="catalog-spinner" aria-hidden="true"></span>
             <div class="catalog-loading-copy">
@@ -286,13 +292,13 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script src="config.js?v=1040"></script>
+<script src="config.js?v=1041"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=1040" defer></script><script src="pc-extensions.js?v=1040" defer></script>
-  <script src="stage-controls.js?v=1040" defer></script>
-  <script src="mobile-layout.js?v=1040" defer></script>
-  <script src="pwa-install.js?v=1040" defer></script>
+  <script src="app.js?v=1041" defer></script><script src="pc-extensions.js?v=1041" defer></script>
+  <script src="stage-controls.js?v=1041" defer></script>
+  <script src="mobile-layout.js?v=1041" defer></script>
+  <script src="pwa-install.js?v=1041" defer></script>
 
-  <script src="stage-ui.js?v=1040" defer></script>
+  <script src="stage-ui.js?v=1041" defer></script>
 </body>
 </html>
