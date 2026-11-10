@@ -1589,9 +1589,9 @@ function drawLyrics(){
         let currentY=Math.max(h*.10,Math.min(h*.66,nextY-fontSize*1.45));
         let lyricCenter=w/2,lyricWidth=w*.93,lyricFont=fontSize*state.visualScale;
 
-        // In landscape, reserve the real rendered space occupied by the X-Stage identity.
-        // If two lyric rows cannot fit below it, reduce lyric size before ever allowing overlap.
-        if(matchMedia('(orientation: landscape)').matches){
+        // Keep the stage identity stationary while lyrics paint above its dimmed sign.
+        // Only reserve logo space if lyrics are being drawn without an active song stage.
+        if(matchMedia('(orientation: landscape)').matches && !ui.stage.classList.contains('playing')){
           const canvasBox=ui.lyrics.getBoundingClientRect();
           const hero=ui.stage.querySelector('.stage-hero');
           if(hero){
