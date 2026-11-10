@@ -693,9 +693,7 @@ function renderSongs() {
     row.append(details,add);
     row.addEventListener('click',()=>{
       selectSong(i,false);
-      if(state.current||state.loading)addToQueue(song);
-      else playSong(song);
-      clearSearchAfterChoice();
+      chooseSearchSong(song);
     });
     fragment.append(row);
   });
@@ -710,6 +708,28 @@ function selectSong(i,scroll=true) {
     row.classList.toggle('selected',i===j);row.setAttribute('aria-selected',String(i===j));
     if(i===j){ui.search.setAttribute('aria-activedescendant',row.id);if(scroll)row.scrollIntoView({block:'nearest'});}
   }
+}
+
+function chooseSearchSong(song){
+  if(!song)return false;
+  if(state.current||state.loading)addToQueue(song);
+  else playSong(song);
+  clearSearchAfterChoice();
+  return true;
+}
+function normalizeVoiceExact(value){
+  return String(value??'')
+    .normalize('NFKC')
+    .toLocaleLowerCase('th')
+    .replace(/[\s\p{P}\p{S}]+/gu,'')
+    .trim();
+}
+function firstVoiceExactMatch(transcript){
+  const first=state.shown[0];
+  if(!first)return null;
+  const heard=normalizeVoiceExact(transcript);
+  if(!heard)return null;
+  return [first.code,first.title,first.artist].some(value=>normalizeVoiceExact(value)===heard)?first:null;
 }
 // X-Stage medley means shuffled, continuous music from the private M4A
 // catalog. Requested songs in the queue always take priority over random songs.
@@ -1014,8 +1034,7 @@ function onSearchKey(e){
   if(e.key==='ArrowDown'){e.preventDefault();if(state.shown.length)selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
   else if(e.key==='ArrowUp'){e.preventDefault();if(state.shown.length)selectSong(Math.max(0,state.selectedIndex-1));}
   else if(e.key==='Enter'){e.preventDefault();const song=state.shown[state.selectedIndex];if(!song)return;
-    if(state.current||state.loading)addToQueue(song);else playSong(song);
-    clearSearchAfterChoice();
+    chooseSearchSong(song);
   }
 }
 
@@ -1026,7 +1045,7 @@ function setupVoiceSearch(){
   const touchDevice=window.matchMedia?.('(pointer:coarse)').matches||navigator.maxTouchPoints>0;
   if(typeof Recognition!=='function'||!touchDevice){button.hidden=true;return;}
   button.hidden=false;
-  let recognition=null,listening=false;
+  let recognition=null,listening=false,voiceAutoChosen=false;
   const originalPlaceholder=ui.search.placeholder;
   const setListening=active=>{
     listening=active;
@@ -1043,6 +1062,7 @@ function setupVoiceSearch(){
     if(listening){try{recognition?.stop();}catch{}return;}
     if(ui.search.disabled)return;
     try{
+      voiceAutoChosen=false;
       recognition=new Recognition();
       recognition.lang='th-TH';
       recognition.continuous=false;
@@ -1050,15 +1070,27 @@ function setupVoiceSearch(){
       recognition.maxAlternatives=3;
       recognition.onstart=()=>{setListening(true);showVoiceMessage('กำลังฟัง… พูดชื่อเพลง ศิลปิน หรือรหัสเพลง');};
       recognition.onresult=event=>{
-        const start=Number(event.resultIndex)||0;
         let transcript='';
-        for(let i=start;i<(event.results?.length||0);i++)transcript+=String(event.results[i]?.[0]?.transcript||'');
+        let final=true;
+        for(let i=0;i<(event.results?.length||0);i++){
+          const result=event.results[i];
+          transcript+=String(result?.[0]?.transcript||'');
+          if(!result?.isFinal)final=false;
+        }
         transcript=transcript.trim();
         if(!transcript)return;
         ui.search.value=transcript;
         state.selectedIndex=0;
         ui.search.dispatchEvent(new Event('input',{bubbles:true}));
         setLiveSearchExpanded(true);
+        if(final&&!voiceAutoChosen){
+          const exact=firstVoiceExactMatch(transcript);
+          if(exact){
+            voiceAutoChosen=true;
+            chooseSearchSong(exact);
+            try{recognition?.stop();}catch{}
+          }
+        }
       };
       recognition.onerror=event=>{
         const code=String(event?.error||'');
