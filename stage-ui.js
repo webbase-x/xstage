@@ -12,6 +12,14 @@
   const home=$('mobile-home-toggle');
   const about=$('mobile-about-toggle');
   const fullscreen=$('fullscreen');
+  const fullscreenSupported=!!(document.fullscreenEnabled&&typeof stage?.requestFullscreen==='function'&&typeof document.exitFullscreen==='function');
+  document.body.classList.toggle('xstage-no-fullscreen',!fullscreenSupported);
+  document.documentElement.classList.toggle('xstage-no-fullscreen',!fullscreenSupported);
+  if(!fullscreenSupported){
+    if(fullscreen)fullscreen.hidden=true;
+    const mobileFullscreen=$('mobile-fullscreen-toggle');if(mobileFullscreen)mobileFullscreen.hidden=true;
+    const ctxFullscreen=document.querySelector('#xstage-context-menu [data-cmd="fullscreen"]');if(ctxFullscreen)ctxFullscreen.hidden=true;
+  }
   const shuffle=$('stage-shuffle');
   if(!stage||!queueDock||!queueBtn||!volume||!repeat)return;
   // Speed and legacy repeat inputs remain available from the tools drawer.
