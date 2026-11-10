@@ -13,7 +13,10 @@
     *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -20%,#15536a,#071928 63%);padding:14px max(12px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom))}
     main{max-width:660px;margin:0 auto}header{display:flex;align-items:center;gap:12px;padding:7px 2px 15px}
     header img{width:46px;height:46px;border-radius:11px;object-fit:cover}header strong{font-size:1.12rem;display:block}header small{color:#8cbdca;font-size:.73rem;display:block;margin-top:2px}
-    #remote-status{margin:0 0 13px;padding:12px;background:#0e2d42;border:1px solid #275a72;border-radius:11px;color:#aaf9dc;font-size:.88rem;line-height:1.6}
+    #remote-status{margin:0 0 13px;padding:12px;background:#0e2d42;border:1px solid #275a72;border-radius:11px;color:#d9eff8;font-size:.88rem;line-height:1.6;font-weight:800}
+    #remote-status[data-state="connected"]{background:#103a35;border-color:#2d8c77;color:#b7ffe9}
+    #remote-status[data-state="connecting"],#remote-status[data-state="pending"],#remote-status[data-state="reconnecting"]{background:#3b3212;border-color:#9d842d;color:#fff0ac}
+    #remote-status[data-state="disconnected"],#remote-status[data-state="error"]{background:#401923;border-color:#a9475b;color:#ffd7df}
     #remote-controls[hidden],.remote-tab-panel[hidden]{display:none!important}
     button{touch-action:manipulation;cursor:pointer;border:1px solid #347991;border-radius:10px;background:#153950;color:#fff;padding:8px 11px;font-weight:800;font-size:.87rem;min-height:42px}
     button:disabled{opacity:.57;cursor:default}button:active:not(:disabled){filter:brightness(1.2)}
@@ -35,6 +38,7 @@
     .now-card{background:#122c41;border:1px solid #38738e;border-radius:13px;padding:14px}
     .now-card small{font-size:.73rem;color:#7ef0d0}.now-card strong{display:block;margin-top:5px;font-size:1.1rem;overflow-wrap:anywhere}
     .now-card span{display:block;margin-top:5px;color:#b3c9dd;font-size:.8rem}
+    #remote-now-time{font-variant-numeric:tabular-nums;color:#86e5ff;font-weight:900}
     .queue-number{font-size:.78rem;font-weight:900;color:#86ddef}
     .remote-queue-row{display:flex;align-items:center;gap:10px;min-width:0;padding:11px;border-radius:10px;border:1px solid #294e66;background:#10283d}
     .remote-queue-row div{min-width:0;flex:1}.remote-queue-row strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.87rem}
@@ -55,7 +59,7 @@
 <body>
  <main>
   <header><img src="assets/xstage-app-icon-192.png" alt=""><div><strong>X-STAGE REMOTE</strong><small>ขอเพลง · คิวเพลง · ควบคุมเวที</small></div></header>
-  <p id="remote-status" role="status" aria-live="polite">กำลังเชื่อมต่อรีโมท…</p>
+  <p id="remote-status" data-state="connecting" role="status" aria-live="polite">กำลังเชื่อมต่อรีโมท…</p>
   <section id="remote-controls" hidden aria-label="รีโมท X-Stage">
    <nav class="remote-tabs" role="tablist" aria-label="หน้ารีโมท">
     <button id="remote-tab-search" type="button" role="tab" aria-selected="true" aria-controls="remote-panel-search">🎵 ขอเพลง</button>
@@ -72,7 +76,7 @@
     <div id="remote-request-history" aria-live="polite"></div>
    </section>
    <section id="remote-panel-queue" class="remote-tab-panel" role="tabpanel" hidden>
-    <div class="now-card"><small>กำลังเล่น</small><strong id="remote-now">ยังไม่ได้เลือกเพลง</strong><span id="remote-now-artist">X-Stage Karaoke</span></div>
+    <div class="now-card"><small>กำลังเล่น</small><strong id="remote-now">ยังไม่ได้เลือกเพลง</strong><span id="remote-now-artist">X-Stage Karaoke</span><span id="remote-now-time">--:-- / --:--</span></div>
     <h2>คิวเพลงถัดไป <span id="remote-queue-count">0</span> รายการ</h2>
     <div id="remote-queue-list" aria-live="polite"><p class="remote-empty">ยังไม่มีเพลงในคิว</p></div>
    </section>
