@@ -1314,7 +1314,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     if(autoplay){
       try{await window.XStageResumeAudioGraph?.();}catch{}
       try{await player.play();if(request===state.requestId)setPlayStatus('กำลังเล่น · '+(song.title||song.code));}
-      catch{if(request===state.requestId){state.userPaused=false;state.resumeAfterInterruption=true;setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น');}}
+      catch{if(request===state.requestId){state.userPaused=true;state.resumeAfterInterruption=false;setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น');}}
     }else{
       player.pause();
       setPlayStatus('เพลงพร้อมเล่นต่อจากตำแหน่งเดิม');
