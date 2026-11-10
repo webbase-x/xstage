@@ -15,6 +15,10 @@ const pkg=JSON.parse(read('package.json'));
 const remoteHtml=read('remote.html');
 const stageUi=read('stage-ui.js');
 const mobile=read('mobile-layout.js');
+const legacyManifest=JSON.parse(read('manifest.webmanifest'));
+const iconSvg=read('assets/xstage-app-icon.svg');
+const iconBuilder=read('scripts/build_xstage_icons.py');
+const iconWorkflow=read('.github/workflows/build-xstage-pwa-icons.yml');
 const singerStage=read('stage.html');
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',read('pwa-install.js')]]){
@@ -53,6 +57,16 @@ assert.ok(pc.includes("HISTORY_STORE='xstage-play-history-v1'"),'play history mu
 assert.ok(index.includes('id="library-select"'),'multi-library selector must exist');
 assert.ok(index.includes('id="gate-close"'),'login gate must be dismissible for stage preview');
 assert.ok(index.includes('property="og:title"'),'Open Graph title must exist');
+assert.ok(index.includes('src="assets/xstage-app-icon.svg?v=1047"'),'topbar must use the canonical stage emblem');
+assert.ok(index.includes('assets/xstage-favicon-32.png'),'web favicon must use the stage-emblem icon set');
+assert.ok(!index.includes('xstage-logo.jpg'),'legacy photographic logo must not remain in the live page');
+assert.ok(iconSvg.includes('M18 18 78 78M78 18 18 78'),'canonical app icon must reuse the exact X geometry from the stage emblem');
+assert.ok(iconSvg.includes('M32 48v5a16 16 0 0 0 32 0v-5M48 69v10M38 80h20'),'canonical app icon must reuse the stage microphone/stand geometry');
+assert.equal(legacyManifest.name,'X-Stage Karaoke Online','legacy manifest must not retain AI Thai Browser branding');
+assert.ok(iconBuilder.includes('SOURCE = ASSETS / "xstage-app-icon.svg"'),'PWA PNG builder must render from the canonical stage emblem SVG');
+assert.ok(iconBuilder.includes('xstage-favicon-32.png'),'icon builder must generate a browser favicon');
+assert.ok(iconWorkflow.includes('assets/xstage-app-icon.svg'),'icon workflow must trigger from the canonical stage emblem');
+assert.ok(!iconWorkflow.includes('assets/xstage-logo.jpg'),'icon workflow must not rebuild from the retired photographic logo');
 assert.ok(!index.includes('data-cmd="find">⌕'),'context menu must not depend on fragile symbol glyphs');
 assert.ok(app.includes('function setSearchAvailability'),'search auth state must be explicit');
 assert.ok(app.includes('function dismissLoginGate'),'login gate preview behavior must exist');

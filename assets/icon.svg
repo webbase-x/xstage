@@ -1,6 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#111827"/>
-  <circle cx="256" cy="256" r="164" fill="none" stroke="#22c55e" stroke-width="34"/>
-  <path d="M94 256h324M256 92c56 54 84 109 84 164s-28 110-84 164c-56-54-84-109-84-164s28-110 84-164Z" fill="none" stroke="#22c55e" stroke-width="28"/>
-  <path d="M170 337c36-18 67-27 94-27 28 0 59 9 94 27" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">X-Stage</title>
+  <desc id="desc">ตรา X ผสานไมโครโฟนจากฉากเวที X-Stage Online</desc>
+  <defs>
+    <linearGradient id="bg" x1="42" y1="34" x2="470" y2="478" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0d3554"/><stop offset=".48" stop-color="#071a32"/><stop offset="1" stop-color="#120d35"/>
+    </linearGradient>
+    <radialGradient id="halo" cx=".32" cy=".2" r=".78">
+      <stop stop-color="#73efff" stop-opacity=".2"/><stop offset=".52" stop-color="#3a8cff" stop-opacity=".07"/><stop offset="1" stop-color="#7a4dff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="xstage-mark-a" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#75f7ff"/><stop offset=".48" stop-color="#36a8ff"/><stop offset="1" stop-color="#a35cff"/>
+    </linearGradient>
+    <linearGradient id="xstage-mark-b" x1="149" y1="96" x2="363" y2="427" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f7fdff"/><stop offset=".55" stop-color="#9bdcff"/><stop offset="1" stop-color="#8c74ff"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect x="12" y="12" width="488" height="488" rx="112" fill="url(#bg)"/>
+  <rect x="12" y="12" width="488" height="488" rx="112" fill="url(#halo)"/>
+  <rect x="25" y="25" width="462" height="462" rx="98" fill="none" stroke="#8ceeff" stroke-opacity=".26" stroke-width="4"/>
+  <g transform="scale(5.3333333333)" filter="url(#glow)">
+    <path d="M18 18 78 78M78 18 18 78" fill="none" stroke="url(#xstage-mark-a)" stroke-width="11" stroke-linecap="round"/>
+    <rect x="39" y="20" width="18" height="38" rx="9" fill="#071426" stroke="url(#xstage-mark-b)" stroke-width="4"/>
+    <path d="M43 31h10M43 38h10M43 45h10" stroke="#dffaff" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
+    <path d="M32 48v5a16 16 0 0 0 32 0v-5M48 69v10M38 80h20" fill="none" stroke="url(#xstage-mark-b)" stroke-width="4" stroke-linecap="round"/>
+  </g>
 </svg>
