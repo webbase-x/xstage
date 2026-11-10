@@ -840,6 +840,32 @@ function playNext(){
 // Release the finished media and lyrics, not merely the transport label.
 // Keeps the stage blank/idle even when the queue is empty and a user has
 // selected the previous song in the search results.
+function clearMediaSession(){
+  if(!('mediaSession' in navigator))return;
+  try{navigator.mediaSession.metadata=null;}catch{}
+  try{navigator.mediaSession.playbackState='none';}catch{}
+}
+function syncMediaSessionMetadata(song){
+  if(!('mediaSession' in navigator)||!song)return;
+  try{
+    navigator.mediaSession.metadata=new MediaMetadata({
+      title:song.title||song.code||'X-Stage Karaoke',
+      artist:song.artist||'X-Stage Karaoke',
+      album:'X-Stage Karaoke Online',
+      artwork:[
+        {src:new URL('assets/xstage-app-icon-192.png',location.href).href,sizes:'192x192',type:'image/png'},
+        {src:new URL('assets/xstage-apple-touch-icon.png',location.href).href,sizes:'180x180',type:'image/png'}
+      ]
+    });
+  }catch(error){console.warn('X-Stage media metadata:',error?.message||error);}
+}
+function syncMediaSessionPosition(){
+  if(!('mediaSession' in navigator)||typeof navigator.mediaSession.setPositionState!=='function')return;
+  const duration=Number.isFinite(player.duration)?player.duration:Number(state.current?.duration||0);
+  const position=Math.max(0,Math.min(duration||0,Number(player.currentTime)||0));
+  if(!(duration>0))return;
+  try{navigator.mediaSession.setPositionState({duration,playbackRate:player.playbackRate||1,position});}catch{}
+}
 function clearIdleStage(message){
   state.userStopped=true;
   state.requestId++;
@@ -853,6 +879,7 @@ function clearIdleStage(message){
   state.objectUrl='';
   state.current=null;
   state.lyrics=null;
+  clearMediaSession();
   state.medleyCache=null;
   state.medleyPrefetch=null;
   state.medleyUpcoming=null;
@@ -909,6 +936,7 @@ async function playSong(song,{remember=true,preloaded=null}={}) {
     if (remember && state.current)state.history.push(state.current);
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
     state.objectUrl=url;state.current=song;state.lyrics=lyrics;
+    syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
     ui.stageCode.textContent=song.code||'—';ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     player.src=url;player.playbackRate=Number(ui.speed.value);player.loop=ui.repeat.checked;
@@ -932,6 +960,10 @@ function updateTransport(){
   ui.duration.textContent=timeLabel(duration);
   ui.seek.disabled=!(duration>0&&state.current);
   if (!ui.seek.matches(':active'))ui.seek.value=duration>0?String(Math.round((player.currentTime/duration)*1000)):'0';
+  if('mediaSession' in navigator){
+    try{navigator.mediaSession.playbackState=player.src?(player.paused?'paused':'playing'):'none';}catch{}
+    syncMediaSessionPosition();
+  }
 }
 function onSearchKey(e){
   if(e.key==='ArrowDown'){e.preventDefault();if(state.shown.length)selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
@@ -1041,7 +1073,8 @@ ui.playPause.addEventListener('click',togglePlayback);
 ui.stop.addEventListener('click',stopSong);
 ui.cancelCurrent.addEventListener('click',cancelCurrentSong);
 ui.restartCurrent.addEventListener('click',restartCurrentSong);
-ui.previous.addEventListener('click',()=>{const old=state.history.pop();renderQueue();if(old)playSong(old,{remember:false});});
+function playPrevious(){const old=state.history.pop();renderQueue();if(old)playSong(old,{remember:false});}
+ui.previous.addEventListener('click',playPrevious);
 ui.next.addEventListener('click',playNext);
 ui.speed.addEventListener('change',()=>{player.playbackRate=Number(ui.speed.value);saveUiPrefs({speed:Number(ui.speed.value)});});
 ui.volume.addEventListener('input',()=>{player.volume=Number(ui.volume.value)/100;saveUiPrefs({volume:Number(ui.volume.value)});});
@@ -1049,6 +1082,21 @@ ui.repeat.addEventListener('change',()=>{player.loop=ui.repeat.checked;saveUiPre
 player.addEventListener('volumechange',()=>saveUiPrefs({volume:Math.round(player.volume*100),muted:player.muted}));
 ui.seek.addEventListener('input',()=>{const d=Number.isFinite(player.duration)?player.duration:Number(state.current?.duration)||0;if(d>0)player.currentTime=d*Number(ui.seek.value)/1000;updateTransport();});
 ui.fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await ui.stage.requestFullscreen();}catch{setPlayStatus('อุปกรณ์นี้ไม่รองรับการแสดงเต็มหน้าจอ');}});
+
+function setupMediaSession(){
+  if(!('mediaSession' in navigator))return;
+  const bind=(action,handler)=>{try{navigator.mediaSession.setActionHandler(action,handler);}catch{}};
+  bind('play',()=>player.play().catch(()=>{}));
+  bind('pause',()=>player.pause());
+  bind('stop',stopSong);
+  bind('nexttrack',()=>playNext());
+  bind('previoustrack',playPrevious);
+  bind('seekbackward',details=>{const step=Number(details.seekOffset)||10;player.currentTime=Math.max(0,player.currentTime-step);});
+  bind('seekforward',details=>{const step=Number(details.seekOffset)||10;const d=Number.isFinite(player.duration)?player.duration:Infinity;player.currentTime=Math.min(d,player.currentTime+step);});
+  bind('seekto',details=>{if(Number.isFinite(details.seekTime))player.currentTime=Math.max(0,Math.min(player.duration||details.seekTime,details.seekTime));});
+}
+setupMediaSession();
+
 player.addEventListener('timeupdate',updateTransport);player.addEventListener('timeupdate',medleyTick);player.addEventListener('loadedmetadata',updateTransport);
 player.addEventListener('durationchange',updateTransport);player.addEventListener('play',updateTransport);
 player.addEventListener('pause',updateTransport);player.addEventListener('ended',()=>{
