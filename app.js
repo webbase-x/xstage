@@ -23,7 +23,8 @@ const state = {
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
   userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
-  queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0
+  queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
+  playbackRestoreAttempted:false
 };
 const CATALOG_DB_NAME='xstage-private-catalog-v1';
 const CATALOG_DB_STORE='catalogs';
@@ -434,7 +435,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     hideCatalogLoading();
     renderSongs();renderQueue();
     setStatus(`พร้อมใช้งานทันที · ${num(state.songs.length)} เพลงจากฐานในเครื่อง · กำลังตรวจอัปเดตเบื้องหลัง`,'success');
-    ui.search.focus();
+    void restorePlaybackAfterReload();
+    if(!readPlaybackResumeState())ui.search.focus();
   }else{
     showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง XStageWeb…',12);
     setStatus('เข้าสู่ระบบสำเร็จ · กำลังดาวน์โหลดฐานเพลงครั้งแรก…','success');
@@ -496,7 +498,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
     hideCatalogLoading();
     setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลงในคลังส่วนตัว${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
-    ui.search.focus();
+    void restorePlaybackAfterReload();
+    if(!readPlaybackResumeState())ui.search.focus();
   }catch(error){
     hideCatalogLoading();
     if(instant&&state.token===token&&authId===state.authId){
@@ -596,6 +599,55 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
 }
 
 function songIdentity(song) { return String(song?.webSongId || `${song?.code}:${song?.title}:${song?.artist}`); }
+
+const PLAYBACK_RESUME_KEY='xstage-playback-resume-v1';
+function clearPlaybackResumeState(){
+  try{sessionStorage.removeItem(PLAYBACK_RESUME_KEY);}catch{}
+}
+function savePlaybackResumeState(){
+  try{
+    if(!state.current||!player.src||player.ended||state.userStopped){
+      clearPlaybackResumeState();
+      return;
+    }
+    sessionStorage.setItem(PLAYBACK_RESUME_KEY,JSON.stringify({
+      savedAt:Date.now(),
+      songKey:songIdentity(state.current),
+      songCode:String(state.current.code||''),
+      songTitle:String(state.current.title||''),
+      currentTime:Math.max(0,Number(player.currentTime)||0),
+      wasPlaying:!player.paused&&!state.userPaused&&!state.userStopped,
+      queueKeys:state.queue.map(songIdentity)
+    }));
+  }catch{}
+}
+function readPlaybackResumeState(){
+  try{
+    const saved=JSON.parse(sessionStorage.getItem(PLAYBACK_RESUME_KEY)||'null');
+    if(!saved||Date.now()-Number(saved.savedAt||0)>2*60*60*1000)return null;
+    return saved;
+  }catch{return null;}
+}
+function findResumeSong(key,code,title){
+  return state.songs.find(song=>songIdentity(song)===String(key||''))||
+    state.songs.find(song=>code&&String(song.code||'')===String(code))||
+    state.songs.find(song=>title&&String(song.title||'')===String(title))||null;
+}
+async function restorePlaybackAfterReload(){
+  if(state.playbackRestoreAttempted||!state.songs.length)return false;
+  const saved=readPlaybackResumeState();
+  if(!saved)return false;
+  state.playbackRestoreAttempted=true;
+  const song=findResumeSong(saved.songKey,saved.songCode,saved.songTitle);
+  if(!song){clearPlaybackResumeState();return false;}
+  const restoredQueue=(Array.isArray(saved.queueKeys)?saved.queueKeys:[])
+    .map(key=>state.songs.find(item=>songIdentity(item)===String(key)))
+    .filter(Boolean);
+  state.queue.splice(0,state.queue.length,...restoredQueue);
+  renderQueue();
+  await playSong(song,{remember:false,resumeAt:Number(saved.currentTime)||0,autoplay:!!saved.wasPlaying});
+  return true;
+}
 function element(tag, cls, text) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -941,6 +993,7 @@ function clearIdleStage(message){
   state.objectUrl='';
   state.current=null;
   state.lyrics=null;
+  clearPlaybackResumeState();
   clearMediaSession();
   state.medleyCache=null;
   state.medleyPrefetch=null;
@@ -989,7 +1042,7 @@ function togglePlayback(){
   else{state.userPaused=true;state.resumeAfterInterruption=false;player.pause();}
 }
 
-async function playSong(song,{remember=true,preloaded=null}={}) {
+async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=true}={}) {
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
   if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มี M4A/JSON ที่พร้อมเล่น');return;}
@@ -1020,11 +1073,28 @@ async function playSong(song,{remember=true,preloaded=null}={}) {
     ui.stageCode.textContent=song.code||'—';ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     player.src=url;player.playbackRate=Number(ui.speed.value);player.loop=ui.repeat.checked;
     player.volume=Number(ui.volume.value)/100;
+    const resumeTarget=Math.max(0,Number(resumeAt)||0);
+    if(resumeTarget>0){
+      const applyResumePosition=()=>{
+        try{
+          const d=Number.isFinite(player.duration)?player.duration:0;
+          player.currentTime=d>0?Math.min(resumeTarget,Math.max(0,d-.25)):resumeTarget;
+        }catch{}
+      };
+      if(player.readyState>=1)applyResumePosition();
+      else player.addEventListener('loadedmetadata',applyResumePosition,{once:true});
+    }
     state.loading=false;renderQueue();updateTransport();
-    state.userPaused=false;state.resumeAfterInterruption=false;
-    try{await window.XStageResumeAudioGraph?.();}catch{}
-    try{await player.play();if(request===state.requestId)setPlayStatus('กำลังเล่น · '+(song.title||song.code));}
-    catch{if(request===state.requestId)setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น');}
+    state.userPaused=!autoplay;state.resumeAfterInterruption=false;
+    if(autoplay){
+      try{await window.XStageResumeAudioGraph?.();}catch{}
+      try{await player.play();if(request===state.requestId)setPlayStatus('กำลังเล่น · '+(song.title||song.code));}
+      catch{if(request===state.requestId){state.userPaused=false;state.resumeAfterInterruption=true;setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น');}}
+    }else{
+      player.pause();
+      setPlayStatus('เพลงพร้อมเล่นต่อจากตำแหน่งเดิม');
+      updateTransport();
+    }
   }catch(e){if(request!==state.requestId || e.name==='AbortError')return;setPlayStatus(e.message||'ไม่สามารถเล่นเพลงได้');state.loading=false;updateTransport();}
   finally{if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}}
 }
@@ -1408,7 +1478,14 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)tryRecover
 window.addEventListener('pageshow',tryRecoverInterruptedPlayback);
 window.addEventListener('focus',tryRecoverInterruptedPlayback);
 
-player.addEventListener('timeupdate',updateTransport);player.addEventListener('timeupdate',medleyTick);player.addEventListener('loadedmetadata',updateTransport);
+let playbackSnapshotTick=0;
+player.addEventListener('timeupdate',()=>{
+  updateTransport();
+  medleyTick();
+  const now=Date.now();
+  if(now-playbackSnapshotTick>2000){playbackSnapshotTick=now;savePlaybackResumeState();}
+});
+player.addEventListener('loadedmetadata',updateTransport);
 player.addEventListener('durationchange',updateTransport);
 player.addEventListener('play',()=>{state.userPaused=false;state.resumeAfterInterruption=false;updateTransport();});
 player.addEventListener('pause',()=>{
@@ -1431,8 +1508,24 @@ document.addEventListener('keydown',e=>{
   if(e.key==='F8'){e.preventDefault();stopSong();}
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen();}
 });
-window.addEventListener('beforeunload',()=>{state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
+window.addEventListener('pagehide',savePlaybackResumeState);
+window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
+window.XStageSoftRefresh=async function(){
+  if(state.current||player.src){
+    savePlaybackResumeState();
+    renderSongs();renderQueue();updateTransport();
+    if(state.token)void pollPublishedCatalog();
+    return true;
+  }
+  if(state.token){
+    await pollPublishedCatalog();
+    renderSongs();renderQueue();updateTransport();
+    return true;
+  }
+  return false;
+};
+
 // Restore a still-valid short-lived token from this browser. After Google expiry,
 // GIS token-model reauthorization still requires an explicit user gesture.
 async function recoverPendingGoogleAuth(reason='กำลังกู้คืนการเข้าสู่ระบบ Google…'){
