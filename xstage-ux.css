@@ -2446,53 +2446,31 @@ body.xstage-ui-v2 .stage-hero-online{
   font-size:clamp(20px,min(4.2cqw,7.2cqh),62px)!important;
 }
 
-/* During playback the full logo becomes a modest sign below the toolbar.
-   The lyric canvas stays above it, with its bottom area reserved for lyrics. */
+/* 1.0.29: keep the complete sign stationary throughout playback.
+   The lyrics canvas sits above this noninteractive sign. */
 body.xstage-ui-v2 .stage.playing .stage-hero{
-  top:calc(var(--xs-top) + 9px)!important;
+  top:46%!important;
   left:50%!important;
-  width:min(48cqw,290px)!important;
-  max-width:calc(100% - 40px)!important;
-  padding:0 4px!important;
-  transform:translate(-50%,0)!important;
-  scale:1;
-  opacity:.58!important;
+  width:min(72cqw,670px)!important;
+  max-width:calc(100% - 32px)!important;
+  box-sizing:border-box;
+  padding:0 clamp(5px,1cqw,16px)!important;
+  transform:translate(-50%,-50%)!important;
+  transform-origin:center center;
+  scale:var(--xstage-visual-scale,1);
+  opacity:.32!important;
 }
-body.xstage-ui-v2 .stage.playing .stage-hero-emblem,
+body.xstage-ui-v2 .stage.playing .stage-hero-emblem{
+  display:grid!important;
+}
 body.xstage-ui-v2 .stage.playing .stage-hero-online{
-  display:none!important;
-}
-body.xstage-ui-v2 .stage.playing .stage-hero-name{
-  font-size:clamp(15px,min(2.3cqw,3.5cqh),27px)!important;
-  line-height:1.05;
-  letter-spacing:-.02em!important;
-}
-body.xstage-ui-v2 .stage.playing .stage-hero-karaoke{
-  font-size:clamp(10px,min(1.5cqw,2.2cqh),15px)!important;
-  letter-spacing:.14em!important;
-  padding:1px 8px 2px!important;
-  border-width:1px;
-  border-radius:7px!important;
+  display:block!important;
 }
 @media (max-height:530px) and (orientation:landscape){
-  /* Very short TV/phone landscape areas: lyrics take absolute priority. */
-  body.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+  /* A compact stage sign is fixed in the same place before and during songs. */
+  body.xstage-ui-v2 .stage .stage-hero,
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  body.xstage-ui-v2 .stage.playing .stage-hero{
     top:46%!important;
-  }
-  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-emblem,
-  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-online{
-    display:none!important;
-  }
-  body.xstage-ui-v2 .stage.playing .stage-hero{
-    display:none!important;
-  }
-}
-@media (max-height:370px) and (orientation:portrait){
-  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-emblem,
-  body.xstage-ui-v2 .stage:not(.playing) .stage-hero-online{
-    display:none!important;
-  }
-  body.xstage-ui-v2 .stage.playing .stage-hero{
-    display:none!important;
   }
 }
