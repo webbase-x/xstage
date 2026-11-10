@@ -3024,3 +3024,175 @@ body.xstage-ui-v2 .pc-settings-section-title{
   border-top:1px solid rgba(92,169,207,.28);
   color:#8feeff;font-weight:900;letter-spacing:.02em;
 }
+
+
+/* 1.0.49: EQ always fits the visible viewport on desktop, tablet, phone, portrait and landscape. */
+body.xstage-ui-v2 .xstage-eq-panel{
+  box-sizing:border-box;
+  max-width:calc(100dvw - 12px);
+  max-height:calc(100dvh - 12px);
+  width:min(1220px,calc(100dvw - 24px));
+  height:min(640px,calc(100dvh - 34px));
+  min-width:0;
+  min-height:0;
+  grid-template-rows:auto auto clamp(54px,12dvh,82px) minmax(0,1fr) auto;
+}
+body.xstage-ui-v2 .xstage-eq-head,
+body.xstage-ui-v2 .xstage-eq-toolbar,
+body.xstage-ui-v2 .xstage-eq-rta-wrap,
+body.xstage-ui-v2 .xstage-eq-main,
+body.xstage-ui-v2 .xstage-eq-bands,
+body.xstage-ui-v2 .xstage-eq-footer{min-width:0;min-height:0}
+body.xstage-ui-v2 .xstage-eq-toolbar{
+  flex-wrap:wrap;
+  gap:clamp(4px,.7vw,10px);
+  padding:clamp(4px,.7vh,7px) clamp(6px,1vw,12px);
+}
+body.xstage-ui-v2 .xstage-eq-toolbar label{min-width:0;flex:0 1 auto}
+body.xstage-ui-v2 .xstage-eq-toolbar select{
+  min-width:0;
+  width:clamp(96px,16vw,185px);
+  max-width:100%;
+}
+body.xstage-ui-v2 #xstage-eq-mode{
+  margin-left:auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+body.xstage-ui-v2 .xstage-eq-rta-wrap{padding:clamp(4px,.7vw,8px) clamp(5px,.9vw,12px)}
+body.xstage-ui-v2 #xstage-eq-rta{min-height:0}
+body.xstage-ui-v2 .xstage-eq-main{
+  grid-template-columns:minmax(0,1fr) clamp(42px,6.2vw,74px);
+  gap:clamp(3px,.65vw,8px);
+  padding:0 clamp(4px,.8vw,10px) clamp(4px,.7vh,7px);
+  overflow:hidden;
+}
+body.xstage-ui-v2 .xstage-eq-bands{
+  grid-template-columns:repeat(31,minmax(0,1fr))!important;
+  gap:clamp(1px,.25vw,4px)!important;
+  padding:clamp(4px,.7vh,8px) clamp(1px,.25vw,4px) 3px!important;
+  overflow:hidden!important;
+}
+body.xstage-ui-v2 .xstage-eq-band{
+  min-width:0!important;
+  grid-template-rows:clamp(12px,2.2vh,18px) clamp(24px,7vh,54px) minmax(0,1fr) clamp(14px,2.8vh,22px)!important;
+  gap:clamp(1px,.25vh,4px)!important;
+  overflow:visible;
+}
+body.xstage-ui-v2 .xstage-eq-gain{
+  min-width:0;
+  width:100%;
+  overflow:hidden;
+  text-align:center;
+  font-size:clamp(5px,.72vw,9px)!important;
+}
+body.xstage-ui-v2 .xstage-eq-band-light{
+  width:clamp(3px,.65vw,9px)!important;
+  min-height:0!important;
+  max-width:100%;
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]{
+  width:clamp(9px,1.65vw,28px)!important;
+  min-width:0!important;
+  min-height:0!important;
+  height:100%!important;
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-webkit-slider-thumb{
+  width:clamp(9px,1.55vw,24px)!important;
+  height:clamp(9px,1.9vh,14px)!important;
+}
+body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-moz-range-thumb{
+  width:clamp(9px,1.55vw,24px)!important;
+  height:clamp(9px,1.9vh,14px)!important;
+}
+body.xstage-ui-v2 .xstage-eq-hz{
+  width:100%;
+  overflow:hidden;
+  text-overflow:clip;
+  font-size:clamp(5px,.68vw,9px)!important;
+  line-height:1!important;
+}
+body.xstage-ui-v2 .xstage-eq-meters-side{
+  min-width:0;
+  gap:clamp(2px,.5vw,8px);
+  padding:clamp(4px,.7vh,9px) clamp(2px,.35vw,5px);
+}
+body.xstage-ui-v2 .xstage-eq-meters-side div{
+  min-width:0;
+  grid-template-rows:clamp(12px,2.2vh,18px) minmax(0,1fr);
+  font-size:clamp(7px,.8vw,11px);
+}
+body.xstage-ui-v2 .xstage-eq-meters-side meter{
+  width:clamp(7px,1.1vw,16px)!important;
+  min-height:0!important;
+  height:100%!important;
+}
+body.xstage-ui-v2 .xstage-eq-footer{
+  min-height:clamp(22px,3.8vh,28px);
+  padding:3px 22px 3px 7px;
+  gap:5px;
+  font-size:clamp(7px,.72vw,10px);
+  white-space:nowrap;
+  overflow:hidden;
+}
+body.xstage-ui-v2 .xstage-eq-footer span{overflow:hidden;text-overflow:ellipsis}
+body.xstage-ui-v2 .xstage-eq-panel.is-expanded{
+  inset:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left))!important;
+  width:auto!important;
+  height:auto!important;
+  max-width:none!important;
+  max-height:none!important;
+}
+@media(max-width:900px),(max-height:620px){
+  body.xstage-ui-v2 .xstage-eq-panel:not(.is-minimized):not(.is-expanded){
+    left:max(4px,env(safe-area-inset-left))!important;
+    top:max(4px,env(safe-area-inset-top))!important;
+    width:calc(100dvw - max(8px,env(safe-area-inset-left) + env(safe-area-inset-right)))!important;
+    height:calc(100dvh - max(8px,env(safe-area-inset-top) + env(safe-area-inset-bottom)))!important;
+    max-width:none!important;
+    max-height:none!important;
+    resize:none!important;
+  }
+  body.xstage-ui-v2 .xstage-eq-head{padding:4px 5px 4px 7px}
+  body.xstage-ui-v2 .xstage-eq-brand{gap:5px}
+  body.xstage-ui-v2 .xstage-eq-brand img{width:22px;height:22px}
+  body.xstage-ui-v2 .xstage-eq-brand strong{font-size:clamp(.65rem,2.2vw,.86rem)}
+  body.xstage-ui-v2 .xstage-eq-head-actions{gap:2px}
+  body.xstage-ui-v2 .xstage-eq-head-actions button,
+  body.xstage-ui-v2 .xstage-eq-toolbar button{
+    min-height:26px;
+    padding:3px 6px;
+    font-size:clamp(.55rem,1.8vw,.68rem);
+  }
+  body.xstage-ui-v2 .xstage-eq-toolbar{font-size:clamp(.56rem,1.8vw,.7rem)}
+}
+@media(max-width:520px){
+  body.xstage-ui-v2 .xstage-eq-panel{
+    border-radius:8px;
+    grid-template-rows:auto auto clamp(42px,10dvh,62px) minmax(0,1fr) auto;
+  }
+  body.xstage-ui-v2 .xstage-eq-toolbar{justify-content:flex-start}
+  body.xstage-ui-v2 .xstage-eq-toolbar label{gap:3px}
+  body.xstage-ui-v2 .xstage-eq-toolbar select{width:clamp(78px,29vw,128px);padding:3px 4px}
+  body.xstage-ui-v2 #xstage-eq-mode{display:none}
+  body.xstage-ui-v2 .xstage-eq-main{grid-template-columns:minmax(0,1fr) 34px}
+  body.xstage-ui-v2 .xstage-eq-band input[type="range"]{width:clamp(7px,2.2vw,12px)!important}
+  body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-webkit-slider-thumb{width:clamp(7px,2.2vw,12px)!important}
+  body.xstage-ui-v2 .xstage-eq-band input[type="range"]::-moz-range-thumb{width:clamp(7px,2.2vw,12px)!important}
+  body.xstage-ui-v2 .xstage-eq-hz,
+  body.xstage-ui-v2 .xstage-eq-gain{font-size:clamp(4.5px,1.5vw,7px)!important}
+  body.xstage-ui-v2 .xstage-eq-meters-side{padding-inline:1px}
+  body.xstage-ui-v2 .xstage-eq-footer span:first-child,
+  body.xstage-ui-v2 .xstage-eq-footer span:last-child{display:none}
+  body.xstage-ui-v2 .xstage-eq-footer{justify-content:center}
+}
+@media(orientation:landscape) and (max-height:520px){
+  body.xstage-ui-v2 .xstage-eq-panel{
+    grid-template-rows:auto auto clamp(34px,14dvh,52px) minmax(0,1fr) auto;
+  }
+  body.xstage-ui-v2 .xstage-eq-rta-wrap{padding-block:2px}
+  body.xstage-ui-v2 .xstage-eq-band{grid-template-rows:11px 20px minmax(0,1fr) 12px!important}
+  body.xstage-ui-v2 .xstage-eq-footer{min-height:20px;padding-block:2px}
+}
