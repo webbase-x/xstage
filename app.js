@@ -26,8 +26,68 @@ const state = {
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
   playbackRestoreAttempted:false,
-  awaitingSharedLibrary:false
+  awaitingSharedLibrary:false,
+  updateAvailable:null,updateAfterTrack:false
 };
+
+const XSTAGE_RELEASE=window.XSTAGE_RELEASE||{version:'0.0.0',build:0};
+function appUpdateElements(){
+  return {notice:$('app-update-notice'),text:$('app-update-text'),action:$('app-update-action')};
+}
+function playbackBusyForUpdate(){
+  return !!(state.loading||state.current&&player.src&&!player.ended&&(!player.paused||state.queue.length||state.medley));
+}
+function renderAppUpdateNotice(){
+  const {notice,text,action}=appUpdateElements();
+  if(!notice||!text||!action)return;
+  const remote=state.updateAvailable;
+  if(!remote){notice.hidden=true;return;}
+  notice.hidden=false;
+  if(state.updateAfterTrack){
+    text.textContent=(state.queue.length||state.medley)
+      ? 'มี X-Stage '+remote.version+' · จะอัปเดตเมื่อคิวว่าง/หยุดเล่น'
+      : 'มี X-Stage '+remote.version+' · จะอัปเดตเมื่อเพลงนี้จบ';
+    action.textContent='กำหนดแล้ว';
+    action.disabled=true;
+  }else{
+    text.textContent='มี X-Stage '+remote.version+' พร้อมใช้งาน';
+    action.textContent=playbackBusyForUpdate()?'อัปเดตเมื่อจบ':'อัปเดตตอนนี้';
+    action.disabled=false;
+  }
+}
+function performAppUpdateReload(){
+  try{savePlaybackResumeState();}catch{}
+  location.reload();
+}
+async function checkAppVersion(){
+  try{
+    const url=new URL('version.json',location.href);
+    url.searchParams.set('_',String(Date.now()));
+    const response=await fetch(url,{cache:'no-store'});
+    if(!response.ok)return;
+    const remote=await response.json();
+    const remoteBuild=Number(remote?.build)||0;
+    const currentBuild=Number(XSTAGE_RELEASE.build)||0;
+    if(remoteBuild>currentBuild){
+      state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
+      renderAppUpdateNotice();
+    }
+  }catch{/* Version checking must never affect playback. */}
+}
+function setupAppUpdateWatcher(){
+  const {action}=appUpdateElements();
+  action?.addEventListener('click',()=>{
+    if(!state.updateAvailable)return;
+    if(playbackBusyForUpdate()){
+      state.updateAfterTrack=true;
+      renderAppUpdateNotice();
+    }else performAppUpdateReload();
+  });
+  setTimeout(()=>{void checkAppVersion();},3500);
+  setInterval(()=>{void checkAppVersion();},5*60*1000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void checkAppVersion();});
+}
+
 const CATALOG_DB_NAME='xstage-private-catalog-v1';
 const CATALOG_DB_STORE='catalogs';
 function openCatalogDatabase(){
@@ -1247,6 +1307,9 @@ function clearIdleStage(message){
   if(typeof pen!=='undefined')pen.clearRect(0,0,ui.lyrics.width,ui.lyrics.height);
   setPlayStatus(message);
   updateTransport();
+  if(state.updateAfterTrack&&state.updateAvailable){
+    setTimeout(performAppUpdateReload,180);
+  }
 }
 function stopSong(){
   state.userPaused=true;
@@ -1748,7 +1811,7 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('pagehide',savePlaybackResumeState);
 window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
-renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);
+renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);setupAppUpdateWatcher();
 window.XStageSoftRefresh=async function(){
   if(state.current||player.src){
     savePlaybackResumeState();
