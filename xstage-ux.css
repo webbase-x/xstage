@@ -2837,3 +2837,190 @@ body.xstage-ui-v2 .stage .stage-search-slot .search-refine-hint{
 body.xstage-ui-v2 .transport-volume-value.is-muted{
   color:#ffcf87;min-width:92px;font-weight:900;
 }
+
+
+/* 1.0.46: artistic X-Stage Online brand themes driven by the real audio analyser. */
+body.xstage-ui-v2 .stage .stage-hero,
+body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+body.xstage-ui-v2 .stage.playing .stage-hero{
+  top:28%!important;
+  width:min(92cqw,1040px)!important;
+  max-width:calc(100% - 28px)!important;
+  min-height:150px;
+}
+body.xstage-ui-v2 .stage .stage-hero::before{
+  content:"";
+  position:absolute;
+  inset:-25% -5%;
+  z-index:-1;
+  pointer-events:none;
+  opacity:calc(.28 + var(--xstage-viz-energy,0) * .42);
+  transition:opacity .08s linear;
+}
+body.xstage-ui-v2 .stage .stage-brand-scene{
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(90px,1fr) minmax(390px,650px) minmax(90px,1fr);
+  align-items:center;
+  gap:clamp(8px,1.3cqw,18px);
+}
+body.xstage-ui-v2 .stage .stage-brand-side-viz{
+  display:block;
+  width:100%;
+  height:clamp(92px,14cqh,150px);
+  opacity:calc(.48 + var(--xstage-viz-energy,0) * .5);
+  filter:drop-shadow(0 0 8px rgba(80,220,255,.24));
+}
+body.xstage-ui-v2 .stage .stage-brand-lockup{
+  position:relative;
+  width:100%;
+  min-width:0;
+  transform:scale(calc(1 + var(--xstage-viz-bass,0) * .012));
+  transition:transform .055s linear,background .2s ease,border-color .2s ease,box-shadow .2s ease;
+}
+body.xstage-ui-v2 .stage .stage-brand-tagline{
+  margin-top:clamp(6px,.9cqh,10px);
+  font-family:"Segoe UI",Arial,Helvetica,sans-serif;
+  font-size:clamp(8px,min(1.1cqw,2cqh),13px);
+  line-height:1;
+  font-weight:760;
+  letter-spacing:clamp(.12em,.24cqw,.26em);
+  white-space:nowrap;
+}
+body.xstage-ui-v2 .stage .stage-brand-spectrum{
+  display:block!important;
+  width:min(74%,760px);
+  height:clamp(26px,4.8cqh,46px)!important;
+  margin:clamp(8px,1.1cqh,13px) auto 0!important;
+  opacity:calc(.38 + var(--xstage-viz-energy,0) * .58)!important;
+  filter:drop-shadow(0 0 8px rgba(78,220,255,.28));
+}
+body.xstage-ui-v2 .stage.playing .stage-brand-lockup{opacity:.92}
+body.xstage-ui-v2 .stage.playing .stage-brand-spectrum{opacity:calc(.42 + var(--xstage-viz-energy,0) * .58)!important}
+
+/* Premium Neon — polished cyan/violet glass stage. */
+body.xstage-ui-v2 .stage[data-brand-theme="premium-neon"] .stage-hero::before{
+  background:
+    radial-gradient(ellipse at 50% 45%,rgba(28,180,255,.24),transparent 42%),
+    radial-gradient(ellipse at 60% 52%,rgba(140,76,255,.15),transparent 48%);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="premium-neon"] .stage-brand-lockup{
+  border-color:rgba(108,225,255,.32);
+  background:linear-gradient(115deg,rgba(2,22,44,.88),rgba(10,30,66,.66) 48%,rgba(33,14,70,.62));
+  box-shadow:0 18px 50px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.08),0 0 34px rgba(48,176,255,.13);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="premium-neon"] .stage-brand-mark{
+  border-color:rgba(102,229,255,.38);
+  background:radial-gradient(circle at 30% 20%,rgba(93,237,255,.2),transparent 42%),linear-gradient(145deg,#0b355bde,#111038ef);
+  box-shadow:inset 0 0 24px rgba(95,144,255,.16),0 0 26px rgba(55,207,255,.18);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="premium-neon"] .stage-brand-x{
+  background:linear-gradient(135deg,#b8ffff,#45d7ff 40%,#8d7bff 73%,#d06cff);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="premium-neon"] .stage-brand-stage{
+  background:linear-gradient(180deg,#fff,#dff6ff 50%,#a9c9ee);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="premium-neon"] .stage-brand-sub span:first-child,
+body.xstage-ui-v2 .stage[data-brand-theme="premium-neon"] .stage-brand-tagline{color:#8cf4ff}
+
+/* Modern Concert — warmer live-show marquee with energetic lighting. */
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-hero::before{
+  background:
+    radial-gradient(ellipse at 24% 55%,rgba(255,65,139,.2),transparent 36%),
+    radial-gradient(ellipse at 76% 50%,rgba(255,180,61,.2),transparent 36%),
+    linear-gradient(105deg,transparent 30%,rgba(255,255,255,.05) 48%,transparent 62%);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-brand-lockup{
+  border-color:rgba(255,197,108,.34);
+  border-radius:10px;
+  background:linear-gradient(110deg,rgba(28,10,26,.88),rgba(41,16,33,.72) 52%,rgba(51,32,9,.72));
+  box-shadow:0 18px 54px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,231,190,.08),0 0 34px rgba(255,83,137,.1);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-brand-mark{
+  border-radius:50%;
+  border-color:rgba(255,199,108,.45);
+  background:radial-gradient(circle at 35% 25%,rgba(255,228,166,.23),transparent 35%),linear-gradient(145deg,#501227e8,#2c101cef 50%,#56360ee8);
+  box-shadow:inset 0 0 22px rgba(255,180,85,.12),0 0 28px rgba(255,76,135,.16);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-brand-x{
+  background:linear-gradient(135deg,#fff1bf,#ffba59 38%,#ff5e93 76%,#ff8bd0);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-brand-stage{
+  background:linear-gradient(180deg,#fffaf0,#ffe5c2 52%,#d59f63);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-brand-sub span:first-child{color:#ffcc74}
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-brand-sub span:last-child,
+body.xstage-ui-v2 .stage[data-brand-theme="modern-concert"] .stage-brand-tagline{color:#ff9fc6}
+
+/* Futuristic Audio Tech — angular HUD / audio workstation identity. */
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-hero::before{
+  background:
+    linear-gradient(rgba(60,245,224,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(60,245,224,.055) 1px,transparent 1px),
+    radial-gradient(ellipse at 50% 45%,rgba(31,226,255,.18),transparent 48%);
+  background-size:22px 22px,22px 22px,auto;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-lockup{
+  border-color:rgba(91,255,224,.38);
+  border-radius:4px;
+  clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+  background:linear-gradient(105deg,rgba(2,24,32,.92),rgba(5,38,52,.76) 55%,rgba(8,31,57,.72));
+  box-shadow:0 18px 50px rgba(0,0,0,.36),inset 0 0 28px rgba(47,255,221,.045),0 0 32px rgba(52,232,255,.11);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-mark{
+  border-radius:4px;
+  clip-path:polygon(14% 0,100% 0,100% 86%,86% 100%,0 100%,0 14%);
+  border-color:rgba(88,255,224,.46);
+  background:linear-gradient(145deg,rgba(7,60,71,.92),rgba(7,22,50,.94));
+  box-shadow:inset 0 0 22px rgba(73,255,222,.12),0 0 24px rgba(52,231,255,.16);
+}
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-word{
+  font-family:"Segoe UI Variable Display","Arial Narrow","Segoe UI",sans-serif;
+  letter-spacing:-.025em;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-x{
+  background:linear-gradient(135deg,#d8ffff,#50ffe0 42%,#39c6ff 76%,#868aff);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-stage{
+  background:linear-gradient(180deg,#f5ffff,#c6fff5 50%,#79cde6);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-sub,
+body.xstage-ui-v2 .stage[data-brand-theme="futuristic-audio-tech"] .stage-brand-tagline{
+  font-family:Consolas,"Segoe UI",monospace;
+  color:#78f7e3;
+}
+
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .stage-hero,
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  body.xstage-ui-v2 .stage.playing .stage-hero{top:27%!important;width:min(96cqw,760px)!important}
+  body.xstage-ui-v2 .stage .stage-brand-scene{grid-template-columns:minmax(42px,.55fr) minmax(260px,1.8fr) minmax(42px,.55fr);gap:5px}
+  body.xstage-ui-v2 .stage .stage-brand-side-viz{height:82px}
+  body.xstage-ui-v2 .stage .stage-brand-tagline{font-size:8px;letter-spacing:.12em;margin-top:5px}
+  body.xstage-ui-v2 .stage .stage-brand-spectrum{width:70%;height:25px!important;margin-top:6px!important}
+}
+@media(max-width:440px){
+  body.xstage-ui-v2 .stage .stage-brand-scene{grid-template-columns:34px minmax(230px,1fr) 34px}
+  body.xstage-ui-v2 .stage .stage-brand-side-viz{height:62px}
+  body.xstage-ui-v2 .stage .stage-brand-tagline{display:none}
+}
+@media(orientation:landscape) and (max-height:530px){
+  body.xstage-ui-v2 .stage .stage-hero,
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  body.xstage-ui-v2 .stage.playing .stage-hero{top:24%!important;width:min(78cqw,780px)!important}
+  body.xstage-ui-v2 .stage .stage-brand-side-viz{height:60px}
+  body.xstage-ui-v2 .stage .stage-brand-spectrum{height:18px!important;margin-top:4px!important}
+  body.xstage-ui-v2 .stage .stage-brand-tagline{display:none}
+}
+
+body.xstage-ui-v2 .pc-settings-section-title{
+  margin:14px 0 5px;padding-top:11px;
+  border-top:1px solid rgba(92,169,207,.28);
+  color:#8feeff;font-weight:900;letter-spacing:.02em;
+}

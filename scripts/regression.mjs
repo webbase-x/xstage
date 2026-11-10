@@ -21,6 +21,10 @@ for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-contr
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
 }
 
+for(const [i,script] of [...singerStage.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).entries()){
+  assert.doesNotThrow(()=>new Function(script),'stage.html inline script '+i+' must parse');
+}
+
 const eqMatch=pc.match(/function eqFreqLabel\(f\)\{([\s\S]*?)\n\}/);
 assert.ok(eqMatch,'eqFreqLabel must exist');
 const eqFreqLabel=new Function('f',eqMatch[1]);
@@ -90,6 +94,25 @@ assert.ok(mobile.includes("'Google Drive พร้อมใช้งาน'"),'d
 assert.ok(mobile.includes("gate.hidden=false"),'drawer Google action must open the canonical PRIVATE STAGE gate');
 assert.ok(pc.includes('createMediaElementSource(audio)'),'player EQ must remain wired to HTML5 Audio through Web Audio');
 assert.ok(pc.includes('createAnalyser()'),'audio visualizer/analyser path must remain wired');
+assert.equal((pc.match(/createMediaElementSource\(audio\)/g)||[]).length,1,'stage visualizer must reuse the single existing HTML5 Audio source');
+assert.ok(index.includes('id="stage-viz-left"'),'main stage must expose the left live visualizer canvas');
+assert.ok(index.includes('id="stage-viz-right"'),'main stage must expose the right live visualizer canvas');
+assert.ok(index.includes('id="stage-viz-wave"'),'main stage must expose the center waveform canvas');
+assert.ok(index.includes('YOUR STAGE · YOUR MUSIC'),'redesigned X-Stage Online lockup must include the stage tagline');
+assert.ok(pc.includes("['premium-neon','Premium Neon']"),'Premium Neon stage theme must exist');
+assert.ok(pc.includes("['modern-concert','Modern Concert']"),'Modern Concert stage theme must exist');
+assert.ok(pc.includes("['futuristic-audio-tech','Futuristic Audio Tech']"),'Futuristic Audio Tech stage theme must exist');
+assert.ok(pc.includes('ธีมโลโก้ X-Stage Online + Audio Visualizer'),'background settings must expose brand/visualizer themes');
+assert.ok(pc.includes('stageFrequencyLevels(bins)'),'stage visualizer must derive levels from real analyser frequency bins');
+assert.ok(pc.includes('eqAnalyser.getByteFrequencyData(bins)'),'stage visualizer must read the existing audio analyser');
+assert.ok(pc.includes("if(!eqContext&&!ensureEqAudio())return false"),'playback resume must initialize the shared audio graph for the live visualizer');
+assert.ok(pc.includes("screen.postMessage({type:'xstage-brand-viz'"),'main stage must synchronize live visualizer data to the singer screen');
+assert.ok(singerStage.includes('id="brand-viz-left"'),'singer screen must include live visualizer canvases');
+assert.ok(singerStage.includes("e.data?.type==='xstage-brand-viz'"),'singer screen must render analyser-fed visualizer data');
+assert.ok(css.includes('[data-brand-theme="premium-neon"]'),'Premium Neon theme CSS must exist');
+assert.ok(css.includes('[data-brand-theme="modern-concert"]'),'Modern Concert theme CSS must exist');
+assert.ok(css.includes('[data-brand-theme="futuristic-audio-tech"]'),'Futuristic Audio Tech theme CSS must exist');
+assert.ok(!pc.includes("classList.toggle('stage-hero-hidden',mode==='photo')"),'photo artwork must no longer hide the redesigned X-Stage Online identity');
 assert.ok(!remoteHtml.includes('⏹ หยุด'),'remote UI must not expose redundant stop');
 assert.ok(pc.includes("เพิ่ม/นำออกจากเพลงโปรด · บันทึกในเบราว์เซอร์นี้"),'favorite tooltip must describe persistent browser storage accurately');
 assert.ok(pc.includes('function autoPresetMetadata'),'AUTO EQ must distinguish metadata-based selection from audio analysis');

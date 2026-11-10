@@ -1,7 +1,7 @@
 /* X-Stage Karaoke Online service worker.
  * Code and navigation are network-first so deployed fixes are not trapped behind stale cache.
  * Private Google Drive media is cross-origin and is never cached here. */
-const CACHE='xstage-shell-v1045';
+const CACHE='xstage-shell-v1046';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());
