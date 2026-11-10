@@ -609,7 +609,8 @@ async function pollPublishedCatalog(){
     state.medleyPoolSource=null;
     ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
     renderSongs();renderQueue();
-    setStatus(`ฐานเพลงอัปเดตระหว่างซิงค์: ${num(countBefore)} → ${num(state.songs.length)} เพลง`,'success');
+    ui.libraryState.textContent='Google Drive · '+(state.libraryRootOwnedByMe?'คลังของฉัน':state.libraryRootOwnerEmail?'แชร์โดย '+state.libraryRootOwnerEmail:'คลังที่แชร์ให้ฉัน')+' · อัปเดตแล้ว';
+    setStatus(`ฐานเพลงอัปเดต: ${num(countBefore)} → ${num(state.songs.length)} เพลง`,'success');
   }catch(error){
     // Keep the last known good catalog playable if a batch is unreachable.
     if(state.token===token&&authId===state.authId){
@@ -709,6 +710,9 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     state.libraryRootOwnerEmail=String(root.owners?.[0]?.emailAddress||'');
     savePreferredLibraryRoot(account.sub,root.id);
     renderLibrarySelector([...ownedRoots,...sharedRoots],root.id);
+    window.dispatchEvent(new CustomEvent('xstage:librarychange',{detail:{
+      accountSub:account.sub,rootId:String(root.id),label:libraryLabel(root),ownedByMe:!!root.ownedByMe
+    }}));
     const cacheOwner=libraryCacheOwner(account.sub,root.id);
     if(!instant){
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
@@ -760,9 +764,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       renderSongs();renderQueue();
     }
     ui.search.disabled=false;
-    ui.libraryState.textContent=state.libraryRootOwnedByMe
-      ? 'คลังเพลงของบัญชีนี้ · แชร์เฉพาะผู้รับที่ระบุได้'
-      : 'กำลังใช้คลังเพลงที่แชร์ให้บัญชีนี้ · อ่านอย่างเดียว';
+    ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · พร้อมใช้งาน';
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
     if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
     hideCatalogLoading();
