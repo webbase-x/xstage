@@ -839,7 +839,9 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.objectUrl = ''; state.token = '';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
   state.catalogPointerId='';state.catalogGeneration='';state.catalogCache.clear();
-  state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';
+  state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';state.availableLibraries=[];
+  if(ui.librarySelect)ui.librarySelect.replaceChildren();
+  if(ui.librarySwitcher)ui.librarySwitcher.hidden=true;
   state.awaitingSharedLibrary=false;
   const sharedGate=$('gate-shared-library');if(sharedGate)sharedGate.hidden=true;
   releaseQueuePreload();
@@ -1792,6 +1794,23 @@ function drawLyrics(){
 }
 
 // The stage clock runs independently in index.html.
+ui.librarySelect?.addEventListener('change',()=>{
+  const rootId=String(ui.librarySelect.value||'');
+  if(!rootId||!state.accountSub)return;
+  savePreferredLibraryRoot(state.accountSub,rootId);
+  if(rootId===String(state.libraryRootId||''))return;
+  const target=state.availableLibraries.find(item=>String(item.id)===rootId);
+  const targetLabel=target?libraryLabel(target):'คลังที่เลือก';
+  const busy=!!(state.loading||state.current&&player.src&&!player.ended&&!player.paused);
+  if(busy){
+    ui.libraryState.textContent='เลือก '+targetLabel+' แล้ว · จะใช้เมื่อเปิด/รีเฟรชครั้งถัดไป';
+    setPlayStatus('บันทึกการเปลี่ยนคลังแล้ว · เพลงปัจจุบันเล่นต่อโดยไม่ถูกตัด');
+    return;
+  }
+  clearPlaybackResumeState();
+  setStatus('กำลังเปลี่ยนไปยัง '+targetLabel+'…','success');
+  location.reload();
+});
 ui.login.addEventListener('click',()=>login());ui.gateLogin.addEventListener('click',()=>login());
 ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
 ui.search.addEventListener('input',()=>{
