@@ -1527,3 +1527,90 @@ body.xstage-ui-v2.xstage-webapp-mode #fullscreen{
 body.xstage-ui-v2 .stage-toolbar #toolbar-stage-pop{
   display:none!important
 }
+
+/* 0.9.98: overflow-proof responsive search toolbar for every viewport/PWA orientation. */
+body.xstage-ui-v2 .stage .stage-toolbar{
+  width:100%;max-width:100%;overflow:visible;
+}
+body.xstage-ui-v2 .stage .stage-search-slot{
+  width:auto;max-width:100%;min-width:0!important;
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock,
+body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded){
+  left:0!important;right:0!important;width:auto!important;
+  min-width:0!important;max-width:100%!important;
+}
+body.xstage-ui-v2 .stage .stage-search-slot .search-box{
+  width:100%;max-width:100%;min-width:0!important;box-sizing:border-box;
+}
+body.xstage-ui-v2 .stage .stage-search-slot #search{
+  flex:1 1 0;width:0!important;max-width:100%!important;min-width:0!important;
+  box-sizing:border-box;
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    align-items:center;
+    gap:clamp(4px,1.4vw,7px);
+    padding-left:max(5px,env(safe-area-inset-left));
+    padding-right:max(5px,env(safe-area-inset-right));
+  }
+  body.xstage-ui-v2 .stage-toolbar .mobile-menu-toggle{
+    grid-column:1;min-width:40px;width:40px;padding:0!important
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot{
+    grid-column:2;width:100%;min-width:0!important;align-self:center
+  }
+  body.xstage-ui-v2 .stage-toolbar .toolbar-aux,
+  body.xstage-ui-v2 .stage-toolbar #fullscreen{
+    display:none!important
+  }
+  body.xstage-ui-v2 .stage-toolbar .mobile-stage-clock{
+    grid-column:3;min-width:0;max-width:78px;
+    padding-left:clamp(5px,1.6vw,8px);padding-right:clamp(5px,1.6vw,8px);
+    font-size:clamp(.58rem,2.8vw,.72rem)
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock{
+    inset:0!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-box{
+    padding-left:clamp(5px,1.8vw,8px);
+    padding-right:clamp(5px,1.8vw,8px)
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-icon{
+    flex:0 0 auto;font-size:clamp(1rem,4.5vw,1.3rem)
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot #search{
+    font-size:clamp(.68rem,3.1vw,.82rem)
+  }
+}
+@media(max-width:390px){
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    grid-template-columns:38px minmax(0,1fr) auto;
+    gap:4px;padding-left:max(4px,env(safe-area-inset-left));
+    padding-right:max(4px,env(safe-area-inset-right))
+  }
+  body.xstage-ui-v2 .stage-toolbar .mobile-menu-toggle{
+    width:38px;min-width:38px
+  }
+  body.xstage-ui-v2 .stage-toolbar .mobile-stage-clock{
+    max-width:68px;padding-left:4px;padding-right:4px;font-size:.58rem
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-box{padding-left:4px;padding-right:4px}
+  body.xstage-ui-v2 .stage .stage-search-slot #search{font-size:.68rem}
+}
+@media(max-height:530px) and (orientation:landscape){
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    max-width:100%;padding-left:max(5px,env(safe-area-inset-left));
+    padding-right:max(5px,env(safe-area-inset-right))
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot{min-width:0!important}
+}
+/* Standalone mode must never gain horizontal page overflow from the fixed stage toolbar. */
+html.xstage-webapp-mode,body.xstage-webapp-mode{max-width:100%;overflow-x:hidden}
+body.xstage-ui-v2.xstage-webapp-mode .stage .stage-toolbar,
+body.xstage-ui-v2.xstage-webapp-mode .stage .stage-search-slot,
+body.xstage-ui-v2.xstage-webapp-mode .stage .search-dock{
+  max-width:100%!important;min-width:0!important
+}
