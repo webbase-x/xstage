@@ -340,13 +340,6 @@ setInterval(pollPublishedCatalog,45000);
 
 async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   if(state.token && state.token!==token)state.catalogCache.clear();
-  setStatus('กำลังค้นหาคลัง XStageWeb ใน Google Drive ของคุณ…');
-  const roots = (await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token));
-  if (authId !== state.authId) return;
-  if (roots.length !== 1) throw Error(roots.length ? 'พบโฟลเดอร์ XStageWeb ซ้ำ กรุณาตรวจใน Drive' : 'ไม่พบโฟลเดอร์ XStageWeb กรุณาซิงก์เพลงจาก X-Stage บน Windows ก่อน');
-  const pointers = await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
-  if (pointers.length !== 1) throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
-  const pointer = await privateJson(pointers[0].id, token);
   setStatus('กำลังยืนยันบัญชี Google…');
   const accountResult = await googleFetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'},'Google Account');
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
@@ -354,6 +347,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   if (!account.email_verified || !account.sub) throw Error('ไม่สามารถยืนยันบัญชี Google ได้');
   if (expectedSub && account.sub!==expectedSub) throw Error('บัญชี Google ไม่ตรงกับเซสชันเดิม กรุณาเข้าสู่ระบบอีกครั้ง');
   if (authId !== state.authId) return;
+
+  // Authentication is complete. Leave the login gate immediately; catalog work is a separate phase.
   ui.account.textContent = account.email || 'Google';
   ui.account.hidden = false;
   ui.logout.hidden = false;
@@ -362,9 +357,19 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   ui.search.disabled = true;
   ui.libraryState.textContent = 'เข้าสู่ระบบแล้ว · กำลังเตรียมฐานเพลง';
   ui.songTotal.textContent = 'กำลังโหลด…';
-  ui.resultCount.textContent = 'กำลังตรวจฐานเพลงล่าสุด';
-  showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังตรวจฐานเพลงล่าสุด…');
-  setStatus('เข้าสู่ระบบสำเร็จ · กำลังตรวจรุ่นฐานเพลงล่าสุด…','success');
+  ui.resultCount.textContent = 'กำลังค้นหาคลังเพลง';
+  showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังค้นหาคลัง XStageWeb ใน Google Drive…');
+  setStatus('เข้าสู่ระบบสำเร็จ · กำลังเตรียมฐานเพลง…','success');
+
+  const roots = await driveList("name='XStageWeb' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+  if (authId !== state.authId) return;
+  if (roots.length !== 1) throw Error(roots.length ? 'พบโฟลเดอร์ XStageWeb ซ้ำ กรุณาตรวจใน Drive' : 'ไม่พบโฟลเดอร์ XStageWeb กรุณาซิงก์เพลงจาก X-Stage บน Windows ก่อน');
+  ui.resultCount.textContent='กำลังตรวจข้อมูลฐานเพลง';
+  showCatalogLoading('พบคลัง XStageWeb','กำลังตรวจ current.json และรุ่นฐานเพลงล่าสุด…');
+  const pointers = await driveList(`'${roots[0].id}' in parents and name='current.json' and trashed=false`,token);
+  if (pointers.length !== 1) throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
+  const pointer = await privateJson(pointers[0].id, token);
+  setStatus('เข้าสู่ระบบแล้ว · กำลังตรวจรุ่นฐานเพลงล่าสุด…','success');
   const cached=await loadCachedCatalog(account.sub,pointer);
   if(cached){
     showCatalogLoading('พบฐานเพลงในเครื่อง','กำลังเปิดฐานเพลงแคชล่าสุด…');
