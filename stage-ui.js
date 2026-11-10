@@ -211,7 +211,8 @@
     const sync=()=>{
       const error=legacyStatus.classList.contains('error');
       const raw=String(legacyStatus.textContent||'').trim();
-      const message=(!raw||raw==='.')?'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง':raw;
+      const punctuationOnly=!raw||/^[\s.,;:!?'"“”‘’·…\-–—_/\\]+$/u.test(raw);
+      const message=punctuationOnly?'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง':raw;
       notice.hidden=!error;
       if(error)notice.textContent=message;
     };
