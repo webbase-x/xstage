@@ -404,7 +404,7 @@ $pc('pc-stage-pop').onclick=()=>{
  if(!screen)setPlayStatus('กรุณาอนุญาตให้เปิดหน้าต่างจอร้องแยก');
   else screen.addEventListener('load',()=>{sendBackgroundToSecondScreen();syncEqDisplaySelector();sendEqState();applyEqVisibility();},{once:true});
 };
-setInterval(()=>{if(!screen||screen.closed){if(eqDisplayTarget!=='main'){eqDisplayTarget='main';syncEqDisplaySelector();eqPanel.hidden=false;}return;}try{screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime},location.origin);}catch{}},200);
+setInterval(()=>{if(!screen||screen.closed){if(eqDisplayTarget!=='main'){eqDisplayTarget='main';syncEqDisplaySelector();eqPanel.hidden=false;}return;}try{screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime,duration:Number.isFinite(audio.duration)?audio.duration:Number(state.current?.duration)||0,playing:!!audio.src&&!audio.paused,queueCount:state.queue.length},location.origin);}catch{}},200);
 $pc('pc-other-tools').onclick=()=>{const d=openDialog('ความสามารถ X-Stage Web');d.append(para('เว็บ: ค้นหาแบบเรียลไทม์, คิวเพลง, ประวัติ, เพลงโปรดในเซสชัน, สุ่มเพลง, A–B, EQ, ตั้งค่าเนื้อร้องและพื้นหลัง, จอร้องแยก, ส่งออก/นำเข้าคิว'));
  d.append(para('เฉพาะ Windows: MIDI Mixer / SoundFont แยกชิ้นดนตรี, GM Keyboard, ปิด Guide Melody, ASIO, ปรับคีย์ดนตรีอิสระจาก M4A และจัดการฐานเพลงในเครื่อง'));
 };
