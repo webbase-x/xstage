@@ -299,6 +299,9 @@ async function privateJson(id, token, opts) {
   catch { throw Error('ไฟล์ JSON บน Drive ไม่ถูกต้อง'); }
 }
 
+function sharedLibraryFeatureReady(){
+  return !!(String(cfg.googlePickerApiKey||'').trim()&&String(cfg.googleAppId||'').trim());
+}
 function setSharedLibraryGate(active,message=''){
   const button=$('gate-shared-library');
   const copy=$('gate-copy');
@@ -307,12 +310,21 @@ function setSharedLibraryGate(active,message=''){
   if(active){
     ui.gate.hidden=false;
     ui.gateLogin.hidden=true;
-    if(button)button.hidden=false;
-    if(copy)copy.textContent='บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงของผู้แชร์ กรุณาอนุญาต X-Stage ให้เปิดโฟลเดอร์นั้นหนึ่งครั้ง';
-    if(footnote)footnote.textContent='เล่นจาก Google Drive ของผู้แชร์โดยตรง · ไม่คัดลอกไฟล์ ไม่บันทึกเพลงลง Drive ของผู้รับ';
+    const ready=sharedLibraryFeatureReady();
+    if(button){
+      button.hidden=!ready;
+      button.disabled=!ready;
+    }
+    if(copy)copy.textContent=ready
+      ? 'บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงของผู้แชร์ กรุณาอนุญาต X-Stage ให้เปิดโฟลเดอร์นั้นหนึ่งครั้ง'
+      : 'บัญชีนี้ล็อกอินสำเร็จ แต่ระบบใช้คลังเพลงที่แชร์ยังไม่เปิดใช้งานบนเว็บไซต์นี้';
+    if(footnote)footnote.textContent=ready
+      ? 'เล่นจาก Google Drive ของผู้แชร์โดยตรง · ไม่คัดลอกไฟล์ ไม่บันทึกเพลงลง Drive ของผู้รับ'
+      : 'เจ้าของเว็บไซต์ต้องตั้งค่า Google Picker API ก่อน · ไม่มีการคัดลอกเพลงลง Drive ของผู้รับ';
     if(message)ui.gateStatus.textContent=message;
+    else if(!ready)ui.gateStatus.textContent='ฟังก์ชันคลังที่แชร์ยังไม่พร้อมใช้งาน';
   }else{
-    if(button)button.hidden=true;
+    if(button){button.hidden=true;button.disabled=false;}
     ui.gateLogin.hidden=false;
     if(copy)copy.textContent='เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้';
     if(footnote)footnote.textContent='ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น';
@@ -741,16 +753,19 @@ function openShareLibraryDialog(){
   status.textContent='';
   email.value='';
   ack.checked=false;
-  const canShare=!!(state.token&&state.libraryRootId&&state.libraryRootOwnedByMe&&state.libraryRootCanShare);
+  const pickerReady=sharedLibraryFeatureReady();
+  const canShare=!!(pickerReady&&state.token&&state.libraryRootId&&state.libraryRootOwnedByMe&&state.libraryRootCanShare);
   email.disabled=ack.disabled=!canShare;
   submit.disabled=true;
-  if(!state.token)status.textContent='กรุณาเข้าสู่ระบบ Google ก่อนแชร์';
+  if(!pickerReady)status.textContent='ยังไม่เปิดใช้งานการแชร์ · เจ้าของเว็บไซต์ต้องตั้งค่า Google Picker API ก่อน';
+  else if(!state.token)status.textContent='กรุณาเข้าสู่ระบบ Google ก่อนแชร์';
   else if(!state.libraryRootOwnedByMe)status.textContent='คลังนี้เป็นคลังที่ผู้อื่นแชร์ให้ จึงไม่สามารถแชร์ต่อจาก X-Stage ได้';
   else if(!state.libraryRootCanShare)status.textContent='บัญชีนี้ไม่มีสิทธิ์แชร์โฟลเดอร์ XStageWeb';
   dialog.showModal();
   if(canShare)setTimeout(()=>email.focus(),30);
 }
 async function shareLibraryWithEmail(email){
+  if(!sharedLibraryFeatureReady())throw Error('ระบบแชร์ยังไม่พร้อม · กรุณาตั้งค่า Google Picker API ก่อน');
   if(!state.token)throw Error('กรุณาเข้าสู่ระบบ Google ก่อนแชร์');
   if(!state.libraryRootId||!state.libraryRootOwnedByMe||!state.libraryRootCanShare)
     throw Error('บัญชีนี้ไม่มีสิทธิ์แชร์คลังเพลง');
