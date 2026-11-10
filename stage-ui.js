@@ -73,7 +73,6 @@
   const closeMenu=()=>{
     if($('mobile-menu-toggle')?.getAttribute('aria-expanded')==='true')$('mobile-menu-toggle').click();
   };
-  $('toolbar-stage-pop')?.addEventListener('click',()=>$('pc-stage-pop')?.click());
   const legacyCommands={
     'mobile-stage-pop':'pc-stage-pop',
     'mobile-random':'pc-random',
