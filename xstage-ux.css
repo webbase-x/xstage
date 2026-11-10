@@ -1843,15 +1843,14 @@ body.xstage-ui-v2 .pull-refresh{
   background:rgba(4,20,39,.92);color:#dffaff;
   box-shadow:0 5px 18px rgba(0,0,0,.38),0 0 12px rgba(38,197,255,.2);
   font-size:.72rem;font-weight:800;white-space:nowrap;
-  opacity:min(1,calc(var(--pull-distance,0px) / 38px));
+  opacity:.96;
   pointer-events:none;
   transition:border-color .15s ease,background .15s ease,transform .15s ease
 }
 body.xstage-ui-v2 .pull-refresh[hidden]{display:none!important}
 body.xstage-ui-v2 .pull-refresh-icon{
   display:inline-grid;place-items:center;width:19px;height:19px;
-  font-size:1.05rem;line-height:1;
-  transform:rotate(calc(var(--pull-distance,0px) * 3deg))
+  font-size:1.05rem;line-height:1
 }
 body.xstage-ui-v2 .pull-refresh.ready{
   border-color:#67f4c0;background:rgba(7,53,42,.94);
