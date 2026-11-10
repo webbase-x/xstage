@@ -113,7 +113,21 @@
         pullRefresh.classList.remove('ready');
       }
       if(pullRefreshText)pullRefreshText.textContent='กำลังรีเฟรช…';
-      setTimeout(()=>window.location.reload(),90);
+      setTimeout(async()=>{
+        let handled=false;
+        try{
+          if(typeof window.XStageSoftRefresh==='function'){
+            handled=!!(await window.XStageSoftRefresh());
+          }
+        }catch(error){
+          console.warn('X-Stage soft refresh:',error?.message||error);
+        }
+        if(handled){
+          resetPullRefresh();
+          return;
+        }
+        window.location.reload();
+      },90);
     }else resetPullRefresh();
   },{passive:true});
   stage.addEventListener('touchcancel',resetPullRefresh,{passive:true});
