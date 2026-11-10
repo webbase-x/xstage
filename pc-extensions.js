@@ -159,6 +159,13 @@ function ensureEqAudio(){
  if(eqContext)return true;
  const C=window.AudioContext||window.webkitAudioContext;if(!C){setPlayStatus('Web Audio API ไม่รองรับ EQ 31 Band');return false;}
  eqContext=new C();eqSource=eqContext.createMediaElementSource(audio);
+ eqContext.addEventListener?.('statechange',()=>{
+   const interrupted=eqContext&&(eqContext.state==='interrupted'||eqContext.state==='suspended');
+   if(interrupted&&state.current&&!state.userPaused&&!state.userStopped){
+     state.resumeAfterInterruption=true;
+     window.dispatchEvent(new CustomEvent('xstage-audio-interrupted'));
+   }
+ });
  eqNodes=EQ_FREQS.map(freq=>{const n=eqContext.createBiquadFilter();n.type='peaking';n.frequency.value=freq;n.Q.value=4.318;return n;});
  eqAnalyser=eqContext.createAnalyser();eqAnalyser.fftSize=4096;eqAnalyser.smoothingTimeConstant=.72;
  eqLeft=eqContext.createAnalyser();eqRight=eqContext.createAnalyser();eqLeft.fftSize=512;eqRight.fftSize=512;
@@ -166,6 +173,13 @@ function ensureEqAudio(){
  let node=eqSource;for(const filter of eqNodes){node.connect(filter);node=filter;}node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination);eqAnalyser.connect(splitter);splitter.connect(eqLeft,0);splitter.connect(eqRight,1);eqLeft.connect(eqMeterSink);eqRight.connect(eqMeterSink);eqMeterSink.connect(eqContext.destination);
  applyEqGains(false);return true;
 }
+
+window.XStageResumeAudioGraph=async function(){
+  if(!eqContext)return true;
+  if(eqContext.state==='running')return true;
+  try{await eqContext.resume();return eqContext.state==='running';}
+  catch{return false;}
+};
 function savedEqGains(){
  const v=(window.XStageUiPrefs?.read?.()||{}).eqGains;
  return Array.isArray(v)&&v.length===31?v.map(x=>Math.max(-12,Math.min(12,Number(x)||0))):null;
