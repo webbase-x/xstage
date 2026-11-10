@@ -2652,9 +2652,24 @@ body.xstage-ui-v2 .gate-close{
 }
 body.xstage-ui-v2 .gate-close:hover{background:#16364d;border-color:#77d9ef}
 body.xstage-ui-v2 .gate-preview-note{display:block;margin-top:10px;color:#b4cedd;line-height:1.45}
-body.xstage-ui-v2 #search[readonly]{cursor:pointer;color:#c9dce8;-webkit-text-fill-color:#c9dce8;opacity:1}
+body.xstage-ui-v2 #search[data-library-ready="false"]{color:#d7e8f2;-webkit-text-fill-color:#d7e8f2;opacity:1}
 body.xstage-ui-v2 .status-line{color:#b2cfdf}
 body.xstage-ui-v2 .xstage-eq-toolbar select,
 body.xstage-ui-v2 .xstage-eq-panel button{
   font-family:"Leelawadee UI","Noto Sans Thai",Tahoma,"Segoe UI",system-ui,sans-serif
+}
+
+
+/* 1.0.42: keep drawer labels readable on every viewport. */
+body.xstage-ui-v2 .stage .mobile-stage-menu button{
+  color:#eef8ff!important;
+  font-family:"Leelawadee UI","Noto Sans Thai",Tahoma,"Segoe UI",system-ui,sans-serif!important;
+  font-size:clamp(.82rem,1vw,1rem)!important;
+  text-indent:0!important;
+}
+body.xstage-ui-v2 .stage .mobile-stage-menu button,
+body.xstage-ui-v2 .stage .mobile-stage-menu summary{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
 }
