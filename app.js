@@ -938,6 +938,10 @@ async function shareLibraryWithEmail(email){
   return true;
 }
 function setupLibrarySharing(){
+  const sharingReady=sharedLibraryFeatureReady();
+  for(const button of [$('pc-share-library'),$('mobile-share-library'),document.querySelector('#xstage-context-menu [data-cmd="share"]')]){
+    if(button){button.hidden=!sharingReady;button.disabled=!sharingReady;}
+  }
   const dialog=$('share-library-dialog');
   const email=$('share-library-email');
   const ack=$('share-library-ack');
@@ -1822,7 +1826,8 @@ ui.librarySelect?.addEventListener('change',()=>{
   const targetLabel=target?libraryLabel(target):'คลังที่เลือก';
   const busy=!!(state.loading||state.current&&player.src&&!player.ended&&!player.paused);
   if(busy){
-    ui.libraryState.textContent='เลือก '+targetLabel+' แล้ว · จะใช้เมื่อเปิด/รีเฟรชครั้งถัดไป';
+    ui.librarySelect.value=String(state.libraryRootId||'');
+    ui.libraryState.textContent='เลือก '+targetLabel+' ไว้แล้ว · จะใช้เมื่อเปิด/รีเฟรชครั้งถัดไป';
     setPlayStatus('บันทึกการเปลี่ยนคลังแล้ว · เพลงปัจจุบันเล่นต่อโดยไม่ถูกตัด');
     return;
   }
@@ -1904,7 +1909,7 @@ document.addEventListener('keydown',e=>{
   if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
   if(e.key==='F5'){e.preventDefault();togglePlayback();}
   if(e.key==='F6'){e.preventDefault();playNext();}
-  if(e.key==='F8'){e.preventDefault();stopSong();}
+  if(e.key==='F8'){e.preventDefault();cancelCurrentSong();}
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen();}
 });
 window.addEventListener('pagehide',savePlaybackResumeState);
