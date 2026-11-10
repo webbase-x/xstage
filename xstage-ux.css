@@ -1831,3 +1831,36 @@ body.xstage-ui-v2.xstage-webapp-mode .stage .search-dock{
   body.xstage-ui-v2 .stage .stage-search-slot .search-dock .search-box{height:34px!important}
   body.xstage-ui-v2 .stage .stage-search-slot #search{height:32px!important}
 }
+
+/* 1.0.02: compact-screen pull-to-refresh feedback. */
+body.xstage-ui-v2 .pull-refresh{
+  position:absolute;z-index:95;left:50%;
+  top:max(6px,env(safe-area-inset-top));
+  transform:translateX(-50%);
+  display:flex;align-items:center;gap:7px;
+  min-height:34px;padding:6px 11px;
+  border:1px solid rgba(83,208,255,.7);border-radius:999px;
+  background:rgba(4,20,39,.92);color:#dffaff;
+  box-shadow:0 5px 18px rgba(0,0,0,.38),0 0 12px rgba(38,197,255,.2);
+  font-size:.72rem;font-weight:800;white-space:nowrap;
+  opacity:min(1,calc(var(--pull-distance,0px) / 38px));
+  pointer-events:none;
+  transition:border-color .15s ease,background .15s ease,transform .15s ease
+}
+body.xstage-ui-v2 .pull-refresh[hidden]{display:none!important}
+body.xstage-ui-v2 .pull-refresh-icon{
+  display:inline-grid;place-items:center;width:19px;height:19px;
+  font-size:1.05rem;line-height:1;
+  transform:rotate(calc(var(--pull-distance,0px) * 3deg))
+}
+body.xstage-ui-v2 .pull-refresh.ready{
+  border-color:#67f4c0;background:rgba(7,53,42,.94);
+  transform:translateX(-50%) scale(1.03)
+}
+body.xstage-ui-v2 .pull-refresh.refreshing .pull-refresh-icon{
+  animation:xstagePullRefreshSpin .7s linear infinite
+}
+@keyframes xstagePullRefreshSpin{to{transform:rotate(360deg)}}
+@media(min-width:821px) and (min-height:521px){
+  body.xstage-ui-v2 .pull-refresh{display:none!important}
+}
