@@ -153,7 +153,11 @@ const eqPrefs=window.XStageUiPrefs?.read?.()||{};
 let eqDisplayTarget=['main','singer','both'].includes(eqPrefs.eqDisplayTarget)?eqPrefs.eqDisplayTarget:'main';
 if(typeof eqPrefs.eqPreset==='string')eqPreset=eqPrefs.eqPreset;
 if(typeof eqPrefs.eqBypassed==='boolean')eqBypassed=eqPrefs.eqBypassed;
-function eqFreqLabel(f){return f>=1000?(f/1000).toFixed(f%1000?2:0).replace(/0$/,'')+'k':String(f);}
+function eqFreqLabel(f){
+  if(f<1000)return String(f);
+  const value=f/1000;
+  return (Number.isInteger(value)?String(value):String(Number(value.toFixed(2))))+'k';
+}
 function eqBandColor(f){return f<80?'#ff3b30':f<250?'#ff8a00':f<630?'#ffd400':f<1600?'#62e33c':f<4000?'#22d3a7':f<10000?'#18b7ff':'#755bff';}
 function ensureEqAudio(){
  if(eqContext)return true;
