@@ -136,6 +136,16 @@ assert.ok(pc.includes('function autoPresetMetadata'),'AUTO EQ must distinguish m
 assert.ok(pc.includes('AUTO: FLAT · ไม่มีข้อมูลแนวเพลง'),'AUTO EQ must clearly explain metadata fallback');
 assert.ok(stageUi.includes("volumeLabel.textContent=muted?'ปิดเสียง · '+n+'%':n+'%'"),'main player must preserve volume while clearly labeling mute');
 assert.ok(css.includes('/* 1.0.45: one canonical utilities menu, clearer search refinement and mute state. */'),'1.0.45 utility menu polish must exist');
+assert.ok(css.includes('/* 1.0.49: EQ always fits the visible viewport on desktop, tablet, phone, portrait and landscape. */'),'responsive EQ viewport rules must exist');
+assert.ok(css.includes('grid-template-columns:repeat(31,minmax(0,1fr))!important'),'main EQ must fit all 31 bands without horizontal overflow');
+assert.ok(css.includes('overflow:hidden!important;'),'responsive EQ must prevent band-strip overflow');
+assert.ok(css.includes('@media(max-width:520px)'),'main EQ must include a phone-specific compact layout');
+assert.ok(css.includes('@media(orientation:landscape) and (max-height:520px)'),'main EQ must include a short-landscape layout');
+assert.ok(pc.includes('function fitEqPanelToViewport()'),'main EQ must clamp a dragged/resized panel back into the viewport');
+assert.ok(pc.includes("window.addEventListener('orientationchange',()=>setTimeout(fitEqPanelToViewport,80))"),'main EQ must refit after device rotation');
+assert.ok(singerStage.includes('/* 1.0.49: singer-screen EQ responsive fit for every viewport. */'),'singer-screen EQ must have matching responsive rules');
+assert.ok(singerStage.includes('function fitSeqToViewport()'),'singer-screen EQ must clamp itself to the viewport');
+assert.ok(singerStage.includes("window.addEventListener('orientationchange',()=>setTimeout(fitSeqToViewport,80))"),'singer-screen EQ must refit after rotation');
 assert.ok(css.includes('.stage-column.mobile-tools-expanded .transport-panel .pc-tools{\n  display:none!important;'),'duplicate legacy tools flyout must stay hidden');
 assert.ok(index.includes('id="mobile-speed-select"'),'playback speed must remain available after consolidating utilities');
 assert.ok(stageUi.includes("const mobileSpeed=$('mobile-speed-select')"),'canonical menu speed selector must stay synchronized');
