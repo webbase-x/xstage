@@ -53,11 +53,31 @@ async function performAppUpdateReload(){
   try{savePlaybackResumeState();}catch{}
   try{
     const registrations=await navigator.serviceWorker?.getRegistrations?.();
-    if(Array.isArray(registrations))await Promise.all(registrations.map(registration=>registration.update().catch(()=>{})));
+    if(Array.isArray(registrations))await Promise.race([
+      Promise.all(registrations.map(registration=>registration.update().catch(()=>{}))),
+      new Promise(resolve=>setTimeout(resolve,4000))
+    ]);
   }catch{}
   const next=new URL(location.href);
   next.searchParams.set('xstage_update',String(Date.now()));
   location.replace(next.href);
+}
+// Automatic web hotfixes run on entry, never mid-song. Guard repeated
+// redirects if a CDN or Service Worker continues serving the older shell.
+const WEB_AUTO_UPDATE_GUARD='xstage-web-auto-update-target-v1';
+let webUpdateReloading=false;
+function autoApplyWebUpdate(remote){
+  if(androidTvNativeBridgeReady()||!remote||webUpdateReloading)return false;
+  if(playbackBusyForUpdate())return false;
+  const target=Number(remote.build);
+  try{
+    const previous=JSON.parse(sessionStorage.getItem(WEB_AUTO_UPDATE_GUARD)||'null');
+    if(previous?.build===target&&Date.now()-Number(previous.at||0)<120000)return false;
+    sessionStorage.setItem(WEB_AUTO_UPDATE_GUARD,JSON.stringify({build:target,at:Date.now()}));
+  }catch{}
+  webUpdateReloading=true;
+  void performAppUpdateReload();
+  return true;
 }
 async function checkAppVersion(){
   // Native APK updates must use the native channel, never a web-only reload.
@@ -74,6 +94,10 @@ async function checkAppVersion(){
     if(remoteBuild>currentBuild){
       state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
       renderAppUpdateNotice();
+      // Reload the old web app as soon as a newer published web release is
+      // confirmed. During active playback, preserve the song and show the
+      // existing Update Now button instead.
+      autoApplyWebUpdate(state.updateAvailable);
       return true;
     }else{
       state.updateAvailable=null;
