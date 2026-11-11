@@ -40,7 +40,7 @@
       const hash=String(meta?.sha256||'').trim();
       if(!/^X-Stage-Karaoke-Android(?:-TV)?-v[0-9A-Za-z._-]+-build[0-9]+\.apk$/.test(file)||
         !Number.isSafeInteger(build)||build<1||!/^\d+\.\d+\.\d+$/.test(version)||
-        file!==\`X-Stage-Karaoke-Android-v\${version}-build\${build}.apk\`||
+        file!==('X-Stage-Karaoke-Android-v'+version+'-build'+build+'.apk')||
         !/^[a-fA-F0-9]{64}$/.test(hash))throw Error('ข้อมูล APK ไม่ผ่านการตรวจสอบ');
       verifiedAndroidApk={url:new URL('./downloads/'+file,location.href).href,file,version,build};
       if(apkMenuLink){
@@ -116,7 +116,7 @@
   }
   function updateButtons() {
     const installed = syncStandaloneUi();
-    if(apkMenuLink)apkMenuLink.hidden=!isAndroidDevice();
+    if(apkMenuLink)apkMenuLink.hidden=!isAndroidDevice()||!verifiedAndroidApk;
     const knownInstalled=installed||hasInstalledHint();
     menuButton.textContent = knownInstalled ? '✓ X-Stage ติดตั้งแล้ว' : '⬇ ติดตั้ง X-Stage เป็นแอป';
     menuButton.disabled = installed;
