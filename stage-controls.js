@@ -153,8 +153,9 @@
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1076','xstage-peerjs',()=>typeof Peer==='function');
-      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1076','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1077','xstage-peerjs',()=>typeof Peer==='function');
+      if(typeof window.XStageEnsureQrLibrary==='function')await window.XStageEnsureQrLibrary();
+      else await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1077','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
