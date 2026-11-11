@@ -32,6 +32,7 @@ public final class MainActivity extends Activity {
 
     private WebView webView;
     private GoogleDeviceAuth googleAuth;
+    private XStageUpdateManager updateManager;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -101,6 +102,31 @@ public final class MainActivity extends Activity {
             }
         });
 
+        updateManager = new XStageUpdateManager(this, new XStageUpdateManager.Listener() {
+            @Override
+            public void onUpdateAvailable(String version, int build) {
+                callJavascript("window.XStageAndroidUpdateAvailable&&window.XStageAndroidUpdateAvailable(" +
+                        JSONObject.quote(version) + "," + build + ");");
+            }
+
+            @Override
+            public void onUpdateStatus(String message) {
+                callJavascript("window.XStageAndroidUpdateStatus&&window.XStageAndroidUpdateStatus(" +
+                        JSONObject.quote(message) + ");");
+            }
+
+            @Override
+            public void onUpdateError(String message) {
+                callJavascript("window.XStageAndroidUpdateError&&window.XStageAndroidUpdateError(" +
+                        JSONObject.quote(message) + ");");
+            }
+
+            @Override
+            public void onNoUpdate() {
+                callJavascript("window.XStageAndroidNoUpdate&&window.XStageAndroidNoUpdate();");
+            }
+        });
+
         webView.addJavascriptInterface(new AndroidBridge(), "XStageAndroid");
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
@@ -128,6 +154,15 @@ public final class MainActivity extends Activity {
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
                 super.onReceivedHttpError(view, request, errorResponse);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                Uri uri = Uri.parse(url);
+                if (isTrustedXStageUrl(uri) && updateManager != null) {
+                    updateManager.checkForUpdates(false);
+                }
             }
         });
 
@@ -212,6 +247,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         enterImmersiveMode();
         if (webView != null) webView.onResume();
+        if (updateManager != null) updateManager.onResume();
     }
 
     @Override
@@ -223,6 +259,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (googleAuth != null) googleAuth.close();
+        if (updateManager != null) updateManager.close();
         if (webView != null) {
             webView.removeJavascriptInterface("XStageAndroid");
             webView.destroy();
@@ -279,6 +316,21 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public String getAppVersion() {
             return BuildConfig.VERSION_NAME;
+        }
+
+        @JavascriptInterface
+        public int getAppBuild() {
+            return BuildConfig.VERSION_CODE;
+        }
+
+        @JavascriptInterface
+        public void checkForAppUpdate() {
+            if (updateManager != null) updateManager.checkForUpdates(true);
+        }
+
+        @JavascriptInterface
+        public void installAvailableUpdate() {
+            if (updateManager != null) runOnUiThread(updateManager::installLatestUpdate);
         }
 
         @JavascriptInterface

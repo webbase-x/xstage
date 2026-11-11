@@ -2187,6 +2187,71 @@ window.XStageAndroidSignedOut=()=>{
   if(state.token)resetPrivate({keepAuth:false});
   setStatus('ออกจากระบบ Google บน Android TV แล้ว');
 };
+function androidTvUpdatePanel(){
+  let panel=$('android-tv-update-panel');
+  if(panel)return panel;
+  panel=document.createElement('section');
+  panel.id='android-tv-update-panel';
+  panel.className='android-tv-update-panel';
+  panel.hidden=true;
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-modal','true');
+  panel.setAttribute('aria-labelledby','android-tv-update-title');
+  panel.innerHTML='<div class="android-tv-update-box">'+
+    '<span class="android-tv-update-kicker">X-STAGE ANDROID TV UPDATE</span>'+
+    '<h2 id="android-tv-update-title">มี X-Stage เวอร์ชันใหม่</h2>'+
+    '<p id="android-tv-update-version" class="android-tv-update-version"></p>'+
+    '<p id="android-tv-update-status" class="android-tv-update-status">พร้อมอัปเดต</p>'+
+    '<div class="android-tv-update-actions">'+
+      '<button id="android-tv-update-now" type="button">อัปเดตตอนนี้</button>'+
+      '<button id="android-tv-update-later" type="button">ภายหลัง</button>'+
+    '</div>'+
+    '<small>ระบบจะดาวน์โหลด APK จาก GitHub Pages ตรวจ SHA-256 แล้วเปิดหน้าติดตั้งของ Android ให้ยืนยัน</small>'+
+    '</div>';
+  document.body.append(panel);
+  $('android-tv-update-now')?.addEventListener('click',()=>{
+    const button=$('android-tv-update-now');
+    if(button){button.disabled=true;button.textContent='กำลังอัปเดต…';}
+    try{window.XStageAndroid?.installAvailableUpdate?.();}
+    catch(error){window.XStageAndroidUpdateError(error?.message||'เริ่มอัปเดตไม่สำเร็จ');}
+  });
+  $('android-tv-update-later')?.addEventListener('click',()=>{
+    panel.hidden=true;
+    ui.search?.focus?.({preventScroll:true});
+  });
+  return panel;
+}
+window.XStageAndroidUpdateAvailable=(version,build)=>{
+  if(!androidTvNativeBridgeReady())return;
+  const panel=androidTvUpdatePanel();
+  const current=(()=>{try{return String(window.XStageAndroid.getAppVersion?.()||'รุ่นปัจจุบัน');}catch{return 'รุ่นปัจจุบัน';}})();
+  panel.hidden=false;
+  $('android-tv-update-title').textContent='มี X-Stage เวอร์ชันใหม่';
+  $('android-tv-update-version').textContent='ปัจจุบัน '+current+' → ใหม่ '+String(version||'')+' (Build '+String(build||'')+')';
+  $('android-tv-update-status').textContent='แนะนำให้อัปเดตเพื่อใช้ฟังก์ชันและการแก้ไขล่าสุด';
+  const button=$('android-tv-update-now');
+  if(button){button.disabled=false;button.textContent='อัปเดตตอนนี้';}
+  setTimeout(()=>$('android-tv-update-now')?.focus?.(),30);
+};
+window.XStageAndroidUpdateStatus=message=>{
+  const panel=androidTvUpdatePanel();
+  panel.hidden=false;
+  $('android-tv-update-status').textContent=String(message||'กำลังอัปเดต X-Stage…');
+};
+window.XStageAndroidUpdateError=message=>{
+  const panel=androidTvUpdatePanel();
+  panel.hidden=false;
+  $('android-tv-update-status').textContent=String(message||'อัปเดตไม่สำเร็จ');
+  const button=$('android-tv-update-now');
+  if(button){button.disabled=false;button.textContent='ลองอัปเดตอีกครั้ง';}
+};
+window.XStageAndroidNoUpdate=()=>{
+  const panel=$('android-tv-update-panel');
+  if(panel&&!panel.hidden){
+    $('android-tv-update-status').textContent='X-Stage เป็นเวอร์ชันล่าสุดแล้ว';
+    setTimeout(()=>{if(panel&&!panel.hidden)panel.hidden=true;},1300);
+  }
+};
 let androidTvBootAuthStarted=false;
 function androidTvHasStoredGoogleSession(){
   if(!androidTvNativeBridgeReady())return false;

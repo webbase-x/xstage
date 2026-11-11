@@ -662,3 +662,41 @@
   .android-tv-auth-details{text-align:center}
   .android-tv-auth-qr-wrap{min-height:220px}
 }
+
+/* 1.0.58 Android TV APK update overlay */
+.android-tv-update-panel{
+  position:fixed;inset:0;z-index:230;
+  display:grid;place-items:center;
+  padding:clamp(18px,4vw,58px);
+  background:rgba(0,5,14,.9);
+  backdrop-filter:blur(9px)
+}
+.android-tv-update-panel[hidden]{display:none!important}
+.android-tv-update-box{
+  width:min(86vw,720px);
+  border:1px solid #55e7f2;
+  border-radius:20px;
+  background:linear-gradient(145deg,#071c2ff8,#061321fd);
+  box-shadow:0 30px 90px #000d,0 0 38px #1ab5d82d;
+  padding:clamp(26px,4vw,50px);
+  color:#eaf9ff;
+  text-align:center
+}
+.android-tv-update-kicker{font-size:clamp(.7rem,1.15vw,.92rem);font-weight:900;letter-spacing:.15em;color:#78eaf4}
+.android-tv-update-box h2{margin:10px 0 8px;font-size:clamp(1.55rem,3vw,2.6rem)}
+.android-tv-update-version{margin:12px 0;font-size:clamp(1rem,1.8vw,1.35rem);font-weight:900;color:#dffbff}
+.android-tv-update-status{min-height:1.6em;margin:12px 0 22px;font-size:clamp(.9rem,1.45vw,1.12rem);color:#9fdbe5;line-height:1.5}
+.android-tv-update-actions{display:flex;justify-content:center;gap:14px;flex-wrap:wrap}
+.android-tv-update-actions button{
+  min-width:180px;min-height:52px;
+  border:1px solid #4f8798;border-radius:12px;
+  background:#102e40;color:#eaf9ff;
+  font-weight:900;font-size:1rem
+}
+.android-tv-update-actions #android-tv-update-now{
+  background:linear-gradient(135deg,#0f8ca0,#155fc2);
+  border-color:#79e9f5
+}
+.android-tv-update-actions button:focus-visible{outline:4px solid #79eff8;outline-offset:3px}
+.android-tv-update-actions button:disabled{opacity:.7;cursor:wait}
+.android-tv-update-box small{display:block;margin-top:18px;color:#8aaeba;font-size:clamp(.72rem,1.05vw,.88rem);line-height:1.5}
