@@ -144,7 +144,7 @@ assert.ok(app.includes("['mobile-menu-toggle','stage-tools-toggle','fullscreen',
 assert.ok(androidMain.includes('if (isTelevisionDevice()) focusSearch();'),'Android TV MENU key must return to search instead of opening a removed menu');
 assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
 assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
-assert.ok(app.includes("menu.hidden=true")&&app.includes("['mobile-menu-toggle','stage-tools-toggle','fullscreen']"),'TV must remove menu/tool/fullscreen controls from D-pad navigation');
+assert.ok(app.includes("menu.hidden=true")&&app.includes("['mobile-menu-toggle','stage-tools-toggle','fullscreen','desktop-update-version','logout','voice-search']"),'TV must remove all local menu/tool/update/logout/voice controls from D-pad navigation');
 assert.ok(app.includes("keyboardToolbar.hidden=false"),'onscreen keyboard must remain available in its original TV toolbar position');
 assert.ok(app.includes("queue.tabIndex=-1")&&app.includes("queue.style.pointerEvents='none'"),'TV queue control must be status-only and not enter D-pad focus');
 assert.ok(app.includes("const selector='#search:not([disabled]),#toggle-keyboard:not([disabled]),#virtual-keyboard button:not([disabled]),#virtual-keyboard input:not([disabled])'"),'TV D-pad focus must be limited to search and onscreen keyboard');
