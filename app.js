@@ -124,6 +124,7 @@ function xstageTvActiveScope(){
   const selectors=[
     '.android-tv-update-panel:not([hidden])',
     '.android-tv-auth-panel:not([hidden])',
+    '.xstage-tv-quick-menu:not([hidden])',
     ...(nativeTv?[]:['.remote-pair-panel:not([hidden])']),
     '.remote-request-panel:not([hidden])',
     'dialog[open]',
@@ -143,6 +144,63 @@ function xstageTvFocusable(scope=xstageTvActiveScope()){
   const selector='button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   return [...scope.querySelectorAll(selector)].filter(xstageTvVisible);
 }
+// Minimal TV-only control surface. The stage stays clean; physical MENU/Back
+// gives D-pad users a way to reach pairing, playback and updates.
+function xstageTvQuickMenu(){
+  let panel=document.getElementById('xstage-tv-quick-menu');
+  if(panel)return panel;
+  panel=document.createElement('section');
+  panel.id='xstage-tv-quick-menu';
+  panel.className='xstage-tv-quick-menu';
+  panel.hidden=true;
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-modal','true');
+  panel.setAttribute('aria-label','เมนูรีโมททีวี X-Stage');
+  panel.innerHTML='<div class="xstage-tv-quick-box">'+
+    '<strong>X-STAGE · รีโมททีวี</strong>'+
+    '<p>ใช้ปุ่มลูกศรเลือกคำสั่ง กด OK เพื่อยืนยัน</p>'+
+    '<div class="xstage-tv-quick-actions">'+
+    '<button type="button" id="xstage-tv-quick-qr">แสดง QR รีโมทมือถือ</button>'+
+    '<button type="button" id="xstage-tv-quick-play">เล่น / พักเพลง</button>'+
+    '<button type="button" id="xstage-tv-quick-update">ตรวจสอบอัปเดต</button>'+
+    '<button type="button" id="xstage-tv-quick-close">กลับสู่เวที</button>'+
+    '</div></div>';
+  document.body.append(panel);
+  panel.querySelector('#xstage-tv-quick-qr').addEventListener('click',()=>{
+    window.XStageRemoteQr?.show(true);
+    panel.hidden=true;
+  });
+  panel.querySelector('#xstage-tv-quick-play').addEventListener('click',()=>{
+    document.getElementById('play-pause')?.click();
+    panel.hidden=true;
+  });
+  panel.querySelector('#xstage-tv-quick-update').addEventListener('click',()=>{
+    panel.hidden=true;
+    void triggerImmediateVersionUpdate();
+  });
+  panel.querySelector('#xstage-tv-quick-close').addEventListener('click',()=>{panel.hidden=true;});
+  return panel;
+}
+window.XStageTvOpenMenu=()=>{
+  if(!document.body.classList.contains('xstage-native-tv'))return false;
+  if(['android-tv-auth-panel','android-tv-update-panel'].some(id=>{
+    const element=document.getElementById(id);
+    return element&&!element.hidden;
+  }))return false;
+  const panel=xstageTvQuickMenu();
+  panel.hidden=!panel.hidden;
+  if(!panel.hidden)panel.querySelector('button')?.focus?.({preventScroll:true});
+  return true;
+};
+window.XStageTvHandleBack=()=>{
+  const menu=document.getElementById('xstage-tv-quick-menu');
+  if(menu&&!menu.hidden){menu.hidden=true;return true;}
+  const update=document.getElementById('android-tv-update-panel');
+  if(update&&!update.hidden){document.getElementById('android-tv-update-later')?.click();return true;}
+  const auth=document.getElementById('android-tv-auth-panel');
+  if(auth&&!auth.hidden){document.getElementById('android-tv-auth-cancel')?.click();return true;}
+  return false;
+};
 window.XStageTvMoveFocus=direction=>{
   const scope=xstageTvActiveScope();
   const items=xstageTvFocusable(scope);
