@@ -120,7 +120,7 @@ assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must sh
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
 assert.ok(app.includes('installAvailableUpdate'),'update-now button must invoke the native updater');
 assert.ok(index.includes('id="android-tv-apk-download"'),'main menu must expose a direct Android TV APK download link');
-assert.ok(pwa.includes("ANDROID_TV_APK_URL='./downloads/X-Stage-Karaoke-Android-TV-Test.apk'"),'PWA fallback must use the stable GitHub Pages APK URL');
+assert.ok(pwa.includes("ANDROID_TV_LATEST_URL='./downloads/android-tv-latest.json'")&&pwa.includes('refreshAndroidTvApkLink()'),'PWA APK download must resolve the latest versioned APK from GitHub Pages metadata');
 assert.ok(pwa.includes("actionButton('ดาวน์โหลด APK X-Stage','primary',downloadAndroidTvApk)"),'unsupported Android browsers must offer the APK download as the primary action');
 assert.ok(pwa.includes("if(shouldAskInstallOnEntry())setTimeout(()=>{void showInitialInstallChoice();},0)"),'install-first choice must appear automatically on initial browser entry');
 assert.ok(pwa.includes("document.getElementById('gate-login')?.focus?.()"),'choosing browser mode must return focus to the normal Google Login button without authenticating automatically');
