@@ -1,4 +1,4 @@
-# X-Stage Android TV / Tablet local debug APK builder (v1.0.77).
+# X-Stage Android TV / Tablet local debug APK builder (v1.0.78).
 # Uses a checksum-pinned Gradle 8.11.1 distribution independently from Android
 # Studio's Gradle 9.x installation. Public test signing only, NOT production.
 param([switch]$SkipClean)
