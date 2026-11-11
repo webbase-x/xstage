@@ -18,7 +18,9 @@
   let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0;
   let searchTimer=null,querySequence=0,activeTab='search',role='guest';
   let ownerAccessToken='';
-  const pendingButtons=new Set();
+  const pendingRequests=new Map();
+  let nextRequestId=0;
+  let reconnectTimer=0,reconnectAttempts=0;
 
   const reconnectButton=document.createElement('button');
   reconnectButton.type='button';reconnectButton.textContent='↻ เชื่อมต่ออีกครั้ง';
@@ -28,6 +30,29 @@
   scanLink.hidden=true;reconnectButton.after(scanLink);
 
   function clearConnectWatchdog(){if(connectWatchdog){clearTimeout(connectWatchdog);connectWatchdog=0;}}
+  function armConnectWatchdog(delay=30000){
+    clearConnectWatchdog();
+    connectWatchdog=setTimeout(()=>{
+      disconnected('การจับคู่หมดเวลา · ตรวจ QR บนจอ แล้วลองเชื่อมต่ออีกครั้ง');
+    },delay);
+  }
+  function releaseRequest(id){
+    const entry=pendingRequests.get(id);
+    if(!entry)return;
+    clearTimeout(entry.timer);
+    entry.button.disabled=false;
+    entry.button.textContent='ขอเพลง';
+    pendingRequests.delete(id);
+  }
+  function resetButtons(){for(const id of [...pendingRequests.keys()])releaseRequest(id);}
+  function scheduleReconnect(){
+    if(reconnectTimer||!hostId||!secret||document.hidden||navigator.onLine===false||reconnectAttempts>=3)return;
+    const wait=[1500,3500,8000][reconnectAttempts++];
+    reconnectTimer=setTimeout(()=>{
+      reconnectTimer=0;
+      if(!connected&&document.visibilityState!=='hidden')connect();
+    },wait);
+  }
   function report(message,state='info'){status.textContent=message;status.dataset.state=state;}
   function timeLabel(value){
     const n=Number(value);if(!Number.isFinite(n)||n<0)return '--:--';
@@ -65,13 +90,13 @@
   controls.hidden=true;setTab('search');setRole('guest');
 
   function disconnected(message){
-    clearConnectWatchdog();
+    clearConnectWatchdog();resetButtons();
     connected=false;ready=false;controls.hidden=true;setRole('guest');
     reconnectButton.hidden=!hostId||!secret;scanLink.hidden=false;report(message,'disconnected');
+    scheduleReconnect();
   }
-  function resetButtons(){for(const b of pendingButtons){b.disabled=false;b.textContent='ขอเพลง';}pendingButtons.clear();}
   function drawResults(items){
-    results.replaceChildren();pendingButtons.clear();
+    results.replaceChildren();
     if(!Array.isArray(items)||!items.length){
       const p=document.createElement('p');p.className='remote-empty';
       p.textContent=search.value.trim()?'ไม่พบเพลงที่ตรงกับคำค้น':'พิมพ์เพื่อค้นหาเพลง';
@@ -87,8 +112,14 @@
       btn.addEventListener('click',()=>{
         if(!ready){report('จอ TV ยังไม่พร้อม กรุณารอให้เปิดคลังเพลง');return;}
         if(!connected)return;
-        btn.disabled=true;btn.textContent='กำลังส่ง';pendingButtons.add(btn);
-        send({type:'request',index:item.index,
+        btn.disabled=true;btn.textContent='กำลังส่ง…';
+        const requestId=++nextRequestId;
+        const timer=setTimeout(()=>{
+          releaseRequest(requestId);
+          report('ไม่ได้รับคำตอบการขอเพลง · ตรวจการเชื่อมต่อ แล้วลองอีกครั้ง','error');
+        },18000);
+        pendingRequests.set(requestId,{button:btn,timer});
+        send({type:'request',requestId,index:item.index,
           singer:String(singer.value||'ไม่ระบุชื่อ').trim().slice(0,45)||'ไม่ระบุชื่อ',
           note:String(note.value||'').trim().slice(0,90)});
       });
@@ -171,8 +202,9 @@
 
   function handleMessage(data){
     if(!data||typeof data!=='object')return;
-    if(data.type==='pending'){report('กำลังรอจอ TV อนุมัติการเชื่อมต่อครั้งแรก…','pending');return;}
+    if(data.type==='pending'){armConnectWatchdog(45000);report('กำลังรอจอหลักอนุมัติการเชื่อมต่อครั้งแรก…','pending');return;}
     if(data.type==='ready'){
+      clearConnectWatchdog();reconnectAttempts=0;
       connected=true;controls.hidden=false;reconnectButton.hidden=true;scanLink.hidden=true;setRole('guest');
       report('เชื่อมต่อแล้ว · Guest ใช้คำสั่งพื้นฐานได้ทันที','connected');
       if(search.value.trim())search.dispatchEvent(new Event('input'));else drawResults([]);
@@ -259,11 +291,15 @@
       if(data.notReady){report('จอ TV ยังไม่ได้เปิดคลังเพลง');drawResults([]);return;}
       if(String(data.query||'')===search.value.trim().toLocaleLowerCase('th'))drawResults(data.items);
     }else if(data.type==='request-received'){
-      resetButtons();clearTimeout(searchTimer);querySequence++;search.value='';results.replaceChildren();
-      const outcome=data.result==='playing'?'เริ่มเล่นทันที':'เพิ่มเข้าคิวแล้ว';
-      receipt('ส่งเพลง '+String(data.title||'')+' สำเร็จ · '+outcome);send({type:'refresh'});
+      if(Number.isSafeInteger(data.requestId))releaseRequest(data.requestId);
+      else resetButtons();
+      clearTimeout(searchTimer);querySequence++;search.value='';results.replaceChildren();
+      const outcome=data.result==='playing'?'กำลังเริ่มเล่น':'เพิ่มเข้าคิวแล้ว';
+      receipt('รับคำขอเพลง '+String(data.title||'')+' แล้ว · '+outcome);send({type:'refresh'});
     }else if(data.type==='request-error'){
-      resetButtons();report(String(data.message||'ขอเพลงไม่สำเร็จ'),'error');
+      if(Number.isSafeInteger(data.requestId))releaseRequest(data.requestId);
+      else resetButtons();
+      report(String(data.message||'ขอเพลงไม่สำเร็จ'),'error');
     }
   }
 
@@ -344,21 +380,53 @@
   report('กำลังเชื่อมต่อรีโมท X-Stage…','connecting');
 
   function connect(){
-    clearConnectWatchdog();setRole('guest');
-    if(peer){try{peer.destroy();}catch{}}
-    peer=new Peer();
-    connectWatchdog=setTimeout(()=>{disconnected('เชื่อมต่อเวทีนานเกินไป · ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง');try{peer?.destroy();}catch{}},15000);
-    peer.on('open',()=>{
-      report('พบเซิร์ฟเวอร์รีโมทแล้ว · กำลังเชื่อมต่อเวที…','connecting');
-      conn=peer.connect(hostId,{reliable:true,serialization:'json'});
-      conn.on('open',()=>{clearConnectWatchdog();connected=true;report('กำลังยืนยัน QR กับจอ TV…','pending');conn.send({type:'hello',key:secret});});
-      conn.on('data',handleMessage);
-      conn.on('close',()=>disconnected('ขาดการเชื่อมต่อ · เชื่อมต่ออีกครั้งหรือสแกน QR ใหม่'));
-      conn.on('error',()=>disconnected('เชื่อมต่อกับเวทีไม่ได้'));
+    clearConnectWatchdog();
+    if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=0;}
+    setRole('guest');
+    const previous=peer;
+    if(previous){try{previous.destroy();}catch{}}
+    const current=new Peer();peer=current;conn=null;
+    armConnectWatchdog(18000);
+    current.on('open',()=>{
+      if(peer!==current)return;
+      report('พบเซิร์ฟเวอร์รีโมท · กำลังจับคู่กับเวที…','connecting');
+      const channel=current.connect(hostId,{reliable:true,serialization:'json'});
+      conn=channel;
+      channel.on('open',()=>{
+        if(peer!==current||conn!==channel)return;
+        // Do not clear the watchdog before receiving the authenticated
+        // "ready" message. A WebRTC connection can open but never be approved.
+        armConnectWatchdog(30000);
+        connected=true;report('กำลังยืนยัน QR กับจอหลัก…','pending');
+        channel.send({type:'hello',key:secret});
+      });
+      channel.on('data',message=>{
+        if(peer===current&&conn===channel)handleMessage(message);
+      });
+      channel.on('close',()=>{
+        if(peer===current&&conn===channel)disconnected('การเชื่อมต่อหลุด · กำลังลองเชื่อมต่อใหม่');
+      });
+      channel.on('error',()=>{
+        if(peer===current&&conn===channel)disconnected('เชื่อมต่อกับเวทีไม่ได้');
+      });
     });
-    peer.on('error',err=>disconnected('เครือข่ายไม่พร้อม: '+String(err?.type||'ไม่ทราบสาเหตุ')));
+    current.on('error',err=>{
+      if(peer===current)disconnected('เครือข่ายไม่พร้อม: '+String(err?.type||'ไม่ทราบสาเหตุ'));
+    });
   }
-  reconnectButton.addEventListener('click',()=>{try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่ออีกครั้ง…','reconnecting');}catch{disconnected('เชื่อมต่อไม่สำเร็จ');}});
+  reconnectButton.addEventListener('click',()=>{
+    reconnectAttempts=0;
+    try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่ออีกครั้ง…','reconnecting');}
+    catch{disconnected('เชื่อมต่อไม่สำเร็จ');}
+  });
+  window.addEventListener('online',()=>{if(!ready){reconnectAttempts=0;connect();}});
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&!ready){reconnectAttempts=0;connect();}
+  });
   try{connect();}catch{disconnected('เริ่มระบบรีโมทไม่สำเร็จ');}
-  window.addEventListener('beforeunload',()=>{clearConnectWatchdog();revokeOwnerToken();try{conn?.close();peer?.destroy();}catch{}});
+  window.addEventListener('beforeunload',()=>{
+    clearConnectWatchdog();resetButtons();
+    if(reconnectTimer)clearTimeout(reconnectTimer);
+    revokeOwnerToken();try{conn?.close();peer?.destroy();}catch{}
+  });
 })();
