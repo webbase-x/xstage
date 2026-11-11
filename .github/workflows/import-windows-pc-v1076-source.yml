@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip'
+      - 'scripts/import_windows_pc_v1076_source.py'
+      - '.github/workflows/import-windows-pc-v1076-source.yml'
   workflow_dispatch:
 
 permissions:
