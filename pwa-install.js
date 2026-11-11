@@ -178,7 +178,13 @@
   // Browser on Android: ask once per published APK build, with an explicit
   // Continue on Web choice. Never show inside the native APK or installed PWA.
   function offerPublishedAndroidApk(apk){
-    if(!apk||!androidApkBrowser()||dialog.open)return;
+    if(!apk||!androidApkBrowser())return;
+    // If another X-Stage dialog opened first (for example a delayed install
+    // prompt), offer the APK after it closes rather than silently losing it.
+    if(dialog.open){
+      dialog.addEventListener('close',()=>{if(androidApkBrowser())offerPublishedAndroidApk(apk);},{once:true});
+      return;
+    }
     try{
       if(localStorage.getItem(ANDROID_APK_NEVER_ASK_KEY)==='1')return;
       if(sessionStorage.getItem(ANDROID_APK_OFFERED_KEY)===String(apk.build))return;
