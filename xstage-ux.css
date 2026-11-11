@@ -3447,3 +3447,30 @@ body.xstage-native-tv #lyrics{z-index:10!important}
     left:14px!important;right:14px!important;bottom:12px!important;padding:9px 12px 8px!important
   }
 }
+
+
+/* 1.0.72 TV cleanup: no keyboard icon/clock around permanent QR. */
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-toolbar,
+body.xstage-native-tv.xstage-ui-v2 #toggle-keyboard,
+body.xstage-native-tv.xstage-ui-v2 #mobile-keyboard-toggle,
+body.xstage-native-tv.xstage-ui-v2 #mobile-stage-clock,
+body.xstage-native-tv.xstage-ui-v2 #stage-clock,
+body.xstage-native-tv.xstage-ui-v2 .stage-metrics{
+  display:none!important;
+  visibility:hidden!important;
+}
+body.xstage-native-tv #remote-pair-panel .remote-pair-top{
+  display:none!important;
+}
+body.xstage-native-tv #remote-pair-panel #remote-pair-status{
+  display:block!important;
+  margin:2px 0 0!important;
+  font-size:clamp(.64rem,.8vw,.74rem)!important;
+  font-weight:800!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+}
+body.xstage-native-tv #remote-pair-panel{
+  top:clamp(16px,2.2vh,26px)!important;
+  right:clamp(18px,2vw,30px)!important;
+}

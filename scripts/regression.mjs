@@ -62,9 +62,9 @@ assert.ok(remoteHtml.includes('data-admin="cancel-current"'),'Owner remote must 
 assert.ok(host.includes("const guestPermissions={search:true,request:true,playpause:true,'volume-up':true,'volume-down':true,mute:true}"),'Guest must be restricted to search/request/play-pause/volume/mute');
 assert.ok(!host.match(/const guestPermissions=.*cancel-current/),'Guest must not receive cancel-current');
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
-assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1071"),'host remote must load same-origin PeerJS for Android WebView reliability');
-assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1071"),'host remote must load same-origin QRCode');
-assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1071'),'mobile remote must load same-origin PeerJS');
+assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1072"),'host remote must load same-origin PeerJS for Android WebView reliability');
+assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1072"),'host remote must load same-origin QRCode');
+assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1072'),'mobile remote must load same-origin PeerJS');
 assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
 assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
 assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
@@ -93,7 +93,7 @@ assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Go
 assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
 assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open device login immediately when no stored session exists');
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
-assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1071"),'Android login must load the same-origin QR renderer');
+assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1072"),'Android login must load the same-origin QR renderer');
 assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
 assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
 assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
@@ -289,6 +289,12 @@ assert.ok(host.includes('function pausePairing()')&&host.includes('pairingPaused
 assert.ok(host.includes("qrPanel.classList.add('pairing-paused')")&&!host.includes("qrCanvas.hidden=true;qrLink.textContent='';qrLink.removeAttribute('href');"),'pausing new pairing must leave the QR permanently visible on TV');
 assert.ok(host.includes("queue:state.queue.slice(0,150).map(songSummary)"),'Owner remote must receive the full supported queue, not only the first 50 songs');
 assert.ok(css.includes('body.xstage-native-tv #remote-pair-panel.pairing-paused #remote-qr'),'paused permanent QR must stay visible with an inactive visual state');
+assert.ok(css.includes('1.0.72 TV cleanup'),'TV cleanup regression guard must exist');
+assert.ok(css.includes('body.xstage-native-tv.xstage-ui-v2 #toggle-keyboard')&&css.includes('body.xstage-native-tv.xstage-ui-v2 #mobile-keyboard-toggle'),'TV must explicitly hide every keyboard icon');
+assert.ok(css.includes('body.xstage-native-tv.xstage-ui-v2 #mobile-stage-clock')&&css.includes('body.xstage-native-tv.xstage-ui-v2 #stage-clock'),'TV must explicitly hide both stage clock variants so they cannot overlap the QR');
+assert.ok(css.includes('body.xstage-native-tv #remote-pair-panel .remote-pair-top{\n  display:none!important'),'TV QR must not show a verbose heading');
+assert.ok(host.includes("status(nativeTvMode?'รีโมทมือถือ':'สแกน QR แล้วรออนุมัติบนจอ')"),'TV QR label must be short and identify it only as the mobile remote');
+assert.ok(host.includes("status(nativeTvMode?'รีโมทมือถือ · พัก':'QR แสดงอยู่ · พักรับผู้ใช้ใหม่ชั่วคราว · ผู้ใช้เดิมยังควบคุมได้')"),'paused TV QR label must remain short');
 assert.ok(remoteHtml.includes('id="owner-update"'),'Owner remote must own the APK update control when TV is display-only');
 assert.ok(host.includes('session.secret=randomSecret()'),'resuming QR pairing must rotate the pairing secret');
 assert.ok(host.includes("pairingPaused=true")&&host.includes("if(session!==active||pairingPaused){conn.close();return;}")&&!host.includes("for(const entry of active.connections.values())try{entry.conn.close();}catch{}\n    try{active.peer?.destroy();}catch{}\n    qrApprove.hidden=true;qrReject.hidden=true;hideFullscreenConfirm();\n    qrLink.textContent='';qrLink.removeAttribute('href');qrCanvas.hidden=true;\n    qrEnd.textContent='สร้าง QR ใหม่';pairingPaused=false;status('ปิดการเชื่อมต่อรีโมทแล้ว');\n  }\n  function pausePairing()"),'pausing QR must reject only new pairings without closing existing remotes');

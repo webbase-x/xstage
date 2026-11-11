@@ -2279,7 +2279,7 @@ function ensureAndroidTvQrLibrary(){
     document.getElementById('xstage-qrcode')?.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1071';
+    script.src='./assets/vendor/qrcode.min.js?v=1072';
     script.async=true;
     const timer=setTimeout(()=>finish(Error('QR library timeout')),5000);
     script.addEventListener('load',()=>finish(typeof QRCode!=='undefined'?null:Error('QR library unavailable')),{once:true});

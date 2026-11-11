@@ -153,8 +153,8 @@
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1071','xstage-peerjs',()=>typeof Peer==='function');
-      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1071','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1072','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1072','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
@@ -425,13 +425,13 @@
       qrCanvas.width=232;qrCanvas.height=232;
       await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
       if(session!==active||pairingPaused)return;
-      qrCanvas.hidden=false;status(nativeTvMode?'สแกน QR · Guest ใช้พื้นฐาน / Owner ล็อกอินบัญชีเดียวกับจอ':'สแกน QR แล้วรออนุมัติบนจอ');
+      qrCanvas.hidden=false;status(nativeTvMode?'รีโมทมือถือ':'สแกน QR แล้วรออนุมัติบนจอ');
     }catch{status('สร้าง QR ไม่สำเร็จ ใช้ลิงก์รีโมทแทน');}
   }
   function pausePairing(){
     pairingPaused=true;
     qrPanel.classList.add('pairing-paused');
-    status('QR แสดงอยู่ · พักรับผู้ใช้ใหม่ชั่วคราว · ผู้ใช้เดิมยังควบคุมได้');
+    status(nativeTvMode?'รีโมทมือถือ · พัก':'QR แสดงอยู่ · พักรับผู้ใช้ใหม่ชั่วคราว · ผู้ใช้เดิมยังควบคุมได้');
     broadcastStatus();
   }
   async function resumePairing(){
