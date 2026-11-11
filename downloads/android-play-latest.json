@@ -2,8 +2,8 @@
   "name": "X-Stage Android Google Play release",
   "package": "com.webbasex.xstage",
   "available": false,
-  "version": "1.0.77",
-  "build": 1077,
+  "version": "1.0.78",
+  "build": 1078,
   "store_url": null,
-  "note": "Production Google Play release is not yet published. Only signed production builds should be marked available; test APK uses separate metadata."
+  "note": "Production Android Google Play build is not published. The sideload test APK is a separate signed channel; never direct Play users to that APK."
 }
