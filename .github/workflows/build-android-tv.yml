@@ -20,7 +20,7 @@ on:
       - ".github/workflows/build-android-tv.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-android-tv:
@@ -92,3 +92,41 @@ jobs:
             android-tv/app/build/outputs/apk/release/*.apk
             android-tv/app/build/outputs/bundle/release/*.aab
             android-tv/store-assets/*.png
+
+      - name: Publish browser-downloadable Android TV test APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads
+          cp android-tv/app/build/outputs/apk/debug/app-debug.apk downloads/X-Stage-Karaoke-Android-TV-Test.apk
+          sha256sum downloads/X-Stage-Karaoke-Android-TV-Test.apk > downloads/X-Stage-Karaoke-Android-TV-Test.apk.sha256
+          python - <<'PY'
+          import hashlib, json, pathlib
+          meta=json.load(open('version.json',encoding='utf-8'))
+          apk=pathlib.Path('downloads/X-Stage-Karaoke-Android-TV-Test.apk')
+          info={
+            'name':'X-Stage Karaoke Android TV Test APK',
+            'version':meta['version'],
+            'build':meta['build'],
+            'file':apk.name,
+            'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+            'source_commit':'${{ github.sha }}',
+            'note':'Test APK signed with the CI debug key; production Google Play signing is separate.'
+          }
+          pathlib.Path('downloads/android-tv-latest.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "main moved while Android TV build was running; refusing to publish a stale APK"
+            exit 1
+          fi
+          git add downloads/X-Stage-Karaoke-Android-TV-Test.apk downloads/X-Stage-Karaoke-Android-TV-Test.apk.sha256 downloads/android-tv-latest.json
+          if git diff --cached --quiet; then
+            echo "Published APK is unchanged"
+            exit 0
+          fi
+          git commit -m "build(android-tv): publish browser-downloadable test APK"
+          git push origin HEAD:main
