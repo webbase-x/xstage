@@ -1,0 +1,92 @@
+name: X-Stage Android TV build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "android-tv/**"
+      - "version.json"
+      - "app.js"
+      - "pwa-install.js"
+      - "style.css"
+      - ".github/workflows/build-android-tv.yml"
+  pull_request:
+    paths:
+      - "android-tv/**"
+      - "version.json"
+      - "app.js"
+      - "pwa-install.js"
+      - "style.css"
+      - ".github/workflows/build-android-tv.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-tv:
+    runs-on: ubuntu-latest
+    env:
+      XSTAGE_TV_OAUTH_CLIENT_ID: ${{ secrets.XSTAGE_TV_OAUTH_CLIENT_ID }}
+      XSTAGE_TV_OAUTH_CLIENT_SECRET: ${{ secrets.XSTAGE_TV_OAUTH_CLIENT_SECRET }}
+      XSTAGE_ANDROID_KEYSTORE_BASE64: ${{ secrets.XSTAGE_ANDROID_KEYSTORE_BASE64 }}
+      XSTAGE_KEYSTORE_PASSWORD: ${{ secrets.XSTAGE_ANDROID_KEYSTORE_PASSWORD }}
+      XSTAGE_KEY_ALIAS: ${{ secrets.XSTAGE_ANDROID_KEY_ALIAS }}
+      XSTAGE_KEY_PASSWORD: ${{ secrets.XSTAGE_ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Prepare optional Play upload keystore
+        shell: bash
+        run: |
+          if [ -n "$XSTAGE_ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$XSTAGE_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/xstage-upload.jks"
+            echo "XSTAGE_KEYSTORE_PATH=$RUNNER_TEMP/xstage-upload.jks" >> "$GITHUB_ENV"
+            echo "Release signing: configured"
+          else
+            echo "Release signing: not configured; release artifacts will be unsigned"
+          fi
+
+      - name: Build APK and AAB from the same source
+        shell: bash
+        run: |
+          gradle -p android-tv clean assembleDebug assembleRelease bundleRelease --stacktrace
+
+      - name: Show build outputs
+        shell: bash
+        run: |
+          find android-tv/app/build/outputs -maxdepth 5 -type f -print | sort
+          find android-tv/store-assets -maxdepth 2 -type f -print | sort
+
+      - name: Upload Android TV artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xstage-android-tv-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            android-tv/app/build/outputs/apk/debug/*.apk
+            android-tv/app/build/outputs/apk/release/*.apk
+            android-tv/app/build/outputs/bundle/release/*.aab
+            android-tv/store-assets/*.png
