@@ -56,7 +56,7 @@ final class GoogleDeviceAuth {
     void startDeviceLogin() {
         final int run = generation.incrementAndGet();
         if (!configured()) {
-            error("ยังไม่ได้ตั้งค่า Google OAuth สำหรับ TVs and Limited Input devices ใน Android build");
+            error("ยังไม่ได้ตั้งค่า Google OAuth สำหรับ Android build: ต้องมี XSTAGE_TV_OAUTH_CLIENT_ID และ XSTAGE_TV_OAUTH_CLIENT_SECRET แล้ว Build APK ใหม่");
             return;
         }
         status("กำลังสร้างรหัสสำหรับเข้าสู่ระบบผ่านมือถือ…");
