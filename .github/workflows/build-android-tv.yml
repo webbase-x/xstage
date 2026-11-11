@@ -70,6 +70,21 @@ jobs:
             echo "Release signing: not configured; release artifacts will be unsigned"
           fi
 
+      - name: Validate Google TV OAuth credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "$XSTAGE_TV_OAUTH_CLIENT_ID" ] || missing+=("XSTAGE_TV_OAUTH_CLIENT_ID")
+          [ -n "$XSTAGE_TV_OAUTH_CLIENT_SECRET" ] || missing+=("XSTAGE_TV_OAUTH_CLIENT_SECRET")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Android APK publish blocked: missing GitHub Actions secrets: ${missing[*]}"
+            echo "::error::Create a Google OAuth client of type 'TVs and Limited Input devices', then add both values under Repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "Google TV OAuth: configured"
+
       - name: Build APK and AAB from the same source
         shell: bash
         run: |
