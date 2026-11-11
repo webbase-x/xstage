@@ -169,7 +169,7 @@ public final class MainActivity extends Activity {
                     // updater reports availability. Otherwise a fast version check can finish
                     // before window.XStageAndroidUpdateAvailable exists and the notice is lost.
                     webAppReady = true;
-                    updateManager.checkForUpdates(false);
+                    updateManager.checkForUpdates(true);
                 }
             }
         });

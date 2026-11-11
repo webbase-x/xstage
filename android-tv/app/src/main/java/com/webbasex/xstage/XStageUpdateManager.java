@@ -36,7 +36,7 @@ final class XStageUpdateManager {
         void onNoUpdate();
     }
 
-    private static final long CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
+    private static final long CHECK_INTERVAL_MS = 60L * 1000L;
     private static final long DOWNLOAD_POLL_MS = 850L;
     private static final String APK_MIME = "application/vnd.android.package-archive";
 
@@ -48,6 +48,7 @@ final class XStageUpdateManager {
     private volatile LatestUpdate latest;
     private volatile boolean closed;
     private boolean waitingInstallPermission;
+    private boolean installRequested;
     private long lastCheckAt;
     private long activeDownloadId = -1L;
     private File activeDownloadFile;
@@ -69,8 +70,16 @@ final class XStageUpdateManager {
                 if (closed) return;
                 latest = update;
                 if (update.build > BuildConfig.VERSION_CODE) {
-                    main.post(() -> listener.onUpdateAvailable(update.version, update.build));
+                    boolean continueInstall = installRequested;
+                    main.post(() -> {
+                        listener.onUpdateAvailable(update.version, update.build);
+                        if (continueInstall) {
+                            installRequested = false;
+                            installLatestUpdate();
+                        }
+                    });
                 } else {
+                    installRequested = false;
                     main.post(listener::onNoUpdate);
                 }
             } catch (Exception e) {
@@ -83,10 +92,12 @@ final class XStageUpdateManager {
         if (!BuildConfig.DEBUG || closed) return;
         LatestUpdate update = latest;
         if (update == null || update.build <= BuildConfig.VERSION_CODE) {
+            installRequested = true;
             listener.onUpdateStatus("กำลังตรวจสอบเวอร์ชันล่าสุด…");
             checkForUpdates(true);
             return;
         }
+        installRequested = false;
         if (!canRequestPackageInstalls()) {
             waitingInstallPermission = true;
             listener.onUpdateStatus("อนุญาตให้ X-Stage ติดตั้งแอปจากแหล่งนี้ก่อน แล้วระบบจะอัปเดตต่ออัตโนมัติ");
@@ -117,7 +128,7 @@ final class XStageUpdateManager {
                 }
             }
         } else {
-            checkForUpdates(false);
+            checkForUpdates(true);
         }
     }
 

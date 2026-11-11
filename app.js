@@ -43,22 +43,21 @@ function renderAppUpdateNotice(){
   if(!notice||!text||!action)return;
   const remote=state.updateAvailable;
   if(!remote){notice.hidden=true;return;}
+  state.updateAfterTrack=false;
   notice.hidden=false;
-  if(state.updateAfterTrack){
-    text.textContent=(state.queue.length||state.medley)
-      ? 'มี X-Stage '+remote.version+' · จะอัปเดตเมื่อคิวว่าง/หยุดเล่น'
-      : 'มี X-Stage '+remote.version+' · จะอัปเดตเมื่อเพลงนี้จบ';
-    action.textContent='กำหนดแล้ว';
-    action.disabled=true;
-  }else{
-    text.textContent='มี X-Stage '+remote.version+' พร้อมใช้งาน';
-    action.textContent=playbackBusyForUpdate()?'อัปเดตเมื่อจบ':'อัปเดตตอนนี้';
-    action.disabled=false;
-  }
+  text.textContent='มี X-Stage '+remote.version+' พร้อมใช้งาน';
+  action.textContent='อัปเดตตอนนี้';
+  action.disabled=false;
 }
-function performAppUpdateReload(){
+async function performAppUpdateReload(){
   try{savePlaybackResumeState();}catch{}
-  location.reload();
+  try{
+    const registrations=await navigator.serviceWorker?.getRegistrations?.();
+    if(Array.isArray(registrations))await Promise.all(registrations.map(registration=>registration.update().catch(()=>{})));
+  }catch{}
+  const next=new URL(location.href);
+  next.searchParams.set('xstage_update',String(Date.now()));
+  location.replace(next.href);
 }
 async function checkAppVersion(){
   try{
@@ -72,25 +71,41 @@ async function checkAppVersion(){
     if(remoteBuild>currentBuild){
       state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
       renderAppUpdateNotice();
+      return true;
     }else{
       state.updateAvailable=null;
       state.updateAfterTrack=false;
       renderAppUpdateNotice();
+      return false;
     }
-  }catch{/* Version checking must never affect playback. */}
+  }catch{return false;/* Version checking must never affect playback. */}
+}
+async function triggerImmediateVersionUpdate(){
+  if(androidTvNativeBridgeReady()){
+    const panel=androidTvUpdatePanel();
+    panel.hidden=false;
+    $('android-tv-update-title').textContent='ตรวจสอบอัปเดต X-Stage';
+    $('android-tv-update-status').textContent='กำลังตรวจสอบเวอร์ชันล่าสุด…';
+    const button=$('android-tv-update-now');
+    if(button){button.disabled=false;button.textContent='อัปเดตตอนนี้';}
+    try{window.XStageAndroid.checkForAppUpdate?.();}catch(error){window.XStageAndroidUpdateError(error?.message||'ตรวจสอบอัปเดตไม่สำเร็จ');}
+    return;
+  }
+  const found=await checkAppVersion();
+  if(found)await performAppUpdateReload();
+  else setStatus('X-Stage เป็นเวอร์ชันล่าสุดแล้ว');
 }
 function setupAppUpdateWatcher(){
   const {action}=appUpdateElements();
-  action?.addEventListener('click',()=>{
-    if(!state.updateAvailable)return;
-    if(playbackBusyForUpdate()){
-      state.updateAfterTrack=true;
-      renderAppUpdateNotice();
-    }else performAppUpdateReload();
-  });
-  setTimeout(()=>{void checkAppVersion();},3500);
-  setInterval(()=>{void checkAppVersion();},5*60*1000);
+  action?.addEventListener('click',()=>{if(state.updateAvailable)void performAppUpdateReload();});
+  $('desktop-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
+  $('mobile-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
+  void checkAppVersion();
+  setInterval(()=>{void checkAppVersion();},60*1000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void checkAppVersion();});
+  window.addEventListener('focus',()=>{void checkAppVersion();});
+  window.addEventListener('online',()=>{void checkAppVersion();});
+  window.addEventListener('pageshow',()=>{void checkAppVersion();});
 }
 
 const CATALOG_DB_NAME='xstage-private-catalog-v1';

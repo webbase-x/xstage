@@ -133,6 +133,14 @@ assert.ok(androidMain.includes('updateManager.checkForUpdates(false)'),'Android 
 assert.ok(androidMain.includes('public void installAvailableUpdate()'),'Android JS bridge must expose the update installer');
 assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must show Android TV update notifications');
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
+assert.ok(index.includes('id="desktop-update-version"')&&index.includes('id="mobile-update-version"'),'version update controls must be available on desktop and compact/mobile UI');
+assert.ok(app.includes('triggerImmediateVersionUpdate'),'all version-update controls must share the immediate update path');
+assert.ok(app.includes("action.textContent='อัปเดตตอนนี้'")&&app.includes('action.disabled=false'),'web update notice must always expose an active update-now button');
+assert.ok(!app.includes("action.textContent=playbackBusyForUpdate()?'อัปเดตเมื่อจบ':'อัปเดตตอนนี้'"),'web updates must not wait for playback to finish');
+assert.ok(androidUpdate.includes('CHECK_INTERVAL_MS = 60L * 1000L'),'native update checks must refresh promptly');
+assert.ok(androidUpdate.includes('installRequested'),'one update tap must continue automatically after native metadata arrives');
+assert.ok(androidMain.includes('updateManager.checkForUpdates(true)'),'Android must force an update check as soon as the hosted UI is ready');
+assert.ok(style.includes('calc(100% - 24px)')&&style.includes('overflow-x:hidden'),'QR rendering must remain contained inside its panel');
 assert.ok(app.includes('installAvailableUpdate'),'update-now button must invoke the native updater');
 assert.ok(index.includes('id="android-tv-apk-download"'),'main menu must expose a direct Android TV APK download link');
 assert.ok(pwa.includes("ANDROID_TV_LATEST_URL='./downloads/android-tv-latest.json'")&&pwa.includes('refreshAndroidTvApkLink()'),'PWA APK download must resolve the latest versioned APK from GitHub Pages metadata');
