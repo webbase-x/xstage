@@ -48,7 +48,7 @@
         apkMenuLink.href=verifiedAndroidApk.url;
         apkMenuLink.setAttribute('download',file);
         apkMenuLink.textContent='ดาวน์โหลด Android APK v'+version+' (Build '+build+')';
-        apkMenuLink.hidden=!isAndroidDevice();
+        apkMenuLink.hidden=!androidApkBrowser();
       }
       return verifiedAndroidApk;
     }catch(error){
@@ -117,7 +117,7 @@
   }
   function updateButtons() {
     const installed = syncStandaloneUi();
-    if(apkMenuLink)apkMenuLink.hidden=!isAndroidDevice()||!verifiedAndroidApk;
+    if(apkMenuLink)apkMenuLink.hidden=!androidApkBrowser()||!verifiedAndroidApk;
     const knownInstalled=installed||hasInstalledHint();
     menuButton.textContent = knownInstalled ? '✓ X-Stage ติดตั้งแล้ว' : '⬇ ติดตั้ง X-Stage เป็นแอป';
     menuButton.disabled = installed;
@@ -192,6 +192,7 @@
       paragraph(apk.build<webBuild
         ? 'หมายเหตุ: APK ที่เผยแพร่ยังเก่ากว่าเว็บรุ่นนี้ เมื่อมี APK รุ่นใหม่ ระบบในแอปจะตรวจอัปเดตอีกครั้ง'
         : 'ติดตั้งเป็นแอป Android สำหรับทีวีหรือแท็บเล็ต แยกจากเวอร์ชันเว็บบนเบราว์เซอร์','xstage-install-note'),
+      paragraph('หมายเหตุ: เป็น APK ทดสอบที่ติดตั้งนอก Google Play · Android อาจขออนุญาตให้ติดตั้งและให้คุณยืนยันด้วยตัวเอง','xstage-install-note'),
       actionRow(
         actionButton('ดาวน์โหลด APK ตอนนี้','primary',()=>{
           if(dialog.open)dialog.close();
@@ -428,6 +429,7 @@
 
   function showInstructions(){
     if(isInstalled()){updateButtons();return;}
+    document.querySelector('#xstage-install-title').textContent='ติดตั้ง X-Stage Karaoke';
     information();
     if(canPromptInstall()){
       content.append(actionRow(actionButton('ติดตั้ง X-Stage','primary',()=>{void install({forLogin:false});})));
