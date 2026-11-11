@@ -360,6 +360,13 @@ assert.ok(androidUpdate.includes('sha256.matches("[0-9a-f]{64}")'),'native APK u
 assert.ok(androidUpdate.includes('file.matches("X-Stage-Karaoke-Android-v'),'native APK update filenames must be constrained');
 assert.ok(androidMain.includes('uri.getPath().equals(XSTAGE_PATH_PREFIX)'),'native JavaScript bridge must limit WebView navigation to the app path');
 assert.ok(androidManifest.includes('android:screenOrientation="unspecified"'),'tablet must be allowed to rotate');
+const androidPlayMeta=JSON.parse(read('downloads/android-play-latest.json'));
+assert.equal(androidPlayMeta.available,false,'Google Play alerts must not advertise an unpublished release');
+assert.equal(androidPlayMeta.package,'com.webbasex.xstage','Play metadata must target the production package');
+assert.ok(androidUpdate.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest()'),'test APK and Play updates must use separate channels');
+assert.ok(androidUpdate.includes('if (update.playStore)'),'production Android install action must open the Play Store');
+assert.ok(androidMain.includes('public boolean usesGooglePlayUpdates()'),'native UI must identify its update channel');
+assert.ok(app.includes('if(androidTvNativeBridgeReady())return null;'),'Android must not confuse a web reload with installing an APK');
 const windowsUpdateMetadata=JSON.parse(read('downloads/windows-pc-latest.json'));
 const windowsUpdateHelper=read('windows-pc/Check-Update.ps1');
 assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
