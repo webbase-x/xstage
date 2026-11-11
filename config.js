@@ -6,4 +6,4 @@ window.XSTAGE_CONFIG = {
   // and to Google Picker API + Google Drive API.
   googlePickerApiKey: ''
 };
-window.XSTAGE_RELEASE = { version: '1.0.56', build: 1056 };
+window.XSTAGE_RELEASE = { version: '1.0.57', build: 1057 };
