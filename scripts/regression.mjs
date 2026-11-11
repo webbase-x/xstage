@@ -103,6 +103,9 @@ assert.ok(androidAuth.includes('https://oauth2.googleapis.com/token'),'Android T
 assert.ok(androidAuth.includes('https://www.googleapis.com/auth/drive.file'),'Android TV login must keep the existing private Drive scope');
 assert.ok(androidWorkflow.includes('assembleDebug assembleRelease bundleRelease'),'CI must build APK and AAB from the same Android source');
 assert.ok(androidWorkflow.includes('actions/upload-artifact@v4'),'CI must publish Android TV build artifacts');
+assert.ok(androidWorkflow.includes('Validate Google TV OAuth credentials'),'CI must block publishing Android APKs without Google TV OAuth configuration');
+assert.ok(androidWorkflow.includes('XSTAGE_TV_OAUTH_CLIENT_ID')&&androidWorkflow.includes('XSTAGE_TV_OAUTH_CLIENT_SECRET'),'CI must require both Google TV OAuth secrets');
+assert.ok(app.includes('ยังไม่ได้ตั้งค่า Google OAuth สำหรับ APK รุ่นนี้'),'Android login UI must clearly explain a missing OAuth configuration instead of looking frozen');
 assert.ok(androidWorkflow.includes('APK_NAME="X-Stage-Karaoke-Android-v${VERSION}-build${BUILD}.apk"'),'CI must publish a versioned TV/tablet Android APK filename on main');
 assert.ok(androidWorkflow.includes("git push origin HEAD:main"),'CI must commit the latest test APK back to main after a successful main build');
 assert.ok(fs.existsSync(new URL('../android-tv/test-signing/xstage-test-update.jks',import.meta.url)),'stable Android TV test signing key must exist');
