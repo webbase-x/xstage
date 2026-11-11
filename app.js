@@ -60,6 +60,8 @@ async function performAppUpdateReload(){
   location.replace(next.href);
 }
 async function checkAppVersion(){
+  // Native APK updates must use the native channel, never a web-only reload.
+  if(androidTvNativeBridgeReady())return null;
   try{
     const url=new URL('version.json',location.href);
     url.searchParams.set('_',String(Date.now()));
@@ -2428,7 +2430,7 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
   state.nativeUpdateAvailable={version:String(version||''),build:Number(build)||0};
   state.nativeUpdateStatus='มี X-Stage เวอร์ชันใหม่พร้อมอัปเดต';
   window.dispatchEvent(new CustomEvent('xstage:native-update',{detail:state.nativeUpdateAvailable}));
-  if(isNativeAndroidTvMode())return;
+  // Show update notice on the TV itself as well as the Owner remote.
   const panel=androidTvUpdatePanel();
   const current=(()=>{try{return String(window.XStageAndroid.getAppVersion?.()||'รุ่นปัจจุบัน');}catch{return 'รุ่นปัจจุบัน';}})();
   panel.hidden=false;
@@ -2442,7 +2444,7 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
 window.XStageAndroidUpdateStatus=message=>{
   state.nativeUpdateStatus=String(message||'กำลังอัปเดต X-Stage…');
   window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus}}));
-  if(isNativeAndroidTvMode())return;
+  // Show update notice on the TV itself as well as the Owner remote.
   const panel=androidTvUpdatePanel();
   panel.hidden=false;
   $('android-tv-update-status').textContent=String(message||'กำลังอัปเดต X-Stage…');
@@ -2450,7 +2452,7 @@ window.XStageAndroidUpdateStatus=message=>{
 window.XStageAndroidUpdateError=message=>{
   state.nativeUpdateStatus=String(message||'อัปเดตไม่สำเร็จ');
   window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus,error:true}}));
-  if(isNativeAndroidTvMode())return;
+  // Show update notice on the TV itself as well as the Owner remote.
   const panel=androidTvUpdatePanel();
   panel.hidden=false;
   $('android-tv-update-status').textContent=String(message||'อัปเดตไม่สำเร็จ');
@@ -2461,7 +2463,7 @@ window.XStageAndroidNoUpdate=()=>{
   state.nativeUpdateAvailable=null;
   state.nativeUpdateStatus='X-Stage เป็นเวอร์ชันล่าสุดแล้ว';
   window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus}}));
-  if(isNativeAndroidTvMode())return;
+  // Show update notice on the TV itself as well as the Owner remote.
   const panel=$('android-tv-update-panel');
   if(panel&&!panel.hidden){
     $('android-tv-update-status').textContent='X-Stage เป็นเวอร์ชันล่าสุดแล้ว';
