@@ -1,0 +1,10 @@
+{
+  "name": "X-Stage Karaoke Windows PC",
+  "version": "0.9.48",
+  "build": 948,
+  "available": false,
+  "installer_file": null,
+  "sha256": null,
+  "minimum_updater_version": "1.0.0",
+  "message": "Windows source has not yet passed build and installer verification. No downloadable update is available."
+}
