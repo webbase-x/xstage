@@ -159,7 +159,8 @@ assert.ok(host.includes("if(nativeTvMode)setTimeout(()=>showQR(true),0)"),'TV mu
 
 assert.ok(app.includes("event.key==='Enter'||event.key==='Accept'"),'hosted UI must handle TV Enter/Accept as a fallback for older APKs');
 assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must receive Android TV update notifications');
-assert.ok(app.includes("if(isNativeAndroidTvMode())return;")&&app.includes("state.nativeUpdateAvailable={version:String(version||''),build:Number(build)||0}"),'native TV updates must be routed to mobile Owner without opening a stage popup');
+assert.ok(app.includes("state.nativeUpdateAvailable={version:String(version||''),build:Number(build)||0}")&&app.includes('Show update notice on the TV itself as well as the Owner remote.'),'native TV updates must notify on both TV display and Owner remote');
+assert.ok(app.includes('if(androidTvNativeBridgeReady())return null;'),'native Android must never mistake a web-only update for an APK update');
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
 assert.ok(index.includes('id="desktop-update-version"')&&index.includes('id="mobile-update-version"'),'version update controls must be available on desktop and compact/mobile UI');
 assert.ok(app.includes('triggerImmediateVersionUpdate'),'all version-update controls must share the immediate update path');
