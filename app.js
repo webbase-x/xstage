@@ -2056,7 +2056,7 @@ function androidTvAuthPanel(){
   panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-labelledby','android-tv-auth-title');
   panel.innerHTML='<div class="android-tv-auth-box">'+
-    '<span class="android-tv-auth-kicker">X-STAGE ANDROID</span>'+
+    '<span class="android-tv-auth-kicker">X-STAGE ANDROID · <b id="android-tv-auth-version">กำลังอ่านรุ่น…</b></span>'+
     '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
     '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือหรืออุปกรณ์อื่น แล้วกรอกรหัสที่แสดง</p>'+
     '<div class="android-tv-auth-grid">'+
@@ -2072,6 +2072,15 @@ function androidTvAuthPanel(){
     '<small>ไม่ต้องกรอกรหัสผ่าน Google ใน X-Stage · การอนุญาตเกิดบนหน้า Google ที่ปลอดภัย</small>'+
     '</div>';
   document.body.append(panel);
+  try{
+    const rawVersion=String(window.XStageAndroid?.getAppVersion?.()||XSTAGE_RELEASE?.version||'').replace(/-debug$/,'');
+    const build=Number(window.XStageAndroid?.getAppBuild?.()||XSTAGE_RELEASE?.build||0);
+    const versionText=$('android-tv-auth-version');
+    if(versionText)versionText.textContent=(rawVersion?'v'+rawVersion:'ไม่ทราบรุ่น')+(build?' · Build '+build:'');
+  }catch{
+    const versionText=$('android-tv-auth-version');
+    if(versionText)versionText.textContent='v'+String(XSTAGE_RELEASE?.version||'');
+  }
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
     $('android-tv-auth-retry').hidden=true;
     startAndroidTvDeviceLogin(true);
