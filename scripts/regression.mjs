@@ -64,7 +64,11 @@ assert.ok(app.includes("window.XStageBeforeGoogleLogin"),'manual Google login mu
 assert.ok(pwa.includes("window.XStageBeforeGoogleLogin=proceed=>"),'PWA module must expose the pre-login install gate');
 assert.ok(pwa.includes("ติดตั้ง X-Stage ก่อนเข้าสู่ระบบไหม?"),'pre-login flow must ask to install before Google authentication');
 assert.ok(pwa.includes('function showInitialInstallChoice'),'browser entry must have an install-first prompt before the user presses Google Login');
-assert.ok(pwa.includes("if(shouldAskInstallOnEntry())setTimeout(showInitialInstallChoice,0)"),'install-first choice must appear automatically on initial browser entry');
+assert.ok(pwa.includes('const installCapabilityWaitMs=1800'),'install UI must wait briefly for a late browser install capability');
+assert.ok(pwa.includes("actionButton('ติดตั้ง X-Stage ตอนนี้','primary'"),'supported browsers must show a direct install-now button');
+assert.ok(pwa.includes('เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง'),'unsupported browsers must explain why no real install button can be shown');
+assert.ok(!pwa.includes("actionButton('ดูวิธีติดตั้ง','primary'"),'initial login flow must not use the ambiguous install-instructions CTA');
+assert.ok(pwa.includes("if(shouldAskInstallOnEntry())setTimeout(()=>{void showInitialInstallChoice();},0)"),'install-first choice must appear automatically on initial browser entry');
 assert.ok(pwa.includes("document.getElementById('gate-login')?.focus?.()"),'choosing browser mode must return focus to the normal Google Login button without authenticating automatically');
 assert.ok(pwa.includes("params.get('source')==='installed'"),'installed-app launch must not show the browser install-first prompt again');
 assert.ok(pwa.includes("buttons.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',runPendingLogin))"),'install-first prompt must allow an explicit browser-login fallback');
