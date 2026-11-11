@@ -248,16 +248,14 @@ window.XStageTvMoveFocus=direction=>{
 window.XStageTvActivateFocused=()=>{
   const scope=xstageTvActiveScope();
   const items=xstageTvFocusable(scope);
+  // In display-only mode, all stage controls are intentionally hidden. Never
+  // query a hidden DOM button as a fallback: OK must reveal the actual menu.
+  if(document.body.classList.contains('xstage-native-tv')&&scope===document)
+    return window.XStageTvOpenMenu?.()||false;
   let active=document.activeElement;
   if(!items.includes(active)){
     active=scope.querySelector?.('#android-tv-update-now:not([disabled]),button:not([disabled]),a[href]')||items[0];
-    if(!active){
-      // Some TrueID/Android TV remotes have no physical MENU key.
-      // OK on an idle stage must still open the accessible control menu.
-      if(document.body.classList.contains('xstage-native-tv')&&scope===document)
-        return window.XStageTvOpenMenu?.()||false;
-      return false;
-    }
+    if(!active)return false;
     try{active.focus({preventScroll:true});}catch{active.focus();}
   }
   if(active.matches?.('input:not([type]),input[type="text"],input[type="search"],textarea')){
