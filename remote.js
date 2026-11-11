@@ -323,6 +323,8 @@
     clearTimeout(searchTimer);
     const term=search.value.trim().toLocaleLowerCase('th');
     if(!term){querySequence++;results.replaceChildren();return;}
+    if(!ready){results.textContent='รอจอหลักเปิดคลังเพลงก่อนค้นหา';return;}
+    results.textContent='กำลังค้นหาเพลง…';
     const n=++querySequence;
     searchTimer=setTimeout(()=>{if(n===querySequence)send({type:'search',query:term.slice(0,70)});},250);
   });
