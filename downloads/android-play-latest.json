@@ -1,0 +1,9 @@
+{
+  "name": "X-Stage Android Google Play release",
+  "package": "com.webbasex.xstage",
+  "available": false,
+  "version": "1.0.75",
+  "build": 1075,
+  "store_url": null,
+  "note": "Do not mark available until the signed production release is published in Google Play."
+}
