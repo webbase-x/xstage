@@ -59,17 +59,17 @@ final class XStageUpdateManager {
     }
 
     void checkForUpdates(boolean force) {
-        if (!BuildConfig.DEBUG || closed) return;
+        if (closed) return;
         long now = System.currentTimeMillis();
         if (!force && now - lastCheckAt < CHECK_INTERVAL_MS) return;
         lastCheckAt = now;
 
         executor.execute(() -> {
             try {
-                LatestUpdate update = fetchLatest();
+                LatestUpdate update = BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest();
                 if (closed) return;
                 latest = update;
-                if (update.build > BuildConfig.VERSION_CODE) {
+                if (update != null && update.build > BuildConfig.VERSION_CODE) {
                     boolean continueInstall = installRequested;
                     main.post(() -> {
                         listener.onUpdateAvailable(update.version, update.build);
@@ -89,7 +89,7 @@ final class XStageUpdateManager {
     }
 
     void installLatestUpdate() {
-        if (!BuildConfig.DEBUG || closed) return;
+        if (closed) return;
         LatestUpdate update = latest;
         if (update == null || update.build <= BuildConfig.VERSION_CODE) {
             installRequested = true;
@@ -98,6 +98,10 @@ final class XStageUpdateManager {
             return;
         }
         installRequested = false;
+        if (update.playStore) {
+            launchPlayStore();
+            return;
+        }
         if (!canRequestPackageInstalls()) {
             waitingInstallPermission = true;
             listener.onUpdateStatus("อนุญาตให้ X-Stage ติดตั้งแอปจากแหล่งนี้ก่อน แล้วระบบจะอัปเดตต่ออัตโนมัติ");
@@ -117,7 +121,7 @@ final class XStageUpdateManager {
     }
 
     void onResume() {
-        if (!BuildConfig.DEBUG || closed) return;
+        if (closed) return;
         if (waitingInstallPermission) {
             if (canRequestPackageInstalls()) {
                 waitingInstallPermission = false;
@@ -142,6 +146,56 @@ final class XStageUpdateManager {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true;
         PackageManager pm = activity.getPackageManager();
         return pm.canRequestPackageInstalls();
+    }
+
+    // Play builds must never install the public debug APK, whose package and signature differ.
+    // Play availability is advertised only after a verified listing is published.
+    private LatestUpdate fetchPlayLatest() throws Exception {
+        URL url = new URL(BuildConfig.XSTAGE_WEB_URL + "downloads/android-play-latest.json?t=" + System.currentTimeMillis());
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setConnectTimeout(12000);
+        connection.setReadTimeout(12000);
+        connection.setUseCaches(false);
+        try {
+            if (connection.getResponseCode() != 200) throw new IllegalStateException("ตรวจรุ่น Google Play ไม่สำเร็จ");
+            StringBuilder payload = new StringBuilder();
+            try (InputStream stream = connection.getInputStream();
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    payload.append(line);
+                    if (payload.length() > 8192) throw new IllegalStateException("ข้อมูลรุ่น Google Play มีขนาดผิดปกติ");
+                }
+            }
+            JSONObject meta = new JSONObject(payload.toString());
+            if (!meta.optBoolean("available", false)) return null;
+            if (!activity.getPackageName().equals(meta.optString("package"))) {
+                throw new IllegalStateException("ข้อมูล Google Play package ไม่ตรงกับแอป");
+            }
+            int build = meta.optInt("build", 0);
+            String version = meta.optString("version", "");
+            if (build <= 0 || !version.matches("[0-9]+(?:\\.[0-9]+){1,3}")) {
+                throw new IllegalStateException("ข้อมูลเวอร์ชัน Google Play ไม่ถูกต้อง");
+            }
+            return new LatestUpdate(version, build, "", "", "", true);
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private void launchPlayStore() {
+        String pkg = activity.getPackageName();
+        Intent market = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg));
+        try {
+            activity.startActivity(market);
+        } catch (Exception ignored) {
+            try {
+                activity.startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/apps/details?id=" + pkg)));
+            } catch (Exception e) {
+                listener.onUpdateError("ไม่สามารถเปิด Google Play เพื่ออัปเดตได้");
+            }
+        }
     }
 
     private LatestUpdate fetchLatest() throws Exception {
@@ -181,7 +235,7 @@ final class XStageUpdateManager {
             throw new IllegalStateException("ไม่มี SHA-256 สำหรับตรวจสอบ APK อัปเดต");
         }
         String apkUrl = BuildConfig.XSTAGE_WEB_URL + "downloads/" + Uri.encode(file, "/");
-        return new LatestUpdate(version, build, apkUrl, sha256, file);
+        return new LatestUpdate(version, build, apkUrl, sha256, file, false);
     }
 
     private void download(LatestUpdate update) {
@@ -320,13 +374,15 @@ final class XStageUpdateManager {
         final String apkUrl;
         final String sha256;
         final String fileName;
+        final boolean playStore;
 
-        LatestUpdate(String version, int build, String apkUrl, String sha256, String fileName) {
+        LatestUpdate(String version, int build, String apkUrl, String sha256, String fileName, boolean playStore) {
             this.version = version;
             this.build = build;
             this.apkUrl = apkUrl;
             this.sha256 = sha256;
             this.fileName = fileName;
+            this.playStore = playStore;
         }
     }
 }
