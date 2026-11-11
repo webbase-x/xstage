@@ -114,7 +114,7 @@ assert.ok(androidUpdate.includes('manager.getUriForDownloadedFile(id)'),'native 
 assert.ok(androidMain.includes('updateManager.checkForUpdates(false)'),'Android TV must check for APK updates after the hosted UI loads');
 assert.ok(androidMain.includes('public void installAvailableUpdate()'),'Android JS bridge must expose the update installer');
 assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must show Android TV update notifications');
-assert.ok(app.includes("id='android-tv-update-now'"),'Android TV update prompt must offer an update-now button');
+assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
 assert.ok(app.includes('installAvailableUpdate'),'update-now button must invoke the native updater');
 assert.ok(index.includes('id="android-tv-apk-download"'),'main menu must expose a direct Android TV APK download link');
 assert.ok(pwa.includes("ANDROID_TV_APK_URL='./downloads/X-Stage-Karaoke-Android-TV-Test.apk'"),'PWA fallback must use the stable GitHub Pages APK URL');
