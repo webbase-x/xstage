@@ -34,6 +34,14 @@ android {
     }
 
     signingConfigs {
+        // Public test/sideload key: intentionally stable so browser-downloaded test APKs can update in place.
+        // Never use this key for Google Play production signing.
+        testSideload {
+            storeFile rootProject.file("test-signing/xstage-test-update.jks")
+            storePassword "xstage-test-update"
+            keyAlias "xstage-test"
+            keyPassword "xstage-test-update"
+        }
         if (signingReady) {
             release {
                 storeFile file(keyStorePath)
@@ -48,6 +56,7 @@ android {
         debug {
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
+            signingConfig signingConfigs.testSideload
         }
         release {
             minifyEnabled false
