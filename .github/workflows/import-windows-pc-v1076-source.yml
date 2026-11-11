@@ -25,7 +25,8 @@ jobs:
         run: |
           python3 -m compileall -q windows-pc/source/karaoke
           cd windows-pc/source
-          python3 -m unittest tests.test_continuous_medley tests.test_random_medley -q
+          python3 -m unittest discover -s tests -p 'test_continuous_medley.py' -q
+          python3 -m unittest discover -s tests -p 'test_random_medley.py' -q
       - name: Commit verified Windows source to same repository
         shell: bash
         run: |
