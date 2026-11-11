@@ -14,10 +14,38 @@
   if(!menuButton || !dialog || !content || !closeButton) return;
 
   const INSTALLED_HINT_KEY='xstage-pwa-installed-v1';
-  const ANDROID_TV_APK_URL='./downloads/X-Stage-Karaoke-Android-TV-Test.apk';
+  const ANDROID_TV_LATEST_URL='./downloads/android-tv-latest.json';
+  const ANDROID_TV_APK_FALLBACK='./downloads/X-Stage-Karaoke-Android-TV-v1.0.59-build1059.apk';
   const apkMenuLink=document.getElementById('android-tv-apk-download');
   const isAndroidDevice=()=>/Android/i.test(navigator.userAgent||'');
-  const downloadAndroidTvApk=()=>{location.href=ANDROID_TV_APK_URL;};
+  let androidTvApkUrl=ANDROID_TV_APK_FALLBACK;
+
+  async function refreshAndroidTvApkLink(){
+    try{
+      const metaUrl=new URL(ANDROID_TV_LATEST_URL,location.href);
+      metaUrl.searchParams.set('_',String(Date.now()));
+      const response=await fetch(metaUrl,{cache:'no-store'});
+      if(!response.ok)throw new Error('HTTP '+response.status);
+      const meta=await response.json();
+      const file=String(meta?.file||'').trim();
+      if(!/^X-Stage-Karaoke-Android-TV-v[0-9A-Za-z._-]+-build[0-9]+\.apk$/.test(file)){
+        throw new Error('invalid APK filename');
+      }
+      androidTvApkUrl=new URL('./downloads/'+file,location.href).href;
+      if(apkMenuLink){
+        apkMenuLink.href=androidTvApkUrl;
+        apkMenuLink.setAttribute('download',file);
+        apkMenuLink.textContent='ดาวน์โหลด Android TV APK '+String(meta.version||'')+' (Build '+String(meta.build||'')+')';
+      }
+      return androidTvApkUrl;
+    }catch(error){
+      console.warn('X-Stage Android TV APK link:',error?.message||error);
+      if(apkMenuLink)apkMenuLink.href=ANDROID_TV_APK_FALLBACK;
+      return androidTvApkUrl;
+    }
+  }
+  void refreshAndroidTvApkLink();
+  const downloadAndroidTvApk=async()=>{location.href=await refreshAndroidTvApkLink();};
   const SKIP_INSTALL_PROMPT_KEY='xstage-skip-install-prompt-v1';
   const skipInstallPrompt=()=>{try{return localStorage.getItem(SKIP_INSTALL_PROMPT_KEY)==='1';}catch{return false;}};
   const setSkipInstallPrompt=skip=>{try{if(skip)localStorage.setItem(SKIP_INSTALL_PROMPT_KEY,'1');else localStorage.removeItem(SKIP_INSTALL_PROMPT_KEY);}catch{}};
