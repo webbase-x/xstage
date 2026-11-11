@@ -88,6 +88,7 @@ assert.ok(app.includes('xstage-tv-quick-new-qr'),'TV D-pad menu must expose QR r
 
 assert.ok(css.includes('.xstage-tv-quick-menu'),'TV quick menu needs legible TV-focus styles');
 assert.ok(app.includes('window.XStageTvOpenMenu=()=>'),'physical Android TV remote must be able to open its quick menu');
+assert.ok(app.includes('return window.XStageTvOpenMenu?.()||false'),'OK key must open quick menu on TrueID remotes without MENU');
 assert.ok(app.includes('window.XStageTvHandleBack=()=>'),'Android TV Back must dismiss modal controls safely');
 assert.ok(androidMain.includes('KEYCODE_MENU')&&androidMain.includes('KEYCODE_SEARCH'),'physical TV remote must support MENU and SEARCH buttons');
 const tokenStore=read('android-tv/app/src/main/java/com/webbasex/xstage/GoogleTokenStore.java');
