@@ -174,8 +174,11 @@ final class XStageUpdateManager {
         if (build <= 0 || version.isEmpty()) {
             throw new IllegalStateException("ข้อมูลเวอร์ชัน APK ไม่สมบูรณ์");
         }
-        if (file.isEmpty()) {
-            file = "X-Stage-Karaoke-Android-v" + version + "-build" + build + ".apk";
+        if (!file.matches("X-Stage-Karaoke-Android-v[0-9A-Za-z._-]+-build[0-9]+\\.apk")) {
+            throw new IllegalStateException("ชื่อไฟล์ APK ไม่ถูกต้อง");
+        }
+        if (!sha256.matches("[0-9a-f]{64}")) {
+            throw new IllegalStateException("ไม่มี SHA-256 สำหรับตรวจสอบ APK อัปเดต");
         }
         String apkUrl = BuildConfig.XSTAGE_WEB_URL + "downloads/" + Uri.encode(file, "/");
         return new LatestUpdate(version, build, apkUrl, sha256, file);
