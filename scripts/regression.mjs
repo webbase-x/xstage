@@ -89,6 +89,11 @@ assert.ok(androidAuth.includes('https://oauth2.googleapis.com/token'),'Android T
 assert.ok(androidAuth.includes('https://www.googleapis.com/auth/drive.file'),'Android TV login must keep the existing private Drive scope');
 assert.ok(androidWorkflow.includes('assembleDebug assembleRelease bundleRelease'),'CI must build APK and AAB from the same Android source');
 assert.ok(androidWorkflow.includes('actions/upload-artifact@v4'),'CI must publish Android TV build artifacts');
+assert.ok(androidWorkflow.includes('downloads/X-Stage-Karaoke-Android-TV-Test.apk'),'CI must publish a stable browser-downloadable APK path on main');
+assert.ok(androidWorkflow.includes("git push origin HEAD:main"),'CI must commit the latest test APK back to main after a successful main build');
+assert.ok(index.includes('id="android-tv-apk-download"'),'main menu must expose a direct Android TV APK download link');
+assert.ok(pwa.includes("ANDROID_TV_APK_URL='./downloads/X-Stage-Karaoke-Android-TV-Test.apk'"),'PWA fallback must use the stable GitHub Pages APK URL');
+assert.ok(pwa.includes("actionButton('ดาวน์โหลด APK X-Stage','primary',downloadAndroidTvApk)"),'unsupported Android browsers must offer the APK download as the primary action');
 assert.ok(pwa.includes("if(shouldAskInstallOnEntry())setTimeout(()=>{void showInitialInstallChoice();},0)"),'install-first choice must appear automatically on initial browser entry');
 assert.ok(pwa.includes("document.getElementById('gate-login')?.focus?.()"),'choosing browser mode must return focus to the normal Google Login button without authenticating automatically');
 assert.ok(pwa.includes("params.get('source')==='installed'"),'installed-app launch must not show the browser install-first prompt again');
