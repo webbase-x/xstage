@@ -2312,44 +2312,32 @@ function androidTvAuthPanel(){
   return panel;
 }
 let androidTvQrLibraryPromise=null;
-let androidTvLoginWatchdog=0;
-function clearAndroidTvLoginWatchdog(){
-  if(androidTvLoginWatchdog){clearTimeout(androidTvLoginWatchdog);androidTvLoginWatchdog=0;}
-}
-function armAndroidTvLoginWatchdog(){
-  clearAndroidTvLoginWatchdog();
-  androidTvLoginWatchdog=setTimeout(()=>{
-    const code=String($('android-tv-auth-code')?.textContent||'').trim();
-    if(code&&code!=='----')return;
-    try{window.XStageAndroid?.cancelGoogleLogin?.();}catch{}
-    const wait=$('android-tv-auth-qr-wait');
-    if(wait){wait.hidden=false;wait.textContent='ยังไม่ได้รับรหัสจาก Google';}
-    window.XStageAndroidAuthError('ขอรหัส Google นานเกินไป กรุณาตรวจอินเทอร์เน็ตแล้วกด “ลองใหม่”');
-  },18000);
-}
 function ensureAndroidTvQrLibrary(){
   if(typeof QRCode!=='undefined')return Promise.resolve();
   if(androidTvQrLibraryPromise)return androidTvQrLibraryPromise;
+  // Both the native Google login and mobile-remote QR must share a single
+  // loader. Replacing each other's <script> caused intermittent endless QR.
   androidTvQrLibraryPromise=new Promise((resolve,reject)=>{
-    let settled=false;
-    const finish=error=>{
-      if(settled)return;
-      settled=true;
-      clearTimeout(timer);
-      if(error)reject(error);else resolve();
-    };
-    document.getElementById('xstage-qrcode')?.remove();
+    const stale=document.getElementById('xstage-qrcode');
+    if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1073';
+    script.src='./assets/vendor/qrcode.min.js?v=1077';
     script.async=true;
-    const timer=setTimeout(()=>finish(Error('QR library timeout')),5000);
-    script.addEventListener('load',()=>finish(typeof QRCode!=='undefined'?null:Error('QR library unavailable')),{once:true});
-    script.addEventListener('error',()=>finish(Error('QR library unavailable')),{once:true});
+    let done=false;
+    const finish=error=>{
+      if(done)return;
+      done=true;clearTimeout(timer);script.onload=null;script.onerror=null;
+      if(error){script.remove();reject(error);}else resolve();
+    };
+    const timer=setTimeout(()=>finish(Error('QR library timeout')),10000);
+    script.onload=()=>finish(typeof QRCode!=='undefined'?null:Error('QR library unavailable'));
+    script.onerror=()=>finish(Error('QR library unavailable'));
     document.head.append(script);
   }).catch(error=>{androidTvQrLibraryPromise=null;throw error;});
   return androidTvQrLibraryPromise;
 }
+window.XStageEnsureQrLibrary=ensureAndroidTvQrLibrary;
 async function renderAndroidTvLoginQr(url){
   const canvas=$('android-tv-auth-qr');
   const wait=$('android-tv-auth-qr-wait');
