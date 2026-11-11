@@ -286,12 +286,30 @@ public final class MainActivity extends Activity {
                 clickWebControl("previous");
                 return true;
             case KeyEvent.KEYCODE_MENU:
-                if (!isTelevisionDevice()) clickWebControl("mobile-menu-toggle");
+                if (isTelevisionDevice()) {
+                    callJavascript("window.XStageTvOpenMenu&&window.XStageTvOpenMenu();");
+                } else {
+                    clickWebControl("mobile-menu-toggle");
+                }
                 return true;
             case KeyEvent.KEYCODE_SEARCH:
-                if (!isTelevisionDevice()) focusSearch();
+                if (isTelevisionDevice()) {
+                    callJavascript("window.XStageTvOpenMenu&&window.XStageTvOpenMenu();");
+                } else {
+                    focusSearch();
+                }
                 return true;
             case KeyEvent.KEYCODE_BACK:
+                if (isTelevisionDevice() && webView != null) {
+                    webView.evaluateJavascript(
+                            "Boolean(window.XStageTvHandleBack&&window.XStageTvHandleBack())",
+                            handled -> {
+                                // Back closes a TV dialog first; otherwise exits the app
+                                // instead of browsing away to an arbitrary WebView page.
+                                if (!"true".equals(handled) && !isFinishing()) finish();
+                            });
+                    return true;
+                }
                 if (webView != null && webView.canGoBack()) {
                     webView.goBack();
                     return true;
