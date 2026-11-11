@@ -159,7 +159,7 @@ assert.ok(app.includes("if(document.body.classList.contains('xstage-native-tv')&
 assert.ok(app.includes("'toggle-keyboard'")&&app.includes("'virtual-keyboard'")&&app.includes("'pc-search'"),'TV display mode must explicitly remove search and onscreen keyboard UI');
 assert.ok(app.includes("queue.tabIndex=-1;queue.hidden=true;queue.style.pointerEvents='none'"),'TV queue control must be completely hidden and non-interactive');
 assert.ok(androidMain.includes('callJavascript("window.XStageTvOpenMenu'),'Android TV MENU key must open the accessible TV quick menu');
-assert.ok(androidMain.includes('if (!isTelevisionDevice()) focusSearch()'),'Android TV SEARCH key must not focus a hidden search field');
+assert.ok(androidMain.includes('if (isTelevisionDevice())')&&androidMain.includes('window.XStageTvOpenMenu'),'Android TV SEARCH key must open TV quick menu instead of focusing hidden search');
 assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
 assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
 assert.ok(androidGradle.includes('b.setColor(java.awt.Color.WHITE)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher/store banner must use a solid white background');
