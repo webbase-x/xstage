@@ -25,3 +25,11 @@ GitHub can also run the workflow manually from the Actions tab after the ZIP has
 The Windows source includes `Verify-Windows-0948.cmd`, `Build-Windows.cmd`, and `Build-Source.ps1`. Build on **Windows** with the locked CPython 3.13 x64 environment. Do **not** upload or advertise `XStageKaraoke.exe` until the full Windows build tests and installer checks pass. Earlier v0.9.48 build logs included failures and did **not** produce an executable.
 
 Keep OAuth client secrets, tokens, customer music, personal SQLite databases and private Google Drive contents out of the repository.
+
+## Windows PC update policy
+
+- `downloads/windows-pc-latest.json` is the source of truth for verified Windows installer availability.
+- Until the actual Windows installer passes CI and signature/integrity checks, `available` must remain `false`. Do not display an "install now" action without a verified artifact.
+- `Check-Update.ps1 -CurrentVersion 0.9.48` checks release availability; add `-Install` to download, validate SHA-256, and launch the installer when a newer, verified release is available.
+- The source import is currently incomplete, so the Windows application menu is **not yet wired** to this script. Once its source arrives, invoke the check on startup and from Help > Check for Updates without blocking playback. Offer immediate installation only after presenting the new version and stopping active audio safely.
+- Web `1.0.74` and Android `1.0.74` are separate from Windows `0.9.48`; do not compare their numeric versions across platforms.
