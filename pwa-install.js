@@ -42,6 +42,15 @@
   const hasInstalledHint=()=>{try{return localStorage.getItem(INSTALLED_HINT_KEY)==='1';}catch{return false;}};
   const markInstalled=()=>{try{localStorage.setItem(INSTALLED_HINT_KEY,'1');}catch{}};
   const canPromptInstall=()=>typeof navigator.install==='function'||!!deferredPrompt;
+  const installCapabilityWaitMs=1800;
+  const waitForInstallCapability=()=>new Promise(resolve=>{
+    if(canPromptInstall()){resolve(true);return;}
+    const started=performance.now();
+    const timer=setInterval(()=>{
+      if(canPromptInstall()){clearInterval(timer);resolve(true);return;}
+      if(performance.now()-started>=installCapabilityWaitMs){clearInterval(timer);resolve(false);}
+    },100);
+  });
   const launchUrl=()=>new URL('./?source=installed&after_install=1',location.href).href;
 
   function syncStandaloneUi(){
@@ -182,48 +191,76 @@
     return !!(gate&&!gate.hidden);
   }
 
-  function showInitialInstallChoice(message=''){
+  async function showInitialInstallChoice(message=''){
     if(!shouldAskInstallOnEntry())return;
     clearContent();
     dialog.classList.add('is-install-first');
     document.querySelector('#xstage-install-title').textContent=hasInstalledHint()
       ? 'เปิด X-Stage ที่ติดตั้งแล้วก่อนเข้าสู่ระบบ'
-      : 'ติดตั้ง X-Stage ก่อนเข้าสู่ระบบไหม?';
+      : 'ติดตั้ง X-Stage ก่อนเข้าสู่ระบบ';
     content.append(paragraph(
       hasInstalledHint()
         ? 'ตรวจพบว่าอุปกรณ์นี้เคยติดตั้ง X-Stage แล้ว แนะนำให้เปิด Web App ที่ติดตั้งไว้ก่อนเชื่อมต่อ Google Drive'
-        : 'ติดตั้ง Web App ก่อน แล้วค่อยเข้าสู่ระบบ Google ภายใน X-Stage ที่ติดตั้ง เพื่อไม่ต้องเข้าสู่ระบบซ้ำภายหลัง'
+        : 'กำลังตรวจสอบว่าเบราว์เซอร์นี้ติดตั้ง X-Stage โดยตรงได้หรือไม่…'
     ));
-    if(message)content.append(paragraph(message,'xstage-install-status'));
-
-    const buttons=[];
-    if(canPromptInstall()){
-      buttons.push(actionButton(
-        hasInstalledHint()?'ติดตั้ง/เปิด X-Stage':'ติดตั้งและเปิด X-Stage',
-        'primary',
-        ()=>{installForLogin=true;void install({forLogin:true});}
-      ));
-    }else if(hasInstalledHint()){
-      buttons.push(actionButton('เปิด X-Stage','primary',openInstalledApp));
-    }else{
-      buttons.push(actionButton('ดูวิธีติดตั้ง','primary',()=>{
-        information();
-        content.append(actionRow(
-          actionButton('กลับ','secondary',()=>showInitialInstallChoice())
-        ));
-      }));
-    }
-    buttons.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
-      installForLogin=false;
-      pendingLogin=null;
-      if(dialog.open)dialog.close();
-      document.getElementById('gate-login')?.focus?.();
-    }));
-    content.append(
-      actionRow(...buttons),
-      paragraph('หากเลือกติดตั้ง ระบบจะไม่เปิด Google Login ในเบราว์เซอร์นี้ และจะพยายามเปิด X-Stage ที่ติดตั้งทันที','xstage-install-note')
-    );
     openDialog();
+
+    if(!hasInstalledHint()&&!canPromptInstall()){
+      const ready=await waitForInstallCapability();
+      if(!dialog.open||!shouldAskInstallOnEntry())return;
+      clearContent();
+      dialog.classList.add('is-install-first');
+      document.querySelector('#xstage-install-title').textContent='ติดตั้ง X-Stage ก่อนเข้าสู่ระบบ';
+      if(!ready){
+        content.append(
+          paragraph('เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง จึงไม่สามารถแสดงปุ่มติดตั้งจริงได้'),
+          paragraph('TV Bro ใช้ Android WebView/Blink สำหรับแสดงเว็บ แต่การติดตั้ง PWA ต้องอาศัยความสามารถของตัวเบราว์เซอร์เอง','xstage-install-note'),
+          actionRow(
+            actionButton('ลองตรวจอีกครั้ง','primary',()=>{void void showInitialInstallChoice('กำลังตรวจสอบอีกครั้ง…');}),
+            actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
+              installForLogin=false;pendingLogin=null;
+              if(dialog.open)dialog.close();
+              document.getElementById('gate-login')?.focus?.();
+            })
+          )
+        );
+        return;
+      }
+    }else{
+      clearContent();
+      dialog.classList.add('is-install-first');
+      document.querySelector('#xstage-install-title').textContent=hasInstalledHint()
+        ? 'เปิด X-Stage ที่ติดตั้งแล้วก่อนเข้าสู่ระบบ'
+        : 'ติดตั้ง X-Stage ก่อนเข้าสู่ระบบ';
+    }
+
+    if(message)content.append(paragraph(message,'xstage-install-status'));
+    if(hasInstalledHint()){
+      content.append(
+        paragraph('เปิด X-Stage ที่ติดตั้งไว้ก่อน แล้วค่อยเชื่อมต่อ Google Drive'),
+        actionRow(
+          actionButton('เปิด X-Stage','primary',openInstalledApp),
+          actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
+            installForLogin=false;pendingLogin=null;
+            if(dialog.open)dialog.close();
+            document.getElementById('gate-login')?.focus?.();
+          })
+        )
+      );
+    }else{
+      content.append(
+        paragraph('เบราว์เซอร์นี้พร้อมติดตั้ง X-Stage เป็น Web App'),
+        actionRow(
+          actionButton('ติดตั้ง X-Stage ตอนนี้','primary',()=>{installForLogin=true;void install({forLogin:true});}),
+          actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
+            installForLogin=false;pendingLogin=null;
+            if(dialog.open)dialog.close();
+            document.getElementById('gate-login')?.focus?.();
+          })
+        ),
+        paragraph('หลังติดตั้ง ระบบจะพยายามเปิด X-Stage ที่ติดตั้งทันที และจะไม่เปิด Google Login ในแท็บเบราว์เซอร์นี้','xstage-install-note')
+      );
+    }
     setTimeout(()=>content.querySelector('.xstage-install-action.primary')?.focus(),30);
   }
 
@@ -335,7 +372,7 @@
     deferredPrompt=e;
     updateButtons();
     if(installForLogin&&dialog.open)showPreLoginChoice();
-    else if(dialog.open&&shouldAskInstallOnEntry())showInitialInstallChoice();
+    else if(dialog.open&&shouldAskInstallOnEntry())void showInitialInstallChoice();
   });
   window.addEventListener('appinstalled',finishInstallation);
   standaloneQuery.addEventListener?.('change',()=>{
@@ -344,8 +381,8 @@
   });
   window.addEventListener('pageshow',()=>{
     updateButtons();
-    if(shouldAskInstallOnEntry()&&!dialog.open)setTimeout(showInitialInstallChoice,0);
+    if(shouldAskInstallOnEntry()&&!dialog.open)setTimeout(()=>{void showInitialInstallChoice();},0);
   });
   updateButtons();
-  if(shouldAskInstallOnEntry())setTimeout(showInitialInstallChoice,0);
+  if(shouldAskInstallOnEntry())setTimeout(()=>{void showInitialInstallChoice();},0);
 })();
