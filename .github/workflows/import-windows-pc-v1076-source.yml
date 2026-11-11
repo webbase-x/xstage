@@ -1,0 +1,38 @@
+name: Import X-Stage Windows PC v1.0.76 continuous medley source
+on:
+  push:
+    paths:
+      - 'downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-xstage-windows-pc
+  cancel-in-progress: false
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact ZIP SHA-256 and safely extract
+        run: python3 scripts/import_windows_pc_v1076_source.py
+      - name: Run Windows source syntax and core medley tests
+        run: |
+          python3 -m compileall -q windows-pc/source/karaoke
+          cd windows-pc/source
+          python3 -m unittest tests.test_continuous_medley tests.test_random_medley -q
+      - name: Commit verified Windows source to same repository
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- windows-pc/source windows-pc/manifest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Import Windows PC v1.0.76 unified medley source"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
