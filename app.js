@@ -2413,6 +2413,10 @@ function androidTvUpdatePanel(){
     '<small>ระบบจะดาวน์โหลด APK จาก GitHub Pages ตรวจ SHA-256 แล้วเปิดหน้าติดตั้งของ Android ให้ยืนยัน</small>'+
     '</div>';
   document.body.append(panel);
+  if(window.XStageAndroid?.usesGooglePlayUpdates?.()){
+    const hint=panel.querySelector('small');
+    if(hint)hint.textContent='ระบบจะเปิดหน้าแอปใน Google Play ให้ยืนยันการอัปเดต ไม่ติดตั้ง APK ทดสอบทับรุ่น Google Play';
+  }
   $('android-tv-update-now')?.addEventListener('click',()=>{
     const button=$('android-tv-update-now');
     if(button){button.disabled=true;button.textContent='กำลังอัปเดต…';}
