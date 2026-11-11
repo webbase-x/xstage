@@ -27,6 +27,8 @@ const androidGradle=read('android-tv/app/build.gradle');
 const androidManifest=read('android-tv/app/src/main/AndroidManifest.xml');
 const androidMain=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
 const androidAuth=read('android-tv/app/src/main/java/com/webbasex/xstage/GoogleDeviceAuth.java');
+const androidUpdate=read('android-tv/app/src/main/java/com/webbasex/xstage/XStageUpdateManager.java');
+const androidDebugManifest=read('android-tv/app/src/debug/AndroidManifest.xml');
 const androidWorkflow=read('.github/workflows/build-android-tv.yml');
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',pwa]]){
@@ -99,6 +101,21 @@ assert.ok(androidWorkflow.includes('assembleDebug assembleRelease bundleRelease'
 assert.ok(androidWorkflow.includes('actions/upload-artifact@v4'),'CI must publish Android TV build artifacts');
 assert.ok(androidWorkflow.includes('downloads/X-Stage-Karaoke-Android-TV-Test.apk'),'CI must publish a stable browser-downloadable APK path on main');
 assert.ok(androidWorkflow.includes("git push origin HEAD:main"),'CI must commit the latest test APK back to main after a successful main build');
+assert.ok(fs.existsSync(new URL('../android-tv/test-signing/xstage-test-update.jks',import.meta.url)),'stable Android TV test signing key must exist');
+assert.ok(androidGradle.includes('signingConfig signingConfigs.testSideload'),'debug APK must use the stable sideload signing key');
+assert.ok(androidGradle.includes('xstage-test-update.jks'),'stable sideload key path must stay configured');
+assert.ok(androidDebugManifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'),'test APK must request package-install permission for in-app sideload updates');
+assert.ok(!androidManifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'),'Google Play release manifest must not request sideload install permission');
+assert.ok(androidUpdate.includes('downloads/android-tv-latest.json'),'native updater must check the GitHub Pages latest-version metadata');
+assert.ok(androidUpdate.includes('CHECK_INTERVAL_MS'),'native updater must periodically re-check for newer APK builds');
+assert.ok(androidUpdate.includes('MessageDigest.getInstance("SHA-256")'),'downloaded APK must be verified before installation');
+assert.ok(androidUpdate.includes('Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES'),'test APK must guide Android unknown-source permission when required');
+assert.ok(androidUpdate.includes('manager.getUriForDownloadedFile(id)'),'native updater must pass the completed APK to the Android installer');
+assert.ok(androidMain.includes('updateManager.checkForUpdates(false)'),'Android TV must check for APK updates after the hosted UI loads');
+assert.ok(androidMain.includes('public void installAvailableUpdate()'),'Android JS bridge must expose the update installer');
+assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must show Android TV update notifications');
+assert.ok(app.includes("id='android-tv-update-now'"),'Android TV update prompt must offer an update-now button');
+assert.ok(app.includes('installAvailableUpdate'),'update-now button must invoke the native updater');
 assert.ok(index.includes('id="android-tv-apk-download"'),'main menu must expose a direct Android TV APK download link');
 assert.ok(pwa.includes("ANDROID_TV_APK_URL='./downloads/X-Stage-Karaoke-Android-TV-Test.apk'"),'PWA fallback must use the stable GitHub Pages APK URL');
 assert.ok(pwa.includes("actionButton('ดาวน์โหลด APK X-Stage','primary',downloadAndroidTvApk)"),'unsupported Android browsers must offer the APK download as the primary action');
