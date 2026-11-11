@@ -128,6 +128,11 @@ function setupAppUpdateWatcher(){
   action?.addEventListener('click',()=>{if(state.updateAvailable)void performAppUpdateReload();});
   $('desktop-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
   $('mobile-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
+  // An older native APK might finish loading the WebView before its deferred
+  // JS update callback exists. Recheck once after hosted scripts initialize.
+  if(androidTvNativeBridgeReady()){
+    setTimeout(()=>{try{window.XStageAndroid.checkForAppUpdate?.();}catch{}},350);
+  }
   void checkAppVersion();
   setInterval(()=>{void checkAppVersion();},60*1000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void checkAppVersion();});
