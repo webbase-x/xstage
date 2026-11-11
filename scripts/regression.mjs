@@ -8,6 +8,9 @@ const host=read('stage-controls.js');
 const remote=read('remote.js');
 const index=read('index.html');
 const css=read('xstage-ux.css');
+const style=read('style.css');
+const pwa=read('pwa-install.js');
+const pwaManifest=JSON.parse(read('xstage.webmanifest'));
 const config=read('config.js');
 const sw=read('sw.js');
 const version=JSON.parse(read('version.json'));
@@ -21,7 +24,7 @@ const iconBuilder=read('scripts/build_xstage_icons.py');
 const iconWorkflow=read('.github/workflows/build-xstage-pwa-icons.yml');
 const singerStage=read('stage.html');
 
-for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',read('pwa-install.js')]]){
+for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',pwa]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
 }
 
@@ -56,6 +59,16 @@ assert.ok(pc.includes("FAVORITES_STORE='xstage-favorites-v2'"),'favorites must p
 assert.ok(pc.includes("HISTORY_STORE='xstage-play-history-v1'"),'play history must persist');
 assert.ok(index.includes('id="library-select"'),'multi-library selector must exist');
 assert.ok(index.includes('id="gate-close"'),'login gate must be dismissible for stage preview');
+assert.ok(app.includes('function startManualGoogleLogin()'),'manual Google login must pass through the install-first decision');
+assert.ok(app.includes("window.XStageBeforeGoogleLogin"),'manual Google login must consult the PWA install gate');
+assert.ok(pwa.includes("window.XStageBeforeGoogleLogin=proceed=>"),'PWA module must expose the pre-login install gate');
+assert.ok(pwa.includes("ติดตั้ง X-Stage ก่อนเข้าสู่ระบบไหม?"),'pre-login flow must ask to install before Google authentication');
+assert.ok(pwa.includes("buttons.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',runPendingLogin))"),'install-first prompt must allow an explicit browser-login fallback');
+assert.ok(pwa.includes('// Never authenticate in the browser tab after choosing install-first.'),'accepted install-first flow must not authenticate in the old browser tab');
+assert.ok(pwa.includes('function attemptImmediateLaunch()'),'successful installation must immediately attempt to open the installed X-Stage app');
+assert.ok(pwa.includes("new URL('./?source=installed&after_install=1',location.href)"),'installed-app launch must stay inside the X-Stage PWA scope');
+assert.equal(pwaManifest.launch_handler?.client_mode,'navigate-existing','installed X-Stage should reuse/navigate its existing app window when supported');
+assert.ok(style.includes('.xstage-install-actions'),'install-first choices must have dedicated responsive styling');
 assert.ok(index.includes('property="og:title"'),'Open Graph title must exist');
 assert.ok(index.includes(`src="assets/xstage-app-icon.svg?v=${version.build}"`),'topbar must use the canonical stage emblem at the current build');
 assert.ok(index.includes('assets/xstage-favicon-32.png'),'web favicon must use the stage-emblem icon set');

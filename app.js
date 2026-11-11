@@ -2041,7 +2041,12 @@ ui.librarySelect?.addEventListener('change',()=>{
   setStatus('กำลังเปลี่ยนไปยัง '+targetLabel+'…','success');
   location.reload();
 });
-ui.login.addEventListener('click',()=>login());ui.gateLogin.addEventListener('click',()=>login());
+function startManualGoogleLogin(){
+  const gate=window.XStageBeforeGoogleLogin;
+  if(typeof gate==='function'&&gate(()=>login()))return;
+  login();
+}
+ui.login.addEventListener('click',startManualGoogleLogin);ui.gateLogin.addEventListener('click',startManualGoogleLogin);
 $('gate-close')?.addEventListener('click',dismissLoginGate);
 ui.gate?.addEventListener('click',event=>{if(event.target===ui.gate)dismissLoginGate();});
 if(ui.gate)new MutationObserver(syncLoginGateState).observe(ui.gate,{attributes:true,attributeFilter:['hidden']});
