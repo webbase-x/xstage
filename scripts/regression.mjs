@@ -129,7 +129,7 @@ assert.ok(androidUpdate.includes('CHECK_INTERVAL_MS'),'native updater must perio
 assert.ok(androidUpdate.includes('MessageDigest.getInstance("SHA-256")'),'downloaded APK must be verified before installation');
 assert.ok(androidUpdate.includes('Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES'),'test APK must guide Android unknown-source permission when required');
 assert.ok(androidUpdate.includes('manager.getUriForDownloadedFile(id)'),'native updater must pass the completed APK to the Android installer');
-assert.ok(androidMain.includes('updateManager.checkForUpdates(false)'),'Android TV must check for APK updates after the hosted UI loads');
+assert.ok(androidMain.includes('updateManager.checkForUpdates(true)'),'Android TV must check for APK updates immediately after the hosted UI loads');
 assert.ok(androidMain.includes('public void installAvailableUpdate()'),'Android JS bridge must expose the update installer');
 assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must show Android TV update notifications');
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
