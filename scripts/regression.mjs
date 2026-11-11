@@ -385,11 +385,11 @@ assert.ok(androidUpdate.includes('if (update.playStore)'),'production Android in
 assert.ok(androidMain.includes('public boolean usesGooglePlayUpdates()'),'native UI must identify its update channel');
 assert.ok(app.includes('if(androidTvNativeBridgeReady())return null;'),'Android must not confuse a web reload with installing an APK');
 const windowsUpdateMetadata=JSON.parse(read('downloads/windows-pc-latest.json'));
-assert.equal(windowsUpdateMetadata.version,version.version,'Windows source version must align with unified release');
-assert.equal(windowsUpdateMetadata.build,version.build,'Windows source build must align with unified release');
 const windowsSourceManifest=JSON.parse(read('windows-pc/manifest.json'));
-assert.equal(windowsSourceManifest.version,version.version,'Windows import manifest must align with unified release');
-assert.equal(windowsSourceManifest.build,version.build,'Windows source build must align with unified release');
+// Windows installers have their own release channel; Android/Web may ship a
+// hotfix without falsely advertising a Windows installer at the same version.
+assert.equal(windowsUpdateMetadata.version,windowsSourceManifest.version,'Windows metadata must match its own Windows source version');
+assert.equal(windowsUpdateMetadata.build,windowsSourceManifest.build,'Windows metadata must match its own Windows build');
 const windowsUpdateHelper=read('windows-pc/Check-Update.ps1');
 assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
