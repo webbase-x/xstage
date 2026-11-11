@@ -3532,3 +3532,64 @@ body.xstage-native-tv #remote-pair-panel{
     top:54px!important;right:14px!important;width:150px!important
   }
 }
+
+
+/* 1.0.77: TV pairing card remains in its own corner, clear of lyrics.
+   Bigger square QR for scanning from the sofa; menus only on MENU key. */
+body.xstage-native-tv #remote-pair-panel{
+  width:clamp(216px,20vw,286px)!important;
+  max-width:286px!important;
+}
+body.xstage-native-tv #remote-pair-panel #remote-qr{
+  --xstage-remote-qr-size:min(232px,18vw,30vh)!important;
+  aspect-ratio:1/1!important;
+}
+body.xstage-native-tv #remote-pair-panel #remote-qr[hidden]{display:none!important}
+body.xstage-native-tv #remote-pair-panel .remote-pair-top strong{
+  font-size:clamp(.73rem,1vw,.97rem)!important;
+}
+body.xstage-native-tv #remote-pair-panel #remote-pair-status{
+  font-size:clamp(.73rem,.92vw,.86rem)!important;
+  line-height:1.45!important;
+}
+@media(max-width:800px),(max-height:510px){
+  body.xstage-native-tv #remote-pair-panel{width:min(174px,28vw)!important}
+  body.xstage-native-tv #remote-pair-panel #remote-qr{
+    --xstage-remote-qr-size:min(155px,25vw,28vh)!important
+  }
+}
+/* TV-only modal controls: restrained concert palette and unmistakable focus. */
+.xstage-tv-quick-menu[hidden]{display:none!important}
+.xstage-tv-quick-menu{
+  position:fixed;inset:0;z-index:210;display:grid;place-items:center;
+  box-sizing:border-box;padding:clamp(16px,4vw,48px);
+  background:rgba(2,8,22,.88);
+  backdrop-filter:blur(8px);
+}
+.xstage-tv-quick-box{
+  box-sizing:border-box;width:min(620px,95vw);max-height:92dvh;overflow-y:auto;
+  padding:clamp(20px,3vw,38px);
+  border:1px solid #62dcf0;border-radius:24px;
+  background:linear-gradient(155deg,#102d46,#061728);
+  box-shadow:0 24px 80px #000b,0 0 34px #31d7f329;
+  color:#eafaff;font-family:"Leelawadee UI","Noto Sans Thai",Tahoma,sans-serif;
+}
+.xstage-tv-quick-box strong{display:block;font-size:clamp(1.45rem,3vw,2rem);letter-spacing:.02em}
+.xstage-tv-quick-box p{font-size:clamp(.96rem,1.55vw,1.15rem);line-height:1.55;color:#b6d7e4}
+.xstage-tv-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:20px}
+.xstage-tv-quick-actions button{
+  min-height:72px;padding:12px 14px;
+  border:1px solid #4d9caf;border-radius:14px;
+  background:#15435e;color:#f5fdff;
+  font:850 clamp(1rem,1.5vw,1.2rem)/1.3 "Leelawadee UI","Noto Sans Thai",sans-serif;
+}
+.xstage-tv-quick-actions button:focus-visible,
+.xstage-tv-quick-actions button:focus{
+  outline:4px solid #87f5ff;outline-offset:3px;
+  background:#1669a0;box-shadow:0 0 18px #34e8ff62;
+  transform:scale(1.025);
+}
+@media(max-width:520px){
+  .xstage-tv-quick-actions{grid-template-columns:1fr}
+  .xstage-tv-quick-actions button{min-height:58px}
+}
