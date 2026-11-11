@@ -14,6 +14,10 @@
   if(!menuButton || !dialog || !content || !closeButton) return;
 
   const INSTALLED_HINT_KEY='xstage-pwa-installed-v1';
+  const ANDROID_TV_APK_URL='./downloads/X-Stage-Karaoke-Android-TV-Test.apk';
+  const apkMenuLink=document.getElementById('android-tv-apk-download');
+  const isAndroidDevice=()=>/Android/i.test(navigator.userAgent||'');
+  const downloadAndroidTvApk=()=>{location.href=ANDROID_TV_APK_URL;};
   const SKIP_INSTALL_PROMPT_KEY='xstage-skip-install-prompt-v1';
   const skipInstallPrompt=()=>{try{return localStorage.getItem(SKIP_INSTALL_PROMPT_KEY)==='1';}catch{return false;}};
   const setSkipInstallPrompt=skip=>{try{if(skip)localStorage.setItem(SKIP_INSTALL_PROMPT_KEY,'1');else localStorage.removeItem(SKIP_INSTALL_PROMPT_KEY);}catch{}};
@@ -64,6 +68,7 @@
   }
   function updateButtons() {
     const installed = syncStandaloneUi();
+    if(apkMenuLink)apkMenuLink.hidden=!isAndroidDevice();
     const knownInstalled=installed||hasInstalledHint();
     menuButton.textContent = knownInstalled ? '✓ X-Stage ติดตั้งแล้ว' : '⬇ ติดตั้ง X-Stage เป็นแอป';
     menuButton.disabled = installed;
@@ -232,17 +237,22 @@
       dialog.classList.add('is-install-first');
       document.querySelector('#xstage-install-title').textContent='ติดตั้ง X-Stage ก่อนเข้าสู่ระบบ';
       if(!ready){
+        const unsupportedActions=[];
+        if(isAndroidDevice())unsupportedActions.push(actionButton('ดาวน์โหลด APK X-Stage','primary',downloadAndroidTvApk));
+        unsupportedActions.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
+          installForLogin=false;pendingLogin=null;
+          if(dialog.open)dialog.close();
+          document.getElementById('gate-login')?.focus?.();
+        }));
+        unsupportedActions.push(actionButton('ลองตรวจ PWA อีกครั้ง','secondary',()=>{void showInitialInstallChoice('กำลังตรวจสอบอีกครั้ง…');}));
         content.append(
-          paragraph('เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง จึงไม่สามารถแสดงปุ่มติดตั้งจริงได้'),
-          paragraph('TV Bro ใช้ Android WebView/Blink สำหรับแสดงเว็บ แต่การติดตั้ง PWA ต้องอาศัยความสามารถของตัวเบราว์เซอร์เอง','xstage-install-note'),
-          actionRow(
-            actionButton('ลองตรวจอีกครั้ง','primary',()=>{void showInitialInstallChoice('กำลังตรวจสอบอีกครั้ง…');}),
-            actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
-              installForLogin=false;pendingLogin=null;
-              if(dialog.open)dialog.close();
-              document.getElementById('gate-login')?.focus?.();
-            })
-          )
+          paragraph(isAndroidDevice()
+            ? 'เบราว์เซอร์นี้ไม่รองรับการติดตั้ง PWA โดยตรง แต่สามารถดาวน์โหลด X-Stage Android TV APK จาก GitHub Pages ได้'
+            : 'เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง จึงไม่สามารถแสดงปุ่มติดตั้งจริงได้'),
+          paragraph(isAndroidDevice()
+            ? 'หลังดาวน์โหลด Android อาจขออนุญาต “ติดตั้งแอปที่ไม่รู้จัก” สำหรับเบราว์เซอร์นี้ก่อนติดตั้ง APK'
+            : 'การติดตั้ง PWA ต้องอาศัยความสามารถของตัวเบราว์เซอร์เอง','xstage-install-note'),
+          actionRow(...unsupportedActions)
         );
         appendSkipInstallChoice();
         return;

@@ -628,3 +628,25 @@
 }
 .android-tv-auth-actions button:focus-visible{outline:4px solid #79eff8;outline-offset:3px}
 .android-tv-auth-box small{display:block;margin-top:16px;color:#8aaeba;font-size:clamp(.72rem,1.1vw,.9rem)}
+
+.android-tv-apk-download{
+  box-sizing:border-box;
+  width:100%;
+  min-height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:9px 12px;
+  border:1px solid #4a7c8e;
+  border-radius:10px;
+  background:#0b3044;
+  color:#e9fbff;
+  text-decoration:none;
+  font:800 .82rem/1.2 "Leelawadee UI","Noto Sans Thai",Tahoma,"Segoe UI",system-ui,sans-serif;
+}
+.android-tv-apk-download:hover,.android-tv-apk-download:focus-visible{
+  border-color:#6feaf6;
+  outline:3px solid #42d7e766;
+  outline-offset:2px;
+}
+.android-tv-apk-download[hidden]{display:none!important}
