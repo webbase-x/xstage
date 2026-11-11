@@ -15,37 +15,57 @@
 
   const INSTALLED_HINT_KEY='xstage-pwa-installed-v1';
   const ANDROID_TV_LATEST_URL='./downloads/android-tv-latest.json';
-  const ANDROID_TV_APK_FALLBACK='./downloads/X-Stage-Karaoke-Android-TV-v1.0.59-build1059.apk';
   const apkMenuLink=document.getElementById('android-tv-apk-download');
   const isAndroidDevice=()=>/Android/i.test(navigator.userAgent||'');
-  let androidTvApkUrl=ANDROID_TV_APK_FALLBACK;
-
+  let verifiedAndroidApk=null;
+  const ANDROID_APK_NEVER_ASK_KEY='xstage-android-apk-never-ask-v1';
+  const ANDROID_APK_OFFERED_KEY='xstage-android-apk-offered-build-v1';
+  const androidApkBrowser=()=>{
+    if(!isAndroidDevice()||window.XStageAndroid)return false;
+    const params=new URLSearchParams(location.search);
+    return !['android-tv','android-tablet','installed'].includes(params.get('source'))
+      && !window.matchMedia('(display-mode: standalone)').matches
+      && window.navigator.standalone!==true;
+  };
   async function refreshAndroidTvApkLink(){
     try{
       const metaUrl=new URL(ANDROID_TV_LATEST_URL,location.href);
       metaUrl.searchParams.set('_',String(Date.now()));
       const response=await fetch(metaUrl,{cache:'no-store'});
-      if(!response.ok)throw new Error('HTTP '+response.status);
+      if(!response.ok)throw Error('HTTP '+response.status);
       const meta=await response.json();
       const file=String(meta?.file||'').trim();
-      if(!/^X-Stage-Karaoke-Android(?:-TV)?-v[0-9A-Za-z._-]+-build[0-9]+\.apk$/.test(file)){
-        throw new Error('invalid APK filename');
-      }
-      androidTvApkUrl=new URL('./downloads/'+file,location.href).href;
+      const build=Number(meta?.build);
+      const version=String(meta?.version||'').trim();
+      const hash=String(meta?.sha256||'').trim();
+      if(!/^X-Stage-Karaoke-Android(?:-TV)?-v[0-9A-Za-z._-]+-build[0-9]+\.apk$/.test(file)||
+        !Number.isSafeInteger(build)||build<1||!/^\d+\.\d+\.\d+$/.test(version)||
+        file!==\`X-Stage-Karaoke-Android-v\${version}-build\${build}.apk\`||
+        !/^[a-fA-F0-9]{64}$/.test(hash))throw Error('ข้อมูล APK ไม่ผ่านการตรวจสอบ');
+      verifiedAndroidApk={url:new URL('./downloads/'+file,location.href).href,file,version,build};
       if(apkMenuLink){
-        apkMenuLink.href=androidTvApkUrl;
+        apkMenuLink.href=verifiedAndroidApk.url;
         apkMenuLink.setAttribute('download',file);
-        apkMenuLink.textContent='ดาวน์โหลด Android APK '+String(meta.version||'')+' (Build '+String(meta.build||'')+')';
+        apkMenuLink.textContent='ดาวน์โหลด Android APK v'+version+' (Build '+build+')';
+        apkMenuLink.hidden=!isAndroidDevice();
       }
-      return androidTvApkUrl;
+      return verifiedAndroidApk;
     }catch(error){
-      console.warn('X-Stage Android APK link:',error?.message||error);
-      if(apkMenuLink)apkMenuLink.href=ANDROID_TV_APK_FALLBACK;
-      return androidTvApkUrl;
+      console.warn('X-Stage Android APK availability:',error?.message||error);
+      verifiedAndroidApk=null;
+      if(apkMenuLink){
+        apkMenuLink.removeAttribute('href');
+        apkMenuLink.removeAttribute('download');
+        apkMenuLink.hidden=true;
+      }
+      return null;
     }
   }
-  void refreshAndroidTvApkLink();
-  const downloadAndroidTvApk=async()=>{location.href=await refreshAndroidTvApkLink();};
+  const downloadAndroidTvApk=async()=>{
+    const apk=verifiedAndroidApk||await refreshAndroidTvApkLink();
+    if(!apk){return;}
+    location.href=apk.url;
+  };
   const SKIP_INSTALL_PROMPT_KEY='xstage-skip-install-prompt-v1';
   const skipInstallPrompt=()=>{try{return localStorage.getItem(SKIP_INSTALL_PROMPT_KEY)==='1';}catch{return false;}};
   const setSkipInstallPrompt=skip=>{try{if(skip)localStorage.setItem(SKIP_INSTALL_PROMPT_KEY,'1');else localStorage.removeItem(SKIP_INSTALL_PROMPT_KEY);}catch{}};
@@ -154,6 +174,50 @@
     if(dialog.classList.contains('is-install-first'))appendSkipInstallChoice();
     if(!dialog.open)dialog.showModal();
   }
+  // Browser on Android: ask once per published APK build, with an explicit
+  // Continue on Web choice. Never show inside the native APK or installed PWA.
+  function offerPublishedAndroidApk(apk){
+    if(!apk||!androidApkBrowser()||dialog.open)return;
+    try{
+      if(localStorage.getItem(ANDROID_APK_NEVER_ASK_KEY)==='1')return;
+      if(sessionStorage.getItem(ANDROID_APK_OFFERED_KEY)===String(apk.build))return;
+      sessionStorage.setItem(ANDROID_APK_OFFERED_KEY,String(apk.build));
+    }catch{}
+    clearContent();
+    document.querySelector('#xstage-install-title').textContent='ดาวน์โหลด X-Stage Android APK หรือไม่?';
+    const webBuild=Number(window.XSTAGE_RELEASE?.build||0);
+    content.append(
+      paragraph('มี APK สำหรับ Android TV/แท็บเล็ต v'+apk.version+' (Build '+apk.build+') พร้อมให้ดาวน์โหลด'),
+      paragraph(apk.build<webBuild
+        ? 'หมายเหตุ: APK ที่เผยแพร่ยังเก่ากว่าเว็บรุ่นนี้ เมื่อมี APK รุ่นใหม่ ระบบในแอปจะตรวจอัปเดตอีกครั้ง'
+        : 'ติดตั้งเป็นแอป Android สำหรับทีวีหรือแท็บเล็ต แยกจากเวอร์ชันเว็บบนเบราว์เซอร์','xstage-install-note'),
+      actionRow(
+        actionButton('ดาวน์โหลด APK ตอนนี้','primary',()=>{
+          if(dialog.open)dialog.close();
+          void downloadAndroidTvApk();
+        }),
+        actionButton('ใช้ X-Stage Web ต่อ','secondary',()=>{
+          if(dialog.open)dialog.close();
+        })
+      )
+    );
+    const never=document.createElement('label');
+    never.className='xstage-install-note';
+    never.style.cssText='display:flex;align-items:center;gap:10px;cursor:pointer;margin:12px 0 0';
+    const choice=document.createElement('input');
+    choice.type='checkbox';choice.id='xstage-android-apk-never-ask';
+    choice.style.cssText='width:20px;height:20px;flex:0 0 auto;accent-color:#20c6d8';
+    choice.addEventListener('change',()=>{
+      try{
+        if(choice.checked)localStorage.setItem(ANDROID_APK_NEVER_ASK_KEY,'1');
+        else localStorage.removeItem(ANDROID_APK_NEVER_ASK_KEY);
+      }catch{}
+    });
+    const label=document.createElement('span');
+    label.textContent='ไม่ต้องถามดาวน์โหลด APK อีก';
+    never.append(choice,label);content.append(never);
+    openDialog();
+  }
 
   function information() {
     clearContent();
@@ -237,7 +301,7 @@
   }
 
   function shouldAskInstallOnEntry(){
-    if(isInstalled()||skipInstallPrompt())return false;
+    if(isInstalled()||skipInstallPrompt()||androidApkBrowser())return false;
     const params=new URLSearchParams(location.search);
     if(params.get('source')==='installed'||params.get('source')==='android-tv'||params.get('source')==='android-tablet')return false;
     const gate=document.getElementById('gate');
@@ -444,4 +508,9 @@
   });
   updateButtons();
   if(shouldAskInstallOnEntry())setTimeout(()=>{void showInitialInstallChoice();},0);
+  if(androidApkBrowser()){
+    void refreshAndroidTvApkLink().then(apk=>{if(apk)offerPublishedAndroidApk(apk);});
+  }else{
+    void refreshAndroidTvApkLink();
+  }
 })();
