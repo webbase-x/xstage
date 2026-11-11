@@ -161,6 +161,7 @@ function xstageTvQuickMenu(){
     '<p>ใช้ปุ่มลูกศรเลือกคำสั่ง กด OK เพื่อยืนยัน</p>'+
     '<div class="xstage-tv-quick-actions">'+
     '<button type="button" id="xstage-tv-quick-qr">แสดง QR รีโมทมือถือ</button>'+
+    '<button type="button" id="xstage-tv-quick-new-qr">สร้าง QR ใหม่</button>'+
     '<button type="button" id="xstage-tv-quick-play">เล่น / พักเพลง</button>'+
     '<button type="button" id="xstage-tv-quick-update">ตรวจสอบอัปเดต</button>'+
     '<button type="button" id="xstage-tv-quick-close">กลับสู่เวที</button>'+
@@ -169,6 +170,10 @@ function xstageTvQuickMenu(){
   panel.querySelector('#xstage-tv-quick-qr').addEventListener('click',()=>{
     window.XStageRemoteQr?.show(true);
     panel.hidden=true;
+  });
+  panel.querySelector('#xstage-tv-quick-new-qr').addEventListener('click',()=>{
+    panel.hidden=true;
+    window.XStageRemoteQr?.retry?.();
   });
   panel.querySelector('#xstage-tv-quick-play').addEventListener('click',()=>{
     document.getElementById('play-pause')?.click();
