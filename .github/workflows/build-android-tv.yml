@@ -13,6 +13,9 @@ on:
       - "xstage-ux.css"
       - "stage-controls.js"
       - "remote.js"
+      - "remote.html"
+      - "scripts/**"
+      - "sw.js"
       - ".github/workflows/build-android-tv.yml"
   pull_request:
     paths:
@@ -25,6 +28,11 @@ on:
 
 permissions:
   contents: write
+
+# New main pushes cancel older builds so a stale APK cannot win the release.
+concurrency:
+  group: xstage-android-tv-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   build-android-tv:
