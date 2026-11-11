@@ -139,6 +139,25 @@ Scope ที่ใช้:
 - debug APK ยังติดตั้งทดสอบได้
 - release APK/AAB จะ build ได้แต่ยังไม่พร้อมอัป Play จนกว่าจะ sign ด้วย upload key
 
+## Build APK บน Windows โดยไม่ชน Gradle 9.6
+
+ดาวน์โหลดหรือ Pull โครงการล่าสุด จากนั้นเปิดโฟลเดอร์ `android-tv/`
+แล้วดับเบิลคลิก **`Build-Debug-APK.cmd`** โดยไม่ต้องสร้างโครงการใหม่
+สคริปต์จะดาวน์โหลด **Gradle 8.11.1** จากเว็บไซต์ทางการและตรวจ SHA-256
+`f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6`
+ก่อน Build โดยไม่ใช้ Gradle 9.6 ของ Android Studio
+
+ต้องมี Android SDK Platform 35 และ JDK 17 หรือใหม่กว่า (สคริปต์ตรวจ
+Android Studio JBR หากยังไม่กำหนด JAVA_HOME) ผลลัพธ์คือ
+`android-tv/app/build/outputs/apk/debug/app-debug.apk`.
+
+**ข้อควรระวัง:** APK ที่ Build ในเครื่องเป็น `debug` ที่ลงนามด้วย
+public test key เท่านั้น ไม่ใช่ไฟล์ส่ง Google Play และจะล็อกอิน Google
+Drive ไม่ได้จนกว่าจะกำหนด OAuth Client ID / Client Secret สำหรับ
+**TVs and Limited Input devices** อย่างถูกต้อง
+
+---
+
 ## Build ในเครื่อง
 
 ต้องมี JDK 17, Android SDK 35 และ Gradle 8.11.1
