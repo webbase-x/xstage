@@ -99,7 +99,7 @@ assert.ok(androidAuth.includes('https://oauth2.googleapis.com/token'),'Android T
 assert.ok(androidAuth.includes('https://www.googleapis.com/auth/drive.file'),'Android TV login must keep the existing private Drive scope');
 assert.ok(androidWorkflow.includes('assembleDebug assembleRelease bundleRelease'),'CI must build APK and AAB from the same Android source');
 assert.ok(androidWorkflow.includes('actions/upload-artifact@v4'),'CI must publish Android TV build artifacts');
-assert.ok(androidWorkflow.includes('downloads/X-Stage-Karaoke-Android-TV-Test.apk'),'CI must publish a stable browser-downloadable APK path on main');
+assert.ok(androidWorkflow.includes('APK_NAME="X-Stage-Karaoke-Android-TV-v${VERSION}-build${BUILD}.apk"'),'CI must publish a versioned browser-downloadable APK filename on main');
 assert.ok(androidWorkflow.includes("git push origin HEAD:main"),'CI must commit the latest test APK back to main after a successful main build');
 assert.ok(fs.existsSync(new URL('../android-tv/test-signing/xstage-test-update.jks',import.meta.url)),'stable Android TV test signing key must exist');
 assert.ok(androidGradle.includes('signingConfig signingConfigs.testSideload'),'debug APK must use the stable sideload signing key');
