@@ -237,7 +237,7 @@ assert.ok(pc.includes("['futuristic-audio-tech','Futuristic Audio Tech']"),'Futu
 assert.ok(pc.includes('ธีมโลโก้ X-Stage Online + Audio Visualizer'),'background settings must expose brand/visualizer themes');
 assert.ok(pc.includes('stageFrequencyLevels(bins)'),'stage visualizer must derive levels from real analyser frequency bins');
 assert.ok(pc.includes('eqAnalyser.getByteFrequencyData(bins)'),'stage visualizer must read the existing audio analyser');
-assert.ok(pc.includes("if(!eqContext&&!ensureEqAudio())return false"),'playback resume must initialize the shared audio graph for the live visualizer');
+assert.ok(pc.includes("if(nativeAndroidTvAudioMode())return true;")&&pc.includes("if(!ensureEqAudio())return false;"),'PC Web must keep the shared EQ/visualizer audio graph while Android TV preserves the native media path by default');
 assert.ok(pc.includes("screen.postMessage({type:'xstage-brand-viz'"),'main stage must synchronize live visualizer data to the singer screen');
 assert.ok(singerStage.includes('id="brand-viz-left"'),'singer screen must include live visualizer canvases');
 assert.ok(singerStage.includes("e.data?.type==='xstage-brand-viz'"),'singer screen must render analyser-fed visualizer data');
