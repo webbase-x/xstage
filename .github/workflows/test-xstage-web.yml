@@ -1,0 +1,30 @@
+name: X-Stage Web and cross-platform regression
+
+on:
+  push:
+    paths:
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.json"
+      - "**/*.html"
+      - "**/*.css"
+      - "android-tv/**/*.java"
+      - "android-tv/**/AndroidManifest.xml"
+      - "windows-pc/Check-Update.ps1"
+      - ".github/workflows/test-xstage-web.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: X-Stage regression
+        run: npm test
