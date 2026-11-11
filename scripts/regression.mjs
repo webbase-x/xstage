@@ -184,6 +184,17 @@ assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must re
 assert.ok(app.includes("state.nativeUpdateAvailable={version:String(version||''),build:Number(build)||0}")&&app.includes('Show update notice on the TV itself as well as the Owner remote.'),'native TV updates must notify on both TV display and Owner remote');
 assert.ok(app.includes('if(androidTvNativeBridgeReady())return null;'),'native Android must never mistake a web-only update for an APK update');
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
+assert.ok(app.includes('WEB_AUTO_UPDATE_GUARD'),'web must guard against stale-cache automatic reload loops');
+assert.ok(app.includes('autoApplyWebUpdate(state.updateAvailable)'),'older web shells must automatically apply newer published builds');
+assert.ok(app.includes('if(playbackBusyForUpdate())return false;'),'automatic web upgrades must not interrupt active karaoke playback');
+assert.ok(app.includes("const autoKey='xstage-native-auto-update-'"),'older Android APKs must be able to start the installed native upgrade path via live hosted Web UI');
+assert.ok(app.includes("button?.click();"),'Android native upgrade must be initiated automatically after a newer release is confirmed');
+assert.ok(pwa.includes('offerPublishedAndroidApk(apk)'),'Android browsers must offer a real APK download choice at entry');
+assert.ok(pwa.includes("actionButton('ใช้ X-Stage Web ต่อ'"),'Android APK offer must allow continuing the Web app');
+assert.ok(pwa.includes('ANDROID_APK_NEVER_ASK_KEY'),'Android APK offer must support opting out');
+assert.ok(pwa.includes('verifiedAndroidApk'),'Android APK offer must use published, validated metadata rather than a stale fallback');
+assert.ok(!pwa.includes('ANDROID_TV_APK_FALLBACK'),'a stale hardcoded APK fallback must never be advertised as the newest release');
+
 assert.ok(index.includes('id="desktop-update-version"')&&index.includes('id="mobile-update-version"'),'version update controls must be available on desktop and compact/mobile UI');
 assert.ok(app.includes('triggerImmediateVersionUpdate'),'all version-update controls must share the immediate update path');
 assert.ok(app.includes("action.textContent='อัปเดตตอนนี้'")&&app.includes('action.disabled=false'),'web update notice must always expose an active update-now button');
@@ -398,6 +409,10 @@ const windowsSourceManifest=JSON.parse(read('windows-pc/manifest.json'));
 assert.equal(windowsUpdateMetadata.version,windowsSourceManifest.version,'Windows metadata must match its own Windows source version');
 assert.equal(windowsUpdateMetadata.build,windowsSourceManifest.build,'Windows metadata must match its own Windows build');
 const windowsUpdateHelper=read('windows-pc/Check-Update.ps1');
+const windowsStartupLauncher=read('windows-pc/Start-XStage-With-Updates.ps1');
+assert.ok(windowsStartupLauncher.includes("Start-Process -FilePath $executable"),'Windows launcher must start the installed app');
+assert.ok(windowsStartupLauncher.includes("'-Install'")&&windowsStartupLauncher.includes("'-Startup'"),'Windows launcher must check and start a verified update automatically');
+assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('available -ne $true'),'Windows updater may only launch a hash-verified published installer');
 assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
 
