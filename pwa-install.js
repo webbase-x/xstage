@@ -14,6 +14,9 @@
   if(!menuButton || !dialog || !content || !closeButton) return;
 
   const INSTALLED_HINT_KEY='xstage-pwa-installed-v1';
+  const SKIP_INSTALL_PROMPT_KEY='xstage-skip-install-prompt-v1';
+  const skipInstallPrompt=()=>{try{return localStorage.getItem(SKIP_INSTALL_PROMPT_KEY)==='1';}catch{return false;}};
+  const setSkipInstallPrompt=skip=>{try{if(skip)localStorage.setItem(SKIP_INSTALL_PROMPT_KEY,'1');else localStorage.removeItem(SKIP_INSTALL_PROMPT_KEY);}catch{}};
   const standaloneQuery=window.matchMedia('(display-mode: standalone)');
   let deferredPrompt=null;
   let pendingLogin=null;
@@ -98,7 +101,24 @@
     row.append(...buttons);
     return row;
   }
+  function appendSkipInstallChoice(){
+    if(content.querySelector('#xstage-skip-install-prompt'))return;
+    const label=document.createElement('label');
+    label.className='xstage-install-note';
+    label.style.cssText='display:flex;align-items:center;gap:10px;cursor:pointer;margin:16px 0 8px;';
+    const checkbox=document.createElement('input');
+    checkbox.type='checkbox';
+    checkbox.id='xstage-skip-install-prompt';
+    checkbox.checked=skipInstallPrompt();
+    checkbox.style.cssText='width:18px;height:18px;flex-shrink:0;accent-color:#20c6d8;';
+    checkbox.addEventListener('change',()=>setSkipInstallPrompt(checkbox.checked));
+    const text=document.createElement('span');
+    text.textContent='ไม่ต้องแสดงหน้าต่างนี้อีกในครั้งต่อไป';
+    label.append(checkbox,text);
+    content.append(label);
+  }
   function openDialog(){
+    if(dialog.classList.contains('is-install-first'))appendSkipInstallChoice();
     if(!dialog.open)dialog.showModal();
   }
 
@@ -184,7 +204,7 @@
   }
 
   function shouldAskInstallOnEntry(){
-    if(isInstalled())return false;
+    if(isInstalled()||skipInstallPrompt())return false;
     const params=new URLSearchParams(location.search);
     if(params.get('source')==='installed'||params.get('source')==='android-tv')return false;
     const gate=document.getElementById('gate');
@@ -224,6 +244,7 @@
             })
           )
         );
+        appendSkipInstallChoice();
         return;
       }
     }else{
@@ -261,11 +282,12 @@
         paragraph('หลังติดตั้ง ระบบจะพยายามเปิด X-Stage ที่ติดตั้งทันที และจะไม่เปิด Google Login ในแท็บเบราว์เซอร์นี้','xstage-install-note')
       );
     }
+    appendSkipInstallChoice();
     setTimeout(()=>content.querySelector('.xstage-install-action.primary')?.focus(),30);
   }
 
   function showPreLoginChoice(message=''){
-    if(isInstalled()){runPendingLogin();return;}
+    if(isInstalled()||skipInstallPrompt()){runPendingLogin();return;}
     if(!hasInstalledHint()&&!canPromptInstall()){void showInitialInstallChoice(message);return;}
     clearContent();
     dialog.classList.add('is-install-first');
@@ -352,7 +374,7 @@
   // module owns the flow; returning false lets app.js call login synchronously.
   window.XStageBeforeGoogleLogin=proceed=>{
     if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')return false;
-    if(typeof proceed!=='function'||isInstalled())return false;
+    if(typeof proceed!=='function'||isInstalled()||skipInstallPrompt())return false;
     pendingLogin=proceed;
     installForLogin=true;
     showPreLoginChoice();
