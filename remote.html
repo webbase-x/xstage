@@ -21,7 +21,7 @@
     button{touch-action:manipulation;cursor:pointer;border:1px solid #347991;border-radius:10px;background:#153950;color:#fff;padding:8px 11px;font-weight:800;font-size:.87rem;min-height:42px}
     button:disabled{opacity:.57;cursor:default}button:active:not(:disabled){filter:brightness(1.2)}
     button:focus-visible,input:focus-visible{outline:2px solid #5ef2d5;outline-offset:3px}
-    .remote-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:15px}
+    .remote-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:15px}
     .remote-tabs button{padding:9px 4px;font-size:clamp(.71rem,3.2vw,.92rem)}
     .remote-tabs button[aria-selected="true"]{background:#1069bb;border-color:#60e6ef;color:#fff;box-shadow:0 0 12px #0b90e258}
     .remote-tab-panel{display:grid;gap:12px}
@@ -55,7 +55,37 @@
     footer{color:#86a9ba;font-size:.72rem;text-align:center;line-height:1.7;padding:18px 5px}
     @media(max-width:365px){.control-row{gap:5px}.control-row button{font-size:.72rem;padding:7px 2px}header strong{font-size:.95rem}}
   
-    .role-note{m<body>
+    .role-note{margin:0 0 12px;padding:10px 12px;border:1px solid #2f667d;border-radius:11px;background:#0d293d;color:#bfe9f3;font-size:.8rem;line-height:1.55}
+    select{width:100%;min-height:45px;border:1px solid #38758e;border-radius:10px;background:#061a2b;padding:9px 12px;font-size:.94rem;color:white;outline:0}
+    select:focus-visible{outline:2px solid #5ef2d5;outline-offset:3px}
+    .owner-gate{display:grid;gap:10px;padding:14px;border:1px solid #3a7189;border-radius:14px;background:#102b40}
+    .owner-login{background:#fff;color:#173049;border-color:#d8e4ec;min-height:48px;font-weight:900}
+    .owner-panel{display:grid;gap:12px}
+    .owner-panel[hidden],.owner-gate[hidden]{display:none!important}
+    .owner-badge{padding:10px 12px;border:1px solid #278c76;border-radius:11px;background:#103a35;color:#b7ffe9;font-size:.82rem;font-weight:900}
+    .admin-section{display:grid;gap:10px;padding:13px;border:1px solid #316d86;border-radius:14px;background:#0f2940}
+    .admin-section h3{margin:0;color:#d8f4ff;font-size:.92rem}
+    .admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .admin-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .admin-grid button{min-width:0;padding:9px 5px;font-size:.78rem}
+    .admin-inline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+    .admin-inline button{white-space:nowrap}
+    .admin-warn{background:#6c5311;border-color:#b79732}
+    .admin-danger{background:#6a2330;border-color:#b04d60}
+    .remote-queue-actions{display:grid!important;grid-template-columns:repeat(4,36px);gap:4px;flex:0 0 auto!important}
+    .remote-queue-actions button{min-height:36px;padding:4px;font-size:.82rem}
+    #remote-qr-state{margin:0;color:#bfe7f2;font-size:.8rem;font-weight:800}
+    @media(max-width:520px){
+      .remote-tabs{gap:4px}
+      .remote-tabs button{font-size:.69rem;padding:8px 2px}
+      .admin-grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .admin-inline{grid-template-columns:1fr}
+      .remote-queue-row{align-items:flex-start;flex-wrap:wrap}
+      .remote-queue-actions{width:100%;grid-template-columns:repeat(4,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
  <main>
   <header><img src="assets/xstage-app-icon-192.png" alt=""><div><strong>X-STAGE REMOTE</strong><small>Guest พื้นฐาน · Owner ควบคุมเต็มระบบ</small></div></header>
   <p id="remote-status" data-state="connecting" role="status" aria-live="polite">กำลังเชื่อมต่อรีโมท…</p>
@@ -206,27 +236,5 @@
  <script src="https://accounts.google.com/gsi/client" defer></script>
  <script src="assets/vendor/peerjs.min.js?v=1072" defer></script>
  <script src="remote.js?v=1072" defer></script>
-</body><div class="control-title">ระดับเสียง <span id="remote-volume-label">80%</span></div>
-      <div class="control-row">
-        <button id="remote-vol-down" type="button">− ลดเสียง</button>
-        <button id="remote-mute" type="button" aria-pressed="false">🔊 ปิดเสียง</button>
-        <button id="remote-vol-up" type="button">+ เพิ่มเสียง</button>
-      </div>
-      <div class="control-title">โหมดแสดงผลจอหลัก</div>
-      <div class="control-row screen-controls">
-        <button id="remote-fullscreen-on" type="button">⛶ เต็มจอหลัก</button>
-        <button id="remote-fullscreen-off" type="button">▣ ย่อจอหลัก</button>
-      </div>
-      <p id="remote-screen-state" class="remote-state">หากเบราว์เซอร์ต้องการการยืนยัน ให้แตะปุ่มบนจอหลักเพื่อเปิด Fullscreen</p>
-      <div class="control-title">เมดเลย์สุ่มเพลงต่อเนื่อง (M4A)</div>
-      <button id="remote-medley" type="button" aria-pressed="false">♫ เปิดสุ่มเพลงต่อเนื่อง</button>
-      <p class="remote-state">เมื่อคิวเพลงหมด ระบบสุ่มเพลงจากคลัง Google Drive มาเล่นต่อเนื่อง เพลงที่ขอไว้ในคิวจะได้เล่นก่อน</p>
-    </div>
-   </section>
-  </section>
-  <footer>เจ้าของเวทีอนุมัติอุปกรณ์ครั้งแรกก่อนใช้งาน · การเพิ่มเพลงไม่ต้องอนุมัติทีละเพลง · มือถือไม่เข้าถึง Google Drive โดยตรง</footer>
- </main>
- <script src="assets/vendor/peerjs.min.js?v=1068" defer></script>
- <script src="remote.js?v=1068" defer></script>
 </body>
 </html>
