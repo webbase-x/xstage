@@ -20,14 +20,14 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1049">
-  <link rel="stylesheet" href="xstage-ux.css?v=1049">
+  <link rel="stylesheet" href="style.css?v=1051">
+  <link rel="stylesheet" href="xstage-ux.css?v=1051">
 </head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1049" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1051" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -297,13 +297,14 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script src="config.js?v=1049"></script>
+<script>window.XSTAGE_RELEASE={version:'1.0.51',build:1051};</script>
+<script src="config.js?v=1051"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=1049" defer></script><script src="pc-extensions.js?v=1049" defer></script>
-  <script src="stage-controls.js?v=1049" defer></script>
-  <script src="mobile-layout.js?v=1049" defer></script>
-  <script src="pwa-install.js?v=1049" defer></script>
+  <script src="app.js?v=1051" defer></script><script src="pc-extensions.js?v=1051" defer></script>
+  <script src="stage-controls.js?v=1051" defer></script>
+  <script src="mobile-layout.js?v=1051" defer></script>
+  <script src="pwa-install.js?v=1051" defer></script>
 
-  <script src="stage-ui.js?v=1049" defer></script>
+  <script src="stage-ui.js?v=1051" defer></script>
 </body>
 </html>
