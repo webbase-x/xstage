@@ -2523,6 +2523,21 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
   const button=$('android-tv-update-now');
   if(button){button.disabled=false;button.textContent='อัปเดตตอนนี้';}
   setTimeout(()=>$('android-tv-update-now')?.focus?.(),30);
+  // Older installed APKs (including 1073) load this hosted UI. Start their
+  // existing native verified-APK update path without requiring a new binary
+  // first. Android still controls install permission / system confirmation.
+  const autoKey='xstage-native-auto-update-'+String(build||version||'unknown');
+  let alreadyAttempted=false;
+  try{
+    alreadyAttempted=sessionStorage.getItem(autoKey)==='1';
+    if(!alreadyAttempted)sessionStorage.setItem(autoKey,'1');
+  }catch{}
+  if(!alreadyAttempted&&!playbackBusyForUpdate()){
+    setTimeout(()=>{
+      if(state.nativeUpdateAvailable?.build!==Number(build)||panel.hidden)return;
+      button?.click();
+    },250);
+  }
 };
 window.XStageAndroidUpdateStatus=message=>{
   state.nativeUpdateStatus=String(message||'กำลังอัปเดต X-Stage…');
