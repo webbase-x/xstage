@@ -89,3 +89,21 @@ android-tv/app/build/outputs/bundle/
 - Google TV device login bridge
 - WebView/native behavior
 - package/version/native code
+
+
+## อัปเดต Test APK อัตโนมัติ
+
+ตั้งแต่ X-Stage 1.0.58 เป็นต้นไป APK ทดสอบที่เผยแพร่ผ่าน GitHub Pages ใช้ test signing key แบบคงที่ เพื่อให้ Android ติดตั้งรุ่นใหม่ทับรุ่นเดิมได้
+
+เมื่อเปิด Test APK:
+1. แอปตรวจ `downloads/android-tv-latest.json` อัตโนมัติ และตรวจซ้ำเป็นระยะ
+2. ถ้ามี build ใหม่กว่า จะแจ้งบนหน้าทีวี
+3. กด **อัปเดตตอนนี้**
+4. ครั้งแรก Android อาจให้อนุญาต “ติดตั้งแอปที่ไม่รู้จัก” สำหรับ X-Stage
+5. แอปดาวน์โหลด APK จาก GitHub Pages
+6. ตรวจ SHA-256 ก่อนเปิด Android Package Installer
+7. ผู้ใช้ยืนยันติดตั้งตามข้อกำหนดของ Android
+
+สิทธิ์ `REQUEST_INSTALL_PACKAGES` อยู่เฉพาะ debug/Test APK ผ่าน `src/debug/AndroidManifest.xml` เท่านั้น ไม่ถูกรวมใน Google Play release AAB
+
+**สำคัญ:** APK 1.0.57 และเก่ากว่าเคยใช้ debug signing key ที่สร้างใหม่บน CI จึงต้องถอนการติดตั้งรุ่นเก่าแล้วติดตั้ง 1.0.58 หนึ่งครั้ง หลังจากนั้น Test APK รุ่นใหม่สามารถอัปเดตทับกันได้
