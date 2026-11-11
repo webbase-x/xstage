@@ -2179,6 +2179,15 @@ function setupNativeAndroidTvUi(){
   const extraSummary=extra?.querySelector('summary');
   if(extraSummary)extraSummary.textContent='เนื้อร้อง / EQ';
 
+  const menuQueue=document.getElementById('mobile-queue-toggle');
+  const menuQueueCount=document.getElementById('mobile-queue-count');
+  if(menuQueue){
+    const countText=String(menuQueueCount?.textContent||'0');
+    menuQueue.setAttribute('aria-label','คิวเพลง');
+    menuQueue.setAttribute('title','คิวเพลง');
+    menuQueue.innerHTML='<span class="tv-queue-icon" aria-hidden="true">☷</span><span id="mobile-queue-count" class="tv-queue-count">'+countText+'</span><span class="tv-queue-arrow" aria-hidden="true">⌃</span><span class="sr-only">คิวเพลง</span>';
+  }
+
   // Keep the onscreen keyboard controls exactly where they already are.
   // Android TV has no guaranteed physical keyboard.
   const keyboardToolbar=document.getElementById('toggle-keyboard');

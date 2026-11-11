@@ -62,7 +62,7 @@ assert.ok(remote.includes("'cancel-current'"),'remote must request cancel-curren
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
 assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1064"),'host remote must load same-origin PeerJS for Android WebView reliability');
 assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1064"),'host remote must load same-origin QRCode');
-assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1067'),'mobile remote must load same-origin PeerJS');
+assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1068'),'mobile remote must load same-origin PeerJS');
 assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
 assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
 assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
@@ -142,7 +142,8 @@ assert.ok(app.includes("document.getElementById('toggle-remote')"),'TV remote la
 assert.ok(style.includes('body.xstage-native-tv #mobile-install-app')&&style.includes('body.xstage-native-tv #mobile-fullscreen-toggle'),'native TV menu must hide install/fullscreen clutter');
 assert.ok(style.includes('body.xstage-native-tv #toggle-keyboard')&&style.includes('body.xstage-native-tv #mobile-keyboard-toggle{display:flex!important}'),'onscreen keyboard controls must remain visible on TV');
 assert.ok(style.includes('#stage-extra-tools #mobile-lyrics')&&style.includes('#stage-extra-tools #mobile-eq'),'TV tools menu must retain lyrics/background and EQ');
-assert.ok(style.includes('body.xstage-native-tv #stage-queue-toggle > span{display:none!important}'),'TV queue shortcut must be icon/count only with no text label');
+assert.ok(style.includes('body.xstage-native-tv #stage-queue-toggle > span:first-of-type{display:none!important}')&&style.includes('body.xstage-native-tv #stage-queue-toggle > span:last-of-type{display:inline-flex!important}'),'TV queue shortcut must hide only the text label and keep the arrow');
+assert.ok(app.includes('tv-queue-icon')&&app.includes('tv-queue-count')&&app.includes('tv-queue-arrow'),'TV menu queue control must render icon + count + arrow with no visible text label');
 
 assert.ok(app.includes("event.key==='Enter'||event.key==='Accept'"),'hosted UI must handle TV Enter/Accept as a fallback for older APKs');
 assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must show Android TV update notifications');

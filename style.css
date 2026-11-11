@@ -748,7 +748,19 @@ body.xstage-native-tv #stage-queue-toggle{
   min-width:46px;width:auto;height:42px;padding:5px 9px!important;
   gap:5px;justify-content:center!important
 }
-body.xstage-native-tv #stage-queue-toggle > span{display:none!important}
+body.xstage-native-tv #stage-queue-toggle > span:first-of-type{display:none!important}
+body.xstage-native-tv #stage-queue-toggle > span:last-of-type{display:inline-flex!important}
 body.xstage-native-tv #stage-queue-toggle #stage-queue-count{
   display:inline-flex!important;min-width:18px;justify-content:center
+}
+
+body.xstage-native-tv #mobile-queue-toggle{
+  width:auto!important;align-self:flex-start;justify-content:center!important;
+  gap:7px;padding:7px 12px!important;font-weight:900
+}
+body.xstage-native-tv #mobile-queue-toggle .tv-queue-icon,
+body.xstage-native-tv #mobile-queue-toggle .tv-queue-count,
+body.xstage-native-tv #mobile-queue-toggle .tv-queue-arrow{display:inline-flex!important}
+body.xstage-native-tv #mobile-queue-toggle .tv-queue-count{
+  min-width:18px;justify-content:center
 }
