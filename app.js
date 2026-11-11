@@ -2158,6 +2158,55 @@ function androidTvNativeBridgeReady(){
   try{return !!(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function');}
   catch{return false;}
 }
+function isNativeAndroidTvMode(){
+  try{
+    if(androidTvNativeBridgeReady()&&typeof window.XStageAndroid.isAndroidTvApp==='function'){
+      return !!window.XStageAndroid.isAndroidTvApp();
+    }
+  }catch{}
+  try{return new URLSearchParams(location.search).get('source')==='android-tv';}
+  catch{return false;}
+}
+function setupNativeAndroidTvUi(){
+  if(!isNativeAndroidTvMode())return;
+  document.body.classList.add('xstage-native-tv');
+
+  const menu=document.getElementById('mobile-stage-menu');
+  const menuTitle=menu?.querySelector('.mobile-menu-head strong');
+  if(menuTitle)menuTitle.textContent='เมนู TV';
+
+  const extra=document.getElementById('stage-extra-tools');
+  const extraSummary=extra?.querySelector('summary');
+  if(extraSummary)extraSummary.textContent='เนื้อร้อง / EQ';
+
+  // Keep the onscreen keyboard controls exactly where they already are.
+  // Android TV has no guaranteed physical keyboard.
+  const keyboardToolbar=document.getElementById('toggle-keyboard');
+  if(keyboardToolbar)keyboardToolbar.hidden=false;
+  const keyboardMenu=document.getElementById('mobile-keyboard-toggle');
+  if(keyboardMenu)keyboardMenu.hidden=false;
+
+  const bottom=document.getElementById('stage-tools-toggle');
+  if(bottom){
+    bottom.classList.add('tv-remote-launcher');
+    bottom.setAttribute('aria-controls','remote-pair-panel');
+    bottom.setAttribute('aria-expanded','false');
+    bottom.setAttribute('aria-label','เปิดรีโมทมือถือ');
+    bottom.setAttribute('title','รีโมทมือถือ');
+    bottom.innerHTML='<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><rect x="12" y="5" width="22" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="23" cy="36.5" r="1.7" fill="currentColor"/><path d="M35 13c4 2 6 5 7 9M35 20c2 1 3 3 4 5" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round"/></svg><span class="sr-only">รีโมทมือถือ</span>';
+    bottom.addEventListener('click',event=>{
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const remote=document.getElementById('toggle-remote');
+      remote?.click();
+      requestAnimationFrame(()=>{
+        const panel=document.getElementById('remote-pair-panel');
+        bottom.setAttribute('aria-expanded',String(!!panel&&!panel.hidden));
+        panel?.querySelector('button:not([hidden]):not([disabled])')?.focus?.({preventScroll:true});
+      });
+    });
+  }
+}
 function androidTvAuthPanel(){
   let panel=$('android-tv-auth-panel');
   if(panel)return panel;
@@ -2541,7 +2590,7 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('pagehide',savePlaybackResumeState);
 window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
-renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);setupAppUpdateWatcher();
+renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);setupNativeAndroidTvUi();setupAppUpdateWatcher();
 window.XStageSoftRefresh=async function(){
   if(state.current||player.src){
     savePlaybackResumeState();

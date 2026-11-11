@@ -702,3 +702,53 @@
 .android-tv-update-box small{display:block;margin-top:18px;color:#8aaeba;font-size:clamp(.72rem,1.05vw,.88rem);line-height:1.5}
 
 #desktop-update-version,#mobile-update-version{border-color:#5edbe8!important;background:#0e5264!important;color:#e9feff!important;font-weight:900}
+
+/* Native Android TV shell: bottom-right is mobile remote, not the tools menu. */
+body.xstage-native-tv #stage-tools-toggle.tv-remote-launcher{
+  width:46px;min-width:46px;max-width:46px;height:42px;min-height:42px;
+  padding:5px!important;display:grid!important;place-items:center!important;
+  border-color:#67e7ef!important;background:#0c4357!important;color:#dfffff!important;
+  border-radius:10px;box-shadow:0 0 0 1px #46b8c54d inset
+}
+body.xstage-native-tv #stage-tools-toggle.tv-remote-launcher svg{width:30px;height:30px;display:block}
+body.xstage-native-tv #stage-tools-toggle.tv-remote-launcher:focus-visible{
+  outline:3px solid #8af7ff;outline-offset:3px;background:#12667b!important
+}
+/* Remove TV-only clutter while retaining core karaoke controls. */
+body.xstage-native-tv #mobile-home-toggle,
+body.xstage-native-tv #mobile-stage-pop,
+body.xstage-native-tv #mobile-tools-toggle,
+body.xstage-native-tv #mobile-random,
+body.xstage-native-tv #mobile-history,
+body.xstage-native-tv #mobile-favorites,
+body.xstage-native-tv #mobile-ab-a,
+body.xstage-native-tv #mobile-ab-b,
+body.xstage-native-tv #mobile-ab-clear,
+body.xstage-native-tv #mobile-import-queue,
+body.xstage-native-tv #mobile-export-queue,
+body.xstage-native-tv #mobile-more-tools,
+body.xstage-native-tv #mobile-share-library,
+body.xstage-native-tv #mobile-clear-cache,
+body.xstage-native-tv #toggle-remote,
+body.xstage-native-tv #mobile-install-app,
+body.xstage-native-tv #mobile-fullscreen-toggle{display:none!important}
+/* The TV needs the onscreen keyboard: never hide or move these controls. */
+body.xstage-native-tv #toggle-keyboard,
+body.xstage-native-tv #mobile-keyboard-toggle{display:flex!important}
+body.xstage-native-tv #stage-extra-tools .stage-extra-tools-list{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px
+}
+body.xstage-native-tv #stage-extra-tools .stage-extra-tools-list > *{display:none!important}
+body.xstage-native-tv #stage-extra-tools #mobile-lyrics,
+body.xstage-native-tv #stage-extra-tools #mobile-eq{display:flex!important}
+body.xstage-native-tv .pc-tools{display:none!important}
+
+/* Native TV queue shortcut: icon + count only. Keep accessible name in HTML. */
+body.xstage-native-tv #stage-queue-toggle{
+  min-width:46px;width:auto;height:42px;padding:5px 9px!important;
+  gap:5px;justify-content:center!important
+}
+body.xstage-native-tv #stage-queue-toggle > span{display:none!important}
+body.xstage-native-tv #stage-queue-toggle #stage-queue-count{
+  display:inline-flex!important;min-width:18px;justify-content:center
+}
