@@ -1,7 +1,6 @@
 package com.webbasex.xstage;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -34,22 +33,20 @@ final class GoogleDeviceAuth {
     private static final String TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
     private static final String REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
     private static final String SCOPE = "openid email https://www.googleapis.com/auth/drive.file";
-    private static final String PREFS = "xstage_tv_google_auth";
-    private static final String REFRESH_TOKEN = "refresh_token";
 
-    private final SharedPreferences prefs;
+    private final GoogleTokenStore tokenStore;
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicInteger generation = new AtomicInteger();
 
     GoogleDeviceAuth(Context context, Listener listener) {
-        this.prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        this.tokenStore = new GoogleTokenStore(context);
         this.listener = listener;
     }
 
     boolean hasStoredSession() {
-        String refreshToken = prefs.getString(REFRESH_TOKEN, "");
+        String refreshToken = tokenStore.read();
         return refreshToken != null && !refreshToken.isEmpty();
     }
 
@@ -87,7 +84,7 @@ final class GoogleDeviceAuth {
     }
 
     void restoreSession() {
-        String refreshToken = prefs.getString(REFRESH_TOKEN, "");
+        String refreshToken = tokenStore.read();
         if (refreshToken == null || refreshToken.isEmpty() || !configured()) return;
         final int run = generation.incrementAndGet();
         status("กำลังกู้คืนการเชื่อมต่อ Google Drive…");
@@ -103,7 +100,7 @@ final class GoogleDeviceAuth {
                 String accessToken = token.optString("access_token");
                 if (accessToken.isEmpty()) {
                     String code = token.optString("error");
-                    if ("invalid_grant".equals(code)) prefs.edit().remove(REFRESH_TOKEN).apply();
+                    if ("invalid_grant".equals(code)) tokenStore.clear();
                     throw new IllegalStateException(readError(token, "กู้คืน Google Login ไม่สำเร็จ"));
                 }
                 long expiresIn = token.optLong("expires_in", 3600L);
@@ -116,8 +113,8 @@ final class GoogleDeviceAuth {
 
     void logout() {
         final int run = generation.incrementAndGet();
-        String refreshToken = prefs.getString(REFRESH_TOKEN, "");
-        prefs.edit().remove(REFRESH_TOKEN).apply();
+        String refreshToken = tokenStore.read();
+        tokenStore.clear();
         if (refreshToken == null || refreshToken.isEmpty()) {
             main.post(listener::onSignedOut);
             return;
@@ -160,7 +157,7 @@ final class GoogleDeviceAuth {
             String accessToken = token.optString("access_token");
             if (!accessToken.isEmpty()) {
                 String refreshToken = token.optString("refresh_token");
-                if (!refreshToken.isEmpty()) prefs.edit().putString(REFRESH_TOKEN, refreshToken).apply();
+                if (!refreshToken.isEmpty()) tokenStore.write(refreshToken);
                 long tokenExpires = token.optLong("expires_in", 3600L);
                 main.post(() -> listener.onToken(accessToken, tokenExpires));
                 return;
