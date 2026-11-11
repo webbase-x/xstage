@@ -62,7 +62,7 @@ assert.ok(remote.includes("'cancel-current'"),'remote must request cancel-curren
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
 assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1064"),'host remote must load same-origin PeerJS for Android WebView reliability');
 assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1064"),'host remote must load same-origin QRCode');
-assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1064'),'mobile remote must load same-origin PeerJS');
+assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1065'),'mobile remote must load same-origin PeerJS');
 assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
 assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
 assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
