@@ -174,6 +174,59 @@
     }
   }
 
+  function shouldAskInstallOnEntry(){
+    if(isInstalled())return false;
+    const params=new URLSearchParams(location.search);
+    if(params.get('source')==='installed')return false;
+    const gate=document.getElementById('gate');
+    return !!(gate&&!gate.hidden);
+  }
+
+  function showInitialInstallChoice(message=''){
+    if(!shouldAskInstallOnEntry())return;
+    clearContent();
+    dialog.classList.add('is-install-first');
+    document.querySelector('#xstage-install-title').textContent=hasInstalledHint()
+      ? 'เปิด X-Stage ที่ติดตั้งแล้วก่อนเข้าสู่ระบบ'
+      : 'ติดตั้ง X-Stage ก่อนเข้าสู่ระบบไหม?';
+    content.append(paragraph(
+      hasInstalledHint()
+        ? 'ตรวจพบว่าอุปกรณ์นี้เคยติดตั้ง X-Stage แล้ว แนะนำให้เปิด Web App ที่ติดตั้งไว้ก่อนเชื่อมต่อ Google Drive'
+        : 'ติดตั้ง Web App ก่อน แล้วค่อยเข้าสู่ระบบ Google ภายใน X-Stage ที่ติดตั้ง เพื่อไม่ต้องเข้าสู่ระบบซ้ำภายหลัง'
+    ));
+    if(message)content.append(paragraph(message,'xstage-install-status'));
+
+    const buttons=[];
+    if(canPromptInstall()){
+      buttons.push(actionButton(
+        hasInstalledHint()?'ติดตั้ง/เปิด X-Stage':'ติดตั้งและเปิด X-Stage',
+        'primary',
+        ()=>{installForLogin=true;void install({forLogin:true});}
+      ));
+    }else if(hasInstalledHint()){
+      buttons.push(actionButton('เปิด X-Stage','primary',openInstalledApp));
+    }else{
+      buttons.push(actionButton('ดูวิธีติดตั้ง','primary',()=>{
+        information();
+        content.append(actionRow(
+          actionButton('กลับ','secondary',()=>showInitialInstallChoice())
+        ));
+      }));
+    }
+    buttons.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
+      installForLogin=false;
+      pendingLogin=null;
+      if(dialog.open)dialog.close();
+      document.getElementById('gate-login')?.focus?.();
+    }));
+    content.append(
+      actionRow(...buttons),
+      paragraph('หากเลือกติดตั้ง ระบบจะไม่เปิด Google Login ในเบราว์เซอร์นี้ และจะพยายามเปิด X-Stage ที่ติดตั้งทันที','xstage-install-note')
+    );
+    openDialog();
+    setTimeout(()=>content.querySelector('.xstage-install-action.primary')?.focus(),30);
+  }
+
   function showPreLoginChoice(message=''){
     if(isInstalled()){runPendingLogin();return;}
     clearContent();
@@ -282,12 +335,17 @@
     deferredPrompt=e;
     updateButtons();
     if(installForLogin&&dialog.open)showPreLoginChoice();
+    else if(dialog.open&&shouldAskInstallOnEntry())showInitialInstallChoice();
   });
   window.addEventListener('appinstalled',finishInstallation);
   standaloneQuery.addEventListener?.('change',()=>{
     updateButtons();
     if(isInstalled()){clearTimeout(launchFallbackTimer);if(dialog.open)dialog.close();}
   });
-  window.addEventListener('pageshow',updateButtons);
+  window.addEventListener('pageshow',()=>{
+    updateButtons();
+    if(shouldAskInstallOnEntry()&&!dialog.open)setTimeout(showInitialInstallChoice,0);
+  });
   updateButtons();
+  if(shouldAskInstallOnEntry())setTimeout(showInitialInstallChoice,0);
 })();
