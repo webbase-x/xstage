@@ -80,6 +80,12 @@ assert.ok(host.includes('window.XStageEnsureQrLibrary'),'mobile pairing and Andr
 assert.ok(app.includes('window.XStageEnsureQrLibrary=ensureAndroidTvQrLibrary'),'Android login must provide a single QR script loader');
 assert.ok(remoteHtml.includes('remote.js?v='+version.build),'mobile remote JS must match the released web build');
 assert.ok(remoteHtml.includes('config.js?v='+version.build),'mobile remote config must not stay pinned to a stale build');
+
+assert.ok(host.includes("url.searchParams.set('v',String(window.XSTAGE_RELEASE?.build||0))"),'pairing QR must bust stale cached mobile HTML');
+assert.ok(remoteHtml.includes('min-height:48px'),'mobile controls must preserve accessible touch targets');
+assert.ok(host.includes('retry:createSession'),'TV must have a user-triggered QR repair path');
+assert.ok(app.includes('xstage-tv-quick-new-qr'),'TV D-pad menu must expose QR regeneration');
+
 assert.ok(css.includes('.xstage-tv-quick-menu'),'TV quick menu needs legible TV-focus styles');
 assert.ok(app.includes('window.XStageTvOpenMenu=()=>'),'physical Android TV remote must be able to open its quick menu');
 assert.ok(app.includes('window.XStageTvHandleBack=()=>'),'Android TV Back must dismiss modal controls safely');
