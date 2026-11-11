@@ -2189,8 +2189,19 @@ window.XStageAndroidAuthError=message=>{
   const text=String(message||'เข้าสู่ระบบ Google ไม่สำเร็จ');
   const panel=androidTvAuthPanel();
   panel.hidden=false;
-  $('android-tv-auth-status').textContent=text;
-  $('android-tv-auth-retry').hidden=false;
+  const missingOauth=text.includes('ยังไม่ได้ตั้งค่า Google OAuth')||text.includes('XSTAGE_TV_OAUTH_CLIENT_ID');
+  if(missingOauth){
+    const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
+    const wait=$('android-tv-auth-qr-wait');
+    if(wait){wait.hidden=false;wait.textContent='ยังไม่ได้ตั้งค่า Google OAuth สำหรับ APK รุ่นนี้';}
+    $('android-tv-auth-url').textContent='ต้องตั้งค่า OAuth Client สำหรับ TV / Limited Input';
+    $('android-tv-auth-code').textContent='CONFIG';
+    $('android-tv-auth-status').textContent='ผู้ดูแลต้องเพิ่ม GitHub Secrets: XSTAGE_TV_OAUTH_CLIENT_ID และ XSTAGE_TV_OAUTH_CLIENT_SECRET แล้ว Build APK ใหม่';
+    $('android-tv-auth-retry').hidden=true;
+  }else{
+    $('android-tv-auth-status').textContent=text;
+    $('android-tv-auth-retry').hidden=false;
+  }
   ui.login.disabled=ui.gateLogin.disabled=false;
   setStatus(text,'error');
 };
