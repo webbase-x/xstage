@@ -1,4 +1,4 @@
-name: X-Stage Windows PC verified build
+name: X-Stage Windows PC installer candidate (v1.0.76)
 
 on:
   workflow_dispatch:
@@ -6,43 +6,94 @@ on:
     paths:
       - 'windows-pc/source/**'
       - 'windows-pc/manifest.json'
+      - 'windows-pc/installer/**'
       - '.github/workflows/build-windows-pc.yml'
 
 permissions:
   contents: read
 
 jobs:
-  windows-source-tests:
+  windows-build-and-installer:
     runs-on: windows-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Verify imported source is present
+
+      - name: Verify imported source and release identity
         shell: pwsh
         run: |
-          if (-not (Test-Path windows-pc/source/Build-Source.ps1)) {
-            throw 'Windows source ZIP has not been imported yet.'
-          }
+          $ErrorActionPreference = 'Stop'
           $meta = Get-Content windows-pc/manifest.json -Raw | ConvertFrom-Json
-          if ($meta.source_imported -ne $true -or $meta.version -ne '1.0.76') {
-            throw 'Windows v1.0.76 source is not imported/verified yet.'
+          if ($meta.source_imported -ne $true -or $meta.version -ne '1.0.76' -or $meta.build -ne 1076) {
+            throw 'Windows v1.0.76 source is not imported. Upload the SHA-256 verified source ZIP before building.'
           }
+          if (-not (Test-Path windows-pc/source/Build-Source.ps1) -or
+              -not (Test-Path windows-pc/source/karaoke/continuous_medley.py)) {
+            throw 'Windows source or continuous medley files are missing.'
+          }
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-          architecture: x64
-      - name: Run Windows full build and verification gates
+          architecture: 'x64'
+
+      - name: Build Windows app and run full regression tests
         shell: pwsh
         run: |
-          Set-Location windows-pc/source
-          & ./Build-Source.ps1 -PythonExe (Get-Command python).Source
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload verified build for manual installation testing
+          $ErrorActionPreference = 'Stop'
+          Push-Location windows-pc/source
+          try {
+            & ./Build-Source.ps1 -PythonExe (Get-Command python).Source
+            if ($LASTEXITCODE -ne 0) { throw "Windows application build failed ($LASTEXITCODE)" }
+            $summary = Get-Content build-tests-summary.json -Raw | ConvertFrom-Json
+            if ($summary.pass -ne $true -or @($summary.failures).Count -gt 0 -or @($summary.errors).Count -gt 0) {
+              throw 'Regression tests did not pass.'
+            }
+            foreach ($file in @('dist/XStageKaraoke/XStageKaraoke.exe',
+                               'dist/XStageKaraoke/install_to_D.ps1',
+                               'dist/XStageKaraoke/tools/Installer-Safety.ps1',
+                               'dist/XStageKaraoke/release-manifest.json')) {
+              if (-not (Test-Path $file -PathType Leaf)) { throw "Build incomplete: $file" }
+            }
+            & (Join-Path (Get-Command python).Source) tools/verify_release.py --verify --package dist/XStageKaraoke
+            if ($LASTEXITCODE -ne 0) { throw 'Release manifest integrity check failed.' }
+          } finally { Pop-Location }
+
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed: $LASTEXITCODE" }
+
+      - name: Compile Windows installer EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path "${env:ProgramFiles(x86)}" 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) { $compiler = Join-Path $env:ProgramFiles 'Inno Setup 6/ISCC.exe' }
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup ISCC.exe not found.' }
+          & $compiler 'windows-pc/installer/XStageKaraoke.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed: $LASTEXITCODE" }
+          $setup = 'windows-pc/installer/output/X-Stage-Karaoke-Windows-v1.0.76-build1076.exe'
+          if (-not (Test-Path $setup -PathType Leaf)) { throw 'Installer EXE was not produced.' }
+          if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer EXE is unexpectedly small.' }
+          $hash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  X-Stage-Karaoke-Windows-v1.0.76-build1076.exe" |
+            Set-Content -Encoding ascii "$setup.sha256"
+          Get-Item $setup | Select-Object FullName, Length
+          Write-Host "Installer SHA256: $hash"
+
+      - name: Upload Windows installer candidate and test logs
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: xstage-windows-v1.0.76-build1076-UNVERIFIED-INSTALLER
-          path: windows-pc/source/dist/XStageKaraoke/**
+          name: X-Stage-Karaoke-Windows-v1.0.76-build1076-CANDIDATE
           if-no-files-found: error
-          retention-days: 14
-      # Deliberately do not publish installer or set latest.available=true:
-      # an EXE bundle is not a tested installer and must pass real Windows testing.
+          retention-days: 30
+          path: |
+            windows-pc/installer/output/*.exe
+            windows-pc/installer/output/*.sha256
+            windows-pc/source/build-tests-summary.json
+            windows-pc/source/build-tests.log
+      # Manual install test and signing remain mandatory before publishing a
+      # public update. Do not set downloads/windows-pc-latest.json.available=true.
