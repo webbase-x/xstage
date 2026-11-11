@@ -216,7 +216,7 @@
           paragraph('เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง จึงไม่สามารถแสดงปุ่มติดตั้งจริงได้'),
           paragraph('TV Bro ใช้ Android WebView/Blink สำหรับแสดงเว็บ แต่การติดตั้ง PWA ต้องอาศัยความสามารถของตัวเบราว์เซอร์เอง','xstage-install-note'),
           actionRow(
-            actionButton('ลองตรวจอีกครั้ง','primary',()=>{void void showInitialInstallChoice('กำลังตรวจสอบอีกครั้ง…');}),
+            actionButton('ลองตรวจอีกครั้ง','primary',()=>{void showInitialInstallChoice('กำลังตรวจสอบอีกครั้ง…');}),
             actionButton('ใช้เบราว์เซอร์ต่อ','secondary',()=>{
               installForLogin=false;pendingLogin=null;
               if(dialog.open)dialog.close();
@@ -266,6 +266,7 @@
 
   function showPreLoginChoice(message=''){
     if(isInstalled()){runPendingLogin();return;}
+    if(!hasInstalledHint()&&!canPromptInstall()){void showInitialInstallChoice(message);return;}
     clearContent();
     dialog.classList.add('is-install-first');
     document.querySelector('#xstage-install-title').textContent=hasInstalledHint()
@@ -288,10 +289,7 @@
     }else if(hasInstalledHint()){
       buttons.push(actionButton('เปิด X-Stage','primary',openInstalledApp));
     }else{
-      buttons.push(actionButton('ดูวิธีติดตั้ง','primary',()=>{
-        information();
-        content.append(actionRow(actionButton('กลับ','secondary',()=>showPreLoginChoice())));
-      }));
+      buttons.push(actionButton('ลองตรวจการติดตั้งอีกครั้ง','primary',()=>{void showInitialInstallChoice(message);}));
     }
     buttons.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',runPendingLogin));
     content.append(
