@@ -353,4 +353,15 @@ const localBuildRefs=[...index.matchAll(/\?v=(\d+)/g)].map(m=>Number(m[1]));
 assert.ok(localBuildRefs.length>0,'index must version local assets');
 assert.ok(localBuildRefs.every(v=>v===Number(version.build)),'all index asset versions must match release build');
 
+// Shared update contract: unavailable is not the same as latest, and APK installs require integrity metadata.
+assert.ok(app.includes("else setStatus('ตรวจสอบเวอร์ชันไม่สำเร็จ"),'web update must report offline or metadata failures');
+assert.ok(androidUpdate.includes('sha256.matches("[0-9a-f]{64}")'),'native APK updates must require SHA-256');
+assert.ok(androidUpdate.includes('file.matches("X-Stage-Karaoke-Android-v'),'native APK update filenames must be constrained');
+assert.ok(androidMain.includes('uri.getPath().equals(XSTAGE_PATH_PREFIX)'),'native JavaScript bridge must limit WebView navigation to the app path');
+assert.ok(androidManifest.includes('android:screenOrientation="unspecified"'),'tablet must be allowed to rotate');
+const windowsUpdateMetadata=JSON.parse(read('downloads/windows-pc-latest.json'));
+const windowsUpdateHelper=read('windows-pc/Check-Update.ps1');
+assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
+assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
+
 console.log('X-Stage regression checks passed for '+version.version+' build '+version.build);
