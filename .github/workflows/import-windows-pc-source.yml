@@ -1,0 +1,37 @@
+name: Import X-Stage Windows PC v0.9.48 R18.1 source
+
+on:
+  push:
+    paths:
+      - 'downloads/X-Stage-Karaoke-v0.9.48-Windows-Source-TurboSync-R18.1-Thai-ETA.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-xstage-windows-pc
+  cancel-in-progress: false
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate SHA-256 and extract Windows source
+        run: python3 scripts/import_windows_pc_source.py
+      - name: Commit source and import manifest
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- windows-pc/source windows-pc/manifest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Import verified Windows v0.9.48 TurboSync R18.1 source"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "Windows source already matches the uploaded archive."
+          fi
