@@ -66,6 +66,7 @@ def main() -> None:
             "source_archive": "downloads/" + ARCHIVE_NAME,
             "sha256": EXPECTED_SHA256,
             "source_files": len(entries),
+            "source_imported": True,
             "windows_build_verified": False,
             "installer_published": False,
             "status": "SOURCE_IMPORTED_NOT_A_WINDOWS_RELEASE",
