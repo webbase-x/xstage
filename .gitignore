@@ -44,11 +44,6 @@ build/
 android-tv/.gradle/
 android-tv/local.properties
 android-tv/**/build/
-*.apk
-*.aab
-*.apks
-*.exe
-*.msi
 *.pdb
 *.obj
 *.class
