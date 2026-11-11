@@ -128,21 +128,31 @@
   function loadRemoteScript(src,id,test){
     if(test())return Promise.resolve();
     return new Promise((resolve,reject)=>{
+      let settled=false;
       let script=document.getElementById(id);
-      if(script?.dataset.loaded==='1'&&test()){resolve();return;}
+      const finish=error=>{
+        if(settled)return;
+        settled=true;clearTimeout(timer);
+        if(error)reject(error);else resolve();
+      };
+      const timer=setTimeout(()=>finish(Error('โหลดระบบรีโมทนานเกินไป')),7000);
+      if(script?.dataset.loaded==='1'&&test()){finish();return;}
       if(!script){
         script=document.createElement('script');
         script.id=id;script.src=src;script.async=true;document.head.append(script);
       }
-      script.addEventListener('load',()=>{script.dataset.loaded='1';test()?resolve():reject(Error('ไลบรารีรีโมทไม่พร้อม'));},{once:true});
-      script.addEventListener('error',()=>reject(Error('โหลดระบบรีโมทไม่สำเร็จ')),{once:true});
+      script.addEventListener('load',()=>{
+        script.dataset.loaded='1';
+        finish(test()?null:Error('ไลบรารีรีโมทไม่พร้อม'));
+      },{once:true});
+      script.addEventListener('error',()=>finish(Error('โหลดระบบรีโมทไม่สำเร็จ')),{once:true});
     });
   }
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js','xstage-peerjs',()=>typeof Peer==='function');
-      await loadRemoteScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1063','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1063','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
@@ -349,9 +359,16 @@
     if(!window.crypto?.getRandomValues){status('เบราว์เซอร์ไม่รองรับการเชื่อมต่ออย่างปลอดภัย');return;}
     const active={peer:null,secret:randomSecret(),connections:new Map(),pending:null};
     session=active;qrEnd.textContent='เปลี่ยน QR';
-    status('กำลังสร้าง QR เพื่อจับคู่รีโมท…');
+    status('กำลังติดต่อเซิร์ฟเวอร์รีโมทเพื่อสร้างรหัสจับคู่…');
     const peer=new Peer();active.peer=peer;
+    const peerOpenTimer=setTimeout(()=>{
+      if(session!==active)return;
+      status('สร้างรหัสรีโมทไม่สำเร็จภายในเวลาที่กำหนด · ตรวจอินเทอร์เน็ตแล้วกด “ลองใหม่”');
+      try{peer.destroy();}catch{}
+      session=null;qrEnd.textContent='ลองใหม่';
+    },12000);
     peer.on('open',async id=>{
+      clearTimeout(peerOpenTimer);
       if(session!==active)return;
       const url=new URL('remote.html',location.href);
       url.search='';url.hash='p='+encodeURIComponent(id)+'&k='+encodeURIComponent(active.secret);
@@ -422,7 +439,7 @@
       };
       conn.on('close',cleanup);conn.on('error',cleanup);
     });
-    peer.on('error',err=>{if(session===active)status('เชื่อมต่อไม่ได้: '+(err?.type||'เครือข่ายไม่พร้อม'));});
+    peer.on('error',err=>{clearTimeout(peerOpenTimer);if(session===active)status('เชื่อมต่อรีโมทไม่ได้: '+(err?.type||'เครือข่ายไม่พร้อม'));});
     peer.on('disconnected',()=>{
       if(session===active)status('การจับคู่หลุด กรุณากด “เปลี่ยน QR” เมื่อเชื่อมต่อไม่ได้');
     });

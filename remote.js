@@ -10,7 +10,7 @@
   const nowTitle=$('remote-now'),nowArtist=$('remote-now-artist'),nowTime=$('remote-now-time');
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
   const hostId=params.get('p'),secret=params.get('k');
-  let peer=null,conn=null,connected=false,ready=false;
+  let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0;
   let searchTimer=null,querySequence=0,activeTab='search';
   const pendingButtons=new Set();
   const reconnectButton=document.createElement('button');
@@ -56,7 +56,9 @@
       check();
     }catch{close();report('ไม่สามารถเปิดกล้องได้ กรุณาตรวจสิทธิ์กล้อง หรือใช้แอปกล้องมือถือสแกน QR');}
   });
+  function clearConnectWatchdog(){if(connectWatchdog){clearTimeout(connectWatchdog);connectWatchdog=0;}}
   function disconnected(message){
+    clearConnectWatchdog();
     connected=false;ready=false;controls.hidden=true;
     reconnectButton.hidden=!hostId||!secret;
     scanLink.hidden=false;report(message,'disconnected');
@@ -227,11 +229,18 @@
   if(typeof Peer!=='function'){report('โหลดระบบจับคู่ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
   report('กำลังเชื่อมต่อรีโมท X-Stage…','connecting');
   function connect(){
+    clearConnectWatchdog();
     if(peer){try{peer.destroy();}catch{}}
     peer=new Peer();
+    connectWatchdog=setTimeout(()=>{
+      disconnected('เชื่อมต่อเวทีนานเกินไป · ตรวจอินเทอร์เน็ตทั้งมือถือและจอหลัก แล้วลองอีกครั้ง');
+      try{peer?.destroy();}catch{}
+    },15000);
     peer.on('open',()=>{
+      report('พบเซิร์ฟเวอร์รีโมทแล้ว · กำลังเชื่อมต่อเวที…','connecting');
       conn=peer.connect(hostId,{reliable:true,serialization:'json'});
       conn.on('open',()=>{
+        clearConnectWatchdog();
         report('กำลังยืนยัน QR กับจอหลัก…','pending');
         conn.send({type:'hello',key:secret});
       });
@@ -243,5 +252,5 @@
   }
   reconnectButton.addEventListener('click',()=>{try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่ออีกครั้ง…','reconnecting');}catch{disconnected('เชื่อมต่อไม่สำเร็จ');}});
   try{connect();}catch{disconnected('เริ่มระบบรีโมทไม่สำเร็จ');}
-  window.addEventListener('beforeunload',()=>{try{conn?.close();peer?.destroy();}catch{}});
+  window.addEventListener('beforeunload',()=>{clearConnectWatchdog();try{conn?.close();peer?.destroy();}catch{}});
 })();

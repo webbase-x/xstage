@@ -60,6 +60,13 @@ assert.ok(!host.includes("action==='stop'"),'host must not expose legacy stop ac
 assert.ok(host.includes("action==='cancel-current'"),'host must cancel current song');
 assert.ok(remote.includes("'cancel-current'"),'remote must request cancel-current');
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
+assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1063"),'host remote must load same-origin PeerJS for Android WebView reliability');
+assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1063"),'host remote must load same-origin QRCode');
+assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1063'),'mobile remote must load same-origin PeerJS');
+assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
+assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
+assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
+assert.ok(remote.includes('connectWatchdog'),'mobile remote must time out instead of hanging during pairing');
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/qrcode'),'main page must lazy-load QRCode');
 assert.ok(!index.includes('apis.google.com/js/api.js'),'main page must lazy-load Google Picker API');
 assert.ok(pc.includes("FAVORITES_STORE='xstage-favorites-v2'"),'favorites must persist');
