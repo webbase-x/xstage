@@ -72,6 +72,10 @@ async function checkAppVersion(){
     if(remoteBuild>currentBuild){
       state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
       renderAppUpdateNotice();
+    }else{
+      state.updateAvailable=null;
+      state.updateAfterTrack=false;
+      renderAppUpdateNotice();
     }
   }catch{/* Version checking must never affect playback. */}
 }
