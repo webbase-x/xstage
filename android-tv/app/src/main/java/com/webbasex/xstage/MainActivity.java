@@ -385,6 +385,11 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public boolean usesGooglePlayUpdates() {
+            return !BuildConfig.DEBUG;
+        }
+
+        @JavascriptInterface
         public void checkForAppUpdate() {
             if (updateManager != null) updateManager.checkForUpdates(true);
         }
