@@ -23,6 +23,11 @@ const iconSvg=read('assets/xstage-app-icon.svg');
 const iconBuilder=read('scripts/build_xstage_icons.py');
 const iconWorkflow=read('.github/workflows/build-xstage-pwa-icons.yml');
 const singerStage=read('stage.html');
+const androidGradle=read('android-tv/app/build.gradle');
+const androidManifest=read('android-tv/app/src/main/AndroidManifest.xml');
+const androidMain=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
+const androidAuth=read('android-tv/app/src/main/java/com/webbasex/xstage/GoogleDeviceAuth.java');
+const androidWorkflow=read('.github/workflows/build-android-tv.yml');
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',pwa]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
@@ -68,6 +73,22 @@ assert.ok(pwa.includes('const installCapabilityWaitMs=1800'),'install UI must wa
 assert.ok(pwa.includes("actionButton('ติดตั้ง X-Stage ตอนนี้','primary'"),'supported browsers must show a direct install-now button');
 assert.ok(pwa.includes('เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง'),'unsupported browsers must explain why no real install button can be shown');
 assert.ok(!pwa.includes("actionButton('ดูวิธีติดตั้ง','primary'"),'initial login flow must not use the ambiguous install-instructions CTA');
+assert.ok(app.includes('function androidTvNativeBridgeReady()'),'web app must detect the native Android TV bridge');
+assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Google device codes from Android');
+assert.ok(app.includes('window.XStageReceiveAndroidToken'),'web app must accept the Android TV OAuth access token');
+assert.ok(pwa.includes("params.get('source')==='android-tv'"),'Android TV app launch must skip browser PWA install prompts');
+assert.ok(androidGradle.includes("applicationId 'com.webbasex.xstage'"),'Android TV package id must stay stable for Google Play');
+assert.ok(androidGradle.includes('minSdk 23'),'Android TV app must remain compatible with Android 10 and older supported TVs');
+assert.ok(androidGradle.includes('targetSdk 34'),'Android TV app must meet the current Google Play TV target requirement');
+assert.ok(androidManifest.includes('android.intent.category.LEANBACK_LAUNCHER'),'Android TV launcher category must be declared');
+assert.ok(androidManifest.includes('android.hardware.touchscreen')&&androidManifest.includes('android:required="false"'),'Android TV app must not require touchscreen hardware');
+assert.ok(androidMain.includes('addJavascriptInterface(new AndroidBridge(), "XStageAndroid")'),'native Android bridge must be exposed only inside the trusted X-Stage WebView');
+assert.ok(androidMain.includes('source=android-tv'),'Android app must identify itself to the hosted X-Stage web runtime');
+assert.ok(androidAuth.includes('https://oauth2.googleapis.com/device/code'),'Android TV login must use Google device authorization');
+assert.ok(androidAuth.includes('https://oauth2.googleapis.com/token'),'Android TV login must poll the Google token endpoint');
+assert.ok(androidAuth.includes('https://www.googleapis.com/auth/drive.file'),'Android TV login must keep the existing private Drive scope');
+assert.ok(androidWorkflow.includes('assembleDebug assembleRelease bundleRelease'),'CI must build APK and AAB from the same Android source');
+assert.ok(androidWorkflow.includes('actions/upload-artifact@v4'),'CI must publish Android TV build artifacts');
 assert.ok(pwa.includes("if(shouldAskInstallOnEntry())setTimeout(()=>{void showInitialInstallChoice();},0)"),'install-first choice must appear automatically on initial browser entry');
 assert.ok(pwa.includes("document.getElementById('gate-login')?.focus?.()"),'choosing browser mode must return focus to the normal Google Login button without authenticating automatically');
 assert.ok(pwa.includes("params.get('source')==='installed'"),'installed-app launch must not show the browser install-first prompt again');
