@@ -2056,20 +2056,20 @@ function androidTvAuthPanel(){
   panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-labelledby','android-tv-auth-title');
   panel.innerHTML='<div class="android-tv-auth-box">'+
-    '<span class="android-tv-auth-kicker">X-STAGE ANDROID TV</span>'+
+    '<span class="android-tv-auth-kicker">X-STAGE ANDROID</span>'+
     '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
-    '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือ แล้วกรอกรหัสที่แสดงบนทีวี</p>'+
+    '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือหรืออุปกรณ์อื่น แล้วกรอกรหัสที่แสดง</p>'+
     '<div class="android-tv-auth-grid">'+
       '<div class="android-tv-auth-qr-wrap"><canvas id="android-tv-auth-qr" width="248" height="248" hidden aria-label="QR สำหรับเปิดหน้า Google Device Login"></canvas><div id="android-tv-auth-qr-wait">กำลังสร้าง QR…</div></div>'+
       '<div class="android-tv-auth-details">'+
         '<div id="android-tv-auth-url" class="android-tv-auth-url">https://www.google.com/device</div>'+
-        '<div class="android-tv-auth-code-label">รหัสบนทีวี</div>'+
+        '<div class="android-tv-auth-code-label">รหัสเข้าสู่ระบบ</div>'+
         '<div id="android-tv-auth-code" class="android-tv-auth-code">----</div>'+
         '<div id="android-tv-auth-status" class="android-tv-auth-status">กำลังเตรียมรหัส…</div>'+
       '</div>'+
     '</div>'+
     '<div class="android-tv-auth-actions"><button id="android-tv-auth-retry" type="button" hidden>ลองใหม่</button><button id="android-tv-auth-cancel" type="button">ยกเลิก</button></div>'+
-    '<small>ไม่ต้องกรอกรหัสผ่าน Google บนทีวี · การอนุญาตเกิดบนมือถือของคุณ</small>'+
+    '<small>ไม่ต้องกรอกรหัสผ่าน Google ใน X-Stage · การอนุญาตเกิดบนหน้า Google ที่ปลอดภัย</small>'+
     '</div>';
   document.body.append(panel);
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
@@ -2185,7 +2185,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
 window.XStageAndroidSignedOut=()=>{
   hideAndroidTvAuthPanel();
   if(state.token)resetPrivate({keepAuth:false});
-  setStatus('ออกจากระบบ Google บน Android TV แล้ว');
+  setStatus('ออกจากระบบ Google ในแอป Android แล้ว');
 };
 function androidTvUpdatePanel(){
   let panel=$('android-tv-update-panel');
@@ -2198,7 +2198,7 @@ function androidTvUpdatePanel(){
   panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-labelledby','android-tv-update-title');
   panel.innerHTML='<div class="android-tv-update-box">'+
-    '<span class="android-tv-update-kicker">X-STAGE ANDROID TV UPDATE</span>'+
+    '<span class="android-tv-update-kicker">X-STAGE ANDROID UPDATE</span>'+
     '<h2 id="android-tv-update-title">มี X-Stage เวอร์ชันใหม่</h2>'+
     '<p id="android-tv-update-version" class="android-tv-update-version"></p>'+
     '<p id="android-tv-update-status" class="android-tv-update-status">พร้อมอัปเดต</p>'+
@@ -2265,18 +2265,18 @@ function startAndroidTvDeviceLogin(automatic=false){
   if(!androidTvNativeBridgeReady())return;
   ui.login.disabled=ui.gateLogin.disabled=true;
   showAndroidTvAuthPanel();
-  setStatus(automatic?'กำลังเตรียม QR Login บน Android TV…':'กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
+  setStatus(automatic?'กำลังเตรียม QR Login ในแอป Android…':'กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
   try{window.XStageAndroid.requestGoogleLogin();}
   catch(error){
     ui.login.disabled=ui.gateLogin.disabled=false;
-    window.XStageAndroidAuthError(error?.message||'เรียก Android TV Login ไม่สำเร็จ');
+    window.XStageAndroidAuthError(error?.message||'เรียก Android Login ไม่สำเร็จ');
   }
 }
 function bootAndroidTvAuthentication(){
   if(androidTvBootAuthStarted||!androidTvNativeBridgeReady()||state.token)return;
   androidTvBootAuthStarted=true;
   if(androidTvHasStoredGoogleSession()){
-    setStatus('กำลังกู้คืน Google Drive บน Android TV…');
+    setStatus('กำลังกู้คืน Google Drive ในแอป Android…');
     restoreAndroidTvGoogleSession();
     return;
   }

@@ -1,13 +1,13 @@
-# X-Stage Android TV
+# X-Stage Android (TV + Tablet)
 
-โปรเจกต์ Android TV ชุดเดียวสำหรับ X-Stage Karaoke Online
+โปรเจกต์ Android ชุดเดียวสำหรับ X-Stage Karaoke Online รองรับทั้ง Android TV และแท็บเล็ต Android
 
 ## ไฟล์ที่ได้จากการ build
 
 จาก source เดียวกัน GitHub Actions สร้าง:
 
 - `.aab` — ใช้อัปโหลด Google Play
-- `.apk` — ใช้ติดตั้งตรง/ทดสอบบน TrueID TV และ Android TV
+- `.apk` — ไฟล์เดียวสำหรับติดตั้งตรง/ทดสอบบน TrueID TV, Android TV และแท็บเล็ต Android
 - Play Store icon 512×512
 - Android TV banner 320×180
 
@@ -25,19 +25,20 @@ Google Play ใช้ Android App Bundle (AAB) เป็นไฟล์เผย
 - targetSdk 34 (Android 14)
 - compileSdk 35
 - TrueID TV Android 10 / API 29 รองรับ
-- ใช้ `LEANBACK_LAUNCHER`
-- ไม่บังคับ touchscreen
-- D-pad/remote ใช้งานได้
+- ใช้ `LEANBACK_LAUNCHER` สำหรับ TV และ `LAUNCHER` สำหรับแท็บเล็ต
+- `android.software.leanback` เป็น optional จึงไม่กีดกันแท็บเล็ต
+- ไม่บังคับ touchscreen; TV ใช้ D-pad/remote และแท็บเล็ตใช้ touch ได้
+- ใช้ `sensorLandscape` เพื่อรองรับการหมุนแท็บเล็ตในแนวนอนทั้งสองด้าน
 - WebView ใช้ hardware acceleration และเปิด X-Stage จาก GitHub Pages
 
-## Google Login บน TV
+## Google Login ในแอป Android
 
-Android TV app ไม่ใช้ Google popup ใน WebView แต่ใช้ OAuth 2.0 Device Flow:
+Native Android app ใช้ OAuth 2.0 Device Flow เพื่อให้ทำงานสม่ำเสมอทั้งบน TV และแท็บเล็ตโดยไม่พึ่ง popup ใน WebView:
 
 1. ทีวีขอ user code จาก Google
-2. X-Stage แสดง `google.com/device` และรหัสบนทีวี
+2. X-Stage แสดง `google.com/device` และรหัสบนอุปกรณ์
 3. ผู้ใช้อนุญาตบนมือถือ
-4. TV poll token จาก Google
+4. แอป Android poll token จาก Google
 5. ส่ง access token เข้า X-Stage web runtime
 6. refresh token เก็บใน private app storage เพื่อกู้ session
 
@@ -95,9 +96,9 @@ android-tv/app/build/outputs/bundle/
 
 ตั้งแต่ X-Stage 1.0.58 เป็นต้นไป APK ทดสอบที่เผยแพร่ผ่าน GitHub Pages ใช้ test signing key แบบคงที่ เพื่อให้ Android ติดตั้งรุ่นใหม่ทับรุ่นเดิมได้
 
-เมื่อเปิด Test APK:
+เมื่อเปิด Test APK บน TV หรือแท็บเล็ต:
 1. แอปตรวจ `downloads/android-tv-latest.json` อัตโนมัติ และตรวจซ้ำเป็นระยะ
-2. ถ้ามี build ใหม่กว่า จะแจ้งบนหน้าทีวี
+2. ถ้ามี build ใหม่กว่า จะแจ้งบนหน้าจออุปกรณ์
 3. กด **อัปเดตตอนนี้**
 4. ครั้งแรก Android อาจให้อนุญาต “ติดตั้งแอปที่ไม่รู้จัก” สำหรับ X-Stage
 5. แอปดาวน์โหลด APK จาก GitHub Pages

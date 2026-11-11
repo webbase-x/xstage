@@ -28,18 +28,18 @@
       if(!response.ok)throw new Error('HTTP '+response.status);
       const meta=await response.json();
       const file=String(meta?.file||'').trim();
-      if(!/^X-Stage-Karaoke-Android-TV-v[0-9A-Za-z._-]+-build[0-9]+\.apk$/.test(file)){
+      if(!/^X-Stage-Karaoke-Android(?:-TV)?-v[0-9A-Za-z._-]+-build[0-9]+\.apk$/.test(file)){
         throw new Error('invalid APK filename');
       }
       androidTvApkUrl=new URL('./downloads/'+file,location.href).href;
       if(apkMenuLink){
         apkMenuLink.href=androidTvApkUrl;
         apkMenuLink.setAttribute('download',file);
-        apkMenuLink.textContent='ดาวน์โหลด Android TV APK '+String(meta.version||'')+' (Build '+String(meta.build||'')+')';
+        apkMenuLink.textContent='ดาวน์โหลด Android APK '+String(meta.version||'')+' (Build '+String(meta.build||'')+')';
       }
       return androidTvApkUrl;
     }catch(error){
-      console.warn('X-Stage Android TV APK link:',error?.message||error);
+      console.warn('X-Stage Android APK link:',error?.message||error);
       if(apkMenuLink)apkMenuLink.href=ANDROID_TV_APK_FALLBACK;
       return androidTvApkUrl;
     }
@@ -239,7 +239,7 @@
   function shouldAskInstallOnEntry(){
     if(isInstalled()||skipInstallPrompt())return false;
     const params=new URLSearchParams(location.search);
-    if(params.get('source')==='installed'||params.get('source')==='android-tv')return false;
+    if(params.get('source')==='installed'||params.get('source')==='android-tv'||params.get('source')==='android-tablet')return false;
     const gate=document.getElementById('gate');
     return !!(gate&&!gate.hidden);
   }
@@ -275,7 +275,7 @@
         unsupportedActions.push(actionButton('ลองตรวจ PWA อีกครั้ง','secondary',()=>{void showInitialInstallChoice('กำลังตรวจสอบอีกครั้ง…');}));
         content.append(
           paragraph(isAndroidDevice()
-            ? 'เบราว์เซอร์นี้ไม่รองรับการติดตั้ง PWA โดยตรง แต่สามารถดาวน์โหลด X-Stage Android TV APK จาก GitHub Pages ได้'
+            ? 'เบราว์เซอร์นี้ไม่รองรับการติดตั้ง PWA โดยตรง แต่สามารถดาวน์โหลด X-Stage Android APK สำหรับ TV/แท็บเล็ตจาก GitHub Pages ได้'
             : 'เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง จึงไม่สามารถแสดงปุ่มติดตั้งจริงได้'),
           paragraph(isAndroidDevice()
             ? 'หลังดาวน์โหลด Android อาจขออนุญาต “ติดตั้งแอปที่ไม่รู้จัก” สำหรับเบราว์เซอร์นี้ก่อนติดตั้ง APK'

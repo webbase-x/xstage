@@ -158,10 +158,13 @@ final class XStageUpdateManager {
         JSONObject json = new JSONObject(body.toString());
         int build = json.optInt("build", 0);
         String version = json.optString("version", "");
-        String file = json.optString("file", "X-Stage-Karaoke-Android-TV-Test.apk");
+        String file = json.optString("file", "");
         String sha256 = json.optString("sha256", "").toLowerCase(Locale.ROOT);
-        if (build <= 0 || version.isEmpty() || file.isEmpty()) {
+        if (build <= 0 || version.isEmpty()) {
             throw new IllegalStateException("ข้อมูลเวอร์ชัน APK ไม่สมบูรณ์");
+        }
+        if (file.isEmpty()) {
+            file = "X-Stage-Karaoke-Android-v" + version + "-build" + build + ".apk";
         }
         String apkUrl = BuildConfig.XSTAGE_WEB_URL + "downloads/" + Uri.encode(file, "/");
         return new LatestUpdate(version, build, apkUrl, sha256, file);

@@ -93,7 +93,7 @@ jobs:
             android-tv/app/build/outputs/bundle/release/*.aab
             android-tv/store-assets/*.png
 
-      - name: Publish browser-downloadable Android TV test APK
+      - name: Publish browser-downloadable Android test APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
@@ -101,22 +101,22 @@ jobs:
           mkdir -p downloads
           VERSION="$(python -c "import json; print(json.load(open('version.json', encoding='utf-8'))['version'])")"
           BUILD="$(python -c "import json; print(json.load(open('version.json', encoding='utf-8'))['build'])")"
-          APK_NAME="X-Stage-Karaoke-Android-TV-v${VERSION}-build${BUILD}.apk"
+          APK_NAME="X-Stage-Karaoke-Android-v${VERSION}-build${BUILD}.apk"
           cp android-tv/app/build/outputs/apk/debug/app-debug.apk "downloads/${APK_NAME}"
           sha256sum "downloads/${APK_NAME}" > "downloads/${APK_NAME}.sha256"
           python - <<'PY'
           import hashlib, json, pathlib
           meta=json.load(open('version.json',encoding='utf-8'))
-          apk_name=f"X-Stage-Karaoke-Android-TV-v{meta['version']}-build{meta['build']}.apk"
+          apk_name=f"X-Stage-Karaoke-Android-v{meta['version']}-build{meta['build']}.apk"
           apk=pathlib.Path('downloads')/apk_name
           info={
-            'name':'X-Stage Karaoke Android TV Test APK',
+            'name':'X-Stage Karaoke Android Test APK (TV + Tablet)',
             'version':meta['version'],
             'build':meta['build'],
             'file':apk.name,
             'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
             'source_commit':'${{ github.sha }}',
-            'note':'Test APK signed with the stable public X-Stage test key for in-place sideload updates; production Google Play signing is separate.'
+            'note':'Android TV/tablet test APK signed with the stable public X-Stage test key for in-place sideload updates; production Google Play signing is separate.'
           }
           pathlib.Path('downloads/android-tv-latest.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           PY

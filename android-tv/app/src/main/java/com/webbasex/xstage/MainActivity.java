@@ -2,8 +2,11 @@ package com.webbasex.xstage;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -175,10 +178,20 @@ public final class MainActivity extends Activity {
         webView.requestFocus();
     }
 
+    private boolean isTelevisionDevice() {
+        UiModeManager uiModeManager = (UiModeManager) getSystemService(UI_MODE_SERVICE);
+        if (uiModeManager != null
+                && uiModeManager.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) {
+            return true;
+        }
+        return getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+    }
+
     private String buildAppUrl() {
         String separator = BuildConfig.XSTAGE_WEB_URL.contains("?") ? "&" : "?";
+        String source = isTelevisionDevice() ? "android-tv" : "android-tablet";
         return BuildConfig.XSTAGE_WEB_URL + separator +
-                "source=android-tv&native_version=" +
+                "source=" + source + "&native_version=" +
                 Uri.encode(BuildConfig.VERSION_NAME);
     }
 
@@ -340,7 +353,7 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean isAndroidTvApp() {
-            return true;
+            return isTelevisionDevice();
         }
     }
 }
