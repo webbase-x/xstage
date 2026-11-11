@@ -21,6 +21,7 @@
   const pendingRequests=new Map();
   let nextRequestId=0;
   let reconnectTimer=0,reconnectAttempts=0;
+  let lastQueueRendering='';
 
   const reconnectButton=document.createElement('button');
   reconnectButton.type='button';reconnectButton.textContent='↻ เชื่อมต่ออีกครั้ง';
@@ -87,6 +88,18 @@
     if(tab==='queue'||tab==='owner')send({type:'refresh'});
   }
   for(const id of ['search','queue','control','owner'])$('remote-tab-'+id).addEventListener('click',()=>setTab(id));
+  // Keyboard accessibility for tab navigation; mobile touch stays unchanged.
+  document.querySelector('.remote-tabs')?.addEventListener('keydown',event=>{
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    const tabs=['search','queue','control','owner'];
+    const current=Math.max(0,tabs.indexOf(activeTab));
+    let index=current;
+    if(event.key==='Home')index=0;
+    else if(event.key==='End')index=tabs.length-1;
+    else index=(current+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+    event.preventDefault();
+    setTab(tabs[index]);$('remote-tab-'+tabs[index]).focus();
+  });
   controls.hidden=true;setTab('search');setRole('guest');
 
   function disconnected(message){
@@ -127,6 +140,9 @@
     }
   }
   function drawQueue(items,total){
+    const signature=JSON.stringify([role,total,items]);
+    if(signature===lastQueueRendering)return;
+    lastQueueRendering=signature;
     queueCount.textContent=String(Number(total)||0);queueList.replaceChildren();
     if(!Array.isArray(items)||!items.length){
       const empty=document.createElement('p');empty.className='remote-empty';
