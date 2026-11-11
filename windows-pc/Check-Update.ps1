@@ -19,7 +19,7 @@ try {
         exit 0
     }
     $file = [string]$meta.installer_file
-    if ($file -notmatch '^X-Stage-Karaoke-Windows-v[0-9.]+-build[0-9]+\\.(exe|msi)$') {
+    if ($file -notmatch '^X-Stage-Karaoke-Windows-v[0-9.]+-build[0-9]+\.(exe|msi)$') {
         throw 'ชื่อไฟล์ตัวติดตั้งไม่ถูกต้อง'
     }
     $expected = [string]$meta.sha256
