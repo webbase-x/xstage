@@ -16,7 +16,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_NAME = "X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip"
-EXPECTED_SHA256 = "e93df7b13548dfd01b1d35e71cd521635bd82fd7ad60de33fa46fc6a29a9cdd7"
+EXPECTED_SHA256 = "bb9498deff94e8bf3debe48bcce32a9b5e6adb595c4c26783f8553128cdfe224"
 ARCHIVE = ROOT / "downloads" / ARCHIVE_NAME
 WINDOWS_ROOT = ROOT / "windows-pc"
 DESTINATION = WINDOWS_ROOT / "source"
