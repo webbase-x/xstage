@@ -64,9 +64,10 @@ async function checkAppVersion(){
     const url=new URL('version.json',location.href);
     url.searchParams.set('_',String(Date.now()));
     const response=await fetch(url,{cache:'no-store'});
-    if(!response.ok)return;
+    if(!response.ok)throw new Error('HTTP '+response.status);
     const remote=await response.json();
     const remoteBuild=Number(remote?.build)||0;
+    if(!Number.isSafeInteger(remoteBuild)||remoteBuild<1||typeof remote?.version!=='string')throw new Error('ข้อมูลเวอร์ชันไม่ถูกต้อง');
     const currentBuild=Number(XSTAGE_RELEASE.build)||0;
     if(remoteBuild>currentBuild){
       state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
@@ -78,7 +79,7 @@ async function checkAppVersion(){
       renderAppUpdateNotice();
       return false;
     }
-  }catch{return false;/* Version checking must never affect playback. */}
+  }catch{return null;/* Unknown status: never claim that an offline client is up to date. */}
 }
 async function triggerImmediateVersionUpdate(){
   if(androidTvNativeBridgeReady()){
@@ -92,8 +93,9 @@ async function triggerImmediateVersionUpdate(){
     return;
   }
   const found=await checkAppVersion();
-  if(found)await performAppUpdateReload();
-  else setStatus('X-Stage เป็นเวอร์ชันล่าสุดแล้ว');
+  if(found===true)await performAppUpdateReload();
+  else if(found===false)setStatus('X-Stage เป็นเวอร์ชันล่าสุดแล้ว');
+  else setStatus('ตรวจสอบเวอร์ชันไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่');
 }
 function setupAppUpdateWatcher(){
   const {action}=appUpdateElements();
