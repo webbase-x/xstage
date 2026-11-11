@@ -96,7 +96,7 @@
 .remote-pair-panel{position:absolute;z-index:25;inset:0;display:flex;justify-content:center;align-items:center;padding:8px;background:#020b17eb;overflow:auto;overscroll-behavior:contain}
 .remote-pair-box{background:#0c273bee;border:1px solid #418299;box-shadow:0 12px 55px #000c;border-radius:15px;width:min(100%,385px);max-height:100%;overflow-y:auto;padding:clamp(10px,2vw,18px);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:#e3f4fa}
 .remote-pair-top{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;font-size:clamp(.83rem,1.5vw,1.06rem)}
-.remote-pair-box canvas{display:block;width:min(200px,45vh,63vw);height:auto;aspect-ratio:1/1;background:white;padding:6px;border-radius:8px}
+.remote-pair-box canvas{--xstage-remote-qr-size:min(200px,45vh,63vw);display:block;width:var(--xstage-remote-qr-size)!important;height:var(--xstage-remote-qr-size)!important;min-width:var(--xstage-remote-qr-size);min-height:var(--xstage-remote-qr-size);max-width:var(--xstage-remote-qr-size);max-height:var(--xstage-remote-qr-size);aspect-ratio:1/1;box-sizing:border-box;background:white;padding:6px;border-radius:8px}
 .remote-pair-box canvas[hidden]{display:none!important}
 .remote-pair-box p{font-size:.78rem;line-height:1.35;margin:2px 0;color:#a1e9d8}
 .remote-pair-box a{color:#7edcef;font-size:.76rem;overflow-wrap:anywhere}
@@ -119,7 +119,7 @@
   .virtual-keyboard{max-height:68%;padding:4px}
   .virtual-key-row{gap:2px}
   .virtual-key{min-height:28px}
-  .remote-pair-box canvas{width:min(140px,33vh)}
+  .remote-pair-box canvas{--xstage-remote-qr-size:min(140px,33vh,63vw)}
 }
 
 
@@ -608,7 +608,7 @@
 .android-tv-auth-copy{font-size:clamp(.95rem,1.7vw,1.3rem);color:#b8d2df;line-height:1.55}
 .android-tv-auth-grid{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:clamp(20px,4vw,44px);align-items:center;margin:20px 0}
 .android-tv-auth-qr-wrap{display:grid;place-items:center;min-height:260px;padding:10px;border-radius:18px;background:#fff;color:#173245;font-weight:800}
-.android-tv-auth-qr-wrap canvas{width:min(248px,34vw);height:auto;max-width:100%;background:#fff;border-radius:8px}
+.android-tv-auth-qr-wrap canvas{--xstage-auth-qr-size:min(248px,34vw,42vh);width:var(--xstage-auth-qr-size)!important;height:var(--xstage-auth-qr-size)!important;min-width:var(--xstage-auth-qr-size);min-height:var(--xstage-auth-qr-size);max-width:var(--xstage-auth-qr-size);max-height:var(--xstage-auth-qr-size);aspect-ratio:1/1;box-sizing:border-box;background:#fff;border-radius:8px}
 .android-tv-auth-details{min-width:0;text-align:left}
 .android-tv-auth-code-label{margin-top:12px;font-size:clamp(.76rem,1.1vw,.9rem);font-weight:900;letter-spacing:.08em;color:#84c8d7;text-transform:uppercase}
 

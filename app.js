@@ -2125,7 +2125,7 @@ function ensureAndroidTvQrLibrary(){
     document.getElementById('xstage-qrcode')?.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1061';
+    script.src='./assets/vendor/qrcode.min.js?v=1064';
     script.async=true;
     const timer=setTimeout(()=>finish(Error('QR library timeout')),5000);
     script.addEventListener('load',()=>finish(typeof QRCode!=='undefined'?null:Error('QR library unavailable')),{once:true});
@@ -2142,6 +2142,7 @@ async function renderAndroidTvLoginQr(url){
   if(wait){wait.hidden=false;wait.textContent='กำลังสร้าง QR…';}
   try{
     await ensureAndroidTvQrLibrary();
+    canvas.width=248;canvas.height=248;
     await QRCode.toCanvas(canvas,String(url||'https://www.google.com/device'),{
       width:248,margin:2,errorCorrectionLevel:'M',
       color:{dark:'#07131f',light:'#ffffff'}

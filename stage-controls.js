@@ -151,8 +151,8 @@
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1063','xstage-peerjs',()=>typeof Peer==='function');
-      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1063','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1064','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1064','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
@@ -375,6 +375,7 @@
       qrLink.textContent='เปิดรีโมท X-Stage บนมือถือ';qrLink.href=url.href;
       if(typeof QRCode==='undefined'){status('ไม่สามารถสร้าง QR ได้ ใช้ลิงก์รีโมทแทน');return;}
       try{
+        qrCanvas.width=232;qrCanvas.height=232;
         await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
         if(session!==active)return;
         qrCanvas.hidden=false;
