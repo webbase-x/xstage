@@ -363,11 +363,18 @@ assert.ok(androidManifest.includes('android:screenOrientation="unspecified"'),'t
 const androidPlayMeta=JSON.parse(read('downloads/android-play-latest.json'));
 assert.equal(androidPlayMeta.available,false,'Google Play alerts must not advertise an unpublished release');
 assert.equal(androidPlayMeta.package,'com.webbasex.xstage','Play metadata must target the production package');
+assert.equal(androidPlayMeta.version,version.version,'Google Play channel version must align with unified source release');
+assert.equal(androidPlayMeta.build,version.build,'Google Play channel build must align with unified source release');
 assert.ok(androidUpdate.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest()'),'test APK and Play updates must use separate channels');
 assert.ok(androidUpdate.includes('if (update.playStore)'),'production Android install action must open the Play Store');
 assert.ok(androidMain.includes('public boolean usesGooglePlayUpdates()'),'native UI must identify its update channel');
 assert.ok(app.includes('if(androidTvNativeBridgeReady())return null;'),'Android must not confuse a web reload with installing an APK');
 const windowsUpdateMetadata=JSON.parse(read('downloads/windows-pc-latest.json'));
+assert.equal(windowsUpdateMetadata.version,version.version,'Windows source version must align with unified release');
+assert.equal(windowsUpdateMetadata.build,version.build,'Windows source build must align with unified release');
+const windowsSourceManifest=JSON.parse(read('windows-pc/manifest.json'));
+assert.equal(windowsSourceManifest.version,version.version,'Windows import manifest must align with unified release');
+assert.equal(windowsSourceManifest.build,version.build,'Windows source build must align with unified release');
 const windowsUpdateHelper=read('windows-pc/Check-Update.ps1');
 assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
