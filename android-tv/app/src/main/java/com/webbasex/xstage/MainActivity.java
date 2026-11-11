@@ -33,6 +33,7 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private GoogleDeviceAuth googleAuth;
     private XStageUpdateManager updateManager;
+    private boolean webAppReady;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -161,6 +162,10 @@ public final class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 Uri uri = Uri.parse(url);
                 if (isTrustedXStageUrl(uri) && updateManager != null) {
+                    // Wait until the web UI and its deferred scripts are ready before the native
+                    // updater reports availability. Otherwise a fast version check can finish
+                    // before window.XStageAndroidUpdateAvailable exists and the notice is lost.
+                    webAppReady = true;
                     updateManager.checkForUpdates(false);
                 }
             }
@@ -247,7 +252,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         enterImmersiveMode();
         if (webView != null) webView.onResume();
-        if (updateManager != null) updateManager.onResume();
+        if (updateManager != null && webAppReady) updateManager.onResume();
     }
 
     @Override
