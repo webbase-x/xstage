@@ -764,3 +764,76 @@ body.xstage-native-tv #mobile-queue-toggle .tv-queue-arrow{display:inline-flex!i
 body.xstage-native-tv #mobile-queue-toggle .tv-queue-count{
   min-width:18px;justify-content:center
 }
+
+/* 1.0.69 Native TV: display + search + onscreen keyboard + QR only. */
+body.xstage-native-tv #mobile-stage-menu,
+body.xstage-native-tv #mobile-menu-toggle,
+body.xstage-native-tv #stage-tools-toggle,
+body.xstage-native-tv .pc-tools,
+body.xstage-native-tv #xstage-context-menu,
+body.xstage-native-tv #stage-queue-panel,
+body.xstage-native-tv #remote-request-toggle,
+body.xstage-native-tv #remote-request-panel,
+body.xstage-native-tv #fullscreen{display:none!important}
+
+body.xstage-native-tv .transport-main,
+body.xstage-native-tv .transport-right{display:none!important}
+body.xstage-native-tv .transport-right-actions{justify-content:flex-end!important}
+body.xstage-native-tv #stage-queue-toggle{
+  display:inline-flex!important;pointer-events:none!important;opacity:1!important;
+  border-color:#42677a!important;background:#0c2637!important;color:#b8d8e5!important
+}
+body.xstage-native-tv #stage-queue-toggle > span:first-of-type{display:none!important}
+body.xstage-native-tv #stage-queue-toggle > span:last-of-type{display:inline-flex!important}
+body.xstage-native-tv #stage-queue-count{display:inline-flex!important}
+
+body.xstage-native-tv #toggle-keyboard{display:flex!important}
+body.xstage-native-tv .remote-pair-panel{display:grid}
+body.xstage-native-tv .remote-pair-panel[hidden]{display:none}
+body.xstage-native-tv #remote-pair-close,
+body.xstage-native-tv .remote-pair-actions,
+body.xstage-native-tv .remote-settings,
+body.xstage-native-tv #remote-link{display:none!important}
+body.xstage-native-tv .remote-pair-box{
+  max-height:calc(100% - 16px);overflow:hidden
+}
+body.xstage-native-tv .remote-pair-box > small{
+  font-size:.72rem;color:#a9cbd7
+}
+body.xstage-native-tv .remote-pair-top{justify-content:center}
+body.xstage-native-tv .remote-pair-top strong::after{
+  content:' · Guest พื้นฐาน / Owner บัญชีเดียวกับจอ';font-size:.72em;color:#80dfe9
+}
+
+/* Native TV keeps the mobile-pair QR visible without covering karaoke lyrics. */
+body.xstage-native-tv #remote-pair-panel{
+  position:absolute!important;inset:12px 12px auto auto!important;
+  width:min(230px,30vw)!important;height:auto!important;
+  display:block!important;z-index:28!important;background:transparent!important;
+  pointer-events:none!important;padding:0!important
+}
+body.xstage-native-tv #remote-pair-panel[hidden]{display:none!important}
+body.xstage-native-tv #remote-pair-panel .remote-pair-box{
+  width:100%!important;max-width:100%!important;max-height:none!important;
+  padding:10px!important;gap:6px!important;border-radius:14px!important;
+  background:rgba(5,23,34,.92)!important;box-shadow:0 10px 30px rgba(0,0,0,.5)!important;
+  pointer-events:none!important
+}
+body.xstage-native-tv #remote-pair-panel #remote-qr{
+  --xstage-remote-qr-size:min(180px,24vw,30vh)!important;
+  width:var(--xstage-remote-qr-size)!important;height:var(--xstage-remote-qr-size)!important;
+  max-width:100%!important;max-height:none!important;margin:auto!important
+}
+body.xstage-native-tv #remote-pair-panel .remote-pair-top strong{
+  font-size:.82rem!important;line-height:1.25!important
+}
+body.xstage-native-tv #remote-pair-panel #remote-pair-status{
+  margin:0!important;font-size:.72rem!important;line-height:1.35!important
+}
+body.xstage-native-tv #remote-pair-panel .remote-pair-box > small{
+  display:block!important;margin:0!important;font-size:.64rem!important;line-height:1.3!important
+}
+@media(max-width:900px){
+  body.xstage-native-tv #remote-pair-panel{width:min(200px,34vw)!important}
+  body.xstage-native-tv #remote-pair-panel #remote-qr{--xstage-remote-qr-size:min(150px,26vw,27vh)!important}
+}

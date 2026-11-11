@@ -180,6 +180,31 @@ function sendBackgroundToSecondScreen(){
     screen.postMessage({type:'xstage-background',value:backgroundPrefs.singer,brandTheme:brandThemePrefs.singer},location.origin);
   }catch{}
 }
+window.XStageRemoteVisualSettings=function(action,value){
+  if(action==='state')return {background:backgroundPrefs.main,brandTheme:brandThemePrefs.main,lyricScale,lyricColor};
+  if(action==='background'){setMainBackground(String(value||'neon'));return true;}
+  if(action==='brand-theme'){setMainBrandTheme(String(value||'premium-neon'));return true;}
+  if(action==='lyric-scale'){
+    const next=Math.max(.7,Math.min(1.5,Number(value)||1));lyricScale=next;
+    window.XStageUiPrefs?.save?.({lyricScale});return true;
+  }
+  if(action==='lyric-color'){
+    const next=String(value||'');if(!/^#[0-9a-f]{6}$/i.test(next))return false;
+    lyricColor=next;window.XStageUiPrefs?.save?.({lyricColor});return true;
+  }
+  return false;
+};
+window.XStageRemoteHistory=function(){
+  loadPersistentLibraryData();
+  return persistentHistory.slice(0,50).map(item=>({code:String(item.code||''),title:String(item.title||''),artist:String(item.artist||''),playedAt:Number(item.playedAt)||0}));
+};
+window.XStageToggleCurrentFavorite=function(){
+  loadPersistentLibraryData();
+  if(!state.current)return {ok:false,message:'ยังไม่มีเพลงปัจจุบัน'};
+  const id=songIdentity(state.current),was=favorites.has(id);
+  if(was)favorites.delete(id);else favorites.add(id);saveFavorites();renderSongs();
+  return {ok:true,favorite:!was,title:String(state.current.title||state.current.code||'')};
+};
 setMainBackground(backgroundPrefs.main);
 setMainBrandTheme(brandThemePrefs.main);
 $pc('pc-lyrics-settings').onclick=()=>{
@@ -237,6 +262,7 @@ const eqPrefs=window.XStageUiPrefs?.read?.()||{};
 let eqDisplayTarget=['main','singer','both'].includes(eqPrefs.eqDisplayTarget)?eqPrefs.eqDisplayTarget:'main';
 if(typeof eqPrefs.eqPreset==='string')eqPreset=eqPrefs.eqPreset;
 if(typeof eqPrefs.eqBypassed==='boolean')eqBypassed=eqPrefs.eqBypassed;
+// EQ preferences are inert until the user explicitly enables EQ in this session.
 function eqFreqLabel(f){
   if(f<1000)return String(f);
   const value=f/1000;
@@ -342,12 +368,42 @@ function ensureEqAudio(){
  applyEqGains(false);startStageBrandVisualizer();return true;
 }
 
+function nativeAndroidTvAudioMode(){
+  try{
+    if(window.XStageAndroid&&typeof window.XStageAndroid.isAndroidTvApp==='function')return !!window.XStageAndroid.isAndroidTvApp();
+  }catch{}
+  try{return new URLSearchParams(location.search).get('source')==='android-tv';}
+  catch{return false;}
+}
 window.XStageResumeAudioGraph=async function(){
-  if(!eqContext&&!ensureEqAudio())return false;
+  // PC Web keeps the existing EQ/WebAudio behavior unchanged.
+  // Android TV APK stays on the native HTMLMediaElement audio path unless
+  // the Owner explicitly enables EQ from the mobile remote.
+  if(!eqContext){
+    if(nativeAndroidTvAudioMode())return true;
+    if(!ensureEqAudio())return false;
+  }
   if(eqContext.state==='running')return true;
   try{await eqContext.resume();return eqContext.state==='running';}
   catch{return false;}
 };
+window.XStageEnableEqPreset=async function(name='flat'){
+  buildEqBands();
+  if(!ensureEqAudio())return false;
+  try{await eqContext.resume();}catch{}
+  setEqPreset(String(name||'flat'));
+  return true;
+};
+window.XStageResetEq=async function(){return window.XStageEnableEqPreset('flat');};
+window.XStageToggleEqBypass=async function(){
+  buildEqBands();
+  if(!ensureEqAudio())return false;
+  try{await eqContext.resume();}catch{}
+  eqBypassed=!eqBypassed;applyEqGains();
+  return eqBypassed;
+};
+window.XStageEqIsActive=()=>!!eqContext;
+
 function savedEqGains(){
  const v=(window.XStageUiPrefs?.read?.()||{}).eqGains;
  return Array.isArray(v)&&v.length===31?v.map(x=>Math.max(-12,Math.min(12,Number(x)||0))):null;

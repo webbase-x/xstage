@@ -134,6 +134,10 @@ function xstageTvActiveScope(){
   }).at(-1);
 }
 function xstageTvFocusable(scope=xstageTvActiveScope()){
+  if(document.body.classList.contains('xstage-native-tv')&&scope===document){
+    const selector='#search:not([disabled]),#toggle-keyboard:not([disabled]),#virtual-keyboard button:not([disabled]),#virtual-keyboard input:not([disabled])';
+    return [...document.querySelectorAll(selector)].filter(xstageTvVisible);
+  }
   const selector='button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   return [...scope.querySelectorAll(selector)].filter(xstageTvVisible);
 }
@@ -803,6 +807,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   state.token=token;
   state.tokenExpiresAt=tokenExpiresAt;
   state.accountSub=account.sub;
+  window.dispatchEvent(new CustomEvent('xstage:auth-ready',{detail:{sub:String(account.sub)}}));
   rememberLogin(true);
   saveActiveAuth(token,tokenExpiresAt,account.sub);
   clearPendingAuth();
@@ -1759,7 +1764,13 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
     ui.stageCode.textContent=song.code||'—';ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
-    player.src=url;player.playbackRate=Number(ui.speed.value);player.loop=ui.repeat.checked;
+    player.src=url;
+    try{
+      if('preservesPitch' in player)player.preservesPitch=true;
+      if('mozPreservesPitch' in player)player.mozPreservesPitch=true;
+      if('webkitPreservesPitch' in player)player.webkitPreservesPitch=true;
+    }catch{}
+    player.playbackRate=Number(ui.speed.value);player.loop=ui.repeat.checked;
     player.volume=Number(ui.volume.value)/100;
     const resumeTarget=Math.max(0,Number(resumeAt)||0);
     if(resumeTarget>0){
@@ -2171,49 +2182,23 @@ function setupNativeAndroidTvUi(){
   if(!isNativeAndroidTvMode())return;
   document.body.classList.add('xstage-native-tv');
 
+  // TV is now a display/search surface. All menus and advanced controls live on the mobile remote.
   const menu=document.getElementById('mobile-stage-menu');
-  const menuTitle=menu?.querySelector('.mobile-menu-head strong');
-  if(menuTitle)menuTitle.textContent='เมนู TV';
-
-  const extra=document.getElementById('stage-extra-tools');
-  const extraSummary=extra?.querySelector('summary');
-  if(extraSummary)extraSummary.textContent='เนื้อร้อง / EQ';
-
-  const menuQueue=document.getElementById('mobile-queue-toggle');
-  const menuQueueCount=document.getElementById('mobile-queue-count');
-  if(menuQueue){
-    const countText=String(menuQueueCount?.textContent||'0');
-    menuQueue.setAttribute('aria-label','คิวเพลง');
-    menuQueue.setAttribute('title','คิวเพลง');
-    menuQueue.innerHTML='<span class="tv-queue-icon" aria-hidden="true">☷</span><span id="mobile-queue-count" class="tv-queue-count">'+countText+'</span><span class="tv-queue-arrow" aria-hidden="true">⌃</span><span class="sr-only">คิวเพลง</span>';
+  if(menu)menu.hidden=true;
+  for(const id of ['mobile-menu-toggle','stage-tools-toggle','fullscreen']){
+    const el=document.getElementById(id);if(el)el.hidden=true;
   }
 
-  // Keep the onscreen keyboard controls exactly where they already are.
-  // Android TV has no guaranteed physical keyboard.
+  // Keep the onscreen keyboard in its original toolbar position because TVs have no guaranteed keyboard.
   const keyboardToolbar=document.getElementById('toggle-keyboard');
   if(keyboardToolbar)keyboardToolbar.hidden=false;
-  const keyboardMenu=document.getElementById('mobile-keyboard-toggle');
-  if(keyboardMenu)keyboardMenu.hidden=false;
 
-  const bottom=document.getElementById('stage-tools-toggle');
-  if(bottom){
-    bottom.classList.add('tv-remote-launcher');
-    bottom.setAttribute('aria-controls','remote-pair-panel');
-    bottom.setAttribute('aria-expanded','false');
-    bottom.setAttribute('aria-label','เปิดรีโมทมือถือ');
-    bottom.setAttribute('title','รีโมทมือถือ');
-    bottom.innerHTML='<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><rect x="12" y="5" width="22" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="23" cy="36.5" r="1.7" fill="currentColor"/><path d="M35 13c4 2 6 5 7 9M35 20c2 1 3 3 4 5" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round"/></svg><span class="sr-only">รีโมทมือถือ</span>';
-    bottom.addEventListener('click',event=>{
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const remote=document.getElementById('toggle-remote');
-      remote?.click();
-      requestAnimationFrame(()=>{
-        const panel=document.getElementById('remote-pair-panel');
-        bottom.setAttribute('aria-expanded',String(!!panel&&!panel.hidden));
-        panel?.querySelector('button:not([hidden]):not([disabled])')?.focus?.({preventScroll:true});
-      });
-    });
+  // Keep queue count visible as status only; it must not open a TV menu or enter D-pad focus order.
+  const queue=document.getElementById('stage-queue-toggle');
+  if(queue){
+    queue.tabIndex=-1;queue.setAttribute('aria-disabled','true');
+    queue.setAttribute('aria-label','จำนวนเพลงในคิว');
+    queue.style.pointerEvents='none';
   }
 }
 function androidTvAuthPanel(){
@@ -2296,7 +2281,7 @@ function ensureAndroidTvQrLibrary(){
     document.getElementById('xstage-qrcode')?.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1064';
+    script.src='./assets/vendor/qrcode.min.js?v=1069';
     script.async=true;
     const timer=setTimeout(()=>finish(Error('QR library timeout')),5000);
     script.addEventListener('load',()=>finish(typeof QRCode!=='undefined'?null:Error('QR library unavailable')),{once:true});

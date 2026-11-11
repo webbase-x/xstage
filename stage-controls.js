@@ -151,130 +151,87 @@
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1064','xstage-peerjs',()=>typeof Peer==='function');
-      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1064','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1069','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1069','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
   }
 
-  // Guests approve connection once on the host, then can search, enqueue,
-  // and use a restricted player controller. No Google token or file URLs leave the host.
+  // Mobile remote security model:
+  // - Guest is QR-paired and gets only basic controls.
+  // - Owner must authenticate with the same Google account as the TV. The short-lived
+  //   mobile access token is verified against Google userinfo, compared by immutable sub,
+  //   and is never stored by the TV.
   const requestPanel=byId('remote-request-panel');
   const requestList=byId('remote-request-list');
   const requestCount=byId('remote-request-count');
   const requestToggle=byId('remote-request-toggle');
   const requestClose=byId('remote-request-close');
-  const permissionKeys=['search','request','playpause','next','cancel-current','volume-up','volume-down','mute','fullscreen-on','fullscreen-off','medley'];
-  const stored=(()=>{try{return JSON.parse(localStorage.getItem('xstage-remote-settings')||'{}');}catch{return {};}})();
-  const settings={autoApprove:!!stored.autoApprove,showControls:stored.showControls!==false,
-    permissions:Object.fromEntries(permissionKeys.map(k=>[
-      k,
-      k==='cancel-current'
-        ? (stored.permissions?.['cancel-current']??stored.permissions?.stop)!==false
-        : stored.permissions?.[k]!==false
-    ]))};
-  function saveSettings(){try{localStorage.setItem('xstage-remote-settings',JSON.stringify(settings));}catch{}}
-  const settingsDetails=document.createElement('details');settingsDetails.className='remote-settings';
-  const summary=document.createElement('summary');summary.textContent='⚙ ตั้งค่าและสิทธิ์รีโมท';
-  const settingsBody=document.createElement('div');settingsBody.className='remote-settings-body';
-  const settingsClose=document.createElement('button');
-  settingsClose.type='button';settingsClose.className='remote-settings-close';
-  settingsClose.textContent='✕';settingsClose.setAttribute('aria-label','ปิดการตั้งค่ารีโมท');
-  settingsClose.addEventListener('click',()=>{settingsDetails.open=false;});
-  settingsBody.append(settingsClose);
-  settingsDetails.append(summary,settingsBody);
-  qrPanel.querySelector('.remote-pair-box')?.append(settingsDetails);
-  function option(label,checked,onChange){
-    const row=document.createElement('label');row.className='remote-settings-option';
-    const input=document.createElement('input');input.type='checkbox';input.checked=checked;
-    input.addEventListener('change',()=>{onChange(input.checked);saveSettings();broadcastStatus();});
-    row.append(input,document.createTextNode(' '+label));settingsBody.append(row);return input;
-  }
-  option('อนุมัติการเชื่อมต่ออัตโนมัติ',settings.autoApprove,v=>{
-    settings.autoApprove=v;if(v&&session?.pending)approveEntry(session.pending);
-  });
-  option('แสดงเมนูควบคุมบนมือถือ',settings.showControls,v=>{settings.showControls=v;});
-  const permissionInputs={};
-  const names={'search':'ค้นหาเพลง','request':'ขอเพลง','playpause':'เล่น / พัก','next':'เพลงถัดไป','cancel-current':'ยกเลิกเพลงปัจจุบัน',
-    'volume-up':'เพิ่มเสียง','volume-down':'ลดเสียง','mute':'ปิด / เปิดเสียง',
-    'fullscreen-on':'เต็มจอ','fullscreen-off':'ย่อจอ','medley':'เมดเลย์'};
-  const actions=document.createElement('div');actions.className='remote-permission-actions';
-  for(const [title,value] of [['อนุญาตทั้งหมด',true],['ไม่อนุญาตทั้งหมด',false]]){
-    const button=document.createElement('button');button.type='button';button.textContent=title;
-    button.addEventListener('click',()=>{for(const k of permissionKeys){settings.permissions[k]=value;permissionInputs[k].checked=value;}saveSettings();broadcastStatus();});
-    actions.append(button);
-  }
-  settingsBody.append(actions);
-  for(const key of permissionKeys)permissionInputs[key]=option(names[key],settings.permissions[key],v=>{settings.permissions[key]=v;});
+  const nativeTvMode=(()=>{
+    try{return new URLSearchParams(location.search).get('source')==='android-tv'||
+      !!(window.XStageAndroid&&window.XStageAndroid.isAndroidTvApp?.());}
+    catch{return false;}
+  })();
+  const guestPermissions={search:true,request:true,playpause:true,'volume-up':true,'volume-down':true,mute:true};
+  const ownerPermissions={...guestPermissions,next:true,'cancel-current':true,'fullscreen-on':true,'fullscreen-off':true,medley:true};
   const activity=[];
-  let session=null, sequence=0;
-  // Browsers may reject fullscreen calls from WebRTC because they are not
-  // user gestures. Never place a confirmation overlay on top of the QR panel.
-  let fullscreenPending=false;
-  function hideFullscreenConfirm(){fullscreenPending=false;}
-  document.addEventListener('fullscreenchange',broadcastStatus);
-  async function setHostFullscreen(full,conn){
-    if(full){
-      if(document.fullscreenElement===stage){send(conn,snapshot());return;}
-      if(typeof stage.requestFullscreen!=='function'){
-        send(conn,{type:'fullscreen-notice',message:'เบราว์เซอร์จอหลักไม่รองรับโหมดเต็มจอ'});
-      }else{
-        try{
-          await stage.requestFullscreen();
-        }catch{
-          send(conn,{type:'fullscreen-notice',message:'เบราว์เซอร์จอหลักต้องให้กดปุ่ม ⛶ บนจอหลักโดยตรง (ไม่เกี่ยวกับสิทธิ์ QR)'});
-        }
-      }
-    }else if(document.fullscreenElement===stage){
-      try{await document.exitFullscreen();}
-      catch{send(conn,{type:'fullscreen-notice',message:'ออกจากเต็มจอไม่ได้ กรุณากด Esc บนจอหลัก'});}
-    }
-    broadcastStatus();
-  }
-  function status(value){qrStatus.textContent=value;}
+  let session=null,sequence=0,pairingPaused=false,fullscreenPending=false;
+
+  function status(value){if(qrStatus)qrStatus.textContent=value;}
   function send(conn,data){if(conn?.open)try{conn.send(data);}catch{}}
   function randomSecret(){
     const bytes=new Uint8Array(24);crypto.getRandomValues(bytes);
     return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
   }
   function songSummary(song){
-    return {title:String(song?.title||''),artist:String(song?.artist||''),code:String(song?.code||''),
-      singer:String(song?.queueSinger||'')};
+    return {title:String(song?.title||''),artist:String(song?.artist||''),code:String(song?.code||''),singer:String(song?.queueSinger||'')};
   }
-  function snapshot(){
+  function entryPermissions(entry){return entry?.role==='owner'?ownerPermissions:guestPermissions;}
+  function snapshot(entry){
     const duration=Number.isFinite(ui.player.duration)?ui.player.duration:Number(state.current?.duration)||0;
-    return {type:'status',ready:!!state.token,playing:!!ui.player.src&&!ui.player.paused,
-      now:songSummary(state.current),queue:state.queue.slice(0,50).map(songSummary),
-      queueCount:state.queue.length,volume:Math.round(Number(ui.volume.value)||0),
-      muted:ui.player.muted,medley:!!state.medley,
+    const eq=byId('xstage-eq-preset');
+    return {type:'status',ready:!!state.token,role:entry?.role==='owner'?'owner':'guest',
+      ownerEmail:entry?.role==='owner'?String(ui.account?.textContent||''):'',
+      playing:!!ui.player.src&&!ui.player.paused,now:songSummary(state.current),
+      queue:state.queue.slice(0,50).map(songSummary),queueCount:state.queue.length,
+      volume:Math.round(Number(ui.volume.value)||0),muted:ui.player.muted,medley:!!state.medley,
+      repeat:!!ui.repeat?.checked,speed:Number(ui.speed?.value)||1,eqPreset:String(eq?.value||'auto'),eqActive:!!window.XStageEqIsActive?.(),
+      visualSettings:entry?.role==='owner'&&typeof window.XStageRemoteVisualSettings==='function'?window.XStageRemoteVisualSettings('state'):null,
       currentTime:Number.isFinite(ui.player.currentTime)?ui.player.currentTime:0,
-      duration:Number.isFinite(duration)?duration:0,
-      fullscreen:document.fullscreenElement===stage,fullscreenPending,
-      showControls:settings.showControls,permissions:{...settings.permissions}};
+      duration:Number.isFinite(duration)?duration:0,fullscreen:document.fullscreenElement===stage,
+      fullscreenPending,pairingPaused,permissions:{...entryPermissions(entry)}};
   }
-  function broadcast(msg){
+  function broadcastStatus(){
     if(!session)return;
-    for(const entry of session.connections.values())if(entry.approved)send(entry.conn,msg);
+    for(const entry of session.connections.values())if(entry.approved)send(entry.conn,snapshot(entry));
   }
-  function broadcastStatus(){broadcast(snapshot());}
+  function hideFullscreenConfirm(){fullscreenPending=false;}
+  document.addEventListener('fullscreenchange',broadcastStatus);
+  async function setHostFullscreen(full,conn){
+    if(full){
+      if(document.fullscreenElement===stage){send(conn,snapshot([...session?.connections?.values?.()||[]].find(e=>e.conn===conn)));return;}
+      if(typeof stage.requestFullscreen!=='function')send(conn,{type:'fullscreen-notice',message:'จอ TV ไม่รองรับ Fullscreen'});
+      else try{await stage.requestFullscreen();}catch{send(conn,{type:'fullscreen-notice',message:'Android TV ไม่อนุญาตเปลี่ยน Fullscreen จากรีโมท'});}
+    }else if(document.fullscreenElement===stage){
+      try{await document.exitFullscreen();}catch{send(conn,{type:'fullscreen-notice',message:'ออกจาก Fullscreen ไม่สำเร็จ'});}
+    }
+    broadcastStatus();
+  }
   function clearPeerSession(){
     if(!session)return;
     const active=session;session=null;
     for(const entry of active.connections.values())try{entry.conn.close();}catch{}
     try{active.peer?.destroy();}catch{}
-    qrApprove.hidden=true;qrReject.hidden=true;
-    hideFullscreenConfirm();
+    qrApprove.hidden=true;qrReject.hidden=true;hideFullscreenConfirm();
     qrLink.textContent='';qrLink.removeAttribute('href');qrCanvas.hidden=true;
-    qrEnd.textContent='สร้าง QR ใหม่';status('ปิดการเชื่อมต่อรีโมทแล้ว');
+    qrEnd.textContent='สร้าง QR ใหม่';pairingPaused=false;status('ปิดการเชื่อมต่อรีโมทแล้ว');
   }
+
   function redrawActivity(){
-    requestCount.textContent=String(activity.length);
-    requestList.replaceChildren();
-    if(!activity.length){
-      const p=document.createElement('p');p.textContent='ยังไม่มีรายการขอเพลง';
-      requestList.append(p);return;
-    }
+    if(!requestCount||!requestList)return;
+    requestCount.textContent=String(activity.length);requestList.replaceChildren();
+    if(!activity.length){const p=document.createElement('p');p.textContent='ยังไม่มีรายการขอเพลง';requestList.append(p);return;}
     for(const item of activity.slice().reverse()){
       const row=document.createElement('div');row.className='request-item';
       const info=document.createElement('div');info.className='request-info';
@@ -283,190 +240,246 @@
       info.append(title,by);row.append(info);requestList.append(row);
     }
   }
-  requestToggle?.addEventListener('click',()=>{
-    requestPanel.hidden=!requestPanel.hidden;
-    requestToggle.setAttribute('aria-expanded',String(!requestPanel.hidden));
-  });
-  requestClose?.addEventListener('click',()=>{
-    requestPanel.hidden=true;requestToggle.setAttribute('aria-expanded','false');
-  });
+  requestToggle?.addEventListener('click',()=>{requestPanel.hidden=!requestPanel.hidden;requestToggle.setAttribute('aria-expanded',String(!requestPanel.hidden));});
+  requestClose?.addEventListener('click',()=>{requestPanel.hidden=true;requestToggle.setAttribute('aria-expanded','false');});
   redrawActivity();
+
   function acceptRequest(conn,msg,limits){
-    if(!settings.permissions.request){send(conn,{type:'request-error',message:'เจ้าของเวทีปิดสิทธิ์ขอเพลง'});return;}
-    if(!state.token){send(conn,{type:'request-error',message:'เจ้าของเวทียังไม่เปิดคลังเพลง'});return;}
+    if(!state.token){send(conn,{type:'request-error',message:'จอ TV ยังไม่เปิดคลังเพลง'});return;}
     if(state.queue.length>=150){send(conn,{type:'request-error',message:'คิวเต็มแล้ว กรุณารอ'});return;}
     if(!Number.isSafeInteger(msg.index)||msg.index<0||msg.index>=state.songs.length)return;
-    const song=state.songs[msg.index];
-    if(!playable(song)){send(conn,{type:'request-error',message:'เพลงนี้ยังเล่นไม่ได้'});return;}
-    const now=Date.now();
-    while(limits.length&&now-limits[0]>60_000)limits.shift();
+    const song=state.songs[msg.index];if(!playable(song)){send(conn,{type:'request-error',message:'เพลงนี้ยังเล่นไม่ได้'});return;}
+    const now=Date.now();while(limits.length&&now-limits[0]>60_000)limits.shift();
     if(limits.length>=8){send(conn,{type:'request-error',message:'ขอเพลงบ่อยเกินไป กรุณารอสักครู่'});return;}
     limits.push(now);
-    const singer=String(msg.singer||'ไม่ระบุชื่อ').trim().slice(0,45)||'ไม่ระบุชื่อ';
-    const note=String(msg.note||'').trim().slice(0,90);
-    const queued={...song,queueSinger:singer};
+    const singerName=String(msg.singer||'ไม่ระบุชื่อ').trim().slice(0,45)||'ไม่ระบุชื่อ';
+    const noteText=String(msg.note||'').trim().slice(0,90);
+    const queued={...song,queueSinger:singerName};
     const wasEmpty=state.queue.length===0;
-    const inactive=!state.loading&&(!state.current||!ui.player.src||ui.player.ended||
-      (ui.player.paused&&ui.player.currentTime<.5));
-    addToQueue(queued);
-    const playImmediately=wasEmpty&&inactive;
-    if(playImmediately)playNext(); // Uses the original queue playback path.
-    activity.push({title:song.title||song.code,singer,note,result:playImmediately?'เล่นทันที':'เพิ่มเข้าคิว'});
-    if(activity.length>30)activity.shift();
-    redrawActivity();
-    send(conn,{type:'request-received',id:++sequence,title:String(song.title||''),
-      result:playImmediately?'playing':'queued'});
+    const inactive=!state.loading&&(!state.current||!ui.player.src||ui.player.ended||(ui.player.paused&&ui.player.currentTime<.5));
+    addToQueue(queued);const playImmediately=wasEmpty&&inactive;if(playImmediately)playNext();
+    activity.push({title:song.title||song.code,singer:singerName,note:noteText,result:playImmediately?'เล่นทันที':'เพิ่มเข้าคิว'});
+    if(activity.length>30)activity.shift();redrawActivity();
+    send(conn,{type:'request-received',id:++sequence,title:String(song.title||''),result:playImmediately?'playing':'queued'});
     broadcastStatus();
   }
+
   function handleControl(conn,msg,entry){
-    const now=Date.now();
-    if(now-entry.lastControl<120)return;entry.lastControl=now;
-    const action=String(msg.action||'');
-    if(!settings.showControls||!settings.permissions[action])return;
+    const now=Date.now();if(now-entry.lastControl<120)return;entry.lastControl=now;
+    const action=String(msg.action||''),permissions=entryPermissions(entry);
+    if(!permissions[action])return;
     const audio=ui.player;
     if(action==='playpause')togglePlayback();
     else if(action==='cancel-current')cancelCurrentSong();
     else if(action==='next')playNext();
     else if(action==='volume-up'||action==='volume-down'){
-      const next=Math.max(0,Math.min(100,Math.round(Number(ui.volume.value)||
-        0)+(action==='volume-up'?5:-5)));
-      ui.volume.value=String(next);ui.volume.dispatchEvent(new Event('input',{bubbles:true}));
-      audio.muted=false;
-    }else if(action==='mute'){
-      audio.muted=!audio.muted;
-    }else if(action==='fullscreen-on'){
-      void setHostFullscreen(true,conn);
-    }else if(action==='fullscreen-off'){
-      void setHostFullscreen(false,conn);
-    }else if(action==='medley'){
-      setMedleyMode(!state.medley);
-    }else return;
+      const next=Math.max(0,Math.min(100,Math.round(Number(ui.volume.value)||0)+(action==='volume-up'?5:-5)));
+      ui.volume.value=String(next);ui.volume.dispatchEvent(new Event('input',{bubbles:true}));audio.muted=false;
+    }else if(action==='mute')audio.muted=!audio.muted;
+    else if(action==='fullscreen-on')void setHostFullscreen(true,conn);
+    else if(action==='fullscreen-off')void setHostFullscreen(false,conn);
+    else if(action==='medley')setMedleyMode(!state.medley);
+    else return;
     broadcastStatus();
   }
+
+  function clickHost(id){const el=byId(id);if(!el||el.disabled)return false;el.click();return true;}
+  function adminResult(entry,action,ok,message,data){send(entry.conn,{type:'admin-result',action,ok,message,data});}
+  function findSongForImport(item){
+    const code=String(item?.code||'').trim(),title=String(item?.title||'').trim().toLocaleLowerCase('th'),artist=String(item?.artist||'').trim().toLocaleLowerCase('th');
+    if(code){const hit=state.songs.find(song=>String(song.code||'').trim()===code&&playable(song));if(hit)return hit;}
+    if(title)return state.songs.find(song=>String(song.title||'').trim().toLocaleLowerCase('th')===title&&(!artist||String(song.artist||'').trim().toLocaleLowerCase('th')===artist)&&playable(song))||null;
+    return null;
+  }
+  async function handleAdmin(entry,msg){
+    if(entry.role!=='owner'){adminResult(entry,String(msg.action||''),false,'คำสั่งนี้ต้องยืนยันบัญชี Owner');return;}
+    const action=String(msg.action||''),value=msg.value;
+    try{
+      if(action==='previous')clickHost('previous');
+      else if(action==='restart')clickHost('restart-current');
+      else if(action==='next')clickHost('next');
+      else if(action==='cancel-current')clickHost('cancel-current');
+      else if(action==='medley')setMedleyMode(!state.medley);
+      else if(action==='repeat-toggle'){ui.repeat.checked=!ui.repeat.checked;ui.repeat.dispatchEvent(new Event('change',{bubbles:true}));}
+      else if(action==='speed'){
+        const allowed=['0.75','0.9','1','1.1','1.25','1.5'],next=String(value||'1');
+        if(!allowed.includes(next))throw Error('ค่าความเร็วไม่ถูกต้อง');
+        ui.speed.value=next;ui.speed.dispatchEvent(new Event('change',{bubbles:true}));
+      }else if(action==='loop-a')clickHost('pc-loop-a');
+      else if(action==='loop-b')clickHost('pc-loop-b');
+      else if(action==='loop-clear')clickHost('pc-loop-clear');
+      else if(action==='fullscreen-toggle'){
+        await setHostFullscreen(document.fullscreenElement!==stage,entry.conn);
+      }else if(action==='shuffle')clickHost('stage-shuffle');
+      else if(action==='clear-queue')clickHost('clear-queue');
+      else if(action==='lyrics-settings')clickHost('pc-lyrics-settings');
+      else if(action==='keyboard')clickHost('toggle-keyboard');
+      else if(action==='stage-pop')clickHost('pc-stage-pop');
+      else if(action==='history')clickHost('pc-history');
+      else if(action==='favorites')clickHost('mobile-favorites');
+      else if(action==='update')clickHost('mobile-update-version');
+      else if(action==='clear-cache'){
+        if(typeof window.XStageClearCache!=='function')throw Error('ระบบล้างแคชยังไม่พร้อม');
+        await window.XStageClearCache();
+      }
+      else if(action==='logout')ui.logout?.click();
+      else if(action==='eq-preset'){
+        const next=String(value||'flat');
+        if(typeof window.XStageEnableEqPreset!=='function')throw Error('EQ ยังไม่พร้อม');
+        await window.XStageEnableEqPreset(next);
+      }else if(action==='eq-reset'){
+        if(typeof window.XStageResetEq!=='function')throw Error('EQ ยังไม่พร้อม');
+        await window.XStageResetEq();
+      }else if(action==='eq-bypass'){
+        if(typeof window.XStageToggleEqBypass!=='function')throw Error('EQ ยังไม่พร้อม');
+        await window.XStageToggleEqBypass();
+      }
+      else if(action==='export-queue'){
+        adminResult(entry,action,true,'ส่งออกคิวไปยังมือถือแล้ว',state.queue.slice(0,150).map(songSummary));return;
+      }else if(action==='import-queue'){
+        const items=Array.isArray(value)?value.slice(0,150):[];let added=0,missing=0;
+        for(const item of items){const song=findSongForImport(item);if(song){addToQueue({...song,queueSinger:'นำเข้าจาก Owner'});added++;}else missing++;}
+        adminResult(entry,action,true,'นำเข้าคิว '+added+' เพลง'+(missing?' · ไม่พบ '+missing+' เพลง':''));broadcastStatus();return;
+      }else if(action==='visual-background'||action==='visual-brand-theme'||action==='visual-lyric-scale'||action==='visual-lyric-color'){
+        if(typeof window.XStageRemoteVisualSettings!=='function')throw Error('ระบบตั้งค่าเวทียังไม่พร้อม');
+        const map={
+          'visual-background':'background',
+          'visual-brand-theme':'brand-theme',
+          'visual-lyric-scale':'lyric-scale',
+          'visual-lyric-color':'lyric-color'
+        };
+        const ok=window.XStageRemoteVisualSettings(map[action],value);
+        if(ok===false)throw Error('ค่าที่ส่งมาไม่ถูกต้อง');
+      }else if(action==='history'){
+        const data=typeof window.XStageRemoteHistory==='function'?window.XStageRemoteHistory():[];
+        adminResult(entry,action,true,'โหลดประวัติแล้ว',data);return;
+      }else if(action==='favorite-current'){
+        const result=typeof window.XStageToggleCurrentFavorite==='function'?window.XStageToggleCurrentFavorite():{ok:false,message:'ระบบเพลงโปรดยังไม่พร้อม'};
+        adminResult(entry,action,result?.ok!==false,String(result?.message||'อัปเดตเพลงโปรดแล้ว'),result);return;
+      }else if(action==='share-library'){
+        const email=String(value||'').trim();
+        if(typeof shareLibraryWithEmail!=='function')throw Error('ระบบแชร์คลังยังไม่พร้อม');
+        await shareLibraryWithEmail(email);adminResult(entry,action,true,'แชร์คลังให้ '+email+' แล้ว');return;
+      }else if(action==='qr-pause'){pausePairing();adminResult(entry,action,true,'พัก QR แล้ว · ผู้ใช้เดิมยังเชื่อมต่ออยู่');return;}
+      else if(action==='qr-resume'){await resumePairing();adminResult(entry,action,true,'เปิด QR ใหม่แล้ว');return;}
+      else throw Error('ไม่รู้จักคำสั่งผู้ดูแล');
+      adminResult(entry,action,true,'ดำเนินการแล้ว');broadcastStatus();
+    }catch(error){adminResult(entry,action,false,String(error?.message||'ดำเนินการไม่สำเร็จ'));}
+  }
+
+  async function verifyOwner(entry,accessToken){
+    if(!entry?.approved||!entry.conn?.open)return;
+    if(!state.accountSub){send(entry.conn,{type:'role',role:'guest',message:'จอ TV ยังไม่ได้ล็อกอิน Google'});return;}
+    const token=String(accessToken||'');
+    if(!token||token.length>4096){send(entry.conn,{type:'role',role:'guest',message:'Google token ไม่ถูกต้อง'});return;}
+    try{
+      const response=await fetch('https://openidconnect.googleapis.com/v1/userinfo',{
+        headers:{Authorization:'Bearer '+token},cache:'no-store'
+      });
+      if(!response.ok)throw Error('Google ไม่ยืนยัน token');
+      const profile=await response.json();
+      if(!profile?.sub||String(profile.sub)!==String(state.accountSub)){
+        entry.role='guest';send(entry.conn,{type:'role',role:'guest',message:'บัญชี Google นี้ไม่ตรงกับบัญชีบนจอ TV'});send(entry.conn,snapshot(entry));return;
+      }
+      entry.role='owner';
+      send(entry.conn,{type:'role',role:'owner',email:String(profile.email||ui.account?.textContent||'')});
+      send(entry.conn,snapshot(entry));status('Owner ยืนยันบัญชีเดียวกับจอแล้ว');
+    }catch{entry.role='guest';send(entry.conn,{type:'role',role:'guest',message:'ตรวจบัญชี Google ไม่สำเร็จ กรุณาลองใหม่'});}
+  }
+
   function approveEntry(entry){
     if(!entry?.conn?.open||!session)return;
     if(session.pending===entry)session.pending=null;
-    entry.approved=true;qrApprove.hidden=true;qrReject.hidden=true;
-    send(entry.conn,{type:'ready'});send(entry.conn,snapshot());
-    status('เชื่อมต่อมือถือเรียบร้อยแล้ว');
+    entry.approved=true;entry.role='guest';qrApprove.hidden=true;qrReject.hidden=true;
+    send(entry.conn,{type:'ready'});send(entry.conn,snapshot(entry));
+    status('เชื่อมต่อมือถือ Guest แล้ว · Owner ต้องยืนยัน Google บนมือถือ');
   }
+
+  async function renderSessionQr(active){
+    if(!active||session!==active||pairingPaused||!active.peerId)return;
+    const url=new URL('remote.html',location.href);url.search='';url.hash='p='+encodeURIComponent(active.peerId)+'&k='+encodeURIComponent(active.secret);
+    qrLink.textContent='เปิดรีโมท X-Stage บนมือถือ';qrLink.href=url.href;
+    try{
+      qrCanvas.width=232;qrCanvas.height=232;
+      await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
+      if(session!==active||pairingPaused)return;
+      qrCanvas.hidden=false;status(nativeTvMode?'สแกน QR · Guest ใช้พื้นฐาน / Owner ล็อกอินบัญชีเดียวกับจอ':'สแกน QR แล้วรออนุมัติบนจอ');
+    }catch{status('สร้าง QR ไม่สำเร็จ ใช้ลิงก์รีโมทแทน');}
+  }
+  function pausePairing(){
+    pairingPaused=true;
+    qrCanvas.hidden=true;qrLink.textContent='';qrLink.removeAttribute('href');
+    status('พัก QR ชั่วคราว · ผู้ใช้ที่เชื่อมอยู่ยังใช้งานต่อได้');broadcastStatus();
+  }
+  async function resumePairing(){
+    if(!session){pairingPaused=false;await createSession();return;}
+    pairingPaused=false;session.secret=randomSecret();await renderSessionQr(session);broadcastStatus();
+  }
+
   async function createSession(){
-    clearPeerSession();
-    status('กำลังเตรียมระบบรีโมท…');
-    try{await ensureRemoteLibraries();}
-    catch(error){status(error?.message||'โหลดระบบเชื่อมต่อมือถือไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
+    clearPeerSession();pairingPaused=false;status('กำลังเตรียมระบบรีโมท…');
+    try{await ensureRemoteLibraries();}catch(error){status(error?.message||'โหลดระบบรีโมทไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
     if(typeof Peer!=='function'||typeof QRCode==='undefined'){status('ระบบรีโมทยังไม่พร้อม กรุณาตรวจอินเทอร์เน็ต');return;}
     if(!window.crypto?.getRandomValues){status('เบราว์เซอร์ไม่รองรับการเชื่อมต่ออย่างปลอดภัย');return;}
-    const active={peer:null,secret:randomSecret(),connections:new Map(),pending:null};
-    session=active;qrEnd.textContent='เปลี่ยน QR';
-    status('กำลังติดต่อเซิร์ฟเวอร์รีโมทเพื่อสร้างรหัสจับคู่…');
+    const active={peer:null,peerId:'',secret:randomSecret(),connections:new Map(),pending:null};
+    session=active;qrEnd.textContent='เปลี่ยน QR';status('กำลังติดต่อเซิร์ฟเวอร์รีโมท…');
     const peer=new Peer();active.peer=peer;
     const peerOpenTimer=setTimeout(()=>{
-      if(session!==active)return;
-      status('สร้างรหัสรีโมทไม่สำเร็จภายในเวลาที่กำหนด · ตรวจอินเทอร์เน็ตแล้วกด “ลองใหม่”');
-      try{peer.destroy();}catch{}
-      session=null;qrEnd.textContent='ลองใหม่';
+      if(session!==active)return;status('สร้าง QR นานเกินไป · ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+      try{peer.destroy();}catch{}session=null;qrEnd.textContent='ลองใหม่';
     },12000);
-    peer.on('open',async id=>{
-      clearTimeout(peerOpenTimer);
-      if(session!==active)return;
-      const url=new URL('remote.html',location.href);
-      url.search='';url.hash='p='+encodeURIComponent(id)+'&k='+encodeURIComponent(active.secret);
-      qrLink.textContent='เปิดรีโมท X-Stage บนมือถือ';qrLink.href=url.href;
-      if(typeof QRCode==='undefined'){status('ไม่สามารถสร้าง QR ได้ ใช้ลิงก์รีโมทแทน');return;}
-      try{
-        qrCanvas.width=232;qrCanvas.height=232;
-        await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
-        if(session!==active)return;
-        qrCanvas.hidden=false;
-        status(settings.autoApprove?'สแกน QR เพื่อเชื่อมต่ออัตโนมัติ':'สแกน QR แล้วรออนุมัติบนจอหลัก');
-      }catch{status('สร้าง QR ไม่สำเร็จ ใช้ลิงก์รีโมทแทน');}
-    });
+    peer.on('open',async id=>{clearTimeout(peerOpenTimer);if(session!==active)return;active.peerId=id;await renderSessionQr(active);});
     peer.on('connection',conn=>{
-      if(session!==active){conn.close();return;}
+      if(session!==active||pairingPaused){conn.close();return;}
       if(active.connections.size>=12){conn.close();return;}
-      const entry={conn,approved:false,lastSearch:0,lastControl:0,requests:[]};
+      const entry={conn,approved:false,role:'guest',lastSearch:0,lastControl:0,requests:[]};
       active.connections.set(conn,entry);
       conn.on('data',msg=>{
         if(session!==active||!msg||typeof msg!=='object')return;
         if(!entry.approved){
-          if(msg.type!=='hello'||msg.key!==active.secret){conn.close();return;}
-          if(active.pending&&active.pending!==entry){
-            send(conn,{type:'error',message:'เจ้าของเวทีกำลังอนุมัติมือถืออีกเครื่อง'});conn.close();return;
-          }
-          if(settings.autoApprove){approveEntry(entry);return;}
-          active.pending=entry;
-          // Make the approval buttons visible even if the QR panel was closed
-          // while the phone was scanning.
-          qrPanel.hidden=false;stage.classList.add('remote-visible');
-          qrToggle.setAttribute('aria-expanded','true');
-          qrApprove.hidden=false;qrReject.hidden=false;
-          status('มือถือขอเชื่อมต่อ · กด “อนุญาต” หนึ่งครั้ง');
-          send(conn,{type:'pending'});
-          return;
+          if(msg.type!=='hello'||msg.key!==active.secret||pairingPaused){conn.close();return;}
+          if(nativeTvMode){approveEntry(entry);return;}
+          if(active.pending&&active.pending!==entry){send(conn,{type:'error',message:'จอหลักกำลังอนุมัติมือถืออีกเครื่อง'});conn.close();return;}
+          active.pending=entry;qrPanel.hidden=false;stage.classList.add('remote-visible');
+          qrToggle.setAttribute('aria-expanded','true');qrApprove.hidden=false;qrReject.hidden=false;
+          status('มือถือขอเชื่อมต่อ · กด “อนุญาต” หนึ่งครั้ง');send(conn,{type:'pending'});return;
         }
+        if(msg.type==='owner-auth'){void verifyOwner(entry,msg.accessToken);return;}
         if(msg.type==='search'){
-          if(!settings.permissions.search){send(conn,{type:'results',items:[],query:String(msg.query||'').trim().toLocaleLowerCase('th')});return;}
+          if(!entryPermissions(entry).search){send(conn,{type:'results',items:[],query:String(msg.query||'').trim().toLocaleLowerCase('th')});return;}
           const now=Date.now();if(now-entry.lastSearch<150)return;entry.lastSearch=now;
-          const term=String(msg.query||'').trim().slice(0,70).toLocaleLowerCase('th');
-          const items=[];
+          const term=String(msg.query||'').trim().slice(0,70).toLocaleLowerCase('th'),items=[];
           if(term&&state.token){
-            const ranked=typeof window.XStageRankSearch==='function'
-              ? window.XStageRankSearch(state.songs,term,200)
-              : state.songs.map((song,index)=>({song,index}));
-            for(const match of ranked){
-              const song=match.song;
-              if(!playable(song))continue;
-              items.push({index:match.index,code:String(song.code||''),title:String(song.title||''),
-                artist:String(song.artist||'')});
-              if(items.length>=30)break;
-            }
+            const ranked=typeof window.XStageRankSearch==='function'?window.XStageRankSearch(state.songs,term,200):state.songs.map((song,index)=>({song,index}));
+            for(const match of ranked){const song=match.song;if(!playable(song))continue;items.push({index:match.index,code:String(song.code||''),title:String(song.title||''),artist:String(song.artist||'')});if(items.length>=30)break;}
           }
           send(conn,{type:'results',items,query:term,notReady:!state.token});
-        }else if(msg.type==='request'){
-          acceptRequest(conn,msg,entry.requests);
-        }else if(msg.type==='control'){
-          handleControl(conn,msg,entry);
-        }else if(msg.type==='refresh'){
-          send(conn,snapshot());
-        }
+        }else if(msg.type==='request')acceptRequest(conn,msg,entry.requests);
+        else if(msg.type==='control')handleControl(conn,msg,entry);
+        else if(msg.type==='admin')void handleAdmin(entry,msg);
+        else if(msg.type==='refresh')send(conn,snapshot(entry));
       });
-      const cleanup=()=>{
-        active.connections.delete(conn);
-        if(active.pending===entry){
-          active.pending=null;qrApprove.hidden=true;qrReject.hidden=true;
-          status('มือถือยกเลิกการเชื่อมต่อ');
-        }
-      };
+      const cleanup=()=>{active.connections.delete(conn);if(active.pending===entry){active.pending=null;qrApprove.hidden=true;qrReject.hidden=true;status('มือถือยกเลิกการเชื่อมต่อ');}};
       conn.on('close',cleanup);conn.on('error',cleanup);
     });
     peer.on('error',err=>{clearTimeout(peerOpenTimer);if(session===active)status('เชื่อมต่อรีโมทไม่ได้: '+(err?.type||'เครือข่ายไม่พร้อม'));});
-    peer.on('disconnected',()=>{
-      if(session===active)status('การจับคู่หลุด กรุณากด “เปลี่ยน QR” เมื่อเชื่อมต่อไม่ได้');
-    });
+    peer.on('disconnected',()=>{if(session===active)status('การจับคู่หลุด · มือถือเดิมอาจต้องเชื่อมต่อใหม่');});
   }
-  qrApprove.addEventListener('click',()=>{
-    const entry=session?.pending;
-    if(!entry||!entry.conn.open)return;
-    approveEntry(entry);
-  });
-  qrReject.addEventListener('click',()=>{
-    const entry=session?.pending;
-    if(entry){session.pending=null;entry.conn.close();}
-    qrApprove.hidden=true;qrReject.hidden=true;
-    status('ปฏิเสธการเชื่อมต่อมือถือ');
-  });
+
+  qrApprove.addEventListener('click',()=>{const entry=session?.pending;if(entry?.conn?.open)approveEntry(entry);});
+  qrReject.addEventListener('click',()=>{const entry=session?.pending;if(entry){session.pending=null;entry.conn.close();}qrApprove.hidden=true;qrReject.hidden=true;status('ปฏิเสธการเชื่อมต่อมือถือ');});
   qrEnd.addEventListener('click',createSession);
   function showQR(open){
-    qrPanel.hidden=!open;
-    stage.classList.toggle('remote-visible',open);
-    qrToggle.setAttribute('aria-expanded',String(open));
-    qrToggle.classList.toggle('active',open);
-    if(open&&!session)createSession();
+    qrPanel.hidden=!open;stage.classList.toggle('remote-visible',open);qrToggle.setAttribute('aria-expanded',String(open));qrToggle.classList.toggle('active',open);
+    if(open&&!session)void createSession();
   }
   qrToggle.addEventListener('click',()=>showQR(qrPanel.hidden));
-  qrClose.addEventListener('click',()=>showQR(false));
+  qrClose.addEventListener('click',()=>{if(!nativeTvMode)showQR(false);});
+  window.XStageRemoteQr={show:showQR,pause:pausePairing,resume:resumePairing,status:()=>({paused:pairingPaused,connected:session?.connections?.size||0})};
+  window.dispatchEvent(new CustomEvent('xstage:remote-ready'));
+  window.addEventListener('xstage:auth-ready',()=>{if(nativeTvMode)showQR(true);});
   setInterval(broadcastStatus,1200);
   window.addEventListener('beforeunload',clearPeerSession);
   ui.logout.addEventListener('click',clearPeerSession);
+  if(nativeTvMode)setTimeout(()=>showQR(true),0);
 })();

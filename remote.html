@@ -54,18 +54,20 @@
     .control-row button[aria-pressed="true"]{background:#127b64;border-color:#6bffe0}
     footer{color:#86a9ba;font-size:.72rem;text-align:center;line-height:1.7;padding:18px 5px}
     @media(max-width:365px){.control-row{gap:5px}.control-row button{font-size:.72rem;padding:7px 2px}header strong{font-size:.95rem}}
-  </style>
-</head>
-<body>
+  
+    .role-note{m<body>
  <main>
-  <header><img src="assets/xstage-app-icon-192.png" alt=""><div><strong>X-STAGE REMOTE</strong><small>ขอเพลง · คิวเพลง · ควบคุมเวที</small></div></header>
+  <header><img src="assets/xstage-app-icon-192.png" alt=""><div><strong>X-STAGE REMOTE</strong><small>Guest พื้นฐาน · Owner ควบคุมเต็มระบบ</small></div></header>
   <p id="remote-status" data-state="connecting" role="status" aria-live="polite">กำลังเชื่อมต่อรีโมท…</p>
   <section id="remote-controls" hidden aria-label="รีโมท X-Stage">
+   <p id="remote-role-note" class="role-note">โหมด Guest · ค้นหา/ขอเพลง ดูคิว เล่น–พัก และปรับเสียงพื้นฐาน</p>
    <nav class="remote-tabs" role="tablist" aria-label="หน้ารีโมท">
-    <button id="remote-tab-search" type="button" role="tab" aria-selected="true" aria-controls="remote-panel-search">🎵 ขอเพลง</button>
-    <button id="remote-tab-queue" type="button" role="tab" aria-selected="false" aria-controls="remote-panel-queue">☷ คิวเพลง</button>
-    <button id="remote-tab-control" type="button" role="tab" aria-selected="false" aria-controls="remote-panel-control">🎛 ควบคุม</button>
+    <button id="remote-tab-search" type="button" role="tab" aria-selected="true" aria-controls="remote-panel-search">🎵 เพลง</button>
+    <button id="remote-tab-queue" type="button" role="tab" aria-selected="false" aria-controls="remote-panel-queue">☷ คิว</button>
+    <button id="remote-tab-control" type="button" role="tab" aria-selected="false" aria-controls="remote-panel-control">🎛 พื้นฐาน</button>
+    <button id="remote-tab-owner" type="button" role="tab" aria-selected="false" aria-controls="remote-panel-owner">🔐 ผู้ดูแล</button>
    </nav>
+
    <section id="remote-panel-search" class="remote-tab-panel" role="tabpanel">
     <div class="request-fields">
       <label for="remote-singer">ชื่อผู้ขอเพลง <input id="remote-singer" maxlength="45" type="text" autocomplete="name" placeholder="ชื่อเล่นของคุณ"></label>
@@ -75,20 +77,136 @@
     <div id="remote-results" aria-live="polite"></div>
     <div id="remote-request-history" aria-live="polite"></div>
    </section>
+
    <section id="remote-panel-queue" class="remote-tab-panel" role="tabpanel" hidden>
     <div class="now-card"><small>กำลังเล่น</small><strong id="remote-now">ยังไม่ได้เลือกเพลง</strong><span id="remote-now-artist">X-Stage Karaoke</span><span id="remote-now-time">--:-- / --:--</span></div>
     <h2>คิวเพลงถัดไป <span id="remote-queue-count">0</span> รายการ</h2>
     <div id="remote-queue-list" aria-live="polite"><p class="remote-empty">ยังไม่มีเพลงในคิว</p></div>
    </section>
+
    <section id="remote-panel-control" class="remote-tab-panel" role="tabpanel" hidden>
     <div class="control-card">
-      <div class="control-title">ควบคุมการเล่น</div>
+      <div class="control-title">ควบคุมพื้นฐาน</div>
       <div class="control-row">
         <button id="remote-playpause" class="primary" type="button">▶ เล่น / พัก</button>
-        <button id="remote-next" type="button">⏭ ถัดไป</button>
-        <button id="remote-stop" type="button">⤼ ยกเลิกเพลง</button>
       </div>
       <div class="control-title">ระดับเสียง <span id="remote-volume-label">80%</span></div>
+      <div class="control-row">
+        <button id="remote-vol-down" type="button">− ลดเสียง</button>
+        <button id="remote-mute" type="button" aria-pressed="false">🔊 ปิดเสียง</button>
+        <button id="remote-vol-up" type="button">+ เพิ่มเสียง</button>
+      </div>
+      <p class="remote-state">Guest ใช้ได้เฉพาะคำสั่งพื้นฐาน คำสั่งขั้นสูงต้องยืนยันบัญชี Google เดียวกับจอ TV</p>
+    </div>
+   </section>
+
+   <section id="remote-panel-owner" class="remote-tab-panel" role="tabpanel" hidden>
+    <div id="remote-owner-gate" class="owner-gate">
+      <p class="role-note">เข้าสู่ระบบ Google ด้วย <strong>บัญชีเดียวกับจอ TV</strong> เพื่อปลดล็อกเมนูผู้ดูแลทั้งหมด จอ TV จะตรวจบัญชีกับ Google ก่อนอนุญาต</p>
+      <button id="remote-owner-login" class="owner-login" type="button">G · เข้าสู่ระบบเจ้าของเวที</button>
+      <p id="remote-owner-status" class="remote-state">ยังไม่ได้ยืนยันสิทธิ์ผู้ดูแล</p>
+    </div>
+    <div id="remote-owner-panel" class="owner-panel" hidden>
+      <div id="remote-owner-badge" class="owner-badge">✓ Owner · บัญชีเดียวกับจอ</div>
+
+      <section class="admin-section">
+       <h3>การเล่นขั้นสูง</h3>
+       <div class="admin-grid three">
+        <button data-admin="previous" type="button">⏮ ก่อนหน้า</button>
+        <button data-admin="restart" type="button">↺ เริ่มใหม่</button>
+        <button data-admin="next" type="button">⏭ ถัดไป</button>
+        <button data-admin="cancel-current" type="button">⤼ ยกเลิกเพลง</button>
+        <button id="owner-medley" data-admin="medley" type="button">♫ เมดเลย์</button>
+        <button id="owner-repeat" data-admin="repeat-toggle" type="button">⇄ วนเพลง</button>
+        <button data-admin="loop-a" type="button">A · จุดเริ่มวน</button>
+        <button data-admin="loop-b" type="button">B · จุดจบวน</button>
+        <button data-admin="loop-clear" type="button">ยกเลิก A–B</button>
+       </div>
+       <label>ความเร็วเพลง
+        <select id="owner-speed"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1">1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select>
+       </label>
+      </section>
+
+      <section class="admin-section">
+       <h3>คิวและเพลง</h3>
+       <div class="admin-grid">
+        <button data-admin="shuffle" type="button">⤨ สุ่มเพลง</button>
+        <button data-admin="clear-queue" type="button">ล้างคิว</button>
+        <button id="owner-export-queue" type="button">ส่งออกคิวลงมือถือ</button>
+        <button id="owner-import-queue" type="button">นำเข้าคิวจากมือถือ</button>
+       </div>
+       <input id="owner-import-file" type="file" accept="application/json,.json" hidden>
+      </section>
+
+      <section class="admin-section">
+       <h3>เสียง / EQ</h3>
+       <label>EQ Preset
+        <select id="owner-eq-preset"><option value="auto">AUTO</option><option value="flat">Flat</option><option value="pop">Pop</option><option value="rock">Rock</option><option value="jazz">Jazz</option><option value="vocal">Vocal</option><option value="edm">Dance / EDM</option><option value="acoustic">Acoustic</option><option value="classical">Classical</option></select>
+       </label>
+       <p id="owner-eq-state" class="remote-state">เสียง Native · EQ ยังไม่ทำงาน</p>
+       <div class="admin-grid">
+        <button data-admin="eq-reset" type="button">EQ FLAT 0 dB</button>
+        <button data-admin="eq-bypass" type="button">Bypass EQ</button>
+       </div>
+      </section>
+
+      <section class="admin-section">
+       <h3>เวที / เนื้อร้อง</h3>
+       <label>พื้นหลังเวที
+        <select id="owner-background"><option value="neon">เวทีนีออน</option><option value="photo">ภาพเวที</option><option value="deep-blue">น้ำเงินเข้ม</option></select>
+       </label>
+       <label>ธีมโลโก้
+        <select id="owner-brand-theme"><option value="premium-neon">Premium Neon</option><option value="modern-concert">Modern Concert</option><option value="futuristic-audio-tech">Futuristic Audio Tech</option></select>
+       </label>
+       <label>ขนาดเนื้อร้อง
+        <select id="owner-lyric-scale"><option value="0.8">80%</option><option value="0.9">90%</option><option value="1">100%</option><option value="1.1">110%</option><option value="1.2">120%</option><option value="1.3">130%</option><option value="1.4">140%</option></select>
+       </label>
+       <label>สีเนื้อร้อง <input id="owner-lyric-color" type="color" value="#ecf7ff"></label>
+       <div class="admin-grid">
+        <button data-admin="keyboard" type="button">แป้นพิมพ์บนจอ</button>
+        <button data-admin="stage-pop" type="button">จอร้องแยก</button>
+        <button data-admin="fullscreen-toggle" type="button">เต็มจอ / กลับ</button>
+        <button data-admin="update" type="button">อัปเดต X-Stage</button>
+        <button id="owner-history" type="button">ประวัติการเล่น</button>
+        <button id="owner-favorite-current" type="button">★ เพลงปัจจุบัน</button>
+        <button id="owner-about" type="button">เกี่ยวกับ X-Stage</button>
+       </div>
+       <div id="owner-history-list" class="remote-state"></div>
+      </section>
+
+      <section class="admin-section">
+       <h3>แชร์คลังเพลง</h3>
+       <div class="admin-inline"><input id="owner-share-email" type="email" placeholder="อีเมล Google ผู้รับ"><button id="owner-share" type="button">แชร์อ่านอย่างเดียว</button></div>
+       <p id="owner-share-status" class="remote-state"></p>
+      </section>
+
+      <section class="admin-section">
+       <h3>QR รีโมท</h3>
+       <p id="remote-qr-state">QR เปิดรับผู้ใช้ใหม่</p>
+       <div class="admin-grid">
+        <button id="owner-qr-pause" class="admin-warn" type="button">พัก QR ชั่วคราว</button>
+        <button id="owner-qr-resume" type="button">เปิด QR ใหม่</button>
+       </div>
+       <p class="remote-state">พัก QR จะหยุดผู้ใช้ใหม่ แต่รีโมทที่เชื่อมอยู่ยังใช้งานต่อได้</p>
+      </section>
+
+      <section class="admin-section">
+       <h3>ระบบ</h3>
+       <div class="admin-grid">
+        <button data-admin="clear-cache" type="button">เคลียร์แคช</button>
+        <button data-admin="logout" class="admin-danger" type="button">ออกจากระบบจอ TV</button>
+       </div>
+      </section>
+    </div>
+   </section>
+  </section>
+  <footer>Guest ไม่ต้องล็อกอิน Google และเข้าถึงได้เฉพาะคำสั่งพื้นฐาน · Owner ต้องใช้บัญชี Google เดียวกับจอ TV</footer>
+ </main>
+ <script src="config.js?v=1069"></script>
+ <script src="https://accounts.google.com/gsi/client" async defer></script>
+ <script src="assets/vendor/peerjs.min.js?v=1069" defer></script>
+ <script src="remote.js?v=1069" defer></script>
+</body><div class="control-title">ระดับเสียง <span id="remote-volume-label">80%</span></div>
       <div class="control-row">
         <button id="remote-vol-down" type="button">− ลดเสียง</button>
         <button id="remote-mute" type="button" aria-pressed="false">🔊 ปิดเสียง</button>
