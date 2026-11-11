@@ -62,9 +62,9 @@ assert.ok(remoteHtml.includes('data-admin="cancel-current"'),'Owner remote must 
 assert.ok(host.includes("const guestPermissions={search:true,request:true,playpause:true,'volume-up':true,'volume-down':true,mute:true}"),'Guest must be restricted to search/request/play-pause/volume/mute');
 assert.ok(!host.match(/const guestPermissions=.*cancel-current/),'Guest must not receive cancel-current');
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
-assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1072"),'host remote must load same-origin PeerJS for Android WebView reliability');
-assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1072"),'host remote must load same-origin QRCode');
-assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1072'),'mobile remote must load same-origin PeerJS');
+assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1073"),'host remote must load same-origin PeerJS for Android WebView reliability');
+assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1073"),'host remote must load same-origin QRCode');
+assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1073'),'mobile remote must load same-origin PeerJS');
 assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
 assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
 assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
@@ -93,7 +93,7 @@ assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Go
 assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
 assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open device login immediately when no stored session exists');
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
-assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1072"),'Android login must load the same-origin QR renderer');
+assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1073"),'Android login must load the same-origin QR renderer');
 assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
 assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
 assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
@@ -147,6 +147,8 @@ assert.ok(androidMain.includes('if (!isTelevisionDevice()) clickWebControl("mobi
 assert.ok(androidMain.includes('if (!isTelevisionDevice()) focusSearch()'),'Android TV SEARCH key must not focus a hidden search field');
 assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
 assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
+assert.ok(androidGradle.includes('b.setColor(java.awt.Color.WHITE)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher/store banner must use a solid white background');
+assert.ok(androidGradle.includes('new java.awt.Color(12,39,63)')&&androidGradle.includes('b.drawString("X-Stage",128,66)'),'white TV banner must keep dark readable X-Stage branding');
 assert.ok(css.includes('1.0.71 Android TV display-only stage'),'TV-specific final layout must live in the last-loaded UX stylesheet');
 assert.ok(css.includes('body.xstage-native-tv .topbar')&&css.includes('body.xstage-native-tv #pc-search')&&css.includes('body.xstage-native-tv #virtual-keyboard'),'TV must hide all search/menu/keyboard chrome');
 assert.ok(css.includes('left:clamp(18px,2vw,30px)!important')&&css.includes('right:clamp(18px,2vw,30px)!important'),'TV brand and QR must occupy opposite top corners');
@@ -297,7 +299,9 @@ assert.ok(host.includes("queue:state.queue.slice(0,150).map(songSummary)"),'Owne
 assert.ok(css.includes('body.xstage-native-tv #remote-pair-panel.pairing-paused #remote-qr'),'paused permanent QR must stay visible with an inactive visual state');
 assert.ok(css.includes('1.0.72 TV cleanup'),'TV cleanup regression guard must exist');
 assert.ok(css.includes('body.xstage-native-tv.xstage-ui-v2 #toggle-keyboard')&&css.includes('body.xstage-native-tv.xstage-ui-v2 #mobile-keyboard-toggle'),'TV must explicitly hide every keyboard icon');
-assert.ok(css.includes('body.xstage-native-tv.xstage-ui-v2 #mobile-stage-clock')&&css.includes('body.xstage-native-tv.xstage-ui-v2 #stage-clock'),'TV must explicitly hide both stage clock variants so they cannot overlap the QR');
+assert.ok(css.includes('body.xstage-native-tv.xstage-ui-v2 #mobile-stage-clock'),'TV must hide the toolbar clock so only one clock remains');
+assert.ok(css.includes('body.xstage-native-tv.xstage-ui-v2 .stage .stage-metrics')&&css.includes('display:flex!important')&&css.includes('body.xstage-native-tv.xstage-ui-v2 #stage-clock')&&css.includes('display:block!important'),'TV must keep exactly one visible stage clock at the top-right');
+assert.ok(css.includes('body.xstage-native-tv #remote-pair-panel{\n  top:clamp(62px,8.4vh,82px)!important'),'permanent QR must be positioned below the top-right clock without overlap');
 assert.ok(css.includes('body.xstage-native-tv #remote-pair-panel .remote-pair-top{\n  display:none!important'),'TV QR must not show a verbose heading');
 assert.ok(host.includes("status(nativeTvMode?'รีโมทมือถือ':'สแกน QR แล้วรออนุมัติบนจอ')"),'TV QR label must be short and identify it only as the mobile remote');
 assert.ok(host.includes("status(nativeTvMode?'รีโมทมือถือ · พัก':'QR แสดงอยู่ · พักรับผู้ใช้ใหม่ชั่วคราว · ผู้ใช้เดิมยังควบคุมได้')"),'paused TV QR label must remain short');

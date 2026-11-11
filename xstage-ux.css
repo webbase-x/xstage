@@ -3474,3 +3474,61 @@ body.xstage-native-tv #remote-pair-panel{
   top:clamp(16px,2.2vh,26px)!important;
   right:clamp(18px,2vw,30px)!important;
 }
+
+
+/* 1.0.73 TV top-right stack: clock above permanent QR, no overlap. */
+body.xstage-native-tv.xstage-ui-v2 #mobile-stage-clock,
+body.xstage-native-tv.xstage-ui-v2 #toggle-keyboard,
+body.xstage-native-tv.xstage-ui-v2 #mobile-keyboard-toggle{
+  display:none!important;
+  visibility:hidden!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-metrics{
+  display:flex!important;
+  visibility:visible!important;
+  position:absolute!important;
+  top:clamp(16px,2.2vh,26px)!important;
+  right:clamp(18px,2vw,30px)!important;
+  left:auto!important;bottom:auto!important;
+  width:clamp(160px,16vw,205px)!important;
+  height:auto!important;
+  z-index:36!important;
+  align-items:center!important;
+  justify-content:center!important;
+  pointer-events:none!important;
+  margin:0!important;padding:0!important;
+  background:transparent!important;
+  border:0!important;box-shadow:none!important
+}
+body.xstage-native-tv.xstage-ui-v2 #stage-clock{
+  display:block!important;
+  visibility:visible!important;
+  width:100%!important;
+  min-height:0!important;
+  padding:7px 10px!important;
+  border:1px solid rgba(104,218,239,.44)!important;
+  border-radius:11px!important;
+  background:rgba(4,22,35,.92)!important;
+  color:#effcff!important;
+  text-align:center!important;
+  font-size:clamp(.78rem,1vw,.98rem)!important;
+  line-height:1.15!important;
+  font-weight:900!important;
+  font-variant-numeric:tabular-nums!important;
+  letter-spacing:.035em!important;
+  text-shadow:0 1px 4px #000!important;
+  white-space:nowrap!important
+}
+body.xstage-native-tv #remote-pair-panel{
+  top:clamp(62px,8.4vh,82px)!important;
+  right:clamp(18px,2vw,30px)!important;
+  left:auto!important;bottom:auto!important
+}
+@media(max-height:600px){
+  body.xstage-native-tv.xstage-ui-v2 .stage .stage-metrics{
+    top:12px!important;right:14px!important;width:150px!important
+  }
+  body.xstage-native-tv #remote-pair-panel{
+    top:54px!important;right:14px!important;width:150px!important
+  }
+}
