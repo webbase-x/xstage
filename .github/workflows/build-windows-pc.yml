@@ -1,0 +1,48 @@
+name: X-Stage Windows PC verified build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'windows-pc/source/**'
+      - 'windows-pc/manifest.json'
+      - '.github/workflows/build-windows-pc.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-source-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify imported source is present
+        shell: pwsh
+        run: |
+          if (-not (Test-Path windows-pc/source/Build-Source.ps1)) {
+            throw 'Windows source ZIP has not been imported yet.'
+          }
+          $meta = Get-Content windows-pc/manifest.json -Raw | ConvertFrom-Json
+          if ($meta.source_imported -ne $true -or $meta.version -ne '1.0.76') {
+            throw 'Windows v1.0.76 source is not imported/verified yet.'
+          }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Run Windows full build and verification gates
+        shell: pwsh
+        run: |
+          Set-Location windows-pc/source
+          & ./Build-Source.ps1 -PythonExe (Get-Command python).Source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload verified build for manual installation testing
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xstage-windows-v1.0.76-build1076-UNVERIFIED-INSTALLER
+          path: windows-pc/source/dist/XStageKaraoke/**
+          if-no-files-found: error
+          retention-days: 14
+      # Deliberately do not publish installer or set latest.available=true:
+      # an EXE bundle is not a tested installer and must pass real Windows testing.
