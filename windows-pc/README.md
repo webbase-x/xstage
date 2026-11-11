@@ -1,3 +1,20 @@
+# X-Stage Karaoke Windows PC — unified v1.0.76 (pending build)
+
+The Web app, Android TV/tablet source and Windows PC source now use **v1.0.76 / build 1076** as a shared release label, but each platform has independent installation artifacts. A version label alone is **not** proof that a Windows installer is published.
+
+## Windows continuous random medley
+
+The source ZIP `X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip` includes:
+- A new transport/menu action to **start continuous shuffled medley by detected song category**.
+- Category groups from the indexed `rhythm` metadata, including unclassified songs; rotate groups rather than mixing blindly.
+- Background, bounded batches of up to six playable tracks, refilled when the remaining queue is low.
+- A stop action (including F8) that cancels pending automatic tracks but preserves manually queued tracks.
+- Startup update check after eight seconds and hourly silent re-checks; a new verified release offers immediate download and SHA-256 validation.
+
+**Import status:** The archive is not uploaded in this repository. Upload exactly `downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip` (SHA-256 `cd5254ff5d6d1768fae1ff6ba46f7761a2f82021cc7996cee000ae0c574712db`, 447 files). GitHub Actions workflow `import-windows-pc-v1076-source.yml` then verifies/imports it. `build-windows-pc.yml` builds/tests on Windows. Keep `downloads/windows-pc-latest.json.available=false` until a tested installer is published.
+
+---
+
 # X-Stage Karaoke — Windows PC (source import)
 
 The Windows PC application is **separate** from the Android TV/tablet APK and the GitHub Pages web app. Keep all three in this existing repository `webbase-x/xstage`.
