@@ -108,6 +108,104 @@ function setupAppUpdateWatcher(){
   window.addEventListener('pageshow',()=>{void checkAppVersion();});
 }
 
+function xstageTvVisible(element){
+  if(!element||element.hidden||element.getAttribute?.('aria-hidden')==='true')return false;
+  const style=getComputedStyle(element);
+  if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
+  const rect=element.getBoundingClientRect();
+  return rect.width>0&&rect.height>0;
+}
+function xstageTvActiveScope(){
+  const selectors=[
+    '.android-tv-update-panel:not([hidden])',
+    '.android-tv-auth-panel:not([hidden])',
+    '.remote-pair-panel:not([hidden])',
+    '.remote-request-panel:not([hidden])',
+    'dialog[open]',
+    '.mobile-stage-menu:not([hidden])',
+    '.login-gate:not([hidden])'
+  ];
+  const visible=selectors.flatMap(selector=>[...document.querySelectorAll(selector)]).filter(xstageTvVisible);
+  if(!visible.length)return document;
+  return visible.sort((a,b)=>{
+    const za=Number.parseInt(getComputedStyle(a).zIndex,10)||0;
+    const zb=Number.parseInt(getComputedStyle(b).zIndex,10)||0;
+    return za-zb;
+  }).at(-1);
+}
+function xstageTvFocusable(scope=xstageTvActiveScope()){
+  const selector='button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  return [...scope.querySelectorAll(selector)].filter(xstageTvVisible);
+}
+window.XStageTvMoveFocus=direction=>{
+  const scope=xstageTvActiveScope();
+  const items=xstageTvFocusable(scope);
+  if(!items.length)return false;
+  const active=document.activeElement;
+  if((active?.matches?.('input,textarea')||false)&&(direction==='left'||direction==='right')&&scope===document){
+    const key=direction==='left'?'ArrowLeft':'ArrowRight';
+    active.dispatchEvent(new KeyboardEvent('keydown',{key,code:key,bubbles:true,cancelable:true}));
+    return true;
+  }
+  if(!items.includes(active)){
+    const preferred=scope.querySelector?.('#android-tv-update-now:not([disabled]),#android-tv-auth-retry:not([disabled]),button:not([disabled])');
+    const target=preferred&&items.includes(preferred)?preferred:items[0];
+    try{target.focus({preventScroll:true});}catch{target.focus();}
+    target.scrollIntoView?.({block:'nearest',inline:'nearest'});
+    return true;
+  }
+  const ar=active.getBoundingClientRect(),ax=ar.left+ar.width/2,ay=ar.top+ar.height/2;
+  let best=null,bestScore=Infinity;
+  for(const item of items){
+    if(item===active)continue;
+    const r=item.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+    const dx=cx-ax,dy=cy-ay;
+    const valid=direction==='left'?dx<-2:direction==='right'?dx>2:direction==='up'?dy<-2:dy>2;
+    if(!valid)continue;
+    const primary=Math.abs(direction==='left'||direction==='right'?dx:dy);
+    const secondary=Math.abs(direction==='left'||direction==='right'?dy:dx);
+    const score=primary+secondary*2.75;
+    if(score<bestScore){bestScore=score;best=item;}
+  }
+  if(!best){
+    const index=items.indexOf(active);
+    const delta=(direction==='left'||direction==='up')?-1:1;
+    best=items[(index+delta+items.length)%items.length];
+  }
+  try{best.focus({preventScroll:true});}catch{best.focus();}
+  best.scrollIntoView?.({block:'nearest',inline:'nearest'});
+  return true;
+};
+window.XStageTvActivateFocused=()=>{
+  const scope=xstageTvActiveScope();
+  const items=xstageTvFocusable(scope);
+  let active=document.activeElement;
+  if(!items.includes(active)){
+    active=scope.querySelector?.('#android-tv-update-now:not([disabled]),button:not([disabled]),a[href]')||items[0];
+    if(!active)return false;
+    try{active.focus({preventScroll:true});}catch{active.focus();}
+  }
+  if(active.matches?.('input:not([type]),input[type="text"],input[type="search"],textarea')){
+    active.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));
+    return true;
+  }
+  active.click?.();
+  return true;
+};
+document.addEventListener('keydown',event=>{
+  if(!event.isTrusted)return;
+  const nativeTv=androidTvNativeBridgeReady()||/Android TV|XStageAndroidTV/i.test(navigator.userAgent||'');
+  if(!nativeTv)return;
+  const map={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
+  if(map[event.key]){
+    event.preventDefault();event.stopPropagation();
+    window.XStageTvMoveFocus(map[event.key]);
+  }else if(event.key==='Enter'||event.key==='Accept'){
+    event.preventDefault();event.stopPropagation();
+    window.XStageTvActivateFocused();
+  }
+},true);
+
 const CATALOG_DB_NAME='xstage-private-catalog-v1';
 const CATALOG_DB_STORE='catalogs';
 function openCatalogDatabase(){

@@ -229,6 +229,44 @@ public final class MainActivity extends Activity {
         callJavascript("(function(){var e=document.getElementById('search');if(e){e.focus();return true}return false})()");
     }
 
+    private void moveWebFocus(String direction) {
+        callJavascript("window.XStageTvMoveFocus&&window.XStageTvMoveFocus(" +
+                JSONObject.quote(direction) + ");");
+    }
+
+    private void activateWebFocus() {
+        callJavascript("window.XStageTvActivateFocused&&window.XStageTvActivateFocused();");
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (isTelevisionDevice() && event != null && event.getAction() == KeyEvent.ACTION_DOWN) {
+            switch (event.getKeyCode()) {
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                    moveWebFocus("left");
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    moveWebFocus("right");
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_UP:
+                    moveWebFocus("up");
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    moveWebFocus("down");
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_ENTER:
+                case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                case KeyEvent.KEYCODE_BUTTON_A:
+                    activateWebFocus();
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         switch (keyCode) {

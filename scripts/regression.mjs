@@ -62,7 +62,7 @@ assert.ok(remote.includes("'cancel-current'"),'remote must request cancel-curren
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
 assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1064"),'host remote must load same-origin PeerJS for Android WebView reliability');
 assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1064"),'host remote must load same-origin QRCode');
-assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1065'),'mobile remote must load same-origin PeerJS');
+assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1066'),'mobile remote must load same-origin PeerJS');
 assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
 assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
 assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
@@ -131,6 +131,12 @@ assert.ok(androidUpdate.includes('Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES'),'
 assert.ok(androidUpdate.includes('manager.getUriForDownloadedFile(id)'),'native updater must pass the completed APK to the Android installer');
 assert.ok(androidMain.includes('updateManager.checkForUpdates(true)'),'Android TV must check for APK updates immediately after the hosted UI loads');
 assert.ok(androidMain.includes('public void installAvailableUpdate()'),'Android JS bridge must expose the update installer');
+assert.ok(androidMain.includes('public boolean dispatchKeyEvent(KeyEvent event)'),'Android TV must intercept remote key events before WebView consumes them');
+assert.ok(androidMain.includes('KEYCODE_DPAD_CENTER')&&androidMain.includes('KEYCODE_ENTER')&&androidMain.includes('KEYCODE_NUMPAD_ENTER')&&androidMain.includes('KEYCODE_BUTTON_A'),'Android TV OK/Enter variants must activate the focused web control');
+assert.ok(androidMain.includes('KEYCODE_DPAD_LEFT')&&androidMain.includes('KEYCODE_DPAD_RIGHT')&&androidMain.includes('KEYCODE_DPAD_UP')&&androidMain.includes('KEYCODE_DPAD_DOWN'),'Android TV D-pad directions must drive web focus');
+assert.ok(app.includes('window.XStageTvMoveFocus=direction=>'),'hosted UI must expose spatial focus navigation for TV remotes');
+assert.ok(app.includes('window.XStageTvActivateFocused=()=>'),'hosted UI must expose focused-control activation for TV remotes');
+assert.ok(app.includes("event.key==='Enter'||event.key==='Accept'"),'hosted UI must handle TV Enter/Accept as a fallback for older APKs');
 assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must show Android TV update notifications');
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
 assert.ok(index.includes('id="desktop-update-version"')&&index.includes('id="mobile-update-version"'),'version update controls must be available on desktop and compact/mobile UI');
