@@ -11,7 +11,7 @@ const ui = {
   librarySelect:$('library-select'),librarySwitcher:$('library-switcher'),
   search: $('search'), voiceSearch:$('voice-search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
-  nowPlaying: $('now-playing'), nowArtist: $('now-artist'), playStatus: $('play-status'),
+  nowPlaying: $('now-playing'), nowArtist: $('now-artist'), songKey:$('tv-song-key'), playStatus: $('play-status'),
   playPause: $('play-pause'), cancelCurrent:$('cancel-current'), restartCurrent:$('restart-current'), previous: $('previous'), next: $('next'),
   seek: $('seek'), elapsed: $('elapsed'), duration: $('duration'), speed: $('speed'), volume: $('volume'),
   repeat: $('repeat'), fullscreen: $('fullscreen'), lyrics: $('lyrics')
@@ -28,7 +28,7 @@ const state = {
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
   playbackRestoreAttempted:false,
   awaitingSharedLibrary:false,
-  updateAvailable:null,updateAfterTrack:false
+  updateAvailable:null,updateAfterTrack:false,nativeUpdateAvailable:null,nativeUpdateStatus:''
 };
 
 const XSTAGE_RELEASE=window.XSTAGE_RELEASE||{version:'0.0.0',build:0};
@@ -135,10 +135,7 @@ function xstageTvActiveScope(){
   }).at(-1);
 }
 function xstageTvFocusable(scope=xstageTvActiveScope()){
-  if(document.body.classList.contains('xstage-native-tv')&&scope===document){
-    const selector='#search:not([disabled]),#toggle-keyboard:not([disabled]),#virtual-keyboard button:not([disabled]),#virtual-keyboard input:not([disabled])';
-    return [...document.querySelectorAll(selector)].filter(xstageTvVisible);
-  }
+  if(document.body.classList.contains('xstage-native-tv')&&scope===document)return [];
   const selector='button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   return [...scope.querySelectorAll(selector)].filter(xstageTvVisible);
 }
@@ -1115,6 +1112,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   ui.songTotal.textContent = '0 เพลง';ui.resultCount.textContent = 'กรุณาเข้าสู่ระบบ';
   ui.libraryState.textContent = 'คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ';
   ui.nowPlaying.textContent = 'ยังไม่ได้เลือกเพลง';ui.nowArtist.textContent='X-Stage Karaoke Online';ui.stageCode.textContent='—';
+  if(ui.songKey)ui.songKey.textContent='คีย์ —';
   ui.stage.classList.remove('playing');ui.stageIdle.hidden = false;
   setPlayStatus(''); updateTransport();renderSongs();renderQueue();
   if (revoke && oldToken && typeof google !== 'undefined') {
@@ -1693,6 +1691,7 @@ function clearIdleStage(message){
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
   ui.stageCode.textContent='—';
+  if(ui.songKey)ui.songKey.textContent='คีย์ —';
   ui.stage.classList.remove('playing');
   ui.stageIdle.hidden=false;
   if(typeof pen!=='undefined')pen.clearRect(0,0,ui.lyrics.width,ui.lyrics.height);
@@ -1764,7 +1763,10 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     state.objectUrl=url;state.current=song;state.lyrics=lyrics;
     syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
-    ui.stageCode.textContent=song.code||'—';ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
+    const musicalKey=String(song.key||song.musicKey||song.originalKey||song.keySignature||'').trim();
+    ui.stageCode.textContent=song.code||'—';
+    if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
+    ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     player.src=url;
     try{
       if('preservesPitch' in player)player.preservesPitch=true;
@@ -2182,25 +2184,20 @@ function isNativeAndroidTvMode(){
 function setupNativeAndroidTvUi(){
   if(!isNativeAndroidTvMode())return;
   document.body.classList.add('xstage-native-tv');
+  ui.stage?.classList.add('tv-display-only');
 
-  // TV is now a display/search surface. All menus and advanced controls live on the mobile remote.
-  const menu=document.getElementById('mobile-stage-menu');
-  if(menu)menu.hidden=true;
-  for(const id of ['mobile-menu-toggle','stage-tools-toggle','fullscreen','desktop-update-version','logout','voice-search']){
-    const el=document.getElementById(id);if(el)el.hidden=true;
+  // Android TV is a pure display surface after sign-in.
+  // All search, queue and advanced controls live on the mobile remote.
+  for(const id of [
+    'mobile-stage-menu','mobile-menu-toggle','stage-tools-toggle','fullscreen',
+    'desktop-update-version','logout','voice-search','toggle-keyboard',
+    'virtual-keyboard','pc-search','stage-queue-panel','remote-request-panel'
+  ]){
+    const el=document.getElementById(id);
+    if(el)el.hidden=true;
   }
-
-  // Keep the onscreen keyboard in its original toolbar position because TVs have no guaranteed keyboard.
-  const keyboardToolbar=document.getElementById('toggle-keyboard');
-  if(keyboardToolbar)keyboardToolbar.hidden=false;
-
-  // Keep queue count visible as status only; it must not open a TV menu or enter D-pad focus order.
   const queue=document.getElementById('stage-queue-toggle');
-  if(queue){
-    queue.tabIndex=-1;queue.setAttribute('aria-disabled','true');
-    queue.setAttribute('aria-label','จำนวนเพลงในคิว');
-    queue.style.pointerEvents='none';
-  }
+  if(queue){queue.tabIndex=-1;queue.hidden=true;queue.style.pointerEvents='none';}
 }
 function androidTvAuthPanel(){
   let panel=$('android-tv-auth-panel');
@@ -2282,7 +2279,7 @@ function ensureAndroidTvQrLibrary(){
     document.getElementById('xstage-qrcode')?.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1070';
+    script.src='./assets/vendor/qrcode.min.js?v=1071';
     script.async=true;
     const timer=setTimeout(()=>finish(Error('QR library timeout')),5000);
     script.addEventListener('load',()=>finish(typeof QRCode!=='undefined'?null:Error('QR library unavailable')),{once:true});
@@ -2426,6 +2423,10 @@ function androidTvUpdatePanel(){
 }
 window.XStageAndroidUpdateAvailable=(version,build)=>{
   if(!androidTvNativeBridgeReady())return;
+  state.nativeUpdateAvailable={version:String(version||''),build:Number(build)||0};
+  state.nativeUpdateStatus='มี X-Stage เวอร์ชันใหม่พร้อมอัปเดต';
+  window.dispatchEvent(new CustomEvent('xstage:native-update',{detail:state.nativeUpdateAvailable}));
+  if(isNativeAndroidTvMode())return;
   const panel=androidTvUpdatePanel();
   const current=(()=>{try{return String(window.XStageAndroid.getAppVersion?.()||'รุ่นปัจจุบัน');}catch{return 'รุ่นปัจจุบัน';}})();
   panel.hidden=false;
@@ -2437,11 +2438,17 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
   setTimeout(()=>$('android-tv-update-now')?.focus?.(),30);
 };
 window.XStageAndroidUpdateStatus=message=>{
+  state.nativeUpdateStatus=String(message||'กำลังอัปเดต X-Stage…');
+  window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus}}));
+  if(isNativeAndroidTvMode())return;
   const panel=androidTvUpdatePanel();
   panel.hidden=false;
   $('android-tv-update-status').textContent=String(message||'กำลังอัปเดต X-Stage…');
 };
 window.XStageAndroidUpdateError=message=>{
+  state.nativeUpdateStatus=String(message||'อัปเดตไม่สำเร็จ');
+  window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus,error:true}}));
+  if(isNativeAndroidTvMode())return;
   const panel=androidTvUpdatePanel();
   panel.hidden=false;
   $('android-tv-update-status').textContent=String(message||'อัปเดตไม่สำเร็จ');
@@ -2449,6 +2456,10 @@ window.XStageAndroidUpdateError=message=>{
   if(button){button.disabled=false;button.textContent='ลองอัปเดตอีกครั้ง';}
 };
 window.XStageAndroidNoUpdate=()=>{
+  state.nativeUpdateAvailable=null;
+  state.nativeUpdateStatus='X-Stage เป็นเวอร์ชันล่าสุดแล้ว';
+  window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus}}));
+  if(isNativeAndroidTvMode())return;
   const panel=$('android-tv-update-panel');
   if(panel&&!panel.hidden){
     $('android-tv-update-status').textContent='X-Stage เป็นเวอร์ชันล่าสุดแล้ว';

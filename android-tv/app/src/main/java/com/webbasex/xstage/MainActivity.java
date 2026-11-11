@@ -286,11 +286,10 @@ public final class MainActivity extends Activity {
                 clickWebControl("previous");
                 return true;
             case KeyEvent.KEYCODE_MENU:
-                if (isTelevisionDevice()) focusSearch();
-                else clickWebControl("mobile-menu-toggle");
+                if (!isTelevisionDevice()) clickWebControl("mobile-menu-toggle");
                 return true;
             case KeyEvent.KEYCODE_SEARCH:
-                focusSearch();
+                if (!isTelevisionDevice()) focusSearch();
                 return true;
             case KeyEvent.KEYCODE_BACK:
                 if (webView != null && webView.canGoBack()) {

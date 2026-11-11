@@ -244,7 +244,13 @@
         if(visual.brandTheme&&[...$('owner-brand-theme').options].some(o=>o.value===visual.brandTheme))$('owner-brand-theme').value=visual.brandTheme;
         if(visual.lyricScale)$('owner-lyric-scale').value=String(visual.lyricScale);
         if(/^#[0-9a-f]{6}$/i.test(String(visual.lyricColor||'')))$('owner-lyric-color').value=String(visual.lyricColor);
-        $('remote-qr-state').textContent=data.pairingPaused?'QR พักอยู่ · ไม่รับผู้ใช้ใหม่':'QR เปิดรับผู้ใช้ใหม่';
+        $('remote-qr-state').textContent=data.pairingPaused?'QR แสดงอยู่ · พักรับผู้ใช้ใหม่':'QR แสดงถาวร · เปิดรับผู้ใช้ใหม่';
+        const updateButton=$('owner-update');
+        if(updateButton){
+          const release=data.updateAvailable;
+          updateButton.textContent=release?.version?'อัปเดต X-Stage '+String(release.version):'ตรวจสอบ / อัปเดต X-Stage';
+          updateButton.title=String(data.updateStatus||'ตรวจสอบเวอร์ชันล่าสุด');
+        }
         $('owner-qr-pause').disabled=!!data.pairingPaused;
         $('owner-qr-resume').disabled=!data.pairingPaused;
       }

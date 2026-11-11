@@ -153,8 +153,8 @@
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1070','xstage-peerjs',()=>typeof Peer==='function');
-      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1070','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1071','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1071','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
@@ -197,10 +197,12 @@
       ownerEmail:entry?.role==='owner'?String(ui.account?.textContent||''):'',
       platform:nativeTvMode?'android-tv':'web',
       playing:!!ui.player.src&&!ui.player.paused,now:songSummary(state.current),
-      queue:state.queue.slice(0,50).map(songSummary),queueCount:state.queue.length,
+      queue:state.queue.slice(0,150).map(songSummary),queueCount:state.queue.length,
       volume:Math.round(Number(ui.volume.value)||0),muted:ui.player.muted,medley:!!state.medley,
       repeat:!!ui.repeat?.checked,speed:Number(ui.speed?.value)||1,eqPreset:String(eq?.value||'auto'),eqActive:!!window.XStageEqIsActive?.(),
       visualSettings:entry?.role==='owner'&&typeof window.XStageRemoteVisualSettings==='function'?window.XStageRemoteVisualSettings('state'):null,
+      updateAvailable:entry?.role==='owner'?(state.nativeUpdateAvailable||state.updateAvailable||null):null,
+      updateStatus:entry?.role==='owner'?String(state.nativeUpdateStatus||''):'',
       currentTime:Number.isFinite(ui.player.currentTime)?ui.player.currentTime:0,
       duration:Number.isFinite(duration)?duration:0,fullscreen:document.fullscreenElement===stage,
       fullscreenPending,pairingPaused,permissions:{...entryPermissions(entry)}};
@@ -428,16 +430,18 @@
   }
   function pausePairing(){
     pairingPaused=true;
-    qrCanvas.hidden=true;qrLink.textContent='';qrLink.removeAttribute('href');
-    status('พัก QR ชั่วคราว · ผู้ใช้ที่เชื่อมอยู่ยังใช้งานต่อได้');broadcastStatus();
+    qrPanel.classList.add('pairing-paused');
+    status('QR แสดงอยู่ · พักรับผู้ใช้ใหม่ชั่วคราว · ผู้ใช้เดิมยังควบคุมได้');
+    broadcastStatus();
   }
   async function resumePairing(){
-    if(!session){pairingPaused=false;await createSession();return;}
-    pairingPaused=false;session.secret=randomSecret();await renderSessionQr(session);broadcastStatus();
+    if(!session){pairingPaused=false;qrPanel.classList.remove('pairing-paused');await createSession();return;}
+    pairingPaused=false;qrPanel.classList.remove('pairing-paused');
+    session.secret=randomSecret();await renderSessionQr(session);broadcastStatus();
   }
 
   async function createSession(){
-    clearPeerSession();pairingPaused=false;status('กำลังเตรียมระบบรีโมท…');
+    clearPeerSession();pairingPaused=false;qrPanel.classList.remove('pairing-paused');status('กำลังเตรียมระบบรีโมท…');
     try{await ensureRemoteLibraries();}catch(error){status(error?.message||'โหลดระบบรีโมทไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
     if(typeof Peer!=='function'||typeof QRCode==='undefined'){status('ระบบรีโมทยังไม่พร้อม กรุณาตรวจอินเทอร์เน็ต');return;}
     if(!window.crypto?.getRandomValues){status('เบราว์เซอร์ไม่รองรับการเชื่อมต่ออย่างปลอดภัย');return;}
