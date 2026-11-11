@@ -494,6 +494,10 @@
       if(session!==active)return;
       status('เชื่อมต่อรีโมทไม่ได้ ('+(err?.type||'เครือข่าย')+') · กด “เปลี่ยน QR” เพื่อลองใหม่');
       qrEnd.textContent='ลองสร้าง QR ใหม่';
+      if(!active.peerId){
+        try{peer.destroy();}catch{}
+        session=null;
+      }
     });
     peer.on('disconnected',()=>{
       if(session!==active)return;
@@ -513,7 +517,7 @@
   }
   qrToggle.addEventListener('click',()=>showQR(qrPanel.hidden));
   qrClose.addEventListener('click',()=>{if(!nativeTvMode)showQR(false);});
-  window.XStageRemoteQr={show:showQR,pause:pausePairing,resume:resumePairing,status:()=>({paused:pairingPaused,connected:session?.connections?.size||0})};
+  window.XStageRemoteQr={show:showQR,retry:createSession,pause:pausePairing,resume:resumePairing,status:()=>({paused:pairingPaused,connected:session?.connections?.size||0,hasQr:!!session?.peerId})};
   window.dispatchEvent(new CustomEvent('xstage:remote-ready'));
   window.addEventListener('xstage:auth-ready',()=>{if(nativeTvMode)showQR(true);});
   setInterval(broadcastStatus,1200);
