@@ -422,7 +422,7 @@
 
   async function renderSessionQr(active){
     if(!active||session!==active||pairingPaused||!active.peerId)return;
-    const url=new URL('remote.html',location.href);url.search='';url.hash='p='+encodeURIComponent(active.peerId)+'&k='+encodeURIComponent(active.secret);
+    const url=new URL('remote.html',location.href);url.search='';url.searchParams.set('v',String(window.XSTAGE_RELEASE?.build||0));url.hash='p='+encodeURIComponent(active.peerId)+'&k='+encodeURIComponent(active.secret);
     qrLink.textContent='เปิดรีโมท X-Stage บนมือถือ';qrLink.href=url.href;
     try{
       qrCanvas.width=232;qrCanvas.height=232;
@@ -452,7 +452,7 @@
     session=active;qrEnd.textContent='เปลี่ยน QR';status('กำลังติดต่อเซิร์ฟเวอร์รีโมท…');
     const peer=new Peer();active.peer=peer;
     const peerOpenTimer=setTimeout(()=>{
-      if(session!==active)return;status('สร้าง QR นานเกินไป · ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+      if(session!==active)return;status(nativeTvMode?'สร้าง QR นานเกินไป · กด MENU > สร้าง QR ใหม่':'สร้าง QR นานเกินไป · กดลองใหม่');
       try{peer.destroy();}catch{}session=null;qrEnd.textContent='ลองใหม่';
     },12000);
     peer.on('open',async id=>{clearTimeout(peerOpenTimer);if(session!==active)return;active.peerId=id;await renderSessionQr(active);});
@@ -492,7 +492,7 @@
     peer.on('error',err=>{
       clearTimeout(peerOpenTimer);
       if(session!==active)return;
-      status('เชื่อมต่อรีโมทไม่ได้ ('+(err?.type||'เครือข่าย')+') · กด “เปลี่ยน QR” เพื่อลองใหม่');
+      status('เชื่อมต่อรีโมทไม่ได้ ('+(err?.type||'เครือข่าย')+') · '+(nativeTvMode?'กด MENU เพื่อสร้าง QR ใหม่':'กด “เปลี่ยน QR” เพื่อลองใหม่'));
       qrEnd.textContent='ลองสร้าง QR ใหม่';
       if(!active.peerId){
         try{peer.destroy();}catch{}
