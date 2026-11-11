@@ -25,8 +25,6 @@ import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 public final class MainActivity extends Activity {
     private static final String XSTAGE_HOST = "webbase-x.github.io";
@@ -63,7 +61,7 @@ public final class MainActivity extends Activity {
         settings.setUserAgentString(settings.getUserAgentString() + " XStageAndroidTV/" + BuildConfig.VERSION_NAME);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WebView.setSafeBrowsingEnabled(true);
+            settings.setSafeBrowsingEnabled(true);
         }
 
         googleAuth = new GoogleDeviceAuth(this, new GoogleDeviceAuth.Listener() {
@@ -141,7 +139,7 @@ public final class MainActivity extends Activity {
         String separator = BuildConfig.XSTAGE_WEB_URL.contains("?") ? "&" : "?";
         return BuildConfig.XSTAGE_WEB_URL + separator +
                 "source=android-tv&native_version=" +
-                URLEncoder.encode(BuildConfig.VERSION_NAME, StandardCharsets.UTF_8);
+                Uri.encode(BuildConfig.VERSION_NAME);
     }
 
     private boolean isTrustedXStageUrl(Uri uri) {
