@@ -99,12 +99,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p downloads
-          cp android-tv/app/build/outputs/apk/debug/app-debug.apk downloads/X-Stage-Karaoke-Android-TV-Test.apk
-          sha256sum downloads/X-Stage-Karaoke-Android-TV-Test.apk > downloads/X-Stage-Karaoke-Android-TV-Test.apk.sha256
+          VERSION="$(python -c "import json; print(json.load(open('version.json', encoding='utf-8'))['version'])")"
+          BUILD="$(python -c "import json; print(json.load(open('version.json', encoding='utf-8'))['build'])")"
+          APK_NAME="X-Stage-Karaoke-Android-TV-v${VERSION}-build${BUILD}.apk"
+          cp android-tv/app/build/outputs/apk/debug/app-debug.apk "downloads/${APK_NAME}"
+          sha256sum "downloads/${APK_NAME}" > "downloads/${APK_NAME}.sha256"
           python - <<'PY'
           import hashlib, json, pathlib
           meta=json.load(open('version.json',encoding='utf-8'))
-          apk=pathlib.Path('downloads/X-Stage-Karaoke-Android-TV-Test.apk')
+          apk_name=f"X-Stage-Karaoke-Android-TV-v{meta['version']}-build{meta['build']}.apk"
+          apk=pathlib.Path('downloads')/apk_name
           info={
             'name':'X-Stage Karaoke Android TV Test APK',
             'version':meta['version'],
@@ -123,7 +127,7 @@ jobs:
             echo "main moved while Android TV build was running; refusing to publish a stale APK"
             exit 1
           fi
-          git add downloads/X-Stage-Karaoke-Android-TV-Test.apk downloads/X-Stage-Karaoke-Android-TV-Test.apk.sha256 downloads/android-tv-latest.json
+          git add "downloads/${APK_NAME}" "downloads/${APK_NAME}.sha256" downloads/android-tv-latest.json
           if git diff --cached --quiet; then
             echo "Published APK is unchanged"
             exit 0
