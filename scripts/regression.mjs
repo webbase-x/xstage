@@ -291,7 +291,7 @@ assert.ok(host.includes("queue:state.queue.slice(0,150).map(songSummary)"),'Owne
 assert.ok(css.includes('body.xstage-native-tv #remote-pair-panel.pairing-paused #remote-qr'),'paused permanent QR must stay visible with an inactive visual state');
 assert.ok(remoteHtml.includes('id="owner-update"'),'Owner remote must own the APK update control when TV is display-only');
 assert.ok(host.includes('session.secret=randomSecret()'),'resuming QR pairing must rotate the pairing secret');
-assert.ok(host.includes("ผู้ใช้ที่เชื่อมอยู่ยังใช้งานต่อได้"),'pausing QR must preserve already-connected remotes');
+assert.ok(host.includes("pairingPaused=true")&&host.includes("if(session!==active||pairingPaused){conn.close();return;}")&&!host.includes("for(const entry of active.connections.values())try{entry.conn.close();}catch{}\n    try{active.peer?.destroy();}catch{}\n    qrApprove.hidden=true;qrReject.hidden=true;hideFullscreenConfirm();\n    qrLink.textContent='';qrLink.removeAttribute('href');qrCanvas.hidden=true;\n    qrEnd.textContent='สร้าง QR ใหม่';pairingPaused=false;status('ปิดการเชื่อมต่อรีโมทแล้ว');\n  }\n  function pausePairing()"),'pausing QR must reject only new pairings without closing existing remotes');
 assert.ok(remoteHtml.includes('id="owner-qr-pause"')&&remoteHtml.includes('id="owner-qr-resume"'),'Owner remote must expose QR pause/resume controls');
 assert.ok(remote.includes("'queue-play'")&&remote.includes("'queue-move'")&&remote.includes("'queue-remove'"),'Owner remote must provide play/reorder/remove controls for every queued song');
 assert.ok(host.includes("action==='queue-play'")&&host.includes("action==='queue-move'")&&host.includes("action==='queue-remove'"),'TV host must enforce Owner queue operations directly');
