@@ -116,10 +116,11 @@ function xstageTvVisible(element){
   return rect.width>0&&rect.height>0;
 }
 function xstageTvActiveScope(){
+  const nativeTv=document.body.classList.contains('xstage-native-tv');
   const selectors=[
     '.android-tv-update-panel:not([hidden])',
     '.android-tv-auth-panel:not([hidden])',
-    '.remote-pair-panel:not([hidden])',
+    ...(nativeTv?[]:['.remote-pair-panel:not([hidden])']),
     '.remote-request-panel:not([hidden])',
     'dialog[open]',
     '.mobile-stage-menu:not([hidden])',
@@ -2185,7 +2186,7 @@ function setupNativeAndroidTvUi(){
   // TV is now a display/search surface. All menus and advanced controls live on the mobile remote.
   const menu=document.getElementById('mobile-stage-menu');
   if(menu)menu.hidden=true;
-  for(const id of ['mobile-menu-toggle','stage-tools-toggle','fullscreen']){
+  for(const id of ['mobile-menu-toggle','stage-tools-toggle','fullscreen','desktop-update-version','logout','voice-search']){
     const el=document.getElementById(id);if(el)el.hidden=true;
   }
 
@@ -2229,13 +2230,13 @@ function androidTvAuthPanel(){
     '</div>';
   document.body.append(panel);
   try{
-    const rawVersion=String(window.XStageAndroid?.getAppVersion?.()||XSTAGE_RELEASE?.version||'').replace(/-debug$/,'');
-    const build=Number(window.XStageAndroid?.getAppBuild?.()||XSTAGE_RELEASE?.build||0);
+    const rawVersion=String(window.XStageAndroid?.getAppVersion?.()||window.XSTAGE_RELEASE?.version||'').replace(/-debug$/,'');
+    const build=Number(window.XStageAndroid?.getAppBuild?.()||window.XSTAGE_RELEASE?.build||0);
     const versionText=$('android-tv-auth-version');
     if(versionText)versionText.textContent=(rawVersion?'v'+rawVersion:'ไม่ทราบรุ่น')+(build?' · Build '+build:'');
   }catch{
     const versionText=$('android-tv-auth-version');
-    if(versionText)versionText.textContent='v'+String(XSTAGE_RELEASE?.version||'');
+    if(versionText)versionText.textContent='v'+String(window.XSTAGE_RELEASE?.version||'');
   }
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
     $('android-tv-auth-retry').hidden=true;
@@ -2281,7 +2282,7 @@ function ensureAndroidTvQrLibrary(){
     document.getElementById('xstage-qrcode')?.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1069';
+    script.src='./assets/vendor/qrcode.min.js?v=1070';
     script.async=true;
     const timer=setTimeout(()=>finish(Error('QR library timeout')),5000);
     script.addEventListener('load',()=>finish(typeof QRCode!=='undefined'?null:Error('QR library unavailable')),{once:true});

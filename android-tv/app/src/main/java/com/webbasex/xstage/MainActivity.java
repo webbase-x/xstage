@@ -56,6 +56,11 @@ public final class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(false);
+        settings.setTextZoom(100);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
         settings.setAllowContentAccess(false);
         settings.setAllowFileAccess(false);
         settings.setLoadsImagesAutomatically(true);
@@ -281,7 +286,8 @@ public final class MainActivity extends Activity {
                 clickWebControl("previous");
                 return true;
             case KeyEvent.KEYCODE_MENU:
-                clickWebControl("mobile-menu-toggle");
+                if (isTelevisionDevice()) focusSearch();
+                else clickWebControl("mobile-menu-toggle");
                 return true;
             case KeyEvent.KEYCODE_SEARCH:
                 focusSearch();

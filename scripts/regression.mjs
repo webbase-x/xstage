@@ -62,9 +62,9 @@ assert.ok(remoteHtml.includes('data-admin="cancel-current"'),'Owner remote must 
 assert.ok(host.includes("const guestPermissions={search:true,request:true,playpause:true,'volume-up':true,'volume-down':true,mute:true}"),'Guest must be restricted to search/request/play-pause/volume/mute');
 assert.ok(!host.match(/const guestPermissions=.*cancel-current/),'Guest must not receive cancel-current');
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
-assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1069"),'host remote must load same-origin PeerJS for Android WebView reliability');
-assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1069"),'host remote must load same-origin QRCode');
-assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1069'),'mobile remote must load same-origin PeerJS');
+assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1070"),'host remote must load same-origin PeerJS for Android WebView reliability');
+assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1070"),'host remote must load same-origin QRCode');
+assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1070'),'mobile remote must load same-origin PeerJS');
 assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
 assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
 assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
@@ -93,7 +93,7 @@ assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Go
 assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
 assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open device login immediately when no stored session exists');
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
-assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1069"),'Android login must load the same-origin QR renderer');
+assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1070"),'Android login must load the same-origin QR renderer');
 assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
 assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
 assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
@@ -139,6 +139,11 @@ assert.ok(androidMain.includes('KEYCODE_DPAD_LEFT')&&androidMain.includes('KEYCO
 assert.ok(app.includes('window.XStageTvMoveFocus=direction=>'),'hosted UI must expose spatial focus navigation for TV remotes');
 assert.ok(app.includes('window.XStageTvActivateFocused=()=>'),'hosted UI must expose focused-control activation for TV remotes');
 assert.ok(app.includes('function setupNativeAndroidTvUi()'),'native Android TV must have a dedicated display-only UI setup');
+assert.ok(app.includes("...(nativeTv?[]:['.remote-pair-panel:not([hidden])'])"),'passive TV remote QR must never hijack D-pad active scope');
+assert.ok(app.includes("['mobile-menu-toggle','stage-tools-toggle','fullscreen','desktop-update-version','logout','voice-search']"),'TV must hide remaining local menu/update/logout/voice controls');
+assert.ok(androidMain.includes('if (isTelevisionDevice()) focusSearch();'),'Android TV MENU key must return to search instead of opening a removed menu');
+assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
+assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
 assert.ok(app.includes("menu.hidden=true")&&app.includes("['mobile-menu-toggle','stage-tools-toggle','fullscreen']"),'TV must remove menu/tool/fullscreen controls from D-pad navigation');
 assert.ok(app.includes("keyboardToolbar.hidden=false"),'onscreen keyboard must remain available in its original TV toolbar position');
 assert.ok(app.includes("queue.tabIndex=-1")&&app.includes("queue.style.pointerEvents='none'"),'TV queue control must be status-only and not enter D-pad focus');
@@ -280,6 +285,13 @@ assert.ok(host.includes('function pausePairing()')&&host.includes('pairingPaused
 assert.ok(host.includes('session.secret=randomSecret()'),'resuming QR pairing must rotate the pairing secret');
 assert.ok(host.includes("ผู้ใช้ที่เชื่อมอยู่ยังใช้งานต่อได้"),'pausing QR must preserve already-connected remotes');
 assert.ok(remoteHtml.includes('id="owner-qr-pause"')&&remoteHtml.includes('id="owner-qr-resume"'),'Owner remote must expose QR pause/resume controls');
+assert.ok(remote.includes("'queue-play'")&&remote.includes("'queue-move'")&&remote.includes("'queue-remove'"),'Owner remote must provide play/reorder/remove controls for every queued song');
+assert.ok(host.includes("action==='queue-play'")&&host.includes("action==='queue-move'")&&host.includes("action==='queue-remove'"),'TV host must enforce Owner queue operations directly');
+assert.ok(!host.includes("else if(action==='history')clickHost('pc-history')"),'Owner history must return to mobile instead of opening a hidden TV dialog');
+assert.ok(host.includes("platform:nativeTvMode?'android-tv':'web'"),'remote status must identify Android TV so unsupported controls can be disabled');
+assert.ok(remoteHtml.includes('id="owner-stage-pop"')&&remote.includes("stagePop.disabled=androidTv"),'second-screen control must be disabled on Android TV instead of appearing broken');
+assert.ok(host.includes("window.XStageAndroid.installAvailableUpdate()"),'Owner update action must invoke the native APK updater directly on Android TV');
+assert.ok(remoteHtml.includes('https://accounts.google.com/gsi/client" defer'),'Owner Google login script must load deterministically before the remote UI');
 assert.ok(remoteHtml.includes('id="owner-background"')&&remoteHtml.includes('id="owner-brand-theme"')&&remoteHtml.includes('id="owner-lyric-scale"')&&remoteHtml.includes('id="owner-lyric-color"'),'visual/lyric settings removed from TV must live on Owner remote');
 assert.ok(remoteHtml.includes('id="owner-eq-preset"')&&remoteHtml.includes('id="owner-eq-state"'),'EQ control and native/EQ state must live on Owner remote');
 assert.ok(pc.includes('function nativeAndroidTvAudioMode()'),'audio code must distinguish Android TV APK from PC Web');

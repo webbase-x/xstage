@@ -1,5 +1,7 @@
 /* X-Stage Online: virtual keyboard and QR-paired mobile remote.
- * Pairing credentials exist only in memory and a URL fragment; no Google tokens are sent. */
+ * Pairing credentials live only in memory/URL fragments. Guest sends no Google token.
+ * Owner sends one short-lived Google access token over WebRTC for same-account verification;
+ * the TV verifies it against Google userinfo and does not store it. */
 'use strict';
 (function(){
   const byId = id => document.getElementById(id);
@@ -151,8 +153,8 @@
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1069','xstage-peerjs',()=>typeof Peer==='function');
-      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1069','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1070','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1070','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
@@ -193,6 +195,7 @@
     const eq=byId('xstage-eq-preset');
     return {type:'status',ready:!!state.token,role:entry?.role==='owner'?'owner':'guest',
       ownerEmail:entry?.role==='owner'?String(ui.account?.textContent||''):'',
+      platform:nativeTvMode?'android-tv':'web',
       playing:!!ui.player.src&&!ui.player.paused,now:songSummary(state.current),
       queue:state.queue.slice(0,50).map(songSummary),queueCount:state.queue.length,
       volume:Math.round(Number(ui.volume.value)||0),muted:ui.player.muted,medley:!!state.medley,
@@ -311,13 +314,30 @@
       else if(action==='fullscreen-toggle'){
         await setHostFullscreen(document.fullscreenElement!==stage,entry.conn);
       }else if(action==='shuffle')clickHost('stage-shuffle');
-      else if(action==='clear-queue')clickHost('clear-queue');
-      else if(action==='lyrics-settings')clickHost('pc-lyrics-settings');
+      else if(action==='clear-queue'){state.queue.length=0;renderQueue();}
       else if(action==='keyboard')clickHost('toggle-keyboard');
       else if(action==='stage-pop')clickHost('pc-stage-pop');
-      else if(action==='history')clickHost('pc-history');
-      else if(action==='favorites')clickHost('mobile-favorites');
-      else if(action==='update')clickHost('mobile-update-version');
+      else if(action==='update'){
+        if(nativeTvMode&&typeof window.XStageAndroid?.installAvailableUpdate==='function'){
+          window.XStageAndroid.installAvailableUpdate();
+        }else{
+          if(typeof triggerImmediateVersionUpdate!=='function')throw Error('ระบบอัปเดตยังไม่พร้อม');
+          await triggerImmediateVersionUpdate();
+        }
+      }else if(action==='queue-move'){
+        const index=Number(value?.index),delta=Number(value?.delta);
+        if(!Number.isInteger(index)||![-1,1].includes(delta)||index<0||index>=state.queue.length)throw Error('ตำแหน่งคิวไม่ถูกต้อง');
+        const target=index+delta;if(target<0||target>=state.queue.length)throw Error('เลื่อนคิวต่อไม่ได้');
+        [state.queue[index],state.queue[target]]=[state.queue[target],state.queue[index]];renderQueue();
+      }else if(action==='queue-remove'){
+        const index=Number(value?.index);
+        if(!Number.isInteger(index)||index<0||index>=state.queue.length)throw Error('ตำแหน่งคิวไม่ถูกต้อง');
+        state.queue.splice(index,1);renderQueue();
+      }else if(action==='queue-play'){
+        const index=Number(value?.index);
+        if(!Number.isInteger(index)||index<0||index>=state.queue.length)throw Error('ตำแหน่งคิวไม่ถูกต้อง');
+        const song=state.queue.splice(index,1)[0];renderQueue();if(song)await playSong(song);
+      }
       else if(action==='clear-cache'){
         if(typeof window.XStageClearCache!=='function')throw Error('ระบบล้างแคชยังไม่พร้อม');
         await window.XStageClearCache();

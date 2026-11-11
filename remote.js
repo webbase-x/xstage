@@ -108,7 +108,22 @@
       const info=document.createElement('div'),title=document.createElement('strong'),subtitle=document.createElement('small');
       title.textContent=String(song?.title||song?.code||'ไม่ทราบชื่อเพลง');
       subtitle.textContent=[song?.artist,song?.singer?'ผู้ขอ: '+song.singer:''].filter(Boolean).join(' · ');
-      info.append(title,subtitle);row.append(number,info);queueList.append(row);
+      info.append(title,subtitle);row.append(number,info);
+      if(role==='owner'){
+        const actions=document.createElement('div');actions.className='remote-queue-actions';
+        const make=(label,action,value,disabled=false)=>{
+          const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;
+          button.addEventListener('click',()=>admin(action,value));return button;
+        };
+        actions.append(
+          make('▶','queue-play',{index}),
+          make('↑','queue-move',{index,delta:-1},index===0),
+          make('↓','queue-move',{index,delta:1},index===items.length-1),
+          make('×','queue-remove',{index})
+        );
+        row.append(actions);
+      }
+      queueList.append(row);
     });
   }
   function receipt(value){
@@ -165,8 +180,8 @@
     }
     if(data.type==='role'){
       revokeOwnerToken();
-      if(data.role==='owner'){setRole('owner',String(data.email||''));report('Owner ยืนยันแล้ว · ควบคุมเต็มระบบ','connected');}
-      else{setRole('guest');ownerStatus.textContent=String(data.message||'บัญชีไม่ตรงกับจอ TV');report(ownerStatus.textContent,'error');}
+      if(data.role==='owner'){setRole('owner',String(data.email||''));report('Owner ยืนยันแล้ว · ควบคุมเต็มระบบ','connected');send({type:'refresh'});}
+      else{setRole('guest');ownerStatus.textContent=String(data.message||'บัญชีไม่ตรงกับจอ TV');report(ownerStatus.textContent,'error');send({type:'refresh'});}
       return;
     }
     if(data.type==='error'){report(String(data.message||'เชื่อมต่อไม่ได้'),'error');return;}
@@ -195,6 +210,12 @@
       ready=!!data.ready;
       if(data.role==='owner'&&role!=='owner')setRole('owner',String(data.ownerEmail||''));
       if(data.role!=='owner'&&role==='owner')setRole('guest');
+      const stagePop=$('owner-stage-pop');
+      if(stagePop){
+        const androidTv=data.platform==='android-tv';
+        stagePop.disabled=androidTv;
+        stagePop.textContent=androidTv?'จอร้องแยก · PC Web เท่านั้น':'จอร้องแยก';
+      }
       const perms=data.permissions||{};
       $('remote-search').disabled=perms.search===false;
       if(perms.search===false){results.replaceChildren();results.textContent='จอ TV ปิดการค้นหาเพลง';}
