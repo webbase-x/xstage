@@ -112,7 +112,7 @@ jobs:
             'file':apk.name,
             'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
             'source_commit':'${{ github.sha }}',
-            'note':'Test APK signed with the CI debug key; production Google Play signing is separate.'
+            'note':'Test APK signed with the stable public X-Stage test key for in-place sideload updates; production Google Play signing is separate.'
           }
           pathlib.Path('downloads/android-tv-latest.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           PY
