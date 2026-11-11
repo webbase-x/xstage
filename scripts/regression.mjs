@@ -80,7 +80,8 @@ assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Go
 assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
 assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open device login immediately when no stored session exists');
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
-assert.ok(app.includes("https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"),'Android TV login must load the QR renderer');
+assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1061"),'Android login must load the same-origin QR renderer');
+assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
 assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
 assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
 assert.ok(androidAuth.includes('boolean hasStoredSession()'),'native Google auth must expose whether a refresh token is stored');
