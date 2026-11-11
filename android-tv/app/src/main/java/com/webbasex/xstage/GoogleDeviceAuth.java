@@ -1,0 +1,264 @@
+package com.webbasex.xstage;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
+
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
+final class GoogleDeviceAuth {
+    interface Listener {
+        void onDeviceCode(String userCode, String verificationUrl, long expiresInSeconds);
+        void onStatus(String message);
+        void onToken(String accessToken, long expiresInSeconds);
+        void onError(String message);
+        void onSignedOut();
+    }
+
+    private static final String DEVICE_ENDPOINT = "https://oauth2.googleapis.com/device/code";
+    private static final String TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+    private static final String REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
+    private static final String SCOPE = "openid email https://www.googleapis.com/auth/drive.file";
+    private static final String PREFS = "xstage_tv_google_auth";
+    private static final String REFRESH_TOKEN = "refresh_token";
+
+    private final SharedPreferences prefs;
+    private final Listener listener;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final AtomicInteger generation = new AtomicInteger();
+
+    GoogleDeviceAuth(Context context, Listener listener) {
+        this.prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        this.listener = listener;
+    }
+
+    void startDeviceLogin() {
+        final int run = generation.incrementAndGet();
+        if (!configured()) {
+            error("ยังไม่ได้ตั้งค่า Google OAuth สำหรับ TVs and Limited Input devices ใน Android build");
+            return;
+        }
+        status("กำลังสร้างรหัสสำหรับเข้าสู่ระบบผ่านมือถือ…");
+        executor.execute(() -> {
+            try {
+                JSONObject code = postForm(DEVICE_ENDPOINT, mapOf(
+                        "client_id", BuildConfig.XSTAGE_TV_OAUTH_CLIENT_ID,
+                        "scope", SCOPE
+                ));
+                if (!isCurrent(run)) return;
+
+                String deviceCode = code.optString("device_code");
+                String userCode = code.optString("user_code");
+                String verificationUrl = code.optString("verification_url", "https://www.google.com/device");
+                long expiresIn = code.optLong("expires_in", 1800L);
+                long interval = Math.max(5L, code.optLong("interval", 5L));
+
+                if (deviceCode.isEmpty() || userCode.isEmpty()) {
+                    throw new IllegalStateException(readError(code, "Google ไม่ส่งรหัสอุปกรณ์กลับมา"));
+                }
+
+                main.post(() -> listener.onDeviceCode(userCode, verificationUrl, expiresIn));
+                pollToken(run, deviceCode, expiresIn, interval);
+            } catch (Exception e) {
+                if (isCurrent(run)) error(readable(e));
+            }
+        });
+    }
+
+    void restoreSession() {
+        String refreshToken = prefs.getString(REFRESH_TOKEN, "");
+        if (refreshToken == null || refreshToken.isEmpty() || !configured()) return;
+        final int run = generation.incrementAndGet();
+        status("กำลังกู้คืนการเชื่อมต่อ Google Drive…");
+        executor.execute(() -> {
+            try {
+                JSONObject token = postForm(TOKEN_ENDPOINT, mapOf(
+                        "client_id", BuildConfig.XSTAGE_TV_OAUTH_CLIENT_ID,
+                        "client_secret", BuildConfig.XSTAGE_TV_OAUTH_CLIENT_SECRET,
+                        "refresh_token", refreshToken,
+                        "grant_type", "refresh_token"
+                ));
+                if (!isCurrent(run)) return;
+                String accessToken = token.optString("access_token");
+                if (accessToken.isEmpty()) {
+                    String code = token.optString("error");
+                    if ("invalid_grant".equals(code)) prefs.edit().remove(REFRESH_TOKEN).apply();
+                    throw new IllegalStateException(readError(token, "กู้คืน Google Login ไม่สำเร็จ"));
+                }
+                long expiresIn = token.optLong("expires_in", 3600L);
+                main.post(() -> listener.onToken(accessToken, expiresIn));
+            } catch (Exception e) {
+                if (isCurrent(run)) error(readable(e));
+            }
+        });
+    }
+
+    void logout() {
+        final int run = generation.incrementAndGet();
+        String refreshToken = prefs.getString(REFRESH_TOKEN, "");
+        prefs.edit().remove(REFRESH_TOKEN).apply();
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            main.post(listener::onSignedOut);
+            return;
+        }
+        executor.execute(() -> {
+            try {
+                postForm(REVOKE_ENDPOINT, mapOf("token", refreshToken));
+            } catch (Exception ignored) {
+                // Local sign-out still completes even if Google is temporarily unreachable.
+            }
+            if (isCurrent(run)) main.post(listener::onSignedOut);
+        });
+    }
+
+    void cancel() {
+        generation.incrementAndGet();
+        status("ยกเลิกการเข้าสู่ระบบผ่านมือถือแล้ว");
+    }
+
+    void close() {
+        generation.incrementAndGet();
+        executor.shutdownNow();
+    }
+
+    private void pollToken(int run, String deviceCode, long expiresIn, long intervalSeconds) throws Exception {
+        long deadline = System.currentTimeMillis() + expiresIn * 1000L;
+        long interval = intervalSeconds;
+
+        while (isCurrent(run) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(interval * 1000L);
+            if (!isCurrent(run)) return;
+
+            JSONObject token = postForm(TOKEN_ENDPOINT, mapOf(
+                    "client_id", BuildConfig.XSTAGE_TV_OAUTH_CLIENT_ID,
+                    "client_secret", BuildConfig.XSTAGE_TV_OAUTH_CLIENT_SECRET,
+                    "device_code", deviceCode,
+                    "grant_type", "urn:ietf:params:oauth:grant-type:device_code"
+            ));
+
+            String accessToken = token.optString("access_token");
+            if (!accessToken.isEmpty()) {
+                String refreshToken = token.optString("refresh_token");
+                if (!refreshToken.isEmpty()) prefs.edit().putString(REFRESH_TOKEN, refreshToken).apply();
+                long tokenExpires = token.optLong("expires_in", 3600L);
+                main.post(() -> listener.onToken(accessToken, tokenExpires));
+                return;
+            }
+
+            String code = token.optString("error");
+            if ("authorization_pending".equals(code)) {
+                status("รอการอนุญาตจากมือถือ…");
+                continue;
+            }
+            if ("slow_down".equals(code)) {
+                interval += 5L;
+                continue;
+            }
+            if ("access_denied".equals(code)) throw new IllegalStateException("ผู้ใช้ไม่อนุญาตการเข้าถึง Google Drive");
+            if ("expired_token".equals(code)) throw new IllegalStateException("รหัสเข้าสู่ระบบหมดอายุ กรุณาลองใหม่");
+            if ("invalid_client".equals(code)) throw new IllegalStateException("Google TV OAuth Client ไม่ถูกต้อง ต้องเป็นชนิด TVs and Limited Input devices");
+            throw new IllegalStateException(readError(token, "เข้าสู่ระบบ Google ไม่สำเร็จ"));
+        }
+
+        if (isCurrent(run)) throw new IllegalStateException("รหัสเข้าสู่ระบบหมดอายุ กรุณากดเข้าสู่ระบบใหม่");
+    }
+
+    private boolean configured() {
+        return !BuildConfig.XSTAGE_TV_OAUTH_CLIENT_ID.trim().isEmpty()
+                && !BuildConfig.XSTAGE_TV_OAUTH_CLIENT_SECRET.trim().isEmpty();
+    }
+
+    private boolean isCurrent(int run) {
+        return generation.get() == run && !Thread.currentThread().isInterrupted();
+    }
+
+    private void status(String message) {
+        main.post(() -> listener.onStatus(message));
+    }
+
+    private void error(String message) {
+        main.post(() -> listener.onError(message));
+    }
+
+    private static String readable(Exception e) {
+        String message = e.getMessage();
+        return message == null || message.trim().isEmpty()
+                ? "เชื่อมต่อ Google ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่"
+                : message;
+    }
+
+    private static String readError(JSONObject json, String fallback) {
+        String description = json.optString("error_description");
+        if (!description.isEmpty()) return description;
+        String error = json.optString("error");
+        if (!error.isEmpty()) return error;
+        return fallback;
+    }
+
+    private static Map<String,String> mapOf(String... pairs) {
+        Map<String,String> map = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < pairs.length; i += 2) map.put(pairs[i], pairs[i + 1]);
+        return map;
+    }
+
+    private static JSONObject postForm(String endpoint, Map<String,String> params) throws Exception {
+        StringBuilder body = new StringBuilder();
+        for (Map.Entry<String,String> entry : params.entrySet()) {
+            if (entry.getValue() == null || entry.getValue().isEmpty()) continue;
+            if (body.length() > 0) body.append('&');
+            body.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8.name()));
+            body.append('=');
+            body.append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8.name()));
+        }
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(15000);
+        connection.setDoOutput(true);
+        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+        connection.setFixedLengthStreamingMode(bytes.length);
+        try (OutputStream output = connection.getOutputStream()) {
+            output.write(bytes);
+        }
+
+        int status = connection.getResponseCode();
+        InputStream stream = status >= 200 && status < 300
+                ? connection.getInputStream()
+                : connection.getErrorStream();
+        StringBuilder response = new StringBuilder();
+        if (stream != null) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) response.append(line);
+            }
+        }
+        connection.disconnect();
+
+        if (response.length() == 0) {
+            JSONObject empty = new JSONObject();
+            empty.put("http_status", status);
+            if (status >= 200 && status < 300) return empty;
+            empty.put("error", "HTTP " + status);
+            return empty;
+        }
+        return new JSONObject(response.toString());
+    }
+}
