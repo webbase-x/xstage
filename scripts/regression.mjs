@@ -62,9 +62,9 @@ assert.ok(remoteHtml.includes('data-admin="cancel-current"'),'Owner remote must 
 assert.ok(host.includes("const guestPermissions={search:true,request:true,playpause:true,'volume-up':true,'volume-down':true,mute:true}"),'Guest must be restricted to search/request/play-pause/volume/mute');
 assert.ok(!host.match(/const guestPermissions=.*cancel-current/),'Guest must not receive cancel-current');
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'main page must lazy-load PeerJS');
-assert.ok(host.includes("./assets/vendor/peerjs.min.js?v=1073"),'host remote must load same-origin PeerJS for Android WebView reliability');
-assert.ok(host.includes("./assets/vendor/qrcode.min.js?v=1073"),'host remote must load same-origin QRCode');
-assert.ok(remoteHtml.includes('assets/vendor/peerjs.min.js?v=1073'),'mobile remote must load same-origin PeerJS');
+assert.ok(host.includes(`./assets/vendor/peerjs.min.js?v=${version.build}`),'host remote must load same-origin PeerJS for Android WebView reliability');
+assert.ok(host.includes(`./assets/vendor/qrcode.min.js?v=${version.build}`),'host remote must load same-origin QRCode');
+assert.ok(remoteHtml.includes(`assets/vendor/peerjs.min.js?v=${version.build}`),'mobile remote must load same-origin PeerJS');
 assert.ok(!host.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'host remote must not depend on PeerJS CDN');
 assert.ok(!remoteHtml.includes('cdnjs.cloudflare.com/ajax/libs/peerjs'),'mobile remote must not depend on PeerJS CDN');
 assert.ok(host.includes('peerOpenTimer'),'host remote must time out when PeerJS never obtains an ID');
@@ -73,6 +73,21 @@ assert.ok(style.includes('--xstage-auth-qr-size')&&style.includes('width:var(--x
 assert.ok(host.includes('qrCanvas.width=232;qrCanvas.height=232'),'remote QR backing canvas must stay 1:1');
 assert.ok(app.includes('canvas.width=248;canvas.height=248'),'Google login QR backing canvas must stay 1:1');
 assert.ok(remote.includes('connectWatchdog'),'mobile remote must time out instead of hanging during pairing');
+assert.ok(remote.includes('armConnectWatchdog(30000)'),'a connected Peer must still wait for the authenticated ready handshake');
+assert.ok(remote.includes('requestId,index:item.index')&&host.includes('requestId,title:String(song.title'),'song requests must receive per-request acknowledgements');
+assert.ok(remote.includes('scheduleReconnect()'),'remote should offer bounded reconnect attempts');
+assert.ok(host.includes('window.XStageEnsureQrLibrary'),'mobile pairing and Android login must share the same QR renderer');
+assert.ok(app.includes('window.XStageEnsureQrLibrary=ensureAndroidTvQrLibrary'),'Android login must provide a single QR script loader');
+assert.ok(remoteHtml.includes('remote.js?v='+version.build),'mobile remote JS must match the released web build');
+assert.ok(remoteHtml.includes('config.js?v='+version.build),'mobile remote config must not stay pinned to a stale build');
+assert.ok(css.includes('.xstage-tv-quick-menu'),'TV quick menu needs legible TV-focus styles');
+assert.ok(app.includes('window.XStageTvOpenMenu=()=>'),'physical Android TV remote must be able to open its quick menu');
+assert.ok(app.includes('window.XStageTvHandleBack=()=>'),'Android TV Back must dismiss modal controls safely');
+assert.ok(androidMain.includes('KEYCODE_MENU')&&androidMain.includes('KEYCODE_SEARCH'),'physical TV remote must support MENU and SEARCH buttons');
+const tokenStore=read('android-tv/app/src/main/java/com/webbasex/xstage/GoogleTokenStore.java');
+assert.ok(tokenStore.includes('AndroidKeyStore')&&tokenStore.includes('AES/GCM/NoPadding'),'refresh token storage must use authenticated encryption');
+assert.ok(androidAuth.includes('tokenStore.write(refreshToken)')&&!androidAuth.includes('prefs.edit().putString(REFRESH_TOKEN'),'native auth must never persist a new refresh token in plaintext');
+
 assert.ok(!index.includes('cdnjs.cloudflare.com/ajax/libs/qrcode'),'main page must lazy-load QRCode');
 assert.ok(!index.includes('apis.google.com/js/api.js'),'main page must lazy-load Google Picker API');
 assert.ok(pc.includes("FAVORITES_STORE='xstage-favorites-v2'"),'favorites must persist');
@@ -93,7 +108,7 @@ assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Go
 assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
 assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open device login immediately when no stored session exists');
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
-assert.ok(app.includes("./assets/vendor/qrcode.min.js?v=1073"),'Android login must load the same-origin QR renderer');
+assert.ok(app.includes(`./assets/vendor/qrcode.min.js?v=${version.build}`),'Android login must load the same-origin QR renderer');
 assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
 assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
 assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
@@ -143,7 +158,7 @@ assert.ok(app.includes("...(nativeTv?[]:['.remote-pair-panel:not([hidden])'])"),
 assert.ok(app.includes("if(document.body.classList.contains('xstage-native-tv')&&scope===document)return []"),'TV display mode must expose no ordinary D-pad-focusable web controls');
 assert.ok(app.includes("'toggle-keyboard'")&&app.includes("'virtual-keyboard'")&&app.includes("'pc-search'"),'TV display mode must explicitly remove search and onscreen keyboard UI');
 assert.ok(app.includes("queue.tabIndex=-1;queue.hidden=true;queue.style.pointerEvents='none'"),'TV queue control must be completely hidden and non-interactive');
-assert.ok(androidMain.includes('if (!isTelevisionDevice()) clickWebControl("mobile-menu-toggle")'),'Android TV MENU key must not open a hidden local menu');
+assert.ok(androidMain.includes('callJavascript("window.XStageTvOpenMenu'),'Android TV MENU key must open the accessible TV quick menu');
 assert.ok(androidMain.includes('if (!isTelevisionDevice()) focusSearch()'),'Android TV SEARCH key must not focus a hidden search field');
 assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
 assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
