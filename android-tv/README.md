@@ -8,6 +8,7 @@
 
 - `.aab` — ใช้อัปโหลด Google Play
 - `.apk` — ไฟล์เดียวสำหรับติดตั้งตรง/ทดสอบบน TrueID TV, Android TV และแท็บเล็ต Android
+- ชื่อไฟล์เผยแพร่ใช้รูปแบบ `X-Stage-Karaoke-Android-v<version>-build<build>.apk`
 - Play Store icon 512×512
 - Android TV banner 320×180
 
