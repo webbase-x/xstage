@@ -3476,7 +3476,7 @@ body.xstage-native-tv #remote-pair-panel{
 }
 
 
-/* 1.0.74 TV top-right stack: clock above permanent QR, no overlap. */
+/* 1.0.75 TV top-right stack: clock above permanent QR, no overlap. */
 body.xstage-native-tv.xstage-ui-v2 #mobile-stage-clock,
 body.xstage-native-tv.xstage-ui-v2 #toggle-keyboard,
 body.xstage-native-tv.xstage-ui-v2 #mobile-keyboard-toggle{
