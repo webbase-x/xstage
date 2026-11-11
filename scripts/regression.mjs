@@ -255,8 +255,8 @@ assert.ok(css.includes('[data-brand-theme="modern-concert"]'),'Modern Concert th
 assert.ok(css.includes('[data-brand-theme="futuristic-audio-tech"]'),'Futuristic Audio Tech theme CSS must exist');
 assert.ok(!pc.includes("classList.toggle('stage-hero-hidden',mode==='photo')"),'photo artwork must no longer hide the redesigned X-Stage Online identity');
 assert.equal((remoteHtml.match(/<body(?:\\s|>)/g)||[]).length,1,'remote.html must contain exactly one body element');
-assert.equal((remoteHtml.match(/<\\/body>/g)||[]).length,1,'remote.html must contain exactly one closing body tag');
-assert.equal((remoteHtml.match(/<\\/html>/g)||[]).length,1,'remote.html must contain exactly one closing html tag');
+assert.equal((remoteHtml.match(/<\/body>/g)||[]).length,1,'remote.html must contain exactly one closing body tag');
+assert.equal((remoteHtml.match(/<\/html>/g)||[]).length,1,'remote.html must contain exactly one closing html tag');
 assert.ok(remoteHtml.indexOf('</style>')>=0&&remoteHtml.indexOf('</style>')<remoteHtml.indexOf('<body>'),'remote.html CSS must close before visible body markup');
 assert.ok(!remoteHtml.includes('.role-note{m<body>'),'remote.html must never embed body markup inside CSS');
 assert.ok(remoteHtml.includes('grid-template-columns:repeat(4,minmax(0,1fr))'),'remote navigation must visibly fit all four tabs');
