@@ -23,8 +23,6 @@
 
     <application
         android:allowBackup="false"
-        android:usesCleartextTraffic="false"
-        android:hardwareAccelerated="true"
         android:banner="@drawable/xstage_tv_banner"
         android:hardwareAccelerated="true"
         android:icon="@drawable/xstage_app_icon"
