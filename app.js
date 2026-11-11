@@ -2058,14 +2058,24 @@ function androidTvAuthPanel(){
   panel.innerHTML='<div class="android-tv-auth-box">'+
     '<span class="android-tv-auth-kicker">X-STAGE ANDROID TV</span>'+
     '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
-    '<p class="android-tv-auth-copy">เปิดลิงก์ด้านล่างบนโทรศัพท์ แล้วกรอกรหัสที่แสดงบนทีวี</p>'+
-    '<div id="android-tv-auth-url" class="android-tv-auth-url">https://www.google.com/device</div>'+
-    '<div id="android-tv-auth-code" class="android-tv-auth-code">----</div>'+
-    '<div id="android-tv-auth-status" class="android-tv-auth-status">กำลังเตรียมรหัส…</div>'+
-    '<div class="android-tv-auth-actions"><button id="android-tv-auth-cancel" type="button">ยกเลิก</button></div>'+
+    '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือ แล้วกรอกรหัสที่แสดงบนทีวี</p>'+
+    '<div class="android-tv-auth-grid">'+
+      '<div class="android-tv-auth-qr-wrap"><canvas id="android-tv-auth-qr" width="248" height="248" hidden aria-label="QR สำหรับเปิดหน้า Google Device Login"></canvas><div id="android-tv-auth-qr-wait">กำลังสร้าง QR…</div></div>'+
+      '<div class="android-tv-auth-details">'+
+        '<div id="android-tv-auth-url" class="android-tv-auth-url">https://www.google.com/device</div>'+
+        '<div class="android-tv-auth-code-label">รหัสบนทีวี</div>'+
+        '<div id="android-tv-auth-code" class="android-tv-auth-code">----</div>'+
+        '<div id="android-tv-auth-status" class="android-tv-auth-status">กำลังเตรียมรหัส…</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="android-tv-auth-actions"><button id="android-tv-auth-retry" type="button" hidden>ลองใหม่</button><button id="android-tv-auth-cancel" type="button">ยกเลิก</button></div>'+
     '<small>ไม่ต้องกรอกรหัสผ่าน Google บนทีวี · การอนุญาตเกิดบนมือถือของคุณ</small>'+
     '</div>';
   document.body.append(panel);
+  $('android-tv-auth-retry')?.addEventListener('click',()=>{
+    $('android-tv-auth-retry').hidden=true;
+    startAndroidTvDeviceLogin(true);
+  });
   $('android-tv-auth-cancel')?.addEventListener('click',()=>{
     try{window.XStageAndroid?.cancelGoogleLogin?.();}catch{}
     panel.hidden=true;
@@ -2075,11 +2085,51 @@ function androidTvAuthPanel(){
   });
   return panel;
 }
+let androidTvQrLibraryPromise=null;
+function ensureAndroidTvQrLibrary(){
+  if(typeof QRCode!=='undefined')return Promise.resolve();
+  androidTvQrLibraryPromise ||= new Promise((resolve,reject)=>{
+    let script=document.getElementById('xstage-qrcode');
+    if(!script){
+      script=document.createElement('script');
+      script.id='xstage-qrcode';
+      script.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js';
+      script.async=true;
+      document.head.append(script);
+    }
+    const finish=()=>typeof QRCode!=='undefined'?resolve():reject(Error('QR library unavailable'));
+    script.addEventListener('load',finish,{once:true});
+    script.addEventListener('error',()=>reject(Error('QR library unavailable')),{once:true});
+    if(script.dataset.loaded==='1')finish();
+  }).catch(error=>{androidTvQrLibraryPromise=null;throw error;});
+  return androidTvQrLibraryPromise;
+}
+async function renderAndroidTvLoginQr(url){
+  const canvas=$('android-tv-auth-qr');
+  const wait=$('android-tv-auth-qr-wait');
+  if(!canvas)return;
+  canvas.hidden=true;
+  if(wait){wait.hidden=false;wait.textContent='กำลังสร้าง QR…';}
+  try{
+    await ensureAndroidTvQrLibrary();
+    await QRCode.toCanvas(canvas,String(url||'https://www.google.com/device'),{
+      width:248,margin:2,errorCorrectionLevel:'M',
+      color:{dark:'#07131f',light:'#ffffff'}
+    });
+    canvas.hidden=false;
+    if(wait)wait.hidden=true;
+  }catch{
+    if(wait){wait.hidden=false;wait.textContent='เปิด google.com/device บนมือถือ แล้วกรอกรหัสด้านขวา';}
+  }
+}
 function showAndroidTvAuthPanel(){
   const panel=androidTvAuthPanel();
   panel.hidden=false;
   $('android-tv-auth-code').textContent='----';
   $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
+  $('android-tv-auth-retry').hidden=true;
+  const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
+  const qrWait=$('android-tv-auth-qr-wait');if(qrWait){qrWait.hidden=false;qrWait.textContent='กำลังสร้าง QR…';}
   setTimeout(()=>$('android-tv-auth-cancel')?.focus?.(),20);
 }
 function hideAndroidTvAuthPanel(){
@@ -2091,9 +2141,12 @@ window.XStageAndroidDeviceCode=payload=>{
   try{data=typeof payload==='string'?JSON.parse(payload):payload||{};}catch{}
   const panel=androidTvAuthPanel();
   panel.hidden=false;
-  $('android-tv-auth-url').textContent=String(data.verification_url||'https://www.google.com/device');
+  const verificationUrl=String(data.verification_url||'https://www.google.com/device');
+  $('android-tv-auth-url').textContent=verificationUrl;
   $('android-tv-auth-code').textContent=String(data.user_code||'----');
-  $('android-tv-auth-status').textContent='รอการอนุญาตจากมือถือ…';
+  $('android-tv-auth-status').textContent='สแกน QR และอนุญาตบนมือถือ…';
+  $('android-tv-auth-retry').hidden=true;
+  void renderAndroidTvLoginQr(verificationUrl);
 };
 window.XStageAndroidAuthStatus=message=>{
   const status=$('android-tv-auth-status');
@@ -2105,6 +2158,7 @@ window.XStageAndroidAuthError=message=>{
   const panel=androidTvAuthPanel();
   panel.hidden=false;
   $('android-tv-auth-status').textContent=text;
+  $('android-tv-auth-retry').hidden=false;
   ui.login.disabled=ui.gateLogin.disabled=false;
   setStatus(text,'error');
 };
@@ -2133,20 +2187,39 @@ window.XStageAndroidSignedOut=()=>{
   if(state.token)resetPrivate({keepAuth:false});
   setStatus('ออกจากระบบ Google บน Android TV แล้ว');
 };
+let androidTvBootAuthStarted=false;
+function androidTvHasStoredGoogleSession(){
+  if(!androidTvNativeBridgeReady())return false;
+  try{return !!window.XStageAndroid.hasStoredGoogleSession?.();}catch{return false;}
+}
 function restoreAndroidTvGoogleSession(){
   if(!androidTvNativeBridgeReady()||state.token)return;
   try{window.XStageAndroid.restoreGoogleSession?.();}catch{}
 }
+function startAndroidTvDeviceLogin(automatic=false){
+  if(!androidTvNativeBridgeReady())return;
+  ui.login.disabled=ui.gateLogin.disabled=true;
+  showAndroidTvAuthPanel();
+  setStatus(automatic?'กำลังเตรียม QR Login บน Android TV…':'กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
+  try{window.XStageAndroid.requestGoogleLogin();}
+  catch(error){
+    ui.login.disabled=ui.gateLogin.disabled=false;
+    window.XStageAndroidAuthError(error?.message||'เรียก Android TV Login ไม่สำเร็จ');
+  }
+}
+function bootAndroidTvAuthentication(){
+  if(androidTvBootAuthStarted||!androidTvNativeBridgeReady()||state.token)return;
+  androidTvBootAuthStarted=true;
+  if(androidTvHasStoredGoogleSession()){
+    setStatus('กำลังกู้คืน Google Drive บน Android TV…');
+    restoreAndroidTvGoogleSession();
+    return;
+  }
+  startAndroidTvDeviceLogin(true);
+}
 function startManualGoogleLogin(){
   if(androidTvNativeBridgeReady()){
-    ui.login.disabled=ui.gateLogin.disabled=true;
-    showAndroidTvAuthPanel();
-    setStatus('กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
-    try{window.XStageAndroid.requestGoogleLogin();}
-    catch(error){
-      ui.login.disabled=ui.gateLogin.disabled=false;
-      window.XStageAndroidAuthError(error?.message||'เรียก Android TV Login ไม่สำเร็จ');
-    }
+    startAndroidTvDeviceLogin(false);
     return;
   }
   const gate=window.XStageBeforeGoogleLogin;
@@ -2336,4 +2409,4 @@ function scheduleOAuthReturnRecovery(){
 document.addEventListener('visibilitychange',scheduleOAuthReturnRecovery);
 window.addEventListener('pageshow',scheduleOAuthReturnRecovery);
 window.addEventListener('focus',scheduleOAuthReturnRecovery);
-setTimeout(restoreAndroidTvGoogleSession,0);
+setTimeout(bootAndroidTvAuthentication,0);

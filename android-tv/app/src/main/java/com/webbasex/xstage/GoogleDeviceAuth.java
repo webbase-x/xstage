@@ -48,6 +48,11 @@ final class GoogleDeviceAuth {
         this.listener = listener;
     }
 
+    boolean hasStoredSession() {
+        String refreshToken = prefs.getString(REFRESH_TOKEN, "");
+        return refreshToken != null && !refreshToken.isEmpty();
+    }
+
     void startDeviceLogin() {
         final int run = generation.incrementAndGet();
         if (!configured()) {

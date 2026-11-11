@@ -267,6 +267,11 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public boolean hasStoredGoogleSession() {
+            return googleAuth.hasStoredSession();
+        }
+
+        @JavascriptInterface
         public void logoutGoogle() {
             googleAuth.logout();
         }

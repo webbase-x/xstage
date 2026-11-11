@@ -75,6 +75,14 @@ assert.ok(pwa.includes('เบราว์เซอร์นี้ไม่ร�
 assert.ok(!pwa.includes("actionButton('ดูวิธีติดตั้ง','primary'"),'initial login flow must not use the ambiguous install-instructions CTA');
 assert.ok(app.includes('function androidTvNativeBridgeReady()'),'web app must detect the native Android TV bridge');
 assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Google device codes from Android');
+assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
+assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open device login immediately when no stored session exists');
+assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
+assert.ok(app.includes("https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"),'Android TV login must load the QR renderer');
+assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
+assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
+assert.ok(androidAuth.includes('boolean hasStoredSession()'),'native Google auth must expose whether a refresh token is stored');
+assert.ok(androidMain.includes('public boolean hasStoredGoogleSession()'),'Android JS bridge must expose the stored-session check');
 assert.ok(app.includes('window.XStageReceiveAndroidToken'),'web app must accept the Android TV OAuth access token');
 assert.ok(pwa.includes("params.get('source')==='android-tv'"),'Android TV app launch must skip browser PWA install prompts');
 assert.ok(androidGradle.includes("applicationId 'com.webbasex.xstage'"),'Android TV package id must stay stable for Google Play');
