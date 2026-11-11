@@ -20,6 +20,7 @@
   let verifiedAndroidApk=null;
   const ANDROID_APK_NEVER_ASK_KEY='xstage-android-apk-never-ask-v1';
   const ANDROID_APK_OFFERED_KEY='xstage-android-apk-offered-build-v1';
+  const ANDROID_APK_USE_WEB_KEY='xstage-android-apk-use-web-session-v1';
   const androidApkBrowser=()=>{
     if(!isAndroidDevice()||window.XStageAndroid)return false;
     const params=new URLSearchParams(location.search);
@@ -197,6 +198,7 @@
           void downloadAndroidTvApk();
         }),
         actionButton('ใช้ X-Stage Web ต่อ','secondary',()=>{
+          try{sessionStorage.setItem(ANDROID_APK_USE_WEB_KEY,'1');}catch{}
           if(dialog.open)dialog.close();
         })
       )
@@ -477,6 +479,11 @@
   window.XStageBeforeGoogleLogin=proceed=>{
     if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')return false;
     if(typeof proceed!=='function'||isInstalled()||skipInstallPrompt())return false;
+    // Choosing "Use X-Stage Web" must actually continue to Google Login,
+    // not immediately replace the APK choice with a second PWA install prompt.
+    if(androidApkBrowser()){
+      try{if(sessionStorage.getItem(ANDROID_APK_USE_WEB_KEY)==='1')return false;}catch{}
+    }
     pendingLogin=proceed;
     installForLogin=true;
     showPreLoginChoice();
