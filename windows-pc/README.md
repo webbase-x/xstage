@@ -11,7 +11,7 @@ The source ZIP `X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip` in
 - A stop action (including F8) that cancels pending automatic tracks but preserves manually queued tracks.
 - Startup update check after eight seconds and hourly silent re-checks; a new verified release offers immediate download and SHA-256 validation.
 
-**Import status:** The archive is not uploaded in this repository. Upload exactly `downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip` (SHA-256 `cd5254ff5d6d1768fae1ff6ba46f7761a2f82021cc7996cee000ae0c574712db`, 447 files). GitHub Actions workflow `import-windows-pc-v1076-source.yml` then verifies/imports it. `build-windows-pc.yml` builds/tests on Windows. Keep `downloads/windows-pc-latest.json.available=false` until a tested installer is published.
+**Import status:** The archive is not uploaded in this repository. Upload exactly `downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip` (SHA-256 `35ec89987dd3423805a785278fc8dae292995709275395ffdbf42227db86f007`, 447 files). GitHub Actions workflow `import-windows-pc-v1076-source.yml` then verifies/imports it. `build-windows-pc.yml` builds/tests on Windows. Keep `downloads/windows-pc-latest.json.available=false` until a tested installer is published.
 
 ---
 
