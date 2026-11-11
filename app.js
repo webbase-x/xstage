@@ -251,7 +251,13 @@ window.XStageTvActivateFocused=()=>{
   let active=document.activeElement;
   if(!items.includes(active)){
     active=scope.querySelector?.('#android-tv-update-now:not([disabled]),button:not([disabled]),a[href]')||items[0];
-    if(!active)return false;
+    if(!active){
+      // Some TrueID/Android TV remotes have no physical MENU key.
+      // OK on an idle stage must still open the accessible control menu.
+      if(document.body.classList.contains('xstage-native-tv')&&scope===document)
+        return window.XStageTvOpenMenu?.()||false;
+      return false;
+    }
     try{active.focus({preventScroll:true});}catch{active.focus();}
   }
   if(active.matches?.('input:not([type]),input[type="text"],input[type="search"],textarea')){
