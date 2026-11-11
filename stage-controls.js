@@ -130,24 +130,24 @@
   function loadRemoteScript(src,id,test){
     if(test())return Promise.resolve();
     return new Promise((resolve,reject)=>{
+      const stale=document.getElementById(id);
+      // A failed script never emits another load/error event. Recreate it so
+      // retry can recover instead of leaving the QR at "กำลังสร้าง".
+      if(stale)stale.remove();
+      const script=document.createElement('script');
+      script.id=id;script.src=src;script.async=true;
       let settled=false;
-      let script=document.getElementById(id);
       const finish=error=>{
         if(settled)return;
         settled=true;clearTimeout(timer);
-        if(error)reject(error);else resolve();
+        script.onload=null;script.onerror=null;
+        if(error){script.remove();reject(error);}
+        else{script.dataset.loaded='1';resolve();}
       };
-      const timer=setTimeout(()=>finish(Error('โหลดระบบรีโมทนานเกินไป')),7000);
-      if(script?.dataset.loaded==='1'&&test()){finish();return;}
-      if(!script){
-        script=document.createElement('script');
-        script.id=id;script.src=src;script.async=true;document.head.append(script);
-      }
-      script.addEventListener('load',()=>{
-        script.dataset.loaded='1';
-        finish(test()?null:Error('ไลบรารีรีโมทไม่พร้อม'));
-      },{once:true});
-      script.addEventListener('error',()=>finish(Error('โหลดระบบรีโมทไม่สำเร็จ')),{once:true});
+      const timer=setTimeout(()=>finish(Error('โหลดระบบรีโมทนานเกินไป')),10000);
+      script.onload=()=>finish(test()?null:Error('ไลบรารีรีโมทไม่พร้อม'));
+      script.onerror=()=>finish(Error('โหลดระบบรีโมทไม่สำเร็จ'));
+      document.head.append(script);
     });
   }
   async function ensureRemoteLibraries(){
@@ -250,12 +250,14 @@
   redrawActivity();
 
   function acceptRequest(conn,msg,limits){
-    if(!state.token){send(conn,{type:'request-error',message:'จอ TV ยังไม่เปิดคลังเพลง'});return;}
-    if(state.queue.length>=150){send(conn,{type:'request-error',message:'คิวเต็มแล้ว กรุณารอ'});return;}
-    if(!Number.isSafeInteger(msg.index)||msg.index<0||msg.index>=state.songs.length)return;
-    const song=state.songs[msg.index];if(!playable(song)){send(conn,{type:'request-error',message:'เพลงนี้ยังเล่นไม่ได้'});return;}
+    const requestId=Number.isSafeInteger(msg?.requestId)?msg.requestId:null;
+    const reply=(type,message)=>send(conn,{type,requestId,message});
+    if(!state.token){reply('request-error','จอ TV ยังไม่เปิดคลังเพลง');return;}
+    if(state.queue.length>=150){reply('request-error','คิวเต็มแล้ว กรุณารอ');return;}
+    if(!Number.isSafeInteger(msg.index)||msg.index<0||msg.index>=state.songs.length){reply('request-error','ไม่พบเพลงที่เลือก กรุณาค้นหาใหม่');return;}
+    const song=state.songs[msg.index];if(!playable(song)){reply('request-error','เพลงนี้ยังเล่นไม่ได้');return;}
     const now=Date.now();while(limits.length&&now-limits[0]>60_000)limits.shift();
-    if(limits.length>=8){send(conn,{type:'request-error',message:'ขอเพลงบ่อยเกินไป กรุณารอสักครู่'});return;}
+    if(limits.length>=8){reply('request-error','ขอเพลงบ่อยเกินไป กรุณารอสักครู่');return;}
     limits.push(now);
     const singerName=String(msg.singer||'ไม่ระบุชื่อ').trim().slice(0,45)||'ไม่ระบุชื่อ';
     const noteText=String(msg.note||'').trim().slice(0,90);
@@ -265,7 +267,7 @@
     addToQueue(queued);const playImmediately=wasEmpty&&inactive;if(playImmediately)playNext();
     activity.push({title:song.title||song.code,singer:singerName,note:noteText,result:playImmediately?'เล่นทันที':'เพิ่มเข้าคิว'});
     if(activity.length>30)activity.shift();redrawActivity();
-    send(conn,{type:'request-received',id:++sequence,title:String(song.title||''),result:playImmediately?'playing':'queued'});
+    send(conn,{type:'request-received',id:++sequence,requestId,title:String(song.title||''),result:playImmediately?'playing':'queued'});
     broadcastStatus();
   }
 
@@ -425,7 +427,7 @@
       qrCanvas.width=232;qrCanvas.height=232;
       await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
       if(session!==active||pairingPaused)return;
-      qrCanvas.hidden=false;status(nativeTvMode?'รีโมทมือถือ':'สแกน QR แล้วรออนุมัติบนจอ');
+      qrCanvas.hidden=false;status(nativeTvMode?'สแกน QR เพื่อขอเพลงจากมือถือ':'สแกน QR แล้วรออนุมัติบนจอ');
     }catch{status('สร้าง QR ไม่สำเร็จ ใช้ลิงก์รีโมทแทน');}
   }
   function pausePairing(){
@@ -486,8 +488,19 @@
       const cleanup=()=>{active.connections.delete(conn);if(active.pending===entry){active.pending=null;qrApprove.hidden=true;qrReject.hidden=true;status('มือถือยกเลิกการเชื่อมต่อ');}};
       conn.on('close',cleanup);conn.on('error',cleanup);
     });
-    peer.on('error',err=>{clearTimeout(peerOpenTimer);if(session===active)status('เชื่อมต่อรีโมทไม่ได้: '+(err?.type||'เครือข่ายไม่พร้อม'));});
-    peer.on('disconnected',()=>{if(session===active)status('การจับคู่หลุด · มือถือเดิมอาจต้องเชื่อมต่อใหม่');});
+    peer.on('error',err=>{
+      clearTimeout(peerOpenTimer);
+      if(session!==active)return;
+      status('เชื่อมต่อรีโมทไม่ได้ ('+(err?.type||'เครือข่าย')+') · กด “เปลี่ยน QR” เพื่อลองใหม่');
+      qrEnd.textContent='ลองสร้าง QR ใหม่';
+    });
+    peer.on('disconnected',()=>{
+      if(session!==active)return;
+      status('เซิร์ฟเวอร์จับคู่หลุด · กำลังเชื่อมต่อใหม่');
+      try{if(!peer.destroyed&&peer.disconnected)peer.reconnect();}catch{
+        status('เชื่อมต่อรีโมทไม่สำเร็จ · กด “เปลี่ยน QR”');
+      }
+    });
   }
 
   qrApprove.addEventListener('click',()=>{const entry=session?.pending;if(entry?.conn?.open)approveEntry(entry);});
