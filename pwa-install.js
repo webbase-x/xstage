@@ -1,5 +1,6 @@
 /* Install UI for X-Stage Karaoke Online.
- * Install prompts are supported in Chromium only; iOS needs Add to Home Screen.
+ * Login is intentionally deferred until the installed Web App is opened when possible,
+ * so users do not authenticate in a browser tab and then repeat authentication in the PWA.
  * No OAuth token or private music is cached by this feature. */
 'use strict';
 (() => {
@@ -11,13 +12,19 @@
   const content = $('xstage-install-content');
   const closeButton = $('xstage-install-close');
   if(!menuButton || !dialog || !content || !closeButton) return;
-  let deferredPrompt = null;
+
+  const INSTALLED_HINT_KEY='xstage-pwa-installed-v1';
   const standaloneQuery=window.matchMedia('(display-mode: standalone)');
+  let deferredPrompt=null;
+  let pendingLogin=null;
+  let installForLogin=false;
+  let installCompletionHandled=false;
+  let launchFallbackTimer=0;
+
   async function ensureXStageServiceWorker(){
     if(!('serviceWorker' in navigator))return null;
     try{
       const registration=await navigator.serviceWorker.register('./sw.js',{scope:'./',updateViaCache:'none'});
-      // Update in place; never reload automatically because audio may be playing.
       void registration.update();
       return registration;
     }catch(error){
@@ -32,6 +39,11 @@
   const isInstalled = () =>
     standaloneQuery.matches ||
     window.navigator.standalone === true;
+  const hasInstalledHint=()=>{try{return localStorage.getItem(INSTALLED_HINT_KEY)==='1';}catch{return false;}};
+  const markInstalled=()=>{try{localStorage.setItem(INSTALLED_HINT_KEY,'1');}catch{}};
+  const canPromptInstall=()=>typeof navigator.install==='function'||!!deferredPrompt;
+  const launchUrl=()=>new URL('./?source=installed&after_install=1',location.href).href;
+
   function syncStandaloneUi(){
     const installed=isInstalled();
     document.body.classList.toggle('xstage-webapp-mode',installed);
@@ -40,77 +52,242 @@
   }
   function updateButtons() {
     const installed = syncStandaloneUi();
-    menuButton.textContent = installed ? '✓ X-Stage ติดตั้งแล้ว' : '⬇ ติดตั้ง X-Stage เป็นแอป';
+    const knownInstalled=installed||hasInstalledHint();
+    menuButton.textContent = knownInstalled ? '✓ X-Stage ติดตั้งแล้ว' : '⬇ ติดตั้ง X-Stage เป็นแอป';
     menuButton.disabled = installed;
     if(toolsButton){
-      toolsButton.textContent = installed ? '✓ ติดตั้งแล้ว' : '⬇ ติดตั้งแอป';
+      toolsButton.textContent = knownInstalled ? '✓ ติดตั้งแล้ว' : '⬇ ติดตั้งแอป';
       toolsButton.disabled = installed;
     }
     if(toolbarButton){
       toolbarButton.disabled = installed;
-      toolbarButton.title = installed ? 'X-Stage ติดตั้งแล้ว' : 'ติดตั้ง X-Stage Karaoke เป็นเว็บแอป';
+      toolbarButton.title = knownInstalled ? 'X-Stage ติดตั้งแล้ว' : 'ติดตั้ง X-Stage Karaoke เป็นเว็บแอป';
     }
   }
-  function information() {
+
+  function clearContent(){
     content.replaceChildren();
+    dialog.classList.remove('is-install-first','is-install-success');
+  }
+  function paragraph(textValue,className=''){
+    const node=document.createElement('p');
+    node.textContent=textValue;
+    if(className)node.className=className;
+    return node;
+  }
+  function actionButton(label,kind,handler){
+    const button=document.createElement('button');
+    button.type='button';
+    button.className='xstage-install-action '+kind;
+    button.textContent=label;
+    button.addEventListener('click',handler);
+    return button;
+  }
+  function actionRow(...buttons){
+    const row=document.createElement('div');
+    row.className='xstage-install-actions';
+    row.append(...buttons);
+    return row;
+  }
+  function openDialog(){
+    if(!dialog.open)dialog.showModal();
+  }
+
+  function information() {
+    clearContent();
     const os = navigator.userAgent || '';
     const ios = /iPad|iPhone|iPod/.test(os) || (/Macintosh/.test(os) && navigator.maxTouchPoints > 1);
     const mac = !ios && /Macintosh|Mac OS X/.test(os);
     const android = /Android/i.test(os);
     const lines = ios
-      ? ['เปิดเว็บนี้ใน Safari หรือเบราว์เซอร์ที่รองรับ', 'แตะปุ่มแชร์ (สี่เหลี่ยมพร้อมลูกศรขึ้น) แล้วเลือก “เพิ่มไปยังหน้าจอโฮม” (Add to Home Screen)', 'เลือกเปิดเป็นเว็บแอป (ถ้ามีตัวเลือก) จากนั้นแตะ “เพิ่ม”']
+      ? ['เปิดเว็บนี้ใน Safari หรือเบราว์เซอร์ที่รองรับ', 'แตะปุ่มแชร์ แล้วเลือก “เพิ่มไปยังหน้าจอโฮม” (Add to Home Screen)', 'เลือกเปิดเป็นเว็บแอป (ถ้ามี) จากนั้นแตะ “เพิ่ม”']
       : android
-        ? ['ใน Chrome หรือ Samsung Internet ให้แตะเมนู ⋮', 'เลือก “ติดตั้งแอป” หรือ “เพิ่มไปยังหน้าจอหลัก” แล้วกดยืนยัน', 'หากไม่มีเมนูดังกล่าว ลองเปิดเว็บด้วย Chrome รุ่นล่าสุด']
+        ? ['เปิดเมนูของเบราว์เซอร์', 'เลือก “ติดตั้งแอป” หรือ “เพิ่มไปยังหน้าจอหลัก” แล้วกดยืนยัน', 'จากนั้นเปิดไอคอน X-Stage ที่หน้าจอหลักก่อนเข้าสู่ระบบ Google']
         : mac
-          ? ['ใน Safari เลือก File → Add to Dock', 'ใน Chrome หรือ Edge เปิดเมนู ⋮ แล้วเลือก Install X-Stage Karaoke หรือ Install page as app']
-          : ['ใน Chrome หรือ Microsoft Edge คลิกไอคอนติดตั้งในแถบที่อยู่ หรือเปิดเมนู ⋮', 'เลือก “ติดตั้ง X-Stage Karaoke Online” หรือ “Install page as app” แล้วกดยืนยัน', 'หากเบราว์เซอร์ไม่รองรับ ให้ใช้ตัวเลือกสร้างทางลัดจากเมนูเบราว์เซอร์'];
-    const intro=document.createElement('p');
-    intro.textContent='เพิ่มไอคอน X-Stage ไว้บน Home Screen หรือ Desktop เพื่อเปิดโปรแกรมได้เหมือนแอป';
-    content.append(intro);
+          ? ['ใน Safari เลือก File → Add to Dock', 'ใน Chrome หรือ Edge เปิดเมนูแล้วเลือก Install X-Stage Karaoke หรือ Install page as app']
+          : ['ใน Chrome หรือ Microsoft Edge คลิกไอคอนติดตั้งในแถบที่อยู่ หรือเปิดเมนู', 'เลือก “ติดตั้ง X-Stage Karaoke Online” หรือ “Install page as app” แล้วกดยืนยัน'];
+    content.append(paragraph('เพิ่ม X-Stage ไว้บน Home Screen หรือ Desktop เพื่อเปิดโปรแกรมได้เหมือนแอป'));
     const ol=document.createElement('ol');
     for(const line of lines){const li=document.createElement('li');li.textContent=line;ol.append(li);}
     content.append(ol);
-    const note=document.createElement('p');
-    note.className='xstage-install-note';
-    note.textContent='การติดตั้งไม่คัดลอกเพลงจาก Google Drive มายังอุปกรณ์ และยังต้องใช้อินเทอร์เน็ตเพื่อลงชื่อเข้าใช้และเล่นเพลง';
-    content.append(note);
+    content.append(paragraph('แนะนำให้ติดตั้งก่อนเข้าสู่ระบบ Google เพื่อให้การอนุญาตบัญชีเกิดใน Web App ที่จะใช้งานจริง','xstage-install-note'));
   }
+
+  function runPendingLogin(){
+    const callback=pendingLogin;
+    pendingLogin=null;
+    installForLogin=false;
+    if(dialog.open)dialog.close();
+    if(typeof callback==='function')callback();
+  }
+  function cancelPendingLogin(){
+    pendingLogin=null;
+    installForLogin=false;
+  }
+
+  function openInstalledApp(){
+    const anchor=document.createElement('a');
+    anchor.href=launchUrl();
+    anchor.target='_blank';
+    anchor.rel='noopener';
+    anchor.hidden=true;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  function showLaunchFallback(){
+    if(document.hidden||isInstalled())return;
+    clearContent();
+    dialog.classList.add('is-install-success');
+    document.querySelector('#xstage-install-title').textContent='ติดตั้ง X-Stage เสร็จแล้ว';
+    content.append(
+      paragraph('กำลังพยายามเปิด X-Stage ที่ติดตั้งไว้ หากเบราว์เซอร์ยังไม่เปิดแอปอัตโนมัติ ให้กดปุ่มด้านล่างหนึ่งครั้ง'),
+      actionRow(
+        actionButton('เปิด X-Stage','primary',openInstalledApp)
+      ),
+      paragraph('ยังไม่ต้องเข้าสู่ระบบ Google ในแท็บเบราว์เซอร์นี้ ให้เข้าสู่ระบบหลังเปิด X-Stage แบบ Web App แล้ว','xstage-install-note')
+    );
+    openDialog();
+  }
+
+  function attemptImmediateLaunch(){
+    clearTimeout(launchFallbackTimer);
+    if(dialog.open)dialog.close();
+    setTimeout(openInstalledApp,180);
+    launchFallbackTimer=setTimeout(showLaunchFallback,1300);
+  }
+
+  function finishInstallation(){
+    if(installCompletionHandled)return;
+    installCompletionHandled=true;
+    deferredPrompt=null;
+    markInstalled();
+    updateButtons();
+    if(installForLogin){
+      // Never authenticate in the browser tab after choosing install-first.
+      pendingLogin=null;
+      installForLogin=false;
+      attemptImmediateLaunch();
+    }else if(dialog.open){
+      dialog.close();
+    }
+  }
+
+  function showPreLoginChoice(message=''){
+    if(isInstalled()){runPendingLogin();return;}
+    clearContent();
+    dialog.classList.add('is-install-first');
+    document.querySelector('#xstage-install-title').textContent=hasInstalledHint()
+      ? 'เปิด X-Stage ที่ติดตั้งแล้วก่อนเข้าสู่ระบบ'
+      : 'ติดตั้ง X-Stage ก่อนเข้าสู่ระบบไหม?';
+    content.append(paragraph(
+      hasInstalledHint()
+        ? 'ตรวจพบว่าเคยติดตั้ง X-Stage แล้ว แนะนำให้เปิด Web App ก่อน แล้วค่อยเชื่อมต่อ Google Drive'
+        : 'แนะนำให้ติดตั้ง Web App ก่อน เพื่อไม่ต้องเข้าสู่ระบบในเบราว์เซอร์ แล้วไปเข้าสู่ระบบซ้ำอีกครั้งในแอปที่ติดตั้ง'
+    ));
+    if(message)content.append(paragraph(message,'xstage-install-status'));
+
+    const buttons=[];
+    if(canPromptInstall()){
+      buttons.push(actionButton(
+        hasInstalledHint()?'ติดตั้ง/เปิด X-Stage':'ติดตั้งและเปิด X-Stage',
+        'primary',
+        ()=>{void install({forLogin:true});}
+      ));
+    }else if(hasInstalledHint()){
+      buttons.push(actionButton('เปิด X-Stage','primary',openInstalledApp));
+    }else{
+      buttons.push(actionButton('ดูวิธีติดตั้ง','primary',()=>{
+        information();
+        content.append(actionRow(actionButton('กลับ','secondary',()=>showPreLoginChoice())));
+      }));
+    }
+    buttons.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',runPendingLogin));
+    content.append(
+      actionRow(...buttons),
+      paragraph('ถ้าเลือกติดตั้ง ระบบจะไม่เปิด Google Login ในแท็บนี้ และจะพยายามเปิด X-Stage ที่ติดตั้งทันที','xstage-install-note')
+    );
+    openDialog();
+    setTimeout(()=>content.querySelector('.xstage-install-action.primary')?.focus(),30);
+  }
+
   function showInstructions(){
     if(isInstalled()){updateButtons();return;}
     information();
-    if(!dialog.open)dialog.showModal();
-  }
-  async function install(){
-    if(isInstalled()){updateButtons();return;}
-    const prompt=deferredPrompt;
-    if(!prompt){showInstructions();return;}
-    deferredPrompt=null;
-    try{
-      // Must be invoked directly in the click event before awaiting anything else.
-      const didPrompt=prompt.prompt();
-      await didPrompt;
-      await prompt.userChoice;
-    }catch{
-      showInstructions();
+    if(canPromptInstall()){
+      content.append(actionRow(actionButton('ติดตั้ง X-Stage','primary',()=>{void install({forLogin:false});})));
     }
-    updateButtons();
+    openDialog();
   }
-  menuButton.addEventListener('click',install);
-  toolsButton?.addEventListener('click',install);
-  toolbarButton?.addEventListener('click',install);
-  closeButton.addEventListener('click',()=>dialog.close());
-  dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+
+  async function install({forLogin=false}={}) {
+    if(isInstalled()){
+      updateButtons();
+      if(forLogin)runPendingLogin();
+      return;
+    }
+    installForLogin=forLogin||installForLogin;
+    installCompletionHandled=false;
+    try{
+      if(typeof navigator.install==='function'){
+        await navigator.install();
+        finishInstallation();
+        return;
+      }
+      const prompt=deferredPrompt;
+      if(!prompt){
+        if(forLogin)showPreLoginChoice('เบราว์เซอร์นี้ยังไม่ส่งคำสั่งติดตั้งอัตโนมัติ');
+        else showInstructions();
+        return;
+      }
+      deferredPrompt=null;
+      await prompt.prompt();
+      const choice=await prompt.userChoice;
+      if(choice?.outcome==='accepted'){
+        // appinstalled may fire first; finishInstallation is idempotent.
+        finishInstallation();
+      }else{
+        installCompletionHandled=false;
+        if(forLogin)showPreLoginChoice('ยกเลิกการติดตั้งแล้ว คุณยังเลือกใช้เบราว์เซอร์ต่อได้');
+        else showInstructions();
+      }
+    }catch(error){
+      installCompletionHandled=false;
+      const cancelled=error?.name==='AbortError'||error?.name==='NotAllowedError';
+      if(forLogin)showPreLoginChoice(cancelled?'ยกเลิกการติดตั้งแล้ว':'ไม่สามารถเริ่มติดตั้งอัตโนมัติได้');
+      else showInstructions();
+    }
+  }
+
+  // Called by app.js before any manual Google login. Returning true means this
+  // module owns the flow; returning false lets app.js call login synchronously.
+  window.XStageBeforeGoogleLogin=proceed=>{
+    if(typeof proceed!=='function'||isInstalled())return false;
+    pendingLogin=proceed;
+    installForLogin=true;
+    showPreLoginChoice();
+    return true;
+  };
+
+  menuButton.addEventListener('click',()=>{void install({forLogin:false});});
+  toolsButton?.addEventListener('click',()=>{void install({forLogin:false});});
+  toolbarButton?.addEventListener('click',()=>{void install({forLogin:false});});
+  closeButton.addEventListener('click',()=>{cancelPendingLogin();dialog.close();});
+  dialog.addEventListener('cancel',cancelPendingLogin);
+  dialog.addEventListener('click',e=>{if(e.target===dialog){cancelPendingLogin();dialog.close();}});
+
   window.addEventListener('beforeinstallprompt',e=>{
     e.preventDefault();
     deferredPrompt=e;
     updateButtons();
+    if(installForLogin&&dialog.open)showPreLoginChoice();
   });
-  window.addEventListener('appinstalled',()=>{
-    deferredPrompt=null;
+  window.addEventListener('appinstalled',finishInstallation);
+  standaloneQuery.addEventListener?.('change',()=>{
     updateButtons();
-    if(dialog.open)dialog.close();
+    if(isInstalled()){clearTimeout(launchFallbackTimer);if(dialog.open)dialog.close();}
   });
-  standaloneQuery.addEventListener?.('change',updateButtons);
   window.addEventListener('pageshow',updateButtons);
   updateButtons();
 })();
