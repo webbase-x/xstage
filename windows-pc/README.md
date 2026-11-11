@@ -33,3 +33,9 @@ Keep OAuth client secrets, tokens, customer music, personal SQLite databases and
 - `Check-Update.ps1 -CurrentVersion 0.9.48` checks release availability; add `-Install` to download, validate SHA-256, and launch the installer when a newer, verified release is available.
 - The source import is currently incomplete, so the Windows application menu is **not yet wired** to this script. Once its source arrives, invoke the check on startup and from Help > Check for Updates without blocking playback. Offer immediate installation only after presenting the new version and stopping active audio safely.
 - Web `1.0.74` and Android `1.0.74` are separate from Windows `0.9.48`; do not compare their numeric versions across platforms.
+
+## Update notification behavior (R18.2 source, pending Windows build)
+
+The verified R18.2 source archive adds `karaoke/program_updates.py`. The program calls `check_program_update(False)` eight seconds after launch (non-blocking), and the update menu calls `check_program_update(True)`. When `downloads/windows-pc-latest.json` explicitly advertises a newer verified Windows installer, the application asks the user whether to download immediately. It validates SHA-256, then asks for confirmation before launching the installer. Song files and Drive data are not overwritten by the updater.
+
+**Deployment blocker:** The update-enabled R18.2 archive is not yet imported into `windows-pc/source/`, and no tested Windows installer has been published. `available: false` is correct until a Windows build and installer are verified. Previously installed Windows builds cannot gain this new update UI until upgraded to an installer containing the R18.2 source.
