@@ -565,3 +565,21 @@
   .mobile-stage-clock{font-size:.63rem;padding:5px 4px}
   .mobile-menu-toggle{min-width:30px;min-height:31px;padding:3px 6px}
 }
+
+.xstage-install-dialog.is-install-first{width:min(94vw,520px)}
+.xstage-install-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.xstage-install-action{
+  min-height:44px;border-radius:10px;padding:10px 16px;
+  border:1px solid #4d8597;background:#0c3348;color:#eafcff;
+  font:800 .86rem/1.25 "Leelawadee UI","Noto Sans Thai",Tahoma,"Segoe UI",system-ui,sans-serif;
+  cursor:pointer
+}
+.xstage-install-action.primary{background:linear-gradient(135deg,#0f8ca0,#155fc2);border-color:#79e9f5;color:#fff;box-shadow:0 8px 22px #001f3480}
+.xstage-install-action.secondary{background:#10283a;border-color:#49677a;color:#d6e9f1}
+.xstage-install-action:focus-visible{outline:3px solid #7cecff;outline-offset:2px}
+.xstage-install-status{padding:9px 11px;border-radius:9px;background:#3a2d0d;border:1px solid #a67c2b;color:#ffe7a8}
+.xstage-install-dialog.is-install-success .xstage-install-note{color:#b7dbe8}
+@media(max-width:520px){
+  .xstage-install-actions{display:grid;grid-template-columns:1fr}
+  .xstage-install-action{width:100%;font-size:.9rem}
+}
