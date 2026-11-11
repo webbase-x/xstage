@@ -1,0 +1,119 @@
+plugins {
+    id 'com.android.application'
+}
+
+def releaseMeta = new groovy.json.JsonSlurper().parse(rootProject.file("../version.json"))
+def tvClientId = (project.findProperty("XSTAGE_TV_OAUTH_CLIENT_ID") ?: System.getenv("XSTAGE_TV_OAUTH_CLIENT_ID") ?: "").toString()
+def tvClientSecret = (project.findProperty("XSTAGE_TV_OAUTH_CLIENT_SECRET") ?: System.getenv("XSTAGE_TV_OAUTH_CLIENT_SECRET") ?: "").toString()
+def quoteBuildConfig = { value -> '"' + value.replace('\\','\\\\').replace('"','\\"') + '"' }
+
+def keyStorePath = System.getenv("XSTAGE_KEYSTORE_PATH") ?: ""
+def keyStorePassword = System.getenv("XSTAGE_KEYSTORE_PASSWORD") ?: ""
+def keyAliasName = System.getenv("XSTAGE_KEY_ALIAS") ?: ""
+def keyPasswordValue = System.getenv("XSTAGE_KEY_PASSWORD") ?: ""
+def signingReady = keyStorePath && keyStorePassword && keyAliasName && keyPasswordValue && file(keyStorePath).exists()
+
+android {
+    namespace 'com.webbasex.xstage'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.webbasex.xstage'
+        minSdk 23
+        targetSdk 34
+        versionCode (releaseMeta.build as Integer)
+        versionName releaseMeta.version.toString()
+
+        buildConfigField "String", "XSTAGE_TV_OAUTH_CLIENT_ID", quoteBuildConfig(tvClientId)
+        buildConfigField "String", "XSTAGE_TV_OAUTH_CLIENT_SECRET", quoteBuildConfig(tvClientSecret)
+        buildConfigField "String", "XSTAGE_WEB_URL", quoteBuildConfig("https://webbase-x.github.io/xstage/")
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        if (signingReady) {
+            release {
+                storeFile file(keyStorePath)
+                storePassword keyStorePassword
+                keyAlias keyAliasName
+                keyPassword keyPasswordValue
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (signingReady) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+    }
+}
+
+tasks.register("generateXStageTvAssets") {
+    def iconFile = file("src/main/res/drawable-nodpi/xstage_app_icon.png")
+    def bannerFile = file("src/main/res/drawable-xhdpi/xstage_tv_banner.png")
+    def storeIcon = rootProject.file("store-assets/xstage-play-icon-512.png")
+    def storeBanner = rootProject.file("store-assets/xstage-tv-banner-320x180.png")
+    outputs.files(iconFile, bannerFile, storeIcon, storeBanner)
+
+    doLast {
+        [iconFile.parentFile, bannerFile.parentFile, storeIcon.parentFile, storeBanner.parentFile].each { it.mkdirs() }
+
+        def icon = new java.awt.image.BufferedImage(512, 512, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        def g = icon.createGraphics()
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        g.setColor(new java.awt.Color(6,19,33)); g.fillRoundRect(8,8,496,496,90,90)
+        g.setColor(new java.awt.Color(34,212,255)); g.setStroke(new java.awt.BasicStroke(8f)); g.drawRoundRect(8,8,496,496,90,90)
+        g.setStroke(new java.awt.BasicStroke(44f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND))
+        g.setColor(new java.awt.Color(60,235,255)); g.drawLine(120,105,390,375)
+        g.setColor(new java.awt.Color(113,91,255)); g.drawLine(390,105,120,375)
+        g.setColor(new java.awt.Color(240,250,255))
+        g.setStroke(new java.awt.BasicStroke(14f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND))
+        g.drawRoundRect(218,160,76,140,72,72)
+        g.drawArc(195,220,122,118,180,180)
+        g.drawLine(256,330,256,392)
+        g.drawLine(205,398,307,398)
+        g.dispose()
+        javax.imageio.ImageIO.write(icon, "png", iconFile)
+        javax.imageio.ImageIO.write(icon, "png", storeIcon)
+
+        def banner = new java.awt.image.BufferedImage(320,180,java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        def b = banner.createGraphics()
+        b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        b.setPaint(new java.awt.GradientPaint(0,0,new java.awt.Color(14,37,61),320,180,new java.awt.Color(6,19,33)))
+        b.fillRect(0,0,320,180)
+        b.drawImage(icon.getScaledInstance(106,106,java.awt.Image.SCALE_SMOOTH),12,37,null)
+        b.setColor(new java.awt.Color(230,249,255)); b.setFont(new java.awt.Font("SansSerif",java.awt.Font.BOLD,22)); b.drawString("X-Stage",128,66)
+        b.setColor(new java.awt.Color(94,232,255)); b.setFont(new java.awt.Font("SansSerif",java.awt.Font.BOLD,14)); b.drawString("Karaoke Online",128,91)
+        b.setColor(new java.awt.Color(169,197,213)); b.setFont(new java.awt.Font("SansSerif",java.awt.Font.PLAIN,10)); b.drawString("ANDROID TV",129,112)
+        b.setColor(new java.awt.Color(61,97,120)); b.drawLine(128,124,302,124)
+        b.dispose()
+        javax.imageio.ImageIO.write(banner, "png", bannerFile)
+        javax.imageio.ImageIO.write(banner, "png", storeBanner)
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn tasks.named("generateXStageTvAssets")
+}

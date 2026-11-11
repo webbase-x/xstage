@@ -583,3 +583,48 @@
   .xstage-install-actions{display:grid;grid-template-columns:1fr}
   .xstage-install-action{width:100%;font-size:.9rem}
 }
+
+/* 1.0.55 Android TV native device-login overlay */
+.android-tv-auth-panel{
+  position:fixed;inset:0;z-index:220;
+  display:grid;place-items:center;
+  padding:clamp(16px,4vw,54px);
+  background:rgba(0,5,14,.88);
+  backdrop-filter:blur(8px)
+}
+.android-tv-auth-panel[hidden]{display:none!important}
+.android-tv-auth-box{
+  width:min(86vw,760px);
+  border:1px solid #4dddec;
+  border-radius:20px;
+  background:linear-gradient(145deg,#071c2ff7,#061321fb);
+  box-shadow:0 28px 80px #000c,0 0 36px #1ab5d82b;
+  padding:clamp(24px,4vw,48px);
+  color:#eaf9ff;
+  text-align:center
+}
+.android-tv-auth-kicker{font-size:clamp(.72rem,1.2vw,.95rem);font-weight:900;letter-spacing:.16em;color:#78eaf4}
+.android-tv-auth-box h2{margin:10px 0 8px;font-size:clamp(1.5rem,3vw,2.5rem)}
+.android-tv-auth-copy{font-size:clamp(.95rem,1.7vw,1.3rem);color:#b8d2df;line-height:1.55}
+.android-tv-auth-url{margin:18px auto 10px;font:800 clamp(1rem,1.8vw,1.35rem)/1.2 monospace;color:#8cecf7}
+.android-tv-auth-code{
+  display:inline-block;
+  margin:8px auto 16px;
+  padding:12px 22px;
+  border:1px solid #5ee8f5;
+  border-radius:14px;
+  background:#0b3448;
+  font:900 clamp(2rem,5vw,4.4rem)/1 monospace;
+  letter-spacing:.16em;
+  color:#fff
+}
+.android-tv-auth-status{min-height:1.5em;margin:8px 0 18px;font-size:clamp(.9rem,1.5vw,1.15rem);color:#9fdbe5}
+.android-tv-auth-actions{display:flex;justify-content:center;gap:12px}
+.android-tv-auth-actions button{
+  min-width:150px;min-height:48px;
+  border:1px solid #4f8798;border-radius:11px;
+  background:#102e40;color:#eaf9ff;
+  font-weight:800;font-size:1rem
+}
+.android-tv-auth-actions button:focus-visible{outline:4px solid #79eff8;outline-offset:3px}
+.android-tv-auth-box small{display:block;margin-top:16px;color:#8aaeba;font-size:clamp(.72rem,1.1vw,.9rem)}

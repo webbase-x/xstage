@@ -186,7 +186,7 @@
   function shouldAskInstallOnEntry(){
     if(isInstalled())return false;
     const params=new URLSearchParams(location.search);
-    if(params.get('source')==='installed')return false;
+    if(params.get('source')==='installed'||params.get('source')==='android-tv')return false;
     const gate=document.getElementById('gate');
     return !!(gate&&!gate.hidden);
   }
@@ -351,6 +351,7 @@
   // Called by app.js before any manual Google login. Returning true means this
   // module owns the flow; returning false lets app.js call login synchronously.
   window.XStageBeforeGoogleLogin=proceed=>{
+    if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')return false;
     if(typeof proceed!=='function'||isInstalled())return false;
     pendingLogin=proceed;
     installForLogin=true;

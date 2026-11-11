@@ -2041,7 +2041,114 @@ ui.librarySelect?.addEventListener('change',()=>{
   setStatus('กำลังเปลี่ยนไปยัง '+targetLabel+'…','success');
   location.reload();
 });
+function androidTvNativeBridgeReady(){
+  try{return !!(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function');}
+  catch{return false;}
+}
+function androidTvAuthPanel(){
+  let panel=$('android-tv-auth-panel');
+  if(panel)return panel;
+  panel=document.createElement('section');
+  panel.id='android-tv-auth-panel';
+  panel.className='android-tv-auth-panel';
+  panel.hidden=true;
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-modal','true');
+  panel.setAttribute('aria-labelledby','android-tv-auth-title');
+  panel.innerHTML='<div class="android-tv-auth-box">'+
+    '<span class="android-tv-auth-kicker">X-STAGE ANDROID TV</span>'+
+    '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
+    '<p class="android-tv-auth-copy">เปิดลิงก์ด้านล่างบนโทรศัพท์ แล้วกรอกรหัสที่แสดงบนทีวี</p>'+
+    '<div id="android-tv-auth-url" class="android-tv-auth-url">https://www.google.com/device</div>'+
+    '<div id="android-tv-auth-code" class="android-tv-auth-code">----</div>'+
+    '<div id="android-tv-auth-status" class="android-tv-auth-status">กำลังเตรียมรหัส…</div>'+
+    '<div class="android-tv-auth-actions"><button id="android-tv-auth-cancel" type="button">ยกเลิก</button></div>'+
+    '<small>ไม่ต้องกรอกรหัสผ่าน Google บนทีวี · การอนุญาตเกิดบนมือถือของคุณ</small>'+
+    '</div>';
+  document.body.append(panel);
+  $('android-tv-auth-cancel')?.addEventListener('click',()=>{
+    try{window.XStageAndroid?.cancelGoogleLogin?.();}catch{}
+    panel.hidden=true;
+    ui.login.disabled=ui.gateLogin.disabled=false;
+    setStatus('ยกเลิกการเข้าสู่ระบบผ่านมือถือแล้ว');
+    ui.gateLogin?.focus?.();
+  });
+  return panel;
+}
+function showAndroidTvAuthPanel(){
+  const panel=androidTvAuthPanel();
+  panel.hidden=false;
+  $('android-tv-auth-code').textContent='----';
+  $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
+  setTimeout(()=>$('android-tv-auth-cancel')?.focus?.(),20);
+}
+function hideAndroidTvAuthPanel(){
+  const panel=$('android-tv-auth-panel');
+  if(panel)panel.hidden=true;
+}
+window.XStageAndroidDeviceCode=payload=>{
+  let data={};
+  try{data=typeof payload==='string'?JSON.parse(payload):payload||{};}catch{}
+  const panel=androidTvAuthPanel();
+  panel.hidden=false;
+  $('android-tv-auth-url').textContent=String(data.verification_url||'https://www.google.com/device');
+  $('android-tv-auth-code').textContent=String(data.user_code||'----');
+  $('android-tv-auth-status').textContent='รอการอนุญาตจากมือถือ…';
+};
+window.XStageAndroidAuthStatus=message=>{
+  const status=$('android-tv-auth-status');
+  if(status)status.textContent=String(message||'กำลังเชื่อมต่อ Google…');
+  setStatus(String(message||'กำลังเชื่อมต่อ Google…'));
+};
+window.XStageAndroidAuthError=message=>{
+  const text=String(message||'เข้าสู่ระบบ Google ไม่สำเร็จ');
+  const panel=androidTvAuthPanel();
+  panel.hidden=false;
+  $('android-tv-auth-status').textContent=text;
+  ui.login.disabled=ui.gateLogin.disabled=false;
+  setStatus(text,'error');
+};
+window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
+  if(!token)return;
+  hideAndroidTvAuthPanel();
+  ui.login.disabled=ui.gateLogin.disabled=true;
+  setStatus('มือถืออนุญาตแล้ว · กำลังเปิด Google Drive…','success');
+  const authId=++state.authId;
+  const safeExpires=Math.max(60,Math.min(3600,Number(expiresIn)||3600));
+  const expiresAt=Date.now()+safeExpires*1000;
+  savePendingAuth(token,expiresAt);
+  try{
+    await openDrive(token,authId,expiresAt);
+  }catch(error){
+    if(authId===state.authId){
+      clearActiveAuth();resetPrivate({keepAuth:true});
+      setStatus(error?.message||'เปิด Google Drive ไม่สำเร็จ','error');
+    }
+  }finally{
+    if(authId===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
+  }
+};
+window.XStageAndroidSignedOut=()=>{
+  hideAndroidTvAuthPanel();
+  if(state.token)resetPrivate({keepAuth:false});
+  setStatus('ออกจากระบบ Google บน Android TV แล้ว');
+};
+function restoreAndroidTvGoogleSession(){
+  if(!androidTvNativeBridgeReady()||state.token)return;
+  try{window.XStageAndroid.restoreGoogleSession?.();}catch{}
+}
 function startManualGoogleLogin(){
+  if(androidTvNativeBridgeReady()){
+    ui.login.disabled=ui.gateLogin.disabled=true;
+    showAndroidTvAuthPanel();
+    setStatus('กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
+    try{window.XStageAndroid.requestGoogleLogin();}
+    catch(error){
+      ui.login.disabled=ui.gateLogin.disabled=false;
+      window.XStageAndroidAuthError(error?.message||'เรียก Android TV Login ไม่สำเร็จ');
+    }
+    return;
+  }
   const gate=window.XStageBeforeGoogleLogin;
   if(typeof gate==='function'&&gate(()=>login()))return;
   login();
@@ -2051,7 +2158,14 @@ $('gate-close')?.addEventListener('click',dismissLoginGate);
 ui.gate?.addEventListener('click',event=>{if(event.target===ui.gate)dismissLoginGate();});
 if(ui.gate)new MutationObserver(syncLoginGateState).observe(ui.gate,{attributes:true,attributeFilter:['hidden']});
 syncLoginGateState();
-ui.logout.addEventListener('click',()=>{resetPrivate({revoke:true});syncLoginGateState();setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');});
+ui.logout.addEventListener('click',()=>{
+  if(androidTvNativeBridgeReady()){
+    try{window.XStageAndroid.logoutGoogle?.();}catch{}
+  }
+  resetPrivate({revoke:true});
+  syncLoginGateState();
+  setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');
+});
 ui.search.addEventListener('input',()=>{
   state.selectedIndex=0;
   renderSongs();
@@ -2222,3 +2336,4 @@ function scheduleOAuthReturnRecovery(){
 document.addEventListener('visibilitychange',scheduleOAuthReturnRecovery);
 window.addEventListener('pageshow',scheduleOAuthReturnRecovery);
 window.addEventListener('focus',scheduleOAuthReturnRecovery);
+setTimeout(restoreAndroidTvGoogleSession,0);

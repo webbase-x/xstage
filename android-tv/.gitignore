@@ -1,0 +1,6 @@
+.gradle/
+**/build/
+local.properties
+app/src/main/res/drawable-nodpi/xstage_app_icon.png
+app/src/main/res/drawable-xhdpi/xstage_tv_banner.png
+store-assets/
