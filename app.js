@@ -818,11 +818,87 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     throw error;
   }
 }
+const XSTAGE_TV_POPUP_HELP_ID='xstage-tv-popup-help';
+function isLikelyAndroidTvBrowser(){
+  const ua=String(navigator.userAgent||'');
+  if(!/Android/i.test(ua))return false;
+  const noTouch=Number(navigator.maxTouchPoints||0)===0;
+  const wideScreen=Math.max(Number(screen?.width||0),Number(screen?.height||0))>=960;
+  return noTouch&&wideScreen;
+}
+function hideTvPopupHelp(){
+  document.getElementById(XSTAGE_TV_POPUP_HELP_ID)?.remove();
+}
+function showTvPopupHelp(message=''){
+  hideTvPopupHelp();
+  const host=location.host||'webbase-x.github.io';
+  const panel=document.createElement('section');
+  panel.id=XSTAGE_TV_POPUP_HELP_ID;
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-modal','true');
+  panel.setAttribute('aria-label','ตั้งค่า Pop-up สำหรับ Google Login บน TV Bro');
+  Object.assign(panel.style,{
+    position:'fixed',inset:'0',zIndex:'2147483647',display:'grid',placeItems:'center',
+    background:'rgba(0,0,0,.82)',padding:'24px',fontFamily:'system-ui,sans-serif'
+  });
+  const box=document.createElement('div');
+  Object.assign(box.style,{
+    width:'min(760px,92vw)',maxHeight:'88vh',overflow:'auto',background:'#071525',
+    color:'#fff',border:'2px solid rgba(255,255,255,.22)',borderRadius:'22px',
+    padding:'26px',boxShadow:'0 20px 70px rgba(0,0,0,.55)',lineHeight:'1.55'
+  });
+  const title=document.createElement('h2');
+  title.textContent='อนุญาต Pop-up ใน TV Bro ก่อนเข้าสู่ Google';
+  title.style.margin='0 0 12px';
+  const intro=document.createElement('p');
+  intro.textContent=message||'TV Bro กำลังบล็อกหน้าต่าง Google Login สำหรับ X-Stage';
+  const steps=document.createElement('ol');
+  steps.style.paddingInlineStart='1.5em';
+  for(const line of [
+    'กด Menu ของ TV Bro เพื่อเปิดแถบเครื่องมือ',
+    'เลือกการตั้งค่า Pop-up / New windows แล้วอนุญาต Pop-up สำหรับเว็บไซต์ '+host,
+    'กลับมาหน้า X-Stage แล้วกด “ตรวจอีกครั้งและเข้าสู่ระบบ” ด้านล่าง'
+  ]){
+    const li=document.createElement('li');li.textContent=line;li.style.margin='8px 0';steps.append(li);
+  }
+  const note=document.createElement('p');
+  note.textContent='อนุญาตเฉพาะเว็บไซต์ X-Stage ก็พอ ไม่จำเป็นต้องปิดตัวบล็อก Pop-up สำหรับทุกเว็บไซต์';
+  note.style.opacity='.82';
+  const actions=document.createElement('div');
+  Object.assign(actions.style,{display:'flex',gap:'12px',flexWrap:'wrap',marginTop:'18px'});
+  const retry=document.createElement('button');
+  retry.type='button';retry.textContent='ตรวจอีกครั้งและเข้าสู่ระบบ';
+  Object.assign(retry.style,{fontSize:'20px',fontWeight:'700',padding:'14px 20px',borderRadius:'14px',cursor:'pointer'});
+  const close=document.createElement('button');
+  close.type='button';close.textContent='ปิด';
+  Object.assign(close.style,{fontSize:'18px',padding:'14px 20px',borderRadius:'14px',cursor:'pointer'});
+  retry.addEventListener('click',()=>{hideTvPopupHelp();login({automatic:false});});
+  close.addEventListener('click',hideTvPopupHelp);
+  actions.append(retry,close);
+  box.append(title,intro,steps,note,actions);
+  panel.append(box);
+  document.body.append(panel);
+  setTimeout(()=>retry.focus(),30);
+}
+function popupPreflightForTv(){
+  if(!isLikelyAndroidTvBrowser())return true;
+  let testWindow=null;
+  try{
+    testWindow=window.open('about:blank','xstage_popup_test','width=160,height=120');
+  }catch{}
+  if(!testWindow){
+    showTvPopupHelp('ตรวจพบว่า TV Bro บล็อกหน้าต่างใหม่ จึงยังเปิด Google Login ไม่ได้');
+    return false;
+  }
+  try{testWindow.close();}catch{}
+  return true;
+}
+
 function googleAuthErrorMessage(error){
   const type=String(error?.type||error?.error||'').trim();
   const detail=String(error?.error_description||error?.message||'').trim();
   if(type==='popup_closed')return 'ยกเลิกการเข้าสู่ระบบ Google แล้ว · กดเข้าสู่ระบบอีกครั้งเมื่อต้องการ';
-  if(/popup|window|blocked/i.test(type))return 'เบราว์เซอร์บล็อกหน้าต่าง Google · อนุญาต Pop-up สำหรับ X-Stage แล้วลองอีกครั้ง';
+  if(/popup|window|blocked/i.test(type)){if(isLikelyAndroidTvBrowser())setTimeout(()=>showTvPopupHelp('TV Bro บล็อกหน้าต่าง Google Login กรุณาอนุญาต Pop-up สำหรับเว็บไซต์นี้'),0);return 'เบราว์เซอร์บล็อกหน้าต่าง Google · อนุญาต Pop-up สำหรับ X-Stage แล้วลองอีกครั้ง';}
   if(/access_denied|denied|cancel/i.test(type))return 'Google ไม่อนุญาตการเข้าถึง · กรุณาเลือกบัญชีและอนุญาตสิทธิ์ที่จำเป็น';
   if(/invalid_client|origin|redirect/i.test(type+' '+detail))return 'การตั้งค่า Google OAuth ไม่ตรงกับเว็บไซต์นี้ · ตรวจ Authorized JavaScript origin: https://webbase-x.github.io';
   if(detail&&detail!=='.')return 'เข้าสู่ระบบ Google ไม่สำเร็จ · '+detail;
@@ -831,6 +907,7 @@ function googleAuthErrorMessage(error){
 }
 
 function login({automatic=false} = {}) {
+  if(!automatic&&!popupPreflightForTv())return;
   if(!navigator.onLine){setStatus('อุปกรณ์ออฟไลน์ · กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่','error');return;}
   if (typeof google === 'undefined' || !google.accounts?.oauth2?.initTokenClient) {
     setStatus('ไม่สามารถโหลด Google Sign-In ได้ กรุณาตรวจอินเทอร์เน็ตและรีเฟรชหน้า', 'error'); return;
