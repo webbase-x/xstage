@@ -1,7 +1,7 @@
 {
   "name": "xstage-karaoke-online",
   "private": true,
-  "version": "1.0.56",
+  "version": "1.0.57",
   "type": "module",
   "scripts": {
     "test": "node scripts/regression.mjs"
