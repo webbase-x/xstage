@@ -205,7 +205,7 @@ public final class MainActivity extends Activity {
         return "https".equalsIgnoreCase(uri.getScheme())
                 && XSTAGE_HOST.equalsIgnoreCase(uri.getHost())
                 && uri.getPath() != null
-                && uri.getPath().startsWith(XSTAGE_PATH_PREFIX);
+                && (uri.getPath().equals(XSTAGE_PATH_PREFIX) || uri.getPath().startsWith(XSTAGE_PATH_PREFIX + "/"));
     }
 
     private void openExternal(Uri uri) {
