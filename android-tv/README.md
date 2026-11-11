@@ -1,3 +1,19 @@
+## Android Studio: fix Gradle 9.6 / AGP 8.9.3 sync error
+
+If Sync fails with `InternalProblems` removed in Gradle 9.6, the cause is an incompatible Gradle version, **not** an app Java compilation error.
+
+Use **AGP 8.9.3 + Gradle 8.11.1 + JDK 17**. Do not upgrade the project to AGP 9 just to fix this Sync error.
+
+1. Open **only** `android-tv/` as the Gradle project in Android Studio (not repository root `xstage/`).
+2. Under **File > Settings > Build, Execution, Deployment > Build Tools > Gradle**, set **Gradle JDK = JDK 17** and select the **Gradle wrapper / gradle-wrapper.properties** distribution if the IDE supports it.
+3. The pinned distribution is `android-tv/gradle/wrapper/gradle-wrapper.properties` → `gradle-8.11.1-bin.zip`. If your local checkout has not pulled that new file, run `git pull` from the repository root and re-open `android-tv/`.
+4. If Android Studio cannot use the wrapper because the checked-out project lacks `gradle-wrapper.jar` or launcher scripts, generate the wrapper with an existing **Gradle 8.11.1** installation: from `android-tv` run `gradle wrapper --gradle-version 8.11.1 --distribution-type bin`. Use the resulting `gradlew.bat` and **do not commit a generated JAR without verifying its provenance**.
+5. Click **Sync Project with Gradle Files**, then choose `Build > Build APK(s)` with `debug` variant.
+
+This repo also builds Android through GitHub Actions using pinned Gradle **8.11.1**.
+
+---
+
 # X-Stage Android (TV + Tablet)
 
 โปรเจกต์ Android ชุดเดียวสำหรับ X-Stage Karaoke Online รองรับทั้ง Android TV และแท็บเล็ต Android
