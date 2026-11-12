@@ -113,6 +113,18 @@
                 <p id="create-preview-hint" class="sound-preview-hint" aria-live="polite">ค้นหาและเลือกเพลงจากรายการด้านบน แล้วกดเล่นทันที</p>
                 <div class="preview-controls"><button id="preview-button" class="button primary" type="button">▶ เล่นเพลงทันที</button><button id="preview-stop-button" class="button ghost" type="button">■ หยุดเล่น</button></div>
                 <div class="preview-row"><div class="preview-description"><strong id="preview-label">เครื่องเล่นคาราโอเกะทดลองฟัง</strong><small>เล่นเสียงสตรีมจากเพลงต้นฉบับ · ไม่สร้าง WAV, M4A หรือ MP3 ใหม่</small></div><audio id="preview-audio" controls preload="none" aria-label="เสียงคาราโอเกะและ SoundFont ทดลองฟังสด"></audio></div>
+                <section class="preview-lyrics-panel" aria-label="ตรวจสอบเนื้อร้องก่อนสร้างเพลง">
+                  <div class="preview-lyrics-heading"><strong>เนื้อร้องระหว่างทดลองฟัง</strong><span id="preview-lyrics-source" class="preview-lyrics-source">ยังไม่ได้เลือกเพลง</span></div>
+                  <p id="preview-lyrics-status" class="preview-lyrics-status" role="status" aria-live="polite">เลือกเพลงแล้วระบบจะตรวจ LRC, KAR และชุด NCN (Song / Lyrics / Cursor)</p>
+                  <div id="preview-lyrics-lines" class="preview-lyrics-lines" aria-label="เนื้อร้องที่ไฮไลต์ตามเวลาเพลง" aria-live="off"><div class="preview-lyrics-empty">♫ เลือกเพลงเพื่อดูเนื้อร้อง</div></div>
+                  <div class="preview-lyrics-ai" id="preview-lyrics-ai-tools" hidden>
+                    <label for="preview-ai-language">ภาษาสำหรับ AI</label>
+                    <select class="field" id="preview-ai-language"><option value="th">ภาษาไทย</option><option value="auto">ตรวจจับภาษา</option><option value="en">English</option></select>
+                    <button type="button" id="preview-ai-transcribe" class="button ghost" disabled>✦ AI ถอดเสียงร้องเป็นร่างเนื้อร้อง</button>
+                    <button type="button" id="preview-ai-review" class="button primary" hidden>ตรวจและบันทึกร่าง AI</button>
+                  </div>
+                  <div class="preview-lyrics-warning" id="preview-lyrics-warning">AI ถอดเสียงได้เฉพาะไฟล์ที่มีเสียงคนร้อง · ผล AI ต้องตรวจแก้ก่อนนำไปใช้จริง · ไฟล์ MIDI/NCN ที่ไม่มีคำร้องไม่สามารถสร้างคำร้องแท้จากเสียงดนตรีได้</div>
+                </section>
                 <div class="hint">เลื่อนระดับเสียงดนตรีและ SoundFont หรือเปลี่ยน SF2/SF3/โทน MIDI ขณะฟังได้โดยไม่เริ่มเพลงใหม่ · เพลง MIDI ล้วนจะมีเสียงต้นฉบับจาก SoundFont มาตรฐานแยกไว้ แม้ปิดเสียง SoundFont ที่เลือก · โหมด AI Separation ทำงานตอนสร้างเพลงเท่านั้น</div>
               </div>
             </div>
