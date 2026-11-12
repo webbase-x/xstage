@@ -27,12 +27,29 @@ ROOT = Path(__file__).resolve().parent
 UI_ROOT = ROOT / "studio"
 if not UI_ROOT.is_dir() and (ROOT.parent / "studio").is_dir():
     UI_ROOT = ROOT.parent / "studio"  # Repo test layout; packaged ZIP uses ROOT/studio.
-DATA = ROOT / "data"
+# Each Windows account has its own durable preferences and OAuth tokens.
+# This location survives replacement/extraction of new PC Ready ZIP releases.
+_LOCAL_APP_DATA = os.environ.get("LOCALAPPDATA") if os.name == "nt" else ""
+DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
+         Path.home() / "AppData" / "Local") / "X-Stage" / "SongStudio"
+        if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.9" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "309" if READY_BUNDLE else "205-SRC"
-DATA.mkdir(exist_ok=True)
+STATUS_VERSION = "0.3.10" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "310" if READY_BUNDLE else "205-SRC"
+DATA.mkdir(parents=True, exist_ok=True)
+# Import the older per-ZIP data folder only once. Never overwrite newer
+# preferences, credentials or the DPAPI token already in AppData.
+if os.name == "nt" and (ROOT / "data").is_dir():
+    for _filename in ("preferences.json", "song-metadata.json",
+                      "google-auth.dpapi", "oauth-client.json"):
+        _prior = ROOT / "data" / _filename
+        _dest = DATA / _filename
+        if _prior.is_file() and not _dest.exists():
+            try:
+                shutil.copy2(_prior, _dest)
+            except OSError:
+                pass
 EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga"}
 EXT_MIDI = {".mid", ".midi", ".kar"}
 EXT_UNSUPPORTED = {".ncn"}
@@ -89,8 +106,30 @@ def _module(filename, name):
     spec.loader.exec_module(module)
     return module
 
+def google_client_path():
+    """Owner-supplied client is bundled for all users; personal override wins."""
+    override = DATA / "oauth-client.json"
+    bundled = ROOT / "config" / "google-oauth-client.json"
+    if override.is_file():
+        return str(override)
+    if bundled.is_file():
+        return str(bundled)
+    legacy = PREFS.get("oauth", "")
+    return legacy if legacy and Path(legacy).is_file() else ""
+
+
 GOOGLE = _module("google_drive.py", "xstage_google_drive").GoogleDrive(
-    DATA, lambda: PREFS.get("oauth", ""))
+    DATA, google_client_path)
+# Normalize old absolute JSON paths to a stable per-user copy when possible.
+if not (DATA / "oauth-client.json").is_file() and not (ROOT / "config" / "google-oauth-client.json").is_file():
+    _old_oauth = PREFS.get("oauth", "")
+    if _old_oauth and Path(_old_oauth).is_file():
+        try:
+            GOOGLE.import_client(_old_oauth)
+        except (OSError, ValueError, RuntimeError):
+            pass
+# The UI reflects the stable effective path but never receives client secrets.
+PREFS["oauth"] = google_client_path()
 
 DEFAULT_SOUNDFONT = RUNTIME / "soundfonts" / "GeneralUser-GS.sf2"
 if DEFAULT_SOUNDFONT.is_file() and not Path(PREFS.get("soundfont", "")).is_file():
@@ -988,7 +1027,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"Python Runtime": True, "FFmpeg": bool(ffmpeg_binary()),
                     "SoundFont": sf_available(), "FluidSynth": bool(fluidsynth_binary()),
                     "Local file mode": True,
-                    "Google Drive connector": GOOGLE.status()["connected"],
+                    "Google OAuth Client configured": GOOGLE.status()["configured"],
+                    "Google Drive signed in": GOOGLE.status()["connected"],
                     "AI separation": ai_available()})
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
@@ -1039,10 +1079,22 @@ class Handler(BaseHTTPRequestHandler):
             path = urllib.parse.urlsplit(self.path).path
             if path == "/api/config":
                 for key, value in payload.items():
-                    if key in PREFS and isinstance(value, str):
+                    if key not in PREFS or not isinstance(value, str):
+                        continue
+                    if key == "oauth":
+                        candidate = value.strip()
+                        if candidate:
+                            # Retain existing client when UI sends the current
+                            # path; import only when a user selected a new file.
+                            if Path(candidate) != Path(google_client_path()):
+                                GOOGLE.import_client(candidate)
+                        # Empty inputs do NOT remove a bundled or saved client.
+                        PREFS[key] = google_client_path()
+                    else:
                         PREFS[key] = value[:2048]
                 save_json(PREFS_FILE, PREFS)
-                self._json({"preferences": dict(PREFS), "soundfonts": font_list()})
+                self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
+                            "google": GOOGLE.status()})
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
                 if kind not in ("source", "workspace", "download", "soundfont", "oauth"):
