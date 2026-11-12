@@ -2397,7 +2397,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1084';
+    script.src='./assets/vendor/qrcode.min.js?v=1085';
     script.async=true;
     let done=false;
     const finish=error=>{
