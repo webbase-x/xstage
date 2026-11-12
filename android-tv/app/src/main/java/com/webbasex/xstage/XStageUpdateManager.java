@@ -204,7 +204,7 @@ final class XStageUpdateManager {
             }
             int build = meta.optInt("build", 0);
             String version = meta.optString("version", "");
-            if (build <= 0 || !version.matches("[0-9]+(?:\\.[0-9]+){1,3}")) {
+        if (build <= 0 || !version.matches("[0-9]+[.][0-9]+[.][0-9]+")) {
                 throw new IllegalStateException("ข้อมูลเวอร์ชัน Google Play ไม่ถูกต้อง");
             }
             return new LatestUpdate(version, build, "", "", "", true);
