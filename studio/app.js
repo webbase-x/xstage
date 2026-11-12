@@ -858,12 +858,11 @@
     if(busy)return message('มีงานกำลังดำเนินการ กรุณาให้เสร็จก่อนนำเข้า');
     $('ai-lyrics-status').textContent='กำลังเปิดหน้าต่างเลือกไฟล์เสียงจากเครื่อง…';
     try {
-      const picked=await post('/api/folder-picker',{kind:'vocal'});
-      if(!picked.path) {
+      const imported=await post('/api/vocal-import',{});
+      if(imported.cancelled) {
         $('ai-lyrics-status').textContent='ยกเลิกการเลือกไฟล์แล้ว';
         return;
       }
-      const imported=await post('/api/ai-import',{path:picked.path});
       $('ai-lyrics-search').value='';aiOffset=0;
       await aiRefreshSongList();
       if(imported.song)await aiChooseSong(imported.song);
