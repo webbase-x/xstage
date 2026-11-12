@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.13-build313'
+$Version = 'v0.3.14-build314'
 $DirName = 'X-Stage-Song-Studio-PC-Ready-' + $Version
 $OutputRoot = Join-Path $Repo 'dist'
 $Stage = Join-Path $OutputRoot $DirName
@@ -52,6 +52,8 @@ $map = @{
  'songstudio-pc/Start-Song-Studio-Ready.cmd' = 'Start-Song-Studio.cmd'
  'songstudio-pc/Start-Song-Studio-Ready.ps1' = 'Start-Song-Studio-Ready.ps1'
  'songstudio-pc/engine.py' = 'engine.py'
+ 'songstudio-pc/ncn_lyrics.py' = 'ncn_lyrics.py'
+ 'songstudio-pc/ai_lyrics.py' = 'ai_lyrics.py'
  'songstudio-pc/google_drive.py' = 'google_drive.py'
  'songstudio-pc/song_export.py' = 'song_export.py'
  'songstudio-pc/live_preview.py' = 'live_preview.py'
@@ -221,6 +223,37 @@ Add-Content -LiteralPath $Pth -Value '..\ai-site' -Encoding ASCII
 if ($LASTEXITCODE -ne 0) { throw 'Bundled Python cannot import local ONNX Runtime/NumPy' }
 Step 'All AI libraries and model included, no downloads required by user'
 
+Step 'Downloading verified offline multilingual Whisper base model and native CLI on CI'
+$WhisperZip = Join-Path $Downloads 'whisper-bin-x64.zip'
+$WhisperURL = 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip'
+$WhisperZipSHA = '6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb'
+Download $WhisperURL $WhisperZip
+CheckSHA $WhisperZip $WhisperZipSHA
+$WhisperExtract = Join-Path $Downloads 'whisper-unpacked'
+Expand-Archive -LiteralPath $WhisperZip -DestinationPath $WhisperExtract -Force
+$WhisperExe = Get-ChildItem -LiteralPath $WhisperExtract -Recurse -Filter 'whisper-cli.exe' -File | Select-Object -First 1
+if (!$WhisperExe) { throw 'Verified whisper.cpp Windows bundle has no whisper-cli.exe' }
+$WhisperFolder = Join-Path $Runtime 'whisper'
+New-Item -ItemType Directory -Force -Path $WhisperFolder | Out-Null
+Copy-Item -Path (Join-Path $WhisperExe.Directory.FullName '*') -Destination $WhisperFolder -Recurse -Force
+if (!(Test-Path (Join-Path $WhisperFolder 'whisper-cli.exe'))) { throw 'Missing offline Whisper CLI' }
+
+# Multilingual base (not base.en) supports Thai; hash is from upstream model.
+$WhisperModelURL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin'
+$WhisperModelSHA = '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe'
+$WhisperModel = Join-Path $ModelDir 'ggml-base.bin'
+try {
+    Download $WhisperModelURL $WhisperModel
+} catch {
+    Write-Warning "Retrying Whisper model download with curl: $_"
+    & curl.exe -fL --retry 3 --retry-delay 4 --connect-timeout 30 --max-time 900 -o $WhisperModel $WhisperModelURL
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to download Whisper multilingual model on CI' }
+}
+if ((Get-Item $WhisperModel).Length -lt 100MB) { throw 'Whisper model file too small' }
+CheckSHA $WhisperModel $WhisperModelSHA
+Step 'Verified offline Whisper multilingual ASR included, no runtime downloads'
+
+
 # 5. Preserve bundled runtime license files and source links in the ZIP
 $PythonLicense = Join-Path $PyDir 'LICENSE.txt'
 if (Test-Path $PythonLicense) {
@@ -235,12 +268,16 @@ CopyFromRepo 'songstudio-pc/THIRD_PARTY_NOTICES.md' '.runtime/licenses/THIRD_PAR
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'engine.py',
+ 'ncn_lyrics.py',
+ 'ai_lyrics.py',
  'google_drive.py',
  'song_export.py',
  'live_preview.py',
  'ai_separate.py',
  'ai-model.lock.json',
  '.runtime/models/htdemucs_fp16weights.onnx',
+ '.runtime/models/ggml-base.bin',
+ '.runtime/whisper/whisper-cli.exe',
  '.runtime/python/python313._pth',
  '.runtime/ai-site/numpy/__init__.py',
  '.runtime/ai-site/onnxruntime/__init__.py',
