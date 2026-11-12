@@ -17,6 +17,7 @@ from functools import lru_cache
 from pathlib import Path
 import os
 import struct
+import re
 import unicodedata
 
 MIDI_SUFFIXES = (".mid", ".midi")
@@ -140,7 +141,7 @@ def _varlen(source: bytes, pos: int, end: int):
     raise ValueError("MIDI delta-time ยาวเกินมาตรฐาน")
 
 
-def midi_events(midi: Path):
+def midi_events(midi: Path, *, include_duration=False):
     """Extract tempo and text metadata, preserving absolute tick positions."""
     data = Path(midi).read_bytes()
     if len(data) < 14 or data[:4] != b"MThd":
@@ -156,6 +157,7 @@ def midi_events(midi: Path):
     if division == 0 or n_tracks > 1024:
         raise ValueError("MIDI timing หรือจำนวน track ไม่ถูกต้อง")
     offset = 8 + length
+    max_tick = 0
     tempos = [(0, 500000)]
     texts = []
     for track_index in range(n_tracks):
@@ -219,6 +221,7 @@ def midi_events(midi: Path):
             if pos > end:
                 raise ValueError("MIDI event เกินขอบเขต track")
             order += 1
+        max_tick = max(max_tick, tick)
         offset = end
     # When multiple tracks specify a tempo at the same tick, choose the
     # last event deterministically. Standard MIDI default is 120 BPM.
@@ -235,7 +238,11 @@ def midi_events(midi: Path):
         sec.append(current_seconds)
         rates.append(rate)
         old_tick, old_rate = tick, rate
-    return division, (ticks, sec, rates), sorted(texts, key=lambda x: (x[0], x[1], x[2]))
+    result = (division, (ticks, sec, rates),
+              sorted(texts, key=lambda x: (x[0], x[1], x[2])))
+    if include_duration:
+        return (*result, tick_to_seconds(max_tick, division, result[1]))
+    return result
 
 
 def tick_to_seconds(tick, division, map_tuple):
@@ -266,61 +273,125 @@ def to_lrc(lines):
 
 
 def ncn_document(companions):
-    """Render NCN lyrics to a valid timed JSON, not a fake empty LRC."""
+    """NCN24 MIDI/LYR/CUR synchronisation, adapted from X-Stage Karaoke PC.
+
+    A CUR entry represents one *CP874 source byte*, not a Unicode grapheme.
+    The newline marker consumes one CUR entry per nonblank lyric line.
+    Preserve verified earlier lyrics when a historical CUR file ends short,
+    but report incomplete timing rather than fabricating the remainder.
+    """
     if not companions or companions.get("missing"):
         raise ValueError("ชุด NCN ไม่ครบ: ขาด " +
                          ", ".join(companions.get("missing", ["Lyrics", "Cursor"])) +
                          " · ต้องมี .MID + .LYR + .CUR รหัสเดียวกัน")
     lyric_file = Path(companions["lyrics"])
     cursor_file = Path(companions["cursor"])
-    lines = _decode_text(lyric_file.read_bytes()).splitlines()
-    if len(lines) < 5:
+    source_bytes = lyric_file.read_bytes()
+    if len(source_bytes) > 1024 * 1024:
+        raise ValueError("ไฟล์ NCN .LYR ใหญ่เกิน 1 MB")
+    # Legacy NCN is CP874. Normalize line endings in bytes before consuming
+    # CUR indices: Windows CRLF is ONE line marker, not two time entries.
+    rows = source_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n").split(b"\n")
+    if len(rows) < 5:
         raise ValueError("NCN .LYR ไม่มีข้อมูลเนื้อร้องเริ่มจากบรรทัดที่ 5")
-    meta = {"title": lines[0].strip(), "artist": lines[1].strip(),
-            "key": lines[2].strip()}
-    raw = cursor_file.read_bytes()
-    if len(raw) % 2:
-        if raw[-1] != 0xff:
-            raise ValueError("NCN .CUR มีจำนวนไบต์คี่ และไม่มีตัวจบ FF")
-        raw = raw[:-1]
-    ticks = list(struct.unpack("<" + "H"*(len(raw)//2), raw))
-    division, tempo_map, _ = midi_events(Path(companions["midi"]))
-    used = 0
-    rendered = []
-    for value in lines[4:]:
-        lyric = value.strip()
-        if not lyric:
-            continue
-        # NCN cursor includes a leading '/' newline event per lyrics line.
-        text = "/" + lyric
-        if used + len(text) > len(ticks):
-            raise ValueError("NCN Cursor มีตำแหน่งเวลาน้อยกว่าตัวอักษรใน Lyrics")
-        events = []
-        current = []
-        current_time = None
-        # Keep Thai combining marks visually joined to their base character,
-        # but consume a cursor word for EACH original Unicode code point.
-        for ch in text:
-            position = ticks[used]
-            used += 1
-            when = tick_to_seconds(position * division / 24.0, division, tempo_map)
-            if ch == "/":
-                continue
-            if unicodedata.category(ch).startswith("M") and current:
-                current[-1]["text"] += ch
-            else:
-                current.append({"text": ch, "startTime": when})
-        if not current:
-            continue
-        rendered.append({"startTime": current[0]["startTime"],
-                         "text": lyric, "characters": current})
-    if not rendered:
-        raise ValueError("NCN ไม่มีเนื้อร้องที่อ่านได้")
-    if used < len(ticks):
-        # Some encoders leave an additional pause or unneeded cursor value.
-        meta["unusedCursorValues"] = len(ticks)-used
-    return _timed_lines_to_json(rendered, companions["code"], "NCN", meta)
+    meta = {
+        "title": _decode_text(rows[0]).strip(),
+        "artist": _decode_text(rows[1]).strip(),
+        "key": _decode_text(rows[2]).strip(),
+    }
+    raw_cursor = cursor_file.read_bytes()
+    if len(raw_cursor) > 2 * 1024 * 1024:
+        raise ValueError("ไฟล์ NCN .CUR ใหญ่เกิน 2 MB")
+    warnings = []
+    if len(raw_cursor) % 2:
+        if raw_cursor[-1:] != b"\xff":
+            warnings.append("CUR มีไบต์ท้ายที่ไม่ครบหนึ่งค่าเวลา · ข้ามไบต์ท้าย")
+        raw_cursor = raw_cursor[:-1]
+    positions = list(struct.unpack("<" + "H" * (len(raw_cursor) // 2), raw_cursor))
+    if not positions:
+        raise ValueError("NCN .CUR ไม่มีตำแหน่งเวลาที่อ่านได้")
 
+    body = list(rows[4:])
+    while body and not body[-1].strip(b" \x00\x1a"):
+        body.pop()
+    removed_footers = 0
+    footer = re.compile(r"^(?:nick[\s_-]*karaoke(?:\s+professional)?|นิค[\s_-]*คาราโอเกะ)$", re.I)
+    def needed(lines):
+        return sum(1 + len(part) for part in lines if part.strip())
+    # Some old collections append an untimed Nick Karaoke credit. Strip only
+    # when there are not enough CUR entries: a *timed* credit is real lyrics.
+    while body and len(positions) < needed(body):
+        candidate = body[-1].strip(b" \x00\x1a").decode("cp874", errors="replace")
+        if not footer.fullmatch(candidate):
+            break
+        body.pop()
+        removed_footers += 1
+        while body and not body[-1].strip(b" \x00\x1a"):
+            body.pop()
+
+    division, tempo_map, _, midi_duration = midi_events(
+        Path(companions["midi"]), include_duration=True)
+    rendered = []
+    previous_pos = 0
+    cursor_index = 0
+    timing_incomplete = False
+    stop_song = False
+    for raw_line in body:
+        if not raw_line.strip():
+            continue
+        chars = []
+        text_parts = []
+        # Use the *original source bytes* to preserve NCN Cursor alignment.
+        for byte in b"\n" + raw_line:
+            if cursor_index >= len(positions):
+                timing_incomplete = True
+                break
+            position = positions[cursor_index]
+            cursor_index += 1
+            if byte in (10, 13):  # One NCN line marker has no printable glyph.
+                continue
+            if position == 65535:  # Historical end/untimed position marker.
+                timing_incomplete = True
+                continue
+            if position < previous_pos:
+                position = previous_pos  # Never run lyrics backwards.
+                warnings.append("CUR มีเวลาย้อนกลับ · ปรับให้เรียงตามเวลาดนตรี")
+            previous_pos = position
+            when = tick_to_seconds(position * division / 24.0, division, tempo_map)
+            if when > midi_duration + 10:
+                warnings.append("CUR มีเวลายาวเกินความยาว MIDI · คงเฉพาะช่วงก่อนหน้า")
+                timing_incomplete = True
+                stop_song = True
+                break
+            char = bytes([byte]).decode("cp874", errors="replace")
+            text_parts.append(char)
+            if unicodedata.category(char).startswith("M") and chars:
+                chars[-1]["text"] += char
+            else:
+                chars.append({"text": char, "startTime": when})
+        text = "".join(text_parts)
+        if text.strip() and chars:
+            rendered.append({
+                "startTime": chars[0]["startTime"],
+                "text": text,
+                "characters": chars
+            })
+        if cursor_index >= len(positions) or stop_song:
+            if not stop_song and len(positions) < needed(body):
+                timing_incomplete = True
+            break
+    if not rendered:
+        raise ValueError("NCN ไม่มีเนื้อร้องที่จับคู่กับ CUR/MIDI ได้จริง")
+    if timing_incomplete:
+        warnings.append("เนื้อร้องบางช่วงไม่มีเวลาจริง · เก็บเฉพาะส่วนที่ตรวจสอบได้")
+    if cursor_index < len(positions):
+        meta["unusedCursorValues"] = len(positions) - cursor_index
+    if warnings:
+        meta["timingWarnings"] = list(dict.fromkeys(warnings))
+    meta["timingComplete"] = not timing_incomplete
+    meta["removedUntimedFooterLines"] = removed_footers
+    meta["cursorValues"] = len(positions)
+    return _timed_lines_to_json(rendered, companions["code"], "NCN", meta)
 
 def kar_document(midi: Path, code: str):
     """Read embedded MIDI/KAR lyric and text events; drop @T headers."""
