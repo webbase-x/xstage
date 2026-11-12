@@ -230,5 +230,89 @@ class NcnSourceTests(unittest.TestCase):
                             for x in report["components"]))
         self.assertNotIn("inspect:cur", {x["value"] for x in report["options"]})
 
+
+    def test_karaoke_pc_ncn_cp874_crlf_and_untimed_footer(self):
+        """Karaoke PC removes an untimed vendor credit, not real song words."""
+        mid, lyr, cur = self.make_ncn("00042", "0", lyric="กข")
+        lyrics = "ชื่อเพลง\r\nศิลปิน\r\nC\r\n.\r\nกข\r\nNick_Karaoke Professional\r\n"
+        lyr.write_bytes(lyrics.encode("cp874"))
+        cur.write_bytes(struct.pack("<3H", 0, 0, 24))
+        doc = ncn.ncn_document(ncn.resolve_companions(mid))
+        self.assertEqual([x["text"] for x in doc["lines"]], ["กข"])
+        self.assertAlmostEqual(doc["lines"][0]["characters"][1]["startTime"], .5)
+        self.assertEqual(doc["metadata"]["removedUntimedFooterLines"], 1)
+        self.assertTrue(doc["metadata"]["timingComplete"])
+
+    def test_karaoke_pc_ncn_partial_cursor_preserves_verified_prefix(self):
+        """Never invent the remainder of a truncated CUR file."""
+        mid, lyr, cur = self.make_ncn("00043", "0", lyric="ABCD")
+        cur.write_bytes(struct.pack("<3H", 0, 0, 24))
+        doc = ncn.ncn_document(ncn.resolve_companions(mid))
+        self.assertEqual(doc["lines"][0]["text"], "AB")
+        self.assertEqual(len(doc["lines"][0]["characters"]), 2)
+        self.assertFalse(doc["metadata"]["timingComplete"])
+        self.assertTrue(doc["metadata"]["timingWarnings"])
+
+    def test_karaoke_pc_ncn_thai_mark_and_sentinel(self):
+        """One CP874 byte consumes a cursor, but Thai marks paint together."""
+        mid, lyr, cur = self.make_ncn("00044", "0", lyric="กิข")
+        cur.write_bytes(struct.pack("<5H", 0, 0, 12, 24, 65535))
+        doc = ncn.ncn_document(ncn.resolve_companions(mid))
+        self.assertEqual(doc["lines"][0]["text"], "กิข")
+        self.assertEqual([x["text"] for x in doc["lines"][0]["characters"]], ["กิ", "ข"])
+        self.assertAlmostEqual(doc["lines"][0]["characters"][1]["startTime"], .5)
+        self.assertEqual(doc["metadata"]["unusedCursorValues"], 1)
+
+    def test_karaoke_pc_ncn_uses_original_midi_tempo_change(self):
+        mid, lyr, cur = self.make_ncn("00045", "0", lyric="กข")
+        mid.write_bytes(midi([
+            (0, b"\xff\x51\x03\x07\xa1\x20"),
+            (480, b"\xff\x51\x03\x0f\x42\x40"),
+        ]))  # 120 BPM until tick 480, then 60 BPM.
+        cur.write_bytes(struct.pack("<3H", 0, 0, 48))
+        doc = ncn.ncn_document(ncn.resolve_companions(mid))
+        self.assertAlmostEqual(doc["lines"][0]["characters"][1]["startTime"], 1.5)
+
+    def test_karaoke_pc_plain_embedded_midi_crlf_and_soft_karaoke(self):
+        """PC Karaoke handles both MIDI lyric CR/LF and KAR slash separators."""
+        def meta(tag, value):
+            return b"\xff" + bytes([tag]) + var(len(value)) + value
+        path = self.dir / "70001.kar"
+        path.write_bytes(midi([
+            (0, meta(1, b"@LTHAI")),
+            (0, meta(1, b"@TExample")),
+            (480, meta(5, "หนึ่ง".encode("cp874"))),
+            (480, meta(5, b"\r")),
+            (0, meta(5, "สอง".encode("cp874"))),
+            (480, meta(5, b"\\Three")),
+        ]))
+        doc = ncn.kar_document(path, "70001")
+        self.assertEqual([x["text"] for x in doc["lines"]], ["หนึ่ง", "สอง", "Three"])
+        self.assertEqual(doc["metadata"]["title"], "Example")
+        self.assertAlmostEqual(doc["lines"][0]["startTime"], .5)
+        self.assertAlmostEqual(doc["lines"][1]["startTime"], 1.)
+        self.assertAlmostEqual(doc["lines"][2]["startTime"], 1.5)
+        self.assertEqual(doc["lines"][0]["characters"][0]["text"], "หนึ่ง")
+
+    def test_karaoke_pc_midi_to_m4a_plus_real_lrc_published_as_pair(self):
+        """Existing publishing engine saves both outputs under ONE song code."""
+        mid, lyr, cur = self.make_ncn("00046", "0", lyric="เพลงทดสอบ")
+        engine.scan_source()
+        row = next(x for x in engine.FILES if x["code"] == "00046")
+        with patch.object(engine, "convert", side_effect=lambda _row, output, preview=False:
+                          Path(output).write_bytes(b"M4A-TEST-DATA" * 500)):
+            completed = engine.build_library([row], "original", {"audio_only": False})
+        self.assertEqual((completed["created"], completed["lyricsCount"],
+                          completed["errors"]), (1, 1, 0), completed)
+        root = self.workspace / "songs"
+        audio = root / "audio" / "0" / "00046.m4a"
+        lrc = root / "lyrics" / "0" / "00046.lrc"
+        timed = root / "lyrics" / "0" / "00046.json"
+        self.assertGreater(audio.stat().st_size, 1000)
+        self.assertIn("เพลงทดสอบ", lrc.read_text(encoding="utf-8"))
+        self.assertEqual(json.loads(timed.read_text(encoding="utf-8"))["sourceFormat"], "NCN")
+        self.assertTrue((root / "current.json").is_file())
+
+
 if __name__ == "__main__":
     unittest.main()
