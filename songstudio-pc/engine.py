@@ -8,6 +8,7 @@ import base64
 import binascii
 import hashlib
 import json
+import importlib.util
 import mimetypes
 import os
 import secrets
@@ -29,8 +30,8 @@ if not UI_ROOT.is_dir() and (ROOT.parent / "studio").is_dir():
 DATA = ROOT / "data"
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.3" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "303" if READY_BUNDLE else "205-SRC"
+STATUS_VERSION = "0.3.4" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "304" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(exist_ok=True)
 EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga"}
 EXT_MIDI = {".mid", ".midi", ".kar"}
@@ -50,6 +51,8 @@ PROCESS = None
 FILES = []
 FILE_BY_ID = {}
 PREVIEWS = {}
+LIVE_TICKETS = {}
+LIVE_LIMIT = threading.BoundedSemaphore(2)
 PREVIEW_FOLDER = Path(tempfile.mkdtemp(prefix="xstage-song-preview-"))
 ALLOWED_ORIGIN = "https://webbase-x.github.io"
 
@@ -539,6 +542,54 @@ def open_picker(kind):
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์ส่งค่าพาธว่างเปล่า")
     return path
 
+def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
+    """Issue one-use ticket for streamed preview; no output audio files."""
+    if type(song_id) is not int:
+        raise ValueError("กรุณาเลือกเพลงสำหรับทดลองฟัง")
+    if JOB.get("state") == "running":
+        raise ValueError("มีงานสร้างเพลงกำลังทำงานอยู่ กรุณารอให้เสร็จก่อน")
+    with LOCK:
+        row = FILE_BY_ID.get(song_id)
+        catalog = list(FILES)
+    if row is None:
+        raise ValueError("ไม่พบเพลงที่เลือกในรายการที่สแกน")
+    spec = importlib.util.spec_from_file_location("xstage_live_preview", ROOT / "live_preview.py")
+    if not spec or not spec.loader:
+        raise RuntimeError("แพ็กเกจไม่มี Live Preview Engine")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    audio, midi = mod.matching_sources(row, catalog)
+    if midi and not sf_available():
+        raise ValueError("กรุณาเลือก SoundFont (.sf2/.sf3) ก่อนเปิดเพลง MIDI/KAR")
+    if not ffmpeg_binary():
+        raise RuntimeError("ไม่มี FFmpeg ในแพ็กเกจ PC")
+    try:
+        backing = float(music_volume)
+        sound = float(synth_volume)
+        if not (0 <= backing <= 1 and 0 <= sound <= 1):
+            raise ValueError()
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("ค่าระดับเสียงต้องอยู่ระหว่าง 0 ถึง 100%")
+    ticket = secrets.token_urlsafe(30)
+    with LOCK:
+        # Live preview links expire quickly and are consumed only once.
+        for key, value in list(LIVE_TICKETS.items()):
+            if value["expires"] <= time.monotonic():
+                LIVE_TICKETS.pop(key, None)
+        LIVE_TICKETS[ticket] = dict(audio=audio, midi=midi,
+                                    soundfont=Path(PREFS["soundfont"]) if midi else None,
+                                    music_volume=backing, synth_volume=sound,
+                                    expires=time.monotonic() + 90)
+    return {
+        "ticket": ticket, "title": row.get("title", ""),
+        "has_backing": bool(audio), "has_midi": bool(midi),
+        "mixed": bool(audio and midi),
+        "message": ("กำลังเล่นดนตรีกับ SoundFont ผสมกันแบบสตรีมสด" if audio and midi
+                    else "เล่น SoundFont MIDI/KAR แบบสตรีมสด" if midi
+                    else "เล่นเสียงดนตรีต้นฉบับ (ไม่มี MIDI สำหรับ SoundFont)")
+    }
+
+
 def job_snapshot():
     with LOCK:
         job = dict(JOB)
@@ -614,6 +665,57 @@ class Handler(BaseHTTPRequestHandler):
         path = u.path
         query = urllib.parse.parse_qs(u.query)
         if path.startswith("/api/"):
+            if path == "/api/live-stream":
+                ticket = query.get("ticket", [""])[0]
+                with LOCK:
+                    request = LIVE_TICKETS.pop(ticket, None)
+                if not request or request["expires"] < time.monotonic():
+                    self._deny("ลิงก์ทดลองฟังหมดอายุ กรุณากดเล่นใหม่", 404)
+                    return
+                if not LIVE_LIMIT.acquire(blocking=False):
+                    self._deny("กำลังเล่นเพลงทดลองฟังมากเกินไป กรุณาหยุดเพลงเดิม", 429)
+                    return
+                generator = None
+                try:
+                    spec = importlib.util.spec_from_file_location("xstage_live_preview", ROOT / "live_preview.py")
+                    if not spec or not spec.loader:
+                        raise RuntimeError("ไม่พบ Live Preview Engine")
+                    live = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(live)
+                    generator = live.stream_mp3(
+                        audio=request["audio"], midi=request["midi"],
+                        soundfont=request["soundfont"], ffmpeg=ffmpeg_binary(),
+                        runtime=RUNTIME, music_volume=request["music_volume"],
+                        synth_volume=request["synth_volume"]
+                    )
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/mpeg")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.send_header("Connection", "close")
+                    if self._origin() == ALLOWED_ORIGIN:
+                        self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
+                        self.send_header("Vary", "Origin")
+                    self.end_headers()
+                    self.close_connection = True
+                    for data in generator:
+                        self.wfile.write(data)
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                    pass  # User pressed Stop or chose a different preview song.
+                except Exception as exc:
+                    if generator is None:
+                        try:
+                            self._deny("ทดลองฟังไม่สำเร็จ: " + str(exc), 500)
+                        except OSError:
+                            pass
+                    else:
+                        print("Live preview stream stopped:", repr(exc), file=sys.stderr)
+                finally:
+                    if generator is not None:
+                        generator.close()
+                    LIVE_LIMIT.release()
+                return
             if path == "/api/preview":
                 ticket = query.get("ticket", [""])[0]
                 with LOCK:
@@ -692,6 +794,10 @@ class Handler(BaseHTTPRequestHandler):
                 if kind not in ("source", "workspace", "download", "soundfont", "oauth"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
+            elif path == "/api/live-preview":
+                self._json(prepare_live_preview(
+                    payload.get("id"), payload.get("music_volume", .8),
+                    payload.get("synth_volume", .8)))
             elif path == "/api/estimate":
                 ids = payload.get("ids", [])
                 if not isinstance(ids, list):
