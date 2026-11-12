@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build308
+  group: xstage-songstudio-ready-build309
   cancel-in-progress: false
 
 jobs:
@@ -53,7 +53,7 @@ jobs:
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.8-build308"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -61,7 +61,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.8-build308"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -74,7 +74,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.8-build308.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -101,10 +101,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.8-build308
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.9-build309
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.8-build308.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.8-build308.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -113,8 +113,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.8-build308"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.8-build308.zip"
+          $tag = "song-studio-pc-ready-v0.3.9-build309"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
@@ -126,16 +126,19 @@ jobs:
           shortcut uses the matching Windows ICO. Live karaoke preview
           streams music with MIDI SoundFont without creating preview files.
           Extract full ZIP and run Start-Song-Studio.cmd.
-          NEW: source fingerprint deduplication across sessions, Google Desktop OAuth and private library sync, persistent
-          completed-song journal, per-digit song catalogs, and current.json.
+          NEW: live separate music/SoundFont mixer, maximized PC interface,
+          two verified build modes, and private Google Desktop OAuth/Drive sync.
+          Setup requires a user-owned Desktop OAuth Client JSON from Google Cloud.
+          Source deduplication, recovery journal, catalogs and current.json remain.
 
-          Limitations: not the original Build205 engine; NCN conversion and
-          private Google Drive sync are not supported in the Source Preview.
+          Limitations: not original Build205 engine; NCN remains unsupported.
+          Google authorization requires user consent; existing Drive files
+          created by other OAuth apps are outside the drive.file scope.
           '@
           gh release view $tag --repo "$env:GITHUB_REPOSITORY" 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" --clobber --repo "$env:GITHUB_REPOSITORY"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.8 Build 308" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.9 Build 309" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
