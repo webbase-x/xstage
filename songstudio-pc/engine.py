@@ -135,6 +135,7 @@ def google_client_path():
 GOOGLE = _module("google_drive.py", "xstage_google_drive").GoogleDrive(
     DATA, google_client_path)
 NCN = _module("ncn_lyrics.py", "xstage_ncn_lyrics")
+AI_LYRICS = _module("ai_lyrics.py", "xstage_ai_lyrics")
 # Normalize old absolute JSON paths to a stable per-user copy when possible.
 if not (DATA / "oauth-client.json").is_file() and not (ROOT / "config" / "google-oauth-client.json").is_file():
     _old_oauth = PREFS.get("oauth", "")
@@ -900,6 +901,24 @@ def execute_job(action, options, started):
             if not rows:
                 raise ValueError("กรุณาเลือกเพลงก่อนสร้าง")
             result = build_library(rows, mode, options) if action == "build" else build_preview(rows, mode)
+        elif action == "ai-lyrics":
+            song_id = options.get("id")
+            with LOCK:
+                row = dict(FILE_BY_ID.get(song_id) or {}) if type(song_id) is int else {}
+                JOB["total"] = 1
+            if not row:
+                raise ValueError("ไม่พบเพลงที่ต้องการถอดเนื้อร้อง")
+            lang = options.get("language", "th")
+            draft = AI_LYRICS.transcribe(
+                Path(row["path"]), str(row.get("code") or Path(row["path"]).stem),
+                DATA, RUNTIME, ffmpeg_binary(), CANCEL, update, language=lang)
+            update("สร้างเนื้อร้องฉบับร่าง AI แล้ว · ต้องตรวจคำและเวลา", 1)
+            result = {
+                "message": ("ได้ร่างเนื้อร้อง AI " + str(len(draft["lines"])) +
+                            " ช่วงเวลา · ต้องตรวจสอบและกดบันทึกก่อนใช้สร้าง Lyrics"),
+                "songId": song_id, "requiresReview": True,
+                "segments": len(draft["lines"])
+            }
         elif action == "login":
             update("เปิด Google Login บนเบราว์เซอร์ · รออนุญาตจากเจ้าของบัญชี")
             account = GOOGLE.login(cancelled=CANCEL, on_status=update)
@@ -1014,6 +1033,16 @@ def start_job(data):
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
     validation = validate_build_request(data) if action == "build" else {}
+    if action == "ai-lyrics":
+        song_id = data.get("id")
+        if type(song_id) is not int or song_id not in FILE_BY_ID:
+            raise ValueError("กรุณาเลือกเพลงที่จะใช้ AI ถอดคำร้องก่อน")
+        suffix = Path(FILE_BY_ID[song_id]["path"]).suffix.lower()
+        if suffix not in EXT_AUDIO:
+            raise ValueError("AI ถอดคำร้องได้เฉพาะเพลงที่มีไฟล์เสียงร้องจริง ไม่ใช่ MIDI/NCN ดนตรีล้วน")
+        if not AI_LYRICS.available(RUNTIME):
+            raise ValueError("ยังไม่มี Whisper AI พร้อมใช้งานในแพ็กเกจ PC รุ่นนี้")
+        validation = {"total": 1}
     with LOCK:
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
@@ -1123,7 +1152,7 @@ def _preview_lyrics_row(row):
         issue = "ไม่พบไฟล์เนื้อร้องที่มีเวลาตรงกับเพลงนี้"
     except (ValueError, OSError, KeyError) as exc:
         issue = str(exc)
-    asr = _module("ai_lyrics.py", "xstage_ai_lyrics")
+    asr = AI_LYRICS
     draft = asr.load_draft(DATA, source)
     if draft:
         return {
@@ -1378,7 +1407,8 @@ class Handler(BaseHTTPRequestHandler):
                     "Local file mode": True,
                     "Google OAuth Client configured": GOOGLE.status()["configured"],
                     "Google Drive signed in": GOOGLE.status()["connected"],
-                    "AI separation": ai_available()})
+                    "AI separation": ai_available(),
+                    "AI lyrics transcription": AI_LYRICS.available(RUNTIME)})
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
             elif path == "/api/songs":
