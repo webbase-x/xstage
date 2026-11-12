@@ -526,6 +526,9 @@
   window.XStageRemoteQr={show:showQR,retry:createSession,pause:pausePairing,resume:resumePairing,status:()=>({paused:pairingPaused,connected:session?.connections?.size||0,hasQr:!!session?.peerId})};
   window.dispatchEvent(new CustomEvent('xstage:remote-ready'));
   window.addEventListener('xstage:auth-ready',()=>{if(nativeTvMode)showQR(true);});
+  window.addEventListener('xstage:native-update',broadcastStatus);
+  window.addEventListener('xstage:web-update',broadcastStatus);
+  window.addEventListener('xstage:native-update-status',broadcastStatus);
   // Real playback result is emitted by app.js after Drive loading and player.play().
   window.addEventListener('xstage:playback-status',event=>{
     if(!session)return;
