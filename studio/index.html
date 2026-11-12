@@ -92,11 +92,21 @@
                 <div class="hint">เสียง MIDI/KAR ใช้ SoundFont ที่เลือก ส่วนไฟล์เสียงทั่วไปจะใช้ไฟล์ต้นฉบับ · การแยกเสียงร้อง AI ขึ้นกับความสามารถของ Engine รุ่นที่ใช้งาน</div>
               </div>
               <div class="sound-preview">
-                <h3>2. ทดลองฟังเสียงก่อนสร้าง</h3>
-                <p id="create-preview-hint" class="sound-preview-hint" aria-live="polite">เลือกเพลง 1 เพลงในขั้นตอนที่ 2 เพื่อทดลองฟัง</p>
-                <button id="preview-button" class="button primary" type="button">♫ สร้างเสียงทดลองฟัง</button>
-                <div class="preview-row"><div class="preview-description"><strong id="preview-label">เครื่องเล่นทดลองฟัง</strong><small>ตัวอย่างเสียงสูงสุด 60 วินาที · ไม่บันทึกลงคลังเพลง</small></div><audio id="preview-audio" controls preload="none" aria-label="ทดลองฟังเสียงจาก SoundFont และการตั้งค่าปัจจุบัน"></audio></div>
-                <div class="hint">เลือก SoundFont หรือโทนเสียงใหม่แล้วกด “สร้างเสียงทดลองฟัง” อีกครั้งเพื่อเปรียบเทียบเสียง หากเลือกเพลงหลายเพลง ให้กลับไปเลือกเพียงเพลงเดียวเพื่อทดลองฟัง</div>
+                <h3>2. ทดลองฟังแบบคาราโอเกะ (ไม่สร้างไฟล์)</h3>
+                <label for="preview-song-search">ค้นหาเพลงที่จะทดลองฟังในหน้านี้</label>
+                <div class="searchbox live-song-search"><span aria-hidden="true">⌕</span><input id="preview-song-search" type="search" placeholder="พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลง" autocomplete="off" aria-controls="preview-search-results" aria-autocomplete="list"></div>
+                <div id="preview-search-results" class="preview-search-results" role="listbox" aria-label="เลือกเพลงทดลองฟัง"><div class="preview-empty">ค้นหาเพลงจากคลังที่สแกนแล้ว</div></div>
+                <div id="preview-selected" class="preview-selected" aria-live="polite">ยังไม่ได้เลือกเพลงทดลองฟัง</div>
+                <div class="preview-mixer" aria-label="เครื่องผสมเสียงดนตรีกับ SoundFont">
+                  <label for="preview-music-volume">เสียงดนตรี <output id="preview-music-volume-label" for="preview-music-volume">80%</output></label>
+                  <input id="preview-music-volume" type="range" min="0" max="100" value="80">
+                  <label for="preview-sf-volume">เสียง SoundFont <output id="preview-sf-volume-label" for="preview-sf-volume">80%</output></label>
+                  <input id="preview-sf-volume" type="range" min="0" max="100" value="80">
+                </div>
+                <p id="create-preview-hint" class="sound-preview-hint" aria-live="polite">ค้นหาและเลือกเพลงจากรายการด้านบน แล้วกดเล่นทันที</p>
+                <div class="preview-controls"><button id="preview-button" class="button primary" type="button">▶ เล่นเพลงทันที</button><button id="preview-stop-button" class="button ghost" type="button">■ หยุดเล่น</button></div>
+                <div class="preview-row"><div class="preview-description"><strong id="preview-label">เครื่องเล่นคาราโอเกะทดลองฟัง</strong><small>เล่นเสียงสตรีมจากเพลงต้นฉบับ · ไม่สร้าง WAV, M4A หรือ MP3 ใหม่</small></div><audio id="preview-audio" controls preload="none" aria-label="เสียงคาราโอเกะและ SoundFont ทดลองฟังสด"></audio></div>
+                <div class="hint">เพลงที่มี MIDI/KAR คู่กับไฟล์ดนตรีชื่อเดียวกันในโฟลเดอร์เดียวกันจะผสมสองเสียงพร้อมกัน หากไม่มีไฟล์ MIDI คู่กัน จะได้ยินเฉพาะเพลงต้นฉบับ · การทดลองฟังไม่ประมวลผล AI Separation</div>
               </div>
             </div>
           </article>
@@ -156,6 +166,15 @@
       </main>
     </div>
   </div>
+  <dialog id="studio-confirm-dialog" class="studio-confirm-modal" aria-labelledby="studio-confirm-title" aria-describedby="studio-confirm-message">
+    <div class="studio-confirm-content">
+      <div class="studio-confirm-symbol" aria-hidden="true">♫</div>
+      <div class="studio-confirm-eyebrow">X-STAGE SONG STUDIO</div>
+      <h2 id="studio-confirm-title">ยืนยันรายการ</h2>
+      <p id="studio-confirm-message"></p>
+      <div class="studio-confirm-actions"><button id="studio-confirm-cancel" type="button" class="button ghost">ยกเลิก</button><button id="studio-confirm-ok" type="button" class="button primary">ยืนยัน</button></div>
+    </div>
+  </dialog>
   <dialog id="edit-dialog" class="modal"><form method="dialog"><h2>แก้ไขข้อมูลเพลง</h2><p id="edit-code" class="hint">—</p><label for="edit-title">ชื่อเพลง</label><input id="edit-title" class="field" type="text" maxlength="180"><label for="edit-artist">ศิลปิน</label><input id="edit-artist" class="field" type="text" maxlength="180"><label for="edit-lyrics">เนื้อร้องแบบ LRC (มีเวลา)</label><textarea id="edit-lyrics" class="field lyrics-editor" placeholder="[00:12.50]เนื้อร้องบรรทัดแรก"></textarea><div class="modal-actions"><button value="cancel" class="button ghost">ยกเลิก</button><button id="edit-save" value="save" class="button primary">บันทึก</button></div></form></dialog>
   <script src="./entry.js"></script>
   <script src="./app.js" defer></script>
