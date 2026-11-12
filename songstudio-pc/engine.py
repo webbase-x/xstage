@@ -135,8 +135,19 @@ def scan_source():
         raise ValueError("โฟลเดอร์ต้นฉบับไม่มีอยู่ กรุณาเลือกโฟลเดอร์ก่อนสแกน")
     rows = []
     index = 1
+    # Never re-import our own output as new source songs when users choose
+    # a parent folder containing both originals and the output directory.
+    workspace = Path(PREFS["workspace"]).expanduser().resolve()
+    excluded = {workspace / "songs", workspace / "song"}
+    origin = source.resolve()
+    if any(origin == folder or folder in origin.parents for folder in excluded):
+        raise ValueError("โฟลเดอร์ต้นฉบับต้องไม่อยู่ในโฟลเดอร์ผลลัพธ์ของโปรแกรม")
     for base, dirs, files in os.walk(source, followlinks=False):
-        dirs[:] = sorted(d for d in dirs if not (Path(base) / d).is_symlink())
+        dirs[:] = sorted(d for d in dirs
+                         if not (Path(base) / d).is_symlink()
+                         and not any((Path(base) / d).resolve() == x or
+                                     x in (Path(base) / d).resolve().parents
+                                     for x in excluded))
         for name in sorted(files):
             path = Path(base) / name
             ext = path.suffix.lower()
@@ -465,6 +476,17 @@ def build_library(rows, mode, options):
                         str(preferred.relative_to(root)) +
                         " หยุดเพื่อป้องกันสร้างไฟล์ซ้ำ กรุณาตรวจ/นำเข้ารายการเดิมก่อน"
                     )
+                # Pre-fingerprint legacy Source Preview editions used
+                # workspace/song/<edited title>.m4a with NO stored source hash.
+                # Skip ambiguous legacy matches rather than creating a repeat
+                # with a new numbered output; do not touch those old files.
+                legacy = (Path(PREFS["workspace"]).expanduser() / "song" /
+                          (safe_stem(row.get("title") or source.stem) + ".m4a"))
+                if legacy.is_file() and legacy.stat().st_size >= 1000:
+                    skipped += 1
+                    log("ข้ามเพื่อป้องกันซ้ำกับรุ่นเก่า (ยังไม่มี fingerprint): " +
+                        str(legacy) + " · ตรวจสอบ/ย้ายไฟล์เก่าก่อนนำเข้าคลังใหม่")
+                    continue
                 target = export.next_target(root, source.name)
                 staged = export.temporary_audio(target)
                 update(f"กำลังสร้างเพลงใหม่ {idx}/{len(rows)}: {row['title']}")
