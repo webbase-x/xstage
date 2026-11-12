@@ -287,10 +287,10 @@ assert.ok(css.includes('.xstage-native-audio-direct'),'Android stage must render
 
 assert.ok(index.includes('id="stage-viz-right"'),'main stage must expose the right live visualizer canvas');
 assert.ok(index.includes('id="stage-viz-wave"'),'main stage must expose the center waveform canvas');
-assert.ok(index.includes('YOUR STAGE · YOUR MUSIC'),'redesigned X-Stage Online lockup must include the stage tagline');
+assert.ok(index.includes('assets/xstage-stage-logo.png?v='+version.build),'stage must reference the exact original branded PNG at current build');
 assert.ok(index.includes('class="stage-official-banner"'),'main stage must show the original PNG only');
 assert.ok(!index.includes('class="stage-brand-copy"'),'synthesized old text logo must be removed');
-assert.ok(singerStage.includes('<strong class="brand-title"><b>X</b>-Stage</strong><div class="brand-sub">KARAOKE · ONLINE</div>'),'singer screen brand must read X-Stage Karaoke Online in the correct order');
+assert.ok(singerStage.includes('assets/xstage-stage-logo.png?v='+version.build),'singer screen must reference the same single original PNG');
 assert.ok(pc.includes("['premium-neon','Premium Neon']"),'Premium Neon stage theme must exist');
 assert.ok(pc.includes("['modern-concert','Modern Concert']"),'Modern Concert stage theme must exist');
 assert.ok(pc.includes("['futuristic-audio-tech','Futuristic Audio Tech']"),'Futuristic Audio Tech stage theme must exist');
