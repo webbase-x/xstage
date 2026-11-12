@@ -110,7 +110,7 @@ jobs:
             Write-Host "PASS: App-wide Desktop OAuth ID + Secret are both available to token exchange."
           } else {
             if (Test-Path $config) { throw "Incomplete Desktop OAuth must NOT be bundled" }
-            Write-Warning "Desktop OAuth ID and matching Secret are not BOTH configured in GitHub. End users must import their full Desktop JSON once; do not claim ready-to-login."
+            throw "Cannot publish Ready ZIP: Google Desktop OAuth Client ID and matching Secret are missing in Actions configuration. This build cannot pass Google Login/upload/download acceptance."
           }
       - name: Verify real audio and MIDI conversions
         shell: powershell
