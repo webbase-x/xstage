@@ -2362,7 +2362,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1083';
+    script.src='./assets/vendor/qrcode.min.js?v=1084';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -2431,6 +2431,7 @@ window.XStageAndroidAuthStatus=message=>{
 };
 window.XStageAndroidAuthError=message=>{
   clearAndroidTvLoginWatchdog();
+  androidTvRefreshingSession=false;
   const text=String(message||'เข้าสู่ระบบ Google ไม่สำเร็จ');
   const panel=androidTvAuthPanel();
   panel.hidden=false;
