@@ -87,10 +87,14 @@ try {
   await pc.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === '/api/live-stream') {
+      await route.fulfill({status:200,contentType:'audio/mpeg',body:Buffer.from('ID3')});
+      return;
+    }
     let response = {};
     if (url.pathname === '/api/status') {
       response = {
-        version:'0.3.1', build:301,
+        version:'0.3.4', build:304,
         preferences:settings, soundfonts:[settings.soundfont],
         presets:[{value:'balanced',label:'สมดุล'}],
         google:{connected:false,email:''},
@@ -104,6 +108,10 @@ try {
     } else if (url.pathname === '/api/config') {
       Object.assign(settings, request.postDataJSON() || {});
       response = {preferences:settings,soundfonts:[settings.soundfont]};
+    } else if (url.pathname === '/api/live-preview') {
+      response = {ticket:'one-time-demo-ticket', title:'เสียงทดสอบ 2',
+        has_backing:true, has_midi:true, mixed:true,
+        message:'กำลังเล่นดนตรีกับ SoundFont ผสมกันแบบสตรีมสด'};
     } else if (url.pathname === '/api/estimate') {
       response = {songs:1,bytes:12000,enoughDisk:true,warning:false};
     } else if (url.pathname === '/api/environment') {
@@ -125,12 +133,19 @@ try {
   assert.equal(await pc.locator('#create-stage-3').isVisible(), true, 'step 3 should open');
   assert.equal(await pc.locator('#create-stage-3 #create-soundfont').isVisible(), true, 'SoundFont must be within step 3');
   assert.equal(await pc.locator('#create-stage-3 #preview-audio').isVisible(), true, 'Preview player must be in the same SoundFont step');
+  assert.equal(await pc.locator('#preview-song-search').isVisible(), true, 'Preview search must be visible in step 3');
+  await pc.locator('#preview-song-search').fill('เสียงทดสอบ');
+  await pc.locator('#preview-search-results [data-preview-id="2"]').waitFor();
   const previewRequest = pc.waitForRequest((req) => {
-    try { return new URL(req.url()).pathname === '/api/jobs' && req.postDataJSON()?.action === 'preview'; }
-    catch { return false; }
+    try { return new URL(req.url()).pathname === '/api/live-preview' &&
+      req.postDataJSON()?.id === 2; } catch { return false; }
   });
-  await pc.click('#preview-button');
+  await pc.locator('#preview-search-results [data-preview-id="2"]').click();
   await previewRequest;
+  await pc.waitForFunction(() => document.getElementById('preview-audio')?.src.includes('/api/live-stream'));
+  assert.match(await pc.locator('#preview-selected').innerText(), /เสียงทดสอบ 2/);
+  await pc.click('#preview-stop-button');
+  assert.equal(await pc.locator('#preview-audio').getAttribute('src'), null, 'Stop must release live stream');
   await pc.waitForFunction(() => !document.getElementById('create-step-next').disabled);
   await pc.click('#create-step-next');
   assert.equal(await pc.locator('#create-stage-4').isVisible(), true, 'step 4 should open');
@@ -141,9 +156,12 @@ try {
     catch { return false; }
   });
   await pc.click('#build-button');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  assert.equal(await pc.locator('#studio-confirm-title').innerText(), 'เริ่มสร้างเพลง');
+  await pc.click('#studio-confirm-ok');
   await buildRequest;
   assert.deepEqual(pcErrors, [], 'PC wizard should not produce JavaScript errors');
-  console.log('PASS: Chromium verified PC wizard navigation, SoundFont + preview in one step, and build action.');
+  console.log('PASS: Chromium verified karaoke song search, live preview ticket/stop, borderless in-app modal, PC wizard and build.');
 
 } finally {
   await browser?.close();
