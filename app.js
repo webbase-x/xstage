@@ -936,7 +936,6 @@ function applyInstantCatalog(instant){
 }
 
 async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
-  if(state.token && state.token!==token)state.catalogCache.clear();
   setStatus('กำลังยืนยันบัญชี Google…');
   const accountResult = await googleFetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'},'Google Account');
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
@@ -945,6 +944,19 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   if (expectedSub && account.sub!==expectedSub) throw Error('บัญชี Google ไม่ตรงกับเซสชันเดิม กรุณาเข้าสู่ระบบอีกครั้ง');
   if (authId !== state.authId) return;
 
+  // A new short-lived token for the SAME account must not reset the player,
+  // downloaded audio, search results or queue. Only the credential changes.
+  if (expectedSub && state.token && state.accountSub===account.sub) {
+    state.token=token;
+    state.tokenExpiresAt=tokenExpiresAt;
+    rememberLogin(true);
+    saveActiveAuth(token,tokenExpiresAt,account.sub);
+    clearPendingAuth();
+    setStatus('ต่ออายุ Google Drive สำเร็จ · เพลงและคิวเดิมเล่นต่อเนื่อง','success');
+    window.dispatchEvent(new CustomEvent('xstage:auth-refreshed',{detail:{sub:String(account.sub)}}));
+    return;
+  }
+  if(state.token && state.token!==token)state.catalogCache.clear();
   // Authentication is complete. Activate the account immediately.
   state.token=token;
   state.tokenExpiresAt=tokenExpiresAt;
@@ -2546,8 +2558,12 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   if(androidTvLoginCancelled)return;
   clearAndroidTvLoginWatchdog();
   if(!token)return;
-  androidTvAuthPanel().hidden=false;
-  $('android-tv-auth-status').textContent='กำลังตรวจสอบบัญชีและสิทธิ์ Google Drive…';
+  const existingSub=state.token&&state.accountSub?state.accountSub:'';
+  // Silent background refresh must never place a full-screen dialog on lyrics.
+  if(!existingSub){
+    androidTvAuthPanel().hidden=false;
+    $('android-tv-auth-status').textContent='กำลังตรวจสอบบัญชีและสิทธิ์ Google Drive…';
+  }
   ui.login.disabled=ui.gateLogin.disabled=true;
   setStatus('มือถืออนุญาตแล้ว · กำลังเปิด Google Drive…','success');
   const authId=++state.authId;
@@ -2555,7 +2571,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   const expiresAt=Date.now()+safeExpires*1000;
   savePendingAuth(token,expiresAt);
   try{
-    await openDrive(token,authId,expiresAt);
+    await openDrive(token,authId,expiresAt,existingSub);
     if(authId===state.authId&&state.token){hideAndroidTvAuthPanel();androidTvRefreshingSession=false;}
   }catch(error){
     if(authId===state.authId){
@@ -2707,7 +2723,7 @@ function androidTvHasStoredGoogleSession(){
   try{return !!window.XStageAndroid.hasStoredGoogleSession?.();}catch{return false;}
 }
 function restoreAndroidTvGoogleSession(){
-  if(!androidTvNativeBridgeReady()||state.token||androidTvLoginCancelled)return;
+  if(!androidTvNativeBridgeReady()||androidTvLoginCancelled)return;
   androidTvLoginInProgress=true;
   try{window.XStageAndroid.restoreGoogleSession?.();armAndroidTvLoginWatchdog();}
   catch(error){androidTvLoginInProgress=false;window.XStageAndroidAuthError?.(error?.message||'คืนค่า Google Session ไม่สำเร็จ');}
@@ -2746,15 +2762,25 @@ function guardAndroidTvSession(){
   if(!androidTvNativeBridgeReady()||!androidTvBootAuthStarted||androidTvLoginCancelled||androidTvLoginInProgress)return;
   const expired=!state.token||!state.tokenExpiresAt||state.tokenExpiresAt<=Date.now()+90_000;
   if(!expired){androidTvRefreshingSession=false;return;}
-  const panel=androidTvAuthPanel();
-  panel.hidden=false;
-  $('android-tv-auth-status').textContent='เซสชันหมดอายุ · กำลังตรวจสอบ Google Drive อีกครั้ง…';
-  $('android-tv-auth-retry').hidden=false;
   if(androidTvRefreshingSession)return;
   androidTvRefreshingSession=true;
-  if(state.token){clearActiveAuth();resetPrivate({keepAuth:false});}
-  if(androidTvHasStoredGoogleSession())restoreAndroidTvGoogleSession();
-  else startAndroidTvDeviceLogin(true);
+  if(androidTvHasStoredGoogleSession()){
+    if(state.token) {
+      // Keep currently loaded audio and the queue alive while restoring the
+      // encrypted native refresh token for the same Google account.
+      setStatus('กำลังต่ออายุ Google Drive โดยไม่ขัดจังหวะเพลง…');
+    }else{
+      const panel=androidTvAuthPanel();
+      panel.hidden=false;
+      $('android-tv-auth-status').textContent='กำลังกู้คืน Google Drive ที่บันทึกไว้…';
+      $('android-tv-auth-retry').hidden=false;
+    }
+    restoreAndroidTvGoogleSession();
+  }else{
+    // No refresh token exists. Google must show a new device-code prompt;
+    // do not destroy the current audio Blob while requesting authorization.
+    startAndroidTvDeviceLogin(true);
+  }
 }
 setInterval(guardAndroidTvSession,30_000);
 window.addEventListener('focus',guardAndroidTvSession);
