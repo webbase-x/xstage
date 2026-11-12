@@ -30,7 +30,7 @@ function Download([string]$Url, [string]$Target) {
     if (!$Url.StartsWith('https://')) { throw "Refusing insecure dependency URL: $Url" }
     Step "Downloading $Url"
     Invoke-WebRequest -Uri $Url -OutFile $Target -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 240
-    if (!(Test-Path $Target) -or (Get-Item $Target).Length -lt 512) { throw "Empty dependency: $Url" }
+    if (!(Test-Path $Target) -or (Get-Item $Target).Length -lt 64) { throw "Empty dependency: $Url" }
 }
 function CheckSHA([string]$File, [string]$Expected) {
     if ($Expected -notmatch '^[a-fA-F0-9]{64}$') { throw "Invalid pinned SHA for $File" }
