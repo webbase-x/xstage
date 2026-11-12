@@ -69,6 +69,10 @@ PREFS = {
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
+DEFAULT_SOUNDFONT = RUNTIME / "soundfonts" / "GeneralUser-GS.sf2"
+if DEFAULT_SOUNDFONT.is_file() and not Path(PREFS.get("soundfont", "")).is_file():
+    PREFS["soundfont"] = str(DEFAULT_SOUNDFONT)
+
 
 def ffmpeg_binary():
     names = [RUNTIME / "tools" / "ffmpeg.exe", RUNTIME / "tools" / "ffmpeg", Path("ffmpeg.exe")]
@@ -78,6 +82,14 @@ def ffmpeg_binary():
     return shutil.which("ffmpeg")
 
 def fluidsynth_binary():
+    base = RUNTIME / "fluidsynth"
+    preferred = base / "bin" / "fluidsynth.exe"
+    if preferred.is_file():
+        return str(preferred)
+    if base.is_dir():
+        for entry in base.rglob("fluidsynth.exe"):
+            if entry.is_file():
+                return str(entry)
     return shutil.which("fluidsynth")
 
 def sf_available():
@@ -92,7 +104,10 @@ def formats():
 
 def font_list():
     choice = PREFS.get("soundfont", "")
-    return [choice] if choice and Path(choice).is_file() else []
+    fonts = [choice] if choice and Path(choice).is_file() else []
+    if DEFAULT_SOUNDFONT.is_file() and str(DEFAULT_SOUNDFONT) not in fonts:
+        fonts.append(str(DEFAULT_SOUNDFONT))
+    return fonts
 
 def scan_source():
     source = Path(PREFS["source"]).expanduser()
@@ -154,11 +169,16 @@ def update(stage, done=None):
 def run_process(args):
     global PROCESS
     if not ffmpeg_binary():
-        raise RuntimeError("ไม่พบ FFmpeg กรุณาเปิด Start-Song-Studio.cmd เพื่อติดตั้งเครื่องมือ")
+        raise RuntimeError("ไม่พบ FFmpeg ในโฟลเดอร์โปรแกรม กรุณาแตกไฟล์ Ready ZIP ทั้งชุดใหม่")
     opts = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
             "stdin": subprocess.DEVNULL}
     if os.name == "nt":
         opts["creationflags"] = subprocess.CREATE_NO_WINDOW
+        exe = Path(str(args[0]))
+        if exe.name.lower() == "fluidsynth.exe":
+            env = os.environ.copy()
+            env["PATH"] = str(exe.parent) + os.pathsep + env.get("PATH", "")
+            opts["env"] = env
     with subprocess.Popen(args, **opts) as proc:
         with LOCK:
             PROCESS = proc
@@ -202,7 +222,7 @@ def ensure_midi_wav(path):
         raise RuntimeError("การสร้าง MIDI/KAR ต้องเลือก SoundFont SF2/SF3 ก่อน")
     fluid = fluidsynth_binary()
     if not fluid:
-        raise RuntimeError("ไม่พบ FluidSynth สำหรับสร้างเสียง MIDI/KAR; ฟังก์ชันนี้ยังไม่พร้อมใช้งานในชุดซอร์ส")
+        raise RuntimeError("ไม่พบ FluidSynth ในโฟลเดอร์โปรแกรม กรุณาใช้ Ready ZIP ที่รวมไลบรารีครบ")
     tmp = PREVIEW_FOLDER / (secrets.token_hex(10) + ".wav")
     params = [fluid, "-ni", PREFS["soundfont"], str(path), "-F", str(tmp), "-r", "44100"]
     run_process(params)
