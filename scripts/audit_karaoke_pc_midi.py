@@ -58,6 +58,26 @@ def main():
                 out=f"  {number:04d} {content}"
                 print(out);budget-=len(out)
                 if budget<200:break
+        # Source-backed details needed to port actual timing and rendering behavior.
+        focused = {
+            "karaoke/legacy.py": [(1, 350)],
+            "karaoke/smf.py": [(1, 310)],
+            "karaoke/offline_generator.py": [(1, 160), (225, 405)],
+            "karaoke/web_assets.py": [(1, 260), (260, 390)],
+            "tests/test_studio.py": [(98, 155)],
+        }
+        for focus, spans in focused.items():
+            try:
+                with z.open(focus) as source:
+                    contents = source.read().decode("utf-8-sig").splitlines()
+            except (KeyError, UnicodeError):
+                print(f"FOCUS_MISSING {focus}")
+                continue
+            for first, last in spans:
+                print(f"FOCUS_BEGIN {focus} {first}-{last}")
+                for idx in range(first-1, min(last, len(contents))):
+                    print(f"  {idx+1:04d}: {contents[idx]}")
+                print(f"FOCUS_END {focus} {first}-{last}")
         print("AUDIT FINISHED; read-only, no Karaoke PC code executed")
 if __name__=="__main__":
     main()
