@@ -201,6 +201,7 @@
       queue:state.queue.slice(0,150).map(songSummary),queueCount:state.queue.length,
       volume:Math.round(Number(ui.volume.value)||0),muted:ui.player.muted,medley:!!state.medley,
       repeat:!!ui.repeat?.checked,speed:Number(ui.speed?.value)||1,eqPreset:String(eq?.value||'auto'),eqActive:!!window.XStageEqIsActive?.(),
+      nativeAudioDirect:!!window.XStageNativeAudioBypass?.(),nativeMeterStatus:window.XStageNativeMeterStatus?.()?.status||'',
       visualSettings:entry?.role==='owner'&&typeof window.XStageRemoteVisualSettings==='function'?window.XStageRemoteVisualSettings('state'):null,
       updateAvailable:entry?.role==='owner'?(state.nativeUpdateAvailable||state.updateAvailable||null):null,
       updateStatus:entry?.role==='owner'?String(state.nativeUpdateStatus||''):'',
@@ -349,13 +350,16 @@
       }
       else if(action==='logout')ui.logout?.click();
       else if(action==='eq-preset'){
+        if(window.XStageNativeAudioBypass?.())throw Error('Android APK ใช้เสียงตรง · EQ ปิดถาวร');
         const next=String(value||'flat');
         if(typeof window.XStageEnableEqPreset!=='function')throw Error('EQ ยังไม่พร้อม');
         await window.XStageEnableEqPreset(next);
       }else if(action==='eq-reset'){
+        if(window.XStageNativeAudioBypass?.())throw Error('Android APK ใช้เสียงตรง · EQ ปิดถาวร');
         if(typeof window.XStageResetEq!=='function')throw Error('EQ ยังไม่พร้อม');
         await window.XStageResetEq();
       }else if(action==='eq-bypass'){
+        if(window.XStageNativeAudioBypass?.())throw Error('Android APK ใช้เสียงตรง · EQ ปิดถาวร');
         if(typeof window.XStageToggleEqBypass!=='function')throw Error('EQ ยังไม่พร้อม');
         await window.XStageToggleEqBypass();
       }
