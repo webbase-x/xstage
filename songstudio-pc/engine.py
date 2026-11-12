@@ -558,6 +558,14 @@ def build_library(rows, mode, options):
                     log("ข้ามเพื่อป้องกันซ้ำกับรุ่นเก่า (ยังไม่มี fingerprint): " +
                         str(legacy) + " · ตรวจสอบ/ย้ายไฟล์เก่าก่อนนำเข้าคลังใหม่")
                     continue
+                # Per-song guard, not a misleading 3x entire-library
+                # requirement. If storage runs out, previous commits survive.
+                free_now = shutil.disk_usage(root).free
+                if free_now < 128 * 1024 ** 2:
+                    raise RuntimeError(
+                        "พื้นที่ดิสก์เหลือน้อยกว่า 128 MB หยุดสร้างเพลงนี้"
+                        " · เปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง"
+                    )
                 target = export.next_target(root, source.name)
                 staged = export.temporary_audio(target)
                 update(f"กำลังสร้างเพลงใหม่ {idx}/{len(rows)}: {row['title']}")
@@ -1195,8 +1203,25 @@ class Handler(BaseHTTPRequestHandler):
                 workspace = Path(PREFS["workspace"]).expanduser()
                 workspace.mkdir(parents=True, exist_ok=True)
                 free = shutil.disk_usage(workspace).free
-                self._json({"songs": len(matches), "bytes": size, "enoughDisk": free > size * 3,
-                            "warning": len(matches) > 200 or size > 2 * 1024 ** 3})
+                # Previous estimate incorrectly required 3x ALL input bytes.
+                # This app processes one source at a time in a separate folder,
+                # without first copying 93,000 originals to disk. Reject only
+                # genuinely too-small free space, and check per-track capacity
+                # during the actual build. A whole-library forecast is advisory.
+                minimum = 256 * 1024 ** 2 if matches else 0
+                projected = sum(
+                    max(1 * 1024 ** 2, min(r["size"] * 2, 256 * 1024 ** 2))
+                    for r in matches if Path(r["path"]).suffix.lower() != ".ncn"
+                )
+                self._json({
+                    "songs": len(matches), "bytes": size,
+                    "freeBytes": free, "estimatedOutputBytes": projected,
+                    "enoughDisk": free >= minimum,
+                    "spaceWarning": projected > free,
+                    "warning": len(matches) > 200 or projected > free,
+                    "unsupported": sum(Path(r["path"]).suffix.lower() == ".ncn"
+                                       for r in matches)
+                })
             elif path == "/api/jobs":
                 self._json(start_job(payload))
             elif path == "/api/jobs/cancel":
