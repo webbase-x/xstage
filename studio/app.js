@@ -636,10 +636,14 @@
       }
     }
     $('job-timing').textContent = fmtTime(job.elapsed || 0);
-    $('job-skip-count').textContent = 'ข้ามซ้ำ ' + fmtNum(Number(job.skipped || 0)) +
-      ' · ERR ' + fmtNum(Number(job.errors || 0)) +
-      ' · M4A ' + fmtNum(Number(job.m4aCount || 0)) +
-      ' · Lyrics ' + fmtNum(Number(job.lyricsCount || 0));
+    $('job-skip-count').textContent = job.kind === 'scan'
+      ? (state === 'success'
+          ? 'สแกนพบ ' + fmtNum(Number(job.result?.songs ?? job.result?.count ?? job.completed ?? 0)) + ' เพลง · ยังไม่ได้สร้าง M4A/Lyrics'
+          : 'กำลังตรวจสอบไฟล์ต้นฉบับ · ยังไม่ได้สร้างเพลง')
+      : 'ข้ามซ้ำ ' + fmtNum(Number(job.skipped || 0)) +
+        ' · ERR ' + fmtNum(Number(job.errors || 0)) +
+        ' · M4A ' + fmtNum(Number(job.m4aCount || 0)) +
+        ' · Lyrics ' + fmtNum(Number(job.lyricsCount || 0));
     const fraction = Number(job.total)>0 ? Number(job.completed) / Number(job.total) :
       Number(job.bytesTotal)>0 ? Number(job.bytesDone)/Number(job.bytesTotal) : null;
     const fill = $('progress-fill');
@@ -650,7 +654,7 @@
       isRunning ? 'กำลังดำเนินการ · ยังไม่ทราบเปอร์เซ็นต์' : state === 'success' ? 'เสร็จสิ้น' : 'รอเริ่มงาน';
     $('job-eta').textContent = isRunning
       ? `เวลาคงเหลือประมาณ ${job.eta !== null ? fmtTime(job.eta) : '—'} · ${job.idleFor > 7 ? `ยังทำงานอยู่ ${job.idleFor} วินาที` : 'สถานะสด'}`
-      : state === 'success' ? 'งานสำเร็จ' : state === 'error' ? 'ตรวจ Log ข้อผิดพลาด' : 'พร้อม';
+      : state === 'success' ? (job.kind === 'scan' ? 'สแกนสำเร็จ · ยังไม่ได้สร้างเพลง' : 'งานสำเร็จ') : state === 'error' ? 'ตรวจ Log ข้อผิดพลาด' : 'พร้อม';
     const list = $('job-log'); list.replaceChildren();
     for (const item of job.logs || []) {const li=document.createElement('li');li.textContent=item;list.append(li);}
   }
