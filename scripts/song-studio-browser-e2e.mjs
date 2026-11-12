@@ -69,6 +69,82 @@ try {
   assert.ok(archive.includes(Buffer.from('ftyp')), 'M4A must contain ISO BMFF file type signature');
   assert.ok(archive.includes(Buffer.from('ทดสอบเนื้อร้อง')), 'LRC must contain editable timed lyric');
   console.log('PASS: Chromium loaded WebAssembly Engine and converted demo.wav to M4A + LRC locally.');
+
+  // The PC Ready package and authenticated PC Web Control share this UI.
+  // Simulate its local API; exercise all four visible steps in Chromium.
+  const pc = await browser.newPage();
+  const pcErrors = [];
+  pc.on('pageerror', (error) => pcErrors.push(error.message));
+  const settings = {
+    source: 'C:\\XStage\\Songs', workspace: 'C:\\XStage\\Created',
+    soundfont: 'C:\\XStage\\GeneralUser-GS.sf2', midi_preset: 'balanced',
+    mode: 'original', download: 'C:\\XStage\\Downloads', oauth: ''
+  };
+  const list = [
+    {id: 1, title: 'เสียงทดสอบ 1', artist: 'XStage', code: 'TEST001', kind: 'MID', size: 12000, status: 'ready'},
+    {id: 2, title: 'เสียงทดสอบ 2', artist: 'XStage', code: 'TEST002', kind: 'MP3', size: 32000, status: 'ready'}
+  ];
+  await pc.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    let response = {};
+    if (url.pathname === '/api/status') {
+      response = {
+        version:'0.3.1', build:301,
+        preferences:settings, soundfonts:[settings.soundfont],
+        presets:[{value:'balanced',label:'สมดุล'}],
+        google:{connected:false,email:''},
+        job:{id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',completed:0,total:0,logs:[]},
+        update:{status:'unavailable'}
+      };
+    } else if (url.pathname === '/api/songs') {
+      response = {rows:list,total:list.length};
+    } else if (url.pathname === '/api/songs/ids') {
+      response = {ids:list.map((song) => song.id)};
+    } else if (url.pathname === '/api/config') {
+      Object.assign(settings, request.postDataJSON() || {});
+      response = {preferences:settings,soundfonts:[settings.soundfont]};
+    } else if (url.pathname === '/api/estimate') {
+      response = {songs:1,bytes:12000,enoughDisk:true,warning:false};
+    } else if (url.pathname === '/api/environment') {
+      response = {'Bundled FFmpeg':true, 'Bundled SoundFont':true};
+    } else if (url.pathname === '/api/jobs') {
+      response = {id:'pc-wizard-smoke-job'};
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)});
+  });
+  pc.on('dialog', async (dialog) => dialog.accept());
+  await pc.goto('http://127.0.0.1:' + port + '/studio/index.html#auth=test-session-token', {waitUntil:'load'});
+  await pc.waitForFunction(() => document.getElementById('catalog-total')?.textContent.includes('2'));
+  assert.equal(await pc.locator('#create-stage-1').isVisible(), true, 'step 1 should be visible initially');
+  assert.equal(await pc.locator('#create-stage-2').isVisible(), false, 'step 2 should be hidden initially');
+  await pc.click('#create-step-next');
+  assert.equal(await pc.locator('#create-stage-2').isVisible(), true, 'step 2 should open');
+  await pc.locator('#song-rows tr[data-id="1"]').click();
+  await pc.click('#create-step-next');
+  assert.equal(await pc.locator('#create-stage-3').isVisible(), true, 'step 3 should open');
+  assert.equal(await pc.locator('#create-stage-3 #create-soundfont').isVisible(), true, 'SoundFont must be within step 3');
+  assert.equal(await pc.locator('#create-stage-3 #preview-audio').isVisible(), true, 'Preview player must be in the same SoundFont step');
+  const previewRequest = pc.waitForRequest((req) => {
+    try { return new URL(req.url()).pathname === '/api/jobs' && req.postDataJSON()?.action === 'preview'; }
+    catch { return false; }
+  });
+  await pc.click('#preview-button');
+  await previewRequest;
+  await pc.waitForFunction(() => !document.getElementById('create-step-next').disabled);
+  await pc.click('#create-step-next');
+  assert.equal(await pc.locator('#create-stage-4').isVisible(), true, 'step 4 should open');
+  assert.match(await pc.locator('#review-song-count').innerText(), /1/, 'review must reflect selected song count');
+  assert.match(await pc.locator('#review-soundfont').innerText(), /GeneralUser-GS/, 'review must reflect selected SoundFont');
+  const buildRequest = pc.waitForRequest((req) => {
+    try { return new URL(req.url()).pathname === '/api/jobs' && req.postDataJSON()?.action === 'build'; }
+    catch { return false; }
+  });
+  await pc.click('#build-button');
+  await buildRequest;
+  assert.deepEqual(pcErrors, [], 'PC wizard should not produce JavaScript errors');
+  console.log('PASS: Chromium verified PC wizard navigation, SoundFont + preview in one step, and build action.');
+
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));
