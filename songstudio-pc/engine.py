@@ -1367,7 +1367,10 @@ def _preview_lyrics_row(row):
                 # per-letter animation for ordinary line-timed LRC.
                 "characters": [
                     {"text": str(ch["text"]), "startTime": float(ch["startTime"])}
-                    for ch in item.get("characters", [])
+                    for ch in (item.get("characters") or [
+                        {"text": unit["text"], "startTime": unit["start"]}
+                        for unit in item.get("syllables", [])
+                        if isinstance(unit, dict) and "start" in unit and "text" in unit])
                     if isinstance(ch, dict) and "startTime" in ch
                 ]
             } for item in doc["lines"][:2500] if str(item.get("text", "")).strip()]
