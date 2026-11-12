@@ -1,0 +1,283 @@
+"""Fast, crash-safe local song publishing for X-Stage Song Studio PC.
+
+Works entirely on the user's PC. Immutable per-digit JSON catalogs are switched
+through songs/current.json only when all required media for a batch exists.
+This is a *local path index*. It does not fabricate Google Drive file IDs;
+Drive publication must upload files and then publish a Drive-specific pointer.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import secrets
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+CATALOG_SCHEMA = 1
+CATALOG_FORMAT = "xstage-local-catalog"
+CURRENT_FORMAT = "xstage-local-current"
+TIMESTAMP_RE = re.compile(r"\[(\d{1,3}):(\d\d)(?:[.:](\d{1,3}))?\]")
+OFFSET_RE = re.compile(r"^\[offset:([+-]?\d+)\]$", re.I)
+
+
+def source_bucket(source_filename: str) -> str:
+    """First ASCII digit in the ORIGINAL source filename; '_' for none."""
+    for char in Path(source_filename).stem:
+        if "0" <= char <= "9":
+            return char
+    return "_"
+
+
+def safe_filename(value: str) -> str:
+    result = "".join("_" if char in '<>:"/\\|?*\0' or ord(char) < 32 else char
+                     for char in str(value)).strip(" .")[:140]
+    return result or "song"
+
+
+def songs_root(workspace: str | Path) -> Path:
+    path = Path(workspace).expanduser()
+    return path if path.name.lower() == "songs" else path / "songs"
+
+
+def next_target(root: Path, source_filename: str) -> Path:
+    """Reserve a *name*, not a file; use one writer job at a time."""
+    bucket = source_bucket(source_filename)
+    folder = root / "audio" / bucket
+    folder.mkdir(parents=True, exist_ok=True)
+    base = safe_filename(Path(source_filename).stem)
+    for counter in range(1, 100001):
+        suffix = f" ({counter})" if counter > 1 else ""
+        target = folder / (base + suffix + ".m4a")
+        lyric = root / "lyrics" / bucket / (base + suffix + ".json")
+        if not target.exists() and not lyric.exists():
+            return target
+    raise RuntimeError("มีไฟล์ชื่อเดียวกันเกินขีดจำกัด 100,000 รายการ")
+
+
+def temporary_audio(target: Path) -> Path:
+    """Same-directory staging; FFmpeg still sees .m4a as output extension."""
+    return target.parent / (".xstage-" + secrets.token_hex(12) + ".m4a")
+
+
+def commit_audio(staged: Path, target: Path) -> None:
+    """No silent overwrites; finalize only complete audio files."""
+    if not staged.is_file() or staged.stat().st_size < 1000:
+        raise RuntimeError("ไฟล์เสียง M4A ที่สร้างไม่สมบูรณ์")
+    if target.exists():
+        raise FileExistsError(f"ไฟล์เพลงมีอยู่แล้ว: {target}")
+    try:
+        # Atomic hardlink creation prevents overwrites on local NTFS.
+        os.link(staged, target)
+    except FileExistsError:
+        raise
+    except OSError:
+        # Fallback for filesystems without hardlinks (e.g. exFAT/SMB).
+        # O_EXCL keeps the no-overwrite contract, and indexing happens later.
+        import shutil
+        with open(staged, "rb") as source, target.open("xb") as output:
+            try:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+                output.flush()
+                os.fsync(output.fileno())
+            except BaseException:
+                output.close()
+                target.unlink(missing_ok=True)
+                raise
+    staged.unlink(missing_ok=True)
+
+
+def lyric_paths(root: Path, audio_file: Path) -> tuple[Path, Path]:
+    folder = root / "lyrics" / audio_file.parent.name
+    return folder / (audio_file.stem + ".json"), folder / (audio_file.stem + ".lrc")
+
+
+def lrc_to_json(text: str, code: str) -> dict:
+    """Keep original LRC and parse its timestamps without fabricating timing."""
+    lines = []
+    offset_ms = 0
+    for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        value = raw.strip()
+        if not value:
+            continue
+        match = OFFSET_RE.match(value)
+        if match:
+            offset_ms = int(match.group(1))
+            continue
+        times = list(TIMESTAMP_RE.finditer(value))
+        lyric = TIMESTAMP_RE.sub("", value).strip()
+        if not times or not lyric:
+            continue
+        for item in times:
+            minutes, seconds = int(item.group(1)), int(item.group(2))
+            if seconds >= 60:
+                continue
+            fraction = item.group(3) or "0"
+            frac = int(fraction) / (10 ** len(fraction))
+            when = round(minutes * 60 + seconds + frac, 3)
+            lines.append({"startTime": when, "text": lyric})
+    lines.sort(key=lambda item: item["startTime"])
+    for i, line in enumerate(lines):
+        next_time = lines[i + 1]["startTime"] if i + 1 < len(lines) else line["startTime"] + 4
+        line["endTime"] = round(max(line["startTime"] + .05, next_time), 3)
+    return {
+        "schemaVersion": 1,
+        "songCode": code,
+        "audioOffsetMs": offset_ms,
+        "lines": lines,
+        "rawLrc": text,
+    }
+
+
+def atomic_json(path: Path, document: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Do not write an incomplete JSON file under the final name.
+    handle = tempfile.NamedTemporaryFile("w", dir=path.parent, suffix=".tmp",
+                                         prefix=".xstage-", encoding="utf-8",
+                                         newline="\n", delete=False)
+    temporary = Path(handle.name)
+    try:
+        with handle:
+            json.dump(document, handle, ensure_ascii=False, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def save_lyrics(root: Path, audio: Path, text: str, code: str) -> Path:
+    """Always publish a valid JSON lyric companion (empty when no LRC).
+
+    Original LRC is also preserved alongside JSON for manual editing.
+    """
+    json_file, lrc_file = lyric_paths(root, audio)
+    # An existing companion indicates a collision; never overwrite a different song.
+    if json_file.exists() or lrc_file.exists():
+        raise FileExistsError(f"ไฟล์เนื้อร้องมีอยู่แล้ว: {json_file}")
+    atomic_json(json_file, lrc_to_json(text, code))
+    if text.strip():
+        lrc_file.write_text(text, encoding="utf-8")
+    return json_file
+
+
+def make_record(root: Path, row: dict, audio: Path, lyrics: Path | None,
+                vocals: Path | None, mode: str) -> dict:
+    source = Path(row["path"])
+    bucket = source_bucket(source.name)
+    if audio.parent.name != bucket:
+        raise ValueError("ตำแหน่งเพลงไม่ตรงกับเลขแรกของชื่อไฟล์ต้นฉบับ")
+    rel = lambda p: p.relative_to(root).as_posix() if p is not None else None
+    code = str(row.get("code") or source.stem)
+    return {
+        "webSongId": audio.relative_to(root).with_suffix("").as_posix(),
+        "code": code,
+        "title": str(row.get("title") or source.stem),
+        "artist": str(row.get("artist") or ""),
+        "sourceFormat": source.suffix.lstrip(".").upper(),
+        "audio": {"path": rel(audio), "size": audio.stat().st_size},
+        "lyrics": {"path": rel(lyrics)} if lyrics else None,
+        "vocals": {"path": rel(vocals)} if vocals else None,
+        "mode": mode, "bucket": bucket,
+    }
+
+
+def _read_current(root: Path) -> tuple[dict, dict[str, dict]]:
+    pointer_path = root / "current.json"
+    if not pointer_path.is_file():
+        return {}, {}
+    try:
+        pointer = json.loads(pointer_path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("current.json เดิมเสียหาย: ไม่เขียนทับฐานข้อมูล") from exc
+    if pointer.get("schemaVersion") != CATALOG_SCHEMA or pointer.get("format") != CURRENT_FORMAT:
+        raise ValueError("current.json เป็นรูปแบบอื่น: ไม่เขียนทับฐานข้อมูลเดิม")
+    current = {}
+    files = pointer.get("catalogFiles")
+    if not isinstance(files, list) or len(files) > 11:
+        raise ValueError("current.json มีรายการ catalog ไม่ถูกต้อง")
+    for meta in files:
+        if not isinstance(meta, dict):
+            raise ValueError("catalog metadata ไม่ถูกต้อง")
+        bucket, relative = meta.get("bucket"), meta.get("path")
+        if bucket not in set("0123456789_") or bucket in current:
+            raise ValueError("ชื่อกลุ่ม catalog ไม่ถูกต้องหรือซ้ำ")
+        expected_prefix = f"catalogs/database-{bucket}-"
+        if not isinstance(relative, str) or not relative.startswith(expected_prefix) or not relative.endswith(".json"):
+            raise ValueError("พาธ catalog ไม่ถูกต้อง")
+        p = root / relative
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"อ่าน catalog เดิมไม่สำเร็จ: {p}") from exc
+        if (data.get("schemaVersion") != CATALOG_SCHEMA or data.get("bucket") != bucket
+                or not isinstance(data.get("songs"), list)):
+            raise ValueError(f"catalog เดิมไม่ถูกต้อง: {p}")
+        current[bucket] = data
+    if sum(len(data["songs"]) for data in current.values()) != pointer.get("songCount"):
+        raise ValueError("จำนวนเพลงใน current.json ไม่ตรงกับ catalog")
+    return pointer, current
+
+
+def publish_batch(root: Path, records: list[dict]) -> dict:
+    """One atomic pointer switch for an entire batch; no O(n²) per-song rewrites.
+
+    Untouched buckets continue pointing to their previous immutable catalog.
+    Catalog files are never overwritten. If interrupted before switching the
+    pointer, the previous song library remains valid.
+    """
+    root = Path(root)
+    if not records:
+        pointer, _ = _read_current(root)
+        return pointer
+    previous, old_buckets = _read_current(root)
+    staged_by_bucket: dict[str, dict[str, dict]] = {}
+    for row in records:
+        bucket = row["bucket"]
+        if bucket not in set("0123456789_"):
+            raise ValueError("catalog bucket ไม่ถูกต้อง")
+        if not (root / row["audio"]["path"]).is_file():
+            raise FileNotFoundError("ไม่พบไฟล์เสียงสำหรับ catalog: " + row["audio"]["path"])
+        if row["lyrics"] and not (root / row["lyrics"]["path"]).is_file():
+            raise FileNotFoundError("ไม่พบเนื้อร้องสำหรับ catalog")
+        if row["vocals"] and not (root / row["vocals"]["path"]).is_file():
+            raise FileNotFoundError("ไม่พบไฟล์เสียงร้องสำหรับ catalog")
+        staged_by_bucket.setdefault(bucket, {})[row["webSongId"]] = row
+
+    generation = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + secrets.token_hex(4)
+    catalog_refs = []
+    song_count = 0
+    for bucket in sorted(set(old_buckets) | set(staged_by_bucket)):
+        if bucket not in staged_by_bucket:
+            # Keep old immutable catalog exactly; avoid a slow rewrite.
+            old_path = next(x["path"] for x in previous["catalogFiles"] if x["bucket"] == bucket)
+            count = len(old_buckets[bucket]["songs"])
+            catalog_refs.append({"bucket": bucket, "path": old_path, "songCount": count})
+            song_count += count
+            continue
+        combined = {record["webSongId"]: record for record in
+                    old_buckets.get(bucket, {}).get("songs", [])
+                    if isinstance(record, dict) and "webSongId" in record}
+        combined.update(staged_by_bucket[bucket])
+        songs = sorted(combined.values(), key=lambda item: item["webSongId"])
+        path = root / "catalogs" / f"database-{bucket}-{generation}.json"
+        atomic_json(path, {
+            "schemaVersion": CATALOG_SCHEMA, "format": CATALOG_FORMAT,
+            "bucket": bucket, "generation": generation, "songs": songs
+        })
+        catalog_refs.append({
+            "bucket": bucket, "path": path.relative_to(root).as_posix(),
+            "songCount": len(songs)
+        })
+        song_count += len(songs)
+    pointer = {
+        "schemaVersion": CATALOG_SCHEMA, "format": CURRENT_FORMAT,
+        "generation": generation, "songCount": song_count,
+        "catalogFiles": catalog_refs,
+        "publishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": "Local relative paths only; Google Drive file IDs must be assigned after verified upload."
+    }
+    atomic_json(root / "current.json", pointer)
+    return pointer
