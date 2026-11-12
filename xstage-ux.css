@@ -4081,3 +4081,85 @@ body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-scene{
  gap:clamp(4px,1cqw,14px)!important;align-items:center!important
 }
 html body.xstage-ui-v2:not(.xstage-native-tv) .stage #lyrics{z-index:10!important;pointer-events:none!important}
+
+
+/* Banner consolidation: exactly ONE image; hide the old text/inline-SVG
+   lockup on Web, Android TV and tablets. Keep lyrics above the banner.
+   Asset is the currently available user-supplied repository PNG; swap its
+   bytes for the newly uploaded picture when its original file is available. */
+:root{--xstage-banner-graphic:url('assets/xstage-stage-logo.png')}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  height:auto!important;
+  min-height:0!important;
+  aspect-ratio:2048 / 682!important;
+  background-image:var(--xstage-banner-graphic)!important;
+  background-color:transparent!important;
+  background-repeat:no-repeat!important;
+  background-position:center!important;
+  background-size:contain!important;
+  border:0!important;
+  box-shadow:none!important;
+  filter:none!important;
+  padding:0!important;
+  margin:0!important;
+  transform:none!important;
+  clip-path:none!important;
+  transition:none!important;
+  overflow:hidden!important;
+}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-mark,
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-copy,
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-tagline,
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup > *{
+  display:none!important;
+  visibility:hidden!important;
+}
+html body.xstage-ui-v2 .stage #lyrics{
+  z-index:90!important;
+  pointer-events:none!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .tv-stage-corner-brand{
+  display:none!important;
+}
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+html body.xstage-native-tv.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+html body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+  position:absolute!important;
+  top:clamp(72px,14vh,148px)!important;
+  left:50%!important;
+  width:min(48vw,620px)!important;
+  max-width:calc(100vw - 340px)!important;
+  transform:translateX(-50%)!important;
+  scale:1!important;
+  opacity:1!important;
+  transition:none!important;
+  z-index:3!important;
+}
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-scene{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,5fr) minmax(0,1fr)!important;
+  align-items:center!important;
+  gap:clamp(3px,.6vw,12px)!important;
+  width:100%!important;
+  min-width:0!important;
+}
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-side-viz{
+  display:block!important;
+  position:static!important;
+  width:100%!important;
+  height:clamp(30px,8vh,88px)!important;
+  max-width:100%!important;
+  pointer-events:none!important;
+}
+@media(max-width:800px){
+  html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+  html body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+    width:min(53vw,350px)!important;
+    max-width:calc(100vw - 130px)!important;
+    top:clamp(45px,13vh,90px)!important;
+  }
+}
