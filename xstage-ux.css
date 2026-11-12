@@ -3593,3 +3593,72 @@ body.xstage-native-tv #remote-pair-panel #remote-pair-status{
   .xstage-tv-quick-actions{grid-template-columns:1fr}
   .xstage-tv-quick-actions button{min-height:58px}
 }
+
+
+/* Android APK direct-audio metering: audio remains on HTMLMediaElement's
+   native speaker path; this visual canvas reads only a SILENT capture stream.
+   Keep meters below the fixed top-left brand, clear of QR and song lyrics. */
+body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage .stage-hero{
+  overflow:visible!important;
+}
+body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage #stage-viz-left{
+  display:block!important;
+  position:absolute!important;
+  top:calc(100% + 10px)!important;
+  left:2px!important;
+  right:auto!important;
+  width:min(320px,31vw)!important;
+  height:clamp(30px,5vh,48px)!important;
+  max-width:100%!important;
+  opacity:.94!important;
+  pointer-events:none!important;
+  filter:drop-shadow(0 0 9px rgba(64,210,245,.35))!important;
+}
+body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage #stage-viz-right,
+body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage #stage-viz-wave{
+  display:none!important;
+}
+body.xstage-native-audio-direct .xstage-native-meter-label{
+  font-family:"Leelawadee UI","Noto Sans Thai",system-ui,sans-serif;
+  font-size:clamp(9px,.84vw,12px);
+  font-weight:850;
+  line-height:1.3;
+  letter-spacing:.045em;
+  color:#a4edff;
+  text-shadow:0 2px 6px #00101c;
+  pointer-events:none;
+}
+body.xstage-native-tv.xstage-native-audio-direct .stage .xstage-native-meter-label{
+  position:absolute!important;
+  top:calc(100% + clamp(47px,6.7vh,66px))!important;
+  left:2px!important;
+  max-width:min(340px,34vw);
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  opacity:.88;
+}
+body.xstage-native-audio-direct .stage[data-native-meter="unsupported"] .xstage-native-meter-label,
+body.xstage-native-audio-direct .stage[data-native-meter="unavailable"] .xstage-native-meter-label{
+  color:#f4c98e;
+}
+body.xstage-native-audio-direct:not(.xstage-native-tv) .stage .xstage-native-meter-label{
+  display:block;
+  padding:5px 9px;
+  width:max-content;
+  max-width:95%;
+  margin:7px auto;
+  border-radius:8px;
+  background:rgba(4,24,43,.78);
+}
+@media(max-width:850px),(max-height:540px){
+  body.xstage-native-tv.xstage-native-audio-direct .stage #stage-viz-left{
+    width:min(230px,34vw)!important;
+    height:clamp(22px,4vh,32px)!important;
+    top:calc(100% + 4px)!important;
+  }
+  body.xstage-native-tv.xstage-native-audio-direct .stage .xstage-native-meter-label{
+    top:calc(100% + 36px)!important;
+    font-size:9px!important;
+  }
+}
