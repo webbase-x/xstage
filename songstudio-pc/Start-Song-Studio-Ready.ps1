@@ -58,8 +58,12 @@ try {
     Write-Status ("Verified {0} bundled component files and SHA-256 checksums." -f $num)
     $versionOutput = & $py -c "import json,subprocess,pathlib,http.server; print('PYTHON_OK')" 2>&1
     if ($LASTEXITCODE -ne 0 -or ($versionOutput -notcontains 'PYTHON_OK')) { throw 'Bundled Python runtime check failed.' }
-    $ffVersion = & $ffmpeg -hide_banner -version 2>&1 | Select-Object -First 1
-    if ($LASTEXITCODE -ne 0 -or $ffVersion -notmatch 'ffmpeg version') { throw 'Bundled FFmpeg runtime check failed.' }
+    # Collect all output before testing exit code. Select-Object -First 1 can close
+    # the native process stdout pipe early and cause a false failure on Windows.
+    $ffText = (& $ffmpeg -hide_banner -version 2>&1 | Out-String)
+    $ffExit = $LASTEXITCODE
+    $ffVersion = (($ffText -split "\r?\n") | Where-Object { $_ -match 'ffmpeg version' } | Select-Object -First 1)
+    if ($ffExit -ne 0 -or !$ffVersion) { throw ("Bundled FFmpeg runtime check failed (exit {0}): {1}" -f $ffExit, $ffText) }
     Write-Status ("FFmpeg: {0}" -f $ffVersion)
     # SoundFont RIFF header includes 'sfbk' at byte offset 8.
     $stream = [IO.File]::OpenRead($sfont)
