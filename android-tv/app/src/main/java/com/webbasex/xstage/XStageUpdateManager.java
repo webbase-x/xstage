@@ -27,6 +27,7 @@ import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 final class XStageUpdateManager {
     interface Listener {
@@ -47,11 +48,12 @@ final class XStageUpdateManager {
 
     private volatile LatestUpdate latest;
     private volatile boolean closed;
+    private final AtomicBoolean checkInFlight = new AtomicBoolean(false);
     private boolean waitingInstallPermission;
-    private boolean installRequested;
-    private long lastCheckAt;
+    private volatile boolean installRequested;
+    private volatile long lastCheckAt;
     private long activeDownloadId = -1L;
-    private File activeDownloadFile;
+    private volatile File activeDownloadFile;
     // Native fallback watcher: survives hosted WebView timer throttling.
     // Web clients perform faster 15-second foreground checks.
     private boolean monitoring;
@@ -69,10 +71,13 @@ final class XStageUpdateManager {
         this.listener = listener;
     }
 
-    void checkForUpdates(boolean force) {
+    synchronized void checkForUpdates(boolean force) {
         if (closed) return;
         long now = System.currentTimeMillis();
         if (!force && now - lastCheckAt < CHECK_INTERVAL_MS) return;
+        // Native timer and hosted page both check. Coalesce concurrent requests
+        // rather than building an unbounded executor backlog on slow networks.
+        if (!checkInFlight.compareAndSet(false, true)) return;
         lastCheckAt = now;
 
         executor.execute(() -> {
@@ -95,6 +100,8 @@ final class XStageUpdateManager {
                 }
             } catch (Exception e) {
                 if (!closed) main.post(() -> listener.onUpdateError(readable(e)));
+            } finally {
+                checkInFlight.set(false);
             }
         });
     }
@@ -248,10 +255,11 @@ final class XStageUpdateManager {
         String version = json.optString("version", "");
         String file = json.optString("file", "");
         String sha256 = json.optString("sha256", "").toLowerCase(Locale.ROOT);
-        if (build <= 0 || version.isEmpty()) {
+        if (build <= 0 || !version.matches("[0-9]+(?:\\\\.[0-9]+){2}")) {
             throw new IllegalStateException("ข้อมูลเวอร์ชัน APK ไม่สมบูรณ์");
         }
-        if (!file.matches("X-Stage-Karaoke-Android-v[0-9A-Za-z._-]+-build[0-9]+\\.apk")) {
+        if (!file.matches("X-Stage-Karaoke-Android-v[0-9A-Za-z._-]+-build[0-9]+\\.apk")
+                || !file.equals("X-Stage-Karaoke-Android-v" + version + "-build" + build + ".apk")) {
             throw new IllegalStateException("ชื่อไฟล์ APK ไม่ถูกต้อง");
         }
         if (!sha256.matches("[0-9a-f]{64}")) {
@@ -312,7 +320,8 @@ final class XStageUpdateManager {
                     long status = statusIndex >= 0 ? cursor.getLong(statusIndex) : DownloadManager.STATUS_FAILED;
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         long id = activeDownloadId;
-                        activeDownloadId = -1L;
+                        // Keep the download slot reserved during SHA verification
+                        // to prevent a second tap deleting the file being checked.
                         verifyAndInstall(manager, id, update);
                         return;
                     }
@@ -349,7 +358,10 @@ final class XStageUpdateManager {
             } catch (Exception e) {
                 main.post(() -> listener.onUpdateError(readable(e)));
             } finally {
-                activeDownloadFile = null;
+                main.post(() -> {
+                    activeDownloadId = -1L;
+                    activeDownloadFile = null;
+                });
             }
         });
     }
