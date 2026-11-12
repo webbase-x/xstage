@@ -308,7 +308,15 @@ def journal_records(root: Path) -> list[dict]:
 def append_journal(root: Path, record: dict) -> None:
     """Durably checkpoint one completed song before handling the next song."""
     root.mkdir(parents=True, exist_ok=True)
-    with (root / JOURNAL_NAME).open("a", encoding="utf-8") as stream:
+    path = root / JOURNAL_NAME
+    needs_newline = False
+    if path.is_file() and path.stat().st_size:
+        with path.open("rb") as previous:
+            previous.seek(-1, 2)
+            needs_newline = previous.read(1) != b"\n"
+    with path.open("a", encoding="utf-8") as stream:
+        if needs_newline:
+            stream.write("\n")
         stream.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
         stream.flush()
         os.fsync(stream.fileno())
