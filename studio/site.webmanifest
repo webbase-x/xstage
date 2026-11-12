@@ -1,0 +1,19 @@
+{
+  "id": "xstage-song-studio",
+  "name": "X-Stage Song Studio PC",
+  "short_name": "X-Stage Studio",
+  "description": "Professional Karaoke and Music Production Studio",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#091523",
+  "theme_color": "#091523",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}
