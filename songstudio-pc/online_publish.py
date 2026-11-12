@@ -197,6 +197,18 @@ class OnlinePublisher:
                   "conflicts": 0, "notReady": not_ready, "filesUploaded": 0}
         root_id = root
         folder_cache = {}
+        file_lists = {}  # one files.list per parent, not per song
+        metadata_cache = {}
+        def matches_md5(media, expected):
+            if not isinstance(media, dict) or not media.get("fileId"):
+                return False
+            ident = media["fileId"]
+            checksum = media.get("md5Checksum")
+            if not isinstance(checksum, str) or len(checksum) != 32:
+                if ident not in metadata_cache:
+                    metadata_cache[ident] = self._metadata(ident)["md5Checksum"]
+                checksum = metadata_cache[ident]
+            return checksum.lower() == expected
         def ensure_root():
             nonlocal root_id
             if not root_id:
@@ -218,13 +230,17 @@ class OnlinePublisher:
             # with the same basename and prevents blind filename deduplication.
             name = path.stem + "-" + checksum[:16] + path.suffix
             parent = folder(("songs", *path.parts[:-1]))
+            if parent not in file_lists:
+                file_lists[parent] = self.drive.list_children(parent)
             result, meta = self.drive.upload_file(
                 parent, local_file, name, cancelled=cancelled,
-                on_progress=on_progress)
+                on_progress=on_progress, existing_items=file_lists[parent])
             if result == "created":
                 counts["filesUploaded"] += 1
+                file_lists[parent].append(meta)
             return {"fileId": meta["id"], "path": "songs/" +
                     str(path.parent).replace("\\", "/") + "/" + name,
+                    "md5Checksum": checksum,
                     "size": local_file.stat().st_size}
         for i, row in enumerate(ready, 1):
             if cancelled and cancelled.is_set():
@@ -245,9 +261,9 @@ class OnlinePublisher:
                 l_id = (candidate.get("lyrics") or {}).get("fileId")
                 if not a_id or not l_id:
                     continue
-                if self._metadata(a_id)["md5Checksum"].lower() == s_hash:
+                if matches_md5(candidate.get("audio"), s_hash):
                     same_audio = candidate
-                    if self._metadata(l_id)["md5Checksum"].lower() == l_hash:
+                    if matches_md5(candidate.get("lyrics"), l_hash):
                         same_both = candidate
                         break
             if same_both:
