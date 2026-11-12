@@ -3899,3 +3899,27 @@ body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-copy > 
   opacity:1!important;
   justify-content:center!important;
 }
+
+/* WEB banner stays anchored at the exact same position and size while playing.
+   Lyrics remain in front; Android TV native HUD is intentionally unaffected. */
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero,
+body.xstage-ui-v2:not(.xstage-native-tv) .stage:not(.playing) .stage-hero,
+body.xstage-ui-v2:not(.xstage-native-tv) .stage.playing .stage-hero{
+  position:absolute!important;
+  top:37%!important;
+  left:50%!important;
+  width:min(72cqw,760px)!important;
+  max-width:calc(100% - 32px)!important;
+  transform:translate(-50%,-50%)!important;
+  scale:1!important;
+  opacity:1!important;
+  transition:none!important;
+  pointer-events:none!important;
+}
+@media(max-width:800px){
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero,
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage:not(.playing) .stage-hero,
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage.playing .stage-hero{
+    width:min(82cqw,470px)!important;
+  }
+}
