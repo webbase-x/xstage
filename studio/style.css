@@ -168,3 +168,26 @@
 .create-build-feedback[data-state=error]{border-color:#af6576;background:#342534}
 .create-build-feedback[data-state=error] .create-build-feedback-icon{background:#a74e62;color:white}
 @media(max-width:680px){.create-build-feedback{flex-wrap:wrap}.create-build-feedback .button{margin-left:49px;align-self:auto}}
+
+
+/* Step 3: proof-of-lyrics panel (LRC, NCN, KAR) and explicitly unverified AI. */
+.preview-lyrics-panel{margin-top:13px;padding:14px;background:linear-gradient(155deg,#0c293b,#091a2c);border:1px solid #315e74;border-radius:14px;min-width:0}
+.preview-lyrics-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.preview-lyrics-heading strong{font-size:13px;color:#e8faff}
+.preview-lyrics-source{font-size:10px;font-weight:850;color:#77dce7;border:1px solid #396d7c;padding:5px 9px;border-radius:20px}
+.preview-lyrics-source[data-state="found"]{color:#84e9cd;border-color:#328774}
+.preview-lyrics-source[data-state="ai-draft"]{color:#ffd991;border-color:#a97e47}
+.preview-lyrics-source[data-state="missing"]{color:#ffb7b7;border-color:#925368}
+.preview-lyrics-status{font-size:11px;margin:8px 0 10px;color:#a9cfdb;line-height:1.55}
+.preview-lyrics-lines{border:1px solid #2d5265;border-radius:12px;background:linear-gradient(155deg,#061a2a,#082639);min-height:137px;max-height:240px;overflow:auto;padding:13px 12px;display:flex;flex-direction:column;align-items:stretch;gap:5px;scrollbar-color:#346f83 transparent}
+.preview-lyric-line{border:0;background:transparent;color:#9eb5c6;display:block;width:100%;text-align:center;line-height:1.7;font-size:clamp(13px,1.12vw,17px);padding:6px 7px;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;transition:color .15s,background .15s;font-family:inherit}
+button.preview-lyric-line{cursor:pointer}
+.preview-lyric-line.active{background:#1a5067;color:#f0fbff;font-weight:850;text-shadow:0 0 9px #48c6ef55}
+.preview-lyric-line.upcoming{color:#b7d9e7}
+.preview-lyrics-empty{padding:32px 8px;text-align:center;color:#7e9db3;line-height:1.7;font-size:12px}
+.preview-lyrics-ai{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:13px}
+.preview-lyrics-ai .field{width:130px;min-width:95px;flex:none;max-width:100%}
+.preview-lyrics-ai label{font-size:11px!important;margin:0!important;flex:none}
+.preview-lyrics-ai .button{min-height:38px;white-space:normal}
+.preview-lyrics-warning{margin-top:9px;color:#92b5c7;font-size:10px;line-height:1.65}
+@media(max-width:700px){.preview-lyrics-lines{max-height:220px}.preview-lyrics-ai{align-items:stretch}.preview-lyrics-ai button{flex:1}}
