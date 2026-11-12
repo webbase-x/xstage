@@ -505,27 +505,81 @@
       updateButtons();
     }
   }
+  function buildFeedback(state, title, detail) {
+    const card = $('create-build-feedback');
+    if (!card) return;
+    card.dataset.state = state;
+    $('create-build-feedback-icon').textContent = state === 'error' ? '!' :
+      state === 'success' ? '✓' : state === 'running' || state === 'starting' ? '◉' : '♫';
+    $('create-build-feedback-title').textContent = title;
+    $('create-build-feedback-detail').textContent = detail;
+  }
+  function showBuildLog() {
+    const logs = $('job-log');
+    logs.hidden = false;
+    $('toggle-log').setAttribute('aria-expanded', 'true');
+    $('job-panel').scrollIntoView({behavior:'smooth',block:'center'});
+  }
   async function run(action, options = {}) {
-    if (busy) return message('มีงานกำลังทำอยู่ · กรุณารอหรือกดยกเลิกก่อน');
+    if (busy) {
+      message('มีงานกำลังทำอยู่ · กรุณารอหรือกดยกเลิกก่อน');
+      return false;
+    }
+    if (action === 'build') {
+      buildFeedback('starting', 'กำลังส่งคำสั่งสร้างเพลงไปยัง PC Engine…',
+        'กำลังตรวจสิทธิ์เขียนไฟล์และรายการเพลงที่เลือก');
+    }
     try {
       const response = await post('/api/jobs', {action, ...options});
+      if (!response?.id) throw new Error('Local Engine ไม่คืนเลขงาน โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง');
       lastJobId = response.id; lastJobState = 'running';
-      busy = true; updateButtons();
+      busy = true;
+      updateButtons();
+      if (action === 'build') {
+        buildFeedback('running', 'PC Engine รับคำสั่งสร้างเพลงแล้ว',
+          'เลขงาน ' + response.id + ' · ' + fmtNum(response.total ?? options.ids?.length ?? 0) +
+          ' เพลง · ' + (options.audio_only ? 'สร้าง M4A อย่างเดียว' : 'สร้าง M4A และ Lyrics') +
+          ' · กำลังติดตามสถานะ');
+        message('รับคำสั่งสร้างเพลงแล้ว · ตรวจสถานะได้ในขั้นตอนที่ 4', false);
+      }
       await loadState();
-      $('job-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
-    } catch (error) { message(error.message); }
+      if (action !== 'build') $('job-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
+      return true;
+    } catch (error) {
+      if (action === 'build') buildFeedback('error', 'ไม่สามารถเริ่มสร้างเพลงได้', error.message);
+      message(error.message);
+      return false;
+    }
   }
   const selectedIDs = () => [...selected];
   async function startBuild(audioOnly) {
-    if (!selected.size) return message('กรุณาเลือกเพลงก่อนสร้าง');
+    if (busy) return message('มีงานกำลังดำเนินการอยู่ กรุณารอให้จบก่อน');
+    if (!selected.size) {
+      buildFeedback('error', 'ยังไม่ได้เลือกเพลงเพื่อสร้าง', 'กรุณากลับไปขั้นตอนที่ 2 แล้วเลือกรายการอย่างน้อยหนึ่งเพลง');
+      return message('กรุณาเลือกเพลงก่อนสร้าง');
+    }
     try {
+      buildFeedback('starting', 'กำลังตรวจสอบไฟล์ต้นฉบับและพื้นที่ว่าง…',
+        'ยังไม่เริ่มสร้างไฟล์ · ตรวจสอบรายการที่เลือกอยู่');
       await saveInputs(['create-source','create-soundfont','create-preset','create-mode']);
-      const estimate = await post('/api/estimate', {ids:selectedIDs()});
-      if (!estimate.enoughDisk) return message('พื้นที่ว่างในเครื่องไม่เพียงพอสำหรับเก็บไฟล์ที่เลือกก่อนสร้าง');
-      if (estimate.warning && !await confirmStudio(`รายการใหญ่ ${fmtNum(estimate.songs)} เพลง (${fmtSize(estimate.bytes)})\nอาจใช้เวลาเตรียมและสร้างนาน ต้องการทำต่อหรือไม่?`, 'ยืนยันรายการเพลงจำนวนมาก')) return;
-      if (!await confirmStudio(`ยืนยันสร้างจาก ${fmtNum(estimate.songs)} เพลง (${fmtSize(estimate.bytes)})?\nระบบจะคัดลอกต้นฉบับที่เลือกและตรวจความสมบูรณ์ในเครื่องก่อนเริ่มแปลงทุกเพลง`, 'เริ่มสร้างเพลง')) return;
-      await run('build', {ids:selectedIDs(), audio_only:audioOnly});
-    } catch (error) { message(error.message); }
+      const ids = selectedIDs();
+      const estimate = await post('/api/estimate', {ids});
+      if (!estimate.songs) throw new Error('ไม่พบเพลงที่เลือกในฐานข้อมูล กรุณาสแกนโฟลเดอร์ใหม่และเลือกเพลงอีกครั้ง');
+      if (!estimate.enoughDisk) throw new Error('พื้นที่ว่างไม่เพียงพอ กรุณาเปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง');
+      const warning = estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ อาจใช้เวลาประมวลผลนาน' : '';
+      const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
+        'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' : 'M4A พร้อม Lyrics') +
+        '\nไฟล์ที่สร้างแล้วจะถูกตรวจซ้ำและข้ามโดยไม่สร้างใหม่' + warning;
+      const approved = await confirmStudio(summary, 'ยืนยันเริ่มสร้างเพลง');
+      if (!approved) {
+        buildFeedback('idle', 'ยกเลิกก่อนเริ่มสร้างเพลง', 'ยังไม่มีไฟล์ถูกสร้างจากคำสั่งนี้');
+        return;
+      }
+      await run('build', {ids, audio_only:audioOnly});
+    } catch (error) {
+      buildFeedback('error', 'เริ่มสร้างเพลงไม่ได้', error.message);
+      message(error.message);
+    }
   }
   async function startUpload() {
     if (!googleConnected) return message('กรุณา Google Login ก่อนซิงค์คลังเพลง');
@@ -549,6 +603,27 @@
     const stage = job.stage || 'พร้อมใช้งาน';
     $('job-title').textContent = (isRunning ? '● ' : '') + stage + (state === 'error' ? ' · ผิดพลาด' : '');
     $('job-detail').textContent = job.detail || 'ไม่มีงานที่กำลังประมวลผล';
+    if (job.kind === 'build' && job.id) {
+      const report = 'งาน ' + job.id + ' · ' +
+        fmtNum(job.completed || 0) + '/' + fmtNum(job.total || 0) + ' เพลง · M4A ' +
+        fmtNum(job.m4aCount || 0) + ' · Lyrics ' + fmtNum(job.lyricsCount || 0) +
+        ' · ข้ามซ้ำ ' + fmtNum(job.skipped || 0) + ' · ERR ' + fmtNum(job.errors || 0);
+      if (state === 'running') {
+        buildFeedback('running', job.stage || 'กำลังสร้างเพลง…', report + ' · ' + (job.detail || 'PC Engine กำลังทำงาน'));
+      } else if (state === 'success') {
+        const errors = Number(job.errors || job.result?.errors || 0);
+        buildFeedback(errors ? 'error' : 'success',
+          errors ? 'สร้างเสร็จโดยมีรายการที่ต้องแก้ไข' : 'สร้างเพลงเสร็จแล้ว',
+          (job.result?.message || report) +
+          (errors ? '\n' + (job.result?.issues || []).slice(0,3).join('\n') : ''));
+      } else if (state === 'error' || state === 'cancelled') {
+        const reasons = (job.logs || []).filter(item => /ERR|ผิดพลาด|Error|ไม่พบ|ซ้ำ|พื้นที่/.test(item));
+        buildFeedback('error', state === 'cancelled' ? 'หยุดงานแล้ว' : 'สร้างเพลงไม่สำเร็จ',
+          [job.detail, ...reasons.slice(-3)].filter(Boolean).join('\n') || report);
+        $('job-log').hidden = false;
+        $('toggle-log').setAttribute('aria-expanded','true');
+      }
+    }
     $('job-timing').textContent = fmtTime(job.elapsed || 0);
     $('job-skip-count').textContent = 'ข้ามซ้ำ ' + fmtNum(Number(job.skipped || 0)) +
       ' · ERR ' + fmtNum(Number(job.errors || 0)) +
@@ -698,6 +773,7 @@
   $('reconcile-button').addEventListener('click',async()=>{
     try{await saveInputs(['create-source']);await run('scan');}catch(e){message(e.message);}
   });
+  $('create-build-show-log').addEventListener('click',showBuildLog);
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
