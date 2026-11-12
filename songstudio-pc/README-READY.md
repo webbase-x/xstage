@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.11 Build 311
+# X-Stage Song Studio PC Ready v0.3.12 Build 312
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,7 +6,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.11-build311.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.12-build312.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -111,7 +111,7 @@ They cannot verify sign-in against a real account without the user's consent.
 - The Edge PC app launches maximized with desktop-scale responsive layout. If Edge is unavailable, your default browser opens and its window size remains under browser control.
 - "M4A only" and "M4A + lyrics" are both tested with real files. A later full build adds missing Lyrics without rewriting an existing M4A.
 
-### Build button fix in v0.3.11 Build311
+### Build button fix in v0.3.12 Build311
 
 - Both buttons (M4A only / M4A + lyrics) now use one confirmation, then show the actual PC Engine job ID directly on Step 4.
 - Preflight checks song IDs, input existence, format support, FFmpeg, SoundFont (for MIDI), AI mode readiness and output write permission **before** acknowledging a job.
@@ -137,7 +137,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.11-build311`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.12-build312`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
