@@ -113,7 +113,8 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(self.drive.upload_order[-1], "current.json")
         # Neither fake absolute local path nor user OAuth credentials leak.
         self.assertNotIn(str(self.base), json.dumps(remote))
-        self.assertEqual(len(self.folder_files(self.remote_root())), 2)
+        # Root has songs/ media folder, immutable catalog, and current.json.
+        self.assertEqual(len(self.folder_files(self.remote_root())), 3)
 
     def test_duplicate_rerun_never_creates_another_song_or_pointer(self):
         self.publisher.publish(self.root, [self.first])
