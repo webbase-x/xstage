@@ -118,7 +118,8 @@ def index_component(path: Path, index: dict):
 
 def lyric_metadata(path: Path):
     """Read only first ~8 KB of .LYR to keep scanning 100k songs fast."""
-    raw = Path(path).open("rb").read(8192)
+    with Path(path).open("rb") as source:
+        raw = source.read(8192)
     lines = _decode_text(raw).splitlines()
     if len(lines) < 4:
         raise ValueError("ไฟล์ .LYR มีหัวข้อมูลไม่ครบ 4 บรรทัด")
@@ -305,7 +306,7 @@ def ncn_document(companions):
             when = tick_to_seconds(position * division / 24.0, division, tempo_map)
             if ch == "/":
                 continue
-            if unicodedata.combining(ch) and current:
+            if unicodedata.category(ch).startswith("M") and current:
                 current[-1]["text"] += ch
             else:
                 current.append({"text": ch, "startTime": when})
