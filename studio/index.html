@@ -114,6 +114,7 @@
     </div>
   </div>
   <dialog id="edit-dialog" class="modal"><form method="dialog"><h2>แก้ไขข้อมูลเพลง</h2><p id="edit-code" class="hint">—</p><label for="edit-title">ชื่อเพลง</label><input id="edit-title" class="field" type="text" maxlength="180"><label for="edit-artist">ศิลปิน</label><input id="edit-artist" class="field" type="text" maxlength="180"><label for="edit-lyrics">เนื้อร้องแบบ LRC (มีเวลา)</label><textarea id="edit-lyrics" class="field lyrics-editor" placeholder="[00:12.50]เนื้อร้องบรรทัดแรก"></textarea><div class="modal-actions"><button value="cancel" class="button ghost">ยกเลิก</button><button id="edit-save" value="save" class="button primary">บันทึก</button></div></form></dialog>
+  <script src="./entry.js"></script>
   <script src="./app.js" defer></script>
   <div id="online-connection-gate" class="connection-gate" hidden role="dialog" aria-modal="true" aria-labelledby="online-gate-title">
     <div class="connection-gate-card">
