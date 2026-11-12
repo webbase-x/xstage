@@ -247,7 +247,7 @@
   }
   function updateButtons() {
     $('selected-count').textContent = `เลือกแล้ว ${fmtNum(selected.size)} เพลง`;
-    $('upload-selected-count').textContent = `${fmtNum(selected.size)} เพลง`;
+    $('upload-selected-count').textContent = 'ซิงค์คลังเพลงทั้งหมด';
     const buttons = ['scan-button','reconcile-button','preview-button','edit-button','build-button',
       'build-audio-button','select-all','select-page','clear-selection','upload-login','settings-login',
       'settings-logout','google-login-header','update-button'];
@@ -256,7 +256,7 @@
     $('build-audio-button').disabled = busy || selected.size === 0;
     $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     $('edit-button').disabled = busy || selected.size !== 1;
-    $('upload-button').disabled = busy || !googleConnected || !selected.size;
+    $('upload-button').disabled = busy || !googleConnected;
     $('settings-logout').disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('[data-pick],.field,.song-table input[type=checkbox]')) el.disabled = busy;
@@ -496,10 +496,9 @@
     } catch (error) { message(error.message); }
   }
   async function startUpload() {
-    if (!googleConnected) return message('ต้อง Google Login ก่อนอัปโหลด');
-    if (!selected.size) return message('กลับไปเลือกเพลงที่จะอัปโหลดในหน้า “สร้างเพลงใหม่”');
-    if (await confirmStudio(`อัปโหลดเฉพาะ ${fmtNum(selected.size)} เพลงที่เลือก โดยตรวจไฟล์ซ้ำบน Drive ก่อนส่ง ใช่หรือไม่?`, 'ยืนยันอัปโหลด')) {
-      await run('upload',{ids:selectedIDs()});
+    if (!googleConnected) return message('กรุณา Google Login ก่อนซิงค์คลังเพลง');
+    if (await confirmStudio('ซิงค์คลังเพลงที่สร้างเสร็จแล้วทั้งหมดจาก songs/current.json ขึ้น Google Drive ส่วนตัว\nระบบตรวจ MD5 ของไฟล์ที่เคยส่งไว้ก่อน และอัปเดต current.json หลังไฟล์เพลงครบเท่านั้น', 'ยืนยันซิงค์คลังเพลง')) {
+      await run('upload',{});
     }
   }
   async function startDownload(kind) {
