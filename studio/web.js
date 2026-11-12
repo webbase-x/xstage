@@ -408,9 +408,18 @@
     state.currentIndex = 0; state.total = work.length;
     setBusy(true);
     $('results').replaceChildren();
-    let success = 0, errors = 0;
+    let success = 0, errors = 0, audioCount = 0, lyricCount = 0;
     const zipAssets = [];
+    // Reserve a shared basename per song so .m4a and .lrc always stay paired.
     const usedNames = new Map();
+    const fileExists = async (name) => {
+      if (!state.dest) return false;
+      try { await state.dest.getFileHandle(name, {create:false}); return true; }
+      catch (error) {
+        if (error?.name === 'NotFoundError') return false;
+        throw error;
+      }
+    };
     try {
       for (let i = 0; i < work.length; i++) {
         if (state.cancelled) break;
@@ -420,18 +429,31 @@
           i * 100 / work.length);
         try {
           const assets = await createSongAssets(song, i);
+          const originalStem = safeName(song.name);
+          const key = originalStem.toLocaleLowerCase();
+          const extensions = assets.map(asset => asset.name.slice(asset.name.lastIndexOf('.')));
+          let suffix = usedNames.get(key) || 0;
+          let commonStem, filenames;
+          for (;;) {
+            if (suffix > 9999) throw new Error('ชื่อเพลงซ้ำมากเกินไป: ' + originalStem);
+            commonStem = originalStem + (suffix ? ' (' + suffix + ')' : '');
+            filenames = extensions.map(ext => commonStem + ext);
+            if (!(await Promise.all(filenames.map(fileExists))).some(Boolean)) break;
+            suffix++;
+          }
+          usedNames.set(key, suffix + 1);
+          assets.forEach((asset, index) => { asset.name = filenames[index]; });
           for (const asset of assets) {
-            const normalized = asset.name.toLocaleLowerCase();
-            const collision = usedNames.get(normalized) || 0;
-            usedNames.set(normalized, collision + 1);
-            if (collision) {
-              const dot = asset.name.lastIndexOf('.');
-              asset.name = asset.name.slice(0, dot) + ' (' + collision + ')' + asset.name.slice(dot);
-            }
-            if (state.dest) await saveUniqueToDirectory(state.dest, asset.name, asset.blob);
-            else zipAssets.push(asset);
+            if (state.dest) {
+              const saved = await saveUniqueToDirectory(state.dest, asset.name, asset.blob);
+              if (saved !== asset.name)
+                throw new Error('มีไฟล์ชื่อเดียวกันถูกสร้างเพิ่มระหว่างบันทึก: ' + asset.name);
+            } else zipAssets.push(asset);
           }
           success++;
+          audioCount++;
+          if (assets.some(asset => asset.name.toLowerCase().endsWith('.lrc'))) lyricCount++;
+          else log('สร้าง M4A สำหรับ ' + song.name + ' แต่ยังไม่มี LRC พร้อมเวลาจริง · ต้องเพิ่มเนื้อร้องก่อนส่งออก LRC', true);
           log('สร้าง ' + song.name + ' เรียบร้อย (' + assets.map((a) => a.name).join(', ') + ')');
         } catch (error) {
           if (state.cancelled) break;
@@ -457,10 +479,12 @@
         setProgress('ยกเลิกงาน', 0);
       } else {
         notice(success
-          ? 'สร้างสำเร็จ ' + success + ' เพลง · ข้อผิดพลาด ' + errors +
-            (state.archive ? ' · ต้องกด “ดาวน์โหลด ZIP ผลลัพธ์” เพื่อรับไฟล์' : ' · บันทึกลงโฟลเดอร์ที่เลือกแล้ว')
+          ? 'สร้าง M4A ' + audioCount + ' ไฟล์ · LRC ' + lyricCount + ' ไฟล์' +
+            (audioCount > lyricCount ? ' · บางเพลงยังไม่มีเนื้อร้องที่มีเวลา (ไม่สร้างเนื้อร้องปลอม)' : '') +
+            ' · ข้อผิดพลาด ' + errors +
+            (state.archive ? ' · กด “ดาวน์โหลด ZIP ผลลัพธ์” เพื่อรับไฟล์' : ' · บันทึกลงโฟลเดอร์ที่เลือกแล้ว')
           : 'สร้างเพลงไม่สำเร็จ · ตรวจรายละเอียดข้อผิดพลาดด้านล่าง',
-          errors || !success ? 'error' : 'good');
+          errors || !success || audioCount !== lyricCount ? 'error' : 'good');
         setProgress('เสร็จสิ้น ' + success + '/' + work.length + ' เพลง', 100);
       }
     } catch (error) {
