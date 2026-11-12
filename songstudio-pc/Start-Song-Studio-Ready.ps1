@@ -35,6 +35,7 @@ try {
     $ffprobe = Check-File '.runtime\tools\ffprobe.exe'
     $sfont = Check-File '.runtime\soundfonts\GeneralUser-GS.sf2'
     $engine = Check-File 'engine.py'
+    $livePreview = Check-File 'live_preview.py'
     $aiScript = Check-File 'ai_separate.py'
     $aiModel = Check-File '.runtime\models\htdemucs_fp16weights.onnx'
     [void](Check-File '.runtime\ai-site\numpy\__init__.py')
