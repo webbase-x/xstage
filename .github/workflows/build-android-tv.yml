@@ -181,8 +181,15 @@ jobs:
                   names=z.namelist()
                   for name in expected:
                       matches=[n for n in names if n.endswith('/'+name)]
-                      assert matches,f'{apk}: launcher graphic {name} not packaged into APK'
+                      if not matches:
+                          # AAPT2 may rename compiled resources in unsigned
+                          # release APKs. Confirm the unique PNG dimensions
+                          # are still packaged rather than trusting filenames.
+                          matches=[n for n in names if n.lower().endswith('.png')
+                                   and png_size(z.read(n))==expected[name]]
+                      assert matches,f'{apk}: no packaged PNG for {name} with required dimensions {expected[name]}'
                       assert png_size(z.read(matches[0]))==expected[name],f'{apk}: incorrect packaged graphic {name}'
+                      print(f'{apk.name}: {name} -> {matches[0]}')
           print('TV launcher verified: original PNG; 320x180 banner, 512x512 icon, full-resolution splash; debug and release APK resources present')
           PY
 
