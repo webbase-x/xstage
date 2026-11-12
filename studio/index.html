@@ -104,6 +104,13 @@
                   <span class="preview-selected-marker" aria-hidden="true">♫</span>
                   <div class="preview-selected-info"><span class="preview-selected-caption">เพลงที่เลือกทดลองฟัง</span><strong id="preview-selected-title">ยังไม่ได้เลือกเพลง</strong><span id="preview-selected-artist">นักร้อง: —</span></div>
                 </div>
+                <div class="preview-file-selector">
+                  <label for="preview-file-type">เลือกประเภทไฟล์ที่ค้นพบเพื่อทดสอบ</label>
+                  <select id="preview-file-type" class="field" disabled><option value="">กรุณาเลือกเพลงก่อน</option></select>
+                  <small>เลือกไฟล์เสียงหรือ MIDI/KAR เพื่อฟัง · เลือก LRC/LYR/CUR เพื่อตรวจเนื้อร้องและเวลา</small>
+                  <div id="preview-file-evidence" class="preview-file-evidence" aria-live="polite">ยังไม่ได้ตรวจองค์ประกอบของเพลง</div>
+                  <div id="preview-file-inspection" class="preview-file-inspection" hidden aria-live="polite"></div>
+                </div>
                 <div class="preview-mixer" aria-label="เครื่องผสมเสียงดนตรีกับ SoundFont">
                   <label for="preview-music-volume">เสียงดนตรี <output id="preview-music-volume-label" for="preview-music-volume">80%</output></label>
                   <input id="preview-music-volume" type="range" min="0" max="100" value="80">
