@@ -288,8 +288,8 @@ assert.ok(css.includes('.xstage-native-audio-direct'),'Android stage must render
 assert.ok(index.includes('id="stage-viz-right"'),'main stage must expose the right live visualizer canvas');
 assert.ok(index.includes('id="stage-viz-wave"'),'main stage must expose the center waveform canvas');
 assert.ok(index.includes('YOUR STAGE · YOUR MUSIC'),'redesigned X-Stage Online lockup must include the stage tagline');
-assert.ok(index.includes('<span class="stage-brand-stage">Stage</span>'),'main stage must display X-Stage in the correct case');
-assert.ok(index.includes('<div class="stage-brand-sub"><span>KARAOKE</span><i></i><span>ONLINE</span></div>'),'main stage brand must read X-Stage Karaoke Online in the correct order');
+assert.ok(index.includes('class="stage-official-banner"'),'main stage must show the original PNG only');
+assert.ok(!index.includes('class="stage-brand-copy"'),'synthesized old text logo must be removed');
 assert.ok(singerStage.includes('<strong class="brand-title"><b>X</b>-Stage</strong><div class="brand-sub">KARAOKE · ONLINE</div>'),'singer screen brand must read X-Stage Karaoke Online in the correct order');
 assert.ok(pc.includes("['premium-neon','Premium Neon']"),'Premium Neon stage theme must exist');
 assert.ok(pc.includes("['modern-concert','Modern Concert']"),'Modern Concert stage theme must exist');
@@ -432,3 +432,11 @@ assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
 
 console.log('X-Stage regression checks passed for '+version.version+' build '+version.build);
+
+assert.ok(index.includes('xstage-native-auth-pending'),'native stage must be locked before first paint');
+assert.ok(style.includes('html.xstage-native-auth-pending .app-shell'),'no stage before Drive login');
+assert.ok(app.includes('setAndroidTvStageAccess(true,account.sub)'),'only verified Google Drive can unlock stage');
+assert.ok(app.includes('if(androidTvNativeBridgeReady())return;\n  const saved=readActiveAuth();'),'native QR login must not be bypassed by stale web credentials');
+assert.ok(androidMain.includes('R.drawable.xstage_tv_splash')&&androidMain.includes('public void onLoginScreenReady()'),'native splash must remain until login UI is ready');
+assert.ok(androidGradle.includes('splashFile.bytes = logoSource.bytes'),'the exact uploaded logo bytes must become native splash');
+assert.ok(singerStage.includes('class="stage-official-banner"'),'separate singer stage must use one original image');

@@ -124,3 +124,8 @@ assert.ok(remote.includes("data.type==='playback-status'"),
   'phone must receive actual stage playback success or error');
 
 console.log('Android TV integration: update detection, nonintrusive toast, login refresh, remote & native safety passed');
+
+assert.ok(app.includes("function setAndroidTvStageAccess(granted,accountSub='')"),'native stage access gate must exist');
+assert.ok(app.includes("if(androidTvVerifiedConnectionSub&&(!state.token||"),'native stage must relock when token expires');
+assert.ok(app.includes("if(androidTvNativeBridgeReady()&&!androidTvVerifiedConnectionSub)throw error;"),'offline cache cannot unlock a first-time TV login');
+assert.ok(main.includes('onLoginScreenReady')&&main.includes('startupBanner.setVisibility(View.GONE)'),'native splash is dismissed only by login UI');
