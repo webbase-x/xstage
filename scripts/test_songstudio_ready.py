@@ -60,4 +60,11 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
     ], capture_output=True, text=True, check=True)
     assert "aac" in probe.stdout, f"Output is not AAC: {probe.stdout}"
     print("PASS: Portable M4A output contains AAC codec")
+    assert engine.ai_available(), "Offline bundled AI model/runtime must be present"
+    ai_output = temp / "ai-instrumental.m4a"
+    engine.separate_ai(row_audio, ai_output, preview=False)
+    vocal_output = temp / "ai-instrumental - vocals.m4a"
+    assert ai_output.stat().st_size > 1000, "AI instrumental M4A missing"
+    assert vocal_output.stat().st_size > 1000, "AI vocals M4A missing"
+    print("PASS: Offline AI separated synthetic WAV into instrumental + vocals M4A")
 print("Ready bundle integration smoke test passed.")
