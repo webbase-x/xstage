@@ -2,13 +2,13 @@
 <#
 Build X-Stage Song Studio PC Ready portable ZIP on Windows GitHub Actions.
 Downloads happen ON THE BUILD RUNNER ONLY. Users receive all runtimes prebundled.
-No AI model or Google Drive implementation is claimed by this packaging script.
+The AI inference script, pinned ONNX model and wheel dependencies are included at build time.
 #>
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.2-build302'
+$Version = 'v0.3.3-build303'
 $DirName = 'X-Stage-Song-Studio-PC-Ready-' + $Version
 $OutputRoot = Join-Path $Repo 'dist'
 $Stage = Join-Path $OutputRoot $DirName
@@ -52,6 +52,8 @@ $map = @{
  'songstudio-pc/Start-Song-Studio-Ready.cmd' = 'Start-Song-Studio.cmd'
  'songstudio-pc/Start-Song-Studio-Ready.ps1' = 'Start-Song-Studio-Ready.ps1'
  'songstudio-pc/engine.py' = 'engine.py'
+ 'songstudio-pc/ai_separate.py' = 'ai_separate.py'
+ 'songstudio-pc/ai-model.lock.json' = 'ai-model.lock.json'
  'songstudio-pc/pick_path.ps1' = 'pick_path.ps1'
  'songstudio-pc/README-READY.md' = 'README.md'
  'studio/index.html' = 'studio/index.html'
@@ -132,6 +134,44 @@ try {
 } finally { $SF.Dispose() }
 Step 'Bundled GeneralUser-GS SoundFont and license ready'
 
+# 4b. Include OFFLINE HTDemucs AI model and pinned Windows x64 inference dependencies.
+# These downloads happen on GitHub Actions ONLY. No requests on users' PCs.
+$ModelDir = Join-Path $Runtime 'models'
+$AiSite = Join-Path $Runtime 'ai-site'
+New-Item -ItemType Directory -Force -Path $ModelDir, $AiSite | Out-Null
+$ModelLock = Get-Content -LiteralPath (Join-Path $Stage 'ai-model.lock.json') -Raw | ConvertFrom-Json
+$ModelURL = [string]$ModelLock.model_url
+$ModelHash = [string]$ModelLock.model_sha256
+$ModelFile = Join-Path $ModelDir ([string]$ModelLock.filename)
+if ($ModelURL -notmatch '^https://huggingface\.co/StemSplitio/htdemucs-onnx/resolve/') {
+    throw 'Model lockfile points to an unexpected origin'
+}
+if ($ModelLock.filename -ne 'htdemucs_fp16weights.onnx') {
+    throw 'Unexpected model filename in lockfile'
+}
+Step "Downloading pinned HTDemucs ONNX model on CI (~166 MB)..."
+try {
+    Download $ModelURL $ModelFile
+} catch {
+    Step "Trying resumable curl mirror request for Hugging Face model: $_"
+    & curl.exe -fL --retry 3 --retry-delay 3 --connect-timeout 30 --max-time 720 -o $ModelFile $ModelURL
+    if ($LASTEXITCODE -ne 0) { throw 'HTDemucs ONNX model download failed on Windows builder' }
+}
+if ((Get-Item $ModelFile).Length -lt 100MB) { throw 'AI ONNX file unexpectedly small' }
+CheckSHA $ModelFile $ModelHash
+Step 'Bundling pinned NumPy + ONNX Runtime CPU wheels on Windows build runner'
+# actions/setup-python supplies Python 3.13 plus pip on GitHub Windows runner.
+& python -m pip install --disable-pip-version-check --no-compile --only-binary=:all: --target $AiSite "numpy==2.2.6" "onnxruntime==1.23.2"
+if ($LASTEXITCODE -ne 0) { throw 'Failed to install pinned Windows AI wheels in the bundle' }
+$Pth = Join-Path $PyDir 'python313._pth'
+if (!(Test-Path -LiteralPath $Pth)) { throw 'Embedded Python path configuration missing' }
+# Python's embeddable distribution ignores global site-packages and the system
+# registry. The bundled AI dependencies live only within this ZIP.
+Add-Content -LiteralPath $Pth -Value '..\ai-site' -Encoding ASCII
+& $py -c "import numpy,onnxruntime; print('OFFLINE_AI_READY',numpy.__version__,onnxruntime.__version__)"
+if ($LASTEXITCODE -ne 0) { throw 'Bundled Python cannot import local ONNX Runtime/NumPy' }
+Step 'All AI libraries and model included, no downloads required by user'
+
 # 5. Preserve bundled runtime license files and source links in the ZIP
 $PythonLicense = Join-Path $PyDir 'LICENSE.txt'
 if (Test-Path $PythonLicense) {
@@ -146,6 +186,12 @@ CopyFromRepo 'songstudio-pc/THIRD_PARTY_NOTICES.md' '.runtime/licenses/THIRD_PAR
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'engine.py',
+ 'ai_separate.py',
+ 'ai-model.lock.json',
+ '.runtime/models/htdemucs_fp16weights.onnx',
+ '.runtime/python/python313._pth',
+ '.runtime/ai-site/numpy/__init__.py',
+ '.runtime/ai-site/onnxruntime/__init__.py',
  'pick_path.ps1',
  'studio/index.html',
  'studio/app.js',
@@ -171,10 +217,10 @@ $manifest = [ordered]@{
     product = 'X-Stage Song Studio PC'
     bundle_type = 'ready-offline'
     platform = 'windows-x64'
-    version = '0.3.2'
-    build = 302
+    version = '0.3.3'
+    build = 303
     created_utc = [DateTime]::UtcNow.ToString('o')
-    contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont')
+    contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont', 'HTDemucs ONNX model (MIT)', 'NumPy 2.2.6', 'ONNX Runtime 1.23.2')
     files = @($files)
 }
 $ManifestFile = Join-Path $Stage '.engine-ready-manifest.json'
@@ -209,6 +255,8 @@ with ZipFile(dest) as archive:
                       ".runtime/tools/ffmpeg.exe",
                       ".runtime/fluidsynth/bin/fluidsynth.exe",
                       ".runtime/soundfonts/GeneralUser-GS.sf2",
+                      ".runtime/models/htdemucs_fp16weights.onnx",
+                      "ai_separate.py",
                       ".engine-ready-manifest.json",
                       "Start-Song-Studio.cmd"]:
         assert base.name + "/" + mandatory in names, mandatory
