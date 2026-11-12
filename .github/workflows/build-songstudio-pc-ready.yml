@@ -1,0 +1,99 @@
+name: X-Stage Song Studio PC Ready Offline ZIP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "songstudio-pc/**"
+      - "scripts/build_songstudio_ready.ps1"
+      - "scripts/test_songstudio_ready.py"
+      - "studio/index.html"
+      - "studio/app.js"
+      - "studio/style.css"
+      - "studio/entry.js"
+      - ".github/workflows/build-songstudio-pc-ready.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xstage-songstudio-ready-build300
+  cancel-in-progress: false
+
+jobs:
+  bundle-windows:
+    runs-on: windows-2022
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package complete portable offline runtimes on CI
+        shell: powershell
+        run: |
+          & ./scripts/build_songstudio_ready.ps1
+          if ($LASTEXITCODE -ne 0) { throw "READY bundle packaging failed" }
+      - name: Run conversion tests using bundled Python and tools (no installs)
+        shell: powershell
+        run: |
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.0-build300"
+          $py = Join-Path $base ".runtime/python/python.exe"
+          if (!(Test-Path $py)) { throw "Portable Python not found" }
+          & $py scripts/test_songstudio_ready.py $base
+          if ($LASTEXITCODE -ne 0) { throw "Ready runtime conversion tests FAILED" }
+      - name: Verify final ZIP and SHA-256 manifest
+        shell: powershell
+        run: |
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.0-build300.zip"
+          $hashfile = "$zip.sha256"
+          if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = ((Get-Content $hashfile -Raw) -split '\s+')[0]
+          if ($actual -ne $expected) { throw "Final ZIP checksum mismatch" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $names = @($archive.Entries | ForEach-Object { $_.FullName })
+            foreach ($name in @("Start-Song-Studio.cmd", ".engine-ready-manifest.json", "engine.py",
+                                ".runtime/python/python.exe", ".runtime/tools/ffmpeg.exe",
+                                ".runtime/fluidsynth/bin/fluidsynth.exe", ".runtime/soundfonts/GeneralUser-GS.sf2")) {
+              if (!($names | Where-Object { $_.EndsWith($name) })) {
+                throw "Final ZIP missing: $name"
+              }
+            }
+          } finally { $archive.Dispose() }
+          Write-Host "PASS: Complete offline ZIP SHA-256 $actual"
+      - name: Upload completed ready-to-run release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.0-build300
+          path: |
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.0-build300.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.0-build300.zip.sha256
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Publish permanent GitHub release direct download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "song-studio-pc-ready-v0.3.0-build300"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.0-build300.zip"
+          $sha = "$zip.sha256"
+          $notes = @'
+          Windows x64 portable Source Engine edition. Fully bundled Python 3.13.10,
+          FFmpeg, FluidSynth and GeneralUser GS SoundFont. Extract ZIP and
+          run Start-Song-Studio.cmd. NO runtime downloads on the user's PC.
+          Tested on Windows GitHub Actions: offline startup validation,
+          WAV->M4A and MIDI->SoundFont->M4A. See README.md and license notices.
+
+          Preview limitations: no AI voice separation, NCN implementation,
+          or Google Drive login/sync. Not the missing original Build 205.
+          '@
+          gh release view $tag --repo "${{ github.repository }}" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag "$zip" "$sha" --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.0 Build 300 (Offline)" --notes $notes --prerelease --latest=false --target "${{ github.sha }}" --repo "${{ github.repository }}"
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP to GitHub release" }
