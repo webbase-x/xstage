@@ -96,6 +96,18 @@ PREFS = {
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
+
+# This library belongs ONLY to the AI Lyrics menu. Scanning the Build Song
+# source folder does not change or erase these imported references.
+VOCAL_LIBRARY_FILE = DATA / "ai-vocal-sources.json"
+_loaded_vocal_sources = load_json(VOCAL_LIBRARY_FILE, [])
+VOCAL_FILES = {}
+if isinstance(_loaded_vocal_sources, list):
+    for _item in _loaded_vocal_sources:
+        if (isinstance(_item, dict) and type(_item.get("id")) is int
+                and _item["id"] < 0 and isinstance(_item.get("path"), str)):
+            VOCAL_FILES[_item["id"]] = _item
+
 # This library belongs ONLY to the independent AI Lyrics menu.
 AI_IMPORTS_FILE = DATA / "ai-lyrics-imports.json"
 AI_IMPORTED = {}
@@ -340,6 +352,76 @@ def scan_source():
         FILE_BY_ID.update((x["id"], x) for x in rows)
         FILE_BY_ID.update(AI_IMPORTED)
     return len(rows)
+
+
+def _selected_row(song_id):
+    """Find imported AI audio as well as a regular scanned song by stable ID."""
+    if type(song_id) is not int:
+        return None
+    with LOCK:
+        return FILE_BY_ID.get(song_id) or VOCAL_FILES.get(song_id)
+
+
+def register_vocal_sources(paths):
+    """Save file references (not copies) in the independent AI vocal catalog."""
+    if not isinstance(paths, list) or not 1 <= len(paths) <= 200:
+        raise ValueError("กรุณาเลือกไฟล์เสียง 1–200 ไฟล์ต่อครั้ง")
+    added = skipped = 0
+    with LOCK:
+        seen = {str(Path(row["path"]).resolve()).casefold()
+                for row in VOCAL_FILES.values() if isinstance(row.get("path"), str)}
+        next_id = min([0, *VOCAL_FILES.keys()]) - 1
+        for raw_path in paths:
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                raise ValueError("พาธไฟล์เสียงไม่ถูกต้อง")
+            path = Path(raw_path).expanduser()
+            if path.suffix.lower() not in EXT_AUDIO or not path.is_file() or path.is_symlink():
+                raise ValueError("ไม่พบไฟล์เสียงที่รองรับ หรือไฟล์เป็นลิงก์: " + path.name)
+            identity = str(path.resolve()).casefold()
+            if identity in seen:
+                skipped += 1
+                continue
+            stat = path.stat()
+            if stat.st_size < 1024:
+                raise ValueError("ไฟล์เสียงเล็กเกินไปหรือไม่สมบูรณ์: " + path.name)
+            note = NOTES.get(str(path), {})
+            VOCAL_FILES[next_id] = {
+                "id": next_id, "path": str(path), "title": note.get("title") or path.stem,
+                "artist": note.get("artist", ""), "code": path.stem,
+                "kind": path.suffix[1:].upper(), "size": stat.st_size,
+                "status": "ready", "scope": "ai-lyrics"
+            }
+            seen.add(identity)
+            next_id -= 1
+            added += 1
+        save_json(VOCAL_LIBRARY_FILE, list(VOCAL_FILES.values()))
+        count = len(VOCAL_FILES)
+    return {"added": added, "skipped": skipped, "total": count,
+            "message": f"นำเข้าเพลงเสียงร้องใหม่ {added} รายการ · ข้ามซ้ำ {skipped} · ในเมนู AI ทั้งหมด {count} เพลง"}
+
+
+def import_vocal_sources():
+    """Choose files on the Windows PC with one multi-selection picker."""
+    selected = open_picker("vocal")
+    if not selected:
+        return {"cancelled": True, "added": 0, "message": "ยกเลิกการนำเข้าเพลง"}
+    try:
+        paths = json.loads(selected)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("ตัวเลือกไฟล์เสียงส่งรายการไม่ถูกต้อง") from exc
+    return register_vocal_sources(paths)
+
+
+def remove_vocal_source(song_id):
+    """Forget a reference only; never delete any original user music."""
+    if type(song_id) is not int:
+        raise ValueError("รหัสไฟล์เสียงไม่ถูกต้อง")
+    with LOCK:
+        removed = VOCAL_FILES.pop(song_id, None)
+        if not removed:
+            raise ValueError("ไม่พบรายการนำเข้าที่เลือก")
+        save_json(VOCAL_LIBRARY_FILE, list(VOCAL_FILES.values()))
+    return {"ok": True, "message": "นำรายการออกจากเมนู AI แล้ว · ไฟล์เสียงต้นฉบับยังอยู่ที่เดิม"}
 
 def visible_files(search=""):
     with LOCK:
