@@ -42,7 +42,7 @@
     if(!entry)return;
     clearTimeout(entry.timer);
     entry.button.disabled=false;
-    entry.button.textContent='ขอเพลง';
+    entry.button.textContent='ส่งเพลงขึ้นเวที';
     pendingRequests.delete(id);
   }
   function resetButtons(){for(const id of [...pendingRequests.keys()])releaseRequest(id);}
@@ -121,11 +121,11 @@
       const info=document.createElement('div');info.className='remote-song-info';
       const title=document.createElement('strong');title.textContent=String(item.code||'')+' · '+String(item.title||'');
       const artist=document.createElement('small');artist.textContent=String(item.artist||'');
-      const btn=document.createElement('button');btn.type='button';btn.className='remote-request-button';btn.textContent='ขอเพลง';
+      const btn=document.createElement('button');btn.type='button';btn.className='remote-request-button';btn.textContent='ส่งเพลงขึ้นเวที';
       btn.addEventListener('click',()=>{
         if(!ready){report('จอ TV ยังไม่พร้อม กรุณารอให้เปิดคลังเพลง');return;}
-        if(!connected)return;
-        btn.disabled=true;btn.textContent='กำลังส่ง…';
+        if(!connected||!conn?.open){report('รีโมทขาดการเชื่อมต่อ กรุณาเชื่อมต่อกับจอ TV อีกครั้ง','error');return;}
+        btn.disabled=true;btn.textContent='กำลังส่งขึ้นเวที…';
         const requestId=++nextRequestId;
         const timer=setTimeout(()=>{
           releaseRequest(requestId);
