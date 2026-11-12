@@ -256,6 +256,23 @@ def _timed_lines_to_json(lines, code, format_name, metadata=None):
     for n, line in enumerate(lines):
         next_time = lines[n+1]["startTime"] if n+1 < len(lines) else line["startTime"]+4
         line["endTime"] = round(max(line["startTime"]+.05, next_time), 3)
+        # X-Stage Karaoke PC/Web consumes syllables[start,duration,text].
+        # NCN CUR byte cues and KAR MIDI meta-event cues are already timed;
+        # carry them through rather than letting the stage interpolate an
+        # approximate word highlight over the whole line.
+        chars = line.get("characters") or []
+        if chars:
+            syllables = []
+            for i, item in enumerate(chars):
+                start = max(0., float(item["startTime"]))
+                end = min(line["endTime"], float(chars[i+1]["startTime"])) \
+                    if i+1 < len(chars) else line["endTime"]
+                syllables.append({
+                    "text": str(item["text"]),
+                    "start": round(start, 4),
+                    "duration": round(max(0., end-start), 4)
+                })
+            line["syllables"] = syllables
     return {
         "schemaVersion": 1, "songCode": code, "sourceFormat": format_name,
         "lines": lines, "rawLrc": to_lrc(lines),
@@ -286,7 +303,7 @@ def ncn_document(companions):
                          " · ต้องมี .MID + .LYR + .CUR รหัสเดียวกัน")
     lyric_file = Path(companions["lyrics"])
     cursor_file = Path(companions["cursor"])
-    source_bytes = lyric_file.read_bytes()
+    source_bytes = lyric_file.read_bytes().split(b"\x1a", 1)[0]
     if len(source_bytes) > 1024 * 1024:
         raise ValueError("ไฟล์ NCN .LYR ใหญ่เกิน 1 MB")
     # Legacy NCN is CP874. Normalize line endings in bytes before consuming
