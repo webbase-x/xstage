@@ -107,68 +107,25 @@ tasks.register("generateXStageTvAssets") {
         javax.imageio.ImageIO.write(icon, "png", iconFile)
         javax.imageio.ImageIO.write(icon, "png", storeIcon)
 
-        // 320x180 Android TV launcher banner, derived from the transparent neon
-        // X-Stage microphone/X/equalizer branding in assets/xstage-tv-pro-logo.svg.
-        // Java2D renders it offline: no network, fonts, or runtime services required.
+        // Match the exact user-supplied transparent stage logo for Android TV.
+        // Composite on white at the fixed Android TV launcher resolution (320x180).
+        def logoSource = rootProject.file("../assets/xstage-stage-logo.png")
+        if (!logoSource.isFile()) throw new GradleException("Missing supplied stage logo: " + logoSource)
+        def sourceLogo = javax.imageio.ImageIO.read(logoSource)
+        if (sourceLogo == null || sourceLogo.getWidth() < 1 || sourceLogo.getHeight() < 1)
+            throw new GradleException("Could not decode supplied stage logo PNG")
         def banner = new java.awt.image.BufferedImage(320,180,java.awt.image.BufferedImage.TYPE_INT_RGB)
         def b = banner.createGraphics()
-        b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
-        b.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        b.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
         b.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING,java.awt.RenderingHints.VALUE_RENDER_QUALITY)
-        b.setColor(java.awt.Color.WHITE); b.fillRect(0,0,320,180)
-        def cyan = new java.awt.Color(0,217,255)
-        def blue = new java.awt.Color(49,125,250)
-        def purple = new java.awt.Color(122,65,224)
-        def magenta = new java.awt.Color(230,55,217)
-        // Restrained music wave and equalizer highlights behind a legible logo.
-        b.setColor(new java.awt.Color(228,244,255))
-        b.fillOval(3,13,135,134)
-        b.setColor(new java.awt.Color(247,234,255))
-        b.fillOval(235,80,85,80)
-        [24,39,32,54,43,25,45].eachWithIndex { h,i ->
-            b.setColor(i%2==0 ? new java.awt.Color(81,192,250,120) : new java.awt.Color(181,91,229,120))
-            b.fillRoundRect((6+i*10) as int,(98-((h as int).intdiv(2))) as int,6,h as int,5,5)
-        }
-        // Stylized gradient X: same signature emblem as the approved transparent logo.
-        b.setStroke(new java.awt.BasicStroke(15f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND))
-        b.setColor(purple); b.drawLine(31,37,103,120)
-        b.setColor(cyan); b.drawLine(103,37,31,120)
-        b.setStroke(new java.awt.BasicStroke(8f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND))
-        b.setColor(blue); b.drawLine(34,39,101,118)
-        // Glowing microphone and stem.
-        b.setColor(new java.awt.Color(255,255,255))
-        b.fillRoundRect(57,49,26,52,22,22)
-        b.setColor(purple); b.setStroke(new java.awt.BasicStroke(3f))
-        b.drawRoundRect(57,49,26,52,22,22)
-        b.setColor(blue)
-        [62,70,78,86].each { y -> b.drawLine(63,y as int,77,y as int) }
-        b.setColor(magenta)
-        b.setStroke(new java.awt.BasicStroke(4f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND))
-        b.drawArc(51,75,38,38,180,180)
-        b.drawLine(70,113,70,130); b.drawLine(59,132,81,132)
-        // Name: two crisp lines, auto-fit to the remaining width without clipping.
-        def fitFont = { String value,int preferred,int width ->
-            int n=preferred
-            def fnt=new java.awt.Font("SansSerif",java.awt.Font.BOLD|java.awt.Font.ITALIC,n)
-            while(n>10 && b.getFontMetrics(fnt).stringWidth(value)>width) {
-                fnt=new java.awt.Font("SansSerif",java.awt.Font.BOLD|java.awt.Font.ITALIC,--n)
-            }
-            fnt
-        }
-        def topText="X-Stage"
-        b.setFont(fitFont(topText,52,196))
-        b.setColor(new java.awt.Color(104,67,180,80)); b.drawString(topText,117,84)
-        b.setPaint(new java.awt.GradientPaint(120,42,blue,308,95,magenta))
-        b.drawString(topText,115,82)
-        b.setStroke(new java.awt.BasicStroke(3f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND))
-        b.setPaint(new java.awt.GradientPaint(120,0,cyan,302,0,purple))
-        b.drawLine(120,94,304,94)
-        def bottomText="Karaoke Online"
-        b.setFont(fitFont(bottomText,24,195))
-        b.setColor(new java.awt.Color(72,49,154))
-        b.drawString(bottomText,115,123)
-        b.setStroke(new java.awt.BasicStroke(1.5f))
-        b.setColor(new java.awt.Color(230,217,248)); b.drawRoundRect(1,1,318,178,18,18)
+        b.setColor(java.awt.Color.WHITE)
+        b.fillRect(0,0,320,180)
+        double scale = Math.min(306d/sourceLogo.getWidth(), 164d/sourceLogo.getHeight())
+        int scaledW = Math.max(1,Math.round(sourceLogo.getWidth()*scale) as int)
+        int scaledH = Math.max(1,Math.round(sourceLogo.getHeight()*scale) as int)
+        int left = (320-scaledW).intdiv(2)
+        int top = (180-scaledH).intdiv(2)
+        b.drawImage(sourceLogo,left,top,scaledW,scaledH,null)
         b.dispose()
         javax.imageio.ImageIO.write(banner, "png", bannerFile)
         javax.imageio.ImageIO.write(banner, "png", storeBanner)
