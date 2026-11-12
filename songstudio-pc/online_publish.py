@@ -160,7 +160,8 @@ class OnlinePublisher:
             raise PublishError("จำนวนเพลงบน Drive ไม่ตรงกับฐาน XStageWeb · ไม่เผยแพร่ทับ")
         return (pointer_file, pointer), songs, {x["name"]: x for x in children}
 
-    def publish(self, local_songs, selected_records, *, cancelled=None, on_progress=None):
+    def publish(self, local_songs, selected_records, *, create_new_library=False,
+                cancelled=None, on_progress=None):
         local_songs = Path(local_songs)
         if not (local_songs / "current.json").is_file():
             raise PublishError("กรุณาสร้างฐานเพลงในเครื่องก่อนอัปโหลด")
@@ -174,6 +175,15 @@ class OnlinePublisher:
         if not ready:
             raise PublishError("ยังไม่มีเพลงพร้อมใช้ X-Stage Online: ต้องมี M4A และ Lyrics JSON พร้อมเวลาจริง")
         root = self._existing_root()
+        # drive.file is app-scoped. If the existing Karaoke Online library was
+        # created by a different OAuth application, it may be invisible here.
+        # Never silently make a second XStageWeb and strand the old songs.
+        if root is None and not create_new_library:
+            raise PublishError(
+                "ไม่พบ XStageWeb ที่บัญชี/แอปนี้เข้าถึงได้ · "
+                "หากมีเพลงเดิม ห้ามสร้างคลังใหม่จนกว่าจะอนุญาตให้ Song Studio "
+                "เข้าถึงคลังเดิมผ่าน Google OAuth/Picker · "
+                "ถ้าเป็น Google Drive ว่างจริง ให้เลือก 'สร้างคลังใหม่' โดยชัดเจน")
         active, remote, root_files = self._read_online(root)
         pointer_file, old_pointer = active if active else (None, None)
         by_code = {}
