@@ -57,7 +57,7 @@ Native browser confirmation windows have been replaced with styled in-app border
 
 ### Google Drive OAuth for every PC user (one owner configuration)
 
-**The app developer configures the public OAuth Desktop Client ID ONCE.**
+**The app developer configures the matching Google Desktop OAuth Client ID + Client Secret ONCE.**
 Do **not** distribute any user's refresh/access token, profile, or Google password.
 
 1. In Google Cloud, enable Google Drive API and set up Google Auth Platform.
@@ -66,14 +66,21 @@ Do **not** distribute any user's refresh/access token, profile, or Google passwo
    allowlisted test users can authenticate and consent usually expires after
    seven days (for non-identity scopes). Follow Google's verification requirements.
 2. At **Google Auth Platform → Clients → Create client → Desktop app**, create
-   a dedicated **X-Stage Song Studio PC** client. Copy the public Client ID,
-   ending in `.apps.googleusercontent.com`. Do **NOT** use the Web app
-   Client ID from `config.js`: Web/TV use different OAuth client types.
-3. At `https://github.com/webbase-x/xstage/settings/variables/actions`,
-   create a repository **Variable** named `XSTAGE_GOOGLE_DESKTOP_CLIENT_ID`
-   and enter the Desktop Client ID (NOT the secret, NOT any OAuth token).
-   The next `PC Ready Offline ZIP` GitHub Actions build embeds a sanitized
-   `config/google-oauth-client.json` with just this public identifier.
+   a dedicated **X-Stage Song Studio PC** client. Download the original OAuth
+   Desktop JSON containing BOTH `installed.client_id` and `installed.client_secret`.
+   Do **NOT** use the Web app Client ID from `config.js`: Web/TV use different
+   OAuth client types. Google can reject a Desktop token request with
+   `HTTP 400: client_secret is missing` if the secret is omitted, even with PKCE.
+3. In the repository **Settings → Secrets and variables → Actions** set:
+   - **Variable:** `XSTAGE_GOOGLE_DESKTOP_CLIENT_ID` = Desktop Client ID
+   - **Secret:** `XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET` = matching Desktop Client Secret
+   From the **same** downloaded Desktop JSON. The next `PC Ready Offline ZIP`
+   build embeds the complete *public Desktop OAuth client configuration*
+   (both values) into `config/google-oauth-client.json`. GitHub Actions stores
+   the build input Secret outside Git history, but anyone who downloads a
+   native application can inspect the resulting Desktop credentials; this
+   field is **not** a confidential server secret. **Never include** users'
+   access tokens or refresh tokens in a release.
 4. Every end user extracts that release and clicks **Google Login**.
    No JSON picker is required. Each user selects **their own** Google account
    and approves **their own** Drive access once. Personal OAuth tokens are
@@ -87,15 +94,20 @@ Old per-ZIP `data` contents are copied into this folder if not present; they
 never overwrite an existing user profile. Separate Windows accounts have
 separate authorization, which is required for privacy.
 
-**Fallback for custom builds:** if the owner has not configured the repository
-variable, the settings screen honestly shows `OAuth Client not configured`.
-Expand **Advanced → Choose Desktop OAuth Client JSON** once; the app validates
-and saves the public Client ID in Windows user data. Future upgrades do not
-require choosing it again, even if the original JSON is deleted.
+**Fallback and repair for older builds:** If the developer has not configured
+BOTH GitHub settings, the ZIP intentionally does not bundle a broken ID-only
+OAuth file. Open **Settings → Advanced → Choose Desktop OAuth Client JSON**
+and select the **original full JSON from Google Cloud** once. The app now
+preserves both `client_id` and `client_secret` under Windows AppData; future
+releases do not require choosing again. Older versions (Build 310–312) stripped
+`client_secret` on import. Reimport the ORIGINAL JSON once after upgrading.
+If the same Desktop client is fully bundled in the new release, the app can
+bypass the obsolete ID-only AppData override automatically.
 
 **Important:** this does NOT log users into Google automatically or bypass
-Google consent. Desktop clients are public and cannot keep secrets hidden:
-we use PKCE and encrypted *per-user* tokens. `drive.file` limits visibility
+Google consent. Desktop clients are public: their `client_secret` cannot be considered
+confidential once shipped to users. We still use PKCE and encrypted *per-user*
+refresh tokens, and never ship the user's tokens. `drive.file` limits visibility
 to files this application created or was explicitly granted access to.
 The app owner must publish the Google consent screen appropriately for the
 target audience; Google may require brand verification.
