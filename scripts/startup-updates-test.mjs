@@ -63,7 +63,7 @@ const makeLiveChecker=new Function('androidTvNativeBridgeReady','window','checkA
   web.checkLiveAppUpdate();
   assert.equal(webChecks,1,'browser must also check its own version regularly');
 }
-assert.ok(app.includes('if(!newlyPublished)return;'),'same Android build must not reopen a dismissed notice');
+assert.ok(app.includes('if(!newlyPublished&&!manuallyChecked)return;'),'same Android build must not reopen a dismissed notice during background checks');
 assert.ok(app.includes('nativeUpdateDismissedBuild===next.build'),'Later must suppress repeat dialogs for the same build');
 assert.ok(app.includes("panel.classList.toggle('during-playback',active)"),'notification must be compact during karaoke');
 assert.ok(css.includes('.android-tv-update-panel.during-playback'),'live APK notice must leave lyrics visible');
