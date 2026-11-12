@@ -117,6 +117,9 @@ assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open 
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
 assert.ok(app.includes(`./assets/vendor/qrcode.min.js?v=${version.build}`),'Android login must load the same-origin QR renderer');
 assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
+assert.ok(app.includes('function armAndroidTvLoginWatchdog(){')&&app.includes('function clearAndroidTvLoginWatchdog(){'),'Google QR login watchdog MUST be implemented, not just called');
+assert.ok(app.includes('androidTvLoginInProgress')&&app.includes('androidTvLoginCancelled'),'Google login cancellation and restoration must not race into duplicate QR requests');
+assert.ok(app.includes("#xstage-tv-quick-login"),'TV quick menu must allow re-login after cancellation');
 assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
 assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
 assert.ok(androidAuth.includes('boolean hasStoredSession()'),'native Google auth must expose whether a refresh token is stored');
