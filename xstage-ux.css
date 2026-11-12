@@ -3662,3 +3662,12 @@ body.xstage-native-audio-direct:not(.xstage-native-tv) .stage .xstage-native-met
     font-size:9px!important;
   }
 }
+
+
+/* Never display a cosmetic but nonfunctional EQ panel in an installed Android APK.
+   The mobile Owner remote shows read-only Audio Direct status instead. */
+body.xstage-native-audio-direct #xstage-eq-panel,
+body.xstage-native-audio-direct #pc-eq,
+body.xstage-native-audio-direct #mobile-eq{
+  display:none!important;
+}
