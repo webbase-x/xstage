@@ -22,7 +22,12 @@
   <link rel="manifest" href="xstage.webmanifest">
   <link rel="stylesheet" href="style.css?v=1082">
   <link rel="stylesheet" href="xstage-ux.css?v=1082">
-</head>
+<script id="xstage-official-logo-loader">(function(){
+  var logo=new Image();
+  logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
+  logo.onerror=function(){document.documentElement.classList.remove('xstage-uploaded-logo-ready')};
+  logo.src='assets/xstage-stage-logo.png';
+})();</script></head>
 <body class="xstage-ui-v2">
   <div class="app-shell">
     <header class="topbar">
