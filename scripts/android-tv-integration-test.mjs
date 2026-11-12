@@ -138,3 +138,20 @@ assert.ok(unified.includes('top:37%!important')&&unified.includes('width:min(72c
 assert.ok(unified.includes('grid-template-columns:minmax(0,1fr) minmax(0,4fr) minmax(0,1fr)!important'),'native TV EQ stays beside the official logo');
 assert.ok(unified.includes('z-index:90!important'),'native TV lyrics stay above the stage banner');
 assert.ok(app.includes("document.body.classList.add('xstage-native-tv')"),'native TV retains its dedicated remote/login behavior');
+
+
+const parityFix=ux.slice(ux.lastIndexOf('/* v1.0.93 Android TV/Web stage parity'));
+const nativeMeter=read('native-audio-meter.js');
+assert.ok(parityFix.includes('top:37%!important')&&parityFix.includes('width:min(72cqw,760px)!important'),
+  'Native Audio Direct TV must share Web stage geometry, including while playing');
+assert.ok(parityFix.includes('.stage.playing .stage-hero')&&parityFix.includes('transform:translate(-50%,-50%)!important'),
+  'TV banner must remain centered and stationary during playback');
+assert.ok(parityFix.includes('.stage-hero #stage-viz-left')&&parityFix.includes('.stage-hero #stage-viz-right'),
+  'Both native EQ meters must be beside the banner, not floating below or hidden');
+assert.ok(parityFix.includes('position:static!important')&&parityFix.includes('display:block!important'),
+  'Old Audio Direct absolute-position and hidden-right-meter CSS must be overridden');
+assert.ok(parityFix.includes('#lyrics')&&parityFix.includes('z-index:90!important'),
+  'TV lyrics must overlay visual elements just like the Web stage');
+assert.ok(nativeMeter.includes("document.getElementById('stage-viz-right')")&&
+  nativeMeter.includes('view.mirror?LEVELS-1-i:i'),
+  'TV must paint both visual meters from live media-capture FFT levels');
