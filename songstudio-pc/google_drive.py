@@ -122,8 +122,18 @@ def _read_client(path: str | Path) -> dict:
     except (OSError, ValueError) as exc:
         raise GoogleError("ไฟล์ OAuth Client JSON ไม่ถูกต้อง") from exc
     data = config.get("installed", {})
-    if not isinstance(data, dict) or not data.get("client_id", "").endswith(".apps.googleusercontent.com"):
+    if not isinstance(data, dict) or not isinstance(data.get("client_id"), str) or not data["client_id"].endswith(".apps.googleusercontent.com"):
         raise GoogleError("ต้องเป็น OAuth Client ประเภท Desktop app (ไม่ใช่ Web/Android Client)")
+    # Google issues a client_secret to Desktop OAuth clients, and its token
+    # endpoint can respond HTTP 400 'client_secret is missing' if omitted.
+    # A native client's secret is not confidential. Keep it inside the app's
+    # Desktop config (NOT in a user's token store), and retain PKCE.
+    if not isinstance(data.get("client_secret"), str) or not data["client_secret"].strip():
+        raise GoogleError(
+            "OAuth Desktop Client JSON ไม่มี client_secret จึงล็อกอิน Google ไม่ได้ "
+            "· โปรดนำเข้า JSON ต้นฉบับจาก Google Cloud ใหม่หนึ่งครั้ง "
+            "หรือให้ผู้พัฒนาบรรจุ Desktop Client ID + Client Secret ในรุ่น PC"
+        )
     return data
 
 
@@ -154,12 +164,16 @@ class GoogleDrive:
         return _read_client(self.get_oauth_path())
 
     def import_client(self, filename):
-        """Save only PUBLIC desktop client configuration, never user tokens."""
+        """Retain BOTH Desktop client fields. Never copy personal user tokens.
+
+        The prior importer discarded Google's installed.client_secret, causing
+        HTTP 400 'client_secret is missing'. Desktop apps are public OAuth
+        clients; this field is an app credential, not the user's refresh token.
+        """
         data = _read_client(filename)
-        # Desktop OAuth clients are public and cannot keep secrets private.
-        # We deliberately store only the ID: PKCE works without a secret.
         public = {"installed": {
             "client_id": data["client_id"],
+            "client_secret": data["client_secret"],
             "auth_uri": AUTH_URL,
             "token_uri": TOKEN_URL,
             "redirect_uris": ["http://127.0.0.1"]
@@ -258,7 +272,7 @@ class GoogleDrive:
                 content = ("<!doctype html><meta charset=utf-8><title>X-Stage Song Studio</title>"
                            "<style>body{font:18px sans-serif;background:#102536;color:#d5faff;"
                            "padding:50px;text-align:center}</style>"
-                           "<h2>เชื่อม Google Drive แล้ว</h2><p>กลับไปที่ X-Stage Song Studio PC ได้เลย</p>")
+                           "<h2>ได้รับคำอนุญาตจาก Google แล้ว</h2><p>กำลังตรวจสอบและเชื่อมต่อใน X-Stage Song Studio PC</p>")
                 content = content.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
