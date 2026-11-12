@@ -170,12 +170,15 @@
           </div>
           <article class="panel ai-lyrics-search">
             <div class="section-heading"><div><h2>1. เลือกเพลงที่มีไฟล์เสียง</h2>
-              <p>แสดงเฉพาะไฟล์เสียงที่ค้นพบจากการสแกน ไม่แสดง MIDI/KAR ที่ไม่มีเสียงร้องให้ AI ถอด</p></div>
-              <button id="ai-lyrics-refresh" type="button" class="button ghost">↻ ค้นหาใหม่</button>
+              <p>นำเข้าไฟล์เสียงใหม่ได้ที่นี่โดยตรง ไม่ต้องสแกนคลังเพลงหรือเปิดเมนูสร้างเพลงใหม่ · รองรับไฟล์เสียงที่มีเสียงร้อง</p></div>
+              <div class="ai-lyrics-import-actions">
+                <button id="ai-lyrics-import" type="button" class="button primary">+ นำเข้าเพลงใหม่</button>
+                <button id="ai-lyrics-refresh" type="button" class="button ghost">↻ แสดงเพลงที่นำเข้า</button>
+              </div>
             </div>
             <div class="searchbox"><span aria-hidden="true">⌕</span>
               <input id="ai-lyrics-search" type="search" placeholder="ค้นหาชื่อเพลง นักร้อง หรือรหัสเพลง" autocomplete="off"></div>
-            <div id="ai-lyrics-results" class="ai-lyrics-results" aria-label="รายการเพลงเสียงสำหรับ AI"><div class="preview-empty">กรุณาสแกนเพลงในเมนูสร้างเพลงใหม่ก่อน</div></div>
+            <div id="ai-lyrics-results" class="ai-lyrics-results" aria-label="รายการเพลงเสียงสำหรับ AI"><div class="preview-empty">ยังไม่มีเพลงที่นำเข้า · กด “นำเข้าเพลงใหม่” เพื่อเลือกไฟล์เสียงจากเครื่อง</div></div>
             <div class="ai-lyrics-pager"><span id="ai-lyrics-count">ยังไม่มีข้อมูล</span>
               <div><button id="ai-lyrics-prev" type="button" class="button ghost">‹ ก่อนหน้า</button>
               <button id="ai-lyrics-next" type="button" class="button ghost">ถัดไป ›</button></div>
@@ -190,7 +193,7 @@
                   <option value="th">ภาษาไทย</option><option value="auto">ตรวจจับภาษาอัตโนมัติ</option><option value="en">ภาษาอังกฤษ</option>
                 </select></div>
               <button id="ai-lyrics-start" class="button primary" type="button" disabled>✦ ให้ AI ถอดเสียงร้องและจัดเวลา</button>
-              <span id="ai-lyrics-status" class="ai-lyrics-status" role="status" aria-live="polite">รอเลือกเพลงที่มีเสียงร้อง</span>
+              <span id="ai-lyrics-status" class="ai-lyrics-status" role="status" aria-live="polite">รอนำเข้าเพลงใหม่หรือเลือกเพลงที่เคยนำเข้า</span>
             </div>
             <div class="ai-lyrics-monitor">
               <strong>3. ทดลองเล่นเพลงพร้อมตรวจเนื้อร้อง</strong>
