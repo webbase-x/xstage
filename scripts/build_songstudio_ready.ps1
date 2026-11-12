@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.1-build301'
+$Version = 'v0.3.2-build302'
 $DirName = 'X-Stage-Song-Studio-PC-Ready-' + $Version
 $OutputRoot = Join-Path $Repo 'dist'
 $Stage = Join-Path $OutputRoot $DirName
@@ -52,6 +52,7 @@ $map = @{
  'songstudio-pc/Start-Song-Studio-Ready.cmd' = 'Start-Song-Studio.cmd'
  'songstudio-pc/Start-Song-Studio-Ready.ps1' = 'Start-Song-Studio-Ready.ps1'
  'songstudio-pc/engine.py' = 'engine.py'
+ 'songstudio-pc/pick_path.ps1' = 'pick_path.ps1'
  'songstudio-pc/README-READY.md' = 'README.md'
  'studio/index.html' = 'studio/index.html'
  'studio/app.js' = 'studio/app.js'
@@ -145,6 +146,7 @@ CopyFromRepo 'songstudio-pc/THIRD_PARTY_NOTICES.md' '.runtime/licenses/THIRD_PAR
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'engine.py',
+ 'pick_path.ps1',
  'studio/index.html',
  'studio/app.js',
  'studio/style.css',
@@ -169,8 +171,8 @@ $manifest = [ordered]@{
     product = 'X-Stage Song Studio PC'
     bundle_type = 'ready-offline'
     platform = 'windows-x64'
-    version = '0.3.1'
-    build = 301
+    version = '0.3.2'
+    build = 302
     created_utc = [DateTime]::UtcNow.ToString('o')
     contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont')
     files = @($files)
