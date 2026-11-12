@@ -134,6 +134,7 @@ def google_client_path():
 
 GOOGLE = _module("google_drive.py", "xstage_google_drive").GoogleDrive(
     DATA, google_client_path)
+NCN = _module("ncn_lyrics.py", "xstage_ncn_lyrics")
 # Normalize old absolute JSON paths to a stable per-user copy when possible.
 if not (DATA / "oauth-client.json").is_file() and not (ROOT / "config" / "google-oauth-client.json").is_file():
     _old_oauth = PREFS.get("oauth", "")
@@ -202,7 +203,7 @@ def scan_source():
         raise ValueError("โฟลเดอร์ต้นฉบับไม่มีอยู่ กรุณาเลือกโฟลเดอร์ก่อนสแกน")
     rows = []
     index = 1
-    ncn = _module("ncn_lyrics.py", "xstage_ncn_lyrics")
+    ncn = NCN
     companion_index = {}
     # Never re-import our own output as new source songs when users choose
     # a parent folder containing both originals and the output directory.
@@ -337,14 +338,79 @@ def unique_target(folder, base, suffix):
 def safe_stem(name):
     return "".join("_" if c in '<>:"/\\|?*\0' else c for c in name).strip(". ")[:130] or "song"
 
+def _matching_lrc(source: Path) -> Path | None:
+    """A companion must have the SAME original code in SAME directory."""
+    candidate = source.with_suffix(".lrc")
+    if candidate.is_file():
+        return candidate
+    # Linux regression tests and Windows both honor case-insensitive .LRC.
+    try:
+        for item in source.parent.iterdir():
+            if (item.is_file() and item.stem.casefold() == source.stem.casefold()
+                    and item.suffix.casefold() == ".lrc"):
+                return item
+    except OSError:
+        pass
+    return None
+
+
+def lyrics_package(row):
+    """Return (LRC, accurately timed JSON, source fingerprint) or no lyrics.
+
+    Never invent timings. The metadata editor's saved timed LRC has priority.
+    NCN requires .MID + .LYR + .CUR with the SAME code and mirrored folder.
+    KAR text events are decoded from the MIDI itself.
+    """
+    export = _song_export_module()
+    code = str(row.get("code") or Path(row["path"]).stem)
+    note = NOTES.get(row["path"], {}).get("lyrics", "")
+    if note:
+        doc = export.lrc_to_json(note, code)
+        if not doc["lines"]:
+            raise ValueError("เนื้อร้องที่แก้ไขไม่มี timestamp LRC ที่ถูกต้อง")
+        return note, doc, hashlib.sha256(note.encode("utf-8")).hexdigest()
+    source = Path(row["path"])
+    trio = row.get("ncn") or NCN.resolve_companions(source)
+    if trio:
+        doc = NCN.ncn_document(trio)
+        files = [Path(trio[k]) for k in ("midi", "lyrics", "cursor")]
+        fingerprint = hashlib.sha256()
+        for item in files:
+            # Metadata changes are enough to detect an updated NCN trio at
+            # scale without rehashing hundreds of megabytes on every run.
+            stat = item.stat()
+            fingerprint.update((str(item.resolve()).casefold() + ":" +
+                                str(stat.st_size) + ":" + str(stat.st_mtime_ns)).encode("utf-8"))
+        return doc["rawLrc"], doc, fingerprint.hexdigest()
+    lrc = _matching_lrc(source)
+    if lrc is not None:
+        data = lrc.read_bytes()
+        text = NCN._decode_text(data)
+        doc = export.lrc_to_json(text, code)
+        if not doc["lines"]:
+            raise ValueError("ไฟล์ LRC มีข้อความ แต่ไม่มี timestamp ที่ถูกต้อง: " + lrc.name)
+        return text, doc, hashlib.sha256(data).hexdigest()
+    if source.suffix.lower() in EXT_MIDI:
+        try:
+            doc = NCN.kar_document(source, code)
+            stat = source.stat()
+            fingerprint = hashlib.sha256(
+                (str(stat.st_size) + ":" + str(stat.st_mtime_ns)).encode()).hexdigest()
+            return doc["rawLrc"], doc, fingerprint
+        except ValueError:
+            if source.suffix.lower() == ".kar":
+                raise
+    return "", None, ""
+
+
 def lyrics_text(row):
+    """Preview currently available lyrics; no empty fake timestamped LRC."""
     note = NOTES.get(row["path"], {}).get("lyrics", "")
     if note:
         return note
-    source = Path(row["path"])
     try:
-        return source.with_suffix(".lrc").read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
+        return lyrics_package(row)[0]
+    except (ValueError, OSError):
         return ""
 
 def ensure_midi_wav(path):
