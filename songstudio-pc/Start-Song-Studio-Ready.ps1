@@ -44,6 +44,12 @@ try {
     $ui = Check-File 'studio\index.html'
     [void](Check-File 'studio\app.js')
     [void](Check-File 'studio\style.css')
+    [void](Check-File 'studio\app-icon.svg')
+    [void](Check-File 'studio\app-icon.ico')
+    [void](Check-File 'studio\app-icon-512.png')
+    [void](Check-File 'studio\site.webmanifest')
+    [void](Check-File 'Create-Desktop-Shortcut.cmd')
+    [void](Check-File 'Create-Desktop-Shortcut.ps1')
     [void](Check-File 'studio\entry.js')
     if ($null -eq $Manifest.files -or $Manifest.files.Count -lt 6) {
         throw 'Ready bundle integrity manifest is incomplete.'
