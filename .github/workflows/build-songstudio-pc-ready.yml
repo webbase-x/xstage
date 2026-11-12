@@ -7,6 +7,12 @@ on:
       - "songstudio-pc/**"
       - "scripts/build_songstudio_ready.ps1"
       - "scripts/test_songstudio_ready.py"
+      - "scripts/test_songstudio_ai_import.py"
+      - "scripts/test_songstudio_drive_roundtrip.py"
+      - "scripts/test_songstudio_lyrics_preview.py"
+      - "scripts/test_songstudio_ncn.py"
+      - "scripts/test_songstudio_drive_download.py"
+      - "scripts/test_songstudio_pc.py"
       - "studio/index.html"
       - "studio/app-icon.svg"
       - "studio/site.webmanifest"
@@ -46,11 +52,15 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pillow==11.3.0
           if ($LASTEXITCODE -ne 0) { throw "Build-only Pillow package failed" }
-      - name: Build complete bundled Windows runtime and ZIP
+      - name: Preflight source syntax and PC/Web UI
         shell: powershell
         run: |
-          & ./scripts/build_songstudio_ready.ps1
-          if ($LASTEXITCODE -ne 0) { throw "READY bundle packaging failed" }
+          & python -m compileall -q songstudio-pc scripts
+          if ($LASTEXITCODE -ne 0) { throw "Python source compilation failed" }
+          & node --check studio/app.js
+          if ($LASTEXITCODE -ne 0) { throw "PC/Web Control JavaScript syntax failed" }
+          & node --check studio/web.js
+          if ($LASTEXITCODE -ne 0) { throw "Web-only JavaScript syntax failed" }
       - name: Regression tests for deduplication and resume
         shell: powershell
         run: |
@@ -64,6 +74,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "NCN Song/Lyrics/Cursor regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
           if ($LASTEXITCODE -ne 0) { throw "Real lyrics and AI draft regressions failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Independent AI import and reviewed lyrics regressions failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Google Drive upload/download/ZIP round-trip regression failed" }
+      - name: Build complete bundled Windows runtime and ZIP
+        shell: powershell
+        run: |
+          & ./scripts/build_songstudio_ready.ps1
+          if ($LASTEXITCODE -ne 0) { throw "READY bundle packaging failed" }
       - name: Validate complete bundled Desktop OAuth pair (never user tokens)
         shell: powershell
         run: |
