@@ -94,7 +94,7 @@ try {
     let response = {};
     if (url.pathname === '/api/status') {
       response = {
-        version:'0.3.4', build:304,
+        version:'0.3.5', build:305,
         preferences:settings, soundfonts:[settings.soundfont],
         presets:[{value:'balanced',label:'สมดุล'}],
         google:{connected:false,email:''},
@@ -124,6 +124,12 @@ try {
   pc.on('dialog', async (dialog) => dialog.accept());
   await pc.goto('http://127.0.0.1:' + port + '/studio/index.html#auth=test-session-token', {waitUntil:'load'});
   await pc.waitForFunction(() => document.getElementById('catalog-total')?.textContent.includes('2'));
+  assert.equal(await pc.locator('.brand-mark img').isVisible(), true, 'PC brand icon must render');
+  await pc.waitForFunction(() => {
+    const icon = document.querySelector('.brand-mark img');
+    return Boolean(icon && icon.complete && icon.naturalWidth > 0);
+  });
+  assert.equal(await pc.locator('link[rel="icon"]').getAttribute('href'), './app-icon.svg');
   assert.equal(await pc.locator('#create-stage-1').isVisible(), true, 'step 1 should be visible initially');
   assert.equal(await pc.locator('#create-stage-2').isVisible(), false, 'step 2 should be hidden initially');
   await pc.click('#create-step-next');
