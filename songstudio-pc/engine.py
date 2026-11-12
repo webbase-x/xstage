@@ -202,6 +202,8 @@ def scan_source():
         raise ValueError("โฟลเดอร์ต้นฉบับไม่มีอยู่ กรุณาเลือกโฟลเดอร์ก่อนสแกน")
     rows = []
     index = 1
+    ncn = _module("ncn_lyrics.py", "xstage_ncn_lyrics")
+    companion_index = {}
     # Never re-import our own output as new source songs when users choose
     # a parent folder containing both originals and the output directory.
     workspace = Path(PREFS["workspace"]).expanduser().resolve()
@@ -218,7 +220,12 @@ def scan_source():
         for name in sorted(files):
             path = Path(base) / name
             ext = path.suffix.lower()
-            if ext not in (EXT_AUDIO | EXT_MIDI | EXT_UNSUPPORTED) or path.is_symlink():
+            if path.is_symlink():
+                continue
+            if ext in (".lyr", ".cur"):
+                ncn.index_component(path, companion_index)
+                continue
+            if ext not in (EXT_AUDIO | EXT_MIDI | EXT_UNSUPPORTED):
                 continue
             try:
                 stat = path.stat()
@@ -235,6 +242,31 @@ def scan_source():
             index += 1
             if index > 100000:
                 raise ValueError("พบเพลงเกิน 100,000 รายการ กรุณาเลือกโฟลเดอร์ย่อย")
+    # Bind all three NCN components using mirrored Song/Lyrics/Cursor paths.
+    # Only MIDI within Song becomes a song; .LYR and .CUR never become rows.
+    for row in rows:
+        original = Path(row["path"])
+        if original.suffix.lower() not in (".mid", ".midi"):
+            continue
+        trio = ncn.resolve_companions(original, companion_index)
+        if trio is None:
+            continue
+        row["ncn"] = trio
+        row["source_format"] = "NCN"
+        row["components"] = {
+            "song": trio["midi"], "lyrics": trio["lyrics"], "cursor": trio["cursor"]
+        }
+        row["status"] = "ready" if not trio["missing"] else "missing-companion"
+        if trio["lyrics"]:
+            try:
+                meta = ncn.lyric_metadata(Path(trio["lyrics"]))
+                row["title"] = NOTES.get(row["path"], {}).get("title") or meta["title"] or row["title"]
+                row["artist"] = NOTES.get(row["path"], {}).get("artist") or meta["artist"]
+            except (OSError, ValueError) as exc:
+                row["status"] = "lyrics-error"
+                row["component_error"] = str(exc)
+        if trio["missing"]:
+            row["component_error"] = "NCN ขาด " + ", ".join(trio["missing"])
     with LOCK:
         FILES[:] = rows
         FILE_BY_ID.clear()
