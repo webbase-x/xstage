@@ -42,7 +42,7 @@ function harness({active=false,token=true,queueSize=0,playableSong=true}={}){
   test.request();
   assert.equal(test.playCount,1,'empty queue starts playback');
   assert.equal(test.messages[0].type,'request-received');
-  assert.equal(test.messages[0].result,'playing');
+  assert.equal(test.messages[0].result,'starting','request is not acknowledged as playing before media starts');
   assert.equal(test.messages[0].requestId,42,'receipt must match the phone request');
 }
 {
@@ -80,4 +80,22 @@ function harness({active=false,token=true,queueSize=0,playableSong=true}={}){
   assert.equal(test.messages[8].requestId,8,'rate limit must identify the request');
 }
 
-console.log('X-Stage mobile remote request contract: 7 behavioral cases passed');
+{
+  const test=harness({queueSize:1,active:false});
+  test.request();
+  assert.equal(test.playCount,0,'a second request only joins the existing queue, even when stage is idle');
+  assert.equal(test.messages[0].result,'queued','queued requests are not claimed to be playing');
+}
+{
+  const test=harness({queueSize:1,active:true});
+  test.request();
+  assert.equal(test.playCount,0,'incoming request must never interrupt a playing song');
+  assert.equal(test.queueAdds,1);
+}
+const player=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const remote=fs.readFileSync(new URL('../remote.js',import.meta.url),'utf8');
+assert.ok(player.includes('publishPlaybackStatus(\'loading\'')&&player.includes('publishPlaybackStatus(\'playing\'')&&player.includes('publishPlaybackStatus(\'error\''),
+  'host playback must report loading, actual playing, and Drive/media failures');
+assert.ok(source.includes("type:'playback-status'")&&remote.includes("data.type==='playback-status'"),
+  'mobile remote must receive actual TV playback feedback');
+console.log('X-Stage mobile remote request contract: 9 behavioral cases and real playback feedback passed');
