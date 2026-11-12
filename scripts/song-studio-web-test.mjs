@@ -99,4 +99,24 @@ await reserveSongAssetNames('เพลงเดิม', existingAssets, new Map(
 assert.deepEqual(existingAssets.map(item => item.name),
   ['เพลงเดิม (1).m4a', 'เพลงเดิม (1).lrc']);
 
+// Never export a misleading ".lrc" if the supplied words have no timestamps.
+const parseStart = js.indexOf('  function parseLrc(');
+const parseEnd = js.indexOf('  async function lyricsFor(', parseStart);
+const assetStart = js.indexOf('  async function createSongAssets(');
+const assetEnd = js.indexOf('  async function reserveSongAssetNames(', assetStart);
+assert.ok(parseStart >= 0 && parseEnd > parseStart && assetStart >= 0 && assetEnd > assetStart);
+let lyricsText = 'ข้อความร้องไม่มีเวลา';
+const warnings = [];
+const makeSongAssets = new Function('Blob','renderAudio','lyricsFor','state','log',
+  js.slice(safeStart, safeEnd) + '\n' + js.slice(parseStart,parseEnd) +
+  '\n' + js.slice(assetStart,assetEnd) + '\nreturn createSongAssets;')(
+    Blob, async () => new Blob(['audio']), async () => lyricsText,
+    {cancelled:false}, text => warnings.push(text));
+let songAssets = await makeSongAssets({name:'ตัวอย่าง'},0);
+assert.deepEqual(songAssets.map(x=>x.name),['ตัวอย่าง.m4a']);
+assert.ok(warnings.some(x=>x.includes('ไม่มีบรรทัดเนื้อร้องพร้อมเวลา')));
+lyricsText = '[00:01.20]ท่อนแรก\n[00:03.50]ท่อนที่สอง';
+songAssets = await makeSongAssets({name:'ตัวอย่าง'},1);
+assert.deepEqual(songAssets.map(x=>x.name),['ตัวอย่าง.m4a','ตัวอย่าง.lrc']);
+
 console.log('Song Studio Web smoke tests passed: JavaScript, DOM IDs, pairing, privacy, ZIP structure.');
