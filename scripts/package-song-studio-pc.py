@@ -16,6 +16,8 @@ FILES = {
     "songstudio-pc/ai-model.lock.json": "ai-model.lock.json",
     "songstudio-pc/pick_path.ps1": "pick_path.ps1",
     "songstudio-pc/README.md": "README.md",
+    "studio/app-icon.svg": "studio/app-icon.svg",
+    "studio/site.webmanifest": "studio/site.webmanifest",
     "studio/index.html": "studio/index.html",
     "studio/app.js": "studio/app.js",
     "studio/style.css": "studio/style.css",
