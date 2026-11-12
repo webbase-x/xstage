@@ -242,7 +242,8 @@ window.XStageTvOpenMenu=()=>{
   if(!document.body.classList.contains('xstage-native-tv'))return false;
   if(['android-tv-auth-panel','android-tv-update-panel'].some(id=>{
     const element=document.getElementById(id);
-    return element&&!element.hidden;
+    return element&&!element.hidden&&
+      !(id==='android-tv-update-panel'&&element.classList.contains('during-playback'));
   }))return false;
   const panel=xstageTvQuickMenu();
   panel.hidden=!panel.hidden;
@@ -269,7 +270,9 @@ window.XStageTvMoveFocus=direction=>{
     return true;
   }
   if(!items.includes(active)){
-    const preferred=scope.querySelector?.('#android-tv-update-now:not([disabled]),#android-tv-auth-retry:not([disabled]),button:not([disabled])');
+    const preferred=scope.classList?.contains('during-playback')
+      ?scope.querySelector?.('#android-tv-update-later:not([disabled])')
+      :scope.querySelector?.('#android-tv-update-now:not([disabled]),#android-tv-auth-retry:not([disabled]),button:not([disabled])');
     const target=preferred&&items.includes(preferred)?preferred:items[0];
     try{target.focus({preventScroll:true});}catch{target.focus();}
     target.scrollIntoView?.({block:'nearest',inline:'nearest'});
@@ -306,7 +309,9 @@ window.XStageTvActivateFocused=()=>{
     return window.XStageTvOpenMenu?.()||false;
   let active=document.activeElement;
   if(!items.includes(active)){
-    active=scope.querySelector?.('#android-tv-update-now:not([disabled]),button:not([disabled]),a[href]')||items[0];
+    active=(scope.classList?.contains('during-playback')
+      ?scope.querySelector?.('#android-tv-update-later:not([disabled])')
+      :scope.querySelector?.('#android-tv-update-now:not([disabled]),button:not([disabled]),a[href]'))||items[0];
     if(!active)return false;
     try{active.focus({preventScroll:true});}catch{active.focus();}
   }
