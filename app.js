@@ -954,6 +954,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     clearPendingAuth();
     setStatus('ต่ออายุ Google Drive สำเร็จ · เพลงและคิวเดิมเล่นต่อเนื่อง','success');
     window.dispatchEvent(new CustomEvent('xstage:auth-refreshed',{detail:{sub:String(account.sub)}}));
+    // An already verified same-account Drive session can reopen after renewal.
+    if(androidTvVerifiedConnectionSub===account.sub)setAndroidTvStageAccess(true);
     return;
   }
   if(state.token && state.token!==token)state.catalogCache.clear();
@@ -992,6 +994,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
+      // Drive API verified access even if XStageWeb folder is not configured yet.
+      setAndroidTvStageAccess(true,account.sub);
       if(instant){
         ui.libraryState.textContent='ใช้ฐานเพลงในเครื่อง · ยังไม่ได้อนุญาตคลังที่แชร์บนอุปกรณ์นี้';
         return;
@@ -1080,11 +1084,15 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     hideCatalogLoading();
     void saveCachedCatalog(cacheOwner,pointer,catalog);
     setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลง · ${libraryLabel(root)}${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
+    setAndroidTvStageAccess(true,account.sub);
     void restorePlaybackAfterReload();
     if(!readPlaybackResumeState())ui.search.focus();
   }catch(error){
     hideCatalogLoading();
     if(instant&&state.token===token&&authId===state.authId){
+      // Initial Android login requires LIVE Google Drive verification;
+      // cached songs must not silently bypass authorization.
+      if(androidTvNativeBridgeReady()&&!androidTvVerifiedConnectionSub)throw error;
       // Local catalog stays usable when update checking is slow/offline/fails.
       setSearchAvailability(true);
       ui.libraryState.textContent='ใช้ฐานเพลงในเครื่อง · ตรวจอัปเดตภายหลัง';
@@ -2374,6 +2382,23 @@ function setupNativeAndroidTvUi(){
   const queue=document.getElementById('stage-queue-toggle');
   if(queue){queue.tabIndex=-1;queue.hidden=true;queue.style.pointerEvents='none';}
 }
+
+let androidTvVerifiedConnectionSub='';
+function setAndroidTvStageAccess(granted,accountSub=''){
+  if(!androidTvNativeBridgeReady())return;
+  if(granted){
+    if(accountSub)androidTvVerifiedConnectionSub=accountSub;
+    document.documentElement.classList.remove('xstage-native-auth-pending');
+    document.body.classList.remove('xstage-native-auth-pending');
+    try{window.XStageAndroid.onLoginScreenReady?.();}catch{}
+  }else{
+    document.documentElement.classList.add('xstage-native-auth-pending');
+    document.body.classList.add('xstage-native-auth-pending');
+  }
+}
+function notifyAndroidTvLoginReady(){
+  try{window.XStageAndroid?.onLoginScreenReady?.();}catch{}
+}
 // Google device-code requests have a bounded wait. Missing watchdog helpers
 // previously threw ReferenceError before the QR callback could render.
 let androidTvLoginWatchdog=0;
@@ -2402,6 +2427,7 @@ function androidTvAuthPanel(){
   panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-labelledby','android-tv-auth-title');
   panel.innerHTML='<div class="android-tv-auth-box">'+
+    '<img class="android-tv-auth-brand" src="assets/xstage-stage-logo.png?v=1089" width="2048" height="682" alt="X-Stage Karaoke Online">'+
     '<span class="android-tv-auth-kicker">X-STAGE ANDROID · <b id="android-tv-auth-version">กำลังอ่านรุ่น…</b></span>'+
     '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
     '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือหรืออุปกรณ์อื่น แล้วกรอกรหัสที่แสดง</p>'+
@@ -2418,6 +2444,8 @@ function androidTvAuthPanel(){
     '<small>ไม่ต้องกรอกรหัสผ่าน Google ใน X-Stage · การอนุญาตเกิดบนหน้า Google ที่ปลอดภัย</small>'+
     '</div>';
   document.body.append(panel);
+  // Native APK requires sign-in before showing a stage. BACK exits the app.
+  if(androidTvNativeBridgeReady())$('android-tv-auth-cancel').hidden=true;
   try{
     const rawVersion=String(window.XStageAndroid?.getAppVersion?.()||window.XSTAGE_RELEASE?.version||'').replace(/-debug$/,'');
     const build=Number(window.XStageAndroid?.getAppBuild?.()||window.XSTAGE_RELEASE?.build||0);
@@ -2498,7 +2526,9 @@ async function renderAndroidTvLoginQr(url){
 }
 function showAndroidTvAuthPanel(){
   const panel=androidTvAuthPanel();
+  setAndroidTvStageAccess(false);
   panel.hidden=false;
+  notifyAndroidTvLoginReady();
   $('android-tv-auth-code').textContent='----';
   $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
   $('android-tv-auth-retry').hidden=true;
@@ -2572,7 +2602,10 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   savePendingAuth(token,expiresAt);
   try{
     await openDrive(token,authId,expiresAt,existingSub);
-    if(authId===state.authId&&state.token){hideAndroidTvAuthPanel();androidTvRefreshingSession=false;}
+    if(authId===state.authId&&state.token){
+      if(!document.documentElement.classList.contains('xstage-native-auth-pending'))hideAndroidTvAuthPanel();
+      androidTvRefreshingSession=false;
+    }
   }catch(error){
     if(authId===state.authId){
       if(existingSub&&state.token){
@@ -2580,6 +2613,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
         // audio and queue; retry via the native refresh-token watchdog.
         clearPendingAuth();
       }else{
+        setAndroidTvStageAccess(false);
         clearActiveAuth();resetPrivate({keepAuth:true});
       }
       window.XStageAndroidAuthError(error?.message||'เปิด Google Drive ไม่สำเร็จ');
@@ -2591,6 +2625,8 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
 };
 window.XStageAndroidSignedOut=()=>{
   clearAndroidTvLoginWatchdog();
+  androidTvVerifiedConnectionSub='';
+  setAndroidTvStageAccess(false);
   if(state.token)resetPrivate({keepAuth:false});
   if(androidTvNativeBridgeReady())startAndroidTvDeviceLogin(true);
   setStatus('ออกจากระบบ Google ในแอป Android แล้ว');
@@ -2746,6 +2782,8 @@ function bootAndroidTvAuthentication(){
     panel.hidden=false;
     $('android-tv-auth-status').textContent='กำลังตรวจสอบสิทธิ์ Google Drive ที่บันทึกไว้…';
     $('android-tv-auth-retry').hidden=false;
+    setAndroidTvStageAccess(false);
+    notifyAndroidTvLoginReady();
     setStatus('กำลังกู้คืน Google Drive ในแอป Android…');
     restoreAndroidTvGoogleSession();
     return;
@@ -2755,7 +2793,10 @@ function bootAndroidTvAuthentication(){
 // Re-check the native Drive session before access tokens expire and after TV wake.
 let androidTvRefreshingSession=false;
 function guardAndroidTvSession(){
-  if(!androidTvNativeBridgeReady()||!androidTvBootAuthStarted||androidTvLoginCancelled||androidTvLoginInProgress)return;
+  if(!androidTvNativeBridgeReady()||!androidTvBootAuthStarted||androidTvLoginCancelled)return;
+  if(androidTvVerifiedConnectionSub&&(!state.token||
+    (state.tokenExpiresAt>0&&state.tokenExpiresAt<=Date.now())))setAndroidTvStageAccess(false);
+  if(androidTvLoginInProgress)return;
   const expired=!state.token||!state.tokenExpiresAt||state.tokenExpiresAt<=Date.now()+90_000;
   if(!expired){androidTvRefreshingSession=false;return;}
   if(androidTvRefreshingSession)return;
@@ -2797,6 +2838,8 @@ if(ui.gate)new MutationObserver(syncLoginGateState).observe(ui.gate,{attributes:
 syncLoginGateState();
 ui.logout.addEventListener('click',()=>{
   if(androidTvNativeBridgeReady()){
+    androidTvVerifiedConnectionSub='';
+    setAndroidTvStageAccess(false);
     try{window.XStageAndroid.logoutGoogle?.();}catch{}
   }
   resetPrivate({revoke:true});
@@ -2929,6 +2972,8 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
   }
 }
 (function restoreTabSession(){
+  // Android APK login is owned by the encrypted native token store, not JS.
+  if(androidTvNativeBridgeReady())return;
   const saved=readActiveAuth();
   if(!saved){
     if(readPendingAuth()){void recoverPendingGoogleAuth();}
