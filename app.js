@@ -568,6 +568,19 @@ function hideCatalogLoading(){
   if(ui.catalogProgressValue)ui.catalogProgressValue.textContent='0%';
 }
 
+function publishPlaybackStatus(state,song,message=''){
+  window.dispatchEvent(new CustomEvent('xstage:playback-status',{
+    detail:{state,title:String(song?.title||song?.code||''),message:String(message||'')}
+  }));
+}
+async function boundedPlaybackTask(task,seconds,message){
+  let timer;
+  try{
+    return await Promise.race([task,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(Error(message)),seconds*1000);
+    })]);
+  }finally{clearTimeout(timer);}
+}
 function setPlayStatus(message) {
   // Track title and playback state already appear in the bottom transport.
   // Keep only loading, errors and actionable notices in the status area.
@@ -1850,7 +1863,8 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
-  state.loading=true;updateTransport();setPlayStatus('');
+  state.loading=true;updateTransport();setPlayStatus('กำลังโหลดเสียงและเนื้อร้องจาก Google Drive…');
+  publishPlaybackStatus('loading',song,'กำลังเตรียมไฟล์เพลงจาก Google Drive');
   try {
     const prepared=(preloaded?.song===song&&preloaded.token===token?preloaded
       :state.queuePrepared?.song===song&&state.queuePrepared.token===token
@@ -1858,10 +1872,10 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     if(prepared){if(state.queuePrepared===prepared)state.queuePrepared=null;if(state.medleyCache===prepared)state.medleyCache=null;}
     const [audio,lyrics]=prepared
       ? [prepared.blob,prepared.lyrics]
-      : await Promise.all([
+      : await boundedPlaybackTask(Promise.all([
           privateFile(song.audio.fileId,token,{signal:controller.signal}).then(r=>r.blob()),
           privateJson(song.lyrics.fileId,token,{signal:controller.signal})
-        ]);
+        ]),90,'โหลดเพลงจาก Google Drive นานเกินไป กรุณาตรวจการเชื่อมต่อ');
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token)return;
     if (!audio.size)throw Error('ไฟล์เสียงว่างเปล่า');
@@ -1898,14 +1912,30 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     state.userPaused=!autoplay;state.resumeAfterInterruption=false;
     if(autoplay){
       try{await window.XStageResumeAudioGraph?.();}catch{}
-      try{await player.play();if(request===state.requestId)setPlayStatus('กำลังเล่น · '+(song.title||song.code));}
-      catch{if(request===state.requestId){state.userPaused=true;state.resumeAfterInterruption=false;setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น');}}
+      try{
+        await boundedPlaybackTask(player.play(),18,'ทีวีไม่เริ่มเล่นเสียงภายใน 18 วินาที');
+        if(request===state.requestId){
+          setPlayStatus('กำลังเล่น · '+(song.title||song.code));
+          publishPlaybackStatus('playing',song,'เริ่มเล่นเพลงบนจอแล้ว');
+        }
+      }catch(error){
+        if(request===state.requestId){
+          state.userPaused=true;state.resumeAfterInterruption=false;
+          const reason=error?.name==='NotAllowedError'
+            ?'Android TV ไม่อนุญาตให้เริ่มเล่นอัตโนมัติ · ลองกด ▶ บนรีโมท'
+            :error?.name==='NotSupportedError'
+            ?'Android TV ไม่รองรับรูปแบบไฟล์เสียงของเพลงนี้'
+            :error?.message||'ไม่สามารถเริ่มเสียงบน TV ได้';
+          setPlayStatus(reason);
+          publishPlaybackStatus('blocked',song,reason);
+        }
+      }
     }else{
       player.pause();
       setPlayStatus('เพลงพร้อมเล่นต่อจากตำแหน่งเดิม');
       updateTransport();
     }
-  }catch(e){if(request!==state.requestId || e.name==='AbortError')return;setPlayStatus(e.message||'ไม่สามารถเล่นเพลงได้');state.loading=false;updateTransport();}
+  }catch(e){if(request!==state.requestId || e.name==='AbortError')return;const message=e.message||'ไม่สามารถเล่นเพลงได้';setPlayStatus(message);publishPlaybackStatus('error',song,message);state.loading=false;updateTransport();}
   finally{if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}}
 }
 function updateTransport(){
@@ -2767,7 +2797,14 @@ player.addEventListener('ended',()=>{
   if(state.queue.length||state.medley)playNext();
   else clearIdleStage('จบเพลงแล้ว · คิวว่าง');
 });
-player.addEventListener('error',()=>{if(state.current)setPlayStatus('ไม่สามารถถอดรหัสไฟล์เสียงนี้ในเบราว์เซอร์ได้');});
+player.addEventListener('error',()=>{
+  if(!state.current)return;
+  const code=player.error?.code;
+  const message=code===4?'Android TV ไม่รองรับไฟล์เสียงนี้หรือรูปแบบไฟล์ไม่ถูกต้อง'
+    :code===3?'Android TV ถอดรหัสไฟล์เสียงเพลงนี้ไม่ได้'
+    :'เกิดข้อผิดพลาดระหว่างเปิดไฟล์เสียงเพลงบนจอ';
+  setPlayStatus(message);publishPlaybackStatus('error',state.current,message);
+});
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'&&state.token){e.preventDefault();ui.search.focus();ui.search.select();return;}
   if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
