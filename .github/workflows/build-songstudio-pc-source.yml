@@ -10,6 +10,12 @@ on:
       - "studio/entry.js"
       - "scripts/package-song-studio-pc.py"
       - "scripts/test_songstudio_pc.py"
+      - "scripts/test_songstudio_ai_import.py"
+      - "scripts/test_songstudio_drive_roundtrip.py"
+      - "scripts/test_songstudio_lyrics_preview.py"
+      - "scripts/test_songstudio_ncn.py"
+      - "scripts/test_songstudio_drive_download.py"
+      - "scripts/test_songstudio_build_outcomes.py"
       - ".github/workflows/build-songstudio-pc-source.yml"
   workflow_dispatch:
 
@@ -34,7 +40,14 @@ jobs:
       - name: Validate source and local API
         run: |
           python -m py_compile songstudio-pc/engine.py scripts/package-song-studio-pc.py
+          node --check studio/app.js
           python -m unittest discover -s scripts -p test_songstudio_pc.py -v
+          python -m unittest discover -s scripts -p test_songstudio_ncn.py -v
+          python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
+          python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
+          python -m unittest discover -s scripts -p test_songstudio_drive_download.py -v
+          python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
+          python -m unittest discover -s scripts -p test_songstudio_build_outcomes.py -v
       - name: Build verified source ZIP and SHA256
         run: |
           python scripts/package-song-studio-pc.py
