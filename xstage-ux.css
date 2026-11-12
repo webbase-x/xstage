@@ -4000,3 +4000,64 @@ body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-panel{
     font-size:clamp(17px,5vw,30px)!important;
   }
 }
+
+
+/* TV hotfix: one microphone mark in the corner, a TEXT-ONLY banner on stage.
+   Do not paint the supplied PNG as a second logo behind legacy text nodes. */
+body.xstage-native-tv.xstage-ui-v2 .stage .tv-stage-corner-brand span{
+  display:none!important;
+}
+html.xstage-uploaded-logo-ready body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup,
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  aspect-ratio:auto!important;
+  background:none!important;
+  background-image:none!important;
+  box-shadow:none!important;
+  border:0!important;
+  padding:0!important;
+  overflow:visible!important;
+}
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup > *{
+  visibility:visible!important;
+}
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-mark{
+  display:none!important;
+}
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-copy{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  width:100%!important;
+  min-width:0!important;
+}
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-copy > *{
+  visibility:visible!important;
+  opacity:1!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-scene{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-word{
+  font-size:clamp(22px,3.5vw,64px)!important;
+  letter-spacing:-.035em!important;
+  line-height:1.15!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-sub{
+  margin-top:clamp(2px,.5vh,6px)!important;
+  font-size:clamp(9px,1vw,16px)!important;
+  letter-spacing:.13em!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-tagline{
+  display:none!important;
+}
