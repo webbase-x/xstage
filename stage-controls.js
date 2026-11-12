@@ -432,7 +432,7 @@
       qrCanvas.width=232;qrCanvas.height=232;
       await QRCode.toCanvas(qrCanvas,url.href,{width:232,margin:2,errorCorrectionLevel:'M'});
       if(session!==active||pairingPaused)return;
-      qrCanvas.hidden=false;status(nativeTvMode?'สแกน QR เพื่อขอเพลงจากมือถือ':'สแกน QR แล้วรออนุมัติบนจอ');
+      qrCanvas.hidden=false;status(nativeTvMode?'รีโมทมือถือ':'สแกน QR แล้วรออนุมัติบนจอ');
     }catch{status('สร้าง QR ไม่สำเร็จ ใช้ลิงก์รีโมทแทน');}
   }
   function pausePairing(){
