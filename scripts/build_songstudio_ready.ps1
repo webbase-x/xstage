@@ -187,7 +187,10 @@ Step 'Offline readiness verified successfully'
 # 7. Package a complete ZIP, include checksum alongside it
 $Zip = Join-Path $OutputRoot ($DirName + '.zip')
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
-Compress-Archive -LiteralPath $Stage -DestinationPath $Zip -CompressionLevel Optimal
+# Compress-Archive silently omits hidden/dot-prefixed paths on some Windows shells.
+# ZipFile.CreateFromDirectory includes .runtime and .engine-ready-manifest.json.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[IO.Compression.ZipFile]::CreateFromDirectory($Stage, $Zip, [IO.Compression.CompressionLevel]::Optimal, $true)
 $Hash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $SHAFile = $Zip + '.sha256'
 "$Hash  $($DirName).zip" | Set-Content -LiteralPath $SHAFile -Encoding ascii
