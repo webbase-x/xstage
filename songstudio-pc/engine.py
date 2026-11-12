@@ -30,8 +30,8 @@ if not UI_ROOT.is_dir() and (ROOT.parent / "studio").is_dir():
 DATA = ROOT / "data"
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.6" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "306" if READY_BUNDLE else "205-SRC"
+STATUS_VERSION = "0.3.7" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "307" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(exist_ok=True)
 EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga"}
 EXT_MIDI = {".mid", ".midi", ".kar"}
@@ -44,7 +44,8 @@ PORT = None
 JOB = {
     "id": "", "kind": "", "state": "idle", "stage": "พร้อมใช้งาน",
     "detail": "", "completed": 0, "total": 0, "elapsed": 0,
-    "eta": None, "idleFor": 0, "logs": [], "result": {}
+    "eta": None, "idleFor": 0, "logs": [], "result": {},
+    "created": 0, "skipped": 0, "errors": 0, "m4aCount": 0, "lyricsCount": 0
 }
 CANCEL = threading.Event()
 PROCESS = None
@@ -375,6 +376,203 @@ def separate_ai(row, target, preview=False):
         return stem
 
 
+def _song_export_module():
+    path = ROOT / "song_export.py"
+    if not path.is_file():
+        raise RuntimeError("ไม่พบระบบตรวจเพลงซ้ำ song_export.py กรุณาติดตั้งแพ็กเกจ PC รุ่นใหม่ให้ครบ")
+    spec = importlib.util.spec_from_file_location("xstage_song_export", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def build_library(rows, mode, options):
+    """Idempotent across independent sessions; checkpoint before next song.
+
+    1. Read previously published catalogs AND the recovered journal.
+    2. Match canonical original path first; hash full source only if needed.
+    3. Never generate new audio/lyrics for a previously completed source.
+    4. Stage output in the destination directory; commit without overwrite.
+    5. Fsync each finished record, then atomically replace current.json once.
+    """
+    export = _song_export_module()
+    root = export.songs_root(PREFS["workspace"])
+    root.mkdir(parents=True, exist_ok=True)
+    for name in ("audio", "lyrics", "catalogs"):
+        (root / name).mkdir(exist_ok=True)
+    records = export.existing_records(root)
+    by_path, by_sha = {}, {}
+    for record in records:
+        if export.record_is_complete(root, record):
+            marker = record.get("sourceIdentity") or {}
+            if marker.get("canonicalPath"):
+                by_path[marker["canonicalPath"]] = record
+            if marker.get("sha256"):
+                by_sha[marker["sha256"]] = record
+
+    created = skipped = errors = audio_count = lyrics_count = 0
+    details = []
+    with LOCK:
+        JOB["total"] = len(rows)
+    log(f"ตรวจสอบคลังเพลงเดิม: พบ {len(records):,} รายการ (รวมรายการที่กู้จากงานก่อน)")
+    try:
+        for idx, row in enumerate(rows, 1):
+            if CANCEL.is_set():
+                raise RuntimeError("ผู้ใช้ยกเลิกงาน; เพลงที่สำเร็จก่อนหน้านี้ถูกเก็บไว้แล้ว")
+            source = Path(row["path"])
+            staged = staged_vocals = target = vocal_target = None
+            committed_audio = committed_vocals = None
+            new_lyric = None
+            checkpointed = False
+            try:
+                if not source.is_file() or source.is_symlink():
+                    raise FileNotFoundError("ไม่พบไฟล์ต้นฉบับ หรือเป็น symlink")
+                update(f"ตรวจเพลงซ้ำ {idx}/{len(rows)}: {row['title']}")
+                canonical = export.canonical_source_path(source)
+                previous = by_path.get(canonical)
+                # If a previous run has a complete record, checking its path
+                # takes milliseconds and avoids re-reading a huge audio file.
+                digest = None
+                if previous is None:
+                    update(f"ตรวจลายนิ้วมือ SHA-256 {idx}/{len(rows)}: {source.name}")
+                    digest = export.source_sha256(source)
+                    previous = by_sha.get(digest)
+                if previous is not None:
+                    skipped += 1
+                    log(f"ข้ามไฟล์ซ้ำ: {source.name} → {previous['audio']['path']} (ไม่สร้างรหัส/M4A/Lyrics ใหม่)")
+                    continue
+
+                # Never create a second filename while repairing a known
+                # incomplete prior record. Existing media stays untouched.
+                partial = export.find_incomplete(root, records, source)
+                if partial:
+                    raise RuntimeError(
+                        "พบข้อมูลสร้างค้างจากไฟล์ต้นฉบับเดียวกัน: " +
+                        str(partial.get("audio", {}).get("path", "ไม่ทราบไฟล์")) +
+                        " กรุณาตรวจไฟล์เดิมก่อนสร้างใหม่เพื่อป้องกันเพลงซ้ำ"
+                    )
+
+                # A pre-existing legacy unindexed output may come from an older
+                # app that did not store a source fingerprint. Do not invent a
+                # different number and accidentally duplicate that song.
+                preferred = (root / "audio" / export.source_bucket(source.name) /
+                             (export.safe_filename(source.stem) + ".m4a"))
+                if preferred.exists() and not any(
+                        item.get("audio", {}).get("path") ==
+                        preferred.relative_to(root).as_posix() for item in records):
+                    raise RuntimeError(
+                        "พบ M4A เดิมที่ไม่มีข้อมูลตรวจต้นฉบับ: " +
+                        str(preferred.relative_to(root)) +
+                        " หยุดเพื่อป้องกันสร้างไฟล์ซ้ำ กรุณาตรวจ/นำเข้ารายการเดิมก่อน"
+                    )
+                target = export.next_target(root, source.name)
+                staged = export.temporary_audio(target)
+                update(f"กำลังสร้างเพลงใหม่ {idx}/{len(rows)}: {row['title']}")
+                if mode == "instrumental":
+                    staged_vocals = separate_ai(row, staged, preview=False)
+                elif source.suffix.lower() == ".m4a":
+                    shutil.copy2(source, staged)  # Preserve source audio; zero transcoding
+                else:
+                    convert(row, staged)
+
+                export.commit_audio(staged, target)
+                committed_audio = target
+                if staged_vocals is not None:
+                    vocal_target = target.with_name(target.stem + " - vocals.m4a")
+                    export.commit_audio(staged_vocals, vocal_target)
+                    committed_vocals = vocal_target
+
+                lyric_file = None
+                if not options.get("audio_only", False):
+                    lyric_file = export.save_lyrics(
+                        root, target, lyrics_text(row), str(row.get("code") or source.stem))
+                    new_lyric = lyric_file
+                record = export.make_record(root, row, target, lyric_file, vocal_target, mode)
+                if digest is None:
+                    # Path matches never reach here; only new songs are hashed.
+                    digest = export.source_sha256(source)
+                record["sourceIdentity"] = export.source_marker(source, digest)
+                export.append_journal(root, record)
+                checkpointed = True
+                records.append(record)
+                by_path[canonical] = record
+                by_sha[digest] = record
+                created += 1
+                audio_count += 1
+                if lyric_file:
+                    lyrics_count += 1
+                log(f"สร้างสำเร็จ: {record['code']} · {record['audio']['path']}")
+            except Exception as exc:
+                errors += 1
+                reason = f"{source.name}: {type(exc).__name__} — {exc}"
+                details.append(reason)
+                log("ERR " + reason)
+                # Roll back ONLY this iteration's unindexed new artifacts.
+                # Never touch source audio or a previously published record.
+                if not checkpointed:
+                    if new_lyric:
+                        new_lyric.unlink(missing_ok=True)
+                        new_lyric.with_suffix(".lrc").unlink(missing_ok=True)
+                    for built in (committed_vocals, committed_audio):
+                        if built is not None:
+                            built.unlink(missing_ok=True)
+                if CANCEL.is_set():
+                    raise RuntimeError("ผู้ใช้ยกเลิก; บันทึกเพลงที่สำเร็จแล้วเพื่อเริ่มใหม่ได้") from exc
+            finally:
+                for temporary in (staged, staged_vocals):
+                    if temporary is not None:
+                        temporary.unlink(missing_ok=True)
+                with LOCK:
+                    JOB.update(created=created, skipped=skipped, errors=errors,
+                               m4aCount=audio_count, lyricsCount=lyrics_count)
+                update(f"ดำเนินการ {idx}/{len(rows)} · ใหม่ {created} · ซ้ำ {skipped} · ERR {errors}", idx)
+    finally:
+        # Called on normal completion, error, OR user cancellation. Each
+        # completed record was journaled and fsynced before this point.
+        pending = export.journal_records(root)
+        if pending:
+            pointer = export.publish_batch(root, pending)
+            export.clear_published_journal(root)
+            log(f"อัปเดต catalogs + current.json แล้ว · รวม {pointer['songCount']} เพลง")
+
+    result = {
+        "created": created, "skipped": skipped, "errors": errors,
+        "m4aCount": audio_count, "lyricsCount": lyrics_count,
+        "output": str(root), "issues": details[-50:],
+        "message": (f"สร้างใหม่ {created} เพลง · ข้ามซ้ำ {skipped} เพลง · ERR {errors} "
+                    f"· M4A {audio_count} · Lyrics {lyrics_count} · {root}")
+    }
+    if errors and not created and not skipped:
+        raise RuntimeError(result["message"] + " · " + "; ".join(details[-3:]))
+    return result
+
+
+def build_preview(rows, mode):
+    """Legacy file-based preview retained only for compatibility.
+
+    The main PC step-3 live player uses live_preview.py and writes no files.
+    """
+    if len(rows) != 1:
+        raise ValueError("การทดลองฟังต้องเลือกหนึ่งเพลง")
+    row = rows[0]
+    output = PREVIEW_FOLDER / (secrets.token_hex(16) + ".m4a")
+    with LOCK:
+        JOB["total"] = 1
+    try:
+        if mode == "instrumental":
+            separate_ai(row, output, preview=True)
+        else:
+            convert(row, output, preview=True)
+        ticket = secrets.token_urlsafe(24)
+        with LOCK:
+            PREVIEWS[ticket] = (output, time.time() + 300)
+        update("ทดลองฟังเสร็จแล้ว", 1)
+        return {"ticket": ticket, "message": "ทดลองฟังพร้อมแล้ว"}
+    except Exception:
+        output.unlink(missing_ok=True)
+        raise
+
+
 def execute_job(action, options, started):
     try:
         if action == "scan":
@@ -383,73 +581,19 @@ def execute_job(action, options, started):
             log(f"ตรวจพบ {amount:,} เพลง")
             result = {"message": f"สแกนเสร็จแล้ว {amount:,} เพลง"}
         elif action in ("build", "preview"):
-            # Snapshot mode for the entire job, so UI changes cannot alter
-            # individual songs in the middle of a batch.
             mode = PREFS.get("mode", "original")
             if mode not in ("original", "instrumental"):
                 raise ValueError("ประเภทเสียงไม่ถูกต้อง")
             if mode == "instrumental" and not ai_available():
-                raise RuntimeError(
-                    "AI Separation ไม่พร้อม: โมเดลหรือไลบรารีไม่ครบ "
-                    "กรุณาใช้ PC Ready Build 303"
-                )
+                raise RuntimeError("AI Separation ไม่พร้อม: โมเดลหรือไลบรารีไม่ครบ")
             ids = options.get("ids", [])
             if not isinstance(ids, list):
                 raise ValueError("รายการเพลงไม่ถูกต้อง")
             with LOCK:
-                rows = [dict(FILE_BY_ID[i]) for i in ids if isinstance(i, int) and i in FILE_BY_ID]
+                rows = [dict(FILE_BY_ID[i]) for i in ids if type(i) is int and i in FILE_BY_ID]
             if not rows:
                 raise ValueError("กรุณาเลือกเพลงก่อนสร้าง")
-            if action == "preview" and len(rows) != 1:
-                raise ValueError("การทดลองฟังต้องเลือกหนึ่งเพลง")
-            with LOCK:
-                JOB["total"] = len(rows)
-            update("กำลังเตรียมเพลงที่เลือก")
-            workspace = Path(PREFS["workspace"]).expanduser() / "song"
-            failed = 0
-            result = {"message": ""}
-            for idx, row in enumerate(rows):
-                if CANCEL.is_set():
-                    raise RuntimeError("ผู้ใช้ยกเลิกงาน")
-                source = Path(row["path"])
-                if not source.is_file():
-                    failed += 1
-                    log(f"ไม่พบต้นฉบับ: {source.name}")
-                    update("กำลังดำเนินการ", idx + 1)
-                    continue
-                update(f"กำลังสร้าง {idx + 1}/{len(rows)}: {row['title']}")
-                base = safe_stem(row["title"])
-                if action == "preview":
-                    dest = PREVIEW_FOLDER / (secrets.token_hex(16) + ".m4a")
-                else:
-                    dest = unique_target(workspace, base, ".m4a")
-                try:
-                    if mode == "instrumental":
-                        vocal_path = separate_ai(row, dest, preview=action == "preview")
-                        if vocal_path is not None:
-                            log("บันทึกเสียงร้องแยก: " + vocal_path.name)
-                    elif not (action == "preview") and source.suffix.lower() == ".m4a":
-                        shutil.copy2(source, dest)
-                    else:
-                        convert(row, dest, preview=action == "preview")
-                    if action == "preview":
-                        ticket = secrets.token_urlsafe(24)
-                        with LOCK:
-                            PREVIEWS[ticket] = (dest, time.time() + 300)
-                            result["ticket"] = ticket
-                    elif not options.get("audio_only", False):
-                        lyrics = lyrics_text(row)
-                        if lyrics.strip():
-                            dest.with_suffix(".lrc").write_text(lyrics, encoding="utf-8")
-                    log(f"เสร็จ: {row['title']}")
-                except Exception as exc:
-                    failed += 1
-                    log(f"ไม่สำเร็จ {row['title']}: {exc}")
-                    dest.unlink(missing_ok=True)
-                update("กำลังดำเนินการ", idx + 1)
-            if failed == len(rows):
-                raise RuntimeError("เพลงทั้งหมดดำเนินการไม่สำเร็จ ตรวจรายละเอียดงาน")
-            result["message"] = f"สร้างสำเร็จ {len(rows) - failed}/{len(rows)} เพลง ({workspace})"
+            result = build_library(rows, mode, options) if action == "build" else build_preview(rows, mode)
         elif action == "check-update":
             result = {"message": "ยังไม่มีไฟล์ติดตั้ง Windows ที่ผ่านการตรวจสอบสำหรับ Source Launcher นี้"}
             update("ตรวจเวอร์ชันเสร็จแล้ว", 1)
@@ -483,6 +627,7 @@ def start_job(data):
             "stage": "เตรียมงาน", "detail": "กำลังเริ่มต้น",
             "completed": 0, "total": 0, "elapsed": 0, "eta": None,
             "idleFor": 0, "logs": [], "result": {},
+            "created": 0, "skipped": 0, "errors": 0, "m4aCount": 0, "lyricsCount": 0,
             "started": time.monotonic(), "updated": time.monotonic()
         }
         result = JOB["id"]
