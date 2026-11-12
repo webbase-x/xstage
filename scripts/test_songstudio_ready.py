@@ -115,6 +115,18 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
     ], capture_output=True, text=True, check=True)
     assert "aac" in probe.stdout, f"Output is not AAC: {probe.stdout}"
     print("PASS: Portable M4A output contains AAC codec")
+    # Original Karaoke PC offline export contract: AAC-LC, 48 kHz,
+    # nominal 256k. Verify the decoded stream, not extension alone.
+    probe_quality = subprocess.run([
+        engine.ffmpeg_binary().replace("ffmpeg.exe", "ffprobe.exe"),
+        "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=codec_name,sample_rate",
+        "-of", "json", str(midi_out)
+    ], capture_output=True, text=True, check=True)
+    quality = json.loads(probe_quality.stdout)["streams"][0]
+    assert quality["codec_name"] == "aac", quality
+    assert int(quality["sample_rate"]) == 48000, quality
+    print("PASS: MIDI M4A is real 48 kHz AAC audio (Karaoke PC parity)")
     assert engine.ai_available(), "Offline bundled AI model/runtime must be present"
     ai_output = temp / "ai-instrumental.m4a"
     engine.separate_ai(row_audio, ai_output, preview=False)
