@@ -116,3 +116,32 @@
 
 /* Persistent duplicate prevention: keep skipped/error counts readable. */
 .progress-meta{flex-wrap:wrap;align-items:center}.job-skip-count{color:#77dfcb;font-weight:850;font-variant-numeric:tabular-nums}
+
+
+/* PC stage: use all available pixels while retaining proportional layouts. */
+@media (min-width: 1080px) {
+  .shell {grid-template-columns:clamp(220px,16vw,272px) minmax(0,1fr)}
+  .main {max-width:none;width:100%;box-sizing:border-box;
+         padding:clamp(20px,2vw,36px) clamp(20px,2.3vw,52px) 40px}
+  .sound-preview-grid {grid-template-columns:minmax(320px,.85fr) minmax(370px,1.15fr)}
+  .create-assistant-heading h2 {font-size:clamp(19px,1.5vw,25px)}
+}
+@media (min-width: 1900px) {
+  .topbar {min-height:112px}
+  .main {max-width:2200px;margin:auto}
+  .create-step-link {min-height:76px}
+  .sound-settings,.sound-preview {padding:clamp(17px,1.4vw,26px)}
+  .sound-preview-grid {gap:clamp(16px,1.4vw,26px)}
+  .preview-search-results {max-height:min(29vh,310px)}
+}
+@media (max-width: 1079px) {
+  .sound-preview-grid {grid-template-columns:1fr}
+}
+@media (max-width: 600px) {
+  .topbar-actions {width:100%;justify-content:flex-start}
+  .sound-settings .path-row,.preview-controls {flex-wrap:wrap}
+  .create-steps {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* Fit two actions and status on small laptop screens. */
+.builder-actions .button{min-height:45px;white-space:normal;line-height:1.5;text-align:center}
+.topbar-heading,.workspace,.sound-settings,.sound-preview{min-width:0}
