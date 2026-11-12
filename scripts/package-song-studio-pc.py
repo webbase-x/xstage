@@ -11,6 +11,7 @@ FILES = {
     "songstudio-pc/Start-Song-Studio.cmd": "Start-Song-Studio.cmd",
     "songstudio-pc/Start-Song-Studio.ps1": "Start-Song-Studio.ps1",
     "songstudio-pc/engine.py": "engine.py",
+    "songstudio-pc/live_preview.py": "live_preview.py",
     "songstudio-pc/ai_separate.py": "ai_separate.py",
     "songstudio-pc/ai-model.lock.json": "ai-model.lock.json",
     "songstudio-pc/pick_path.ps1": "pick_path.ps1",
