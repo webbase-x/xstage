@@ -394,21 +394,27 @@ def ncn_document(companions):
     return _timed_lines_to_json(rendered, companions["code"], "NCN", meta)
 
 def kar_document(midi: Path, code: str):
-    """Read embedded MIDI/KAR lyric and text events; drop @T headers."""
+    """Real MIDI/KAR lyric events using the X-Stage Karaoke PC line protocol.
+
+    Soft Karaoke uses '/' and '\\' line boundaries. Ordinary MIDI lyric
+    meta events also use CR/LF. A line-only control event must NOT be
+    discarded by a whitespace filter. Notes alone never become lyrics.
+    """
     division, tempo_map, events = midi_events(midi)
     chunks = []
     title, artist = "", ""
     for tick, track, order, tag, text in events:
-        if tag not in (1, 5) or not text.strip():
+        if tag not in (1, 5) or not text:
             continue
-        text = text.replace("\r", "\n")
         if text.startswith("@T"):
             if not title:
                 title = text[2:].strip()
             elif not artist:
                 artist = text[2:].strip()
             continue
-        if text.startswith("@I") or text.startswith("@L"):
+        if text.startswith("@"):
+            # Karaoke metadata (@L/@I and unknown declarations) are not song
+            # words and must never be presented as timed lyrics.
             continue
         when = tick_to_seconds(tick, division, tempo_map)
         chunks.append((when, text))
@@ -417,17 +423,18 @@ def kar_document(midi: Path, code: str):
     lines, pieces, start = [], [], None
     def flush():
         nonlocal pieces, start
-        actual = "".join(p["text"] for p in pieces).strip()
-        if actual:
+        actual = "".join(p["text"] for p in pieces)
+        if actual.strip():
             lines.append({"startTime": start, "text": actual,
                           "characters": list(pieces)})
         pieces, start = [], None
     for when, raw in chunks:
-        segments = raw.replace("\\", "/").split("/")
-        for i, segment in enumerate(segments):
-            if i:
+        # Preserve per-syllable timing and original spaces, as PC karaoke
+        # playback does. Splitting on CR/LF is essential for embedded MIDI.
+        for segment in re.split(r"([/\\\r\n])", raw):
+            if segment in ("/", "\\", "\r", "\n"):
                 flush()
-            if segment:
+            elif segment:
                 pieces.append({"startTime": when, "text": segment})
                 if start is None:
                     start = when
