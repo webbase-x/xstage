@@ -566,7 +566,9 @@
       const estimate = await post('/api/estimate', {ids});
       if (!estimate.songs) throw new Error('ไม่พบเพลงที่เลือกในฐานข้อมูล กรุณาสแกนโฟลเดอร์ใหม่และเลือกเพลงอีกครั้ง');
       if (!estimate.enoughDisk) throw new Error('พื้นที่ว่างไม่เพียงพอ กรุณาเปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง');
-      const warning = estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ อาจใช้เวลาประมวลผลนาน' : '';
+      const warning = (estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ โปรแกรมจะสร้างทีละเพลง ไม่คัดลอกต้นฉบับทั้งหมด' : '') +
+        (estimate.spaceWarning ? '\n⚠ พื้นที่ว่างอาจไม่พอสำหรับสร้างทุกเพลง หากเต็มจะหยุดรายการที่เหลือและเก็บเพลงที่สำเร็จไว้' : '') +
+        (estimate.unsupported ? '\n⚠ มี ' + fmtNum(estimate.unsupported) + ' ไฟล์ NCN ซึ่งยังไม่รองรับ และจะแจ้ง ERR รายเพลง' : '');
       const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
         'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' : 'M4A พร้อม Lyrics') +
         '\nไฟล์ที่สร้างแล้วจะถูกตรวจซ้ำและข้ามโดยไม่สร้างใหม่' + warning;
@@ -601,7 +603,10 @@
     const isRunning = state === 'running';
     const led = $('job-led');led.className = 'job-led ' + (/^(idle|running|error|success|cancelled)$/.test(state) ? state : 'idle');
     const stage = job.stage || 'พร้อมใช้งาน';
-    $('job-title').textContent = (isRunning ? '● ' : '') + stage + (state === 'error' ? ' · ผิดพลาด' : '');
+    const jobLabel = job.kind === 'scan' && state === 'success'
+      ? 'สแกนโฟลเดอร์เสร็จแล้ว (ยังไม่ได้สร้างเพลง)'
+      : stage;
+    $('job-title').textContent = (isRunning ? '● ' : '') + jobLabel + (state === 'error' ? ' · ผิดพลาด' : '');
     $('job-detail').textContent = job.detail || 'ไม่มีงานที่กำลังประมวลผล';
     if (job.kind === 'build' && job.id) {
       const report = 'งาน ' + job.id + ' · ' +
@@ -612,8 +617,12 @@
         buildFeedback('running', job.stage || 'กำลังสร้างเพลง…', report + ' · ' + (job.detail || 'PC Engine กำลังทำงาน'));
       } else if (state === 'success') {
         const errors = Number(job.errors || job.result?.errors || 0);
+        const created = Number(job.created || job.result?.created || 0);
+        const skipped = Number(job.skipped || job.result?.skipped || 0);
         buildFeedback(errors ? 'error' : 'success',
-          errors ? 'สร้างเสร็จโดยมีรายการที่ต้องแก้ไข' : 'สร้างเพลงเสร็จแล้ว',
+          errors ? 'สร้างเสร็จโดยมีรายการที่ต้องแก้ไข' :
+          created ? 'สร้างเพลงเสร็จแล้ว' :
+          skipped ? 'ไม่มีเพลงใหม่ · ข้ามเพลงที่มีอยู่แล้วทั้งหมด' : 'งานจบโดยไม่มีไฟล์ใหม่',
           (job.result?.message || report) +
           (errors ? '\n' + (job.result?.issues || []).slice(0,3).join('\n') : ''));
       } else if (state === 'error' || state === 'cancelled') {
