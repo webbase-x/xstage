@@ -21,13 +21,18 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build309
+  group: xstage-songstudio-ready-build310
   cancel-in-progress: true
 
 jobs:
   bundle-windows:
     runs-on: windows-2022
     timeout-minutes: 28
+    env:
+      # Owner supplies the Desktop app's PUBLIC client ID once in
+      # GitHub Settings > Secrets and variables > Actions > Variables.
+      # No user tokens, refresh credentials, or Web-client IDs are shipped.
+      XSTAGE_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.XSTAGE_GOOGLE_DESKTOP_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,10 +55,25 @@ jobs:
         run: |
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
           if ($LASTEXITCODE -ne 0) { throw "Duplicate and resume regression tests failed" }
+      - name: Validate app-wide Google OAuth config when owner set Client ID
+        shell: powershell
+        run: |
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.10-build310"
+          $config = Join-Path $base "config/google-oauth-client.json"
+          if ($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) {
+            if (!(Test-Path $config)) { throw "Configured Google Desktop Client missing from ZIP" }
+            $client = Get-Content $config -Encoding UTF8 -Raw | ConvertFrom-Json
+            if ($client.installed.client_id -ne $env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) {
+              throw "Unexpected OAuth Desktop Client ID in ready distribution"
+            }
+            Write-Host "PASS: All users receive configured public app Client ID without choosing a JSON."
+          } else {
+            Write-Warning "No Desktop Client ID variable configured: user OAuth will need one-time JSON import; publishing state must not be described as auto-ready."
+          }
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.10-build310"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -61,7 +81,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.10-build310"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -74,7 +94,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.10-build310.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -101,10 +121,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.9-build309
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.10-build310
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.10-build310.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.10-build310.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -113,8 +133,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.9-build309"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip"
+          $tag = "song-studio-pc-ready-v0.3.10-build310"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.10-build310.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
@@ -128,7 +148,11 @@ jobs:
           Extract full ZIP and run Start-Song-Studio.cmd.
           NEW: live separate music/SoundFont mixer, maximized PC interface,
           two verified build modes, and private Google Desktop OAuth/Drive sync.
-          Setup requires a user-owned Desktop OAuth Client JSON from Google Cloud.
+          Google Desktop OAuth Client ID can be embedded once by the app owner
+          via Actions variable XSTAGE_GOOGLE_DESKTOP_CLIENT_ID. If present,
+          end users only authorize their own account, without selecting JSON.
+          Per-user tokens and preferences persist across releases under Windows
+          LocalAppData and DPAPI. If variable is absent, one-time import is required.
           Source deduplication, recovery journal, catalogs and current.json remain.
 
           Limitations: not original Build205 engine; NCN remains unsupported.
@@ -139,6 +163,6 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" --clobber --repo "$env:GITHUB_REPOSITORY"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.9 Build 309" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.10 Build 310" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
