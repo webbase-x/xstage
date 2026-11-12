@@ -105,6 +105,44 @@ jobs:
           fi
           echo "Google TV OAuth: configured"
 
+      - name: Verify Google TV device-code endpoint
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          # A configured secret alone does not prove Google will issue QR codes.
+          # Test the actual device endpoint without printing credentials or codes.
+          python - <<'PY'
+          import json, os, sys, urllib.parse, urllib.request, urllib.error
+          endpoint = "https://oauth2.googleapis.com/device/code"
+          scope = "openid email https://www.googleapis.com/auth/drive.file"
+          body = urllib.parse.urlencode({
+              "client_id": os.environ["XSTAGE_TV_OAUTH_CLIENT_ID"],
+              "scope": scope,
+          }).encode("ascii")
+          request = urllib.request.Request(endpoint, data=body, headers={
+              "Content-Type": "application/x-www-form-urlencoded",
+              "Cache-Control": "no-store",
+          }, method="POST")
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  result = json.load(response)
+          except urllib.error.HTTPError as exc:
+              try:
+                  error = json.load(exc)
+              except Exception:
+                  error = {}
+              kind = str(error.get("error") or error.get("error_code") or "google_oauth_rejected")
+              print(f"::error::Google TV QR code request failed: {kind} (HTTP {exc.code}). Check the TVs and Limited Input devices OAuth client, consent screen and scopes.")
+              sys.exit(1)
+          except Exception as exc:
+              print(f"::error::Cannot verify Google device-code endpoint: {type(exc).__name__}. Check runner network/TLS.")
+              sys.exit(1)
+          if not result.get("device_code") or not result.get("user_code") or not result.get("verification_url"):
+              print("::error::Google did not return a usable device_code/user_code/verification_url.")
+              sys.exit(1)
+          print("Google TV QR endpoint: validated — device code issued (secrets and code hidden)")
+          PY
+
       - name: Build APK and AAB from the same source
         shell: bash
         run: |
