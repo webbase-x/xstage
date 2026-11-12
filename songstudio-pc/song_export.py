@@ -118,8 +118,24 @@ def lyric_paths(root: Path, audio_file: Path) -> tuple[Path, Path]:
     return folder / (audio_file.stem + ".json"), folder / (audio_file.stem + ".lrc")
 
 
+WORD_TIMESTAMP_RE = re.compile(r"<(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?>")
+
+def _lrc_seconds(match):
+    second = int(match.group(2))
+    if second >= 60:
+        return None
+    frac = match.group(3) or "0"
+    return round(int(match.group(1)) * 60 + second +
+                 int(frac) / (10 ** len(frac)), 4)
+
+
 def lrc_to_json(text: str, code: str) -> dict:
-    """Keep original LRC and parse its timestamps without fabricating timing."""
+    """Keep original LRC; preserve genuine enhanced-LRC syllable cue times.
+
+    Plain LRC has line starts only: it MUST NOT invent per-word timestamps.
+    Enhanced LRC <mm:ss.xx> has real token starts, converted to the
+    X-Stage Karaoke PC/Web 'syllables' JSON schema for karaoke highlighting.
+    """
     lines = []
     offset_ms = 0
     for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
@@ -130,22 +146,57 @@ def lrc_to_json(text: str, code: str) -> dict:
         if match:
             offset_ms = int(match.group(1))
             continue
-        times = list(TIMESTAMP_RE.finditer(value))
-        lyric = TIMESTAMP_RE.sub("", value).strip()
-        if not times or not lyric:
+        stamps = list(TIMESTAMP_RE.finditer(value))
+        if not stamps:
             continue
-        for item in times:
-            minutes, seconds = int(item.group(1)), int(item.group(2))
-            if seconds >= 60:
+        caption = TIMESTAMP_RE.sub("", value)
+        cues = list(WORD_TIMESTAMP_RE.finditer(caption))
+        lyric = WORD_TIMESTAMP_RE.sub("", caption).strip()
+        if not lyric:
+            continue
+        base_seconds = _lrc_seconds(stamps[0])
+        if base_seconds is None:
+            continue
+        tokens = []
+        if cues:
+            lead = caption[:cues[0].start()]
+            if lead:
+                tokens.append((base_seconds, lead))
+            for i, cue in enumerate(cues):
+                begin = _lrc_seconds(cue)
+                if begin is None:
+                    continue
+                stop = cues[i+1].start() if i+1 < len(cues) else len(caption)
+                part = caption[cue.end():stop]
+                if part:
+                    tokens.append((begin, part))
+        for stamp in stamps:
+            when = _lrc_seconds(stamp)
+            if when is None:
                 continue
-            fraction = item.group(3) or "0"
-            frac = int(fraction) / (10 ** len(fraction))
-            when = round(minutes * 60 + seconds + frac, 3)
-            lines.append({"startTime": when, "text": lyric})
+            row = {"startTime": when, "text": lyric}
+            if tokens:
+                # Multiple [timestamp] tags repeat a line; word events move
+                # by the exact same delta rather than staying at the first.
+                shift = when - base_seconds
+                row["_tokens"] = [(round(t + shift, 4), segment)
+                                  for t, segment in tokens]
+            lines.append(row)
     lines.sort(key=lambda item: item["startTime"])
     for i, line in enumerate(lines):
-        next_time = lines[i + 1]["startTime"] if i + 1 < len(lines) else line["startTime"] + 4
+        next_time = lines[i+1]["startTime"] if i+1 < len(lines) else line["startTime"] + 4
         line["endTime"] = round(max(line["startTime"] + .05, next_time), 3)
+        tokens = line.pop("_tokens", None)
+        if tokens:
+            syllables = []
+            for j, (cue, segment) in enumerate(tokens):
+                finish = min(line["endTime"], tokens[j+1][0]) \
+                    if j+1 < len(tokens) else line["endTime"]
+                syllables.append({
+                    "text": segment, "start": cue,
+                    "duration": round(max(0., finish-cue), 4)
+                })
+            line["syllables"] = syllables
     return {
         "schemaVersion": 1,
         "songCode": code,
