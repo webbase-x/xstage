@@ -67,4 +67,38 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
     assert ai_output.stat().st_size > 1000, "AI instrumental M4A missing"
     assert vocal_output.stat().st_size > 1000, "AI vocals M4A missing"
     print("PASS: Offline AI separated synthetic WAV into instrumental + vocals M4A")
+
+    # The new karaoke preview must generate audio directly as HTTP-ready MP3
+    # bytes; unlike build/AI modes it is forbidden to write a sample file.
+    import importlib.util
+    spec_live = importlib.util.spec_from_file_location(
+        "xstage_live", root / "live_preview.py")
+    live = importlib.util.module_from_spec(spec_live)
+    spec_live.loader.exec_module(live)
+    paired_midi = temp / "demo.mid"
+    paired_midi.write_bytes(midi)
+    catalog = [
+        {"id": 101, "path": str(input_wav), "title": "Preview demo", "kind": "WAV"},
+        {"id": 102, "path": str(paired_midi), "title": "Preview demo", "kind": "MID"},
+    ]
+    backing, sfmidi = live.matching_sources(catalog[0], catalog)
+    assert backing == input_wav and sfmidi == paired_midi, "Companion MIDI pairing failed"
+    before_files = set(temp.iterdir())
+    streamed = b"".join(live.stream_mp3(
+        audio=backing, midi=sfmidi,
+        soundfont=engine.DEFAULT_SOUNDFONT,
+        ffmpeg=engine.ffmpeg_binary(), runtime=root / ".runtime",
+        music_volume=0.7, synth_volume=0.8
+    ))
+    assert streamed.startswith(b"ID3") and len(streamed) > 1000, "Live MP3 stream missing"
+    assert set(temp.iterdir()) == before_files, "Live preview created a disk file"
+    print("PASS: FluidSynth + backing music mixed live to MP3 bytes without creating files")
+
+    engine.FILES[:] = catalog
+    engine.FILE_BY_ID.clear()
+    engine.FILE_BY_ID.update({song["id"]: song for song in catalog})
+    ticket = engine.prepare_live_preview(101)
+    assert ticket["mixed"] and ticket["has_midi"], "Live ticket must report real mixed tracks"
+    assert len(ticket["ticket"]) > 30
+    print("PASS: Live preview ticket issued from catalog without exposing file paths")
 print("Ready bundle integration smoke test passed.")
