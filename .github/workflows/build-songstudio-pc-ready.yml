@@ -64,6 +64,19 @@ jobs:
         run: |
           & python -m compileall -q songstudio-pc scripts
           if ($LASTEXITCODE -ne 0) { throw "Python source compilation failed" }
+          $psFiles = @('scripts/build_songstudio_ready.ps1',
+                       'songstudio-pc/Start-Song-Studio-Ready.ps1',
+                       'songstudio-pc/Start-Song-Studio.ps1')
+          foreach ($psFile in $psFiles) {
+            $parseTokens = $null; $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $psFile), [ref]$parseTokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell syntax validation failed: $psFile"
+            }
+          }
+          Write-Host "PASS: all Song Studio Windows launcher/build PowerShell scripts parse cleanly"
           & node --check studio/app.js
           if ($LASTEXITCODE -ne 0) { throw "PC/Web Control JavaScript syntax failed" }
           & node --check studio/web.js
