@@ -107,6 +107,34 @@ class PcSourceTests(unittest.TestCase):
         repeat = engine.build_library(originals, "original", {"audio_only": False})
         self.assertEqual((repeat["created"], repeat["skipped"]), (0, 2))
 
+    def test_existing_legacy_preview_output_is_not_built_again(self):
+        audio = self.source / "007007.m4a"
+        audio.write_bytes(b"E" * 4096)
+        legacy = self.dest / "song" / "Old Song.m4a"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_bytes(b"OLD" * 4096)
+        engine.CANCEL.clear()
+        result = engine.build_library(
+            [{"path": str(audio), "code": "007007", "title": "Old Song"}],
+            "original", {"audio_only": False})
+        self.assertEqual((result["created"], result["skipped"], result["errors"]),
+                         (0, 1, 0))
+        self.assertEqual(legacy.read_bytes(), b"OLD" * 4096)
+        self.assertFalse((self.dest / "songs" / "audio" / "0" / "007007.m4a").exists())
+
+    def test_scan_ignores_previous_song_studio_output_inside_source_tree(self):
+        # Source can be the workspace's parent; generated audio must not be
+        # mistaken for new originals on the next scan.
+        engine.PREFS["source"] = str(self.dir)
+        audio = self.dir / "originals" / "000001.m4a"
+        audio.parent.mkdir(parents=True)
+        audio.write_bytes(b"F" * 4096)
+        generated = self.dest / "songs" / "audio" / "0" / "000001.m4a"
+        generated.parent.mkdir(parents=True)
+        generated.write_bytes(audio.read_bytes())
+        self.assertEqual(engine.scan_source(), 1)
+        self.assertEqual(Path(engine.FILES[0]["path"]), audio)
+
     def test_stop_and_restart_reuses_durable_journal_without_reencoding(self):
         # Simulate power loss after audio+lyric are written and the fsynced
         # journal is saved, but before catalogs/current.json were switched.
