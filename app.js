@@ -2575,7 +2575,13 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
     if(authId===state.authId&&state.token){hideAndroidTvAuthPanel();androidTvRefreshingSession=false;}
   }catch(error){
     if(authId===state.authId){
-      clearActiveAuth();resetPrivate({keepAuth:true});
+      if(existingSub&&state.token){
+        // Renewal may fail while Google is briefly offline. Keep the existing
+        // audio and queue; retry via the native refresh-token watchdog.
+        clearPendingAuth();
+      }else{
+        clearActiveAuth();resetPrivate({keepAuth:true});
+      }
       window.XStageAndroidAuthError(error?.message||'เปิด Google Drive ไม่สำเร็จ');
     }
   }finally{
@@ -2665,20 +2671,9 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
   const button=$('android-tv-update-now');
   if(button){button.disabled=false;button.textContent='อัปเดตตอนนี้';}
   if(!active)setTimeout(()=>$('android-tv-update-now')?.focus?.(),30);
-  // An older APK can use the verified native updater from this hosted page.
-  // Never start the Android installer automatically during a karaoke song.
-  const autoKey='xstage-native-auto-update-'+String(next.build||next.version||'unknown');
-  let alreadyAttempted=false;
-  try{
-    alreadyAttempted=sessionStorage.getItem(autoKey)==='1';
-    if(!alreadyAttempted)sessionStorage.setItem(autoKey,'1');
-  }catch{}
-  if(!alreadyAttempted&&!active){
-    setTimeout(()=>{
-      if(state.nativeUpdateAvailable?.build!==next.build||panel.hidden)return;
-      button?.click();
-    },250);
-  }
+  // Inform immediately, but NEVER start an Android package installer without
+  // the user's explicit Update Now action, even when the stage is idle.
+  // Android itself will still request install confirmation and permissions.
 };
 window.XStageAndroidUpdateStatus=message=>{
   state.nativeUpdateStatus=String(message||'กำลังอัปเดต X-Stage…');
@@ -2706,6 +2701,7 @@ window.XStageAndroidUpdateError=message=>{
 };
 window.XStageAndroidNoUpdate=()=>{
   nativeUpdateManualCheck=false;
+  nativeUpdateInstalling=false;
   state.nativeUpdateAvailable=null;
   state.nativeUpdateStatus='X-Stage เป็นเวอร์ชันล่าสุดแล้ว';
   window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus}}));
