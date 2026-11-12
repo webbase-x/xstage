@@ -350,6 +350,9 @@ function startStageBrandVisualizer(){
   if(!stageVizFrame&&eqAnalyser)stageVizFrame=requestAnimationFrame(drawStageBrandVisualizer);
 }
 function ensureEqAudio(){
+ // Android APK playback must never be re-routed through createMediaElementSource.
+ // Its standalone native-audio-meter.js is visual only and has a zero-gain sink.
+ if(nativeAndroidTvAudioMode())return false;
  if(eqContext){startStageBrandVisualizer();return true;}
  const C=window.AudioContext||window.webkitAudioContext;if(!C){setPlayStatus('Web Audio API ไม่รองรับ EQ 31 Band');return false;}
  eqContext=new C();eqSource=eqContext.createMediaElementSource(audio);
@@ -370,15 +373,16 @@ function ensureEqAudio(){
 
 function nativeAndroidTvAudioMode(){
   try{
-    if(window.XStageAndroid&&typeof window.XStageAndroid.isAndroidTvApp==='function')return !!window.XStageAndroid.isAndroidTvApp();
+    if(window.XStageAndroid&&typeof window.XStageAndroid.getAppVersion==='function')return true;
   }catch{}
-  try{return new URLSearchParams(location.search).get('source')==='android-tv';}
+  try{return ['android-tv','android-tablet'].includes(new URLSearchParams(location.search).get('source'));}
   catch{return false;}
 }
+window.XStageNativeAudioBypass=()=>nativeAndroidTvAudioMode();
 window.XStageResumeAudioGraph=async function(){
   // PC Web keeps the existing EQ/WebAudio behavior unchanged.
-  // Android TV APK stays on the native HTMLMediaElement audio path unless
-  // the Owner explicitly enables EQ from the mobile remote.
+  // Every Android APK (TV/tablet) stays on direct HTMLMediaElement playback.
+  // The Owner cannot enable EQ; only the silent visual meter is permitted.
   if(!eqContext){
     if(nativeAndroidTvAudioMode())return true;
     if(!ensureEqAudio())return false;
@@ -388,6 +392,7 @@ window.XStageResumeAudioGraph=async function(){
   catch{return false;}
 };
 window.XStageEnableEqPreset=async function(name='flat'){
+  if(nativeAndroidTvAudioMode())return false;
   buildEqBands();
   if(!ensureEqAudio())return false;
   try{await eqContext.resume();}catch{}
@@ -396,13 +401,14 @@ window.XStageEnableEqPreset=async function(name='flat'){
 };
 window.XStageResetEq=async function(){return window.XStageEnableEqPreset('flat');};
 window.XStageToggleEqBypass=async function(){
+  if(nativeAndroidTvAudioMode())return true;
   buildEqBands();
   if(!ensureEqAudio())return false;
   try{await eqContext.resume();}catch{}
   eqBypassed=!eqBypassed;applyEqGains();
   return eqBypassed;
 };
-window.XStageEqIsActive=()=>!!eqContext;
+window.XStageEqIsActive=()=>!nativeAndroidTvAudioMode()&&!!eqContext;
 
 function savedEqGains(){
  const v=(window.XStageUiPrefs?.read?.()||{}).eqGains;
@@ -522,6 +528,7 @@ function sendEqState(){
  try{screen.postMessage({type:'xstage-eq-state',open:eqDisplayTarget==='singer'||eqDisplayTarget==='both',minimized:eqPanel.classList.contains('is-minimized'),expanded:eqPanel.classList.contains('is-expanded'),preset:eqPreset,bypassed:eqBypassed,gains:currentEqGains()},location.origin);}catch{}
 }
 function openEq(target){
+ if(nativeAndroidTvAudioMode()){setPlayStatus('Android APK: เสียงออกตรง · แถบระดับเสียงไม่ผ่าน EQ');return;}
  buildEqBands();if(!ensureEqAudio())return;eqContext.resume().catch(()=>{});
  if(!eqFrame)eqFrame=requestAnimationFrame(drawEqRta);
  if(target&&['main','singer','both'].includes(target)&&singerScreenAvailable())eqDisplayTarget=target;
