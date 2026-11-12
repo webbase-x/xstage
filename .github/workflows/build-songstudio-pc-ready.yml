@@ -100,6 +100,13 @@ jobs:
             throw "Google OAuth Client ID format invalid. Expected Desktop Client ID."
           }
           Write-Host "PASS: Desktop OAuth client pair present for bundled Google Login."
+      - name: Preflight bundled Google Desktop OAuth
+        shell: powershell
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) -or
+              [string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)) {
+            throw "Cannot publish all-functions-ready ZIP: Google Desktop OAuth Client ID and Secret must both be configured in repo Actions"
+          }
       - name: Browser end-to-end test before creating ZIP
         shell: powershell
         run: |
