@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://cdn.jsdelivr.net blob:; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>X-Stage Song Studio Web · สร้าง M4A ในเบราว์เซอร์</title>
+  <link rel="stylesheet" href="./web.css">
+  <script src="./web.js" defer></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../" aria-label="X-Stage Karaoke Online"><span class="brand-mark">X</span><span><b>X-STAGE</b><small>SONG STUDIO WEB</small></span></a>
+    <div class="edition">WEB EDITION · BETA 0.3.0</div>
+    <nav aria-label="ส่วนการทำงาน">
+      <a href="#source"><span>01</span> เลือกเพลงต้นฉบับ</a>
+      <a href="#catalog"><span>02</span> รายการเพลง</a>
+      <a href="#lyrics"><span>03</span> จัดการเนื้อร้อง</a>
+      <a href="#output"><span>04</span> สร้างและบันทึก</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="privacy-icon">✓</div>
+      <strong>PRIVATE BY DESIGN</strong>
+      <p>ไฟล์เพลงอยู่ในอุปกรณ์ของคุณ ไม่มีการอัปโหลดไปยังเว็บไซต์</p>
+      <a href="./?mode=pc">ใช้ Web Control ร่วมกับ PC Engine</a>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">YOUR MUSIC · YOUR DEVICE · YOUR CONTROL</div>
+        <h1>X-Stage <em>Song Studio</em></h1>
+        <p>สร้าง M4A และไฟล์เนื้อร้อง LRC ผ่านเว็บ โดยไม่ต้องติดตั้งโปรแกรม Windows</p>
+      </div>
+      <div class="top-status"><span class="status-dot"></span> Browser Local Mode</div>
+    </header>
+
+    <div id="notice" class="notice" role="status" aria-live="polite">เลือกไฟล์เพลงหรือโฟลเดอร์จากเครื่องเพื่อเริ่มต้น</div>
+    <section id="source" class="panel">
+      <div class="section-head"><div><span class="step">01 / SOURCE</span><h2>ไฟล์เพลงต้นฉบับ</h2><p>รองรับไฟล์เสียงและ LRC ที่เลือกจากเครื่อง ไม่คัดลอกหรือย้ายต้นฉบับ</p></div><span class="pill">NO UPLOAD</span></div>
+      <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="เลือกไฟล์เพลง">
+        <div class="drop-icon">♫</div>
+        <strong>ลากไฟล์เพลงมาวาง หรือเลือกจากอุปกรณ์</strong>
+        <span>MP3 · M4A · WAV · AAC · OGG · FLAC · LRC</span>
+        <div class="action-row center">
+          <button id="choose-files" class="btn primary" type="button">เลือกไฟล์เพลง</button>
+          <button id="choose-folder" class="btn secondary" type="button">เลือกโฟลเดอร์</button>
+        </div>
+        <small>ไฟล์ MIDI / KAR / NCN แสดงในรายการได้ แต่การแปลงด้วย SoundFont ยังไม่รองรับใน Web Beta</small>
+      </div>
+      <input id="file-input" type="file" multiple hidden accept=".mp3,.m4a,.wav,.aac,.ogg,.oga,.flac,.lrc,.mid,.midi,.kar,.ncn,.lyr,.cur,.sf2,.sf3,audio/*">
+      <input id="folder-input" type="file" multiple webkitdirectory hidden>
+      <div class="source-summary"><span id="file-count">0 เพลง</span><span id="source-size">0 MB</span><button id="clear-all" class="btn text" type="button">ล้างรายการในหน้าเว็บ</button></div>
+    </section>
+
+    <section id="catalog" class="panel">
+      <div class="section-head"><div><span class="step">02 / CATALOG</span><h2>รายการเพลง</h2><p>เลือกเพลงสำหรับทดลองฟัง แก้ไขเนื้อร้อง และสร้างไฟล์ใหม่</p></div><span id="selected-counter" class="pill dark">เลือก 0</span></div>
+      <div class="catalog-toolbar"><input id="search" type="search" placeholder="ค้นชื่อเพลงหรือชนิดไฟล์" aria-label="ค้นหาเพลง"><button id="select-all" class="btn secondary" type="button">เลือกทั้งหมดที่รองรับ</button><button id="deselect-all" class="btn secondary" type="button">ยกเลิกเลือก</button></div>
+      <div class="table-wrap"><table><thead><tr><th>เลือก</th><th>เพลง</th><th>ชนิด</th><th>เนื้อร้อง</th><th>ขนาด</th></tr></thead><tbody id="song-list"><tr><td colspan="5" class="empty">ยังไม่มีเพลง กรุณาเลือกไฟล์หรือโฟลเดอร์</td></tr></tbody></table></div>
+      <div id="catalog-note" class="footnote">รองรับการสร้าง M4A จากไฟล์เสียงที่ FFmpeg.wasm สามารถอ่านได้</div>
+    </section>
+
+    <section id="lyrics" class="panel">
+      <div class="section-head"><div><span class="step">03 / LYRICS & PREVIEW</span><h2>ทดลองฟังและเนื้อร้อง</h2><p>เลือกเพลงหนึ่งรายการเพื่อแก้ไข LRC หรือเพิ่มเวลาจากตำแหน่งเล่นปัจจุบัน</p></div></div>
+      <div class="editor-grid">
+        <div class="player-card">
+          <strong id="active-title">ยังไม่ได้เลือกเพลง</strong><span id="active-kind">—</span>
+          <audio id="player" controls preload="metadata"></audio>
+          <div id="active-lyric" class="active-lyric">เนื้อร้องจะแสดงตามเวลาที่บันทึกใน LRC</div>
+          <button id="insert-time" class="btn secondary" type="button" disabled>+ แทรกเวลาที่กำลังเล่น</button>
+          <span class="footnote">ไฟล์ MIDI และ KAR ไม่สามารถทดลองฟังด้วยตัวเล่นเสียงนี้ได้</span>
+        </div>
+        <div class="editor-card">
+          <label for="lyrics-text">เนื้อร้องรูปแบบ LRC</label>
+          <textarea id="lyrics-text" rows="10" placeholder="[00:12.50]บรรทัดแรกของเพลง&#10;[00:18.00]บรรทัดถัดไป" disabled spellcheck="false"></textarea>
+          <div class="action-row"><button id="save-lyrics" class="btn secondary" type="button" disabled>บันทึกเนื้อร้องในหน้านี้</button><button id="download-lyrics" class="btn text" type="button" disabled>ดาวน์โหลด LRC</button></div>
+          <small class="footnote">บันทึกในหน้านี้ไม่ได้เปลี่ยนไฟล์ต้นฉบับ ผลลัพธ์จะมี .lrc แยกคู่กับ .m4a</small>
+        </div>
+      </div>
+    </section>
+
+    <section id="output" class="panel">
+      <div class="section-head"><div><span class="step">04 / LOCAL EXPORT</span><h2>สร้างเพลง M4A + LRC</h2><p>ระบบใช้ FFmpeg WebAssembly ประมวลผลภายในเบราว์เซอร์ของคุณ</p></div><span class="pill">AAC 192 kbps</span></div>
+      <div class="export-grid">
+        <div class="export-info">
+          <h3>Web Processing Engine</h3>
+          <p id="engine-caption">ยังไม่ดาวน์โหลด Engine · ครั้งแรกต้องใช้อินเทอร์เน็ตเพื่อรับโมดูลประมวลผลประมาณ 30 MB</p>
+          <button id="load-engine" class="btn secondary" type="button">↓ ดาวน์โหลด Web Engine</button>
+          <p class="footnote">ไฟล์เสียง M4A ที่มีอยู่แล้วจะถูกคัดลอกเป็นผลลัพธ์ ไม่แปลงซ้ำ สำหรับ MP3/WAV และชนิดอื่นต้องใช้ Engine</p>
+        </div>
+        <div class="export-info">
+          <h3>ปลายทางไฟล์</h3>
+          <p id="destination-label">ค่าเริ่มต้น: ดาวน์โหลด ZIP รวมเพลงที่สร้าง</p>
+          <button id="pick-destination" class="btn secondary" type="button">เลือกโฟลเดอร์บันทึก (Chrome / Edge)</button>
+          <p class="footnote">เบราว์เซอร์ที่ไม่รองรับการเลือกโฟลเดอร์จะดาวน์โหลด ZIP แทน</p>
+        </div>
+      </div>
+      <div class="action-row output-actions"><button id="build" class="btn primary large" type="button" disabled>▶ สร้างเพลงที่เลือก</button><button id="cancel" class="btn danger" type="button" hidden>หยุดการประมวลผล</button></div>
+      <div class="progress-wrap"><div class="progress-track"><div id="progress-bar"></div></div><div class="progress-text"><span id="progress-label">พร้อมเริ่มงาน</span><span id="progress-percent">0%</span></div></div>
+      <div id="results" class="results" aria-live="polite"></div>
+    </section>
+    <footer>© X-Stage Song Studio · Web Beta 0.3.0 · ไม่มีบัญชีผู้ใช้ ไม่เก็บข้อมูลเพลงบนเซิร์ฟเวอร์ · <a href="./?mode=pc">เปิดรุ่น Web Control + PC Engine</a></footer>
+  </main>
+</div>
+</body></html>
