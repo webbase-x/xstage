@@ -50,7 +50,7 @@ try {
             'Google OAuth JSON (*.json)|*.json|All files (*.*)|*.*'
         }
         $dialog.CheckFileExists = $true
-        $dialog.Multiselect = $false
+        $dialog.Multiselect = $Kind -eq 'vocal'
         $dialog.RestoreDirectory = $true
         if ($InitialPath) {
             if (Test-Path -LiteralPath $InitialPath -PathType Leaf) {
@@ -65,7 +65,7 @@ try {
     [void]$owner.Activate()
     $answer = $dialog.ShowDialog($owner)
     if ($answer -eq [System.Windows.Forms.DialogResult]::OK) {
-        $chosen = if ($Kind -in @('source','workspace','download')) { $dialog.SelectedPath } else { $dialog.FileName }
+        $chosen = if ($Kind -eq 'vocal') { ConvertTo-Json -InputObject @($dialog.FileNames) -Compress } elseif ($Kind -in @('source','workspace','download')) { $dialog.SelectedPath } else { $dialog.FileName }
         if ([string]::IsNullOrWhiteSpace($chosen)) {
             throw 'หน้าต่างเลือกไฟล์ไม่คืนค่าที่เลือก'
         }
