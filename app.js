@@ -2621,6 +2621,7 @@ let nativeUpdateManualCheck=false;
 let nativeUpdateInstalling=false;
 window.XStageAndroidUpdateAvailable=(version,build)=>{
   if(!androidTvNativeBridgeReady())return;
+  const manuallyChecked=nativeUpdateManualCheck;
   nativeUpdateManualCheck=false;
   const next={version:String(version||''),build:Number(build)||0};
   const currentBuild=Number(window.XStageAndroid?.getAppBuild?.()||XSTAGE_RELEASE.build)||0;
@@ -2631,11 +2632,11 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
   state.nativeUpdateStatus='พบ X-Stage v'+next.version+' · Build '+next.build+' พร้อมอัปเดต';
   // Status snapshots advertise each available build to the Owner remote.
   // A recurring check of the SAME build must not reopen a dismissed notice.
-  if(!newlyPublished)return;
-  window.dispatchEvent(new CustomEvent('xstage:native-update',{detail:next}));
+  if(!newlyPublished&&!manuallyChecked)return;
+  if(newlyPublished)window.dispatchEvent(new CustomEvent('xstage:native-update',{detail:next}));
   const panel=androidTvUpdatePanel();
   const current=(()=>{try{return String(window.XStageAndroid.getAppVersion?.()||'รุ่นปัจจุบัน');}catch{return 'รุ่นปัจจุบัน';}})();
-  if(nativeUpdateDismissedBuild===next.build)return;
+  if(nativeUpdateDismissedBuild===next.build&&!manuallyChecked)return;
   panel.hidden=false;
   const active=playbackBusyForUpdate();
   panel.classList.toggle('during-playback',active);
