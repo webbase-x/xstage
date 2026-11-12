@@ -892,3 +892,10 @@ body.xstage-native-tv #remote-pair-panel .remote-pair-box > small{
 
 /* Live update toast yields to TV's full quick menu when MENU is pressed. */
 body.xstage-native-tv .xstage-tv-quick-menu{z-index:245!important}
+
+
+/* Android APK: prevent first-paint stage access before native Drive validation. */
+html.xstage-native-auth-pending .app-shell{visibility:hidden!important;pointer-events:none!important}
+html.xstage-native-auth-pending body{background:#061321!important}
+html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!important}
+.android-tv-auth-brand{display:block;object-fit:contain;width:100%;max-width:min(350px,70vw);max-height:130px;height:auto;margin:0 auto 8px}
