@@ -13,7 +13,8 @@
   const selected = new Set();
   const encoder = new TextEncoder();
   const state = { active: null, previewURL: '', dest: null, ffmpeg: null, busy: false,
-                  cancelled: false, currentIndex: 0, total: 0, currentFraction: 0 };
+                  cancelled: false, currentIndex: 0, total: 0, currentFraction: 0,
+                  archive: null, archiveName: '' };
   const ffmpegUrls = [
     'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js',
     'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js',
@@ -43,6 +44,7 @@
   }
   function setBusy(flag) {
     state.busy = flag;
+    $('download-result').disabled = flag || !state.archive;
     for (const id of ['choose-files', 'choose-folder', 'clear-all', 'select-all', 'deselect-all',
                       'pick-destination', 'load-engine', 'build', 'save-lyrics', 'insert-time']) {
       $(id).disabled = flag;
@@ -400,6 +402,9 @@
       return;
     }
     state.cancelled = false;
+    state.archive = null;
+    state.archiveName = '';
+    $('download-result').hidden = true;
     state.currentIndex = 0; state.total = work.length;
     setBusy(true);
     $('results').replaceChildren();
@@ -439,14 +444,23 @@
       if (!state.cancelled && zipAssets.length) {
         setProgress('กำลังจัดเตรียม ZIP สำหรับดาวน์โหลด', 98);
         const blob = await makeZIP(zipAssets);
-        download(blob, 'X-Stage-Song-Studio-' + new Date().toISOString().slice(0, 10) + '.zip');
-        log('ดาวน์โหลดไฟล์ ZIP รวม ' + zipAssets.length + ' รายการ');
+        if (!blob.size) throw new Error('ZIP ผลลัพธ์ว่างเปล่า');
+        state.archive = blob;
+        state.archiveName = 'X-Stage-Song-Studio-' + new Date().toISOString().slice(0, 10) + '.zip';
+        $('download-result').hidden = false;
+        $('download-result').disabled = false;
+        log('สร้าง ZIP แล้ว ' + zipAssets.length + ' ไฟล์ (' + readableBytes(blob.size) +
+            ') · กด “ดาวน์โหลด ZIP ผลลัพธ์” เพื่อบันทึกลงเครื่อง');
       }
       if (state.cancelled) {
         notice('ยกเลิกงานแล้ว · ไฟล์ที่สร้างเสร็จก่อนหน้ายังคงอยู่', 'error');
         setProgress('ยกเลิกงาน', 0);
       } else {
-        notice('เสร็จสิ้น ' + success + ' เพลง · พบข้อผิดพลาด ' + errors + ' เพลง', errors ? 'error' : 'good');
+        notice(success
+          ? 'สร้างสำเร็จ ' + success + ' เพลง · ข้อผิดพลาด ' + errors +
+            (state.archive ? ' · ต้องกด “ดาวน์โหลด ZIP ผลลัพธ์” เพื่อรับไฟล์' : ' · บันทึกลงโฟลเดอร์ที่เลือกแล้ว')
+          : 'สร้างเพลงไม่สำเร็จ · ตรวจรายละเอียดข้อผิดพลาดด้านล่าง',
+          errors || !success ? 'error' : 'good');
         setProgress('เสร็จสิ้น ' + success + '/' + work.length + ' เพลง', 100);
       }
     } catch (error) {
@@ -473,6 +487,8 @@
     state.previewURL = '';
     $('player').pause(); $('player').removeAttribute('src'); $('player').load();
     entries.clear(); selected.clear(); state.active = null;
+    state.archive = null; state.archiveName = '';
+    $('download-result').hidden = true;
     $('active-title').textContent = 'ยังไม่ได้เลือกเพลง'; $('active-kind').textContent = '—';
     $('lyrics-text').value = ''; $('lyrics-text').disabled = true;
     $('save-lyrics').disabled = true; $('download-lyrics').disabled = true;
@@ -517,6 +533,14 @@
   });
   $('pick-destination').addEventListener('click', () => {void chooseDestination();});
   $('build').addEventListener('click', () => {void build();});
+  $('download-result').addEventListener('click', () => {
+    if (!state.archive || !state.archiveName) {
+      notice('ยังไม่มี ZIP ที่สร้างสำเร็จ กรุณาสร้างเพลงก่อน', 'error');
+      return;
+    }
+    download(state.archive, state.archiveName);
+    notice('ส่งคำสั่งดาวน์โหลด ZIP แล้ว · ตรวจสอบการดาวน์โหลดของเบราว์เซอร์', 'good');
+  });
   $('cancel').addEventListener('click', cancel);
   const drop = $('drop-zone');
   ['dragenter', 'dragover'].forEach((eventName) => drop.addEventListener(eventName, (event) => {
