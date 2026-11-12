@@ -1163,7 +1163,9 @@ def execute_job(action, options, started):
             update("ตรวจเพลงซ้ำจาก XStageWeb เดิมก่อนอัปโหลด · ไม่ลบเพลงเดิม")
             online = _module("online_publish.py", "xstage_online_publish")
             synced = online.OnlinePublisher(GOOGLE).publish(
-                root, records, cancelled=CANCEL, on_progress=lambda sent, total:
+                root, records,
+                create_new_library=(options.get("create_new_library") is True),
+                cancelled=CANCEL, on_progress=lambda sent, total:
                 update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"))
             result = {
                 "message": (
