@@ -554,10 +554,12 @@ def build_library(rows, mode, options):
                 legacy = (Path(PREFS["workspace"]).expanduser() / "song" /
                           (safe_stem(row.get("title") or source.stem) + ".m4a"))
                 if legacy.is_file() and legacy.stat().st_size >= 1000:
-                    skipped += 1
-                    log("ข้ามเพื่อป้องกันซ้ำกับรุ่นเก่า (ยังไม่มี fingerprint): " +
-                        str(legacy) + " · ตรวจสอบ/ย้ายไฟล์เก่าก่อนนำเข้าคลังใหม่")
-                    continue
+                    # An unindexed legacy file is NOT a verified completed
+                    # catalog item. Never report it as a successful duplicate.
+                    raise RuntimeError(
+                        "พบไฟล์ M4A รุ่นเก่าที่ยังไม่มีข้อมูลยืนยันต้นฉบับ: " +
+                        str(legacy) +
+                        " · ไม่สร้างซ้ำหรือเขียนทับ · กรุณาตรวจสอบ/นำเข้าคลังเดิมก่อน")
                 # Per-song guard, not a misleading 3x entire-library
                 # requirement. If storage runs out, previous commits survive.
                 free_now = shutil.disk_usage(root).free
@@ -643,8 +645,15 @@ def build_library(rows, mode, options):
         "message": (f"สร้างใหม่ {created} เพลง · ข้ามซ้ำ {skipped} เพลง · ERR {errors} "
                     f"· M4A {audio_count} · Lyrics {lyrics_count} · {root}")
     }
-    if errors and not created and not skipped:
-        raise RuntimeError(result["message"] + " · " + "; ".join(details[-3:]))
+    if not created and not skipped:
+        raise RuntimeError(
+            "ไม่มีเพลงที่สร้างสำเร็จหรือข้ามซ้ำโดยยืนยันจาก Catalog ได้ · " +
+            result["message"] + (" · " + "; ".join(details[-3:]) if details else
+                                  " · ตรวจสอบไฟล์ต้นฉบับและ Log"))
+    if created == 0 and skipped:
+        result["message"] = (
+            f"ไม่มีไฟล์ใหม่ · ตรวจยืนยันเพลงเดิมใน Catalog แล้ว {skipped:,} เพลง "
+            f"· ERR {errors} · {root}")
     return result
 
 
@@ -734,8 +743,15 @@ def execute_job(action, options, started):
         else:
             raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
-            JOB.update(state="success", result=result, stage="เสร็จสิ้น",
-                       detail=result.get("message", "เสร็จแล้ว"))
+            build_errors = action == "build" and result.get("errors", 0) > 0
+            skipped_only = (action == "build" and result.get("created", 0) == 0
+                            and result.get("skipped", 0) > 0)
+            JOB.update(
+                state="error" if build_errors else "success", result=result,
+                stage=("สร้างเพลงบางรายการไม่สำเร็จ" if build_errors else
+                       "ไม่มีเพลงใหม่ · ยืนยันจาก Catalog แล้ว" if skipped_only else
+                       "เสร็จสิ้น"),
+                detail=result.get("message", "เสร็จแล้ว"))
     except Exception as exc:
         with LOCK:
             JOB["state"] = "cancelled" if CANCEL.is_set() else "error"
