@@ -1,0 +1,10 @@
+{
+  "name": "X-Stage Song Studio Windows",
+  "platform": "windows",
+  "version": "0.2.1",
+  "build": 201,
+  "available": false,
+  "installer_file": null,
+  "sha256": null,
+  "message": "Song Studio 0.2.1 source/build kit is prepared. No Windows installer has been built, signed, tested and publicly published yet. Source release and karaoke player have separate update channels."
+}
