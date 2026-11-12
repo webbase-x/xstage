@@ -49,6 +49,108 @@ class PcSourceTests(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertEqual(first.read_bytes(), b"old")
 
+    def test_http_confirm_build_creates_media_and_reuses_it_for_lyrics(self):
+        """Test exactly what both UI Create buttons send over Local Engine API."""
+        import time
+        from http.server import ThreadingHTTPServer
+        original = self.source / "004210.m4a"
+        original.write_bytes(b"valid-for-copy-regression" * 240)
+        (self.source / "004210.lrc").write_text("[00:01.00]ทดสอบ", encoding="utf-8")
+        engine.FILES[:] = [{
+            "id": 1, "path": str(original), "title": "ทดลองสร้างเพลง",
+            "artist": "ทดสอบ", "code": "004210", "kind": "M4A",
+            "size": original.stat().st_size
+        }]
+        engine.FILE_BY_ID.clear()
+        engine.FILE_BY_ID[1] = engine.FILES[0]
+        engine.PREFS["mode"] = "original"
+        engine.CANCEL.clear()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), engine.Handler)
+        old_port = engine.PORT
+        engine.PORT = server.server_port
+        runner = threading.Thread(target=server.serve_forever, daemon=True)
+        runner.start()
+        def request(url, body):
+            client = HTTPConnection("127.0.0.1", server.server_port, timeout=15)
+            encoded = json.dumps(body).encode("utf-8")
+            client.request("POST", url, encoded, headers={
+                "Content-Type":"application/json", "X-XStage-Token": engine.TOKEN
+            })
+            response = client.getresponse()
+            result = response.status, json.loads(response.read().decode("utf-8"))
+            client.close()
+            return result
+        def finish():
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                snapshot = engine.job_snapshot()
+                if snapshot["state"] != "running":
+                    return snapshot
+                time.sleep(.05)
+            self.fail("PC job was acknowledged but Engine never finished")
+        try:
+            status, first = request("/api/jobs", {"action":"build",
+                                  "ids":[1], "audio_only":True})
+            self.assertEqual(status, 200)
+            self.assertTrue(first.get("id"), "No build receipt")
+            self.assertEqual(first.get("total"), 1)
+            done = finish()
+            self.assertEqual(done["state"], "success", done.get("detail"))
+            self.assertEqual((done["created"], done["m4aCount"]), (1, 1))
+            audio = self.dest / "songs/audio/0/004210.m4a"
+            self.assertEqual(audio.read_bytes(), original.read_bytes())
+            status, second = request("/api/jobs", {"action":"build",
+                                   "ids":[1], "audio_only":False})
+            self.assertEqual(status, 200)
+            self.assertNotEqual(first["id"], second["id"])
+            done = finish()
+            self.assertEqual(done["state"], "success", done.get("detail"))
+            self.assertEqual((done["created"], done["skipped"], done["lyricsCount"]), (0, 1, 1))
+            self.assertTrue((self.dest / "songs/lyrics/0/004210.json").is_file())
+            self.assertEqual(len(list((self.dest / "songs/audio").rglob("*.m4a"))), 1)
+        finally:
+            server.shutdown()
+            server.server_close()
+            runner.join(timeout=3)
+            engine.PORT = old_port
+
+    def test_estimate_93597_selected_tracks_does_not_require_three_times_all_sources(self):
+        """Bulk selection is ~600 KB JSON, below the 1 MiB Local API limit."""
+        import time
+        from http.server import ThreadingHTTPServer
+        sample = self.source / "test.m4a"
+        sample.write_bytes(b"M4A-test" * 512)
+        row = {"path":str(sample), "size":sample.stat().st_size,
+               "code":"test", "kind":"M4A", "title":"test"}
+        ids = list(range(1, 93598))
+        engine.FILE_BY_ID.clear()
+        engine.FILE_BY_ID.update({i: row for i in ids})
+        server = ThreadingHTTPServer(("127.0.0.1", 0), engine.Handler)
+        old_port = engine.PORT
+        engine.PORT = server.server_port
+        runner = threading.Thread(target=server.serve_forever, daemon=True)
+        runner.start()
+        try:
+            raw = json.dumps({"ids":ids},separators=(",",":")).encode("utf-8")
+            self.assertLess(len(raw), 1_048_576)
+            client = HTTPConnection("127.0.0.1",server.server_port,timeout=30)
+            client.request("POST","/api/estimate",raw,headers={
+                "Content-Type":"application/json","X-XStage-Token":engine.TOKEN
+            })
+            response = client.getresponse()
+            result = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.status,200,result)
+            self.assertEqual(result["songs"],93597)
+            self.assertTrue(result["warning"])
+            self.assertIn("freeBytes",result)
+            self.assertIn("estimatedOutputBytes",result)
+            client.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            runner.join(timeout=3)
+            engine.PORT = old_port
+
     def test_build_does_not_duplicate_source_between_independent_runs(self):
         audio = self.source / "001234.m4a"
         audio.write_bytes(b"A" * 4096)
