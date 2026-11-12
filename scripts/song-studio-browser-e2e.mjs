@@ -53,6 +53,16 @@ try {
     name:'demo.wav', mimeType:'audio/wav', buffer:sineWaveWAV()
   }]);
   await page.waitForFunction(() => document.querySelector('#file-count').textContent.includes('1'));
+  // Songs often contain multiple audio source formats. Both must remain
+  // selectable instead of silently replacing the previous format.
+  await page.setInputFiles('#file-input', [{
+    name:'demo.mp3', mimeType:'audio/mpeg', buffer:Buffer.from('ID3dummy-alternate-source')
+  }]);
+  await page.locator('#song-list select[data-audio-select]').waitFor();
+  assert.equal(await page.locator('#song-list select[data-audio-select]').inputValue(), 'wav');
+  await page.locator('#song-list select[data-audio-select]').selectOption('mp3');
+  assert.equal(await page.locator('#song-list select[data-audio-select]').inputValue(), 'mp3');
+  await page.locator('#song-list select[data-audio-select]').selectOption('wav');
   await page.locator('#song-list tr').first().click();
   await page.fill('#lyrics-text', '[00:00.10]ทดสอบเนื้อร้อง\n[00:00.40]บรรทัดถัดไป');
   await page.click('#save-lyrics');
