@@ -266,10 +266,12 @@
     const queued={...song,queueSinger:singerName};
     const wasEmpty=state.queue.length===0;
     const inactive=!state.loading&&(!state.current||!ui.player.src||ui.player.ended||(ui.player.paused&&ui.player.currentTime<.5));
-    addToQueue(queued);const playImmediately=wasEmpty&&inactive;if(playImmediately)playNext();
-    activity.push({title:song.title||song.code,singer:singerName,note:noteText,result:playImmediately?'เล่นทันที':'เพิ่มเข้าคิว'});
+    addToQueue(queued);const playImmediately=wasEmpty&&inactive;
+    activity.push({title:song.title||song.code,singer:singerName,note:noteText,result:playImmediately?'กำลังเริ่มเล่น':'เพิ่มเข้าคิว'});
     if(activity.length>30)activity.shift();redrawActivity();
-    send(conn,{type:'request-received',id:++sequence,requestId,title:String(song.title||''),result:playImmediately?'playing':'queued'});
+    // Do not claim that the audio is playing until HTMLAudioElement.play() succeeds.
+    send(conn,{type:'request-received',id:++sequence,requestId,title:String(song.title||''),result:playImmediately?'starting':'queued'});
+    if(playImmediately)playNext();
     broadcastStatus();
   }
 
@@ -524,6 +526,15 @@
   window.XStageRemoteQr={show:showQR,retry:createSession,pause:pausePairing,resume:resumePairing,status:()=>({paused:pairingPaused,connected:session?.connections?.size||0,hasQr:!!session?.peerId})};
   window.dispatchEvent(new CustomEvent('xstage:remote-ready'));
   window.addEventListener('xstage:auth-ready',()=>{if(nativeTvMode)showQR(true);});
+  // Real playback result is emitted by app.js after Drive loading and player.play().
+  window.addEventListener('xstage:playback-status',event=>{
+    if(!session)return;
+    const detail=event?.detail||{};
+    const payload={type:'playback-status',state:String(detail.state||''),
+      title:String(detail.title||''),message:String(detail.message||'')};
+    for(const entry of session.connections.values())
+      if(entry.approved)send(entry.conn,payload);
+  });
   setInterval(broadcastStatus,1200);
   window.addEventListener('beforeunload',clearPeerSession);
   ui.logout.addEventListener('click',clearPeerSession);
