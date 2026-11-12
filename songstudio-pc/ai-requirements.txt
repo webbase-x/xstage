@@ -1,0 +1,4 @@
+# Bundled at GitHub Actions build time; not downloaded on user PCs.
+# Pinned Windows CPython 3.13 x64 binary wheels.
+numpy==2.2.6
+onnxruntime==1.23.2
