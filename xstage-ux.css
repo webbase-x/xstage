@@ -3923,3 +3923,80 @@ body.xstage-ui-v2:not(.xstage-native-tv) .stage.playing .stage-hero{
     width:min(82cqw,470px)!important;
   }
 }
+
+/* WEB stage: remove the uploaded-image logo (higher-specificity legacy rule),
+   keep a single stationary text banner and surround it with live EQ canvases. */
+html.xstage-uploaded-logo-ready body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-lockup,
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-lockup{
+  background:none!important;
+  background-image:none!important;
+  transform:none!important;
+  clip-path:none!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-mark,
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .tv-stage-corner-brand{
+  display:none!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-scene{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,3fr) minmax(0,1fr)!important;
+  align-items:center!important;
+  column-gap:clamp(5px,1.2vw,18px)!important;
+  min-width:0!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-side-viz{
+  display:block!important;
+  position:static!important;
+  width:100%!important;
+  height:clamp(36px,9cqh,110px)!important;
+  max-width:100%!important;
+  opacity:.92!important;
+  pointer-events:none!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-lockup{
+  min-width:0!important;
+  max-width:100%!important;
+  padding:0!important;
+  flex:initial!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-word{
+  font-size:clamp(22px,min(5.4cqw,8.4cqh),74px)!important;
+  letter-spacing:-.04em!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-sub{
+  margin-top:clamp(3px,.65cqh,8px)!important;
+  font-size:clamp(9px,min(1.35cqw,2.3cqh),16px)!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-tagline{
+  font-size:clamp(7px,min(.98cqw,1.7cqh),12px)!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage #stage-viz-wave{
+  display:none!important;
+}
+/* Lyrics are above all visual decorations, but UI controls remain operable. */
+body.xstage-ui-v2:not(.xstage-native-tv) .stage #lyrics{
+  position:absolute!important;
+  inset:0!important;
+  z-index:90!important;
+  width:100%!important;
+  height:100%!important;
+  pointer-events:none!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar,
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .mobile-stage-menu,
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .remote-pair-panel,
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-panel{
+  z-index:100!important;
+}
+@media(max-width:520px){
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-scene{
+    grid-template-columns:minmax(0,.5fr) minmax(0,4fr) minmax(0,.5fr)!important;
+    column-gap:3px!important;
+  }
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-side-viz{
+    height:clamp(23px,6cqh,55px)!important;
+  }
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-word{
+    font-size:clamp(17px,5vw,30px)!important;
+  }
+}
