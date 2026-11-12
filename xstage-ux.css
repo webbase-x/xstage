@@ -4061,3 +4061,23 @@ body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-sub{
 body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-tagline{
   display:none!important;
 }
+
+/* WEB single-image banner — supplied logo is already the identical PNG in assets. */
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-lockup,
+html.xstage-uploaded-logo-ready body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-lockup{
+ display:block!important;width:100%!important;max-width:100%!important;
+ aspect-ratio:2048/682!important;height:auto!important;padding:0!important;
+ background:transparent url('assets/xstage-stage-logo.png') center/contain no-repeat!important;
+ border:0!important;box-shadow:none!important;backdrop-filter:none!important;
+ transform:none!important;clip-path:none!important;transition:none!important
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-lockup > *,
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-mark,
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-copy{
+ display:none!important;visibility:hidden!important
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-scene{
+ display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,4fr) minmax(0,1fr)!important;
+ gap:clamp(4px,1cqw,14px)!important;align-items:center!important
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage #lyrics{z-index:10!important;pointer-events:none!important}
