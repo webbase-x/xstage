@@ -437,15 +437,23 @@
         button.setAttribute('role', 'option');
         button.setAttribute('aria-selected', String(song.id === previewSongId));
         const info = document.createElement('span');
+        info.className = 'preview-song-title';
         const title = document.createElement('strong');
-        title.textContent = song.title || 'ไม่มีชื่อเพลง';
-        const details = document.createElement('small');
-        details.textContent = [song.artist, song.code].filter(Boolean).join(' · ');
-        info.append(title, details);
+        title.textContent = song.title || 'ไม่ระบุชื่อเพลง';
+        const code = document.createElement('small');
+        code.textContent = 'รหัส: ' + (song.code || '—');
+        info.append(title, code);
+        const performer = document.createElement('span');
+        performer.className = 'preview-song-artist';
+        performer.textContent = song.artist?.trim() || 'ไม่ระบุนักร้อง';
+        if (!song.artist?.trim()) performer.classList.add('artist-unknown');
         const type = document.createElement('small');
         type.className = 'chip';
         type.textContent = song.kind || 'AUDIO';
-        button.append(info, type);
+        button.setAttribute('aria-label', [song.title || 'ไม่ระบุชื่อเพลง',
+          song.artist?.trim() ? 'นักร้อง ' + song.artist.trim() : 'ไม่ระบุนักร้อง',
+          'รหัส ' + (song.code || '—')].join(' · '));
+        button.append(info, performer, type);
         list.append(button);
       }
     } catch(error) {
@@ -472,10 +480,13 @@
         music_volume:Number($('preview-music-volume').value) / 100,
         synth_volume:Number($('preview-sf-volume').value) / 100
       });
-      $('preview-selected').textContent = '♫ ' + (response.title || 'เพลงที่เลือก');
+      $('preview-selected-title').textContent = response.title || 'เพลงที่เลือก';
+      $('preview-selected-artist').textContent = 'นักร้อง: ' +
+        (response.artist?.trim() || previewSongRows.find(row => row.id === songId)?.artist?.trim() || 'ไม่ระบุนักร้อง');
       $('create-preview-hint').textContent = response.message ||
         (response.mixed ? 'เล่นเสียงดนตรีและ SoundFont พร้อมกัน' : 'เล่นแบบสด');
-      $('preview-label').textContent = 'กำลังเล่น ' + (response.title || 'เพลงที่เลือก');
+      $('preview-label').textContent = 'กำลังเล่น ' + (response.title || 'เพลงที่เลือก') +
+        ' · ' + (response.artist?.trim() || previewSongRows.find(row => row.id === songId)?.artist?.trim() || 'ไม่ระบุนักร้อง');
       liveStreamId = response.stream_id || '';
       if (response.original_is_midi) $('create-preview-hint').textContent =
         'ดนตรีต้นฉบับ MIDI ใช้ SoundFont มาตรฐาน · เลื่อนเสียง SoundFont ที่เลือกเป็น 0% ก็ยังได้ยินเพลงเดิม';
@@ -702,7 +713,9 @@
     const song = previewSongRows.find(item => item.id === chosen);
     if (!song) return;
     previewSongId = chosen;
-    $('preview-selected').textContent = '♫ ' + (song.title || 'เพลงที่เลือก');
+    $('preview-selected-title').textContent = song.title || 'ไม่ระบุชื่อเพลง';
+    $('preview-selected-artist').textContent = 'นักร้อง: ' +
+      (song.artist?.trim() || 'ไม่ระบุนักร้อง');
     for (const button of $('preview-search-results').querySelectorAll('[data-preview-id]')) {
       button.setAttribute('aria-selected', String(Number(button.dataset.previewId) === chosen));
       button.classList.toggle('active', Number(button.dataset.previewId) === chosen);
