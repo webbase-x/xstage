@@ -285,15 +285,36 @@
     await config(payload);
   }
   async function pick(kind) {
-    const response = await post('/api/folder-picker', {kind});
-    if (!response.path) return;
-    const field = ({source:'create-source',workspace:'create-workspace',soundfont:'create-soundfont',
-        download:'download-destination',oauth:'settings-oauth'})[kind];
-    const element = $(field);
-    if (kind === 'soundfont') element.add(new Option(response.path.split(/[\\/]/).pop(), response.path));
-    element.value = response.path;
-    await config({[kind]: response.path});
-    message('เลือกและจำตำแหน่งใหม่แล้ว', false);
+    const button = [...document.querySelectorAll('[data-pick]')].find(el => el.dataset.pick === kind);
+    if (busy || button?.disabled) return;
+    const oldLabel = button?.textContent || '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'กำลังเปิดหน้าต่าง Windows…';
+    }
+    message('กำลังเปิดหน้าต่างเลือก' + (kind === 'soundfont' || kind === 'oauth' ? 'ไฟล์' : 'โฟลเดอร์') +
+      ' ของ Windows · หากไม่เห็นให้ดูที่แถบงาน', false);
+    try {
+      const response = await post('/api/folder-picker', {kind});
+      if (!response.path) {
+        message('ยกเลิกการเลือก · เก็บตำแหน่งเดิมไว้', false);
+        return;
+      }
+      const field = ({source:'create-source',workspace:'create-workspace',soundfont:'create-soundfont',
+          download:'download-destination',oauth:'settings-oauth'})[kind];
+      const element = $(field);
+      if (kind === 'soundfont' && ![...element.options].some(opt => opt.value === response.path)) {
+        element.add(new Option(response.path.split(/[\\/]/).pop(), response.path));
+      }
+      element.value = response.path;
+      await config({[kind]: response.path});
+      message('เลือกและบันทึกตำแหน่งใหม่เรียบร้อยแล้ว', false);
+    } finally {
+      if (button) {
+        button.textContent = oldLabel;
+        button.disabled = busy;
+      }
+    }
   }
   async function run(action, options = {}) {
     if (busy) return message('มีงานกำลังทำอยู่ · กรุณารอหรือกดยกเลิกก่อน');
