@@ -110,7 +110,7 @@ try {
       Object.assign(settings, request.postDataJSON() || {});
       response = {preferences:settings,soundfonts:[settings.soundfont]};
     } else if (url.pathname === '/api/live-preview') {
-      response = {ticket:'one-time-demo-ticket', title:'เสียงทดสอบ 2',
+      response = {ticket:'one-time-demo-ticket', stream_id:'demo-stream-id', title:'เสียงทดสอบ 2',
         has_backing:true, has_midi:true, mixed:true,
         message:'กำลังเล่นดนตรีกับ SoundFont ผสมกันแบบสตรีมสด'};
     } else if (url.pathname === '/api/estimate') {
@@ -151,6 +151,21 @@ try {
   await previewRequest;
   await pc.waitForFunction(() => document.getElementById('preview-audio')?.src.includes('/api/live-stream'));
   assert.match(await pc.locator('#preview-selected').innerText(), /เสียงทดสอบ 2/);
+  const liveChange = pc.waitForRequest((req) => {
+    try { return new URL(req.url()).pathname === '/api/live-control' &&
+      req.postDataJSON()?.synth_volume === 0 &&
+      req.postDataJSON()?.music_volume === 0.8; }
+    catch { return false; }
+  });
+  await pc.locator('#preview-sf-volume').evaluate(el => {
+    el.value = '0';
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await liveChange;
+  assert.equal(await pc.locator('#preview-sf-volume-label').innerText(), '0%');
+  assert.equal(await pc.locator('#preview-audio').getAttribute('src'),
+    'http://127.0.0.1:' + port + '/api/live-stream?ticket=one-time-demo-ticket',
+    'Realtime mixer changes must not start a new stream or reset play position');
   await pc.click('#preview-stop-button');
   assert.equal(await pc.locator('#preview-audio').getAttribute('src'), null, 'Stop must release live stream');
   await pc.waitForFunction(() => !document.getElementById('create-step-next').disabled);
