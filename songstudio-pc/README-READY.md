@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.9 Build 309
+# X-Stage Song Studio PC Ready v0.3.10 Build 310
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,13 +6,13 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.10-build310.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
 5. The launcher checks that the bundled Python, FFmpeg, FluidSynth, SoundFont and HTDemucs AI libraries/model are intact, using SHA-256 checksums, without downloading anything.
 6. The local engine opens the PC app interface in Edge app-style mode (or in your default browser if Edge isn't present). Work with files on this computer.
-7. You may change input/output folders. The chosen paths are remembered inside `data/preferences.json`.
+7. You may change input/output folders. The chosen paths persist across new ZIP releases under Windows `%LOCALAPPDATA%\\X-Stage\\SongStudio\\preferences.json`.
 8. For a custom X-Stage Song Studio **Windows desktop shortcut icon**, run `Create-Desktop-Shortcut.cmd` in the extracted folder (optional).
 
 ### Included components
@@ -55,9 +55,54 @@ Native browser confirmation windows have been replaced with styled in-app border
 - Legacy outputs created by older versions without source fingerprints cannot always be matched automatically; the engine blocks ambiguous unindexed filename collisions and reports the reason rather than silently making duplicate numbered files.
 - Two genuinely different originals with the same filename can coexist with a collision-safe suffix, while existing media is never overwritten.
 
-### Google Drive sign-in (requires user configuration)
+### Google Drive OAuth for every PC user (one owner configuration)
 
-Select a Google Cloud **Desktop app** OAuth Client JSON, enable the Google Drive API in that project, and configure OAuth consent/testing access as required by Google. Click **Google Login**; approval happens in the user's browser via a short-lived loopback callback with PKCE. Refresh tokens are encrypted under the Windows user's DPAPI key and never committed to GitHub. The narrow `drive.file` scope permits this app's files, not unrestricted access to older files created by other apps. Upload/download operates on the app's private Drive folder and does not publish file permissions. A real Google account must authorize the login on the target PC; simulated CI tests cannot grant that consent.
+**The app developer configures the public OAuth Desktop Client ID ONCE.**
+Do **not** distribute any user's refresh/access token, profile, or Google password.
+
+1. In Google Cloud, enable Google Drive API and set up Google Auth Platform.
+   For users outside your organization, choose **External** and publish
+   the OAuth consent app **In production**. While in **Testing**, only
+   allowlisted test users can authenticate and consent usually expires after
+   seven days (for non-identity scopes). Follow Google's verification requirements.
+2. At **Google Auth Platform → Clients → Create client → Desktop app**, create
+   a dedicated **X-Stage Song Studio PC** client. Copy the public Client ID,
+   ending in `.apps.googleusercontent.com`. Do **NOT** use the Web app
+   Client ID from `config.js`: Web/TV use different OAuth client types.
+3. At `https://github.com/webbase-x/xstage/settings/variables/actions`,
+   create a repository **Variable** named `XSTAGE_GOOGLE_DESKTOP_CLIENT_ID`
+   and enter the Desktop Client ID (NOT the secret, NOT any OAuth token).
+   The next `PC Ready Offline ZIP` GitHub Actions build embeds a sanitized
+   `config/google-oauth-client.json` with just this public identifier.
+4. Every end user extracts that release and clicks **Google Login**.
+   No JSON picker is required. Each user selects **their own** Google account
+   and approves **their own** Drive access once. Personal OAuth tokens are
+   never included in the downloadable ZIP.
+
+**Persistent Windows user storage:** `%LOCALAPPDATA%\X-Stage\SongStudio\`.
+This stores `preferences.json`, a user's optional `oauth-client.json`
+override and `google-auth.dpapi` (encrypted refresh token). New application
+ZIP releases automatically reuse the same per-Windows-account settings.
+Old per-ZIP `data` contents are copied into this folder if not present; they
+never overwrite an existing user profile. Separate Windows accounts have
+separate authorization, which is required for privacy.
+
+**Fallback for custom builds:** if the owner has not configured the repository
+variable, the settings screen honestly shows `OAuth Client not configured`.
+Expand **Advanced → Choose Desktop OAuth Client JSON** once; the app validates
+and saves the public Client ID in Windows user data. Future upgrades do not
+require choosing it again, even if the original JSON is deleted.
+
+**Important:** this does NOT log users into Google automatically or bypass
+Google consent. Desktop clients are public and cannot keep secrets hidden:
+we use PKCE and encrypted *per-user* tokens. `drive.file` limits visibility
+to files this application created or was explicitly granted access to.
+The app owner must publish the Google consent screen appropriately for the
+target audience; Google may require brand verification.
+
+**Testing status:** GitHub Windows automated tests can check the bundled
+Client ID and mock the OAuth callback, and validate Windows DPAPI roundtrip.
+They cannot verify sign-in against a real account without the user's consent.
 
 ### Live SoundFont and PC window fixes
 
@@ -84,7 +129,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.9-build309`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.10-build310`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
