@@ -43,13 +43,16 @@ if public_client.exists():
     config = json.loads(public_client.read_text(encoding="utf-8-sig"))
     installed = config.get("installed", {})
     assert installed.get("client_id", "").endswith(".apps.googleusercontent.com")
+    assert isinstance(installed.get("client_secret"), str) and installed["client_secret"], (
+        "Incomplete bundled Google Desktop OAuth client causes HTTP 400"
+    )
     assert "refresh_token" not in public_client.read_text(encoding="utf-8-sig")
     assert "access_token" not in public_client.read_text(encoding="utf-8-sig")
     service = google.GoogleDrive(root / ".test-user-google", lambda: str(public_client))
     assert service.status()["configured"] and not service.status()["connected"]
-    print("PASS: Bundled app-wide OAuth client is valid and has no user credentials")
+    print("PASS: Bundled app-wide OAuth Desktop ID+Secret complete; no user tokens shipped")
 else:
-    print("INFO: Owner has not configured XSTAGE_GOOGLE_DESKTOP_CLIENT_ID; one-time import remains available")
+    print("INFO: Owner has not configured BOTH Desktop ID+Secret; import original Desktop JSON once per Windows user")
 
 with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
     temp = Path(scratch)
