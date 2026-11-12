@@ -183,5 +183,43 @@ class LyricPreviewTests(unittest.TestCase):
         self.assertFalse(report["complete"])
         self.assertFalse(any(option["kind"] == "inspect" for option in report["options"]))
 
+
+    def test_karaoke_pc_enhanced_lrc_syllables_and_plain_lrc_no_fake_cues(self):
+        """Web stage must receive genuinely timestamped words, never guesses."""
+        export = engine._song_export_module()
+        original = ("[ti:เพลงทดลอง]\n[offset:250]\n"
+                    "[00:01.00]<00:01.00>สวัสดี <00:02.50>โลก\n"
+                    "[00:04.00]บรรทัดสอง\n")
+        document = export.lrc_to_json(original, "10001")
+        self.assertEqual(document["audioOffsetMs"], 250)
+        self.assertEqual(document["rawLrc"], original)
+        self.assertEqual(document["lines"][0]["text"], "สวัสดี โลก")
+        self.assertEqual([unit["text"] for unit in document["lines"][0]["syllables"]],
+                         ["สวัสดี ", "โลก"])
+        self.assertEqual([unit["start"] for unit in document["lines"][0]["syllables"]],
+                         [1.0, 2.5])
+        self.assertEqual([unit["duration"] for unit in document["lines"][0]["syllables"]],
+                         [1.5, 1.5])
+        self.assertNotIn("syllables", document["lines"][1])
+
+    def test_enhanced_lrc_repeated_stamps_shift_word_cues(self):
+        document = engine._song_export_module().lrc_to_json(
+            "[00:01.00][00:05.00]<00:01.00>ร้อง <00:02.00>เพลง\n", "20001")
+        self.assertEqual(len(document["lines"]), 2)
+        self.assertEqual(document["lines"][0]["syllables"][0]["start"], 1.)
+        self.assertEqual(document["lines"][1]["syllables"][0]["start"], 5.)
+        self.assertEqual(document["lines"][1]["syllables"][1]["start"], 6.)
+
+    def test_enhanced_lrc_preview_gives_real_token_timing(self):
+        self.audio.with_suffix(".lrc").write_text(
+            "[00:01.00]<00:01.00>ร้อง<00:02.00>ตาม\n", encoding="utf-8")
+        data = engine.preview_lyrics(12)
+        self.assertEqual(data["status"], "found")
+        self.assertEqual(data["lines"][0]["text"], "ร้องตาม")
+        self.assertEqual(
+            [(entry["text"], entry["startTime"])
+             for entry in data["lines"][0]["characters"]],
+            [("ร้อง", 1.), ("ตาม", 2.)])
+
 if __name__ == "__main__":
     unittest.main()
