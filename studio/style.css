@@ -145,3 +145,26 @@
 /* Fit two actions and status on small laptop screens. */
 .builder-actions .button{min-height:45px;white-space:normal;line-height:1.5;text-align:center}
 .topbar-heading,.workspace,.sound-settings,.sound-preview{min-width:0}
+
+
+/* Build jobs: explicit state next to confirmation buttons, visible even when
+ * a conversion finishes quickly or another view is scrolled below. */
+.create-build-feedback{display:flex;align-items:flex-start;gap:13px;margin-top:15px;
+  padding:13px 15px;background:#0c2c3d;border:1px solid #3c6376;border-radius:13px;
+  box-shadow:inset 0 1px 0 #ffffff0a;min-width:0}
+.create-build-feedback-icon{width:36px;height:36px;border-radius:11px;background:#23516a;
+  display:grid;place-items:center;color:#99e6ef;font-weight:900;font-size:20px;flex-shrink:0}
+.create-build-feedback-body{min-width:0;flex:1}
+.create-build-feedback-body strong{display:block;color:#e6f7ff;font-size:13px;line-height:1.5}
+.create-build-feedback-body p{color:#afccd7;font-size:12px;line-height:1.6;
+  margin:5px 0 0;white-space:pre-line;overflow-wrap:anywhere}
+.create-build-feedback .button{flex-shrink:0;align-self:center}
+.create-build-feedback[data-state=starting],
+.create-build-feedback[data-state=running]{border-color:#50aeb8;background:#103847}
+.create-build-feedback[data-state=starting] .create-build-feedback-icon,
+.create-build-feedback[data-state=running] .create-build-feedback-icon{background:#146b7b;color:#e6fffc}
+.create-build-feedback[data-state=success]{border-color:#338d81;background:#103733}
+.create-build-feedback[data-state=success] .create-build-feedback-icon{background:#167a60;color:white}
+.create-build-feedback[data-state=error]{border-color:#af6576;background:#342534}
+.create-build-feedback[data-state=error] .create-build-feedback-icon{background:#a74e62;color:white}
+@media(max-width:680px){.create-build-feedback{flex-wrap:wrap}.create-build-feedback .button{margin-left:49px;align-self:auto}}
