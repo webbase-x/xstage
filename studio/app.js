@@ -136,14 +136,14 @@
       button.classList.toggle('completed', step < createStep);
       if (isActive) button.setAttribute('aria-current', 'step');
       else button.removeAttribute('aria-current');
-      button.disabled = busy || (step > 1 && total < 1) || (step > 2 && selected.size === 0);
+      button.disabled = busy || (step > 1 && total < 1) || (step === 4 && selected.size === 0);
     }
     $('create-step-progress').textContent = 'ขั้นตอนที่ ' + createStep + ' จาก 4';
     $('create-step-description').textContent = 'ขั้นตอน ' + createStep + '/4 · ' + createStepLabels[createStep - 1];
     $('create-step-previous').disabled = busy || createStep === 1;
     const next = $('create-step-next');
     next.hidden = createStep === 4;
-    next.disabled = busy || (createStep === 1 && total < 1) || (createStep === 2 && selected.size === 0);
+    next.disabled = busy || (createStep === 1 && total < 1) || (createStep === 3 && selected.size === 0);
     if (createStep < 4) {
       next.textContent = 'ขั้นตอนถัดไป: ' + ['เลือกเพลง', 'ตั้งค่าเสียง / ทดลองฟัง', 'สร้างเพลง'][createStep - 1] + ' ›';
     }
@@ -168,8 +168,8 @@
       message('ขั้นตอนที่ 1: เลือกโฟลเดอร์ต้นฉบับ กดตรวจสอบไฟล์เพลง และรอให้สแกนพบเพลงก่อน');
       return;
     }
-    if (step > 2 && selected.size === 0) {
-      message('ขั้นตอนที่ 2: เลือกเพลงอย่างน้อย 1 เพลงก่อนดำเนินการต่อ');
+    if (step === 4 && selected.size === 0) {
+      message('ก่อนสร้างเพลง กรุณาเลือกเพลงอย่างน้อย 1 เพลงในขั้นตอนที่ 2');
       return;
     }
     if (createStep === 3 && step !== 3) stopLivePreview();
