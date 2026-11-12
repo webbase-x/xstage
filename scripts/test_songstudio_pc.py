@@ -216,11 +216,11 @@ class PcSourceTests(unittest.TestCase):
         legacy.parent.mkdir(parents=True, exist_ok=True)
         legacy.write_bytes(b"OLD" * 4096)
         engine.CANCEL.clear()
-        result = engine.build_library(
-            [{"path": str(audio), "code": "007007", "title": "Old Song"}],
-            "original", {"audio_only": False})
-        self.assertEqual((result["created"], result["skipped"], result["errors"]),
-                         (0, 1, 0))
+        with self.assertRaisesRegex(RuntimeError, "ไม่มีเพลงที่สร้างสำเร็จ"):
+            engine.build_library(
+                [{"path": str(audio), "code": "007007", "title": "Old Song"}],
+                "original", {"audio_only": False})
+        # Unverified legacy output must not be counted as a successful skip.
         self.assertEqual(legacy.read_bytes(), b"OLD" * 4096)
         self.assertFalse((self.dest / "songs" / "audio" / "0" / "007007.m4a").exists())
 
