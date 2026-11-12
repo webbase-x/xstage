@@ -400,6 +400,9 @@
 
   async function verifyOwner(entry,accessToken){
     if(!entry?.approved||!entry.conn?.open)return;
+    const authGeneration=(entry.ownerAuthGeneration||0)+1;
+    entry.ownerAuthGeneration=authGeneration;
+    const activeSession=session;
     if(!state.accountSub){send(entry.conn,{type:'role',role:'guest',message:'จอ TV ยังไม่ได้ล็อกอิน Google'});return;}
     const token=String(accessToken||'');
     if(!token||token.length>4096){send(entry.conn,{type:'role',role:'guest',message:'Google token ไม่ถูกต้อง'});return;}
@@ -409,6 +412,9 @@
       });
       if(!response.ok)throw Error('Google ไม่ยืนยัน token');
       const profile=await response.json();
+      // Owner logout invalidates an in-flight Google verification response.
+      if(!entry.approved||!entry.conn?.open||session!==activeSession||
+         entry.ownerAuthGeneration!==authGeneration)return;
       if(!profile?.sub||String(profile.sub)!==String(state.accountSub)){
         entry.role='guest';send(entry.conn,{type:'role',role:'guest',message:'บัญชี Google นี้ไม่ตรงกับบัญชีบนจอ TV'});send(entry.conn,snapshot(entry));return;
       }
@@ -478,6 +484,13 @@
           status('มือถือขอเชื่อมต่อ · กด “อนุญาต” หนึ่งครั้ง');send(conn,{type:'pending'});return;
         }
         if(msg.type==='owner-auth'){void verifyOwner(entry,msg.accessToken);return;}
+        if(msg.type==='owner-signout'){
+          entry.ownerAuthGeneration=(entry.ownerAuthGeneration||0)+1;
+          entry.role='guest';
+          send(conn,{type:'role',role:'guest',signedOut:true,message:'ออกจากระบบผู้ดูแลบนมือถือแล้ว'});
+          send(conn,snapshot(entry));
+          return;
+        }
         if(msg.type==='search'){
           if(!entryPermissions(entry).search){send(conn,{type:'results',items:[],query:String(msg.query||'').trim().toLocaleLowerCase('th')});return;}
           const now=Date.now();if(now-entry.lastSearch<150)return;entry.lastSearch=now;
