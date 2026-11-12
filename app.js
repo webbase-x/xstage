@@ -189,6 +189,7 @@ function xstageTvQuickMenu(){
     '<strong>X-STAGE · รีโมททีวี</strong>'+
     '<p>ใช้ปุ่มลูกศรเลือกคำสั่ง กด OK เพื่อยืนยัน</p>'+
     '<div class="xstage-tv-quick-actions">'+
+    '<button type="button" id="xstage-tv-quick-login">เข้าสู่ระบบ Google Drive</button>'+ 
     '<button type="button" id="xstage-tv-quick-qr">แสดง QR รีโมทมือถือ</button>'+
     '<button type="button" id="xstage-tv-quick-new-qr">สร้าง QR ใหม่</button>'+
     '<button type="button" id="xstage-tv-quick-play">เล่น / พักเพลง</button>'+
@@ -196,6 +197,10 @@ function xstageTvQuickMenu(){
     '<button type="button" id="xstage-tv-quick-close">กลับสู่เวที</button>'+
     '</div></div>';
   document.body.append(panel);
+  panel.querySelector('#xstage-tv-quick-login').addEventListener('click',()=>{
+    panel.hidden=true;
+    if(!state.token)startAndroidTvDeviceLogin(false);
+  });
   panel.querySelector('#xstage-tv-quick-qr').addEventListener('click',()=>{
     window.XStageRemoteQr?.show(true);
     panel.hidden=true;
@@ -538,7 +543,9 @@ function syncLoginGateState(){
   }
 }
 function dismissLoginGate(){
-  if(androidTvNativeBridgeReady()&&!state.token)return;
+  // Cancellation must allow the TV viewer to close the welcome gate; the
+  // private song library still remains locked until Google authenticates.
+  if(androidTvNativeBridgeReady()&&!state.token&&!androidTvLoginCancelled)return;
   if(!ui.gate||ui.gate.hidden)return;
   ui.gate.hidden=true;
   syncLoginGateState();
@@ -2303,6 +2310,23 @@ function setupNativeAndroidTvUi(){
   const queue=document.getElementById('stage-queue-toggle');
   if(queue){queue.tabIndex=-1;queue.hidden=true;queue.style.pointerEvents='none';}
 }
+// Google device-code requests have a bounded wait. Missing watchdog helpers
+// previously threw ReferenceError before the QR callback could render.
+let androidTvLoginWatchdog=0;
+let androidTvLoginInProgress=false;
+function clearAndroidTvLoginWatchdog(){
+  if(androidTvLoginWatchdog){clearTimeout(androidTvLoginWatchdog);androidTvLoginWatchdog=0;}
+}
+function armAndroidTvLoginWatchdog(){
+  clearAndroidTvLoginWatchdog();
+  androidTvLoginWatchdog=setTimeout(()=>{
+    androidTvLoginWatchdog=0;
+    if(androidTvLoginCancelled||state.token||!androidTvLoginInProgress)return;
+    androidTvLoginInProgress=false;
+    try{window.XStageAndroid?.cancelGoogleLogin?.();}catch{}
+    window.XStageAndroidAuthError?.('Google ยังไม่ส่งรหัสเข้าสู่ระบบภายใน 30 วินาที · ตรวจอินเทอร์เน็ตแล้วกด ลองใหม่');
+  },30000);
+}
 function androidTvAuthPanel(){
   let panel=$('android-tv-auth-panel');
   if(panel)return panel;
@@ -2347,6 +2371,7 @@ function androidTvAuthPanel(){
     // Cancel the native device-code poll as well as the UI. Do not automatically
     // reopen the login dialog until the user explicitly requests sign-in again.
     androidTvLoginCancelled=true;
+    androidTvLoginInProgress=false;
     androidTvRefreshingSession=false;
     clearAndroidTvLoginWatchdog();
     try{window.XStageAndroid?.cancelGoogleLogin?.();}catch{}
@@ -2354,6 +2379,10 @@ function androidTvAuthPanel(){
     ui.login.disabled=ui.gateLogin.disabled=false;
     setStatus('ยกเลิกการเข้าสู่ระบบแล้ว · กดเข้าสู่ระบบ Google เมื่อต้องการเปิดคลังเพลง');
     try{ui.gateLogin?.focus?.();}catch{}
+    if(document.body.classList.contains('xstage-native-tv')&&ui.gate?.hidden){
+      // Without the welcome gate, physical MENU/OK can reopen Google login.
+      window.XStageTvOpenMenu?.();
+    }
   });
   return panel;
 }
@@ -2440,6 +2469,7 @@ window.XStageAndroidAuthStatus=message=>{
 window.XStageAndroidAuthError=message=>{
   if(androidTvLoginCancelled)return;
   clearAndroidTvLoginWatchdog();
+  androidTvLoginInProgress=false;
   androidTvRefreshingSession=false;
   const text=String(message||'เข้าสู่ระบบ Google ไม่สำเร็จ');
   const panel=androidTvAuthPanel();
@@ -2481,6 +2511,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
       window.XStageAndroidAuthError(error?.message||'เปิด Google Drive ไม่สำเร็จ');
     }
   }finally{
+    androidTvLoginInProgress=false;
     if(authId===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
   }
 };
@@ -2596,16 +2627,20 @@ function androidTvHasStoredGoogleSession(){
 }
 function restoreAndroidTvGoogleSession(){
   if(!androidTvNativeBridgeReady()||state.token||androidTvLoginCancelled)return;
-  try{window.XStageAndroid.restoreGoogleSession?.();}catch{}
+  androidTvLoginInProgress=true;
+  try{window.XStageAndroid.restoreGoogleSession?.();armAndroidTvLoginWatchdog();}
+  catch(error){androidTvLoginInProgress=false;window.XStageAndroidAuthError?.(error?.message||'คืนค่า Google Session ไม่สำเร็จ');}
 }
 function startAndroidTvDeviceLogin(automatic=false){
   if(!androidTvNativeBridgeReady())return;
   androidTvLoginCancelled=false;
+  androidTvLoginInProgress=true;
   ui.login.disabled=ui.gateLogin.disabled=true;
   showAndroidTvAuthPanel();
   setStatus(automatic?'กำลังเตรียม QR Login ในแอป Android…':'กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
   try{window.XStageAndroid.requestGoogleLogin();armAndroidTvLoginWatchdog();}
   catch(error){
+    androidTvLoginInProgress=false;
     ui.login.disabled=ui.gateLogin.disabled=false;
     window.XStageAndroidAuthError(error?.message||'เรียก Android Login ไม่สำเร็จ');
   }
@@ -2627,7 +2662,7 @@ function bootAndroidTvAuthentication(){
 // Re-check the native Drive session before access tokens expire and after TV wake.
 let androidTvRefreshingSession=false;
 function guardAndroidTvSession(){
-  if(!androidTvNativeBridgeReady()||androidTvLoginCancelled)return;
+  if(!androidTvNativeBridgeReady()||!androidTvBootAuthStarted||androidTvLoginCancelled||androidTvLoginInProgress)return;
   const expired=!state.token||!state.tokenExpiresAt||state.tokenExpiresAt<=Date.now()+90_000;
   if(!expired){androidTvRefreshingSession=false;return;}
   const panel=androidTvAuthPanel();
