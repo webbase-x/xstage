@@ -35,6 +35,7 @@ try {
     $ffprobe = Check-File '.runtime\tools\ffprobe.exe'
     $sfont = Check-File '.runtime\soundfonts\GeneralUser-GS.sf2'
     $engine = Check-File 'engine.py'
+    $picker = Check-File 'pick_path.ps1'
     $ui = Check-File 'studio\index.html'
     [void](Check-File 'studio\app.js')
     [void](Check-File 'studio\style.css')
