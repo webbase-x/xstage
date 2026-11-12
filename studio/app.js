@@ -1098,8 +1098,15 @@
   }
   async function startUpload() {
     if (!googleConnected) return message('กรุณา Google Login ก่อนซิงค์คลังเพลง');
-    if (await confirmStudio('ซิงค์คลังเพลงที่สร้างเสร็จแล้วทั้งหมดจาก songs/current.json ขึ้น Google Drive ส่วนตัว\nระบบตรวจ MD5 ของไฟล์ที่เคยส่งไว้ก่อน และอัปเดต current.json หลังไฟล์เพลงครบเท่านั้น', 'ยืนยันซิงค์คลังเพลง')) {
-      await run('upload',{});
+    const createNew = $('upload-create-library').checked === true;
+    const details = 'ส่ง M4A + Lyrics JSON จากคลังในเครื่องไปยัง XStageWeb\n'+
+      'ตรวจเพลงซ้ำด้วยรหัสเพลงและ MD5 ของไฟล์จริง · คงเพลงเดิมทั้งหมด\n'+
+      'เพิ่มฐานเพลงเฉพาะรายการใหม่/แก้ไข และเผยแพร่ current.json เป็นขั้นตอนสุดท้าย';
+    const warning = createNew
+      ? '\n\n⚠ เลือกสร้างคลังใหม่: ยืนยันว่า Google Drive นี้ไม่มีคลัง XStageWeb เดิมที่ต้องใช้ต่อ'
+      : '\n\nหากมองไม่เห็นคลังเดิมเพราะสิทธิ์ Google ไม่ครบ ระบบจะหยุดโดยไม่สร้างคลังซ้ำ';
+    if (await confirmStudio(details + warning, 'ยืนยันเผยแพร่เพลงไปยัง X-Stage Karaoke Online')) {
+      await run('upload',{create_new_library:createNew});
     }
   }
   async function startDownload(kind) {
