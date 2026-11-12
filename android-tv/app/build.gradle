@@ -89,6 +89,11 @@ tasks.register("generateXStageTvAssets") {
     inputs.file(rootProject.file("../assets/xstage-stage-logo.png"))
 
     doLast {
+        // Previous builds generated an xhdpi banner. Never package both
+        // qualifiers: on xhdpi TVs Android could still select the stale art.
+        def staleLauncherBanner = file("src/main/res/drawable-xhdpi/xstage_tv_banner.png")
+        if (staleLauncherBanner.exists() && !staleLauncherBanner.delete())
+            throw new GradleException("Cannot remove stale xhdpi Android TV banner")
         [iconFile.parentFile, bannerFile.parentFile, splashFile.parentFile, storeIcon.parentFile, storeBanner.parentFile].each { it.mkdirs() }
 
         // One official user-supplied source for Android TV launcher banner,
