@@ -30,6 +30,13 @@ assert.ok(js.includes('await makeZIP(zipAssets)') && js.includes('await renderAu
 assert.ok(css.includes('@media(max-width:650px)'), 'Web UI must be responsive');
 assert.ok(index.includes('<script src="./entry.js"></script>'),
   'public studio must include an entry router');
+const webOutputIds = new Set([...html.matchAll(/\\bid="([^"]+)"/g)].map((m) => m[1]));
+assert.ok(webOutputIds.has('download-result'), 'Web conversion must expose explicit result download');
+assert.ok(js.includes("state.archive = blob") && js.includes("state.archiveName"),
+  'Completed archive must be retained until user downloads it');
+assert.ok(js.includes("$('download-result').addEventListener('click'"),
+  'Result download must be activated by a real user click');
+
 
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
 const used = [...js.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]);
