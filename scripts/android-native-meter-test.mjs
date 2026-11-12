@@ -72,6 +72,7 @@ function fakeEnvironment({native=true,captureSupported=true}={}){
     close(){this.state='closed';return Promise.resolve();}
   }
   const window={AudioContext:FakeAudioContext,devicePixelRatio:1,
+    addEventListener(){},
     XStageAndroid:native?{getAppVersion:()=> '1.0.79'}:undefined};
   const run=new Function('window','document','location','requestAnimationFrame',
     'cancelAnimationFrame','setTimeout','clearTimeout',meter);
