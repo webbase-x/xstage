@@ -17,8 +17,8 @@
   const ffmpegUrls = [
     'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js',
     'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js',
-    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
-    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
+    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm'
   ];
   const extOf = (name) => String(name).split('.').pop().toLowerCase();
   const baseOf = (name) => String(name).replace(/\.[^.]+$/, '');
@@ -49,6 +49,10 @@
     }
     $('build').disabled = flag || ![...selected].some((id) => entries.get(id)?.audio);
     $('cancel').hidden = !flag;
+    if (!flag) {
+      $('save-lyrics').disabled = !state.active;
+      $('insert-time').disabled = !entries.get(state.active)?.audio;
+    }
   }
   function safeName(name) {
     return String(name || 'untitled').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
@@ -163,6 +167,7 @@
       $('folder-input').click(); return;
     }
     try {
+      state.cancelled = false;
       const handle = await window.showDirectoryPicker({ mode: 'read' });
       notice('กำลังอ่านรายการไฟล์จากโฟลเดอร์ ' + handle.name);
       const files = [];
@@ -243,7 +248,7 @@
         const pct = 100 * ((state.currentIndex + state.currentFraction) / Math.max(1, state.total));
         setProgress('กำลังเข้ารหัส M4A · เพลง ' + (state.currentIndex + 1) + '/' + state.total, pct);
       });
-      const workerURL = await blobFromURL(ffmpegUrls[1], 'text/javascript');
+      const workerURL = URL.createObjectURL(new Blob(['import "' + ffmpegUrls[1] + '";'], {type: 'text/javascript'}));
       const coreURL = await blobFromURL(ffmpegUrls[2], 'text/javascript');
       const wasmURL = await blobFromURL(ffmpegUrls[3], 'application/wasm');
       tempURLs.push(workerURL, coreURL, wasmURL);
