@@ -60,7 +60,7 @@
   const previewAudio = $('preview-audio');
   let previewSongId = null, previewSearchTimer = 0, previewSearchSeq = 0;
   let previewSongRows = [], livePreviewPending = false;
-  let liveStreamId = '', liveControlTimer = 0, liveControlPending = false;
+  let liveStreamId = '', liveControlTimer = 0, liveControlPending = false, liveControlDirty = false;
 
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
@@ -354,6 +354,7 @@
     clearTimeout(liveControlTimer);
     const stopping = liveStreamId;
     liveStreamId = '';
+    liveControlDirty = false;
     previewAudio.pause();
     previewAudio.removeAttribute('src');
     previewAudio.load(); // Aborts HTTP stream; closes FFmpeg/FluidSynth without writing files.
@@ -362,9 +363,11 @@
   }
   function queueLiveControl(immediate = false) {
     if (!liveStreamId) return;
+    liveControlDirty = true;
     clearTimeout(liveControlTimer);
     liveControlTimer = setTimeout(async () => {
-      if (liveControlPending || !liveStreamId) return;
+      if (liveControlPending || !liveStreamId || !liveControlDirty) return;
+      liveControlDirty = false;
       liveControlPending = true;
       const stream = liveStreamId;
       try {
@@ -383,6 +386,7 @@
         if (stream === liveStreamId) message('ปรับเสียงสดไม่สำเร็จ: ' + error.message);
       } finally {
         liveControlPending = false;
+        if (liveControlDirty && liveStreamId) queueLiveControl(true);
       }
     }, immediate ? 0 : 70);
   }
