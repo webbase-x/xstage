@@ -961,6 +961,8 @@ def execute_job(action, options, started):
             if not row:
                 raise ValueError("ไม่พบเพลงที่ต้องการถอดเนื้อร้อง")
             lang = options.get("language", "th")
+            if not ffmpeg_binary():
+                raise RuntimeError("ไม่พบ FFmpeg สำหรับเตรียมเสียงให้ Whisper")
             draft = AI_LYRICS.transcribe(
                 Path(row["path"]), str(row.get("code") or Path(row["path"]).stem),
                 DATA, RUNTIME, ffmpeg_binary(), CANCEL, update, language=lang)
@@ -1385,6 +1387,77 @@ def preview_inspect(song_id, choice):
             "text": "\n".join(line["text"] for line in doc["lines"])[:15000]}
 
 
+
+def available_vocal_sources(search="", offset=0, limit=40):
+    """Return indexed audio only, never instrumental MIDI/KAR/NCN rows."""
+    matches = [row for row in visible_files(search)
+               if Path(row["path"]).suffix.lower() in EXT_AUDIO]
+    page = [{**row, **preview_song_identity(row)}
+            for row in matches[offset:offset + limit]]
+    return {"rows": page, "total": len(matches)}
+
+
+def ai_lyrics_draft(song_id):
+    """AI draft stays in private AppData until the owner explicitly approves."""
+    with LOCK:
+        row = dict(FILE_BY_ID.get(song_id) or {}) if type(song_id) is int else {}
+    if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
+        raise ValueError("ต้องเลือกเพลงที่เป็นไฟล์เสียงสำหรับถอดคำร้อง")
+    draft = AI_LYRICS.load_draft(DATA, Path(row["path"]))
+    return {
+        "id": song_id, **preview_song_identity(row),
+        "available": AI_LYRICS.available(RUNTIME),
+        "hasDraft": bool(draft), "draft": draft,
+        "approvedLrc": NOTES.get(row["path"], {}).get("lyrics", "")
+    }
+
+
+def approve_ai_lyrics(song_id, lrc_text):
+    """Require explicit user review and strict timestamps before saving."""
+    if type(song_id) is not int or not isinstance(lrc_text, str):
+        raise ValueError("ข้อมูลเนื้อร้องไม่ถูกต้อง")
+    if len(lrc_text) > 100000 or not lrc_text.strip():
+        raise ValueError("เนื้อร้องว่างหรือมีขนาดใหญ่เกินกำหนด")
+    with LOCK:
+        row = dict(FILE_BY_ID.get(song_id) or {})
+    if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
+        raise ValueError("ต้องเลือกเพลงเสียงร้องที่อยู่ในรายการสแกน")
+    if not AI_LYRICS.load_draft(DATA, Path(row["path"])):
+        raise ValueError("ยังไม่มีฉบับร่าง AI สำหรับเพลงนี้ กรุณาให้ AI ถอดเสียงก่อน")
+    # lrc_to_json ignores invalid lines; reject invalid non-metadata content
+    # instead of silently publishing a partial transcription.
+    import re
+    stamp = re.compile(r"^\\[(\\d{1,3}):(\\d{2})(?:\\.(\\d{1,3}))?\\](.+)$")
+    starts = []
+    count = 0
+    for raw in lrc_text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if re.match(r"^\\[(ti|ar|al|by|offset):", line, re.I):
+            continue
+        match = stamp.match(line)
+        if not match or int(match.group(2)) >= 60:
+            raise ValueError("รูปแบบ LRC ไม่ถูกต้อง: " + line[:70])
+        seconds = int(match.group(1))*60 + int(match.group(2))
+        seconds += int((match.group(3) or "0").ljust(3, "0"))/1000
+        if starts and seconds < starts[-1]:
+            raise ValueError("เวลาคำร้องต้องเรียงจากน้อยไปมาก")
+        starts.append(seconds)
+        count += 1
+    if not count:
+        raise ValueError("ต้องมีเนื้อร้องพร้อม timestamp อย่างน้อยหนึ่งบรรทัด")
+    doc = _song_export_module().lrc_to_json(lrc_text, str(row.get("code") or ""))
+    if len(doc["lines"]) != count:
+        raise ValueError("ตรวจคำร้องกับเวลา LRC ไม่ผ่าน โปรดแก้ไขก่อนบันทึก")
+    with LOCK:
+        notes = NOTES.setdefault(row["path"], {})
+        notes["lyrics"] = lrc_text
+        save_json(NOTES_FILE, NOTES)
+    return {"ok": True, "lines": count, "message": "บันทึก LRC ที่ผู้ใช้ตรวจแก้แล้วในข้อมูลเพลงเรียบร้อย"}
+
+
+
 def preview_lyrics(song_id):
     if type(song_id) is not int:
         raise ValueError("รหัสเพลงสำหรับแสดงเนื้อร้องไม่ถูกต้อง")
@@ -1640,6 +1713,17 @@ class Handler(BaseHTTPRequestHandler):
                     page_rows = [{**item, **preview_song_identity(item)}
                                  for item in page_rows]
                 self._json({"rows": page_rows, "total": len(rows)})
+            elif path == "/api/vocal-songs":
+                search = query.get("search", [""])[0]
+                offset = max(0, int(query.get("offset", ["0"])[0]))
+                limit = max(1, min(60, int(query.get("limit", ["30"])[0])))
+                self._json(available_vocal_sources(search, offset, limit))
+            elif path == "/api/ai-lyrics-draft":
+                try:
+                    song_id = int(query.get("id", [""])[0])
+                except ValueError as exc:
+                    raise ValueError("กรุณาเลือกเพลงเสียงร้อง") from exc
+                self._json(ai_lyrics_draft(song_id))
             elif path == "/api/preview-sources":
                 try:
                     song_id = int(query.get("id", [""])[0])
@@ -1781,6 +1865,8 @@ class Handler(BaseHTTPRequestHandler):
                     "formats": dict(__import__("collections").Counter(
                         Path(r["path"]).suffix.lower() for r in matches))
                 })
+            elif path == "/api/ai-lyrics-approve":
+                self._json(approve_ai_lyrics(payload.get("id"), payload.get("lrc")))
             elif path == "/api/jobs":
                 self._json(start_job(payload))
             elif path == "/api/jobs/cancel":
