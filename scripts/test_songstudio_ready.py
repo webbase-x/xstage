@@ -23,6 +23,18 @@ assert engine.fluidsynth_binary() is not None, "FluidSynth is missing"
 assert engine.sf_available(), "Default SoundFont is not selected"
 assert engine.DEFAULT_SOUNDFONT.is_file(), "SoundFont is not present"
 
+# The real Windows DPAPI native calls must be 64-bit pointer-safe.
+# This unit check needs no actual Google account, OAuth file or network.
+spec_google = importlib.util.spec_from_file_location("xstage_google_dpapi",
+                                                    root / "google_drive.py")
+google = importlib.util.module_from_spec(spec_google)
+spec_google.loader.exec_module(google)
+plain = b"xstage-google-dpapi-roundtrip-2026"
+encrypted = google._crypt(plain, False)
+assert encrypted != plain and len(encrypted) > len(plain)
+assert google._crypt(encrypted, True) == plain
+print("PASS: Windows DPAPI encrypts/decrypts Google refresh-token data safely")
+
 with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
     temp = Path(scratch)
     input_wav = temp / "demo.wav"
