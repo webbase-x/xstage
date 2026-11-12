@@ -16,7 +16,7 @@ def generate(output: Path) -> None:
     output.mkdir(parents=True, exist_ok=True)
     # Integer 2x scale keeps Pillow stroke widths and corner radii exact.
     size = 1024
-    unit = size / 512
+    unit = size // 512
 
     def scale(points):
         return [(int(x * unit), int(y * unit)) for x, y in points]
