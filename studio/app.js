@@ -62,6 +62,8 @@
   let previewSongRows = [], livePreviewPending = false;
   let previewLyrics = null, previewLyricsSeq = 0, currentLyricIndex = -2;
   let liveStreamId = '', liveControlTimer = 0, liveControlPending = false, liveControlDirty = false;
+  let previewSourceSeq = 0, previewPlaySerial = 0, previewPendingChange = false;
+  let previewSourceSongId = null, karaokeAnimationFrame = 0;
 
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
@@ -150,6 +152,8 @@
       next.textContent = 'ขั้นตอนถัดไป: ' + ['เลือกเพลง', 'ตั้งค่าเสียง / ทดลองฟัง', 'สร้างเพลง'][createStep - 1] + ' ›';
     }
     $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
+    $('preview-button').textContent = $('preview-file-type').value.startsWith('inspect:')
+      ? '⌕ ตรวจไฟล์ประกอบ' : '▶ เล่นเพลงทันที';
     const previewHint = $('create-preview-hint');
     if (!previewAudio.src && !livePreviewPending) {
       previewHint.textContent = previewSongId || selected.size === 1
@@ -179,7 +183,11 @@
     if (createStep === 3) {
       if (!previewSongId && selected.size === 1) previewSongId = [...selected][0];
       void searchPreviewSongs();
-      if (previewSongId) { void loadPreviewIdentity(previewSongId); void loadPreviewLyrics(previewSongId); }
+      if (previewSongId) {
+        void loadPreviewIdentity(previewSongId);
+        void loadPreviewSources(previewSongId);
+        void loadPreviewLyrics(previewSongId);
+      }
     }
     updateCreateWizard();
     document.querySelector('.create-assistant')?.scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -370,6 +378,9 @@
     }
   }
   function stopLivePreview() {
+    previewPlaySerial++;
+    if (karaokeAnimationFrame) cancelAnimationFrame(karaokeAnimationFrame);
+    karaokeAnimationFrame = 0;
     clearTimeout(liveControlTimer);
     const stopping = liveStreamId;
     liveStreamId = '';
@@ -417,24 +428,58 @@
     let lo = 0, hi = entries.length - 1, index = -1;
     while (lo <= hi) {
       const mid = (lo + hi) >>> 1;
-      if (Number(entries[mid].startTime) <= time) {index = mid; lo = mid + 1;}
+      if (Number(entries[mid].startTime) <= time) { index = mid; lo = mid + 1; }
       else hi = mid - 1;
     }
-    if (currentLyricIndex === index) return;
-    currentLyricIndex = index;
     const panel = $('preview-lyrics-lines');
-    panel.replaceChildren();
-    const from = Math.max(0, Math.min(entries.length - 5, index - 2));
-    const to = Math.min(entries.length, Math.max(5, from + 5));
-    for (let i = from; i < to; i++) {
-      const line = document.createElement('div');
-      line.className = 'preview-lyric-line';
-      if (i === index && time < Number(entries[i].endTime || Number(entries[i].startTime) + 4))
-        line.classList.add('active');
-      else if (i > index) line.classList.add('upcoming');
-      line.textContent = entries[i].text || '';
-      panel.append(line);
+    if (currentLyricIndex !== index) {
+      currentLyricIndex = index;
+      panel.replaceChildren();
+      const from = Math.max(0, Math.min(entries.length - 5, index - 2));
+      const to = Math.min(entries.length, Math.max(5, from + 5));
+      for (let i = from; i < to; i++) {
+        const entry = entries[i];
+        const line = document.createElement('div');
+        line.className = 'preview-lyric-line';
+        line.dataset.lineIndex = String(i);
+        if (i > index) line.classList.add('upcoming');
+        if (data.status === 'found' && Array.isArray(entry.characters) &&
+            entry.characters.length) {
+          const textByChars = entry.characters.map(c => c.text || '').join('');
+          if (textByChars === entry.text) {
+            for (const part of entry.characters) {
+              const segment = document.createElement('span');
+              segment.className = 'karaoke-character';
+              segment.dataset.startTime = String(Number(part.startTime) || 0);
+              segment.textContent = part.text || '';
+              line.append(segment);
+            }
+          } else line.textContent = entry.text || '';
+        } else line.textContent = entry.text || '';
+        panel.append(line);
+      }
     }
+    for (const line of panel.querySelectorAll('[data-line-index]')) {
+      const i = Number(line.dataset.lineIndex);
+      const entry = entries[i];
+      const active = i === index && time < Number(entry.endTime || Number(entry.startTime) + 4);
+      line.classList.toggle('active', active);
+      line.classList.toggle('upcoming', i > index);
+      if (active) {
+        for (const segment of line.querySelectorAll('.karaoke-character')) {
+          segment.classList.toggle('sung', time + 0.015 >= Number(segment.dataset.startTime));
+        }
+      }
+    }
+  }
+  function animateKaraoke() {
+    karaokeAnimationFrame = 0;
+    if (previewAudio.paused || previewAudio.ended) return;
+    updateLyricTime(previewAudio.currentTime);
+    karaokeAnimationFrame = requestAnimationFrame(animateKaraoke);
+  }
+  function startKaraokeAnimation() {
+    if (!karaokeAnimationFrame) karaokeAnimationFrame = requestAnimationFrame(animateKaraoke);
   }
   function showPreviewIdentity(song) {
     if (!song) return;
@@ -454,6 +499,78 @@
     } catch (error) {
       if (songId === previewSongId && !fallback)
         $('preview-label').textContent = 'อ่านชื่อเพลงและนักร้องไม่สำเร็จ: ' + error.message;
+    }
+  }
+  async function loadPreviewSources(songId) {
+    const seq = ++previewSourceSeq;
+    const picker = $('preview-file-type');
+    picker.disabled = true;
+    picker.replaceChildren(new Option('กำลังตรวจประเภทไฟล์…', ''));
+    $('preview-file-evidence').textContent = 'กำลังตรวจ Song, Lyrics, Cursor หรือ LRC ตามประเภทเพลง…';
+    $('preview-file-inspection').hidden = true;
+    if (!songId) return;
+    try {
+      const report = await api('/api/preview-sources?id=' + encodeURIComponent(songId));
+      if (seq !== previewSourceSeq || songId !== previewSongId) return null;
+      previewSourceSongId = songId;
+      picker.replaceChildren();
+      for (const choice of report.options || []) {
+        const option = new Option(choice.label, choice.value);
+        picker.add(option);
+      }
+      if (!picker.options.length) picker.add(new Option('ไม่พบไฟล์ที่ทดสอบได้', ''));
+      picker.disabled = !report.options?.length;
+      picker.value = report.options?.some(c => c.value === 'auto') ? 'auto' :
+        (report.options?.[0]?.value || '');
+      const evidence = $('preview-file-evidence');
+      evidence.replaceChildren();
+      for (const item of report.components || []) {
+        const element = document.createElement('span');
+        element.className = 'preview-component ' + (item.found ? 'found' : 'missing');
+        element.textContent = (item.found ? '✓ ' : '✕ ') + item.type +
+          (item.found ? ' · ' + item.name : ' · ไม่พบไฟล์');
+        evidence.append(element);
+      }
+      const proof = document.createElement('p');
+      proof.className = 'preview-proof-message';
+      proof.textContent = (report.timedLyricsReady ? '✓ เนื้อร้องและเวลาผ่านการอ่านจริง' :
+        '⚠ ยังยืนยันเนื้อร้องที่ตรงเวลาไม่ได้') + ' · ' + (report.proofMessage || '');
+      evidence.append(proof);
+      updateButtons();
+      return report;
+    } catch (error) {
+      if (seq !== previewSourceSeq) return null;
+      picker.replaceChildren(new Option('ตรวจไฟล์ไม่สำเร็จ', ''));
+      $('preview-file-evidence').textContent = 'ตรวจองค์ประกอบไม่สำเร็จ: ' + error.message;
+      updateButtons();
+      return null;
+    }
+  }
+  async function inspectPreviewFile(songId, kind) {
+    stopLivePreview();
+    const panel = $('preview-file-inspection');
+    panel.hidden = false;
+    panel.replaceChildren();
+    panel.textContent = 'กำลังอ่านไฟล์ประกอบ…';
+    try {
+      const result = await api('/api/preview-inspect?id=' + encodeURIComponent(songId) +
+        '&kind=' + encodeURIComponent(kind));
+      if (songId !== previewSongId || $('preview-file-type').value !== kind) return;
+      panel.replaceChildren();
+      const summary = document.createElement('strong');
+      summary.textContent = '✓ ' + result.file + ' · ' + result.message;
+      panel.append(summary);
+      if (result.text) {
+        const content = document.createElement('pre');
+        content.textContent = result.text;
+        panel.append(content);
+      }
+      $('preview-label').textContent = 'ตรวจไฟล์ ' + result.file + ' แล้ว · ไม่มีการสร้างเพลง';
+    } catch (error) {
+      if (songId === previewSongId) {
+        panel.textContent = '✕ ตรวจไฟล์ไม่ผ่าน: ' + error.message;
+        $('preview-label').textContent = 'ตรวจไฟล์ประกอบไม่สำเร็จ';
+      }
     }
   }
   async function loadPreviewLyrics(songId) {
@@ -606,18 +723,30 @@
   async function startLivePreview() {
     const songId = previewSongId || (selected.size === 1 ? [...selected][0] : null);
     if (!songId) return message('กรุณาค้นหาและเลือกเพลงจากรายการในขั้นตอนทดลองฟังก่อน');
-    if (livePreviewPending) return;
+    if (previewSourceSongId !== songId) await loadPreviewSources(songId);
+    const choice = $('preview-file-type').value || 'auto';
+    if (choice.startsWith('inspect:')) return inspectPreviewFile(songId, choice);
+    if (livePreviewPending) { previewPendingChange = true; return; }
     livePreviewPending = true;
     $('preview-button').disabled = true;
     $('preview-label').textContent = 'กำลังเปิดเสียงสตรีมสด…';
     try {
       stopLivePreview();
+      const serial = previewPlaySerial;
+      $('preview-file-inspection').hidden = true;
       await saveInputs(['create-soundfont']);
+      if (serial !== previewPlaySerial || songId !== previewSongId) return;
       const response = await post('/api/live-preview', {
         id:songId,
+        source_choice:choice,
         music_volume:Number($('preview-music-volume').value) / 100,
         synth_volume:Number($('preview-sf-volume').value) / 100
       });
+      if (serial !== previewPlaySerial || songId !== previewSongId ||
+          $('preview-file-type').value !== choice) {
+        if (response.stream_id) void post('/api/live-stop', {stream_id:response.stream_id}).catch(()=>{});
+        return;
+      }
       showPreviewIdentity(response);
       $('create-preview-hint').textContent = response.message ||
         (response.mixed ? 'เล่นเสียงดนตรีและ SoundFont พร้อมกัน' : 'เล่นแบบสด');
@@ -639,6 +768,10 @@
     } finally {
       livePreviewPending = false;
       updateButtons();
+      if (previewPendingChange) {
+        previewPendingChange = false;
+        void startLivePreview();
+      }
     }
   }
   function buildFeedback(state, title, detail) {
@@ -943,9 +1076,24 @@
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
   $('preview-stop-button').addEventListener('click',stopLivePreview);
+  $('preview-file-type').addEventListener('change', () => {
+    stopLivePreview();
+    updateButtons();
+    if (livePreviewPending) { previewPendingChange = true; return; }
+    void startLivePreview();
+  });
   $('preview-ai-transcribe').addEventListener('click',()=>{void transcribePreviewWithAi();});
   $('preview-ai-review').addEventListener('click',()=>{void reviewAiLyrics();});
   previewAudio.addEventListener('timeupdate',()=>updateLyricTime(previewAudio.currentTime));
+  previewAudio.addEventListener('play', startKaraokeAnimation);
+  previewAudio.addEventListener('pause', () => {
+    if (karaokeAnimationFrame) cancelAnimationFrame(karaokeAnimationFrame);
+    karaokeAnimationFrame = 0;
+  });
+  previewAudio.addEventListener('ended', () => {
+    if (karaokeAnimationFrame) cancelAnimationFrame(karaokeAnimationFrame);
+    karaokeAnimationFrame = 0;
+  });
   previewAudio.addEventListener('seeked',()=>{currentLyricIndex=-2;updateLyricTime(previewAudio.currentTime);});
   $('preview-song-search').addEventListener('input', () => {
     clearTimeout(previewSearchTimer);
@@ -957,6 +1105,7 @@
     const chosen = Number(option.dataset.previewId);
     const song = previewSongRows.find(item => item.id === chosen);
     if (!song) return;
+    stopLivePreview();
     previewSongId = chosen;
     showPreviewIdentity(song);
     void loadPreviewIdentity(chosen, song);
@@ -966,7 +1115,9 @@
     }
     updateButtons();
     void loadPreviewLyrics(chosen);
-    void startLivePreview();
+    void loadPreviewSources(chosen).then(report => {
+      if (report && previewSongId === chosen) void startLivePreview();
+    });
   });
   for (const [slider,label] of [['preview-music-volume','preview-music-volume-label'],
                                  ['preview-sf-volume','preview-sf-volume-label']]) {
