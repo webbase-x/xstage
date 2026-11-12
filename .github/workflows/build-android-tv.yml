@@ -173,7 +173,10 @@ jobs:
               assert png_size(content)==dimensions,f'Unexpected dimensions: {output}'
               assert len(content)>4096,f'Suspiciously empty launcher graphic: {output}'
           assert (folder/'xstage_tv_splash.png').read_bytes()==source.read_bytes(),'Native splash must be exact source PNG'
-          for apk in [Path('android-tv/app/build/outputs/apk/debug/app-debug.apk'),Path('android-tv/app/build/outputs/apk/release/app-release.apk')]:
+          debug_apks=list(Path('android-tv/app/build/outputs/apk/debug').glob('*.apk'))
+          release_apks=list(Path('android-tv/app/build/outputs/apk/release').glob('*.apk'))
+          assert debug_apks and release_apks,'Both debug and release APKs must be built'
+          for apk in debug_apks+release_apks:
               with ZipFile(apk) as z:
                   names=z.namelist()
                   for name in expected:
