@@ -122,7 +122,7 @@
       cancel.addEventListener('click', reject);
       dialog.addEventListener('close', closed);
       dialog.showModal(); // In-app borderless UI; never a native OS confirm title bar.
-      cancel.focus();
+      ok.focus(); // Enter confirms the explicit build action, not Cancel.
     });
   }
   function updateCreateWizard() {
@@ -572,11 +572,15 @@
       const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
         'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' : 'M4A พร้อม Lyrics') +
         '\nไฟล์ที่สร้างแล้วจะถูกตรวจซ้ำและข้ามโดยไม่สร้างใหม่' + warning;
+      buildFeedback('starting', 'ตรวจสอบพร้อม · รอผู้ใช้ยืนยันสร้างเพลง',
+        'เลือก ' + fmtNum(ids.length) + ' เพลง · ยังไม่ได้เริ่ม Engine · กด “ยืนยัน” เพื่อสร้างไฟล์');
       const approved = await confirmStudio(summary, 'ยืนยันเริ่มสร้างเพลง');
       if (!approved) {
-        buildFeedback('idle', 'ยกเลิกก่อนเริ่มสร้างเพลง', 'ยังไม่มีไฟล์ถูกสร้างจากคำสั่งนี้');
+        buildFeedback('idle', 'ยกเลิกก่อนเริ่มสร้างเพลง', 'คำสั่งไม่ได้ส่งไปยัง PC Engine · กดสร้างและยืนยันอีกครั้งได้');
         return;
       }
+      buildFeedback('starting', 'ยืนยันแล้ว · กำลังส่งงานให้ PC Engine…',
+        'กำลังส่งรายการ ' + fmtNum(ids.length) + ' เพลง · รอเลขงานจาก Engine');
       await run('build', {ids, audio_only:audioOnly});
     } catch (error) {
       buildFeedback('error', 'เริ่มสร้างเพลงไม่ได้', error.message);
