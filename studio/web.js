@@ -6,6 +6,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const AUDIO = new Set(['mp3', 'm4a', 'wav', 'aac', 'ogg', 'oga', 'flac']);
+  const AUDIO_PRIORITY = ['m4a', 'wav', 'flac', 'mp3', 'aac', 'ogg', 'oga'];
   const MIDI = new Set(['mid', 'midi', 'kar', 'ncn']);
   const SIDE = new Set(['lrc', 'lyr', 'cur', 'sf2', 'sf3']);
   const ALL = new Set([...AUDIO, ...MIDI, ...SIDE]);
@@ -44,6 +45,8 @@
   }
   function setBusy(flag) {
     state.busy = flag;
+    for (const item of document.querySelectorAll('[data-audio-select]'))
+      item.disabled = flag;
     $('download-result').disabled = flag || !state.archive;
     for (const id of ['choose-files', 'choose-folder', 'clear-all', 'select-all', 'deselect-all',
                       'pick-destination', 'load-engine', 'build', 'save-lyrics', 'insert-time']) {
@@ -98,6 +101,28 @@
     badge.className = 'file-state' + (e.audio ? '' : ' unsupported');
     badge.textContent = e.audio ? extOf(e.audio.name).toUpperCase() : 'MIDI · รอ Engine';
     tdType.appendChild(badge);
+    if (e.audioFiles?.size > 1) {
+      const picker = document.createElement('select');
+      picker.dataset.audioSelect = e.id;
+      picker.disabled = state.busy;
+      picker.setAttribute('aria-label', 'เลือกไฟล์เสียงที่จะใช้สร้างและทดลองฟัง: ' + songTitle(e));
+      for (const [extension, audioFile] of e.audioFiles) {
+        const option = document.createElement('option');
+        option.value = extension;
+        option.textContent = extension.toUpperCase() + ' · ' + readableBytes(audioFile.size);
+        option.selected = e.audio === audioFile;
+        picker.appendChild(option);
+      }
+      picker.addEventListener('click', event => event.stopPropagation());
+      picker.addEventListener('change', event => {
+        event.stopPropagation();
+        e.audio = e.audioFiles.get(picker.value);
+        badge.textContent = picker.value.toUpperCase();
+        updateOverview();
+        if (state.active === e.id) void activate(e.id);
+      });
+      tdType.appendChild(picker);
+    }
     const tdLyric = document.createElement('td');
     tdLyric.textContent = e.lyricsText || e.lrc ? 'มี LRC' : '—';
     const tdSize = document.createElement('td');
@@ -137,11 +162,19 @@
       const id = (path + '/' + stem).toLocaleLowerCase();
       if (!entries.has(id)) entries.set(id, {
         id, name: stem, path, audio: null, midi: null, lrc: null,
-        lyricsText: null, parts: new Map()
+        lyricsText: null, parts: new Map(), audioFiles: new Map()
       });
       const song = entries.get(id);
       song.parts.set(ext, file);
-      if (AUDIO.has(ext)) song.audio = file;
+      if (AUDIO.has(ext)) {
+        const prior = song.audio;
+        song.audioFiles.set(ext, file);
+        // Never silently pick the LAST imported audio variant. Use a stable
+        // priority and let the user select an alternative in the catalog.
+        if (!prior || AUDIO_PRIORITY.indexOf(ext) < AUDIO_PRIORITY.indexOf(extOf(prior.name)))
+          song.audio = file;
+        else if (extOf(prior.name) === ext) song.audio = file;
+      }
       if (MIDI.has(ext)) song.midi = file;
       if (ext === 'lrc') { song.lrc = file; song.lyricsText = null; }
       if (AUDIO.has(ext)) selected.add(id);
@@ -387,9 +420,11 @@
     if (state.cancelled) throw new Error('ยกเลิกโดยผู้ใช้');
     assets.push({name: name + '.m4a', blob: audioBlob});
     const lyrics = await lyricsFor(song);
-    if (lyrics.trim()) assets.push({
+    if (lyrics.trim() && parseLrc(lyrics).length) assets.push({
       name: name + '.lrc', blob: new Blob([lyrics.replace(/\r?\n/g, '\r\n')], {type: 'text/plain;charset=utf-8'})
     });
+    else if (lyrics.trim())
+      log(song.name + ': ข้าม LRC เพราะไม่มีบรรทัดเนื้อร้องพร้อมเวลาที่ถูกต้อง', true);
     return assets;
   }
   async function reserveSongAssetNames(songName, assets, usedNames, exists) {
