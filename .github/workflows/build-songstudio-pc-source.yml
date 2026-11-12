@@ -1,0 +1,60 @@
+name: X-Stage Song Studio PC Source ZIP
+on:
+  push:
+    branches: [main]
+    paths:
+      - "songstudio-pc/**"
+      - "studio/index.html"
+      - "studio/app.js"
+      - "studio/style.css"
+      - "studio/entry.js"
+      - "scripts/package-song-studio-pc.py"
+      - "scripts/test_songstudio_pc.py"
+      - ".github/workflows/build-songstudio-pc-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: songstudio-pc-source-zip
+  cancel-in-progress: false
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate source and local API
+        run: |
+          python -m py_compile songstudio-pc/engine.py scripts/package-song-studio-pc.py
+          python -m unittest discover -s scripts -p test_songstudio_pc.py -v
+      - name: Build verified source ZIP and SHA256
+        run: |
+          python scripts/package-song-studio-pc.py
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          p = Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip")
+          with ZipFile(p) as z:
+              assert z.testzip() is None
+              assert len(z.namelist()) >= 7
+          print("ZIP verified:", p.stat().st_size, "bytes")
+          PY
+      - name: Publish direct download in existing GitHub repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip*
+          if git diff --cached --quiet; then
+            echo "Source ZIP already matches GitHub"
+            exit 0
+          fi
+          git commit -m "build(song-studio): publish PC source ZIP and SHA-256 [skip ci]"
+          git push origin HEAD:main
