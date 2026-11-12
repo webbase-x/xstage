@@ -1190,10 +1190,18 @@ def _preview_lyrics_row(row):
         if doc and doc.get("lines"):
             status = str(doc.get("sourceFormat") or
                          ("NCN" if row.get("ncn") else "LRC")).upper()
-            timed = [{"startTime": float(item["startTime"]),
-                      "endTime": float(item.get("endTime", item["startTime"] + 3)),
-                      "text": str(item["text"])}
-                     for item in doc["lines"][:2500] if str(item.get("text", "")).strip()]
+            timed = [{
+                "startTime": float(item["startTime"]),
+                "endTime": float(item.get("endTime", item["startTime"] + 3)),
+                "text": str(item["text"]),
+                # True NCN cursor and KAR event positions; no fabricated
+                # per-letter animation for ordinary line-timed LRC.
+                "characters": [
+                    {"text": str(ch["text"]), "startTime": float(ch["startTime"])}
+                    for ch in item.get("characters", [])
+                    if isinstance(ch, dict) and "startTime" in ch
+                ]
+            } for item in doc["lines"][:2500] if str(item.get("text", "")).strip()]
             if timed:
                 return {
                     "status": "found", "source": status,
