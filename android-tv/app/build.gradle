@@ -127,7 +127,7 @@ tasks.register("generateXStageTvAssets") {
         b.fillOval(235,80,85,80)
         [24,39,32,54,43,25,45].eachWithIndex { h,i ->
             b.setColor(i%2==0 ? new java.awt.Color(81,192,250,120) : new java.awt.Color(181,91,229,120))
-            b.fillRoundRect(6+i*10,98-(h as int)/2,6,h as int,5,5)
+            b.fillRoundRect((6+i*10) as int,(98-((h as int).intdiv(2))) as int,6,h as int,5,5)
         }
         // Stylized gradient X: same signature emblem as the approved transparent logo.
         b.setStroke(new java.awt.BasicStroke(15f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND))
