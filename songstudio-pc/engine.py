@@ -776,9 +776,16 @@ def validate_build_request(data):
         rows = [FILE_BY_ID.get(item) for item in ids]
     if any(row is None for row in rows):
         raise ValueError("รายการเพลงบางรายการไม่อยู่ในฐานปัจจุบัน กรุณาสแกนและเลือกเพลงใหม่")
-    unsupported = [row["code"] for row in rows if Path(row["path"]).suffix.lower() in EXT_UNSUPPORTED]
-    if len(unsupported) == len(rows):
-        raise ValueError("รายการที่เลือกเป็นไฟล์ NCN ทั้งหมด ซึ่ง Engine รุ่นนี้ยังสร้าง M4A ไม่ได้")
+    from collections import Counter
+    formats = Counter(Path(row["path"]).suffix.lower() for row in rows)
+    unsupported_count = sum(count for ext, count in formats.items() if ext in EXT_UNSUPPORTED)
+    supported_count = len(rows) - unsupported_count
+    if supported_count == 0:
+        raise ValueError(
+            f"ไม่สามารถเริ่มสร้าง: เลือก {len(rows):,} เพลง แต่เป็น NCN ทั้งหมด "
+            "ซึ่ง Song Studio PC Engine รุ่นนี้ยังแปลง NCN ไม่ได้ · "
+            "กรุณาเลือก MP3/M4A/WAV หรือ MIDI/KAR ที่รองรับ")
+
     mode = PREFS.get("mode", "original")
     if mode not in ("original", "instrumental"):
         raise ValueError("ประเภทเสียงที่เลือกไม่ถูกต้อง")
@@ -801,7 +808,8 @@ def validate_build_request(data):
             pass
     except OSError as exc:
         raise ValueError("โฟลเดอร์เก็บเพลงไม่พร้อมหรือไม่มีสิทธิ์เขียน: " + str(exc)) from exc
-    return {"total": len(rows), "unsupported": len(unsupported), "mode": mode}
+    return {"total": len(rows), "unsupported": unsupported_count,
+            "supported": supported_count, "formats": dict(formats), "mode": mode}
 
 
 def start_job(data):
@@ -1237,7 +1245,9 @@ class Handler(BaseHTTPRequestHandler):
                     "spaceWarning": projected > free,
                     "warning": len(matches) > 200 or projected > free,
                     "unsupported": sum(Path(r["path"]).suffix.lower() == ".ncn"
-                                       for r in matches)
+                                       for r in matches),
+                    "formats": dict(__import__("collections").Counter(
+                        Path(r["path"]).suffix.lower() for r in matches))
                 })
             elif path == "/api/jobs":
                 self._json(start_job(payload))
