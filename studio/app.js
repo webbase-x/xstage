@@ -482,6 +482,10 @@
     $('job-title').textContent = (isRunning ? '● ' : '') + stage + (state === 'error' ? ' · ผิดพลาด' : '');
     $('job-detail').textContent = job.detail || 'ไม่มีงานที่กำลังประมวลผล';
     $('job-timing').textContent = fmtTime(job.elapsed || 0);
+    $('job-skip-count').textContent = 'ข้ามซ้ำ ' + fmtNum(Number(job.skipped || 0)) +
+      ' · ERR ' + fmtNum(Number(job.errors || 0)) +
+      ' · M4A ' + fmtNum(Number(job.m4aCount || 0)) +
+      ' · Lyrics ' + fmtNum(Number(job.lyricsCount || 0));
     const fraction = Number(job.total)>0 ? Number(job.completed) / Number(job.total) :
       Number(job.bytesTotal)>0 ? Number(job.bytesDone)/Number(job.bytesTotal) : null;
     const fill = $('progress-fill');
