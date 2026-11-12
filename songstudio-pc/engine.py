@@ -26,6 +26,9 @@ if not UI_ROOT.is_dir() and (ROOT.parent / "studio").is_dir():
     UI_ROOT = ROOT.parent / "studio"  # Repo test layout; packaged ZIP uses ROOT/studio.
 DATA = ROOT / "data"
 RUNTIME = ROOT / ".runtime"
+READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
+STATUS_VERSION = "0.3.1" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "301" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(exist_ok=True)
 EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga"}
 EXT_MIDI = {".mid", ".midi", ".kar"}
@@ -455,7 +458,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._deny()
                 return
             if path == "/api/status":
-                self._json({"version": "0.2.5-Source-Preview", "build": "205-SRC",
+                self._json({"version": STATUS_VERSION, "build": STATUS_BUILD,
                     "job": job_snapshot(), "preferences": dict(PREFS),
                     "soundfonts": font_list(), "presets": formats(),
                     "google": {"connected": False, "email": ""},
