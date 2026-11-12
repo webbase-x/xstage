@@ -82,12 +82,14 @@ android {
 tasks.register("generateXStageTvAssets") {
     def iconFile = file("src/main/res/drawable-nodpi/xstage_app_icon.png")
     def bannerFile = file("src/main/res/drawable-xhdpi/xstage_tv_banner.png")
+    def splashFile = file("src/main/res/drawable-nodpi/xstage_tv_splash.png")
     def storeIcon = rootProject.file("store-assets/xstage-play-icon-512.png")
     def storeBanner = rootProject.file("store-assets/xstage-tv-banner-320x180.png")
-    outputs.files(iconFile, bannerFile, storeIcon, storeBanner)
+    outputs.files(iconFile, bannerFile, splashFile, storeIcon, storeBanner)
+    inputs.file(rootProject.file("../assets/xstage-stage-logo.png"))
 
     doLast {
-        [iconFile.parentFile, bannerFile.parentFile, storeIcon.parentFile, storeBanner.parentFile].each { it.mkdirs() }
+        [iconFile.parentFile, bannerFile.parentFile, splashFile.parentFile, storeIcon.parentFile, storeBanner.parentFile].each { it.mkdirs() }
 
         def icon = new java.awt.image.BufferedImage(512, 512, java.awt.image.BufferedImage.TYPE_INT_ARGB)
         def g = icon.createGraphics()
@@ -115,6 +117,8 @@ tasks.register("generateXStageTvAssets") {
         def sourceLogo = javax.imageio.ImageIO.read(logoSource)
         if (sourceLogo == null || sourceLogo.getWidth() < 1 || sourceLogo.getHeight() < 1)
             throw new GradleException("Could not decode supplied stage logo PNG")
+        // Preserve exact transparent PNG bytes for the native startup splash.
+        splashFile.bytes = logoSource.bytes
         def banner = new java.awt.image.BufferedImage(320,180,java.awt.image.BufferedImage.TYPE_INT_RGB)
         def b = banner.createGraphics()
         b.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
