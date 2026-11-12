@@ -38,7 +38,9 @@ final class GoogleDeviceAuth {
     private final GoogleTokenStore tokenStore;
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    // A cancelled Google HTTP call may remain in socket read until timeout.
+    // A fresh login must not sit behind that cancelled call in a single queue.
+    private final ExecutorService executor = Executors.newCachedThreadPool();
     private final AtomicInteger generation = new AtomicInteger();
     private Future<?> activeAuthJob;
 
@@ -176,6 +178,9 @@ final class GoogleDeviceAuth {
                     "device_code", deviceCode,
                     "grant_type", "urn:ietf:params:oauth:grant-type:device_code"
             ));
+            // Cancellation can happen while the HTTP request is on the wire.
+            // Never save a refresh token from a cancelled QR session.
+            if (!isCurrent(run)) return;
 
             String accessToken = token.optString("access_token");
             if (!accessToken.isEmpty()) {
