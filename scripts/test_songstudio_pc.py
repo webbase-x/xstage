@@ -151,6 +151,23 @@ class PcSourceTests(unittest.TestCase):
             runner.join(timeout=3)
             engine.PORT = old_port
 
+    def test_all_ncn_selected_rejected_before_build_job(self):
+        source = self.source / "test.ncn"
+        source.write_bytes(b"unsupported-NCN")
+        row = {"id": 1, "path": str(source), "code": "test", "title": "NCN"}
+        engine.FILE_BY_ID[1] = row
+        with self.assertRaisesRegex(ValueError, "NCN ทั้งหมด"):
+            engine.validate_build_request({"ids": [1], "audio_only": False})
+        self.assertFalse((self.dest / "songs").exists())
+
+    def test_supported_format_preflight_counts_and_rejects_missing(self):
+        source = self.source / "test.m4a"
+        source.write_bytes(b"m4a-test")
+        engine.FILE_BY_ID[1] = {"id": 1, "path": str(source), "code": "test", "title": "Test"}
+        result = engine.validate_build_request({"ids": [1], "audio_only": True})
+        self.assertEqual(result["supported"], 1)
+        self.assertEqual(result["formats"], {".m4a": 1})
+
     def test_build_does_not_duplicate_source_between_independent_runs(self):
         audio = self.source / "001234.m4a"
         audio.write_bytes(b"A" * 4096)
