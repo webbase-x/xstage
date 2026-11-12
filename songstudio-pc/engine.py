@@ -1372,10 +1372,17 @@ def _preview_lyrics_row(row):
                 ]
             } for item in doc["lines"][:2500] if str(item.get("text", "")).strip()]
             if timed:
+                meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+                warnings = list(meta.get("timingWarnings") or [])[:5]
+                partial = meta.get("timingComplete") is False
+                notice = (f"พบเนื้อร้องจากต้นฉบับ {status} {len(timed)} บรรทัด" +
+                          (" · ⚠ เวลาเนื้อร้องบางส่วนไม่ครบ กรุณาตรวจต้นฉบับ LYR/CUR" if partial
+                           else ""))
                 return {
                     "status": "found", "source": status,
-                    "message": f"พบเนื้อร้องจากต้นฉบับ {status} {len(timed)} บรรทัด",
+                    "message": notice,
                     "lines": timed, "truncated": len(doc["lines"]) > 2500,
+                    "timingComplete": not partial, "timingWarnings": warnings,
                     "aiAvailable": False, "requiresReview": False,
                 }
         issue = "ไม่พบไฟล์เนื้อร้องที่มีเวลาตรงกับเพลงนี้"
@@ -1503,6 +1510,7 @@ def preview_source_report(song_id):
         "components": components, "timedLyricsReady": status == "found",
         "proofSource": proof.get("source", ""), "proofMessage": proof.get("message", ""),
         "complete": bool(related and status == "found" and
+                         proof.get("timingComplete", True) and
                          all(item["found"] for item in components if item["required"])),
     }
 
