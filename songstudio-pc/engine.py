@@ -463,8 +463,26 @@ def build_library(rows, mode, options):
                     digest = export.source_sha256(source)
                     previous = by_sha.get(digest)
                 if previous is not None:
+                    # When a user first clicked "M4A only", then later asks
+                    # for "M4A + lyrics", complete only the missing lyrics.
+                    # Never re-encode or duplicate the already published M4A.
+                    if not options.get("audio_only", False) and not previous.get("lyrics"):
+                        saved_audio = export.safe_media_path(root, previous["audio"]["path"], "audio")
+                        upgrade = export.save_lyrics(
+                            root, saved_audio, lyrics_text(row),
+                            str(row.get("code") or source.stem))
+                        revised = dict(previous)
+                        revised["lyrics"] = {"path": upgrade.relative_to(root).as_posix()}
+                        export.append_journal(root, revised)
+                        records.append(revised)
+                        by_path[canonical] = revised
+                        if digest:
+                            by_sha[digest] = revised
+                        lyrics_count += 1
+                        log(f"เติม Lyrics ให้เพลงเดิมโดยไม่สร้าง M4A ซ้ำ: {source.name}")
+                    else:
+                        log(f"ข้ามไฟล์ซ้ำ: {source.name} → {previous['audio']['path']} (ไม่สร้างรหัส/M4A/Lyrics ใหม่)")
                     skipped += 1
-                    log(f"ข้ามไฟล์ซ้ำ: {source.name} → {previous['audio']['path']} (ไม่สร้างรหัส/M4A/Lyrics ใหม่)")
                     continue
 
                 # Never create a second filename while repairing a known
