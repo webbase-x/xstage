@@ -59,8 +59,15 @@ try {
   await page.click('#load-engine');
   await page.waitForFunction(() => /พร้อมประมวลผล|โหลด Engine ไม่สำเร็จ/.test(document.querySelector('#engine-caption').textContent), null, {timeout:45000});
   assert.match(await page.locator('#engine-caption').innerText(), /พร้อมประมวลผล/, 'Web Engine must finish loading successfully');
-  const downloadPromise = page.waitForEvent('download', {timeout:120000});
   await page.click('#build');
+  // Browser conversions are asynchronous. A later automatic download may be
+  // blocked as lacking user activation, so production retains the ZIP and
+  // exposes a real click to download it.
+  await page.locator('#download-result:visible').waitFor({timeout:120000});
+  await assert.equal(await page.locator('#download-result').isEnabled(), true,
+    'successful Web conversion must leave an actionable download button');
+  const downloadPromise = page.waitForEvent('download', {timeout:30000});
+  await page.click('#download-result');
   const download = await downloadPromise;
   const savedFile = await download.path();
   assert.ok(savedFile, 'a browser ZIP download must have a local path');
