@@ -149,11 +149,46 @@ class GoogleDrive:
             except (GoogleError, OSError, ValueError):
                 self.last_error = "โทเค็นเดิมอ่านไม่ได้ กรุณาล็อกอินใหม่บน Windows เครื่องนี้"
 
+    def client_config(self):
+        """Installed Desktop client from bundled build or user's stable override."""
+        return _read_client(self.get_oauth_path())
+
+    def import_client(self, filename):
+        """Save only PUBLIC desktop client configuration, never user tokens."""
+        data = _read_client(filename)
+        # Desktop OAuth clients are public and cannot keep secrets private.
+        # We deliberately store only the ID: PKCE works without a secret.
+        public = {"installed": {
+            "client_id": data["client_id"],
+            "auth_uri": AUTH_URL,
+            "token_uri": TOKEN_URL,
+            "redirect_uris": ["http://127.0.0.1"]
+        }}
+        output = self.data / "oauth-client.json"
+        temp = output.with_name("oauth-client.json.tmp")
+        try:
+            temp.write_text(json.dumps(public, indent=2), encoding="utf-8")
+            temp.replace(output)
+        finally:
+            temp.unlink(missing_ok=True)
+        return str(output)
+
     def status(self):
         with self.lock:
-            return {"connected": bool(self.refresh_token),
-                    "email": self.email, "error": self.last_error,
-                    "scope": SCOPE}
+            try:
+                client = self.client_config()
+                configured = True
+                client_matches = bool(self.refresh_token) and client["client_id"] == self.client_id
+                error = (self.last_error if client_matches or not self.refresh_token
+                         else "OAuth Client เปลี่ยนแล้ว กรุณาลงชื่อเข้าใช้ใหม่")
+                return {"configured": configured, "connected": client_matches,
+                        "email": self.email if client_matches else "",
+                        "error": error, "scope": SCOPE,
+                        "config_source": ("user" if Path(self.get_oauth_path()) ==
+                                          self.data / "oauth-client.json" else "bundled")}
+            except GoogleError as exc:
+                return {"configured": False, "connected": False, "email": "",
+                        "error": str(exc), "scope": SCOPE, "config_source": "missing"}
 
     def _save(self):
         payload = _json_bytes({
