@@ -10,6 +10,7 @@
   const player=document.getElementById('player');
   const stage=document.getElementById('stage');
   const canvas=document.getElementById('stage-viz-left');
+  const rightCanvas=document.getElementById('stage-viz-right');
   const bridge=window.XStageAndroid;
   let native=!!(bridge&&typeof bridge.getAppVersion==='function');
   if(!native)try{native=['android-tv','android-tablet'].includes(new URLSearchParams(location.search).get('source'));}catch{}
@@ -17,7 +18,12 @@
   document.body.classList.add('xstage-native-audio-direct');
 
   const surface=canvas.getContext('2d');
+  const rightSurface=rightCanvas?.getContext('2d');
   if(!surface)return;
+  // Android's silent capture feeds both EQ-style side meters, exactly like
+  // the Web stage. The second canvas does not create a second audio source.
+  const views=[{canvas,ctx:surface,mirror:false}];
+  if(rightSurface)views.push({canvas:rightCanvas,ctx:rightSurface,mirror:true});
   const label=document.createElement('div');
   label.className='xstage-native-meter-label';
   label.setAttribute('role','status');
@@ -54,8 +60,10 @@
     tries=0;lastFrame=0;SMOOTH.fill(0);
     stage.style.setProperty('--xstage-viz-energy','0');
     stage.style.setProperty('--xstage-viz-bass','0');
-    const size=canvas.getBoundingClientRect();
-    surface.clearRect(0,0,Math.max(canvas.width,size.width),Math.max(canvas.height,size.height));
+    for(const view of views){
+      const size=view.canvas.getBoundingClientRect();
+      view.ctx.clearRect(0,0,Math.max(view.canvas.width,size.width),Math.max(view.canvas.height,size.height));
+    }
   }
   function retry(){
     if(retryTimer||!player.src||player.paused||player.ended)return;
@@ -67,11 +75,11 @@
       if(current===epoch)start();
     },Math.min(1500,tries*280));
   }
-  function sizeCanvas(){
-    const rect=canvas.getBoundingClientRect();
+  function sizeCanvas(target){
+    const rect=target.getBoundingClientRect();
     const scale=Math.min(window.devicePixelRatio||1,2);
     const w=Math.max(1,Math.round(rect.width*scale)),h=Math.max(1,Math.round(rect.height*scale));
-    if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+    if(target.width!==w||target.height!==h){target.width=w;target.height=h;}
     return [w,h];
   }
   function render(timestamp){
@@ -82,10 +90,8 @@
     const data=new Uint8Array(analyser.frequencyBinCount);
     const playing=!player.paused&&!player.ended&&!player.muted&&player.volume>0;
     if(playing&&context.state==='running')analyser.getByteFrequencyData(data);
-    const [w,h]=sizeCanvas(),nyquist=(context.sampleRate||48000)/2;
+    const nyquist=(context.sampleRate||48000)/2;
     const upper=Math.min(15500,nyquist*.92),lower=40;
-    const gap=Math.max(1.2,w*.009),barWidth=Math.max(1.5,(w-(LEVELS-1)*gap)/LEVELS);
-    surface.clearRect(0,0,w,h);
     let energy=0,bass=0;
     for(let i=0;i<LEVELS;i++){
       const f0=lower*Math.pow(upper/lower,i/LEVELS),f1=lower*Math.pow(upper/lower,(i+1)/LEVELS);
@@ -100,17 +106,27 @@
       const old=SMOOTH[i];
       SMOOTH[i]=value>old?old*.2+value*.8:old*.77+value*.23;
       const level=SMOOTH[i];energy+=level;if(i<7)bass+=level;
-      const barHeight=Math.max(2,level*h*.92);
-      const x=i*(barWidth+gap),y=h-barHeight;
-      const gradient=surface.createLinearGradient(0,y,0,h);
-      gradient.addColorStop(0,'#b5faff');
-      gradient.addColorStop(.45,'#30c9f3');
-      gradient.addColorStop(1,'#7f66ff');
-      surface.globalAlpha=.30+.7*level;
-      surface.fillStyle=gradient;
-      surface.fillRect(x,y,barWidth,barHeight);
     }
-    surface.globalAlpha=1;
+    // Same live spectrum in Web and TV: bars on both sides of the stationary
+    // banner. Mirror their order so the spectrum balances visually.
+    for(const view of views){
+      const [w,h]=sizeCanvas(view.canvas),ctx=view.ctx;
+      const gap=Math.max(1.2,w*.009),barWidth=Math.max(1.5,(w-(LEVELS-1)*gap)/LEVELS);
+      ctx.clearRect(0,0,w,h);
+      for(let i=0;i<LEVELS;i++){
+        const level=SMOOTH[view.mirror?LEVELS-1-i:i];
+        const barHeight=Math.max(2,level*h*.92);
+        const x=i*(barWidth+gap),y=h-barHeight;
+        const gradient=ctx.createLinearGradient(0,y,0,h);
+        gradient.addColorStop(0,'#c8ffff');
+        gradient.addColorStop(.48,'#42d8ff');
+        gradient.addColorStop(1,'#825dff');
+        ctx.globalAlpha=.28+.72*level;
+        ctx.fillStyle=gradient;
+        ctx.fillRect(x,y,barWidth,barHeight);
+      }
+      ctx.globalAlpha=1;
+    }
     stage.style.setProperty('--xstage-viz-energy',(energy/LEVELS).toFixed(3));
     stage.style.setProperty('--xstage-viz-bass',(bass/7).toFixed(3));
     if(context.state!=='running'&&playing)statusText('blocked');
