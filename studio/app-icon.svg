@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="X-Stage Song Studio PC app icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#091932"/><stop offset=".48" stop-color="#14204a"/><stop offset="1" stop-color="#240d40"/></linearGradient>
+    <radialGradient id="halo"><stop stop-color="#1b5cbd" stop-opacity=".48"/><stop offset=".72" stop-color="#641fbd" stop-opacity=".15"/><stop offset="1" stop-opacity="0"/></radialGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#3ce5ff"/><stop offset=".55" stop-color="#5179ff"/><stop offset="1" stop-color="#ef53ff"/></linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f5fcff"/><stop offset=".22" stop-color="#71ddff"/><stop offset=".44" stop-color="#1270d8"/><stop offset=".65" stop-color="#7b46e8"/><stop offset=".84" stop-color="#e15ff5"/><stop offset="1" stop-color="#f7efff"/></linearGradient>
+    <linearGradient id="metal2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7ffff"/><stop offset=".22" stop-color="#cceeff"/><stop offset=".53" stop-color="#4385f4"/><stop offset=".78" stop-color="#6e50db"/><stop offset="1" stop-color="#faf7ff"/></linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#3de8ff"/><stop offset=".45" stop-color="#805dff"/><stop offset=".78" stop-color="#fc5ef4"/><stop offset="1" stop-color="#ffb36d"/></linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="12"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="4"/></filter>
+    <clipPath id="clip"><rect x="5" y="5" width="502" height="502" rx="110"/></clipPath>
+  </defs>
+  <rect x="5" y="5" width="502" height="502" rx="110" fill="url(#bg)"/>
+  <g clip-path="url(#clip)">
+    <circle cx="266" cy="236" r="286" fill="url(#halo)"/>
+    <path d="M-20 355 Q165 289 290 336 T538 332" stroke="#6e38e1" stroke-width="30" fill="none" opacity=".35" filter="url(#soft)"/>
+    <g opacity=".42" fill="url(#ring)">
+      <rect x="54" y="201" width="14" height="40" rx="7"/><rect x="74" y="180" width="14" height="83" rx="7"/>
+      <rect x="94" y="152" width="14" height="139" rx="7"/><rect x="114" y="184" width="14" height="68" rx="7"/>
+      <rect x="384" y="172" width="14" height="106" rx="7"/><rect x="404" y="150" width="14" height="146" rx="7"/>
+      <rect x="424" y="183" width="14" height="79" rx="7"/><rect x="444" y="211" width="14" height="34" rx="7"/>
+    </g>
+    <path d="M116 203 C121 114 178 72 265 72 C365 72 404 132 406 213" fill="none" stroke="#3e60af" stroke-width="31" stroke-linecap="round" opacity=".8"/>
+    <path d="M117 204 C126 123 175 86 264 86 C350 86 386 133 394 203" fill="none" stroke="url(#edge)" stroke-width="9" stroke-linecap="round" opacity=".9"/>
+    <rect x="96" y="199" width="50" height="105" rx="23" fill="#071b39" stroke="#80d9ff" stroke-width="9"/>
+    <rect x="373" y="199" width="50" height="105" rx="23" fill="#0a1743" stroke="#c78aff" stroke-width="9"/>
+    <g opacity=".75"><path d="M183 115 C218 94 300 95 332 110" stroke="#baf8ff" stroke-width="3" fill="none"/><path d="M178 126 C233 106 305 114 335 125" stroke="#5d8dff" stroke-width="3" fill="none"/></g>
+    <g transform="translate(304 187)" opacity=".85">
+      <rect x="0" y="0" width="64" height="111" rx="30" fill="#2b366a" stroke="#a5caff" stroke-width="6"/>
+      <g stroke="#cce7ff" stroke-width="6" stroke-linecap="round"><path d="M12 28h40M10 46h44M10 64h44M13 82h38"/></g>
+      <path d="M-5 64v21q0 31 38 32q38-1 38-32V64" stroke="#dbeaff" stroke-width="7" fill="none"/>
+      <path d="M33 117v20M7 137h52" stroke="#dbeaff" stroke-width="8" stroke-linecap="round"/>
+    </g>
+    <path d="M131 141 L203 141 L260 211 L314 141 L390 141 L299 251 L390 371 L315 371 L258 295 L196 371 L117 371 L215 251 Z"
+      transform="translate(0 5)" fill="#140e3b" stroke="#030a20" stroke-width="15" stroke-linejoin="round"/>
+    <path d="M131 141 L203 141 L260 211 L314 141 L390 141 L299 251 L390 371 L315 371 L258 295 L196 371 L117 371 L215 251 Z"
+      fill="url(#metal)" stroke="#c4ecff" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M155 154 L195 154 L260 237 L320 154 L365 154" fill="none" stroke="#e9faff" stroke-width="7" opacity=".8"/>
+    <path d="M139 360 L192 360 L259 278 L322 360 L372 360" fill="none" stroke="#8cb7ff" stroke-width="8" opacity=".8"/>
+    <path d="M96 397 Q156 354 226 392 Q304 425 417 377" stroke="url(#ring)" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <path d="M96 397 Q156 354 226 392 Q304 425 417 377" stroke="#f8b572" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/>
+    <path d="M69 428v-24m13 30v-36m13 24v-15m13 35v-50m13 35v-29m13 24v-12m13 31v-49m13 40v-30" fill="none" stroke="#32e8ff" stroke-width="5" stroke-linecap="round" opacity=".8"/>
+    <rect x="356" y="405" width="118" height="63" rx="24" fill="#1764bd" stroke="#a3eaff" stroke-width="5"/>
+    <text x="415" y="450" font-family="Arial,Helvetica,sans-serif" font-size="43" font-weight="900" text-anchor="middle" fill="#ffffff" letter-spacing="1">PC</text>
+  </g>
+  <rect x="5" y="5" width="502" height="502" rx="110" fill="none" stroke="url(#edge)" stroke-width="9"/>
+  <rect x="14" y="14" width="484" height="484" rx="103" fill="none" stroke="#a2eeff" stroke-width="2" opacity=".5"/>
+</svg>
