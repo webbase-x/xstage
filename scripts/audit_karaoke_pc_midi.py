@@ -61,6 +61,7 @@ def main():
         # Source-backed details needed to port actual timing and rendering behavior.
         focused = {
             "karaoke/legacy.py": [(1, 350)],
+            "karaoke/lyrics.py": [(1, 360)],
             "karaoke/smf.py": [(1, 310)],
             "karaoke/offline_generator.py": [(1, 160), (225, 405)],
             "karaoke/web_assets.py": [(1, 260), (260, 390)],
