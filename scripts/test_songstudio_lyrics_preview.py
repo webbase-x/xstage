@@ -120,7 +120,7 @@ class LyricPreviewTests(unittest.TestCase):
 
     def test_preview_title_and_artist_from_lrc_metadata(self):
         self.audio.with_suffix(".lrc").write_text(
-            "[ti:เพลงที่ถูกต้อง]\\n[ar:ศิลปินต้นฉบับ]\\n[00:01.25]เนื้อเพลงจริง\\n",
+            "[ti:เพลงที่ถูกต้อง]\n[ar:ศิลปินต้นฉบับ]\n[00:01.25]เนื้อเพลงจริง\n",
             encoding="utf-8")
         row = engine.FILE_BY_ID[12]
         row["title"] = "000012"
@@ -135,7 +135,7 @@ class LyricPreviewTests(unittest.TestCase):
 
     def test_live_preview_returns_artist_not_only_title(self):
         self.audio.with_suffix(".lrc").write_text(
-            "[ti:ชื่อเพลงสำหรับฟัง]\\n[ar:ผู้ร้องทดสอบ]\\n[00:01.00]ร้องเพลง\\n",
+            "[ti:ชื่อเพลงสำหรับฟัง]\n[ar:ผู้ร้องทดสอบ]\n[00:01.00]ร้องเพลง\n",
             encoding="utf-8")
         row = engine.FILE_BY_ID[12]
         row["title"] = "000012"
