@@ -243,12 +243,19 @@
     ownerStatus.textContent=automatic
       ?'พบผู้ดูแลที่จำไว้ · กำลังยืนยันกับ Google และจอ TV อีกครั้ง…'
       :'กำลังเปิด Google เพื่อยืนยันบัญชี…';
+    const loginWatchdog=setTimeout(()=>{
+      if(request!==ownerAuthRequest||!ownerLoginBusy)return;
+      ownerAuthRequest++;
+      ownerLoginBusy=false;
+      ownerStatus.textContent='Google ยังไม่ตอบกลับ · แตะเข้าสู่ระบบเพื่อยืนยันอีกครั้ง';
+    },20000);
     try{
       const client=google.accounts.oauth2.initTokenClient({
         client_id:cfg.googleClientId,
         scope:'openid email',
         callback:result=>{
           if(request!==ownerAuthRequest||conn!==activeConnection)return;
+          clearTimeout(loginWatchdog);
           ownerLoginBusy=false;
           if(result?.error||!result?.access_token){
             ownerStatus.textContent=automatic
@@ -262,6 +269,7 @@
         },
         error_callback:()=>{
           if(request!==ownerAuthRequest)return;
+          clearTimeout(loginWatchdog);
           ownerLoginBusy=false;
           ownerStatus.textContent=automatic
             ?'จำบัญชีไว้แล้ว · เบราว์เซอร์ต้องให้แตะเข้าสู่ระบบอีกครั้ง'
@@ -273,6 +281,7 @@
       client.requestAccessToken({prompt:automatic?'':'select_account'});
     }catch(error){
       if(request!==ownerAuthRequest)return;
+      clearTimeout(loginWatchdog);
       ownerLoginBusy=false;
       ownerStatus.textContent=automatic
         ?'จำบัญชีไว้แล้ว · แตะเข้าสู่ระบบเพื่อยืนยันสิทธิ์'
@@ -332,7 +341,7 @@
         report('Owner ยืนยันแล้ว · จำบัญชีบนมือถือเครื่องนี้ · ออกจากระบบได้','connected');
         send({type:'refresh'});
       }else{
-        if(data.signedOut)clearRememberedOwner();
+        if(data.signedOut||String(data.message||'').includes('ไม่ตรงกับบัญชีบนจอ'))clearRememberedOwner();
         setRole('guest');
         ownerStatus.textContent=String(data.message||'บัญชีไม่ตรงกับจอ TV');
         report(ownerStatus.textContent,data.signedOut?'connected':'error');
