@@ -22,7 +22,7 @@ permissions:
 
 concurrency:
   group: xstage-songstudio-ready-build309
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   bundle-windows:
