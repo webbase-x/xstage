@@ -423,9 +423,30 @@ class GoogleDrive:
             raise GoogleError("Google Drive MD5 ไม่ตรงกับต้นฉบับ: " + name)
         return ("updated" if matches else "created", answer)
 
-    def _tree_folder(self):
-        root = self.folder("root", ROOT_NAME)
-        songs = self.folder(root, "songs")
+    def _tree_folder(self, *, create=True):
+        """Resolve the private library; downloads must NEVER create empty folders."""
+        if create:
+            root = self.folder("root", ROOT_NAME)
+            return self.folder(root, "songs")
+
+        def existing_folder(parent, name):
+            matches = [item for item in self.list_children(parent)
+                       if item.get("name") == name
+                       and item.get("mimeType") == "application/vnd.google-apps.folder"]
+            return matches[0]["id"] if matches else None
+
+        root = existing_folder("root", ROOT_NAME)
+        if not root:
+            raise GoogleError(
+                "ไม่พบโฟลเดอร์ '" + ROOT_NAME + "' ในไฟล์ที่แอปได้รับสิทธิ์ Google Drive "
+                "(drive.file) · ตรวจสอบบัญชี Google/OAuth Client ที่ใช้ซิงค์เพลง "
+                "หรือซิงค์คลังจาก Song Studio PC ก่อน · ไม่มีการสร้างโฟลเดอร์ใหม่")
+        songs = existing_folder(root, "songs")
+        if not songs:
+            raise GoogleError(
+                "พบโฟลเดอร์ '" + ROOT_NAME + "' แต่ไม่พบโฟลเดอร์ songs "
+                "ที่แอปเข้าถึงได้ · ตรวจสอบการซิงค์เพลงและสิทธิ์ drive.file "
+                "· ไม่มีการสร้างโฟลเดอร์ใหม่")
         return songs
 
     def upload_library(self, local_songs, selected_records, cancelled=None, on_progress=None):
@@ -481,7 +502,8 @@ class GoogleDrive:
         if kind not in ("songs", "db", "zip"):
             raise GoogleError("ประเภทดาวน์โหลดไม่ถูกต้อง")
         target_root = Path(target_root)
-        songs_folder = self._tree_folder()
+        # Download is strictly read-only until a verified existing library is found.
+        songs_folder = self._tree_folder(create=False)
         collected = []
         def walk(parent, prefix=""):
             for item in self.list_children(parent):
@@ -494,7 +516,16 @@ class GoogleDrive:
                     collected.append((rel, item))
         walk(songs_folder)
         if not collected:
-            raise GoogleError("ไม่พบไฟล์คลังเพลงบน Google Drive ที่แอปมีสิทธิ์เข้าถึง")
+            description = ("ฐานข้อมูล current.json หรือ catalogs" if kind == "db"
+                           else "ไฟล์เพลง/คลังเพลง")
+            raise GoogleError(
+                "พบโฟลเดอร์คลังเพลง แต่ไม่พบ" + description +
+                "ที่แอปเข้าถึงได้ · ตรวจสอบว่าได้อัปโหลด songs/current.json "
+                "และ catalogs จาก Song Studio PC แล้ว "
+                "และใช้บัญชี Google/OAuth Client ที่มีสิทธิ์ drive.file")
+        if on_status:
+            on_status("พบคลังเพลงบน Google Drive · " + str(len(collected)) +
+                      " ไฟล์ · กำลังดาวน์โหลด " + kind.upper())
         base = (Path(tempfile.mkdtemp(prefix="xstage-drive-zip-")) if kind == "zip"
                 else target_root / "X-Stage Song Studio" / "songs")
         done = 0
