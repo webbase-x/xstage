@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.6 Build 306
+# X-Stage Song Studio PC Ready v0.3.7 Build 307
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,7 +6,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.6-build306.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.7-build307.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -45,6 +45,16 @@ All listed components are predownloaded and tested during **GitHub Actions build
 
 Native browser confirmation windows have been replaced with styled in-app borderless dialogs and toast notifications; the Windows folder/file chooser remains a native OS dialog.
 
+### Preventing duplicate songs across separate sessions
+
+- The first successful build stores the original source's canonical path and SHA-256 in the durable local catalog.
+- A second build, even after exiting and restarting Song Studio, **skips** that exact source and never allocates a second audio/lyric file.
+- A copied or renamed source with identical audio bytes is also skipped by SHA-256.
+- Completed songs are fsynced to `songs/.build-journal.jsonl` before processing the next song. After interruption the next run checks both catalogs and this journal; `current.json` is published atomically.
+- Brand-new output uses `songs/audio/<first-digit>/`, companion lyrics `songs/lyrics/<first-digit>/`, grouped immutable `songs/catalogs/`, and `songs/current.json`.
+- Legacy outputs created by older versions without source fingerprints cannot always be matched automatically; the engine blocks ambiguous unindexed filename collisions and reports the reason rather than silently making duplicate numbered files.
+- Two genuinely different originals with the same filename can coexist with a collision-safe suffix, while existing media is never overwritten.
+
 ### Limitations
 
 - **NCN** music handling, **Google Drive login/upload/download** remain unimplemented in the source engine. The UI still shows legacy controls for PC/Web parity; these actions will display a clear unsupported error rather than silently claiming success.
@@ -63,7 +73,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.6-build306`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.7-build307`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
