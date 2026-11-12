@@ -270,6 +270,15 @@ assert.ok(pc.includes('createMediaElementSource(audio)'),'player EQ must remain 
 assert.ok(pc.includes('createAnalyser()'),'audio visualizer/analyser path must remain wired');
 assert.equal((pc.match(/createMediaElementSource\(audio\)/g)||[]).length,1,'stage visualizer must reuse the single existing HTML5 Audio source');
 assert.ok(index.includes('id="stage-viz-left"'),'main stage must expose the left live visualizer canvas');
+const nativeMeter=read('native-audio-meter.js');
+assert.ok(index.includes('native-audio-meter.js?v='+version.build),'the silent native meter must share the current asset build');
+assert.ok(nativeMeter.includes('player.captureStream()')&&nativeMeter.includes('mute.gain.value=0'),'Android meter must sample the playing song with zero audible output');
+assert.ok(!/\b(?:context|ctx)\.createMediaElementSource\s*\(/.test(nativeMeter),'native visualizer must never reroute the main media output');
+assert.ok(pc.includes("['android-tv','android-tablet']"),'native direct sound path must include APK TV and tablet modes');
+assert.ok(host.includes('nativeAudioDirect:!!window.XStageNativeAudioBypass'),'Owner remote must report direct-audio bypass');
+assert.ok(remote.includes('eqSelect.disabled=direct'),'Owner EQ must be disabled on Android APK');
+assert.ok(css.includes('.xstage-native-audio-direct'),'Android stage must render the live meter in its native layout');
+
 assert.ok(index.includes('id="stage-viz-right"'),'main stage must expose the right live visualizer canvas');
 assert.ok(index.includes('id="stage-viz-wave"'),'main stage must expose the center waveform canvas');
 assert.ok(index.includes('YOUR STAGE · YOUR MUSIC'),'redesigned X-Stage Online lockup must include the stage tagline');
@@ -354,8 +363,8 @@ assert.ok(remoteHtml.includes('id="owner-background"')&&remoteHtml.includes('id=
 assert.ok(remoteHtml.includes('id="owner-eq-preset"')&&remoteHtml.includes('id="owner-eq-state"'),'EQ control and native/EQ state must live on Owner remote');
 assert.ok(pc.includes('function nativeAndroidTvAudioMode()'),'audio code must distinguish Android TV APK from PC Web');
 assert.ok(pc.includes("if(nativeAndroidTvAudioMode())return true;")&&pc.includes("if(!ensureEqAudio())return false;"),'Android TV must keep native audio by default while PC Web keeps the existing WebAudio/EQ path');
-assert.ok(pc.includes("window.XStageEnableEqPreset=async function"),'Android TV EQ must activate only from an explicit Owner action');
-assert.ok(pc.includes("window.XStageEqIsActive=()=>!!eqContext"),'Owner remote must be able to display whether EQ is actually active');
+assert.ok(pc.includes("window.XStageEnableEqPreset=async function")&&pc.includes("if(nativeAndroidTvAudioMode())return false;"),'Android APK EQ must never activate, including from the Owner remote');
+assert.ok(pc.includes("window.XStageEqIsActive=()=>!nativeAndroidTvAudioMode()&&!!eqContext"),'Owner EQ status must report inactive whenever the native Android audio bypass is engaged');
 assert.ok(app.includes("player.preservesPitch=true"),'playback must preserve pitch when the browser supports it');
 assert.ok(singerStage.includes('id="track-time"'),'separate singer screen must show playback time');
 assert.ok(singerStage.includes("document.querySelector('#play-state').textContent=e.data.playing?'กำลังเล่น':'พัก'"),'separate singer screen must show play/pause state');
