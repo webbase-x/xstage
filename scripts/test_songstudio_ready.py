@@ -162,5 +162,79 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
     assert len(list((destination / "audio").rglob("*.m4a"))) == 1
     assert len(list((destination / "lyrics").rglob("*.json"))) == 1
     assert (destination / "current.json").is_file()
+
     print("PASS: Both build actions work: M4A only, then add lyrics without duplicate conversion")
+
+    # End-to-end Windows PC HTTP API test. This exercises exactly the
+    # interface behind the two UI confirmation buttons, NOT just build_library.
+    import json
+    import http.client
+    import threading
+    import time
+    from http.server import ThreadingHTTPServer
+
+    engine.PREFS["workspace"] = str(temp / "browser_pc_real_jobs")
+    engine.PREFS["mode"] = "original"
+    engine.CANCEL.clear()
+    source_row["id"] = 803
+    engine.FILE_BY_ID.clear()
+    engine.FILE_BY_ID[803] = dict(source_row)
+    api_server = ThreadingHTTPServer(("127.0.0.1", 0), engine.Handler)
+    engine.PORT = api_server.server_port
+    api_thread = threading.Thread(target=api_server.serve_forever, daemon=True)
+    api_thread.start()
+
+    def http_json(method, endpoint, body=None):
+        conn = http.client.HTTPConnection("127.0.0.1", engine.PORT, timeout=15)
+        try:
+            request_body = json.dumps(body).encode("utf-8") if body is not None else None
+            headers = {"X-XStage-Token": engine.TOKEN}
+            if request_body is not None:
+                headers["Content-Type"] = "application/json"
+            conn.request(method, endpoint, body=request_body, headers=headers)
+            reply = conn.getresponse()
+            payload = json.loads(reply.read().decode("utf-8"))
+            return reply.status, payload
+        finally:
+            conn.close()
+
+    def do_real_pc_build(only_audio):
+        state, answer = http_json("POST", "/api/jobs", {
+            "action": "build", "ids": [803], "audio_only": only_audio})
+        assert state == 200 and answer.get("id"), (
+            "PC confirmation did NOT start real engine job: " + str(answer))
+        assert answer.get("total") == 1, (
+            "PC Engine did not acknowledge selected source: " + str(answer))
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            status, snapshot = http_json("GET", "/api/status")
+            assert status == 200, snapshot
+            job = snapshot["job"]
+            if job["id"] == answer["id"] and job["state"] != "running":
+                assert job["state"] == "success", (
+                    "PC build failed after UI confirmed: " + str(job))
+                return job
+            time.sleep(0.1)
+        raise AssertionError("PC build stays running with no completion within test deadline")
+
+    try:
+        unknown_status, unknown_response = http_json("POST", "/api/jobs", {
+            "action": "build", "ids": [999999], "audio_only": True})
+        assert unknown_status == 400 and "error" in unknown_response, (
+            "Missing original must show an immediate, specific error")
+        first_http = do_real_pc_build(True)
+        assert first_http["result"]["created"] == 1 and first_http["result"]["m4aCount"] == 1
+        second_http = do_real_pc_build(False)
+        assert second_http["result"]["created"] == 0 and second_http["result"]["lyricsCount"] == 1
+        output_dir = temp / "browser_pc_real_jobs" / "songs"
+        assert len(list((output_dir / "audio").rglob("*.m4a"))) == 1
+        assert len(list((output_dir / "lyrics").rglob("*.json"))) == 1
+        assert (output_dir / "current.json").is_file()
+        print("PASS: PC browser POST /api/jobs starts & finishes both build modes; "+
+              "invalid songs return immediate HTTP 400, outputs and current.json verified")
+    finally:
+        api_server.shutdown()
+        api_server.server_close()
+        api_thread.join(timeout=3)
+
 print("Ready bundle integration smoke test passed.")
