@@ -1,0 +1,28 @@
+name: X-Stage Song Studio Web checks
+on:
+  push:
+    paths:
+      - "studio/**"
+      - "scripts/song-studio-web-test.mjs"
+      - ".github/workflows/test-song-studio-web.yml"
+  pull_request:
+    paths:
+      - "studio/**"
+      - "scripts/song-studio-web-test.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-web-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check Song Studio JavaScript syntax
+        run: |
+          node --check studio/entry.js
+          node --check studio/web.js
+      - name: Test local file workflows and PC pairing routing
+        run: node scripts/song-studio-web-test.mjs
