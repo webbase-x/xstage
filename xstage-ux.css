@@ -3671,3 +3671,68 @@ body.xstage-native-audio-direct #pc-eq,
 body.xstage-native-audio-direct #mobile-eq{
   display:none!important;
 }
+
+
+/* 1.0.82: consistent transparent X-Stage pro logo on WEB, TV and PC web stage.
+   The visual sits beneath the lyrics and away from the mobile remote QR. */
+body.xstage-ui-v2 .stage .stage-hero .stage-brand-scene{
+  position:relative!important;
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+}
+body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup{
+  display:block!important;
+  width:100%!important;
+  aspect-ratio:16/5!important;
+  padding:0!important;
+  background:transparent url('assets/xstage-tv-pro-logo.svg') center/contain no-repeat!important;
+  border:0!important;border-radius:0!important;
+  box-shadow:none!important;backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup > *{
+  visibility:hidden!important;
+}
+body.xstage-ui-v2 .stage .stage-hero{
+  top:39%!important;
+  width:min(68cqw,800px)!important;
+  z-index:2!important;
+}
+body.xstage-ui-v2 .stage.playing .stage-hero{
+  top:clamp(55px,13cqh,110px)!important;
+  left:clamp(18px,2vw,30px)!important;
+  width:min(26cqw,330px)!important;
+  max-width:calc(100% - 260px)!important;
+  transform:none!important;
+  scale:1!important;
+  opacity:.8!important;
+}
+body.xstage-ui-v2 .stage #lyrics{z-index:10!important}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero{
+  top:clamp(15px,2vh,26px)!important;
+  left:clamp(18px,2vw,30px)!important;
+  width:min(32cqw,430px)!important;
+  max-width:calc(100% - 350px)!important;
+  transform:none!important;
+  scale:1!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+  top:clamp(15px,2vh,26px)!important;
+  width:min(28cqw,350px)!important;
+  max-width:calc(100% - 350px)!important;
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .stage-hero{width:min(78cqw,470px)!important}
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    top:55px!important;left:10px!important;
+    width:min(37cqw,220px)!important;
+    max-width:calc(100% - 160px)!important
+  }
+  body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero{
+    left:10px!important;top:12px!important;
+    width:min(32cqw,240px)!important;
+    max-width:calc(100% - 190px)!important
+  }
+}
