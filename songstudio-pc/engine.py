@@ -29,8 +29,8 @@ if not UI_ROOT.is_dir() and (ROOT.parent / "studio").is_dir():
 DATA = ROOT / "data"
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.2" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "302" if READY_BUNDLE else "205-SRC"
+STATUS_VERSION = "0.3.3" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "303" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(exist_ok=True)
 EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga"}
 EXT_MIDI = {".mid", ".midi", ".kar"}
@@ -96,6 +96,17 @@ def fluidsynth_binary():
             if entry.is_file():
                 return str(entry)
     return shutil.which("fluidsynth")
+
+def ai_available():
+    """Ready if all built artifacts exist; fail safely when missing."""
+    model = RUNTIME / "models" / "htdemucs_fp16weights.onnx"
+    script = ROOT / "ai_separate.py"
+    libs = RUNTIME / "ai-site"
+    return (model.is_file() and model.stat().st_size > 100_000_000
+            and script.is_file() and (libs / "numpy").is_dir()
+            and (libs / "onnxruntime").is_dir()
+            and (RUNTIME / "python" / "python.exe").is_file())
+
 
 def sf_available():
     return bool(PREFS["soundfont"]) and Path(PREFS["soundfont"]).is_file()
@@ -254,6 +265,113 @@ def convert(row, target, preview=False):
         if temp_wav:
             temp_wav.unlink(missing_ok=True)
 
+def separate_ai(row, target, preview=False):
+    """Split a song offline; output karaoke M4A and optional vocals M4A.
+
+    Uses locally bundled FFmpeg + ONNX Runtime + HTDemucs model. Progress
+    and cancellation are supplied by the subprocess; no song data leaves PC.
+    Returns path to the separate vocals M4A (or None for preview).
+    """
+    global PROCESS
+    if not ai_available():
+        raise RuntimeError(
+            "AI Separation ไม่พร้อม: ไม่พบโมเดล HTDemucs หรือไลบรารีใน ZIP "
+            "กรุณาใช้ PC Ready Build 303 ที่รวม AI ทั้งชุด"
+        )
+    source = Path(row["path"])
+    if source.suffix.lower() in EXT_UNSUPPORTED:
+        raise RuntimeError("ยังไม่รองรับ NCN สำหรับ AI separation")
+    with tempfile.TemporaryDirectory(prefix="xstage-ai-", dir=str(PREVIEW_FOLDER)) as temp:
+        folder = Path(temp)
+        prepared = folder / "input.wav"
+        instrumental = folder / "instrumental.wav"
+        vocals = folder / "vocals.wav"
+        midi_wav = None
+        try:
+            if source.suffix.lower() in EXT_MIDI:
+                update("FluidSynth: กำลังสังเคราะห์ MIDI ก่อนแยกเสียง")
+                midi_wav = ensure_midi_wav(source)
+            update("AI ขั้น 1/4 · เตรียมเสียง PCM 44.1 kHz stereo")
+            ffargs = [ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-y",
+                      "-nostdin", "-i", str(midi_wav or source)]
+            if preview:
+                ffargs += ["-t", "60"]
+            ffargs += ["-vn", "-ac", "2", "-ar", "44100", "-c:a", "pcm_s16le", str(prepared)]
+            run_process(ffargs)
+        finally:
+            if midi_wav is not None:
+                midi_wav.unlink(missing_ok=True)
+        if CANCEL.is_set():
+            raise RuntimeError("ผู้ใช้ยกเลิกงาน")
+
+        python = RUNTIME / "python" / "python.exe"
+        cmd = [str(python), "-u", str(ROOT / "ai_separate.py"),
+               str(prepared), str(instrumental), str(vocals)]
+        opts = dict(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                    errors="replace", bufsize=1)
+        if os.name == "nt":
+            opts["creationflags"] = subprocess.CREATE_NO_WINDOW
+        update("AI ขั้น 2/4 · กำลังโหลดโมเดล HTDemucs")
+        output_lines = []
+        with subprocess.Popen(cmd, **opts) as proc:
+            with LOCK:
+                PROCESS = proc
+            try:
+                for line in proc.stdout:
+                    item = line.strip()
+                    if not item:
+                        continue
+                    output_lines.append(item)
+                    output_lines[:] = output_lines[-30:]
+                    if item.startswith("AI_PROGRESS "):
+                        fraction = item.split(" ", 2)[1]
+                        update("AI ขั้น 2/4 · แยกเสียง " + fraction + " ช่วง")
+                        with LOCK:
+                            JOB["detail"] = "ประมวลผลบน CPU · " + fraction + " ช่วง"
+                            JOB["updated"] = time.monotonic()
+                    elif item.startswith("AI_STAGE "):
+                        update("AI ขั้น 2/4 · " + item.removeprefix("AI_STAGE "))
+                    elif item.startswith("AI_ERROR "):
+                        log(item)
+                returncode = proc.wait()
+                if CANCEL.is_set():
+                    raise RuntimeError("ผู้ใช้ยกเลิกงาน")
+                if returncode:
+                    raise RuntimeError(
+                        "AI separation ไม่สำเร็จ (code " + str(returncode) + "): " +
+                        " | ".join(output_lines[-5:])
+                    )
+            finally:
+                with LOCK:
+                    PROCESS = None
+        if not instrumental.is_file() or not vocals.is_file():
+            raise RuntimeError("AI separation ไม่คืนไฟล์เสียงทั้งสองส่วน")
+        update("AI ขั้น 3/4 · เข้ารหัส M4A ดนตรี")
+        run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-nostdin",
+                     "-y", "-i", str(instrumental), "-c:a", "aac", "-b:a", "192k",
+                     "-movflags", "+faststart", str(target)])
+        if not target.is_file() or target.stat().st_size < 1000:
+            raise RuntimeError("ไฟล์ AI Instrumental M4A ไม่สมบูรณ์")
+        if preview:
+            return None
+        update("AI ขั้น 4/4 · เข้ารหัส M4A เสียงร้องแยก")
+        stem = target.with_name(target.stem + " - vocals.m4a")
+        if stem.exists():
+            stem = unique_target(target.parent, target.stem + " - vocals", ".m4a")
+        try:
+            run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-nostdin",
+                         "-y", "-i", str(vocals), "-c:a", "aac", "-b:a", "192k",
+                         "-movflags", "+faststart", str(stem)])
+        except Exception:
+            stem.unlink(missing_ok=True)
+            raise
+        if not stem.is_file() or stem.stat().st_size < 1000:
+            stem.unlink(missing_ok=True)
+            raise RuntimeError("ไฟล์ AI Vocals M4A ไม่สมบูรณ์")
+        return stem
+
+
 def execute_job(action, options, started):
     try:
         if action == "scan":
@@ -262,6 +380,16 @@ def execute_job(action, options, started):
             log(f"ตรวจพบ {amount:,} เพลง")
             result = {"message": f"สแกนเสร็จแล้ว {amount:,} เพลง"}
         elif action in ("build", "preview"):
+            # Snapshot mode for the entire job, so UI changes cannot alter
+            # individual songs in the middle of a batch.
+            mode = PREFS.get("mode", "original")
+            if mode not in ("original", "instrumental"):
+                raise ValueError("ประเภทเสียงไม่ถูกต้อง")
+            if mode == "instrumental" and not ai_available():
+                raise RuntimeError(
+                    "AI Separation ไม่พร้อม: โมเดลหรือไลบรารีไม่ครบ "
+                    "กรุณาใช้ PC Ready Build 303"
+                )
             ids = options.get("ids", [])
             if not isinstance(ids, list):
                 raise ValueError("รายการเพลงไม่ถูกต้อง")
@@ -293,7 +421,11 @@ def execute_job(action, options, started):
                 else:
                     dest = unique_target(workspace, base, ".m4a")
                 try:
-                    if not (action == "preview") and source.suffix.lower() == ".m4a":
+                    if mode == "instrumental":
+                        vocal_path = separate_ai(row, dest, preview=action == "preview")
+                        if vocal_path is not None:
+                            log("บันทึกเสียงร้องแยก: " + vocal_path.name)
+                    elif not (action == "preview") and source.suffix.lower() == ".m4a":
                         shutil.copy2(source, dest)
                     else:
                         convert(row, dest, preview=action == "preview")
@@ -320,7 +452,7 @@ def execute_job(action, options, started):
             update("ตรวจเวอร์ชันเสร็จแล้ว", 1)
         else:
             raise RuntimeError(
-                "ฟังก์ชัน Google Drive / AI แบบออฟไลน์ยังไม่มีในชุด PC Source Launcher นี้ "
+                 "ฟังก์ชัน Google Drive ยังไม่มีในชุด PC Source Launcher นี้ "
                 "และไม่ได้อ้างว่าเทียบเท่า v0.2.5 Build 205"
             )
         with LOCK:
@@ -505,7 +637,7 @@ class Handler(BaseHTTPRequestHandler):
                     "SoundFont": sf_available(), "FluidSynth": bool(fluidsynth_binary()),
                     "Local file mode": True,
                     "Google Drive connector": False,
-                    "AI separation": False})
+                    "AI separation": ai_available()})
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
             elif path == "/api/songs":
