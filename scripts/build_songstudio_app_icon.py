@@ -101,6 +101,19 @@ def generate(output: Path) -> None:
         d.line((xx,cy-h/2*unit,xx,cy+h/2*unit),
                fill="#41e9fd",width=5*unit)
 
+    # Piano keyboard ties the native .ico/.png to the refreshed studio SVG.
+    # Draw it before the PC badge so the badge stays prominent.
+    d.rounded_rectangle((88*unit,412*unit,341*unit,476*unit),
+                        radius=9*unit,fill="#0b1637",outline="#6f9cfa",width=3*unit)
+    for j in range(8):
+        x=(92+j*31)*unit
+        width=(28 if j==7 else 29)*unit
+        d.rounded_rectangle((x,416*unit,x+width,471*unit),
+                            radius=3*unit,fill="#e6f6ff",outline="#53649a",width=1*unit)
+    for x0,width in [(111,19),(142,19),(204,19),(235,19),(266,19),(328,8)]:
+        d.rounded_rectangle((x0*unit,416*unit,(x0+width)*unit,452*unit),
+                            radius=3*unit,fill="#091832",outline="#5974ae",width=1*unit)
+
     # PC badge; legible at 64px.
     rect=(355*unit,399*unit,474*unit,473*unit)
     d.rounded_rectangle(rect,radius=22*unit,fill="#1866c3",
