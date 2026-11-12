@@ -29,8 +29,8 @@ if not UI_ROOT.is_dir() and (ROOT.parent / "studio").is_dir():
 DATA = ROOT / "data"
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.1" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "301" if READY_BUNDLE else "205-SRC"
+STATUS_VERSION = "0.3.2" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "302" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(exist_ok=True)
 EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga"}
 EXT_MIDI = {".mid", ".midi", ".kar"}
