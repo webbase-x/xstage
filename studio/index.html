@@ -19,7 +19,7 @@
       </div>
       <div class="edition"><span class="small-dot"></span> PC + WEB · SAME STUDIO</div>
       <nav id="main-navigation" class="navigation" aria-label="ส่วนงาน">
-        <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>สร้างเพลงใหม่<small>สแกน · ฟัง · SoundFont · M4A</small></span></button>
+        <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>สร้างเพลงใหม่<small>4 ขั้นตอน · สแกน · เลือก · ฟัง · สร้าง</small></span></button>
         <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>อัปโหลด<small>Google Drive · ไม่ส่งซ้ำ</small></span></button>
         <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
         <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
@@ -42,39 +42,82 @@
       <main id="main" class="main">
         <div id="global-message" class="global-message" role="alert" hidden></div>
         <section id="tab-create" class="tab active" aria-labelledby="page-title">
-          <div class="grid-2">
-            <article class="panel">
-              <div class="section-heading"><div><div class="eyebrow">01 / SOURCE</div><h2>ต้นฉบับและพื้นที่ทำงาน</h2></div><span class="chip">OFFLINE FIRST</span></div>
-              <label for="create-source">โฟลเดอร์ต้นฉบับ</label>
-              <div class="path-row"><input id="create-source" class="field" type="text" placeholder="เลือกโฟลเดอร์เพลงจากเครื่อง PC" autocomplete="off"><button class="button ghost" type="button" data-pick="source">เลือกโฟลเดอร์</button></div>
-              <label for="create-workspace">พื้นที่เก็บเพลงที่สร้าง (X-Stage/song)</label>
-              <div class="path-row"><input id="create-workspace" class="field" type="text" autocomplete="off"><button class="button ghost" type="button" data-pick="workspace">เปลี่ยนที่เก็บ</button></div>
-              <div class="toolbar"><button id="scan-button" class="button primary" type="button">⌕ ตรวจสอบไฟล์เพลง</button><button id="reconcile-button" class="button ghost" type="button" title="สแกนเพื่ออัปเดตรายการต้นฉบับ">รีเฟรชรายการ</button></div>
-              <div class="hint">เก็บค่าโฟลเดอร์ที่เลือกไว้ให้เปิดครั้งถัดไป โดยไม่ย้ายหรือลบเพลงเดิม</div>
-            </article>
-            <article class="panel">
-              <div class="section-heading"><div><div class="eyebrow">02 / SOUND DESIGN</div><h2>เสียงสำหรับสร้าง M4A</h2></div><span class="chip info">SF2 / SF3</span></div>
-              <label for="create-soundfont">SoundFont สำหรับ MIDI / KAR / NCN</label>
-              <div class="path-row"><select id="create-soundfont" class="field"><option value="">ยังไม่ได้เลือก SoundFont</option></select><button class="button ghost" type="button" data-pick="soundfont">เลือกไฟล์</button></div>
-              <div class="form-2">
-                <div><label for="create-preset">โทนเสียง MIDI</label><select class="field" id="create-preset"><option value="balanced">สมดุล</option></select></div>
-                <div><label for="create-mode">ประเภทเสียง</label><select class="field" id="create-mode"><option value="original">คงเสียงต้นฉบับ</option><option value="instrumental">แยกเสียงร้อง AI (Full Offline)</option></select></div>
-              </div>
-              <div class="hint">ทดลองฟังจะใช้ SoundFont และโทนเสียงที่เลือกไว้ ข้อมูลแคชถูกเก็บบน PC ไม่อัปโหลดขึ้นเว็บสาธารณะ</div>
-            </article>
+          <div class="create-assistant panel" aria-label="ตัวช่วยสร้างเพลงใหม่ทีละขั้นตอน">
+            <div class="create-assistant-heading">
+              <div><div class="eyebrow">CREATE SONG · STEP BY STEP</div><h2>สร้างเพลงใหม่ทีละขั้นตอน</h2><p>ทำตามลำดับจากเลือกต้นฉบับ → เลือกเพลง → ตั้งค่าเสียงและทดลองฟัง → สร้างเพลง</p></div>
+              <span id="create-step-progress" class="chip info" aria-live="polite">ขั้นตอนที่ 1 จาก 4</span>
+            </div>
+            <nav class="create-steps" aria-label="เลือกขั้นตอนการสร้างเพลง">
+              <button class="create-step-link active" type="button" data-create-target="1" aria-current="step" aria-controls="create-stage-1"><span class="create-step-number">1</span><span>ต้นฉบับ<small>เลือกโฟลเดอร์และสแกน</small></span></button>
+              <button class="create-step-link" type="button" data-create-target="2" aria-controls="create-stage-2"><span class="create-step-number">2</span><span>เลือกเพลง<small>ค้นหาและเลือกรายการ</small></span></button>
+              <button class="create-step-link" type="button" data-create-target="3" aria-controls="create-stage-3"><span class="create-step-number">3</span><span>SoundFont + ทดลองฟัง<small>ตรวจคุณภาพเสียง</small></span></button>
+              <button class="create-step-link" type="button" data-create-target="4" aria-controls="create-stage-4"><span class="create-step-number">4</span><span>สร้างเพลง<small>ตรวจสรุปและเริ่มสร้าง</small></span></button>
+            </nav>
           </div>
-          <section class="panel catalog-panel">
-            <div class="section-heading"><div><div class="eyebrow">03 / SONG CATALOG</div><h2>รายการเพลงต้นฉบับ</h2></div><span id="catalog-total" class="chip">0 เพลง</span></div>
+
+          <article id="create-stage-1" class="panel create-step-panel" data-create-step="1" aria-labelledby="create-stage-1-heading">
+            <div class="section-heading"><div><div class="eyebrow">STEP 01 / SOURCE</div><h2 id="create-stage-1-heading">เลือกต้นฉบับและพื้นที่ทำงาน</h2><p>เลือกโฟลเดอร์เพลงและตำแหน่งบันทึก จากนั้นสแกนให้พบรายการก่อนดำเนินการต่อ</p></div><span class="chip">OFFLINE FIRST</span></div>
+            <label for="create-source">โฟลเดอร์ต้นฉบับ</label>
+            <div class="path-row"><input id="create-source" class="field" type="text" placeholder="เลือกโฟลเดอร์เพลงจากเครื่อง PC" autocomplete="off"><button class="button ghost" type="button" data-pick="source">เลือกโฟลเดอร์</button></div>
+            <label for="create-workspace">พื้นที่เก็บเพลงที่สร้าง (X-Stage/song)</label>
+            <div class="path-row"><input id="create-workspace" class="field" type="text" autocomplete="off"><button class="button ghost" type="button" data-pick="workspace">เปลี่ยนที่เก็บ</button></div>
+            <div class="toolbar"><button id="scan-button" class="button primary" type="button">⌕ ตรวจสอบไฟล์เพลง</button><button id="reconcile-button" class="button ghost" type="button" title="สแกนเพื่ออัปเดตรายการต้นฉบับ">รีเฟรชรายการ</button></div>
+            <div class="hint">ระบบจดจำตำแหน่งที่เลือก ไม่ย้ายหรือลบไฟล์ต้นฉบับ · หลังสแกนเสร็จกด “ขั้นตอนถัดไป”</div>
+          </article>
+
+          <section id="create-stage-2" class="panel catalog-panel create-step-panel" data-create-step="2" aria-labelledby="create-stage-2-heading" hidden>
+            <div class="section-heading"><div><div class="eyebrow">STEP 02 / SONG SELECTION</div><h2 id="create-stage-2-heading">เลือกรายการเพลง</h2><p>เลือกหนึ่งเพลงเพื่อทดลองฟังในขั้นที่ 3 หรือเลือกหลายเพลงเพื่อสร้างเป็นชุด</p></div><span id="catalog-total" class="chip">0 เพลง</span></div>
             <div class="catalog-actions">
               <div class="searchbox"><span aria-hidden="true">⌕</span><input id="song-search" type="search" placeholder="ค้นชื่อเพลง ศิลปิน หรือรหัสเพลง" autocomplete="off"></div>
               <button id="select-page" class="button ghost" type="button">เลือกหน้านี้</button><button id="select-all" class="button ghost" type="button">เลือกทั้งหมด</button><button id="clear-selection" class="button ghost" type="button">ยกเลิกทั้งหมด</button>
             </div>
-            <div class="selection-strip"><span id="selected-count">เลือกแล้ว 0 เพลง</span><span id="selection-hint">เลือกเพลงเพื่อสร้าง ทดลองฟัง หรืออัปโหลด</span></div>
+            <div class="selection-strip"><span id="selected-count">เลือกแล้ว 0 เพลง</span><span id="selection-hint">เลือกรายการเพื่อสร้าง หรือเลือกเพียง 1 เพลงเพื่อทดลองฟัง</span></div>
             <div class="table-scroll" role="region" aria-label="ตารางเลือกเพลง" tabindex="0"><table class="song-table"><thead><tr><th class="col-select"><span class="sr-only">เลือก</span></th><th>ชื่อเพลง</th><th>ชนิด</th><th>ขนาด</th><th>สถานะ</th></tr></thead><tbody id="song-rows"><tr><td colspan="5" class="empty-row">กำลังโหลดข้อมูลเพลง…</td></tr></tbody></table></div>
             <div class="table-bottom"><span id="table-page-label">—</span><div class="page-controls"><button id="page-prev" class="button ghost" type="button">‹ ก่อนหน้า</button><button id="page-next" class="button ghost" type="button">ถัดไป ›</button></div></div>
-            <div class="builder-actions"><button id="preview-button" class="button ghost" type="button">♫ ทดลองฟัง</button><button id="edit-button" class="button ghost" type="button">✎ ชื่อเพลง / เนื้อร้อง</button><button id="build-audio-button" class="button ghost" type="button">สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">สร้าง M4A + เนื้อร้องจากเพลงที่เลือก</button></div>
-            <div class="preview-row"><div class="preview-description"><strong id="preview-label">เครื่องเล่นทดลองฟัง</strong><small>ตัวอย่างเสียงสูงสุด 60 วินาที · ไม่บันทึกลงคลังเพลง</small></div><audio id="preview-audio" controls preload="none"></audio></div>
+            <div class="toolbar"><button id="edit-button" class="button ghost" type="button">✎ ชื่อเพลง / เนื้อร้อง</button></div>
+            <div class="hint">ปุ่มทดลองฟังและการเลือก SoundFont อยู่รวมกันในขั้นตอนถัดไป · เลือกหลายเพลงเพื่อสร้างเป็นชุดได้</div>
           </section>
+
+          <article id="create-stage-3" class="panel create-step-panel" data-create-step="3" aria-labelledby="create-stage-3-heading" hidden>
+            <div class="section-heading"><div><div class="eyebrow">STEP 03 / SOUND FONT & AUDIO PREVIEW</div><h2 id="create-stage-3-heading">SoundFont และทดลองฟังเสียง</h2><p>ตั้งค่าเสียงและทดลองฟังในหน้าเดียวกัน ก่อนยืนยันการสร้างเพลงจริง</p></div><span class="chip info">SF2 / SF3</span></div>
+            <div class="sound-preview-grid">
+              <div class="sound-settings">
+                <h3>1. เลือกเสียงที่ใช้สร้างเพลง</h3>
+                <label for="create-soundfont">SoundFont สำหรับ MIDI / KAR</label>
+                <div class="path-row"><select id="create-soundfont" class="field"><option value="">ยังไม่ได้เลือก SoundFont</option></select><button class="button ghost" type="button" data-pick="soundfont">เลือกไฟล์</button></div>
+                <div class="form-2">
+                  <div><label for="create-preset">โทนเสียง MIDI</label><select class="field" id="create-preset"><option value="balanced">สมดุล</option></select></div>
+                  <div><label for="create-mode">ประเภทเสียง</label><select class="field" id="create-mode"><option value="original">คงเสียงต้นฉบับ</option><option value="instrumental">แยกเสียงร้อง AI (Full Offline)</option></select></div>
+                </div>
+                <div class="hint">เสียง MIDI/KAR ใช้ SoundFont ที่เลือก ส่วนไฟล์เสียงทั่วไปจะใช้ไฟล์ต้นฉบับ · การแยกเสียงร้อง AI ขึ้นกับความสามารถของ Engine รุ่นที่ใช้งาน</div>
+              </div>
+              <div class="sound-preview">
+                <h3>2. ทดลองฟังเสียงก่อนสร้าง</h3>
+                <p id="create-preview-hint" class="sound-preview-hint" aria-live="polite">เลือกเพลง 1 เพลงในขั้นตอนที่ 2 เพื่อทดลองฟัง</p>
+                <button id="preview-button" class="button primary" type="button">♫ สร้างเสียงทดลองฟัง</button>
+                <div class="preview-row"><div class="preview-description"><strong id="preview-label">เครื่องเล่นทดลองฟัง</strong><small>ตัวอย่างเสียงสูงสุด 60 วินาที · ไม่บันทึกลงคลังเพลง</small></div><audio id="preview-audio" controls preload="none" aria-label="ทดลองฟังเสียงจาก SoundFont และการตั้งค่าปัจจุบัน"></audio></div>
+                <div class="hint">เลือก SoundFont หรือโทนเสียงใหม่แล้วกด “สร้างเสียงทดลองฟัง” อีกครั้งเพื่อเปรียบเทียบเสียง หากเลือกเพลงหลายเพลง ให้กลับไปเลือกเพียงเพลงเดียวเพื่อทดลองฟัง</div>
+              </div>
+            </div>
+          </article>
+
+          <article id="create-stage-4" class="panel create-step-panel" data-create-step="4" aria-labelledby="create-stage-4-heading" hidden>
+            <div class="section-heading"><div><div class="eyebrow">STEP 04 / CREATE & EXPORT</div><h2 id="create-stage-4-heading">ตรวจสอบและสร้างเพลง</h2><p>ตรวจสอบจำนวนเพลง พื้นที่บันทึก และเสียงที่ตั้งไว้ก่อนเริ่มงาน</p></div><span class="chip">LOCAL PROCESSING</span></div>
+            <div id="create-review" class="create-review" aria-live="polite">
+              <div><span>จำนวนเพลงที่เลือก</span><strong id="review-song-count">0 เพลง</strong></div>
+              <div><span>ตำแหน่งเก็บผลลัพธ์</span><strong id="review-workspace">—</strong></div>
+              <div><span>SoundFont</span><strong id="review-soundfont">—</strong></div>
+              <div><span>ประเภทเสียง</span><strong id="review-mode">—</strong></div>
+            </div>
+            <div class="builder-actions"><button id="build-audio-button" class="button ghost" type="button">สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">▶ สร้าง M4A + เนื้อร้องจากเพลงที่เลือก</button></div>
+            <div class="hint">ระบบจะแสดงสถานะ ความคืบหน้า และรายละเอียดข้อผิดพลาดที่แผงสถานะด้านล่าง · สามารถกลับไปปรับเสียงก่อนเริ่มสร้าง</div>
+          </article>
+
+          <div class="create-step-footer">
+            <button id="create-step-previous" class="button ghost" type="button" disabled>‹ ขั้นตอนก่อนหน้า</button>
+            <span id="create-step-description" aria-live="polite">ขั้นตอน 1/4 · เลือกต้นฉบับและสแกนไฟล์</span>
+            <button id="create-step-next" class="button primary" type="button">ขั้นตอนถัดไป: เลือกเพลง ›</button>
+          </div>
         </section>
 
         <section id="tab-upload" class="tab">
