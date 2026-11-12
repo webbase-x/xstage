@@ -11,6 +11,7 @@ FILES = {
     "songstudio-pc/Start-Song-Studio.cmd": "Start-Song-Studio.cmd",
     "songstudio-pc/Start-Song-Studio.ps1": "Start-Song-Studio.ps1",
     "songstudio-pc/engine.py": "engine.py",
+    "songstudio-pc/pick_path.ps1": "pick_path.ps1",
     "songstudio-pc/README.md": "README.md",
     "studio/index.html": "studio/index.html",
     "studio/app.js": "studio/app.js",
