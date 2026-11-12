@@ -74,8 +74,9 @@ assert.ok(nativeMain.includes('updateManager.startMonitoring()')&&nativeMain.inc
 assert.ok(host.includes("'xstage:native-update',broadcastStatus"),'paired remotes should receive the new build promptly');
 assert.ok(remote.includes('lastNotifiedUpdateBuild'),'Owner mobile should show one clear notification per new build');
 
-assert.ok(app.includes("const autoKey='xstage-native-auto-update-'"),'hosted UI must upgrade older APKs without requiring a new Java binary');
-assert.ok(app.includes("button?.click();"),'new native release must automatically start the system-confirmed update');
+assert.ok(app.includes("window.XStageAndroidUpdateAvailable=(version,build)=>"),'older APKs must receive live release notices');
+assert.ok(app.includes("android-tv-update-now')?.addEventListener('click'"),'APK installation must require a real user action');
+assert.ok(!app.includes("button?.click();"),'APK release notification cannot silently start installer');
 assert.ok(android.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest()'),'test APK must remain separate from production Play channel');
 assert.ok(android.includes('MessageDigest.getInstance("SHA-256")'),'APK updates must verify downloads');
 assert.ok(pwa.includes('offerPublishedAndroidApk(apk)'),'Android browser visitors must see an APK-or-Web choice');
