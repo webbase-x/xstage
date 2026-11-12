@@ -51,31 +51,27 @@ class FakePrivateDrive(drive.GoogleDrive):
                          "mimeType": "application/vnd.google-apps.folder"}}
         return ident
 
-    def upload_file(self, parent, path, name, *, replace_pointer=False,
-                    cancelled=None, on_progress=None):
+    def _resumable_put(self, path, parent, filename, replacing=None,
+                       cancelled=None, on_progress=None):
+        """Mock only remote transport; real upload_file performs SHA/MD5 logic."""
         if self.locked:
             raise AssertionError("Download attempted a Drive write")
-        self.upload_order.append(name)
+        self.upload_order.append(filename)
         body = Path(path).read_bytes()
         md5 = hashlib.md5(body).hexdigest()
-        for ident, rec in self.items.items():
-            meta = rec["metadata"]
-            if rec["parent"] == parent and meta["name"] == name and (
-                    meta["mimeType"] != "application/vnd.google-apps.folder"):
-                if meta["md5Checksum"] == md5:
-                    return "skipped", dict(meta)
-                if not replace_pointer:
-                    raise drive.GoogleError("same-name different bytes")
-                rec["body"] = body
-                meta["md5Checksum"] = md5
-                return "updated", dict(meta)
+        if replacing:
+            record = self.items[replacing]
+            record["body"] = body
+            record["metadata"]["md5Checksum"] = md5
+            return dict(record["metadata"])
         ident = self._newid()
-        meta = {"id": ident, "name": name, "mimeType": "application/octet-stream",
+        meta = {"id": ident, "name": filename,
+                "mimeType": "application/octet-stream",
                 "md5Checksum": md5, "size": str(len(body))}
         self.items[ident] = {"parent": parent, "body": body, "metadata": meta}
         if on_progress:
             on_progress(len(body), len(body))
-        return "created", dict(meta)
+        return dict(meta)
 
     def token(self):
         return "test-only-token"
@@ -133,6 +129,22 @@ class DriveRoundTripTests(unittest.TestCase):
             with zipfile.ZipFile(archived["path"]) as archive:
                 self.assertIn("songs/current.json", archive.namelist())
                 self.assertIn("songs/audio/0/a.m4a", archive.namelist())
+
+    def test_upload_collision_and_local_restore_conflict_fail_closed(self):
+        self.g.upload_library(self.songs, self.records)
+        original = (self.songs / "audio/0/a.m4a")
+        original.write_bytes(b"new-content" * 600)
+        with self.assertRaisesRegex(drive.GoogleError, "เนื้อหาต่างกัน"):
+            self.g.upload_library(self.songs, self.records)
+        self.g.locked = True
+        target = self.root / "already-exists"
+        dest = target / "X-Stage Song Studio" / "songs" / "audio/0/a.m4a"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"do-not-overwrite")
+        with patch.object(drive, "_request", side_effect=self._fake_request):
+            with self.assertRaisesRegex(drive.GoogleError, "ต่างเนื้อหา"):
+                self.g.download_library(target, kind="songs")
+        self.assertEqual(dest.read_bytes(), b"do-not-overwrite")
 
     def test_corrupt_remote_download_rejected_by_md5(self):
         self.g.upload_library(self.songs, self.records)
