@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.9-build309'
+$Version = 'v0.3.10-build310'
 $DirName = 'X-Stage-Song-Studio-PC-Ready-' + $Version
 $OutputRoot = Join-Path $Repo 'dist'
 $Stage = Join-Path $OutputRoot $DirName
@@ -69,6 +69,274 @@ $map = @{
  'studio/entry.js' = 'studio/entry.js'
 }
 foreach ($item in $map.GetEnumerator()) { CopyFromRepo $item.Key $item.Value }
+
+# The app OWNER configures one public Desktop OAuth Client ID in GitHub
+# Actions Repository Variables, not once per end-user. The JSON is a PUBLIC
+# CLIENT IDENTIFIER (NOT any user's OAuth/refresh/access token).
+$DesktopClientId = [string]$env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID
+if (![string]::IsNullOrWhiteSpace($DesktopClientId)) {
+    if ($DesktopClientId -notmatch '^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com and 512px icon for Windows'
+& python (Join-Path $Repo 'scripts/build_songstudio_app_icon.py') (Join-Path $Stage 'studio')
+if ($LASTEXITCODE -ne 0) { throw 'Rendering Song Studio app icon failed' }
+foreach ($asset in @('studio/app-icon.svg','studio/app-icon.ico','studio/app-icon-512.png','studio/site.webmanifest')) {
+    if (!(Test-Path -LiteralPath (Join-Path $Stage $asset))) { throw "Missing app artwork: $asset" }
+}
+
+
+# 1. Python embeddable runtime: no Python installation or pip necessary
+$PyZip = Join-Path $Downloads 'python-embedded.zip'
+Download $PythonURL $PyZip
+$PyDir = Join-Path $Runtime 'python'
+New-Item -ItemType Directory -Force -Path $PyDir | Out-Null
+Expand-Archive -LiteralPath $PyZip -DestinationPath $PyDir -Force
+if (!(Test-Path (Join-Path $PyDir 'pythonw.exe'))) { throw 'Bundled Python lacks pythonw.exe' }
+$py = Join-Path $PyDir 'python.exe'
+& $py -c "import http.server,json,pathlib,subprocess,threading; print('PYTHON_EMBED_OK')"
+if ($LASTEXITCODE -ne 0) { throw 'Bundled Python failed self-test' }
+Step 'Bundled Python embedded runtime ready'
+
+# 2. Trusted Gyan Windows FFmpeg; check vendor-provided archive digest
+$FfmpegZip = Join-Path $Downloads 'ffmpeg-essentials.zip'
+$FFSHA = Join-Path $Downloads 'ffmpeg-essentials.sha256'
+Download $FfmpegURL $FfmpegZip
+Download $FfmpegShaURL $FFSHA
+$hashFile = Get-Content -LiteralPath $FFSHA -Raw
+if ($hashFile -notmatch '(?i)\b[a-f0-9]{64}\b') { throw 'FFmpeg vendor checksum file invalid' }
+CheckSHA $FfmpegZip $Matches[0]
+$FFTemp = Join-Path $Downloads 'ffmpeg-unpacked'
+Expand-Archive -LiteralPath $FfmpegZip -DestinationPath $FFTemp -Force
+$Tools = Join-Path $Runtime 'tools'
+New-Item -ItemType Directory -Force -Path $Tools | Out-Null
+foreach ($file in @('ffmpeg.exe', 'ffprobe.exe')) {
+    $found = Get-ChildItem -LiteralPath $FFTemp -Recurse -Filter $file -File | Select-Object -First 1
+    if (!$found) { throw "FFmpeg archive missing $file" }
+    Copy-Item -LiteralPath $found.FullName -Destination (Join-Path $Tools $file)
+}
+& (Join-Path $Tools 'ffmpeg.exe') -hide_banner -version | Select-Object -First 1
+if ($LASTEXITCODE -ne 0) { throw 'Bundled FFmpeg failed self-test' }
+Step 'Bundled FFmpeg and ffprobe ready'
+
+# 3. Official Windows FluidSynth binary (pinned upstream GitHub checksum)
+$FluidZip = Join-Path $Downloads 'fluidsynth-win64.zip'
+Download $FluidURL $FluidZip
+CheckSHA $FluidZip $FluidSha256
+$FluidTemp = Join-Path $Downloads 'fluidsynth-unpacked'
+Expand-Archive -LiteralPath $FluidZip -DestinationPath $FluidTemp -Force
+$FluidExe = Get-ChildItem -LiteralPath $FluidTemp -Recurse -File -Filter 'fluidsynth.exe' | Select-Object -First 1
+if (!$FluidExe) { throw 'Official FluidSynth Windows archive does not contain fluidsynth.exe' }
+$FluidBin = Join-Path $Runtime 'fluidsynth/bin'
+New-Item -ItemType Directory -Force -Path $FluidBin | Out-Null
+# Include all native DLLs beside the executable so no machine-level installation is needed.
+Copy-Item -Path (Join-Path $FluidExe.Directory.FullName '*') -Destination $FluidBin -Recurse -Force
+$FluidPath = Join-Path $FluidBin 'fluidsynth.exe'
+if (!(Test-Path $FluidPath)) { throw 'Bundled FluidSynth executable missing' }
+$env:PATH = "$FluidBin;$env:PATH"
+& $FluidPath --version
+if ($LASTEXITCODE -ne 0) { throw 'Bundled FluidSynth failed self-test' }
+Step 'Bundled FluidSynth and its native libraries ready'
+
+# 4. GM SoundFont, pinned to a specific upstream commit, with publisher license
+$SFDir = Join-Path $Runtime 'soundfonts'
+$Licenses = Join-Path $Runtime 'licenses'
+New-Item -ItemType Directory -Force -Path $SFDir, $Licenses | Out-Null
+$SFPath = Join-Path $SFDir 'GeneralUser-GS.sf2'
+Download $SoundFontURL $SFPath
+Download $SoundFontLicenseURL (Join-Path $Licenses 'GeneralUser-GS-LICENSE.txt')
+if ((Get-Item $SFPath).Length -lt 1000000) { throw 'Bundled SoundFont is suspiciously small' }
+$SF = [IO.File]::OpenRead($SFPath)
+try {
+    $header = New-Object byte[] 12
+    if ($SF.Read($header, 0, 12) -ne 12 -or
+        [Text.Encoding]::ASCII.GetString($header,0,4) -ne 'RIFF' -or
+        [Text.Encoding]::ASCII.GetString($header,8,4) -ne 'sfbk') {
+        throw 'Invalid SoundFont header'
+    }
+} finally { $SF.Dispose() }
+Step 'Bundled GeneralUser-GS SoundFont and license ready'
+
+# 4b. Include OFFLINE HTDemucs AI model and pinned Windows x64 inference dependencies.
+# These downloads happen on GitHub Actions ONLY. No requests on users' PCs.
+$ModelDir = Join-Path $Runtime 'models'
+$AiSite = Join-Path $Runtime 'ai-site'
+New-Item -ItemType Directory -Force -Path $ModelDir, $AiSite | Out-Null
+$ModelLock = Get-Content -LiteralPath (Join-Path $Stage 'ai-model.lock.json') -Raw | ConvertFrom-Json
+$ModelURL = [string]$ModelLock.model_url
+$ModelHash = [string]$ModelLock.model_sha256
+$ModelFile = Join-Path $ModelDir ([string]$ModelLock.filename)
+if ($ModelURL -notmatch '^https://huggingface\.co/StemSplitio/htdemucs-onnx/resolve/') {
+    throw 'Model lockfile points to an unexpected origin'
+}
+if ($ModelLock.filename -ne 'htdemucs_fp16weights.onnx') {
+    throw 'Unexpected model filename in lockfile'
+}
+Step "Downloading pinned HTDemucs ONNX model on CI (~166 MB)..."
+try {
+    Download $ModelURL $ModelFile
+} catch {
+    Step "Trying resumable curl mirror request for Hugging Face model: $_"
+    & curl.exe -fL --retry 3 --retry-delay 3 --connect-timeout 30 --max-time 720 -o $ModelFile $ModelURL
+    if ($LASTEXITCODE -ne 0) { throw 'HTDemucs ONNX model download failed on Windows builder' }
+}
+if ((Get-Item $ModelFile).Length -lt 100MB) { throw 'AI ONNX file unexpectedly small' }
+CheckSHA $ModelFile $ModelHash
+Step 'Bundling pinned NumPy + ONNX Runtime CPU wheels on Windows build runner'
+# actions/setup-python supplies Python 3.13 plus pip on GitHub Windows runner.
+& python -m pip install --disable-pip-version-check --no-compile --only-binary=:all: --target $AiSite "numpy==2.2.6" "onnxruntime==1.23.2"
+if ($LASTEXITCODE -ne 0) { throw 'Failed to install pinned Windows AI wheels in the bundle' }
+$Pth = Join-Path $PyDir 'python313._pth'
+if (!(Test-Path -LiteralPath $Pth)) { throw 'Embedded Python path configuration missing' }
+# Python's embeddable distribution ignores global site-packages and the system
+# registry. The bundled AI dependencies live only within this ZIP.
+Add-Content -LiteralPath $Pth -Value '..\ai-site' -Encoding ASCII
+& $py -c "import numpy,onnxruntime; print('OFFLINE_AI_READY',numpy.__version__,onnxruntime.__version__)"
+if ($LASTEXITCODE -ne 0) { throw 'Bundled Python cannot import local ONNX Runtime/NumPy' }
+Step 'All AI libraries and model included, no downloads required by user'
+
+# 5. Preserve bundled runtime license files and source links in the ZIP
+$PythonLicense = Join-Path $PyDir 'LICENSE.txt'
+if (Test-Path $PythonLicense) {
+    Copy-Item $PythonLicense (Join-Path $Licenses 'Python-LICENSE.txt') -Force
+}
+$FFLicense = Get-ChildItem -LiteralPath $FFTemp -Filter 'LICENSE*' -File -Recurse | Select-Object -First 1
+if ($FFLicense) { Copy-Item $FFLicense.FullName (Join-Path $Licenses 'FFmpeg-LICENSE.txt') -Force }
+$FluidLicense = Get-ChildItem -LiteralPath $FluidTemp -Filter 'LICENSE*' -File -Recurse | Select-Object -First 1
+if ($FluidLicense) { Copy-Item $FluidLicense.FullName (Join-Path $Licenses 'FluidSynth-LICENSE.txt') -Force }
+CopyFromRepo 'songstudio-pc/THIRD_PARTY_NOTICES.md' '.runtime/licenses/THIRD_PARTY_NOTICES.md'
+
+# 6. Runtime integrity manifest, packaged with the app
+$paths = @(
+ 'engine.py',
+ 'google_drive.py',
+ 'song_export.py',
+ 'live_preview.py',
+ 'ai_separate.py',
+ 'ai-model.lock.json',
+ '.runtime/models/htdemucs_fp16weights.onnx',
+ '.runtime/python/python313._pth',
+ '.runtime/ai-site/numpy/__init__.py',
+ '.runtime/ai-site/onnxruntime/__init__.py',
+ 'pick_path.ps1',
+ 'Create-Desktop-Shortcut.cmd',
+ 'Create-Desktop-Shortcut.ps1',
+ 'studio/app-icon.svg',
+ 'studio/app-icon.ico',
+ 'studio/app-icon-512.png',
+ 'studio/site.webmanifest',
+ 'studio/index.html',
+ 'studio/app.js',
+ 'studio/style.css',
+ 'studio/entry.js',
+ '.runtime/python/python.exe',
+ '.runtime/python/pythonw.exe',
+ '.runtime/tools/ffmpeg.exe',
+ '.runtime/tools/ffprobe.exe',
+ '.runtime/fluidsynth/bin/fluidsynth.exe',
+ '.runtime/soundfonts/GeneralUser-GS.sf2'
+)
+$files = foreach ($relative in $paths) {
+    $p = Join-Path $Stage ($relative.Replace('/', '\'))
+    if (!(Test-Path -LiteralPath $p -PathType Leaf)) { throw "Manifest file missing: $relative" }
+    [ordered]@{
+        path = $relative
+        sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()
+        bytes = (Get-Item $p).Length
+    }
+}
+$manifest = [ordered]@{
+    product = 'X-Stage Song Studio PC'
+    bundle_type = 'ready-offline'
+    platform = 'windows-x64'
+    version = '0.3.10'
+    build = 310
+    created_utc = [DateTime]::UtcNow.ToString('o')
+    contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont', 'HTDemucs ONNX model (MIT)', 'NumPy 2.2.6', 'ONNX Runtime 1.23.2')
+    files = @($files)
+}
+# Include public app Client ID in the archive integrity manifest when configured.
+if (Test-Path (Join-Path $Stage 'config/google-oauth-client.json')) {
+    $path = 'config/google-oauth-client.json'
+    $p = Join-Path $Stage $path
+    $files += [ordered]@{
+        path = $path
+        sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()
+        bytes = (Get-Item $p).Length
+    }
+}
+$ManifestFile = Join-Path $Stage '.engine-ready-manifest.json'
+ConvertTo-Json -InputObject $manifest -Depth 8 | Set-Content -LiteralPath $ManifestFile -Encoding UTF8
+
+# Offline check, no network calls, run the exact release launcher in CI
+$Check = Join-Path $Stage 'Start-Song-Studio-Ready.ps1'
+& $Check -NoLaunch
+if ($LASTEXITCODE -ne 0) { throw 'Offline Readiness check FAILED' }
+Step 'Offline readiness verified successfully'
+
+# 7. Package a complete ZIP, include checksum alongside it
+$Zip = Join-Path $OutputRoot ($DirName + '.zip')
+if (Test-Path $Zip) { Remove-Item $Zip -Force }
+# Python zipfile creates portable POSIX-style archive paths and includes
+# dot-prefixed .runtime and .engine-ready-manifest.json on Windows.
+$PackScript = Join-Path $Downloads 'write-archive.py'
+$PythonPack = @'
+import sys
+from pathlib import Path
+from zipfile import ZipFile, ZIP_DEFLATED
+base = Path(sys.argv[1]).resolve()
+dest = Path(sys.argv[2]).resolve()
+with ZipFile(dest, "w", ZIP_DEFLATED, compresslevel=8, allowZip64=True) as archive:
+    for path in sorted(base.rglob("*")):
+        if path.is_file():
+            name = "/".join((base.name,) + path.relative_to(base).parts)
+            archive.write(path, arcname=name)
+with ZipFile(dest) as archive:
+    names = set(archive.namelist())
+    for mandatory in [".runtime/python/python.exe",
+                      ".runtime/tools/ffmpeg.exe",
+                      ".runtime/fluidsynth/bin/fluidsynth.exe",
+                      ".runtime/soundfonts/GeneralUser-GS.sf2",
+                      ".runtime/models/htdemucs_fp16weights.onnx",
+                      "ai_separate.py",
+                      "live_preview.py",
+                      "song_export.py",
+                      "google_drive.py",
+                      "studio/app-icon.svg",
+                      "studio/app-icon.ico",
+                      "studio/app-icon-512.png",
+                      "Create-Desktop-Shortcut.cmd",
+                      ".engine-ready-manifest.json",
+                      "Start-Song-Studio.cmd"]:
+        assert base.name + "/" + mandatory in names, mandatory
+    assert archive.testzip() is None, "corrupt ZIP entry"
+print("Portable Ready ZIP verified:", len(names), "files")
+'@
+[IO.File]::WriteAllText($PackScript, $PythonPack, (New-Object Text.UTF8Encoding($false)))
+& $py $PackScript $Stage $Zip
+if ($LASTEXITCODE -ne 0) { throw 'Portable offline Ready ZIP verification failed' }
+$Hash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$SHAFile = $Zip + '.sha256'
+"$Hash  $($DirName).zip" | Set-Content -LiteralPath $SHAFile -Encoding ascii
+Step ("Published candidate: $Zip")
+Step ("ZIP size: {0:N2} MB" -f ((Get-Item $Zip).Length / 1MB))
+Step ("SHA256: $Hash")
+) {
+        throw 'Invalid XSTAGE_GOOGLE_DESKTOP_CLIENT_ID: expected Google Desktop OAuth client ID'
+    }
+    $publicClient = [ordered]@{
+        installed = [ordered]@{
+            client_id = $DesktopClientId
+            auth_uri = 'https://accounts.google.com/o/oauth2/v2/auth'
+            token_uri = 'https://oauth2.googleapis.com/token'
+            redirect_uris = @('http://127.0.0.1')
+        }
+    }
+    $clientDir = Join-Path $Stage 'config'
+    New-Item -ItemType Directory -Force -Path $clientDir | Out-Null
+    $clientFile = Join-Path $clientDir 'google-oauth-client.json'
+    ConvertTo-Json -InputObject $publicClient -Depth 6 | Set-Content -LiteralPath $clientFile -Encoding UTF8
+    Step 'Included app-level public Google Desktop OAuth Client ID (never user tokens)'
+} else {
+    Write-Warning 'XSTAGE_GOOGLE_DESKTOP_CLIENT_ID is not set. Other users will need to import JSON once; Google login cannot be automatic until owner sets this repository variable and rebuilds.'
+}
 Step 'Rendering X-Stage Song Studio PC native ICO and 512px icon for Windows'
 & python (Join-Path $Repo 'scripts/build_songstudio_app_icon.py') (Join-Path $Stage 'studio')
 if ($LASTEXITCODE -ne 0) { throw 'Rendering Song Studio app icon failed' }
