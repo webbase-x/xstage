@@ -1350,10 +1350,10 @@ def preview_inspect(song_id, choice):
                 raise ValueError("LYR ไม่มีส่วนหัวหรือเนื้อร้อง")
             return {"kind": choice, "file": file.name, "verified": True,
                     "message": "อ่านเนื้อร้อง LYR ได้ แต่ต้องตรวจ CUR + MIDI จึงยืนยันเวลาได้",
-                    "text": "\\n".join(lines[4:])[:15000]}
+                    "text": "\n".join(lines[4:])[:15000]}
         raw = file.read_bytes()
         if len(raw) % 2:
-            if raw[-1:] != b"\\xff":
+            if raw[-1:] != b"\xff":
                 raise ValueError("CUR ไม่สมบูรณ์: จำนวนไบต์ไม่ถูกต้อง")
             raw = raw[:-1]
         return {"kind": choice, "file": file.name, "verified": True,
@@ -1373,7 +1373,7 @@ def preview_inspect(song_id, choice):
     doc = NCN.kar_document(src, src.stem)
     return {"kind": choice, "file": src.name, "verified": True,
             "message": f"อ่านเนื้อร้องฝังใน MIDI/KAR ได้ {len(doc['lines'])} บรรทัด",
-            "text": "\\n".join(line["text"] for line in doc["lines"])[:15000]}
+            "text": "\n".join(line["text"] for line in doc["lines"])[:15000]}
 
 
 def preview_lyrics(song_id):
