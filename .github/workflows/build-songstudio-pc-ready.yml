@@ -9,6 +9,7 @@ on:
       - "scripts/test_songstudio_ready.py"
       - "scripts/song-studio-web-test.mjs"
       - "scripts/test_songstudio_ui_contract.mjs"
+      - "scripts/song-studio-browser-e2e.mjs"
       - "studio/web.html"
       - "studio/web.js"
       - "studio/web.css"
@@ -39,7 +40,7 @@ concurrency:
 jobs:
   bundle-windows:
     runs-on: windows-2022
-    timeout-minutes: 28
+    timeout-minutes: 40
     env:
       # Owner sets Desktop Client ID as Actions Variable and the matching
       # Desktop Client Secret as Actions Secret. Native clients are public;
@@ -99,6 +100,15 @@ jobs:
             throw "Google OAuth Client ID format invalid. Expected Desktop Client ID."
           }
           Write-Host "PASS: Desktop OAuth client pair present for bundled Google Login."
+      - name: Browser end-to-end test before creating ZIP
+        shell: powershell
+        run: |
+          & npm install --no-save --ignore-scripts playwright@1.56.0
+          if ($LASTEXITCODE -ne 0) { throw "Playwright test dependency failed" }
+          & npx playwright install chromium
+          if ($LASTEXITCODE -ne 0) { throw "Chromium installation for smoke tests failed" }
+          & node scripts/song-studio-browser-e2e.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Real-browser Song Studio PC/Web/AI/Drive UI regression failed" }
       - name: Build complete bundled Windows runtime and ZIP
         shell: powershell
         run: |
