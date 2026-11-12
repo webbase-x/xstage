@@ -837,3 +837,55 @@ body.xstage-native-tv #remote-pair-panel .remote-pair-box > small{
   body.xstage-native-tv #remote-pair-panel{width:min(200px,34vw)!important}
   body.xstage-native-tv #remote-pair-panel #remote-qr{--xstage-remote-qr-size:min(150px,26vw,27vh)!important}
 }
+
+
+/* Live release notice while karaoke is playing.
+   Keep the stage and lyrics visible; only the compact actions capture input. */
+.android-tv-update-panel.during-playback{
+  position:fixed!important;
+  inset:auto clamp(10px,1.5vw,22px) clamp(10px,1.5vh,22px) auto!important;
+  display:block!important;
+  width:min(460px,calc(100vw - 20px))!important;
+  height:auto!important;
+  padding:0!important;
+  background:transparent!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  pointer-events:none!important;
+}
+.android-tv-update-panel.during-playback .android-tv-update-box{
+  width:100%!important;
+  max-height:min(36vh,260px)!important;
+  padding:clamp(10px,1.3vw,18px)!important;
+  border-radius:12px!important;
+  background:rgba(5,23,40,.96)!important;
+  box-shadow:0 9px 38px rgba(0,0,0,.7)!important;
+  pointer-events:auto!important;
+  overflow:auto!important;
+}
+.android-tv-update-panel.during-playback .android-tv-update-kicker,
+.android-tv-update-panel.during-playback .android-tv-update-box small{
+  display:none!important;
+}
+.android-tv-update-panel.during-playback .android-tv-update-box h2{
+  margin:0 0 5px!important;
+  font-size:clamp(13px,1.25vw,19px)!important;
+}
+.android-tv-update-panel.during-playback .android-tv-update-version{
+  margin:3px 0!important;
+  font-size:clamp(11px,1vw,15px)!important;
+}
+.android-tv-update-panel.during-playback .android-tv-update-status{
+  min-height:0!important;
+  margin:4px 0 9px!important;
+  font-size:clamp(10px,.85vw,13px)!important;
+}
+.android-tv-update-panel.during-playback .android-tv-update-actions{
+  gap:7px!important;
+}
+.android-tv-update-panel.during-playback .android-tv-update-actions button{
+  min-width:100px!important;
+  min-height:38px!important;
+  flex:1 1 auto;
+  font-size:clamp(11px,.9vw,14px)!important;
+}
