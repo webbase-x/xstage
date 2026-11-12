@@ -307,7 +307,7 @@
           if (job.state === 'success') {
             if (job.kind === 'preview' && job.result?.ticket) {
               const t = encodeURIComponent(job.result.ticket);
-              previewAudio.pause(); previewAudio.src = engineAddress('/api/preview?ticket=' + encodeURIComponent(t));
+              previewAudio.pause(); previewAudio.src = engineAddress('/api/preview?ticket=' + t);
               $('preview-label').textContent = 'ตัวอย่างเสียงพร้อม · กด ▶ เพื่อฟัง';
               previewAudio.play().catch(()=>{});
             } else if (job.kind === 'check-update') {
