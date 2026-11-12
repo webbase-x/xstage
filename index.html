@@ -20,8 +20,14 @@
   <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="xstage.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1088">
-  <link rel="stylesheet" href="xstage-ux.css?v=1088">
+  <script>
+  // Native Android TV stays hidden until Google Drive authorization completes.
+  // Run before CSS paints the first frame to prevent a stage flash.
+  if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
+    document.documentElement.classList.add('xstage-native-auth-pending');
+  </script>
+  <link rel="stylesheet" href="style.css?v=1089">
+  <link rel="stylesheet" href="xstage-ux.css?v=1089">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -32,7 +38,7 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1088" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1089" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -61,32 +67,11 @@
             <button id="app-update-action" type="button">อัปเดต</button>
           </div>
           <div class="stage-ambience" aria-hidden="true"></div>
-          <div class="tv-stage-corner-brand" aria-hidden="true"><svg viewBox="0 0 96 96" focusable="false"><path d="M17 17 79 79M79 17 17 79" stroke="#63e8ff" stroke-width="11" stroke-linecap="round"/><rect x="39" y="20" width="18" height="38" rx="9" fill="#081626" stroke="#fff" stroke-width="4"/><path d="M32 49v5a16 16 0 0 0 32 0v-5M48 70v10M38 81h20" fill="none" stroke="#e6f8ff" stroke-width="4" stroke-linecap="round"/></svg><span>X-STAGE</span></div>
           <div class="stage-hero" aria-hidden="true">
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <div class="stage-brand-mark">
-                  <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" focusable="false">
-                    <defs>
-                      <linearGradient id="xstage-mark-a" x1="12" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#75f7ff"/><stop offset=".48" stop-color="#36a8ff"/><stop offset="1" stop-color="#a35cff"/>
-                      </linearGradient>
-                      <linearGradient id="xstage-mark-b" x1="28" y1="18" x2="68" y2="80" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#f7fdff"/><stop offset=".55" stop-color="#9bdcff"/><stop offset="1" stop-color="#8c74ff"/>
-                      </linearGradient>
-                    </defs>
-                    <path d="M18 18 78 78M78 18 18 78" fill="none" stroke="url(#xstage-mark-a)" stroke-width="11" stroke-linecap="round"/>
-                    <rect x="39" y="20" width="18" height="38" rx="9" fill="#071426" stroke="url(#xstage-mark-b)" stroke-width="4"/>
-                    <path d="M43 31h10M43 38h10M43 45h10" stroke="#dffaff" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
-                    <path d="M32 48v5a16 16 0 0 0 32 0v-5M48 69v10M38 80h20" fill="none" stroke="url(#xstage-mark-b)" stroke-width="4" stroke-linecap="round"/>
-                  </svg>
-                </div>
-                <div class="stage-brand-copy">
-                  <strong class="stage-brand-word"><span class="stage-brand-x">X</span><span class="stage-brand-dash">-</span><span class="stage-brand-stage">Stage</span></strong>
-                  <div class="stage-brand-sub"><span>KARAOKE</span><i></i><span>ONLINE</span></div>
-                  <div class="stage-brand-tagline">YOUR STAGE · YOUR MUSIC</div>
-                </div>
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1089" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -307,15 +292,15 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script>window.XSTAGE_RELEASE={version:'1.0.88',build:1088};</script>
-<script src="config.js?v=1088"></script>
+<script>window.XSTAGE_RELEASE={version:'1.0.89',build:1089};</script>
+<script src="config.js?v=1089"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="app.js?v=1088" defer></script><script src="pc-extensions.js?v=1088" defer></script>
-  <script src="native-audio-meter.js?v=1088" defer></script>
-  <script src="stage-controls.js?v=1088" defer></script>
-  <script src="mobile-layout.js?v=1088" defer></script>
-  <script src="pwa-install.js?v=1088" defer></script>
+  <script src="app.js?v=1089" defer></script><script src="pc-extensions.js?v=1089" defer></script>
+  <script src="native-audio-meter.js?v=1089" defer></script>
+  <script src="stage-controls.js?v=1089" defer></script>
+  <script src="mobile-layout.js?v=1089" defer></script>
+  <script src="pwa-install.js?v=1089" defer></script>
 
-  <script src="stage-ui.js?v=1088" defer></script>
+  <script src="stage-ui.js?v=1089" defer></script>
 </body>
 </html>
