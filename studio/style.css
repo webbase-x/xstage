@@ -63,3 +63,40 @@
 @media(max-width:1170px){.create-step-link{padding:10px 8px;gap:7px}.create-step-number{width:27px;height:27px}}
 @media(max-width:890px){.create-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.sound-preview-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.create-assistant-heading{align-items:flex-start;flex-direction:column}.create-step-link{min-height:59px}.create-step-footer{flex-wrap:wrap}.create-step-footer span{width:100%;order:-1}.create-step-footer .button{flex:1;min-width:0}.create-review{grid-template-columns:1fr}.create-step-panel .builder-actions{justify-content:stretch}.create-step-panel .builder-actions .button{flex:1}.sound-settings,.sound-preview{padding:12px}}
+
+
+/* Live streaming karaoke preview: search inside step 3 and mix controls. */
+.live-song-search{min-width:0;flex:none;width:100%;margin:8px 0}
+.preview-search-results{max-height:186px;min-height:56px;overflow:auto;border:1px solid #355a71;border-radius:12px;background:#092234;padding:5px;display:flex;flex-direction:column;gap:3px}
+.preview-search-option{display:flex;align-items:center;gap:11px;justify-content:space-between;width:100%;padding:9px 11px;border:1px solid transparent;background:transparent;color:#cde9f3;text-align:left;border-radius:9px;cursor:pointer}
+.preview-search-option:hover,.preview-search-option:focus-visible{background:#16435c;border-color:#4694ae}
+.preview-search-option.active{border-color:#4de4d7;background:#124c59}
+.preview-search-option strong{font-size:12px;line-height:1.5;display:block}
+.preview-search-option small{display:block;color:#93c2cf;font-size:11px;margin-top:2px}
+.preview-search-option .chip{flex-shrink:0}
+.preview-empty{padding:17px;color:#98bac8;font-size:12px;text-align:center}
+.preview-selected{margin:10px 0;color:#80e6d6;font-size:12px;font-weight:750;overflow-wrap:anywhere}
+.preview-mixer{display:grid;grid-template-columns:minmax(120px,auto) minmax(100px,1fr);gap:8px 13px;align-items:center;padding:12px;border:1px solid #2c5365;border-radius:10px;background:#0d2c3e;margin:5px 0 13px}
+.preview-mixer label{display:flex!important;justify-content:space-between;gap:12px;margin:0!important;font-size:11px!important;white-space:nowrap}
+.preview-mixer output{color:#84e9e0;font-variant-numeric:tabular-nums}
+.preview-mixer input[type=range]{width:100%;accent-color:#5edbd9;cursor:pointer}
+.preview-controls{display:flex;flex-wrap:wrap;gap:9px;margin:8px 0}
+.preview-controls .button{margin:0!important}
+.preview-row{margin-bottom:8px}
+.preview-row audio{display:block;min-width:0}
+.preview-search-option[aria-selected=true]{box-shadow:inset 0 0 0 1px #47e0d7}
+.global-message{position:fixed;top:20px;right:20px;z-index:1200;max-width:min(410px,calc(100vw - 36px));margin:0;border:1px solid #3d8495!important;background:linear-gradient(135deg,#113c50,#0e2638)!important;color:#ecfcff!important;box-shadow:0 16px 52px #0009;border-radius:15px;padding:15px 17px 15px 43px;font-size:12px;line-height:1.65;animation:studio-toast-in .2s ease-out}
+.global-message::before{content:"♫";position:absolute;left:15px;top:16px;color:#77e6df;font-size:18px}
+.global-message[data-error=true]{border-color:#d47d82!important;background:linear-gradient(135deg,#52303b,#211f33)!important}
+.global-message[data-error=true]::before{content:"!";font-weight:900;color:#ffd3be}
+@keyframes studio-toast-in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+.studio-confirm-modal{position:fixed;border:1px solid #498497;border-radius:20px;background:linear-gradient(155deg,#163c53,#0d263b 85%);color:#eafaff;width:min(450px,calc(100vw - 30px));padding:0;box-shadow:0 35px 95px #000b;max-height:calc(100dvh - 40px);overflow:auto}
+.studio-confirm-modal::backdrop{background:#000a14c9;backdrop-filter:blur(7px)}
+.studio-confirm-content{padding:26px;text-align:left}
+.studio-confirm-symbol{display:grid;place-items:center;width:52px;height:52px;border-radius:15px;background:linear-gradient(130deg,#62d4d7,#2999bd);color:#062536;font-size:25px;margin-bottom:16px}
+.studio-confirm-eyebrow{font-size:10px;letter-spacing:1.5px;color:#7acbd3;font-weight:850}
+.studio-confirm-content h2{font-size:20px;margin:8px 0 8px}
+.studio-confirm-content p{white-space:pre-line;font-size:13px;line-height:1.75;color:#b9dbe6;margin:0}
+.studio-confirm-actions{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;margin-top:23px}
+.studio-confirm-actions .button{min-width:96px}
+@media(max-width:610px){.preview-mixer{grid-template-columns:1fr}.studio-confirm-content{padding:20px}.global-message{top:12px;right:12px}}
