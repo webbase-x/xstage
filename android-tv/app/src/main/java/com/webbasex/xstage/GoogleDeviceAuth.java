@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 final class GoogleDeviceAuth {
@@ -39,6 +40,15 @@ final class GoogleDeviceAuth {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicInteger generation = new AtomicInteger();
+    private Future<?> activeAuthJob;
+
+    // A previous OAuth device poll can sleep for several seconds. Interrupt it
+    // when Cancel/Retry is pressed so the next QR request never waits behind it.
+    private void cancelActiveJob() {
+        Future<?> job = activeAuthJob;
+        activeAuthJob = null;
+        if (job != null) job.cancel(true);
+    }
 
     GoogleDeviceAuth(Context context, Listener listener) {
         this.tokenStore = new GoogleTokenStore(context);
@@ -50,14 +60,15 @@ final class GoogleDeviceAuth {
         return refreshToken != null && !refreshToken.isEmpty();
     }
 
-    void startDeviceLogin() {
+    synchronized void startDeviceLogin() {
         final int run = generation.incrementAndGet();
+        cancelActiveJob();
         if (!configured()) {
-            error("ยังไม่ได้ตั้งค่า Google OAuth สำหรับ Android build: ต้องมี XSTAGE_TV_OAUTH_CLIENT_ID และ XSTAGE_TV_OAUTH_CLIENT_SECRET แล้ว Build APK ใหม่");
+            error(run, "ยังไม่ได้ตั้งค่า Google OAuth สำหรับ Android build: ต้องมี XSTAGE_TV_OAUTH_CLIENT_ID และ XSTAGE_TV_OAUTH_CLIENT_SECRET แล้ว Build APK ใหม่");
             return;
         }
-        status("กำลังสร้างรหัสสำหรับเข้าสู่ระบบผ่านมือถือ…");
-        executor.execute(() -> {
+        status(run, "กำลังสร้างรหัสสำหรับเข้าสู่ระบบผ่านมือถือ…");
+        activeAuthJob = executor.submit(() -> {
             try {
                 JSONObject code = postForm(DEVICE_ENDPOINT, mapOf(
                         "client_id", BuildConfig.XSTAGE_TV_OAUTH_CLIENT_ID,
@@ -78,17 +89,25 @@ final class GoogleDeviceAuth {
                 main.post(() -> { if (isCurrent(run)) listener.onDeviceCode(userCode, verificationUrl, expiresIn); });
                 pollToken(run, deviceCode, expiresIn, interval);
             } catch (Exception e) {
-                if (isCurrent(run)) error(readable(e));
+                if (isCurrent(run)) error(run, readable(e));
             }
         });
     }
 
-    void restoreSession() {
-        String refreshToken = tokenStore.read();
-        if (refreshToken == null || refreshToken.isEmpty() || !configured()) return;
+    synchronized void restoreSession() {
         final int run = generation.incrementAndGet();
-        status("กำลังกู้คืนการเชื่อมต่อ Google Drive…");
-        executor.execute(() -> {
+        cancelActiveJob();
+        String refreshToken = tokenStore.read();
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            error(run, "ไม่มีเซสชัน Google ที่บันทึกไว้ · กรุณาเข้าสู่ระบบผ่าน QR ใหม่");
+            return;
+        }
+        if (!configured()) {
+            error(run, "ยังไม่ได้ตั้งค่า Google OAuth สำหรับ Android build · โปรดตรวจสอบ APK และการตั้งค่าผู้ดูแล");
+            return;
+        }
+        status(run, "กำลังกู้คืนการเชื่อมต่อ Google Drive…");
+        activeAuthJob = executor.submit(() -> {
             try {
                 JSONObject token = postForm(TOKEN_ENDPOINT, mapOf(
                         "client_id", BuildConfig.XSTAGE_TV_OAUTH_CLIENT_ID,
@@ -111,12 +130,13 @@ final class GoogleDeviceAuth {
         });
     }
 
-    void logout() {
+    synchronized void logout() {
         final int run = generation.incrementAndGet();
+        cancelActiveJob();
         String refreshToken = tokenStore.read();
         tokenStore.clear();
         if (refreshToken == null || refreshToken.isEmpty()) {
-            main.post(listener::onSignedOut);
+            main.post(() -> { if (isCurrent(run)) listener.onSignedOut(); });
             return;
         }
         executor.execute(() -> {
@@ -125,17 +145,20 @@ final class GoogleDeviceAuth {
             } catch (Exception ignored) {
                 // Local sign-out still completes even if Google is temporarily unreachable.
             }
-            if (isCurrent(run)) main.post(listener::onSignedOut);
+            if (isCurrent(run)) main.post(() -> { if (isCurrent(run)) listener.onSignedOut(); });
         });
     }
 
-    void cancel() {
+    synchronized void cancel() {
         generation.incrementAndGet();
-        status("ยกเลิกการเข้าสู่ระบบผ่านมือถือแล้ว");
+        cancelActiveJob();
+        // The hosted UI owns Cancel feedback. A stale native callback must
+        // not re-open QR Login after the user has dismissed it.
     }
 
-    void close() {
+    synchronized void close() {
         generation.incrementAndGet();
+        cancelActiveJob();
         executor.shutdownNow();
     }
 
@@ -165,7 +188,7 @@ final class GoogleDeviceAuth {
 
             String code = token.optString("error");
             if ("authorization_pending".equals(code)) {
-                status("รอการอนุญาตจากมือถือ…");
+                status(run, "รอการอนุญาตจากมือถือ…");
                 continue;
             }
             if ("slow_down".equals(code)) {
@@ -190,12 +213,12 @@ final class GoogleDeviceAuth {
         return generation.get() == run && !Thread.currentThread().isInterrupted();
     }
 
-    private void status(String message) {
-        main.post(() -> listener.onStatus(message));
+    private void status(int run, String message) {
+        main.post(() -> { if (isCurrent(run)) listener.onStatus(message); });
     }
 
-    private void error(String message) {
-        main.post(() -> listener.onError(message));
+    private void error(int run, String message) {
+        main.post(() -> { if (isCurrent(run)) listener.onError(message); });
     }
 
     private static String readable(Exception e) {
