@@ -36,6 +36,8 @@ class OnlinePublishTests(unittest.TestCase):
         self.root.mkdir()
         (self.root / "current.json").write_text('{"songCount":1}', encoding="utf-8")
         self.drive = FakeOnlineDrive()
+        # Existing visible XStageWeb library is normal for incremental syncing.
+        self.drive.folder("root", "XStageWeb")
         self.publisher = online.OnlinePublisher(self.drive)
         self.source_json = self.publisher._json
         # Mock ONLY the private Drive GET file body. Actual JSON schema
@@ -168,7 +170,20 @@ class OnlinePublishTests(unittest.TestCase):
         only = self.make_song("20003", b"C" * 5200, "", with_lyrics=False)
         with self.assertRaisesRegex(online.PublishError, "Lyrics"):
             self.publisher.publish(self.root, [only])
+        self.assertEqual(len(self.drive.items), 1)  # Keep existing empty root untouched
+
+    def test_missing_online_root_never_silently_creates_duplicate_library(self):
+        self.drive.items.clear()
+        with self.assertRaisesRegex(online.PublishError, "ไม่พบ XStageWeb"):
+            self.publisher.publish(self.root, [self.first])
         self.assertEqual(self.drive.items, {})
+
+    def test_explicit_fresh_drive_consent_creates_new_online_root(self):
+        self.drive.items.clear()
+        result = self.publisher.publish(
+            self.root, [self.first], create_new_library=True)
+        self.assertTrue(result["published"])
+        self.assertEqual(result["totalSongs"], 1)
 
     def test_legacy_unindexed_online_root_stays_untouched(self):
         root = self.drive.folder("root", "XStageWeb")
