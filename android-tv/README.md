@@ -1,3 +1,35 @@
+## Android APK audio — direct speaker output + silent stage meter (v1.0.79)
+
+The **installed Android APK** (TV and tablet) deliberately uses the native
+`HTMLMediaElement` output path for all audible music. It never calls
+`createMediaElementSource(audio)` or routes the speaker signal through
+the 31-band Web EQ. Owner mobile-remote EQ buttons are read-only/disabled in
+this mode; PC/Web still retain their original EQ processing.
+
+A separate `native-audio-meter.js` calls `audio.captureStream()` on the
+same playing media element and analyses it with `MediaStreamAudioSourceNode`
+and `AnalyserNode`. Its only destination is a GainNode fixed at **0 gain**.
+The analysis graph does **not** feed an audible signal back to the speakers.
+The stage's left visualizer canvas displays 28 real frequency bands beneath
+the X-Stage brand, without covering lyrics or the permanent pairing QR.
+
+The meter is recreated when the song source changes and cleaned up after
+playback; it pauses naturally when music stops. It uses no microphone or
+`RECORD_AUDIO` permission. On WebViews that do not support captureStream
+or cannot provide an audio track, the music continues to play directly.
+The stage clearly displays that live level monitoring is unavailable
+instead of enabling EQ or inventing visual levels.
+
+**Hardware verification required before claiming live visualizer compatibility:**
+on TrueID TV Android 10 and on a tablet, play MP3 and M4A from the private
+Google Drive, confirm real-time meter movement, no doubling, echo, mute or
+additional sound latency, verify pause/seek/next song and TV remote volume.
+Also verify the Owner remote cannot enable EQ. This feature is source-level
+tested; a tested APK binary is not yet published. Android TV WebView versions
+vary and older devices may not provide `captureStream()`.
+
+---
+
 ## APK + Mobile Remote reliability and design — v1.0.77 / Build 1077
 
 This is the Android/Web **source revision**. It is not a confirmation that the
