@@ -538,6 +538,7 @@ function syncLoginGateState(){
   }
 }
 function dismissLoginGate(){
+  if(androidTvNativeBridgeReady()&&!state.token)return;
   if(!ui.gate||ui.gate.hidden)return;
   ui.gate.hidden=true;
   syncLoginGateState();
@@ -2340,6 +2341,7 @@ function androidTvAuthPanel(){
     startAndroidTvDeviceLogin(true);
   });
   $('android-tv-auth-cancel')?.addEventListener('click',()=>{
+    if(androidTvNativeBridgeReady()){ $('android-tv-auth-status').textContent='ต้องเชื่อมต่อ Google Drive ก่อนเปิดเวที · กดลองใหม่'; $('android-tv-auth-retry').hidden=false; return; }
     clearAndroidTvLoginWatchdog();
     try{window.XStageAndroid?.cancelGoogleLogin?.();}catch{}
     panel.hidden=true;
@@ -2451,7 +2453,8 @@ window.XStageAndroidAuthError=message=>{
 window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   clearAndroidTvLoginWatchdog();
   if(!token)return;
-  hideAndroidTvAuthPanel();
+  androidTvAuthPanel().hidden=false;
+  $('android-tv-auth-status').textContent='กำลังตรวจสอบบัญชีและสิทธิ์ Google Drive…';
   ui.login.disabled=ui.gateLogin.disabled=true;
   setStatus('มือถืออนุญาตแล้ว · กำลังเปิด Google Drive…','success');
   const authId=++state.authId;
@@ -2460,10 +2463,11 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   savePendingAuth(token,expiresAt);
   try{
     await openDrive(token,authId,expiresAt);
+    if(authId===state.authId&&state.token){hideAndroidTvAuthPanel();androidTvRefreshingSession=false;}
   }catch(error){
     if(authId===state.authId){
       clearActiveAuth();resetPrivate({keepAuth:true});
-      setStatus(error?.message||'เปิด Google Drive ไม่สำเร็จ','error');
+      window.XStageAndroidAuthError(error?.message||'เปิด Google Drive ไม่สำเร็จ');
     }
   }finally{
     if(authId===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
@@ -2471,8 +2475,8 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
 };
 window.XStageAndroidSignedOut=()=>{
   clearAndroidTvLoginWatchdog();
-  hideAndroidTvAuthPanel();
   if(state.token)resetPrivate({keepAuth:false});
+  if(androidTvNativeBridgeReady())startAndroidTvDeviceLogin(true);
   setStatus('ออกจากระบบ Google ในแอป Android แล้ว');
 };
 function androidTvUpdatePanel(){
@@ -2597,12 +2601,35 @@ function bootAndroidTvAuthentication(){
   if(androidTvBootAuthStarted||!androidTvNativeBridgeReady()||state.token)return;
   androidTvBootAuthStarted=true;
   if(androidTvHasStoredGoogleSession()){
+    const panel=androidTvAuthPanel();
+    panel.hidden=false;
+    $('android-tv-auth-status').textContent='กำลังตรวจสอบสิทธิ์ Google Drive ที่บันทึกไว้…';
+    $('android-tv-auth-retry').hidden=false;
     setStatus('กำลังกู้คืน Google Drive ในแอป Android…');
     restoreAndroidTvGoogleSession();
     return;
   }
   startAndroidTvDeviceLogin(true);
 }
+// Re-check the native Drive session before access tokens expire and after TV wake.
+let androidTvRefreshingSession=false;
+function guardAndroidTvSession(){
+  if(!androidTvNativeBridgeReady())return;
+  const expired=!state.token||!state.tokenExpiresAt||state.tokenExpiresAt<=Date.now()+90_000;
+  if(!expired){androidTvRefreshingSession=false;return;}
+  const panel=androidTvAuthPanel();
+  panel.hidden=false;
+  $('android-tv-auth-status').textContent='เซสชันหมดอายุ · กำลังตรวจสอบ Google Drive อีกครั้ง…';
+  $('android-tv-auth-retry').hidden=false;
+  if(androidTvRefreshingSession)return;
+  androidTvRefreshingSession=true;
+  if(state.token){clearActiveAuth();resetPrivate({keepAuth:false});}
+  if(androidTvHasStoredGoogleSession())restoreAndroidTvGoogleSession();
+  else startAndroidTvDeviceLogin(true);
+}
+setInterval(guardAndroidTvSession,30_000);
+window.addEventListener('focus',guardAndroidTvSession);
+window.addEventListener('pageshow',guardAndroidTvSession);
 function startManualGoogleLogin(){
   if(androidTvNativeBridgeReady()){
     startAndroidTvDeviceLogin(false);
