@@ -19,8 +19,12 @@ assert.ok(meter.includes('mute.gain.value=0'),'the meter output must always be s
 assert.ok(host.includes('nativeAudioDirect:!!window.XStageNativeAudioBypass'),'remote must receive native audio bypass state');
 assert.ok(host.includes('Android APK ใช้เสียงตรง · EQ ปิดถาวร'),'Owner EQ controls must be rejected on native APK');
 assert.ok(remote.includes("eqSelect.disabled=direct"),'Owner remote must disable EQ on native APK');
-assert.ok(css.includes('body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage #stage-viz-left'),
-  'TV should show meter below logo instead of hiding all visualisation');
+assert.ok(css.includes('html body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage .stage-hero #stage-viz-right'),
+  'native TV must restore the right EQ meter beside the single banner');
+assert.ok(meter.includes('const rightCanvas=document.getElementById(\'stage-viz-right\')'),
+  'native meter must render on both physical EQ side canvases');
+assert.ok(meter.includes('view.mirror?LEVELS-1-i:i'),
+  'right meter must mirror real measured FFT bins, not play a fake animation');
 
 function fakeEnvironment({native=true,captureSupported=true}={}){
   const listeners=new Map(),events=new Map(),edges=[],frames=[],changes=[];
@@ -39,16 +43,18 @@ function fakeEnvironment({native=true,captureSupported=true}={}){
     style:{setProperty(name,value){events.set(name,value);}},
     querySelector:()=>scene
   };
-  const drawing={
+  const drawing=side=>({
     globalAlpha:1,
     clearRect(){},createLinearGradient(){return {addColorStop(){}};},
-    fillRect(){events.set('bars',(events.get('bars')||0)+1);}
-  };
-  const canvas={width:320,height:80,getContext:()=>drawing,
+    fillRect(){events.set(side+'-bars',(events.get(side+'-bars')||0)+1);}
+  });
+  const canvas={width:320,height:80,getContext:()=>drawing('left'),
+    getBoundingClientRect:()=>({width:320,height:80})};
+  const rightCanvas={width:320,height:80,getContext:()=>drawing('right'),
     getBoundingClientRect:()=>({width:320,height:80})};
   const document={
     body:{classList:{add(name){events.set('class',name);}}},
-    getElementById:id=>({player,stage,'stage-viz-left':canvas}[id]||null),
+    getElementById:id=>({player,stage,'stage-viz-left':canvas,'stage-viz-right':rightCanvas}[id]||null),
     createElement:()=>({className:'',textContent:'',setAttribute(){}}),
     addEventListener:(type,fn)=>{}
   };
@@ -90,7 +96,8 @@ function fakeEnvironment({native=true,captureSupported=true}={}){
   assert.deepEqual(t.edges,[['capture-stream','fft'],['fft','silent-gain'],['silent-gain','destination']]);
   assert.equal(t.window.XStageNativeMeterStatus().silentGain,true,'speaker-connected meter is exactly zero gain');
   t.frames.shift()(50);
-  assert.equal(t.events.get('bars'),28,'stage renders 28 real FFT bands');
+  assert.equal(t.events.get('left-bars'),28,'left side renders 28 real FFT bands');
+  assert.equal(t.events.get('right-bars'),28,'right side mirrors the same live 28 FFT bands');
   assert.equal(t.stage.dataset.nativeMeter,'active');
   t.emit('loadstart');
   assert.equal(t.stops(),1,'capture tracks are discarded when the song changes');
@@ -109,4 +116,4 @@ function fakeEnvironment({native=true,captureSupported=true}={}){
   assert.equal(t.contexts(),0,'ordinary Web app must not open a separate meter context');
   assert.equal(t.window.XStageNativeMeterStatus,undefined);
 }
-console.log('Android direct audio and silent level meter: 3 behavioral cases, 10 integration assertions passed');
+console.log('Android direct audio / Web-identical dual-sided spectrum: 3 behavioral cases and mirrored 28-band FFT without rerouting speaker audio passed');
