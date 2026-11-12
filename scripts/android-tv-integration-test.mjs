@@ -81,10 +81,12 @@ function guardScenario({hasSession=true,ready=true,token='old-token',expiresSoon
   const calls=[];
   const make=new Function('androidTvNativeBridgeReady','androidTvBootAuthStarted',
     'androidTvLoginCancelled','androidTvLoginInProgress','androidTvRefreshingSession',
+    'androidTvVerifiedConnectionSub','setAndroidTvStageAccess',
     'state','androidTvHasStoredGoogleSession','restoreAndroidTvGoogleSession',
     'startAndroidTvDeviceLogin','androidTvAuthPanel','$','setStatus',
     guardSrc+'\nreturn guardAndroidTvSession;');
-  const guard=make(()=>true,ready,false,loginBusy,false,state,()=>hasSession,
+  const guard=make(()=>true,ready,false,loginBusy,false,
+    token?'verified-google-sub':'',()=>calls.push('lock'),state,()=>hasSession,
     ()=>calls.push('restore'),()=>calls.push('login'),()=>({hidden:true}),
     ()=>({textContent:'',hidden:true}),()=>{});
   guard();
