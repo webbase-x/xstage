@@ -23,6 +23,20 @@ assert engine.fluidsynth_binary() is not None, "FluidSynth is missing"
 assert engine.sf_available(), "Default SoundFont is not selected"
 assert engine.DEFAULT_SOUNDFONT.is_file(), "SoundFont is not present"
 
+assert engine.AI_LYRICS.available(engine.RUNTIME), (
+    "Bundled multilingual Whisper CLI/model unavailable; AI Lyrics menu cannot run")
+whisper_exe, whisper_model = engine.AI_LYRICS.resources(engine.RUNTIME)
+assert whisper_model.stat().st_size > 100_000_000, "Whisper model is incomplete"
+help_test = subprocess.run(
+    [str(whisper_exe), "-h"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    timeout=30, creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0))
+output = help_test.stdout.decode("utf-8", errors="replace").casefold()
+assert help_test.returncode in (0, 1) and (
+    "whisper" in output or "usage" in output or "model" in output), (
+        "Whisper bundled executable failed to start with its dependent DLLs")
+print("PASS: Whisper CLI and multilingual model respond from bundled offline runtime")
+
+
 # The real Windows DPAPI native calls must be 64-bit pointer-safe.
 # This unit check needs no actual Google account, OAuth file or network.
 spec_google = importlib.util.spec_from_file_location("xstage_google_dpapi",
