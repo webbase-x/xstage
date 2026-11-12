@@ -104,6 +104,19 @@ try {
       };
     } else if (url.pathname === '/api/songs') {
       response = {rows:list,total:list.length};
+    } else if (url.pathname === '/api/preview-lyrics') {
+      const id = Number(url.searchParams.get('id'));
+      response = id === 1 ? {
+        id, status:'found', source:'NCN',
+        message:'พบเนื้อร้องจากต้นฉบับ NCN 2 บรรทัด',
+        lines:[{startTime:0,endTime:2,text:'เสียงทดสอบต้นฉบับ'},
+               {startTime:2,endTime:5,text:'บรรทัดที่สอง'}],
+        requiresReview:false,aiAvailable:false
+      } : {
+        id,status:'missing',source:'ไม่พบเนื้อร้อง',
+        message:'ยังไม่มี LRC หรือไฟล์เนื้อร้อง MIDI',lines:[],
+        aiEligible:true,aiAvailable:true,requiresReview:false
+      };
     } else if (url.pathname === '/api/songs/ids') {
       response = {ids:list.map((song) => song.id)};
     } else if (url.pathname === '/api/config') {
@@ -144,6 +157,9 @@ try {
   assert.equal(await pc.locator('#create-stage-3').isVisible(), true, 'step 3 should open');
   assert.equal(await pc.locator('#create-stage-3 #create-soundfont').isVisible(), true, 'SoundFont must be within step 3');
   assert.equal(await pc.locator('#create-stage-3 #preview-audio').isVisible(), true, 'Preview player must be in the same SoundFont step');
+  await pc.waitForFunction(() => document.getElementById('preview-lyrics-source')?.textContent.includes('NCN'));
+  assert.match(await pc.locator('#preview-lyrics-lines').innerText(), /เสียงทดสอบต้นฉบับ/,
+    'Preview must prove source NCN has real karaoke lyrics');
   assert.equal(await pc.locator('#preview-song-search').isVisible(), true, 'Preview search must be visible in step 3');
   await pc.locator('#preview-song-search').fill('เสียงทดสอบ');
   await pc.locator('#preview-search-results [data-preview-id="2"]').waitFor();
@@ -154,6 +170,10 @@ try {
   await pc.locator('#preview-search-results [data-preview-id="2"]').click();
   await previewRequest;
   await pc.waitForFunction(() => document.getElementById('preview-audio')?.src.includes('/api/live-stream'));
+  await pc.waitForFunction(() => document.getElementById('preview-lyrics-source')?.textContent.includes('ไม่พบเนื้อร้อง'));
+  assert.match(await pc.locator('#preview-lyrics-lines').innerText(), /ไม่พบเนื้อร้อง/);
+  assert.equal(await pc.locator('#preview-ai-transcribe').isEnabled(), true,
+    'When vocals exist and offline ASR is available show optional AI draft action');
   assert.match(await pc.locator('#preview-selected').innerText(), /เสียงทดสอบ 2/);
   const liveChange = pc.waitForRequest((req) => {
     try { return new URL(req.url()).pathname === '/api/live-control' &&
