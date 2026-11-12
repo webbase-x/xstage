@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.3 Build 303
+# X-Stage Song Studio PC Ready v0.3.4 Build 304
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,7 +6,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.3-build303.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.4-build304.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -30,7 +30,7 @@ All listed components are predownloaded and tested during **GitHub Actions build
 - Convert supported audio formats to M4A (AAC 192 kbps) using FFmpeg; preserve existing M4A audio
 - Render MIDI/KAR to WAV using bundled FluidSynth and default SF2, then convert to M4A
 - **Offline AI Separation:** HTDemucs ONNX model and NumPy/ONNX Runtime are included in the Ready ZIP. Choose “แยกเสียงร้อง AI (Full Offline)” in create-step 3; create-step 4 exports the instrumental M4A plus a separate vocals M4A. Preview uses the same local AI model. No additional downloads on the user's PC.
-- Preview one song, edit LRC and save as companion lyrics file
+- **Live listening:** Step 3 now searches songs independently, plays as a real MP3 stream without generating preview files, and mixes matching same-stem backing audio and MIDI via the chosen SF2/SF3 using FluidSynth. Volume levels apply when starting a new stream. Audio-only files play normally; there is no manufactured MIDI accompaniment. Edit LRC and save as companion lyrics file.
 - Local work status, progress, cancellation, and non-overwriting output names
 
 ### AI separation limitations
@@ -38,6 +38,10 @@ All listed components are predownloaded and tested during **GitHub Actions build
 - CPU-only in this edition; a reasonably fast 64-bit PC and sufficient memory are required. Processing takes longer than standard conversion.
 - The chosen AI model uses four-stem Demucs separation; output quality varies by recording. It is not a perfect vocal remover.
 - The GitHub source folder contains `ai_separate.py` and `ai-model.lock.json`, while the large model binary is shipped in the GitHub Release ZIP, not committed to the Git history.
+
+### Dialog UX
+
+Native browser confirmation windows have been replaced with styled in-app borderless dialogs and toast notifications; the Windows folder/file chooser remains a native OS dialog.
 
 ### Limitations
 
@@ -57,7 +61,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.3-build303`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.4-build304`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
