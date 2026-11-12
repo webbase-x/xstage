@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.8 Build 308
+# X-Stage Song Studio PC Ready v0.3.9 Build 309
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,7 +6,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.8-build308.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.9-build309.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -59,6 +59,13 @@ Native browser confirmation windows have been replaced with styled in-app border
 
 Select a Google Cloud **Desktop app** OAuth Client JSON, enable the Google Drive API in that project, and configure OAuth consent/testing access as required by Google. Click **Google Login**; approval happens in the user's browser via a short-lived loopback callback with PKCE. Refresh tokens are encrypted under the Windows user's DPAPI key and never committed to GitHub. The narrow `drive.file` scope permits this app's files, not unrestricted access to older files created by other apps. Upload/download operates on the app's private Drive folder and does not publish file permissions. A real Google account must authorize the login on the target PC; simulated CI tests cannot grant that consent.
 
+### Live SoundFont and PC window fixes
+
+- On MIDI-only tracks, the original melody is rendered through the bundled default SoundFont while the chosen SoundFont is independently mixed. Muting the chosen SoundFont does not mute the original track.
+- Both volume sliders, the selected SoundFont and the MIDI preset are processed on the running stream; no preview file is created and the playback time is preserved.
+- The Edge PC app launches maximized with desktop-scale responsive layout. If Edge is unavailable, your default browser opens and its window size remains under browser control.
+- "M4A only" and "M4A + lyrics" are both tested with real files. A later full build adds missing Lyrics without rewriting an existing M4A.
+
 ### Limitations
 
 - **NCN** music handling, **Google Drive access to files owned by a different OAuth application** remain unimplemented in the source engine. The UI still shows legacy controls for PC/Web parity; these actions will display a clear unsupported error rather than silently claiming success.
@@ -77,7 +84,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.8-build308`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.9-build309`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
