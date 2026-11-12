@@ -184,8 +184,12 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
     destination = temp / "production" / "songs"
     audio_files = list((destination / "audio").rglob("*.m4a"))
     assert len(audio_files) == 1
+    # A source WAV has no built-in words. Supply REAL timed LRC before
+    # expecting the second build to add lyrics; never require invented lyrics.
+    input_wav.with_suffix(".lrc").write_text(
+        "[00:00.10]ทดสอบคำร้องจริง\\n[00:00.60]ท่อนต่อไป\\n", encoding="utf-8")
     complete = engine.build_library([source_row], "original", {"audio_only": False})
-    assert complete["created"] == 0 and complete["lyricsCount"] == 1
+    assert complete["created"] == 0 and complete["lyricsCount"] == 1, complete
     assert len(list((destination / "audio").rglob("*.m4a"))) == 1
     assert len(list((destination / "lyrics").rglob("*.json"))) == 1
     assert (destination / "current.json").is_file()
