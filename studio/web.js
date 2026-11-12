@@ -392,6 +392,26 @@
     });
     return assets;
   }
+  async function reserveSongAssetNames(songName, assets, usedNames, exists) {
+    // Reserve one common filename stem for ALL parts of a single song.
+    // A missing LRC on the first copy must not cause the second copy's LRC
+    // to be paired with the wrong M4A in a ZIP or restored folder.
+    const originalStem = safeName(songName);
+    const key = originalStem.toLocaleLowerCase();
+    const extensions = assets.map(asset => asset.name.slice(asset.name.lastIndexOf('.')));
+    let suffix = usedNames.get(key) || 0;
+    let filenames;
+    for (;;) {
+      if (suffix > 9999) throw new Error('ชื่อเพลงซ้ำมากเกินไป: ' + originalStem);
+      const stem = originalStem + (suffix ? ' (' + suffix + ')' : '');
+      filenames = extensions.map(ext => stem + ext);
+      if (!(await Promise.all(filenames.map(exists))).some(Boolean)) break;
+      suffix++;
+    }
+    usedNames.set(key, suffix + 1);
+    assets.forEach((asset, index) => { asset.name = filenames[index]; });
+    return assets;
+  }
   async function build() {
     if (state.busy) return;
     const work = [...selected].map((id) => entries.get(id)).filter((e) => e?.audio);
@@ -429,20 +449,7 @@
           i * 100 / work.length);
         try {
           const assets = await createSongAssets(song, i);
-          const originalStem = safeName(song.name);
-          const key = originalStem.toLocaleLowerCase();
-          const extensions = assets.map(asset => asset.name.slice(asset.name.lastIndexOf('.')));
-          let suffix = usedNames.get(key) || 0;
-          let commonStem, filenames;
-          for (;;) {
-            if (suffix > 9999) throw new Error('ชื่อเพลงซ้ำมากเกินไป: ' + originalStem);
-            commonStem = originalStem + (suffix ? ' (' + suffix + ')' : '');
-            filenames = extensions.map(ext => commonStem + ext);
-            if (!(await Promise.all(filenames.map(fileExists))).some(Boolean)) break;
-            suffix++;
-          }
-          usedNames.set(key, suffix + 1);
-          assets.forEach((asset, index) => { asset.name = filenames[index]; });
+          await reserveSongAssetNames(song.name, assets, usedNames, fileExists);
           for (const asset of assets) {
             if (state.dest) {
               const saved = await saveUniqueToDirectory(state.dest, asset.name, asset.blob);
