@@ -1,0 +1,14 @@
+{
+  "model_name": "HTDemucs 4-stem (fp16-stored weights)",
+  "model_format": "ONNX",
+  "filename": "htdemucs_fp16weights.onnx",
+  "model_url": "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/main/htdemucs_fp16weights.onnx?download=true",
+  "model_sha256": "d05c269d0178d2a72ad484b10b11dd370193fc923201c3b27a99f848745db70a",
+  "model_license": "MIT",
+  "model_source": "https://huggingface.co/StemSplitio/htdemucs-onnx",
+  "model_origin": "Meta Demucs HTDemucs, ONNX export by StemSplit",
+  "python_runtime": "3.13.10 embedded Windows x64",
+  "numpy": "2.2.6",
+  "onnxruntime_cpu": "1.23.2",
+  "description": "Only downloaded and hash-checked during CI packaging; ZIP ships the exact full model and wheels for offline inference."
+}
