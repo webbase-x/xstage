@@ -92,7 +92,7 @@ class LyricPreviewTests(unittest.TestCase):
                 if "ffmpeg" in str(cmd[0]):
                     Path(cmd[-1]).write_bytes(b"WAV-data" * 10000)
                 else:
-                    dest = Path(cmd[cmd.index("-of") + 1] + ".json")
+                    dest = Path(str(cmd[cmd.index("-of") + 1]) + ".json")
                     dest.write_text(json.dumps({"transcription": [
                         {"text":"ทดสอบ", "offsets":{"from":1000,"to":2700}}
                     ]}), encoding="utf-8")
