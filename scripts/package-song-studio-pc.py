@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Build a source-only Windows ZIP including the existing same-UI control frontend."""
+from pathlib import Path
+from hashlib import sha256
+from zipfile import ZipFile, ZIP_DEFLATED, ZipInfo
+
+REPO = Path(__file__).resolve().parents[1]
+DEST = REPO / "downloads" / "X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip"
+ROOT = "X-Stage-Song-Studio-PC-Source-Preview"
+FILES = {
+    "songstudio-pc/Start-Song-Studio.cmd": "Start-Song-Studio.cmd",
+    "songstudio-pc/Start-Song-Studio.ps1": "Start-Song-Studio.ps1",
+    "songstudio-pc/engine.py": "engine.py",
+    "songstudio-pc/README.md": "README.md",
+    "studio/index.html": "studio/index.html",
+    "studio/app.js": "studio/app.js",
+    "studio/style.css": "studio/style.css",
+    "studio/entry.js": "studio/entry.js",
+}
+
+def package():
+    DEST.parent.mkdir(parents=True, exist_ok=True)
+    with ZipFile(DEST, "w", ZIP_DEFLATED, compresslevel=9) as archive:
+        for source, output in sorted(FILES.items()):
+            data = (REPO / source).read_bytes()
+            info = ZipInfo(f"{ROOT}/{output}", date_time=(2026, 11, 12, 0, 0, 0))
+            info.compress_type = ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, data, compress_type=ZIP_DEFLATED, compresslevel=9)
+    digest = sha256(DEST.read_bytes()).hexdigest()
+    companion = DEST.with_name(DEST.name + ".sha256")
+    companion.write_text(f"{digest}  {DEST.name}\n", encoding="utf-8")
+    print(f"Built {DEST} ({DEST.stat().st_size:,} bytes, SHA256 {digest})")
+    return DEST
+
+if __name__ == "__main__":
+    package()
