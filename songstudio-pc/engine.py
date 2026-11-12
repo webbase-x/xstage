@@ -414,6 +414,58 @@ def lyrics_text(row):
     except (ValueError, OSError):
         return ""
 
+
+def preview_song_identity(row):
+    """Resolve title/artist for the ONE selected song; never guess from neighbors.
+
+    A bulk scan of 90k+ songs must remain fast, so inspect embedded KAR or
+    LRC metadata on demand only. Saved manual edits retain priority.
+    """
+    source = Path(row["path"])
+    code = str(row.get("code") or source.stem)
+    title = str(row.get("title") or source.stem).strip()
+    artist = str(row.get("artist") or "").strip()
+    overrides = NOTES.get(str(source), {})
+    discovered = {}
+    trio = row.get("ncn") or NCN.resolve_companions(source)
+    if trio and trio.get("lyrics"):
+        try:
+            discovered = NCN.lyric_metadata(Path(trio["lyrics"]))
+        except (OSError, ValueError):
+            pass
+    elif source.suffix.lower() in EXT_MIDI:
+        try:
+            _, _, events = NCN.midi_events(source)
+            titles = [text[2:].strip() for _, _, _, tag, text in events
+                      if tag in (1, 5) and text.startswith("@T") and text[2:].strip()]
+            if titles:
+                discovered = {"title": titles[0],
+                              "artist": titles[1] if len(titles) > 1 else ""}
+        except (OSError, ValueError):
+            pass
+    if not discovered and source.suffix.lower() in EXT_AUDIO:
+        lrc = _matching_lrc(source)
+        if lrc:
+            try:
+                head = NCN._decode_text(lrc.read_bytes()[:8192])
+                for line in head.splitlines()[:40]:
+                    line = line.strip()
+                    if line.startswith("[") and line.endswith("]") and ":" in line:
+                        tag, value = line[1:-1].split(":", 1)
+                        if tag.casefold() in ("ti", "title") and value.strip():
+                            discovered["title"] = value.strip()
+                        if tag.casefold() in ("ar", "artist") and value.strip():
+                            discovered["artist"] = value.strip()
+            except (OSError, ValueError):
+                pass
+    if not str(overrides.get("title") or "").strip() and (
+            not title or title.casefold() == source.stem.casefold()):
+        title = str(discovered.get("title") or title).strip()
+    if not str(overrides.get("artist") or "").strip() and not artist:
+        artist = str(discovered.get("artist") or "").strip()
+    return {"title": title or code, "artist": artist, "code": code}
+
+
 def ensure_midi_wav(path):
     if not sf_available():
         raise RuntimeError("การสร้าง MIDI/KAR ต้องเลือก SoundFont SF2/SF3 ก่อน")
@@ -1184,8 +1236,7 @@ def preview_lyrics(song_id):
         row = dict(FILE_BY_ID.get(song_id) or {})
     if not row:
         raise ValueError("ไม่พบเพลงที่เลือกในฐานข้อมูลที่สแกน")
-    return {"id": song_id, "title": row.get("title", ""),
-            "artist": row.get("artist", ""), **_preview_lyrics_row(row)}
+    return {"id": song_id, **preview_song_identity(row), **_preview_lyrics_row(row)}
 
 
 def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
@@ -1238,7 +1289,7 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
                                     expires=time.monotonic() + 90)
     return {
         "ticket": ticket, "stream_id": stream_id,
-        "title": row.get("title", ""),
+        **preview_song_identity(row),
         "has_backing": bool(audio), "has_midi": bool(midi),
         "original_is_midi": bool(midi and not audio),
         "mixed": bool(midi),
@@ -1427,7 +1478,8 @@ class Handler(BaseHTTPRequestHandler):
                 if row is None:
                     self._deny("ไม่พบเพลง", 404)
                 else:
-                    self._json({**row, "lyrics_edit": lyrics_text(row)})
+                    self._json({**row, **preview_song_identity(row),
+                                "lyrics_edit": lyrics_text(row)})
             else:
                 self._deny("ไม่พบ API", 404)
             return
