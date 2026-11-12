@@ -1136,8 +1136,19 @@ def main():
             edge = Path(os.environ.get("PROGRAMFILES", "")) / "Microsoft/Edge/Application/msedge.exe"
         try:
             if edge.is_file():
-                subprocess.Popen([str(edge), "--app=" + url], stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
+                # Full-size PC workspace on first launch. Reuse OS screen size
+                # rather than a fixed 1280x720 browser window.
+                flags = ["--new-window", "--start-maximized"]
+                if os.name == "nt":
+                    try:
+                        import ctypes
+                        cx = max(1280, ctypes.windll.user32.GetSystemMetrics(0))
+                        cy = max(720, ctypes.windll.user32.GetSystemMetrics(1))
+                        flags += [f"--window-size={cx},{cy}", "--window-position=0,0"]
+                    except (AttributeError, OSError):
+                        pass
+                subprocess.Popen([str(edge), *flags, "--app=" + url],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 webbrowser.open(url)
         except Exception:
