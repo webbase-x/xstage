@@ -619,11 +619,13 @@
         const errors = Number(job.errors || job.result?.errors || 0);
         const created = Number(job.created || job.result?.created || 0);
         const skipped = Number(job.skipped || job.result?.skipped || 0);
-        buildFeedback(errors ? 'error' : 'success',
-          errors ? 'สร้างเสร็จโดยมีรายการที่ต้องแก้ไข' :
+        const invalidEmpty = created === 0 && skipped === 0;
+        buildFeedback(errors || invalidEmpty ? 'error' : 'success',
+          errors ? 'สร้างเพลงบางรายการไม่สำเร็จ · ตรวจสอบ Log' :
           created ? 'สร้างเพลงเสร็จแล้ว' :
-          skipped ? 'ไม่มีเพลงใหม่ · ข้ามเพลงที่มีอยู่แล้วทั้งหมด' : 'งานจบโดยไม่มีไฟล์ใหม่',
+          skipped ? 'ไม่มีเพลงใหม่ · ตรวจพบเพลงเดิมที่ยืนยันแล้ว' : 'ไม่พบผลการสร้างเพลงที่ตรวจสอบได้',
           (job.result?.message || report) +
+          (invalidEmpty ? '\nEngine แจ้งเสร็จสิ้น แต่ไม่มีไฟล์ใหม่หรือรายการข้ามที่ตรวจยืนยันได้ · กรุณาตรวจสอบ Log และไฟล์ต้นฉบับ' : '') +
           (errors ? '\n' + (job.result?.issues || []).slice(0,3).join('\n') : ''));
       } else if (state === 'error' || state === 'cancelled') {
         const reasons = (job.logs || []).filter(item => /ERR|ผิดพลาด|Error|ไม่พบ|ซ้ำ|พื้นที่/.test(item));
