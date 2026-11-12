@@ -537,6 +537,17 @@ class GoogleDrive:
                 "ที่แอปเข้าถึงได้ · ตรวจสอบว่าได้อัปโหลด songs/current.json "
                 "และ catalogs จาก Song Studio PC แล้ว "
                 "และใช้บัญชี Google/OAuth Client ที่มีสิทธิ์ drive.file")
+        # A private upload publishes current.json LAST; its absence means a
+        # partial/incomplete library must not be presented as a good restore.
+        if not any(rel == "current.json" for rel, _ in collected):
+            raise GoogleError(
+                "คลังเพลงบน Drive ยังไม่มี songs/current.json · อัปโหลดอาจไม่ครบ "
+                "กรุณาซิงค์เพลงจาก PC อีกครั้งก่อนดาวน์โหลด")
+        missing_hashes = [rel for rel, item in collected if not item.get("md5Checksum")]
+        if missing_hashes:
+            raise GoogleError(
+                "Google Drive ไม่ส่ง MD5 สำหรับไฟล์ " + missing_hashes[0] +
+                " · ไม่ดาวน์โหลดไฟล์ที่ตรวจความถูกต้องไม่ได้")
         if on_status:
             on_status("พบคลังเพลงบน Google Drive · " + str(len(collected)) +
                       " ไฟล์ · กำลังดาวน์โหลด " + kind.upper())
