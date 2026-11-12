@@ -40,6 +40,7 @@
 
   const tabNames = {
     create: ['สร้างเพลงใหม่', 'เตรียมต้นฉบับให้ครบในเครื่องก่อนเริ่มสร้าง M4A'],
+    'ai-lyrics': ['สร้างเนื้อร้อง AI', 'นำเข้าเพลงใหม่ ถอดเสียงร้อง จัดเวลา และทดลองฟัง LRC'],
     upload: ['อัปโหลด', 'ตรวจไฟล์ซ้ำบน Google Drive · ส่งเฉพาะเพลงที่เปลี่ยน'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
@@ -64,6 +65,10 @@
   let liveStreamId = '', liveControlTimer = 0, liveControlPending = false, liveControlDirty = false;
   let previewSourceSeq = 0, previewPlaySerial = 0, previewPendingChange = false;
   let previewSourceSongId = null, karaokeAnimationFrame = 0;
+  let aiSongId = null, aiSongs = [], aiOffset = 0, aiTotal = 0;
+  let aiSearchTimer = 0, aiSearchSeq = 0, aiDraftSeq = 0;
+  let aiStreamId = '', aiPlaySerial = 0, aiDraftReady = false, aiEngineReady = false;
+  let aiTimed = [], aiActiveIndex = -2;
 
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
@@ -154,6 +159,7 @@
     $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     $('preview-button').textContent = $('preview-file-type').value.startsWith('inspect:')
       ? '⌕ ตรวจไฟล์ประกอบ' : '▶ เล่นเพลงทันที';
+    aiUpdateButtons();
     const previewHint = $('create-preview-hint');
     if (!previewAudio.src && !livePreviewPending) {
       previewHint.textContent = previewSongId || selected.size === 1
@@ -207,6 +213,8 @@
     $('page-subtitle').textContent = tabNames[name][1];
     document.title = `${tabNames[name][0]} · X-Stage Song Studio`;
     if (activeTab !== 'create') stopLivePreview();
+    if (activeTab !== 'ai-lyrics') aiStopPlayback();
+    if (name === 'ai-lyrics') void aiRefreshSongList();
     if (name === 'settings') void refreshEnvironment();
   }
   function setFields() {
@@ -773,6 +781,234 @@
         void startLivePreview();
       }
     }
+  }
+
+  // Independent AI Lyrics workspace: files are registered by the user in this menu.
+  const aiAudio = $('ai-lyrics-audio');
+  function aiParseLrc() {
+    const rows = [], errors = [];
+    let last = -1;
+    for (const [index,raw] of $('ai-lyrics-editor').value.split(/\r?\n/).entries()) {
+      const line = raw.trim();
+      if (!line || /^\[(ti|ar|al|by|offset):/i.test(line)) continue;
+      const match = /^\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\](.+)$/.exec(line);
+      if (!match || Number(match[2]) >= 60 || !match[4].trim()) {
+        errors.push('บรรทัด ' + (index+1) + ' ไม่ใช่รูปแบบ LRC ที่ถูกต้อง');
+        continue;
+      }
+      const seconds = Number(match[1])*60+Number(match[2])+
+        Number((match[3]||'0').padEnd(3,'0'))/1000;
+      if (seconds < last) errors.push('เวลาคำร้องบรรทัด '+(index+1)+' ไม่เรียงตามลำดับ');
+      last = seconds;
+      rows.push({startTime: seconds, text:match[4].trim()});
+    }
+    return {valid:rows.length>0 && errors.length===0, lines:rows, errors};
+  }
+  function aiUpdateButtons() {
+    const hasSong = Number.isInteger(aiSongId);
+    const valid = aiParseLrc().valid;
+    $('ai-lyrics-start').disabled = busy || !hasSong || !aiEngineReady;
+    $('ai-lyrics-play').disabled = busy || !hasSong;
+    $('ai-lyrics-editor').disabled = !hasSong;
+    $('ai-lyrics-insert-time').disabled = !hasSong || !aiAudio.src;
+    $('ai-lyrics-download').disabled = !hasSong || !valid;
+    $('ai-lyrics-save').disabled = busy || !hasSong || !valid || !aiDraftReady;
+  }
+  async function aiRefreshSongList() {
+    if (!token || !engineBase) return;
+    const seq = ++aiSearchSeq, panel = $('ai-lyrics-results');
+    panel.textContent = 'กำลังอ่านไฟล์เสียงที่นำเข้า…';
+    try {
+      const data = await api('/api/vocal-songs?search='+
+        encodeURIComponent($('ai-lyrics-search').value.trim())+
+        '&offset='+aiOffset+'&limit=30');
+      if (seq !== aiSearchSeq) return;
+      aiSongs = data.rows || [];
+      aiTotal = Number(data.total || 0);
+      panel.replaceChildren();
+      for(const item of aiSongs) {
+        const button = document.createElement('button');
+        button.type='button'; button.className='ai-lyrics-song';
+        button.dataset.aiId=String(item.id);
+        button.classList.toggle('active',item.id===aiSongId);
+        const info=document.createElement('span');
+        const title=document.createElement('strong');
+        title.textContent=item.title||item.code||'ไม่มีชื่อเพลง';
+        const subtitle=document.createElement('small');
+        subtitle.textContent=(item.artist||'ไม่ระบุศิลปิน')+' · '+item.code;
+        info.append(title,subtitle);
+        const chip=document.createElement('span');
+        chip.className='chip';chip.textContent=item.kind||'AUDIO';
+        button.append(info,chip);panel.append(button);
+      }
+      if(!aiSongs.length) {
+        const empty=document.createElement('div');
+        empty.className='preview-empty';
+        empty.textContent='ยังไม่มีเพลงในเมนูนี้ · กด “นำเข้าเพลงใหม่” เพื่อเลือกไฟล์จากเครื่อง';
+        panel.append(empty);
+      }
+      $('ai-lyrics-count').textContent = aiTotal ?
+        fmtNum(aiOffset+1)+'–'+fmtNum(Math.min(aiOffset+aiSongs.length,aiTotal))+
+        ' จาก '+fmtNum(aiTotal)+' ไฟล์' : 'ยังไม่มีเพลงที่นำเข้า';
+      $('ai-lyrics-prev').disabled=aiOffset===0;
+      $('ai-lyrics-next').disabled=aiOffset+30>=aiTotal;
+    } catch(error) {if(seq===aiSearchSeq)panel.textContent='อ่านรายการไม่สำเร็จ: '+error.message;}
+  }
+  async function aiImportAudio() {
+    if(busy)return message('มีงานกำลังดำเนินการ กรุณาให้เสร็จก่อนนำเข้า');
+    $('ai-lyrics-status').textContent='กำลังเปิดหน้าต่างเลือกไฟล์เสียงจากเครื่อง…';
+    try {
+      const picked=await post('/api/folder-picker',{kind:'vocal'});
+      if(!picked.path) {
+        $('ai-lyrics-status').textContent='ยกเลิกการเลือกไฟล์แล้ว';
+        return;
+      }
+      const imported=await post('/api/ai-import',{path:picked.path});
+      $('ai-lyrics-search').value='';aiOffset=0;
+      await aiRefreshSongList();
+      if(imported.song)await aiChooseSong(imported.song);
+      message(imported.message||'นำเข้าไฟล์เสียงแล้ว',false);
+    }catch(error) {
+      $('ai-lyrics-status').textContent='นำเข้าไม่สำเร็จ: '+error.message;
+      message(error.message);
+    }
+  }
+  function aiStopPlayback() {
+    ++aiPlaySerial;
+    const stream=aiStreamId;aiStreamId='';
+    aiAudio.pause();aiAudio.removeAttribute('src');aiAudio.load();
+    if(stream)void post('/api/live-stop',{stream_id:stream}).catch(()=>{});
+    aiActiveIndex=-2;
+  }
+  function aiRenderTime() {
+    const panel=$('ai-lyrics-karaoke');
+    if(!aiTimed.length)return;
+    const t=aiAudio.currentTime||0;
+    let current=-1;
+    for(let i=0;i<aiTimed.length;i++){
+      if(aiTimed[i].startTime>t)break;
+      current=i;
+    }
+    if(aiActiveIndex===current)return;
+    aiActiveIndex=current;panel.replaceChildren();
+    const from=Math.max(0,current<0?0:current-1);
+    const until=Math.min(aiTimed.length,Math.max(from+2,current+3));
+    for(let i=from;i<until;i++) {
+      const line=document.createElement('div');
+      line.className='ai-karaoke-line';
+      line.classList.toggle('active',i===current);
+      line.textContent=aiTimed[i].text;panel.append(line);
+    }
+  }
+  function aiValidateEditor() {
+    const check=aiParseLrc();
+    aiTimed=check.lines;aiActiveIndex=-2;
+    if(check.lines.length)aiRenderTime();
+    else $('ai-lyrics-karaoke').textContent='ยังไม่มีเนื้อร้องที่มีเวลาให้ทดลอง';
+    $('ai-lyrics-validation').textContent=check.valid ?
+      '✓ ตรวจรูปแบบ LRC แล้ว '+fmtNum(check.lines.length)+' บรรทัด · ควรฟังตรวจคำและเวลาอีกครั้ง':
+      check.errors.length ? '✕ '+check.errors.slice(0,3).join(' · '):
+      'ยังไม่มีเนื้อร้องที่มีเวลา';
+    aiUpdateButtons();
+  }
+  async function aiChooseSong(row) {
+    aiStopPlayback();
+    aiSongId=row.id;
+    const seq=++aiDraftSeq;
+    aiDraftReady=false;aiEngineReady=false;
+    $('ai-lyrics-selected').textContent=(row.title||row.code)+
+      ' · '+(row.artist||'ไม่ระบุศิลปิน')+' · '+(row.kind||'');
+    $('ai-lyrics-editor').value='';
+    $('ai-lyrics-status').textContent='กำลังตรวจโมเดล AI และร่างเนื้อร้องที่เคยสร้าง…';
+    for(const button of $('ai-lyrics-results').querySelectorAll('[data-ai-id]'))
+      button.classList.toggle('active',Number(button.dataset.aiId)===row.id);
+    aiValidateEditor();
+    try{
+      const data=await api('/api/ai-lyrics-draft?id='+encodeURIComponent(row.id));
+      if(seq!==aiDraftSeq||row.id!==aiSongId)return;
+      aiEngineReady=Boolean(data.available);
+      aiDraftReady=Boolean(data.hasDraft);
+      $('ai-lyrics-editor').value=String(data.approvedLrc||data.draft?.rawLrc||'');
+      $('ai-lyrics-engine-state').textContent=aiEngineReady ?
+        'Whisper AI พร้อมใช้งาน' : 'Whisper AI ยังไม่พร้อมในแพ็กเกจ';
+      $('ai-lyrics-status').textContent=data.approvedLrc ?
+        '✓ พบเนื้อร้องที่เคยตรวจบันทึกแล้ว · สามารถทดลองฟังอีกครั้ง':
+        data.hasDraft ? 'พบร่างคำร้อง AI · โปรดฟังตรวจคำและเวลา':
+        'ยังไม่มีร่าง AI · ถ้าเพลงมีเสียงร้องให้กดถอดคำร้อง';
+      aiValidateEditor();
+    }catch(error){
+      if(seq===aiDraftSeq)$('ai-lyrics-status').textContent='อ่านร่างไม่สำเร็จ: '+error.message;
+    }
+  }
+  async function aiStartTranscription() {
+    if(!Number.isInteger(aiSongId)||!aiEngineReady||busy)
+      return message('กรุณานำเข้าเพลงเสียงร้องและตรวจว่า Whisper AI พร้อมใช้งาน');
+    const consent=await confirmStudio(
+      'AI จะถอดเสียงจากไฟล์เพลงที่เลือก พร้อมประเมินเวลาแต่ละบรรทัดแบบออฟไลน์\n'+
+      'คำร้องและเวลาอาจผิด ต้องทดลองฟังและตรวจแก้ก่อนบันทึก ยืนยันให้เริ่มหรือไม่?',
+      'เริ่มสร้างเนื้อร้อง AI');
+    if(!consent)return;
+    aiStopPlayback();
+    $('ai-lyrics-status').textContent='เริ่มถอดเสียงร้อง AI · ตรวจสถานะได้ที่แผงงานด้านล่าง';
+    void run('ai-lyrics',{id:aiSongId,language:$('ai-lyrics-language').value});
+  }
+  async function aiPlayAudio() {
+    if(!Number.isInteger(aiSongId))return message('กรุณาเลือกเพลงที่นำเข้าก่อน');
+    if(busy)return message('งาน AI ยังดำเนินการอยู่');
+    aiStopPlayback();
+    const serial=aiPlaySerial,chosen=aiSongId;
+    $('ai-lyrics-status').textContent='กำลังเปิดเสียงต้นฉบับสำหรับทดลองเนื้อร้อง…';
+    try{
+      const res=await post('/api/live-preview',{
+        id:chosen,source_choice:'auto',music_volume:0.9,synth_volume:0
+      });
+      if(serial!==aiPlaySerial||chosen!==aiSongId){
+        if(res.stream_id)void post('/api/live-stop',{stream_id:res.stream_id}).catch(()=>{});
+        return;
+      }
+      aiStreamId=res.stream_id||'';
+      aiAudio.src=engineAddress('/api/live-stream?ticket='+encodeURIComponent(res.ticket));
+      const play=aiAudio.play();
+      if(play)await play.catch(()=>message('กด ▶ บนเครื่องเล่นเพื่อฟัง',false));
+      $('ai-lyrics-status').textContent='ทดลองฟัง '+(res.title||res.code||'เพลงที่เลือก')+
+        ' · ตรวจคำและเวลาในจอคาราโอเกะ';
+    }catch(error){
+      $('ai-lyrics-status').textContent='ทดลองฟังไม่สำเร็จ: '+error.message;
+      message(error.message);
+    }
+  }
+  function aiInsertTimestamp() {
+    const t=aiAudio.currentTime||0;
+    const minute=Math.floor(t/60), seconds=(t%60).toFixed(2).padStart(5,'0');
+    const stamp='['+String(minute).padStart(2,'0')+':'+seconds+']';
+    const editor=$('ai-lyrics-editor');
+    editor.setRangeText(stamp,editor.selectionStart,editor.selectionEnd,'end');
+    editor.focus();aiValidateEditor();
+  }
+  function aiDownloadLrc() {
+    const result=aiParseLrc();
+    if(!result.valid)return message('ตรวจรูปแบบเนื้อร้องก่อนดาวน์โหลด LRC');
+    const blob=new Blob([$('ai-lyrics-editor').value],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');link.href=url;
+    link.download='XStage-AI-'+String(aiSongId)+'.lrc';
+    document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }
+  async function aiApproveLrc() {
+    if(!aiParseLrc().valid||!aiDraftReady)
+      return message('ต้องมีร่าง AI และรูปแบบ LRC ที่ถูกต้องก่อนบันทึก');
+    if(!await confirmStudio(
+      'ตรวจคำร้องและเวลาเทียบกับเสียงจริงแล้วใช่หรือไม่?\n'+
+      'ยืนยันบันทึกลงข้อมูลเพลงส่วนตัว (ไม่แก้ไฟล์เสียงต้นฉบับ)',
+      'ยืนยันเนื้อร้องที่ตรวจแก้แล้ว'))return;
+    try{
+      const result=await post('/api/ai-lyrics-approve',{
+        id:aiSongId,lrc:$('ai-lyrics-editor').value
+      });
+      $('ai-lyrics-status').textContent='✓ '+result.message;
+      message('บันทึก LRC ที่ตรวจแล้ว '+fmtNum(result.lines)+' บรรทัด',false);
+    }catch(error){message(error.message);}
   }
   function buildFeedback(state, title, detail) {
     const card = $('create-build-feedback');
