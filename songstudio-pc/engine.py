@@ -1427,14 +1427,14 @@ def approve_ai_lyrics(song_id, lrc_text):
     # lrc_to_json ignores invalid lines; reject invalid non-metadata content
     # instead of silently publishing a partial transcription.
     import re
-    stamp = re.compile(r"^\\[(\\d{1,3}):(\\d{2})(?:\\.(\\d{1,3}))?\\](.+)$")
+    stamp = re.compile(r"^\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\](.+)$")
     starts = []
     count = 0
     for raw in lrc_text.splitlines():
         line = raw.strip()
         if not line:
             continue
-        if re.match(r"^\\[(ti|ar|al|by|offset):", line, re.I):
+        if re.match(r"^\[(ti|ar|al|by|offset):", line, re.I):
             continue
         match = stamp.match(line)
         if not match or int(match.group(2)) >= 60:
