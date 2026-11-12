@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#091523">
+  <meta name="color-scheme" content="dark">
+  <title>X-Stage Song Studio · PC + Web</title>
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:*; media-src 'self' http://127.0.0.1:*; object-src 'none'; base-uri 'none'">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="shell" class="shell">
+    <aside class="sidebar" aria-label="เมนูโปรแกรม">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span>X</span></div>
+        <div><strong>X-STAGE</strong><small>SONG STUDIO</small></div>
+      </div>
+      <div class="edition"><span class="small-dot"></span> PC + WEB · SAME STUDIO</div>
+      <nav id="main-navigation" class="navigation" aria-label="ส่วนงาน">
+        <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>สร้างเพลงใหม่<small>สแกน · ฟัง · SoundFont · M4A</small></span></button>
+        <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>อัปโหลด<small>Google Drive · ไม่ส่งซ้ำ</small></span></button>
+        <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
+        <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="pc-indicator"><span class="pc-icon">●</span><span>Local Engine<small id="engine-state">กำลังเชื่อมต่อ…</small></span></div>
+        <div id="version-info" class="version-info">X-Stage Song Studio</div>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-heading"><div class="eyebrow">YOUR MUSIC. YOUR CONTROL.</div><h1 id="page-title">สร้างเพลงใหม่</h1><p id="page-subtitle">เตรียมไฟล์ให้พร้อมในเครื่องก่อนเริ่มสร้างเพลงทุกครั้ง</p></div>
+        <div class="topbar-actions">
+          <span id="google-badge" class="google-badge offline"><span class="small-dot"></span> ยังไม่เชื่อม Google</span>
+          <button id="open-web" class="button ghost" type="button" title="เปิดหน้า UI เดียวกันในเบราว์เซอร์">▣ เปิด Web Control</button>
+          <button id="google-login-header" class="button ghost" type="button">Google Login</button>
+        </div>
+      </header>
+      <main id="main" class="main">
+        <div id="global-message" class="global-message" role="alert" hidden></div>
+        <section id="tab-create" class="tab active" aria-labelledby="page-title">
+          <div class="grid-2">
+            <article class="panel">
+              <div class="section-heading"><div><div class="eyebrow">01 / SOURCE</div><h2>ต้นฉบับและพื้นที่ทำงาน</h2></div><span class="chip">OFFLINE FIRST</span></div>
+              <label for="create-source">โฟลเดอร์ต้นฉบับ</label>
+              <div class="path-row"><input id="create-source" class="field" type="text" placeholder="เลือกโฟลเดอร์เพลงจากเครื่อง PC" autocomplete="off"><button class="button ghost" type="button" data-pick="source">เลือกโฟลเดอร์</button></div>
+              <label for="create-workspace">พื้นที่เก็บเพลงที่สร้าง (X-Stage/song)</label>
+              <div class="path-row"><input id="create-workspace" class="field" type="text" autocomplete="off"><button class="button ghost" type="button" data-pick="workspace">เปลี่ยนที่เก็บ</button></div>
+              <div class="toolbar"><button id="scan-button" class="button primary" type="button">⌕ ตรวจสอบไฟล์เพลง</button><button id="reconcile-button" class="button ghost" type="button" title="สแกนเพื่ออัปเดตรายการต้นฉบับ">รีเฟรชรายการ</button></div>
+              <div class="hint">เก็บค่าโฟลเดอร์ที่เลือกไว้ให้เปิดครั้งถัดไป โดยไม่ย้ายหรือลบเพลงเดิม</div>
+            </article>
+            <article class="panel">
+              <div class="section-heading"><div><div class="eyebrow">02 / SOUND DESIGN</div><h2>เสียงสำหรับสร้าง M4A</h2></div><span class="chip info">SF2 / SF3</span></div>
+              <label for="create-soundfont">SoundFont สำหรับ MIDI / KAR / NCN</label>
+              <div class="path-row"><select id="create-soundfont" class="field"><option value="">ยังไม่ได้เลือก SoundFont</option></select><button class="button ghost" type="button" data-pick="soundfont">เลือกไฟล์</button></div>
+              <div class="form-2">
+                <div><label for="create-preset">โทนเสียง MIDI</label><select class="field" id="create-preset"><option value="balanced">สมดุล</option></select></div>
+                <div><label for="create-mode">ประเภทเสียง</label><select class="field" id="create-mode"><option value="original">คงเสียงต้นฉบับ</option><option value="instrumental">แยกเสียงร้อง AI (Full Offline)</option></select></div>
+              </div>
+              <div class="hint">ทดลองฟังจะใช้ SoundFont และโทนเสียงที่เลือกไว้ ข้อมูลแคชถูกเก็บบน PC ไม่อัปโหลดขึ้นเว็บสาธารณะ</div>
+            </article>
+          </div>
+          <section class="panel catalog-panel">
+            <div class="section-heading"><div><div class="eyebrow">03 / SONG CATALOG</div><h2>รายการเพลงต้นฉบับ</h2></div><span id="catalog-total" class="chip">0 เพลง</span></div>
+            <div class="catalog-actions">
+              <div class="searchbox"><span aria-hidden="true">⌕</span><input id="song-search" type="search" placeholder="ค้นชื่อเพลง ศิลปิน หรือรหัสเพลง" autocomplete="off"></div>
+              <button id="select-page" class="button ghost" type="button">เลือกหน้านี้</button><button id="select-all" class="button ghost" type="button">เลือกทั้งหมด</button><button id="clear-selection" class="button ghost" type="button">ยกเลิกทั้งหมด</button>
+            </div>
+            <div class="selection-strip"><span id="selected-count">เลือกแล้ว 0 เพลง</span><span id="selection-hint">เลือกเพลงเพื่อสร้าง ทดลองฟัง หรืออัปโหลด</span></div>
+            <div class="table-scroll" role="region" aria-label="ตารางเลือกเพลง" tabindex="0"><table class="song-table"><thead><tr><th class="col-select"><span class="sr-only">เลือก</span></th><th>ชื่อเพลง</th><th>ชนิด</th><th>ขนาด</th><th>สถานะ</th></tr></thead><tbody id="song-rows"><tr><td colspan="5" class="empty-row">กำลังโหลดข้อมูลเพลง…</td></tr></tbody></table></div>
+            <div class="table-bottom"><span id="table-page-label">—</span><div class="page-controls"><button id="page-prev" class="button ghost" type="button">‹ ก่อนหน้า</button><button id="page-next" class="button ghost" type="button">ถัดไป ›</button></div></div>
+            <div class="builder-actions"><button id="preview-button" class="button ghost" type="button">♫ ทดลองฟัง</button><button id="edit-button" class="button ghost" type="button">✎ ชื่อเพลง / เนื้อร้อง</button><button id="build-audio-button" class="button ghost" type="button">สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">สร้าง M4A + เนื้อร้องจากเพลงที่เลือก</button></div>
+            <div class="preview-row"><div class="preview-description"><strong id="preview-label">เครื่องเล่นทดลองฟัง</strong><small>ตัวอย่างเสียงสูงสุด 60 วินาที · ไม่บันทึกลงคลังเพลง</small></div><audio id="preview-audio" controls preload="none"></audio></div>
+          </section>
+        </section>
+
+        <section id="tab-upload" class="tab">
+          <div class="section-top"><div><div class="eyebrow">PRIVATE GOOGLE DRIVE</div><h2>อัปโหลดเพลงที่สร้างเสร็จแล้ว</h2><p>เช็กไฟล์ต้นทางและ MD5 บน Drive ก่อนส่ง ลดการอัปโหลดซ้ำ</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageWeb ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
+          <article class="panel"><div class="section-heading"><div><h2>รายการอัปโหลด</h2><p>เลือกเพลงจากตารางในหน้า “สร้างเพลงใหม่” จากนั้นกลับมาสั่งอัปโหลดที่นี่</p></div><span id="upload-selected-count" class="chip">0 เพลง</span></div><div class="toolbar"><button id="go-create" class="button ghost">กลับไปเลือกเพลง</button><button id="upload-button" class="button primary">↑ อัปโหลดเพลงที่เลือก</button></div><div class="hint">เพลงที่มีอยู่บน Drive และเนื้อหาตรงกันจะถูกข้ามโดยอัตโนมัติ ไม่เปลี่ยนสิทธิ์แชร์ให้เป็นสาธารณะ</div></article>
+        </section>
+
+        <section id="tab-download" class="tab">
+          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>โหลดไฟล์จาก Google Drive ส่วนตัว ตรวจ MD5 และไม่เขียนทับไฟล์ที่ไม่ตรงกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <article class="panel"><div class="section-heading"><div><h2>ตำแหน่งเก็บไฟล์ดาวน์โหลด</h2><p>เลือกใหม่ได้ ระบบจำค่าไว้เปิดครั้งต่อไป</p></div></div><div class="path-row"><input id="download-destination" type="text" class="field" placeholder="เลือกโฟลเดอร์เก็บข้อมูล"><button type="button" class="button ghost" data-pick="download">เลือกที่เก็บ</button></div></article>
+          <div class="download-grid">
+            <article class="panel download-card"><div class="download-symbol">♫</div><h3>โฟลเดอร์เพลง</h3><p>ดาวน์โหลดเพลง M4A และเนื้อร้องจาก Catalog พร้อมตรวจไฟล์ซ้ำ</p><button class="button primary download-action" data-kind="songs" type="button">↓ ดาวน์โหลด SONG</button></article>
+            <article class="panel download-card"><div class="download-symbol">▤</div><h3>ฐานเพลง DB</h3><p>ดาวน์โหลด Catalog และ Manifest โดยไม่จำเป็นต้องรับไฟล์เพลงทั้งหมด</p><button class="button ghost download-action" data-kind="db" type="button">↓ ดาวน์โหลด DB</button></article>
+            <article class="panel download-card"><div class="download-symbol">▦</div><h3>ชุดสำรอง ZIP</h3><p>ดาวน์โหลดทุกเพลงที่เผยแพร่ แล้วสร้าง ZIP ภายในเครื่อง ตรวจไฟล์ก่อนเสร็จ</p><button class="button ghost download-action" data-kind="zip" type="button">↓ ดาวน์โหลด ZIP</button></article>
+          </div>
+        </section>
+
+        <section id="tab-settings" class="tab">
+          <div class="section-top"><div><div class="eyebrow">PREFERENCES & HEALTH</div><h2>ตั้งค่าและตรวจสภาพแวดล้อม</h2><p>ใช้การตั้งค่าชุดเดียวกันทั้งแอป PC และหน้าเว็บ</p></div></div>
+          <div class="grid-2">
+            <article class="panel"><div class="section-heading"><div><h2>บัญชี Google</h2><p>ใช้ Desktop OAuth Client JSON ของเจ้าของบัญชี</p></div></div>
+              <label for="settings-oauth">Google OAuth Client JSON</label><div class="path-row"><input id="settings-oauth" type="text" class="field" placeholder="เลือกไฟล์ JSON"><button class="button ghost" data-pick="oauth">เลือกไฟล์</button></div>
+              <div class="toolbar"><button id="settings-login" class="button primary">เชื่อม Google</button><button id="settings-logout" class="button ghost">ออกจาก Google</button></div><div class="hint">โทเคนใช้ Credential Manager ของ Windows หากมี และไม่ถูกเก็บไว้ในโฟลเดอร์เพลง</div>
+            </article>
+            <article class="panel"><div class="section-heading"><div><h2>เครื่องมือประมวลผล</h2><button id="refresh-environment" class="button ghost">ตรวจซ้ำ</button></div></div><div id="environment-list" class="environment-list">กำลังตรวจ FFmpeg, FluidSynth, SoundFont…</div><div class="hint">ส่วนประกอบต้องพร้อมก่อนสร้าง Installer; งานสร้าง M4A ทำบน Local Engine ไม่ต้องให้เว็บดาวน์โหลดเครื่องมือใหม่ทุกเพลง</div></article>
+          </div>
+          <article class="panel"><div class="section-heading"><div><h2>อัปเดต X-Stage Song Studio</h2><span id="update-version" class="chip">—</span></div><p>ตรวจรุ่นผ่านช่องทาง Song Studio โดยเฉพาะ ต้องมี Installer ที่เผยแพร่จริงและ SHA-256 ถูกต้อง</p><button id="update-button" class="button ghost">↻ ตรวจเวอร์ชันล่าสุด</button></article>
+        </section>
+
+        <section id="job-panel" class="job-panel" aria-label="สถานะการทำงาน" aria-live="polite">
+          <div class="job-header"><div class="job-status"><span id="job-led" class="job-led idle"></span><div><strong id="job-title">พร้อมทำงาน</strong><span id="job-detail">ไม่มีงานที่กำลังประมวลผล</span></div></div><div class="job-header-actions"><span id="job-timing" class="time-display">00:00</span><button id="cancel-job" class="button danger" type="button" hidden>หยุดงาน</button><button id="toggle-log" class="button ghost" type="button" aria-expanded="false">รายละเอียด ▾</button></div></div>
+          <div class="progress-line"><div id="progress-fill" class="progress-fill"></div></div><div class="progress-meta"><span id="job-fraction">รอเริ่มงาน</span><span id="job-eta">เวลาคงเหลือ —</span></div>
+          <ol id="job-log" class="job-log" hidden></ol>
+        </section>
+      </main>
+    </div>
+  </div>
+  <dialog id="edit-dialog" class="modal"><form method="dialog"><h2>แก้ไขข้อมูลเพลง</h2><p id="edit-code" class="hint">—</p><label for="edit-title">ชื่อเพลง</label><input id="edit-title" class="field" type="text" maxlength="180"><label for="edit-artist">ศิลปิน</label><input id="edit-artist" class="field" type="text" maxlength="180"><label for="edit-lyrics">เนื้อร้องแบบ LRC (มีเวลา)</label><textarea id="edit-lyrics" class="field lyrics-editor" placeholder="[00:12.50]เนื้อร้องบรรทัดแรก"></textarea><div class="modal-actions"><button value="cancel" class="button ghost">ยกเลิก</button><button id="edit-save" value="save" class="button primary">บันทึก</button></div></form></dialog>
+  <script src="./app.js" defer></script>
+  <div id="online-connection-gate" class="connection-gate" hidden role="dialog" aria-modal="true" aria-labelledby="online-gate-title">
+    <div class="connection-gate-card">
+      <div class="gate-mark">X</div>
+      <div class="eyebrow">X-STAGE SONG STUDIO · WEB CONTROL</div>
+      <h2 id="online-gate-title">เชื่อมต่อ Song Studio บน PC</h2>
+      <p id="online-connection-help">เปิด X-Stage Song Studio บน PC แล้วกด “เปิด Web Control”</p>
+      <ol>
+        <li>เปิดแอป <strong>X-Stage Song Studio</strong> บน Windows</li>
+        <li>กด <strong>เปิด Web Control</strong> เพื่อเปิดหน้านี้พร้อมการจับคู่</li>
+        <li>กด <strong>เชื่อมต่อ Engine</strong> และอนุญาตสิทธิ์ Local Network เมื่อเบราว์เซอร์ถาม</li>
+      </ol>
+      <button id="online-connect-now" class="button primary large" type="button">เชื่อมต่อ Engine บน PC เครื่องนี้</button>
+      <p class="connection-gate-foot">เพลง, SoundFont และ Google Drive อยู่ใน PC ส่วนตัว · หน้าเว็บไม่ได้รับไฟล์ต้นฉบับ</p>
+    </div>
+  </div>
+</body>
+</html>
