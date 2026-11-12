@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.13 Build 313
+# X-Stage Song Studio PC Ready v0.3.14 Build 314
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,7 +6,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.13-build313.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.14-build314.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -131,6 +131,33 @@ They cannot verify sign-in against a real account without the user's consent.
 - Windows CI includes a real authenticated HTTP POST `/api/jobs` + GET `/api/status` smoke test, followed by output validation for both create actions and `songs/current.json`.
 - Existing completed songs are skipped without regeneration. Older source formats such as NCN remain unsupported and now produce a clear explanation instead of silent inactivity.
 
+### Verify song lyrics while auditioning, and optional offline AI transcript
+
+In Step 3, find a song by title, singer or code and start the no-file karaoke
+preview. The lyrics panel displays lines in sync with the player's playback
+position, and labels the genuine source: timed LRC, MIDI/KAR embedded lyric,
+or NCN Song + Lyrics + Cursor components. When lyrics cannot be matched or
+the NCN trio is incomplete, the app reports the exact reason and never
+fabricates a blank or guessed lyric document.
+
+**AI only when original audio has audible singing:** Ready Build 314 includes
+the pinned multilingual Whisper.cpp base model and native Windows CLI. On
+an MP3/M4A/WAV/etc. with no usable existing lyrics, click
+**AI ถอดเสียงร้องเป็นร่างเนื้อร้อง** and select Thai or auto-detect language.
+The on-device ASR transcribes to an **unverified** line-timed draft in
+`%LOCALAPPDATA%\\X-Stage\\SongStudio\\ai-lyrics-drafts`.
+No private audio is sent to a server. A temporary mono WAV is deleted
+after inference; no M4A song is created by the audition workflow.
+Use **ตรวจและบันทึกร่าง AI** to correct the guessed text and timing before
+it is accepted as an editable LRC or used in the final catalog.
+
+Important limitations: Whisper is a speech recognizer, not a reliable song
+lyrics recognizer. It can mishear Thai singing, improvise/hallucinate words on
+instrumental music, or miss entire verses. Never auto-publish AI transcripts
+as verified karaoke lyrics. A pure MIDI/NCN instrumental contains note
+events, **not a singer's words**, so transcription is not offered unless
+an actual audio recording with vocals exists.
+
 ### Limitations
 
 - **NCN** music handling, **Google Drive access to files owned by a different OAuth application** remain unimplemented in the source engine. The UI still shows legacy controls for PC/Web parity; these actions will display a clear unsupported error rather than silently claiming success.
@@ -149,7 +176,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.13-build313`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.14-build314`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
