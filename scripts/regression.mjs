@@ -170,7 +170,7 @@ assert.ok(androidMain.includes('if (isTelevisionDevice())')&&androidMain.include
 assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
 assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
 assert.ok(androidGradle.includes('b.setColor(java.awt.Color.WHITE)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher/store banner must use a solid white background');
-assert.ok(androidGradle.includes('new java.awt.Color(12,39,63)')&&androidGradle.includes('b.drawString("X-Stage",128,66)'),'white TV banner must keep dark readable X-Stage branding');
+assert.ok(androidGradle.includes('new java.awt.Color(12,39,63)')&&androidGradle.includes('def topText = "X-Stage"')&&androidGradle.includes('def bottomText = "Karaoke Online"')&&androidGradle.includes('fitFont(topText,76,296)')&&androidGradle.includes('fitFont(bottomText,39,296)'),'white TV banner must fit its two centered branding lines without clipping');
 assert.ok(css.includes('1.0.71 Android TV display-only stage'),'TV-specific final layout must live in the last-loaded UX stylesheet');
 assert.ok(css.includes('body.xstage-native-tv .topbar')&&css.includes('body.xstage-native-tv #pc-search')&&css.includes('body.xstage-native-tv #virtual-keyboard'),'TV must hide all search/menu/keyboard chrome');
 assert.ok(css.includes('left:clamp(18px,2vw,30px)!important')&&css.includes('right:clamp(18px,2vw,30px)!important'),'TV brand and QR must occupy opposite top corners');
