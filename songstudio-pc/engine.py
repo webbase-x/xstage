@@ -1316,16 +1316,25 @@ def preview_source_report(song_id):
                 choices.append({"value": "inspect:lrc", "kind": "inspect",
                                 "label": "ตรวจเนื้อร้องและเวลา LRC"})
         if source.suffix.lower() in EXT_MIDI:
-            component("เนื้อร้องฝังใน MIDI/KAR", source)
-            choices.append({"value": "inspect:embedded", "kind": "inspect",
-                            "label": "ตรวจเนื้อร้องฝังใน MIDI/KAR"})
+            embedded_ok = False
+            try:
+                embedded_ok = bool(NCN.kar_document(source, source.stem)["lines"])
+            except (ValueError, OSError):
+                pass
+            components.append({"type": "เนื้อร้องฝังใน MIDI/KAR",
+                               "name": source.name, "found": embedded_ok,
+                               "required": False, "size": source.stat().st_size})
+            if embedded_ok:
+                choices.append({"value": "inspect:embedded", "kind": "inspect",
+                                "label": "ตรวจเนื้อร้องฝังใน MIDI/KAR"})
     proof = _preview_lyrics_row(row)
     status = proof.get("status", "missing")
     return {
         "id": song_id, **preview_song_identity(row), "options": choices,
         "components": components, "timedLyricsReady": status == "found",
         "proofSource": proof.get("source", ""), "proofMessage": proof.get("message", ""),
-        "complete": bool(related and status == "found"),
+        "complete": bool(related and status == "found" and
+                         all(item["found"] for item in components if item["required"])),
     }
 
 
