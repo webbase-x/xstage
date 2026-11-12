@@ -75,7 +75,7 @@ final class GoogleDeviceAuth {
                     throw new IllegalStateException(readError(code, "Google ไม่ส่งรหัสอุปกรณ์กลับมา"));
                 }
 
-                main.post(() -> listener.onDeviceCode(userCode, verificationUrl, expiresIn));
+                main.post(() -> { if (isCurrent(run)) listener.onDeviceCode(userCode, verificationUrl, expiresIn); });
                 pollToken(run, deviceCode, expiresIn, interval);
             } catch (Exception e) {
                 if (isCurrent(run)) error(readable(e));
@@ -104,7 +104,7 @@ final class GoogleDeviceAuth {
                     throw new IllegalStateException(readError(token, "กู้คืน Google Login ไม่สำเร็จ"));
                 }
                 long expiresIn = token.optLong("expires_in", 3600L);
-                main.post(() -> listener.onToken(accessToken, expiresIn));
+                main.post(() -> { if (isCurrent(run)) listener.onToken(accessToken, expiresIn); });
             } catch (Exception e) {
                 if (isCurrent(run)) error(readable(e));
             }
@@ -159,7 +159,7 @@ final class GoogleDeviceAuth {
                 String refreshToken = token.optString("refresh_token");
                 if (!refreshToken.isEmpty()) tokenStore.write(refreshToken);
                 long tokenExpires = token.optLong("expires_in", 3600L);
-                main.post(() -> listener.onToken(accessToken, tokenExpires));
+                main.post(() -> { if (isCurrent(run)) listener.onToken(accessToken, tokenExpires); });
                 return;
             }
 
