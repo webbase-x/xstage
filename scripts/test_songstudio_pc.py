@@ -119,7 +119,7 @@ class PcSourceTests(unittest.TestCase):
         with ZipFile(target) as z:
             files = set(z.namelist())
             for name in ["Start-Song-Studio.cmd", "Start-Song-Studio.ps1", "pick_path.ps1",
-                         "engine.py", "studio/index.html", "studio/app.js",
+                         "engine.py", "ai_separate.py", "ai-model.lock.json", "studio/index.html", "studio/app.js",
                          "studio/style.css", "studio/entry.js"]:
                 self.assertIn("X-Stage-Song-Studio-PC-Source-Preview/" + name, files)
             self.assertTrue(z.testzip() is None)
