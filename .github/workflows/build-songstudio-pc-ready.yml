@@ -29,10 +29,11 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 28
     env:
-      # Owner supplies the Desktop app's PUBLIC client ID once in
-      # GitHub Settings > Secrets and variables > Actions > Variables.
-      # No user tokens, refresh credentials, or Web-client IDs are shipped.
+      # Owner sets Desktop Client ID as Actions Variable and the matching
+      # Desktop Client Secret as Actions Secret. Native clients are public;
+      # the built ZIP necessarily contains the pair. Never ship user tokens.
       XSTAGE_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.XSTAGE_GOOGLE_DESKTOP_CLIENT_ID }}
+      XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -59,20 +60,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Google Drive download read-only regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_build_outcomes.py -v
           if ($LASTEXITCODE -ne 0) { throw "Build outcome status regressions failed" }
-      - name: Validate app-wide Google OAuth config when owner set Client ID
+      - name: Validate complete bundled Desktop OAuth pair (never user tokens)
         shell: powershell
         run: |
           $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.12-build312"
           $config = Join-Path $base "config/google-oauth-client.json"
-          if ($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) {
-            if (!(Test-Path $config)) { throw "Configured Google Desktop Client missing from ZIP" }
+          $hasId = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID)
+          $hasSecret = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)
+          if ($hasId -and $hasSecret) {
+            if (!(Test-Path $config)) { throw "Complete Desktop OAuth Client missing from ZIP" }
             $client = Get-Content $config -Encoding UTF8 -Raw | ConvertFrom-Json
             if ($client.installed.client_id -ne $env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) {
-              throw "Unexpected OAuth Desktop Client ID in ready distribution"
+              throw "Unexpected Desktop OAuth Client ID in bundle"
             }
-            Write-Host "PASS: All users receive configured public app Client ID without choosing a JSON."
+            if ($client.installed.client_secret -ne $env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET) {
+              throw "Desktop OAuth client_secret missing or mismatched"
+            }
+            if ($client.installed.refresh_token -or $client.installed.access_token) {
+              throw "User tokens must never be bundled"
+            }
+            Write-Host "PASS: App-wide Desktop OAuth ID + Secret are both available to token exchange."
           } else {
-            Write-Warning "No Desktop Client ID variable configured: user OAuth will need one-time JSON import; publishing state must not be described as auto-ready."
+            if (Test-Path $config) { throw "Incomplete Desktop OAuth must NOT be bundled" }
+            Write-Warning "Desktop OAuth ID and matching Secret are not BOTH configured in GitHub. End users must import their full Desktop JSON once; do not claim ready-to-login."
           }
       - name: Verify real audio and MIDI conversions
         shell: powershell
