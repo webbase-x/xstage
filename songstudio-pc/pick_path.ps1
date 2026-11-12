@@ -2,7 +2,7 @@
 # X-Stage Song Studio — interactive Windows folder / file picker.
 # Runs within the logged-in user's desktop session, never inside a remote web page.
 param(
-    [Parameter(Mandatory=$true)][ValidateSet('source','workspace','download','soundfont','oauth')]
+    [Parameter(Mandatory=$true)][ValidateSet('source','workspace','download','soundfont','oauth','vocal')]
     [string]$Kind,
     [string]$InitialPath = '',
     [switch]$SelfTest
@@ -41,9 +41,11 @@ try {
         }
     } else {
         $dialog = New-Object System.Windows.Forms.OpenFileDialog
-        $dialog.Title = if ($Kind -eq 'soundfont') { 'เลือก SoundFont (.sf2 / .sf3)' } else { 'เลือก Google OAuth JSON' }
+        $dialog.Title = if ($Kind -eq 'vocal') { 'นำเข้าเพลงใหม่สำหรับสร้างเนื้อร้อง AI' } elseif ($Kind -eq 'soundfont') { 'เลือก SoundFont (.sf2 / .sf3)' } else { 'เลือก Google OAuth JSON' }
         $dialog.Filter = if ($Kind -eq 'soundfont') {
             'SoundFont (*.sf2;*.sf3)|*.sf2;*.sf3|All files (*.*)|*.*'
+        } elseif ($Kind -eq 'vocal') {
+            'Audio (*.mp3;*.m4a;*.wav;*.flac;*.aac;*.ogg;*.wma;*.mp4;*.oga)|*.mp3;*.m4a;*.wav;*.flac;*.aac;*.ogg;*.wma;*.mp4;*.oga'
         } else {
             'Google OAuth JSON (*.json)|*.json|All files (*.*)|*.*'
         }
