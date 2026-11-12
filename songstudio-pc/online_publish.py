@@ -77,12 +77,18 @@ class OnlinePublisher:
 
     def _json(self, file_id):
         """Read large immutable catalogs without the small OAuth API JSON limit."""
+        import urllib.error
         import urllib.parse
-        from google_drive import _request, API
-        url = API + "/files/" + urllib.parse.quote(str(file_id), safe="") + "?alt=media"
-        with _request(url, headers={"Authorization": "Bearer " + self.drive.token()},
-                      timeout=120) as stream:
-            raw = stream.read(MAX_CATALOG_BYTES + 1)
+        import urllib.request
+        url = ("https://www.googleapis.com/drive/v3/files/" +
+               urllib.parse.quote(str(file_id), safe="") + "?alt=media")
+        request = urllib.request.Request(
+            url, headers={"Authorization": "Bearer " + self.drive.token()})
+        try:
+            with urllib.request.urlopen(request, timeout=120) as stream:
+                raw = stream.read(MAX_CATALOG_BYTES + 1)
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+            raise PublishError("อ่านฐานเพลงเดิมใน Google Drive ไม่ได้ · ตรวจสิทธิ์ drive.file") from exc
         if len(raw) > MAX_CATALOG_BYTES:
             raise PublishError("ฐานเพลง Google Drive ใหญ่เกินขอบเขตความปลอดภัย")
         try:
