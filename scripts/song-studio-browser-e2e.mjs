@@ -177,17 +177,31 @@ try {
   assert.equal(await pc.locator('#create-stage-4').isVisible(), true, 'step 4 should open');
   assert.match(await pc.locator('#review-song-count').innerText(), /1/, 'review must reflect selected song count');
   assert.match(await pc.locator('#review-soundfont').innerText(), /GeneralUser-GS/, 'review must reflect selected SoundFont');
-  const buildRequest = pc.waitForRequest((req) => {
-    try { return new URL(req.url()).pathname === '/api/jobs' && req.postDataJSON()?.action === 'build'; }
-    catch { return false; }
-  });
   await pc.click('#build-button');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
-  assert.equal(await pc.locator('#studio-confirm-title').innerText(), 'เริ่มสร้างเพลง');
+  assert.equal(await pc.locator('#studio-confirm-title').innerText(), 'ยืนยันเริ่มสร้างเพลง');
+  const fullBuild = pc.waitForRequest((req) => {
+    try { return new URL(req.url()).pathname === '/api/jobs' &&
+      req.postDataJSON()?.action === 'build' && req.postDataJSON()?.audio_only === false; }
+    catch { return false; }
+  });
   await pc.click('#studio-confirm-ok');
-  await buildRequest;
+  await fullBuild;
+  await pc.waitForFunction(() => document.getElementById('create-build-feedback-title')?.textContent.includes('รับคำสั่ง'));
+  assert.match(await pc.locator('#create-build-feedback-detail').innerText(), /pc-wizard-smoke-job/);
+
+  await pc.click('#build-audio-button');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  assert.match(await pc.locator('#studio-confirm-message').innerText(), /M4A อย่างเดียว/);
+  const audioBuild = pc.waitForRequest((req) => {
+    try { return new URL(req.url()).pathname === '/api/jobs' &&
+      req.postDataJSON()?.action === 'build' && req.postDataJSON()?.audio_only === true; }
+    catch { return false; }
+  });
+  await pc.click('#studio-confirm-ok');
+  await audioBuild;
   assert.deepEqual(pcErrors, [], 'PC wizard should not produce JavaScript errors');
-  console.log('PASS: Chromium verified karaoke song search, live preview ticket/stop, borderless in-app modal, PC wizard and build.');
+  console.log('PASS: Both Create buttons submit real build jobs after ONE confirmation; acknowledgment stays visible.');
 
 } finally {
   await browser?.close();
