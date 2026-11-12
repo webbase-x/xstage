@@ -23,6 +23,7 @@
       <div class="edition"><span class="small-dot"></span> PC + WEB · SAME STUDIO</div>
       <nav id="main-navigation" class="navigation" aria-label="ส่วนงาน">
         <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>สร้างเพลงใหม่<small>4 ขั้นตอน · สแกน · เลือก · ฟัง · สร้าง</small></span></button>
+        <button class="nav-button" data-tab="ai-lyrics"><span class="nav-glyph" aria-hidden="true">✦</span><span>สร้างเนื้อร้อง AI<small>เสียงร้อง · ถอดคำ · ตั้งเวลา · ทดลองฟัง</small></span></button>
         <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>อัปโหลด<small>Google Drive · ไม่ส่งซ้ำ</small></span></button>
         <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
         <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
@@ -159,6 +160,63 @@
             <span id="create-step-description" aria-live="polite">ขั้นตอน 1/4 · เลือกต้นฉบับและสแกนไฟล์</span>
             <button id="create-step-next" class="button primary" type="button">ขั้นตอนถัดไป: เลือกเพลง ›</button>
           </div>
+        </section>
+
+        <section id="tab-ai-lyrics" class="tab" aria-label="สร้างเนื้อร้องจากเพลงที่มีเสียงร้อง">
+          <div class="section-top">
+            <div><div class="eyebrow">AI VOCAL TRANSCRIPTION · OFFLINE</div><h2>สร้างเนื้อร้องจากเสียงร้องด้วย AI</h2>
+              <p>ค้นหาเพลงที่มีไฟล์เสียง → AI ถอดเสียงเป็นคำร้องพร้อมเวลา → ทดลองเล่นและแก้ไข → ยืนยันบันทึก LRC</p></div>
+            <span class="chip info" id="ai-lyrics-engine-state">กำลังตรวจสอบ Whisper AI</span>
+          </div>
+          <article class="panel ai-lyrics-search">
+            <div class="section-heading"><div><h2>1. เลือกเพลงที่มีไฟล์เสียง</h2>
+              <p>แสดงเฉพาะไฟล์เสียงที่ค้นพบจากการสแกน ไม่แสดง MIDI/KAR ที่ไม่มีเสียงร้องให้ AI ถอด</p></div>
+              <button id="ai-lyrics-refresh" type="button" class="button ghost">↻ ค้นหาใหม่</button>
+            </div>
+            <div class="searchbox"><span aria-hidden="true">⌕</span>
+              <input id="ai-lyrics-search" type="search" placeholder="ค้นหาชื่อเพลง นักร้อง หรือรหัสเพลง" autocomplete="off"></div>
+            <div id="ai-lyrics-results" class="ai-lyrics-results" aria-label="รายการเพลงเสียงสำหรับ AI"><div class="preview-empty">กรุณาสแกนเพลงในเมนูสร้างเพลงใหม่ก่อน</div></div>
+            <div class="ai-lyrics-pager"><span id="ai-lyrics-count">ยังไม่มีข้อมูล</span>
+              <div><button id="ai-lyrics-prev" type="button" class="button ghost">‹ ก่อนหน้า</button>
+              <button id="ai-lyrics-next" type="button" class="button ghost">ถัดไป ›</button></div>
+            </div>
+          </article>
+          <article class="panel ai-lyrics-workspace">
+            <div class="section-heading"><div><h2>2. ถอดเสียงและจัดเวลาเนื้อร้อง</h2>
+              <p id="ai-lyrics-selected">ยังไม่ได้เลือกเพลง</p></div><span class="chip">LRC TIMED LYRICS</span></div>
+            <div class="ai-lyrics-tools">
+              <div><label for="ai-lyrics-language">ภาษาที่ใช้ถอดเสียง</label>
+                <select id="ai-lyrics-language" class="field">
+                  <option value="th">ภาษาไทย</option><option value="auto">ตรวจจับภาษาอัตโนมัติ</option><option value="en">ภาษาอังกฤษ</option>
+                </select></div>
+              <button id="ai-lyrics-start" class="button primary" type="button" disabled>✦ ให้ AI ถอดเสียงร้องและจัดเวลา</button>
+              <span id="ai-lyrics-status" class="ai-lyrics-status" role="status" aria-live="polite">รอเลือกเพลงที่มีเสียงร้อง</span>
+            </div>
+            <div class="ai-lyrics-monitor">
+              <strong>3. ทดลองเล่นเพลงพร้อมตรวจเนื้อร้อง</strong>
+              <div class="ai-lyrics-player-row">
+                <button id="ai-lyrics-play" class="button ghost" type="button" disabled>▶ ฟังเสียงต้นฉบับ</button>
+                <button id="ai-lyrics-stop" class="button ghost" type="button">■ หยุด</button>
+                <audio id="ai-lyrics-audio" controls preload="none" aria-label="เสียงต้นฉบับสำหรับเทียบเนื้อร้อง AI"></audio>
+              </div>
+              <div id="ai-lyrics-karaoke" class="ai-lyrics-karaoke" aria-live="off">
+                <span>ยังไม่มีเนื้อร้องพร้อมเวลา · เลือกเพลงแล้วกด AI ถอดเสียง</span>
+              </div>
+            </div>
+            <div class="ai-lyrics-edit">
+              <label for="ai-lyrics-editor">4. ตรวจแก้เนื้อร้องและเวลารูปแบบ LRC ก่อนบันทึก</label>
+              <textarea id="ai-lyrics-editor" class="field" rows="12" spellcheck="false"
+                placeholder="[00:12.50]เนื้อร้องบรรทัดแรก&#10;[00:18.75]เนื้อร้องบรรทัดที่สอง"
+                disabled></textarea>
+              <div class="ai-lyrics-editor-actions">
+                <button id="ai-lyrics-insert-time" class="button ghost" type="button" disabled>+ แทรกเวลาที่เล่นอยู่</button>
+                <button id="ai-lyrics-download" class="button ghost" type="button" disabled>↓ ดาวน์โหลด LRC ฉบับแก้ไข</button>
+                <button id="ai-lyrics-save" class="button primary" type="button" disabled>✓ ตรวจแล้ว บันทึกเนื้อร้อง</button>
+              </div>
+              <p id="ai-lyrics-validation" class="ai-lyrics-validation" role="status" aria-live="polite">ยังไม่มีเนื้อร้องให้ตรวจ</p>
+              <p class="hint">AI อาจฟังภาษาไทยหรือเสียงร้องที่ปนดนตรีผิด และระบุเวลาไม่ตรงทุกคำ ต้องตรวจด้วยการฟังจริงก่อนบันทึก · ผลลัพธ์เป็นร่างส่วนตัว ไม่อัปโหลดเพลงหรือเผยแพร่เนื้อร้องอัตโนมัติ</p>
+            </div>
+          </article>
         </section>
 
         <section id="tab-upload" class="tab">
