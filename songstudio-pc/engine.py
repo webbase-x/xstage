@@ -1466,7 +1466,12 @@ class Handler(BaseHTTPRequestHandler):
                 rows = visible_files(query.get("search", [""])[0])
                 limit = max(1, min(500, int(query.get("limit", ["100"])[0])))
                 offset = max(0, int(query.get("offset", ["0"])[0]))
-                self._json({"rows": rows[offset:offset + limit], "total": len(rows)})
+                page_rows = rows[offset:offset + limit]
+                # Enrich only the small preview page, never the full catalog.
+                if query.get("preview_identity", ["0"])[0] == "1":
+                    page_rows = [{**item, **preview_song_identity(item)}
+                                 for item in page_rows]
+                self._json({"rows": page_rows, "total": len(rows)})
             elif path == "/api/preview-lyrics":
                 try:
                     song_id = int(query.get("id", [""])[0])
