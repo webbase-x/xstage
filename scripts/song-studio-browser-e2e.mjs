@@ -81,6 +81,7 @@ try {
     soundfont: 'C:\\XStage\\GeneralUser-GS.sf2', midi_preset: 'balanced',
     mode: 'original', download: 'C:\\XStage\\Downloads', oauth: ''
   };
+  let fakeGoogleConnected = false;
   const list = [
     {id: 1, title: 'เสียงทดสอบ 1', artist: 'XStage', code: 'TEST001', kind: 'MID', size: 12000, status: 'ready'},
     {id: 2, title: 'เสียงทดสอบ 2', artist: 'XStage', code: 'TEST002', kind: 'MP3', size: 32000, status: 'ready'}
@@ -98,7 +99,9 @@ try {
         version:'0.3.5', build:305,
         preferences:settings, soundfonts:[settings.soundfont],
         presets:[{value:'balanced',label:'สมดุล'}],
-        google:{configured:true,connected:false,email:'',config_source:'bundled'},
+        google:{configured:true,connected:fakeGoogleConnected,
+                email:fakeGoogleConnected?'test@example.invalid':'',
+                config_source:'bundled'},
         job:{id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',completed:0,total:0,logs:[]},
         update:{status:'unavailable'}
       };
@@ -158,6 +161,7 @@ try {
     } else if (url.pathname === '/api/environment') {
       response = {'Bundled FFmpeg':true, 'Bundled SoundFont':true};
     } else if (url.pathname === '/api/jobs') {
+      if (request.postDataJSON()?.action === 'login') fakeGoogleConnected = true;
       response = {id:'pc-wizard-smoke-job'};
     }
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)});
@@ -279,6 +283,35 @@ try {
   await pc.click('#ai-lyrics-download');
   assert.match((await exportedLrc).suggestedFilename(),/\.lrc$/);
   assert.deepEqual(pcErrors,[], 'AI Lyrics menu must not produce browser errors');
+  // Cloud UI smoke uses mocked API only; network/account integration is
+  // independently covered by the Drive round-trip Python tests.
+  await pc.click('.nav-button[data-tab="settings"]');
+  await pc.click('#settings-login');
+  await pc.waitForFunction(()=>document.querySelector('#google-badge')?.textContent.includes('test@example.invalid'));
+  await pc.click('.nav-button[data-tab="upload"]');
+  assert.equal(await pc.locator('#upload-button').isEnabled(),true);
+  await pc.click('#upload-button');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  const uploadJob=pc.waitForRequest(req=>{
+    try{return new URL(req.url()).pathname==='/api/jobs' &&
+      req.postDataJSON()?.action==='upload';}catch{return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await uploadJob;
+  await pc.click('.nav-button[data-tab="download"]');
+  const downloadButton=pc.locator('.download-action[data-kind="songs"]');
+  assert.equal(await downloadButton.isEnabled(),true);
+  await downloadButton.click();
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  const downloadJob=pc.waitForRequest(req=>{
+    try{return new URL(req.url()).pathname==='/api/jobs' &&
+      req.postDataJSON()?.action==='download' &&
+      req.postDataJSON()?.kind==='songs';}catch{return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await downloadJob;
+  assert.deepEqual(pcErrors,[], 'Cloud UI actions should not produce JavaScript errors');
+
   assert.deepEqual(pcErrors, [], 'PC wizard should not produce JavaScript errors');
   console.log('PASS: Both Create buttons submit real build jobs after ONE confirmation; acknowledgment stays visible.');
 
