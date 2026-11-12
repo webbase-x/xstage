@@ -6,6 +6,8 @@ import os
 import tempfile
 import threading
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from http.client import HTTPConnection
 from pathlib import Path
 from zipfile import ZipFile
@@ -46,6 +48,31 @@ class PcSourceTests(unittest.TestCase):
         second = engine.unique_target(self.dest, "song", ".m4a")
         self.assertNotEqual(first, second)
         self.assertEqual(first.read_bytes(), b"old")
+
+    def test_windows_picker_returns_thai_unicode_path_and_reports_errors(self):
+        # Mock Windows subprocess so this test also runs on Linux CI without GUI.
+        import base64
+        path = r"C:\เพลงไทย\ต้นฉบับ"
+        payload = b"PICKED:" + base64.b64encode(path.encode("utf-8")) + b"\r\n"
+        result = SimpleNamespace(stdout=payload, stderr=b"", returncode=0)
+        process = SimpleNamespace(
+            PIPE=-1, DEVNULL=-3, CREATE_NO_WINDOW=0x08000000,
+            run=Mock(return_value=result)
+        )
+        with patch.object(engine, "os", SimpleNamespace(name="nt")), \
+             patch.object(engine, "subprocess", process):
+            self.assertEqual(engine.open_picker("source"), path)
+            self.assertEqual(process.run.call_args.args[0][-4:],
+                             ["-Kind", "source", "-InitialPath", str(self.source)])
+            process.run.return_value = SimpleNamespace(
+                stdout=b"CANCELLED\n", stderr=b"", returncode=0
+            )
+            self.assertEqual(engine.open_picker("workspace"), "")
+            process.run.return_value = SimpleNamespace(
+                stdout=b"", stderr=b"PowerShell picker failure", returncode=1
+            )
+            with self.assertRaisesRegex(RuntimeError, "PowerShell picker failure"):
+                engine.open_picker("source")
 
     def test_local_http_only_and_auth(self):
         from http.server import ThreadingHTTPServer
@@ -91,7 +118,7 @@ class PcSourceTests(unittest.TestCase):
         target = module.package()
         with ZipFile(target) as z:
             files = set(z.namelist())
-            for name in ["Start-Song-Studio.cmd", "Start-Song-Studio.ps1",
+            for name in ["Start-Song-Studio.cmd", "Start-Song-Studio.ps1", "pick_path.ps1",
                          "engine.py", "studio/index.html", "studio/app.js",
                          "studio/style.css", "studio/entry.js"]:
                 self.assertIn("X-Stage-Song-Studio-PC-Source-Preview/" + name, files)
