@@ -103,6 +103,12 @@ class PcSourceTests(unittest.TestCase):
             code, content = get("/", no_token)
             self.assertEqual(code, 200)
             self.assertIn(b"Song Studio", content)
+            code, icon = get("/app-icon.svg", no_token)
+            self.assertEqual(code, 200)
+            self.assertIn(b"<svg", icon)
+            code, manifest = get("/site.webmanifest", no_token)
+            self.assertEqual(code, 200)
+            self.assertEqual(json.loads(manifest)["short_name"], "X-Stage Studio")
         finally:
             server.shutdown()
             server.server_close()
@@ -120,7 +126,7 @@ class PcSourceTests(unittest.TestCase):
             files = set(z.namelist())
             for name in ["Start-Song-Studio.cmd", "Start-Song-Studio.ps1", "pick_path.ps1",
                          "engine.py", "ai_separate.py", "ai-model.lock.json", "live_preview.py", "studio/index.html", "studio/app.js",
-                         "studio/style.css", "studio/entry.js"]:
+                         "studio/style.css", "studio/entry.js", "studio/app-icon.svg", "studio/site.webmanifest"]:
                 self.assertIn("X-Stage-Song-Studio-PC-Source-Preview/" + name, files)
             self.assertTrue(z.testzip() is None)
 
