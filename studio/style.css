@@ -21,3 +21,45 @@
 .connection-gate-card li{margin-bottom:8px}
 .connection-gate-card .button{min-height:52px;width:100%}
 .connection-gate-card .connection-gate-foot{font-size:.82rem;margin-top:16px}
+
+/* Song Studio create wizard · shared PC and authenticated Web Control UI */
+.create-step-panel[hidden],.create-step-footer [hidden]{display:none!important}
+.create-assistant{margin-bottom:17px;background:linear-gradient(130deg,#123d52,#102737 66%,#102139)}
+.create-assistant-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.create-assistant-heading h2{font-size:20px;line-height:1.4;margin:6px 0 5px}
+.create-assistant-heading p{font-size:12px;color:#a5c5d6;margin:0;line-height:1.65}
+.create-assistant-heading .chip{flex-shrink:0}
+.create-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.create-step-link{display:flex;min-width:0;min-height:70px;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:1px solid #33546b;border-radius:12px;background:#0d2637;color:#c1d7e4;font-size:12px;font-weight:800;transition:border-color .15s,background .15s}
+.create-step-link:hover:not(:disabled){background:#153a52;border-color:#54c8da}
+.create-step-link.active{background:linear-gradient(125deg,#106b79,#16475d);border-color:#55dfe1;box-shadow:inset 0 0 0 1px #39b6c080;color:white}
+.create-step-link.completed{border-color:#388e7b;background:#123d3d}
+.create-step-link:disabled{opacity:.62;cursor:not-allowed}
+.create-step-link span:last-child{min-width:0}
+.create-step-link small{display:block;font-size:10px;color:#a0bfcb;font-weight:550;margin-top:3px;line-height:1.35}
+.create-step-number{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border-radius:50%;border:1px solid #517b92;background:#183d51;color:#b9e9f7;font-size:13px;font-weight:900}
+.create-step-link.active .create-step-number{background:#67e3de;color:#09283a;border-color:#b5faf4}
+.create-step-link.completed .create-step-number{background:#20856e;color:#f0fffd;border-color:#20856e}
+.create-step-panel{margin-top:0;margin-bottom:16px}
+.create-step-panel .section-heading h2{font-size:18px}
+.create-step-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid #294d60;background:#0d2538;border-radius:13px}
+.create-step-footer span{color:#a8c9db;font-size:12px;text-align:center}
+.create-step-footer .button{min-width:160px}
+.sound-preview-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.sound-settings,.sound-preview{padding:18px;background:#0a2233;border:1px solid #2b4e62;border-radius:13px;min-width:0}
+.sound-settings h3,.sound-preview h3{font-size:14px;margin:0 0 17px;color:#e4f5fd}
+.sound-settings label{font-size:12px;font-weight:760;color:#a5c8d6;display:block;margin-bottom:6px}
+.sound-settings .hint,.sound-preview .hint{margin-top:12px}
+.sound-preview{display:flex;flex-direction:column}
+.sound-preview .button{align-self:flex-start;margin:8px 0 4px}
+.sound-preview-hint{margin:0;color:#c4e6ec;font-size:12px;line-height:1.65;min-height:42px}
+.sound-preview .preview-row{flex-direction:column;align-items:stretch;margin-top:12px}
+.sound-preview .preview-row audio{width:100%;max-width:none}
+.create-review{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.create-review>div{padding:13px 15px;background:#0b2737;border:1px solid #33576b;border-radius:11px;min-width:0}
+.create-review span{display:block;color:#91b8c8;font-size:11px;margin-bottom:5px}
+.create-review strong{display:block;color:#dffbfb;font-size:13px;overflow-wrap:anywhere;line-height:1.5}
+.create-step-panel .builder-actions{justify-content:flex-end;gap:10px}
+@media(max-width:1170px){.create-step-link{padding:10px 8px;gap:7px}.create-step-number{width:27px;height:27px}}
+@media(max-width:890px){.create-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.sound-preview-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.create-assistant-heading{align-items:flex-start;flex-direction:column}.create-step-link{min-height:59px}.create-step-footer{flex-wrap:wrap}.create-step-footer span{width:100%;order:-1}.create-step-footer .button{flex:1;min-width:0}.create-review{grid-template-columns:1fr}.create-step-panel .builder-actions{justify-content:stretch}.create-step-panel .builder-actions .button{flex:1}.sound-settings,.sound-preview{padding:12px}}
