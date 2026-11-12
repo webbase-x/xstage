@@ -60,6 +60,7 @@
   const previewAudio = $('preview-audio');
   let previewSongId = null, previewSearchTimer = 0, previewSearchSeq = 0;
   let previewSongRows = [], livePreviewPending = false;
+  let liveStreamId = '', liveControlTimer = 0, liveControlPending = false;
 
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
@@ -195,6 +196,7 @@
     $('page-title').textContent = tabNames[name][0];
     $('page-subtitle').textContent = tabNames[name][1];
     document.title = `${tabNames[name][0]} · X-Stage Song Studio`;
+    if (activeTab !== 'create') stopLivePreview();
     if (name === 'settings') void refreshEnvironment();
   }
   function setFields() {
@@ -349,10 +351,40 @@
     }
   }
   function stopLivePreview() {
+    clearTimeout(liveControlTimer);
+    const stopping = liveStreamId;
+    liveStreamId = '';
     previewAudio.pause();
     previewAudio.removeAttribute('src');
     previewAudio.load(); // Aborts HTTP stream; closes FFmpeg/FluidSynth without writing files.
+    if (stopping) void post('/api/live-stop', {stream_id:stopping}).catch(()=>{});
     $('preview-label').textContent = 'หยุดทดลองฟังแล้ว';
+  }
+  function queueLiveControl(immediate = false) {
+    if (!liveStreamId) return;
+    clearTimeout(liveControlTimer);
+    liveControlTimer = setTimeout(async () => {
+      if (liveControlPending || !liveStreamId) return;
+      liveControlPending = true;
+      const stream = liveStreamId;
+      try {
+        const payload = {
+          stream_id:stream,
+          music_volume:Number($('preview-music-volume').value)/100,
+          synth_volume:Number($('preview-sf-volume').value)/100,
+          soundfont:$('create-soundfont').value || prefs.soundfont,
+          preset:$('create-preset').value
+        };
+        await post('/api/live-control', payload);
+        if (stream === liveStreamId) {
+          $('create-preview-hint').textContent = 'ปรับเสียงสดแล้ว · เสียงดนตรีต้นฉบับแยกจาก SoundFont';
+        }
+      } catch (error) {
+        if (stream === liveStreamId) message('ปรับเสียงสดไม่สำเร็จ: ' + error.message);
+      } finally {
+        liveControlPending = false;
+      }
+    }, immediate ? 0 : 70);
   }
   async function searchPreviewSongs() {
     if (!token || !engineBase) return;
@@ -423,6 +455,11 @@
       $('create-preview-hint').textContent = response.message ||
         (response.mixed ? 'เล่นเสียงดนตรีและ SoundFont พร้อมกัน' : 'เล่นแบบสด');
       $('preview-label').textContent = 'กำลังเล่น ' + (response.title || 'เพลงที่เลือก');
+      liveStreamId = response.stream_id || '';
+      if (response.original_is_midi) $('create-preview-hint').textContent =
+        'ดนตรีต้นฉบับ MIDI ใช้ SoundFont มาตรฐาน · เลื่อนเสียง SoundFont ที่เลือกเป็น 0% ก็ยังได้ยินเพลงเดิม';
+      else if (!response.has_midi) $('create-preview-hint').textContent =
+        'ไฟล์นี้เป็นเสียงดนตรีต้นฉบับล้วน ไม่มี MIDI คู่กัน จึงไม่มี SoundFont ให้ผสม';
       previewAudio.src = engineAddress('/api/live-stream?ticket=' + encodeURIComponent(response.ticket));
       const result = previewAudio.play();
       if (result) await result.catch(() => {
@@ -657,10 +694,17 @@
                                  ['preview-sf-volume','preview-sf-volume-label']]) {
     $(slider).addEventListener('input', () => {
       $(label).textContent = $(slider).value + '%';
-      if (!previewAudio.paused) $('create-preview-hint').textContent =
-        'ระดับเสียงใหม่จะมีผลเมื่อกด “เล่นเพลงทันที” เพื่อเริ่มสตรีมใหม่';
+      queueLiveControl();
     });
   }
+  // SoundFont and MIDI preset adjustments apply to the existing stream,
+  // without creating another file or losing the current play position.
+  $('create-soundfont').addEventListener('change',()=>queueLiveControl(true));
+  $('create-preset').addEventListener('change',()=>queueLiveControl(true));
+  $('create-mode').addEventListener('change', () => {
+    if (liveStreamId) $('create-preview-hint').textContent =
+      'AI แยกเสียงใช้กับการสร้างเพลงในขั้นตอนที่ 4 เท่านั้น · เสียงทดลองฟังยังเป็นดนตรีต้นฉบับ';
+  });
   previewAudio.addEventListener('error', () => {
     if (previewAudio.getAttribute('src')) message('สตรีมเสียงขัดข้อง · ตรวจไฟล์ต้นฉบับและ SoundFont แล้วกดเล่นใหม่');
   });
