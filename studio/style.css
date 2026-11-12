@@ -100,3 +100,16 @@
 .studio-confirm-actions{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;margin-top:23px}
 .studio-confirm-actions .button{min-width:96px}
 @media(max-width:610px){.preview-mixer{grid-template-columns:1fr}.studio-confirm-content{padding:20px}.global-message{top:12px;right:12px}}
+
+
+/* Dedicated X-Stage Song Studio PC app identity — consistent desktop/browser mark. */
+.brand{gap:11px;padding:1px 3px 22px;min-width:0}
+.brand-mark{width:64px;height:64px;min-width:64px;border:1px solid #3968b780;border-radius:20px;background:linear-gradient(135deg,#0b2751,#251144)!important;box-shadow:0 0 28px #376dff38,0 4px 20px #0008;overflow:hidden;padding:0;display:flex;align-items:center;justify-content:center}
+.brand-mark img{display:block;width:100%;height:100%;object-fit:contain;border-radius:17px}
+.brand-wordmark{min-width:0;display:flex;flex-direction:column;justify-content:center}
+.brand-wordmark strong{font-size:20px;line-height:1.02;font-weight:950;letter-spacing:.025em;white-space:nowrap;color:#f3fbff;text-shadow:0 1px 12px #20beef39}
+.brand-wordmark small{color:#9fe7ff;font-size:10px;font-weight:900;letter-spacing:.11em;margin-top:6px;white-space:nowrap}
+.brand-edition{display:inline-block;font-size:10px;letter-spacing:0;color:#07213c;background:linear-gradient(135deg,#61e4ff,#8b91ff);border-radius:4px;padding:1px 4px;margin-left:2px}
+.brand-caption{font-size:7px;font-weight:800;letter-spacing:.075em;color:#94aaba;margin-top:5px;white-space:nowrap}
+@media(max-width:1280px){.brand{gap:7px}.brand-mark{width:54px;height:54px;min-width:54px;border-radius:17px}.brand-wordmark strong{font-size:18px}.brand-wordmark small{font-size:9px}.brand-caption{font-size:6.5px}}
+@media(max-width:750px){.sidebar .brand{padding-bottom:11px}.brand-mark{width:56px;height:56px;min-width:56px}.brand-wordmark strong{font-size:21px}.brand-caption{font-size:8px}}
