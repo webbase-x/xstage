@@ -146,6 +146,27 @@ class DriveRoundTripTests(unittest.TestCase):
                 self.g.download_library(target, kind="songs")
         self.assertEqual(dest.read_bytes(), b"do-not-overwrite")
 
+    def test_partial_drive_library_without_pointer_is_rejected(self):
+        self.g.upload_library(self.songs, self.records)
+        for ident, item in list(self.g.items.items()):
+            if item["metadata"]["name"] == "current.json":
+                self.g.items.pop(ident)
+        self.g.locked = True
+        with patch.object(drive, "_request", side_effect=self._fake_request):
+            with self.assertRaisesRegex(drive.GoogleError, "current.json"):
+                self.g.download_library(self.root / "partial", kind="songs")
+        self.assertFalse((self.root / "partial").exists())
+
+    def test_missing_remote_md5_cannot_publish_unverified_restore(self):
+        self.g.upload_library(self.songs, self.records)
+        for item in self.g.items.values():
+            if item["metadata"]["name"] == "a.m4a":
+                item["metadata"].pop("md5Checksum", None)
+        self.g.locked = True
+        with patch.object(drive, "_request", side_effect=self._fake_request):
+            with self.assertRaisesRegex(drive.GoogleError, "MD5"):
+                self.g.download_library(self.root / "unverified", kind="songs")
+
     def test_corrupt_remote_download_rejected_by_md5(self):
         self.g.upload_library(self.songs, self.records)
         for item in self.g.items.values():
