@@ -92,14 +92,19 @@ jobs:
       - name: Preflight Google Drive upload/download OAuth readiness
         shell: powershell
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) -or
-              [string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)) {
-            throw "Cannot build Ready ZIP: Google Desktop OAuth Client ID + Secret are required before packaging. Configure Actions variable/secret."
+          $hasId = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID)
+          $hasSecret = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)
+          if ($hasId -ne $hasSecret) {
+            throw "Desktop OAuth incomplete: provide BOTH matching Client ID and Client Secret or neither."
           }
-          if (!$env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID.EndsWith('.apps.googleusercontent.com')) {
-            throw "Google OAuth Client ID format invalid. Expected Desktop Client ID."
+          if ($hasId) {
+            if (!$env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID.EndsWith('.apps.googleusercontent.com')) {
+              throw "Google OAuth Client ID format invalid. Expected Desktop Client ID."
+            }
+            Write-Host "PASS: Desktop OAuth client pair present for bundled Google Login."
+          } else {
+            Write-Warning "Google OAuth not preconfigured: core ZIP can be built, but users must import their Desktop OAuth Client JSON once. Never claim automatic Google Login."
           }
-          Write-Host "PASS: Desktop OAuth client pair present for bundled Google Login."
       - name: Preflight bundled Google Desktop OAuth
         shell: powershell
         run: |
@@ -143,7 +148,7 @@ jobs:
             Write-Host "PASS: App-wide Desktop OAuth ID + Secret are both available to token exchange."
           } else {
             if (Test-Path $config) { throw "Incomplete Desktop OAuth must NOT be bundled" }
-            throw "Cannot publish Ready ZIP: Google Desktop OAuth Client ID and matching Secret are missing in Actions configuration. This build cannot pass Google Login/upload/download acceptance."
+            Write-Warning "Google OAuth NOT bundled. Core audio/runtime tests can pass; end users must import a valid Desktop OAuth JSON once for Google Login/Drive."
           }
       - name: Verify real audio and MIDI conversions
         shell: powershell
@@ -227,6 +232,9 @@ jobs:
           Google Desktop OAuth ID and matching Secret may be bundled by the
           developer via Actions Variable and Secret. When absent, users import
           their own complete Desktop JSON once.
+          If the owner has not configured BOTH Desktop OAuth values, Google Login
+          requires a one-time Desktop Client JSON import in Advanced Settings.
+          This release does NOT provide automatic Google Login in that case.
           Per-user tokens and preferences persist across releases under Windows
           LocalAppData and DPAPI. If variable is absent, one-time import is required.
           Source deduplication, recovery journal, catalogs and current.json remain.
