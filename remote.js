@@ -13,12 +13,40 @@
   const ownerGate=$('remote-owner-gate'),ownerPanel=$('remote-owner-panel');
   const ownerStatus=$('remote-owner-status'),ownerBadge=$('remote-owner-badge');
   const roleNote=$('remote-role-note');
+  // Remember the preferred Owner account and the short-lived TV pairing only.
+  // Google OAuth access tokens and Owner permissions are NEVER persisted.
+  const OWNER_PREF_KEY='xstage-remote-owner-preference-v1';
+  const OWNER_PAIR_KEY='xstage-remote-owner-pair-v1';
+  const OWNER_REMEMBER_MS=7*24*60*60*1000;
+  function rememberRead(key){
+    try {
+      const value=JSON.parse(localStorage.getItem(key)||'null');
+      if(!value||!Number.isFinite(value.at)||value.at>Date.now()+60000||
+         Date.now()-value.at>OWNER_REMEMBER_MS)return null;
+      return value;
+    }catch{return null;}
+  }
+  function rememberWrite(key,value){try{localStorage.setItem(key,JSON.stringify({...value,at:Date.now()}));}catch{}}
+  function rememberClear(key){try{localStorage.removeItem(key);}catch{}}
+  const rememberedOwner=rememberRead(OWNER_PREF_KEY);
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
-  const hostId=params.get('p'),secret=params.get('k');
+  let hostId=params.get('p'),secret=params.get('k');
+  function validPair(p,k){return /^[a-z0-9_-]+$/i.test(String(p||''))&&/^[a-f0-9]{48}$/i.test(String(k||''));}
+  // Reopen the bookmarked remote on the same phone without re-scanning QR
+  // while the TV's ephemeral pairing key remains valid.
+  if(!validPair(hostId,secret)&&rememberedOwner){
+    const pair=rememberRead(OWNER_PAIR_KEY);
+    if(pair&&validPair(pair.hostId,pair.secret)){
+      hostId=pair.hostId;secret=pair.secret;
+      const savedFragment=new URLSearchParams({p:hostId,k:secret});
+      history.replaceState(null,'',location.pathname+location.search+'#'+savedFragment.toString());
+    }
+  }
   let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0;
   let lastNotifiedUpdateBuild=0;
   let searchTimer=null,querySequence=0,activeTab='search',role='guest';
   let ownerAccessToken='';
+  let ownerAuthRequest=0,ownerLoginBusy=false,ownerAutoAttempted=false;
   const pendingRequests=new Map();
   let nextRequestId=0;
   let reconnectTimer=0,reconnectAttempts=0;
@@ -106,6 +134,7 @@
   function disconnected(message){
     clearConnectWatchdog();resetButtons();
     connected=false;ready=false;controls.hidden=true;setRole('guest');
+    ownerAuthRequest++;ownerLoginBusy=false;ownerAutoAttempted=false;discardOwnerToken();
     reconnectButton.hidden=!hostId||!secret;scanLink.hidden=false;report(message,'disconnected');
     scheduleReconnect();
   }
@@ -178,36 +207,96 @@
     const item=document.createElement('p');item.className='request-receipt';item.textContent=value;history.prepend(item);
     while(history.children.length>12)history.lastElementChild.remove();report(value);
   }
-  function revokeOwnerToken(){
-    const token=ownerAccessToken;ownerAccessToken='';
-    if(token&&window.google?.accounts?.oauth2?.revoke)try{google.accounts.oauth2.revoke(token,()=>{});}catch{}
+  function discardOwnerToken(){
+    // An already validated ephemeral Google token is immediately removed
+    // from JS memory. Revoking its OAuth grant would break remembered login.
+    ownerAccessToken='';
   }
-  function ownerLogin(){
+  function clearRememberedOwner(){
+    rememberClear(OWNER_PREF_KEY);
+    rememberClear(OWNER_PAIR_KEY);
+  }
+  function ownerLogoutMobile(){
+    // Logging out the mobile owner does NOT sign out the karaoke TV/Drive.
+    ownerAuthRequest++;
+    ownerLoginBusy=false;
+    discardOwnerToken();
+    clearRememberedOwner();
+    setRole('guest');
+    if(connected)send({type:'owner-signout'});
+    ownerStatus.textContent='ออกจากระบบผู้ดูแลบนมือถือแล้ว · ใช้ Guest ได้ต่อ';
+    report('ออกจากระบบผู้ดูแลบนมือถือแล้ว · จอ TV ยังคงเล่นเพลงได้','connected');
+    setTab('owner');
+  }
+  $('owner-logout-mobile').addEventListener('click',ownerLogoutMobile);
+  function ownerLogin({automatic=false}={}){
     if(!connected){ownerStatus.textContent='ยังไม่ได้เชื่อมต่อจอ TV';return;}
+    if(ownerLoginBusy)return;
     const cfg=window.XSTAGE_CONFIG||{};
     if(!cfg.googleClientId){ownerStatus.textContent='เว็บไซต์ยังไม่ได้ตั้ง Google OAuth Web Client ID';return;}
     if(!window.google?.accounts?.oauth2?.initTokenClient){
       ownerStatus.textContent='กำลังโหลด Google Sign-In · กรุณากดอีกครั้ง';return;
     }
-    ownerStatus.textContent='กำลังเปิด Google เพื่อยืนยันบัญชี…';
+    ownerLoginBusy=true;
+    const request=++ownerAuthRequest,activeConnection=conn;
+    ownerStatus.textContent=automatic
+      ?'พบผู้ดูแลที่จำไว้ · กำลังยืนยันกับ Google และจอ TV อีกครั้ง…'
+      :'กำลังเปิด Google เพื่อยืนยันบัญชี…';
     try{
       const client=google.accounts.oauth2.initTokenClient({
         client_id:cfg.googleClientId,
         scope:'openid email',
         callback:result=>{
+          if(request!==ownerAuthRequest||conn!==activeConnection)return;
+          ownerLoginBusy=false;
           if(result?.error||!result?.access_token){
-            ownerStatus.textContent='ยืนยัน Google ไม่สำเร็จ';return;
+            ownerStatus.textContent=automatic
+              ?'จำบัญชีผู้ดูแลไว้แล้ว · แตะเข้าสู่ระบบเพื่อยืนยันอีกครั้ง'
+              :'ยืนยัน Google ไม่สำเร็จ';
+            return;
           }
           ownerAccessToken=String(result.access_token);
           ownerStatus.textContent='กำลังตรวจว่าบัญชีตรงกับจอ TV…';
           send({type:'owner-auth',accessToken:ownerAccessToken});
         },
-        error_callback:()=>{ownerStatus.textContent='ไม่สามารถเปิด Google Sign-In ได้';}
+        error_callback:()=>{
+          if(request!==ownerAuthRequest)return;
+          ownerLoginBusy=false;
+          ownerStatus.textContent=automatic
+            ?'จำบัญชีไว้แล้ว · เบราว์เซอร์ต้องให้แตะเข้าสู่ระบบอีกครั้ง'
+            :'ไม่สามารถเปิด Google Sign-In ได้';
+        }
       });
-      client.requestAccessToken({prompt:'select_account'});
-    }catch(error){ownerStatus.textContent=String(error?.message||'เปิด Google Sign-In ไม่สำเร็จ');}
+      // GIS OAuth may require a user gesture even when Google remembers the
+      // account. If the browser blocks automatic reuse, show the login button.
+      client.requestAccessToken({prompt:automatic?'':'select_account'});
+    }catch(error){
+      if(request!==ownerAuthRequest)return;
+      ownerLoginBusy=false;
+      ownerStatus.textContent=automatic
+        ?'จำบัญชีไว้แล้ว · แตะเข้าสู่ระบบเพื่อยืนยันสิทธิ์'
+        :String(error?.message||'เปิด Google Sign-In ไม่สำเร็จ');
+    }
   }
-  $('remote-owner-login').addEventListener('click',ownerLogin);
+  function restoreOwnerLogin(){
+    if(!rememberedOwner||ownerAutoAttempted||!connected)return;
+    ownerAutoAttempted=true;
+    ownerStatus.textContent='กำลังตรวจสิทธิ์ Owner ที่จำไว้…';
+    const connectionAtStart=conn;
+    // The Google GIS script is loaded with defer and may not be ready when
+    // the PeerJS channel opens. Retry loading only; never loop consent popups.
+    const check=(tries=0)=>{
+      if(!connected||conn!==connectionAtStart||role==='owner')return;
+      if(window.google?.accounts?.oauth2?.initTokenClient){ownerLogin({automatic:true});return;}
+      if(tries>=20){
+        ownerStatus.textContent='จำบัญชีผู้ดูแลไว้แล้ว · แตะเข้าสู่ระบบเพื่อยืนยันอีกครั้ง';
+        return;
+      }
+      setTimeout(()=>check(tries+1),300);
+    };
+    check();
+  }
+  $('remote-owner-login').addEventListener('click',()=>ownerLogin());
 
   function downloadQueue(data){
     const body=JSON.stringify({schema:'xstage-remote-queue-v1',exportedAt:new Date().toISOString(),items:Array.isArray(data)?data:[]},null,2);
@@ -225,12 +314,28 @@
       connected=true;controls.hidden=false;reconnectButton.hidden=true;scanLink.hidden=true;setRole('guest');
       report('เชื่อมต่อแล้ว · Guest ใช้คำสั่งพื้นฐานได้ทันที','connected');
       if(search.value.trim())search.dispatchEvent(new Event('input'));else drawResults([]);
-      send({type:'refresh'});return;
+      send({type:'refresh'});
+      restoreOwnerLogin();
+      return;
     }
     if(data.type==='role'){
-      revokeOwnerToken();
-      if(data.role==='owner'){setRole('owner',String(data.email||''));report('Owner ยืนยันแล้ว · ควบคุมเต็มระบบ','connected');send({type:'refresh'});}
-      else{setRole('guest');ownerStatus.textContent=String(data.message||'บัญชีไม่ตรงกับจอ TV');report(ownerStatus.textContent,'error');send({type:'refresh'});}
+      discardOwnerToken();
+      ownerLoginBusy=false;
+      if(data.role==='owner'){
+        // Save only a validated account hint and the ephemeral QR pairing,
+        // never an OAuth token or unverified Owner privilege.
+        rememberWrite(OWNER_PREF_KEY,{email:String(data.email||'')});
+        if(validPair(hostId,secret))rememberWrite(OWNER_PAIR_KEY,{hostId,secret});
+        setRole('owner',String(data.email||''));
+        report('Owner ยืนยันแล้ว · จำบัญชีบนมือถือเครื่องนี้ · ออกจากระบบได้','connected');
+        send({type:'refresh'});
+      }else{
+        if(data.signedOut)clearRememberedOwner();
+        setRole('guest');
+        ownerStatus.textContent=String(data.message||'บัญชีไม่ตรงกับจอ TV');
+        report(ownerStatus.textContent,data.signedOut?'connected':'error');
+        send({type:'refresh'});
+      }
       return;
     }
     if(data.type==='error'){report(String(data.message||'เชื่อมต่อไม่ได้'),'error');return;}
@@ -415,7 +520,7 @@
     }catch{close();report('ไม่สามารถเปิดกล้องได้ กรุณาตรวจสิทธิ์กล้อง');}
   });
 
-  if(!hostId||!secret||!/^[a-z0-9_-]+$/i.test(hostId)||!/^[a-f0-9]{48}$/i.test(secret)){
+  if(!validPair(hostId,secret)){
     scanLink.hidden=false;reconnectButton.hidden=true;report('ยังไม่มีรหัส QR · แตะ 📷 เพื่อสแกนจากจอ TV');return;
   }
   if(typeof Peer!=='function'){report('โหลดระบบจับคู่ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
@@ -425,6 +530,7 @@
     clearConnectWatchdog();
     if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=0;}
     setRole('guest');
+    ownerAuthRequest++;ownerLoginBusy=false;ownerAutoAttempted=false;discardOwnerToken();
     const previous=peer;
     if(previous){try{previous.destroy();}catch{}}
     const current=new Peer();peer=current;conn=null;
@@ -469,6 +575,6 @@
   window.addEventListener('beforeunload',()=>{
     clearConnectWatchdog();resetButtons();
     if(reconnectTimer)clearTimeout(reconnectTimer);
-    revokeOwnerToken();try{conn?.close();peer?.destroy();}catch{}
+    discardOwnerToken();try{conn?.close();peer?.destroy();}catch{}
   });
 })();
