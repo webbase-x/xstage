@@ -562,6 +562,28 @@ def _song_export_module():
     return module
 
 
+def _source_digest(row, export):
+    """Deduplicate complete NCN *song packages*, not just MIDI bytes.
+
+    Two different NCN songs may share an identical MIDI arrangement but
+    have different .LYR/.CUR and must not share their lyrics record.
+    """
+    source = Path(row["path"])
+    trio = row.get("ncn") or NCN.resolve_companions(source)
+    if not trio:
+        return export.source_sha256(source)
+    digest = hashlib.sha256()
+    digest.update(b"NCN-FULL-SOURCE-V1\\0")
+    for component in ("midi", "lyrics", "cursor"):
+        file = trio.get(component)
+        if file:
+            digest.update(component.encode())
+            digest.update(export.source_sha256(file).encode("ascii"))
+        else:
+            digest.update((component + "=MISSING").encode())
+    return digest.hexdigest()
+
+
 def build_library(rows, mode, options):
     """Idempotent across independent sessions; checkpoint before next song.
 
@@ -611,26 +633,44 @@ def build_library(rows, mode, options):
                 digest = None
                 if previous is None:
                     update(f"ตรวจลายนิ้วมือ SHA-256 {idx}/{len(rows)}: {source.name}")
-                    digest = export.source_sha256(source)
+                    digest = _source_digest(row, export)
                     previous = by_sha.get(digest)
                 if previous is not None:
-                    # When a user first clicked "M4A only", then later asks
-                    # for "M4A + lyrics", complete only the missing lyrics.
-                    # Never re-encode or duplicate the already published M4A.
-                    if not options.get("audio_only", False) and not previous.get("lyrics"):
-                        saved_audio = export.safe_media_path(root, previous["audio"]["path"], "audio")
-                        upgrade = export.save_lyrics(
-                            root, saved_audio, lyrics_text(row),
-                            str(row.get("code") or source.stem))
-                        revised = dict(previous)
-                        revised["lyrics"] = {"path": upgrade.relative_to(root).as_posix()}
-                        export.append_journal(root, revised)
-                        records.append(revised)
-                        by_path[canonical] = revised
-                        if digest:
-                            by_sha[digest] = revised
-                        lyrics_count += 1
-                        log(f"เติม Lyrics ให้เพลงเดิมโดยไม่สร้าง M4A ซ้ำ: {source.name}")
+                    # Repair or add ONLY the lyric companion. Preserve the
+                    # exact same M4A, song ID, audio catalog path and code.
+                    if not options.get("audio_only", False):
+                        try:
+                            lrc, document, lyric_fingerprint = lyrics_package(row)
+                            if document and (not previous.get("lyrics") or
+                                             previous.get("lyricsSourceIdentity") != lyric_fingerprint):
+                                saved_audio = export.safe_media_path(
+                                    root, previous["audio"]["path"], "audio")
+                                repair = bool(previous.get("lyrics"))
+                                upgrade = export.save_lyrics(
+                                    root, saved_audio, lrc, str(row.get("code") or source.stem),
+                                    document=document, repair=repair)
+                                revised = dict(previous)
+                                revised["lyrics"] = {
+                                    "path": upgrade.relative_to(root).as_posix()
+                                }
+                                revised["lyricsSourceIdentity"] = lyric_fingerprint
+                                export.append_journal(root, revised)
+                                records.append(revised)
+                                by_path[canonical] = revised
+                                by_sha[digest or (previous.get("sourceIdentity") or {}).get("sha256")] = revised
+                                lyrics_count += 1
+                                log(("ซ่อมเนื้อร้องจากต้นฉบับจริง" if repair else "เพิ่ม Lyrics") +
+                                    " โดยไม่สร้าง M4A ซ้ำ: " + source.name)
+                            elif document is None:
+                                errors += 1
+                                issue = source.name + ": ไม่มีไฟล์เนื้อร้องพร้อมเวลา (M4A เดิมยังปลอดภัย)"
+                                details.append(issue)
+                                log("ERR " + issue)
+                        except (OSError, ValueError, RuntimeError) as exc:
+                            errors += 1
+                            issue = source.name + ": " + str(exc)
+                            details.append(issue)
+                            log("ERR Lyrics " + issue)
                     else:
                         log(f"ข้ามไฟล์ซ้ำ: {source.name} → {previous['audio']['path']} (ไม่สร้างรหัส/M4A/Lyrics ใหม่)")
                     skipped += 1
@@ -640,11 +680,37 @@ def build_library(rows, mode, options):
                 # incomplete prior record. Existing media stays untouched.
                 partial = export.find_incomplete(root, records, source)
                 if partial:
-                    raise RuntimeError(
-                        "พบข้อมูลสร้างค้างจากไฟล์ต้นฉบับเดียวกัน: " +
-                        str(partial.get("audio", {}).get("path", "ไม่ทราบไฟล์")) +
-                        " กรุณาตรวจไฟล์เดิมก่อนสร้างใหม่เพื่อป้องกันเพลงซ้ำ"
-                    )
+                    # Older releases sometimes published blank Lyrics JSON.
+                    # Repair from the original components; NEVER re-encode or
+                    # allocate a second audio filename for that source.
+                    saved_audio = export.safe_media_path(
+                        root, partial["audio"]["path"], "audio")
+                    if not saved_audio.is_file() or saved_audio.stat().st_size < 1000:
+                        raise RuntimeError(
+                            "พบรายการเดิมแต่ M4A ไม่สมบูรณ์: " + str(saved_audio) +
+                            " · ไม่ลบหรือเขียนทับอัตโนมัติ")
+                    if options.get("audio_only", False):
+                        skipped += 1
+                        log("ข้ามไฟล์เสียงเดิมที่อยู่ระหว่างซ่อม Lyrics: " + source.name)
+                        continue
+                    lrc, document, lyric_fingerprint = lyrics_package(row)
+                    if not document:
+                        raise ValueError(
+                            "ไม่มีไฟล์ Lyrics จริงสำหรับซ่อมเพลงที่เคยสร้าง · " + source.name)
+                    repaired = export.save_lyrics(
+                        root, saved_audio, lrc, str(row.get("code") or source.stem),
+                        document=document, repair=True)
+                    revised = dict(partial)
+                    revised["lyrics"] = {"path": repaired.relative_to(root).as_posix()}
+                    revised["lyricsSourceIdentity"] = lyric_fingerprint
+                    export.append_journal(root, revised)
+                    records.append(revised)
+                    by_path[canonical] = revised
+                    by_sha[digest] = revised
+                    lyrics_count += 1
+                    skipped += 1
+                    log("ซ่อม Lyrics JSON เดิมที่ผิดพลาดสำเร็จโดยไม่สร้าง M4A ซ้ำ: " + source.name)
+                    continue
 
                 # A pre-existing legacy unindexed output may come from an older
                 # app that did not store a source fingerprint. Do not invent a
@@ -680,6 +746,11 @@ def build_library(rows, mode, options):
                         "พื้นที่ดิสก์เหลือน้อยกว่า 128 MB หยุดสร้างเพลงนี้"
                         " · เปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง"
                     )
+                # Resolve the entire NCN trio before costly MIDI synthesis.
+                # A missing .LYR/.CUR must never produce a wrong timed JSON.
+                lyric_info = ("", None, "")
+                if not options.get("audio_only", False):
+                    lyric_info = lyrics_package(row)
                 target = export.next_target(root, source.name)
                 staged = export.temporary_audio(target)
                 update(f"กำลังสร้างเพลงใหม่ {idx}/{len(rows)}: {row['title']}")
@@ -699,13 +770,25 @@ def build_library(rows, mode, options):
 
                 lyric_file = None
                 if not options.get("audio_only", False):
-                    lyric_file = export.save_lyrics(
-                        root, target, lyrics_text(row), str(row.get("code") or source.stem))
-                    new_lyric = lyric_file
+                    lrc, timed_doc, lyric_fingerprint = lyric_info
+                    if timed_doc:
+                        lyric_file = export.save_lyrics(
+                            root, target, lrc, str(row.get("code") or source.stem),
+                            document=timed_doc)
+                        new_lyric = lyric_file
+                    else:
+                        # Audio was genuinely created, but lyrics could NOT be
+                        # extracted. Report ERR instead of claiming fake JSON.
+                        errors += 1
+                        reason = source.name + ": ไม่พบเนื้อร้องที่มีเวลาจริง (.LRC, NCN, KAR)"
+                        details.append(reason)
+                        log("ERR Lyrics " + reason)
                 record = export.make_record(root, row, target, lyric_file, vocal_target, mode)
+                if lyric_file:
+                    record["lyricsSourceIdentity"] = lyric_fingerprint
                 if digest is None:
                     # Path matches never reach here; only new songs are hashed.
-                    digest = export.source_sha256(source)
+                    digest = _source_digest(row, export)
                 record["sourceIdentity"] = export.source_marker(source, digest)
                 export.append_journal(root, record)
                 checkpointed = True
