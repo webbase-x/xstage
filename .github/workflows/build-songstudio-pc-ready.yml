@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build305
+  group: xstage-songstudio-ready-build306
   cancel-in-progress: false
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.5-build305"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.6-build306"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -56,7 +56,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.5-build305"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.6-build306"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -69,7 +69,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.5-build305.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.6-build306.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -96,10 +96,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.5-build305
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.6-build306
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.5-build305.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.5-build305.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.6-build306.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.6-build306.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -108,8 +108,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.5-build305"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.5-build305.zip"
+          $tag = "song-studio-pc-ready-v0.3.6-build306"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.6-build306.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
@@ -129,6 +129,6 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" --clobber --repo "$env:GITHUB_REPOSITORY"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.5 Build 305" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.6 Build 306" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
