@@ -4,6 +4,8 @@ This is a source preview, not the unrecovered original v0.2.5 Build 205 engine.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import mimetypes
@@ -354,21 +356,56 @@ def start_job(data):
     return {"id": result}
 
 def open_picker(kind):
+    """Show an actual Windows foreground picker; preserve Unicode/Thai paths.
+
+    A hidden PowerShell host alone can leave FolderBrowserDialog behind
+    Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
+    and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
+    """
+    if kind not in ("source", "workspace", "download", "soundfont", "oauth"):
+        raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
+        raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
+    picker = ROOT / "pick_path.ps1"
+    if not picker.is_file():
+        raise RuntimeError("ไม่พบ pick_path.ps1 กรุณาแตกไฟล์ ZIP รุ่นใหม่ให้ครบก่อน")
+    initial = str(PREFS.get(kind) or "")
+    args = [
+        "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-STA", "-File", str(picker), "-Kind", kind,
+        "-InitialPath", initial
+    ]
+    try:
+        result = subprocess.run(
+            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL, timeout=180,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "หน้าต่างเลือกโฟลเดอร์ไม่ตอบสนองเกิน 3 นาที "
+            "โปรดลองเปิดใหม่ หรือพิมพ์พาธในช่องได้โดยตรง"
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError("ไม่สามารถเปิดตัวเลือกโฟลเดอร์ Windows: " + str(exc)) from exc
+    stdout = result.stdout.decode("ascii", errors="replace").strip().splitlines()
+    line = next((item.strip() for item in reversed(stdout)
+                 if item.strip() == "CANCELLED" or item.startswith("PICKED:")), "")
+    if result.returncode:
+        err = result.stderr.decode("utf-8", errors="replace").strip()[-700:]
+        raise RuntimeError("หน้าต่างเลือกโฟลเดอร์เปิดไม่สำเร็จ: " +
+                           (err or f"PowerShell exited with code {result.returncode}"))
+    if line == "CANCELLED":
         return ""
-    if kind in ("source", "workspace", "download"):
-        command = ("Add-Type -AssemblyName System.Windows.Forms; "
-                   "$d=New-Object System.Windows.Forms.FolderBrowserDialog; "
-                   "if($d.ShowDialog() -eq 'OK'){$d.SelectedPath}")
-    else:
-        command = ("Add-Type -AssemblyName System.Windows.Forms; "
-                   "$d=New-Object System.Windows.Forms.OpenFileDialog; "
-                   "$d.Filter='Files|*.sf2;*.sf3;*.json|All files|*.*'; "
-                   "if($d.ShowDialog() -eq 'OK'){$d.FileName}")
-    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    proc = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", command],
-                          capture_output=True, text=True, timeout=120, creationflags=flags)
-    return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+    if not line.startswith("PICKED:"):
+        raise RuntimeError("หน้าต่างเลือกโฟลเดอร์ไม่ส่งผลลัพธ์กลับมา กรุณาลองอีกครั้ง")
+    try:
+        path = base64.b64decode(line.removeprefix("PICKED:"), validate=True).decode("utf-8")
+    except (UnicodeDecodeError, ValueError, binascii.Error) as exc:
+        raise RuntimeError("ไม่สามารถอ่านชื่อโฟลเดอร์ภาษาไทยจาก Windows") from exc
+    if not path.strip():
+        raise RuntimeError("หน้าต่างเลือกโฟลเดอร์ส่งค่าพาธว่างเปล่า")
+    return path
 
 def job_snapshot():
     with LOCK:
