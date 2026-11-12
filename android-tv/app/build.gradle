@@ -107,16 +107,28 @@ tasks.register("generateXStageTvAssets") {
         javax.imageio.ImageIO.write(icon, "png", iconFile)
         javax.imageio.ImageIO.write(icon, "png", storeIcon)
 
-        def banner = new java.awt.image.BufferedImage(320,180,java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        // TV launcher banner: two centered lines, white background, auto-fit to safe margins.
+        def banner = new java.awt.image.BufferedImage(320,180,java.awt.image.BufferedImage.TYPE_INT_RGB)
         def b = banner.createGraphics()
         b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
-        b.setColor(java.awt.Color.WHITE)
-        b.fillRect(0,0,320,180)
-        b.drawImage(icon.getScaledInstance(106,106,java.awt.Image.SCALE_SMOOTH),12,37,null)
-        b.setColor(new java.awt.Color(12,39,63)); b.setFont(new java.awt.Font("SansSerif",java.awt.Font.BOLD,22)); b.drawString("X-Stage",128,66)
-        b.setColor(new java.awt.Color(0,137,183)); b.setFont(new java.awt.Font("SansSerif",java.awt.Font.BOLD,14)); b.drawString("Karaoke Online",128,91)
-        b.setColor(new java.awt.Color(76,98,112)); b.setFont(new java.awt.Font("SansSerif",java.awt.Font.PLAIN,10)); b.drawString("ANDROID TV",129,112)
-        b.setColor(new java.awt.Color(190,208,218)); b.drawLine(128,124,302,124)
+        b.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        b.setColor(java.awt.Color.WHITE); b.fillRect(0,0,320,180)
+        def fitFont = { String value, int preferred, int maxWidth ->
+            def size = preferred
+            def font = new java.awt.Font("SansSerif",java.awt.Font.BOLD,size)
+            while(size>10 && b.getFontMetrics(font).stringWidth(value)>maxWidth) {
+                font = new java.awt.Font("SansSerif",java.awt.Font.BOLD,--size)
+            }
+            font
+        }
+        b.setColor(new java.awt.Color(12,39,63))
+        def topText = "X-Stage"
+        b.setFont(fitFont(topText,76,296))
+        b.drawString(topText,(320-b.getFontMetrics().stringWidth(topText))/2,87)
+        b.setColor(new java.awt.Color(0,112,153))
+        def bottomText = "Karaoke Online"
+        b.setFont(fitFont(bottomText,39,296))
+        b.drawString(bottomText,(320-b.getFontMetrics().stringWidth(bottomText))/2,139)
         b.dispose()
         javax.imageio.ImageIO.write(banner, "png", bannerFile)
         javax.imageio.ImageIO.write(banner, "png", storeBanner)
