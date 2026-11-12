@@ -2173,7 +2173,8 @@ function drawLyrics(){
         const lines=state.lyrics.lines;
         let idx=-1;
         for(let i=0;i<lines.length;i++){if(Number(lines[i].startTime)<=when)idx=i;else break;}
-        const fontSize=Math.min(76,w*.062,h*.14);
+        const isWebStage=!document.body.classList.contains('xstage-native-tv');
+        const fontSize=isWebStage?Math.min(112,w*.078,h*.19):Math.min(76,w*.062,h*.14);
         // Keep both lyric lines above the integrated transport/virtual keyboard.
         const density=Math.min(window.devicePixelRatio||1,2);
         const transportHeight=ui.stage.querySelector('.transport-panel')?.getBoundingClientRect().height||0;
@@ -2184,11 +2185,13 @@ function drawLyrics(){
         const lyricLift=fontSize*1.45;
         let nextY=Math.max(h*.22,Math.min(h*.83,usableBottom-fontSize*.8)-lyricLift);
         let currentY=Math.max(h*.10,Math.min(h*.66,nextY-fontSize*1.45));
+        // WEB lyrics overlay the banner instead of shrinking to avoid it.
+        // Retain transport and QR collision handling on both platforms.
         let lyricCenter=w/2,lyricWidth=w*.93,lyricFont=fontSize*state.visualScale;
 
         // Keep the stage identity stationary while lyrics paint above its dimmed sign.
         // Only reserve logo space if lyrics are being drawn without an active song stage.
-        if(matchMedia('(orientation: landscape)').matches && !ui.stage.classList.contains('stage-hero-hidden')){
+        if(!isWebStage && matchMedia('(orientation: landscape)').matches && !ui.stage.classList.contains('stage-hero-hidden')){
           const canvasBox=ui.lyrics.getBoundingClientRect();
           const hero=ui.stage.querySelector('.stage-hero');
           if(hero){
