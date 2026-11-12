@@ -139,7 +139,7 @@ try {
       response = {id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',code:'AINEW',
                   available:true,hasDraft:true,approvedLrc:'',
                   draft:{source:'AI_DRAFT_UNVERIFIED',
-                         rawLrc:'[00:00.10]ท่อนแรก AI\\n[00:00.50]ท่อนที่สอง AI',
+                         rawLrc:'[00:00.10]ท่อนแรก AI\n[00:00.50]ท่อนที่สอง AI',
                          lines:[{startTime:0.1,endTime:0.5,text:'ท่อนแรก AI'},
                                 {startTime:0.5,endTime:1,text:'ท่อนที่สอง AI'}]}};
     } else if (url.pathname === '/api/ai-lyrics-approve') {
