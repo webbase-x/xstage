@@ -216,6 +216,44 @@ class PcSourceTests(unittest.TestCase):
         self.assertEqual(live.blend_pcm(original, soundfont_pcm, 1, 0), original)
         self.assertEqual(live.blend_pcm(original, soundfont_pcm, 0, 1), soundfont_pcm)
 
+    def test_app_oauth_client_is_public_and_persistent_for_other_users(self):
+        spec = importlib.util.spec_from_file_location("xstage_google_public",
+                 REPO / "songstudio-pc" / "google_drive.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        original = self.dir / "developer-client.json"
+        original.write_text(json.dumps({"installed": {
+            "client_id": "123456-correctdesktopid.apps.googleusercontent.com",
+            "client_secret": "desktop-public-secret-not-required"
+        }}), encoding="utf-8")
+        data = self.dir / "WindowsUser" / "X-Stage" / "SongStudio"
+        target = data / "oauth-client.json"
+        drive = mod.GoogleDrive(data, lambda: str(target))
+        self.assertFalse(drive.status()["configured"])
+        saved = drive.import_client(original)
+        self.assertEqual(saved, str(target))
+        self.assertTrue(drive.status()["configured"])
+        self.assertFalse(drive.status()["connected"])
+        public = json.loads(target.read_text(encoding="utf-8"))
+        self.assertEqual(public["installed"]["client_id"],
+                         "123456-correctdesktopid.apps.googleusercontent.com")
+        self.assertNotIn("client_secret", public["installed"])
+        self.assertNotIn("refresh_token", target.read_text(encoding="utf-8"))
+        original.unlink()
+        reloaded = mod.GoogleDrive(data, lambda: str(target))
+        self.assertTrue(reloaded.status()["configured"])
+        self.assertFalse(reloaded.status()["connected"])
+        # A second Windows account has no token or private override by default.
+        other = mod.GoogleDrive(self.dir / "OtherWindowsUser", lambda: "")
+        self.assertFalse(other.status()["configured"])
+        self.assertFalse(other.status()["connected"])
+
+    def test_windows_data_is_outside_portable_release(self):
+        if os.name == "nt":
+            self.assertNotEqual(engine.DATA, REPO / "songstudio-pc" / "data")
+            self.assertEqual(engine.DATA.parts[-2:], ("X-Stage", "SongStudio"))
+        self.assertTrue(engine.DATA.is_dir())
+
     def test_google_oauth_desktop_loopback_and_dpapi_storage_mock(self):
         # Simulate the Google browser callback + token endpoint, without a
         # network or actual account. Real authorization requires user consent.
