@@ -4170,3 +4170,39 @@ html body.xstage-ui-v2 .stage.stage-hero-hidden .stage-hero{
   display:block!important;
   visibility:visible!important;
 }
+
+
+/* v1.0.89: exact supplied PNG as the ONLY stage banner on Web, TV and tablet. */
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup{
+ display:block!important;background:none!important;background-image:none!important;
+ width:100%!important;height:auto!important;aspect-ratio:2048/682!important;
+ padding:0!important;border:0!important;box-shadow:none!important
+}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup > img.stage-official-banner{
+ display:block!important;visibility:visible!important;opacity:1!important;
+ width:100%!important;max-width:100%!important;height:auto!important;
+ aspect-ratio:2048/682!important;object-fit:contain!important;
+ position:relative!important;inset:auto!important;
+ transform:none!important;transition:none!important
+}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-mark,
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-copy,
+html body.xstage-ui-v2 .stage .tv-stage-corner-brand{display:none!important}
+html body.xstage-ui-v2 .stage #lyrics{z-index:90!important;pointer-events:none!important}
+html body.xstage-ui-v2 .stage.stage-hero-hidden .stage-hero{display:block!important;visibility:visible!important}
+/* The image must stay fixed at the SAME size and position while playing. */
+html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+html body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero,
+html body.xstage-native-tv.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+ position:absolute!important;top:clamp(72px,14vh,148px)!important;left:50%!important;
+ width:min(52vw,690px)!important;max-width:calc(100vw - 300px)!important;
+ transform:translateX(-50%)!important;scale:1!important;opacity:1!important;
+ transition:none!important;pointer-events:none!important
+}
+@media(max-width:800px){
+ html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+ html body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+  width:min(64vw,420px)!important;max-width:calc(100vw - 100px)!important;
+  top:clamp(44px,12vh,90px)!important
+ }
+}
