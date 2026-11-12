@@ -52,12 +52,12 @@ try {
     name:'demo.wav', mimeType:'audio/wav', buffer:sineWaveWAV()
   }]);
   await page.waitForFunction(() => document.querySelector('#file-count').textContent.includes('1'));
-  await page.locator('#song-list tbody tr').count().catch(()=>{}); // static table has an existing tbody
   await page.locator('#song-list tr').first().click();
   await page.fill('#lyrics-text', '[00:00.10]ทดสอบเนื้อร้อง\n[00:00.40]บรรทัดถัดไป');
   await page.click('#save-lyrics');
   await page.click('#load-engine');
-  await page.waitForFunction(() => document.querySelector('#engine-caption').textContent.includes('พร้อมประมวลผล'), null, {timeout:120000});
+  await page.waitForFunction(() => /พร้อมประมวลผล|โหลด Engine ไม่สำเร็จ/.test(document.querySelector('#engine-caption').textContent), null, {timeout:45000});
+  assert.match(await page.locator('#engine-caption').innerText(), /พร้อมประมวลผล/, 'Web Engine must finish loading successfully');
   const downloadPromise = page.waitForEvent('download', {timeout:120000});
   await page.click('#build');
   const download = await downloadPromise;
