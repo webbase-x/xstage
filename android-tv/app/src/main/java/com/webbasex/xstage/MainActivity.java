@@ -175,6 +175,7 @@ public final class MainActivity extends Activity {
                     // before window.XStageAndroidUpdateAvailable exists and the notice is lost.
                     webAppReady = true;
                     updateManager.checkForUpdates(true);
+                    updateManager.startMonitoring();
                 }
             }
         });
@@ -326,11 +327,15 @@ public final class MainActivity extends Activity {
         super.onResume();
         enterImmersiveMode();
         if (webView != null) webView.onResume();
-        if (updateManager != null && webAppReady) updateManager.onResume();
+        if (updateManager != null && webAppReady) {
+            updateManager.onResume();
+            updateManager.startMonitoring();
+        }
     }
 
     @Override
     protected void onPause() {
+        if (updateManager != null) updateManager.stopMonitoring();
         if (webView != null) webView.onPause();
         super.onPause();
     }
