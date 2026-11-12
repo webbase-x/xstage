@@ -16,6 +16,7 @@
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
   const hostId=params.get('p'),secret=params.get('k');
   let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0;
+  let lastNotifiedUpdateBuild=0;
   let searchTimer=null,querySequence=0,activeTab='search',role='guest';
   let ownerAccessToken='';
   const pendingRequests=new Map();
@@ -303,8 +304,15 @@
         const updateButton=$('owner-update');
         if(updateButton){
           const release=data.updateAvailable;
-          updateButton.textContent=release?.version?'อัปเดต X-Stage '+String(release.version):'ตรวจสอบ / อัปเดต X-Stage';
+          const build=Number(release?.build)||0;
+          updateButton.textContent=build
+            ?'อัปเดต X-Stage v'+String(release.version||'')+' · Build '+build
+            :'ตรวจสอบ / อัปเดต X-Stage';
           updateButton.title=String(data.updateStatus||'ตรวจสอบเวอร์ชันล่าสุด');
+          if(build>0&&build!==lastNotifiedUpdateBuild){
+            lastNotifiedUpdateBuild=build;
+            receipt('มี X-Stage v'+String(release.version||'')+' (Build '+build+') ใหม่ · กดอัปเดตเมื่อต้องการ ไม่ตัดเพลงที่กำลังเล่น');
+          }
         }
         $('owner-qr-pause').disabled=!!data.pairingPaused;
         $('owner-qr-resume').disabled=!data.pairingPaused;
