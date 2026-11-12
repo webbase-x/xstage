@@ -221,12 +221,29 @@
   }
   function setGoogle(google) {
     googleConnected = !!google?.connected;
+    const configured = !!google?.configured;
     const badge = $('google-badge');
     badge.classList.toggle('offline', !googleConnected);
-    const label = googleConnected ? `เชื่อม Google · ${google.email}` : 'ยังไม่เชื่อม Google';
+    const label = googleConnected ? `เชื่อม Google · ${google.email}`
+      : configured ? 'Google พร้อมให้ลงชื่อเข้าใช้' : 'ยังไม่ได้ตั้งค่า Google OAuth';
     badge.innerHTML = '<span class="small-dot"></span>' + escapeHTML(label);
-    $('upload-google-state').textContent = googleConnected ? google.email + ' · พร้อมอัปโหลด' : 'กรุณาเชื่อม Google ก่อนอัปโหลด';
+    $('upload-google-state').textContent = googleConnected ? google.email + ' · พร้อมอัปโหลด'
+      : configured ? 'พร้อมเชื่อมต่อ · กด Google Login เพื่อเลือกบัญชีของคุณ'
+      : 'ผู้พัฒนาแอปยังไม่ได้ตั้งค่า Desktop OAuth Client';
     $('google-login-header').textContent = googleConnected ? 'Google ✓' : 'Google Login';
+    const status = $('google-config-state');
+    if (status) {
+      status.dataset.ready = configured ? 'true' : 'false';
+      status.textContent = configured
+        ? '✓ OAuth Client ตั้งค่าแล้ว (' + (google.config_source === 'bundled' ? 'รวมในแอป' : 'บันทึกถาวรบนเครื่อง') +
+          ') · ผู้ใช้เพียงเลือกบัญชี Google ครั้งแรก'
+        : 'ยังไม่มี Desktop OAuth Client ในแอป · ผู้ดูแลต้องเพิ่ม Client ID ในแพ็กเกจ หรือเลือก JSON ครั้งเดียวในตัวเลือกขั้นสูง';
+    }
+    const advanced = $('oauth-advanced');
+    if (advanced && !advanced.dataset.initialized) {
+      advanced.open = !configured;
+      advanced.dataset.initialized = 'true';
+    }
     for (const id of ['upload-button', 'settings-logout']) $(id).disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
   }
@@ -714,7 +731,9 @@
   $('edit-button').addEventListener('click',()=>{void openEdit();});
   $('edit-dialog').addEventListener('close',event=>{if($('edit-dialog').returnValue==='save')void saveEdit();});
   for (const button of [$('upload-login'),$('settings-login'),$('google-login-header')]) button.addEventListener('click',async()=>{
-    try{await saveInputs(['settings-oauth']);await run('login');}catch(e){message(e.message);}
+    // Client ID is now embedded or stored in per-user AppData. The user does
+    // not have to browse for a JSON file on every launch or release.
+    try { await run('login'); } catch(e) { message(e.message); }
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-button').addEventListener('click',()=>{void startUpload();});
