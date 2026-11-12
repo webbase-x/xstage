@@ -7,6 +7,7 @@ Drive publication must upload files and then publish a Drive-specific pointer.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -16,6 +17,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CATALOG_SCHEMA = 1
+JOURNAL_NAME = ".build-journal.jsonl"
+
+def canonical_source_path(path: str | Path) -> str:
+    """Stable identity across restarts on Windows (including case-only changes)."""
+    return str(Path(path).expanduser().resolve()).replace("\\", "/").casefold()
+
+
+def source_sha256(path: str | Path) -> str:
+    """Full-file fingerprint catches copied/renamed originals; streamed, bounded RAM."""
+    checksum = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            checksum.update(chunk)
+    return checksum.hexdigest()
+
+
+def source_marker(path: str | Path, sha256: str) -> dict:
+    file = Path(path)
+    return {
+        "canonicalPath": canonical_source_path(file),
+        "sha256": sha256,
+        "bytes": file.stat().st_size,
+    }
+
 CATALOG_FORMAT = "xstage-local-catalog"
 CURRENT_FORMAT = "xstage-local-current"
 TIMESTAMP_RE = re.compile(r"\[(\d{1,3}):(\d\d)(?:[.:](\d{1,3}))?\]")
@@ -221,6 +246,117 @@ def _read_current(root: Path) -> tuple[dict, dict[str, dict]]:
     return pointer, current
 
 
+
+def safe_media_path(root: Path, rel: str, kind: str) -> Path:
+    """Prevent catalog and journal paths from pointing outside the songs root."""
+    if not isinstance(rel, str) or "\\\\" in rel or "\\0" in rel:
+        raise ValueError("พาธไฟล์เพลงไม่ถูกต้อง")
+    path = (root / rel).resolve()
+    if not path.is_relative_to(root.resolve()) or not rel.startswith(kind + "/"):
+        raise ValueError("พาธ catalog อ้างถึงไฟล์นอกคลังเพลง")
+    return path
+
+
+def record_is_complete(root: Path, record: dict) -> bool:
+    """Only a fully published audio/lyrics/vocals set can block rebuilding."""
+    try:
+        audio = safe_media_path(root, record["audio"]["path"], "audio")
+        if not audio.is_file() or audio.stat().st_size < 1000:
+            return False
+        lyric = record.get("lyrics")
+        if lyric:
+            companion = safe_media_path(root, lyric["path"], "lyrics")
+            if not companion.is_file():
+                return False
+            # Ensure the lyrics document is complete and readable.
+            parsed = json.loads(companion.read_text(encoding="utf-8-sig"))
+            if not isinstance(parsed, dict) or not isinstance(parsed.get("lines"), list):
+                return False
+        if record.get("mode") == "instrumental" and not record.get("vocals"):
+            return False
+        vocal = record.get("vocals")
+        if vocal:
+            vocal_file = safe_media_path(root, vocal["path"], "audio")
+            if not vocal_file.is_file() or vocal_file.stat().st_size < 1000:
+                return False
+        return True
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def journal_records(root: Path) -> list[dict]:
+    """Recover completed work from a crashed/stopped run before catalog switch."""
+    path = root / JOURNAL_NAME
+    if not path.exists():
+        return []
+    entries = []
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                # Power loss can leave an incomplete trailing line. Retain the
+                # file for diagnostics; do not delete earlier complete entries.
+                continue
+            if isinstance(record, dict) and record.get("webSongId") and record_is_complete(root, record):
+                entries.append(record)
+    return entries
+
+
+def append_journal(root: Path, record: dict) -> None:
+    """Durably checkpoint one completed song before handling the next song."""
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / JOURNAL_NAME).open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def existing_records(root: Path) -> list[dict]:
+    """Read durable pointer + crash journal; no dependence on process memory."""
+    _, buckets = _read_current(root)
+    by_id = {row["webSongId"]: row for bucket in buckets.values()
+             for row in bucket["songs"] if isinstance(row, dict) and row.get("webSongId")}
+    for row in journal_records(root):
+        by_id[row["webSongId"]] = row
+    return list(by_id.values())
+
+
+def find_duplicate(root: Path, records: list[dict],
+                   source_path: str | Path, sha256: str | None = None) -> dict | None:
+    """Path prevents repeat-run duplicates; SHA also catches moved/renamed copies.
+
+    Incomplete catalog entries are intentionally NOT considered duplicates:
+    callers may repair them with the original output path rather than produce
+    a second filename.
+    """
+    canonical = canonical_source_path(source_path)
+    for row in records:
+        marker = row.get("sourceIdentity") or {}
+        if marker.get("canonicalPath") == canonical and record_is_complete(root, row):
+            return row
+    if sha256:
+        for row in records:
+            marker = row.get("sourceIdentity") or {}
+            if marker.get("sha256") == sha256 and record_is_complete(root, row):
+                return row
+    return None
+
+
+def find_incomplete(root: Path, records: list[dict], source_path: str | Path) -> dict | None:
+    canonical = canonical_source_path(source_path)
+    for row in records:
+        if (row.get("sourceIdentity") or {}).get("canonicalPath") == canonical and not record_is_complete(root, row):
+            return row
+    return None
+
+
+def clear_published_journal(root: Path) -> None:
+    """Only clear after current.json atomically points at published records."""
+    (root / JOURNAL_NAME).unlink(missing_ok=True)
+
 def publish_batch(root: Path, records: list[dict]) -> dict:
     """One atomic pointer switch for an entire batch; no O(n²) per-song rewrites.
 
@@ -240,9 +376,9 @@ def publish_batch(root: Path, records: list[dict]) -> dict:
             raise ValueError("catalog bucket ไม่ถูกต้อง")
         if not (root / row["audio"]["path"]).is_file():
             raise FileNotFoundError("ไม่พบไฟล์เสียงสำหรับ catalog: " + row["audio"]["path"])
-        if row["lyrics"] and not (root / row["lyrics"]["path"]).is_file():
+        if row.get("lyrics") and not (root / row["lyrics"]["path"]).is_file():
             raise FileNotFoundError("ไม่พบเนื้อร้องสำหรับ catalog")
-        if row["vocals"] and not (root / row["vocals"]["path"]).is_file():
+        if row.get("vocals") and not (root / row["vocals"]["path"]).is_file():
             raise FileNotFoundError("ไม่พบไฟล์เสียงร้องสำหรับ catalog")
         staged_by_bucket.setdefault(bucket, {})[row["webSongId"]] = row
 
