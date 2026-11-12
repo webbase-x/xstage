@@ -35,6 +35,10 @@ try {
     $ffprobe = Check-File '.runtime\tools\ffprobe.exe'
     $sfont = Check-File '.runtime\soundfonts\GeneralUser-GS.sf2'
     $engine = Check-File 'engine.py'
+    [void](Check-File 'ncn_lyrics.py')
+    [void](Check-File 'ai_lyrics.py')
+    [void](Check-File '.runtime\\whisper\\whisper-cli.exe')
+    [void](Check-File '.runtime\\models\\ggml-base.bin')
     [void](Check-File 'google_drive.py')
     $livePreview = Check-File 'live_preview.py'
     $aiScript = Check-File 'ai_separate.py'
