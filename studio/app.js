@@ -58,6 +58,8 @@
     'ตรวจสอบและสร้างเพลง'
   ];
   const previewAudio = $('preview-audio');
+  let previewSongId = null, previewSearchTimer = 0, previewSearchSeq = 0;
+  let previewSongRows = [], livePreviewPending = false;
 
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
@@ -91,9 +93,36 @@
   }
   function message(text, isError = true) {
     const box = $('global-message'); box.textContent = String(text || '');
-    box.hidden = !text; box.style.borderColor = isError ? '#c45b70' : '#329c8d';
+    box.hidden = !text; box.dataset.error = isError ? 'true' : 'false';
     clearTimeout(notificationTimer);
     if (text) notificationTimer = setTimeout(() => {box.hidden = true;}, isError ? 9500 : 5000);
+  }
+  function confirmStudio(description, title='ยืนยันรายการ') {
+    return new Promise(resolve => {
+      const dialog = $('studio-confirm-dialog');
+      $('studio-confirm-title').textContent = title;
+      $('studio-confirm-message').textContent = String(description);
+      const ok = $('studio-confirm-ok');
+      const cancel = $('studio-confirm-cancel');
+      let resolved = false;
+      const complete = answer => {
+        if (resolved) return;
+        resolved = true;
+        ok.removeEventListener('click', accept);
+        cancel.removeEventListener('click', reject);
+        dialog.removeEventListener('close', closed);
+        if (dialog.open) dialog.close();
+        resolve(answer);
+      };
+      const accept = () => complete(true);
+      const reject = () => complete(false);
+      const closed = () => complete(false);
+      ok.addEventListener('click', accept);
+      cancel.addEventListener('click', reject);
+      dialog.addEventListener('close', closed);
+      dialog.showModal(); // In-app borderless UI; never a native OS confirm title bar.
+      cancel.focus();
+    });
   }
   function updateCreateWizard() {
     for (const panel of document.querySelectorAll('[data-create-step]')) {
@@ -118,14 +147,13 @@
     if (createStep < 4) {
       next.textContent = 'ขั้นตอนถัดไป: ' + ['เลือกเพลง', 'ตั้งค่าเสียง / ทดลองฟัง', 'สร้างเพลง'][createStep - 1] + ' ›';
     }
-    const singleSong = selected.size === 1
-      ? songs.find(song => song.id === [...selected][0]) : null;
+    $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     const previewHint = $('create-preview-hint');
-    previewHint.textContent = selected.size === 0
-      ? 'ยังไม่ได้เลือกเพลง · กลับไปขั้นตอนที่ 2 แล้วเลือกเพลงก่อน'
-      : selected.size > 1
-        ? 'เลือก ' + fmtNum(selected.size) + ' เพลง · หากต้องการทดลองฟัง กรุณากลับไปเลือกเพียง 1 เพลง'
-        : 'พร้อมทดลองฟัง' + (singleSong ? ': ' + singleSong.title : 'เพลงที่เลือก') + ' · กดปุ่มสร้างเสียงตัวอย่าง';
+    if (!previewAudio.src && !livePreviewPending) {
+      previewHint.textContent = previewSongId || selected.size === 1
+        ? 'พร้อมทดลองฟังแบบสตรีมสด · กดเล่นหรือเลือกเพลงจากผลค้นหาได้ทันที'
+        : 'ค้นหาและเลือกเพลงที่จะทดลองฟังภายในหน้านี้ได้เลย';
+    }
     $('review-song-count').textContent = fmtNum(selected.size) + ' เพลง';
     $('review-workspace').textContent = $('create-workspace').value.trim() || prefs.workspace || 'ยังไม่ได้เลือก';
     const fontValue = $('create-soundfont').value || prefs.soundfont || '';
@@ -144,8 +172,12 @@
       message('ขั้นตอนที่ 2: เลือกเพลงอย่างน้อย 1 เพลงก่อนดำเนินการต่อ');
       return;
     }
-    if (createStep === 3 && step !== 3) previewAudio.pause();
+    if (createStep === 3 && step !== 3) stopLivePreview();
     createStep = step;
+    if (createStep === 3) {
+      if (!previewSongId && selected.size === 1) previewSongId = [...selected][0];
+      void searchPreviewSongs();
+    }
     updateCreateWizard();
     document.querySelector('.create-assistant')?.scrollIntoView({behavior: 'smooth', block: 'start'});
   }
@@ -220,7 +252,7 @@
     for (const name of buttons) $(name).disabled = busy;
     $('build-button').disabled = busy || selected.size === 0;
     $('build-audio-button').disabled = busy || selected.size === 0;
-    $('preview-button').disabled = busy || selected.size !== 1;
+    $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     $('edit-button').disabled = busy || selected.size !== 1;
     $('upload-button').disabled = busy || !googleConnected || !selected.size;
     $('settings-logout').disabled = busy || !googleConnected;
@@ -316,6 +348,94 @@
       }
     }
   }
+  function stopLivePreview() {
+    previewAudio.pause();
+    previewAudio.removeAttribute('src');
+    previewAudio.load(); // Aborts HTTP stream; closes FFmpeg/FluidSynth without writing files.
+    $('preview-label').textContent = 'หยุดทดลองฟังแล้ว';
+  }
+  async function searchPreviewSongs() {
+    if (!token || !engineBase) return;
+    const seq = ++previewSearchSeq;
+    const q = $('preview-song-search').value.trim();
+    const list = $('preview-search-results');
+    list.replaceChildren();
+    const loading = document.createElement('div');
+    loading.className = 'preview-empty';
+    loading.textContent = 'กำลังค้นเพลง…';
+    list.append(loading);
+    try {
+      const result = await api('/api/songs?offset=0&limit=30&search=' + encodeURIComponent(q));
+      if (seq !== previewSearchSeq) return;
+      previewSongRows = result.rows || [];
+      list.replaceChildren();
+      if (!previewSongRows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'preview-empty';
+        empty.textContent = 'ไม่พบชื่อเพลงที่ค้นหา ลองพิมพ์คำอื่นหรือสแกนต้นฉบับใหม่';
+        list.append(empty);
+        return;
+      }
+      for (const song of previewSongRows) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'preview-search-option';
+        button.dataset.previewId = String(song.id);
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', String(song.id === previewSongId));
+        const info = document.createElement('span');
+        const title = document.createElement('strong');
+        title.textContent = song.title || 'ไม่มีชื่อเพลง';
+        const details = document.createElement('small');
+        details.textContent = [song.artist, song.code].filter(Boolean).join(' · ');
+        info.append(title, details);
+        const type = document.createElement('small');
+        type.className = 'chip';
+        type.textContent = song.kind || 'AUDIO';
+        button.append(info, type);
+        list.append(button);
+      }
+    } catch(error) {
+      if (seq !== previewSearchSeq) return;
+      list.replaceChildren();
+      const err = document.createElement('div');
+      err.className = 'preview-empty';
+      err.textContent = 'ค้นเพลงไม่สำเร็จ: ' + error.message;
+      list.append(err);
+    }
+  }
+  async function startLivePreview() {
+    const songId = previewSongId || (selected.size === 1 ? [...selected][0] : null);
+    if (!songId) return message('กรุณาค้นหาและเลือกเพลงจากรายการในขั้นตอนทดลองฟังก่อน');
+    if (livePreviewPending) return;
+    livePreviewPending = true;
+    $('preview-button').disabled = true;
+    $('preview-label').textContent = 'กำลังเปิดเสียงสตรีมสด…';
+    try {
+      stopLivePreview();
+      await saveInputs(['create-soundfont']);
+      const response = await post('/api/live-preview', {
+        id:songId,
+        music_volume:Number($('preview-music-volume').value) / 100,
+        synth_volume:Number($('preview-sf-volume').value) / 100
+      });
+      $('preview-selected').textContent = '♫ ' + (response.title || 'เพลงที่เลือก');
+      $('create-preview-hint').textContent = response.message ||
+        (response.mixed ? 'เล่นเสียงดนตรีและ SoundFont พร้อมกัน' : 'เล่นแบบสด');
+      $('preview-label').textContent = 'กำลังเล่น ' + (response.title || 'เพลงที่เลือก');
+      previewAudio.src = engineAddress('/api/live-stream?ticket=' + encodeURIComponent(response.ticket));
+      const result = previewAudio.play();
+      if (result) await result.catch(() => {
+        message('เครื่องเล่นพร้อมแล้ว · กด ▶ ในแถบเครื่องเล่นเพื่อเริ่มเสียง', false);
+      });
+    } catch(error) {
+      $('preview-label').textContent = 'ไม่สามารถทดลองฟังได้';
+      message(error.message);
+    } finally {
+      livePreviewPending = false;
+      updateButtons();
+    }
+  }
   async function run(action, options = {}) {
     if (busy) return message('มีงานกำลังทำอยู่ · กรุณารอหรือกดยกเลิกก่อน');
     try {
@@ -333,15 +453,15 @@
       await saveInputs(['create-source','create-soundfont','create-preset','create-mode']);
       const estimate = await post('/api/estimate', {ids:selectedIDs()});
       if (!estimate.enoughDisk) return message('พื้นที่ว่างในเครื่องไม่เพียงพอสำหรับเก็บไฟล์ที่เลือกก่อนสร้าง');
-      if (estimate.warning && !confirm(`รายการใหญ่ ${fmtNum(estimate.songs)} เพลง (${fmtSize(estimate.bytes)})\nอาจใช้เวลาเตรียมและสร้างนาน ต้องการทำต่อหรือไม่?`)) return;
-      if (!confirm(`ยืนยันสร้างจาก ${fmtNum(estimate.songs)} เพลง (${fmtSize(estimate.bytes)})?\nระบบจะคัดลอกต้นฉบับที่เลือกและตรวจความสมบูรณ์ในเครื่องก่อนเริ่มแปลงทุกเพลง`)) return;
+      if (estimate.warning && !await confirmStudio(`รายการใหญ่ ${fmtNum(estimate.songs)} เพลง (${fmtSize(estimate.bytes)})\nอาจใช้เวลาเตรียมและสร้างนาน ต้องการทำต่อหรือไม่?`, 'ยืนยันรายการเพลงจำนวนมาก')) return;
+      if (!await confirmStudio(`ยืนยันสร้างจาก ${fmtNum(estimate.songs)} เพลง (${fmtSize(estimate.bytes)})?\nระบบจะคัดลอกต้นฉบับที่เลือกและตรวจความสมบูรณ์ในเครื่องก่อนเริ่มแปลงทุกเพลง`, 'เริ่มสร้างเพลง')) return;
       await run('build', {ids:selectedIDs(), audio_only:audioOnly});
     } catch (error) { message(error.message); }
   }
   async function startUpload() {
     if (!googleConnected) return message('ต้อง Google Login ก่อนอัปโหลด');
     if (!selected.size) return message('กลับไปเลือกเพลงที่จะอัปโหลดในหน้า “สร้างเพลงใหม่”');
-    if (confirm(`อัปโหลดเฉพาะ ${fmtNum(selected.size)} เพลงที่เลือก โดยตรวจไฟล์ซ้ำบน Drive ก่อนส่ง ใช่หรือไม่?`)) {
+    if (await confirmStudio(`อัปโหลดเฉพาะ ${fmtNum(selected.size)} เพลงที่เลือก โดยตรวจไฟล์ซ้ำบน Drive ก่อนส่ง ใช่หรือไม่?`, 'ยืนยันอัปโหลด')) {
       await run('upload',{ids:selectedIDs()});
     }
   }
@@ -350,7 +470,7 @@
     try {
       await saveInputs(['download-destination']);
       const labels = {songs:'โฟลเดอร์เพลง',db:'ฐานข้อมูล DB',zip:'ZIP สำรองทั้งชุด'};
-      if (!confirm(`ดาวน์โหลด ${labels[kind]} ไปที่\n${prefs.download}\n\nไฟล์เดิมที่มีเนื้อหาต่างกันจะไม่ถูกเขียนทับ ยืนยันหรือไม่?`)) return;
+      if (!await confirmStudio(`ดาวน์โหลด ${labels[kind]} ไปที่\n${prefs.download}\n\nไฟล์เดิมที่มีเนื้อหาต่างกันจะไม่ถูกเขียนทับ ยืนยันหรือไม่?`, 'ยืนยันดาวน์โหลด')) return;
       await run('download',{kind});
     } catch (error) { message(error.message); }
   }
@@ -457,6 +577,7 @@
     }
     try {
       await loadState({initialize:true}); await refreshSongs();
+      await searchPreviewSongs();
       await refreshEnvironment();
       refreshTimer = window.setInterval(poll, 900);
       // Connected workspace and authenticated web view use the exact same UI.
@@ -484,7 +605,7 @@
   $('select-all').addEventListener('click',async()=>{
     try {
       const result = await api('/api/songs/ids?search='+encodeURIComponent(search));
-      if (result.ids.length > 1000 && !confirm(`พบ ${fmtNum(result.ids.length)} เพลงที่ตรงเงื่อนไข ต้องการเลือกทั้งหมดจริงหรือไม่?`)) return;
+      if (result.ids.length > 1000 && !await confirmStudio(`พบ ${fmtNum(result.ids.length)} เพลงที่ตรงเงื่อนไข ต้องการเลือกทั้งหมดจริงหรือไม่?`, 'เลือกรายการทั้งหมด')) return;
       for (const id of result.ids) selected.add(id);
       await refreshSongs();
     }catch(error){message(error.message);}
@@ -507,16 +628,44 @@
   });
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
-  $('preview-button').addEventListener('click',async()=>{
-    try{await saveInputs(['create-soundfont','create-preset']);previewAudio.pause();await run('preview',{ids:selectedIDs()});}
-    catch(error){message(error.message);}
+  $('preview-button').addEventListener('click',()=>{void startLivePreview();});
+  $('preview-stop-button').addEventListener('click',stopLivePreview);
+  $('preview-song-search').addEventListener('input', () => {
+    clearTimeout(previewSearchTimer);
+    previewSearchTimer = setTimeout(() => {void searchPreviewSongs();}, 180);
+  });
+  $('preview-search-results').addEventListener('click', event => {
+    const option = event.target.closest('[data-preview-id]');
+    if (!option) return;
+    const chosen = Number(option.dataset.previewId);
+    const song = previewSongRows.find(item => item.id === chosen);
+    if (!song) return;
+    previewSongId = chosen;
+    $('preview-selected').textContent = '♫ ' + (song.title || 'เพลงที่เลือก');
+    for (const button of $('preview-search-results').querySelectorAll('[data-preview-id]')) {
+      button.setAttribute('aria-selected', String(Number(button.dataset.previewId) === chosen));
+      button.classList.toggle('active', Number(button.dataset.previewId) === chosen);
+    }
+    updateButtons();
+    void startLivePreview();
+  });
+  for (const [slider,label] of [['preview-music-volume','preview-music-volume-label'],
+                                 ['preview-sf-volume','preview-sf-volume-label']]) {
+    $(slider).addEventListener('input', () => {
+      $(label).textContent = $(slider).value + '%';
+      if (!previewAudio.paused) $('create-preview-hint').textContent =
+        'ระดับเสียงใหม่จะมีผลเมื่อกด “เล่นเพลงทันที” เพื่อเริ่มสตรีมใหม่';
+    });
+  }
+  previewAudio.addEventListener('error', () => {
+    if (previewAudio.getAttribute('src')) message('สตรีมเสียงขัดข้อง · ตรวจไฟล์ต้นฉบับและ SoundFont แล้วกดเล่นใหม่');
   });
   $('edit-button').addEventListener('click',()=>{void openEdit();});
   $('edit-dialog').addEventListener('close',event=>{if($('edit-dialog').returnValue==='save')void saveEdit();});
   for (const button of [$('upload-login'),$('settings-login'),$('google-login-header')]) button.addEventListener('click',async()=>{
     try{await saveInputs(['settings-oauth']);await run('login');}catch(e){message(e.message);}
   });
-  $('settings-logout').addEventListener('click',()=>{if(confirm('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?'))void run('logout');});
+  $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-button').addEventListener('click',()=>{void startUpload();});
   $('go-create').addEventListener('click',()=>tab('create'));
   for(const button of document.querySelectorAll('.download-action')) button.addEventListener('click',()=>{void startDownload(button.dataset.kind);});
