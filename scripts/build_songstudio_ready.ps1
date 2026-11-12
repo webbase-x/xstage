@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.7-build307'
+$Version = 'v0.3.8-build308'
 $DirName = 'X-Stage-Song-Studio-PC-Ready-' + $Version
 $OutputRoot = Join-Path $Repo 'dist'
 $Stage = Join-Path $OutputRoot $DirName
@@ -52,6 +52,7 @@ $map = @{
  'songstudio-pc/Start-Song-Studio-Ready.cmd' = 'Start-Song-Studio.cmd'
  'songstudio-pc/Start-Song-Studio-Ready.ps1' = 'Start-Song-Studio-Ready.ps1'
  'songstudio-pc/engine.py' = 'engine.py'
+ 'songstudio-pc/google_drive.py' = 'google_drive.py'
  'songstudio-pc/song_export.py' = 'song_export.py'
  'songstudio-pc/live_preview.py' = 'live_preview.py'
  'songstudio-pc/ai_separate.py' = 'ai_separate.py'
@@ -199,6 +200,7 @@ CopyFromRepo 'songstudio-pc/THIRD_PARTY_NOTICES.md' '.runtime/licenses/THIRD_PAR
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'engine.py',
+ 'google_drive.py',
  'song_export.py',
  'live_preview.py',
  'ai_separate.py',
@@ -238,8 +240,8 @@ $manifest = [ordered]@{
     product = 'X-Stage Song Studio PC'
     bundle_type = 'ready-offline'
     platform = 'windows-x64'
-    version = '0.3.7'
-    build = 307
+    version = '0.3.8'
+    build = 308
     created_utc = [DateTime]::UtcNow.ToString('o')
     contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont', 'HTDemucs ONNX model (MIT)', 'NumPy 2.2.6', 'ONNX Runtime 1.23.2')
     files = @($files)
@@ -280,6 +282,7 @@ with ZipFile(dest) as archive:
                       "ai_separate.py",
                       "live_preview.py",
                       "song_export.py",
+                      "google_drive.py",
                       "studio/app-icon.svg",
                       "studio/app-icon.ico",
                       "studio/app-icon-512.png",
