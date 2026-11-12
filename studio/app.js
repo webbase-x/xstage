@@ -1180,6 +1180,8 @@
       busy = job.state === 'running';
       setGoogle(response.google);
       renderJob(job);updateButtons();
+      if (job.kind === 'ai-lyrics' && job.state === 'running' && aiSongId !== null)
+        $('ai-lyrics-status').textContent = job.stage || job.detail || 'AI กำลังถอดเสียงร้อง';
       if (job.id && (job.id !== lastJobId || (lastJobState !== job.state && !busy))) {
         lastJobId = job.id;
         if (!busy) {
@@ -1192,6 +1194,10 @@
             } else if (job.kind === 'ai-lyrics') {
               if (job.result?.songId === previewSongId)
                 await loadPreviewLyrics(previewSongId);
+              if (job.result?.songId === aiSongId) {
+                const aiCurrent = aiSongs.find(x=>x.id===aiSongId);
+                if (aiCurrent) await aiChooseSong(aiCurrent);
+              }
               message(job.result?.message || 'AI ถอดคำร้องเป็นฉบับร่างแล้ว · กรุณาตรวจแก้', false);
             } else if (job.kind === 'check-update') {
               message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
@@ -1311,6 +1317,33 @@
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
+  $('ai-lyrics-import').addEventListener('click',()=>{void aiImportAudio();});
+  $('ai-lyrics-refresh').addEventListener('click',()=>{void aiRefreshSongList();});
+  $('ai-lyrics-search').addEventListener('input',()=>{
+    clearTimeout(aiSearchTimer);
+    aiSearchTimer=setTimeout(()=>{aiOffset=0;void aiRefreshSongList();},180);
+  });
+  $('ai-lyrics-results').addEventListener('click',event=>{
+    const option=event.target.closest('[data-ai-id]');
+    if(!option)return;
+    const row=aiSongs.find(x=>x.id===Number(option.dataset.aiId));
+    if(row)void aiChooseSong(row);
+  });
+  $('ai-lyrics-prev').addEventListener('click',()=>{
+    aiOffset=Math.max(0,aiOffset-30);void aiRefreshSongList();
+  });
+  $('ai-lyrics-next').addEventListener('click',()=>{
+    if(aiOffset+30<aiTotal){aiOffset+=30;void aiRefreshSongList();}
+  });
+  $('ai-lyrics-start').addEventListener('click',()=>{void aiStartTranscription();});
+  $('ai-lyrics-play').addEventListener('click',()=>{void aiPlayAudio();});
+  $('ai-lyrics-stop').addEventListener('click',aiStopPlayback);
+  $('ai-lyrics-editor').addEventListener('input',aiValidateEditor);
+  $('ai-lyrics-audio').addEventListener('timeupdate',aiRenderTime);
+  $('ai-lyrics-audio').addEventListener('seeked',()=>{aiActiveIndex=-2;aiRenderTime();});
+  $('ai-lyrics-insert-time').addEventListener('click',aiInsertTimestamp);
+  $('ai-lyrics-download').addEventListener('click',aiDownloadLrc);
+  $('ai-lyrics-save').addEventListener('click',()=>{void aiApproveLrc();});
   $('preview-stop-button').addEventListener('click',stopLivePreview);
   $('preview-file-type').addEventListener('change', () => {
     stopLivePreview();
