@@ -187,10 +187,35 @@ Step 'Offline readiness verified successfully'
 # 7. Package a complete ZIP, include checksum alongside it
 $Zip = Join-Path $OutputRoot ($DirName + '.zip')
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
-# Compress-Archive silently omits hidden/dot-prefixed paths on some Windows shells.
-# ZipFile.CreateFromDirectory includes .runtime and .engine-ready-manifest.json.
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::CreateFromDirectory($Stage, $Zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+# Python zipfile creates portable POSIX-style archive paths and includes
+# dot-prefixed .runtime and .engine-ready-manifest.json on Windows.
+$PackScript = Join-Path $Downloads 'write-archive.py'
+$PythonPack = @'
+import sys
+from pathlib import Path
+from zipfile import ZipFile, ZIP_DEFLATED
+base = Path(sys.argv[1]).resolve()
+dest = Path(sys.argv[2]).resolve()
+with ZipFile(dest, "w", ZIP_DEFLATED, compresslevel=8, allowZip64=True) as archive:
+    for path in sorted(base.rglob("*")):
+        if path.is_file():
+            name = "/".join((base.name,) + path.relative_to(base).parts)
+            archive.write(path, arcname=name)
+with ZipFile(dest) as archive:
+    names = set(archive.namelist())
+    for mandatory in [".runtime/python/python.exe",
+                      ".runtime/tools/ffmpeg.exe",
+                      ".runtime/fluidsynth/bin/fluidsynth.exe",
+                      ".runtime/soundfonts/GeneralUser-GS.sf2",
+                      ".engine-ready-manifest.json",
+                      "Start-Song-Studio.cmd"]:
+        assert base.name + "/" + mandatory in names, mandatory
+    assert archive.testzip() is None, "corrupt ZIP entry"
+print("Portable Ready ZIP verified:", len(names), "files")
+'@
+[IO.File]::WriteAllText($PackScript, $PythonPack, (New-Object Text.UTF8Encoding($false)))
+& $py $PackScript $Stage $Zip
+if ($LASTEXITCODE -ne 0) { throw 'Portable offline Ready ZIP verification failed' }
 $Hash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $SHAFile = $Zip + '.sha256'
 "$Hash  $($DirName).zip" | Set-Content -LiteralPath $SHAFile -Encoding ascii
