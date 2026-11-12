@@ -3801,3 +3801,68 @@ body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
     max-width:calc(100% - 185px)!important;
   }
 }
+
+
+/* TV HUD: independent top corners, centered banner, and QR below the clock. */
+.tv-stage-corner-brand{display:none}
+body.xstage-native-tv.xstage-ui-v2 .stage .tv-stage-corner-brand{
+  position:absolute;z-index:32;top:clamp(9px,1.5vw,22px);left:clamp(10px,1.6vw,24px);
+  display:flex;align-items:center;gap:clamp(5px,.6vw,9px);
+  padding:clamp(4px,.5vw,7px) clamp(6px,.7vw,10px);
+  max-width:27%;box-sizing:border-box;background:rgba(3,15,28,.78);
+  color:#eaffff;border:1px solid rgba(94,231,255,.4);border-radius:11px;
+  font-size:clamp(9px,1vw,16px);font-weight:900;letter-spacing:.06em;
+  pointer-events:none;white-space:nowrap
+}
+body.xstage-native-tv.xstage-ui-v2 .tv-stage-corner-brand svg{
+  width:clamp(24px,2.9vw,42px);height:clamp(24px,2.9vw,42px);flex:none
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-metrics{
+  display:flex!important;position:absolute!important;z-index:33!important;
+  top:clamp(9px,1.5vw,22px)!important;right:clamp(10px,1.6vw,24px)!important;
+  left:auto!important;max-width:30%!important;opacity:1!important;
+  visibility:visible!important
+}
+/* Show one supplied-image banner. Hide old duplicate text nodes by structure. */
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+body.xstage-native-tv.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+  position:absolute!important;left:50%!important;top:clamp(78px,14vh,150px)!important;
+  transform:translateX(-50%)!important;scale:1!important;
+  width:min(40vw,540px)!important;max-width:calc(100% - 330px)!important;
+  height:auto!important;z-index:3!important;opacity:.88!important;
+  overflow:hidden!important;pointer-events:none!important
+}
+body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+  width:min(27vw,370px)!important;opacity:.68!important
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup{
+  width:100%!important;max-width:100%!important;aspect-ratio:2048/682!important;
+  padding:0!important;background-repeat:no-repeat!important;
+  background-position:center!important;background-size:contain!important
+}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup > *,
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-copy,
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-mark{
+  display:none!important
+}
+body.xstage-native-tv.xstage-ui-v2 #remote-pair-panel{
+  top:clamp(70px,8vw,114px)!important;
+  right:clamp(10px,1.6vw,24px)!important;
+  width:min(220px,24vw,32vh)!important;
+  max-width:calc(100% - 20px)!important
+}
+body.xstage-native-tv.xstage-ui-v2 #remote-pair-panel #remote-qr{
+  --xstage-remote-qr-size:min(168px,19vw,25vh)!important
+}
+@media(max-width:800px){
+  body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+  body.xstage-native-tv.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+    top:clamp(62px,13vh,110px)!important;width:min(39vw,280px)!important;
+    max-width:calc(100% - 180px)!important
+  }
+  body.xstage-native-tv.xstage-ui-v2 #remote-pair-panel{
+    top:65px!important;width:min(175px,26vw)!important
+  }
+}
