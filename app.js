@@ -2427,7 +2427,7 @@ function androidTvAuthPanel(){
   panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-labelledby','android-tv-auth-title');
   panel.innerHTML='<div class="android-tv-auth-box">'+
-    '<img class="android-tv-auth-brand" src="assets/xstage-stage-logo.png?v=1090" width="2048" height="682" alt="X-Stage Karaoke Online">'+
+    '<img class="android-tv-auth-brand" src="assets/xstage-stage-logo.png?v=1091" width="2048" height="682" alt="X-Stage Karaoke Online">'+
     '<span class="android-tv-auth-kicker">X-STAGE ANDROID · <b id="android-tv-auth-version">กำลังอ่านรุ่น…</b></span>'+
     '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
     '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือหรืออุปกรณ์อื่น แล้วกรอกรหัสที่แสดง</p>'+
@@ -2489,7 +2489,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1090';
+    script.src='./assets/vendor/qrcode.min.js?v=1091';
     script.async=true;
     let done=false;
     const finish=error=>{

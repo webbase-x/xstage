@@ -131,3 +131,10 @@ assert.ok(app.includes("function setAndroidTvStageAccess(granted,accountSub='')"
 assert.ok(app.includes("if(androidTvVerifiedConnectionSub&&(!state.token||"),'native stage must relock when token expires');
 assert.ok(app.includes("if(androidTvNativeBridgeReady()&&!androidTvVerifiedConnectionSub)throw error;"),'offline cache cannot unlock a first-time TV login');
 assert.ok(main.includes('onLoginScreenReady')&&main.includes('startupBanner.setVisibility(View.GONE)'),'native splash is dismissed only by login UI');
+
+const ux = read('xstage-ux.css');
+const unified = ux.slice(ux.lastIndexOf('/* v1.0.91: Android TV stage shares the WEB stage design exactly.'));
+assert.ok(unified.includes('top:37%!important')&&unified.includes('width:min(72cqw,760px)!important'),'native TV uses identical WEB stage placement');
+assert.ok(unified.includes('grid-template-columns:minmax(0,1fr) minmax(0,4fr) minmax(0,1fr)!important'),'native TV EQ stays beside the official logo');
+assert.ok(unified.includes('z-index:90!important'),'native TV lyrics stay above the stage banner');
+assert.ok(app.includes("document.body.classList.add('xstage-native-tv')"),'native TV retains its dedicated remote/login behavior');

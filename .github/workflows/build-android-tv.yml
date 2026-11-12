@@ -159,7 +159,7 @@ jobs:
           assert hashlib.sha256(source.read_bytes()).hexdigest() == '5cc34771ae31287ef70ff032d56763a45e5942b3f27a8623c0c81ea72f8f0622', 'Official user artwork changed'
           folder=Path('android-tv/app/src/main/res/drawable-nodpi')
           def png_size(raw):
-              assert raw[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'Not a PNG'
+              assert raw[:8] == bytes((137,80,78,71,13,10,26,10)), 'Not a PNG'
               return struct.unpack('>II',raw[16:24])
           expected={
               'xstage_tv_banner.png': (320,180),

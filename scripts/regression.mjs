@@ -448,3 +448,14 @@ assert.ok(app.includes('if(androidTvNativeBridgeReady())return;\n  const saved=r
 assert.ok(androidMain.includes('R.drawable.xstage_tv_splash')&&androidMain.includes('public void onLoginScreenReady()'),'native splash must remain until login UI is ready');
 assert.ok(androidGradle.includes('splashFile.bytes = logoSource.bytes'),'the exact uploaded logo bytes must become native splash');
 assert.ok(singerStage.includes('class="stage-official-banner"'),'separate singer stage must use one original image');
+
+const stageParityStart=css.lastIndexOf('/* v1.0.91: Android TV stage shares the WEB stage design exactly.');
+assert.ok(stageParityStart>0,'shared WEB / Android TV stage parity rules must be last');
+const stageParity=css.slice(stageParityStart);
+assert.ok(!stageParity.includes(':not(.xstage-native-tv)'),'final stage appearance must not diverge between Web and Android TV');
+assert.ok(stageParity.includes('top:37%!important')&&stageParity.includes('width:min(72cqw,760px)!important'),'all devices must share the exact stationary Web hero geometry');
+assert.ok(stageParity.includes('grid-template-columns:minmax(0,1fr) minmax(0,4fr) minmax(0,1fr)!important'),'both stages must share the same EQ/banner/EQ layout');
+assert.ok(stageParity.includes('height:clamp(36px,9cqh,110px)!important'),'live EQ side meters must match Web');
+assert.ok(stageParity.includes('#stage-viz-wave{display:none!important}'),'web and TV use the same EQ visualizer placement');
+assert.ok(stageParity.includes('z-index:90!important')&&stageParity.includes('z-index:100!important'),'lyrics must be above the banner without blocking controls');
+assert.ok(stageParity.includes('.stage:not(.playing) .stage-hero')&&stageParity.includes('.stage.playing .stage-hero'),'TV and Web banners may not move or shrink while singing');

@@ -4206,3 +4206,103 @@ html body.xstage-native-tv.xstage-ui-v2 .stage:not(.playing) .stage-hero{
   top:clamp(44px,12vh,90px)!important
  }
 }
+
+/* v1.0.91: Android TV stage shares the WEB stage design exactly.
+   Only TV controls/login differ; banner placement, size, EQ side meters and
+   lyrics layering are shared. Override all earlier TV-specific hero rules. */
+html body.xstage-ui-v2 .stage .stage-hero,
+html body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+html body.xstage-ui-v2 .stage.playing .stage-hero{
+  display:flex!important;
+  position:absolute!important;
+  top:37%!important;
+  left:50%!important;
+  width:min(72cqw,760px)!important;
+  max-width:calc(100% - 32px)!important;
+  height:auto!important;
+  min-height:0!important;
+  overflow:visible!important;
+  padding:0!important;
+  transform:translate(-50%,-50%)!important;
+  transform-origin:center center!important;
+  scale:1!important;
+  opacity:1!important;
+  visibility:visible!important;
+  transition:none!important;
+  z-index:3!important;
+  pointer-events:none!important;
+}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-scene{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,4fr) minmax(0,1fr)!important;
+  align-items:center!important;
+  gap:clamp(4px,1cqw,14px)!important;
+  width:100%!important;
+  min-width:0!important;
+}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-side-viz{
+  display:block!important;
+  position:static!important;
+  width:100%!important;
+  height:clamp(36px,9cqh,110px)!important;
+  max-width:100%!important;
+  opacity:.92!important;
+  pointer-events:none!important;
+}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup{
+  display:block!important;
+  min-width:0!important;
+  max-width:100%!important;
+  aspect-ratio:2048/682!important;
+  background:none!important;
+  background-image:none!important;
+  transform:none!important;
+  transition:none!important;
+  padding:0!important;
+  box-shadow:none!important;
+  border:0!important;
+}
+html body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup > img.stage-official-banner{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:100%!important;
+  height:auto!important;
+  object-fit:contain!important;
+  transform:none!important;
+}
+html body.xstage-ui-v2 .stage #stage-viz-wave{display:none!important}
+html body.xstage-ui-v2 .stage #lyrics{
+  position:absolute!important;
+  inset:0!important;
+  z-index:90!important;
+  width:100%!important;
+  height:100%!important;
+  pointer-events:none!important;
+}
+html body.xstage-ui-v2 .stage .stage-toolbar,
+html body.xstage-ui-v2 .stage .mobile-stage-menu,
+html body.xstage-ui-v2 .stage .remote-pair-panel,
+html body.xstage-ui-v2 .stage .transport-panel{
+  z-index:100!important;
+}
+@media(max-width:800px){
+  html body.xstage-ui-v2 .stage .stage-hero,
+  html body.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  html body.xstage-ui-v2 .stage.playing .stage-hero{
+    width:min(82cqw,470px)!important;
+    max-width:calc(100% - 24px)!important;
+    top:37%!important;
+    left:50%!important;
+    transform:translate(-50%,-50%)!important;
+  }
+}
+@media(max-width:520px){
+  html body.xstage-ui-v2 .stage .stage-hero .stage-brand-scene{
+    grid-template-columns:minmax(0,.5fr) minmax(0,4fr) minmax(0,.5fr)!important;
+    column-gap:3px!important;
+  }
+  html body.xstage-ui-v2 .stage .stage-hero .stage-brand-side-viz{
+    height:clamp(23px,6cqh,55px)!important;
+  }
+}
