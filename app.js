@@ -123,6 +123,17 @@ async function triggerImmediateVersionUpdate(){
   else if(found===false)setStatus('X-Stage เป็นเวอร์ชันล่าสุดแล้ว');
   else setStatus('ตรวจสอบเวอร์ชันไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่');
 }
+// Installed Android APKs load this hosted UI, including older builds. A live
+// foreground poll also fixes missing mid-song update notices on those APKs.
+// Keep the native APK channel separate from the Web version.json channel.
+const XSTAGE_LIVE_UPDATE_CHECK_MS=15_000;
+function checkLiveAppUpdate(){
+  if(androidTvNativeBridgeReady()){
+    try{window.XStageAndroid.checkForAppUpdate?.();}catch{}
+    return;
+  }
+  void checkAppVersion();
+}
 function setupAppUpdateWatcher(){
   const {action}=appUpdateElements();
   action?.addEventListener('click',()=>{if(state.updateAvailable)void performAppUpdateReload();});
@@ -133,12 +144,12 @@ function setupAppUpdateWatcher(){
   if(androidTvNativeBridgeReady()){
     setTimeout(()=>{try{window.XStageAndroid.checkForAppUpdate?.();}catch{}},350);
   }
-  void checkAppVersion();
-  setInterval(()=>{void checkAppVersion();},60*1000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void checkAppVersion();});
-  window.addEventListener('focus',()=>{void checkAppVersion();});
-  window.addEventListener('online',()=>{void checkAppVersion();});
-  window.addEventListener('pageshow',()=>{void checkAppVersion();});
+  checkLiveAppUpdate();
+  setInterval(checkLiveAppUpdate,XSTAGE_LIVE_UPDATE_CHECK_MS);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkLiveAppUpdate();});
+  window.addEventListener('focus',checkLiveAppUpdate);
+  window.addEventListener('online',checkLiveAppUpdate);
+  window.addEventListener('pageshow',checkLiveAppUpdate);
 }
 
 function xstageTvVisible(element){
@@ -2584,37 +2595,53 @@ function androidTvUpdatePanel(){
   });
   $('android-tv-update-later')?.addEventListener('click',()=>{
     panel.hidden=true;
+    if(state.nativeUpdateAvailable?.build){
+      nativeUpdateDismissedBuild=state.nativeUpdateAvailable.build;
+    }
     ui.search?.focus?.({preventScroll:true});
   });
   return panel;
 }
+let nativeUpdateDismissedBuild=0;
 window.XStageAndroidUpdateAvailable=(version,build)=>{
   if(!androidTvNativeBridgeReady())return;
-  state.nativeUpdateAvailable={version:String(version||''),build:Number(build)||0};
-  state.nativeUpdateStatus='มี X-Stage เวอร์ชันใหม่พร้อมอัปเดต';
-  window.dispatchEvent(new CustomEvent('xstage:native-update',{detail:state.nativeUpdateAvailable}));
-  // Show update notice on the TV itself as well as the Owner remote.
+  const next={version:String(version||''),build:Number(build)||0};
+  const currentBuild=Number(window.XStageAndroid?.getAppBuild?.()||XSTAGE_RELEASE.build)||0;
+  if(!Number.isSafeInteger(next.build)||next.build<=currentBuild)return;
+  const previous=state.nativeUpdateAvailable;
+  const newlyPublished=!previous||previous.build!==next.build||previous.version!==next.version;
+  state.nativeUpdateAvailable=next;
+  state.nativeUpdateStatus='พบ X-Stage v'+next.version+' · Build '+next.build+' พร้อมอัปเดต';
+  // Status snapshots advertise each available build to the Owner remote.
+  // A recurring check of the SAME build must not reopen a dismissed notice.
+  if(!newlyPublished)return;
+  window.dispatchEvent(new CustomEvent('xstage:native-update',{detail:next}));
   const panel=androidTvUpdatePanel();
   const current=(()=>{try{return String(window.XStageAndroid.getAppVersion?.()||'รุ่นปัจจุบัน');}catch{return 'รุ่นปัจจุบัน';}})();
+  if(nativeUpdateDismissedBuild===next.build)return;
   panel.hidden=false;
-  $('android-tv-update-title').textContent='มี X-Stage เวอร์ชันใหม่';
-  $('android-tv-update-version').textContent='ปัจจุบัน '+current+' → ใหม่ '+String(version||'')+' (Build '+String(build||'')+')';
-  $('android-tv-update-status').textContent='แนะนำให้อัปเดตเพื่อใช้ฟังก์ชันและการแก้ไขล่าสุด';
+  const active=playbackBusyForUpdate();
+  panel.classList.toggle('during-playback',active);
+  panel.setAttribute('aria-modal',String(!active));
+  $('android-tv-update-title').textContent='พบ X-Stage รุ่นใหม่ · Build '+next.build;
+  $('android-tv-update-version').textContent='ปัจจุบัน '+current+' → ใหม่ v'+next.version+' (Build '+next.build+')';
+  $('android-tv-update-status').textContent=active
+    ?'เพลงกำลังเล่นต่อเนื่อง · เลือกอัปเดตตอนนี้หรือภายหลัง'
+    :'มีรุ่นใหม่พร้อมติดตั้ง';
   const button=$('android-tv-update-now');
   if(button){button.disabled=false;button.textContent='อัปเดตตอนนี้';}
-  setTimeout(()=>$('android-tv-update-now')?.focus?.(),30);
-  // Older installed APKs (including 1073) load this hosted UI. Start their
-  // existing native verified-APK update path without requiring a new binary
-  // first. Android still controls install permission / system confirmation.
-  const autoKey='xstage-native-auto-update-'+String(build||version||'unknown');
+  if(!active)setTimeout(()=>$('android-tv-update-now')?.focus?.(),30);
+  // An older APK can use the verified native updater from this hosted page.
+  // Never start the Android installer automatically during a karaoke song.
+  const autoKey='xstage-native-auto-update-'+String(next.build||next.version||'unknown');
   let alreadyAttempted=false;
   try{
     alreadyAttempted=sessionStorage.getItem(autoKey)==='1';
     if(!alreadyAttempted)sessionStorage.setItem(autoKey,'1');
   }catch{}
-  if(!alreadyAttempted&&!playbackBusyForUpdate()){
+  if(!alreadyAttempted&&!active){
     setTimeout(()=>{
-      if(state.nativeUpdateAvailable?.build!==Number(build)||panel.hidden)return;
+      if(state.nativeUpdateAvailable?.build!==next.build||panel.hidden)return;
       button?.click();
     },250);
   }
