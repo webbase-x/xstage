@@ -163,7 +163,7 @@
 
         <section id="job-panel" class="job-panel" aria-label="สถานะการทำงาน" aria-live="polite">
           <div class="job-header"><div class="job-status"><span id="job-led" class="job-led idle"></span><div><strong id="job-title">พร้อมทำงาน</strong><span id="job-detail">ไม่มีงานที่กำลังประมวลผล</span></div></div><div class="job-header-actions"><span id="job-timing" class="time-display">00:00</span><button id="cancel-job" class="button danger" type="button" hidden>หยุดงาน</button><button id="toggle-log" class="button ghost" type="button" aria-expanded="false">รายละเอียด ▾</button></div></div>
-          <div class="progress-line"><div id="progress-fill" class="progress-fill"></div></div><div class="progress-meta"><span id="job-fraction">รอเริ่มงาน</span><span id="job-eta">เวลาคงเหลือ —</span></div>
+          <div class="progress-line"><div id="progress-fill" class="progress-fill"></div></div><div class="progress-meta"><span id="job-fraction">รอเริ่มงาน</span><span id="job-skip-count" class="job-skip-count" aria-live="polite">ข้ามซ้ำ 0 · ERR 0</span><span id="job-eta">เวลาคงเหลือ —</span></div>
           <ol id="job-log" class="job-log" hidden></ol>
         </section>
       </main>
