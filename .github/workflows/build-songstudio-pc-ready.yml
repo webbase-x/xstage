@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build301
+  group: xstage-songstudio-ready-build302
   cancel-in-progress: false
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
       - name: Run conversion tests using bundled Python and tools (no installs)
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.1-build301"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -43,7 +43,7 @@ jobs:
       - name: Verify final ZIP and SHA-256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.1-build301.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -65,10 +65,10 @@ jobs:
       - name: Upload completed ready-to-run release archive
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.1-build301
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.2-build302
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.1-build301.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.1-build301.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -77,8 +77,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.1-build301"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.1-build301.zip"
+          $tag = "song-studio-pc-ready-v0.3.2-build302"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows x64 portable Source Engine edition. Fully bundled Python 3.13.10,
@@ -94,6 +94,6 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" --clobber --repo "${{ github.repository }}"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.1 Build 301 (Offline)" --notes $notes --prerelease --latest=false --target "${{ github.sha }}" --repo "${{ github.repository }}"
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.2 Build 302 (Offline)" --notes $notes --prerelease --latest=false --target "${{ github.sha }}" --repo "${{ github.repository }}"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP to GitHub release" }
