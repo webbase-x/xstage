@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 # X-Stage Song Studio — interactive Windows folder / file picker.
 # Runs within the logged-in user's desktop session, never inside a remote web page.
 param(
