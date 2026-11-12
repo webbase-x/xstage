@@ -55,10 +55,13 @@ class PcSourceTests(unittest.TestCase):
         thread.start()
         try:
             def get(path, headers):
-                with HTTPConnection("127.0.0.1", server.server_port, timeout=5) as conn:
+                conn = HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+                try:
                     conn.request("GET", path, headers=headers)
                     res = conn.getresponse()
                     return res.status, res.read()
+                finally:
+                    conn.close()
             host = f"127.0.0.1:{server.server_port}"
             no_token = {"Host": host}
             self.assertEqual(get("/api/status", no_token)[0], 403)
