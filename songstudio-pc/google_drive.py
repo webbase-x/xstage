@@ -417,12 +417,16 @@ class GoogleDrive:
         finally:
             conn.close()
 
-    def upload_file(self, parent, path, name, *, replace_pointer=False, cancelled=None, on_progress=None):
+    def upload_file(self, parent, path, name, *, replace_pointer=False, cancelled=None,
+                    on_progress=None, existing_items=None):
         expected = hashlib.md5()
         with path.open("rb") as source:
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
                 expected.update(chunk)
-        matches = [f for f in self.list_children(parent)
+        # Online bulk sync can pass one verified folder listing for the whole
+        # batch, avoiding one Drive files.list request for every music file.
+        children = self.list_children(parent) if existing_items is None else existing_items
+        matches = [f for f in children
                    if f.get("name") == name and f.get("mimeType") != "application/vnd.google-apps.folder"]
         for match in matches:
             if match.get("md5Checksum", "").lower() == expected.hexdigest():
