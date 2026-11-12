@@ -204,7 +204,7 @@ final class XStageUpdateManager {
             }
             int build = meta.optInt("build", 0);
             String version = meta.optString("version", "");
-        if (build <= 0 || !version.matches("[0-9]+[.][0-9]+[.][0-9]+")) {
+            if (build <= 0 || !version.matches("[0-9]+(?:[.][0-9]+){1,3}")) {
                 throw new IllegalStateException("ข้อมูลเวอร์ชัน Google Play ไม่ถูกต้อง");
             }
             return new LatestUpdate(version, build, "", "", "", true);
@@ -255,7 +255,7 @@ final class XStageUpdateManager {
         String version = json.optString("version", "");
         String file = json.optString("file", "");
         String sha256 = json.optString("sha256", "").toLowerCase(Locale.ROOT);
-        if (build <= 0 || !version.matches("[0-9]+(?:\\\\.[0-9]+){2}")) {
+        if (build <= 0 || !version.matches("[0-9]+[.][0-9]+[.][0-9]+")) {
             throw new IllegalStateException("ข้อมูลเวอร์ชัน APK ไม่สมบูรณ์");
         }
         if (!file.matches("X-Stage-Karaoke-Android-v[0-9A-Za-z._-]+-build[0-9]+\\.apk")
