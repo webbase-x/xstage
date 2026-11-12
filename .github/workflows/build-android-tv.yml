@@ -148,6 +148,41 @@ jobs:
         run: |
           gradle -p android-tv clean assembleDebug assembleRelease bundleRelease --stacktrace
 
+      - name: Verify launcher banner, icon and splash inside built APK
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import hashlib, struct
+          source=Path('assets/xstage-stage-logo.png')
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == '5cc34771ae31287ef70ff032d56763a45e5942b3f27a8623c0c81ea72f8f0622', 'Official user artwork changed'
+          folder=Path('android-tv/app/src/main/res/drawable-nodpi')
+          def png_size(raw):
+              assert raw[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'Not a PNG'
+              return struct.unpack('>II',raw[16:24])
+          expected={
+              'xstage_tv_banner.png': (320,180),
+              'xstage_app_icon.png': (512,512),
+              'xstage_tv_splash.png': (2048,682),
+          }
+          for name,dimensions in expected.items():
+              output=folder/name
+              assert output.exists(),f'Missing Android launcher drawable: {output}'
+              content=output.read_bytes()
+              assert png_size(content)==dimensions,f'Unexpected dimensions: {output}'
+              assert len(content)>4096,f'Suspiciously empty launcher graphic: {output}'
+          assert (folder/'xstage_tv_splash.png').read_bytes()==source.read_bytes(),'Native splash must be exact source PNG'
+          for apk in [Path('android-tv/app/build/outputs/apk/debug/app-debug.apk'),Path('android-tv/app/build/outputs/apk/release/app-release.apk')]:
+              with ZipFile(apk) as z:
+                  names=z.namelist()
+                  for name in expected:
+                      matches=[n for n in names if n.endswith('/'+name)]
+                      assert matches,f'{apk}: launcher graphic {name} not packaged into APK'
+                      assert png_size(z.read(matches[0]))==expected[name],f'{apk}: incorrect packaged graphic {name}'
+          print('TV launcher verified: original PNG; 320x180 banner, 512x512 icon, full-resolution splash; debug and release APK resources present')
+          PY
+
       - name: Show build outputs
         shell: bash
         run: |

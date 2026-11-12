@@ -81,7 +81,7 @@ android {
 
 tasks.register("generateXStageTvAssets") {
     def iconFile = file("src/main/res/drawable-nodpi/xstage_app_icon.png")
-    def bannerFile = file("src/main/res/drawable-xhdpi/xstage_tv_banner.png")
+    def bannerFile = file("src/main/res/drawable-nodpi/xstage_tv_banner.png")
     def splashFile = file("src/main/res/drawable-nodpi/xstage_tv_splash.png")
     def storeIcon = rootProject.file("store-assets/xstage-play-icon-512.png")
     def storeBanner = rootProject.file("store-assets/xstage-tv-banner-320x180.png")
@@ -91,41 +91,44 @@ tasks.register("generateXStageTvAssets") {
     doLast {
         [iconFile.parentFile, bannerFile.parentFile, splashFile.parentFile, storeIcon.parentFile, storeBanner.parentFile].each { it.mkdirs() }
 
+        // One official user-supplied source for Android TV launcher banner,
+        // square launcher icon, Play Store previews and app startup splash.
+        // IMPORTANT: do not generate the old X/microphone emblem here.
+        def logoSource = rootProject.file("../assets/xstage-stage-logo.png")
+        if (!logoSource.isFile()) throw new GradleException("Missing official X-Stage stage logo: " + logoSource)
+        def sourceLogo = javax.imageio.ImageIO.read(logoSource)
+        if (sourceLogo == null || sourceLogo.getWidth() < 1 || sourceLogo.getHeight() < 1)
+            throw new GradleException("Could not decode official stage logo PNG")
+        splashFile.bytes = logoSource.bytes
+
+        // Some Google TV / Android TV launchers render android:icon instead of
+        // android:banner in the app grid. Both MUST show this same full image.
         def icon = new java.awt.image.BufferedImage(512, 512, java.awt.image.BufferedImage.TYPE_INT_ARGB)
         def g = icon.createGraphics()
-        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
-        g.setColor(new java.awt.Color(6,19,33)); g.fillRoundRect(8,8,496,496,90,90)
-        g.setColor(new java.awt.Color(34,212,255)); g.setStroke(new java.awt.BasicStroke(8f)); g.drawRoundRect(8,8,496,496,90,90)
-        g.setStroke(new java.awt.BasicStroke(44f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND))
-        g.setColor(new java.awt.Color(60,235,255)); g.drawLine(120,105,390,375)
-        g.setColor(new java.awt.Color(113,91,255)); g.drawLine(390,105,120,375)
-        g.setColor(new java.awt.Color(240,250,255))
-        g.setStroke(new java.awt.BasicStroke(14f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND))
-        g.drawRoundRect(218,160,76,140,72,72)
-        g.drawArc(195,220,122,118,180,180)
-        g.drawLine(256,330,256,392)
-        g.drawLine(205,398,307,398)
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+        g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY)
+        g.setColor(java.awt.Color.BLACK)
+        g.fillRect(0,0,512,512)
+        double iconScale = Math.min(488d/sourceLogo.getWidth(), 480d/sourceLogo.getHeight())
+        int iconW = Math.max(1,Math.round(sourceLogo.getWidth()*iconScale) as int)
+        int iconH = Math.max(1,Math.round(sourceLogo.getHeight()*iconScale) as int)
+        int iconLeft = (512-iconW).intdiv(2)
+        int iconTop = (512-iconH).intdiv(2)
+        g.drawImage(sourceLogo,iconLeft,iconTop,iconW,iconH,null)
         g.dispose()
         javax.imageio.ImageIO.write(icon, "png", iconFile)
         javax.imageio.ImageIO.write(icon, "png", storeIcon)
 
-        // v1.0.84: exact official user-supplied transparent logo (no redraw).
-        // Match the exact user-supplied transparent stage logo for Android TV.
-        // Composite on white at the fixed Android TV launcher resolution (320x180).
-        def logoSource = rootProject.file("../assets/xstage-stage-logo.png")
-        if (!logoSource.isFile()) throw new GradleException("Missing supplied stage logo: " + logoSource)
-        def sourceLogo = javax.imageio.ImageIO.read(logoSource)
-        if (sourceLogo == null || sourceLogo.getWidth() < 1 || sourceLogo.getHeight() < 1)
-            throw new GradleException("Could not decode supplied stage logo PNG")
-        // Preserve exact transparent PNG bytes for the native startup splash.
-        splashFile.bytes = logoSource.bytes
+        // Android TV launcher banner is fixed 16:9 (320x180). Keep the
+        // 2048x682 original aspect ratio: contain, centered, never crop/stretch.
+        // A black background matches the user's supplied transparent PNG.
         def banner = new java.awt.image.BufferedImage(320,180,java.awt.image.BufferedImage.TYPE_INT_RGB)
         def b = banner.createGraphics()
         b.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
         b.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING,java.awt.RenderingHints.VALUE_RENDER_QUALITY)
-        b.setColor(java.awt.Color.WHITE)
+        b.setColor(java.awt.Color.BLACK)
         b.fillRect(0,0,320,180)
-        double scale = Math.min(306d/sourceLogo.getWidth(), 164d/sourceLogo.getHeight())
+        double scale = Math.min(316d/sourceLogo.getWidth(), 172d/sourceLogo.getHeight())
         int scaledW = Math.max(1,Math.round(sourceLogo.getWidth()*scale) as int)
         int scaledH = Math.max(1,Math.round(sourceLogo.getHeight()*scale) as int)
         int left = (320-scaledW).intdiv(2)

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const read=name=>fs.readFileSync(new URL('../'+name,import.meta.url),'utf8');
+const requireBannerSource=()=>fs.readFileSync(new URL('../assets/xstage-stage-logo.png',import.meta.url));
 const app=read('app.js');
 const pc=read('pc-extensions.js');
 const host=read('stage-controls.js');
@@ -174,8 +175,15 @@ assert.ok(androidMain.includes('callJavascript("window.XStageTvOpenMenu'),'Andro
 assert.ok(androidMain.includes('if (isTelevisionDevice())')&&androidMain.includes('window.XStageTvOpenMenu'),'Android TV SEARCH key must open TV quick menu instead of focusing hidden search');
 assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
 assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
-assert.ok(androidGradle.includes('b.setColor(java.awt.Color.WHITE)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher/store banner must use a solid white background');
+assert.ok(androidGradle.includes('b.setColor(java.awt.Color.BLACK)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher banner must show the original transparent logo on black');
 assert.ok(androidGradle.includes('rootProject.file("../assets/xstage-stage-logo.png")')&&androidGradle.includes('b.fillRect(0,0,320,180)')&&androidGradle.includes('b.drawImage(sourceLogo,left,top,scaledW,scaledH,null)'),'TV launcher banner must use the exact uploaded PNG, preserve its aspect ratio, and fit within 320x180');
+assert.ok(androidGradle.includes('drawable-nodpi/xstage_tv_banner.png'),'TV launcher banner must use nodpi without Android density rescaling');
+assert.ok(androidGradle.includes('g.drawImage(sourceLogo,iconLeft,iconTop,iconW,iconH,null)'),'Android launcher app-grid icon must show the same full official logo, not the old X symbol');
+assert.ok(!androidGradle.includes('g.drawRoundRect(218,160,76,140')&&!androidGradle.includes('g.drawLine(205,398,307,398)'),'obsolete synthetic microphone launcher icon must not be regenerated');
+assert.ok(androidManifest.includes('android:roundIcon="@drawable/xstage_app_icon"')&&androidManifest.includes('android:logo="@drawable/xstage_app_icon"'),'app-grid launcher icon fallbacks must all use the new logo');
+assert.ok(androidManifest.match(/android:banner="@drawable\/xstage_tv_banner"/g)?.length===2,'activity and application must use the same official banner');
+const actualBannerSourceSha=await import('node:crypto').then(x=>x.createHash('sha256').update(requireBannerSource()).digest('hex'));
+assert.equal(actualBannerSourceSha,'5cc34771ae31287ef70ff032d56763a45e5942b3f27a8623c0c81ea72f8f0622','Android logo source must be pixel-identical to the user-supplied PNG');
 assert.ok(css.includes('1.0.71 Android TV display-only stage'),'TV-specific final layout must live in the last-loaded UX stylesheet');
 assert.ok(css.includes('body.xstage-native-tv .topbar')&&css.includes('body.xstage-native-tv #pc-search')&&css.includes('body.xstage-native-tv #virtual-keyboard'),'TV must hide all search/menu/keyboard chrome');
 assert.ok(css.includes('left:clamp(18px,2vw,30px)!important')&&css.includes('right:clamp(18px,2vw,30px)!important'),'TV brand and QR must occupy opposite top corners');
