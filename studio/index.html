@@ -152,9 +152,16 @@
         <section id="tab-settings" class="tab">
           <div class="section-top"><div><div class="eyebrow">PREFERENCES & HEALTH</div><h2>ตั้งค่าและตรวจสภาพแวดล้อม</h2><p>ใช้การตั้งค่าชุดเดียวกันทั้งแอป PC และหน้าเว็บ</p></div></div>
           <div class="grid-2">
-            <article class="panel"><div class="section-heading"><div><h2>บัญชี Google</h2><p>ใช้ Desktop OAuth Client JSON ของเจ้าของบัญชี</p></div></div>
-              <label for="settings-oauth">Google Desktop OAuth Client JSON (ไฟล์ของผู้ใช้)</label><div class="path-row"><input id="settings-oauth" type="text" class="field" placeholder="เลือกไฟล์ JSON"><button class="button ghost" data-pick="oauth">เลือกไฟล์</button></div>
-              <div class="toolbar"><button id="settings-login" class="button primary">เชื่อม Google</button><button id="settings-logout" class="button ghost">ออกจาก Google</button></div><div class="hint">ต้องตั้งค่า Google Drive API และ OAuth Consent ใน Google Cloud แล้วเลือก Client ประเภท Desktop · บัญชี Google ลงชื่อผ่านเบราว์เซอร์ · Refresh Token เข้ารหัสด้วย Windows DPAPI ไม่เผยแพร่สู่ GitHub</div>
+            <article class="panel"><div class="section-heading"><div><h2>บัญชี Google</h2><p>ลงชื่อเข้าใช้บัญชีของตนเอง · ไม่ต้องเลือกไฟล์ JSON เมื่อแอปตั้งค่าไว้แล้ว</p></div></div>
+              <div class="google-config-state" id="google-config-state" aria-live="polite">กำลังตรวจการตั้งค่า OAuth ของแอป…</div>
+              <div class="toolbar"><button id="settings-login" class="button primary" type="button">เชื่อม Google</button><button id="settings-logout" class="button ghost" type="button">ออกจาก Google</button></div>
+              <details id="oauth-advanced" class="oauth-advanced">
+                <summary>ตัวเลือกขั้นสูง · ใช้ OAuth Client JSON ของตนเอง</summary>
+                <label for="settings-oauth">ไฟล์ Google Desktop OAuth Client JSON</label>
+                <div class="path-row"><input id="settings-oauth" type="text" class="field" placeholder="ไม่จำเป็นเมื่อผู้พัฒนาตั้งค่าในแอปแล้ว"><button class="button ghost" type="button" data-pick="oauth">เลือกไฟล์</button></div>
+                <div class="hint">ถ้าเลือกไฟล์ ระบบจะตรวจและคัดลอกค่าระบุตัวแอปไปเก็บในพื้นที่ส่วนตัวของ Windows เพียงครั้งเดียว · ใช้ได้กับรุ่น PC ที่อัปเดตภายหลัง</div>
+              </details>
+              <div class="hint">การตั้งค่า Client ID เป็นข้อมูลของแอป ไม่ใช่บัญชีผู้ใช้ · ผู้ใช้ Google แต่ละคนอนุญาตสิทธิ์ครั้งแรกด้วยตนเอง · โทเค็นเก็บแยกบัญชี Windows และเข้ารหัสด้วย DPAPI</div>
             </article>
             <article class="panel"><div class="section-heading"><div><h2>เครื่องมือประมวลผล</h2><button id="refresh-environment" class="button ghost">ตรวจซ้ำ</button></div></div><div id="environment-list" class="environment-list">กำลังตรวจ FFmpeg, FluidSynth, SoundFont…</div><div class="hint">ส่วนประกอบต้องพร้อมก่อนสร้าง Installer; งานสร้าง M4A ทำบน Local Engine ไม่ต้องให้เว็บดาวน์โหลดเครื่องมือใหม่ทุกเพลง</div></article>
           </div>
