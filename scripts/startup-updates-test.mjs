@@ -43,6 +43,37 @@ function scenario({busy=false,native=false}={}){
   assert.equal(test.apply({version:'1.0.78',build:1078}),false,'native APK uses its own updater');
   assert.equal(test.reloads(),0);
 }
+const nativeMain=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
+const remote=read('remote.js');
+const host=read('stage-controls.js');
+const css=read('style.css');
+const liveStart=app.indexOf('const XSTAGE_LIVE_UPDATE_CHECK_MS=');
+const liveEnd=app.indexOf('function setupAppUpdateWatcher(){',liveStart);
+assert.ok(liveStart>=0&&liveEnd>liveStart,'live update watcher must be available');
+const makeLiveChecker=new Function('androidTvNativeBridgeReady','window','checkAppVersion',
+  app.slice(liveStart,liveEnd)+'\nreturn {checkLiveAppUpdate,XSTAGE_LIVE_UPDATE_CHECK_MS};');
+{
+  let nativeChecks=0,webChecks=0;
+  const native=makeLiveChecker(()=>true,{XStageAndroid:{checkForAppUpdate(){nativeChecks++;}}},()=>{webChecks++;});
+  assert.ok(native.XSTAGE_LIVE_UPDATE_CHECK_MS<=20000,'updates should be checked within twenty seconds while playing');
+  native.checkLiveAppUpdate();native.checkLiveAppUpdate();
+  assert.equal(nativeChecks,2,'native APK must be checked repeatedly while in the foreground');
+  assert.equal(webChecks,0,'APK must not use web-only version.json update channel');
+  const web=makeLiveChecker(()=>false,{},()=>{webChecks++;});
+  web.checkLiveAppUpdate();
+  assert.equal(webChecks,1,'browser must also check its own version regularly');
+}
+assert.ok(app.includes('if(!newlyPublished)return;'),'same Android build must not reopen a dismissed notice');
+assert.ok(app.includes('nativeUpdateDismissedBuild===next.build'),'Later must suppress repeat dialogs for the same build');
+assert.ok(app.includes("panel.classList.toggle('during-playback',active)"),'notification must be compact during karaoke');
+assert.ok(css.includes('.android-tv-update-panel.during-playback'),'live APK notice must leave lyrics visible');
+assert.ok(android.includes('private final Runnable periodicUpdateCheck'),'native fallback must monitor releases during playback');
+assert.ok(android.includes('main.postDelayed(this, CHECK_INTERVAL_MS)'),'native fallback must continue monitoring');
+assert.ok(nativeMain.includes('updateManager.startMonitoring()')&&nativeMain.includes('updateManager.stopMonitoring()'),
+  'native monitor must follow activity foreground lifecycle');
+assert.ok(host.includes("'xstage:native-update',broadcastStatus"),'paired remotes should receive the new build promptly');
+assert.ok(remote.includes('lastNotifiedUpdateBuild'),'Owner mobile should show one clear notification per new build');
+
 assert.ok(app.includes("const autoKey='xstage-native-auto-update-'"),'hosted UI must upgrade older APKs without requiring a new Java binary');
 assert.ok(app.includes("button?.click();"),'new native release must automatically start the system-confirmed update');
 assert.ok(android.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest()'),'test APK must remain separate from production Play channel');
