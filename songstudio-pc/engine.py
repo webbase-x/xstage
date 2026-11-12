@@ -1229,6 +1229,145 @@ def _preview_lyrics_row(row):
     }
 
 
+
+def _related_preview_files(row, catalog):
+    """Use only real indexed files with the exact stem and parent directory."""
+    selected = Path(row["path"])
+    if not selected.is_file() or selected.is_symlink():
+        return []
+    candidates = []
+    for item in catalog:
+        path = Path(item["path"])
+        if (path.parent == selected.parent
+                and path.stem.casefold() == selected.stem.casefold()
+                and path.suffix.lower() in (EXT_AUDIO | EXT_MIDI)
+                and path.is_file() and not path.is_symlink()):
+            candidates.append(item)
+    return sorted(candidates, key=lambda item:
+                  (Path(item["path"]).suffix.casefold(), int(item["id"])))
+
+
+def _preview_source_inventory(row, catalog):
+    related = _related_preview_files(row, catalog)
+    audio = [item for item in related if Path(item["path"]).suffix.lower() in EXT_AUDIO]
+    midi = [item for item in related if Path(item["path"]).suffix.lower() in EXT_MIDI]
+    options = []
+    if related:
+        options.append({
+            "value": "auto", "kind": "play",
+            "label": ("เสียงต้นฉบับ + MIDI/SoundFont (ผสม)" if audio and midi else
+                      "เล่นไฟล์เสียงต้นฉบับ" if audio else "เล่น MIDI/KAR ด้วย SoundFont")
+        })
+    for item in audio + midi:
+        path = Path(item["path"])
+        kind = "audio" if item in audio else "midi"
+        options.append({"value": f"{kind}:{item['id']}", "kind": "play",
+                        "label": ("ทดลองฟังเสียง " if kind == "audio" else "ทดลองฟังดนตรี ") +
+                                 path.suffix.upper() + " · " + path.name})
+    return options, related
+
+
+def preview_source_report(song_id):
+    """Report observed components, selectable source types, and timed readiness."""
+    if type(song_id) is not int:
+        raise ValueError("รหัสเพลงสำหรับตรวจไฟล์ไม่ถูกต้อง")
+    with LOCK:
+        row = dict(FILE_BY_ID.get(song_id) or {})
+        catalog = list(FILES)
+    if not row:
+        raise ValueError("ไม่พบเพลงที่เลือก")
+    choices, related = _preview_source_inventory(row, catalog)
+    source = Path(row["path"])
+    components = []
+    def component(kind, path, required=False):
+        file = Path(path) if path else None
+        exists = bool(file and file.is_file() and not file.is_symlink())
+        components.append({"type": kind, "name": file.name if file else "—",
+                           "found": exists, "required": bool(required),
+                           "size": file.stat().st_size if exists else 0})
+        return exists
+    for item in related:
+        path = Path(item["path"])
+        component("เพลง " + path.suffix.upper(), path)
+    trio = row.get("ncn") or NCN.resolve_companions(source)
+    if trio:
+        if not related:
+            component("Song · MIDI", trio.get("midi"), True)
+        lyr_ok = component("Lyrics · LYR", trio.get("lyrics"), True)
+        cur_ok = component("Cursor · CUR", trio.get("cursor"), True)
+        choices.extend([
+            {"value": "inspect:lyr", "kind": "inspect", "label": "ตรวจเนื้อร้อง LYR"}
+            for _ in range(1) if lyr_ok])
+        choices.extend([
+            {"value": "inspect:cur", "kind": "inspect", "label": "ตรวจเวลา CUR"}
+            for _ in range(1) if cur_ok])
+    else:
+        lrc = _matching_lrc(source)
+        if lrc:
+            if component("Lyrics · LRC", lrc):
+                choices.append({"value": "inspect:lrc", "kind": "inspect",
+                                "label": "ตรวจเนื้อร้องและเวลา LRC"})
+        if source.suffix.lower() in EXT_MIDI:
+            component("เนื้อร้องฝังใน MIDI/KAR", source)
+            choices.append({"value": "inspect:embedded", "kind": "inspect",
+                            "label": "ตรวจเนื้อร้องฝังใน MIDI/KAR"})
+    proof = _preview_lyrics_row(row)
+    status = proof.get("status", "missing")
+    return {
+        "id": song_id, **preview_song_identity(row), "options": choices,
+        "components": components, "timedLyricsReady": status == "found",
+        "proofSource": proof.get("source", ""), "proofMessage": proof.get("message", ""),
+        "complete": bool(related and status == "found"),
+    }
+
+
+def preview_inspect(song_id, choice):
+    """Allow inspecting a real text/cursor component without claiming it is audio."""
+    if type(choice) is not str or choice not in ("inspect:lyr", "inspect:cur",
+                                                  "inspect:lrc", "inspect:embedded"):
+        raise ValueError("ชนิดไฟล์สำหรับตรวจไม่ถูกต้อง")
+    with LOCK:
+        row = dict(FILE_BY_ID.get(song_id) or {})
+    if not row:
+        raise ValueError("ไม่พบเพลงที่เลือก")
+    src = Path(row["path"])
+    trio = row.get("ncn") or NCN.resolve_companions(src)
+    if choice in ("inspect:lyr", "inspect:cur"):
+        file = Path((trio or {}).get("lyrics" if choice == "inspect:lyr" else "cursor") or "")
+        if not trio or not file.is_file():
+            raise ValueError("ไม่พบไฟล์ประกอบ NCN ชนิดนี้")
+        if choice == "inspect:lyr":
+            lines = NCN._decode_text(file.read_bytes()).splitlines()
+            if len(lines) < 5:
+                raise ValueError("LYR ไม่มีส่วนหัวหรือเนื้อร้อง")
+            return {"kind": choice, "file": file.name, "verified": True,
+                    "message": "อ่านเนื้อร้อง LYR ได้ แต่ต้องตรวจ CUR + MIDI จึงยืนยันเวลาได้",
+                    "text": "\\n".join(lines[4:])[:15000]}
+        raw = file.read_bytes()
+        if len(raw) % 2:
+            if raw[-1:] != b"\\xff":
+                raise ValueError("CUR ไม่สมบูรณ์: จำนวนไบต์ไม่ถูกต้อง")
+            raw = raw[:-1]
+        return {"kind": choice, "file": file.name, "verified": True,
+                "message": f"อ่าน Cursor ได้ {len(raw)//2:,} ตำแหน่ง · ต้องตรวจคู่กับ MIDI และ LYR",
+                "text": ""}
+    if choice == "inspect:lrc":
+        lrc = _matching_lrc(src)
+        if not lrc:
+            raise ValueError("ไม่มีไฟล์ LRC ที่ตรงรหัสเพลงนี้")
+        text = NCN._decode_text(lrc.read_bytes())
+        if not _song_export_module().lrc_to_json(text, src.stem).get("lines"):
+            raise ValueError("LRC ไม่มี timestamp สำหรับการแสดงคาราโอเกะ")
+        return {"kind": choice, "file": lrc.name, "verified": True,
+                "message": "อ่าน LRC พร้อม timestamp ได้", "text": text[:15000]}
+    if src.suffix.lower() not in EXT_MIDI:
+        raise ValueError("เพลงที่เลือกไม่ได้เป็น MIDI/KAR")
+    doc = NCN.kar_document(src, src.stem)
+    return {"kind": choice, "file": src.name, "verified": True,
+            "message": f"อ่านเนื้อร้องฝังใน MIDI/KAR ได้ {len(doc['lines'])} บรรทัด",
+            "text": "\\n".join(line["text"] for line in doc["lines"])[:15000]}
+
+
 def preview_lyrics(song_id):
     if type(song_id) is not int:
         raise ValueError("รหัสเพลงสำหรับแสดงเนื้อร้องไม่ถูกต้อง")
@@ -1239,7 +1378,7 @@ def preview_lyrics(song_id):
     return {"id": song_id, **preview_song_identity(row), **_preview_lyrics_row(row)}
 
 
-def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
+def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8, source_choice="auto"):
     """Issue one-use ticket for streamed preview; no output audio files."""
     if type(song_id) is not int:
         raise ValueError("กรุณาเลือกเพลงสำหรับทดลองฟัง")
@@ -1255,7 +1394,18 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
         raise RuntimeError("แพ็กเกจไม่มี Live Preview Engine")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    options, related = _preview_source_inventory(row, catalog)
+    allowed = {item["value"] for item in options if item["kind"] == "play"}
+    if source_choice not in allowed:
+        raise ValueError("ประเภทไฟล์ที่เลือกไม่มีอยู่จริงสำหรับเพลงนี้")
     audio, midi = mod.matching_sources(row, catalog)
+    if source_choice != "auto":
+        category, raw_id = source_choice.split(":", 1)
+        match = next((item for item in related if item["id"] == int(raw_id)), None)
+        if not match:
+            raise ValueError("ไม่พบไฟล์ที่เลือกในรายการเพลงที่สแกน")
+        chosen = Path(match["path"])
+        audio, midi = ((chosen, None) if category == "audio" else (None, chosen))
     if midi and not sf_available():
         raise ValueError("กรุณาเลือก SoundFont (.sf2/.sf3) ก่อนเปิดเพลง MIDI/KAR")
     if not ffmpeg_binary():
@@ -1290,6 +1440,7 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
     return {
         "ticket": ticket, "stream_id": stream_id,
         **preview_song_identity(row),
+        "source_choice": source_choice,
         "has_backing": bool(audio), "has_midi": bool(midi),
         "original_is_midi": bool(midi and not audio),
         "mixed": bool(midi),
@@ -1472,6 +1623,18 @@ class Handler(BaseHTTPRequestHandler):
                     page_rows = [{**item, **preview_song_identity(item)}
                                  for item in page_rows]
                 self._json({"rows": page_rows, "total": len(rows)})
+            elif path == "/api/preview-sources":
+                try:
+                    song_id = int(query.get("id", [""])[0])
+                except ValueError as exc:
+                    raise ValueError("กรุณาเลือกเพลงสำหรับตรวจไฟล์") from exc
+                self._json(preview_source_report(song_id))
+            elif path == "/api/preview-inspect":
+                try:
+                    song_id = int(query.get("id", [""])[0])
+                except ValueError as exc:
+                    raise ValueError("กรุณาเลือกเพลงสำหรับตรวจไฟล์") from exc
+                self._json(preview_inspect(song_id, query.get("kind", [""])[0]))
             elif path == "/api/preview-lyrics":
                 try:
                     song_id = int(query.get("id", [""])[0])
@@ -1545,7 +1708,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/live-preview":
                 self._json(prepare_live_preview(
                     payload.get("id"), payload.get("music_volume", .8),
-                    payload.get("synth_volume", .8)))
+                    payload.get("synth_volume", .8), payload.get("source_choice", "auto")))
             elif path == "/api/live-control":
                 session_id = payload.get("stream_id", "")
                 with LOCK:
