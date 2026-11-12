@@ -50,6 +50,13 @@
   let songs = [], prefs = {}, googleConnected = false;
   let lastJobId = '', lastJobState = 'idle', refreshTimer = 0;
   let busy = false, editingId = null, notificationTimer = null;
+  let createStep = 1;
+  const createStepLabels = [
+    'เลือกต้นฉบับและสแกนไฟล์',
+    'ค้นหาและเลือกเพลง',
+    'เลือก SoundFont และทดลองฟัง',
+    'ตรวจสอบและสร้างเพลง'
+  ];
   const previewAudio = $('preview-audio');
 
   async function api(path, opts = {}) {
@@ -87,6 +94,60 @@
     box.hidden = !text; box.style.borderColor = isError ? '#c45b70' : '#329c8d';
     clearTimeout(notificationTimer);
     if (text) notificationTimer = setTimeout(() => {box.hidden = true;}, isError ? 9500 : 5000);
+  }
+  function updateCreateWizard() {
+    for (const panel of document.querySelectorAll('[data-create-step]')) {
+      const visible = Number(panel.dataset.createStep) === createStep;
+      panel.hidden = !visible;
+    }
+    for (const button of document.querySelectorAll('[data-create-target]')) {
+      const step = Number(button.dataset.createTarget);
+      const isActive = step === createStep;
+      button.classList.toggle('active', isActive);
+      button.classList.toggle('completed', step < createStep);
+      if (isActive) button.setAttribute('aria-current', 'step');
+      else button.removeAttribute('aria-current');
+      button.disabled = busy || (step > 1 && total < 1) || (step > 2 && selected.size === 0);
+    }
+    $('create-step-progress').textContent = 'ขั้นตอนที่ ' + createStep + ' จาก 4';
+    $('create-step-description').textContent = 'ขั้นตอน ' + createStep + '/4 · ' + createStepLabels[createStep - 1];
+    $('create-step-previous').disabled = busy || createStep === 1;
+    const next = $('create-step-next');
+    next.hidden = createStep === 4;
+    next.disabled = busy || (createStep === 1 && total < 1) || (createStep === 2 && selected.size === 0);
+    if (createStep < 4) {
+      next.textContent = 'ขั้นตอนถัดไป: ' + ['เลือกเพลง', 'ตั้งค่าเสียง / ทดลองฟัง', 'สร้างเพลง'][createStep - 1] + ' ›';
+    }
+    const singleSong = selected.size === 1
+      ? songs.find(song => song.id === [...selected][0]) : null;
+    const previewHint = $('create-preview-hint');
+    previewHint.textContent = selected.size === 0
+      ? 'ยังไม่ได้เลือกเพลง · กลับไปขั้นตอนที่ 2 แล้วเลือกเพลงก่อน'
+      : selected.size > 1
+        ? 'เลือก ' + fmtNum(selected.size) + ' เพลง · หากต้องการทดลองฟัง กรุณากลับไปเลือกเพียง 1 เพลง'
+        : 'พร้อมทดลองฟัง' + (singleSong ? ': ' + singleSong.title : 'เพลงที่เลือก') + ' · กดปุ่มสร้างเสียงตัวอย่าง';
+    $('review-song-count').textContent = fmtNum(selected.size) + ' เพลง';
+    $('review-workspace').textContent = $('create-workspace').value.trim() || prefs.workspace || 'ยังไม่ได้เลือก';
+    const fontValue = $('create-soundfont').value || prefs.soundfont || '';
+    $('review-soundfont').textContent = fontValue ? fontValue.split(/[\\/]/).pop() : 'ไม่ได้เลือก (ไฟล์เสียงทั่วไป)';
+    const mode = $('create-mode');
+    $('review-mode').textContent = mode.options[mode.selectedIndex]?.textContent || mode.value || 'คงเสียงต้นฉบับ';
+  }
+  function goCreateStep(target) {
+    const step = Number(target);
+    if (!Number.isInteger(step) || step < 1 || step > 4 || busy) return;
+    if (step > 1 && total < 1) {
+      message('ขั้นตอนที่ 1: เลือกโฟลเดอร์ต้นฉบับ กดตรวจสอบไฟล์เพลง และรอให้สแกนพบเพลงก่อน');
+      return;
+    }
+    if (step > 2 && selected.size === 0) {
+      message('ขั้นตอนที่ 2: เลือกเพลงอย่างน้อย 1 เพลงก่อนดำเนินการต่อ');
+      return;
+    }
+    if (createStep === 3 && step !== 3) previewAudio.pause();
+    createStep = step;
+    updateCreateWizard();
+    document.querySelector('.create-assistant')?.scrollIntoView({behavior: 'smooth', block: 'start'});
   }
   function tab(name) {
     if (!tabNames[name]) return;
@@ -166,6 +227,7 @@
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('[data-pick],.field,.song-table input[type=checkbox]')) el.disabled = busy;
     $('cancel-job').hidden = !busy;
+    updateCreateWizard();
   }
   async function refreshSongs() {
     const data = await api('/api/songs?limit=' + pageSize + '&offset=' + (page * pageSize) + '&search=' + encodeURIComponent(search));
@@ -390,6 +452,11 @@
   });
   if (onlinePage) $('open-web').hidden = true;
   for (const el of document.querySelectorAll('.nav-button')) el.addEventListener('click',()=>tab(el.dataset.tab));
+  for (const el of document.querySelectorAll('[data-create-target]')) {
+    el.addEventListener('click', () => goCreateStep(el.dataset.createTarget));
+  }
+  $('create-step-previous').addEventListener('click', () => goCreateStep(createStep - 1));
+  $('create-step-next').addEventListener('click', () => goCreateStep(createStep + 1));
   $('song-rows').addEventListener('click', rowSelection);
   $('select-page').addEventListener('click',()=>{for (const song of songs) selected.add(song.id);void refreshSongs();});
   $('clear-selection').addEventListener('click',()=>{selected.clear();void refreshSongs();});
@@ -446,5 +513,6 @@
     $('toggle-log').setAttribute('aria-expanded',String(!log.hidden));
     $('toggle-log').textContent=log.hidden?'รายละเอียด ▾':'ซ่อนรายละเอียด ▴';
   });
+  updateCreateWizard();
   void initialize();
 })();
