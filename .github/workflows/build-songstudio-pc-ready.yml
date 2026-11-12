@@ -55,6 +55,10 @@ jobs:
         run: |
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
           if ($LASTEXITCODE -ne 0) { throw "Duplicate and resume regression tests failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_drive_download.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Google Drive download read-only regressions failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_build_outcomes.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Build outcome status regressions failed" }
       - name: Validate app-wide Google OAuth config when owner set Client ID
         shell: powershell
         run: |
