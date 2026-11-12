@@ -16,6 +16,7 @@ on:
       - "scripts/test_songstudio_ai_import.py"
       - "scripts/test_songstudio_ui_contract.mjs"
       - "scripts/test_songstudio_drive_roundtrip.py"
+      - "scripts/test_songstudio_online_publish.py"
       - "scripts/test_songstudio_lyrics_preview.py"
       - "scripts/test_songstudio_ncn.py"
       - "scripts/test_songstudio_drive_download.py"
@@ -102,6 +103,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Independent AI import and reviewed lyrics regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
           if ($LASTEXITCODE -ne 0) { throw "Google Drive upload/download/ZIP round-trip regression failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_online_publish.py -v
+          if ($LASTEXITCODE -ne 0) { throw "XStageWeb online publish/dedup/merge/pointer regression failed" }
       - name: Preflight Google Drive upload/download OAuth readiness
         shell: powershell
         run: |
