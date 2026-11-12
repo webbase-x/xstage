@@ -60,6 +60,7 @@
   const previewAudio = $('preview-audio');
   let previewSongId = null, previewSearchTimer = 0, previewSearchSeq = 0;
   let previewSongRows = [], livePreviewPending = false;
+  let previewLyrics = null, previewLyricsSeq = 0, currentLyricIndex = -2;
   let liveStreamId = '', liveControlTimer = 0, liveControlPending = false, liveControlDirty = false;
 
   async function api(path, opts = {}) {
@@ -178,6 +179,7 @@
     if (createStep === 3) {
       if (!previewSongId && selected.size === 1) previewSongId = [...selected][0];
       void searchPreviewSongs();
+      if (previewSongId) void loadPreviewLyrics(previewSongId);
     }
     updateCreateWizard();
     document.querySelector('.create-assistant')?.scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -406,6 +408,121 @@
         if (liveControlDirty && liveStreamId) queueLiveControl(true);
       }
     }, immediate ? 0 : 70);
+  }
+  function updateLyricTime(timeSeconds=0) {
+    const data = previewLyrics;
+    if (!data?.lines?.length) return;
+    const time = Number.isFinite(timeSeconds) && timeSeconds >= 0 ? timeSeconds : 0;
+    const entries = data.lines;
+    let lo = 0, hi = entries.length - 1, index = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (Number(entries[mid].startTime) <= time) {index = mid; lo = mid + 1;}
+      else hi = mid - 1;
+    }
+    if (currentLyricIndex === index) return;
+    currentLyricIndex = index;
+    const panel = $('preview-lyrics-lines');
+    panel.replaceChildren();
+    const from = Math.max(0, Math.min(entries.length - 5, index - 2));
+    const to = Math.min(entries.length, Math.max(5, from + 5));
+    for (let i = from; i < to; i++) {
+      const line = document.createElement('div');
+      line.className = 'preview-lyric-line';
+      if (i === index && time < Number(entries[i].endTime || Number(entries[i].startTime) + 4))
+        line.classList.add('active');
+      else if (i > index) line.classList.add('upcoming');
+      line.textContent = entries[i].text || '';
+      panel.append(line);
+    }
+  }
+  async function loadPreviewLyrics(songId) {
+    const seq = ++previewLyricsSeq;
+    previewLyrics = null;
+    currentLyricIndex = -2;
+    const panel = $('preview-lyrics-lines');
+    panel.replaceChildren();
+    const empty = document.createElement('div');
+    empty.className = 'preview-lyrics-empty';
+    empty.textContent = 'กำลังตรวจเนื้อร้องจากไฟล์ต้นฉบับ…';
+    panel.append(empty);
+    $('preview-lyrics-source').textContent = 'กำลังตรวจสอบ';
+    $('preview-lyrics-source').dataset.state = 'loading';
+    $('preview-lyrics-status').textContent = 'ตรวจสอบ LRC / KAR / NCN (Song + Lyrics + Cursor)';
+    $('preview-lyrics-ai-tools').hidden = true;
+    if (!songId) {
+      empty.textContent = '♫ เลือกเพลงเพื่อดูเนื้อร้อง';
+      $('preview-lyrics-source').textContent = 'ยังไม่ได้เลือกเพลง';
+      $('preview-lyrics-status').textContent = 'เลือกเพลงแล้วระบบจะแสดงที่มาและเนื้อร้องตรงกับเวลา';
+      return;
+    }
+    try {
+      const result = await api('/api/preview-lyrics?id=' + encodeURIComponent(songId));
+      if (seq !== previewLyricsSeq || songId !== previewSongId) return;
+      previewLyrics = result;
+      $('preview-lyrics-source').textContent = result.source || 'ไม่พบแหล่งข้อมูล';
+      $('preview-lyrics-source').dataset.state = result.status || 'missing';
+      $('preview-lyrics-status').textContent = result.message ||
+        (result.status === 'found' ? 'พบเนื้อร้องจากไฟล์จริง' : 'ยังไม่พบเนื้อร้อง');
+      panel.replaceChildren();
+      if (Array.isArray(result.lines) && result.lines.length) {
+        updateLyricTime(previewAudio.currentTime || 0);
+      } else {
+        const noLyrics = document.createElement('div');
+        noLyrics.className = 'preview-lyrics-empty';
+        noLyrics.textContent = result.status === 'missing'
+          ? 'ไม่พบเนื้อร้องพร้อมเวลาของเพลงนี้ · ไม่สร้างข้อความหรือเวลาปลอม'
+          : 'ไม่พบข้อความเนื้อร้องที่ตรวจได้';
+        panel.append(noLyrics);
+      }
+      const aiControls = $('preview-lyrics-ai-tools');
+      aiControls.hidden = result.status === 'found' || !result.aiEligible && result.status !== 'ai-draft';
+      $('preview-ai-transcribe').disabled = !result.aiAvailable || busy;
+      $('preview-ai-transcribe').textContent = result.aiAvailable
+        ? '✦ ใช้ AI ถอดเสียงร้อง (ร่างสำหรับตรวจ)'
+        : 'AI ถอดเสียงร้องยังไม่พร้อมในแพ็กเกจนี้';
+      $('preview-ai-review').hidden = result.status !== 'ai-draft' || !result.draftLrc;
+    } catch (error) {
+      if (seq !== previewLyricsSeq) return;
+      panel.replaceChildren();
+      const alert = document.createElement('div');
+      alert.className = 'preview-lyrics-empty';
+      alert.textContent = 'ตรวจเนื้อร้องไม่สำเร็จ: ' + error.message;
+      panel.append(alert);
+      $('preview-lyrics-source').textContent = 'ตรวจสอบผิดพลาด';
+      $('preview-lyrics-source').dataset.state = 'missing';
+      $('preview-lyrics-status').textContent = error.message;
+    }
+  }
+  async function transcribePreviewWithAi() {
+    if (!previewSongId || !previewLyrics?.aiAvailable)
+      return message('เพลงนี้ไม่มีไฟล์เสียงร้อง หรือแพ็กเกจยังไม่มีโมเดล AI ถอดเสียง');
+    if (busy) return message('กรุณาให้งานที่กำลังทำอยู่เสร็จก่อน');
+    const approved = await confirmStudio(
+      'AI ใช้เสียงร้องในไฟล์จริงถอดเป็นข้อความแบบออฟไลน์ ผลอาจผิดหรือแต่งคำเกินจริง โดยเฉพาะเพลงดนตรีล้วน\n' +
+      'ผลจะเป็นฉบับร่างในพื้นที่ส่วนตัวของ Windows เท่านั้น ไม่เพิ่ม Lyrics ในคลังอัตโนมัติ\n' +
+      'ต้องตรวจคำและเวลาแล้วกดบันทึกก่อนใช้งาน ยืนยันหรือไม่?',
+      'AI ถอดเนื้อร้องเป็นฉบับร่าง');
+    if (!approved) return;
+    stopLivePreview();
+    const started = await run('ai-lyrics', {id:previewSongId, language:$('preview-ai-language').value});
+    if (started) {
+      $('preview-lyrics-status').textContent = 'AI กำลังถอดเสียง · ดูสถานะในแผงงาน · ไม่แก้ไขไฟล์เพลงต้นฉบับ';
+      $('preview-ai-transcribe').disabled = true;
+    }
+  }
+  async function reviewAiLyrics() {
+    if (!previewSongId || previewLyrics?.status !== 'ai-draft' || !previewLyrics.draftLrc)
+      return message('ไม่มีร่าง AI ที่ตรวจแก้ได้');
+    try {
+      const row = await api('/api/song/' + previewSongId);
+      editingId = previewSongId;
+      $('edit-code').textContent = (row.code || '') + ' · ' + (row.kind || '') + ' · ร่าง AI';
+      $('edit-title').value = row.title || '';
+      $('edit-artist').value = row.artist || '';
+      $('edit-lyrics').value = previewLyrics.draftLrc;
+      $('edit-dialog').showModal();
+    } catch (error) { message(error.message); }
   }
   async function searchPreviewSongs() {
     if (!token || !engineBase) return;
@@ -684,6 +801,10 @@
               previewAudio.pause(); previewAudio.src = engineAddress('/api/preview?ticket=' + t);
               $('preview-label').textContent = 'ตัวอย่างเสียงพร้อม · กด ▶ เพื่อฟัง';
               previewAudio.play().catch(()=>{});
+            } else if (job.kind === 'ai-lyrics') {
+              if (job.result?.songId === previewSongId)
+                await loadPreviewLyrics(previewSongId);
+              message(job.result?.message || 'AI ถอดคำร้องเป็นฉบับร่างแล้ว · กรุณาตรวจแก้', false);
             } else if (job.kind === 'check-update') {
               message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
@@ -733,6 +854,7 @@
         lyrics:$('edit-lyrics').value
       });
       await refreshSongs();
+      if (editingId === previewSongId) void loadPreviewLyrics(previewSongId);
       message('บันทึกข้อมูลเพลงและเนื้อร้องแล้ว',false);
     }catch(error){message(error.message);}
   }
@@ -802,6 +924,10 @@
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
   $('preview-stop-button').addEventListener('click',stopLivePreview);
+  $('preview-ai-transcribe').addEventListener('click',()=>{void transcribePreviewWithAi();});
+  $('preview-ai-review').addEventListener('click',()=>{void reviewAiLyrics();});
+  previewAudio.addEventListener('timeupdate',()=>updateLyricTime(previewAudio.currentTime));
+  previewAudio.addEventListener('seeked',()=>{currentLyricIndex=-2;updateLyricTime(previewAudio.currentTime);});
   $('preview-song-search').addEventListener('input', () => {
     clearTimeout(previewSearchTimer);
     previewSearchTimer = setTimeout(() => {void searchPreviewSongs();}, 180);
@@ -821,6 +947,7 @@
       button.classList.toggle('active', Number(button.dataset.previewId) === chosen);
     }
     updateButtons();
+    void loadPreviewLyrics(chosen);
     void startLivePreview();
   });
   for (const [slider,label] of [['preview-music-volume','preview-music-volume-label'],
