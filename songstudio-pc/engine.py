@@ -1095,6 +1095,70 @@ def open_picker(kind):
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์ส่งค่าพาธว่างเปล่า")
     return path
 
+def _preview_lyrics_row(row):
+    """Show only actually parsed lyrics, never infer words from MIDI notes.
+
+    AI drafts are displayed separately and never count as verified originals.
+    Parsing and MIDI tempo mapping are on-demand, not part of the 93k-song
+    catalog scan or HTTP streaming loop.
+    """
+    source = Path(row["path"])
+    is_audio = source.suffix.lower() in EXT_AUDIO
+    try:
+        lrc, doc, fingerprint = lyrics_package(row)
+        if doc and doc.get("lines"):
+            status = str(doc.get("sourceFormat") or
+                         ("NCN" if row.get("ncn") else "LRC")).upper()
+            timed = [{"startTime": float(item["startTime"]),
+                      "endTime": float(item.get("endTime", item["startTime"] + 3)),
+                      "text": str(item["text"])}
+                     for item in doc["lines"][:2500] if str(item.get("text", "")).strip()]
+            if timed:
+                return {
+                    "status": "found", "source": status,
+                    "message": f"พบเนื้อร้องจากต้นฉบับ {status} {len(timed)} บรรทัด",
+                    "lines": timed, "truncated": len(doc["lines"]) > 2500,
+                    "aiAvailable": False, "requiresReview": False,
+                }
+        issue = "ไม่พบไฟล์เนื้อร้องที่มีเวลาตรงกับเพลงนี้"
+    except (ValueError, OSError, KeyError) as exc:
+        issue = str(exc)
+    asr = _module("ai_lyrics.py", "xstage_ai_lyrics")
+    draft = asr.load_draft(DATA, source)
+    if draft:
+        return {
+            "status": "ai-draft", "source": "AI · Whisper (ยังไม่ยืนยัน)",
+            "message": "พบเนื้อร้องร่างจาก AI · โปรดอ่าน ตรวจคำและเวลา แล้วกดนำไปแก้ไข/บันทึก",
+            "lines": draft["lines"][:2500],
+            "truncated": len(draft["lines"]) > 2500,
+            "aiAvailable": bool(is_audio and asr.available(RUNTIME)),
+            "requiresReview": True,
+            "draftLrc": draft.get("rawLrc", ""),
+            "sourceIssue": issue,
+        }
+    can_asr = is_audio and asr.available(RUNTIME)
+    return {
+        "status": "missing", "source": "ไม่พบเนื้อร้อง",
+        "message": issue + (
+            " · มี AI สำหรับถอดคำร้องจริงเป็นร่างให้ตรวจ" if can_asr else
+            " · MIDI ล้วนถอดคำร้องด้วย AI ไม่ได้" if not is_audio else
+            " · แพ็กเกจยังไม่มีโมเดล AI ถอดเสียงร้อง"),
+        "lines": [], "aiAvailable": bool(can_asr),
+        "requiresReview": False, "aiEligible": bool(is_audio),
+    }
+
+
+def preview_lyrics(song_id):
+    if type(song_id) is not int:
+        raise ValueError("รหัสเพลงสำหรับแสดงเนื้อร้องไม่ถูกต้อง")
+    with LOCK:
+        row = dict(FILE_BY_ID.get(song_id) or {})
+    if not row:
+        raise ValueError("ไม่พบเพลงที่เลือกในฐานข้อมูลที่สแกน")
+    return {"id": song_id, "title": row.get("title", ""),
+            "artist": row.get("artist", ""), **_preview_lyrics_row(row)}
+
+
 def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
     """Issue one-use ticket for streamed preview; no output audio files."""
     if type(song_id) is not int:
@@ -1322,6 +1386,12 @@ class Handler(BaseHTTPRequestHandler):
                 limit = max(1, min(500, int(query.get("limit", ["100"])[0])))
                 offset = max(0, int(query.get("offset", ["0"])[0]))
                 self._json({"rows": rows[offset:offset + limit], "total": len(rows)})
+            elif path == "/api/preview-lyrics":
+                try:
+                    song_id = int(query.get("id", [""])[0])
+                except ValueError as exc:
+                    raise ValueError("ต้องระบุรหัสเพลงสำหรับตรวจเนื้อร้อง") from exc
+                self._json(preview_lyrics(song_id))
             elif path.startswith("/api/song/"):
                 row = FILE_BY_ID.get(int(path.rsplit("/", 1)[-1]))
                 if row is None:
