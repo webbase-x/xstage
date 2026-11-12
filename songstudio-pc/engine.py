@@ -22,6 +22,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 UI_ROOT = ROOT / "studio"
+if not UI_ROOT.is_dir() and (ROOT.parent / "studio").is_dir():
+    UI_ROOT = ROOT.parent / "studio"  # Repo test layout; packaged ZIP uses ROOT/studio.
 DATA = ROOT / "data"
 RUNTIME = ROOT / ".runtime"
 DATA.mkdir(exist_ok=True)
