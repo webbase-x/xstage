@@ -49,6 +49,107 @@ class PcSourceTests(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertEqual(first.read_bytes(), b"old")
 
+    def test_build_does_not_duplicate_source_between_independent_runs(self):
+        audio = self.source / "001234.m4a"
+        audio.write_bytes(b"A" * 4096)
+        (self.source / "001234.lrc").write_text(
+            "[00:01.00]สวัสดีทดสอบ", encoding="utf-8")
+        original = {"id": 1, "path": str(audio), "title": "ทดสอบเพลง",
+                    "code": "001234", "kind": "M4A"}
+        engine.CANCEL.clear()
+        first = engine.build_library([original], "original", {"audio_only": False})
+        root = self.dest / "songs"
+        self.assertEqual(first["created"], 1)
+        self.assertEqual(first["skipped"], 0)
+        self.assertTrue((root / "audio/0/001234.m4a").is_file())
+        self.assertTrue((root / "lyrics/0/001234.json").is_file())
+        self.assertTrue((root / "current.json").is_file())
+        before_audio = sorted(str(x) for x in root.rglob("*.m4a"))
+        before_lyrics = sorted(str(x) for x in root.rglob("*.json"))
+        pointer_before = (root / "current.json").read_text(encoding="utf-8")
+
+        # The source, memory and selection may be reloaded on another day.
+        second = engine.build_library([original], "original", {"audio_only": False})
+        self.assertEqual(second["created"], 0)
+        self.assertEqual(second["skipped"], 1)
+        self.assertEqual(second["errors"], 0)
+        self.assertEqual(sorted(str(x) for x in root.rglob("*.m4a")), before_audio)
+        self.assertEqual(sorted(str(x) for x in root.rglob("*.json")), before_lyrics)
+        self.assertEqual((root / "current.json").read_text(encoding="utf-8"), pointer_before)
+
+        # The very same audio may be renamed/copied to another folder.
+        moved = self.source / "copy"
+        moved.mkdir()
+        copied = moved / "998877.m4a"
+        copied.write_bytes(audio.read_bytes())
+        renamed = {**original, "path": str(copied), "code": "998877"}
+        third = engine.build_library([renamed], "original", {"audio_only": False})
+        self.assertEqual((third["created"], third["skipped"]), (0, 1))
+        self.assertEqual(sorted(str(x) for x in root.rglob("*.m4a")), before_audio)
+
+    def test_build_distinct_source_same_name_keeps_both_without_overwriting(self):
+        audio = self.source / "001234.m4a"
+        audio.write_bytes(b"A" * 4096)
+        second_folder = self.source / "other"
+        second_folder.mkdir()
+        another = second_folder / "001234.m4a"
+        another.write_bytes(b"B" * 4096)
+        originals = [
+            {"path": str(audio), "code": "001234", "title": "First"},
+            {"path": str(another), "code": "001234", "title": "Second"}
+        ]
+        engine.CANCEL.clear()
+        result = engine.build_library(originals, "original", {"audio_only": False})
+        self.assertEqual(result["created"], 2)
+        audio_dir = self.dest / "songs" / "audio" / "0"
+        self.assertEqual(sorted(file.name for file in audio_dir.glob("*.m4a")),
+                         ["001234 (2).m4a", "001234.m4a"])
+        repeat = engine.build_library(originals, "original", {"audio_only": False})
+        self.assertEqual((repeat["created"], repeat["skipped"]), (0, 2))
+
+    def test_stop_and_restart_reuses_durable_journal_without_reencoding(self):
+        # Simulate power loss after audio+lyric are written and the fsynced
+        # journal is saved, but before catalogs/current.json were switched.
+        from importlib.util import spec_from_file_location, module_from_spec
+        export_spec = spec_from_file_location("songstudio_export_test",
+                                              REPO / "songstudio-pc" / "song_export.py")
+        export = module_from_spec(export_spec)
+        export_spec.loader.exec_module(export)
+        audio = self.source / "000777.m4a"
+        audio.write_bytes(b"Q" * 4096)
+        root = self.dest / "songs"
+        target = root / "audio/0/000777.m4a"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(audio.read_bytes())
+        record = export.make_record(
+            root, {"path": str(audio), "code": "000777", "title": "Recover"},
+            target, None, None, "original")
+        record["sourceIdentity"] = export.source_marker(audio, export.source_sha256(audio))
+        export.append_journal(root, record)
+        self.assertFalse((root / "current.json").exists())
+
+        engine.CANCEL.clear()
+        result = engine.build_library(
+            [{"path": str(audio), "code": "000777", "title": "Recover"}],
+            "original", {"audio_only": False})
+        self.assertEqual((result["created"], result["skipped"]), (0, 1))
+        self.assertEqual(len(list(root.rglob("*.m4a"))), 1)
+        self.assertTrue((root / "current.json").is_file())
+        self.assertFalse((root / export.JOURNAL_NAME).exists())
+
+    def test_preexisting_unindexed_file_is_not_duplicated(self):
+        original = self.source / "000888.m4a"
+        original.write_bytes(b"D" * 4096)
+        target = self.dest / "songs" / "audio" / "0" / original.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"OLD" * 4096)
+        with self.assertRaisesRegex(RuntimeError, "ERR 1"):
+            engine.build_library(
+                [{"path": str(original), "code": "000888", "title": "Unindexed"}],
+                "original", {"audio_only": False})
+        self.assertEqual(target.read_bytes(), b"OLD" * 4096)
+        self.assertFalse((target.parent / "000888 (2).m4a").exists())
+
     def test_windows_picker_returns_thai_unicode_path_and_reports_errors(self):
         # Mock Windows subprocess so this test also runs on Linux CI without GUI.
         import base64
@@ -125,7 +226,7 @@ class PcSourceTests(unittest.TestCase):
         with ZipFile(target) as z:
             files = set(z.namelist())
             for name in ["Start-Song-Studio.cmd", "Start-Song-Studio.ps1", "pick_path.ps1",
-                         "engine.py", "ai_separate.py", "ai-model.lock.json", "live_preview.py", "studio/index.html", "studio/app.js",
+                         "engine.py", "song_export.py", "ai_separate.py", "ai-model.lock.json", "live_preview.py", "studio/index.html", "studio/app.js",
                          "studio/style.css", "studio/entry.js", "studio/app-icon.svg", "studio/site.webmanifest"]:
                 self.assertIn("X-Stage-Song-Studio-PC-Source-Preview/" + name, files)
             self.assertTrue(z.testzip() is None)
