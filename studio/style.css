@@ -113,3 +113,6 @@
 .brand-caption{font-size:7px;font-weight:800;letter-spacing:.075em;color:#94aaba;margin-top:5px;white-space:nowrap}
 @media(max-width:1280px){.brand{gap:7px}.brand-mark{width:54px;height:54px;min-width:54px;border-radius:17px}.brand-wordmark strong{font-size:18px}.brand-wordmark small{font-size:9px}.brand-caption{font-size:6.5px}}
 @media(max-width:750px){.sidebar .brand{padding-bottom:11px}.brand-mark{width:56px;height:56px;min-width:56px}.brand-wordmark strong{font-size:21px}.brand-caption{font-size:8px}}
+
+/* Persistent duplicate prevention: keep skipped/error counts readable. */
+.progress-meta{flex-wrap:wrap;align-items:center}.job-skip-count{color:#77dfcb;font-weight:850;font-variant-numeric:tabular-nums}
