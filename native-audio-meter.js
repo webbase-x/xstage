@@ -26,7 +26,7 @@
   const LEVELS=28,SMOOTH=Array(LEVELS).fill(0);
   let stream=null,context=null,source=null,analyser=null,silent=null;
   let frame=0,lastFrame=0,retryTimer=0,tries=0,epoch=0;
-  let status='idle';
+  let status='';
   function statusText(next){
     if(status===next)return;
     status=next;stage.dataset.nativeMeter=next;
@@ -96,7 +96,7 @@
         const value=(data[n]||0)/255;peak=Math.max(peak,value);
         energySquared+=value*value;count++;
       }
-      const value=Math.min(1,Math.sqrt(energySquared/Math.max(1,count))*.83+peak*.31);
+      const value=Math.min(1,(Math.sqrt(energySquared/Math.max(1,count))*.83+peak*.31)*Math.sqrt(player.volume));
       const old=SMOOTH[i];
       SMOOTH[i]=value>old?old*.2+value*.8:old*.77+value*.23;
       const level=SMOOTH[i];energy+=level;if(i<7)bass+=level;
