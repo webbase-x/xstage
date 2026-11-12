@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.0 Build 300
+# X-Stage Song Studio PC Ready v0.3.1 Build 301
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,7 +6,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.0-build300.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.1-build301.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The launcher checks that the bundled Python, FFmpeg, FluidSynth and SoundFont are intact, using SHA-256 checksums, without downloading anything.
@@ -49,7 +49,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.0-build300`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.1-build301`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
