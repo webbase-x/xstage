@@ -69,5 +69,16 @@ jobs:
             echo "Source ZIP already matches GitHub"
             exit 0
           fi
+          # If a newer source revision arrived while tests ran, never publish
+          # a stale ZIP over the newer code (or force-push the repository).
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "SKIPPED: newer main revision exists; its own workflow will publish."
+            exit 0
+          fi
           git commit -m "build(song-studio): publish PC source ZIP and SHA-256 [skip ci]"
-          git push origin HEAD:main
+          # A concurrent writer may still race between fetch and push.
+          if ! git push origin HEAD:main; then
+            echo "SKIPPED: remote advanced during publishing; never overwrite it."
+            exit 0
+          fi
