@@ -16,3 +16,6 @@ FFmpeg's executable and FluidSynth libraries are separate third-party programs d
 **No Google OAuth secrets, user songs or credentials are bundled.** Songs are processed locally in the user's machine after extracting the archive.
 
 **The AI vocal-separation model is included in Ready Build 303.** It runs on the CPU offline and may need substantial RAM. Google Drive sync remains outside this source preview. The light Source ZIP contains source and an integrity-locked model reference, not the 166 MB binary; the Ready ZIP contains the binary and all Python dependencies. Adding a model would require choosing a licensed model, validating hardware requirements and measuring its size/quality. It must not be misrepresented as included.
+
+| Whisper.cpp native Windows CPU binary b5454 | https://github.com/ggml-org/whisper.cpp/releases/tag/b5454 | MIT, upstream ggml-org/whisper.cpp · Windows x64 ZIP SHA256 6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb |
+| Whisper multilingual base GGML model | https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base.bin | MIT OpenAI Whisper / GGML model conversion. 147,951,465 bytes; SHA256 60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe. For voice-to-text drafts only. |
