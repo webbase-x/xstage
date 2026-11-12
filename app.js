@@ -2210,8 +2210,7 @@ function drawLyrics(){
         const lines=state.lyrics.lines;
         let idx=-1;
         for(let i=0;i<lines.length;i++){if(Number(lines[i].startTime)<=when)idx=i;else break;}
-        const isWebStage=!document.body.classList.contains('xstage-native-tv');
-        const fontSize=isWebStage?Math.min(112,w*.078,h*.19):Math.min(76,w*.062,h*.14);
+        const fontSize=Math.min(76,w*.062,h*.14);
         // Keep both lyric lines above the integrated transport/virtual keyboard.
         const density=Math.min(window.devicePixelRatio||1,2);
         const transportHeight=ui.stage.querySelector('.transport-panel')?.getBoundingClientRect().height||0;
@@ -2228,7 +2227,7 @@ function drawLyrics(){
 
         // Keep the stage identity stationary while lyrics paint above its dimmed sign.
         // Only reserve logo space if lyrics are being drawn without an active song stage.
-        if(!isWebStage && matchMedia('(orientation: landscape)').matches && !ui.stage.classList.contains('stage-hero-hidden')){
+        if(matchMedia('(orientation: landscape)').matches && !ui.stage.classList.contains('stage-hero-hidden')){
           const canvasBox=ui.lyrics.getBoundingClientRect();
           const hero=ui.stage.querySelector('.stage-hero');
           if(hero){
