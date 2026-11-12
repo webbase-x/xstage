@@ -152,5 +152,5 @@
   if(accountLogout)observer.observe(accountLogout,{attributes:true,attributeFilter:['hidden']});
   if(queueCount)observer.observe(queueCount,{childList:true,subtree:true,characterData:true});
   if(songTotal)observer.observe(songTotal,{childList:true,subtree:true,characterData:true});
-  setMenu(window.innerWidth>=1100);updateIndicators();
+  setMenu(false);updateIndicators();
 })();
