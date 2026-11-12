@@ -173,18 +173,41 @@ def atomic_json(path: Path, document: dict) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def save_lyrics(root: Path, audio: Path, text: str, code: str) -> Path:
-    """Always publish a valid JSON lyric companion (empty when no LRC).
+def save_lyrics(root: Path, audio: Path, text: str, code: str,
+                *, document: dict | None = None, repair: bool = False) -> Path:
+    """Save lyrics only when real timestamps are present; no empty fake JSON.
 
-    Original LRC is also preserved alongside JSON for manual editing.
+    NCN/KAR parsers can provide source-accurate timed JSON via document.
+    A repair preserves the prior generated JSON/LRC in a sibling backup.
+    Original MIDI, LYR and CUR files are never modified.
     """
     json_file, lrc_file = lyric_paths(root, audio)
-    # An existing companion indicates a collision; never overwrite a different song.
-    if json_file.exists() or lrc_file.exists():
+    parsed = document if document is not None else lrc_to_json(text, code)
+    if not isinstance(parsed, dict) or not parsed.get("lines"):
+        raise ValueError("ไม่มีเนื้อร้องพร้อมเวลาจริง · ไม่สร้าง Lyrics JSON ว่าง")
+    if not isinstance(parsed["lines"], list):
+        raise ValueError("รูปแบบเนื้อร้องไม่ถูกต้อง")
+    if not repair and (json_file.exists() or lrc_file.exists()):
         raise FileExistsError(f"ไฟล์เนื้อร้องมีอยู่แล้ว: {json_file}")
-    atomic_json(json_file, lrc_to_json(text, code))
-    if text.strip():
-        lrc_file.write_text(text, encoding="utf-8")
+    json_file.parent.mkdir(parents=True, exist_ok=True)
+    if repair:
+        # Back up generated output once per repair attempt. Manual corrections
+        # must not be silently destroyed by a reimport.
+        import shutil
+        suffix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        for old in (json_file, lrc_file):
+            if old.is_file():
+                backup = old.with_name(old.name + ".before-repair-" + suffix + ".bak")
+                shutil.copy2(old, backup)
+    raw_lrc = str(parsed.get("rawLrc") or text)
+    atomic_json(json_file, parsed)
+    if raw_lrc.strip():
+        temporary = lrc_file.with_name("." + lrc_file.name + "." + secrets.token_hex(6) + ".tmp")
+        try:
+            temporary.write_text(raw_lrc, encoding="utf-8")
+            os.replace(temporary, lrc_file)
+        finally:
+            temporary.unlink(missing_ok=True)
     return json_file
 
 
@@ -270,7 +293,9 @@ def record_is_complete(root: Path, record: dict) -> bool:
                 return False
             # Ensure the lyrics document is complete and readable.
             parsed = json.loads(companion.read_text(encoding="utf-8-sig"))
-            if not isinstance(parsed, dict) or not isinstance(parsed.get("lines"), list):
+            if (not isinstance(parsed, dict)
+                    or not isinstance(parsed.get("lines"), list)
+                    or not parsed["lines"]):
                 return False
         if record.get("mode") == "instrumental" and not record.get("vocals"):
             return False
