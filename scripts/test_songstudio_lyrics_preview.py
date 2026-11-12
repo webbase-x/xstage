@@ -117,5 +117,35 @@ class LyricPreviewTests(unittest.TestCase):
             ai.transcribe(midi, "000012", self.dir, self.dir, "ffmpeg",
                           __import__("threading").Event(), lambda status: None)
 
+
+    def test_preview_title_and_artist_from_lrc_metadata(self):
+        self.audio.with_suffix(".lrc").write_text(
+            "[ti:เพลงที่ถูกต้อง]\\n[ar:ศิลปินต้นฉบับ]\\n[00:01.25]เนื้อเพลงจริง\\n",
+            encoding="utf-8")
+        row = engine.FILE_BY_ID[12]
+        row["title"] = "000012"
+        row["artist"] = ""
+        details = engine.preview_song_identity(row)
+        self.assertEqual(details["title"], "เพลงที่ถูกต้อง")
+        self.assertEqual(details["artist"], "ศิลปินต้นฉบับ")
+        payload = engine.preview_lyrics(12)
+        self.assertEqual(payload["title"], "เพลงที่ถูกต้อง")
+        self.assertEqual(payload["artist"], "ศิลปินต้นฉบับ")
+        self.assertEqual(payload["lines"][0]["text"], "เนื้อเพลงจริง")
+
+    def test_live_preview_returns_artist_not_only_title(self):
+        self.audio.with_suffix(".lrc").write_text(
+            "[ti:ชื่อเพลงสำหรับฟัง]\\n[ar:ผู้ร้องทดสอบ]\\n[00:01.00]ร้องเพลง\\n",
+            encoding="utf-8")
+        row = engine.FILE_BY_ID[12]
+        row["title"] = "000012"
+        row["artist"] = ""
+        with patch.object(engine, "ffmpeg_binary", return_value="ffmpeg"):
+            response = engine.prepare_live_preview(12)
+        self.assertEqual(response["title"], "ชื่อเพลงสำหรับฟัง")
+        self.assertEqual(response["artist"], "ผู้ร้องทดสอบ")
+        self.assertEqual(response["code"], "000012")
+        self.assertTrue(response["ticket"])
+
 if __name__ == "__main__":
     unittest.main()
