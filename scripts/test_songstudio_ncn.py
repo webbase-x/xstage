@@ -194,5 +194,41 @@ class NcnSourceTests(unittest.TestCase):
                          (root / "lyrics").exists() else [], [])
 
 
+
+    def test_component_inspection_and_real_karaoke_characters(self):
+        mid, lyr, cur = self.make_ncn("A123", "A")
+        engine.scan_source()
+        song_id = engine.FILES[0]["id"]
+        report = engine.preview_source_report(song_id)
+        self.assertTrue(report["timedLyricsReady"])
+        self.assertTrue(report["complete"])
+        self.assertEqual(len([x for x in report["components"]
+                              if x["found"] and x["required"]]), 2)
+        selections = {x["value"] for x in report["options"]}
+        self.assertIn("midi:" + str(song_id), selections)
+        self.assertIn("inspect:lyr", selections)
+        self.assertIn("inspect:cur", selections)
+        lyric_check = engine.preview_inspect(song_id, "inspect:lyr")
+        cursor_check = engine.preview_inspect(song_id, "inspect:cur")
+        self.assertIn("สวัสดี", lyric_check["text"])
+        self.assertIn("ตำแหน่ง", cursor_check["message"])
+        preview = engine.preview_lyrics(song_id)
+        self.assertEqual(preview["status"], "found")
+        self.assertEqual(preview["source"], "NCN")
+        self.assertEqual(preview["lines"][0]["text"], "สวัสดี")
+        self.assertEqual(len(preview["lines"][0]["characters"]), 5)
+        self.assertAlmostEqual(preview["lines"][0]["characters"][1]["startTime"], .25)
+
+    def test_incomplete_ncn_picker_reports_missing_cursor(self):
+        self.make_ncn("B222", "B", with_cursor=False)
+        engine.scan_source()
+        song_id = engine.FILES[0]["id"]
+        report = engine.preview_source_report(song_id)
+        self.assertFalse(report["complete"])
+        self.assertFalse(report["timedLyricsReady"])
+        self.assertTrue(any(x["type"] == "Cursor · CUR" and not x["found"]
+                            for x in report["components"]))
+        self.assertNotIn("inspect:cur", {x["value"] for x in report["options"]})
+
 if __name__ == "__main__":
     unittest.main()
