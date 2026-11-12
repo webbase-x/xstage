@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="300" viewBox="0 0 960 300" role="img" aria-label="X-Stage Karaoke Online">
+<defs><linearGradient id="neon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#00eaff"/><stop offset=".45" stop-color="#258fff"/><stop offset="1" stop-color="#de30f8"/></linearGradient>
+<linearGradient id="letter" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0bbdf8"/><stop offset=".52" stop-color="#7d59ee"/><stop offset="1" stop-color="#ef36c9"/></linearGradient>
+<linearGradient id="silver" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffffff"/><stop offset=".55" stop-color="#e5efff"/><stop offset="1" stop-color="#c28df6"/></linearGradient></defs>
+<g opacity=".8" fill="url(#neon)">
+<rect x="4" y="125" width="12" height="64" rx="5"/><rect x="22" y="108" width="12" height="82" rx="5"/><rect x="40" y="137" width="12" height="51" rx="5"/><rect x="60" y="91" width="12" height="98" rx="5"/>
+<rect x="218" y="116" width="12" height="75" rx="5"/><rect x="236" y="133" width="12" height="57" rx="5"/><rect x="254" y="102" width="12" height="88" rx="5"/></g>
+<path d="M60 25 L136 103 212 25 250 25 156 128 255 236 215 236 136 150 56 236 14 236 116 128 20 25Z" fill="url(#neon)" stroke="#3032b2" stroke-width="7" stroke-linejoin="round"/>
+<g transform="translate(97 40) rotate(-15 42 92)"><rect x="21" y="17" width="48" height="94" rx="24" fill="url(#silver)" stroke="#5334bf" stroke-width="5"/><path d="M33 37 H58 M33 53 H58 M33 69 H58 M33 85 H58" stroke="#394c9a" stroke-width="6" stroke-linecap="round"/><path d="M11 86 v7 a34 34 0 0 0 68 0 v-7 M45 128 v50 M24 180 H66" fill="none" stroke="url(#neon)" stroke-width="8" stroke-linecap="round"/></g>
+<path d="M33 256 Q130 277 241 250" fill="none" stroke="url(#neon)" stroke-width="13" stroke-linecap="round"/>
+<g font-family="Arial,Helvetica,sans-serif" font-weight="900" font-style="italic" letter-spacing="-9">
+<text x="287" y="168" font-size="156" fill="url(#letter)" stroke="#49319e" stroke-width="2" paint-order="stroke">X-Stage</text></g>
+<path d="M322 184 Q554 205 900 179" stroke="url(#neon)" stroke-width="7" stroke-linecap="round" fill="none"/>
+<g font-family="Arial,Helvetica,sans-serif" font-size="57" font-style="italic" font-weight="800">
+<text x="425" y="251" fill="#563ba0" stroke="#ffffff" stroke-width="1" paint-order="stroke">Karaoke Online</text></g></svg>
