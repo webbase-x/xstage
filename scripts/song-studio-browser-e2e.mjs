@@ -98,7 +98,7 @@ try {
         version:'0.3.5', build:305,
         preferences:settings, soundfonts:[settings.soundfont],
         presets:[{value:'balanced',label:'สมดุล'}],
-        google:{connected:false,email:''},
+        google:{configured:true,connected:false,email:'',config_source:'bundled'},
         job:{id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',completed:0,total:0,logs:[]},
         update:{status:'unavailable'}
       };
@@ -125,6 +125,10 @@ try {
   pc.on('dialog', async (dialog) => dialog.accept());
   await pc.goto('http://127.0.0.1:' + port + '/studio/index.html#auth=test-session-token', {waitUntil:'load'});
   await pc.waitForFunction(() => document.getElementById('catalog-total')?.textContent.includes('2'));
+  assert.match(await pc.locator('#google-config-state').innerText(), /ตั้งค่าแล้ว/,
+    'Bundled public OAuth Client must show ready for login, not Not Ready');
+  assert.match(await pc.locator('#google-badge').innerText(), /พร้อมให้ลงชื่อเข้าใช้/,
+    'Not signed in must not be confused with missing OAuth config');
   assert.equal(await pc.locator('.brand-mark img').isVisible(), true, 'PC brand icon must render');
   await pc.waitForFunction(() => {
     const icon = document.querySelector('.brand-mark img');
