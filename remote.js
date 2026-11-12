@@ -286,7 +286,14 @@
         $('owner-repeat').textContent=data.repeat?'⇄ ปิดวนเพลง':'⇄ เปิดวนเพลง';
         if(data.speed)$('owner-speed').value=String(data.speed);
         if(data.eqPreset&&[...$('owner-eq-preset').options].some(o=>o.value===data.eqPreset))$('owner-eq-preset').value=data.eqPreset;
-        $('owner-eq-state').textContent=data.eqActive?'EQ ทำงาน · '+String(data.eqPreset||'').toUpperCase():'เสียง Native · EQ ยังไม่ทำงาน';
+        const direct=!!data.nativeAudioDirect;
+        const eqSelect=$('owner-eq-preset');
+        eqSelect.disabled=direct;
+        for(const button of document.querySelectorAll('[data-admin="eq-reset"],[data-admin="eq-bypass"]'))button.disabled=direct;
+        $('owner-eq-state').textContent=direct
+          ? 'ANDROID DIRECT · เสียงออกลำโพงตรง · มิเตอร์แสดงผลเท่านั้น'+
+            (data.nativeMeterStatus==='unsupported'?' · WebView ไม่รองรับมิเตอร์สด':'')
+          : data.eqActive?'EQ ทำงาน · '+String(data.eqPreset||'').toUpperCase():'เสียง Native · EQ ยังไม่ทำงาน';
         const visual=data.visualSettings||{};
         if(visual.background&&[...$('owner-background').options].some(o=>o.value===visual.background))$('owner-background').value=visual.background;
         if(visual.brandTheme&&[...$('owner-brand-theme').options].some(o=>o.value===visual.brandTheme))$('owner-brand-theme').value=visual.brandTheme;
