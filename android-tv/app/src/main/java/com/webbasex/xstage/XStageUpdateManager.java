@@ -52,6 +52,17 @@ final class XStageUpdateManager {
     private long lastCheckAt;
     private long activeDownloadId = -1L;
     private File activeDownloadFile;
+    // Native fallback watcher: survives hosted WebView timer throttling.
+    // Web clients perform faster 15-second foreground checks.
+    private boolean monitoring;
+    private final Runnable periodicUpdateCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (closed || !monitoring) return;
+            checkForUpdates(false);
+            main.postDelayed(this, CHECK_INTERVAL_MS);
+        }
+    };
 
     XStageUpdateManager(Activity activity, Listener listener) {
         this.activity = activity;
@@ -136,7 +147,19 @@ final class XStageUpdateManager {
         }
     }
 
+    void startMonitoring() {
+        if (closed || monitoring) return;
+        monitoring = true;
+        main.postDelayed(periodicUpdateCheck, CHECK_INTERVAL_MS);
+    }
+
+    void stopMonitoring() {
+        monitoring = false;
+        main.removeCallbacks(periodicUpdateCheck);
+    }
+
     void close() {
+        stopMonitoring();
         closed = true;
         executor.shutdownNow();
         main.removeCallbacksAndMessages(null);
