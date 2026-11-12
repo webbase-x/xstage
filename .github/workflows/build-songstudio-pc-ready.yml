@@ -83,6 +83,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Independent AI import and reviewed lyrics regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
           if ($LASTEXITCODE -ne 0) { throw "Google Drive upload/download/ZIP round-trip regression failed" }
+      - name: Preflight Google Drive upload/download OAuth readiness
+        shell: powershell
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) -or
+              [string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)) {
+            throw "Cannot build Ready ZIP: Google Desktop OAuth Client ID + Secret are required before packaging. Configure Actions variable/secret."
+          }
+          if (!$env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID.EndsWith('.apps.googleusercontent.com')) {
+            throw "Google OAuth Client ID format invalid. Expected Desktop Client ID."
+          }
+          Write-Host "PASS: Desktop OAuth client pair present for bundled Google Login."
       - name: Build complete bundled Windows runtime and ZIP
         shell: powershell
         run: |
