@@ -147,5 +147,41 @@ class LyricPreviewTests(unittest.TestCase):
         self.assertEqual(response["code"], "000012")
         self.assertTrue(response["ticket"])
 
+
+    def test_source_picker_offers_only_discovered_types(self):
+        other_midi = self.dir / "000012.mid"
+        other_midi.write_bytes(b"MThd" + b"x" * 1500)
+        midi_row = {"id": 13, "path": str(other_midi), "code": "000012",
+                    "kind": "MID", "title": "ทดสอบ", "artist": ""}
+        engine.FILES.append(midi_row)
+        engine.FILE_BY_ID[13] = midi_row
+        report = engine.preview_source_report(12)
+        values = {option["value"] for option in report["options"]}
+        self.assertIn("auto", values)
+        self.assertIn("audio:12", values)
+        self.assertIn("midi:13", values)
+        self.assertNotIn("audio:13", values)
+        with patch.object(engine, "ffmpeg_binary", return_value="ffmpeg"):
+            audio = engine.prepare_live_preview(12, source_choice="audio:12")
+            self.assertTrue(audio["has_backing"])
+            self.assertFalse(audio["has_midi"])
+            with self.assertRaisesRegex(ValueError, "ไม่มีอยู่จริง"):
+                engine.prepare_live_preview(12, source_choice="audio:13")
+            with patch.object(engine, "sf_available", return_value=True):
+                synth = engine.prepare_live_preview(12, source_choice="midi:13")
+            self.assertFalse(synth["has_backing"])
+            self.assertTrue(synth["has_midi"])
+        self.assertEqual(
+            engine.LIVE_TICKETS[audio["ticket"]]["audio"], self.audio)
+        self.assertEqual(
+            engine.LIVE_TICKETS[synth["ticket"]]["midi"], other_midi)
+
+    def test_audio_without_lyrics_reports_no_timed_karaoke(self):
+        with patch.object(engine, "DATA", self.dir), patch.object(ai, "available", return_value=False):
+            report = engine.preview_source_report(12)
+        self.assertFalse(report["timedLyricsReady"])
+        self.assertFalse(report["complete"])
+        self.assertFalse(any(option["kind"] == "inspect" for option in report["options"]))
+
 if __name__ == "__main__":
     unittest.main()
