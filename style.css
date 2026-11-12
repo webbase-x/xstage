@@ -889,3 +889,6 @@ body.xstage-native-tv #remote-pair-panel .remote-pair-box > small{
   flex:1 1 auto;
   font-size:clamp(11px,.9vw,14px)!important;
 }
+
+/* Live update toast yields to TV's full quick menu when MENU is pressed. */
+body.xstage-native-tv .xstage-tv-quick-menu{z-index:245!important}
