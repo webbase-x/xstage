@@ -77,4 +77,26 @@ const endRecord = buffer.length - 22;
 assert.equal(dv.getUint32(endRecord, true), 0x06054b50, 'ZIP must have end-of-central-directory');
 assert.equal(dv.getUint16(endRecord + 10, true), 2, 'ZIP must contain two output files');
 
+// Regression: same-name songs must keep M4A and LRC basenames matched,
+// even if the first song has no lyrics or the destination has an old LRC.
+const safeStart = js.indexOf('  function safeName(');
+const safeEnd = js.indexOf('  function updateOverview()', safeStart);
+const reserveStart = js.indexOf('  async function reserveSongAssetNames(');
+const reserveEnd = js.indexOf('  async function build()', reserveStart);
+assert.ok(safeStart >= 0 && safeEnd > safeStart && reserveStart >= 0 && reserveEnd > reserveStart);
+const reserveSongAssetNames = new Function(
+  js.slice(safeStart, safeEnd) + '\n' +
+  js.slice(reserveStart, reserveEnd) + '\nreturn reserveSongAssetNames;')();
+const usedStems = new Map();
+const firstAssets = [{name:'ชื่อซ้ำ.m4a'}];
+await reserveSongAssetNames('ชื่อซ้ำ', firstAssets, usedStems, async () => false);
+const secondAssets = [{name:'ชื่อซ้ำ.m4a'}, {name:'ชื่อซ้ำ.lrc'}];
+await reserveSongAssetNames('ชื่อซ้ำ', secondAssets, usedStems, async () => false);
+assert.deepEqual(secondAssets.map(item => item.name), ['ชื่อซ้ำ (1).m4a', 'ชื่อซ้ำ (1).lrc']);
+const existingAssets = [{name:'เพลงเดิม.m4a'}, {name:'เพลงเดิม.lrc'}];
+await reserveSongAssetNames('เพลงเดิม', existingAssets, new Map(),
+  async name => name === 'เพลงเดิม.lrc');
+assert.deepEqual(existingAssets.map(item => item.name),
+  ['เพลงเดิม (1).m4a', 'เพลงเดิม (1).lrc']);
+
 console.log('Song Studio Web smoke tests passed: JavaScript, DOM IDs, pairing, privacy, ZIP structure.');
