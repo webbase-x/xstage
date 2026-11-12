@@ -107,6 +107,7 @@ tasks.register("generateXStageTvAssets") {
         javax.imageio.ImageIO.write(icon, "png", iconFile)
         javax.imageio.ImageIO.write(icon, "png", storeIcon)
 
+        // v1.0.84: exact official user-supplied transparent logo (no redraw).
         // Match the exact user-supplied transparent stage logo for Android TV.
         // Composite on white at the fixed Android TV launcher resolution (320x180).
         def logoSource = rootProject.file("../assets/xstage-stage-logo.png")
