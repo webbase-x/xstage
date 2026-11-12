@@ -4163,3 +4163,10 @@ html body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero .stage-brand-side-viz
     top:clamp(45px,13vh,90px)!important;
   }
 }
+
+
+/* A playing-state toggle must not remove the fixed banner image. */
+html body.xstage-ui-v2 .stage.stage-hero-hidden .stage-hero{
+  display:block!important;
+  visibility:visible!important;
+}
