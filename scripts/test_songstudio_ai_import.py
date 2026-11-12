@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -50,6 +51,26 @@ class IndependentAIImportTests(unittest.TestCase):
         engine.DATA = self.old_data
         engine.AI_IMPORTS_FILE = self.old_import_file
         self.temp.cleanup()
+
+    def test_import_picker_json_contract_and_removal(self):
+        with patch.object(engine, "open_picker", return_value=json.dumps(
+                [str(self.one), str(self.two)], ensure_ascii=False)):
+            result = engine.import_vocal_sources()
+        self.assertEqual(result["added"], 2)
+        self.assertEqual(len(engine.available_vocal_sources()["rows"]), 2)
+        self.assertEqual(engine.visible_files(), [])
+        with patch.object(engine, "open_picker", return_value=json.dumps([str(self.one)])):
+            repeated = engine.import_vocal_sources()
+        self.assertEqual(repeated["skipped"], 1)
+        engine.remove_vocal_source(result["song"]["id"])
+        self.assertTrue(self.one.is_file())
+        self.assertEqual(engine.available_vocal_sources()["total"], 1)
+
+    def test_import_picker_cancel_is_non_destructive(self):
+        with patch.object(engine, "open_picker", return_value=None):
+            response = engine.import_vocal_sources()
+        self.assertTrue(response["cancelled"])
+        self.assertEqual(engine.available_vocal_sources()["total"], 0)
 
     def test_new_audio_import_only_affects_ai_menu(self):
         imported = engine.import_ai_audio(str(self.one))
