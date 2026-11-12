@@ -178,6 +178,92 @@ class PcSourceTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(), b"OLD" * 4096)
         self.assertFalse((target.parent / "000888 (2).m4a").exists())
 
+    def test_audio_only_then_add_lyrics_keeps_existing_m4a(self):
+        source = self.source / "021999.m4a"
+        source.write_bytes(b"F" * 8000)
+        (self.source / "021999.lrc").write_text("[00:01.00]เพลงทดสอบ", encoding="utf-8")
+        row = {"path": str(source), "title": "เพลงทดสอบ", "code": "021999"}
+        engine.CANCEL.clear()
+        first = engine.build_library([row], "original", {"audio_only": True})
+        self.assertEqual((first["created"], first["lyricsCount"]), (1, 0))
+        audio = self.dest / "songs/audio/0/021999.m4a"
+        old_data = audio.read_bytes()
+        second = engine.build_library([row], "original", {"audio_only": False})
+        self.assertEqual((second["created"], second["skipped"], second["lyricsCount"]), (0, 1, 1))
+        self.assertEqual(audio.read_bytes(), old_data)
+        self.assertTrue((self.dest / "songs/lyrics/0/021999.json").is_file())
+        third = engine.build_library([row], "original", {"audio_only": False})
+        self.assertEqual((third["created"], third["skipped"], third["lyricsCount"]), (0, 1, 0))
+        self.assertEqual(len(list((self.dest / "songs/audio").rglob("*.m4a"))), 1)
+
+    def test_live_controls_update_gains_soundfont_and_midi_preset(self):
+        spec = importlib.util.spec_from_file_location("songstudio_live_test",
+            REPO / "songstudio-pc" / "live_preview.py")
+        live = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(live)
+        sf = self.dir / "test.sf2"
+        sf.write_bytes(b"mock-sf")
+        state = live.LiveControls(.8, .8, sf)
+        assert state.snapshot()[0] == .8
+        response = state.update(music_volume=1.0, synth_volume=0.0,
+                                preset="bright", soundfont=str(sf))
+        self.assertEqual(response, (1.0, 0.0, sf, "bright"))
+        with self.assertRaisesRegex(ValueError, "0 ถึง 100"):
+            state.update(music_volume=9)
+        from array import array
+        original = array("h", [1000, -1000, 2000, -2000]).tobytes()
+        soundfont_pcm = array("h", [8000, 8000, 8000, 8000]).tobytes()
+        self.assertEqual(live.blend_pcm(original, soundfont_pcm, 1, 0), original)
+        self.assertEqual(live.blend_pcm(original, soundfont_pcm, 0, 1), soundfont_pcm)
+
+    def test_google_oauth_desktop_loopback_and_dpapi_storage_mock(self):
+        # Simulate the Google browser callback + token endpoint, without a
+        # network or actual account. Real authorization requires user consent.
+        import urllib.parse
+        import urllib.request
+        import time
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location("xstage_google_test",
+             REPO / "songstudio-pc" / "google_drive.py")
+        google = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(google)
+        client_path = self.dir / "oauth.json"
+        client_path.write_text(json.dumps({"installed":{
+            "client_id":"demo-test.apps.googleusercontent.com",
+            "client_secret":"local-client-secret"
+        }}), encoding="utf-8")
+        drive = google.GoogleDrive(self.dir, lambda: str(client_path))
+        browser_threads = []
+        def open_callback(url, new=1):
+            parsed = urllib.parse.urlsplit(url)
+            params = urllib.parse.parse_qs(parsed.query)
+            self.assertEqual(params["code_challenge_method"], ["S256"])
+            self.assertIn("drive.file", params["scope"][0])
+            target = params["redirect_uri"][0] + "?" + urllib.parse.urlencode({
+                "state":params["state"][0], "code":"one-time-test-code"
+            })
+            def callback():
+                time.sleep(.1)
+                with urllib.request.urlopen(target, timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+            thread = threading.Thread(target=callback)
+            thread.start()
+            browser_threads.append(thread)
+            return True
+        with patch.object(google, "_crypt", side_effect=lambda x, decrypt: x), \
+             patch.object(google.webbrowser, "open", side_effect=open_callback), \
+             patch.object(drive, "_token_exchange", return_value={
+                 "access_token":"test-access","refresh_token":"test-refresh","expires_in":3600}), \
+             patch.object(drive, "api", return_value={"user":{"emailAddress":"tester@example.com"}}):
+            info = drive.login()
+            self.assertTrue(info["connected"])
+            self.assertEqual(info["email"], "tester@example.com")
+            self.assertTrue(drive.secret_file.is_file())
+            drive.logout()
+            self.assertFalse(drive.status()["connected"])
+        for thread in browser_threads:
+            thread.join(timeout=5)
+
     def test_windows_picker_returns_thai_unicode_path_and_reports_errors(self):
         # Mock Windows subprocess so this test also runs on Linux CI without GUI.
         import base64
