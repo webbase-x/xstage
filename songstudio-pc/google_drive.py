@@ -81,6 +81,10 @@ def _crypt(data: bytes, decrypt: bool) -> bytes:
         raise GoogleError("Google Login แบบบันทึกโทเค็นรองรับเฉพาะ Windows")
     dll = ctypes.windll.crypt32
     kernel = ctypes.windll.kernel32
+    # Windows HLOCAL is pointer-sized; without argtypes ctypes defaults to
+    # 32-bit int and can truncate the returned DPAPI buffer on x64 Windows.
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
     if decrypt:
         fn = dll.CryptUnprotectData
         fn.argtypes = [ctypes.POINTER(_Blob), ctypes.c_void_p, ctypes.c_void_p,
