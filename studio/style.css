@@ -85,6 +85,37 @@
 .preview-row{margin-bottom:8px}
 .preview-row audio{display:block;min-width:0}
 .preview-search-option[aria-selected=true]{box-shadow:inset 0 0 0 1px #47e0d7}
+
+/* Preview song identity and metadata columns: names must remain readable. */
+.preview-results-heading,.preview-search-option{
+  display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr) max-content;
+  column-gap:12px;align-items:center
+}
+.preview-results-heading{
+  padding:3px 14px 7px;color:#b8d7e6;font-size:11px;font-weight:800
+}
+.preview-search-option{min-height:58px;overflow:hidden}
+.preview-song-title,.preview-song-artist{min-width:0;overflow-wrap:anywhere}
+.preview-song-title strong{display:block;font-size:14px;line-height:1.4;color:#f0fbff}
+.preview-song-title small{display:block;color:#9bbfcd;font-size:11px}
+.preview-song-artist{font-size:13px;line-height:1.45;color:#cceef4;font-weight:700}
+.preview-song-artist.artist-unknown{color:#d4b9a1;font-weight:500}
+.preview-selected{
+  display:flex;align-items:center;gap:12px;padding:14px 16px;
+  border:1px solid #327587;border-radius:12px;background:#113d4e
+}
+.preview-selected-marker{font-size:26px;flex:0 0 auto}
+.preview-selected-info{display:flex;flex-direction:column;gap:5px;min-width:0}
+.preview-selected-caption{color:#a0ced9;font-size:11px}
+#preview-selected-title{display:block;color:#f4feff;font-size:18px;line-height:1.35;overflow-wrap:anywhere}
+#preview-selected-artist{display:block;color:#91e9d4;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+@media(max-width:620px){
+  .preview-results-heading{display:none}
+  .preview-search-option{grid-template-columns:minmax(0,1fr) max-content;row-gap:3px}
+  .preview-song-artist{grid-column:1/-1}
+  #preview-selected-title{font-size:16px}
+}
+
 .global-message{position:fixed;top:20px;right:20px;z-index:1200;max-width:min(410px,calc(100vw - 36px));margin:0;border:1px solid #3d8495!important;background:linear-gradient(135deg,#113c50,#0e2638)!important;color:#ecfcff!important;box-shadow:0 16px 52px #0009;border-radius:15px;padding:15px 17px 15px 43px;font-size:12px;line-height:1.65;animation:studio-toast-in .2s ease-out}
 .global-message::before{content:"♫";position:absolute;left:15px;top:16px;color:#77e6df;font-size:18px}
 .global-message[data-error=true]{border-color:#d47d82!important;background:linear-gradient(135deg,#52303b,#211f33)!important}
