@@ -224,7 +224,8 @@ def ensure_midi_wav(path):
     if not fluid:
         raise RuntimeError("ไม่พบ FluidSynth ในโฟลเดอร์โปรแกรม กรุณาใช้ Ready ZIP ที่รวมไลบรารีครบ")
     tmp = PREVIEW_FOLDER / (secrets.token_hex(10) + ".wav")
-    params = [fluid, "-ni", PREFS["soundfont"], str(path), "-F", str(tmp), "-r", "44100"]
+    # FluidSynth CLI expects flags before positional SoundFont/MIDI arguments.
+    params = [fluid, "-ni", "-F", str(tmp), "-r", "44100", PREFS["soundfont"], str(path)]
     run_process(params)
     return tmp
 
