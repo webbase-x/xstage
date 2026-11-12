@@ -40,6 +40,75 @@ jobs:
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
           if ($LASTEXITCODE -ne 0) { throw "Ready runtime conversion tests FAILED" }
+      - name: Check Windows folder dialog host and Thai path encoding
+        shell: powershell
+        run: |
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302"
+          $picker = Join-Path $base "pick_path.ps1"
+          if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
+          $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
+          if ($LASTEXITCODE -ne 0) { throw "Picker script self-test failed" }
+          if ($reply -notmatch '^PICKER_SELFTEST:([A-Za-z0-9+/=]+)
+        shell: powershell
+        run: |
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip"
+          $hashfile = "$zip.sha256"
+          if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = ((Get-Content $hashfile -Raw) -split '\s+')[0]
+          if ($actual -ne $expected) { throw "Final ZIP checksum mismatch" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $names = @($archive.Entries | ForEach-Object { $_.FullName })
+            foreach ($name in @("Start-Song-Studio.cmd", "pick_path.ps1", ".engine-ready-manifest.json", "engine.py",
+                                ".runtime/python/python.exe", ".runtime/tools/ffmpeg.exe",
+                                ".runtime/fluidsynth/bin/fluidsynth.exe", ".runtime/soundfonts/GeneralUser-GS.sf2")) {
+              if (!($names | Where-Object { $_.EndsWith($name) })) {
+                throw "Final ZIP missing: $name"
+              }
+            }
+          } finally { $archive.Dispose() }
+          Write-Host "PASS: Complete offline ZIP SHA-256 $actual"
+      - name: Upload completed ready-to-run release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.2-build302
+          path: |
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip.sha256
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Publish permanent GitHub release direct download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "song-studio-pc-ready-v0.3.2-build302"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip"
+          $sha = "$zip.sha256"
+          $notes = @'
+          Windows x64 portable Source Engine edition. Fully bundled Python 3.13.10,
+          FFmpeg, FluidSynth and GeneralUser GS SoundFont. Extract ZIP and
+          run Start-Song-Studio.cmd. NO runtime downloads on the user's PC.
+          Tested on Windows GitHub Actions: offline startup validation,
+          WAV->M4A and MIDI->SoundFont->M4A. See README.md and license notices.
+
+          Preview limitations: no AI voice separation, NCN implementation,
+          or Google Drive login/sync. Not the missing original Build 205.
+          '@
+          gh release view $tag --repo "${{ github.repository }}" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag "$zip" "$sha" --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.2 Build 302 (Offline)" --notes $notes --prerelease --latest=false --target "${{ github.sha }}" --repo "${{ github.repository }}"
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP to GitHub release" }
+) { throw "Picker protocol invalid" }
+          $actual = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Matches[1]))
+          if ($actual -ne 'C:\ทดสอบ\เพลง') { throw "Thai Unicode picker path was corrupted" }
+          Write-Host "PASS: Windows picker script runs and returns Unicode paths safely."
       - name: Verify final ZIP and SHA-256 manifest
         shell: powershell
         run: |
