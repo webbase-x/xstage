@@ -2341,13 +2341,16 @@ function androidTvAuthPanel(){
     startAndroidTvDeviceLogin(true);
   });
   $('android-tv-auth-cancel')?.addEventListener('click',()=>{
-    if(androidTvNativeBridgeReady()){ $('android-tv-auth-status').textContent='ต้องเชื่อมต่อ Google Drive ก่อนเปิดเวที · กดลองใหม่'; $('android-tv-auth-retry').hidden=false; return; }
+    // Cancel the native device-code poll as well as the UI. Do not automatically
+    // reopen the login dialog until the user explicitly requests sign-in again.
+    androidTvLoginCancelled=true;
+    androidTvRefreshingSession=false;
     clearAndroidTvLoginWatchdog();
     try{window.XStageAndroid?.cancelGoogleLogin?.();}catch{}
     panel.hidden=true;
     ui.login.disabled=ui.gateLogin.disabled=false;
-    setStatus('ยกเลิกการเข้าสู่ระบบผ่านมือถือแล้ว');
-    ui.gateLogin?.focus?.();
+    setStatus('ยกเลิกการเข้าสู่ระบบแล้ว · กดเข้าสู่ระบบ Google เมื่อต้องการเปิดคลังเพลง');
+    try{ui.gateLogin?.focus?.();}catch{}
   });
   return panel;
 }
@@ -2412,6 +2415,7 @@ function hideAndroidTvAuthPanel(){
   if(panel)panel.hidden=true;
 }
 window.XStageAndroidDeviceCode=payload=>{
+  if(androidTvLoginCancelled)return;
   clearAndroidTvLoginWatchdog();
   let data={};
   try{data=typeof payload==='string'?JSON.parse(payload):payload||{};}catch{}
@@ -2425,11 +2429,13 @@ window.XStageAndroidDeviceCode=payload=>{
   void renderAndroidTvLoginQr(verificationUrl);
 };
 window.XStageAndroidAuthStatus=message=>{
+  if(androidTvLoginCancelled)return;
   const status=$('android-tv-auth-status');
   if(status)status.textContent=String(message||'กำลังเชื่อมต่อ Google…');
   setStatus(String(message||'กำลังเชื่อมต่อ Google…'));
 };
 window.XStageAndroidAuthError=message=>{
+  if(androidTvLoginCancelled)return;
   clearAndroidTvLoginWatchdog();
   androidTvRefreshingSession=false;
   const text=String(message||'เข้าสู่ระบบ Google ไม่สำเร็จ');
@@ -2452,6 +2458,7 @@ window.XStageAndroidAuthError=message=>{
   setStatus(text,'error');
 };
 window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
+  if(androidTvLoginCancelled)return;
   clearAndroidTvLoginWatchdog();
   if(!token)return;
   androidTvAuthPanel().hidden=false;
@@ -2579,16 +2586,18 @@ window.XStageAndroidNoUpdate=()=>{
   }
 };
 let androidTvBootAuthStarted=false;
+let androidTvLoginCancelled=false;
 function androidTvHasStoredGoogleSession(){
   if(!androidTvNativeBridgeReady())return false;
   try{return !!window.XStageAndroid.hasStoredGoogleSession?.();}catch{return false;}
 }
 function restoreAndroidTvGoogleSession(){
-  if(!androidTvNativeBridgeReady()||state.token)return;
+  if(!androidTvNativeBridgeReady()||state.token||androidTvLoginCancelled)return;
   try{window.XStageAndroid.restoreGoogleSession?.();}catch{}
 }
 function startAndroidTvDeviceLogin(automatic=false){
   if(!androidTvNativeBridgeReady())return;
+  androidTvLoginCancelled=false;
   ui.login.disabled=ui.gateLogin.disabled=true;
   showAndroidTvAuthPanel();
   setStatus(automatic?'กำลังเตรียม QR Login ในแอป Android…':'กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
@@ -2615,7 +2624,7 @@ function bootAndroidTvAuthentication(){
 // Re-check the native Drive session before access tokens expire and after TV wake.
 let androidTvRefreshingSession=false;
 function guardAndroidTvSession(){
-  if(!androidTvNativeBridgeReady())return;
+  if(!androidTvNativeBridgeReady()||androidTvLoginCancelled)return;
   const expired=!state.token||!state.tokenExpiresAt||state.tokenExpiresAt<=Date.now()+90_000;
   if(!expired){androidTvRefreshingSession=false;return;}
   const panel=androidTvAuthPanel();
