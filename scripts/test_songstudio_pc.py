@@ -343,7 +343,7 @@ class PcSourceTests(unittest.TestCase):
         original = self.dir / "developer-client.json"
         original.write_text(json.dumps({"installed": {
             "client_id": "123456-correctdesktopid.apps.googleusercontent.com",
-            "client_secret": "desktop-public-secret-not-required"
+            "client_secret": "desktop-public-secret-from-google"
         }}), encoding="utf-8")
         data = self.dir / "WindowsUser" / "X-Stage" / "SongStudio"
         target = data / "oauth-client.json"
@@ -356,7 +356,8 @@ class PcSourceTests(unittest.TestCase):
         public = json.loads(target.read_text(encoding="utf-8"))
         self.assertEqual(public["installed"]["client_id"],
                          "123456-correctdesktopid.apps.googleusercontent.com")
-        self.assertNotIn("client_secret", public["installed"])
+        self.assertEqual(public["installed"]["client_secret"],
+                         "desktop-public-secret-from-google")
         self.assertNotIn("refresh_token", target.read_text(encoding="utf-8"))
         original.unlink()
         reloaded = mod.GoogleDrive(data, lambda: str(target))
@@ -366,6 +367,24 @@ class PcSourceTests(unittest.TestCase):
         other = mod.GoogleDrive(self.dir / "OtherWindowsUser", lambda: "")
         self.assertFalse(other.status()["configured"])
         self.assertFalse(other.status()["connected"])
+
+    def test_incomplete_legacy_desktop_oauth_client_fails_before_google_login(self):
+        spec = importlib.util.spec_from_file_location("xstage_google_legacy",
+             REPO / "songstudio-pc" / "google_drive.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        legacy = self.dir / "old-oauth-client.json"
+        legacy.write_text(json.dumps({"installed":{
+            "client_id": "12345-legacy.apps.googleusercontent.com"
+        }}), encoding="utf-8")
+        service = mod.GoogleDrive(self.dir / "fresh-user", lambda: str(legacy))
+        status = service.status()
+        self.assertFalse(status["configured"])
+        self.assertIn("client_secret", status["error"])
+        with self.assertRaisesRegex(mod.GoogleError, "client_secret"):
+            service.login()
+        with self.assertRaisesRegex(mod.GoogleError, "client_secret"):
+            service.import_client(legacy)
 
     def test_windows_data_is_outside_portable_release(self):
         if os.name == "nt":
@@ -391,6 +410,13 @@ class PcSourceTests(unittest.TestCase):
         }}), encoding="utf-8")
         drive = google.GoogleDrive(self.dir, lambda: str(client_path))
         browser_threads = []
+        posted = []
+        def exchange(form):
+            posted.append(dict(form))
+            if form["grant_type"] == "authorization_code":
+                return {"access_token":"test-access",
+                        "refresh_token":"test-refresh","expires_in":3600}
+            return {"access_token":"refreshed-access","expires_in":3600}
         def open_callback(url, new=1):
             parsed = urllib.parse.urlsplit(url)
             params = urllib.parse.parse_qs(parsed.query)
@@ -409,13 +435,18 @@ class PcSourceTests(unittest.TestCase):
             return True
         with patch.object(google, "_crypt", side_effect=lambda x, decrypt: x), \
              patch.object(google.webbrowser, "open", side_effect=open_callback), \
-             patch.object(drive, "_token_exchange", return_value={
-                 "access_token":"test-access","refresh_token":"test-refresh","expires_in":3600}), \
+             patch.object(drive, "_token_exchange", side_effect=exchange), \
              patch.object(drive, "api", return_value={"user":{"emailAddress":"tester@example.com"}}):
             info = drive.login()
             self.assertTrue(info["connected"])
             self.assertEqual(info["email"], "tester@example.com")
             self.assertTrue(drive.secret_file.is_file())
+            self.assertEqual(posted[0]["client_secret"], "local-client-secret")
+            self.assertIn("code_verifier", posted[0])
+            drive.access_expires = 0
+            self.assertEqual(drive.token(), "refreshed-access")
+            self.assertEqual(posted[1]["grant_type"], "refresh_token")
+            self.assertEqual(posted[1]["client_secret"], "local-client-secret")
             drive.logout()
             self.assertFalse(drive.status()["connected"])
         for thread in browser_threads:
