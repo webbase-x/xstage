@@ -73,7 +73,7 @@ try {
 
   // The PC Ready package and authenticated PC Web Control share this UI.
   // Simulate its local API; exercise all four visible steps in Chromium.
-  const pc = await browser.newPage();
+  const pc = await browser.newPage({acceptDownloads:true});
   const pcErrors = [];
   pc.on('pageerror', (error) => pcErrors.push(error.message));
   const settings = {
@@ -117,6 +117,33 @@ try {
         message:'ยังไม่มี LRC หรือไฟล์เนื้อร้อง MIDI',lines:[],
         aiEligible:true,aiAvailable:true,requiresReview:false
       };
+    } else if (url.pathname === '/api/preview-sources') {
+      response = {
+        id:Number(url.searchParams.get('id')),
+        options:[{value:'auto',kind:'play',label:'ทดสอบเสียงต้นฉบับ'},
+                 {value:'midi:1',kind:'play',label:'ทดลองฟัง MID'}],
+        components:[{type:'Song · MIDI',name:'TEST001.mid',found:true,required:true},
+                    {type:'Lyrics · LYR',name:'TEST001.lyr',found:true,required:true},
+                    {type:'Cursor · CUR',name:'TEST001.cur',found:true,required:true}],
+        timedLyricsReady:true, proofMessage:'พบต้นฉบับครบสามส่วน'
+      };
+    } else if (url.pathname === '/api/vocal-songs') {
+      response = {rows:[{id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',
+                         code:'AINEW',kind:'MP3',size:10000,status:'ai-import'}],total:1};
+    } else if (url.pathname === '/api/vocal-import') {
+      response = {added:1,skipped:0,total:1,errors:[],
+                  song:{id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',
+                        code:'AINEW',kind:'MP3',size:10000},
+                  message:'นำเข้าเพลงใหม่ 1 เพลง'};
+    } else if (url.pathname === '/api/ai-lyrics-draft') {
+      response = {id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',code:'AINEW',
+                  available:true,hasDraft:true,approvedLrc:'',
+                  draft:{source:'AI_DRAFT_UNVERIFIED',
+                         rawLrc:'[00:00.10]ท่อนแรก AI\\n[00:00.50]ท่อนที่สอง AI',
+                         lines:[{startTime:0.1,endTime:0.5,text:'ท่อนแรก AI'},
+                                {startTime:0.5,endTime:1,text:'ท่อนที่สอง AI'}]}};
+    } else if (url.pathname === '/api/ai-lyrics-approve') {
+      response = {ok:true,lines:2,message:'บันทึก LRC ที่ผู้ใช้ตรวจแก้แล้ว'};
     } else if (url.pathname === '/api/songs/ids') {
       response = {ids:list.map((song) => song.id)};
     } else if (url.pathname === '/api/config') {
@@ -220,6 +247,38 @@ try {
   });
   await pc.click('#studio-confirm-ok');
   await audioBuild;
+  // Independent AI lyrics menu: import -> select -> proof playback -> review.
+  await pc.click('.nav-button[data-tab="ai-lyrics"]');
+  assert.equal(await pc.locator('#tab-ai-lyrics').isVisible(),true,
+    'AI Lyrics must be a separate left menu');
+  assert.equal(await pc.locator('#ai-lyrics-import').isVisible(),true);
+  await pc.click('#ai-lyrics-import');
+  await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-selected')?.textContent.includes('เพลง AI นำเข้า'));
+  assert.equal(await pc.locator('#ai-lyrics-start').isEnabled(),true,
+    'Independent imported file can use Whisper when a model is available');
+  assert.match(await pc.locator('#ai-lyrics-editor').inputValue(),/ท่อนแรก AI/);
+  assert.equal(await pc.locator('#ai-lyrics-save').isEnabled(),true);
+  const aiLive = pc.waitForRequest((req)=>{
+    try {return new URL(req.url()).pathname === '/api/live-preview' &&
+      req.postDataJSON()?.id===-1;}catch{return false;}
+  });
+  await pc.click('#ai-lyrics-play');
+  await aiLive;
+  await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-audio')?.src.includes('/api/live-stream'));
+  assert.match(await pc.locator('#ai-lyrics-karaoke').innerText(),/ท่อนแรก AI/);
+  await pc.click('#ai-lyrics-stop');
+  await pc.click('#ai-lyrics-save');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  const approvedLrc = pc.waitForRequest((req)=>{
+    try{return new URL(req.url()).pathname === '/api/ai-lyrics-approve' &&
+      req.postDataJSON()?.id === -1;}catch{return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await approvedLrc;
+  const exportedLrc = pc.waitForEvent('download');
+  await pc.click('#ai-lyrics-download');
+  assert.match((await exportedLrc).suggestedFilename(),/\.lrc$/);
+  assert.deepEqual(pcErrors,[], 'AI Lyrics menu must not produce browser errors');
   assert.deepEqual(pcErrors, [], 'PC wizard should not produce JavaScript errors');
   console.log('PASS: Both Create buttons submit real build jobs after ONE confirmation; acknowledgment stays visible.');
 
