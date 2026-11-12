@@ -45,7 +45,7 @@ function renderAppUpdateNotice(){
   if(!remote){notice.hidden=true;return;}
   state.updateAfterTrack=false;
   notice.hidden=false;
-  text.textContent='มี X-Stage '+remote.version+' พร้อมใช้งาน';
+  text.textContent='มี X-Stage v'+remote.version+' · Build '+remote.build+' พร้อมอัปเดต';
   action.textContent='อัปเดตตอนนี้';
   action.disabled=false;
 }
@@ -92,8 +92,11 @@ async function checkAppVersion(){
     if(!Number.isSafeInteger(remoteBuild)||remoteBuild<1||typeof remote?.version!=='string')throw new Error('ข้อมูลเวอร์ชันไม่ถูกต้อง');
     const currentBuild=Number(XSTAGE_RELEASE.build)||0;
     if(remoteBuild>currentBuild){
+      const changed=state.updateAvailable?.build!==remoteBuild||
+        state.updateAvailable?.version!==String(remote.version||'');
       state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
       renderAppUpdateNotice();
+      if(changed)window.dispatchEvent(new CustomEvent('xstage:web-update',{detail:state.updateAvailable}));
       // Reload the old web app as soon as a newer published web release is
       // confirmed. During active playback, preserve the song and show the
       // existing Update Now button instead.
@@ -109,8 +112,12 @@ async function checkAppVersion(){
 }
 async function triggerImmediateVersionUpdate(){
   if(androidTvNativeBridgeReady()){
+    nativeUpdateManualCheck=true;
     const panel=androidTvUpdatePanel();
     panel.hidden=false;
+    const active=playbackBusyForUpdate();
+    panel.classList.toggle('during-playback',active);
+    panel.setAttribute('aria-modal',String(!active));
     $('android-tv-update-title').textContent='ตรวจสอบอัปเดต X-Stage';
     $('android-tv-update-status').textContent='กำลังตรวจสอบเวอร์ชันล่าสุด…';
     const button=$('android-tv-update-now');
@@ -2588,12 +2595,14 @@ function androidTvUpdatePanel(){
     if(hint)hint.textContent='ระบบจะเปิดหน้าแอปใน Google Play ให้ยืนยันการอัปเดต ไม่ติดตั้ง APK ทดสอบทับรุ่น Google Play';
   }
   $('android-tv-update-now')?.addEventListener('click',()=>{
+    nativeUpdateInstalling=true;
     const button=$('android-tv-update-now');
     if(button){button.disabled=true;button.textContent='กำลังอัปเดต…';}
     try{window.XStageAndroid?.installAvailableUpdate?.();}
     catch(error){window.XStageAndroidUpdateError(error?.message||'เริ่มอัปเดตไม่สำเร็จ');}
   });
   $('android-tv-update-later')?.addEventListener('click',()=>{
+    nativeUpdateManualCheck=false;
     panel.hidden=true;
     if(state.nativeUpdateAvailable?.build){
       nativeUpdateDismissedBuild=state.nativeUpdateAvailable.build;
@@ -2603,8 +2612,11 @@ function androidTvUpdatePanel(){
   return panel;
 }
 let nativeUpdateDismissedBuild=0;
+let nativeUpdateManualCheck=false;
+let nativeUpdateInstalling=false;
 window.XStageAndroidUpdateAvailable=(version,build)=>{
   if(!androidTvNativeBridgeReady())return;
+  nativeUpdateManualCheck=false;
   const next={version:String(version||''),build:Number(build)||0};
   const currentBuild=Number(window.XStageAndroid?.getAppBuild?.()||XSTAGE_RELEASE.build)||0;
   if(!Number.isSafeInteger(next.build)||next.build<=currentBuild)return;
@@ -2649,22 +2661,29 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
 window.XStageAndroidUpdateStatus=message=>{
   state.nativeUpdateStatus=String(message||'กำลังอัปเดต X-Stage…');
   window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus}}));
-  // Show update notice on the TV itself as well as the Owner remote.
   const panel=androidTvUpdatePanel();
+  // Background polling must never take over the stage or reopen a dismissed notice.
+  if(!nativeUpdateManualCheck&&!nativeUpdateInstalling&&panel.hidden)return;
   panel.hidden=false;
-  $('android-tv-update-status').textContent=String(message||'กำลังอัปเดต X-Stage…');
+  $('android-tv-update-status').textContent=state.nativeUpdateStatus;
 };
 window.XStageAndroidUpdateError=message=>{
   state.nativeUpdateStatus=String(message||'อัปเดตไม่สำเร็จ');
   window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus,error:true}}));
-  // Show update notice on the TV itself as well as the Owner remote.
+  const wasUserInitiated=nativeUpdateManualCheck||nativeUpdateInstalling;
+  nativeUpdateManualCheck=false;
+  nativeUpdateInstalling=false;
   const panel=androidTvUpdatePanel();
+  // Network errors during the 15-second check stay in Owner diagnostics.
+  // They are NOT permission to interrupt karaoke with a full-screen dialog.
+  if(!wasUserInitiated&&panel.hidden)return;
   panel.hidden=false;
-  $('android-tv-update-status').textContent=String(message||'อัปเดตไม่สำเร็จ');
+  $('android-tv-update-status').textContent=state.nativeUpdateStatus;
   const button=$('android-tv-update-now');
   if(button){button.disabled=false;button.textContent='ลองอัปเดตอีกครั้ง';}
 };
 window.XStageAndroidNoUpdate=()=>{
+  nativeUpdateManualCheck=false;
   state.nativeUpdateAvailable=null;
   state.nativeUpdateStatus='X-Stage เป็นเวอร์ชันล่าสุดแล้ว';
   window.dispatchEvent(new CustomEvent('xstage:native-update-status',{detail:{message:state.nativeUpdateStatus}}));
