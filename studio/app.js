@@ -566,7 +566,12 @@
       const estimate = await post('/api/estimate', {ids});
       if (!estimate.songs) throw new Error('ไม่พบเพลงที่เลือกในฐานข้อมูล กรุณาสแกนโฟลเดอร์ใหม่และเลือกเพลงอีกครั้ง');
       if (!estimate.enoughDisk) throw new Error('พื้นที่ว่างไม่เพียงพอ กรุณาเปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง');
-      const warning = (estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ โปรแกรมจะสร้างทีละเพลง ไม่คัดลอกต้นฉบับทั้งหมด' : '') +
+      const formats = Object.entries(estimate.formats || {}).sort((a,b)=>b[1]-a[1])
+        .map(([extension,count]) => (extension || 'ไม่มีนามสกุล').toUpperCase() + ' ' + fmtNum(count)).join(' · ');
+      if (estimate.unsupported >= estimate.songs) throw new Error(
+        'เพลงที่เลือกทั้งหมดเป็น NCN ซึ่ง PC Engine รุ่นนี้ยังแปลงไม่ได้ · กรุณาเลือกเพลงรูปแบบที่รองรับ');
+      const warning = (formats ? '\nประเภทไฟล์: ' + formats : '') +
+        (estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ โปรแกรมจะสร้างทีละเพลง ไม่คัดลอกต้นฉบับทั้งหมด' : '') +
         (estimate.spaceWarning ? '\n⚠ พื้นที่ว่างอาจไม่พอสำหรับสร้างทุกเพลง หากเต็มจะหยุดรายการที่เหลือและเก็บเพลงที่สำเร็จไว้' : '') +
         (estimate.unsupported ? '\n⚠ มี ' + fmtNum(estimate.unsupported) + ' ไฟล์ NCN ซึ่งยังไม่รองรับ และจะแจ้ง ERR รายเพลง' : '');
       const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
