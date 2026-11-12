@@ -3866,3 +3866,36 @@ body.xstage-native-tv.xstage-ui-v2 #remote-pair-panel #remote-qr{
     top:65px!important;width:min(175px,26vw)!important
   }
 }
+
+/* WEB stage: show the text banner only, without the stage logo image or mark.
+   Native Android TV retains its own supplied-image banner and corner emblem. */
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-lockup{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  aspect-ratio:auto!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-mark{
+  display:none!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-copy{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  text-align:center!important;
+  width:100%!important;
+}
+body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-copy > *{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  justify-content:center!important;
+}
