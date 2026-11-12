@@ -1,0 +1,49 @@
+name: X-Stage Song Studio PC Windows bootstrap smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "songstudio-pc/**"
+      - "downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip"
+      - ".github/workflows/test-songstudio-pc-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-source:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract published PC source archive
+        shell: powershell
+        run: |
+          $zip = "downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip"
+          if (!(Test-Path $zip)) { throw "Published ZIP missing" }
+          Expand-Archive -LiteralPath $zip -DestinationPath "$env:RUNNER_TEMP\songstudio" -Force
+          $root = Join-Path $env:RUNNER_TEMP "songstudio\X-Stage-Song-Studio-PC-Source-Preview"
+          if (!(Test-Path (Join-Path $root "Start-Song-Studio.cmd"))) { throw "CMD missing" }
+          if (!(Test-Path (Join-Path $root "engine.py"))) { throw "Engine missing" }
+          Write-Host "Extracted verified source archive to $root"
+      - name: First-run Windows bootstrap using official Python and FFmpeg
+        shell: powershell
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "songstudio\X-Stage-Song-Studio-PC-Source-Preview"
+          & (Join-Path $root "Start-Song-Studio.ps1")
+          if ($LASTEXITCODE -ne 0) { throw "Windows bootstrap failed. See setup log." }
+          if (!(Test-Path (Join-Path $root ".runtime\python\pythonw.exe"))) { throw "Embedded Python is missing" }
+          if (!(Test-Path (Join-Path $root ".runtime\tools\ffmpeg.exe"))) { throw "FFmpeg missing" }
+          & (Join-Path $root ".runtime\python\python.exe") -m py_compile (Join-Path $root "engine.py")
+          if ($LASTEXITCODE -ne 0) { throw "Engine syntax check failed" }
+          Write-Host "PASS: Windows download, verification and local engine startup."
+      - name: Stop test engine
+        if: always()
+        shell: powershell
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "songstudio\X-Stage-Song-Studio-PC-Source-Preview"
+          Get-CimInstance Win32_Process | Where-Object {
+            $_.Name -eq 'pythonw.exe' -and $_.ExecutablePath -like "$root*"
+          } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
