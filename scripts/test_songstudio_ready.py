@@ -18,6 +18,16 @@ spec = importlib.util.spec_from_file_location("songstudio_ready_engine", root / 
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 
+# Prevent a ZIP bearing one version while its integrity manifest or UI
+# advertises a different build (older distributions accidentally did this).
+import json
+manifest = json.loads((root / ".engine-ready-manifest.json").read_text(encoding="utf-8-sig"))
+assert manifest["version"] == engine.STATUS_VERSION, (
+    "Ready manifest version does not match the bundled PC Engine")
+assert str(manifest["build"]) == str(engine.STATUS_BUILD), (
+    "Ready manifest build does not match the bundled PC Engine")
+print("PASS: Ready ZIP manifest matches PC Engine version and build")
+
 assert engine.ffmpeg_binary() is not None, "FFmpeg is missing"
 assert engine.fluidsynth_binary() is not None, "FluidSynth is missing"
 assert engine.sf_available(), "Default SoundFont is not selected"
