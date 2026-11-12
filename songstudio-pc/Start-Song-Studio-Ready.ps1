@@ -35,6 +35,10 @@ try {
     $ffprobe = Check-File '.runtime\tools\ffprobe.exe'
     $sfont = Check-File '.runtime\soundfonts\GeneralUser-GS.sf2'
     $engine = Check-File 'engine.py'
+    $aiScript = Check-File 'ai_separate.py'
+    $aiModel = Check-File '.runtime\models\htdemucs_fp16weights.onnx'
+    [void](Check-File '.runtime\ai-site\numpy\__init__.py')
+    [void](Check-File '.runtime\ai-site\onnxruntime\__init__.py')
     $picker = Check-File 'pick_path.ps1'
     $ui = Check-File 'studio\index.html'
     [void](Check-File 'studio\app.js')
@@ -76,7 +80,8 @@ try {
             throw 'Bundled SoundFont file is invalid.'
         }
     } finally { $stream.Dispose() }
-    Write-Status 'SoundFont verified. Nothing to install or download.'
+    if ((Get-Item $aiModel).Length -lt 100MB) { throw 'AI Separation model is incomplete.' }
+    Write-Status 'SoundFont and bundled AI ONNX dependencies verified. Nothing to install or download.'
     if ($NoLaunch) {
         Write-Status 'Offline readiness check passed (NoLaunch mode).'
         exit 0
