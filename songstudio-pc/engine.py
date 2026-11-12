@@ -79,6 +79,19 @@ PREFS = {
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
+
+def _module(filename, name):
+    source = ROOT / filename
+    if not source.is_file():
+        raise RuntimeError("ไม่พบไฟล์โปรแกรมที่จำเป็น: " + filename)
+    spec = importlib.util.spec_from_file_location(name, source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+GOOGLE = _module("google_drive.py", "xstage_google_drive").GoogleDrive(
+    DATA, lambda: PREFS.get("oauth", ""))
+
 DEFAULT_SOUNDFONT = RUNTIME / "soundfonts" / "GeneralUser-GS.sf2"
 if DEFAULT_SOUNDFONT.is_file() and not Path(PREFS.get("soundfont", "")).is_file():
     PREFS["soundfont"] = str(DEFAULT_SOUNDFONT)
@@ -617,8 +630,41 @@ def execute_job(action, options, started):
             if not rows:
                 raise ValueError("กรุณาเลือกเพลงก่อนสร้าง")
             result = build_library(rows, mode, options) if action == "build" else build_preview(rows, mode)
+        elif action == "login":
+            update("เปิด Google Login บนเบราว์เซอร์ · รออนุญาตจากเจ้าของบัญชี")
+            account = GOOGLE.login(cancelled=CANCEL, on_status=update)
+            log("Google Login สำเร็จ: " + account.get("email", "(ไม่มีชื่ออีเมล)"))
+            result = {"message": "เชื่อม Google Drive ส่วนตัวเรียบร้อยแล้ว"}
+        elif action == "logout":
+            GOOGLE.logout()
+            result = {"message": "ออกจาก Google บน PC เครื่องนี้แล้ว (สิทธิ์ใน Google Account ยังถอนได้จากบัญชี Google)"}
+        elif action == "upload":
+            export = _song_export_module()
+            root = export.songs_root(PREFS["workspace"])
+            # Publishing current.json requires ALL referenced media first.
+            # Upload the complete published library to avoid a broken pointer.
+            pointer, _ = export._read_current(root)
+            if not pointer:
+                raise ValueError("ไม่พบ songs/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
+            records = [x for x in export.existing_records(root) if export.record_is_complete(root, x)]
+            if len(records) != pointer.get("songCount"):
+                raise RuntimeError("ฐานเพลงยังไม่ครบ กรุณาตรวจ catalogs ก่อนซิงค์ไป Drive")
+            with LOCK:
+                JOB["total"] = len(records)
+            update("ซิงค์เพลงในคลังส่วนตัวขึ้น Google Drive")
+            synced = GOOGLE.upload_library(
+                root, records, cancelled=CANCEL, on_progress=lambda sent, total:
+                update(f"อัปโหลด Google Drive {sent:,}/{total:,} bytes"))
+            result = {"message": "ซิงค์ Google Drive เรียบร้อย · เพิ่ม {created} · ข้าม {skipped} · ปรับปรุง {updated}".format(**synced),
+                      **synced}
+        elif action == "download":
+            kind = options.get("kind", "songs")
+            update("กำลังดาวน์โหลดคลังเพลงส่วนตัวจาก Google Drive")
+            result = GOOGLE.download_library(
+                PREFS["download"], kind=kind, cancelled=CANCEL, on_status=update)
+            result["message"] = f"ดาวน์โหลด {result['files']} ไฟล์เสร็จแล้ว · {result['path']}"
         elif action == "check-update":
-            result = {"message": "ยังไม่มีไฟล์ติดตั้ง Windows ที่ผ่านการตรวจสอบสำหรับ Source Launcher นี้"}
+            result = {"message": "ยังไม่มีตัวอัปเดตอัตโนมัติ กรุณาตรวจสอบรุ่น PC Ready ที่ GitHub Releases"}
             update("ตรวจเวอร์ชันเสร็จแล้ว", 1)
         else:
             raise RuntimeError(
@@ -921,13 +967,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"version": STATUS_VERSION, "build": STATUS_BUILD,
                     "job": job_snapshot(), "preferences": dict(PREFS),
                     "soundfonts": font_list(), "presets": formats(),
-                    "google": {"connected": False, "email": ""},
+                    "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
             elif path == "/api/environment":
                 self._json({"Python Runtime": True, "FFmpeg": bool(ffmpeg_binary()),
                     "SoundFont": sf_available(), "FluidSynth": bool(fluidsynth_binary()),
                     "Local file mode": True,
-                    "Google Drive connector": False,
+                    "Google Drive connector": bool(PREFS.get("oauth")) or GOOGLE.status()["connected"],
                     "AI separation": ai_available()})
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
