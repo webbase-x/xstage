@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.4-build304'
+$Version = 'v0.3.5-build305'
 $DirName = 'X-Stage-Song-Studio-PC-Ready-' + $Version
 $OutputRoot = Join-Path $Repo 'dist'
 $Stage = Join-Path $OutputRoot $DirName
@@ -57,12 +57,23 @@ $map = @{
  'songstudio-pc/ai-model.lock.json' = 'ai-model.lock.json'
  'songstudio-pc/pick_path.ps1' = 'pick_path.ps1'
  'songstudio-pc/README-READY.md' = 'README.md'
+ 'songstudio-pc/Create-Desktop-Shortcut.cmd' = 'Create-Desktop-Shortcut.cmd'
+ 'songstudio-pc/Create-Desktop-Shortcut.ps1' = 'Create-Desktop-Shortcut.ps1'
+ 'studio/app-icon.svg' = 'studio/app-icon.svg'
+ 'studio/site.webmanifest' = 'studio/site.webmanifest'
  'studio/index.html' = 'studio/index.html'
  'studio/app.js' = 'studio/app.js'
  'studio/style.css' = 'studio/style.css'
  'studio/entry.js' = 'studio/entry.js'
 }
 foreach ($item in $map.GetEnumerator()) { CopyFromRepo $item.Key $item.Value }
+Step 'Rendering X-Stage Song Studio PC native ICO and 512px icon for Windows'
+& python (Join-Path $Repo 'scripts/build_songstudio_app_icon.py') (Join-Path $Stage 'studio')
+if ($LASTEXITCODE -ne 0) { throw 'Rendering Song Studio app icon failed' }
+foreach ($asset in @('studio/app-icon.svg','studio/app-icon.ico','studio/app-icon-512.png','studio/site.webmanifest')) {
+    if (!(Test-Path -LiteralPath (Join-Path $Stage $asset))) { throw "Missing app artwork: $asset" }
+}
+
 
 # 1. Python embeddable runtime: no Python installation or pip necessary
 $PyZip = Join-Path $Downloads 'python-embedded.zip'
@@ -195,6 +206,12 @@ $paths = @(
  '.runtime/ai-site/numpy/__init__.py',
  '.runtime/ai-site/onnxruntime/__init__.py',
  'pick_path.ps1',
+ 'Create-Desktop-Shortcut.cmd',
+ 'Create-Desktop-Shortcut.ps1',
+ 'studio/app-icon.svg',
+ 'studio/app-icon.ico',
+ 'studio/app-icon-512.png',
+ 'studio/site.webmanifest',
  'studio/index.html',
  'studio/app.js',
  'studio/style.css',
@@ -219,8 +236,8 @@ $manifest = [ordered]@{
     product = 'X-Stage Song Studio PC'
     bundle_type = 'ready-offline'
     platform = 'windows-x64'
-    version = '0.3.4'
-    build = 304
+    version = '0.3.5'
+    build = 305
     created_utc = [DateTime]::UtcNow.ToString('o')
     contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont', 'HTDemucs ONNX model (MIT)', 'NumPy 2.2.6', 'ONNX Runtime 1.23.2')
     files = @($files)
@@ -260,6 +277,10 @@ with ZipFile(dest) as archive:
                       ".runtime/models/htdemucs_fp16weights.onnx",
                       "ai_separate.py",
                       "live_preview.py",
+                      "studio/app-icon.svg",
+                      "studio/app-icon.ico",
+                      "studio/app-icon-512.png",
+                      "Create-Desktop-Shortcut.cmd",
                       ".engine-ready-manifest.json",
                       "Start-Song-Studio.cmd"]:
         assert base.name + "/" + mandatory in names, mandatory
