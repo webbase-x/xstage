@@ -127,7 +127,7 @@ final class GoogleDeviceAuth {
                 long expiresIn = token.optLong("expires_in", 3600L);
                 main.post(() -> { if (isCurrent(run)) listener.onToken(accessToken, expiresIn); });
             } catch (Exception e) {
-                if (isCurrent(run)) error(readable(e));
+                if (isCurrent(run)) error(run, readable(e));
             }
         });
     }
