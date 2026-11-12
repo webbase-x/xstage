@@ -3736,3 +3736,68 @@ body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
     max-width:calc(100% - 190px)!important
   }
 }
+
+
+/* v1.0.83 supplied official stage logo — transparent 2048×682 PNG.
+   SVG remains visible until the exact uploaded PNG is installed in assets/. */
+html.xstage-uploaded-logo-ready body.xstage-ui-v2 .stage .stage-hero .stage-brand-lockup{
+  background-image:url('assets/xstage-stage-logo.png')!important;
+  background-position:center center!important;
+  background-size:contain!important;
+  background-repeat:no-repeat!important;
+  aspect-ratio:2048/682!important;
+}
+body.xstage-ui-v2 .stage .stage-hero{
+  pointer-events:none!important;
+  overflow:visible!important;
+  max-width:calc(100% - 32px)!important;
+}
+body.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+  width:min(72cqw,760px)!important;
+  top:37%!important;
+  left:50%!important;
+  transform:translate(-50%,-50%)!important;
+  scale:1!important;
+}
+body.xstage-ui-v2 .stage.playing .stage-hero{
+  width:min(23cqw,300px)!important;
+  top:clamp(56px,10cqh,100px)!important;
+  left:clamp(12px,1.6vw,24px)!important;
+  transform:none!important;
+  opacity:.76!important;
+}
+body.xstage-ui-v2 .stage #lyrics{z-index:10!important;pointer-events:none!important}
+body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+body.xstage-native-tv.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+  width:min(31vw,440px)!important;
+  top:clamp(16px,2vh,28px)!important;
+  left:clamp(14px,2vw,30px)!important;
+  max-width:calc(100% - 360px)!important;
+  transform:none!important;
+  opacity:.9!important;
+}
+body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+  width:min(23vw,320px)!important;
+  top:clamp(16px,2vh,28px)!important;
+  left:clamp(14px,2vw,30px)!important;
+  max-width:calc(100% - 360px)!important;
+  opacity:.76!important;
+}
+@media(max-width:800px){
+  body.xstage-ui-v2 .stage:not(.playing) .stage-hero{
+    width:min(82cqw,470px)!important;
+  }
+  body.xstage-ui-v2 .stage.playing .stage-hero{
+    width:min(33cqw,205px)!important;
+    top:clamp(50px,10cqh,70px)!important;
+    left:10px!important;
+    max-width:calc(100% - 145px)!important;
+  }
+  body.xstage-native-tv.xstage-ui-v2 .stage .stage-hero,
+  body.xstage-native-tv.xstage-ui-v2 .stage:not(.playing) .stage-hero,
+  body.xstage-native-tv.xstage-ui-v2 .stage.playing .stage-hero{
+    width:min(30vw,230px)!important;
+    top:10px!important;left:10px!important;
+    max-width:calc(100% - 185px)!important;
+  }
+}
