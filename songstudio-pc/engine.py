@@ -1151,22 +1151,31 @@ def execute_job(action, options, started):
         elif action == "upload":
             export = _song_export_module()
             root = export.songs_root(PREFS["workspace"])
-            # Publishing current.json requires ALL referenced media first.
-            # Upload the complete published library to avoid a broken pointer.
             pointer, _ = export._read_current(root)
             if not pointer:
                 raise ValueError("ไม่พบ songs/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
-            records = [x for x in export.existing_records(root) if export.record_is_complete(root, x)]
+            records = [x for x in export.existing_records(root)
+                       if export.record_is_complete(root, x)]
             if len(records) != pointer.get("songCount"):
-                raise RuntimeError("ฐานเพลงยังไม่ครบ กรุณาตรวจ catalogs ก่อนซิงค์ไป Drive")
+                raise RuntimeError("ฐานเพลงในเครื่องไม่ครบ · ไม่เผยแพร่ฐานที่อาจเสียหาย")
             with LOCK:
                 JOB["total"] = len(records)
-            update("ซิงค์เพลงในคลังส่วนตัวขึ้น Google Drive")
-            synced = GOOGLE.upload_library(
+            update("ตรวจเพลงซ้ำจาก XStageWeb เดิมก่อนอัปโหลด · ไม่ลบเพลงเดิม")
+            online = _module("online_publish.py", "xstage_online_publish")
+            synced = online.OnlinePublisher(GOOGLE).publish(
                 root, records, cancelled=CANCEL, on_progress=lambda sent, total:
-                update(f"อัปโหลด Google Drive {sent:,}/{total:,} bytes"))
-            result = {"message": "ซิงค์ Google Drive เรียบร้อย · เพิ่ม {created} · ข้าม {skipped} · ปรับปรุง {updated}".format(**synced),
-                      **synced}
+                update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"))
+            result = {
+                "message": (
+                    f"ซิงค์ XStageWeb สำเร็จ · เพลงใหม่ {synced['newSongs']} · "
+                    f"ปรับปรุงเนื้อร้อง {synced['updatedSongs']} · "
+                    f"ข้ามซ้ำ {synced['duplicates']} · "
+                    f"รอตรวจรหัสซ้ำ {synced['conflicts']} · "
+                    f"ยังไม่มีเนื้อร้อง {synced['notReady']} · "
+                    f"รวมพร้อมเล่น {synced['totalSongs']} เพลง" +
+                    (" · ฐานใหม่เผยแพร่แล้ว" if synced['published']
+                     else " · ฐานเดิมไม่เปลี่ยน")),
+                **synced}
         elif action == "download":
             kind = options.get("kind", "songs")
             update("กำลังดาวน์โหลดคลังเพลงส่วนตัวจาก Google Drive")
