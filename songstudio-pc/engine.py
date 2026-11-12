@@ -96,6 +96,71 @@ PREFS = {
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
+# This library belongs ONLY to the independent AI Lyrics menu.
+AI_IMPORTS_FILE = DATA / "ai-lyrics-imports.json"
+AI_IMPORTED = {}
+def restore_ai_imports():
+    raw = load_json(AI_IMPORTS_FILE, [])
+    if not isinstance(raw, list):
+        return
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            song_id = entry.get("id")
+            path = Path(entry["path"]).expanduser()
+            if (type(song_id) is not int or song_id >= 0 or
+                    path.suffix.lower() not in EXT_AUDIO or not path.is_file()
+                    or path.is_symlink()):
+                continue
+            row = {"id": song_id, "path": str(path.resolve()), "code": path.stem,
+                   "title": str(entry.get("title") or path.stem),
+                   "artist": str(entry.get("artist") or ""),
+                   "kind": path.suffix[1:].upper(), "size": path.stat().st_size,
+                   "status": "ai-import", "source_format": "AI_IMPORT"}
+            AI_IMPORTED[song_id] = row
+            FILE_BY_ID[song_id] = row
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+
+def import_ai_audio(source_path):
+    """Register a selected local audio file without scanning the song library."""
+    if not isinstance(source_path, str) or not source_path.strip():
+        raise ValueError("กรุณาเลือกไฟล์เพลงจากเครื่อง")
+    path = Path(source_path).expanduser()
+    if path.suffix.lower() not in EXT_AUDIO:
+        raise ValueError("รองรับการนำเข้าไฟล์เสียง MP3, M4A, WAV, FLAC, AAC, OGG, WMA และ MP4")
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("ไม่พบไฟล์เพลงหรือไม่อนุญาตให้ใช้ symbolic link")
+    if path.stat().st_size < 1000:
+        raise ValueError("ไฟล์เสียงมีขนาดเล็กผิดปกติหรือไม่มีข้อมูล")
+    resolved = str(path.resolve())
+    with LOCK:
+        existing = next((row for row in AI_IMPORTED.values()
+                         if row["path"].casefold() == resolved.casefold()), None)
+        if existing:
+            return {"ok": True, "alreadyImported": True, "song": existing,
+                    "message": "ไฟล์นี้มีอยู่แล้วในเมนูสร้างเนื้อร้อง AI"}
+        song_id = min([0, *AI_IMPORTED.keys()]) - 1
+        row = {"id": song_id, "path": resolved, "code": path.stem,
+               "title": path.stem, "artist": "", "kind": path.suffix[1:].upper(),
+               "size": path.stat().st_size, "status": "ai-import",
+               "source_format": "AI_IMPORT"}
+        AI_IMPORTED[song_id] = row
+        FILE_BY_ID[song_id] = row
+        try:
+            save_json(AI_IMPORTS_FILE,
+                      [{"id": item["id"], "path": item["path"], "title": item["title"],
+                        "artist": item["artist"]} for item in AI_IMPORTED.values()])
+        except Exception:
+            AI_IMPORTED.pop(song_id, None)
+            FILE_BY_ID.pop(song_id, None)
+            raise
+    return {"ok": True, "alreadyImported": False, "song": row,
+            "message": "นำเข้าไฟล์เสียงในเมนูสร้างเนื้อร้อง AI แล้ว (ไม่คัดลอกต้นฉบับ)"}
+
+restore_ai_imports()
+
 
 def _module(filename, name):
     source = ROOT / filename
@@ -273,6 +338,7 @@ def scan_source():
         FILES[:] = rows
         FILE_BY_ID.clear()
         FILE_BY_ID.update((x["id"], x) for x in rows)
+        FILE_BY_ID.update(AI_IMPORTED)
     return len(rows)
 
 def visible_files(search=""):
@@ -1133,14 +1199,14 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "soundfont", "oauth"):
+    if kind not in ("source", "workspace", "download", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
     picker = ROOT / "pick_path.ps1"
     if not picker.is_file():
         raise RuntimeError("ไม่พบ pick_path.ps1 กรุณาแตกไฟล์ ZIP รุ่นใหม่ให้ครบก่อน")
-    initial = str(PREFS.get(kind) or "")
+    initial = str(PREFS.get("source", "") if kind == "vocal" else PREFS.get(kind) or "")
     args = [
         "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
         "-STA", "-File", str(picker), "-Kind", kind,
@@ -1389,9 +1455,14 @@ def preview_inspect(song_id, choice):
 
 
 def available_vocal_sources(search="", offset=0, limit=40):
-    """Return indexed audio only, never instrumental MIDI/KAR/NCN rows."""
-    matches = [row for row in visible_files(search)
-               if Path(row["path"]).suffix.lower() in EXT_AUDIO]
+    """Only show songs imported to the independent AI Lyrics workspace."""
+    with LOCK:
+        matches = list(AI_IMPORTED.values())
+    query = str(search or "").casefold()
+    if query:
+        matches = [row for row in matches if query in
+                   (str(row["title"]) + " " + str(row["artist"]) + " " +
+                    str(row["code"])).casefold()]
     page = [{**row, **preview_song_identity(row)}
             for row in matches[offset:offset + limit]]
     return {"rows": page, "total": len(matches)}
@@ -1468,67 +1539,6 @@ def preview_lyrics(song_id):
     return {"id": song_id, **preview_song_identity(row), **_preview_lyrics_row(row)}
 
 
-def save_verified_lyrics(song_id, raw_lrc):
-    """Store manually reviewed LRC in PC AppData and export one local file.
-
-    Never publish an AI transcription merely because Whisper produced it.
-    Original audio, source companion files and existing exports remain intact.
-    """
-    if type(song_id) is not int or not isinstance(raw_lrc, str):
-        raise ValueError("รายการเนื้อร้องสำหรับบันทึกไม่ถูกต้อง")
-    if len(raw_lrc) > 100_000:
-        raise ValueError("เนื้อร้องยาวเกินขนาดที่อนุญาต")
-    with LOCK:
-        row = dict(FILE_BY_ID.get(song_id) or {})
-    if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
-        raise ValueError("เลือกได้เฉพาะเพลงที่มีไฟล์เสียงจริง")
-    source = Path(row["path"])
-    if not source.is_file() or source.is_symlink():
-        raise ValueError("ไม่พบไฟล์เสียงต้นฉบับ")
-    export = _song_export_module()
-    doc = export.lrc_to_json(raw_lrc, str(row["code"]))
-    if not doc.get("lines"):
-        raise ValueError("ไม่มีบรรทัดเนื้อร้องแบบ LRC ที่มีเวลา เช่น [00:12.50]เนื้อร้อง")
-    if any(len(str(line.get("text", ""))) > 1000 for line in doc["lines"]):
-        raise ValueError("มีบรรทัดเนื้อร้องยาวผิดปกติ กรุณาตรวจแก้ก่อนบันทึก")
-    root = Path(PREFS.get("workspace") or "").expanduser()
-    if not PREFS.get("workspace") or not root.is_dir() or root.is_symlink():
-        raise ValueError("โปรดกำหนดโฟลเดอร์ผลลัพธ์ในเมนูสร้างเพลงใหม่ก่อนบันทึก LRC")
-    folder = root / "lyrics-exports"
-    folder.mkdir(parents=True, exist_ok=True)
-    if folder.is_symlink():
-        raise ValueError("โฟลเดอร์เนื้อร้องที่ส่งออกไม่ปลอดภัย")
-    label = export.safe_filename(str(row.get("code") or source.stem))
-    # Never silently overwrite earlier edits; choose a new file name on each export.
-    identity = hashlib.sha256(str(source.resolve()).encode("utf-8")).hexdigest()[:8]
-    written = None
-    for count in range(1, 1001):
-        suffix = "" if count == 1 else f"-{count}"
-        target = folder / f"{label}-{identity}{suffix}.lrc"
-        try:
-            with target.open("x", encoding="utf-8") as stream:
-                stream.write(raw_lrc.replace("\\r\\n", "\\n").replace("\\r", "\\n"))
-                stream.flush()
-                os.fsync(stream.fileno())
-            written = target
-            break
-        except FileExistsError:
-            continue
-    if written is None:
-        raise RuntimeError("มีไฟล์ LRC รุ่นก่อนซ้ำมากเกินไป ไม่สามารถส่งออก")
-    try:
-        with LOCK:
-            note = NOTES.setdefault(row["path"], {})
-            note["lyrics"] = raw_lrc
-            save_json(NOTES_FILE, NOTES)
-    except Exception:
-        written.unlink(missing_ok=True)
-        raise
-    return {"ok": True, "songId": song_id, "path": str(written),
-            "lines": len(doc["lines"]), "status": "manually-reviewed",
-            "message": "บันทึก LRC ที่ตรวจแก้แล้วเรียบร้อย โดยไม่เขียนทับต้นฉบับ"}
-
-
 def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8, source_choice="auto"):
     """Issue one-use ticket for streamed preview; no output audio files."""
     if type(song_id) is not int:
@@ -1537,7 +1547,7 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8, source_cho
         raise ValueError("มีงานสร้างเพลงกำลังทำงานอยู่ กรุณารอให้เสร็จก่อน")
     with LOCK:
         row = FILE_BY_ID.get(song_id)
-        catalog = list(FILES)
+        catalog = list(FILES) + list(AI_IMPORTED.values())
     if row is None:
         raise ValueError("ไม่พบเพลงที่เลือกในรายการที่สแกน")
     spec = importlib.util.spec_from_file_location("xstage_live_preview", ROOT / "live_preview.py")
@@ -1788,21 +1798,6 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as exc:
                     raise ValueError("กรุณาเลือกเพลงเสียงร้อง") from exc
                 self._json(ai_lyrics_draft(song_id))
-            elif path == "/api/ai-lyrics-draft":
-                try:
-                    song_id = int(query.get("id", [""])[0])
-                except ValueError as exc:
-                    raise ValueError("กรุณาเลือกเพลงสำหรับสร้างเนื้อร้อง") from exc
-                with LOCK:
-                    row = dict(FILE_BY_ID.get(song_id) or {})
-                if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
-                    raise ValueError("เลือกได้เฉพาะเพลงเสียงจริง MP3/M4A/WAV และไฟล์เสียงที่รองรับ")
-                draft = AI_LYRICS.load_draft(DATA, Path(row["path"]))
-                saved = NOTES.get(row["path"], {}).get("lyrics", "")
-                self._json({"id": song_id, **preview_song_identity(row),
-                            "aiAvailable": AI_LYRICS.available(RUNTIME),
-                            "draft": draft, "savedLrc": saved,
-                            "status": "saved" if saved else "draft" if draft else "not-started"})
             elif path == "/api/preview-sources":
                 try:
                     song_id = int(query.get("id", [""])[0])
@@ -1880,13 +1875,13 @@ class Handler(BaseHTTPRequestHandler):
                 save_json(PREFS_FILE, PREFS)
                 self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
                             "google": GOOGLE.status()})
+            elif path == "/api/ai-import":
+                self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
-                if kind not in ("source", "workspace", "download", "soundfont", "oauth"):
+                if kind not in ("source", "workspace", "download", "soundfont", "oauth", "vocal"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
-            elif path == "/api/lyrics/save-reviewed":
-                self._json(save_verified_lyrics(payload.get("id"), payload.get("lrc")))
             elif path == "/api/live-preview":
                 self._json(prepare_live_preview(
                     payload.get("id"), payload.get("music_volume", .8),
