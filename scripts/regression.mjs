@@ -117,6 +117,8 @@ assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open 
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
 assert.ok(app.includes(`./assets/vendor/qrcode.min.js?v=${version.build}`),'Android login must load the same-origin QR renderer');
 assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
+assert.ok(app.includes('async function boundedPlaybackTask(')&&app.includes('publishPlaybackStatus(\'blocked\''),'Android TV must show actionable playback failure instead of leaving a song on preload');
+assert.ok(host.includes("type:'playback-status'")&&remote.includes("data.type==='playback-status'"),'mobile remote must receive real playback outcome from TV');
 assert.ok(app.includes('function armAndroidTvLoginWatchdog(){')&&app.includes('function clearAndroidTvLoginWatchdog(){'),'Google QR login watchdog MUST be implemented, not just called');
 assert.ok(app.includes('androidTvLoginInProgress')&&app.includes('androidTvLoginCancelled'),'Google login cancellation and restoration must not race into duplicate QR requests');
 assert.ok(app.includes("#xstage-tv-quick-login"),'TV quick menu must allow re-login after cancellation');
