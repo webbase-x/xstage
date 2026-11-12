@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.1 Build 301
+# X-Stage Song Studio PC Ready v0.3.2 Build 302
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,12 +6,13 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.1-build301.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
-4. The launcher checks that the bundled Python, FFmpeg, FluidSynth and SoundFont are intact, using SHA-256 checksums, without downloading anything.
-5. The local engine opens the PC app interface in Edge app-style mode (or in your default browser if Edge isn't present). Work with files on this computer.
-6. You may change input/output folders. The chosen paths are remembered inside `data/preferences.json`.
+4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
+5. The launcher checks that the bundled Python, FFmpeg, FluidSynth and SoundFont are intact, using SHA-256 checksums, without downloading anything.
+6. The local engine opens the PC app interface in Edge app-style mode (or in your default browser if Edge isn't present). Work with files on this computer.
+7. You may change input/output folders. The chosen paths are remembered inside `data/preferences.json`.
 
 ### Included components
 
@@ -49,7 +50,7 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.1-build301`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.2-build302`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
