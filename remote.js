@@ -317,8 +317,17 @@
       if(Number.isSafeInteger(data.requestId))releaseRequest(data.requestId);
       else resetButtons();
       clearTimeout(searchTimer);querySequence++;search.value='';results.replaceChildren();
-      const outcome=data.result==='playing'?'กำลังเริ่มเล่น':'เพิ่มเข้าคิวแล้ว';
+      const outcome=data.result==='starting'||data.result==='playing'?'กำลังเตรียมเปิดบนเวที (รอผลเล่นจริง)':'เพิ่มท้ายคิวแล้ว';
       receipt('รับคำขอเพลง '+String(data.title||'')+' แล้ว · '+outcome);send({type:'refresh'});
+    }else if(data.type==='playback-status'){
+      const title=String(data.title||'เพลงที่เลือก');
+      const message=String(data.message||'');
+      if(data.state==='loading')report('จอ TV กำลังโหลดเพลง '+title+' จาก Drive…','connected');
+      else if(data.state==='playing')report('▶ เริ่มเล่นบนเวทีแล้ว · '+title,'connected');
+      else if(data.state==='blocked'||data.state==='error'){
+        receipt('เล่นเพลง '+title+' ไม่สำเร็จบนจอ TV · '+(message||'โปรดตรวจสอบระบบเสียงและสิทธิ์ไฟล์'));
+        report('ไม่สามารถเล่นเพลงบนจอ TV · '+(message||'กรุณาตรวจสอบระบบเสียง'),'error');
+      }
     }else if(data.type==='request-error'){
       if(Number.isSafeInteger(data.requestId))releaseRequest(data.requestId);
       else resetButtons();
