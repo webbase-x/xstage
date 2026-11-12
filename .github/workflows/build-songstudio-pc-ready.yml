@@ -50,7 +50,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Picker script self-test failed" }
           if ($reply -notmatch '^PICKER_SELFTEST:([A-Za-z0-9+/=]+)$') { throw "Picker protocol invalid: $reply" }
           $actual = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Matches[1]))
-          if ($actual -ne 'C:\ทดสอบ\เพลง') { throw "Thai Unicode picker path was corrupted" }
+          $expected = 'C:\' + (-join @([char]0x0E17,[char]0x0E14,[char]0x0E2A,[char]0x0E2D,[char]0x0E1A,[char]0x005C,[char]0x0E40,[char]0x0E1E,[char]0x0E25,[char]0x0E07))
+          if ($actual -ne $expected) { throw "Thai Unicode picker path was corrupted" }
           Write-Host "PASS: Windows picker script runs and returns Unicode paths safely."
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
