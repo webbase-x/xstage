@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build302
+  group: xstage-songstudio-ready-build303
   cancel-in-progress: false
 
 jobs:
@@ -27,6 +27,11 @@ jobs:
     timeout-minutes: 28
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: 'songstudio-pc/ai-requirements.txt'
       - name: Build complete bundled Windows runtime and ZIP
         shell: powershell
         run: |
@@ -35,7 +40,7 @@ jobs:
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.3-build303"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -43,7 +48,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.3-build303"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -56,7 +61,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.3-build303.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -66,7 +71,9 @@ jobs:
           $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
           try {
             $names = @($archive.Entries | ForEach-Object { $_.FullName })
-            foreach ($name in @("Start-Song-Studio.cmd", "pick_path.ps1",
+            foreach ($name in @("Start-Song-Studio.cmd", "pick_path.ps1", "ai_separate.py", "ai-model.lock.json",
+                                ".runtime/models/htdemucs_fp16weights.onnx",
+                                ".runtime/ai-site/numpy/__init__.py", ".runtime/ai-site/onnxruntime/__init__.py",
                                 ".engine-ready-manifest.json", "engine.py",
                                 ".runtime/python/python.exe", ".runtime/tools/ffmpeg.exe",
                                 ".runtime/fluidsynth/bin/fluidsynth.exe", ".runtime/soundfonts/GeneralUser-GS.sf2")) {
@@ -79,10 +86,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.2-build302
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.3-build303
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.3-build303.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.3-build303.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -91,22 +98,24 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.2-build302"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.2-build302.zip"
+          $tag = "song-studio-pc-ready-v0.3.3-build303"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.3-build303.zip"
           $sha = "$zip.sha256"
           $notes = @'
-          Windows 10/11 x64 portable Source Engine edition. Bundled Python,
-          FFmpeg, FluidSynth, and GeneralUser GS SoundFont. No runtime downloads.
-          Fix: foreground Windows folder and SoundFont picker with Thai paths.
+          Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
+          GeneralUser SoundFont, NumPy, ONNX Runtime CPU, and the 166 MB
+          verified HTDemucs ONNX model. AI Separation creates local karaoke
+          instrumental and vocals files. No installation or model download
+          on user's PC.
           Extract full ZIP and run Start-Song-Studio.cmd.
 
-          Limitations: original Build 205 engine, AI vocal separation, NCN and
-          private Drive sync are NOT included as working features yet.
+          Limitations: not the original Build205 engine; NCN conversion and
+          private Google Drive sync are not supported in the Source Preview.
           '@
           gh release view $tag --repo "$env:GITHUB_REPOSITORY" 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" --clobber --repo "$env:GITHUB_REPOSITORY"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.2 Build 302" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.3 Build 303" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
