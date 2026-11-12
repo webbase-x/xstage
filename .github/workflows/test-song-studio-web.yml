@@ -4,6 +4,7 @@ on:
     paths:
       - "studio/**"
       - "scripts/song-studio-web-test.mjs"
+      - "scripts/song-studio-browser-e2e.mjs"
       - ".github/workflows/test-song-studio-web.yml"
   pull_request:
     paths:
@@ -26,3 +27,18 @@ jobs:
           node --check studio/web.js
       - name: Test local file workflows and PC pairing routing
         run: node scripts/song-studio-web-test.mjs
+
+  chromium-conversion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install browser smoke-test dependencies
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Convert local WAV to M4A inside Chromium
+        run: node scripts/song-studio-browser-e2e.mjs
