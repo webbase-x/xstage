@@ -738,25 +738,82 @@ def execute_job(action, options, started):
             JOB["elapsed"] = time.monotonic() - started
             JOB["updated"] = time.monotonic()
 
+def validate_build_request(data):
+    """Reject impossible builds BEFORE saying that the PC Engine started."""
+    ids = data.get("ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 100_000:
+        raise ValueError("กรุณาเลือกเพลงอย่างน้อย 1 เพลงก่อนสั่งสร้าง")
+    if not all(type(item) is int for item in ids):
+        raise ValueError("รหัสรายการเพลงไม่ถูกต้อง กรุณาสแกนและเลือกรายการใหม่")
+    if not isinstance(data.get("audio_only", False), bool):
+        raise ValueError("ประเภทคำสั่งสร้างเพลงไม่ถูกต้อง")
+    with LOCK:
+        rows = [FILE_BY_ID.get(item) for item in ids]
+    if any(row is None for row in rows):
+        raise ValueError("รายการเพลงบางรายการไม่อยู่ในฐานปัจจุบัน กรุณาสแกนและเลือกเพลงใหม่")
+    unsupported = [row["code"] for row in rows if Path(row["path"]).suffix.lower() in EXT_UNSUPPORTED]
+    if len(unsupported) == len(rows):
+        raise ValueError("รายการที่เลือกเป็นไฟล์ NCN ทั้งหมด ซึ่ง Engine รุ่นนี้ยังสร้าง M4A ไม่ได้")
+    mode = PREFS.get("mode", "original")
+    if mode not in ("original", "instrumental"):
+        raise ValueError("ประเภทเสียงที่เลือกไม่ถูกต้อง")
+    if mode == "instrumental" and not ai_available():
+        raise ValueError("AI Separation ไม่พร้อม: โมเดลหรือไลบรารีไม่ครบในแพ็กเกจ")
+    if any(Path(row["path"]).suffix.lower() != ".m4a" for row in rows) and not ffmpeg_binary():
+        raise ValueError("ไม่พบ FFmpeg ในแพ็กเกจ จึงยังสร้างเพลงจากรูปแบบนี้ไม่ได้")
+    if any(Path(row["path"]).suffix.lower() in EXT_MIDI for row in rows) and not sf_available():
+        raise ValueError("ยังไม่ได้เลือก SoundFont ที่ใช้งานได้สำหรับเพลง MIDI/KAR")
+    for row in rows[:5]:
+        if not Path(row["path"]).is_file():
+            raise ValueError("ไม่พบไฟล์ต้นฉบับ: " + str(row["path"]))
+    workspace = PREFS.get("workspace", "").strip()
+    if not workspace:
+        raise ValueError("กรุณาเลือกโฟลเดอร์เก็บเพลงก่อนสร้าง")
+    output = Path(workspace).expanduser()
+    try:
+        output.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryFile(dir=output):
+            pass
+    except OSError as exc:
+        raise ValueError("โฟลเดอร์เก็บเพลงไม่พร้อมหรือไม่มีสิทธิ์เขียน: " + str(exc)) from exc
+    return {"total": len(rows), "unsupported": len(unsupported), "mode": mode}
+
+
 def start_job(data):
     global JOB
     action = str(data.get("action", ""))
     with LOCK:
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
+    validation = validate_build_request(data) if action == "build" else {}
+    with LOCK:
+        if JOB["state"] == "running":
+            raise ValueError("มีงานกำลังดำเนินการอยู่")
         CANCEL.clear()
+        now = time.monotonic()
         JOB = {
             "id": secrets.token_hex(8), "kind": action, "state": "running",
-            "stage": "เตรียมงาน", "detail": "กำลังเริ่มต้น",
-            "completed": 0, "total": 0, "elapsed": 0, "eta": None,
-            "idleFor": 0, "logs": [], "result": {},
+            "stage": "PC Engine รับคำสั่งแล้ว",
+            "detail": ("รอเริ่มสร้าง " + str(validation["total"]) + " เพลง" if validation
+                       else "กำลังเริ่มต้น"),
+            "completed": 0, "total": validation.get("total", 0),
+            "elapsed": 0, "eta": None,
+            "idleFor": 0, "logs": ["รับคำสั่งสำเร็จ · กำลังเตรียมการประมวลผล"], "result": {},
             "created": 0, "skipped": 0, "errors": 0, "m4aCount": 0, "lyricsCount": 0,
-            "started": time.monotonic(), "updated": time.monotonic()
+            "started": now, "updated": now
         }
-        result = JOB["id"]
-    thread = threading.Thread(target=execute_job, args=(action, data, time.monotonic()), daemon=True)
-    thread.start()
-    return {"id": result}
+        job_id = JOB["id"]
+    try:
+        thread = threading.Thread(target=execute_job,
+                                  args=(action, data, now), daemon=True,
+                                  name="xstage-studio-" + action)
+        thread.start()
+    except Exception as exc:
+        with LOCK:
+            JOB["state"] = "error"
+            JOB["detail"] = "เริ่ม Thread สร้างเพลงไม่ได้: " + str(exc)
+        raise RuntimeError("PC Engine เริ่มงานไม่ได้: " + str(exc)) from exc
+    return {"id": job_id, **validation}
 
 def open_picker(kind):
     """Show an actual Windows foreground picker; preserve Unicode/Thai paths.
