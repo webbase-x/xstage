@@ -689,7 +689,8 @@ def execute_job(action, options, started):
             update("กำลังสแกนไฟล์เพลง")
             amount = scan_source()
             log(f"ตรวจพบ {amount:,} เพลง")
-            result = {"message": f"สแกนเสร็จแล้ว {amount:,} เพลง"}
+            result = {"message": f"สแกนเสร็จแล้ว {amount:,} เพลง · ยังไม่ได้สร้างไฟล์ M4A/Lyrics",
+                      "songs": amount}
         elif action in ("build", "preview"):
             mode = PREFS.get("mode", "original")
             if mode not in ("original", "instrumental"):
