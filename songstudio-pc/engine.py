@@ -107,10 +107,24 @@ def _module(filename, name):
     return module
 
 def google_client_path():
-    """Owner-supplied client is bundled for all users; personal override wins."""
+    """Use a complete Desktop OAuth pair; migrate around broken ID-only clients.
+
+    v0.3.10–312 imported a Desktop client then stripped client_secret.
+    When a new release bundles the SAME client's missing secret, prefer
+    bundled credentials without deleting the user's private overrides.
+    """
     override = DATA / "oauth-client.json"
     bundled = ROOT / "config" / "google-oauth-client.json"
     if override.is_file():
+        if bundled.is_file():
+            try:
+                own = json.loads(override.read_text(encoding="utf-8-sig")).get("installed", {})
+                built = json.loads(bundled.read_text(encoding="utf-8-sig")).get("installed", {})
+                if (not own.get("client_secret") and built.get("client_secret")
+                        and own.get("client_id") == built.get("client_id")):
+                    return str(bundled)
+            except (OSError, ValueError, AttributeError, TypeError):
+                pass
         return str(override)
     if bundled.is_file():
         return str(bundled)
