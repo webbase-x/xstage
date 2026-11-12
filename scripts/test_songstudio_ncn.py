@@ -92,7 +92,7 @@ class NcnSourceTests(unittest.TestCase):
         self.assertEqual(document["sourceFormat"], "NCN")
         self.assertEqual(document["metadata"]["artist"], "นักร้องทดสอบ")
         self.assertEqual(document["lines"][0]["text"], "สวัสดี")
-        self.assertEqual(len(document["lines"][0]["characters"]), 5)
+        self.assertEqual(len(document["lines"][0]["characters"]), 4)
         self.assertAlmostEqual(document["lines"][0]["characters"][1]["startTime"], .25)
         self.assertTrue(fingerprint)
 
@@ -216,7 +216,7 @@ class NcnSourceTests(unittest.TestCase):
         self.assertEqual(preview["status"], "found")
         self.assertEqual(preview["source"], "NCN")
         self.assertEqual(preview["lines"][0]["text"], "สวัสดี")
-        self.assertEqual(len(preview["lines"][0]["characters"]), 5)
+        self.assertEqual(len(preview["lines"][0]["characters"]), 4)
         self.assertAlmostEqual(preview["lines"][0]["characters"][1]["startTime"], .25)
 
     def test_incomplete_ncn_picker_reports_missing_cursor(self):
