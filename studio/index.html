@@ -127,7 +127,12 @@
               <div><span>ประเภทเสียง</span><strong id="review-mode">—</strong></div>
             </div>
             <div class="builder-actions"><button id="build-audio-button" class="button ghost" type="button">สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">▶ สร้าง M4A + เนื้อร้องจากเพลงที่เลือก</button></div>
-            <div class="hint">ระบบจะแสดงสถานะ ความคืบหน้า และรายละเอียดข้อผิดพลาดที่แผงสถานะด้านล่าง · สามารถกลับไปปรับเสียงก่อนเริ่มสร้าง</div>
+            <div id="create-build-feedback" class="create-build-feedback" data-state="idle" role="status" aria-live="polite">
+              <span id="create-build-feedback-icon" class="create-build-feedback-icon" aria-hidden="true">♫</span>
+              <div class="create-build-feedback-body"><strong id="create-build-feedback-title">พร้อมสร้างเพลง</strong><p id="create-build-feedback-detail">เลือกเพลงแล้วกดสร้าง ระบบจะแสดงผลรับคำสั่งและข้อผิดพลาดในหน้านี้ทันที</p></div>
+              <button id="create-build-show-log" class="button ghost" type="button">ดูรายละเอียดงาน</button>
+            </div>
+            <div class="hint">ยืนยันแล้วระบบจะแสดงเลขงานและสถานะที่นี่ทันที · ไฟล์ที่เคยสร้างสำเร็จจะถูกข้ามเพื่อป้องกันซ้ำ · ข้อผิดพลาดแสดงสาเหตุโดยไม่ปิดอัตโนมัติ</div>
           </article>
 
           <div class="create-step-footer">
