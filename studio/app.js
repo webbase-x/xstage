@@ -179,7 +179,7 @@
     if (createStep === 3) {
       if (!previewSongId && selected.size === 1) previewSongId = [...selected][0];
       void searchPreviewSongs();
-      if (previewSongId) void loadPreviewLyrics(previewSongId);
+      if (previewSongId) { void loadPreviewIdentity(previewSongId); void loadPreviewLyrics(previewSongId); }
     }
     updateCreateWizard();
     document.querySelector('.create-assistant')?.scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -436,6 +436,26 @@
       panel.append(line);
     }
   }
+  function showPreviewIdentity(song) {
+    if (!song) return;
+    const title = String(song.title || song.code || 'ไม่ระบุชื่อเพลง').trim();
+    const artist = String(song.artist || '').trim();
+    $('preview-selected-title').textContent = title;
+    $('preview-selected-artist').textContent = 'นักร้อง / ศิลปิน: ' + (artist || 'ไม่มีข้อมูลผู้ร้องในต้นฉบับ');
+    $('preview-label').textContent = 'เพลงที่เลือก: ' + title +
+      ' · ' + (artist || 'ไม่ระบุนักร้อง');
+  }
+  async function loadPreviewIdentity(songId, fallback = null) {
+    if (fallback) showPreviewIdentity(fallback);
+    if (!songId) return;
+    try {
+      const song = await api('/api/song/' + encodeURIComponent(songId));
+      if (songId === previewSongId) showPreviewIdentity(song);
+    } catch (error) {
+      if (songId === previewSongId && !fallback)
+        $('preview-label').textContent = 'อ่านชื่อเพลงและนักร้องไม่สำเร็จ: ' + error.message;
+    }
+  }
   async function loadPreviewLyrics(songId) {
     const seq = ++previewLyricsSeq;
     previewLyrics = null;
@@ -460,6 +480,7 @@
       const result = await api('/api/preview-lyrics?id=' + encodeURIComponent(songId));
       if (seq !== previewLyricsSeq || songId !== previewSongId) return;
       previewLyrics = result;
+      showPreviewIdentity(result);
       $('preview-lyrics-source').textContent = result.source || 'ไม่พบแหล่งข้อมูล';
       $('preview-lyrics-source').dataset.state = result.status || 'missing';
       $('preview-lyrics-status').textContent = result.message ||
@@ -535,7 +556,7 @@
     loading.textContent = 'กำลังค้นเพลง…';
     list.append(loading);
     try {
-      const result = await api('/api/songs?offset=0&limit=30&search=' + encodeURIComponent(q));
+      const result = await api('/api/songs?offset=0&limit=30&preview_identity=1&search=' + encodeURIComponent(q));
       if (seq !== previewSearchSeq) return;
       previewSongRows = result.rows || [];
       list.replaceChildren();
@@ -597,13 +618,11 @@
         music_volume:Number($('preview-music-volume').value) / 100,
         synth_volume:Number($('preview-sf-volume').value) / 100
       });
-      $('preview-selected-title').textContent = response.title || 'เพลงที่เลือก';
-      $('preview-selected-artist').textContent = 'นักร้อง: ' +
-        (response.artist?.trim() || previewSongRows.find(row => row.id === songId)?.artist?.trim() || 'ไม่ระบุนักร้อง');
+      showPreviewIdentity(response);
       $('create-preview-hint').textContent = response.message ||
         (response.mixed ? 'เล่นเสียงดนตรีและ SoundFont พร้อมกัน' : 'เล่นแบบสด');
-      $('preview-label').textContent = 'กำลังเล่น ' + (response.title || 'เพลงที่เลือก') +
-        ' · ' + (response.artist?.trim() || previewSongRows.find(row => row.id === songId)?.artist?.trim() || 'ไม่ระบุนักร้อง');
+      $('preview-label').textContent = 'กำลังเล่น ' + (response.title || response.code || 'เพลงที่เลือก') +
+        ' · ' + (response.artist?.trim() || 'ไม่ระบุนักร้อง');
       liveStreamId = response.stream_id || '';
       if (response.original_is_midi) $('create-preview-hint').textContent =
         'ดนตรีต้นฉบับ MIDI ใช้ SoundFont มาตรฐาน · เลื่อนเสียง SoundFont ที่เลือกเป็น 0% ก็ยังได้ยินเพลงเดิม';
@@ -939,9 +958,8 @@
     const song = previewSongRows.find(item => item.id === chosen);
     if (!song) return;
     previewSongId = chosen;
-    $('preview-selected-title').textContent = song.title || 'ไม่ระบุชื่อเพลง';
-    $('preview-selected-artist').textContent = 'นักร้อง: ' +
-      (song.artist?.trim() || 'ไม่ระบุนักร้อง');
+    showPreviewIdentity(song);
+    void loadPreviewIdentity(chosen, song);
     for (const button of $('preview-search-results').querySelectorAll('[data-preview-id]')) {
       button.setAttribute('aria-selected', String(Number(button.dataset.previewId) === chosen));
       button.classList.toggle('active', Number(button.dataset.previewId) === chosen);
