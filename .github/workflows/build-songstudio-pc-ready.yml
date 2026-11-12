@@ -105,13 +105,6 @@ jobs:
           } else {
             Write-Warning "Google OAuth not preconfigured: core ZIP can be built, but users must import their Desktop OAuth Client JSON once. Never claim automatic Google Login."
           }
-      - name: Preflight bundled Google Desktop OAuth
-        shell: powershell
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) -or
-              [string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)) {
-            throw "Cannot publish all-functions-ready ZIP: Google Desktop OAuth Client ID and Secret must both be configured in repo Actions"
-          }
       - name: Browser end-to-end test before creating ZIP
         shell: powershell
         run: |
@@ -209,6 +202,17 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
+      # Core audio/lyrics/Web/Windows tests and an artifact are generated
+      # even when the repository owner has not supplied Desktop OAuth yet.
+      # The publicly advertised all-functions Ready release remains blocked
+      # until users can Google Login with the app's bundled Desktop client.
+      - name: Gate full-featured public release on Desktop OAuth
+        shell: powershell
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) -or
+              [string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)) {
+            throw "Cannot publish all-functions-ready ZIP: Google Desktop OAuth Client ID and Secret must both be configured in repo Actions"
+          }
       - name: Publish GitHub release after tests pass
         shell: pwsh
         env:
