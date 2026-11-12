@@ -28,7 +28,7 @@
   }
   function rememberWrite(key,value){try{localStorage.setItem(key,JSON.stringify({...value,at:Date.now()}));}catch{}}
   function rememberClear(key){try{localStorage.removeItem(key);}catch{}}
-  const rememberedOwner=rememberRead(OWNER_PREF_KEY);
+  let rememberedOwner=rememberRead(OWNER_PREF_KEY);
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
   let hostId=params.get('p'),secret=params.get('k');
   function validPair(p,k){return /^[a-z0-9_-]+$/i.test(String(p||''))&&/^[a-f0-9]{48}$/i.test(String(k||''));}
@@ -39,7 +39,7 @@
     if(pair&&validPair(pair.hostId,pair.secret)){
       hostId=pair.hostId;secret=pair.secret;
       const savedFragment=new URLSearchParams({p:hostId,k:secret});
-      history.replaceState(null,'',location.pathname+location.search+'#'+savedFragment.toString());
+      window.history.replaceState(null,'',location.pathname+location.search+'#'+savedFragment.toString());
     }
   }
   let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0;
@@ -213,6 +213,7 @@
     ownerAccessToken='';
   }
   function clearRememberedOwner(){
+    rememberedOwner=null;
     rememberClear(OWNER_PREF_KEY);
     rememberClear(OWNER_PAIR_KEY);
   }
@@ -324,6 +325,7 @@
       if(data.role==='owner'){
         // Save only a validated account hint and the ephemeral QR pairing,
         // never an OAuth token or unverified Owner privilege.
+        rememberedOwner={email:String(data.email||''),at:Date.now()};
         rememberWrite(OWNER_PREF_KEY,{email:String(data.email||'')});
         if(validPair(hostId,secret))rememberWrite(OWNER_PAIR_KEY,{hostId,secret});
         setRole('owner',String(data.email||''));
