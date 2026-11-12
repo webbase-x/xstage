@@ -186,7 +186,7 @@ assert.ok(host.includes("if(nativeTvMode)setTimeout(()=>showQR(true),0)"),'TV mu
 
 assert.ok(app.includes("event.key==='Enter'||event.key==='Accept'"),'hosted UI must handle TV Enter/Accept as a fallback for older APKs');
 assert.ok(app.includes('window.XStageAndroidUpdateAvailable'),'hosted UI must receive Android TV update notifications');
-assert.ok(app.includes("state.nativeUpdateAvailable={version:String(version||''),build:Number(build)||0}")&&app.includes('Show update notice on the TV itself as well as the Owner remote.'),'native TV updates must notify on both TV display and Owner remote');
+assert.ok(app.includes('state.nativeUpdateAvailable=next;')&&app.includes("window.dispatchEvent(new CustomEvent('xstage:native-update'"),'native TV updates must notify on both TV display and Owner remote');
 assert.ok(app.includes('if(androidTvNativeBridgeReady())return null;'),'native Android must never mistake a web-only update for an APK update');
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
 assert.ok(app.includes('WEB_AUTO_UPDATE_GUARD'),'web must guard against stale-cache automatic reload loops');
