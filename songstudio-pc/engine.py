@@ -685,10 +685,7 @@ def execute_job(action, options, started):
             result = {"message": "ยังไม่มีตัวอัปเดตอัตโนมัติ กรุณาตรวจสอบรุ่น PC Ready ที่ GitHub Releases"}
             update("ตรวจเวอร์ชันเสร็จแล้ว", 1)
         else:
-            raise RuntimeError(
-                 "ฟังก์ชัน Google Drive ยังไม่มีในชุด PC Source Launcher นี้ "
-                "และไม่ได้อ้างว่าเทียบเท่า v0.2.5 Build 205"
-            )
+            raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
             JOB.update(state="success", result=result, stage="เสร็จสิ้น",
                        detail=result.get("message", "เสร็จแล้ว"))
@@ -991,7 +988,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"Python Runtime": True, "FFmpeg": bool(ffmpeg_binary()),
                     "SoundFont": sf_available(), "FluidSynth": bool(fluidsynth_binary()),
                     "Local file mode": True,
-                    "Google Drive connector": bool(PREFS.get("oauth")) or GOOGLE.status()["connected"],
+                    "Google Drive connector": GOOGLE.status()["connected"],
                     "AI separation": ai_available()})
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
