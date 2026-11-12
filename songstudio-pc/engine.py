@@ -605,7 +605,7 @@ def ensure_midi_wav(path):
         raise RuntimeError("ไม่พบ FluidSynth ในโฟลเดอร์โปรแกรม กรุณาใช้ Ready ZIP ที่รวมไลบรารีครบ")
     tmp = PREVIEW_FOLDER / (secrets.token_hex(10) + ".wav")
     # FluidSynth CLI expects flags before positional SoundFont/MIDI arguments.
-    params = [fluid, "-ni", "-F", str(tmp), "-r", "44100", PREFS["soundfont"], str(path)]
+    params = [fluid, "-ni", "-F", str(tmp), "-r", "48000", PREFS["soundfont"], str(path)]
     run_process(params)
     return tmp
 
@@ -621,10 +621,46 @@ def convert(row, target, preview=False):
                "-i", str(inp)]
         if preview:
             cmd += ["-t", "60"]
-        cmd += ["-vn", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(target)]
+        # Karaoke PC audio export uses 48 kHz / AAC-LC 256 kbps for MIDI.
+        # Keep existing 192 kbps for ordinary audio transcodes to avoid
+        # surprising changes in non-MIDI workspaces.
+        cmd += ["-vn", "-c:a", "aac", "-profile:a", "aac_low"]
+        if midi:
+            cmd += ["-ar", "48000", "-b:a", "256k"]
+        else:
+            cmd += ["-b:a", "192k"]
+        cmd += ["-movflags", "+faststart", str(target)]
         run_process(cmd)
         if not target.is_file() or target.stat().st_size < 1000:
             raise RuntimeError("ไฟล์เสียงผลลัพธ์ไม่สมบูรณ์")
+        if midi:
+            ffmpeg = Path(ffmpeg_binary())
+            probe = ffmpeg.with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
+            if not probe.is_file():
+                found = shutil.which("ffprobe")
+                probe = Path(found) if found else None
+            if probe is None and READY_BUNDLE:
+                raise RuntimeError("แพ็กเกจไม่มี ffprobe สำหรับยืนยัน AAC ของ MIDI")
+            if probe is not None:
+                kw = {}
+                if os.name == "nt":
+                    kw["creationflags"] = subprocess.CREATE_NO_WINDOW
+                checked = subprocess.run([
+                    str(probe), "-v", "error", "-select_streams", "a:0",
+                    "-show_entries", "stream=codec_name,sample_rate",
+                    "-of", "json", str(target)],
+                    capture_output=True, text=True, timeout=30, **kw)
+                if checked.returncode:
+                    raise RuntimeError("ตรวจสอบคุณภาพ M4A ไม่ผ่าน: " + checked.stderr[-500:])
+                try:
+                    streams = json.loads(checked.stdout).get("streams") or []
+                    codec_ok = bool(streams and
+                                    streams[0].get("codec_name") == "aac" and
+                                    int(streams[0].get("sample_rate", 0)) == 48000)
+                except (ValueError, TypeError, AttributeError):
+                    codec_ok = False
+                if not codec_ok:
+                    raise RuntimeError("M4A ที่สร้างจาก MIDI ไม่ใช่ AAC 48 kHz ตามสเปก")
     finally:
         if temp_wav:
             temp_wav.unlink(missing_ok=True)
