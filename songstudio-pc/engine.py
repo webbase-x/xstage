@@ -53,6 +53,7 @@ FILES = []
 FILE_BY_ID = {}
 PREVIEWS = {}
 LIVE_TICKETS = {}
+LIVE_SESSIONS = {}
 LIVE_LIMIT = threading.BoundedSemaphore(2)
 PREVIEW_FOLDER = Path(tempfile.mkdtemp(prefix="xstage-song-preview-"))
 ALLOWED_ORIGIN = "https://webbase-x.github.io"
@@ -738,21 +739,33 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8):
     except (TypeError, ValueError, OverflowError):
         raise ValueError("ค่าระดับเสียงต้องอยู่ระหว่าง 0 ถึง 100%")
     ticket = secrets.token_urlsafe(30)
+    stream_id = secrets.token_urlsafe(30)
+    selected_font = Path(PREFS["soundfont"]) if midi else None
+    stream = mod.LiveControls(backing, sound, selected_font, PREFS.get("midi_preset", "balanced"))
     with LOCK:
-        # Live preview links expire quickly and are consumed only once.
+        # Keep control session separate from the one-use playback ticket.
+        # Do not mutate a stream after it is stopped or its ticket expires.
         for key, value in list(LIVE_TICKETS.items()):
             if value["expires"] <= time.monotonic():
                 LIVE_TICKETS.pop(key, None)
+        for key, value in list(LIVE_SESSIONS.items()):
+            if value["expires"] <= time.monotonic() and not value["controls"].active:
+                LIVE_SESSIONS.pop(key, None)
+        LIVE_SESSIONS[stream_id] = {
+            "controls": stream, "expires": time.monotonic() + 3600,
+            "midi": bool(midi), "started": False
+        }
         LIVE_TICKETS[ticket] = dict(audio=audio, midi=midi,
-                                    soundfont=Path(PREFS["soundfont"]) if midi else None,
-                                    music_volume=backing, synth_volume=sound,
+                                    soundfont=selected_font, session=stream_id,
                                     expires=time.monotonic() + 90)
     return {
-        "ticket": ticket, "title": row.get("title", ""),
+        "ticket": ticket, "stream_id": stream_id,
+        "title": row.get("title", ""),
         "has_backing": bool(audio), "has_midi": bool(midi),
-        "mixed": bool(audio and midi),
-        "message": ("กำลังเล่นดนตรีกับ SoundFont ผสมกันแบบสตรีมสด" if audio and midi
-                    else "เล่น SoundFont MIDI/KAR แบบสตรีมสด" if midi
+        "original_is_midi": bool(midi and not audio),
+        "mixed": bool(midi),
+        "message": ("กำลังเล่นเสียงต้นฉบับพร้อม SoundFont ที่เลือก" if audio and midi
+                    else "กำลังเล่น MIDI เดิมด้วย SoundFont มาตรฐาน + SoundFont ที่เลือก" if midi
                     else "เล่นเสียงดนตรีต้นฉบับ (ไม่มี MIDI สำหรับ SoundFont)")
     }
 
@@ -849,11 +862,17 @@ class Handler(BaseHTTPRequestHandler):
                         raise RuntimeError("ไม่พบ Live Preview Engine")
                     live = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(live)
+                    session_id = request["session"]
+                    with LOCK:
+                        live_session = LIVE_SESSIONS.get(session_id)
+                        if not live_session:
+                            raise RuntimeError("เซสชันเสียงหมดอายุ")
+                        live_session["started"] = True
+                        controls = live_session["controls"]
                     generator = live.stream_mp3(
                         audio=request["audio"], midi=request["midi"],
                         soundfont=request["soundfont"], ffmpeg=ffmpeg_binary(),
-                        runtime=RUNTIME, music_volume=request["music_volume"],
-                        synth_volume=request["synth_volume"]
+                        runtime=RUNTIME, controls=controls
                     )
                     self.send_response(200)
                     self.send_header("Content-Type", "audio/mpeg")
@@ -881,6 +900,9 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     if generator is not None:
                         generator.close()
+                    with LOCK:
+                        if request:
+                            LIVE_SESSIONS.pop(request.get("session", ""), None)
                     LIVE_LIMIT.release()
                 return
             if path == "/api/preview":
@@ -969,6 +991,31 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(prepare_live_preview(
                     payload.get("id"), payload.get("music_volume", .8),
                     payload.get("synth_volume", .8)))
+            elif path == "/api/live-control":
+                session_id = payload.get("stream_id", "")
+                with LOCK:
+                    active = LIVE_SESSIONS.get(session_id)
+                if not active or active["expires"] < time.monotonic() or active["controls"].cancelled.is_set():
+                    raise ValueError("เสียงทดลองฟังหยุดไปแล้ว กรุณากดเล่นใหม่")
+                changes = {key: payload[key] for key in
+                           ("music_volume", "synth_volume", "soundfont", "preset")
+                           if key in payload}
+                if "soundfont" in changes and not active["midi"]:
+                    # No MIDI to resynthesize; audio-only source is unchanged.
+                    changes.pop("soundfont")
+                values = active["controls"].update(**changes)
+                self._json({"ok": True, "music_volume": values[0],
+                            "synth_volume": values[1], "preset": values[3]})
+            elif path == "/api/live-stop":
+                session_id = payload.get("stream_id", "")
+                with LOCK:
+                    active = LIVE_SESSIONS.pop(session_id, None)
+                    for key, value in list(LIVE_TICKETS.items()):
+                        if value.get("session") == session_id:
+                            LIVE_TICKETS.pop(key, None)
+                if active:
+                    active["controls"].cancelled.set()
+                self._json({"ok": True})
             elif path == "/api/estimate":
                 ids = payload.get("ids", [])
                 if not isinstance(ids, list):
