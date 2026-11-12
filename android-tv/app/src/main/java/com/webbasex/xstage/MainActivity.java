@@ -17,6 +17,8 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.webkit.JavascriptInterface;
 import android.webkit.SafeBrowsingResponse;
 import android.webkit.WebChromeClient;
@@ -34,6 +36,8 @@ public final class MainActivity extends Activity {
     private static final String XSTAGE_PATH_PREFIX = "/xstage";
 
     private WebView webView;
+    private FrameLayout appRoot;
+    private ImageView startupBanner;
     private GoogleDeviceAuth googleAuth;
     private XStageUpdateManager updateManager;
     private boolean webAppReady;
@@ -50,7 +54,21 @@ public final class MainActivity extends Activity {
         webView.setBackgroundColor(Color.rgb(6,19,33));
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-        setContentView(webView);
+        // Native startup splash shows the official logo until the QR login UI
+        // is ready. The hosted stage itself stays locked until Drive access.
+        appRoot = new FrameLayout(this);
+        appRoot.setBackgroundColor(Color.rgb(6,19,33));
+        appRoot.addView(webView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        startupBanner = new ImageView(this);
+        startupBanner.setImageResource(R.drawable.xstage_tv_splash);
+        startupBanner.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        startupBanner.setBackgroundColor(Color.rgb(6,19,33));
+        int padding = Math.round(24f * getResources().getDisplayMetrics().density);
+        startupBanner.setPadding(padding,padding,padding,padding);
+        appRoot.addView(startupBanner, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(appRoot);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -372,6 +390,13 @@ public final class MainActivity extends Activity {
     }
 
     public final class AndroidBridge {
+        @JavascriptInterface
+        public void onLoginScreenReady() {
+            runOnUiThread(() -> {
+                if (startupBanner != null) startupBanner.setVisibility(View.GONE);
+            });
+        }
+
         @JavascriptInterface
         public void requestGoogleLogin() {
             runOnUiThread(() -> googleAuth.startDeviceLogin());
