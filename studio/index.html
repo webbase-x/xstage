@@ -97,9 +97,13 @@
               <div class="sound-preview">
                 <h3>2. ทดลองฟังแบบคาราโอเกะ (ไม่สร้างไฟล์)</h3>
                 <label for="preview-song-search">ค้นหาเพลงที่จะทดลองฟังในหน้านี้</label>
-                <div class="searchbox live-song-search"><span aria-hidden="true">⌕</span><input id="preview-song-search" type="search" placeholder="พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลง" autocomplete="off" aria-controls="preview-search-results" aria-autocomplete="list"></div>
-                <div id="preview-search-results" class="preview-search-results" role="listbox" aria-label="เลือกเพลงทดลองฟัง"><div class="preview-empty">ค้นหาเพลงจากคลังที่สแกนแล้ว</div></div>
-                <div id="preview-selected" class="preview-selected" aria-live="polite">ยังไม่ได้เลือกเพลงทดลองฟัง</div>
+                <div class="searchbox live-song-search"><span aria-hidden="true">⌕</span><input id="preview-song-search" type="search" placeholder="ค้นหาชื่อเพลง ชื่อนักร้อง หรือรหัสเพลง" autocomplete="off" aria-controls="preview-search-results" aria-autocomplete="list"></div>
+                <div class="preview-results-heading" aria-hidden="true"><span>ชื่อเพลง / รหัสเพลง</span><span>นักร้อง / ศิลปิน</span><span>ประเภท</span></div>
+                <div id="preview-search-results" class="preview-search-results" role="listbox" aria-label="เลือกเพลงทดลองฟัง พร้อมแสดงชื่อเพลงและนักร้อง"><div class="preview-empty">ค้นหาชื่อเพลงหรือนักร้องจากคลังที่สแกนแล้ว</div></div>
+                <div id="preview-selected" class="preview-selected" aria-live="polite">
+                  <span class="preview-selected-marker" aria-hidden="true">♫</span>
+                  <div class="preview-selected-info"><span class="preview-selected-caption">เพลงที่เลือกทดลองฟัง</span><strong id="preview-selected-title">ยังไม่ได้เลือกเพลง</strong><span id="preview-selected-artist">นักร้อง: —</span></div>
+                </div>
                 <div class="preview-mixer" aria-label="เครื่องผสมเสียงดนตรีกับ SoundFont">
                   <label for="preview-music-volume">เสียงดนตรี <output id="preview-music-volume-label" for="preview-music-volume">80%</output></label>
                   <input id="preview-music-volume" type="range" min="0" max="100" value="80">
