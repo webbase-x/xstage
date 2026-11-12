@@ -14,7 +14,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 def generate(output: Path) -> None:
     output.mkdir(parents=True, exist_ok=True)
-    size = 768
+    # Integer 2x scale keeps Pillow stroke widths and corner radii exact.
+    size = 1024
     unit = size / 512
 
     def scale(points):
