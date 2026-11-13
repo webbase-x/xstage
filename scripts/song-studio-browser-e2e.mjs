@@ -326,6 +326,42 @@ try {
   assert.match((await exportedLrc).suggestedFilename(),/\.lrc$/);
   // Removing an imported song must ask first, preserve the row on Cancel,
   // then clear the selected editor and list only after an accepted API call.
+  // Owners can paste correct lyrics with no timestamps, keep every word,
+  // and choose AI-assisted approximate timing without overwriting on cancel.
+  const ownerLyrics='ฉันเดินทางไกล\nยังคงคิดถึงเธอ\nแม้เวลาผ่านไป';
+  await pc.locator('#ai-lyrics-paste').fill(ownerLyrics);
+  assert.equal(await pc.locator('#ai-lyrics-align').isEnabled(),true);
+  await pc.locator('#ai-lyrics-align').click();
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  assert.match(await pc.locator('#studio-confirm-title').innerText(),/AI จัดเวลา/);
+  await pc.click('#studio-confirm-cancel');
+  assert.equal(await pc.locator('#ai-lyrics-paste').inputValue(), ownerLyrics);
+  await pc.locator('#ai-lyrics-align').click();
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  const alignRequest=pc.waitForRequest(req=>{
+    try{return new URL(req.url()).pathname==='/api/jobs' &&
+      req.postDataJSON()?.action==='ai-align' &&
+      req.postDataJSON()?.lyrics===ownerLyrics &&
+      req.postDataJSON()?.id===-1;}catch{return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await alignRequest;
+  simulatedJob={id:'finished-ai-align-test',kind:'ai-align',state:'success',
+    stage:'จัดเวลาแล้ว',detail:'พร้อมตรวจแก้',total:1,completed:1,
+    result:{songId:-1,rawLrc:'[00:05.00]ฉันเดินทางไกล\n[00:08.00]ยังคงคิดถึงเธอ\n[00:12.00]แม้เวลาผ่านไป\n',
+      uncertain:1,issues:['บรรทัด 2: พบคำตรงกันเพียงบางส่วน'],
+      message:'จัดเวลาเบื้องต้น 3 บรรทัด'},logs:[]};
+  await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-editor')?.value.includes('[00:08.00]ยังคงคิดถึงเธอ'),
+    null,{timeout:10000});
+  assert.deepEqual((await pc.locator('#ai-lyrics-editor').inputValue()).split('\n').filter(Boolean)
+    .map(s=>s.slice(s.indexOf(']')+1)),ownerLyrics.split('\n'),
+    'Whisper timestamps may be approximate but must never replace supplied words');
+  assert.match(await pc.locator('#ai-lyrics-align-review').innerText(),/บรรทัด 2/);
+  assert.equal(await pc.locator('#ai-lyrics-paste').inputValue(),ownerLyrics);
+  // Reset mocked engine to idle before exercising independent AI removal.
+  simulatedJob={id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
+    completed:0,total:0,logs:[]};
+
   const removeButton=pc.locator('#ai-lyrics-results [data-ai-remove="-1"]');
   await removeButton.waitFor();
   await removeButton.click();
