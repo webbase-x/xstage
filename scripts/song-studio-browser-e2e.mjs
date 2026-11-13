@@ -148,7 +148,10 @@ try {
       response = id === 1 ? {
         id, status:'found', source:'NCN',
         message:'พบเนื้อร้องจากต้นฉบับ NCN 2 บรรทัด',
-        lines:[{startTime:0,endTime:2,text:'เสียงทดสอบต้นฉบับ'},
+        lines:[{startTime:0,endTime:2,text:'เสียงทดสอบต้นฉบับ',
+                characters:[{text:'เสียง',startTime:0},
+                            {text:'ทดสอบ',startTime:.6},
+                            {text:'ต้นฉบับ',startTime:1.25}]},
                {startTime:2,endTime:5,text:'บรรทัดที่สอง'}],
         requiresReview:false,aiAvailable:false
       } : {
@@ -292,6 +295,24 @@ try {
   await pc.waitForFunction(() => document.getElementById('preview-lyrics-source')?.textContent.includes('NCN'));
   assert.match(await pc.locator('#preview-lyrics-lines').innerText(), /เสียงทดสอบต้นฉบับ/,
     'Preview must prove source NCN has real karaoke lyrics');
+  // MIDI/CUR true cue boundaries must create a progressive fill (not a
+  // one-frame, all-at-once color flip at each character's start).
+  const midiWipe = await pc.evaluate(()=>{
+    const audio=document.querySelector('#preview-audio');
+    Object.defineProperty(audio,'currentTime',{configurable:true,get:()=>.3});
+    audio.dispatchEvent(new Event('timeupdate'));
+    const line=document.querySelector('#preview-lyrics-lines .preview-lyric-line[data-cue-type="midi"]');
+    const spans=line?[...line.querySelectorAll('.karaoke-wipe-text')]:[];
+    const fractions=spans.map(s=>parseFloat(s.style.getPropertyValue('--karaoke-wipe')));
+    delete audio.currentTime;
+    return {length:spans.length,fractions,content:line?.textContent};
+  });
+  assert.equal(midiWipe.length,3,'MIDI cursor cues must be preserved separately');
+  assert.equal(midiWipe.content,'เสียงทดสอบต้นฉบับ');
+  assert.ok(midiWipe.fractions[0]>20&&midiWipe.fractions[0]<80,
+    'Sung MIDI chunk should be partially colored between real cue times');
+  assert.equal(midiWipe.fractions[1],0,'Next MIDI phrase should remain unpainted');
+  assert.equal(midiWipe.fractions[2],0,'Later MIDI phrase should remain unpainted');
   assert.equal(await pc.locator('#preview-song-search').isVisible(), true, 'Preview search must be visible in step 3');
   await pc.locator('#preview-song-search').fill('เสียงทดสอบ');
   await pc.locator('#preview-search-results [data-preview-id="2"]').waitFor();
@@ -443,6 +464,19 @@ try {
   await aiLive;
   await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-audio')?.src.includes('/api/live-stream'));
   assert.match(await pc.locator('#ai-lyrics-karaoke').innerText(),/ท่อนแรก AI/);
+  const aiWipe = await pc.evaluate(()=>{
+    const audio=document.querySelector('#ai-lyrics-audio');
+    Object.defineProperty(audio,'currentTime',{configurable:true,get:()=>.3});
+    audio.dispatchEvent(new Event('timeupdate'));
+    const line=document.querySelector('#ai-lyrics-karaoke .ai-karaoke-line.active');
+    const sweep=line?.querySelector('.karaoke-wipe-text');
+    const color=sweep?parseFloat(sweep.style.getPropertyValue('--karaoke-wipe')):-1;
+    delete audio.currentTime;
+    return {color,text:line?.textContent};
+  });
+  assert.equal(aiWipe.text,'ท่อนแรก AI','AI draft words must not change');
+  assert.ok(aiWipe.color>20&&aiWipe.color<80,
+    'AI LRC preview should smoothly fill during the first timed line');
   await pc.click('#ai-lyrics-stop');
   await pc.click('#ai-lyrics-save');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
