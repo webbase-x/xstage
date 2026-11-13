@@ -14,6 +14,7 @@ on:
       - "studio/web.js"
       - "studio/web.css"
       - "scripts/test_songstudio_ai_import.py"
+      - "scripts/test_songstudio_ai_export.py"
       - "scripts/test_songstudio_ui_contract.mjs"
       - "scripts/test_songstudio_drive_roundtrip.py"
       - "scripts/test_songstudio_online_publish.py"
@@ -107,6 +108,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Pasted original lyrics AI alignment regression failed" }
           & python -m unittest discover -s scripts -p test_songstudio_lyric_text_groups.py -v
           if ($LASTEXITCODE -ne 0) { throw "Batch head/tail lyrics replacement regression failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_ai_export.py -v
+          if ($LASTEXITCODE -ne 0) { throw "AI selected lyrics/instrumental export tests failed" }
           & python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
           if ($LASTEXITCODE -ne 0) { throw "Independent AI import and reviewed lyrics regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_layout.py -v
