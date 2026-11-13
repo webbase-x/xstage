@@ -239,6 +239,7 @@
       if(aiMicRecorder?.state==='recording')aiStopMic();
     }
     if (name === 'ai-lyrics') void aiRefreshSongList();
+    if (name === 'settings') void refreshHistory();
     if (name === 'lyric-head-tail') {
       void refreshPhraseBackup();
       if(phraseReady)void refreshPhraseGroups();
@@ -2050,6 +2051,57 @@
       }
     } catch(error) {message(error.message);}
   }
+  async function refreshHistory() {
+    const panel = $('history-list');
+    if (!panel) return;
+    try {
+      const result = await api('/api/history');
+      panel.replaceChildren();
+      if (!result.events?.length) {
+        panel.textContent = 'ยังไม่มีประวัติ · ระบบจะบันทึกเมื่อแก้ข้อมูลเพลงหรือเปลี่ยนการตั้งค่า';
+        return;
+      }
+      for (const event of result.events) {
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        const detail = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = event.summary + ' · ' + event.target;
+        const date = document.createElement('small');
+        date.textContent = event.createdAt ?
+          new Date(event.createdAt).toLocaleString('th-TH') : '';
+        detail.append(title, date);
+        const action = document.createElement('button');
+        action.className = 'button ghost';
+        action.type = 'button';
+        action.textContent = '↶ คืนค่าก่อนแก้';
+        action.dataset.restoreHistory = event.id;
+        row.append(detail, action);
+        panel.append(row);
+      }
+    } catch (error) {
+      panel.textContent = 'อ่านประวัติไม่ได้: ' + error.message;
+    }
+  }
+  async function restoreHistory(id) {
+    if (busy) return message('มีงานกำลังทำงานอยู่ ไม่สามารถคืนค่าได้');
+    const yes = await confirmStudio(
+      'คืนค่าข้อมูลก่อนการแก้ไขที่เลือกใช่หรือไม่? ระบบจะบันทึกการคืนค่านี้ลงประวัติอีกครั้ง และไม่แตะไฟล์เพลงต้นฉบับ',
+      'ยืนยันคืนค่าประวัติ', {acceptLabel:'คืนค่าก่อนแก้',cancelLabel:'ยกเลิก'});
+    if (!yes) return;
+    try {
+      const result = await post('/api/history/restore',{id});
+      if (result.preferences) {
+        prefs = result.preferences;
+        setFields();
+      }
+      selected.clear();
+      await refreshSongs();
+      await refreshHistory();
+      message(result.message || 'คืนค่าจากประวัติสำเร็จ', false);
+    } catch (error) { message('คืนค่าประวัติไม่สำเร็จ: ' + error.message); }
+  }
+
   async function openEdit() {
     if (selected.size !== 1) return;
     const id = [...selected][0];
@@ -2325,6 +2377,11 @@
     if (previewAudio.getAttribute('src')) message('สตรีมเสียงขัดข้อง · ตรวจไฟล์ต้นฉบับและ SoundFont แล้วกดเล่นใหม่');
   });
   $('edit-button').addEventListener('click',()=>{void openEdit();});
+  $('history-refresh').addEventListener('click',()=>{void refreshHistory();});
+  $('history-list').addEventListener('click',event=>{
+    const button=event.target.closest('[data-restore-history]');
+    if (button) void restoreHistory(button.dataset.restoreHistory);
+  });
   $('edit-dialog').addEventListener('close',event=>{if($('edit-dialog').returnValue==='save')void saveEdit();});
   for (const button of [$('upload-login'),$('settings-login'),$('google-login-header')]) button.addEventListener('click',async()=>{
     try {
