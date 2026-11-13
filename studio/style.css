@@ -271,3 +271,11 @@ button.preview-lyric-line{cursor:pointer}
 .ai-lyrics-validation{color:#afd6de;font-size:12px;line-height:1.6}
 @media(max-width:750px){.navigation{grid-template-columns:repeat(5,minmax(0,1fr))}.ai-lyrics-tools>div{flex-basis:100%}.ai-lyrics-player-row audio{width:100%;min-width:0}}
 @media(max-width:480px){.navigation{grid-template-columns:repeat(3,minmax(0,1fr))}.ai-lyrics-editor-actions>.button{flex:1}}
+
+/* Foreground Google authorization prompt, present on PC and paired Web Control. */
+.google-login-help{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid #50c8d2;background:#12384a;color:#e6fbff;border-radius:12px;padding:14px 17px;margin-bottom:17px;box-shadow:0 8px 26px #0003}
+.google-login-help[hidden]{display:none!important}
+.google-login-help strong{font-size:15px}
+.google-login-help p{font-size:12px;line-height:1.65;margin:6px 0 0;color:#c8edf2}
+.google-login-help button{flex-shrink:0;white-space:nowrap}
+@media(max-width:740px){.google-login-help{flex-direction:column;align-items:stretch}.google-login-help button{width:100%}}
