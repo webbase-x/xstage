@@ -29,12 +29,16 @@ for(const tab of ['create','ai-lyrics','upload','download','settings']){
   assert.ok(html.includes('id="tab-'+tab+'"'),'Missing tab panel '+tab);
 }
 for(const endpoint of ['/api/vocal-songs','/api/vocal-import','/api/ai-lyrics-draft',
-    '/api/ai-lyrics-approve','/api/preview-sources','/api/live-preview','/api/jobs'])
+    '/api/ai-lyrics-approve','/api/vocal-remove','/api/preview-sources','/api/live-preview','/api/jobs'])
   assert.ok(js.includes(endpoint),'Missing UI endpoint '+endpoint);
 for(const handler of ['ai-lyrics-import','ai-lyrics-start','ai-lyrics-play',
                       'ai-lyrics-download','ai-lyrics-save','upload-button','download-destination'])
   assert.ok(js.includes("$('"+handler+"')"),'Missing event/UI binding for '+handler);
 
+assert.ok(js.includes('aiRemoveImportedSong('),'Missing AI imported song removal workflow');
+assert.ok(js.includes('data-ai-remove') || js.includes('dataset.aiRemove'),'Missing per-row remove action');
+assert.ok(js.includes('นำออกจากรายการ') && js.includes('ไม่ลบไฟล์เพลงต้นฉบับ'),'Missing destructive-action warning');
+assert.ok(css.includes('.ai-lyrics-song-remove'),'Missing remove button styling');
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
 console.log('PASS: PC/Web Control UI syntax, 5 tabs, 147 unique IDs, AI import/preview/export and Drive controls.');
