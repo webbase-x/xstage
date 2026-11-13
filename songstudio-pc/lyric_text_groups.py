@@ -359,6 +359,12 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
         if parsed is None:
             raise ValueError("เนื้อร้องของเพลงที่เลือกไม่ครบ 4 บรรทัด")
         path, lrc, doc, raw = parsed
+        # A cached search predicate is only advisory; re-check the complete
+        # current lyric body before committing a filtered batch.
+        query = _same(search).casefold()
+        if query and query not in "\n".join(
+                _same(line["text"]).casefold() for line in doc["lines"]):
+            raise ValueError("เนื้อร้องเปลี่ยนหลังค้นหา กรุณาตรวจรายการใหม่ก่อนแทนที่")
         revised_doc, revised_lrc = doc, raw
         lost_tokens = 0
         chosen_positions = set()
