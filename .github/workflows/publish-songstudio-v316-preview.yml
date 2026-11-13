@@ -1,0 +1,99 @@
+name: Publish Song Studio 316 verified Core Preview
+
+on:
+  workflow_run:
+    workflows: ["X-Stage Song Studio PC Ready Offline ZIP"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.head_sha == '12bae1a59a964850008bd8c94e7d9fb1c73de382'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Retrieve verified Windows Ready artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 43360396345 --repo "$GITHUB_REPOSITORY" \
+            --name "X-Stage-Song-Studio-PC-Ready-v0.3.16-build316" --dir dist
+          ls -lh dist
+      - name: Verify ZIP content, version and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          f=Path('dist/X-Stage-Song-Studio-PC-Ready-v0.3.16-build316.zip')
+          sha=Path(str(f)+'.sha256')
+          assert f.is_file() and sha.is_file(), 'ZIP/checksum missing'
+          assert f.stat().st_size>300_000_000, 'Truncated ZIP'
+          expected=sha.read_text(encoding='utf-8-sig').split()[0].lower()
+          with f.open('rb') as stream:
+              actual=hashlib.file_digest(stream,'sha256').hexdigest()
+          assert expected==actual and len(actual)==64, 'SHA-256 mismatch'
+          with zipfile.ZipFile(f) as z:
+              assert z.testzip() is None, 'Broken ZIP member'
+              names=z.namelist()
+              required=['code_registry.py','online_publish.py','google_drive.py','engine.py',
+                        'studio/index.html','studio/app.js','Start-Song-Studio.cmd']
+              for item in required:
+                  assert any(x.endswith('/'+item) or x==item for x in names), 'Missing '+item
+              mname=next(x for x in names if x.endswith('/.engine-ready-manifest.json'))
+              manifest=json.loads(z.read(mname))
+              assert manifest['version']=='0.3.16' and str(manifest['build'])=='316', manifest
+              registry=z.read(next(x for x in names if x.endswith('/code_registry.py'))).decode('utf-8')
+              assert 'reconcile_existing' in registry and 'apply_changes' in registry
+          print('PASS: v0.3.16 Build 316 SHA-256', actual, f.stat().st_size)
+          PY
+      - name: Publish stable direct download as Core Preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='song-studio-pc-core-preview-v0.3.16-build316'
+          zip='dist/X-Stage-Song-Studio-PC-Ready-v0.3.16-build316.zip'
+          sha="$zip.sha256"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists; preserving verified ZIP.'
+            exit 0
+          fi
+          cat > /tmp/notes.md <<'NOTES'
+          X-Stage Song Studio PC Core Preview v0.3.16 Build 316 (Windows x64).
+
+          NEW: Check song codes against both the prior PC catalog and private XStageWeb
+          Google Drive catalog before building new audio or publishing. If the same code
+          identifies DIFFERENT audio, the PC catalog gets a safe unused numeric gap or
+          the next available code; remote songs are never rewritten. Existing M4A is
+          retained byte-for-byte, generated Lyrics JSON gets the assigned songCode,
+          immutable local catalogs are checkpointed, and originalCode is retained.
+          New songs use the assigned ID in generated filenames. Upload retries verify
+          the online catalog again and prevent remote webSongId clobbering.
+          Includes a PC+Google code preflight button in Create > Step 1.
+
+          LIMITATIONS: If Google OAuth/Drive cannot be verified, new PC codes are
+          provisional and will be rechecked at upload. The package has no bundled
+          default Google Desktop OAuth client; import your own Desktop OAuth JSON
+          once under Advanced Settings. Logging into Karaoke Online does not log
+          the Song Studio PC in. The actual account's live Drive behavior was not
+          end-to-end tested. Never create a duplicate XStageWeb library because
+          one is invisible to your OAuth client.
+
+          Extract entire ZIP then run Start-Song-Studio.cmd.
+          NOTES
+          gh release create "$tag" "$zip" "$sha" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "X-Stage Song Studio PC Core Preview v0.3.16 Build 316" \
+            --notes-file /tmp/notes.md --prerelease --latest=false \
+            --target 12bae1a59a964850008bd8c94e7d9fb1c73de382
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,assets
