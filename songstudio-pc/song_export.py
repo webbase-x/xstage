@@ -265,9 +265,11 @@ def save_lyrics(root: Path, audio: Path, text: str, code: str,
 def make_record(root: Path, row: dict, audio: Path, lyrics: Path | None,
                 vocals: Path | None, mode: str) -> dict:
     source = Path(row["path"])
-    bucket = source_bucket(source.name)
-    if audio.parent.name != bucket:
-        raise ValueError("ตำแหน่งเพลงไม่ตรงกับเลขแรกของชื่อไฟล์ต้นฉบับ")
+    # Assigned codes may differ from source filenames after checking both
+    # libraries; the stored audio bucket, not the source name, is authoritative.
+    bucket = audio.parent.name
+    if bucket not in set("0123456789_") or audio.parent.parent.name != "audio":
+        raise ValueError("ตำแหน่งไฟล์เสียงไม่อยู่ในคลังเพลงที่รองรับ")
     rel = lambda p: p.relative_to(root).as_posix() if p is not None else None
     code = str(row.get("code") or source.stem)
     return {
