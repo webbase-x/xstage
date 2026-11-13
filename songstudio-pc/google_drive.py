@@ -790,6 +790,62 @@ class GoogleDrive:
                 "· ไม่มีการสร้างโฟลเดอร์ใหม่")
         return songs
 
+    def _raw_library_download_plan(self, root_id, kind, *, library_name):
+        """Read an existing categorized Drive tree without requiring current.json.
+
+        A missing catalog means files can be backed up, NOT that their song
+        metadata or code registry is verified. Never create/update Drive files.
+        """
+        folders = {"application/vnd.google-apps.folder"}
+        records = []
+        seen_paths = set()
+        visited = set()
+        max_items = 300000
+
+        def walk(folder_id, prefix="", depth=0):
+            if depth > 12 or folder_id in visited:
+                raise GoogleError("โครงสร้างโฟลเดอร์ Drive ซ้อนลึกหรือวนซ้ำผิดปกติ")
+            visited.add(folder_id)
+            for item in self.list_children(folder_id):
+                name = item.get("name")
+                if (not isinstance(name, str) or name in ("", ".", "..")
+                        or "/" in name or "\\\\" in name or ":" in name
+                        or any(ord(char) < 32 for char in name)):
+                    raise GoogleError("ชื่อไฟล์หรือโฟลเดอร์ XStageWeb ไม่ปลอดภัย")
+                relative = prefix + name
+                if relative in seen_paths:
+                    raise GoogleError("พบชื่อไฟล์ซ้ำใน XStageWeb: " + relative)
+                seen_paths.add(relative)
+                if len(seen_paths) > max_items:
+                    raise GoogleError("พบไฟล์เกิน 300,000 รายการ · ต้องแบ่งการสำรองเป็นชุด")
+                is_folder = item.get("mimeType") in folders
+                if is_folder:
+                    walk(item["id"], relative + "/", depth + 1)
+                elif item.get("mimeType", "").startswith("application/vnd.google-apps."):
+                    # Google native Docs are not binary song library files.
+                    continue
+                else:
+                    is_db = (relative == "current.json" or relative.startswith("DB/")
+                             or relative.startswith("catalog-") or
+                             relative.startswith("database-"))
+                    if kind == "db" and not is_db:
+                        continue
+                    if kind in ("songs", "zip") and relative.startswith(".xstage-"):
+                        continue
+                    if not item.get("md5Checksum"):
+                        raise GoogleError("ไม่พบ MD5 สำหรับไฟล์บน Drive: " + relative)
+                    records.append((relative, item))
+        walk(root_id)
+        if not records:
+            if kind == "db":
+                raise GoogleError("ไม่พบไฟล์ DB หรือ current.json ใน XStageWeb · "
+                                  "ดาวน์โหลด Song หรือ ZIP ได้ แต่ยังไม่มีฐานเพลงให้กู้คืน")
+            raise GoogleError("พบคลัง " + library_name +
+                              " แต่ไม่พบไฟล์ที่แอปเข้าถึงได้ · "
+                              "ตรวจสิทธิ์ Google Drive ของโฟลเดอร์และไฟล์ภายใน")
+        records.sort(key=lambda x: x[0])
+        return records, library_name
+
     def _online_download_plan(self, kind):
         """Plan a read-only, checksum-verified snapshot of XStageWeb.
 
@@ -808,10 +864,14 @@ class GoogleDrive:
         children = self.list_children(roots[0]["id"])
         pointers = [f for f in children if f.get("name") == "current.json"
                     and f.get("mimeType") != "application/vnd.google-apps.folder"]
-        if len(pointers) != 1:
-            raise GoogleError(
-                "พบ XStageWeb แต่ไม่มี current.json ที่เผยแพร่ครบหรือมีไฟล์ซ้ำ "
-                "· ตรวจสถานะซิงค์จาก Song Studio PC ก่อน · ไม่สร้างคลังใหม่")
+        if len(pointers) > 1:
+            raise GoogleError("พบ current.json ซ้ำใน XStageWeb · หยุดเพื่อป้องกันกู้คืนฐานผิด")
+        if not pointers:
+            # Existing user-organized AUDIO/VIDEO/MIDI/DB can be downloaded
+            # as files even when the online catalog was never published.
+            # This is a backup, not a playable song-code registry.
+            return self._raw_library_download_plan(
+                roots[0]["id"], kind, library_name=library_name)
         def checksum(value, label):
             if not isinstance(value, str) or not re.fullmatch("[0-9a-fA-F]{32}", value):
                 raise GoogleError("ไม่พบ MD5 สำหรับตรวจสอบไฟล์: " + label)
