@@ -181,7 +181,8 @@ def _run(cmd, cancelled, phase, on_status, *, timeout, environment=None, cwd=Non
 
 
 def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
-               ffmpeg: str, cancelled, on_status, language="th") -> dict:
+               ffmpeg: str, cancelled, on_status, language="th",
+               *, draft_source: Path | None = None) -> dict:
     source = Path(source)
     if source.suffix.lower() not in AUDIO_SUFFIXES:
         raise ValueError("AI ถอดคำร้องได้เฉพาะไฟล์เสียงที่มีคนร้อง ไม่ใช่ MIDI/NCN/KAR แบบดนตรีล้วน")
@@ -193,9 +194,17 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
     ready, reason = readiness(runtime)
     if not ready:
         raise RuntimeError("Whisper AI ไม่พร้อม: " + reason)
-    output = draft_path(data_dir, source)
-    existing = load_draft(data_dir, source)
-    if existing:
+    # A vocals-only stem is processed as input, but the reviewed draft stays
+    # associated with the ORIGINAL imported song ID. Switching between full
+    # mix and vocal-only invalidates only the old automatic draft cache; it
+    # never deletes the user's approved LRC.
+    owner = Path(draft_source) if draft_source is not None else source
+    output = draft_path(data_dir, owner)
+    fingerprint = _source_key(source)
+    existing = load_draft(data_dir, owner)
+    if existing and (existing.get("audioFingerprint") == fingerprint or
+                     (owner.resolve() == source.resolve() and
+                      not existing.get("audioFingerprint"))):
         return existing
     on_status("AI กำลังตรวจไฟล์เสียงและเตรียมการถอดเนื้อร้อง")
     with tempfile.TemporaryDirectory(prefix="xstage-whisper-") as scratch:
@@ -259,6 +268,9 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
                         "และทดลองไฟล์เสียงร้องแยก (vocals) หากมี") from exc
         if draft is None:
             raise RuntimeError("Whisper ไม่คืนเนื้อร้องที่ใช้ได้")
+    draft["audioFingerprint"] = fingerprint
+    draft["audioSource"] = ("separated-vocals" if owner.resolve() != source.resolve()
+                            else "original")
     # Only a finished JSON text draft persists in the user's private AppData.
     # Transient PCM and Whisper output are removed on TemporaryDirectory exit.
     output.parent.mkdir(parents=True, exist_ok=True)
