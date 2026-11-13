@@ -245,6 +245,11 @@ button.preview-lyric-line{cursor:pointer}
 .ai-lyrics-import-actions{display:flex;gap:9px;flex-wrap:wrap}
 .ai-lyrics-search .searchbox{max-width:100%;margin-bottom:12px}
 .ai-lyrics-results{display:flex;flex-direction:column;gap:5px;max-height:310px;min-height:60px;overflow:auto;border:1px solid #30576c;border-radius:12px;padding:8px;background:#091f30}
+.ai-lyrics-song-row{display:flex;align-items:stretch;gap:7px;min-width:0}
+.ai-lyrics-song-row>.ai-lyrics-song{flex:1;min-width:0}
+.ai-lyrics-song-remove{flex:none;align-self:stretch;border:1px solid #87555e;border-radius:10px;padding:0 12px;min-width:64px;background:#30242c;color:#ffd8da;font-size:12px;font-weight:700;cursor:pointer}
+.ai-lyrics-song-remove:hover,.ai-lyrics-song-remove:focus-visible{background:#5a303b;border-color:#f18d9d;outline-offset:2px}
+.ai-lyrics-song-remove:disabled{opacity:.45;cursor:not-allowed}
 .ai-lyrics-song{width:100%;display:flex;gap:12px;justify-content:space-between;align-items:center;text-align:left;background:#103047;border:1px solid transparent;border-radius:10px;color:#f1fbff;padding:11px 14px;min-width:0}
 .ai-lyrics-song:hover,.ai-lyrics-song:focus-visible{background:#1a4960;border-color:#52bbc6}
 .ai-lyrics-song.active{background:#165364;border-color:#66e2d4}
