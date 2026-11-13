@@ -15,6 +15,7 @@ on:
       - "scripts/test_songstudio_online_publish.py"
       - "scripts/test_songstudio_code_registry.py"
       - "scripts/test_songstudio_lyrics_preview.py"
+      - "scripts/test_songstudio_pasted_lyrics.py"
       - "scripts/test_songstudio_ncn.py"
       - "scripts/test_songstudio_smart_scan.py"
       - "scripts/test_songstudio_drive_download.py"
@@ -48,6 +49,7 @@ jobs:
           python -m unittest discover -s scripts -p test_songstudio_ncn.py -v
           python -m unittest discover -s scripts -p test_songstudio_smart_scan.py -v
           python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
+          python -m unittest discover -s scripts -p test_songstudio_pasted_lyrics.py -v
           python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
           python -m unittest discover -s scripts -p test_songstudio_drive_download.py -v
           python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
