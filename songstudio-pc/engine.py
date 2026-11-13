@@ -1346,8 +1346,11 @@ def execute_job(action, options, started):
                 on_progress=lambda sent, total:
                 update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"),
                 on_batch=lambda batch, total, created, revised:
-                update(f"เผยแพร่ฐาน XStageWeb ชุดที่ {batch} แล้ว · "
-                       f"พร้อมเล่น {total:,} เพลง · เพิ่ม {created:,} · แก้ Lyrics {revised:,}"))
+                update(f"เผยแพร่ฐาน StageWeb ชุดที่ {batch} แล้ว · "
+                       f"พร้อมเล่น {total:,} เพลง · เพิ่ม {created:,} · แก้ Lyrics {revised:,}"),
+                on_row=lambda done, total, skipped:
+                update(f"ตรวจและอัปโหลด {done + skipped:,}/{total + skipped:,} เพลง "
+                       "· รวมเพลงที่ข้ามซ้ำโดยตรวจ MD5 แล้ว", done + skipped))
             result = {
                 "message": (
                     f"ซิงค์ XStageWeb สำเร็จ · เพลงใหม่ {synced['newSongs']} · "
