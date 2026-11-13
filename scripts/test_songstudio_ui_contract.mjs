@@ -17,7 +17,8 @@ const required={
           'preview-file-type','preview-lyrics-lines','build-button','build-audio-button'],
   ai:['ai-lyrics-import','ai-lyrics-results','ai-lyrics-start','ai-lyrics-play',
       'ai-lyrics-editor','ai-lyrics-karaoke','ai-lyrics-save',
-      'ai-lyrics-download','ai-lyrics-insert-time'],
+      'ai-lyrics-download','ai-lyrics-insert-time',
+      'ai-lyrics-paste','ai-lyrics-align','ai-lyrics-align-review'],
   drive:['upload-button','settings-login','download-destination','settings-logout'],
 };
 for(const [area,elements] of Object.entries(required))
@@ -35,6 +36,9 @@ for(const handler of ['ai-lyrics-import','ai-lyrics-start','ai-lyrics-play',
                       'ai-lyrics-download','ai-lyrics-save','upload-button','download-destination'])
   assert.ok(js.includes("$('"+handler+"')"),'Missing event/UI binding for '+handler);
 
+assert.ok(js.includes("run('ai-align'"),'Missing AI alignment job handler');
+assert.ok(js.includes('pendingAiAlignment'),'Missing safeguard for owner's pasted words');
+assert.ok(css.includes('.ai-lyrics-paste-panel'),'Missing pasted lyrics UX styles');
 assert.ok(js.includes('aiRemoveImportedSong('),'Missing AI imported song removal workflow');
 assert.ok(js.includes('data-ai-remove') || js.includes('dataset.aiRemove'),'Missing per-row remove action');
 assert.ok(js.includes('นำออกจากรายการ') && js.includes('ไม่ลบไฟล์เพลงต้นฉบับ'),'Missing destructive-action warning');
