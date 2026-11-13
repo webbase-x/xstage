@@ -1,0 +1,88 @@
+name: Publish X-Stage Song Studio 315 verified Core Preview
+
+on:
+  workflow_run:
+    workflows: ["X-Stage Song Studio PC Ready Offline ZIP"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.head_sha == '4358056cf0b63d91f1c4942eec1d7d7306d03d6f'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download and verify the matching Windows build artifact
+        env:
+          GH_TOKEN: {{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 43349816144 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "X-Stage-Song-Studio-PC-Ready-v0.3.15-build315" \
+            --dir dist
+          ls -lh dist
+      - name: Validate full portable ZIP before public preview release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, zipfile, json
+          file=Path('dist/X-Stage-Song-Studio-PC-Ready-v0.3.15-build315.zip')
+          sha=Path(str(file)+'.sha256')
+          assert file.is_file() and sha.is_file(), 'ZIP or checksum missing'
+          expected=sha.read_text(encoding='utf-8-sig').split()[0].lower()
+          assert len(expected)==64, 'Invalid SHA256'
+          with file.open('rb') as stream:
+              actual=hashlib.file_digest(stream,'sha256').hexdigest()
+          assert actual==expected, 'Downloaded ZIP SHA256 did not match verified build'
+          assert file.stat().st_size>300_000_000, 'Archive incomplete'
+          with zipfile.ZipFile(file) as z:
+              assert z.testzip() is None, 'Corrupt archive'
+              names=z.namelist()
+              for name in ('online_publish.py','google_drive.py','engine.py','studio/index.html','studio/app.js','Start-Song-Studio.cmd'):
+                  assert any(x.endswith('/'+name) or x==name for x in names), 'Missing '+name
+              manifest_name=next(x for x in names if x.endswith('/.engine-ready-manifest.json'))
+              manifest=json.loads(z.read(manifest_name))
+              assert manifest['version']=='0.3.15' and str(manifest['build'])=='315', manifest
+              script=z.read(next(x for x in names if x.endswith('/google_drive.py'))).decode('utf8')
+              assert 'show_pending_login' in script and '_focus_google_browser_window' in script
+          print('PASS: verified Windows ZIP v0.3.15 Build 315 SHA256',actual, 'bytes',file.stat().st_size)
+          PY
+      - name: Release verified Core Preview as direct-download ZIP
+        env:
+          GH_TOKEN: {{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="song-studio-pc-core-preview-v0.3.15-build315"
+          zip="dist/X-Stage-Song-Studio-PC-Ready-v0.3.15-build315.zip"
+          sha="$zip.sha256"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Immutable release already exists; not overwriting verified ZIP."
+            exit 0
+          fi
+          cat >/tmp/release-notes.md <<'NOTES'
+          X-Stage Song Studio PC v0.3.15 Build 315 — Windows x64 Core Preview.
+
+          FIX: Clicking Google Login now opens the system browser and tries to raise the real Google Accounts consent window to the foreground. During the 3-minute approval window, the PC and Web Control show a visible prompt and a "เปิด Google Login อีกครั้ง" retry button that re-opens the SAME pending OAuth request. The Google client and signed-in states update after consent; missing Desktop OAuth fails immediately with an actionable explanation.
+
+          This ZIP bundles the existing verified audio pipeline (FFmpeg, FluidSynth/SoundFont, MIDI/KAR/NCN to M4A plus timed JSON/LRC), offline AI components, and incremental Google Drive XStageWeb catalog publishing. Extract the complete ZIP first, then open Start-Song-Studio.cmd.
+
+          LIMITATION: The developer's default Desktop OAuth client is NOT bundled. In Settings > Advanced, select your own valid Google Desktop OAuth Client JSON once, then Google Login in the PC app. Logging into X-Stage Karaoke Online separately does not sign in the Song Studio PC app. End-to-end sign-in/upload for the actual owner's Google account has not been tested. Never create another XStageWeb library to sidestep a missing Drive OAuth scope.
+
+          Original core CI plus current Windows bundling, SHA256 and ZIP checks passed; this is deliberately labeled Core Preview, NOT all-functions-ready.
+          NOTES
+          gh release create "$tag" "$zip" "$sha" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "X-Stage Song Studio PC Core Preview v0.3.15 Build 315" \
+            --notes-file /tmp/release-notes.md --prerelease --latest=false \
+            --target 4358056cf0b63d91f1c4942eec1d7d7306d03d6f
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,assets
