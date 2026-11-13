@@ -173,6 +173,14 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(again["newSongs"], 1)
         self.assertEqual(len(self.published()), 2)
 
+    def test_exact_duplicate_audio_and_lyrics_across_two_codes_is_skipped(self):
+        duplicate = self.make_song("90009", b"A" * 5200, "เพลงหนึ่ง")
+        result = self.publisher.publish(self.root, [self.first, duplicate], batch_size=1)
+        self.assertEqual(result["newSongs"], 1)
+        self.assertEqual(result["duplicates"], 1)
+        self.assertEqual(result["totalSongs"], 1)
+        self.assertEqual(len(self.published()), 1)
+
     def test_same_code_different_audio_is_conflict_not_silent_overwrite(self):
         self.publisher.publish(self.root, [self.first])
         before = dict(self.published())
