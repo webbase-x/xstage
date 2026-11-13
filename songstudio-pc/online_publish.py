@@ -376,7 +376,14 @@ class OnlinePublisher:
                 continue
             candidates = list(by_code.get(code, []))
             exact_id = remote.get(str(row["webSongId"]))
-            if exact_id and exact_id not in candidates:
+            if exact_id and str(exact_id.get("code") or "").casefold() != code:
+                # A PC catalog can use a filename-derived webSongId that
+                # already exists remotely for an entirely different track.
+                # Never overwrite that remote song's identity or its code.
+                if matches_md5(exact_id.get("audio"), s_hash):
+                    counts["conflicts"] += 1
+                    continue
+            elif exact_id and exact_id not in candidates:
                 candidates.append(exact_id)
             same_audio, same_both = None, None
             for candidate in candidates:
@@ -411,11 +418,21 @@ class OnlinePublisher:
                 src = _local_path(local_songs, row["vocals"]["path"], "audio")
                 vocals = upload(src, row["vocals"]["path"])
             ident = (str(same_audio["webSongId"]) if same_audio else str(row["webSongId"]))
+            if not same_audio and ident in remote:
+                # Keep the old Drive entry immutable. A new online ID is
+                # derived from the assigned code and actual M4A checksum;
+                # only the metadata identity changes, not the user's files.
+                ident = ident + "-assigned-" + str(row["code"]) + "-" + s_hash[:16]
+                if ident in remote:
+                    counts["conflicts"] += 1
+                    continue
             item = {"webSongId": ident, "code": str(row["code"]),
                     "title": str(row.get("title") or row["code"]),
                     "artist": str(row.get("artist") or ""),
                     "sourceFormat": str(row.get("sourceFormat") or ""),
                     "audio": audio, "lyrics": lyrics}
+            if row.get("originalCode"):
+                item["originalCode"] = str(row["originalCode"])
             if lrc_media:
                 item["lrc"] = lrc_media
             if vocals:
