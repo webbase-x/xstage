@@ -108,13 +108,17 @@
     clearTimeout(notificationTimer);
     if (text) notificationTimer = setTimeout(() => {box.hidden = true;}, isError ? 9500 : 5000);
   }
-  function confirmStudio(description, title='ยืนยันรายการ') {
+  function confirmStudio(description, title='ยืนยันรายการ',
+                         {acceptLabel='ยืนยัน', cancelLabel='ยกเลิก'} = {}) {
     return new Promise(resolve => {
       const dialog = $('studio-confirm-dialog');
       $('studio-confirm-title').textContent = title;
       $('studio-confirm-message').textContent = String(description);
       const ok = $('studio-confirm-ok');
       const cancel = $('studio-confirm-cancel');
+      const oldOk = ok.textContent, oldCancel = cancel.textContent;
+      ok.textContent = acceptLabel;
+      cancel.textContent = cancelLabel;
       let resolved = false;
       const complete = answer => {
         if (resolved) return;
@@ -123,6 +127,8 @@
         cancel.removeEventListener('click', reject);
         dialog.removeEventListener('close', closed);
         if (dialog.open) dialog.close();
+        ok.textContent = oldOk;
+        cancel.textContent = oldCancel;
         resolve(answer);
       };
       const accept = () => complete(true);
@@ -1190,7 +1196,8 @@
       '\n\nต้องการอัปโหลดเพลงที่พร้อมไปยัง X-Stage Song Karaoke Online ตอนนี้หรือไม่?' +
       '\n\nใช้ Google Drive ส่วนตัว · ตรวจเพลงซ้ำก่อนอัปโหลด · ไม่ลบเพลงเดิม' +
       '\nไม่สร้างคลังเพลงใหม่โดยอัตโนมัติ · เลือกยกเลิกเพื่ออัปโหลดภายหลังได้',
-      'สร้างเพลงเสร็จแล้ว · อัปโหลดเข้า X-Stage Song Karaoke Online?'
+      'สร้างเพลงเสร็จแล้ว · อัปโหลดเข้า X-Stage Song Karaoke Online?',
+      {acceptLabel:'อัปโหลดตอนนี้', cancelLabel:'ไว้ภายหลัง'}
     );
     if (!approved) {
       message('เก็บเพลงในเครื่องแล้ว · อัปโหลดเข้า X-Stage Song Karaoke Online ภายหลังได้จากเมนูอัปโหลด', false);
