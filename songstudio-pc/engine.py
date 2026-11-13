@@ -2674,7 +2674,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not row:
                     raise ValueError("ไม่พบเพลง")
                 value = NOTES.setdefault(row["path"], {})
-                before_edit = dict(value)
+                before_edit = {"title": value.get("title", row.get("title", "")),
+                               "artist": value.get("artist", row.get("artist", "")),
+                               "lyrics": value.get("lyrics", lyrics_text(row))}
                 for key in ("title", "artist", "lyrics"):
                     if isinstance(payload.get(key), str):
                         value[key] = payload[key][:100000]
