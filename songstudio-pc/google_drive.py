@@ -575,12 +575,13 @@ class GoogleDrive:
         The legacy Song Studio/songs path is a DIFFERENT backup format.
         """
         roots = [f for f in self.list_children("root")
-                 if f.get("name") == "XStageWeb" and
+                 if f.get("name") in ("StageWeb", "XStageWeb") and
                  f.get("mimeType") == "application/vnd.google-apps.folder"]
         if len(roots) > 1:
             raise GoogleError("พบ XStageWeb หลายคลังที่มองเห็นได้ · กรุณาเลือกคลังให้ชัดเจน")
         if not roots:
             return None
+        library_name = roots[0]["name"]
         children = self.list_children(roots[0]["id"])
         pointers = [f for f in children if f.get("name") == "current.json"
                     and f.get("mimeType") != "application/vnd.google-apps.folder"]
@@ -613,7 +614,7 @@ class GoogleDrive:
                 raise GoogleError(label + " มีโครงสร้างไม่ถูกต้อง")
             return obj
         pointer_file = pointers[0]
-        pointer = read_json(pointer_file, "XStageWeb/current.json")
+        pointer = read_json(pointer_file, library_name + "/current.json")
         base_id, deltas = pointer.get("catalogFileId"), pointer.get("deltaFileIds")
         count = pointer.get("songCount")
         if (pointer.get("schemaVersion") != 1 or not isinstance(base_id, str)
@@ -650,7 +651,7 @@ class GoogleDrive:
             if (not isinstance(name, str) or not name.startswith(prefix) or
                     not name.endswith(".json") or "/" in name or "\\" in name):
                 raise GoogleError("ชื่อ Catalog ไม่ตรงกับ XStageWeb/current.json")
-            doc = read_json(meta, "XStageWeb/" + name)
+            doc = read_json(meta, library_name + "/" + name)
             add(name, file_id, meta.get("md5Checksum"))
             return doc
         base = catalog(base_id, "catalog-base-")
@@ -686,8 +687,8 @@ class GoogleDrive:
                 raise GoogleError("XStageWeb ยังไม่มีเพลงที่เผยแพร่")
             for row in songs.values():
                 for field, prefix in (
-                    ("audio", "songs/audio/"), ("lyrics", "songs/lyrics/"),
-                    ("lrc", "songs/lyrics/"), ("vocals", "songs/"),
+                    ("audio", "audio/"), ("lyrics", "lyrics/"),
+                    ("lrc", "lyrics/"), ("vocals", "audio/"),
                 ):
                     media = row.get(field)
                     if field in ("lrc", "vocals") and media is None:
@@ -695,11 +696,13 @@ class GoogleDrive:
                     if not isinstance(media, dict):
                         raise GoogleError("Catalog มีเพลงที่ไม่มีไฟล์ " + field)
                     rel = media.get("path")
-                    if not isinstance(rel, str) or not rel.startswith(prefix):
+                    if (not isinstance(rel, str) or
+                            not (rel.startswith(prefix) or
+                                 rel.startswith("songs/" + prefix))):
                         raise GoogleError("พาธไฟล์ " + field + " ใน Catalog ไม่ถูกต้อง")
                     add(rel, media.get("fileId"), media.get("md5Checksum"))
         add("current.json", pointer_file["id"], pointer_file.get("md5Checksum"))
-        return files
+        return files, library_name
 
     def upload_library(self, local_songs, selected_records, cancelled=None, on_progress=None):
         """Upload completed selected songs, catalogs, then current.json LAST."""
@@ -756,8 +759,7 @@ class GoogleDrive:
         target_root = Path(target_root)
         online = self._online_download_plan(kind)
         if online is not None:
-            collected = online
-            library_name = "XStageWeb"
+            collected, library_name = online
         else:
             # Compatibility with an older, separately uploaded PC backup.
             # The current Karaoke Online uploader does NOT publish here.
@@ -795,7 +797,7 @@ class GoogleDrive:
             on_status("พบคลังเพลงบน Google Drive · " + str(len(collected)) +
                       " ไฟล์ · กำลังดาวน์โหลด " + kind.upper())
         base = (Path(tempfile.mkdtemp(prefix="xstage-drive-zip-")) if kind == "zip"
-                else target_root / "XStageWeb" if library_name == "XStageWeb"
+                else target_root / library_name if library_name in ("StageWeb", "XStageWeb")
                 else target_root / "X-Stage Song Studio" / "songs")
         done = 0
         try:
