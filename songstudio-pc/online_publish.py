@@ -302,13 +302,18 @@ class OnlinePublisher:
             name = path.stem + "-" + checksum[:16] + path.suffix
             parent = folder(tuple(path.parts[:-1]))
             if parent not in file_lists:
-                file_lists[parent] = self.drive.list_children(parent)
+                # Build the folder index ONCE per parent, rather than a
+                # linear search through every previous song on every upload.
+                lookup = {}
+                for item in self.drive.list_children(parent):
+                    lookup.setdefault(item.get("name"), []).append(item)
+                file_lists[parent] = lookup
             result, meta = self.drive.upload_file(
                 parent, local_file, name, cancelled=cancelled,
                 on_progress=on_progress, existing_items=file_lists[parent])
             if result == "created":
                 counts["filesUploaded"] += 1
-                file_lists[parent].append(meta)
+                file_lists[parent].setdefault(name, []).append(meta)
             return {"fileId": meta["id"], "path":
                     str(path.parent).replace("\\", "/") + "/" + name,
                     "md5Checksum": checksum,
