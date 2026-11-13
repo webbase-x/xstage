@@ -89,11 +89,11 @@ class LyricPreviewTests(unittest.TestCase):
         (mock_model / "models").mkdir(parents=True)
         (mock_model / "models" / "ggml-base.bin").write_bytes(b"mock")
         with patch.object(ai, "readiness", return_value=(True, "")):
-            def fake_run(cmd, cancelled, phase, on_status, **_):
+            def fake_run(cmd, cancelled, phase, on_status, **kwargs):
                 if "ffmpeg" in str(cmd[0]):
                     Path(cmd[-1]).write_bytes(b"WAV-data" * 10000)
                 else:
-                    dest = Path(str(cmd[cmd.index("-of") + 1]) + ".json")
+                    dest = Path(kwargs["cwd"]) / (str(cmd[cmd.index("-of") + 1]) + ".json")
                     dest.write_text(json.dumps({"transcription": [
                         {"text":"ทดสอบ", "offsets":{"from":1000,"to":2700}}
                     ]}), encoding="utf-8")
@@ -121,13 +121,13 @@ class LyricPreviewTests(unittest.TestCase):
         source.write_bytes(b"RIFF" + b"z" * 90000)
         attempts = []
 
-        def fake_run(cmd, cancelled, phase, on_status, **_):
+        def fake_run(cmd, cancelled, phase, on_status, **kwargs):
             if "ffmpeg" in str(cmd[0]):
                 Path(cmd[-1]).write_bytes(b"WAV" * 11000)
                 return
             language = str(cmd[cmd.index("-l") + 1])
             attempts.append(language)
-            dest = Path(str(cmd[cmd.index("-of") + 1]) + ".json")
+            dest = Path(kwargs["cwd"]) / (str(cmd[cmd.index("-of") + 1]) + ".json")
             text = [{"text": "เสียงร้อง", "offsets": {"from": 1000, "to": 2200}}] \
                 if language == "auto" else []
             dest.write_text(json.dumps({"transcription": text}), encoding="utf-8")
@@ -179,7 +179,7 @@ class LyricPreviewTests(unittest.TestCase):
             if "ffmpeg" in str(cmd[0]):
                 Path(cmd[-1]).write_bytes(b"wav" * 15000)
             else:
-                dest = Path(str(cmd[cmd.index("-of") + 1]) + ".json")
+                dest = Path(kwargs["cwd"]) / (str(cmd[cmd.index("-of") + 1]) + ".json")
                 dest.write_text(json.dumps({"transcription": [
                     {"text": "เพลงทดสอบ", "offsets": {"from": 1000, "to": 3000}}
                 ]}), encoding="utf-8")
@@ -192,10 +192,14 @@ class LyricPreviewTests(unittest.TestCase):
                                    lambda _: None)
         self.assertEqual(result["lines"][0]["text"], "เพลงทดสอบ")
         args, working_directory = calls[-1]
-        self.assertEqual(working_directory, runtime)
-        self.assertEqual(args[args.index("-m") + 1], str(Path("models") / "ggml-base.bin"))
-        self.assertTrue(args[args.index("-m") + 1].isascii())
-        self.assertTrue(Path(args[args.index("-f") + 1]).is_absolute())
+        self.assertTrue(Path(working_directory).name.startswith("xstage-whisper-"))
+        self.assertEqual(args[args.index("-m") + 1], "model.bin")
+        self.assertEqual(args[args.index("-f") + 1], "audio-16k.wav")
+        self.assertEqual(args[args.index("-of") + 1], "draft")
+        self.assertTrue(all(value.isascii() for value in
+                            [args[args.index("-m") + 1],
+                             args[args.index("-f") + 1],
+                             args[args.index("-of") + 1]]))
 
     def test_ai_cannot_generate_true_words_from_instrumental_midi(self):
         midi = self.dir / "000012.mid"
