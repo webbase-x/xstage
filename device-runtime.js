@@ -16,8 +16,9 @@ function setting(){
   }catch{return {...DEFAULTS};}
 }
 function deviceInfo(){
-  const n=global.navigator||{},media=global.document?.createElement?.('audio');
-  const canPlay=m=>{try{return !!media?.canPlayType?.(m)?.replace('no','');}catch{return false;}};
+  const n=global.navigator||{},media=global.document?.createElement?.('audio'),
+        video=global.document?.createElement?.('video');
+  const canPlay=(element,m)=>{try{return ['maybe','probably'].includes(element?.canPlayType?.(m));}catch{return false;}};
   const cores=Number(n.hardwareConcurrency)||0,mem=Number(n.deviceMemory)||0;
   const android=/android/i.test(n.userAgent||'');
   const wasm=typeof WebAssembly==='object';
@@ -26,8 +27,9 @@ function deviceInfo(){
   const conservative=saver||(mem>0&&mem<=2)||(cores>0&&cores<=2);
   const lower=conservative||android;
   return {wasm,worklet,android,cores,memoryGb:mem,conservative,saveData:saver,
-    m4a:canPlay('audio/mp4; codecs="mp4a.40.2"'),mp3:canPlay('audio/mpeg'),
-    video:{avi:canPlay('video/x-msvideo'),mpg:canPlay('video/mpeg'),wmv:canPlay('video/x-ms-wmv')},
+    m4a:canPlay(media,'audio/mp4; codecs="mp4a.40.2"'),mp3:canPlay(media,'audio/mpeg'),
+    video:{avi:canPlay(video,'video/x-msvideo'),mpg:canPlay(video,'video/mpeg'),
+      vcd:canPlay(video,'video/mpeg'),wmv:canPlay(video,'video/x-ms-wmv')},
     maxPreloadBytes:conservative?2*1024*1024:lower?5*1024*1024:MAX_PREVIEW,
     preloadRemainingSeconds:conservative?8:lower?12:20,
     preloadIdleDelayMs:conservative?1200:lower?700:400};
@@ -57,8 +59,11 @@ function preloadEnvironment(){
     const info=deviceInfo();
     // Static shell is cacheable; never fetch/private-cache song or lyrics.
     // Service worker owns offline code cache, and can be absent in WebView.
-    if('serviceWorker' in (global.navigator||{})){
-      try{await global.navigator.serviceWorker.ready;}catch{}
+    if(global.navigator?.serviceWorker?.getRegistration){
+      try{
+        const reg=await global.navigator.serviceWorker.getRegistration();
+        if(reg?.active)await reg.update().catch(()=>{});
+      }catch{}
     }
     return {device:info,prefs:setting(),preferred:info.conservative?'audio':'auto'};
   })();
