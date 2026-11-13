@@ -44,6 +44,14 @@ for(const handler of ['ai-lyrics-import','ai-lyrics-start','ai-lyrics-play',
   assert.ok(js.includes("$('"+handler+"')"),'Missing event/UI binding for '+handler);
 
 assert.ok(js.includes("run('ai-align'"),'Missing AI alignment job handler');
+assert.ok(js.includes("previewAudio.addEventListener('playing', startKaraokeAnimation)"),
+  'Karaoke lyric animation must recover after streaming resumes');
+assert.ok(js.includes("previewAudio.addEventListener('timeupdate',()=>{"),
+  'Streaming lyric clock must update from decoded audio position');
+assert.ok(js.includes("previewLyricClockHealth()"),
+  'Long playback must diagnose stalled media time or exhausted lyric timestamps');
+assert.ok(js.includes("previewLyricCoverageWarned"),
+  'Missing lyrics after the last timestamp must be reported once, not silently freeze');
 assert.ok(js.includes("run('ai-separate-vocals'"),
   'AI Lyrics separation button must start backend HTDemucs job');
 assert.ok(js.includes("useSeparatedVocals:$('ai-lyrics-use-vocals').checked"),
