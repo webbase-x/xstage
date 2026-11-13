@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.19" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "319" if READY_BUNDLE else "205-SRC"
+STATUS_VERSION = "0.3.20" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "320" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
