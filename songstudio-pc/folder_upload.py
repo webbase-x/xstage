@@ -163,19 +163,17 @@ def report(folder):
 
 
 def upload(drive, folder, *, create_new_library=False, cancelled=None, progress=None):
-    from importlib import import_module
     result = scan(folder)
     if not result["complete"]:
         raise ValueError("ไม่พบชุดเพลงพร้อมอัปโหลด · ตรวจไฟล์เพลงและเนื้อร้องให้ครบก่อน")
     # Never merge uncatalogued media into an unverified Online code registry.
-    from pathlib import Path
     roots = [x for x in drive.list_children("root")
              if x.get("name") in ("XStageWeb", "StageWeb")
              and x.get("mimeType") == FOLDER]
     if len(roots) > 1:
         raise ValueError("พบ XStageWeb/StageWeb ซ้ำกัน · กรุณาตรวจคลังเดิมก่อนอัปโหลด")
     if not roots and not create_new_library:
-        raise ValueError("ไม่พบคลัง XStageWeb ที่เข้าถึงได้ · กรุณาตรวจสิทธิ์ Google Drive ก่อน")
+        raise ValueError("ไม่พบ XStageWeb ที่แอปมองเห็นได้ · กรุณายืนยันการสร้างโฟลเดอร์ใหม่ก่อนอัปโหลด")
     root_id = roots[0]["id"] if roots else drive.folder("root", "XStageWeb")
     cache = {}
     uploaded = skipped = 0
