@@ -121,30 +121,32 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(self.drive.upload_order[-1], "current.json")
         # Neither fake absolute local path nor user OAuth credentials leak.
         self.assertNotIn(str(self.base), json.dumps(remote))
-        # Direct audio/ and lyrics/ live beside the immutable catalog,
+        # Media folders and lyrics/ live beside the immutable catalog,
         # published pointer and staging marker (never songs/ for new songs).
-        self.assertEqual(len(self.folder_files(self.remote_root())), 5)
+        self.assertEqual(len(self.folder_files(self.remote_root())), 7)
 
     def test_new_drive_publishes_requested_stageweb_root_with_direct_media(self):
         # Explicit consent only: existing old XStageWeb must never silently
-        # split into a second library. New Drive uses exactly StageWeb.
+        # split into a second library. New Drive uses exactly XStageWeb.
         self.drive.items.clear()
         result = self.publisher.publish(
             self.root, [self.first], create_new_library=True)
         self.assertEqual(result["newSongs"], 1)
         folder = next(
             f["metadata"] for f in self.drive.items.values()
-            if f["parent"] == "root" and f["metadata"]["name"] == "StageWeb")
+            if f["parent"] == "root" and f["metadata"]["name"] == "XStageWeb")
         children = self.folder_files(folder["id"])
         names = {f["name"] for f in children}
-        self.assertTrue({"audio", "lyrics", "current.json"}.issubset(names))
+        self.assertTrue({"mp3", "m4a", "midi", "lyrics", "current.json"}.issubset(names))
         self.assertNotIn("songs", names)
         self.assertTrue(any(name.startswith("catalog-base-") for name in names))
         pointer_id = next(f["id"] for f in children if f["name"] == "current.json")
         pointer = self.publisher._json(pointer_id)
         songs = self.publisher._json(pointer["catalogFileId"])["songs"]
         self.assertEqual(len(songs), 1)
-        self.assertTrue(songs[0]["audio"]["path"].startswith("audio/"))
+        self.assertTrue(songs[0]["audio"]["path"].startswith("m4a/"))
+        midi_folder = next(f["id"] for f in children if f["name"] == "midi")
+        self.assertEqual({x["name"] for x in self.folder_files(midi_folder)}, {"NCN", "KAR", "MID"})
         self.assertTrue(songs[0]["lyrics"]["path"].startswith("lyrics/"))
         self.assertTrue(songs[0]["lrc"]["path"].startswith("lyrics/"))
         self.drive.locked = True
@@ -152,8 +154,8 @@ class OnlinePublishTests(unittest.TestCase):
                           side_effect=self._download_private_json):
             got = self.drive.download_library(self.base / "stage-download", "songs")
             db = self.drive.download_library(self.base / "stage-db", "db")
-        self.assertEqual(got["source"], "StageWeb")
-        self.assertEqual(Path(got["path"]).name, "StageWeb")
+        self.assertEqual(got["source"], "XStageWeb")
+        self.assertEqual(Path(got["path"]).name, "XStageWeb")
         self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
         self.assertEqual(db["files"], 2)
 
@@ -193,7 +195,7 @@ class OnlinePublishTests(unittest.TestCase):
             archive = self.drive.download_library(self.base / "zip", kind="zip")
         with zipfile.ZipFile(archive["path"]) as bundle:
             self.assertIn("XStageWeb/current.json", bundle.namelist())
-            self.assertTrue(any(x.startswith("XStageWeb/audio/") for x in bundle.namelist()))
+            self.assertTrue(any(x.startswith("XStageWeb/m4a/") for x in bundle.namelist()))
         self.assertEqual(len(self.drive.items), original_count)
 
     def test_online_restore_includes_delta_and_current_media_only(self):
