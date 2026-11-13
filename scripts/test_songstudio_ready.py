@@ -50,6 +50,41 @@ assert help_test.returncode in (0, 1) and (
 print("PASS: Whisper CLI and multilingual model respond from bundled offline runtime")
 
 
+# A "-h" check cannot catch native crashes in the inference/model-loading path.
+# Use a temporary Thai-named folder and run actual multilingual inference.
+# In particular, Windows MSVC whisper.cpp can abort 0xC0000409 if a model
+# argument is a full path containing non-ASCII characters.
+with tempfile.TemporaryDirectory(prefix="xstage-whisper-ภาษาไทย-") as thai_scratch:
+    thai_folder = Path(thai_scratch)
+    speech_test = thai_folder / "เสียงทดสอบ.wav"
+    with wave.open(str(speech_test), "wb") as stream:
+        stream.setnchannels(1)
+        stream.setsampwidth(2)
+        stream.setframerate(16000)
+        stream.writeframes(b"\x00\x00" * 16000 * 2)
+    draft_base = thai_folder / "ร่างทดสอบ"
+    command = [
+        str(whisper_exe), "-m", "models/ggml-base.bin",
+        "-f", str(speech_test), "-l", "th", "-oj", "-of", str(draft_base), "-np",
+    ]
+    completed = subprocess.run(
+        command, cwd=engine.RUNTIME, capture_output=True, timeout=120,
+        creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0))
+    assert completed.returncode == 0, (
+        "Whisper inference crashed on a Thai-named audio/output path (exit " +
+        str(completed.returncode & 0xFFFFFFFF) + "): " +
+        completed.stderr.decode("utf-8", errors="replace")[-1500:])
+    result_json = Path(str(draft_base) + ".json")
+    assert result_json.is_file(), (
+        "Whisper inference exited successfully but did not create JSON "
+        "in a Thai-named temporary folder")
+    result_data = json.loads(result_json.read_text(encoding="utf-8-sig"))
+    assert isinstance(result_data.get("transcription"), list), (
+        "Whisper returned invalid JSON despite exit code 0")
+    print("PASS: Actual Whisper inference and JSON export work with Thai paths")
+
+
+
 # The real Windows DPAPI native calls must be 64-bit pointer-safe.
 # This unit check needs no actual Google account, OAuth file or network.
 spec_google = importlib.util.spec_from_file_location("xstage_google_dpapi",
