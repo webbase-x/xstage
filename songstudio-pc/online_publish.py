@@ -5,7 +5,12 @@ Online layout (NOT the local Song Studio pointer format):
                             deltaFileIds, songCount}
     XStageWeb/catalog-base-<generation>.json: {schemaVersion, songs: [...]}
     XStageWeb/catalog-delta-<generation>.json: {schemaVersion, upserts, removes}
-    XStageWeb/songs/{audio,lyrics,vocals}/...  (private Drive files)
+    XStageWeb/AUDIO/M4A/{Songs,Lyrics}/0-9,A-Z/... (private Drive files)
+    XStageWeb/AUDIO/MP3/{Songs,Lyrics}/0-9,A-Z/... (supported layout)
+    XStageWeb/VIDEO/{AVI,MPG,VCD,WMV}/... (reserved categories)
+    XStageWeb/MIDI/{NCN/{Songs,Lyrics,Cursor},EMK}/... (reserved categories)
+    XStageWeb/DB/catalog-*.json (immutable catalogs)
+    XStageWeb/current.json (compatibility pointer for existing players)
 
 Never publish a new pointer until media and immutable catalog are uploaded and
 MD5 checked. Existing online songs are merged; this is NOT a whole-library
@@ -19,8 +24,8 @@ import secrets
 import tempfile
 from pathlib import Path, PurePosixPath
 
-ONLINE_ROOT = "StageWeb"
-LEGACY_ONLINE_ROOT = "XStageWeb"
+ONLINE_ROOT = "XStageWeb"
+LEGACY_ONLINE_ROOT = "StageWeb"
 STAGING_MARKER = ".xstage-songstudio-staging.json"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 MAX_CATALOG_BYTES = 128 * 1024 * 1024
@@ -29,6 +34,36 @@ MAX_DELTAS = 32
 
 class PublishError(RuntimeError):
     pass
+
+# Drive folder layout v2. The original local StageWeb paths are intentionally
+# unchanged: they are used by recovery journals and local catalogs.
+LAYOUT_VERSION = 2
+BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def media_drive_path(relative, *, code=""):
+    """Map a local immutable media path into the private Drive taxonomy.
+
+    The extension of the rendered file, NOT its original source type, selects
+    MP3 vs M4A. The public catalog references the resulting Drive file ID.
+    """
+    rel = PurePosixPath(relative)
+    if (not isinstance(relative, str) or rel.is_absolute() or
+            any(part in (".", "..", "") for part in rel.parts) or
+            len(rel.parts) < 2 or "\\\\" in relative or ":" in relative):
+        raise PublishError("พาธสื่อเพลงไม่ปลอดภัย: " + str(relative))
+    group = str(code or rel.stem).strip()[:1].upper()
+    if group not in BUCKETS:
+        group = "_"
+    suffix = rel.suffix.lower()
+    kind = rel.parts[0].lower()
+    if kind == "audio" and suffix in (".m4a", ".mp3"):
+        fmt = "M4A" if suffix == ".m4a" else "MP3"
+        return PurePosixPath("AUDIO", fmt, "Songs", group, rel.name)
+    if kind == "lyrics" and suffix in (".json", ".lrc", ".lyr"):
+        return PurePosixPath("AUDIO", "M4A", "Lyrics", group, rel.name)
+    raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวด AUDIO: " + str(relative))
+
 
 
 def _md5(path):
@@ -140,7 +175,7 @@ class OnlinePublisher:
             if children:
                 markers = [x for x in children if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs", "audio", "lyrics"}
+                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "VIDEO", "MIDI", "DB"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
                         and self._json(markers[0]["id"]).get("format") ==
                         "xstage-songstudio-upload-staging-v1"):
@@ -295,9 +330,9 @@ class OnlinePublisher:
                     folder_cache[key] = self.drive.folder(parent, name)
                 parent = folder_cache[key]
             return parent
-        def upload(local_file, rel):
+        def upload(local_file, rel, *, code=""):
             checksum = _md5(local_file)
-            path = PurePosixPath(rel)
+            path = media_drive_path(rel, code=code)
             # Immutable, content-named media avoids overwriting an older song
             # with the same basename and prevents blind filename deduplication.
             name = path.stem + "-" + checksum[:16] + path.suffix
@@ -335,7 +370,7 @@ class OnlinePublisher:
                     path.write_text(json.dumps(document, ensure_ascii=False,
                                                separators=(",", ":")), encoding="utf-8")
                     _, metadata = self.drive.upload_file(
-                        ensure_root(), path, name, cancelled=cancelled)
+                        folder(("DB",)), path, name, cancelled=cancelled)
                     return metadata["id"]
                 if old_pointer and len(old_pointer.get("deltaFileIds", [])) < MAX_DELTAS:
                     delta_id = push_json("catalog-delta-" + generation + ".json", {
@@ -349,7 +384,8 @@ class OnlinePublisher:
                         "schemaVersion": 1, "songs": list(remote.values())})
                     delta_ids = []
                 next_pointer = {
-                    "schemaVersion": 1, "generation": generation,
+                    "schemaVersion": 1, "layoutVersion": LAYOUT_VERSION,
+                    "generation": generation,
                     "catalogFileId": catalog_id, "deltaFileIds": delta_ids,
                     "songCount": len(remote)
                 }
@@ -425,16 +461,16 @@ class OnlinePublisher:
                 counts["conflicts"] += 1
                 continue
             audio = (dict(same_audio["audio"]) if same_audio else
-                     upload(sound, row["audio"]["path"]))
-            lyrics = upload(lyric, row["lyrics"]["path"])
+                     upload(sound, row["audio"]["path"], code=row["code"]))
+            lyrics = upload(lyric, row["lyrics"]["path"], code=row["code"])
             lrc_path = str(Path(row["lyrics"]["path"]).with_suffix(".lrc")).replace("\\", "/")
             lrc_media = None
             if (local_songs / lrc_path).is_file():
-                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path)
+                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path, code=row["code"])
             vocals = None
             if row.get("vocals") and row["vocals"].get("path"):
                 src = _local_path(local_songs, row["vocals"]["path"], "audio")
-                vocals = upload(src, row["vocals"]["path"])
+                vocals = upload(src, row["vocals"]["path"], code=row["code"])
             ident = (str(same_audio["webSongId"]) if same_audio else str(row["webSongId"]))
             if not same_audio and ident in remote:
                 # Keep the old Drive entry immutable. A new online ID is
