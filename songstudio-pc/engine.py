@@ -1165,8 +1165,12 @@ def execute_job(action, options, started):
             synced = online.OnlinePublisher(GOOGLE).publish(
                 root, records,
                 create_new_library=(options.get("create_new_library") is True),
-                cancelled=CANCEL, on_progress=lambda sent, total:
-                update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"))
+                cancelled=CANCEL,
+                on_progress=lambda sent, total:
+                update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"),
+                on_batch=lambda batch, total, created, revised:
+                update(f"เผยแพร่ฐาน XStageWeb ชุดที่ {batch} แล้ว · "
+                       f"พร้อมเล่น {total:,} เพลง · เพิ่ม {created:,} · แก้ Lyrics {revised:,}"))
             result = {
                 "message": (
                     f"ซิงค์ XStageWeb สำเร็จ · เพลงใหม่ {synced['newSongs']} · "
@@ -1190,12 +1194,16 @@ def execute_job(action, options, started):
         else:
             raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
-            build_errors = action == "build" and result.get("errors", 0) > 0
+            build_errors = (
+                (action == "build" and result.get("errors", 0) > 0)
+                or (action == "upload" and
+                    (result.get("conflicts", 0) > 0 or result.get("notReady", 0) > 0)))
             skipped_only = (action == "build" and result.get("created", 0) == 0
                             and result.get("skipped", 0) > 0)
             JOB.update(
                 state="error" if build_errors else "success", result=result,
-                stage=("สร้างเพลงบางรายการไม่สำเร็จ" if build_errors else
+                stage=("ซิงค์บางส่วน · มีเพลงที่ต้องตรวจสอบ" if build_errors and action == "upload" else
+                       "สร้างเพลงบางรายการไม่สำเร็จ" if build_errors else
                        "ไม่มีเพลงใหม่ · ยืนยันจาก Catalog แล้ว" if skipped_only else
                        "เสร็จสิ้น"),
                 detail=result.get("message", "เสร็จแล้ว"))
