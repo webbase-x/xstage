@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Download and verify the matching Windows build artifact
         env:
-          GH_TOKEN: {{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -58,7 +58,7 @@ jobs:
           PY
       - name: Release verified Core Preview as direct-download ZIP
         env:
-          GH_TOKEN: {{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
