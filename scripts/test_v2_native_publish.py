@@ -1,6 +1,7 @@
 """XStageWeb/DB V2 publisher tests; all Drive I/O uses mock private Drive."""
 import importlib.util
 import json
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,9 +27,11 @@ class NativeV2Tests(unittest.TestCase):
         self.pub.reader._json=lambda ident: json.loads(self.drive.items[str(ident)]["body"].decode("utf8"))
         self.write("input/audio.mp3",b"ID3"+b"X"*2500)
         self.write("input/audio.m4a",b"A"*4000)
-        self.write("input/X01.MID",b"MThd"+b"Z"*30)
-        self.write("input/X01.LYR",b"line1")
-        self.write("input/X01.CUR",b"clock")
+        track=b"\\x00\\xff\\x51\\x03\\x07\\xa1\\x20\\x00\\xff\\x2f\\x00"
+        midi=b"MThd"+struct.pack(">IHHH",6,0,1,480)+b"MTrk"+struct.pack(">I",len(track))+track
+        self.write("input/X01.MID",midi)
+        self.write("input/X01.LYR","Test Song\\nSinger\\nC\\n\\nHello\\n".encode("cp874"))
+        self.write("input/X01.CUR",struct.pack("<"+"H"*6,*([0]+[i*12 for i in range(5)]))+b"\\xff")
         self.write("input/clip.avi",b"RIFF"+b"x"*2000)
         self.write("input/words.json",
                    json.dumps({"schemaVersion":1,
@@ -63,6 +66,9 @@ class NativeV2Tests(unittest.TestCase):
         self.assertTrue(songs["X01"]["media"]["midi"]["path"].startswith("MIDI/NCN/Songs/X/"))
         self.assertTrue(songs["X01"]["media"]["midi"]["lyr"]["path"].startswith("MIDI/NCN/Lyrics/X/"))
         self.assertTrue(songs["X01"]["media"]["midi"]["cur"]["path"].startswith("MIDI/NCN/Cursor/X/"))
+        self.assertTrue(songs["X01"]["lyrics"]["path"].startswith("MIDI/NCN/Lyrics/X/"))
+        lyric=self.pub.reader._json(songs["X01"]["lyrics"]["fileId"])
+        self.assertEqual(lyric["lines"][0]["text"],"Hello")
         self.assertTrue(songs["V01"]["media"]["video"]["path"].startswith("VIDEO/AVI/"))
 
     def test_rejects_incomplete_ncn_and_unsafe_files(self):
