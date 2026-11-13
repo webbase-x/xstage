@@ -1,0 +1,25 @@
+name: XStageWeb media layout regression
+on:
+  push:
+    branches: [feature/xstageweb-media-layout]
+    paths:
+      - "songstudio-pc/online_publish.py"
+      - "scripts/test_songstudio_online_publish.py"
+      - ".github/workflows/xstageweb-media-layout.yml"
+  pull_request:
+    paths:
+      - "songstudio-pc/online_publish.py"
+      - "scripts/test_songstudio_online_publish.py"
+      - ".github/workflows/xstageweb-media-layout.yml"
+permissions:
+  contents: read
+jobs:
+  layout-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m py_compile songstudio-pc/online_publish.py scripts/test_songstudio_online_publish.py
+      - run: python scripts/test_songstudio_online_publish.py
