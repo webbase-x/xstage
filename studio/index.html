@@ -305,13 +305,14 @@
         </section>
 
         <section id="tab-download" class="tab">
-          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>โหลดไฟล์จาก Google Drive ส่วนตัว ตรวจ MD5 และไม่เขียนทับไฟล์ที่ไม่ตรงกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageWeb/current.json ที่เผยแพร่จริงบน Google Drive ส่วนตัว (รองรับคลังสำรอง PC รูปแบบเก่า) · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel"><div class="section-heading"><div><h2>ตำแหน่งเก็บไฟล์ดาวน์โหลด</h2><p>เลือกใหม่ได้ ระบบจำค่าไว้เปิดครั้งต่อไป</p></div></div><div class="path-row"><input id="download-destination" type="text" class="field" placeholder="เลือกโฟลเดอร์เก็บข้อมูล"><button type="button" class="button ghost" data-pick="download">เลือกที่เก็บ</button></div></article>
           <div class="download-grid">
-            <article class="panel download-card"><div class="download-symbol">♫</div><h3>โฟลเดอร์เพลง</h3><p>ดาวน์โหลดเพลง M4A และเนื้อร้องจาก Catalog พร้อมตรวจไฟล์ซ้ำ</p><button class="button primary download-action" data-kind="songs" type="button">↓ ดาวน์โหลด SONG</button></article>
-            <article class="panel download-card"><div class="download-symbol">▤</div><h3>ฐานเพลง DB</h3><p>ดาวน์โหลด Catalog และ Manifest โดยไม่จำเป็นต้องรับไฟล์เพลงทั้งหมด</p><button class="button ghost download-action" data-kind="db" type="button">↓ ดาวน์โหลด DB</button></article>
-            <article class="panel download-card"><div class="download-symbol">▦</div><h3>ชุดสำรอง ZIP</h3><p>ดาวน์โหลดทุกเพลงที่เผยแพร่ แล้วสร้าง ZIP ภายในเครื่อง ตรวจไฟล์ก่อนเสร็จ</p><button class="button ghost download-action" data-kind="zip" type="button">↓ ดาวน์โหลด ZIP</button></article>
+            <article class="panel download-card"><div class="download-symbol">♫</div><h3>โฟลเดอร์เพลง</h3><p>ดาวน์โหลด M4A/เนื้อร้องตาม Catalog ของ XStageWeb ไม่ต้องไล่ค้นไฟล์ในทุกโฟลเดอร์ และไม่สร้างคลังใหม่</p><button class="button primary download-action" data-kind="songs" type="button">↓ ดาวน์โหลด SONG</button></article>
+            <article class="panel download-card"><div class="download-symbol">▤</div><h3>ฐานเพลง DB</h3><p>ดาวน์โหลด XStageWeb/current.json พร้อม Catalog หลัก/ส่วนเพิ่มที่อ้างถึง โดยไม่โหลด M4A</p><button class="button ghost download-action" data-kind="db" type="button">↓ ดาวน์โหลด DB</button></article>
+            <article class="panel download-card"><div class="download-symbol">▦</div><h3>ชุดสำรอง ZIP</h3><p>สำรองคลังเพลงและ Catalog ที่เผยแพร่เป็น ZIP โดยตรวจ MD5 ทุกไฟล์</p><button class="button ghost download-action" data-kind="zip" type="button">↓ ดาวน์โหลด ZIP</button></article>
           </div>
+          <p class="hint">ผลดาวน์โหลดคลังออนไลน์จะเก็บในโฟลเดอร์ XStageWeb แยกจากคลังสร้างเพลงในเครื่อง ไม่เขียนทับฐานเพลง PC เดิม และไม่อัปโหลดหรือเปิดสิทธิ์สาธารณะโดยอัตโนมัติ · หาก XStageWeb มองไม่เห็น กรุณาตรวจบัญชี Google และ OAuth Client เดิมที่ใช้เผยแพร่ ห้ามเลือกสร้างคลังใหม่เพื่อแก้ปัญหาการดาวน์โหลด</p>
         </section>
 
         <section id="tab-settings" class="tab">
