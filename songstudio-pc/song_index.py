@@ -110,13 +110,26 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
     On cancellation keep the previous committed catalog and checkpoint the
     completed file enumeration; next scan reuses unchanged checkpoint rows.
     """
-    origin = Path(source).expanduser().resolve()
+    # Keep exactly the path spelling chosen by the user (including Windows
+    # 8.3 short directory aliases such as RUNNER~1). Path.resolve() expands
+    # those aliases and would silently change every catalog path on Windows.
+    origin = Path(source).expanduser()
+    if not origin.is_absolute():
+        origin = Path.cwd() / origin
     work = Path(workspace).expanduser().resolve()
     if not origin.is_dir():
         raise ValueError("โฟลเดอร์ต้นฉบับไม่มีอยู่ กรุณาเลือกโฟลเดอร์ก่อนสแกน")
+    origin_real = origin.resolve()
     excludes = {work / "songs", work / "song"}
-    if any(origin == item or item in origin.parents for item in excludes):
+    if any(origin_real == item or item in origin_real.parents for item in excludes):
         raise ValueError("โฟลเดอร์ต้นฉบับต้องไม่อยู่ในโฟลเดอร์ผลลัพธ์ของโปรแกรม")
+    # Map excluded output locations back to the user's original root prefix.
+    # This avoids costly resolve() calls for every directory and still works
+    # when Windows exposes the same directory through long/short aliases.
+    excluded_under_source = {
+        origin / item.relative_to(origin_real) for item in excludes
+        if item == origin_real or origin_real in item.parents
+    }
     scope = _scope(origin, work)
     with _connect(db_path) as db:
         previous = _read_rows(db, "song_index", scope)
@@ -165,7 +178,7 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
                 if entry.is_dir(follow_symlinks=False):
                     candidate = Path(entry.path)
                     if not any(candidate == item or item in candidate.parents
-                               for item in excludes):
+                               for item in excluded_under_source):
                         child_dirs.append(candidate)
                     continue
                 extension = Path(entry.name).suffix.lower()
