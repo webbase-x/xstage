@@ -26,7 +26,7 @@ const required={
       'ai-lyrics-separate','ai-lyrics-use-vocals','ai-lyrics-vocals-status',
       'ai-mic-start','ai-mic-stop','ai-mic-save','ai-mic-discard',
       'ai-mic-preview','ai-mic-status','ai-mic-timer'],
-  drive:['upload-button','settings-login','download-destination','settings-logout'],
+  drive:['upload-folder-button','upload-folder','upload-inspect','upload-allow-new','settings-login','download-destination','settings-logout'],
 };
 for(const [area,elements] of Object.entries(required))
  for(const id of elements)
@@ -40,7 +40,7 @@ for(const endpoint of ['/api/vocal-songs','/api/vocal-import','/api/ai-lyrics-dr
     '/api/ai-lyrics-approve','/api/vocal-remove','/api/preview-sources','/api/live-preview','/api/jobs'])
   assert.ok(js.includes(endpoint),'Missing UI endpoint '+endpoint);
 for(const handler of ['ai-lyrics-import','ai-lyrics-start','ai-lyrics-play',
-                      'ai-lyrics-download','ai-lyrics-save','upload-button','download-destination'])
+                      'ai-lyrics-download','ai-lyrics-save','upload-folder-button','download-destination'])
   assert.ok(js.includes("$('"+handler+"')"),'Missing event/UI binding for '+handler);
 
 assert.ok(js.includes("run('ai-align'"),'Missing AI alignment job handler');
