@@ -180,3 +180,49 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
+
+## Google Drive library layout v2 (Build 322)
+
+New private Google Drive libraries use `XStageWeb/` and create the following
+category directories. Alphabet/digit subfolders (`0`–`9`, `A`–`Z`) are
+created **on demand** as songs are uploaded, avoiding hundreds of empty
+folders:
+
+```text
+XStageWeb/
+  AUDIO/
+    MP3/Songs/{0-9,A-Z}/
+    MP3/Lyrics/{0-9,A-Z}/
+    M4A/Songs/{0-9,A-Z}/
+    M4A/Lyrics/{0-9,A-Z}/
+  VIDEO/{AVI,MPG,VCD,WMV}/
+  MIDI/
+    NCN/{Songs,Lyrics,Cursor}/{0-9,A-Z}/
+    EMK/{0-9,A-Z}/
+  DB/catalog-base-*.json
+  DB/catalog-delta-*.json
+  current.json
+```
+
+The **current export pipeline publishes converted M4A audio and timed
+JSON/LRC only**. Video and NCN/EMK folders are present as future categories;
+they do not imply that direct VIDEO/MIDI cloud publishing has been enabled.
+Folder names are case-sensitive for Drive lookup.
+
+`current.json` stays in the root so the existing karaoke player can locate
+the private database; the immutable catalogs move to `DB/`. File IDs, MD5
+checks and the existing pointer-before-publish safety rules remain enforced.
+`StageWeb/` remains the local PC working directory. Existing remote
+`StageWeb/` libraries are reused by ID without moving, deleting, or
+renaming old media. An existing `StageWeb/` and `XStageWeb/` side by side
+will cause publishing to stop rather than silently merge separate libraries.
+Do not select "create new library" to work around missing OAuth access;
+first connect the original library via the same authorized Google OAuth app.
+
+### Verification
+
+The Windows Ready CI runs `scripts/test_songstudio_drive_layout.py` and
+`scripts/test_songstudio_online_publish.py` before making its ZIP artifact.
+These cover code buckets, new private folders, online pointer/catalog layout,
+download restoration, duplicate-root safety and interrupted uploads.
+
