@@ -90,7 +90,20 @@ def scan(folder):
     paths = _indexed(root)
     by_dir = {}
     for path in paths:
-        by_dir.setdefault((path.parent, path.stem.casefold()), []).append(path)
+        # Pair both same-directory originals and already sorted
+        # AUDIO/{MP3,M4A}/{Songs,Lyrics}/A and MIDI/NCN/{Songs,Lyrics,Cursor}/A.
+        # Keep the source collection prefix and bucket: never pair unrelated
+        # tracks merely because their filenames match.
+        parent = path.relative_to(root).parts[:-1]
+        lowered = [part.casefold() for part in parent]
+        role = next((i for i, part in enumerate(lowered)
+                     if part in ("songs", "lyrics", "cursor")
+                     and i > 0), None)
+        if role is None:
+            key = (tuple(lowered), path.stem.casefold())
+        else:
+            key = (tuple(lowered[:role] + lowered[role+1:]), path.stem.casefold())
+        by_dir.setdefault(key, []).append(path)
     complete, incomplete, unsupported = [], [], []
     handled = set()
 
