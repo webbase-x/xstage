@@ -319,6 +319,59 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
         assert (output_dir / "current.json").is_file()
         print("PASS: PC browser POST /api/jobs starts & finishes both build modes; "+
               "invalid songs return immediate HTTP 400, outputs and current.json verified")
+
+        # Real microphone recording round trip: the browser posts the same
+        # WebM/Opus bytes MediaRecorder produces. The local engine must
+        # authenticate that request, encode AAC/M4A and import the file only
+        # into the AI Lyrics list, without publishing a Karaoke Online DB.
+        webm=temp/"recorded-voice.webm"
+        subprocess.run([engine.ffmpeg_binary(),"-hide_banner","-loglevel","error",
+                        "-y","-i",str(input_wav),"-c:a","libopus","-b:a","64k",
+                        str(webm)],check=True)
+        recording=webm.read_bytes()
+        assert len(recording)>1000 and recording[:4]==b"\x1a\x45\xdf\xa3"
+        engine.AI_RECORDING_INBOX=temp/"private-microphone-inbox"
+        def record_http(body,token,content_type):
+            conn=http.client.HTTPConnection("127.0.0.1",engine.PORT,timeout=20)
+            try:
+                conn.request("POST","/api/ai-recording-upload",body=body,headers={
+                    "X-XStage-Token":token,"Content-Type":content_type})
+                response=conn.getresponse()
+                return response.status,json.loads(response.read().decode("utf-8"))
+            finally:
+                conn.close()
+        status,denied=record_http(recording,"invalid-token","audio/webm")
+        assert status==403 and "error" in denied
+        status,uploaded=record_http(recording,engine.TOKEN,"audio/webm")
+        assert status==200 and uploaded.get("recordingId"),uploaded
+        status,start=http_json("POST","/api/jobs",{
+            "action":"ai-recording-save","recordingId":uploaded["recordingId"]})
+        assert status==200 and start.get("id"),start
+        deadline=time.monotonic()+45
+        while time.monotonic()<deadline:
+            status,snapshot=http_json("GET","/api/status")
+            assert status==200,snapshot
+            job=snapshot["job"]
+            if job["id"]==start["id"] and job["state"]!="running":
+                assert job["state"]=="success",job
+                result=job["result"]
+                final=Path(result["path"])
+                assert final.is_file() and final.suffix==".m4a"
+                assert final.is_relative_to(
+                    temp/"browser_pc_real_jobs"/"StageWeb"/"audio")
+                assert result["song"]["id"] in engine.AI_IMPORTED
+                assert len(list((output_dir/"audio").rglob("*.m4a")))==2
+                subprocess.run([engine.ffmpeg_binary(),"-hide_banner",
+                    "-loglevel","error","-i",str(final),
+                    "-f","null","-"],check=True)
+                assert not engine.AI_RECORDINGS_PENDING
+                print("PASS: authenticated WebM microphone upload, AAC M4A conversion, "
+                      "AI import and no automatic online publish")
+                break
+            time.sleep(.1)
+        else:
+            raise AssertionError("Microphone M4A job did not finish within smoke-test deadline")
+
     finally:
         api_server.shutdown()
         api_server.server_close()
