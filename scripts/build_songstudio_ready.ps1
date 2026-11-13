@@ -76,6 +76,7 @@ $map = @{
  'songstudio-pc/song_index.py' = 'song_index.py'
  'songstudio-pc/ai_lyrics.py' = 'ai_lyrics.py'
  'songstudio-pc/lyric_alignment.py' = 'lyric_alignment.py'
+ 'songstudio-pc/lyric_text_groups.py' = 'lyric_text_groups.py'
  'songstudio-pc/google_drive.py' = 'google_drive.py'
  'songstudio-pc/online_publish.py' = 'online_publish.py'
  'songstudio-pc/code_registry.py' = 'code_registry.py'
@@ -296,6 +297,7 @@ $paths = @(
  'song_index.py',
  'ai_lyrics.py',
  'lyric_alignment.py',
+ 'lyric_text_groups.py',
  'google_drive.py',
  'song_export.py',
  'code_registry.py',
@@ -384,6 +386,7 @@ with ZipFile(dest) as archive:
                       "song_export.py",
                       "song_index.py",
                       "lyric_alignment.py",
+                      "lyric_text_groups.py",
                       "code_registry.py",
                       "google_drive.py",
                       "studio/app-icon.svg",
