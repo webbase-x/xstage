@@ -463,9 +463,73 @@ class GoogleDrive:
                               "parents": [parent]})
         return item["id"]
 
-    def _resumable_put(self, path, parent, filename, replacing=None, cancelled=None, on_progress=None):
+    @staticmethod
+    def _upload_session_request(session, mime_type, total, *, offset=0, data=None,
+                                cancelled=None, on_progress=None):
+        """One bounded HTTPS upload request or empty status probe.
+
+        Google Drive acknowledges partial uploads with HTTP 308 and Range.
+        Keep each body at most 8 MiB; do not load large M4A files into RAM.
+        Never follow an untrusted session URL to another host.
+        """
+        import http.client
+        endpoint = urllib.parse.urlsplit(session)
+        if (endpoint.scheme != "https" or endpoint.hostname != "www.googleapis.com"
+                or endpoint.port not in (None, 443)
+                or endpoint.username is not None or endpoint.password is not None
+                or not endpoint.path.startswith("/upload/drive/v3/")):
+            raise GoogleError("Google คืน URL ของช่องอัปโหลดที่ไม่ได้รับอนุญาต")
+        body = data if data is not None else b""
+        if data is not None and not body:
+            raise GoogleError("ส่วนข้อมูลที่อัปโหลดต้องไม่ว่าง")
+        conn = http.client.HTTPSConnection(endpoint.hostname, endpoint.port or 443,
+                                           timeout=120)
+        try:
+            resource = endpoint.path + ("?" + endpoint.query if endpoint.query else "")
+            conn.putrequest("PUT", resource)
+            conn.putheader("Content-Type", mime_type)
+            conn.putheader("Content-Length", str(len(body)))
+            if data is None:
+                conn.putheader("Content-Range", f"bytes */{total}")
+            else:
+                conn.putheader("Content-Range",
+                               f"bytes {offset}-{offset+len(body)-1}/{total}")
+            conn.endheaders()
+            if body:
+                for index in range(0, len(body), 1024 * 1024):
+                    if cancelled and cancelled.is_set():
+                        raise GoogleError("ผู้ใช้ยกเลิกอัปโหลด Google Drive")
+                    part = body[index:index + 1024 * 1024]
+                    conn.send(part)
+                    if on_progress:
+                        on_progress(min(total, offset + index + len(part)), total)
+            response = conn.getresponse()
+            result = response.read(MAX_HTTP_RESPONSE + 1)
+            if len(result) > MAX_HTTP_RESPONSE:
+                raise GoogleError("Google Drive ส่งผลตอบกลับอัปโหลดใหญ่เกินกำหนด")
+            return response.status, response.getheader("Range", ""), result
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _acknowledged_upload_offset(header, total):
+        if not header:
+            return 0
+        match = re.fullmatch(r"bytes=0-(\d+)", header.strip())
+        if not match:
+            raise GoogleError("Google Drive คืน Range ของการอัปโหลดไม่ถูกต้อง")
+        offset = int(match.group(1)) + 1
+        if offset < 0 or offset > total:
+            raise GoogleError("Google Drive ยืนยันจำนวน byte เกินขนาดไฟล์")
+        return offset
+
+    def _resumable_put(self, path, parent, filename, replacing=None,
+                       cancelled=None, on_progress=None):
         size = path.stat().st_size
-        meta = {"name": filename, "mimeType": mimetypes.guess_type(filename)[0] or "application/octet-stream"}
+        if size < 1:
+            raise GoogleError("ไม่อนุญาตให้อัปโหลดไฟล์ว่าง")
+        meta = {"name": filename,
+                "mimeType": mimetypes.guess_type(filename)[0] or "application/octet-stream"}
         if not replacing:
             meta["parents"] = [parent]
         route = f"/files/{replacing}" if replacing else "/files"
@@ -480,42 +544,99 @@ class GoogleDrive:
                      "X-Upload-Content-Length": str(size)})
         try:
             with urllib.request.urlopen(req, timeout=45) as response:
-                location = response.headers.get("Location", "")
+                session = response.headers.get("Location", "")
         except urllib.error.HTTPError as exc:
-            raise GoogleError("เปิดช่องอัปโหลด Google Drive ไม่สำเร็จ: HTTP " + str(exc.code)) from exc
-        if not location.startswith("https://www.googleapis.com/"):
-            raise GoogleError("Google Drive ไม่คืน resumable upload URL ที่ถูกต้อง")
-        # Streaming PUT with http.client; avoid loading multi-GB M4A into RAM.
-        import http.client
-        endpoint = urllib.parse.urlsplit(location)
-        conn = http.client.HTTPSConnection(endpoint.hostname, endpoint.port or 443, timeout=90)
-        try:
-            conn.putrequest("PUT", endpoint.path + ("?" + endpoint.query if endpoint.query else ""))
-            conn.putheader("Content-Type", meta["mimeType"])
-            conn.putheader("Content-Length", str(size))
-            conn.endheaders()
-            sent = 0
-            with path.open("rb") as file:
-                while True:
+            raise GoogleError(
+                "เปิดช่องอัปโหลด Google Drive ไม่สำเร็จ: HTTP " + str(exc.code)) from exc
+        except (urllib.error.URLError, OSError) as exc:
+            raise GoogleError("เชื่อมต่อ Google Drive เพื่อเริ่มอัปโหลดไม่ได้") from exc
+        # Validated again in _upload_session_request, before any PUT.
+        endpoint = urllib.parse.urlsplit(session)
+        if (endpoint.scheme != "https" or endpoint.hostname != "www.googleapis.com"
+                or endpoint.port not in (None, 443)
+                or not endpoint.path.startswith("/upload/drive/v3/")):
+            raise GoogleError("Google Drive ไม่คืน resumable upload URL ที่ปลอดภัย")
+
+        cursor = 0
+        retry = 0
+        chunk_size = 8 * 1024 * 1024  # exact multiple of Drive's 256 KiB
+        with path.open("rb") as source:
+            while cursor < size:
+                if cancelled and cancelled.is_set():
+                    raise GoogleError("ผู้ใช้ยกเลิกอัปโหลด Google Drive")
+                source.seek(cursor)
+                chunk = source.read(min(chunk_size, size - cursor))
+                if not chunk:
+                    raise GoogleError("ไฟล์ต้นฉบับเปลี่ยนหรืออ่านไม่ครบระหว่างอัปโหลด")
+                try:
+                    status, acknowledged, raw = self._upload_session_request(
+                        session, meta["mimeType"], size, offset=cursor,
+                        data=chunk, cancelled=cancelled, on_progress=on_progress)
+                    if status in (200, 201):
+                        if cursor + len(chunk) < size:
+                            raise GoogleError("Google Drive ตอบว่าอัปโหลดเสร็จก่อนรับไฟล์ครบ")
+                        try:
+                            response = json.loads(raw)
+                        except (ValueError, UnicodeError) as exc:
+                            raise GoogleError("ผลตอบกลับการอัปโหลดไม่ใช่ JSON") from exc
+                        if not isinstance(response, dict) or not response.get("id"):
+                            raise GoogleError("Google Drive ไม่ส่ง File ID หลังอัปโหลด")
+                        return response
+                    if status == 308:
+                        next_cursor = self._acknowledged_upload_offset(
+                            acknowledged, size)
+                        if next_cursor > cursor + len(chunk):
+                            raise GoogleError("Google Drive ตอบรับ byte มากกว่าที่ส่งไป")
+                        if next_cursor > cursor:
+                            cursor = next_cursor
+                            retry = 0
+                            continue
+                        raise OSError("Google Drive ยังไม่ยืนยันข้อมูลของส่วนนี้")
+                    if status not in (429, 500, 502, 503, 504):
+                        raise GoogleError("อัปโหลด Google Drive ไม่สำเร็จ: HTTP " +
+                                          str(status) + " · ไฟล์เดิมยังไม่ถูกเผยแพร่")
+                    raise OSError("Google Drive ส่ง HTTP " + str(status))
+                except (OSError, __import__("http.client", fromlist=["HTTPException"]).HTTPException) as exc:
                     if cancelled and cancelled.is_set():
-                        raise GoogleError("ผู้ใช้ยกเลิกอัปโหลด")
-                    chunk = file.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    conn.send(chunk)
-                    sent += len(chunk)
+                        raise GoogleError("ผู้ใช้ยกเลิกอัปโหลด Google Drive") from exc
+                    retry += 1
+                    if retry > 4:
+                        raise GoogleError(
+                            "การเชื่อมต่อ Google Drive ขัดข้องหลายครั้ง · "
+                            "ยังไม่ได้เผยแพร่ current.json และจะตรวจซ้ำเมื่ออัปโหลดใหม่") from exc
+                    seconds = min(2 ** (retry - 1), 8)
                     if on_progress:
-                        on_progress(sent, size)
-            answer = conn.getresponse()
-            raw = answer.read(MAX_HTTP_RESPONSE + 1)
-            if answer.status not in (200, 201):
-                raise GoogleError("อัปโหลด Google Drive ไม่สำเร็จ: HTTP " + str(answer.status) +
-                                  " " + raw[:300].decode("utf-8", "replace"))
-            if len(raw) > MAX_HTTP_RESPONSE:
-                raise GoogleError("ผลตอบกลับ Google Drive ใหญ่เกินกำหนด")
-            return json.loads(raw)
-        finally:
-            conn.close()
+                        on_progress(cursor, size)
+                    if cancelled:
+                        if cancelled.wait(seconds):
+                            raise GoogleError("ผู้ใช้ยกเลิกอัปโหลด Google Drive")
+                    else:
+                        time.sleep(seconds)
+                    # Query the SAME resumable session before retransmitting.
+                    # A lost final response may mean the file is already
+                    # complete; never create a second remote file in that case.
+                    try:
+                        status, acknowledged, raw = self._upload_session_request(
+                            session, meta["mimeType"], size, cancelled=cancelled)
+                        if status in (200, 201):
+                            value = json.loads(raw)
+                            if not isinstance(value, dict) or not value.get("id"):
+                                raise GoogleError("Google Drive ไม่ส่ง File ID สำหรับไฟล์ที่อัปโหลดครบ")
+                            return value
+                        if status == 308:
+                            cursor = self._acknowledged_upload_offset(
+                                acknowledged, size)
+                            if cursor >= size:
+                                raise GoogleError("Google Drive ยืนยัน byte ครบแต่ไม่คืนสถานะสำเร็จ")
+                        elif status not in (429, 500, 502, 503, 504):
+                            raise GoogleError(
+                                "Google Drive ไม่อนุญาตให้ทำต่อจากการอัปโหลดเดิม: HTTP " +
+                                str(status))
+                    except (OSError, __import__("http.client", fromlist=["HTTPException"]).HTTPException):
+                        # The probe itself can fail transiently. Retry the
+                        # probe next time, without switching the public DB.
+                        continue
+        raise GoogleError("อัปโหลดไม่สมบูรณ์ · Google Drive ยังไม่ยืนยันไฟล์")
 
     def upload_file(self, parent, path, name, *, replace_pointer=False, cancelled=None,
                     on_progress=None, existing_items=None):
