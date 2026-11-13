@@ -177,6 +177,29 @@ class OnlinePublisher:
             raise PublishError("จำนวนเพลงบน Drive ไม่ตรงกับฐาน XStageWeb · ไม่เผยแพร่ทับ")
         return (pointer_file, pointer), songs, {x["name"]: x for x in children}
 
+    def read_code_registry(self, *, allow_missing_root=False):
+        """Return a verified code snapshot from the ACTUAL private XStageWeb DB.
+
+        An invisible existing library is never interpreted as an empty catalog.
+        This is read-only; no staging markers, Drive folders or music are made.
+        """
+        root = self._existing_root()
+        if root is None:
+            if allow_missing_root:
+                return {"songs": [], "generation": "", "visible": False}
+            raise PublishError(
+                "ไม่พบคลัง XStageWeb เดิมที่ Google OAuth ของ Song Studio เข้าถึงได้ "
+                "· ห้ามอ้างว่าไม่มีรหัสซ้ำจนกว่าจะเชื่อมต่อคลังเดิม")
+        active, songs, _ = self._read_online(root)
+        if active is None:
+            if allow_missing_root:
+                return {"songs": [], "generation": "", "visible": False}
+            raise PublishError("คลัง XStageWeb ยังไม่มี current.json ที่ตรวจยืนยันได้ "
+                               "· ไม่สามารถกำหนดรหัสจากสองแหล่ง")
+        _, pointer = active
+        return {"songs": list(songs.values()), "generation": pointer["generation"],
+                "visible": True}
+
     def publish(self, local_songs, selected_records, *, create_new_library=False,
                 cancelled=None, on_progress=None, on_batch=None, batch_size=100):
         local_songs = Path(local_songs)
