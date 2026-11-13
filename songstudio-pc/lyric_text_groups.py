@@ -150,6 +150,7 @@ def scan(root, export, *, cancelled=None, on_progress=None):
         raise ValueError("จำนวนรายการเพลงเกินขนาดที่รุ่นนี้รองรับ")
     grouped = {name: defaultdict(list) for name in POSITIONS}
     included = excluded = missing = 0
+    searchable = {}
     seen = set()
     for number, row in enumerate(entries, 1):
         if cancelled is not None and cancelled.is_set():
@@ -171,6 +172,10 @@ def scan(root, export, *, cancelled=None, on_progress=None):
             continue
         _, _, doc, _ = parsed
         included += 1
+        # Cache a normalized, case-insensitive searchable transcript once
+        # per song rather than reopening 90k JSON documents per text query.
+        searchable[song_id] = "\n".join(
+            _same(line["text"]).casefold() for line in doc["lines"])
         for pos, (index, _) in POSITIONS.items():
             text = _same(doc["lines"][index]["text"])
             if not text:
@@ -194,42 +199,122 @@ def scan(root, export, *, cancelled=None, on_progress=None):
             }
     return {
         "root": str(root), "generation": pointer.get("generation"),
-        "groups": group_lookup, "songs": included,
+        "groups": group_lookup, "searchable": searchable, "songs": included,
         "skippedInvalid": excluded, "withoutLyrics": missing,
         "inspected": len(entries), "groupCount": len(group_lookup),
     }
 
 
+def _searched_members(snapshot, group, search=""):
+    query = _same(search).casefold()
+    if len(query) > 200:
+        raise ValueError("คำค้นหาเนื้อร้องยาวเกิน 200 ตัวอักษร")
+    if not query:
+        return list(group["members"])
+    searchable = snapshot.get("searchable", {})
+    return [item for item in group["members"]
+            if query in searchable.get(item["songId"], "")]
+
+
 def list_groups(snapshot, position, *, search="", offset=0, limit=40, repeats_only=True):
     if position not in POSITIONS:
         raise ValueError("ตำแหน่งบรรทัดไม่ถูกต้อง")
-    query = _same(search).casefold()
-    groups = [g for g in snapshot["groups"].values()
-              if g["position"] == position
-              and (not repeats_only or g["count"] >= 2)
-              and (not query or query in g["text"].casefold())]
-    groups.sort(key=lambda x: (-x["count"], x["text"].casefold()))
+    groups = []
+    for group in snapshot["groups"].values():
+        if group["position"] != position:
+            continue
+        # "Repeated" refers to the full library, while a phrase filtered by
+        # any lyric-body search can legitimately match only one of those songs.
+        if repeats_only and group["count"] < 2:
+            continue
+        members = _searched_members(snapshot, group, search)
+        if members:
+            groups.append((group, len(members)))
+    groups.sort(key=lambda entry: (-entry[1], -entry[0]["count"],
+                                   entry[0]["text"].casefold()))
     page = groups[offset:offset+limit]
     return {
         "position": position, "label": POSITIONS[position][1],
         "total": len(groups), "offset": offset,
-        "rows": [{"id": g["id"], "position": g["position"], "text": g["text"],
-                  "count": g["count"]} for g in page],
+        "rows": [{"id": group["id"], "position": group["position"],
+                  "text": group["text"], "count": count,
+                  "libraryCount": group["count"]}
+                 for group, count in page],
         "songs": snapshot["songs"], "inspected": snapshot["inspected"],
         "skippedInvalid": snapshot["skippedInvalid"],
         "withoutLyrics": snapshot["withoutLyrics"],
     }
 
 
-def preview(snapshot, group_id, limit=12):
-    g = snapshot["groups"].get(group_id)
-    if not g:
+def preview(snapshot, group_id, limit=12, search=""):
+    group = snapshot["groups"].get(group_id)
+    if not group:
         raise ValueError("ไม่พบกลุ่มข้อความ กรุณาวิเคราะห์คลังเพลงใหม่")
+    matches = _searched_members(snapshot, group, search)
+    if not matches:
+        raise ValueError("กลุ่มข้อความนี้ไม่มีเพลงที่ตรงกับคำค้นหาปัจจุบัน")
     return {
-        "id": g["id"], "text": g["text"], "position": g["position"],
-        "label": g["label"], "count": g["count"],
-        "examples": [{"code": s["code"], "title": s["title"],
-                      "artist": s["artist"]} for s in g["members"][:limit]],
+        "id": group["id"], "text": group["text"], "position": group["position"],
+        "label": group["label"], "count": len(matches),
+        "libraryCount": group["count"],
+        "examples": [{"code": item["code"], "title": item["title"],
+                      "artist": item["artist"]} for item in matches[:limit]],
+    }
+
+
+def _new_text(value):
+    if not isinstance(value, str):
+        raise ValueError("กรุณาระบุข้อความแทนที่")
+    value = unicodedata.normalize("NFC", value.strip())
+    if (not value or len(value) > MAX_TEXT or
+            "\r" in value or "\n" in value or "\0" in value):
+        raise ValueError("ข้อความแทนที่ต้องเป็นบรรทัดเดียว ความยาวไม่เกิน 400 ตัวอักษร")
+    return value
+
+
+def _targets(snapshot, group_ids, search="", replacement=None):
+    if (not isinstance(group_ids, list) or not 1 <= len(group_ids) <= 200 or
+            any(not isinstance(x, str) for x in group_ids) or
+            len(set(group_ids)) != len(group_ids)):
+        raise ValueError("กรุณาเลือกกลุ่มข้อความไม่ซ้ำกัน 1–200 กลุ่ม")
+    new = _new_text(replacement) if replacement is not None else None
+    targets = {}
+    chosen = []
+    already = 0
+    for group_id in group_ids:
+        group = snapshot["groups"].get(group_id)
+        if not group:
+            raise ValueError("พบกลุ่มข้อความที่เปลี่ยนหลังวิเคราะห์ กรุณาตรวจรายการใหม่")
+        matching = _searched_members(snapshot, group, search)
+        if not matching:
+            raise ValueError("มีกลุ่มที่ไม่ตรงกับคำค้นหา กรุณาตรวจรายการที่เลือกอีกครั้ง")
+        if new is not None and _same(group["text"]) == new:
+            already += len(matching)
+            continue
+        chosen.append((group, matching))
+        for item in matching:
+            targets.setdefault(item["songId"], {
+                "record": item["record"], "songId": item["songId"],
+                "edits": []
+            })["edits"].append((group, item))
+    return targets, chosen, already
+
+
+def plan(snapshot, group_ids, *, search="", replacement=None):
+    targets, chosen, already = _targets(snapshot, group_ids, search, replacement)
+    return {
+        "groups": len(chosen), "chosenGroups": len(group_ids),
+        "changedSongs": len(targets),
+        "changedLines": sum(len(item["edits"]) for item in targets.values()),
+        "alreadyCorrect": already,
+        "selected": [{
+            "id": group["id"], "position": group["position"],
+            "label": group["label"], "text": group["text"],
+            "count": len(members),
+            "examples": [{"code": row["code"], "title": row["title"]}
+                         for row in members[:3]],
+        } for group, members in chosen],
+        "search": _same(search),
     }
 
 
