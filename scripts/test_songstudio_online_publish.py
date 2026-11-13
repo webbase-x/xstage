@@ -153,7 +153,7 @@ class OnlinePublishTests(unittest.TestCase):
             archive = self.drive.download_library(self.base / "zip", kind="zip")
         with zipfile.ZipFile(archive["path"]) as bundle:
             self.assertIn("XStageWeb/current.json", bundle.namelist())
-            self.assertTrue(any(x.startswith("XStageWeb/songs/audio/") for x in bundle.namelist()))
+            self.assertTrue(any(x.startswith("XStageWeb/audio/") for x in bundle.namelist()))
         self.assertEqual(len(self.drive.items), original_count)
 
     def test_online_restore_includes_delta_and_current_media_only(self):
