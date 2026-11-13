@@ -41,6 +41,75 @@ class GoogleError(RuntimeError):
     pass
 
 
+def _focus_google_browser_window(stop_signal=None, timeout=4):
+    """Best-effort bring the user's actual Google sign-in browser to foreground.
+
+    The default browser may reuse a background tab even with autoraise=True.
+    Only target a *visible browser window* whose title identifies Google
+    Accounts; do not steal focus from an unrelated app. Windows may prohibit
+    foreground changes, in which case the app provides a manual retry button.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+        user32.EnumWindows.restype = wintypes.BOOL
+        user32.IsWindowVisible.argtypes = [wintypes.HWND]
+        user32.IsWindowVisible.restype = wintypes.BOOL
+        user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+        user32.GetWindowTextLengthW.restype = ctypes.c_int
+        user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+        user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+        user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+        user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+        user32.SetForegroundWindow.restype = wintypes.BOOL
+        user32.BringWindowToTop.argtypes = [wintypes.HWND]
+        user32.FlashWindow.argtypes = [wintypes.HWND, wintypes.BOOL]
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if stop_signal is not None and stop_signal.is_set():
+                return True
+            windows = []
+
+            @callback_type
+            def collect(hwnd, _):
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                n = user32.GetWindowTextLengthW(hwnd)
+                if n < 5 or n > 500:
+                    return True
+                title_buffer = ctypes.create_unicode_buffer(n + 1)
+                class_buffer = ctypes.create_unicode_buffer(128)
+                user32.GetWindowTextW(hwnd, title_buffer, n + 1)
+                user32.GetClassNameW(hwnd, class_buffer, 128)
+                title = title_buffer.value.casefold()
+                window_class = class_buffer.value.casefold()
+                browser = ("chrome_widgetwin" in window_class or
+                           "mozillawindowclass" in window_class)
+                google = any(x in title for x in (
+                    "google", "accounts.google.com", "เลือกบัญชี",
+                    "ลงชื่อเข้าใช้", "choose an account"))
+                if browser and google:
+                    windows.append(hwnd)
+                return True
+
+            user32.EnumWindows(collect, 0)
+            if windows:
+                hwnd = windows[0]
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE, including minimized browsers
+                user32.BringWindowToTop(hwnd)
+                if user32.SetForegroundWindow(hwnd):
+                    return True
+                user32.FlashWindow(hwnd, True)
+            time.sleep(.25)
+    except (OSError, AttributeError, TypeError, ValueError):
+        # Background raise is opportunistic, not a prerequisite for OAuth.
+        return False
+    return False
+
+
 def _json_bytes(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
@@ -150,6 +219,8 @@ class GoogleDrive:
         self.email = ""
         self.client_id = ""
         self.last_error = ""
+        self.pending_auth_url = ""
+        self.pending_auth_stop = None
         if self.secret_file.exists():
             try:
                 saved = json.loads(_crypt(self.secret_file.read_bytes(), True))
@@ -248,6 +319,20 @@ class GoogleDrive:
             self.last_error = ""
             return self.access_token
 
+    def show_pending_login(self):
+        """Open the *same* active OAuth page again on explicit user request."""
+        with self.lock:
+            url = self.pending_auth_url
+            signal = self.pending_auth_stop
+        if not url or signal is None or signal.is_set():
+            raise GoogleError("ยังไม่มีหน้า Google Login ที่รอการยืนยัน · กด Google Login ใหม่")
+        if not webbrowser.open(url, new=1):
+            raise GoogleError("เปิด Google Login ในเบราว์เซอร์เริ่มต้นไม่ได้")
+        if os.name == "nt":
+            threading.Thread(target=_focus_google_browser_window, args=(signal,),
+                             daemon=True, name="xstage-google-login-foreground").start()
+        return {"ok": True, "message": "เปิดหน้าต่าง Google Login อีกครั้ง · กรุณาเลือกบัญชีและกดอนุญาต"}
+
     def login(self, cancelled=None, on_status=None):
         client = _read_client(self.get_oauth_path())
         state = secrets.token_urlsafe(30)
@@ -290,15 +375,22 @@ class GoogleDrive:
                       "state": state, "code_challenge": challenge,
                       "code_challenge_method": "S256"}
             url = AUTH_URL + "?" + urllib.parse.urlencode(params)
-            if on_status:
-                on_status("เปิด Google Browser เพื่อเลือกบัญชีและอนุญาตเข้าถึงไฟล์ที่ใช้กับแอป")
-            if not webbrowser.open(url, new=1):
-                raise GoogleError("ไม่สามารถเปิดเบราว์เซอร์สำหรับ Google Login ได้")
-            start = time.monotonic()
-            while not signal.is_set() and time.monotonic() - start < 180:
-                if cancelled and cancelled.is_set():
-                    raise GoogleError("ยกเลิก Google Login")
-                listener.handle_request()
+            with self.lock:
+                self.pending_auth_url = url
+                self.pending_auth_stop = signal
+            try:
+                if on_status:
+                    on_status("เปิด Google Login ด้านหน้าแล้ว · โปรดเลือกบัญชี Google และกดอนุญาตสิทธิ์ (หากถูกบัง ให้กลับไปที่ Song Studio แล้วกด เปิด Google Login อีกครั้ง)")
+                self.show_pending_login()
+                start = time.monotonic()
+                while not signal.is_set() and time.monotonic() - start < 180:
+                    if cancelled and cancelled.is_set():
+                        raise GoogleError("ยกเลิก Google Login")
+                    listener.handle_request()
+            finally:
+                with self.lock:
+                    self.pending_auth_url = ""
+                    self.pending_auth_stop = None
         if not signal.is_set():
             raise GoogleError("หมดเวลาลงชื่อเข้าใช้ Google (3 นาที)")
         if received.get("error"):
