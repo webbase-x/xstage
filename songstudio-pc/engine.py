@@ -100,6 +100,12 @@ NOTES = load_json(NOTES_FILE, {})
 # This library belongs ONLY to the independent AI Lyrics menu.
 AI_IMPORTS_FILE = DATA / "ai-lyrics-imports.json"
 AI_IMPORTED = {}
+# Temporary microphone recordings are private and never added to the public
+# Karaoke Online catalog. Pending upload tickets are random and in-memory.
+AI_RECORDING_INBOX = DATA / "ai-recording-inbox"
+AI_RECORDINGS_PENDING = {}
+MAX_AI_RECORDING_BYTES = 64 * 1024 * 1024
+MAX_AI_RECORDING_SECONDS = 20 * 60
 def restore_ai_imports():
     raw = load_json(AI_IMPORTS_FILE, [])
     if not isinstance(raw, list):
@@ -159,6 +165,95 @@ def import_ai_audio(source_path):
             raise
     return {"ok": True, "alreadyImported": False, "song": row,
             "message": "นำเข้าไฟล์เสียงในเมนูสร้างเนื้อร้อง AI แล้ว (ไม่คัดลอกต้นฉบับ)"}
+
+def stage_microphone_recording(reader, length, content_type):
+    """Accept browser MediaRecorder bytes on the authenticated loopback API.
+
+    Stream to private AppData rather than loading long recordings into RAM.
+    Never trust a browser file path, name, MIME parameter, or user upload ID.
+    No public catalog is changed until a separate explicit Create Song action.
+    """
+    formats = {"audio/webm": (".webm", b"\x1a\x45\xdf\xa3"),
+               "audio/mp4": (".mp4", None),
+               "audio/ogg": (".ogg", b"OggS")}
+    mime = str(content_type or "").split(";", 1)[0].strip().lower()
+    if mime not in formats:
+        raise ValueError("ไฟล์บันทึกไมโครโฟนต้องเป็น WebM, MP4 หรือ OGG เท่านั้น")
+    if type(length) is not int or not 1000 <= length <= MAX_AI_RECORDING_BYTES:
+        raise ValueError("เสียงที่บันทึกมีขนาดไม่ถูกต้องหรือเกิน 64 MB")
+    with LOCK:
+        if JOB["state"] == "running":
+            raise ValueError("มีงานอื่นกำลังทำงาน ไม่สามารถรับไฟล์บันทึกพร้อมกันได้")
+        if len(AI_RECORDINGS_PENDING) >= 4:
+            raise ValueError("มีเสียงบันทึกที่รอบันทึกมากเกินไป · โปรดบันทึกให้เสร็จก่อน")
+    AI_RECORDING_INBOX.mkdir(parents=True, exist_ok=True)
+    ticket = secrets.token_urlsafe(24)
+    suffix, magic = formats[mime]
+    filename = AI_RECORDING_INBOX / (ticket + suffix)
+    partial = AI_RECORDING_INBOX / (ticket + ".upload")
+    try:
+        remaining = length
+        with partial.open("xb") as output:
+            while remaining:
+                chunk = reader.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("ไฟล์เสียงบันทึกส่งมาไม่ครบ · ยังไม่ได้บันทึก")
+                output.write(chunk)
+                remaining -= len(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+        with partial.open("rb") as check:
+            prefix = check.read(16)
+        if (magic is not None and not prefix.startswith(magic)) or (
+                mime == "audio/mp4" and prefix[4:8] != b"ftyp"):
+            raise ValueError("ข้อมูลเสียงบันทึกไม่ตรงกับชนิดไฟล์ที่ระบุ")
+        partial.replace(filename)
+        with LOCK:
+            AI_RECORDINGS_PENDING[ticket] = filename
+        return {"recordingId": ticket, "bytes": length,
+                "message": "รับไฟล์จากไมโครโฟนแล้ว · พร้อมบันทึกเป็น M4A"}
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def save_microphone_recording(recording_id):
+    """Convert an uploaded voice take to AAC M4A and import into AI Lyrics."""
+    with LOCK:
+        original = AI_RECORDINGS_PENDING.get(recording_id)
+    if not original or not original.is_file() or not original.resolve().is_relative_to(
+            AI_RECORDING_INBOX.resolve()):
+        raise ValueError("ไม่พบเสียงที่บันทึกไว้หรือรายการหมดอายุ · กรุณาอัดใหม่")
+    ffmpeg = ffmpeg_binary()
+    if not ffmpeg:
+        raise RuntimeError("ไม่พบ FFmpeg สำหรับบันทึกเสียง M4A ในแพ็กเกจ PC")
+    export = _song_export_module()
+    root = export.songs_root(PREFS["workspace"])
+    output = root / "audio" / "_" / (
+        "Voice-Recording-" + time.strftime("%Y%m%d-%H%M%S") +
+        "-" + secrets.token_hex(5) + ".m4a")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    staged = export.temporary_audio(output)
+    try:
+        update("บันทึกเสียงขั้น 1/2 · แปลงเสียงไมโครโฟนเป็น AAC/M4A", 0)
+        run_process([ffmpeg, "-hide_banner", "-loglevel", "error",
+                     "-nostdin", "-y", "-i", str(original),
+                     "-vn", "-t", str(MAX_AI_RECORDING_SECONDS),
+                     "-c:a", "aac", "-b:a", "160k", "-movflags",
+                     "+faststart", str(staged)])
+        if CANCEL.is_set():
+            raise RuntimeError("ยกเลิกการบันทึกเสียง")
+        export.commit_audio(staged, output)
+        update("บันทึกเสียงขั้น 2/2 · เพิ่มเสียงที่อัดลงรายการ AI", 1)
+        imported = import_ai_audio(str(output))
+    finally:
+        staged.unlink(missing_ok=True)
+    with LOCK:
+        AI_RECORDINGS_PENDING.pop(recording_id, None)
+    original.unlink(missing_ok=True)
+    return {"message": ("บันทึกเสียงใหม่ M4A และนำเข้าเมนู AI สำเร็จ · "
+                        "ไม่แก้เพลงต้นฉบับหรืออัปโหลด Google Drive"),
+            "song": imported["song"], "path": str(output)}
+
 
 restore_ai_imports()
 
@@ -1310,6 +1405,10 @@ def execute_job(action, options, started):
             result = LYRIC_TEXT.undo(LYRIC_TEXT_BACKUPS, root, options.get("backupId"))
             with LOCK:
                 LYRIC_TEXT_INDEX = None
+        elif action == "ai-recording-save":
+            with LOCK:
+                JOB["total"] = 1
+            result = save_microphone_recording(options.get("recordingId"))
         elif action == "ai-separate-vocals":
             song_id = options.get("id")
             with LOCK:
@@ -1579,6 +1678,17 @@ def start_job(data):
                 str(info.get("error") or "ไม่พบ Google Desktop OAuth Client JSON") +
                 " · เปิดตั้งค่า > ตัวเลือกขั้นสูง > เลือก Google Desktop OAuth Client JSON "
                 "แล้วลอง Google Login ใหม่")
+    if action == "ai-recording-save":
+        recording_id = data.get("recordingId")
+        if not isinstance(recording_id, str) or len(recording_id) > 128:
+            raise ValueError("รหัสเสียงบันทึกไม่ถูกต้อง")
+        with LOCK:
+            uploaded = AI_RECORDINGS_PENDING.get(recording_id)
+        if not uploaded or not uploaded.is_file():
+            raise ValueError("ไม่พบข้อมูลเสียงที่บันทึกในเครื่อง · กรุณาอัดเสียงใหม่")
+        if not ffmpeg_binary():
+            raise ValueError("FFmpeg ไม่พร้อมสำหรับแปลงเสียงบันทึกเป็น M4A")
+        validation = {"total": 1}
     if action in ("ai-lyrics", "ai-align", "ai-separate-vocals"):
         song_id = data.get("id")
         if type(song_id) is not int or song_id not in FILE_BY_ID:
@@ -2022,10 +2132,17 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8, source_cho
     spec.loader.exec_module(mod)
     options, related = _preview_source_inventory(row, catalog)
     allowed = {item["value"] for item in options if item["kind"] == "play"}
-    if source_choice not in allowed:
+    if source_choice not in allowed and source_choice != "ai-vocals":
         raise ValueError("ประเภทไฟล์ที่เลือกไม่มีอยู่จริงสำหรับเพลงนี้")
     audio, midi = mod.matching_sources(row, catalog)
-    if source_choice != "auto":
+    if source_choice == "ai-vocals":
+        if song_id not in AI_IMPORTED:
+            raise ValueError("เสียงร้องแยกใช้ได้เฉพาะเพลงที่นำเข้าในหน้า AI")
+        audio = saved_ai_vocals(row)
+        midi = None
+        if not audio:
+            raise ValueError("ไม่มีไฟล์เสียงร้องที่แยกแล้วสำหรับทดลองฟัง")
+    elif source_choice != "auto":
         category, raw_id = source_choice.split(":", 1)
         match = next((item for item in related if item["id"] == int(raw_id)), None)
         if not match:
@@ -2341,7 +2458,24 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok() or not self._allowed() or not self._auth():
             self._deny()
             return
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except (ValueError, TypeError):
+            self._deny("ขนาดข้อมูลไม่ถูกต้อง", 413)
+            return
+        path = urllib.parse.urlsplit(self.path).path
+        if path == "/api/ai-recording-upload":
+            if not 1000 <= length <= MAX_AI_RECORDING_BYTES:
+                self._deny("เสียงบันทึกต้องมีขนาดระหว่าง 1 KB และ 64 MB", 413)
+                return
+            try:
+                self.connection.settimeout(90)
+                result = stage_microphone_recording(
+                    self.rfile, length, self.headers.get("Content-Type", ""))
+                self._json(result)
+            except (ValueError, OSError, TimeoutError) as exc:
+                self._deny(str(exc), 400)
+            return
         if length > 1048576 or length <= 0:
             self._deny("ขนาดคำสั่งไม่ถูกต้อง", 413)
             return
