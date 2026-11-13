@@ -639,11 +639,15 @@ function getFileId(data) {
 function songPlayFormat(song){
   return window.XStageRuntime?.chooseFormat?.(song)||null;
 }
+function availableAudioFormat(song){
+  const rt=window.XStageRuntime;
+  return rt?.chooseFormat?.(song,rt.deviceInfo(),{...rt.setting(),format:'auto',mode:'audio'})||null;
+}
 function playable(song) {
-  const format=songPlayFormat(song);
+  // Keep the searchable catalog independent of the current filter selection.
+  const format=availableAudioFormat(song);
   const media=window.XStageRuntime?.selectedMedia?.(song,format);
-  // MIDI and VIDEO are intentionally excluded until their stage engines and
-  // synchronized lyrics have been validated end to end.
+  // MIDI/video will join this list once the corresponding stage engine is ready.
   return !!(getFileId(media)&&getFileId(song?.lyrics)&&['m4a','mp3'].includes(format));
 }
 function songAudioMedia(song){
@@ -651,7 +655,9 @@ function songAudioMedia(song){
 }
 function matchesSongFormat(song){
   const selected=document.getElementById('song-format-filter')?.value||'auto';
-  return selected==='auto'?playable(song):playable(song)&&songPlayFormat(song)===selected;
+  const format=songPlayFormat(song);
+  return playable(song)&&['m4a','mp3'].includes(format)&&
+    (selected==='auto'||format===selected);
 }
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
 const GOOGLE_FETCH_TIMEOUT_MS=18_000;
@@ -1939,7 +1945,7 @@ function togglePlayback(){
 async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=true}={}) {
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
-  if (!playable(song)) {setPlayStatus('ไม่พบไฟล์เสียงและเนื้อร้องที่อุปกรณ์นี้รองรับ · เปลี่ยนรูปแบบค้นหา');return;}
+  if (!playable(song)||!songAudioMedia(song)) {setPlayStatus('ไม่พบไฟล์เสียงและเนื้อร้องที่อุปกรณ์นี้รองรับ · เปลี่ยนรูปแบบค้นหา');return;}
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
