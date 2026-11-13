@@ -19,7 +19,8 @@ import secrets
 import tempfile
 from pathlib import Path, PurePosixPath
 
-ONLINE_ROOT = "XStageWeb"
+ONLINE_ROOT = "StageWeb"
+LEGACY_ONLINE_ROOT = "XStageWeb"
 STAGING_MARKER = ".xstage-songstudio-staging.json"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 MAX_CATALOG_BYTES = 128 * 1024 * 1024
@@ -114,10 +115,17 @@ class OnlinePublisher:
         return result
 
     def _existing_root(self):
+        # Existing XStageWeb databases keep their original Google Drive ID.
+        # Never generate a second StageWeb tree when the legacy library is
+        # already visible; code and MD5 duplicate checks must cover both.
         found = [x for x in self.drive.list_children("root") if
-                 x.get("name") == ONLINE_ROOT and x.get("mimeType") == FOLDER_MIME]
+                 x.get("name") in (ONLINE_ROOT, LEGACY_ONLINE_ROOT) and
+                 x.get("mimeType") == FOLDER_MIME]
         if len(found) > 1:
-            raise PublishError("พบโฟลเดอร์ XStageWeb ซ้ำหลายรายการ: กรุณาเลือกคลังที่ถูกต้องก่อน")
+            raise PublishError(
+                "พบคลัง StageWeb และ XStageWeb มากกว่าหนึ่งรายการ · "
+                "หยุดก่อนอัปโหลดเพื่อไม่ให้แยกฐานเพลงซ้ำ "
+                "กรุณาตรวจเลือกคลังเดิมให้ชัดเจน")
         return found[0]["id"] if found else None
 
     def _read_online(self, root):
@@ -132,7 +140,7 @@ class OnlinePublisher:
             if children:
                 markers = [x for x in children if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs"}
+                expected = {STAGING_MARKER, "songs", "audio", "lyrics"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
                         and self._json(markers[0]["id"]).get("format") ==
                         "xstage-songstudio-upload-staging-v1"):
@@ -188,7 +196,7 @@ class OnlinePublisher:
             if allow_missing_root:
                 return {"songs": [], "generation": "", "visible": False}
             raise PublishError(
-                "ไม่พบคลัง XStageWeb เดิมที่ Google OAuth ของ Song Studio เข้าถึงได้ "
+                "ไม่พบคลัง XStageWeb/StageWeb เดิมที่ Google OAuth ของ Song Studio เข้าถึงได้ "
                 "· ห้ามอ้างว่าไม่มีรหัสซ้ำจนกว่าจะเชื่อมต่อคลังเดิม")
         active, songs, _ = self._read_online(root)
         if active is None:
@@ -222,7 +230,7 @@ class OnlinePublisher:
         # Never silently make a second XStageWeb and strand the old songs.
         if root is None and not create_new_library:
             raise PublishError(
-                "ไม่พบ XStageWeb ที่บัญชี/แอปนี้เข้าถึงได้ · "
+                "ไม่พบ XStageWeb/StageWeb ที่บัญชี/แอปนี้เข้าถึงได้ · "
                 "หากมีเพลงเดิม ห้ามสร้างคลังใหม่จนกว่าจะอนุญาตให้ Song Studio "
                 "เข้าถึงคลังเดิมผ่าน Google OAuth/Picker · "
                 "ถ้าเป็น Google Drive ว่างจริง ให้เลือก 'สร้างคลังใหม่' โดยชัดเจน")
@@ -292,7 +300,7 @@ class OnlinePublisher:
             # Immutable, content-named media avoids overwriting an older song
             # with the same basename and prevents blind filename deduplication.
             name = path.stem + "-" + checksum[:16] + path.suffix
-            parent = folder(("songs", *path.parts[:-1]))
+            parent = folder(tuple(path.parts[:-1]))
             if parent not in file_lists:
                 file_lists[parent] = self.drive.list_children(parent)
             result, meta = self.drive.upload_file(
@@ -301,7 +309,7 @@ class OnlinePublisher:
             if result == "created":
                 counts["filesUploaded"] += 1
                 file_lists[parent].append(meta)
-            return {"fileId": meta["id"], "path": "songs/" +
+            return {"fileId": meta["id"], "path":
                     str(path.parent).replace("\\", "/") + "/" + name,
                     "md5Checksum": checksum,
                     "size": local_file.stat().st_size}
