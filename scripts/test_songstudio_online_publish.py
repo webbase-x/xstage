@@ -112,6 +112,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertTrue(remote["lyrics"]["fileId"])
         self.assertIn(remote["audio"]["fileId"], self.drive.items)
         self.assertIn(remote["lyrics"]["fileId"], self.drive.items)
+        self.assertIn(remote["lrc"]["fileId"], self.drive.items)
         self.assertEqual(self.drive.upload_order[-1], "current.json")
         # Neither fake absolute local path nor user OAuth credentials leak.
         self.assertNotIn(str(self.base), json.dumps(remote))
