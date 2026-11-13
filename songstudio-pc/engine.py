@@ -929,6 +929,101 @@ def separate_ai_lyrics_vocals(song_id):
                        " · ไม่แก้เพลงต้นฉบับและไม่อัปโหลด Google Drive อัตโนมัติ"}
 
 
+
+def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumental=False):
+    """Export only the selected reviewed LRC and/or separated karaoke M4A.
+
+    Files are copied to the user's remembered download directory, never to
+    the original source folder or directly into the published song catalog.
+    Exclusive file creation prevents overwrites, including concurrent exports.
+    """
+    if type(song_id) is not int or not (include_lyrics or include_instrumental):
+        raise ValueError("กรุณาเลือกเพลงและชนิดไฟล์อย่างน้อยหนึ่งรายการ")
+    with LOCK:
+        row = dict(AI_IMPORTED.get(song_id) or {})
+    if not row:
+        raise ValueError("กรุณาเลือกเพลงจากรายการที่นำเข้าในหน้า AI")
+    source = Path(row["path"]).expanduser()
+    if not source.is_file() or source.is_symlink() or source.suffix.lower() not in EXT_AUDIO:
+        raise ValueError("ไฟล์เสียงต้นฉบับไม่พร้อมใช้งาน")
+    reviewed = ""
+    if include_lyrics:
+        with LOCK:
+            reviewed = str(NOTES.get(row["path"], {}).get("lyrics") or "")
+        if not reviewed.strip():
+            raise ValueError("ยังไม่ได้ตรวจและบันทึกเนื้อร้อง LRC · ต้องบันทึกก่อนส่งออก")
+        parsed = _song_export_module().lrc_to_json(reviewed, str(row.get("code") or ""))
+        if not parsed.get("lines"):
+            raise ValueError("เนื้อร้อง LRC ไม่มีเวลาที่ถูกต้อง")
+    destination = Path(PREFS["download"]).expanduser()
+    if not destination.is_dir():
+        raise ValueError("โฟลเดอร์ส่งออกไม่พร้อมใช้งาน · เลือกตำแหน่งในเมนูดาวน์โหลดก่อน")
+    if destination.is_symlink():
+        raise ValueError("ไม่อนุญาตโฟลเดอร์ส่งออกที่เป็น Symbolic Link")
+    safe = _song_export_module().safe_filename(
+        str(row.get("code") or source.stem) + " - " + str(row.get("title") or source.stem))
+    safe = safe[:110]
+    instrumental = None
+    if include_instrumental:
+        instrumental = ai_vocals_target(row).with_name(
+            ai_vocals_target(row).name.replace(" - AI Vocals-", " - AI Instrumental-"))
+        if instrumental.name == ai_vocals_target(row).name:
+            raise RuntimeError("หาไฟล์ดนตรีที่แยกไว้ไม่สำเร็จ")
+        if not instrumental.is_file() or instrumental.stat().st_size < 1000:
+            update("ยังไม่มีไฟล์เพลงตัดเสียงร้อง · กำลังแยกเสียงด้วย AI ก่อนส่งออก")
+            separate_ai_lyrics_vocals(song_id)
+        if not instrumental.is_file() or instrumental.stat().st_size < 1000:
+            raise RuntimeError("ไม่พบไฟล์ M4A ดนตรีที่แยกเสร็จแล้ว")
+
+    exported = []
+    tasks = []
+    if include_lyrics:
+        tasks.append((safe + ".lrc", reviewed.encode("utf-8-sig")))
+    if include_instrumental:
+        tasks.append((safe + " - Instrumental.m4a", instrumental))
+    for i, (name, data) in enumerate(tasks, 1):
+        if CANCEL.is_set():
+            raise RuntimeError("ยกเลิกการส่งออก")
+        update(f"ส่งออกไฟล์ {i}/{len(tasks)} · {name}", i - 1)
+        # Reserve an unused name atomically; never replace an existing export.
+        target = None
+        for n in range(1, 1001):
+            stem = Path(name).stem + (f" ({n})" if n > 1 else "")
+            candidate = destination / (stem + Path(name).suffix)
+            try:
+                with candidate.open("xb") as output:
+                    target = candidate
+                    try:
+                        if isinstance(data, bytes):
+                            output.write(data)
+                        else:
+                            with data.open("rb") as stream:
+                                while True:
+                                    if CANCEL.is_set():
+                                        raise RuntimeError("ยกเลิกการส่งออก")
+                                    block = stream.read(1024 * 1024)
+                                    if not block:
+                                        break
+                                    output.write(block)
+                        output.flush()
+                        os.fsync(output.fileno())
+                    except BaseException:
+                        output.close()
+                        candidate.unlink(missing_ok=True)
+                        raise
+                break
+            except FileExistsError:
+                continue
+        if target is None:
+            raise RuntimeError("มีไฟล์ชื่อซ้ำมากเกินไปในโฟลเดอร์ส่งออก")
+        exported.append(str(target))
+        update(f"บันทึกไฟล์ {i}/{len(tasks)} สำเร็จ", i)
+    return {"songId": song_id, "files": exported, "count": len(exported),
+            "message": "ส่งออกสำเร็จ " + str(len(exported)) + " ไฟล์ · " +
+                       " | ".join(exported) +
+                       " · ไม่แก้ไฟล์ต้นฉบับหรืออัปโหลด Google Drive"}
+
+
 def _song_export_module():
     path = ROOT / "song_export.py"
     if not path.is_file():
@@ -1442,6 +1537,13 @@ def execute_job(action, options, started):
             with LOCK:
                 JOB["total"] = 1
             result = separate_ai_lyrics_vocals(song_id)
+        elif action == "ai-export":
+            with LOCK:
+                JOB["total"] = 2
+            result = export_ai_lyrics_files(
+                options.get("id"),
+                include_lyrics=options.get("lyrics") is True,
+                include_instrumental=options.get("instrumental") is True)
         elif action == "ai-lyrics":
             song_id = options.get("id")
             with LOCK:
