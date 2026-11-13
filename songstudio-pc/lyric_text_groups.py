@@ -225,7 +225,7 @@ def list_groups(snapshot, position, *, search="", offset=0, limit=40, repeats_on
             continue
         # "Repeated" refers to the full library, while a phrase filtered by
         # any lyric-body search can legitimately match only one of those songs.
-        if repeats_only and group["count"] < 2:
+        if repeats_only and group["count"] < 2 and not group.get("queuePending"):
             continue
         members = _searched_members(snapshot, group, search)
         if members:
@@ -445,9 +445,14 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
     # preserves all other rows, counts and pagination in the operator's queue.
     for group, members in chosen:
         removed = {item["songId"] for item in members}
+        was_repeated = group["count"] >= 2
         group["members"][:] = [
             item for item in group["members"] if item["songId"] not in removed]
         group["count"] = len(group["members"])
+        # If a searched batch edited only some songs of a repeated group,
+        # the one-song remainder must stay visible in the work queue.
+        if was_repeated and group["count"] > 0:
+            group["queuePending"] = True
         if not group["members"]:
             snapshot["groups"].pop(group["id"], None)
     for item in changes:
