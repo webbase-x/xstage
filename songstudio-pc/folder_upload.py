@@ -175,51 +175,90 @@ def report(folder):
                       for kind in ("MP3", "M4A", "AVI", "MPG", "VCD", "WMV", "NCN")}}
 
 
-def upload(drive, folder, *, create_new_library=False, cancelled=None, progress=None):
+def upload(drive, folder, *, create_new_library=False, cancelled=None,
+           progress=None, export=None, publisher=None, staging_root=None):
+    """Publish supported ready audio+lyrics sets through the SAME online DB.
+
+    The existing Karaoke Online schema supports audio+timed JSON. Do not put
+    unsupported VIDEO/NCN into the catalog and falsely claim playability.
+    Original source files are never modified.
+    """
+    import json
+    import shutil
+    import tempfile
+    if export is None or publisher is None or staging_root is None:
+        raise ValueError("ต้องใช้ Online Publisher และตัวแปลง LRC ของ X-Stage")
     result = scan(folder)
-    if not result["complete"]:
-        raise ValueError("ไม่พบชุดเพลงพร้อมอัปโหลด · ตรวจไฟล์เพลงและเนื้อร้องให้ครบก่อน")
-    # Never merge uncatalogued media into an unverified Online code registry.
-    roots = [x for x in drive.list_children("root")
-             if x.get("name") in ("XStageWeb", "StageWeb")
-             and x.get("mimeType") == FOLDER]
-    if len(roots) > 1:
-        raise ValueError("พบ XStageWeb/StageWeb ซ้ำกัน · กรุณาตรวจคลังเดิมก่อนอัปโหลด")
-    if not roots and not create_new_library:
-        raise ValueError("ไม่พบ XStageWeb ที่แอปมองเห็นได้ · กรุณายืนยันการสร้างโฟลเดอร์ใหม่ก่อนอัปโหลด")
-    root_id = roots[0]["id"] if roots else drive.folder("root", "XStageWeb")
-    cache = {}
-    uploaded = skipped = 0
-    finished = 0
-    for row in result["complete"]:
-        # Validate all companions again immediately before the group transfer.
-        for path, _ in row["files"]:
-            if not path.is_file() or path.is_symlink():
-                raise ValueError("ไฟล์เปลี่ยนหลังตรวจสอบ: " + str(path))
-        for path, parts in row["files"]:
+    supported = [r for r in result["complete"] if r["kind"] in ("MP3", "M4A")]
+    deferred = [r for r in result["complete"] if r["kind"] not in ("MP3", "M4A")]
+    if not supported:
+        raise ValueError("ยังไม่มี MP3/M4A พร้อมเนื้อร้องให้เผยแพร่ทันที · "
+                         "VIDEO/NCN ยังไม่รองรับ Catalog สำหรับเล่นออนไลน์ จึงไม่อัปโหลดโดยอ้างว่าพร้อมเล่น")
+    # Check the live catalogue before creating local files or modifying Drive.
+    preview = publisher.read_code_registry(allow_missing_root=create_new_library)
+    if not preview.get("visible") and not create_new_library:
+        raise ValueError("ไม่พบ XStageWeb ที่มองเห็นได้ · ต้องยืนยันสร้างคลังใหม่")
+    staging_root = Path(staging_root).expanduser()
+    staging_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="xstage-upload-", dir=staging_root) as scratch:
+        stage = Path(scratch)
+        (stage / "audio").mkdir()
+        (stage / "lyrics").mkdir()
+        prepared = []
+        seen = set()
+        for row in supported:
             if cancelled and cancelled.is_set():
-                raise ValueError("ยกเลิกการอัปโหลด · ไฟล์ที่ส่งก่อนหน้าจะคงอยู่บน Drive")
-            parent = root_id
-            prefix = []
-            for part in parts:
-                prefix.append(part)
-                key = tuple(prefix)
-                if key not in cache:
-                    cache[key] = drive.folder(parent, part)
-                parent = cache[key]
-            md5 = digest(path)
-            name = path.stem + "-" + md5[:16] + path.suffix.lower()
-            status, _ = drive.upload_file(parent, path, name, cancelled=cancelled)
-            if status == "created":
-                uploaded += 1
-            else:
-                skipped += 1
-        finished += 1
-        if progress:
-            progress(finished, result["total"], row["name"])
-    return {"ready": result["total"], "uploadedFiles": uploaded,
-            "skippedFiles": skipped, "incomplete": len(result["incomplete"]),
-            "unsupported": len(result["unsupported"]), "catalogUnchanged": True,
-            "message": f"อัปโหลดชุดไฟล์พร้อมใช้ {finished} ชุด · ส่งใหม่ {uploaded} ไฟล์ "
-                       f"· ข้ามซ้ำ {skipped} · ไม่ครบ {len(result['incomplete'])} "
-                       "· ไม่แก้ current.json (ไฟล์ต้นฉบับยังไม่ถูกเพิ่มเข้าฐานเล่นออนไลน์)"}
+                raise ValueError("ยกเลิกก่อนเผยแพร่")
+            media = next((p for p, _ in row["files"] if p.suffix.lower() in AUDIO), None)
+            lyric = next((p for p, _ in row["files"] if p.suffix.lower() == ".lrc"), None)
+            if media is None or lyric is None:
+                continue
+            # Content fingerprint allows distinct same-name songs, while the
+            # remote publisher will verify MD5 and code collisions again.
+            source_id = digest(media)
+            if source_id in seen:
+                continue
+            seen.add(source_id)
+            code = row["name"].strip()
+            if not code or len(code) > 140:
+                continue
+            name = export.safe_filename(code)
+            suffix = media.suffix.lower()
+            file = stage / "audio" / (source_id[:16] + suffix)
+            lyrics_file = stage / "lyrics" / (source_id[:16] + ".json")
+            lrc_file = lyrics_file.with_suffix(".lrc")
+            document = export.lrc_to_json(lyric.read_text(encoding="utf-8-sig"), code)
+            if not document.get("lines"):
+                continue
+            # Use ordinary copies for cross-volume safety. Avoid mutating user
+            # originals; ephemeral staging is deleted even after cancellation.
+            shutil.copy2(media, file)
+            raw_lrc = lyric.read_bytes()
+            lrc_file.write_bytes(raw_lrc)
+            lyrics_file.write_text(json.dumps(document, ensure_ascii=False),
+                                   encoding="utf-8")
+            prepared.append({
+                "webSongId": "import/" + source_id,
+                "code": code, "title": row["name"], "artist": "",
+                "sourceFormat": row["kind"],
+                "audio": {"path": "audio/" + file.name},
+                "lyrics": {"path": "lyrics/" + lyrics_file.name}})
+        if not prepared:
+            raise ValueError("ไม่มีเนื้อร้องที่แปลงเป็น JSON พร้อมเวลาได้")
+        (stage / "current.json").write_text('{"staging":true}', encoding="utf-8")
+        result_db = publisher.publish(
+            stage, prepared, create_new_library=create_new_library,
+            cancelled=cancelled,
+            on_row=(lambda done, total, skipped:
+                    progress(done + skipped, total + skipped, "กำลังสร้าง DB ออนไลน์"))
+                   if progress else None)
+    return {
+        **result_db, "ready": len(prepared), "deferred": len(deferred),
+        "incomplete": len(result["incomplete"]), "unsupported": len(result["unsupported"]),
+        "message": (
+            f"ซิงค์ DB พร้อมเล่น · เพิ่ม {result_db['newSongs']} เพลง · "
+            f"ปรับเนื้อร้อง {result_db['updatedSongs']} · "
+            f"ข้ามซ้ำ {result_db['duplicates']} · รหัสชนกัน {result_db['conflicts']} · "
+            f"ข้ามรายการไม่สมบูรณ์ {len(result['incomplete'])} · "
+            f"ยังไม่เผยแพร่ VIDEO/NCN {len(deferred)} รายการ (ยังไม่มี Online Catalog ที่รองรับ)")
+    }
