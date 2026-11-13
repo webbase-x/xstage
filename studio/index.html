@@ -199,6 +199,11 @@
                 <select id="ai-lyrics-language" class="field">
                   <option value="th">ภาษาไทย</option><option value="auto">ตรวจจับภาษาอัตโนมัติ</option><option value="en">ภาษาอังกฤษ</option>
                 </select></div>
+              <div class="ai-vocal-stem-tools">
+                <button id="ai-lyrics-separate" class="button ghost" type="button" disabled>♫ แยกเสียงร้องและบันทึก M4A</button>
+                <label class="ai-vocal-stem-check"><input id="ai-lyrics-use-vocals" type="checkbox" disabled> ใช้เสียงร้องแยกสำหรับ Whisper AI</label>
+                <span id="ai-lyrics-vocals-status" class="hint" role="status" aria-live="polite">ยังไม่มีไฟล์เสียงร้องแยก · บันทึกใน StageWeb/audio โดยไม่แก้ไฟล์เดิม</span>
+              </div>
               <button id="ai-lyrics-start" class="button primary" type="button" disabled>✦ ให้ AI ถอดเสียงร้องและจัดเวลา</button>
               <span id="ai-lyrics-status" class="ai-lyrics-status" role="status" aria-live="polite">รอนำเข้าเพลงใหม่หรือเลือกเพลงที่เคยนำเข้า</span>
             </div>
