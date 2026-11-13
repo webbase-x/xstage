@@ -636,7 +636,7 @@ def convert(row, target, preview=False):
         if temp_wav:
             temp_wav.unlink(missing_ok=True)
 
-def separate_ai(row, target, preview=False):
+def separate_ai(row, target, preview=False, *, vocals_only=False):
     """Split a song offline; output karaoke M4A and optional vocals M4A.
 
     Uses locally bundled FFmpeg + ONNX Runtime + HTDemucs model. Progress
@@ -649,6 +649,8 @@ def separate_ai(row, target, preview=False):
             "AI Separation ไม่พร้อม: ไม่พบโมเดล HTDemucs หรือไลบรารีใน ZIP "
             "กรุณาใช้ PC Ready Build 303 ที่รวม AI ทั้งชุด"
         )
+    if preview and vocals_only:
+        raise ValueError("การแยกเสียงร้องเพื่อบันทึก M4A ต้องไม่ใช้โหมดตัวอย่าง 60 วินาที")
     source = Path(row["path"])
     if source.suffix.lower() in EXT_UNSUPPORTED:
         raise RuntimeError("ยังไม่รองรับ NCN สำหรับ AI separation")
@@ -718,17 +720,20 @@ def separate_ai(row, target, preview=False):
                     PROCESS = None
         if not instrumental.is_file() or not vocals.is_file():
             raise RuntimeError("AI separation ไม่คืนไฟล์เสียงทั้งสองส่วน")
-        update("AI ขั้น 3/4 · เข้ารหัส M4A ดนตรี")
-        run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-nostdin",
-                     "-y", "-i", str(instrumental), "-c:a", "aac", "-b:a", "192k",
-                     "-movflags", "+faststart", str(target)])
-        if not target.is_file() or target.stat().st_size < 1000:
-            raise RuntimeError("ไฟล์ AI Instrumental M4A ไม่สมบูรณ์")
-        if preview:
-            return None
+        if not vocals_only:
+            update("AI ขั้น 3/4 · เข้ารหัส M4A ดนตรี")
+            run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-nostdin",
+                         "-y", "-i", str(instrumental), "-c:a", "aac", "-b:a", "192k",
+                         "-movflags", "+faststart", str(target)])
+            if not target.is_file() or target.stat().st_size < 1000:
+                raise RuntimeError("ไฟล์ AI Instrumental M4A ไม่สมบูรณ์")
+            if preview:
+                return None
         update("AI ขั้น 4/4 · เข้ารหัส M4A เสียงร้องแยก")
-        stem = target.with_name(target.stem + " - vocals.m4a")
+        stem = target if vocals_only else target.with_name(target.stem + " - vocals.m4a")
         if stem.exists():
+            if vocals_only:
+                raise FileExistsError("ไฟล์เสียงร้องแยกอยู่แล้ว · ไม่เขียนทับ M4A เดิม")
             stem = unique_target(target.parent, target.stem + " - vocals", ".m4a")
         try:
             run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-nostdin",
@@ -741,6 +746,64 @@ def separate_ai(row, target, preview=False):
             stem.unlink(missing_ok=True)
             raise RuntimeError("ไฟล์ AI Vocals M4A ไม่สมบูรณ์")
         return stem
+
+
+def ai_vocals_target(row):
+    """Deterministic private StageWeb/audio M4A for an imported source.
+
+    The filename includes a fingerprint of original path/size/mtime so a
+    changed source cannot silently reuse its predecessor's AI vocal file.
+    AI-only stems are never added to the public song catalog automatically.
+    """
+    source = Path(row["path"]).expanduser()
+    if (source.suffix.lower() not in EXT_AUDIO or
+            not source.is_file() or source.is_symlink()):
+        raise ValueError("ต้องเลือกไฟล์เสียงต้นฉบับที่ยังอยู่ในเครื่อง")
+    export = _song_export_module()
+    root = export.songs_root(PREFS["workspace"])
+    bucket = export.source_bucket(str(row.get("code") or source.name))
+    key = AI_LYRICS._source_key(source)[:16]
+    stem = export.safe_filename(source.stem)[:90]
+    return root / "audio" / bucket / (stem + " - AI Vocals-" + key + ".m4a")
+
+
+def saved_ai_vocals(row):
+    """Return only completed M4A; never use a partial output as AI input."""
+    path = ai_vocals_target(row)
+    return path if path.is_file() and not path.is_symlink() and path.stat().st_size >= 1000 else None
+
+
+def separate_ai_lyrics_vocals(song_id):
+    """Create a standalone reusable local vocal M4A, without catalog publish."""
+    with LOCK:
+        row = dict(AI_IMPORTED.get(song_id) or {}) if type(song_id) is int else {}
+    if not row:
+        raise ValueError("เลือกเพลงที่นำเข้าในเมนูเนื้อร้อง AI ก่อน")
+    if not ai_available():
+        raise RuntimeError("AI Separation HTDemucs ไม่พร้อม · กรุณาใช้ PC Ready ที่รวมโมเดลครบ")
+    destination = ai_vocals_target(row)
+    if destination.exists():
+        found = saved_ai_vocals(row)
+        if found is None:
+            raise RuntimeError("พบไฟล์เสียงร้องแยกที่ไม่สมบูรณ์ · ไม่เขียนทับ กรุณาตรวจไฟล์เดิม")
+        update("พบเสียงร้องแยก M4A ที่สร้างไว้แล้ว · ใช้ซ้ำโดยไม่ประมวลผล AI ใหม่", 1)
+        return {"songId": song_id, "path": str(found), "reused": True,
+                "message": "มีไฟล์ M4A เสียงร้องแยกที่สร้างไว้แล้ว · " + str(found)}
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    export = _song_export_module()
+    staged = export.temporary_audio(destination)
+    try:
+        update("กำลังแยกเสียงร้องออกจากดนตรี · ประมวลผลออฟไลน์บนเครื่อง")
+        separate_ai(row, staged, vocals_only=True)
+        if CANCEL.is_set():
+            raise RuntimeError("ผู้ใช้ยกเลิกก่อนบันทึก M4A เสียงร้อง")
+        export.commit_audio(staged, destination)
+    finally:
+        staged.unlink(missing_ok=True)
+    update("บันทึกไฟล์เสียงร้องแยกแล้ว · สามารถเลือกใช้สำหรับ Whisper AI", 1)
+    return {"songId": song_id, "path": str(destination), "reused": False,
+            "message": "บันทึก M4A เสียงร้องแยกสำเร็จ · " + str(destination) +
+                       " · ไม่แก้เพลงต้นฉบับและไม่อัปโหลด Google Drive อัตโนมัติ"}
 
 
 def _song_export_module():
@@ -1247,6 +1310,11 @@ def execute_job(action, options, started):
             result = LYRIC_TEXT.undo(LYRIC_TEXT_BACKUPS, root, options.get("backupId"))
             with LOCK:
                 LYRIC_TEXT_INDEX = None
+        elif action == "ai-separate-vocals":
+            song_id = options.get("id")
+            with LOCK:
+                JOB["total"] = 1
+            result = separate_ai_lyrics_vocals(song_id)
         elif action == "ai-lyrics":
             song_id = options.get("id")
             with LOCK:
@@ -1257,9 +1325,17 @@ def execute_job(action, options, started):
             lang = options.get("language", "th")
             if not ffmpeg_binary():
                 raise RuntimeError("ไม่พบ FFmpeg สำหรับเตรียมเสียงให้ Whisper")
+            original = Path(row["path"])
+            use_vocals = options.get("useSeparatedVocals") is True
+            vocals = saved_ai_vocals(row) if use_vocals else None
+            if use_vocals and not vocals:
+                raise ValueError("ยังไม่มี M4A เสียงร้องแยกที่ใช้ได้ · กดแยกเสียงร้องก่อน")
+            if vocals:
+                update("ใช้ไฟล์ M4A เสียงร้องที่แยกแล้วสำหรับ Whisper AI")
             draft = AI_LYRICS.transcribe(
-                Path(row["path"]), str(row.get("code") or Path(row["path"]).stem),
-                DATA, RUNTIME, ffmpeg_binary(), CANCEL, update, language=lang)
+                vocals or original, str(row.get("code") or original.stem),
+                DATA, RUNTIME, ffmpeg_binary(), CANCEL, update, language=lang,
+                draft_source=original)
             update("สร้างเนื้อร้องฉบับร่าง AI แล้ว · ต้องตรวจคำและเวลา", 1)
             result = {
                 "message": ("ได้ร่างเนื้อร้อง AI " + str(len(draft["lines"])) +
@@ -1276,16 +1352,26 @@ def execute_job(action, options, started):
             if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
                 raise ValueError("กรุณาเลือกเพลงที่มีเสียงร้องสำหรับจัดเวลา")
             update("กำลังจับคู่คำร้องที่วางกับเวลาจากเสียงเพลง")
-            draft = AI_LYRICS.load_draft(DATA, Path(row["path"]))
+            original = Path(row["path"])
+            use_vocals = options.get("useSeparatedVocals") is True
+            vocals = saved_ai_vocals(row) if use_vocals else None
+            if use_vocals and not vocals:
+                raise ValueError("ยังไม่มี M4A เสียงร้องแยกที่ใช้ได้ · กดแยกเสียงร้องก่อน")
+            draft = AI_LYRICS.load_draft(DATA, original)
+            # An older draft from the full mix must not be mistaken for a
+            # transcription of the new vocal-only source.
+            if vocals and (not draft or
+                           draft.get("audioFingerprint") != AI_LYRICS._source_key(vocals)):
+                draft = None
             if not draft:
-                update("ยังไม่มีร่าง Whisper · กำลังถอดเสียงเพื่อใช้เป็นหลักเวลาจริง")
+                update("ยังไม่มีร่างจากไฟล์เสียงที่เลือก · กำลังถอดเสียงเพื่อใช้เป็นหลักเวลาจริง")
                 ffmpeg = ffmpeg_binary()
                 if not ffmpeg:
                     raise RuntimeError("ไม่พบ FFmpeg สำหรับสร้างร่างเสียงร้อง")
                 draft = AI_LYRICS.transcribe(
-                    Path(row["path"]), str(row.get("code") or Path(row["path"]).stem),
+                    vocals or original, str(row.get("code") or original.stem),
                     DATA, RUNTIME, ffmpeg, CANCEL, update,
-                    language=options.get("language", "th"))
+                    language=options.get("language", "th"), draft_source=original)
             if CANCEL.is_set():
                 raise RuntimeError("ผู้ใช้ยกเลิกการจัดเวลาเนื้อเพลง")
             aligned = LYRIC_ALIGNMENT.align_lyrics(owner_lyrics, draft)
@@ -1493,13 +1579,21 @@ def start_job(data):
                 str(info.get("error") or "ไม่พบ Google Desktop OAuth Client JSON") +
                 " · เปิดตั้งค่า > ตัวเลือกขั้นสูง > เลือก Google Desktop OAuth Client JSON "
                 "แล้วลอง Google Login ใหม่")
-    if action in ("ai-lyrics", "ai-align"):
+    if action in ("ai-lyrics", "ai-align", "ai-separate-vocals"):
         song_id = data.get("id")
         if type(song_id) is not int or song_id not in FILE_BY_ID:
             raise ValueError("กรุณาเลือกเพลงที่จะใช้ AI ถอดคำร้องก่อน")
         suffix = Path(FILE_BY_ID[song_id]["path"]).suffix.lower()
         if suffix not in EXT_AUDIO:
             raise ValueError("AI ถอดคำร้องได้เฉพาะเพลงที่มีไฟล์เสียงร้องจริง ไม่ใช่ MIDI/NCN ดนตรีล้วน")
+        if action in ("ai-lyrics", "ai-align"):
+            if not isinstance(data.get("useSeparatedVocals", False), bool):
+                raise ValueError("ตัวเลือกเสียงร้องแยกต้องเป็น True/False")
+        if action == "ai-separate-vocals":
+            if song_id not in AI_IMPORTED:
+                raise ValueError("แยกเสียงร้องได้เฉพาะเพลงที่นำเข้าในเมนูสร้างเนื้อร้อง AI")
+            if not ai_available() or not ffmpeg_binary():
+                raise ValueError("โมเดลแยกเสียงร้อง HTDemucs หรือ FFmpeg ไม่พร้อมในแพ็กเกจนี้")
         if action == "ai-align":
             # Check the user's pasted words before accepting a background job.
             LYRIC_ALIGNMENT._read_owner_lines(data.get("lyrics"))
@@ -1507,7 +1601,7 @@ def start_job(data):
         # without re-running Whisper; new songs still require bundled tools.
         has_reference = (action == "ai-align" and
                          AI_LYRICS.load_draft(DATA, Path(FILE_BY_ID[song_id]["path"])))
-        if not has_reference:
+        if action != "ai-separate-vocals" and not has_reference:
             ready, reason = AI_LYRICS.readiness(RUNTIME)
             if not ready:
                 raise ValueError("Whisper AI ยังไม่พร้อม: " + reason)
@@ -1840,9 +1934,12 @@ def ai_lyrics_draft(song_id):
     ready, reason = AI_LYRICS.readiness(RUNTIME)
     if ready and not ffmpeg_binary():
         ready, reason = False, "ไม่พบ FFmpeg ในแพ็กเกจ PC Ready"
+    vocals = saved_ai_vocals(row)
     return {
         "id": song_id, **preview_song_identity(row),
         "available": ready, "aiProblem": reason,
+        "separationAvailable": ai_available() and bool(ffmpeg_binary()),
+        "separatedVocals": str(vocals) if vocals else None,
         "hasDraft": bool(draft), "draft": draft,
         "approvedLrc": AI_LYRICS.replace_music_interlude_label(
             NOTES.get(row["path"], {}).get("lyrics", ""))
