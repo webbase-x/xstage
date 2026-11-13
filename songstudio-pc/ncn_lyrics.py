@@ -76,7 +76,8 @@ def _file_names(folder: Path) -> dict[str, Path]:
         return {}
 
 
-def resolve_companions(midi: Path, index: dict | None = None) -> dict | None:
+def resolve_companions(midi: Path, index: dict | None = None, *,
+                       indexed_only: bool = False) -> dict | None:
     """Resolve .MID/.LYR/.CUR in mirrored Song/Lyrics/Cursor directories.
 
     Never use files from a different code or digit bucket. Case-insensitive
@@ -92,8 +93,10 @@ def resolve_companions(midi: Path, index: dict | None = None) -> dict | None:
                                    ("cursor", ".cur", "cursor")):
         indexed = (index or {}).get((str(root).casefold(), str(subdir).casefold(),
                                       code, suffix))
-        if indexed is not None and Path(indexed).is_file():
+        if indexed is not None and (indexed_only or Path(indexed).is_file()):
             result[key] = str(indexed)
+            continue
+        if indexed_only:
             continue
         folder = _find_ci(root, component)
         if folder is None:
