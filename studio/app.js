@@ -300,7 +300,7 @@
   function updateButtons() {
     $('selected-count').textContent = `เลือกแล้ว ${fmtNum(selected.size)} เพลง`;
     $('upload-selected-count').textContent = 'ซิงค์คลังเพลงทั้งหมด';
-    const buttons = ['scan-button','reconcile-button','preview-button','edit-button','build-button',
+    const buttons = ['scan-button','reconcile-button','scan-full-button','preview-button','edit-button','build-button',
       'build-audio-button','select-all','select-page','clear-selection','upload-login','settings-login',
       'settings-logout','google-login-header','update-button','verify-code-registry'];
     for (const name of buttons) $(name).disabled = busy;
@@ -384,9 +384,13 @@
   }
   async function config(patch) {
     const previousWorkspace = prefs.workspace;
+    const previousSource = prefs.source;
     const response = await post('/api/config', patch);
     prefs = response.preferences || prefs;
-    if (patch.workspace && previousWorkspace !== prefs.workspace) { selected.clear(); page = 0; await refreshSongs(); }
+    if ((patch.workspace && previousWorkspace !== prefs.workspace) ||
+        (patch.source && previousSource !== prefs.source)) {
+      selected.clear(); page = 0; await refreshSongs();
+    }
     if ('soundfont' in patch || 'workspace' in patch) soundfontOptions(response.soundfonts || []);
     setFields();
     if (response.google) setGoogle(response.google);
@@ -1215,7 +1219,7 @@
     $('job-skip-count').textContent = job.kind === 'scan'
       ? (state === 'success'
           ? 'สแกนพบ ' + fmtNum(Number(job.result?.songs ?? job.result?.count ?? job.completed ?? 0)) + ' เพลง · ยังไม่ได้สร้าง M4A/Lyrics'
-          : 'กำลังตรวจสอบไฟล์ต้นฉบับ · ยังไม่ได้สร้างเพลง')
+          : 'ตรวจไฟล์ ' + fmtNum(job.completed || 0) + ' · ยังไม่ได้สร้างเพลง')
       : 'ข้ามซ้ำ ' + fmtNum(Number(job.skipped || 0)) +
         ' · ERR ' + fmtNum(Number(job.errors || 0)) +
         ' · M4A ' + fmtNum(Number(job.m4aCount || 0)) +
@@ -1227,7 +1231,9 @@
     fill.style.width = fraction !== null ? Math.max(0,Math.min(100,100*fraction)).toFixed(1)+'%' : (isRunning?'33%':'0%');
     $('job-fraction').textContent = Number(job.total)>0 ? `${fmtNum(job.completed)} / ${fmtNum(job.total)} รายการ · ${Math.round(fraction*100)}%`:
       Number(job.bytesTotal)>0?`${fmtSize(job.bytesDone)} / ${fmtSize(job.bytesTotal)} · ${Math.round(fraction*100)}%`:
-      isRunning ? 'กำลังดำเนินการ · ยังไม่ทราบเปอร์เซ็นต์' : state === 'success' ? 'เสร็จสิ้น' : 'รอเริ่มงาน';
+      isRunning && job.kind === 'scan'
+        ? 'ตรวจรายการแล้ว ' + fmtNum(job.completed || 0) + ' ไฟล์ · กำลังตรวจการเปลี่ยนแปลง'
+        : isRunning ? 'กำลังดำเนินการ · ยังไม่ทราบเปอร์เซ็นต์' : state === 'success' ? 'เสร็จสิ้น' : 'รอเริ่มงาน';
     $('job-eta').textContent = isRunning
       ? `เวลาคงเหลือประมาณ ${job.eta !== null ? fmtTime(job.eta) : '—'} · ${job.idleFor > 7 ? `ยังทำงานอยู่ ${job.idleFor} วินาที` : 'สถานะสด'}`
       : state === 'success' ? (job.kind === 'scan' ? 'สแกนสำเร็จ · ยังไม่ได้สร้างเพลง' : 'งานสำเร็จ') : state === 'error' ? 'ตรวจ Log ข้อผิดพลาด' : 'พร้อม';
@@ -1371,10 +1377,13 @@
   for (const el of document.querySelectorAll('[data-pick]')) el.addEventListener('click',()=>pick(el.dataset.pick).catch(e=>message(e.message)));
   $('verify-code-registry').addEventListener('click',()=>{void verifyCodeRegistry();});
   $('scan-button').addEventListener('click',async()=>{
-    try{await saveInputs(['create-source']);await run('scan');}catch(e){message(e.message);}
+    try{await saveInputs(['create-source']);await run('scan',{full:false});}catch(e){message(e.message);}
   });
   $('reconcile-button').addEventListener('click',async()=>{
-    try{await saveInputs(['create-source']);await run('scan');}catch(e){message(e.message);}
+    try{await saveInputs(['create-source']);await run('scan',{full:false});}catch(e){message(e.message);}
+  });
+  $('scan-full-button').addEventListener('click',async()=>{
+    try{await saveInputs(['create-source']);await run('scan',{full:true});}catch(e){message(e.message);}
   });
   $('create-build-show-log').addEventListener('click',showBuildLog);
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
