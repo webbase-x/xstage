@@ -200,7 +200,7 @@ jobs:
             $names = @($archive.Entries | ForEach-Object { $_.FullName })
             foreach ($name in @("studio/app-icon.svg", "studio/app-icon.ico", "studio/app-icon-512.png",
                                 "Create-Desktop-Shortcut.cmd", "Create-Desktop-Shortcut.ps1",
-                                "Start-Song-Studio.cmd", "song_export.py", "code_registry.py", "google_drive.py", "online_publish.py", "pick_path.ps1", "ai_separate.py", "ai-model.lock.json", "live_preview.py", "ncn_lyrics.py", "song_index.py", "ai_lyrics.py",
+                                "Start-Song-Studio.cmd", "song_export.py", "code_registry.py", "google_drive.py", "online_publish.py", "pick_path.ps1", "ai_separate.py", "ai-model.lock.json", "live_preview.py", "ncn_lyrics.py", "song_index.py", "ai_lyrics.py", "lyric_alignment.py",
                                 ".runtime/models/htdemucs_fp16weights.onnx", ".runtime/models/ggml-base.bin",
                                 ".runtime/whisper/whisper-cli.exe",
                                 ".runtime/ai-site/numpy/__init__.py", ".runtime/ai-site/onnxruntime/__init__.py",
