@@ -303,6 +303,8 @@ button.preview-lyric-line{cursor:pointer}
 .lyric-group-row{display:flex;gap:13px;align-items:center;justify-content:space-between;width:100%;min-width:0;text-align:left;background:#103047;border:1px solid transparent;border-radius:9px;padding:12px;color:#f2fcff;cursor:pointer}
 .lyric-group-row:hover,.lyric-group-row:focus-visible{border-color:#75d7e4;background:#17445d}
 .lyric-group-row.active{border-color:#6ee5ca;background:#14535c}
+.lyric-group-row input[type="checkbox"]{flex:none;inline-size:18px;block-size:18px;accent-color:#54e1cf;cursor:pointer}
+.lyric-group-row:has(input:checked){background:#174e5a;border-color:#75d7e4}
 .lyric-group-row-text{min-width:0;flex:1;overflow-wrap:anywhere;white-space:pre-wrap}
 .lyric-group-row-count{flex:none;background:#1c5062;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
 .lyric-group-selection{background:#102e43;border-radius:10px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:45px}
