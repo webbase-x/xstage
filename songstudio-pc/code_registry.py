@@ -162,7 +162,7 @@ def apply_changes(root: Path, changes, export):
     manual LRC text and all source components unmodified. Existing pointer
     remains valid until immutable catalog + journal have been written.
     """
-    root = Path(root)
+    root = Path(root).resolve()
     count = 0
     for original, new_code in changes:
         old = str(original.get("code") or "")
