@@ -1582,10 +1582,30 @@
                 message('จัดเวลาสำเร็จแต่เพลงหรือเนื้อเพลงที่เลือกเปลี่ยนไป · โปรแกรมไม่เขียนทับข้อความของคุณ');
               }
               pendingAiAlignment=null;
+            } else if (job.kind === 'lyric-groups-scan') {
+              phraseReady=true;
+              phraseOffset=0;phraseClearSelection();
+              await refreshPhraseGroups();
+              await refreshPhraseBackup();
+              message(job.result?.message||'จัดกลุ่มข้อความเสร็จแล้ว',false);
+            } else if (['lyric-groups-replace','lyric-groups-undo'].includes(job.kind)) {
+              phraseReady=false;phraseRows=[];phraseOffset=0;
+              ++phraseSeq;phraseClearSelection();
+              $('lyric-group-results').textContent=
+                'มีการแก้ไขข้อความแล้ว · กรุณากด วิเคราะห์ข้อความหัว–ท้ายเพลง อีกครั้ง เพื่ออัปเดตผลการจัดกลุ่ม';
+              $('lyric-group-page-count').textContent='ต้องวิเคราะห์ใหม่';
+              $('lyric-group-page-count').dataset.total='0';
+              await refreshPhraseBackup();
+              message(job.result?.message||'ดำเนินการสำเร็จ',false);
             } else if (job.kind === 'check-update') {
               message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
           } else if (job.state === 'error') {
+            if(job.kind?.startsWith('lyric-groups-')) {
+              $('lyric-group-preview-status').textContent=
+                'ไม่สำเร็จ · ตรวจ Log · หากเริ่มแก้ไขแล้วสามารถตรวจชุดสำรองเพื่อย้อนคืนได้';
+              await refreshPhraseBackup();
+            }
             if(job.kind==='ai-align'){
               $('ai-lyrics-align-review').textContent=
                 'จัดเวลาไม่สำเร็จ · คำร้องที่วางยังอยู่ · '+(job.detail||'ตรวจ Log เพื่อดูสาเหตุ');
@@ -1721,6 +1741,43 @@
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
+  $('lyric-group-scan').addEventListener('click',()=>{
+    if(!busy)void run('lyric-groups-scan');
+  });
+  $('lyric-group-undo').addEventListener('click',()=>{void phraseUndo();});
+  for(const btn of document.querySelectorAll('[data-lyric-position]')){
+    btn.addEventListener('click',()=>{
+      if(busy)return;
+      phrasePosition=btn.dataset.lyricPosition;
+      phraseOffset=0;phraseClearSelection();
+      if(phraseReady)void refreshPhraseGroups();
+    });
+  }
+  $('lyric-group-search').addEventListener('input',()=>{
+    clearTimeout(phraseSearchTimer);
+    phraseSearchTimer=setTimeout(()=>{
+      phraseOffset=0;phraseClearSelection();
+      void refreshPhraseGroups();
+    },220);
+  });
+  $('lyric-group-repeats').addEventListener('change',()=>{
+    phraseOffset=0;phraseClearSelection();
+    void refreshPhraseGroups();
+  });
+  $('lyric-group-results').addEventListener('click',event=>{
+    const btn=event.target.closest('[data-lyric-group]');
+    if(btn)void phraseSelectGroup(btn.dataset.lyricGroup);
+  });
+  $('lyric-group-prev').addEventListener('click',()=>{
+    phraseOffset=Math.max(0,phraseOffset-40);phraseClearSelection();
+    void refreshPhraseGroups();
+  });
+  $('lyric-group-next').addEventListener('click',()=>{
+    phraseOffset+=40;phraseClearSelection();
+    void refreshPhraseGroups();
+  });
+  $('lyric-group-replacement').addEventListener('input',phraseUpdateButtons);
+  $('lyric-group-apply').addEventListener('click',()=>{void phraseApply();});
   $('ai-lyrics-import').addEventListener('click',()=>{void aiImportAudio();});
   $('ai-lyrics-refresh').addEventListener('click',()=>{void aiRefreshSongList();});
   $('ai-lyrics-search').addEventListener('input',()=>{
