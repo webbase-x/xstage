@@ -235,6 +235,153 @@
     }
     if (name === 'settings') void refreshEnvironment();
   }
+  // Local-only text grouping; the backend never modifies audio or uploads.
+  function phraseUpdateButtons(){
+    const allow=phraseReady&&!busy;
+    $('lyric-group-scan').disabled=busy;
+    $('lyric-group-search').disabled=!allow;
+    $('lyric-group-repeats').disabled=!allow;
+    $('lyric-group-replacement').disabled=!allow||!phraseChosen;
+    $('lyric-group-apply').disabled=!allow||!phraseChosen||
+      !$('lyric-group-replacement').value.trim()||
+      $('lyric-group-replacement').value.trim()===phraseChosen.text;
+    $('lyric-group-undo').disabled=busy||!phraseBackup;
+    const total=Number($('lyric-group-page-count').dataset.total||0);
+    $('lyric-group-prev').disabled=!allow||phraseOffset===0;
+    $('lyric-group-next').disabled=!allow||phraseOffset+40>=total;
+    for(const btn of document.querySelectorAll('[data-lyric-position]')){
+      const isCurrent=btn.dataset.lyricPosition===phrasePosition;
+      btn.disabled=busy;
+      btn.classList.toggle('primary',isCurrent);
+      btn.classList.toggle('ghost',!isCurrent);
+      btn.setAttribute('aria-pressed',String(isCurrent));
+    }
+    for(const btn of $('lyric-group-results').querySelectorAll('[data-lyric-group]'))
+      btn.disabled=busy;
+  }
+  function phraseClearSelection(){
+    phraseChosen=null;
+    $('lyric-group-selection').textContent='ยังไม่ได้เลือกกลุ่มข้อความ';
+    $('lyric-group-examples').replaceChildren();
+    $('lyric-group-replacement').value='';
+    $('lyric-group-preview-status').textContent='เลือกกลุ่มเพื่อดูตัวอย่างก่อนเปลี่ยนข้อความ';
+    phraseUpdateButtons();
+  }
+  async function refreshPhraseBackup(){
+    try{
+      const value=await api('/api/lyric-groups-backup');
+      phraseBackup=value.latest||null;
+    }catch{phraseBackup=null;}
+    phraseUpdateButtons();
+  }
+  async function refreshPhraseGroups(){
+    if(!phraseReady)return;
+    const seq=++phraseSeq;
+    $('lyric-group-results').textContent='กำลังจัดอันดับข้อความที่ใช้ซ้ำ…';
+    const params=new URLSearchParams({
+      position:phrasePosition,offset:String(phraseOffset),limit:'40',
+      repeats:$('lyric-group-repeats').checked?'1':'0',
+      search:$('lyric-group-search').value.trim()
+    });
+    try{
+      const data=await api('/api/lyric-groups?'+params.toString());
+      if(seq!==phraseSeq)return;
+      if(data.total&&phraseOffset>=data.total){
+        phraseOffset=Math.floor((data.total-1)/40)*40;
+        return refreshPhraseGroups();
+      }
+      phraseRows=data.rows||[];
+      const panel=$('lyric-group-results');panel.replaceChildren();
+      for(const group of phraseRows){
+        const btn=document.createElement('button');
+        btn.type='button';btn.className='lyric-group-row';
+        btn.dataset.lyricGroup=group.id;
+        btn.classList.toggle('active',group.id===phraseChosen?.id);
+        const txt=document.createElement('span');txt.className='lyric-group-row-text';
+        txt.textContent=group.text;
+        const count=document.createElement('span');count.className='lyric-group-row-count';
+        count.textContent=fmtNum(group.count)+' เพลง';
+        btn.append(txt,count);panel.append(btn);
+      }
+      if(!phraseRows.length)panel.textContent='ไม่พบข้อความตามเงื่อนไขนี้ · ลองตำแหน่งอื่นหรือแสดงข้อความที่ไม่ซ้ำ';
+      $('lyric-group-page-count').dataset.total=String(data.total||0);
+      $('lyric-group-page-count').textContent=data.total?
+        fmtNum(phraseOffset+1)+'–'+fmtNum(Math.min(data.total,phraseOffset+phraseRows.length))+
+        ' จาก '+fmtNum(data.total)+' กลุ่ม':'ไม่มีกลุ่มข้อความ';
+      $('lyric-group-stats').textContent='เพลงที่ตรวจได้ '+fmtNum(data.songs)+
+        ' · รายการในคลัง '+fmtNum(data.inspected)+
+        ' · ไม่มีคำร้องครบ 4 บรรทัด '+fmtNum(data.withoutLyrics)+
+        ' · ข้ามไฟล์ไม่รองรับ '+fmtNum(data.skippedInvalid);
+      phraseUpdateButtons();
+    }catch(error){
+      if(seq!==phraseSeq)return;
+      phraseReady=false;
+      $('lyric-group-results').textContent='อ่านข้อมูลไม่สำเร็จ: '+error.message;
+      message(error.message);
+      phraseUpdateButtons();
+    }
+  }
+  async function phraseSelectGroup(id){
+    if(busy||!phraseRows.some(x=>x.id===id))return;
+    phraseClearSelection();
+    const seq=++phraseSeq;
+    try{
+      const data=await api('/api/lyric-groups-preview?group='+encodeURIComponent(id));
+      if(seq!==phraseSeq)return;
+      phraseChosen=data;
+      $('lyric-group-selection').textContent=data.label+' · '+fmtNum(data.count)+
+        ' เพลง\n\nข้อความเดิม: '+data.text;
+      const container=$('lyric-group-examples');container.replaceChildren();
+      for(const item of data.examples||[]){
+        const el=document.createElement('div');el.className='lyric-group-example';
+        el.textContent=(item.code||'ไม่มีรหัส')+' · '+(item.title||'ไม่มีชื่อเพลง')+
+          (item.artist?' — '+item.artist:'');
+        container.append(el);
+      }
+      if(data.count>(data.examples||[]).length){
+        const rest=document.createElement('div');rest.className='lyric-group-example';
+        rest.textContent='และอีก '+fmtNum(data.count-data.examples.length)+
+          ' เพลง · ยืนยันแล้วจะแทนที่ครบทุกเพลงในกลุ่ม';
+        container.append(rest);
+      }
+      $('lyric-group-preview-status').textContent=
+        'เปลี่ยนเฉพาะ '+data.label+' · เวลาเดิมคงอยู่ · สำรอง JSON/LRC ก่อนแก้ · ไม่มีการอัปโหลดอัตโนมัติ';
+      for(const btn of $('lyric-group-results').querySelectorAll('[data-lyric-group]'))
+        btn.classList.toggle('active',btn.dataset.lyricGroup===id);
+      phraseUpdateButtons();
+    }catch(error){phraseClearSelection();message(error.message);}
+  }
+  async function phraseApply(){
+    const group=phraseChosen;
+    const replacement=$('lyric-group-replacement').value.trim();
+    if(!group||busy||!phraseReady)return;
+    if(!replacement||replacement===group.text||
+       replacement.length>400||/[\r\n]/.test(replacement))
+      return message('กรุณาใส่ข้อความใหม่หนึ่งบรรทัด ความยาวไม่เกิน 400 ตัวอักษร');
+    const approved=await confirmStudio(
+      'ตำแหน่ง: '+group.label+'\nจำนวนเพลง: '+fmtNum(group.count)+
+      '\n\nข้อความเดิม:\n'+group.text+'\n\nข้อความใหม่:\n'+replacement+
+      '\n\nจะสำรอง JSON/LRC ก่อนแก้ทั้งกลุ่ม · เวลาและไฟล์เสียงไม่เปลี่ยน'+
+      '\nต้องกดอัปโหลด Google Drive เองภายหลังหากต้องการซิงค์ขึ้น Online',
+      'ยืนยันแก้ข้อความ '+fmtNum(group.count)+' เพลง',
+      {acceptLabel:'สำรองและแทนที่',cancelLabel:'ยกเลิก'});
+    if(!approved||busy||phraseChosen?.id!==group.id)return;
+    const started=await run('lyric-groups-replace',{
+      group:group.id,replacement,expectedCount:group.count
+    });
+    if(started)$('lyric-group-preview-status').textContent=
+      'กำลังสำรองและแทนที่ · รายละเอียดแสดงในแผงสถานะงานด้านล่าง';
+  }
+  async function phraseUndo(){
+    const backup=phraseBackup;if(!backup||busy)return;
+    const approved=await confirmStudio(
+      'ย้อนคืนการแก้ไข '+fmtNum(backup.songs)+' เพลง\n\nจาก: '+
+      backup.newText+'\nกลับเป็น: '+backup.oldText+
+      '\n\nระบบจะคืนค่าต่อเมื่อทุกไฟล์ยังตรงกับการแก้ไขครั้งก่อน เพื่อป้องกันทับข้อมูลใหม่',
+      'ยืนยันย้อนคืนข้อความทั้งชุด',
+      {acceptLabel:'ตรวจและย้อนคืน',cancelLabel:'ยกเลิก'});
+    if(approved&&!busy)await run('lyric-groups-undo',{backupId:backup.id});
+  }
   function setFields() {
     $('create-source').value = prefs.source || '';
     $('create-workspace').value = prefs.workspace || '';
