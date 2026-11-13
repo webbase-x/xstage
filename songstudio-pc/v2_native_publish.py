@@ -10,7 +10,7 @@ import secrets
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from online_publish import cloud_media_path, PublishError
+from online_publish import cloud_media_path, PublishError, OnlinePublisher
 
 MAX_MANIFEST_SONGS = 1000000
 MAX_MEDIA_BYTES = 2 * 1024 * 1024 * 1024
@@ -99,6 +99,7 @@ def _read_song(root, item):
 class V2NativePublisher:
     def __init__(self, drive):
         self.drive = drive
+        self.reader = OnlinePublisher(drive)
 
     def publish(self, root_path: Path, manifest: dict, *, create_new_library=False,
                 cancelled=None, on_progress=None):
@@ -128,10 +129,10 @@ class V2NativePublisher:
         # Re-read the active V2 pointer, merge by ID, and preserve other entries.
         previous, existing = None, {}
         if current:
-            previous = self.drive.get_json(current[0]["id"])
+            previous = self.reader._json(current[0]["id"])
             if previous.get("schemaVersion") != 2:
                 raise PublishError("DB/current.json ไม่ใช่ Schema V2")
-            catalog = self.drive.get_json(previous["catalogFileId"])
+            catalog = self.reader._json(previous["catalogFileId"])
             if catalog.get("schemaVersion") != 2:
                 raise PublishError("ฐานเพลง V2 ไม่ถูกต้อง")
             existing = {s["id"]: s for s in catalog.get("songs", [])}
@@ -183,7 +184,7 @@ class V2NativePublisher:
             }
             if on_progress: on_progress(index, len(songs))
         if current:
-            fresh = self.drive.get_json(current[0]["id"])
+            fresh = self.reader._json(current[0]["id"])
             if fresh.get("generation") != previous.get("generation"):
                 raise PublishError("ฐาน V2 ถูกอัปเดตระหว่างอัปโหลด")
         generation = secrets.token_hex(12)
