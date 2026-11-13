@@ -793,10 +793,9 @@
     }
     for (const line of panel.querySelectorAll('[data-line-index]')) {
       const i = Number(line.dataset.lineIndex);
-      const entry = entries[i];
-      const start=Number(entry.startTime)||0;
-      const end=Number(entry.endTime)>start?Number(entry.endTime):start+4;
-      const active=i===index && time<end;
+      // Preserve the fully swept color between an early lyric end and
+      // the next verse, as on MIDI karaoke players; do not snap back.
+      const active=i===index;
       line.classList.toggle('active',active);
       line.classList.toggle('upcoming',i>index);
       karaokeUpdateSpans(line,time);
