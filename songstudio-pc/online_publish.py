@@ -56,7 +56,7 @@ def cloud_media_path(local_relative, source_format="", role="audio", code=""):
     """Return the new Drive path; does not move files or synthesize MIDI."""
     if not isinstance(local_relative, str) or not local_relative:
         raise PublishError("พาธสื่อไม่ถูกต้อง")
-    if "\\\\" in local_relative or ":" in local_relative:
+    if "\\" in local_relative or ":" in local_relative:
         raise PublishError("พาธสื่อไม่ปลอดภัย")
     path = PurePosixPath(local_relative)
     if (path.is_absolute() or any(p in ("", ".", "..") for p in local_relative.split("/"))
