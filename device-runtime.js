@@ -24,9 +24,11 @@ function deviceInfo(){
   const wasm=typeof WebAssembly==='object';
   const worklet=!!global.AudioWorkletNode&&!!global.AudioContext;
   const saver=!!n.connection?.saveData;
-  const conservative=saver||(mem>0&&mem<=2)||(cores>0&&cores<=2);
+  const native=global.XStageDeviceProfile||{};
+  const lowNative=!!native.lowRam||(Number(native.memoryClassMb)>0&&Number(native.memoryClassMb)<=128);
+  const conservative=saver||lowNative||(mem>0&&mem<=2)||(cores>0&&cores<=2);
   const lower=conservative||android;
-  return {wasm,worklet,android,cores,memoryGb:mem,conservative,saveData:saver,
+  return {wasm,worklet,android,cores,memoryGb:mem,nativeMemoryMb:Number(native.memoryClassMb)||0,conservative,saveData:saver,
     m4a:canPlay(media,'audio/mp4; codecs="mp4a.40.2"'),mp3:canPlay(media,'audio/mpeg'),
     video:{avi:canPlay(video,'video/x-msvideo'),mpg:canPlay(video,'video/mpeg'),
       vcd:canPlay(video,'video/mpeg'),wmv:canPlay(video,'video/x-ms-wmv')},
