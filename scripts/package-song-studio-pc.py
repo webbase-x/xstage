@@ -14,6 +14,7 @@ FILES = {
     "songstudio-pc/ncn_lyrics.py": "ncn_lyrics.py",
     "songstudio-pc/song_index.py": "song_index.py",
     "songstudio-pc/ai_lyrics.py": "ai_lyrics.py",
+    "songstudio-pc/lyric_alignment.py": "lyric_alignment.py",
     "songstudio-pc/google_drive.py": "google_drive.py",
     "songstudio-pc/online_publish.py": "online_publish.py",
     "songstudio-pc/code_registry.py": "code_registry.py",
