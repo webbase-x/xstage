@@ -1,0 +1,26 @@
+name: Web MIDI SoundFont lab static checks
+on:
+  push:
+    branches: [feature/web-midi-soundfont-lab]
+    paths:
+      - "midi-lab.html"
+      - "midi-lab.js"
+      - "scripts/test_midi_lab_static.mjs"
+      - ".github/workflows/web-midi-lab.yml"
+  pull_request:
+    paths:
+      - "midi-lab.html"
+      - "midi-lab.js"
+      - "scripts/test_midi_lab_static.mjs"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check midi-lab.js
+      - run: node scripts/test_midi_lab_static.mjs
