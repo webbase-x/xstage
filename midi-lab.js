@@ -12,13 +12,13 @@ function prefs(){try{return {...DEFAULTS,...JSON.parse(localStorage.getItem('xst
 function savePrefs(){try{localStorage.setItem('xstage-midi-lab-settings',JSON.stringify({mode:$('mode').value,quality:$('quality').value,cache:$('cache').checked}));}catch{}}
 function hasMidiHeader(buffer){const b=new Uint8Array(buffer,0,Math.min(buffer.byteLength,4));return b.length===4&&b[0]===77&&b[1]===84&&b[2]===104&&b[3]===100;}
 function soundFontHeader(buffer){const b=new Uint8Array(buffer,0,Math.min(buffer.byteLength,12));return b.length===12&&String.fromCharCode(...b.subarray(0,4))==='RIFF'&&String.fromCharCode(...b.subarray(8,12))==='sfbk';}
-function cacheDB(){return new Promise((resolve,reject)=>{if(!indexedDB){reject(Error('IndexedDB unavailable'));return;}const req=indexedDB.open(STORE,1);req.onupgradeneeded=()=>req.result.createObjectStore('fonts');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+function cacheDB(){return new Promise((resolve,reject)=>{if(typeof indexedDB==='undefined'){reject(Error('IndexedDB unavailable'));return;}const req=indexedDB.open(STORE,1);req.onupgradeneeded=()=>req.result.createObjectStore('fonts');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function cacheGet(){let db;try{db=await cacheDB();return await new Promise((resolve,reject)=>{const tx=db.transaction('fonts','readonly');const req=tx.objectStore('fonts').get('last');req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}finally{db?.close();}}
 async function cachePut(record){let db;try{db=await cacheDB();await new Promise((resolve,reject)=>{const tx=db.transaction('fonts','readwrite');tx.objectStore('fonts').put(record,'last');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}finally{db?.close();}}
 async function cacheClear(){let db;try{db=await cacheDB();await new Promise((resolve,reject)=>{const tx=db.transaction('fonts','readwrite');tx.objectStore('fonts').clear();tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}finally{db?.close();}}
 function stopCurrent(){if(sequencer){try{sequencer.pause();sequencer.currentTime=0;}catch{}}updateUI();}
 async function makeEngine(fontBuffer,identity){
-  if(!window.AudioContext||!AudioWorkletNode)throw Error('เบราว์เซอร์นี้ไม่มี Web Audio AudioWorklet');
+  if(!window.AudioContext||typeof AudioWorkletNode==='undefined')throw Error('เบราว์เซอร์นี้ไม่มี Web Audio AudioWorklet');
   if(!audioContext){audioContext=new AudioContext({latencyHint:'playback',sampleRate:$('quality').value==='light'?32000:48000});}
   // Security: only pinned package versions, not user-supplied JS URLs.
   const {WorkletSynthesizer,Sequencer}=await import(LIB_URL);
