@@ -103,6 +103,35 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(songs), pointer["songCount"])
         return songs
 
+    def test_typed_cloud_media_paths_keep_original_filenames_and_buckets(self):
+        route = online.cloud_media_path
+        self.assertEqual(str(route("audio/12/0001.m4a", code="A0001")),
+                         "AUDIO/M4A/Songs/A/0001.m4a")
+        self.assertEqual(str(route("audio/12/0001.mp3", code="90001")),
+                         "AUDIO/MP3/Songs/9/0001.mp3")
+        self.assertEqual(str(route("lyrics/12/0001.json", role="lyrics", code="00001")),
+                         "AUDIO/M4A/Lyrics/0/0001.json")
+        self.assertEqual(str(route("lyrics/12/0001.lrc", role="lrc", code="00001")),
+                         "AUDIO/M4A/Lyrics/0/0001.lrc")
+        self.assertEqual(str(route("audio/12/0001.mid", "NCN", code="B0001")),
+                         "MIDI/NCN/Songs/B/0001.mid")
+        self.assertEqual(str(route("midi/12/0001.lyr", "NCN", code="B0001")),
+                         "MIDI/NCN/Lyrics/B/0001.lyr")
+        self.assertEqual(str(route("midi/12/0001.cur", "NCN", code="B0001")),
+                         "MIDI/NCN/Cursor/B/0001.cur")
+        self.assertEqual(str(route("audio/12/0001.kar", code="C0001")),
+                         "MIDI/E-MK/C/0001.kar")
+        self.assertEqual(str(route("video/sample.dat", code="D0001")),
+                         "VIDEO/VCD/sample.dat")
+        self.assertEqual(str(route("video/sample.mpg")), "VIDEO/MPG/sample.mpg")
+        self.assertEqual(str(route("video/sample.wmv")), "VIDEO/WMV/sample.wmv")
+        self.assertEqual(str(route("video/sample.avi")), "VIDEO/AVI/sample.avi")
+        for bad in ("../escaped.mid", "/absolute.mid", "audio//bad.mid",
+                    "audio/../../bad.mid", "audio\\\\bad.mid"):
+            with self.subTest(path=bad):
+                with self.assertRaises(online.PublishError):
+                    route(bad)
+
     def test_first_publish_matches_online_schema_and_uploads_real_private_files(self):
         result = self.publisher.publish(self.root, [self.first])
         self.assertTrue(result["published"])
@@ -121,39 +150,41 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(self.drive.upload_order[-1], "current.json")
         # Neither fake absolute local path nor user OAuth credentials leak.
         self.assertNotIn(str(self.base), json.dumps(remote))
-        # Direct audio/ and lyrics/ live beside the immutable catalog,
+        # Media folders and lyrics/ live beside the immutable catalog,
         # published pointer and staging marker (never songs/ for new songs).
-        self.assertEqual(len(self.folder_files(self.remote_root())), 5)
+        self.assertEqual(len(self.folder_files(self.remote_root())), 7)
 
     def test_new_drive_publishes_requested_stageweb_root_with_direct_media(self):
         # Explicit consent only: existing old XStageWeb must never silently
-        # split into a second library. New Drive uses exactly StageWeb.
+        # split into a second library. New Drive uses exactly XStageWeb.
         self.drive.items.clear()
         result = self.publisher.publish(
             self.root, [self.first], create_new_library=True)
         self.assertEqual(result["newSongs"], 1)
         folder = next(
             f["metadata"] for f in self.drive.items.values()
-            if f["parent"] == "root" and f["metadata"]["name"] == "StageWeb")
+            if f["parent"] == "root" and f["metadata"]["name"] == "XStageWeb")
         children = self.folder_files(folder["id"])
         names = {f["name"] for f in children}
-        self.assertTrue({"audio", "lyrics", "current.json"}.issubset(names))
+        self.assertTrue({"AUDIO", "VIDEO", "MIDI", "DB", "current.json"}.issubset(names))
         self.assertNotIn("songs", names)
         self.assertTrue(any(name.startswith("catalog-base-") for name in names))
         pointer_id = next(f["id"] for f in children if f["name"] == "current.json")
         pointer = self.publisher._json(pointer_id)
         songs = self.publisher._json(pointer["catalogFileId"])["songs"]
         self.assertEqual(len(songs), 1)
-        self.assertTrue(songs[0]["audio"]["path"].startswith("audio/"))
-        self.assertTrue(songs[0]["lyrics"]["path"].startswith("lyrics/"))
-        self.assertTrue(songs[0]["lrc"]["path"].startswith("lyrics/"))
+        self.assertTrue(songs[0]["audio"]["path"].startswith("AUDIO/M4A/Songs/0/"))
+        midi_folder = next(f["id"] for f in children if f["name"] == "MIDI")
+        self.assertEqual({x["name"] for x in self.folder_files(midi_folder)}, {"NCN", "E-MK"})
+        self.assertTrue(songs[0]["lyrics"]["path"].startswith("AUDIO/M4A/Lyrics/0/"))
+        self.assertTrue(songs[0]["lrc"]["path"].startswith("AUDIO/M4A/Lyrics/0/"))
         self.drive.locked = True
         with patch.object(roundtrip.drive, "_request",
                           side_effect=self._download_private_json):
             got = self.drive.download_library(self.base / "stage-download", "songs")
             db = self.drive.download_library(self.base / "stage-db", "db")
-        self.assertEqual(got["source"], "StageWeb")
-        self.assertEqual(Path(got["path"]).name, "StageWeb")
+        self.assertEqual(got["source"], "XStageWeb")
+        self.assertEqual(Path(got["path"]).name, "XStageWeb")
         self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
         self.assertEqual(db["files"], 2)
 
@@ -193,7 +224,7 @@ class OnlinePublishTests(unittest.TestCase):
             archive = self.drive.download_library(self.base / "zip", kind="zip")
         with zipfile.ZipFile(archive["path"]) as bundle:
             self.assertIn("XStageWeb/current.json", bundle.namelist())
-            self.assertTrue(any(x.startswith("XStageWeb/audio/") for x in bundle.namelist()))
+            self.assertTrue(any(x.startswith("XStageWeb/AUDIO/M4A/Songs/") for x in bundle.namelist()))
         self.assertEqual(len(self.drive.items), original_count)
 
     def test_online_restore_includes_delta_and_current_media_only(self):

@@ -5,7 +5,12 @@ Online layout (NOT the local Song Studio pointer format):
                             deltaFileIds, songCount}
     XStageWeb/catalog-base-<generation>.json: {schemaVersion, songs: [...]}
     XStageWeb/catalog-delta-<generation>.json: {schemaVersion, upserts, removes}
-    XStageWeb/songs/{audio,lyrics,vocals}/...  (private Drive files)
+    XStageWeb/AUDIO/{MP3,M4A}/{Songs,Lyrics}/[0-9A-Z]/...
+    XStageWeb/VIDEO/{AVI,MPG,VCD,WMV}/...
+    XStageWeb/MIDI/NCN/{Songs,Lyrics,Cursor}/[0-9A-Z]/...
+    XStageWeb/MIDI/E-MK/[0-9A-Z]/...
+    XStageWeb/DB/ (reserved; root current.json stays for web compatibility)
+    Existing catalog paths retain their private Drive file IDs.
 
 Never publish a new pointer until media and immutable catalog are uploaded and
 MD5 checked. Existing online songs are merged; this is NOT a whole-library
@@ -19,12 +24,66 @@ import secrets
 import tempfile
 from pathlib import Path, PurePosixPath
 
-ONLINE_ROOT = "StageWeb"
-LEGACY_ONLINE_ROOT = "XStageWeb"
+ONLINE_ROOT = "XStageWeb"
+LEGACY_ONLINE_ROOT = "StageWeb"
 STAGING_MARKER = ".xstage-songstudio-staging.json"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 MAX_CATALOG_BYTES = 128 * 1024 * 1024
 MAX_DELTAS = 32
+
+# Only new Drive uploads use typed folders. All paths in existing catalog
+# entries remain untouched; local StageWeb/audio and StageWeb/lyrics are unchanged.
+MEDIA_ROOTS = (
+    ("AUDIO", "MP3", "Songs"), ("AUDIO", "MP3", "Lyrics"),
+    ("AUDIO", "M4A", "Songs"), ("AUDIO", "M4A", "Lyrics"),
+    ("VIDEO", "AVI"), ("VIDEO", "MPG"), ("VIDEO", "VCD"), ("VIDEO", "WMV"),
+    ("MIDI", "NCN", "Songs"), ("MIDI", "NCN", "Lyrics"),
+    ("MIDI", "NCN", "Cursor"), ("MIDI", "E-MK"), ("DB",),
+)
+
+
+def _bucket(code):
+    """One directory per ASCII numeral or Latin letter, stable per song code."""
+    key = str(code or "").strip().upper()
+    if key and key[0] in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        return key[0]
+    # Legacy Thai/non-ASCII codes remain representable without extra folders.
+    # Use a stable hex hash instead of guessing a letter from the filename.
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[0].upper()
+
+
+def cloud_media_path(local_relative, source_format="", role="audio", code=""):
+    """Return the new Drive path; does not move files or synthesize MIDI."""
+    if not isinstance(local_relative, str) or not local_relative:
+        raise PublishError("พาธสื่อไม่ถูกต้อง")
+    if "\\" in local_relative or ":" in local_relative:
+        raise PublishError("พาธสื่อไม่ปลอดภัย")
+    path = PurePosixPath(local_relative)
+    if (path.is_absolute() or any(p in ("", ".", "..") for p in local_relative.split("/"))
+            or any(p in ("", ".", "..") for p in path.parts)):
+        raise PublishError("พาธสื่อไม่ปลอดภัย")
+    ext = path.suffix.lower()
+    bucket = _bucket(code or path.stem)
+    typ = "MP3" if ext == ".mp3" else "M4A" if ext == ".m4a" else ""
+    if typ:
+        leaf = "Lyrics" if role in ("lyrics", "lrc") else "Songs"
+        return PurePosixPath("AUDIO", typ, leaf, bucket, path.name)
+    if role in ("lyrics", "lrc") and ext in (".json", ".lrc"):
+        # A currently rendered M4A needs its own timed lyrics, even when
+        # the sourceFormat says NCN. Native NCN .LYR/.CUR are separate files.
+        return PurePosixPath("AUDIO", "M4A", "Lyrics", bucket, path.name)
+    kind = str(source_format or "").upper()
+    if kind == "NCN" and ext in (".mid", ".midi", ".lyr", ".cur"):
+        section = ("Songs" if ext in (".mid", ".midi") else
+                   "Lyrics" if ext == ".lyr" else "Cursor")
+        return PurePosixPath("MIDI", "NCN", section, bucket, path.name)
+    if ext in (".mid", ".midi", ".kar", ".emk") or kind in ("E-MK", "EMK"):
+        return PurePosixPath("MIDI", "E-MK", bucket, path.name)
+    if ext in (".avi", ".mpg", ".mpeg", ".dat", ".wmv"):
+        video_kind = {".avi": "AVI", ".mpg": "MPG", ".mpeg": "MPG",
+                      ".dat": "VCD", ".wmv": "WMV"}[ext]
+        return PurePosixPath("VIDEO", video_kind, path.name)
+    raise PublishError("ชนิดไฟล์ที่กำหนดไม่รองรับในโครงสร้าง XStageWeb: " + ext)
 
 
 class PublishError(RuntimeError):
@@ -140,7 +199,8 @@ class OnlinePublisher:
             if children:
                 markers = [x for x in children if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs", "audio", "lyrics"}
+                expected = {STAGING_MARKER, "songs", "audio", "lyrics",
+                            "mp3", "m4a", "midi", "AUDIO", "MIDI", "VIDEO", "DB"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
                         and self._json(markers[0]["id"]).get("format") ==
                         "xstage-songstudio-upload-staging-v1"):
@@ -295,9 +355,9 @@ class OnlinePublisher:
                     folder_cache[key] = self.drive.folder(parent, name)
                 parent = folder_cache[key]
             return parent
-        def upload(local_file, rel):
+        def upload(local_file, rel, source_format="", role="audio", code=""):
             checksum = _md5(local_file)
-            path = PurePosixPath(rel)
+            path = cloud_media_path(rel, source_format, role=role, code=code)
             # Immutable, content-named media avoids overwriting an older song
             # with the same basename and prevents blind filename deduplication.
             name = path.stem + "-" + checksum[:16] + path.suffix
@@ -319,6 +379,10 @@ class OnlinePublisher:
                     str(path.parent).replace("\\", "/") + "/" + name,
                     "md5Checksum": checksum,
                     "size": local_file.stat().st_size}
+        # Only fixed category directories are created up front. The 0-9 and
+        # A-Z leaf buckets are created on demand to avoid 36*many Drive calls.
+        for parts in MEDIA_ROOTS:
+            folder(parts)
         counts["published"] = False
         counts["batches"] = 0
         def flush():
@@ -425,16 +489,16 @@ class OnlinePublisher:
                 counts["conflicts"] += 1
                 continue
             audio = (dict(same_audio["audio"]) if same_audio else
-                     upload(sound, row["audio"]["path"]))
-            lyrics = upload(lyric, row["lyrics"]["path"])
+                     upload(sound, row["audio"]["path"], row.get("sourceFormat", ""), code=row["code"]))
+            lyrics = upload(lyric, row["lyrics"]["path"], role="lyrics", code=row["code"])
             lrc_path = str(Path(row["lyrics"]["path"]).with_suffix(".lrc")).replace("\\", "/")
             lrc_media = None
             if (local_songs / lrc_path).is_file():
-                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path)
+                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path, role="lrc", code=row["code"])
             vocals = None
             if row.get("vocals") and row["vocals"].get("path"):
                 src = _local_path(local_songs, row["vocals"]["path"], "audio")
-                vocals = upload(src, row["vocals"]["path"])
+                vocals = upload(src, row["vocals"]["path"], code=row["code"])
             ident = (str(same_audio["webSongId"]) if same_audio else str(row["webSongId"]))
             if not same_audio and ident in remote:
                 # Keep the old Drive entry immutable. A new online ID is
