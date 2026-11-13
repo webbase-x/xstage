@@ -1715,7 +1715,8 @@ def ai_lyrics_draft(song_id):
         "id": song_id, **preview_song_identity(row),
         "available": ready, "aiProblem": reason,
         "hasDraft": bool(draft), "draft": draft,
-        "approvedLrc": NOTES.get(row["path"], {}).get("lyrics", "")
+        "approvedLrc": AI_LYRICS.replace_music_interlude_label(
+            NOTES.get(row["path"], {}).get("lyrics", ""))
     }
 
 
@@ -1725,6 +1726,8 @@ def approve_ai_lyrics(song_id, lrc_text):
         raise ValueError("ข้อมูลเนื้อร้องไม่ถูกต้อง")
     if len(lrc_text) > 100000 or not lrc_text.strip():
         raise ValueError("เนื้อร้องว่างหรือมีขนาดใหญ่เกินกำหนด")
+    # Save the AI interlude label consistently when the owner approves a draft.
+    lrc_text = AI_LYRICS.replace_music_interlude_label(lrc_text)
     with LOCK:
         row = dict(FILE_BY_ID.get(song_id) or {})
     if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
