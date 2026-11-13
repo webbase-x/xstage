@@ -440,6 +440,8 @@ class PcSourceTests(unittest.TestCase):
             info = drive.login()
             self.assertTrue(info["connected"])
             self.assertEqual(info["email"], "tester@example.com")
+            self.assertEqual(drive.pending_auth_url, "")
+            self.assertIsNone(drive.pending_auth_stop)
             self.assertTrue(drive.secret_file.is_file())
             self.assertEqual(posted[0]["client_secret"], "local-client-secret")
             self.assertIn("code_verifier", posted[0])
@@ -451,6 +453,38 @@ class PcSourceTests(unittest.TestCase):
             self.assertFalse(drive.status()["connected"])
         for thread in browser_threads:
             thread.join(timeout=5)
+
+    def test_google_login_reopens_same_pending_browser_without_new_auth_session(self):
+        """Retry must raise existing Google page, not create another OAuth state."""
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location(
+            "xstage_google_browser", REPO / "songstudio-pc" / "google_drive.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        service = mod.GoogleDrive(self.dir / "browser-window", lambda: "")
+        url = "https://accounts.google.com/o/oauth2/v2/auth?state=pending-test"
+        service.pending_auth_url = url
+        service.pending_auth_stop = threading.Event()
+        with patch.object(mod.webbrowser, "open", return_value=True) as opened:
+            result = service.show_pending_login()
+            self.assertTrue(result["ok"])
+            opened.assert_called_once_with(url, new=1)
+        service.pending_auth_stop.set()
+        with self.assertRaisesRegex(mod.GoogleError, "ยังไม่มีหน้า Google Login"):
+            service.show_pending_login()
+        service.pending_auth_url = ""
+        service.pending_auth_stop = None
+        with self.assertRaisesRegex(mod.GoogleError, "ยังไม่มีหน้า Google Login"):
+            service.show_pending_login()
+
+    def test_google_login_rejects_missing_client_before_creating_job(self):
+        # Browser sign-in to X-Stage Online is not Desktop OAuth for Song Studio.
+        with patch.object(engine.GOOGLE, "status", return_value={
+                    "configured": False, "connected": False,
+                    "error": "ไม่พบ Google Desktop OAuth Client JSON"}):
+            with self.assertRaisesRegex(ValueError, "Google Desktop OAuth Client JSON"):
+                engine.start_job({"action": "login"})
+        self.assertNotEqual(engine.JOB["state"], "running")
 
     def test_windows_picker_returns_thai_unicode_path_and_reports_errors(self):
         # Mock Windows subprocess so this test also runs on Linux CI without GUI.
