@@ -122,7 +122,6 @@ class LyricHeadTailTests(unittest.TestCase):
                          result["backupId"])
         restored=bulk.undo(self.backups,self.root,result["backupId"])
         self.assertEqual(restored["restoredSongs"],3)
-        self.assertEqual(path.read_bytes(),old_json) if False else None
         self.assertEqual((self.root/"lyrics"/"0"/"001.json").read_bytes(),old_json)
         self.assertEqual(lrc.read_bytes(),old_lrc)
         self.assertIsNone(bulk.latest_backup(self.backups,self.root))
@@ -149,7 +148,8 @@ class LyricHeadTailTests(unittest.TestCase):
                 else:
                     self.assertEqual(doc["lines"][index]["text"],old["lines"][index]["text"])
                 for i in range(len(old["lines"])):
-                    if i!=index:self.assertEqual(doc["lines"][i],old["lines"][i])
+                    if i!=index%len(old["lines"]):
+                        self.assertEqual(doc["lines"][i],old["lines"][i])
             bulk.undo(self.backups,self.root,output["backupId"])
 
     def test_cancel_before_commit_and_stale_catalog_do_not_change_files(self):
