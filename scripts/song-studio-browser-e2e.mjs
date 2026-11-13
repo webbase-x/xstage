@@ -99,6 +99,9 @@ try {
     mode: 'original', download: 'C:\\XStage\\Downloads', oauth: ''
   };
   let fakeGoogleConnected = false;
+  let simulatedJob = {id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
+                      completed:0,total:0,logs:[]};
+  const uploadRequests = [];
   const list = [
     {id: 1, title: 'เสียงทดสอบ 1', artist: 'XStage', code: 'TEST001', kind: 'MID', size: 12000, status: 'ready'},
     {id: 2, title: 'เสียงทดสอบ 2', artist: 'XStage', code: 'TEST002', kind: 'MP3', size: 32000, status: 'ready'}
@@ -119,7 +122,7 @@ try {
         google:{configured:true,connected:fakeGoogleConnected,
                 email:fakeGoogleConnected?'test@example.invalid':'',
                 config_source:'bundled'},
-        job:{id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',completed:0,total:0,logs:[]},
+        job:simulatedJob,
         update:{status:'unavailable'}
       };
     } else if (url.pathname === '/api/songs') {
@@ -183,6 +186,7 @@ try {
       response = {'Bundled FFmpeg':true, 'Bundled SoundFont':true};
     } else if (url.pathname === '/api/jobs') {
       if (request.postDataJSON()?.action === 'login') fakeGoogleConnected = true;
+      if (request.postDataJSON()?.action === 'upload') uploadRequests.push(request.postDataJSON());
       response = {id:'pc-wizard-smoke-job'};
     }
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)});
@@ -341,6 +345,68 @@ try {
   await downloadJob;
   assert.deepEqual(pcErrors,[], 'Cloud UI actions should not produce JavaScript errors');
 
+  // Post-build consent: a completed build must ASK instead of uploading.
+  const manualUploadCount = uploadRequests.length;
+  simulatedJob = {id:'finished-build-1',kind:'build',state:'success',
+    stage:'เสร็จสิ้น',detail:'สร้างเพลงสำเร็จ',completed:1,total:1,
+    created:1,skipped:0,errors:0,result:{created:1,skipped:0,errors:0},logs:[]};
+  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
+  assert.match(await pc.locator('#studio-confirm-title').innerText(),/X-Stage Song Karaoke Online/);
+  assert.equal(await pc.locator('#studio-confirm-ok').innerText(),'อัปโหลดตอนนี้');
+  assert.equal(await pc.locator('#studio-confirm-cancel').innerText(),'ไว้ภายหลัง');
+  assert.equal(uploadRequests.length,manualUploadCount,'No upload without post-build consent');
+  await pc.locator('#upload-create-library').evaluate(el=>el.checked=true);
+  const automaticFollowup = pc.waitForRequest(req=>{
+    try {
+      const data=req.postDataJSON();
+      return new URL(req.url()).pathname==='/api/jobs' &&
+        data?.action==='upload' && data?.create_new_library===false;
+    } catch {return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await automaticFollowup;
+  assert.equal(uploadRequests.length,manualUploadCount+1);
+  assert.equal(uploadRequests.at(-1).create_new_library,false,
+    'Post-build upload MUST NOT inherit create-new-library flag');
+  assert.equal(await pc.locator('#tab-upload').isVisible(),true);
+
+  simulatedJob = {id:'finished-build-2',kind:'build',state:'success',
+    stage:'เสร็จสิ้น',detail:'สร้างเพลงสำเร็จ',completed:1,total:1,
+    created:1,skipped:0,errors:0,result:{created:1,skipped:0,errors:0},logs:[]};
+  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
+  await pc.click('#studio-confirm-cancel');
+  await pc.waitForTimeout(1800);
+  assert.equal(uploadRequests.length,manualUploadCount+1,
+    'Choosing Later must not upload anything');
+  assert.equal(await pc.locator('#studio-confirm-dialog').isVisible(),false,
+    'Build completion prompt must not reopen on repeated polling');
+
+  fakeGoogleConnected=false;
+  simulatedJob = {id:'finished-build-3',kind:'build',state:'success',
+    stage:'เสร็จสิ้น',detail:'สร้างเพลงสำเร็จ',completed:1,total:1,
+    created:1,skipped:0,errors:0,result:{created:1,skipped:0,errors:0},logs:[]};
+  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
+  await pc.click('#studio-confirm-ok');
+  await pc.waitForFunction(()=>document.querySelector('#global-message')?.textContent.includes('ยังไม่ได้เชื่อม Google Drive'));
+  assert.equal(uploadRequests.length,manualUploadCount+1,
+    'Offline Google login must NOT start an unauthorized upload');
+  assert.equal(await pc.locator('#tab-upload').isVisible(),true);
+
+  simulatedJob = {id:'finished-build-4',kind:'build',state:'error',
+    stage:'สร้างบางรายการไม่สำเร็จ',detail:'มี ERR',completed:2,total:2,
+    created:1,skipped:0,errors:1,result:{created:1,skipped:0,errors:1},logs:[]};
+  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/บางเพลงสร้างไม่สำเร็จ/);
+  await pc.click('#studio-confirm-cancel');
+
+  simulatedJob = {id:'finished-build-5',kind:'build',state:'error',
+    stage:'ไม่สำเร็จ',detail:'ไม่มีไฟล์สำเร็จ',completed:1,total:1,
+    created:0,skipped:0,errors:1,result:{created:0,skipped:0,errors:1},logs:[]};
+  await pc.waitForTimeout(1500);
+  assert.equal(await pc.locator('#studio-confirm-dialog').isVisible(),false,
+    'No upload prompt when build has no successful or verified output');
+
+  assert.deepEqual(pcErrors, [], 'Post-build consent must not cause browser errors');
   assert.deepEqual(pcErrors, [], 'PC wizard should not produce JavaScript errors');
   console.log('PASS: Both Create buttons submit real build jobs after ONE confirmation; acknowledgment stays visible.');
 
