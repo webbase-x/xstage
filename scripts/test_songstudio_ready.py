@@ -1,6 +1,7 @@
 """Windows integration smoke test: portable runtime + MIDI + audio->M4A, no network."""
 import importlib.util
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -56,22 +57,27 @@ print("PASS: Whisper CLI and multilingual model respond from bundled offline run
 # argument is a full path containing non-ASCII characters.
 with tempfile.TemporaryDirectory(prefix="xstage-whisper-ภาษาไทย-") as thai_scratch:
     thai_folder = Path(thai_scratch)
-    speech_test = thai_folder / "เสียงทดสอบ.wav"
+    speech_test = thai_folder / "audio-16k.wav"
     with wave.open(str(speech_test), "wb") as stream:
         stream.setnchannels(1)
         stream.setsampwidth(2)
         stream.setframerate(16000)
         stream.writeframes(b"\x00\x00" * 16000 * 2)
-    draft_base = thai_folder / "ร่างทดสอบ"
+    draft_base = thai_folder / "draft"
+    model_copy = thai_folder / "model.bin"
+    try:
+        os.link(whisper_model, model_copy)
+    except OSError:
+        shutil.copyfile(whisper_model, model_copy)
     command = [
-        str(whisper_exe), "-m", "models/ggml-base.bin",
-        "-f", str(speech_test), "-l", "th", "-oj", "-of", str(draft_base), "-np",
+        str(whisper_exe), "-m", "model.bin",
+        "-f", "audio-16k.wav", "-l", "th", "-oj", "-of", "draft", "-np",
     ]
     completed = subprocess.run(
-        command, cwd=engine.RUNTIME, capture_output=True, timeout=120,
+        command, cwd=thai_folder, capture_output=True, timeout=120,
         creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0))
     assert completed.returncode == 0, (
-        "Whisper inference crashed on a Thai-named audio/output path (exit " +
+        "Whisper inference failed inside Thai-named working directory (exit " +
         str(completed.returncode & 0xFFFFFFFF) + "): " +
         completed.stderr.decode("utf-8", errors="replace")[-1500:])
     result_json = Path(str(draft_base) + ".json")
