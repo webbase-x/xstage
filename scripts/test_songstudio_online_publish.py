@@ -187,6 +187,7 @@ class OnlinePublishTests(unittest.TestCase):
                          sample.read_bytes())
         self.assertEqual((restored / "MIDI/NCN/Cursor/A001.CUR").read_bytes(),
                          cursor.read_bytes())
+        self.assertFalse((restored / "DB").exists())
         self.assertEqual((Path(database["path"]) / "DB/library.json").read_bytes(),
                          catalog.read_bytes())
         self.assertFalse((Path(database["path"]) / "AUDIO").exists())
