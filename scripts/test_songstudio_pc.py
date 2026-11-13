@@ -222,7 +222,10 @@ class PcSourceTests(unittest.TestCase):
         self.assertEqual(result["created"], 2)
         audio_dir = self.dest / "songs" / "audio" / "0"
         self.assertEqual(sorted(file.name for file in audio_dir.glob("*.m4a")),
-                         ["001234 (2).m4a", "001234.m4a"])
+                         ["001234.m4a", "001235.m4a"])
+        records = engine._song_export_module().existing_records(self.dest / "songs")
+        self.assertEqual({r["code"] for r in records}, {"001234", "001235"})
+        self.assertEqual({r["originalCode"] for r in records}, {"001234"})
         repeat = engine.build_library(originals, "original", {"audio_only": False})
         self.assertEqual((repeat["created"], repeat["skipped"]), (0, 2))
 
