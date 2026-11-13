@@ -2234,15 +2234,45 @@ function drawLine(text,y,maxWidth,fontSize,fill,progress=null,centerX=ui.lyrics.
   // when its Thai glyphs cannot shrink further (e.g. QR beside lyrics).
   const displayedWidth=Math.min(pen.measureText(text).width,maxWidth);
   pen.strokeText(text,centerX,y,maxWidth);pen.shadowBlur=0;pen.fillStyle=fill;pen.fillText(text,centerX,y,maxWidth);
-  if(progress!==null){pen.save();pen.beginPath();pen.rect(centerX-displayedWidth/2-1,y-sz*.8,Math.max(0,Math.min(1,progress))*displayedWidth+1,sz*1.65);pen.clip();pen.fillStyle='#ffd76a';pen.fillText(text,centerX,y,maxWidth);pen.restore();}
+  if(progress!==null){
+    pen.save();pen.beginPath();
+    // A precise MIDI/CUR sweep uses the measured display width of each
+    // timed syllable, not raw character count (Thai combining marks have
+    // variable / zero painted width). LRC-only songs use a clearly
+    // approximate line-duration wipe, never invented syllable timestamps.
+    const clipWidth=Math.max(0,Math.min(1,progress))*displayedWidth;
+    pen.rect(centerX-displayedWidth/2-1,y-sz*.8,clipWidth+1,sz*1.65);
+    pen.clip();pen.fillStyle='#ffd76a';pen.fillText(text,centerX,y,maxWidth);pen.restore();
+  }
 }
 function lineProgress(line,when){
+  const start=Number(line.startTime)||0;
+  const end=Number(line.endTime)||start+1;
+  const fallback=Math.min(1,Math.max(0,(when-start)/Math.max(.01,end-start)));
   const units=Array.isArray(line.syllables)?line.syllables:[];
-  if(!units.length){const start=Number(line.startTime)||0,end=Number(line.endTime)||start+1;return Math.min(1,Math.max(0,(when-start)/Math.max(.01,end-start)));}
-  let total=0,lit=0;
-  for(const u of units){const width=graphemeCount(String(u.text||'')),start=Number(u.start)||0,duration=Number(u.duration)||0;
-    total+=width;lit+=width*Math.max(0,Math.min(1,duration>0?(when-start)/duration:(when>=start?1:0)));}
-  return total?lit/total:0;
+  if(!units.length)return fallback;
+  // This method is safe with Thai grapheme clusters, including combining
+  // marks, when measuring each prefix with the same canvas font as drawLine.
+  const chars=units.map(u=>String(u.text||''));
+  if(chars.join('')!==String(line.text||''))return fallback;
+  const totalWidth=pen.measureText(String(line.text||'')).width;
+  if(!totalWidth)return fallback;
+  let prefix='', previousWidth=0, sweepWidth=0;
+  for(let i=0;i<units.length;i++){
+    const unit=units[i];
+    prefix+=chars[i];
+    const nextWidth=Math.max(previousWidth,pen.measureText(prefix).width);
+    const unitStart=Number(unit.start);
+    const duration=Number(unit.duration);
+    if(!Number.isFinite(unitStart)||!Number.isFinite(duration) || duration<0)
+      return fallback;
+    const fraction=duration>0
+      ? Math.max(0,Math.min(1,(when-unitStart)/duration))
+      : (when>=unitStart?1:0);
+    sweepWidth+=(nextWidth-previousWidth)*fraction;
+    previousWidth=nextWidth;
+  }
+  return Math.max(0,Math.min(1,sweepWidth/totalWidth));
 }
 function drawLyrics(){
   try {
@@ -2323,7 +2353,17 @@ function drawLyrics(){
         }
         if(idx<0){drawLine(String(lines[0].text||''),Math.min(h*.72,currentY),lyricWidth,lyricFont,'#bfe2ef',null,lyricCenter);}
         else{
-          const current=lines[idx];drawLine(String(current.text||''),currentY,lyricWidth,lyricFont,'#ecf7ff',lineProgress(current,when),lyricCenter);
+          const current=lines[idx];
+           // Match measurement font to the rendered line before evaluating
+           // per-syllable sweep distances.
+           let sweepFont=lyricFont;
+           do {
+             pen.font=`900 ${Math.round(sweepFont)}px "Leelawadee UI","Noto Sans Thai",Tahoma,sans-serif`;
+             if(pen.measureText(String(current.text||'')).width<=lyricWidth)break;
+             sweepFont*=.92;
+           }while(sweepFont>14);
+           drawLine(String(current.text||''),currentY,lyricWidth,lyricFont,
+             '#ecf7ff',lineProgress(current,when),lyricCenter);
           const next=lines[idx+1];if(next)drawLine(String(next.text||''),nextY,lyricWidth,lyricFont*.88,'#b7d2e0',null,lyricCenter);
         }
       }
