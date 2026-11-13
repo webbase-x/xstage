@@ -869,35 +869,61 @@ def saved_ai_vocals(row):
 
 
 def separate_ai_lyrics_vocals(song_id):
-    """Create a standalone reusable local vocal M4A, without catalog publish."""
+    """Save separate vocal and instrumental AAC M4A files, without publishing.
+
+    Stable source fingerprints make retries idempotent. Neither the imported
+    audio nor any existing output is overwritten. An interrupted run may leave
+    one completed stem; the next run safely creates only the missing stem.
+    """
     with LOCK:
         row = dict(AI_IMPORTED.get(song_id) or {}) if type(song_id) is int else {}
     if not row:
         raise ValueError("เลือกเพลงที่นำเข้าในเมนูเนื้อร้อง AI ก่อน")
     if not ai_available():
         raise RuntimeError("AI Separation HTDemucs ไม่พร้อม · กรุณาใช้ PC Ready ที่รวมโมเดลครบ")
-    destination = ai_vocals_target(row)
-    if destination.exists():
-        found = saved_ai_vocals(row)
-        if found is None:
-            raise RuntimeError("พบไฟล์เสียงร้องแยกที่ไม่สมบูรณ์ · ไม่เขียนทับ กรุณาตรวจไฟล์เดิม")
-        update("พบเสียงร้องแยก M4A ที่สร้างไว้แล้ว · ใช้ซ้ำโดยไม่ประมวลผล AI ใหม่", 1)
-        return {"songId": song_id, "path": str(found), "reused": True,
-                "message": "มีไฟล์ M4A เสียงร้องแยกที่สร้างไว้แล้ว · " + str(found)}
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    vocal_target = ai_vocals_target(row)
+    music_target = vocal_target.with_name(
+        vocal_target.name.replace(" - AI Vocals-", " - AI Instrumental-"))
+    if music_target == vocal_target:
+        raise RuntimeError("ไม่สามารถกำหนดชื่อ M4A ดนตรีแยกได้")
+
+    def finished(path):
+        if path.exists() and (not path.is_file() or path.is_symlink() or
+                              path.stat().st_size < 1000):
+            raise RuntimeError("พบไฟล์ M4A ที่ไม่สมบูรณ์ · ไม่เขียนทับ: " + str(path))
+        return path.is_file()
+
+    vocal_ready, music_ready = finished(vocal_target), finished(music_target)
+    if vocal_ready and music_ready:
+        update("พบ M4A เสียงร้องและดนตรีที่สร้างแล้ว · ใช้ไฟล์เดิม", 1)
+        return {"songId": song_id, "path": str(vocal_target),
+                "instrumentalPath": str(music_target), "reused": True,
+                "message": "มีไฟล์ M4A แยกเสียงร้องและดนตรีแล้ว · " +
+                           str(vocal_target) + " · " + str(music_target)}
+
+    music_target.parent.mkdir(parents=True, exist_ok=True)
     export = _song_export_module()
-    staged = export.temporary_audio(destination)
+    staged_music = export.temporary_audio(music_target)
+    staged_vocal = None
     try:
-        update("กำลังแยกเสียงร้องออกจากดนตรี · ประมวลผลออฟไลน์บนเครื่อง")
-        separate_ai(row, staged, vocals_only=True)
+        update("กำลังแยกเสียงร้องและดนตรีเป็น M4A สองไฟล์ · ประมวลผลออฟไลน์")
+        staged_vocal = separate_ai(row, staged_music, vocals_only=False)
         if CANCEL.is_set():
-            raise RuntimeError("ผู้ใช้ยกเลิกก่อนบันทึก M4A เสียงร้อง")
-        export.commit_audio(staged, destination)
+            raise RuntimeError("ผู้ใช้ยกเลิกก่อนบันทึกไฟล์ M4A")
+        # Check again to avoid replacing files created by another process.
+        if not finished(vocal_target):
+            export.commit_audio(staged_vocal, vocal_target)
+        if not finished(music_target):
+            export.commit_audio(staged_music, music_target)
     finally:
-        staged.unlink(missing_ok=True)
-    update("บันทึกไฟล์เสียงร้องแยกแล้ว · สามารถเลือกใช้สำหรับ Whisper AI", 1)
-    return {"songId": song_id, "path": str(destination), "reused": False,
-            "message": "บันทึก M4A เสียงร้องแยกสำเร็จ · " + str(destination) +
+        staged_music.unlink(missing_ok=True)
+        if staged_vocal is not None:
+            staged_vocal.unlink(missing_ok=True)
+    update("บันทึก M4A เสียงร้องและดนตรีแยกเสร็จแล้ว · ใช้เสียงร้องกับ Whisper AI ได้", 1)
+    return {"songId": song_id, "path": str(vocal_target),
+            "instrumentalPath": str(music_target), "reused": False,
+            "message": "บันทึก M4A แยกเสียงร้อง: " + str(vocal_target) +
+                       " · ดนตรี: " + str(music_target) +
                        " · ไม่แก้เพลงต้นฉบับและไม่อัปโหลด Google Drive อัตโนมัติ"}
 
 
