@@ -71,7 +71,7 @@
   let aiSongId = null, aiSongs = [], aiOffset = 0, aiTotal = 0;
   let aiSearchTimer = 0, aiSearchSeq = 0, aiDraftSeq = 0;
   let aiStreamId = '', aiPlaySerial = 0, aiDraftReady = false, aiEngineReady = false;
-  let aiTimed = [], aiActiveIndex = -2;
+  let aiTimed = [], aiActiveIndex = -2, aiKaraokeFrame = 0;
   let phraseReady=false,phrasePosition='first',phraseOffset=0,phraseRows=[];
   let phraseSeq=0,phraseSearchTimer=0,phraseBackup=null;
   const phraseSelected=new Map();
@@ -717,6 +717,29 @@
       }
     }, immediate ? 0 : 70);
   }
+  // MIDI-style progressive color wipe. For NCN/KAR and enhanced LRC,
+  // use genuine cue boundaries; plain LRC is line-level interpolation only.
+  function karaokeWipeRatio(time,start,end){
+    if(!Number.isFinite(time)||!Number.isFinite(start))return 0;
+    const finish=Number.isFinite(end)&&end>start?end:start+0.05;
+    return Math.max(0,Math.min(1,(time-start)/(finish-start)));
+  }
+  function karaokeWipeSpan(text,start,end){
+    const el=document.createElement('span');
+    el.className='karaoke-wipe-text';
+    el.textContent=text;
+    el.dataset.startTime=String(start);
+    el.dataset.endTime=String(end);
+    el.style.setProperty('--karaoke-wipe','0%');
+    return el;
+  }
+  function karaokeUpdateSpans(line,time){
+    for(const span of line.querySelectorAll('.karaoke-wipe-text')){
+      const progress=karaokeWipeRatio(time,
+        Number(span.dataset.startTime),Number(span.dataset.endTime));
+      span.style.setProperty('--karaoke-wipe',(progress*100).toFixed(2)+'%');
+    }
+  }
   function updateLyricTime(timeSeconds=0) {
     const data = previewLyrics;
     if (!data?.lines?.length) return;
@@ -739,58 +762,44 @@
         const line = document.createElement('div');
         line.className = 'preview-lyric-line';
         line.dataset.lineIndex = String(i);
-        if (i > index) line.classList.add('upcoming');
-        if (data.status === 'found' && Array.isArray(entry.characters) &&
-            entry.characters.length) {
-          const textByChars = entry.characters.map(c => c.text || '').join('');
-          if (textByChars === entry.text) {
-            for (let n=0;n<entry.characters.length;n++) {
-              const part=entry.characters[n];
-              const next=entry.characters[n+1];
-              const segment=document.createElement('span');
-              segment.className='karaoke-character';
-              const starts=Number(part.startTime);
-              const ends=next?Number(next.startTime):Number(entry.endTime);
-              segment.dataset.startTime=String(Number.isFinite(starts)?starts:0);
-              segment.dataset.endTime=String(Number.isFinite(ends)?Math.max(ends,starts):starts);
-              segment.textContent=part.text||'';
-              line.append(segment);
-            }
-          } else line.textContent = entry.text || '';
-        } else {
-          // Standard LRC contains line times only. A smooth whole-line wipe
-          // is a preview estimate, not fabricated MIDI syllable timing.
-          const span=document.createElement('span');
-          span.className='karaoke-approximate';
-          span.textContent=entry.text||'';
-          line.append(span);
+        const start = Number(entry.startTime)||0;
+        const end = Number(entry.endTime) > start ? Number(entry.endTime) :
+          (Number(entries[i+1]?.startTime) > start ? Number(entries[i+1].startTime) : start+4);
+        const units = Array.isArray(entry.characters)?entry.characters:[];
+        // Discard invalid/incomplete MIDI cues and preserve the displayed
+        // full line: never guess absent words or split Thai combining marks.
+        const validCues = data.status==='found' && units.length>0 &&
+          units.map(u=>String(u.text||'')).join('')===String(entry.text||'') &&
+          units.every(u=>Number.isFinite(Number(u.startTime))&&
+            Number(u.startTime)>=start&&Number(u.startTime)<=end) &&
+          units.every((u,j)=>j===0 ||
+            Number(u.startTime)>=Number(units[j-1].startTime));
+        if(validCues){
+          for(let j=0;j<units.length;j++){
+            const unit=units[j];
+            const begin=Number(unit.startTime);
+            const next=j+1<units.length?Number(units[j+1].startTime):end;
+            line.append(karaokeWipeSpan(String(unit.text||''),begin,
+              next>begin?next:begin+.05));
+          }
+          line.dataset.cueType='midi';
+        }else{
+          line.append(karaokeWipeSpan(String(entry.text||''),start,end));
+          line.dataset.cueType='line-estimate';
         }
+        if (i > index) line.classList.add('upcoming');
         panel.append(line);
       }
     }
     for (const line of panel.querySelectorAll('[data-line-index]')) {
       const i = Number(line.dataset.lineIndex);
       const entry = entries[i];
-      const active = i === index && time < Number(entry.endTime || Number(entry.startTime) + 4);
-      line.classList.toggle('active', active);
-      line.classList.toggle('upcoming', i > index);
-      const characters=line.querySelectorAll('.karaoke-character');
-      for(const segment of characters){
-        const start=Number(segment.dataset.startTime);
-        const end=Number(segment.dataset.endTime);
-        const ratio=active
-          ? (end>start?Math.max(0,Math.min(1,(time-start)/(end-start))):
-             (time>=start?1:0))
-          : 0;
-        segment.style.setProperty('--karaoke-fill',(ratio*100).toFixed(2)+'%');
-      }
-      const approximate=line.querySelector('.karaoke-approximate');
-      if(approximate){
-        const begin=Number(entry.startTime)||0;
-        const finish=Number(entry.endTime)||begin+3;
-        const ratio=active?Math.max(0,Math.min(1,(time-begin)/Math.max(.02,finish-begin))):0;
-        approximate.style.setProperty('--karaoke-fill',(ratio*100).toFixed(2)+'%');
-      }
+      const start=Number(entry.startTime)||0;
+      const end=Number(entry.endTime)>start?Number(entry.endTime):start+4;
+      const active=i===index && time<end;
+      line.classList.toggle('active',active);
+      line.classList.toggle('upcoming',i>index);
+      karaokeUpdateSpans(line,time);
     }
   }
   function animateKaraoke() {
@@ -1239,8 +1248,13 @@
       message('นำเพลงออกจากรายการไม่สำเร็จ: '+error.message);
     }
   }
+  function aiStopKaraokeAnimation(){
+    if(aiKaraokeFrame)cancelAnimationFrame(aiKaraokeFrame);
+    aiKaraokeFrame=0;
+  }
   function aiStopPlayback() {
     ++aiPlaySerial;
+    aiStopKaraokeAnimation();
     const stream=aiStreamId;aiStreamId='';
     aiAudio.pause();aiAudio.removeAttribute('src');aiAudio.load();
     if(stream)void post('/api/live-stop',{stream_id:stream}).catch(()=>{});
@@ -1249,22 +1263,42 @@
   function aiRenderTime() {
     const panel=$('ai-lyrics-karaoke');
     if(!aiTimed.length)return;
-    const t=aiAudio.currentTime||0;
+    const t=Number(aiAudio.currentTime)||0;
     let current=-1;
     for(let i=0;i<aiTimed.length;i++){
       if(aiTimed[i].startTime>t)break;
       current=i;
     }
-    if(aiActiveIndex===current)return;
-    aiActiveIndex=current;panel.replaceChildren();
-    const from=Math.max(0,current<0?0:current-1);
-    const until=Math.min(aiTimed.length,Math.max(from+2,current+3));
-    for(let i=from;i<until;i++) {
-      const line=document.createElement('div');
-      line.className='ai-karaoke-line';
-      line.classList.toggle('active',i===current);
-      line.textContent=aiTimed[i].text;panel.append(line);
+    if(aiActiveIndex!==current){
+      aiActiveIndex=current;panel.replaceChildren();
+      const from=Math.max(0,current<0?0:current-1);
+      const until=Math.min(aiTimed.length,Math.max(from+2,current+3));
+      for(let i=from;i<until;i++) {
+        const entry=aiTimed[i];
+        const start=Number(entry.startTime)||0;
+        const next=Number(aiTimed[i+1]?.startTime);
+        const end=Number.isFinite(next)&&next>start?next:start+4;
+        const line=document.createElement('div');
+        line.className='ai-karaoke-line';
+        line.dataset.lineIndex=String(i);
+        line.append(karaokeWipeSpan(entry.text,start,end));
+        panel.append(line);
+      }
     }
+    for(const line of panel.querySelectorAll('[data-line-index]')){
+      const i=Number(line.dataset.lineIndex);
+      line.classList.toggle('active',i===current);
+      karaokeUpdateSpans(line,t);
+    }
+  }
+  function aiAnimateKaraoke(){
+    aiKaraokeFrame=0;
+    if(aiAudio.paused||aiAudio.ended)return;
+    aiRenderTime();
+    aiKaraokeFrame=requestAnimationFrame(aiAnimateKaraoke);
+  }
+  function aiStartKaraokeAnimation(){
+    if(!aiKaraokeFrame)aiKaraokeFrame=requestAnimationFrame(aiAnimateKaraoke);
   }
   function aiValidateEditor() {
     const check=aiParseLrc();
@@ -1925,6 +1959,11 @@
   $('ai-lyrics-stop').addEventListener('click',aiStopPlayback);
   $('ai-lyrics-editor').addEventListener('input',aiValidateEditor);
   $('ai-lyrics-audio').addEventListener('timeupdate',aiRenderTime);
+  $('ai-lyrics-audio').addEventListener('play',aiStartKaraokeAnimation);
+  $('ai-lyrics-audio').addEventListener('pause',aiStopKaraokeAnimation);
+  $('ai-lyrics-audio').addEventListener('ended',()=>{
+    aiStopKaraokeAnimation();aiRenderTime();
+  });
   $('ai-lyrics-audio').addEventListener('seeked',()=>{aiActiveIndex=-2;aiRenderTime();});
   $('ai-lyrics-insert-time').addEventListener('click',aiInsertTimestamp);
   $('ai-lyrics-download').addEventListener('click',aiDownloadLrc);
