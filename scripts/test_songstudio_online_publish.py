@@ -157,6 +157,66 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
         self.assertEqual(db["files"], 2)
 
+    def test_raw_xstageweb_folder_without_pointer_downloads_songs_zip_db(self):
+        """User-managed AUDIO/MIDI/VIDEO/DB libraries need not have current.json."""
+        self.drive.items.clear()
+        root = self.drive.folder("root", "XStageWeb")
+        audio = self.drive.folder(self.drive.folder(
+            self.drive.folder(self.drive.folder(root, "AUDIO"), "MP3"), "Songs"), "A")
+        mid = self.drive.folder(self.drive.folder(
+            self.drive.folder(root, "MIDI"), "NCN"), "Cursor")
+        db = self.drive.folder(root, "DB")
+        sample = self.base / "sample.mp3"
+        sample.write_bytes(b"ID3" + b"Z" * 5000)
+        cursor = self.base / "sample.cur"
+        cursor.write_bytes(b"C" * 1200)
+        catalog = self.base / "catalog-data.json"
+        catalog.write_text('{"count":1}', encoding="utf-8")
+        self.drive.upload_file(audio, sample, "A001.mp3")
+        self.drive.upload_file(mid, cursor, "A001.CUR")
+        self.drive.upload_file(db, catalog, "library.json")
+        self.drive.locked = True
+        count = len(self.drive.items)
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            songs = self.drive.download_library(self.base / "raw-songs", "songs")
+            database = self.drive.download_library(self.base / "raw-db", "db")
+            archive = self.drive.download_library(self.base / "raw-zip", "zip")
+        restored = Path(songs["path"])
+        self.assertEqual((restored / "AUDIO/MP3/Songs/A/A001.mp3").read_bytes(),
+                         sample.read_bytes())
+        self.assertEqual((restored / "MIDI/NCN/Cursor/A001.CUR").read_bytes(),
+                         cursor.read_bytes())
+        self.assertEqual((Path(database["path"]) / "DB/library.json").read_bytes(),
+                         catalog.read_bytes())
+        self.assertFalse((Path(database["path"]) / "AUDIO").exists())
+        with zipfile.ZipFile(archive["path"]) as bundle:
+            self.assertIn("XStageWeb/AUDIO/MP3/Songs/A/A001.mp3", bundle.namelist())
+            self.assertIn("XStageWeb/DB/library.json", bundle.namelist())
+        self.assertEqual(len(self.drive.items), count)
+
+    def test_raw_xstageweb_db_without_database_gives_clear_error(self):
+        self.drive.items.clear()
+        root = self.drive.folder("root", "XStageWeb")
+        audio = self.drive.folder(root, "AUDIO")
+        song = self.base / "alone.m4a"
+        song.write_bytes(b"A" * 2000)
+        self.drive.upload_file(audio, song, "alone.m4a")
+        self.drive.locked = True
+        with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ไม่พบไฟล์ DB"):
+            self.drive.download_library(self.base / "missing-db", "db")
+
+    def test_raw_xstageweb_rejects_unsafe_names_without_writing(self):
+        self.drive.items.clear()
+        root = self.drive.folder("root", "XStageWeb")
+        source = self.base / "file.mp3"
+        source.write_bytes(b"A" * 2000)
+        self.drive.upload_file(root, source, "../unsafe.mp3")
+        self.drive.locked = True
+        with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ไม่ปลอดภัย"):
+            self.drive.download_library(self.base / "unsafe", "songs")
+        self.assertFalse((self.base / "unsafe").exists())
+
     def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
         self.drive.folder("root", "StageWeb")
         before = len(self.drive.items)
