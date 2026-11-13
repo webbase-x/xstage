@@ -5,7 +5,11 @@ Online layout (NOT the local Song Studio pointer format):
                             deltaFileIds, songCount}
     XStageWeb/catalog-base-<generation>.json: {schemaVersion, songs: [...]}
     XStageWeb/catalog-delta-<generation>.json: {schemaVersion, upserts, removes}
-    XStageWeb/songs/{audio,lyrics,vocals}/...  (private Drive files)
+    XStageWeb/m4a/... (new AAC exports)
+    XStageWeb/mp3/... (reserved for original MP3 media)
+    XStageWeb/midi/{NCN,KAR,MID}/... (reserved for native MIDI sources)
+    XStageWeb/lyrics/... (synchronized text remains separate)
+    Existing audio/... paths are retained by their fileId without migration.
 
 Never publish a new pointer until media and immutable catalog are uploaded and
 MD5 checked. Existing online songs are merged; this is NOT a whole-library
@@ -19,12 +23,37 @@ import secrets
 import tempfile
 from pathlib import Path, PurePosixPath
 
-ONLINE_ROOT = "StageWeb"
-LEGACY_ONLINE_ROOT = "XStageWeb"
+ONLINE_ROOT = "XStageWeb"
+LEGACY_ONLINE_ROOT = "StageWeb"
 STAGING_MARKER = ".xstage-songstudio-staging.json"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 MAX_CATALOG_BYTES = 128 * 1024 * 1024
 MAX_DELTAS = 32
+
+# Media directories are Drive-side only; local audio/ files and catalog file IDs
+# remain unchanged. Do not turn existing M4A-only uploads into MIDI records.
+MIDI_TYPES = ("NCN", "KAR", "MID")
+
+
+def cloud_media_path(local_relative, source_format=""):
+    """Route new media only; never rewrite previously published file IDs."""
+    path = PurePosixPath(local_relative)
+    if path.is_absolute() or any(p in ("", ".", "..") for p in path.parts):
+        raise PublishError("พาธสื่อไม่ปลอดภัย")
+    suffix = path.suffix.lower()
+    if not suffix:
+        raise PublishError("ไม่พบชนิดไฟล์สื่อ")
+    if suffix == ".m4a":
+        return PurePosixPath("m4a", *path.parts[1:]) if path.parts[0] == "audio" else PurePosixPath("m4a", *path.parts)
+    if suffix == ".mp3":
+        return PurePosixPath("mp3", *path.parts[1:]) if path.parts[0] == "audio" else PurePosixPath("mp3", *path.parts)
+    if suffix in (".mid", ".midi", ".kar"):
+        kind = str(source_format or "").upper()
+        kind = "NCN" if kind == "NCN" else "KAR" if suffix == ".kar" else "MID"
+        rest = path.parts[1:] if path.parts[0] in ("audio", "midi") else path.parts
+        return PurePosixPath("midi", kind, *rest)
+    return path
+
 
 
 class PublishError(RuntimeError):
@@ -295,9 +324,9 @@ class OnlinePublisher:
                     folder_cache[key] = self.drive.folder(parent, name)
                 parent = folder_cache[key]
             return parent
-        def upload(local_file, rel):
+        def upload(local_file, rel, source_format=""):
             checksum = _md5(local_file)
-            path = PurePosixPath(rel)
+            path = cloud_media_path(rel, source_format) if PurePosixPath(rel).suffix.lower() in (".m4a", ".mp3", ".mid", ".midi", ".kar") else PurePosixPath(rel)
             # Immutable, content-named media avoids overwriting an older song
             # with the same basename and prevents blind filename deduplication.
             name = path.stem + "-" + checksum[:16] + path.suffix
@@ -319,6 +348,12 @@ class OnlinePublisher:
                     str(path.parent).replace("\\", "/") + "/" + name,
                     "md5Checksum": checksum,
                     "size": local_file.stat().st_size}
+        # Create expected top-level directories without touching old audio paths.
+        # These folders are private and do not make MIDI playable by themselves.
+        for media_folder in ("mp3", "m4a", "midi"):
+            folder((media_folder,))
+        for midi_type in MIDI_TYPES:
+            folder(("midi", midi_type))
         counts["published"] = False
         counts["batches"] = 0
         def flush():
@@ -425,7 +460,7 @@ class OnlinePublisher:
                 counts["conflicts"] += 1
                 continue
             audio = (dict(same_audio["audio"]) if same_audio else
-                     upload(sound, row["audio"]["path"]))
+                     upload(sound, row["audio"]["path"], row.get("sourceFormat", "")))
             lyrics = upload(lyric, row["lyrics"]["path"])
             lrc_path = str(Path(row["lyrics"]["path"]).with_suffix(".lrc")).replace("\\", "/")
             lrc_media = None
