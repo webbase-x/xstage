@@ -27,9 +27,23 @@ def resources(runtime: Path) -> tuple[Path, Path]:
     return runtime / "whisper" / "whisper-cli.exe", runtime / "models" / "ggml-base.bin"
 
 
-def available(runtime: Path) -> bool:
+def readiness(runtime: Path) -> tuple[bool, str]:
+    """Give a clear packaging error instead of a disabled button with no cause."""
     cli, model = resources(runtime)
-    return cli.is_file() and model.is_file() and model.stat().st_size > 100_000_000
+    if not cli.is_file():
+        return False, "ไม่พบ whisper-cli.exe ใน .runtime/whisper · โปรดใช้ PC Ready ZIP ที่แตกไฟล์ครบ"
+    if not model.is_file():
+        return False, "ไม่พบโมเดล ggml-base.bin ใน .runtime/models · โปรดใช้ PC Ready ZIP รุ่นเต็ม"
+    try:
+        if model.stat().st_size <= 100_000_000:
+            return False, "โมเดล Whisper ไม่สมบูรณ์ · ดาวน์โหลด PC Ready ZIP ใหม่แล้วแตกทั้งหมด"
+    except OSError as exc:
+        return False, "ตรวจโมเดล Whisper ไม่ได้: " + str(exc)
+    return True, ""
+
+
+def available(runtime: Path) -> bool:
+    return readiness(runtime)[0]
 
 
 def _source_key(source: Path) -> str:
@@ -145,8 +159,9 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
     if language not in LANGUAGES:
         raise ValueError("ภาษา AI ต้องเป็น th, en หรือ auto")
     cli, model = resources(runtime)
-    if not available(runtime):
-        raise RuntimeError("ยังไม่มี Whisper AI พร้อมโมเดลภาษาในแพ็กเกจ PC Ready")
+    ready, reason = readiness(runtime)
+    if not ready:
+        raise RuntimeError("Whisper AI ไม่พร้อม: " + reason)
     output = draft_path(data_dir, source)
     existing = load_draft(data_dir, source)
     if existing:
@@ -160,18 +175,41 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
                   "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)]
         _run(ffargs, cancelled, "กำลังแปลงเสียงชั่วคราวสำหรับ AI", on_status, timeout=180)
         if not wav.is_file() or wav.stat().st_size < 32044:
-            raise ValueError("ไฟล์ไม่มีเสียงร้องหรือเสียงสั้นเกินไปสำหรับการถอดคำ")
+            raise ValueError("ไฟล์เสียงสั้นเกินไปหรือไม่สามารถแปลงเป็น WAV สำหรับ AI")
         name = folder / "draft"
-        args = [cli, "-m", model, "-f", wav, "-l", language,
-                "-oj", "-of", name, "-np"]
-        on_status("Whisper กำลังถอดเสียงร้องเป็นร่างเนื้อร้อง ไม่แก้ต้นฉบับ")
-        _run(args, cancelled, "Whisper AI กำลังถอดเนื้อร้อง", on_status,
-             timeout=MAX_PROCESS_SECONDS)
         result_file = folder / "draft.json"
-        if not result_file.is_file():
-            raise RuntimeError("Whisper ทำงานเสร็จแต่ไม่สร้างผล JSON")
-        payload = json.loads(result_file.read_text(encoding="utf-8-sig"))
-        draft = json_to_draft(payload, code, language)
+        # A chosen-language pass can reject sung/dialectal phrases as silence.
+        # Retry once with multilingual automatic language detection, using the
+        # exact same temporary WAV. Never invent lyrics or publish a draft.
+        languages = [language] if language == "auto" else [language, "auto"]
+        draft = None
+        for attempt, detected_language in enumerate(languages):
+            if cancelled.is_set():
+                raise RuntimeError("ผู้ใช้ยกเลิก AI ถอดเนื้อร้อง")
+            result_file.unlink(missing_ok=True)
+            if attempt:
+                on_status("ไม่พบคำร้องจากภาษาที่เลือก · ลองตรวจจับภาษาอัตโนมัติอีกครั้ง")
+            args = [cli, "-m", model, "-f", wav, "-l", detected_language,
+                    "-oj", "-of", name, "-np"]
+            on_status("Whisper กำลังถอดเสียงร้องเป็นร่างเนื้อร้อง ไม่แก้ต้นฉบับ")
+            _run(args, cancelled, "Whisper AI กำลังถอดเนื้อร้อง", on_status,
+                 timeout=MAX_PROCESS_SECONDS)
+            if not result_file.is_file():
+                raise RuntimeError("Whisper ทำงานเสร็จแต่ไม่สร้างผล JSON · ตรวจไฟล์ AI Runtime")
+            payload = json.loads(result_file.read_text(encoding="utf-8-sig"))
+            try:
+                draft = json_to_draft(payload, code, detected_language)
+                break
+            except ValueError as exc:
+                if "ไม่พบเสียงร้องที่ถอดเป็นคำ" not in str(exc):
+                    raise
+                if attempt == len(languages) - 1:
+                    raise ValueError(
+                        "AI ไม่พบคำร้องในไฟล์เสียงนี้ แม้ลองตรวจจับภาษาแล้ว "
+                        "· กรุณายืนยันว่าไฟล์มีเสียงคนร้องชัดเจน "
+                        "และทดลองไฟล์เสียงร้องแยก (vocals) หากมี") from exc
+        if draft is None:
+            raise RuntimeError("Whisper ไม่คืนเนื้อร้องที่ใช้ได้")
     # Only a finished JSON text draft persists in the user's private AppData.
     # Transient PCM and Whisper output are removed on TemporaryDirectory exit.
     output.parent.mkdir(parents=True, exist_ok=True)
