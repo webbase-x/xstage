@@ -203,6 +203,7 @@ GOOGLE = _module("google_drive.py", "xstage_google_drive").GoogleDrive(
 NCN = _module("ncn_lyrics.py", "xstage_ncn_lyrics")
 SONG_INDEX = _module("song_index.py", "xstage_song_index")
 AI_LYRICS = _module("ai_lyrics.py", "xstage_ai_lyrics")
+LYRIC_ALIGNMENT = _module("lyric_alignment.py", "xstage_lyric_alignment")
 # Normalize old absolute JSON paths to a stable per-user copy when possible.
 if not (DATA / "oauth-client.json").is_file() and not (ROOT / "config" / "google-oauth-client.json").is_file():
     _old_oauth = PREFS.get("oauth", "")
@@ -1204,6 +1205,32 @@ def execute_job(action, options, started):
                 "songId": song_id, "requiresReview": True,
                 "segments": len(draft["lines"])
             }
+        elif action == "ai-align":
+            song_id = options.get("id")
+            owner_lyrics = options.get("lyrics")
+            with LOCK:
+                row = dict(FILE_BY_ID.get(song_id) or {}) if type(song_id) is int else {}
+                JOB["total"] = 1
+            if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
+                raise ValueError("กรุณาเลือกเพลงที่มีเสียงร้องสำหรับจัดเวลา")
+            update("กำลังจับคู่คำร้องที่วางกับเวลาจากเสียงเพลง")
+            draft = AI_LYRICS.load_draft(DATA, Path(row["path"]))
+            if not draft:
+                update("ยังไม่มีร่าง Whisper · กำลังถอดเสียงเพื่อใช้เป็นหลักเวลาจริง")
+                ffmpeg = ffmpeg_binary()
+                if not ffmpeg:
+                    raise RuntimeError("ไม่พบ FFmpeg สำหรับสร้างร่างเสียงร้อง")
+                draft = AI_LYRICS.transcribe(
+                    Path(row["path"]), str(row.get("code") or Path(row["path"]).stem),
+                    DATA, RUNTIME, ffmpeg, CANCEL, update,
+                    language=options.get("language", "th"))
+            if CANCEL.is_set():
+                raise RuntimeError("ผู้ใช้ยกเลิกการจัดเวลาเนื้อเพลง")
+            aligned = LYRIC_ALIGNMENT.align_lyrics(owner_lyrics, draft)
+            update("จัดเวลาเบื้องต้นแล้ว · ต้องฟังตรวจทุกบรรทัดก่อนบันทึก", 1)
+            result = {**aligned, "songId": song_id,
+                      "message": aligned["message"] +
+                      " · ผลลัพธ์อยู่ในช่องแก้ไขเท่านั้น ยังไม่ได้บันทึกหรืออัปโหลด"}
         elif action == "login":
             update("เปิด Google Login บนเบราว์เซอร์ · รออนุญาตจากเจ้าของบัญชี")
             account = GOOGLE.login(cancelled=CANCEL, on_status=update)
@@ -1372,18 +1399,26 @@ def start_job(data):
                 str(info.get("error") or "ไม่พบ Google Desktop OAuth Client JSON") +
                 " · เปิดตั้งค่า > ตัวเลือกขั้นสูง > เลือก Google Desktop OAuth Client JSON "
                 "แล้วลอง Google Login ใหม่")
-    if action == "ai-lyrics":
+    if action in ("ai-lyrics", "ai-align"):
         song_id = data.get("id")
         if type(song_id) is not int or song_id not in FILE_BY_ID:
             raise ValueError("กรุณาเลือกเพลงที่จะใช้ AI ถอดคำร้องก่อน")
         suffix = Path(FILE_BY_ID[song_id]["path"]).suffix.lower()
         if suffix not in EXT_AUDIO:
             raise ValueError("AI ถอดคำร้องได้เฉพาะเพลงที่มีไฟล์เสียงร้องจริง ไม่ใช่ MIDI/NCN ดนตรีล้วน")
-        ready, reason = AI_LYRICS.readiness(RUNTIME)
-        if not ready:
-            raise ValueError("Whisper AI ยังไม่พร้อม: " + reason)
-        if not ffmpeg_binary():
-            raise ValueError("ไม่พบ FFmpeg ที่ต้องใช้แปลงไฟล์เสียงสำหรับ AI ในแพ็กเกจ PC Ready")
+        if action == "ai-align":
+            # Check the user's pasted words before accepting a background job.
+            LYRIC_ALIGNMENT._read_owner_lines(data.get("lyrics"))
+        # Aligning existing verified-timing draft is possible offline even
+        # without re-running Whisper; new songs still require bundled tools.
+        has_reference = (action == "ai-align" and
+                         AI_LYRICS.load_draft(DATA, Path(FILE_BY_ID[song_id]["path"])))
+        if not has_reference:
+            ready, reason = AI_LYRICS.readiness(RUNTIME)
+            if not ready:
+                raise ValueError("Whisper AI ยังไม่พร้อม: " + reason)
+            if not ffmpeg_binary():
+                raise ValueError("ไม่พบ FFmpeg ที่ต้องใช้แปลงไฟล์เสียงสำหรับ AI ในแพ็กเกจ PC Ready")
         validation = {"total": 1}
     with LOCK:
         if JOB["state"] == "running":
