@@ -161,7 +161,7 @@ class OnlinePublisher:
         return (pointer_file, pointer), songs, {x["name"]: x for x in children}
 
     def publish(self, local_songs, selected_records, *, create_new_library=False,
-                cancelled=None, on_progress=None):
+                cancelled=None, on_progress=None, on_batch=None, batch_size=100):
         local_songs = Path(local_songs)
         if not (local_songs / "current.json").is_file():
             raise PublishError("กรุณาสร้างฐานเพลงในเครื่องก่อนอัปโหลด")
@@ -174,6 +174,8 @@ class OnlinePublisher:
                 not_ready += 1
         if not ready:
             raise PublishError("ยังไม่มีเพลงพร้อมใช้ X-Stage Online: ต้องมี M4A และ Lyrics JSON พร้อมเวลาจริง")
+        if type(batch_size) is not int or not 1 <= batch_size <= 1000:
+            raise PublishError("ขนาดชุดเผยแพร่ต้องอยู่ระหว่าง 1–1000 เพลง")
         root = self._existing_root()
         # drive.file is app-scoped. If the existing Karaoke Online library was
         # created by a different OAuth application, it may be invisible here.
@@ -242,9 +244,64 @@ class OnlinePublisher:
                     str(path.parent).replace("\\", "/") + "/" + name,
                     "md5Checksum": checksum,
                     "size": local_file.stat().st_size}
+        counts["published"] = False
+        counts["batches"] = 0
+        def flush():
+            nonlocal old_pointer, pointer_file
+            if not revisions:
+                return
+            if cancelled and cancelled.is_set():
+                raise PublishError(
+                    "ยกเลิกก่อนเผยแพร่รอบปัจจุบัน · รอบก่อนหน้าที่เผยแพร่แล้วยังใช้งานได้")
+            generation = secrets.token_hex(12)
+            with tempfile.TemporaryDirectory(prefix="xstage-online-publish-") as temp:
+                def push_json(name, document):
+                    path = Path(temp) / name
+                    path.write_text(json.dumps(document, ensure_ascii=False,
+                                               separators=(",", ":")), encoding="utf-8")
+                    _, metadata = self.drive.upload_file(
+                        ensure_root(), path, name, cancelled=cancelled)
+                    return metadata["id"]
+                if old_pointer and len(old_pointer.get("deltaFileIds", [])) < MAX_DELTAS:
+                    delta_id = push_json("catalog-delta-" + generation + ".json", {
+                        "schemaVersion": 1, "upserts": list(revisions), "removes": []})
+                    catalog_id = old_pointer["catalogFileId"]
+                    delta_ids = [*old_pointer.get("deltaFileIds", []), delta_id]
+                else:
+                    # Compact immutable base only after 32 online deltas,
+                    # never rewrite the main DB for every single song.
+                    catalog_id = push_json("catalog-base-" + generation + ".json", {
+                        "schemaVersion": 1, "songs": list(remote.values())})
+                    delta_ids = []
+                next_pointer = {
+                    "schemaVersion": 1, "generation": generation,
+                    "catalogFileId": catalog_id, "deltaFileIds": delta_ids,
+                    "songCount": len(remote)
+                }
+                if pointer_file:
+                    current = self._json(pointer_file["id"])
+                    if current.get("generation") != old_pointer.get("generation"):
+                        raise PublishError(
+                            "ฐาน Drive มีผู้อื่นอัปเดตระหว่างซิงค์ · "
+                            "หยุดก่อนเผยแพร่รอบใหม่เพื่อป้องกันข้อมูลสูญหาย")
+                pointer_path = Path(temp) / "current.json"
+                pointer_path.write_text(json.dumps(next_pointer, ensure_ascii=False,
+                                                   separators=(",", ":")), encoding="utf-8")
+                _, pointer_file = self.drive.upload_file(
+                    ensure_root(), pointer_path, "current.json",
+                    replace_pointer=True, cancelled=cancelled)
+            old_pointer = next_pointer
+            revisions.clear()
+            counts["published"] = True
+            counts["batches"] += 1
+            counts["generation"] = generation
+            counts["totalSongs"] = len(remote)
+            if on_batch:
+                on_batch(counts["batches"], len(remote),
+                         counts["newSongs"], counts["updatedSongs"])
         for i, row in enumerate(ready, 1):
             if cancelled and cancelled.is_set():
-                raise PublishError("ยกเลิกซิงค์ Google Drive · ฐานที่ใช้อยู่ยังไม่เปลี่ยน")
+                raise PublishError("ยกเลิกซิงค์ Google Drive · ชุดเพลงที่เผยแพร่ก่อนหน้ายังคงใช้งานได้")
             code = str(row["code"]).casefold()
             sound = _local_path(local_songs, row["audio"]["path"], "audio")
             lyric = _local_path(local_songs, row["lyrics"]["path"], "lyrics")
@@ -298,47 +355,8 @@ class OnlinePublisher:
             revisions.append(item)
             by_code.setdefault(code, []).append(item)
             counts["updatedSongs" if same_audio else "newSongs"] += 1
-        if not revisions:
-            counts["published"] = False
-            counts["totalSongs"] = len(remote)
-            return counts
-        if cancelled and cancelled.is_set():
-            raise PublishError("ยกเลิกก่อนเผยแพร่ฐานเพลง · ฐานเดิมยังใช้ได้")
-        generation = secrets.token_hex(12)
-        with tempfile.TemporaryDirectory(prefix="xstage-online-publish-") as temp:
-            def push_json(name, document):
-                path = Path(temp) / name
-                path.write_text(json.dumps(document, ensure_ascii=False,
-                                           separators=(",", ":")), encoding="utf-8")
-                _, metadata = self.drive.upload_file(
-                    ensure_root(), path, name, cancelled=cancelled)
-                return metadata["id"]
-            if old_pointer and len(old_pointer.get("deltaFileIds", [])) < MAX_DELTAS:
-                delta_id = push_json("catalog-delta-" + generation + ".json", {
-                    "schemaVersion": 1, "upserts": revisions, "removes": []})
-                catalog_id = old_pointer["catalogFileId"]
-                delta_ids = [*old_pointer.get("deltaFileIds", []), delta_id]
-            else:
-                catalog_id = push_json("catalog-base-" + generation + ".json", {
-                    "schemaVersion": 1, "songs": list(remote.values())})
-                delta_ids = []
-            next_pointer = {
-                "schemaVersion": 1, "generation": generation,
-                "catalogFileId": catalog_id, "deltaFileIds": delta_ids,
-                "songCount": len(remote)
-            }
-            # Detect a new external publication before switching current.json.
-            # Only one publisher should write to a shared XStageWeb library.
-            if pointer_file:
-                current = self._json(pointer_file["id"])
-                if current.get("generation") != old_pointer.get("generation"):
-                    raise PublishError("ฐาน Drive มีผู้อื่นอัปเดตระหว่างซิงค์ · กรุณาซิงค์ใหม่")
-            push_path = Path(temp) / "current.json"
-            push_path.write_text(json.dumps(next_pointer, ensure_ascii=False,
-                                            separators=(",", ":")), encoding="utf-8")
-            self.drive.upload_file(ensure_root(), push_path, "current.json",
-                                   replace_pointer=True, cancelled=cancelled)
-        counts["published"] = True
+            if len(revisions) >= batch_size:
+                flush()
+        flush()
         counts["totalSongs"] = len(remote)
-        counts["generation"] = generation
         return counts
