@@ -976,7 +976,8 @@ class GoogleDrive:
         counts[status] += 1
         return counts
 
-    def download_library(self, target_root, kind="songs", cancelled=None, on_status=None):
+    def download_library(self, target_root, kind="songs", cancelled=None, on_status=None,
+                         on_item=None):
         if kind not in ("songs", "db", "zip"):
             raise GoogleError("ประเภทดาวน์โหลดไม่ถูกต้อง")
         target_root = Path(target_root)
@@ -1023,6 +1024,8 @@ class GoogleDrive:
                 else target_root / library_name if library_name in ("StageWeb", "XStageWeb")
                 else target_root / "X-Stage Song Studio" / "songs")
         done = 0
+        if on_item:
+            on_item(0, len(collected))
         try:
             for rel, item in collected:
                 if cancelled and cancelled.is_set():
@@ -1034,14 +1037,20 @@ class GoogleDrive:
                 if dest.is_file() and item.get("md5Checksum"):
                     if file_md5(dest) == item["md5Checksum"]:
                         done += 1
+                        if on_item:
+                            on_item(done, len(collected))
                         continue
                     raise GoogleError("ไฟล์ในเครื่องชื่อเดียวกันแต่ต่างเนื้อหา: " + str(dest))
                 self._download_verified(item, dest, rel=rel,
                                         cancelled=cancelled, on_status=on_status)
                 done += 1
+                if on_item:
+                    on_item(done, len(collected))
                 if on_status:
                     on_status(f"ดาวน์โหลด {done}/{len(collected)} · {rel}")
             if kind == "zip":
+                if on_status:
+                    on_status("ดาวน์โหลดครบและตรวจ MD5 แล้ว · กำลังประกอบ ZIP โดยไม่บีบอัด M4A ซ้ำ")
                 target_root.mkdir(parents=True, exist_ok=True)
                 name = ("X-Stage-Songs-" + time.strftime("%Y%m%d-%H%M%S") +
                         "-" + secrets.token_hex(4) + ".zip")
