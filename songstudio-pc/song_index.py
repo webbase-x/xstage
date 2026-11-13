@@ -230,6 +230,7 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
     # A full NCN tree uses the in-memory companion index with zero fallback
     # folder searches; clearing the fallback cache prevents stale deletions.
     ncn._file_names.cache_clear()
+    ncn._ncn_root.cache_clear()
     for number, (_, _, row) in enumerate(songs, 1):
         if is_cancelled():
             _save_checkpoint(db_path, scope, records)
@@ -272,6 +273,12 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
         prior_stamp = row.get("_ncn_stamp")
         if prior_stamp == stamp and row.get("source_format") == "NCN":
             continue
+        # Changed .LYR/.CUR files are changes to their linked song even
+        # when the MIDI itself has the same timestamp/size as last scan.
+        if (row["path"] in previous
+                and records[row["path"]][:2] == previous[row["path"]][:2]
+                and prior_stamp != stamp):
+            changed += 1
         note = notes.get(row["path"], {})
         row.update(ncn=trio, source_format="NCN",
                    components={"song": trio["midi"], "lyrics": trio["lyrics"],
