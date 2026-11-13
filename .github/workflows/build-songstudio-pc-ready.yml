@@ -36,7 +36,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build318
+  group: xstage-songstudio-ready-build319
   cancel-in-progress: true
 
 jobs:
@@ -147,7 +147,7 @@ jobs:
       - name: Validate complete bundled Desktop OAuth pair (never user tokens)
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.18-build318"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.19-build319"
           $config = Join-Path $base "config/google-oauth-client.json"
           $hasId = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID)
           $hasSecret = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)
@@ -171,7 +171,7 @@ jobs:
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.18-build318"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.19-build319"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -179,7 +179,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.18-build318"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.19-build319"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -192,7 +192,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.18-build318.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.19-build319.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -220,10 +220,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.18-build318
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.19-build319
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.18-build318.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.18-build318.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.19-build319.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.19-build319.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -243,8 +243,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.18-build318"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.18-build318.zip"
+          $tag = "song-studio-pc-ready-v0.3.19-build319"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.19-build319.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
