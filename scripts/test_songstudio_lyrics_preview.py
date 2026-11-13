@@ -86,7 +86,8 @@ class LyricPreviewTests(unittest.TestCase):
 
     def test_ai_transcription_creates_only_unverified_private_draft(self):
         mock_model = self.dir / "model"
-        mock_model.mkdir()
+        (mock_model / "models").mkdir(parents=True)
+        (mock_model / "models" / "ggml-base.bin").write_bytes(b"mock")
         with patch.object(ai, "readiness", return_value=(True, "")):
             def fake_run(cmd, cancelled, phase, on_status, **_):
                 if "ffmpeg" in str(cmd[0]):
@@ -131,6 +132,9 @@ class LyricPreviewTests(unittest.TestCase):
                 if language == "auto" else []
             dest.write_text(json.dumps({"transcription": text}), encoding="utf-8")
 
+        model_dir = self.dir / "models"
+        model_dir.mkdir()
+        (model_dir / "ggml-base.bin").write_bytes(b"mock")
         with patch.object(ai, "readiness", return_value=(True, "")), \
              patch.object(ai, "_run", side_effect=fake_run):
             draft = ai.transcribe(
@@ -159,6 +163,39 @@ class LyricPreviewTests(unittest.TestCase):
         tail = ShortReadPipe(b"\x01\x00\x01\x00")
         self.assertEqual(live.read_pcm_block(tail, 8),
                          b"\x01\x00\x01\x00" + b"\x00" * 4)
+
+    def test_whisper_uses_ascii_relative_model_path_under_thai_install(self):
+        # Regression for Windows MSVC whisper.cpp 0xC0000409 when -m has
+        # Thai path elements. The working directory can contain Unicode.
+        runtime = self.dir / "โปรแกรมเพลงไทย" / ".runtime"
+        (runtime / "models").mkdir(parents=True)
+        (runtime / "models" / "ggml-base.bin").write_bytes(b"model")
+        source = self.dir / "เพลงทดสอบ.mp3"
+        source.write_bytes(b"ID3" * 6000)
+        calls = []
+
+        def fake_run(cmd, cancelled, phase, on_status, **kwargs):
+            calls.append((list(map(str, cmd)), kwargs.get("cwd")))
+            if "ffmpeg" in str(cmd[0]):
+                Path(cmd[-1]).write_bytes(b"wav" * 15000)
+            else:
+                dest = Path(str(cmd[cmd.index("-of") + 1]) + ".json")
+                dest.write_text(json.dumps({"transcription": [
+                    {"text": "เพลงทดสอบ", "offsets": {"from": 1000, "to": 3000}}
+                ]}), encoding="utf-8")
+        with patch.object(ai, "readiness", return_value=(True, "")), \\
+             patch.object(ai, "_run", side_effect=fake_run), \\
+             patch.object(ai, "resources", return_value=(runtime / "whisper" / "whisper-cli.exe",
+                                                        runtime / "models" / "ggml-base.bin")):
+            result = ai.transcribe(source, "001", self.dir, runtime,
+                                   "ffmpeg", __import__("threading").Event(),
+                                   lambda _: None)
+        self.assertEqual(result["lines"][0]["text"], "เพลงทดสอบ")
+        args, working_directory = calls[-1]
+        self.assertEqual(working_directory, runtime)
+        self.assertEqual(args[args.index("-m") + 1], str(Path("models") / "ggml-base.bin"))
+        self.assertTrue(args[args.index("-m") + 1].isascii())
+        self.assertTrue(Path(args[args.index("-f") + 1]).is_absolute())
 
     def test_ai_cannot_generate_true_words_from_instrumental_midi(self):
         midi = self.dir / "000012.mid"
