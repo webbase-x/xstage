@@ -1400,8 +1400,11 @@ def start_job(data):
         suffix = Path(FILE_BY_ID[song_id]["path"]).suffix.lower()
         if suffix not in EXT_AUDIO:
             raise ValueError("AI ถอดคำร้องได้เฉพาะเพลงที่มีไฟล์เสียงร้องจริง ไม่ใช่ MIDI/NCN ดนตรีล้วน")
-        if not AI_LYRICS.available(RUNTIME):
-            raise ValueError("ยังไม่มี Whisper AI พร้อมใช้งานในแพ็กเกจ PC รุ่นนี้")
+        ready, reason = AI_LYRICS.readiness(RUNTIME)
+        if not ready:
+            raise ValueError("Whisper AI ยังไม่พร้อม: " + reason)
+        if not ffmpeg_binary():
+            raise ValueError("ไม่พบ FFmpeg ที่ต้องใช้แปลงไฟล์เสียงสำหรับ AI ในแพ็กเกจ PC Ready")
         validation = {"total": 1}
     with LOCK:
         if JOB["state"] == "running":
@@ -1726,9 +1729,12 @@ def ai_lyrics_draft(song_id):
     if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
         raise ValueError("ต้องเลือกเพลงที่เป็นไฟล์เสียงสำหรับถอดคำร้อง")
     draft = AI_LYRICS.load_draft(DATA, Path(row["path"]))
+    ready, reason = AI_LYRICS.readiness(RUNTIME)
+    if ready and not ffmpeg_binary():
+        ready, reason = False, "ไม่พบ FFmpeg ในแพ็กเกจ PC Ready"
     return {
         "id": song_id, **preview_song_identity(row),
-        "available": AI_LYRICS.available(RUNTIME),
+        "available": ready, "aiProblem": reason,
         "hasDraft": bool(draft), "draft": draft,
         "approvedLrc": NOTES.get(row["path"], {}).get("lyrics", "")
     }
