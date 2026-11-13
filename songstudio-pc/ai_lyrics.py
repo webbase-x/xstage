@@ -104,10 +104,12 @@ def json_to_draft(payload: dict, code: str, language: str) -> dict:
     }
 
 
-def _run(cmd, cancelled, phase, on_status, *, timeout, environment=None):
+def _run(cmd, cancelled, phase, on_status, *, timeout, environment=None, cwd=None):
     """Run without opening CMD and without a subprocess PIPE deadlock."""
     opts = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE, env=environment)
+    if cwd is not None:
+        opts["cwd"] = str(cwd)
     if os.name == "nt":
         opts["creationflags"] = subprocess.CREATE_NO_WINDOW
     process = subprocess.Popen([str(c) for c in cmd], **opts)
@@ -140,8 +142,14 @@ def _run(cmd, cancelled, phase, on_status, *, timeout, environment=None):
             cancelled.wait(.35)
         worker.join(timeout=2)
         if process.returncode:
+            code = process.returncode & 0xFFFFFFFF
+            native_crash = (
+                " · Windows 0xC0000409: whisper-cli ปิดตัวเองผิดปกติ"
+                " (อาจเกี่ยวกับพาธภาษาไทยหรือข้อผิดพลาดในโปรแกรม Whisper)"
+                if code == 0xC0000409 else ""
+            )
             raise RuntimeError(phase + " ไม่สำเร็จ (exit " + str(process.returncode) +
-                               "): " + " / ".join(last_output[-4:])[:450])
+                               native_crash + "): " + " / ".join(last_output[-4:])[:450])
     finally:
         if process.poll() is None:
             process.kill()
@@ -178,6 +186,16 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
             raise ValueError("ไฟล์เสียงสั้นเกินไปหรือไม่สามารถแปลงเป็น WAV สำหรับ AI")
         name = folder / "draft"
         result_file = folder / "draft.json"
+        # whisper.cpp MSVC Windows builds may interpret an absolute -m path
+        # containing Thai/non-ASCII characters as non-UTF8 argv and terminate
+        # with 0xC0000409. Resolve the model relative to a Unicode-safe cwd.
+        # CreateProcessW accepts a Unicode working directory; the -m argument
+        # itself now consists entirely of ASCII characters.
+        whisper_cwd = Path(runtime)
+        model_arg = str(Path("models") / model.name)
+        if not (whisper_cwd / model_arg).is_file():
+            raise RuntimeError("ไม่พบโมเดล Whisper ในโฟลเดอร์โปรแกรม")
+
         # A chosen-language pass can reject sung/dialectal phrases as silence.
         # Retry once with multilingual automatic language detection, using the
         # exact same temporary WAV. Never invent lyrics or publish a draft.
@@ -189,11 +207,11 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
             result_file.unlink(missing_ok=True)
             if attempt:
                 on_status("ไม่พบคำร้องจากภาษาที่เลือก · ลองตรวจจับภาษาอัตโนมัติอีกครั้ง")
-            args = [cli, "-m", model, "-f", wav, "-l", detected_language,
+            args = [cli, "-m", model_arg, "-f", wav, "-l", detected_language,
                     "-oj", "-of", name, "-np"]
             on_status("Whisper กำลังถอดเสียงร้องเป็นร่างเนื้อร้อง ไม่แก้ต้นฉบับ")
             _run(args, cancelled, "Whisper AI กำลังถอดเนื้อร้อง", on_status,
-                 timeout=MAX_PROCESS_SECONDS)
+                 timeout=MAX_PROCESS_SECONDS, cwd=whisper_cwd)
             if not result_file.is_file():
                 raise RuntimeError("Whisper ทำงานเสร็จแต่ไม่สร้างผล JSON · ตรวจไฟล์ AI Runtime")
             payload = json.loads(result_file.read_text(encoding="utf-8-sig"))
