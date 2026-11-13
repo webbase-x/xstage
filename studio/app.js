@@ -878,6 +878,8 @@
     $('ai-lyrics-insert-time').disabled = !hasSong || !aiAudio.src;
     $('ai-lyrics-download').disabled = !hasSong || !valid;
     $('ai-lyrics-save').disabled = busy || !hasSong || !valid || !aiDraftReady;
+    for(const control of $('ai-lyrics-results').querySelectorAll('[data-ai-remove]'))
+      control.disabled=busy;
   }
   async function aiRefreshSongList() {
     if (!token || !engineBase) return;
@@ -890,6 +892,10 @@
       if (seq !== aiSearchSeq) return;
       aiSongs = data.rows || [];
       aiTotal = Number(data.total || 0);
+      if(aiTotal && aiOffset>=aiTotal){
+        aiOffset=Math.floor((aiTotal-1)/30)*30;
+        return aiRefreshSongList();
+      }
       panel.replaceChildren();
       for(const item of aiSongs) {
         const button = document.createElement('button');
@@ -904,7 +910,16 @@
         info.append(title,subtitle);
         const chip=document.createElement('span');
         chip.className='chip';chip.textContent=item.kind||'AUDIO';
-        button.append(info,chip);panel.append(button);
+        const row=document.createElement('div');
+        row.className='ai-lyrics-song-row';
+        const remove=document.createElement('button');
+        remove.type='button';remove.className='ai-lyrics-song-remove';
+        remove.dataset.aiRemove=String(item.id);
+        remove.textContent='นำออก';
+        remove.title='นำเพลงนี้ออกจากรายการ AI (ไม่ลบไฟล์ต้นฉบับหรือร่างเนื้อร้อง)';
+        remove.setAttribute('aria-label','นำ '+(item.title||item.code||'เพลงที่เลือก')+' ออกจากรายการ');
+        remove.disabled=busy;
+        button.append(info,chip);row.append(button,remove);panel.append(row);
       }
       if(!aiSongs.length) {
         const empty=document.createElement('div');
@@ -917,6 +932,7 @@
         ' จาก '+fmtNum(aiTotal)+' ไฟล์' : 'ยังไม่มีเพลงที่นำเข้า';
       $('ai-lyrics-prev').disabled=aiOffset===0;
       $('ai-lyrics-next').disabled=aiOffset+30>=aiTotal;
+      aiUpdateButtons();
     } catch(error) {if(seq===aiSearchSeq)panel.textContent='อ่านรายการไม่สำเร็จ: '+error.message;}
   }
   async function aiImportAudio() {
@@ -935,6 +951,37 @@
     }catch(error) {
       $('ai-lyrics-status').textContent='นำเข้าไม่สำเร็จ: '+error.message;
       message(error.message);
+    }
+  }
+  async function aiRemoveImportedSong(song) {
+    if(busy) return message('มีงานกำลังดำเนินการ · กรุณารอให้เสร็จก่อนนำเพลงออก');
+    if(!song || !Number.isInteger(song.id) || song.id>=0)return;
+    const label=song.title||song.code||'เพลงที่เลือก';
+    const approved=await confirmStudio(
+      'นำเพลง “'+label+'” ออกจากรายการสร้างเนื้อร้อง AI ใช่หรือไม่?\n\n'+
+      'การนำออกจะลบเฉพาะรายการที่นำเข้า ไม่ลบไฟล์เพลงต้นฉบับ ไม่ลบร่าง AI หรือ LRC ที่บันทึกไว้ในเครื่อง\n'+
+      'สามารถนำเข้าไฟล์เดิมได้อีกครั้งภายหลัง',
+      'ยืนยันนำเพลงออกจากรายการ AI',
+      {acceptLabel:'นำออกจากรายการ',cancelLabel:'ยกเลิก'}
+    );
+    if(!approved)return;
+    if(busy)return message('มีงานเริ่มประมวลผลแล้ว · กรุณาลองนำออกอีกครั้งหลังงานเสร็จ');
+    try{
+      const result=await post('/api/vocal-remove',{id:song.id});
+      // Invalidate any delayed draft fetch from the removed selection.
+      if(aiSongId===song.id){
+        ++aiDraftSeq;
+        aiStopPlayback();
+        aiSongId=null;aiDraftReady=false;aiEngineReady=false;
+        $('ai-lyrics-selected').textContent='ยังไม่ได้เลือกเพลง';
+        $('ai-lyrics-editor').value='';
+        $('ai-lyrics-status').textContent='นำเพลงออกจากรายการแล้ว · เลือกหรือนำเข้าเพลงอื่นได้';
+        aiValidateEditor();
+      }
+      await aiRefreshSongList();
+      message(result.message||'นำเพลงออกจากรายการแล้ว · ไฟล์เพลงต้นฉบับยังอยู่',false);
+    }catch(error){
+      message('นำเพลงออกจากรายการไม่สำเร็จ: '+error.message);
     }
   }
   function aiStopPlayback() {
@@ -1459,6 +1506,12 @@
     aiSearchTimer=setTimeout(()=>{aiOffset=0;void aiRefreshSongList();},180);
   });
   $('ai-lyrics-results').addEventListener('click',event=>{
+    const remove=event.target.closest('[data-ai-remove]');
+    if(remove){
+      const song=aiSongs.find(item=>item.id===Number(remove.dataset.aiRemove));
+      if(song)void aiRemoveImportedSong(song);
+      return;
+    }
     const option=event.target.closest('[data-ai-id]');
     if(!option)return;
     const row=aiSongs.find(x=>x.id===Number(option.dataset.aiId));
