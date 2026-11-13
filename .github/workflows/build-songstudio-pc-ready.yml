@@ -47,7 +47,7 @@ jobs:
       # Owner sets Desktop Client ID as Actions Variable and the matching
       # Desktop Client Secret as Actions Secret. Native clients are public;
       # the built ZIP necessarily contains the pair. Never ship user tokens.
-      XSTAGE_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.XSTAGE_GOOGLE_DESKTOP_CLIENT_ID }}
+      XSTAGE_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.XSTAGE_GOOGLE_DESKTOP_CLIENT_ID || vars.XSTAGE_GOOGLE_DESKTOP_CLIENT_ID }}
       XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
