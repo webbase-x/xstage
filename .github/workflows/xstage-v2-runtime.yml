@@ -23,3 +23,4 @@ jobs:
       - run: node --check app.js
       - run: node scripts/device-runtime-test.mjs
       - run: python scripts/test_songstudio_online_publish.py
+      - run: python scripts/test_v2_native_publish.py
