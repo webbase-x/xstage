@@ -193,6 +193,29 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(self.published(), before)
         self.assertEqual(self.pointer()[0]["generation"], original_pointer["generation"])
 
+    def test_same_websongid_different_audio_and_code_keeps_original_drive_song(self):
+        self.publisher.publish(self.root, [self.first])
+        original = dict(self.published())
+        changed = self.make_song("00001", b"Z" * 5200, "เพลงใหม่คนละเพลง")
+        changed["code"] = "00002"
+        changed["originalCode"] = "00001"
+        result = self.publisher.publish(self.root, [changed])
+        self.assertEqual(result["newSongs"], 1)
+        self.assertEqual(result["conflicts"], 0)
+        after = self.published()
+        self.assertEqual(len(after), 2)
+        self.assertEqual(after[self.first["webSongId"]], original[self.first["webSongId"]])
+        self.assertEqual({x["code"] for x in after.values()}, {"00001", "00002"})
+
+    def test_registry_read_requires_visible_pointer_not_just_similar_folder(self):
+        with self.assertRaisesRegex(online.PublishError, "ยังไม่มี current.json"):
+            self.publisher.read_code_registry()
+        self.publisher.publish(self.root, [self.first])
+        verified = self.publisher.read_code_registry()
+        self.assertTrue(verified["visible"])
+        self.assertEqual([x["code"] for x in verified["songs"]], ["00001"])
+        self.assertTrue(verified["generation"])
+
     def test_same_audio_changed_lyrics_preserves_audio_file_id(self):
         self.publisher.publish(self.root, [self.first])
         old = self.published()[self.first["webSongId"]]
