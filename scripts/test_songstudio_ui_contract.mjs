@@ -52,6 +52,14 @@ assert.ok(js.includes("previewLyricClockHealth()"),
   'Long playback must diagnose stalled media time or exhausted lyric timestamps');
 assert.ok(js.includes("previewLyricCoverageWarned"),
   'Missing lyrics after the last timestamp must be reported once, not silently freeze');
+for (const id of ['ai-export-button','ai-export-lyrics','ai-export-instrumental',
+                 'ai-export-choose-folder','ai-export-folder']) {
+  assert.ok(html.includes('id="'+id+'"'), 'Missing selectable AI export UI: '+id);
+}
+assert.ok(js.includes("run('ai-export',{id,lyrics,instrumental})"),
+  'AI export selections must reach the authenticated local engine');
+assert.ok(js.includes("saveInputs(['download-destination'])"),
+  'AI export must persist the selected destination');
 assert.ok(js.includes("run('ai-separate-vocals'"),
   'AI Lyrics separation button must start backend HTDemucs job');
 assert.ok(js.includes("useSeparatedVocals:$('ai-lyrics-use-vocals').checked"),
