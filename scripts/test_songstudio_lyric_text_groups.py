@@ -211,6 +211,110 @@ class LyricHeadTailTests(unittest.TestCase):
         self.assertEqual(snap["skippedInvalid"],1)
         self.assertEqual(bulk.list_groups(snap,"first")["rows"][0]["count"],2)
 
+    def test_search_matches_middle_lyrics_and_limits_edits_to_matched_songs(self):
+        snap=self.snapshot()
+        # Not present in the grouped intro text, only in song 001's body.
+        found=bulk.list_groups(snap,"first",search="เนื้อร้องหนึ่ง")
+        self.assertEqual(found["rows"][0]["text"],"[X-Stage Karaoke]")
+        self.assertEqual(found["rows"][0]["count"],1)
+        self.assertEqual(found["rows"][0]["libraryCount"],3)
+        ident=found["rows"][0]["id"]
+        self.assertEqual(bulk.preview(snap,ident,search="เนื้อร้องหนึ่ง")["count"],1)
+        plan=bulk.plan(snap,[ident],search="เนื้อร้องหนึ่ง",replacement="ใหม่เฉพาะเพลง 001")
+        self.assertEqual(plan["changedSongs"],1)
+        self.assertEqual(plan["changedLines"],1)
+        before2=(self.root/"lyrics"/"0"/"002.json").read_bytes()
+        result=bulk.apply_many(self.root,export,snap,[ident],"ใหม่เฉพาะเพลง 001",
+                               self.backups,search="เนื้อร้องหนึ่ง",expected_count=1)
+        self.assertEqual(result["changedSongs"],1)
+        self.assertEqual((self.root/"lyrics"/"0"/"002.json").read_bytes(),before2)
+        doc=json.loads((self.root/"lyrics"/"0"/"001.json").read_text(encoding="utf-8"))
+        self.assertEqual(doc["lines"][0]["text"],"ใหม่เฉพาะเพลง 001")
+        self.assertEqual(doc["lines"][2]["text"],"เนื้อร้องหนึ่ง")
+        # The remaining two-song group remains visible and ready for editing.
+        waiting=bulk.list_groups(snap,"first")
+        self.assertEqual(waiting["rows"][0]["count"],2)
+        self.assertIn("[X-Stage Karaoke]",[item["text"] for item in waiting["rows"]])
+        self.assertEqual(bulk.undo(self.backups,self.root,result["backupId"])["restoredSongs"],1)
+
+    def test_multiple_selected_groups_share_one_replacement_and_one_backup(self):
+        snap=self.snapshot()
+        first=bulk.list_groups(snap,"first",repeats_only=False)["rows"]
+        selected=[item["id"] for item in first]
+        plan=bulk.plan(snap,selected,replacement="[ใหม่ X-Stage]")
+        self.assertEqual(plan["changedSongs"],4)
+        self.assertEqual(plan["changedLines"],4)
+        result=bulk.apply_many(self.root,export,snap,selected,
+                               "[ใหม่ X-Stage]",self.backups,expected_count=4)
+        self.assertEqual(result["changedSongs"],4)
+        self.assertEqual(result["changedGroups"],2)
+        self.assertEqual(result["changedFiles"],8)
+        for row in self.records:
+            doc=json.loads((self.root/row["lyrics"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(doc["lines"][0]["text"],"[ใหม่ X-Stage]")
+            self.assertEqual([item["startTime"] for item in doc["lines"]],
+                             self.starts[row["code"]])
+        self.assertEqual(len(list(self.backups.glob("*.zip"))),1)
+        # The original groups disappear, but ALL other position groups remain
+        # available from the same cached snapshot, without rescanning.
+        self.assertTrue(bulk.list_groups(snap,"second")["rows"])
+        self.assertTrue(bulk.list_groups(snap,"last")["rows"])
+        self.assertEqual(bulk.list_groups(snap,"first")["rows"][0]["count"],4)
+        bulk.undo(self.backups,self.root,result["backupId"])
+
+    def test_cross_position_selection_updates_each_song_once(self):
+        snap=self.snapshot()
+        first=bulk.list_groups(snap,"first")["rows"][0]["id"]
+        second=next(item for item in bulk.list_groups(snap,"second")["rows"]
+                    if item["text"]=="ผู้ผลิตรายการ")["id"]
+        planned=bulk.plan(snap,[first,second],replacement="[XStage ใหม่]")
+        self.assertEqual(planned["changedSongs"],3)
+        self.assertEqual(planned["changedLines"],5)
+        original=(self.root/"lyrics"/"0"/"001.json").read_bytes()
+        result=bulk.apply_many(self.root,export,snap,[first,second],
+                               "[XStage ใหม่]",self.backups,expected_count=5)
+        self.assertEqual(result["changedSongs"],3)
+        self.assertEqual(result["changedLines"],5)
+        self.assertEqual(result["changedFiles"],6,
+                         "Save JSON+LRC once per song despite multiple slots")
+        d1=json.loads((self.root/"lyrics"/"0"/"001.json").read_text(encoding="utf-8"))
+        self.assertEqual(d1["lines"][0]["text"],"[XStage ใหม่]")
+        self.assertEqual(d1["lines"][1]["text"],"[XStage ใหม่]")
+        self.assertEqual(d1["lines"][2]["text"],"เนื้อร้องหนึ่ง")
+        self.assertEqual(d1["lines"][0]["startTime"],2.)
+        bulk.undo(self.backups,self.root,result["backupId"])
+        self.assertEqual((self.root/"lyrics"/"0"/"001.json").read_bytes(),original)
+
+    def test_singleton_remainder_stays_visible_in_repeated_only_queue(self):
+        snap=self.snapshot()
+        group=bulk.list_groups(snap,"second")["rows"][0]
+        # This second-line group has two songs. Editing only song 001 leaves
+        # song 002 as a one-item pending queue, even with repeats-only checked.
+        matches=bulk.list_groups(snap,"second",search="เนื้อร้องหนึ่ง")
+        self.assertEqual(matches["rows"][0]["count"],1)
+        result=bulk.apply_many(self.root,export,snap,[group["id"]],
+                               "ผลิตรายการใหม่",self.backups,
+                               search="เนื้อร้องหนึ่ง",expected_count=1)
+        pending=bulk.list_groups(snap,"second")
+        original_group=next(item for item in pending["rows"]
+                            if item["id"]==group["id"])
+        self.assertEqual(original_group["count"],1)
+        self.assertEqual(original_group["libraryCount"],1)
+        bulk.undo(self.backups,self.root,result["backupId"])
+
+    def test_confirmation_count_uses_lines_not_distinct_songs(self):
+        snap=self.snapshot()
+        first=bulk.list_groups(snap,"first")["rows"][0]["id"]
+        second=next(item for item in bulk.list_groups(snap,"second")["rows"]
+                    if item["text"]=="ผู้ผลิตรายการ")["id"]
+        with self.assertRaisesRegex(ValueError,"จำนวนเพลงหรือบรรทัด"):
+            bulk.apply_many(self.root,export,snap,[first,second],"แก้",
+                            self.backups,expected_count=3)
+        with self.assertRaisesRegex(ValueError,"ไม่ซ้ำ"):
+            bulk.plan(snap,[first,first],replacement="แก้")
+        self.assertFalse(self.backups.exists(),
+                         "Invalid confirmation must not create backups")
+
     def test_empty_or_multiline_text_is_rejected(self):
         snap=self.snapshot()
         g=bulk.list_groups(snap,"first")["rows"][0]
