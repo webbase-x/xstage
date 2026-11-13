@@ -50,6 +50,8 @@
   let page = 0, pageSize = 100, total = 0, search = '', searchTimer = 0;
   let songs = [], prefs = {}, googleConnected = false, googleConfigured = false;
   let lastJobId = '', lastJobState = 'idle', refreshTimer = 0;
+  // A finished build offers uploading once per job, never automatically.
+  const promptedBuildUploadJobs = new Set();
   let busy = false, editingId = null, notificationTimer = null;
   let createStep = 1;
   const createStepLabels = [
@@ -292,6 +294,10 @@
        ? `มีรุ่นใหม่ v${data.update.version}` : `v${data.version} / ${data.build}`;
     if (initialize) {
       presetOptions(data.presets); soundfontOptions(data.soundfonts); setFields();
+      // A previously finished job must not reopen the consent dialog on launch.
+      // If a build is in progress, polling still detects its completion.
+      lastJobId = data.job?.id || '';
+      lastJobState = data.job?.state || 'idle';
     }
     setGoogle(data.google);
     renderJob(data.job || {});
@@ -1151,17 +1157,60 @@
       message(error.message);
     }
   }
-  async function startUpload() {
+  async function startUpload({confirmedAfterBuild = false} = {}) {
+    // Post-build consent never inherits a manually checked "new library"
+    // option: uploads must merge into an existing, accessible Drive catalog.
     if (!googleConnected) return message('กรุณา Google Login ก่อนซิงค์คลังเพลง');
-    const createNew = $('upload-create-library').checked === true;
-    const details = 'ส่ง M4A + Lyrics JSON จากคลังในเครื่องไปยัง XStageWeb\n'+
-      'ตรวจเพลงซ้ำด้วยรหัสเพลงและ MD5 ของไฟล์จริง · คงเพลงเดิมทั้งหมด\n'+
-      'เพิ่มฐานเพลงเฉพาะรายการใหม่/แก้ไข และเผยแพร่ current.json เป็นขั้นตอนสุดท้าย';
+    const createNew = !confirmedAfterBuild && $('upload-create-library').checked === true;
+    const details = 'ส่ง M4A + Lyrics JSON ที่พร้อมใช้งานจากคลังในเครื่องไปยัง X-Stage Song Karaoke Online ผ่าน Google Drive ส่วนตัว\n'+
+      'ตรวจเพลงซ้ำด้วยรหัสเพลงและ MD5 ของไฟล์จริง · ไม่ลบเพลงเดิม\n'+
+      'เพิ่มเฉพาะเพลงใหม่หรือข้อมูลที่แก้ไข และเผยแพร่ current.json หลังตรวจไฟล์ครบแล้ว';
     const warning = createNew
       ? '\n\n⚠ เลือกสร้างคลังใหม่: ยืนยันว่า Google Drive นี้ไม่มีคลัง XStageWeb เดิมที่ต้องใช้ต่อ'
       : '\n\nหากมองไม่เห็นคลังเดิมเพราะสิทธิ์ Google ไม่ครบ ระบบจะหยุดโดยไม่สร้างคลังซ้ำ';
-    if (await confirmStudio(details + warning, 'ยืนยันเผยแพร่เพลงไปยัง X-Stage Karaoke Online')) {
+    if (confirmedAfterBuild || await confirmStudio(details + warning, 'ยืนยันเผยแพร่เพลงไปยัง X-Stage Song Karaoke Online')) {
       await run('upload',{create_new_library:createNew});
+    }
+  }
+
+  async function offerUploadAfterBuild(job) {
+    if (job.kind !== 'build' || !['success','error'].includes(job.state)) return;
+    const created = Number(job.result?.created || job.created || 0);
+    const skipped = Number(job.result?.skipped || job.skipped || 0);
+    const errors = Number(job.result?.errors || job.errors || 0);
+    // No verified media to publish: leave the build failure in the log.
+    if (created + skipped <= 0) return;
+    const report = 'สร้างใหม่ ' + fmtNum(created) + ' เพลง · เพลงเดิมที่ตรวจยืนยันแล้ว ' +
+      fmtNum(skipped) + ' · ผิดพลาด ' + fmtNum(errors);
+    const partial = errors
+      ? '\n⚠ บางเพลงสร้างไม่สำเร็จ จะอัปโหลดเฉพาะเพลงในคลังที่ตรวจสอบว่าพร้อมเท่านั้น'
+      : '';
+    const approved = await confirmStudio(
+      report + partial +
+      '\n\nต้องการอัปโหลดเพลงที่พร้อมไปยัง X-Stage Song Karaoke Online ตอนนี้หรือไม่?' +
+      '\n\nใช้ Google Drive ส่วนตัว · ตรวจเพลงซ้ำก่อนอัปโหลด · ไม่ลบเพลงเดิม' +
+      '\nไม่สร้างคลังเพลงใหม่โดยอัตโนมัติ · เลือกยกเลิกเพื่ออัปโหลดภายหลังได้',
+      'สร้างเพลงเสร็จแล้ว · อัปโหลดเข้า X-Stage Song Karaoke Online?'
+    );
+    if (!approved) {
+      message('เก็บเพลงในเครื่องแล้ว · อัปโหลดเข้า X-Stage Song Karaoke Online ภายหลังได้จากเมนูอัปโหลด', false);
+      return;
+    }
+    tab('upload');
+    $('upload-create-library').checked = false;
+    try {
+      // OAuth may have expired while the build was running. Check the local
+      // engine's current connection before sending a single song.
+      const latest = await api('/api/status');
+      setGoogle(latest.google);
+      if (!latest.google?.connected) {
+        message('เลือกอัปโหลดแล้ว แต่ยังไม่ได้เชื่อม Google Drive · กรุณากด เชื่อม Google แล้วกด เพิ่มเพลงเข้า XStageWeb อีกครั้ง (ยังไม่ได้อัปโหลด)', false);
+        $('upload-login').focus();
+        return;
+      }
+      await startUpload({confirmedAfterBuild:true});
+    } catch (error) {
+      message('ยังไม่ได้เริ่มอัปโหลด: ' + error.message);
     }
   }
   async function startDownload(kind) {
@@ -1272,6 +1321,13 @@
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
           } else if (job.state === 'error') message(job.detail || 'งานไม่สำเร็จ');
           if (['scan','build','upload','download'].includes(job.kind)) await refreshSongs();
+          if (job.kind === 'build' && ['success','error'].includes(job.state) &&
+              !promptedBuildUploadJobs.has(job.id)) {
+            // Mark before awaiting the dialog: polling runs every 900 ms.
+            promptedBuildUploadJobs.add(job.id);
+            void offerUploadAfterBuild(job).catch(error =>
+              message('ไม่สามารถเปิดขั้นตอนอัปโหลดหลังสร้างเพลง: ' + error.message));
+          }
         }
       }
       lastJobState = job.state;
