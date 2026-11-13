@@ -59,6 +59,7 @@ $map = @{
  'songstudio-pc/Start-Song-Studio-Ready.ps1' = 'Start-Song-Studio-Ready.ps1'
  'songstudio-pc/engine.py' = 'engine.py'
  'songstudio-pc/ncn_lyrics.py' = 'ncn_lyrics.py'
+ 'songstudio-pc/song_index.py' = 'song_index.py'
  'songstudio-pc/ai_lyrics.py' = 'ai_lyrics.py'
  'songstudio-pc/google_drive.py' = 'google_drive.py'
  'songstudio-pc/online_publish.py' = 'online_publish.py'
@@ -277,6 +278,7 @@ CopyFromRepo 'songstudio-pc/THIRD_PARTY_NOTICES.md' '.runtime/licenses/THIRD_PAR
 $paths = @(
  'engine.py',
  'ncn_lyrics.py',
+ 'song_index.py',
  'ai_lyrics.py',
  'google_drive.py',
  'song_export.py',
@@ -364,6 +366,7 @@ with ZipFile(dest) as archive:
                       "ai_separate.py",
                       "live_preview.py",
                       "song_export.py",
+                      "song_index.py",
                       "code_registry.py",
                       "google_drive.py",
                       "studio/app-icon.svg",
