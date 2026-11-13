@@ -305,6 +305,10 @@ try {
   await pc.click('.nav-button[data-tab="settings"]');
   await pc.click('#settings-login');
   await pc.waitForFunction(()=>document.querySelector('#google-badge')?.textContent.includes('test@example.invalid'));
+  assert.match(await pc.locator('#google-login-state').innerText(), /test@example.invalid/,
+    'After Google Login, the settings status must show the actual signed-in account');
+  assert.match(await pc.locator('#google-config-state').innerText(), /ตั้งค่าแล้ว/,
+    'OAuth client readiness must remain visible after Google Login');
   await pc.click('.nav-button[data-tab="upload"]');
   assert.equal(await pc.locator('#upload-button').isEnabled(),true);
   await pc.click('#upload-button');
