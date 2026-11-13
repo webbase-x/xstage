@@ -978,8 +978,10 @@
       aiDraftReady=Boolean(data.hasDraft);
       $('ai-lyrics-editor').value=String(data.approvedLrc||data.draft?.rawLrc||'');
       $('ai-lyrics-engine-state').textContent=aiEngineReady ?
-        'Whisper AI พร้อมใช้งาน' : 'Whisper AI ยังไม่พร้อมในแพ็กเกจ';
-      $('ai-lyrics-status').textContent=data.approvedLrc ?
+        'Whisper AI พร้อมใช้งาน' : 'Whisper AI ไม่พร้อม';
+      $('ai-lyrics-status').textContent=!aiEngineReady ?
+        'AI ยังถอดคำร้องไม่ได้: '+(data.aiProblem||'กรุณาติดตั้ง PC Ready รุ่นเต็มให้ครบ'):
+        data.approvedLrc ?
         '✓ พบเนื้อร้องที่เคยตรวจบันทึกแล้ว · สามารถทดลองฟังอีกครั้ง':
         data.hasDraft ? 'พบร่างคำร้อง AI · โปรดฟังตรวจคำและเวลา':
         'ยังไม่มีร่าง AI · ถ้าเพลงมีเสียงร้องให้กดถอดคำร้อง';
