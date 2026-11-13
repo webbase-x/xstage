@@ -1935,6 +1935,8 @@
       busy = job.state === 'running';
       setGoogle(response.google);
       renderJob(job);updateButtons();
+      if (job.kind === 'ai-export' && job.state === 'running')
+        $('ai-export-status').textContent = job.stage || job.detail || 'กำลังส่งออกไฟล์ที่เลือก';
       if (['ai-lyrics','ai-align','ai-separate-vocals'].includes(job.kind) && job.state === 'running' && aiSongId !== null)
         $('ai-lyrics-status').textContent = job.stage || job.detail || 'AI กำลังจัดเวลา';
       if (job.id && (job.id !== lastJobId || (lastJobState !== job.state && !busy))) {
@@ -1953,6 +1955,10 @@
               await aiRefreshSongList();
               if(job.result?.song)await aiChooseSong(job.result.song);
               message(job.result?.message||'บันทึกเสียงใหม่สำเร็จ',false);
+            } else if (job.kind === 'ai-export') {
+              $('ai-export-status').textContent=job.result?.message ||
+                '✓ ส่งออกไฟล์ที่เลือกเรียบร้อยแล้ว';
+              message(job.result?.message || 'ส่งออกไฟล์ที่เลือกสำเร็จ',false);
             } else if (job.kind === 'ai-separate-vocals') {
               const row=aiSongs.find(item=>item.id===job.result?.songId);
               if(row&&aiSongId===row.id)await aiChooseSong(row,{preferVocals:true});
@@ -2020,6 +2026,10 @@
               $('ai-mic-status').textContent=
                 'แปลงเสียงไม่สำเร็จ · เสียงที่อัดยังอยู่ในหน้าจอ · ตรวจ Log แล้วลองอีกครั้ง';
               aiUpdateButtons();
+            }
+            if(job.kind==='ai-export'){
+              $('ai-export-status').textContent='ส่งออกไม่สำเร็จ: '+
+                (job.detail||'ตรวจรายละเอียดในแผงงาน');
             }
             if(job.kind==='ai-separate-vocals'){
               $('ai-lyrics-vocals-status').textContent=
