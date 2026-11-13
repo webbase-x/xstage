@@ -69,10 +69,10 @@
             <div class="path-row"><input id="create-source" class="field" type="text" placeholder="เลือกโฟลเดอร์เพลงจากเครื่อง PC" autocomplete="off"><button class="button ghost" type="button" data-pick="source">เลือกโฟลเดอร์</button></div>
             <label for="create-workspace">พื้นที่เก็บเพลงที่สร้าง (songs/audio, songs/lyrics, songs/catalogs)</label>
             <div class="path-row"><input id="create-workspace" class="field" type="text" autocomplete="off"><button class="button ghost" type="button" data-pick="workspace">เปลี่ยนที่เก็บ</button></div>
-            <div class="toolbar"><button id="scan-button" class="button primary" type="button">⌕ ตรวจสอบไฟล์เพลง</button><button id="reconcile-button" class="button ghost" type="button" title="สแกนเพื่ออัปเดตรายการต้นฉบับ">รีเฟรชรายการ</button></div>
+            <div class="toolbar"><button id="scan-button" class="button primary" type="button">⌕ สแกนด่วน (เฉพาะที่เปลี่ยน)</button><button id="reconcile-button" class="button ghost" type="button" title="ใช้ดัชนีเพลงเดิมและตรวจหาไฟล์ที่เพิ่ม เปลี่ยน หรือลบ">รีเฟรชรายการ</button><button id="scan-full-button" class="button ghost" type="button" title="อ่านข้อมูลเพลงทุกไฟล์ใหม่ทั้งหมดโดยไม่ลบไฟล์ต้นฉบับ">สแกนเต็ม</button></div>
             <div class="toolbar"><button id="verify-code-registry" class="button ghost" type="button">▦ ตรวจรหัสคลัง PC + Google Drive</button></div>
             <div id="code-registry-state" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจรหัสสองแหล่ง · ระบบจะตรวจซ้ำก่อนสร้างและก่อนอัปโหลดโดยอัตโนมัติ</div>
-            <div class="hint">ระบบจดจำตำแหน่งที่เลือก ไม่ย้ายหรือลบไฟล์ต้นฉบับ · หลังสแกนเสร็จกด “ขั้นตอนถัดไป”</div>
+            <div class="hint">เปิดครั้งต่อไปใช้ดัชนี SQLite เดิมได้ทันที · สแกนด่วนเพื่อตรวจเพลงเพิ่ม/เปลี่ยน/ลบ · สแกนเต็มเมื่อต้องการตรวจใหม่ทั้งหมด · หยุดงานแล้วสแกนอีกครั้งเพื่อใช้จุดตรวจเดิมต่อ · ไม่ย้ายหรือลบไฟล์ต้นฉบับ</div>
           </article>
 
           <section id="create-stage-2" class="panel catalog-panel create-step-panel" data-create-step="2" aria-labelledby="create-stage-2-heading" hidden>
