@@ -744,15 +744,27 @@
             entry.characters.length) {
           const textByChars = entry.characters.map(c => c.text || '').join('');
           if (textByChars === entry.text) {
-            for (const part of entry.characters) {
-              const segment = document.createElement('span');
-              segment.className = 'karaoke-character';
-              segment.dataset.startTime = String(Number(part.startTime) || 0);
-              segment.textContent = part.text || '';
+            for (let n=0;n<entry.characters.length;n++) {
+              const part=entry.characters[n];
+              const next=entry.characters[n+1];
+              const segment=document.createElement('span');
+              segment.className='karaoke-character';
+              const starts=Number(part.startTime);
+              const ends=next?Number(next.startTime):Number(entry.endTime);
+              segment.dataset.startTime=String(Number.isFinite(starts)?starts:0);
+              segment.dataset.endTime=String(Number.isFinite(ends)?Math.max(ends,starts):starts);
+              segment.textContent=part.text||'';
               line.append(segment);
             }
           } else line.textContent = entry.text || '';
-        } else line.textContent = entry.text || '';
+        } else {
+          // Standard LRC contains line times only. A smooth whole-line wipe
+          // is a preview estimate, not fabricated MIDI syllable timing.
+          const span=document.createElement('span');
+          span.className='karaoke-approximate';
+          span.textContent=entry.text||'';
+          line.append(span);
+        }
         panel.append(line);
       }
     }
@@ -762,10 +774,22 @@
       const active = i === index && time < Number(entry.endTime || Number(entry.startTime) + 4);
       line.classList.toggle('active', active);
       line.classList.toggle('upcoming', i > index);
-      if (active) {
-        for (const segment of line.querySelectorAll('.karaoke-character')) {
-          segment.classList.toggle('sung', time + 0.015 >= Number(segment.dataset.startTime));
-        }
+      const characters=line.querySelectorAll('.karaoke-character');
+      for(const segment of characters){
+        const start=Number(segment.dataset.startTime);
+        const end=Number(segment.dataset.endTime);
+        const ratio=active
+          ? (end>start?Math.max(0,Math.min(1,(time-start)/(end-start))):
+             (time>=start?1:0))
+          : 0;
+        segment.style.setProperty('--karaoke-fill',(ratio*100).toFixed(2)+'%');
+      }
+      const approximate=line.querySelector('.karaoke-approximate');
+      if(approximate){
+        const begin=Number(entry.startTime)||0;
+        const finish=Number(entry.endTime)||begin+3;
+        const ratio=active?Math.max(0,Math.min(1,(time-begin)/Math.max(.02,finish-begin))):0;
+        approximate.style.setProperty('--karaoke-fill',(ratio*100).toFixed(2)+'%');
       }
     }
   }
