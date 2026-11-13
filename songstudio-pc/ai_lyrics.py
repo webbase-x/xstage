@@ -22,6 +22,28 @@ LANGUAGES = {"th", "en", "auto"}
 MAX_AUDIO_SECONDS = 20 * 60
 MAX_PROCESS_SECONDS = 60 * 60
 
+# Music-break label requested for X-Stage AI lyrics. This is a visual
+# interlude label, not a word inferred to have been sung by the artist.
+MUSIC_INTERLUDE_SOURCE = "[เสียงดนตรี]"
+MUSIC_INTERLUDE_LABEL = "[X-Stage Karaoke]"
+
+
+def replace_music_interlude_label(value: str) -> str:
+    """Change only the exact Thai instrumental marker; preserve LRC timings."""
+    return value.replace(MUSIC_INTERLUDE_SOURCE, MUSIC_INTERLUDE_LABEL)
+
+
+def _normalize_draft_labels(draft: dict) -> dict:
+    """Present legacy cached AI drafts with the new label without rewriting files."""
+    normalized = dict(draft)
+    normalized["rawLrc"] = replace_music_interlude_label(
+        str(draft.get("rawLrc") or ""))
+    normalized["lines"] = [
+        {**line, "text": replace_music_interlude_label(str(line.get("text") or ""))}
+        if isinstance(line, dict) else line for line in draft["lines"]
+    ]
+    return normalized
+
 
 def resources(runtime: Path) -> tuple[Path, Path]:
     runtime = Path(runtime)
@@ -66,7 +88,7 @@ def load_draft(data_dir: Path, source: Path):
                 or not isinstance(result.get("lines"), list)
                 or not result["lines"]):
             return None
-        return result
+        return _normalize_draft_labels(result)
     except (ValueError, OSError, KeyError):
         return None
 
@@ -79,7 +101,7 @@ def json_to_draft(payload: dict, code: str, language: str) -> dict:
     for segment in segments[:2500]:
         if not isinstance(segment, dict):
             continue
-        text = str(segment.get("text") or "").strip()
+        text = replace_music_interlude_label(str(segment.get("text") or "").strip())
         if not text or text.lower() in ("[music]", "[silence]", "(music)", "♪"):
             continue
         offsets = segment.get("offsets") or {}
