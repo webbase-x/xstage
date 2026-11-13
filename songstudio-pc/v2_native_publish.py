@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 from online_publish import cloud_media_path, PublishError, OnlinePublisher
+from ncn_lyrics import ncn_document, kar_document
 
 MAX_MANIFEST_SONGS = 1000000
 MAX_MEDIA_BYTES = 2 * 1024 * 1024 * 1024
@@ -177,6 +178,28 @@ class V2NativePublisher:
                     media["midi"] = {"type":"ncn", **payload["song"],
                                      "lyr":payload["lyrics"], "cur":payload["cursor"]}
             lyrics = upload(item["lyrics"], "M4A", "lyrics", item["code"]) if item["lyrics"] else None
+            # Derive verified timing from original CUR/LYR or embedded KAR events;
+            # never guess lyric timing from MIDI notes. Publish lyrics JSON
+            # together with the native track so the stage can stream it.
+            if lyrics is None and ("ncn" in item["media"] or
+                    ("emk" in item["media"] and item["media"]["emk"]["song"].suffix.lower()==".kar")):
+                with tempfile.TemporaryDirectory(prefix="xstage-midi-timing-") as tmpdir:
+                    try:
+                        if "ncn" in item["media"]:
+                            trio=item["media"]["ncn"]
+                            doc=ncn_document({"midi":trio["song"],"lyrics":trio["lyrics"],
+                                              "cursor":trio["cursor"]})
+                            native_type="NCN"
+                        else:
+                            doc=kar_document(item["media"]["emk"]["song"],item["code"])
+                            native_type="E-MK"
+                        if not doc.get("lines"):
+                            raise ValueError("missing timed lyric lines")
+                    except (OSError, ValueError, TypeError) as ex:
+                        raise PublishError("ซิงค์ MIDI/NCN Lyrics ไม่สำเร็จ: "+str(ex)) from ex
+                    tmp=Path(tmpdir)/(item["code"]+".json")
+                    tmp.write_text(json.dumps(doc,ensure_ascii=False),encoding="utf-8")
+                    lyrics=upload(tmp,native_type,"native-timed",item["code"])
             result[item["id"]] = {
                 "id": item["id"], "webSongId": item["id"], "code": item["code"],
                 "title": item["title"], "artist": item["artist"],
