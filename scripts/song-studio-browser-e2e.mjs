@@ -338,7 +338,7 @@ try {
   await pc.locator('#lyric-group-replacement').fill('[X-Stage Karaoke Online]');
   await pc.click('#lyric-group-apply');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
-  assert.match(await pc.locator('#studio-confirm-message').innerText(),/3 เพลง/);
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/จำนวนเพลง: 3/);
   assert.match(await pc.locator('#studio-confirm-message').innerText(),/ไม่เปลี่ยน/);
   await pc.click('#studio-confirm-cancel');
   await pc.click('#lyric-group-apply');
