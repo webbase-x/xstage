@@ -103,7 +103,7 @@ class LyricPreviewTests(unittest.TestCase):
                     __import__("threading").Event(), lambda status: None)
         self.assertEqual(draft["lines"][0]["text"], "ทดสอบ")
         self.assertIsNotNone(ai.load_draft(self.dir, self.audio))
-        self.assertFalse((self.dir / "songs" / "current.json").exists())
+        self.assertFalse((self.dir / "StageWeb" / "current.json").exists())
         self.assertFalse(list(self.dir.rglob("audio-16k.wav")))
         with patch.object(engine, "DATA", self.dir), patch.object(ai, "available", return_value=True):
             response = engine.preview_lyrics(12)
