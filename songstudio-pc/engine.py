@@ -505,6 +505,7 @@ def lyrics_package(row):
     trio = row.get("ncn") or NCN.resolve_companions(source)
     if trio:
         doc = NCN.ncn_document(trio)
+        doc["songCode"] = code
         files = [Path(trio[k]) for k in ("midi", "lyrics", "cursor")]
         fingerprint = hashlib.sha256()
         for item in files:
@@ -782,6 +783,44 @@ def _song_export_module():
     return module
 
 
+def code_registry_snapshot(root, *, require_drive=False):
+    """Read actual local + visible Google catalog before assigning song codes.
+
+    Without a verified Drive snapshot, code assignments are PC-only provisional;
+    publishing always runs a fresh, mandatory online reconciliation.
+    """
+    registry = _module("code_registry.py", "xstage_code_registry")
+    online = _module("online_publish.py", "xstage_online_publish")
+    root = Path(root)
+    status = GOOGLE.status()
+    if status.get("connected"):
+        try:
+            snapshot = online.OnlinePublisher(GOOGLE).read_code_registry()
+            return registry, snapshot["songs"], True, snapshot["generation"]
+        except Exception as exc:
+            if require_drive:
+                raise RuntimeError(
+                    "ตรวจรหัสจาก Google Drive ไม่สำเร็จ · ไม่เปลี่ยนรหัสหรืออัปโหลด: " +
+                    str(exc)) from exc
+            log("ยังไม่สามารถยืนยันรหัส Google Drive · ไม่แก้รหัสเพลงเก่า: " + str(exc))
+    elif require_drive:
+        raise RuntimeError("ต้อง Google Login ใน Song Studio PC ก่อนตรวจรหัสร่วมสองแหล่ง")
+    return registry, [], False, ""
+
+
+def reconcile_local_codes(root, records, registry, remote, export):
+    """Re-map code collisions in durable local catalog; never touch audio."""
+    allocator = registry.CodeAllocator(records, remote, root)
+    changes = allocator.reconcile_existing()
+    if changes:
+        update("พบรหัสซ้ำระหว่าง PC และ Google Drive · กำลังจัดสรรรหัสว่าง")
+        changed = registry.apply_changes(root, changes, export)
+        log(f"แก้รหัสในคลัง PC {changed:,} เพลงโดยไม่แปลง M4A ซ้ำ")
+        for old, code in changes[-5:]:
+            log(f"รหัสซ้ำ {old['code']} → {code} · {old.get('title', '')}")
+    return allocator, len(changes)
+
+
 def _source_digest(row, export):
     """Deduplicate complete NCN *song packages*, not just MIDI bytes.
 
@@ -819,6 +858,15 @@ def build_library(rows, mode, options):
     for name in ("audio", "lyrics", "catalogs"):
         (root / name).mkdir(exist_ok=True)
     records = export.existing_records(root)
+    registry, remote, online_verified, online_generation = code_registry_snapshot(root)
+    if online_verified:
+        allocator, remapped = reconcile_local_codes(root, records, registry, remote, export)
+        if remapped:
+            records = export.existing_records(root)
+        log(f"ตรวจรหัสสองแหล่งแล้ว · PC {len(records):,} · Google Drive {len(remote):,} เพลง")
+    else:
+        allocator = registry.CodeAllocator(records, [], root)
+        log("ยังไม่ได้ยืนยันรหัสกับ Google Drive · รหัสเพลงที่สร้างขณะออฟไลน์เป็นรหัสชั่วคราวจนกว่าจะอัปโหลด")
     by_path, by_sha = {}, {}
     for record in records:
         if export.record_is_complete(root, record):
@@ -856,6 +904,9 @@ def build_library(rows, mode, options):
                     digest = _source_digest(row, export)
                     previous = by_sha.get(digest)
                 if previous is not None:
+                    # The original source's filename is NOT the assigned code
+                    # after an earlier two-source reconciliation.
+                    row["code"] = str(previous["code"])
                     # Repair or add ONLY the lyric companion. Preserve the
                     # exact same M4A, song ID, audio catalog path and code.
                     if not options.get("audio_only", False):
@@ -958,6 +1009,14 @@ def build_library(rows, mode, options):
                         "พบไฟล์ M4A รุ่นเก่าที่ยังไม่มีข้อมูลยืนยันต้นฉบับ: " +
                         str(legacy) +
                         " · ไม่สร้างซ้ำหรือเขียนทับ · กรุณาตรวจสอบ/นำเข้าคลังเดิมก่อน")
+                # Reserve the code against BOTH catalogs before media creation.
+                # If Drive was offline, keep this local reservation provisional;
+                # the upload stage will verify/reassign against live XStageWeb.
+                original_code = str(row.get("code") or source.stem)
+                assigned_code = allocator.assign_new(original_code)
+                row["code"] = assigned_code
+                if assigned_code != original_code:
+                    log(f"รหัส {original_code} ถูกใช้แล้ว · จัดสรร {assigned_code} ให้เพลง {row.get('title', '')}")
                 # Per-song guard, not a misleading 3x entire-library
                 # requirement. If storage runs out, previous commits survive.
                 free_now = shutil.disk_usage(root).free
@@ -971,7 +1030,7 @@ def build_library(rows, mode, options):
                 lyric_info = ("", None, "")
                 if not options.get("audio_only", False):
                     lyric_info = lyrics_package(row)
-                target = export.next_target(root, source.name)
+                target = export.next_target(root, assigned_code + source.suffix)
                 staged = export.temporary_audio(target)
                 update(f"กำลังสร้างเพลงใหม่ {idx}/{len(rows)}: {row['title']}")
                 if mode == "instrumental":
@@ -1004,6 +1063,9 @@ def build_library(rows, mode, options):
                         details.append(reason)
                         log("ERR Lyrics " + reason)
                 record = export.make_record(root, row, target, lyric_file, vocal_target, mode)
+                record["originalCode"] = original_code
+                record["codeVerifiedFrom"] = ("pc-and-drive" if online_verified
+                                             else "pc-only-unverified")
                 if lyric_file:
                     record["lyricsSourceIdentity"] = lyric_fingerprint
                 if digest is None:
@@ -1162,10 +1224,30 @@ def execute_job(action, options, started):
                        if export.record_is_complete(root, x)]
             if len(records) != pointer.get("songCount"):
                 raise RuntimeError("ฐานเพลงในเครื่องไม่ครบ · ไม่เผยแพร่ฐานที่อาจเสียหาย")
+            registry = _module("code_registry.py", "xstage_code_registry")
+            online = _module("online_publish.py", "xstage_online_publish")
+            if options.get("create_new_library") is True:
+                # Explicit first-library creation only. If already visible,
+                # the existing library still wins. No invisible old library
+                # is treated as empty without the user's explicit consent.
+                snapshot = online.OnlinePublisher(GOOGLE).read_code_registry(
+                    allow_missing_root=True)
+                remote = snapshot["songs"]
+            else:
+                snapshot = online.OnlinePublisher(GOOGLE).read_code_registry()
+                remote = snapshot["songs"]
+            allocator, remapped = reconcile_local_codes(root, records, registry, remote, export)
+            if remapped:
+                records = [x for x in export.existing_records(root)
+                           if export.record_is_complete(root, x)]
+                pointer, _ = export._read_current(root)
+                if len(records) != pointer.get("songCount"):
+                    raise RuntimeError("ปรับรหัสคลัง PC แล้วพบจำนวนเพลงไม่ตรง · หยุดก่อนอัปโหลด")
+            log(f"ตรวจรหัสก่อนอัปโหลด: PC {len(records):,} · Google Drive {len(remote):,} "
+                f"· ปรับรหัส PC {remapped:,}")
             with LOCK:
                 JOB["total"] = len(records)
             update("ตรวจเพลงซ้ำจาก XStageWeb เดิมก่อนอัปโหลด · ไม่ลบเพลงเดิม")
-            online = _module("online_publish.py", "xstage_online_publish")
             synced = online.OnlinePublisher(GOOGLE).publish(
                 root, records,
                 create_new_library=(options.get("create_new_library") is True),
