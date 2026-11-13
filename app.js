@@ -1994,6 +1994,7 @@ async function playMidiSong(song,{remember=true,resumeAt=0,autoplay=true}={}){
     player.pause();
     ui.player.pause();
     ui.player.removeAttribute('src');ui.player.load();
+    ui.player.loop=false; // MIDI owns repeat; avoid stale HTML audio loop blocking ended event.
     if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
     state.objectUrl='';
     await engine.start(buffer,{autoplay,resumeAt});
