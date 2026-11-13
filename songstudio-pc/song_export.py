@@ -360,11 +360,17 @@ def _read_current(root: Path) -> tuple[dict, dict[str, dict]]:
 
 
 def safe_media_path(root: Path, rel: str, kind: str) -> Path:
-    """Prevent catalog and journal paths from pointing outside the songs root."""
-    if not isinstance(rel, str) or "\\\\" in rel or "\\0" in rel:
+    """Permit canonical private media paths only, never traversal or aliases."""
+    if (not isinstance(rel, str) or not rel.startswith(kind + "/")
+            or "\\" in rel or ":" in rel or "\0" in rel
+            or any(part in ("", ".", "..") for part in rel.split("/"))
+            or any(ord(char) < 32 for char in rel)):
         raise ValueError("พาธไฟล์เพลงไม่ถูกต้อง")
-    path = (root / rel).resolve()
-    if not path.is_relative_to(root.resolve()) or not rel.startswith(kind + "/"):
+    original = root / rel
+    if original.is_symlink():
+        raise ValueError("ไม่อนุญาตพาธไฟล์เพลงแบบลิงก์")
+    path = original.resolve()
+    if not path.is_relative_to(root.resolve()):
         raise ValueError("พาธ catalog อ้างถึงไฟล์นอกคลังเพลง")
     return path
 
@@ -496,11 +502,13 @@ def publish_batch(root: Path, records: list[dict]) -> dict:
         bucket = row["bucket"]
         if bucket not in set("0123456789_"):
             raise ValueError("catalog bucket ไม่ถูกต้อง")
-        if not (root / row["audio"]["path"]).is_file():
+        if not safe_media_path(root, row["audio"]["path"], "audio").is_file():
             raise FileNotFoundError("ไม่พบไฟล์เสียงสำหรับ catalog: " + row["audio"]["path"])
-        if row.get("lyrics") and not (root / row["lyrics"]["path"]).is_file():
+        if row.get("lyrics") and not safe_media_path(
+                root, row["lyrics"]["path"], "lyrics").is_file():
             raise FileNotFoundError("ไม่พบเนื้อร้องสำหรับ catalog")
-        if row.get("vocals") and not (root / row["vocals"]["path"]).is_file():
+        if row.get("vocals") and not safe_media_path(
+                root, row["vocals"]["path"], "audio").is_file():
             raise FileNotFoundError("ไม่พบไฟล์เสียงร้องสำหรับ catalog")
         staged_by_bucket.setdefault(bucket, {})[row["webSongId"]] = row
 
