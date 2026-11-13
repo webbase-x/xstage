@@ -1630,9 +1630,11 @@ def execute_job(action, options, started):
             result = FOLDER_UPLOAD.upload(
                 GOOGLE, root,
                 create_new_library=(options.get("create_new_library") is True),
-                cancelled=CANCEL,
+                cancelled=CANCEL, export=_song_export_module(),
+                publisher=_module("online_publish.py", "xstage_online_publish").OnlinePublisher(GOOGLE),
+                staging_root=DATA,
                 progress=lambda done, total, name: update(
-                    f"อัปโหลดชุดที่ {done:,}/{total:,} · {name}", done))
+                    f"ตรวจและเผยแพร่ {done:,}/{total:,} · {name}", done))
         elif action == "upload":
             export = _song_export_module()
             root = export.songs_root(PREFS["workspace"])
