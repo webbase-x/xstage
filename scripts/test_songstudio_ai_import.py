@@ -66,6 +66,39 @@ class IndependentAIImportTests(unittest.TestCase):
         self.assertTrue(self.one.is_file())
         self.assertEqual(engine.available_vocal_sources()["total"], 1)
 
+    def test_remove_preserves_source_draft_and_reimport(self):
+        imported=engine.import_ai_audio(str(self.one))
+        original_id=imported["song"]["id"]
+        draft=engine.AI_LYRICS.draft_path(self.root, self.one)
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text('{"source":"AI_DRAFT_UNVERIFIED","lines":[{"text":"test"}]}', encoding="utf-8")
+        initial=self.one.read_bytes()
+        with patch.dict(engine.JOB, {"state": "idle"}):
+            response=engine.remove_vocal_source(original_id)
+        self.assertTrue(response["ok"])
+        self.assertIn("ไม่ลบ", response["message"])
+        self.assertTrue(self.one.exists())
+        self.assertEqual(self.one.read_bytes(),initial)
+        self.assertTrue(draft.exists(),"AI draft must survive removal")
+        self.assertEqual(engine.available_vocal_sources()["total"],0)
+        self.assertNotIn(original_id,engine.FILE_BY_ID)
+        engine.AI_IMPORTED.clear()
+        engine.FILE_BY_ID.clear()
+        engine.restore_ai_imports()
+        self.assertEqual(engine.available_vocal_sources()["total"],0)
+        second=engine.import_ai_audio(str(self.one))
+        self.assertFalse(second["alreadyImported"])
+        self.assertEqual(engine.available_vocal_sources()["total"],1)
+        self.assertTrue(draft.exists())
+
+    def test_cannot_remove_import_during_active_processing(self):
+        song=engine.import_ai_audio(str(self.one))["song"]
+        with patch.dict(engine.JOB, {"state":"running","kind":"ai-lyrics"}):
+            with self.assertRaisesRegex(ValueError,"มีงานกำลังดำเนินการ"):
+                engine.remove_vocal_source(song["id"])
+        self.assertEqual(engine.available_vocal_sources()["total"],1)
+        self.assertTrue(self.one.exists())
+
     def test_import_picker_cancel_is_non_destructive(self):
         with patch.object(engine, "open_picker", return_value=None):
             response = engine.import_vocal_sources()
