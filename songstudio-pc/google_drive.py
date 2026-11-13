@@ -875,7 +875,8 @@ class GoogleDrive:
                     not name.endswith(".json") or "/" in name or "\\" in name):
                 raise GoogleError("ชื่อ Catalog ไม่ตรงกับ XStageWeb/current.json")
             doc = read_json(meta, library_name + "/" + name)
-            add(name, file_id, meta.get("md5Checksum"))
+            add(("DB/" + name if pointer.get("layoutVersion") == 2 else name),
+                file_id, meta.get("md5Checksum"))
             return doc
         base = catalog(base_id, "catalog-base-")
         if base.get("schemaVersion") != 1 or not isinstance(base.get("songs"), list):
@@ -919,8 +920,12 @@ class GoogleDrive:
                     if not isinstance(media, dict):
                         raise GoogleError("Catalog มีเพลงที่ไม่มีไฟล์ " + field)
                     rel = media.get("path")
+                    new_layout = (isinstance(rel, str) and
+                                  rel.startswith("AUDIO/") and
+                                  ("/Songs/" in rel if field in ("audio", "vocals")
+                                   else "/Lyrics/" in rel))
                     if (not isinstance(rel, str) or
-                            not (rel.startswith(prefix) or
+                            not (new_layout or rel.startswith(prefix) or
                                  rel.startswith("songs/" + prefix))):
                         raise GoogleError("พาธไฟล์ " + field + " ใน Catalog ไม่ถูกต้อง")
                     add(rel, media.get("fileId"), media.get("md5Checksum"))
