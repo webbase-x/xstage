@@ -1140,6 +1140,11 @@
   function renderJob(job) {
     const state = job.state || 'idle';
     const isRunning = state === 'running';
+    // Do not silently leave the user on the original app window: the OAuth
+    // browser opens in front, while this panel remains available as fallback.
+    const oauthWaiting = job.kind === 'login' && isRunning;
+    $('google-login-help').hidden = !oauthWaiting;
+    $('google-login-focus').disabled = !oauthWaiting;
     const led = $('job-led');led.className = 'job-led ' + (/^(idle|running|error|success|cancelled)$/.test(state) ? state : 'idle');
     const stage = job.stage || 'พร้อมใช้งาน';
     const jobLabel = job.kind === 'scan' && state === 'success'
@@ -1458,6 +1463,18 @@
     } catch(e) {
       message('เริ่ม Google Login ไม่สำเร็จ: ' + e.message);
       await refreshEnvironment();
+    }
+  });
+  $('google-login-focus').addEventListener('click',async()=>{
+    const button = $('google-login-focus');
+    button.disabled = true;
+    try {
+      const opened = await post('/api/google-login-focus',{});
+      message(opened.message || 'แสดงหน้า Google Login แล้ว · โปรดเลือกบัญชีและกดอนุญาต',false);
+    } catch(e) {
+      message('เปิดหน้า Google Login ไม่สำเร็จ: ' + e.message);
+    } finally {
+      button.disabled = false;
     }
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
