@@ -71,6 +71,9 @@
   let aiSearchTimer = 0, aiSearchSeq = 0, aiDraftSeq = 0;
   let aiStreamId = '', aiPlaySerial = 0, aiDraftReady = false, aiEngineReady = false;
   let aiTimed = [], aiActiveIndex = -2;
+  // Keep the owner's pasted words independent from Whisper's guessed text.
+  const aiPastedLyrics = new Map();
+  let pendingAiAlignment = null;
 
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
@@ -878,6 +881,9 @@
     $('ai-lyrics-insert-time').disabled = !hasSong || !aiAudio.src;
     $('ai-lyrics-download').disabled = !hasSong || !valid;
     $('ai-lyrics-save').disabled = busy || !hasSong || !valid || !aiDraftReady;
+    $('ai-lyrics-paste').disabled = !hasSong;
+    $('ai-lyrics-align').disabled = busy || !hasSong ||
+      !(aiEngineReady || aiDraftReady) || !$('ai-lyrics-paste').value.trim();
     for(const control of $('ai-lyrics-results').querySelectorAll('[data-ai-remove]'))
       control.disabled=busy;
   }
@@ -973,8 +979,12 @@
         ++aiDraftSeq;
         aiStopPlayback();
         aiSongId=null;aiDraftReady=false;aiEngineReady=false;
+        aiPastedLyrics.delete(song.id);
+        if(pendingAiAlignment?.id===song.id)pendingAiAlignment=null;
         $('ai-lyrics-selected').textContent='ยังไม่ได้เลือกเพลง';
         $('ai-lyrics-editor').value='';
+        $('ai-lyrics-paste').value='';
+        $('ai-lyrics-align-review').textContent='นำเพลงออกจากรายการแล้ว';
         $('ai-lyrics-status').textContent='นำเพลงออกจากรายการแล้ว · เลือกหรือนำเข้าเพลงอื่นได้';
         aiValidateEditor();
       }
@@ -1030,6 +1040,8 @@
     $('ai-lyrics-selected').textContent=(row.title||row.code)+
       ' · '+(row.artist||'ไม่ระบุศิลปิน')+' · '+(row.kind||'');
     $('ai-lyrics-editor').value='';
+    $('ai-lyrics-paste').value=aiPastedLyrics.get(row.id)||'';
+    $('ai-lyrics-align-review').textContent='วางเนื้อเพลงถูกต้องแล้วกด AI จัดเวลา · ผลเป็นเวลาโดยประมาณ ต้องฟังตรวจ';
     $('ai-lyrics-status').textContent='กำลังตรวจโมเดล AI และร่างเนื้อร้องที่เคยสร้าง…';
     for(const button of $('ai-lyrics-results').querySelectorAll('[data-ai-id]'))
       button.classList.toggle('active',Number(button.dataset.aiId)===row.id);
@@ -1064,6 +1076,32 @@
     aiStopPlayback();
     $('ai-lyrics-status').textContent='เริ่มถอดเสียงร้อง AI · ตรวจสถานะได้ที่แผงงานด้านล่าง';
     void run('ai-lyrics',{id:aiSongId,language:$('ai-lyrics-language').value});
+  }
+  async function aiAlignPastedLyrics() {
+    if(!Number.isInteger(aiSongId)||busy || !(aiEngineReady||aiDraftReady))
+      return message('กรุณาเลือกเพลงเสียงร้องและตรวจว่า AI พร้อม หรือมีร่าง Whisper เดิม');
+    const lyrics=$('ai-lyrics-paste').value;
+    if(!lyrics.trim())return message('กรุณาวางเนื้อเพลงที่ถูกต้องทีละบรรทัดก่อน');
+    if(/^\\s*\\[\\d{1,3}:\\d{2}/m.test(lyrics))
+      return message('พบเวลา LRC อยู่แล้ว · ช่องวางเนื้อเพลงรับข้อความที่ยังไม่มีเวลา');
+    const approved=await confirmStudio(
+      'โปรแกรมจะใช้คำร้องที่คุณวางไว้ตามเดิม แล้วเทียบกับผลถอดเสียง Whisper ที่มีเวลา\\n'+
+      'หากยังไม่มีร่าง Whisper จะถอดเสียงร้องจากไฟล์เพลงก่อน โดยไม่แก้คำที่คุณวาง\\n\\n'+
+      'เวลาเป็นค่าประมาณ ไม่ใช่การจัดคำต่อคำอย่างแม่นยำ ต้องทดลองฟังและแก้ก่อนบันทึก',
+      'ยืนยัน AI จัดเวลาให้เนื้อเพลงที่วาง',
+      {acceptLabel:'เริ่มจัดเวลา',cancelLabel:'ยกเลิก'}
+    );
+    if(!approved)return;
+    if(busy)return message('มีงานอื่นกำลังดำเนินการ');
+    aiStopPlayback();
+    const id=aiSongId;
+    pendingAiAlignment={id,lyrics};
+    $('ai-lyrics-align-review').textContent='กำลังเทียบเนื้อเพลงที่วางกับเสียงร้อง · จะไม่แก้คำร้องต้นฉบับ';
+    $('ai-lyrics-status').textContent='AI กำลังจัดเวลาเนื้อเพลงที่วาง…';
+    const started=await run('ai-align',{
+      id,lyrics,language:$('ai-lyrics-language').value
+    });
+    if(!started)pendingAiAlignment=null;
   }
   async function aiPlayAudio() {
     if(!Number.isInteger(aiSongId))return message('กรุณาเลือกเพลงที่นำเข้าก่อน');
@@ -1351,8 +1389,8 @@
       busy = job.state === 'running';
       setGoogle(response.google);
       renderJob(job);updateButtons();
-      if (job.kind === 'ai-lyrics' && job.state === 'running' && aiSongId !== null)
-        $('ai-lyrics-status').textContent = job.stage || job.detail || 'AI กำลังถอดเสียงร้อง';
+      if (['ai-lyrics','ai-align'].includes(job.kind) && job.state === 'running' && aiSongId !== null)
+        $('ai-lyrics-status').textContent = job.stage || job.detail || 'AI กำลังจัดเวลา';
       if (job.id && (job.id !== lastJobId || (lastJobState !== job.state && !busy))) {
         lastJobId = job.id;
         if (!busy) {
@@ -1370,10 +1408,39 @@
                 if (aiCurrent) await aiChooseSong(aiCurrent);
               }
               message(job.result?.message || 'AI ถอดคำร้องเป็นฉบับร่างแล้ว · กรุณาตรวจแก้', false);
+            } else if (job.kind === 'ai-align') {
+              const result=job.result||{};
+              const pending=pendingAiAlignment;
+              if (pending && pending.id===aiSongId && result.songId===aiSongId &&
+                  $('ai-lyrics-paste').value===pending.lyrics && result.rawLrc) {
+                // Replacing the editor is safe only if the user's pasted
+                // source has not been modified while Whisper was running.
+                $('ai-lyrics-editor').value=result.rawLrc;
+                aiDraftReady=true;
+                aiValidateEditor();
+                $('ai-lyrics-align-review').textContent=
+                  result.message+'\\n'+(result.issues||[]).join('\\n')+
+                  '\\nเวลาเป็นการประมาณจากเสียงร้องจริง · ต้องฟังตรวจทุกบรรทัดก่อนกดบันทึก';
+                $('ai-lyrics-status').textContent='✓ ได้ร่างเวลา LRC แล้ว · โปรดฟังตรวจและแก้เวลา';
+                message('จัดเวลาเบื้องต้นแล้ว · '+fmtNum(result.uncertain)+' บรรทัดควรตรวจเป็นพิเศษ',false);
+              } else {
+                message('จัดเวลาสำเร็จแต่เพลงหรือเนื้อเพลงที่เลือกเปลี่ยนไป · โปรแกรมไม่เขียนทับข้อความของคุณ');
+              }
+              pendingAiAlignment=null;
             } else if (job.kind === 'check-update') {
               message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
-          } else if (job.state === 'error') message(job.detail || 'งานไม่สำเร็จ');
+          } else if (job.state === 'error') {
+            if(job.kind==='ai-align'){
+              $('ai-lyrics-align-review').textContent=
+                'จัดเวลาไม่สำเร็จ · คำร้องที่วางยังอยู่ · '+(job.detail||'ตรวจ Log เพื่อดูสาเหตุ');
+              pendingAiAlignment=null;
+            }
+            message(job.detail || 'งานไม่สำเร็จ');
+          } else if (job.state==='cancelled' && job.kind==='ai-align') {
+            pendingAiAlignment=null;
+            $('ai-lyrics-align-review').textContent='ยกเลิกจัดเวลาแล้ว · คำร้องที่วางยังอยู่';
+          }
           if (['scan','build','upload','download'].includes(job.kind)) await refreshSongs();
           if (job.kind === 'build' && ['success','error'].includes(job.state) &&
               !promptedBuildUploadJobs.has(job.id)) {
@@ -1524,6 +1591,11 @@
     if(aiOffset+30<aiTotal){aiOffset+=30;void aiRefreshSongList();}
   });
   $('ai-lyrics-start').addEventListener('click',()=>{void aiStartTranscription();});
+  $('ai-lyrics-align').addEventListener('click',()=>{void aiAlignPastedLyrics();});
+  $('ai-lyrics-paste').addEventListener('input',()=>{
+    if(Number.isInteger(aiSongId))aiPastedLyrics.set(aiSongId,$('ai-lyrics-paste').value);
+    aiUpdateButtons();
+  });
   $('ai-lyrics-play').addEventListener('click',()=>{void aiPlayAudio();});
   $('ai-lyrics-stop').addEventListener('click',aiStopPlayback);
   $('ai-lyrics-editor').addEventListener('input',aiValidateEditor);
