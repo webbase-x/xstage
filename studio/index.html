@@ -191,6 +191,22 @@
               <button id="ai-lyrics-next" type="button" class="button ghost">ถัดไป ›</button></div>
             </div>
           </article>
+          <article class="panel ai-microphone-panel">
+            <div class="section-heading"><div><h3>บันทึกเสียงร้องใหม่ผ่านไมโครโฟน</h3>
+              <p>อัดเสียงร้องสด → ฟังตรวจ → บันทึก AAC/M4A เข้า StageWeb/audio → นำเข้า AI อัตโนมัติ · ไม่ส่งเสียงออกจากเครื่อง</p></div>
+              <span class="chip">PRIVATE RECORDING</span></div>
+            <div class="ai-microphone-buttons">
+              <button id="ai-mic-start" class="button primary" type="button">● เริ่มอัดเสียง</button>
+              <button id="ai-mic-stop" class="button ghost" type="button" disabled>■ หยุดอัด</button>
+              <button id="ai-mic-save" class="button primary" type="button" disabled>✓ บันทึก M4A และนำเข้า AI</button>
+              <button id="ai-mic-discard" class="button ghost" type="button" disabled>✕ ทิ้งเสียงที่อัด</button>
+            </div>
+            <div class="ai-microphone-preview">
+              <span id="ai-mic-timer" class="chip" aria-label="เวลาบันทึกเสียง">00:00</span>
+              <audio id="ai-mic-preview" controls preload="none" aria-label="ทดลองฟังเสียงที่อัดใหม่" hidden></audio>
+            </div>
+            <p id="ai-mic-status" class="hint" role="status" aria-live="polite">กดเริ่มอัดเพื่ออนุญาตไมโครโฟน · รองรับเบราว์เซอร์ที่มี MediaRecorder · สูงสุด 20 นาที / 64 MB</p>
+          </article>
           <article class="panel ai-lyrics-workspace">
             <div class="section-heading"><div><h2>2. ถอดเสียงและจัดเวลาเนื้อร้อง</h2>
               <p id="ai-lyrics-selected">ยังไม่ได้เลือกเพลง</p></div><span class="chip">LRC TIMED LYRICS</span></div>
