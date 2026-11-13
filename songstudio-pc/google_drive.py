@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import ctypes
 import hashlib
+import http.client
 import http.server
 import io
 import json
@@ -596,7 +597,7 @@ class GoogleDrive:
                         raise GoogleError("อัปโหลด Google Drive ไม่สำเร็จ: HTTP " +
                                           str(status) + " · ไฟล์เดิมยังไม่ถูกเผยแพร่")
                     raise OSError("Google Drive ส่ง HTTP " + str(status))
-                except (OSError, __import__("http.client", fromlist=["HTTPException"]).HTTPException) as exc:
+                except (OSError, http.client.HTTPException) as exc:
                     if cancelled and cancelled.is_set():
                         raise GoogleError("ผู้ใช้ยกเลิกอัปโหลด Google Drive") from exc
                     retry += 1
@@ -632,7 +633,7 @@ class GoogleDrive:
                             raise GoogleError(
                                 "Google Drive ไม่อนุญาตให้ทำต่อจากการอัปโหลดเดิม: HTTP " +
                                 str(status))
-                    except (OSError, __import__("http.client", fromlist=["HTTPException"]).HTTPException):
+                    except (OSError, http.client.HTTPException):
                         # The probe itself can fail transiently. Retry the
                         # probe next time, without switching the public DB.
                         continue
