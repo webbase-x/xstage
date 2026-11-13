@@ -356,9 +356,9 @@ try {
   assert.equal(await pc.locator('#studio-confirm-cancel').innerText(),'ไว้ภายหลัง');
   assert.equal(uploadRequests.length,manualUploadCount,'No upload without post-build consent');
   await pc.locator('#upload-create-library').evaluate(el=>el.checked=true);
-  const automaticFollowup = pc.waitForRequest(req=>{
+  const automaticFollowup = pc.waitForResponse(res=>{
     try {
-      const data=req.postDataJSON();
+      const req=res.request(),data=req.postDataJSON();
       return new URL(req.url()).pathname==='/api/jobs' &&
         data?.action==='upload' && data?.create_new_library===false;
     } catch {return false;}
