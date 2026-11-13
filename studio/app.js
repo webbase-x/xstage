@@ -1654,15 +1654,25 @@
               await refreshPhraseGroups();
               await refreshPhraseBackup();
               message(job.result?.message||'จัดกลุ่มข้อความเสร็จแล้ว',false);
-            } else if (['lyric-groups-replace','lyric-groups-undo'].includes(job.kind)) {
+            } else if (job.kind === 'lyric-groups-replace') {
+              // Keep the current position, lyric search and page: the backend
+              // already patched the live groups without a full rescan.
+              phraseReady=true;
+              phraseClearSelection();
+              await refreshPhraseGroups();
+              await refreshPhraseBackup();
+              $('lyric-group-preview-status').textContent=
+                'แก้ไขแล้ว · รายการที่ยังไม่แก้คงอยู่ด้านบน เลือกชุดถัดไปได้ทันที';
+              message(job.result?.message||'แทนที่ข้อความสำเร็จ',false);
+            } else if (job.kind === 'lyric-groups-undo') {
               phraseReady=false;phraseRows=[];phraseOffset=0;
               ++phraseSeq;phraseClearSelection();
               $('lyric-group-results').textContent=
-                'มีการแก้ไขข้อความแล้ว · กรุณากด วิเคราะห์ข้อความหัว–ท้ายเพลง อีกครั้ง เพื่ออัปเดตผลการจัดกลุ่ม';
+                'ย้อนคืนข้อมูลแล้ว · กดวิเคราะห์อีกครั้งเพื่อจัดกลุ่มตามข้อมูลเดิม';
               $('lyric-group-page-count').textContent='ต้องวิเคราะห์ใหม่';
               $('lyric-group-page-count').dataset.total='0';
               await refreshPhraseBackup();
-              message(job.result?.message||'ดำเนินการสำเร็จ',false);
+              message(job.result?.message||'ย้อนคืนสำเร็จ',false);
             } else if (job.kind === 'check-update') {
               message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
@@ -1815,7 +1825,8 @@
     btn.addEventListener('click',()=>{
       if(busy)return;
       phrasePosition=btn.dataset.lyricPosition;
-      phraseOffset=0;phraseClearSelection();
+      phraseOffset=0;
+      // Keep checked groups from the other line positions.
       if(phraseReady)void refreshPhraseGroups();
     });
   }
@@ -1830,19 +1841,31 @@
     phraseOffset=0;phraseClearSelection();
     void refreshPhraseGroups();
   });
-  $('lyric-group-results').addEventListener('click',event=>{
-    const btn=event.target.closest('[data-lyric-group]');
-    if(btn)void phraseSelectGroup(btn.dataset.lyricGroup);
+  $('lyric-group-results').addEventListener('change',event=>{
+    const check=event.target.closest('input[data-lyric-group]');
+    if(check)phraseToggleGroup(check.dataset.lyricGroup,check.checked);
   });
+  $('lyric-group-select-page').addEventListener('click',()=>{
+    if(busy||!phraseReady)return;
+    for(const row of phraseRows)phraseSelected.set(row.id,row);
+    for(const check of $('lyric-group-results').querySelectorAll('input[data-lyric-group]'))
+      check.checked=true;
+    phraseUpdateButtons();void phraseRefreshSelection();
+  });
+  $('lyric-group-clear').addEventListener('click',phraseClearSelection);
   $('lyric-group-prev').addEventListener('click',()=>{
-    phraseOffset=Math.max(0,phraseOffset-40);phraseClearSelection();
+    phraseOffset=Math.max(0,phraseOffset-40);
     void refreshPhraseGroups();
   });
   $('lyric-group-next').addEventListener('click',()=>{
-    phraseOffset+=40;phraseClearSelection();
+    phraseOffset+=40;
     void refreshPhraseGroups();
   });
-  $('lyric-group-replacement').addEventListener('input',phraseUpdateButtons);
+  $('lyric-group-replacement').addEventListener('input',()=>{
+    phraseUpdateButtons();
+    clearTimeout(phraseSearchTimer);
+    phraseSearchTimer=setTimeout(()=>{void phraseRefreshSelection();},220);
+  });
   $('lyric-group-apply').addEventListener('click',()=>{void phraseApply();});
   $('ai-lyrics-import').addEventListener('click',()=>{void aiImportAudio();});
   $('ai-lyrics-refresh').addEventListener('click',()=>{void aiRefreshSongList();});
