@@ -221,8 +221,14 @@ class OnlinePublisher:
                                        cancelled=cancelled)
         pointer_file, old_pointer = active if active else (None, None)
         by_code = {}
+        by_pair = {}
         for item in remote.values():
             by_code.setdefault(str(item.get("code") or "").casefold(), []).append(item)
+            audio_hash = (item.get("audio") or {}).get("md5Checksum")
+            lyric_hash = (item.get("lyrics") or {}).get("md5Checksum")
+            if (isinstance(audio_hash, str) and len(audio_hash) == 32
+                    and isinstance(lyric_hash, str) and len(lyric_hash) == 32):
+                by_pair.setdefault((audio_hash.lower(), lyric_hash.lower()), item)
         # Compute duplicate evidence only for same-code candidates. Never skip
         # or overwrite on title match alone. Older clients may use an unrelated
         # OAuth app; in that case a metadata 403 must stop safely.
@@ -338,6 +344,13 @@ class OnlinePublisher:
             sound = _local_path(local_songs, row["audio"]["path"], "audio")
             lyric = _local_path(local_songs, row["lyrics"]["path"], "lyrics")
             s_hash, l_hash = _md5(sound), _md5(lyric)
+            # Exact M4A+Lyrics bytes are the same song even if the local
+            # filename or catalog code was changed. Never infer equivalence
+            # from title alone.
+            pair = (s_hash, l_hash)
+            if pair in by_pair:
+                counts["duplicates"] += 1
+                continue
             candidates = list(by_code.get(code, []))
             exact_id = remote.get(str(row["webSongId"]))
             if exact_id and exact_id not in candidates:
@@ -386,6 +399,7 @@ class OnlinePublisher:
             remote[ident] = item
             revisions.append(item)
             by_code.setdefault(code, []).append(item)
+            by_pair[pair] = item
             counts["updatedSongs" if same_audio else "newSongs"] += 1
             if len(revisions) >= batch_size:
                 flush()
