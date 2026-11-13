@@ -1254,15 +1254,15 @@
       return message('กรุณาเลือกไฟล์เสียงร้องและตรวจว่า HTDemucs พร้อม');
     const id=aiSongId;
     const approved=await confirmStudio(
-      'แยกเสียงร้องจากดนตรีแบบออฟไลน์ด้วย HTDemucs แล้วบันทึก M4A ใหม่ไว้ใน StageWeb/audio\n'+
+      'แยกเสียงร้องและดนตรีแบบออฟไลน์ด้วย HTDemucs แล้วบันทึก M4A แยก 2 ไฟล์ใน StageWeb/audio\n'+
       'เสียงเพลงต้นฉบับไม่เปลี่ยนและไม่อัปโหลด Google Drive\n'+
       'การแยกเสียงร้องอาจมีเสียงดนตรีหลงเหลือ ต้องทดลองฟังตรวจสอบ',
-      'ยืนยันแยกเสียงร้องและบันทึก M4A',
+      'ยืนยันแยกเสียงร้องและดนตรีเป็น M4A',
       {acceptLabel:'เริ่มแยกเสียงร้อง',cancelLabel:'ยกเลิก'});
     if(!approved||busy||aiSongId!==id)return;
     aiStopPlayback();
     $('ai-lyrics-vocals-status').textContent=
-      'กำลังแยกเสียงร้องด้วย HTDemucs · ตรวจความคืบหน้าที่แผงงาน';
+      'กำลังแยกเสียงร้องและดนตรีด้วย HTDemucs · ตรวจความคืบหน้าที่แผงงาน';
     await run('ai-separate-vocals',{id});
   }
   function aiUpdateMicTimer(){
@@ -1896,7 +1896,7 @@
               const row=aiSongs.find(item=>item.id===job.result?.songId);
               if(row&&aiSongId===row.id)await aiChooseSong(row,{preferVocals:true});
               $('ai-lyrics-vocals-status').textContent=job.result?.message||
-                'แยกเสียงร้องและบันทึก M4A สำเร็จ';
+                'แยกเสียงร้องและดนตรีเป็น M4A สองไฟล์สำเร็จ';
               message(job.result?.message||'แยกเสียงร้องสำเร็จ',false);
             } else if (job.kind === 'ai-lyrics') {
               if (job.result?.songId === previewSongId)
