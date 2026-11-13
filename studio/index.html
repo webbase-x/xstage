@@ -363,6 +363,11 @@
             </article>
             <article class="panel"><div class="section-heading"><div><h2>เครื่องมือประมวลผล</h2><button id="refresh-environment" class="button ghost">ตรวจซ้ำ</button></div></div><div id="environment-list" class="environment-list">กำลังตรวจ FFmpeg, FluidSynth, SoundFont…</div><div class="hint">ส่วนประกอบต้องพร้อมก่อนสร้าง Installer; งานสร้าง M4A ทำบน Local Engine ไม่ต้องให้เว็บดาวน์โหลดเครื่องมือใหม่ทุกเพลง</div></article>
           </div>
+          <article class="panel" id="edit-history-panel">
+            <div class="section-heading"><div><h2>ประวัติการแก้ไขและตั้งค่าอัตโนมัติ</h2><p>บันทึกเมื่อกดบันทึกข้อมูลเพลงหรือเปลี่ยนการตั้งค่า · คืนค่าที่ใช้ครั้งก่อนเมื่อเปิดแอปอีกครั้ง · เก็บประวัติสูงสุด 50 รายการในเครื่อง</p></div><button id="history-refresh" class="button ghost" type="button">↻ โหลดประวัติ</button></div>
+            <div id="history-list" class="history-list" aria-live="polite">กำลังอ่านประวัติจากเครื่อง…</div>
+            <p class="hint">คืนค่าจากประวัติจะสร้างประวัติรายการใหม่ด้วย ไม่แตะเพลงต้นฉบับหรือ Google OAuth Token · ต้องยืนยันก่อนคืนค่า</p>
+          </article>
           <article class="panel"><div class="section-heading"><div><h2>อัปเดต X-Stage Song Studio</h2><span id="update-version" class="chip">—</span></div><p>ตรวจรุ่นผ่านช่องทาง Song Studio โดยเฉพาะ ต้องมี Installer ที่เผยแพร่จริงและ SHA-256 ถูกต้อง</p><button id="update-button" class="button ghost">↻ ตรวจเวอร์ชันล่าสุด</button></article>
         </section>
 
