@@ -188,7 +188,7 @@ class V2NativePublisher:
                         if "ncn" in item["media"]:
                             trio=item["media"]["ncn"]
                             doc=ncn_document({"midi":trio["song"],"lyrics":trio["lyrics"],
-                                              "cursor":trio["cursor"]})
+                                              "cursor":trio["cursor"],"code":item["code"]})
                             native_type="NCN"
                         else:
                             doc=kar_document(item["media"]["emk"]["song"],item["code"])
