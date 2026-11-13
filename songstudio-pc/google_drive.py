@@ -909,9 +909,11 @@ class GoogleDrive:
             if not songs:
                 raise GoogleError("XStageWeb ยังไม่มีเพลงที่เผยแพร่")
             for row in songs.values():
-                for field, prefix in (
-                    ("audio", "audio/"), ("lyrics", "lyrics/"),
-                    ("lrc", "lyrics/"), ("vocals", "audio/"),
+                for field, prefixes in (
+                    ("audio", ("audio/", "m4a/", "mp3/", "midi/")),
+                    ("lyrics", ("lyrics/",)),
+                    ("lrc", ("lyrics/",)),
+                    ("vocals", ("audio/", "m4a/")),
                 ):
                     media = row.get(field)
                     if field in ("lrc", "vocals") and media is None:
@@ -920,8 +922,9 @@ class GoogleDrive:
                         raise GoogleError("Catalog มีเพลงที่ไม่มีไฟล์ " + field)
                     rel = media.get("path")
                     if (not isinstance(rel, str) or
-                            not (rel.startswith(prefix) or
-                                 rel.startswith("songs/" + prefix))):
+                            not any(rel.startswith(prefix) or
+                                    rel.startswith("songs/" + prefix)
+                                    for prefix in prefixes)):
                         raise GoogleError("พาธไฟล์ " + field + " ใน Catalog ไม่ถูกต้อง")
                     add(rel, media.get("fileId"), media.get("md5Checksum"))
         add("current.json", pointer_file["id"], pointer_file.get("md5Checksum"))
