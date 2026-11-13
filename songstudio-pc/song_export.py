@@ -1,7 +1,7 @@
 """Fast, crash-safe local song publishing for X-Stage Song Studio PC.
 
 Works entirely on the user's PC. Immutable per-digit JSON catalogs are switched
-through songs/current.json only when all required media for a batch exists.
+through StageWeb/current.json only when all required media for a batch exists.
 This is a *local path index*. It does not fabricate Google Drive file IDs;
 Drive publication must upload files and then publish a Drive-specific pointer.
 """
@@ -62,8 +62,41 @@ def safe_filename(value: str) -> str:
 
 
 def songs_root(workspace: str | Path) -> Path:
-    path = Path(workspace).expanduser()
-    return path if path.name.lower() == "songs" else path / "songs"
+    """Use StageWeb/ as the only active local library; preserve old data.
+
+    A legacy workspace/songs tree is renamed atomically on the SAME volume
+    only when StageWeb does not already exist. Never copy gigabytes, silently
+    overwrite another library, or create a second local catalog. The old
+    catalogs/ subdirectory remains readable, while new immutable catalogs
+    are published directly under StageWeb/.
+    """
+    selected = Path(workspace).expanduser()
+    if selected.name.casefold() == "stageweb":
+        target = selected
+        legacy = selected.parent / "songs"
+    elif selected.name.casefold() == "songs":
+        target = selected.parent / "StageWeb"
+        legacy = selected
+    else:
+        target = selected / "StageWeb"
+        legacy = selected / "songs"
+    if legacy.is_dir():
+        if target.exists():
+            old_has_data = ((legacy / "current.json").is_file() or
+                            (legacy / JOURNAL_NAME).is_file() or
+                            any((legacy / d).is_dir() and
+                                any((legacy / d).iterdir())
+                                for d in ("audio", "lyrics", "catalogs")))
+            if old_has_data:
+                raise RuntimeError(
+                    "พบคลัง songs แบบเก่าและ StageWeb พร้อมกัน · "
+                    "โปรแกรมไม่รวมสองฐานหรือทับไฟล์อัตโนมัติ "
+                    "กรุณาสำรองแล้วตรวจเลือกคลังเดิมก่อน")
+        else:
+            # Parent is the same: Path.rename performs an atomic directory
+            # move, retaining all catalog records and media without re-encoding.
+            legacy.rename(target)
+    return target
 
 
 def next_target(root: Path, source_filename: str) -> Path:
@@ -305,8 +338,11 @@ def _read_current(root: Path) -> tuple[dict, dict[str, dict]]:
         bucket, relative = meta.get("bucket"), meta.get("path")
         if bucket not in set("0123456789_") or bucket in current:
             raise ValueError("ชื่อกลุ่ม catalog ไม่ถูกต้องหรือซ้ำ")
-        expected_prefix = f"catalogs/database-{bucket}-"
-        if not isinstance(relative, str) or not relative.startswith(expected_prefix) or not relative.endswith(".json"):
+        allowed = (f"database-{bucket}-", f"catalogs/database-{bucket}-")
+        if (not isinstance(relative, str) or
+                not any(relative.startswith(prefix) for prefix in allowed) or
+                not relative.endswith(".json") or
+                "/" in relative.removeprefix("catalogs/") or "\\" in relative):
             raise ValueError("พาธ catalog ไม่ถูกต้อง")
         p = root / relative
         try:
@@ -484,7 +520,7 @@ def publish_batch(root: Path, records: list[dict]) -> dict:
                     if isinstance(record, dict) and "webSongId" in record}
         combined.update(staged_by_bucket[bucket])
         songs = sorted(combined.values(), key=lambda item: item["webSongId"])
-        path = root / "catalogs" / f"database-{bucket}-{generation}.json"
+        path = root / f"database-{bucket}-{generation}.json"
         atomic_json(path, {
             "schemaVersion": CATALOG_SCHEMA, "format": CATALOG_FORMAT,
             "bucket": bucket, "generation": generation, "songs": songs
