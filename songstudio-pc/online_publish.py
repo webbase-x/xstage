@@ -209,7 +209,8 @@ class OnlinePublisher:
                 "visible": True}
 
     def publish(self, local_songs, selected_records, *, create_new_library=False,
-                cancelled=None, on_progress=None, on_batch=None, batch_size=100):
+                cancelled=None, on_progress=None, on_batch=None, on_row=None,
+                batch_size=100):
         local_songs = Path(local_songs)
         if not (local_songs / "current.json").is_file():
             raise PublishError("กรุณาสร้างฐานเพลงในเครื่องก่อนอัปโหลด")
@@ -374,6 +375,10 @@ class OnlinePublisher:
                 on_batch(counts["batches"], len(remote),
                          counts["newSongs"], counts["updatedSongs"])
         for i, row in enumerate(ready, 1):
+            # Report completed rows, not merely bytes in one current upload.
+            # This also advances progress through verified duplicates.
+            if on_row:
+                on_row(i - 1, len(ready), not_ready)
             if cancelled and cancelled.is_set():
                 raise PublishError("ยกเลิกซิงค์ Google Drive · ชุดเพลงที่เผยแพร่ก่อนหน้ายังคงใช้งานได้")
             code = str(row["code"]).casefold()
@@ -460,5 +465,7 @@ class OnlinePublisher:
             if len(revisions) >= batch_size:
                 flush()
         flush()
+        if on_row:
+            on_row(len(ready), len(ready), not_ready)
         counts["totalSongs"] = len(remote)
         return counts
