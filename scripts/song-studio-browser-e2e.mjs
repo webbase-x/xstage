@@ -107,8 +107,17 @@ try {
   let lyricBulkReady=false,bulkBackup=null;
   const bulkGroup={id:'intro-verified-1234',position:'first',
     label:'บรรทัดแรก',text:'[X-Stage Karaoke]',count:3,
-    examples:[{code:'001',title:'เพลงหนึ่ง',artist:'XStage'},
-              {code:'002',title:'เพลงสอง',artist:'XStage'}]};
+    songIds:[1,2,3]};
+  const altGroup={id:'intro-other-1234',position:'first',
+    label:'บรรทัดแรก',text:'เสียงเกริ่นเก่า',count:2,
+    songIds:[4,5]};
+  const pendingGroup={id:'intro-pending-1234',position:'first',
+    label:'บรรทัดแรก',text:'ข้อความรอแก้',count:2,
+    songIds:[6,7]};
+  const tailGroup={id:'outro-verified-1234',position:'last',
+    label:'บรรทัดสุดท้าย',text:'ข้อความท้ายเดิม',count:2,
+    songIds:[2,6]};
+  let lyricGroups=[bulkGroup,altGroup,pendingGroup,tailGroup];
   const list = [
     {id: 1, title: 'เสียงทดสอบ 1', artist: 'XStage', code: 'TEST001', kind: 'MID', size: 12000, status: 'ready'},
     {id: 2, title: 'เสียงทดสอบ 2', artist: 'XStage', code: 'TEST002', kind: 'MP3', size: 32000, status: 'ready'}
@@ -159,9 +168,33 @@ try {
       };
     } else if (url.pathname === '/api/lyric-groups') {
       const position=url.searchParams.get('position')||'first';
-      const groups=lyricBulkReady&&position==='first'?[bulkGroup]:[];
-      response={rows:groups.map(({id,position,text,count})=>({id,position,text,count})),
-                total:groups.length,songs:3,inspected:3,withoutLyrics:0,skippedInvalid:0};
+      const search=url.searchParams.get('search')||'';
+      const ids=search==='คำจากท่อนกลาง'?[2,4]:null;
+      const groups=lyricBulkReady?lyricGroups.filter(g=>g.position===position):[];
+      const matched=groups.map(g=>({...g,count:ids?
+        g.songIds.filter(id=>ids.includes(id)).length:g.count,
+        libraryCount:g.count})).filter(g=>g.count>0);
+      response={rows:matched.map(({id,position,text,count,libraryCount})=>
+                  ({id,position,text,count,libraryCount})),
+                total:matched.length,songs:7,inspected:7,
+                withoutLyrics:0,skippedInvalid:0};
+    } else if (url.pathname === '/api/lyric-groups-plan') {
+      const data=request.postDataJSON()||{};
+      const selected=lyricGroups.filter(g=>(data.groups||[]).includes(g.id));
+      const bodyMatches=data.search==='คำจากท่อนกลาง'?[2,4]:null;
+      const applicable=selected.filter(g=>g.text!==data.replacement)
+        .map(g=>({...g,songIds:bodyMatches?
+          g.songIds.filter(id=>bodyMatches.includes(id)):g.songIds}))
+        .filter(g=>g.songIds.length>0);
+      const unique=new Set(applicable.flatMap(g=>g.songIds));
+      response={groups:applicable.length,chosenGroups:(data.groups||[]).length,
+        changedSongs:unique.size,
+        changedLines:applicable.reduce((n,g)=>n+g.songIds.length,0),
+        alreadyCorrect:0,
+        selected:applicable.map(g=>({id:g.id,position:g.position,
+          label:g.label,text:g.text,count:g.songIds.length,
+          examples:g.songIds.slice(0,3).map(id=>({code:'00'+id,title:'เพลง '+id}))})),
+        search:data.search||''};
     } else if (url.pathname === '/api/lyric-groups-preview') {
       response=bulkGroup;
     } else if (url.pathname === '/api/lyric-groups-backup') {
@@ -215,10 +248,13 @@ try {
       const action=request.postDataJSON()?.action;
       if(action==='lyric-groups-scan')lyricBulkReady=true;
       if(action==='lyric-groups-replace'){
-        bulkBackup={id:'20261113T153000000000Z-a1b2c3d4',position:'first',
-          oldText:bulkGroup.text,newText:'[X-Stage Karaoke Online]',
-          songs:3,createdAt:'2026-11-13T15:30:00+07:00'};
-        lyricBulkReady=false;
+        const targets=request.postDataJSON()?.groups||[];
+        bulkBackup={id:'20261113T153000000000Z-a1b2c3d4',position:'mixed',
+          oldText:String(targets.length)+' กลุ่ม',
+          newText:'[X-Stage Karaoke Online]',
+          songs:6,createdAt:'2026-11-13T15:30:00+07:00'};
+        lyricGroups=lyricGroups.filter(g=>!targets.includes(g.id));
+        lyricBulkReady=true; // Remaining items stay in the live queue.
       }
       if(action==='lyric-groups-undo')bulkBackup=null;
       if (request.postDataJSON()?.action === 'login') fakeGoogleConnected = true;
@@ -316,8 +352,8 @@ try {
   });
   await pc.click('#studio-confirm-ok');
   await audioBuild;
-  // Grouped opening/closing text editor operates independently per line
-  // position and never sends any upload request without the owner's action.
+  // Search the entire lyric body; choose multiple groups from several
+  // positions, replace once, then continue directly with unedited groups.
   await pc.click('.nav-button[data-tab="lyric-head-tail"]');
   assert.equal(await pc.locator('#tab-lyric-head-tail').isVisible(),true);
   const scanJob=pc.waitForRequest(req=>{
@@ -327,34 +363,52 @@ try {
   await pc.click('#lyric-group-scan');
   await scanJob;
   simulatedJob={id:'lyric-scan-complete',kind:'lyric-groups-scan',state:'success',
-    stage:'เสร็จสิ้น',detail:'วิเคราะห์แล้ว',completed:3,total:3,
-    result:{message:'จัดกลุ่มข้อความแล้ว',songs:3,groups:1},logs:[]};
+    stage:'เสร็จสิ้น',detail:'วิเคราะห์แล้ว',completed:7,total:7,
+    result:{message:'จัดกลุ่มข้อความแล้ว',songs:7,groups:4},logs:[]};
   await pc.locator('#lyric-group-results [data-lyric-group="intro-verified-1234"]')
     .waitFor({timeout:10000});
-  assert.match(await pc.locator('#lyric-group-results').innerText(),/3 เพลง/);
+  await pc.locator('#lyric-group-search').fill('คำจากท่อนกลาง');
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-results')?.textContent.includes('1 เพลง'));
+  assert.match(await pc.locator('#lyric-group-results').innerText(),/1 เพลง/);
+  await pc.locator('#lyric-group-search').fill('');
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-results')?.textContent.includes('3 เพลง'));
   await pc.click('#lyric-group-results [data-lyric-group="intro-verified-1234"]');
-  await pc.waitForFunction(()=>document.querySelector('#lyric-group-selection')?.textContent.includes('บรรทัดแรก'));
-  assert.match(await pc.locator('#lyric-group-examples').innerText(),/เพลงหนึ่ง/);
+  await pc.click('#lyric-group-results [data-lyric-group="intro-other-1234"]');
+  await pc.click('[data-lyric-position="last"]');
+  await pc.locator('#lyric-group-results [data-lyric-group="outro-verified-1234"]')
+    .waitFor();
+  await pc.click('#lyric-group-results [data-lyric-group="outro-verified-1234"]');
+  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/3 กลุ่ม/);
+  await pc.click('[data-lyric-position="first"]');
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-results input[data-lyric-group="intro-verified-1234"]')?.checked);
   await pc.locator('#lyric-group-replacement').fill('[X-Stage Karaoke Online]');
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-selection')?.textContent.includes('7 บรรทัด'));
   await pc.click('#lyric-group-apply');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
-  assert.match(await pc.locator('#studio-confirm-message').innerText(),/จำนวนเพลง: 3/);
-  assert.match(await pc.locator('#studio-confirm-message').innerText(),/ไม่เปลี่ยน/);
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/จำนวนเพลง: 6/);
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/7 บรรทัด/);
   await pc.click('#studio-confirm-cancel');
   await pc.click('#lyric-group-apply');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
   const replaceRequest=pc.waitForRequest(req=>{
     try{const d=req.postDataJSON();return new URL(req.url()).pathname==='/api/jobs'&&
-      d?.action==='lyric-groups-replace'&&d?.expectedCount===3&&
-      d?.group==='intro-verified-1234'&&d?.replacement==='[X-Stage Karaoke Online]';}catch{return false;}
+      d?.action==='lyric-groups-replace'&&d?.expectedCount===7&&
+      d?.groups?.length===3&&d?.replacement==='[X-Stage Karaoke Online]';}
+    catch{return false;}
   });
   await pc.click('#studio-confirm-ok');
   await replaceRequest;
   simulatedJob={id:'lyric-bulk-complete',kind:'lyric-groups-replace',state:'success',
-    stage:'เสร็จสิ้น',detail:'แทนที่แล้ว',completed:3,total:3,
-    result:{changedSongs:3,message:'แก้ข้อความบรรทัดแรกสำเร็จ 3 เพลง'},logs:[]};
+    stage:'เสร็จสิ้น',detail:'แทนที่แล้ว',completed:6,total:6,
+    result:{changedSongs:6,changedLines:7,message:'แก้ข้อความ 3 กลุ่มสำเร็จ'},logs:[]};
   await pc.waitForFunction(()=>document.querySelector('#lyric-group-undo')?.disabled===false);
-  assert.match(await pc.locator('#lyric-group-results').innerText(),/วิเคราะห์/);
+  // No full re-scan: a group excluded from the first batch remains visible.
+  await pc.locator('#lyric-group-results [data-lyric-group="intro-pending-1234"]')
+    .waitFor({timeout:10000});
+  assert.equal(await pc.locator('#lyric-group-results [data-lyric-group="intro-verified-1234"]').count(),0);
+  assert.match(await pc.locator('#lyric-group-results').innerText(),/ข้อความรอแก้/);
+  await pc.click('#lyric-group-results [data-lyric-group="intro-pending-1234"]');
+  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/1 กลุ่ม/);
   await pc.click('#lyric-group-undo');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
   const undoRequest=pc.waitForRequest(req=>{
@@ -364,10 +418,10 @@ try {
   await pc.click('#studio-confirm-ok');
   await undoRequest;
   simulatedJob={id:'lyric-undo-complete',kind:'lyric-groups-undo',state:'success',
-    stage:'เสร็จสิ้น',detail:'คืนข้อมูลแล้ว',completed:3,total:3,
-    result:{restoredSongs:3,message:'คืนค่าเดิม 3 เพลง'},logs:[]};
+    stage:'เสร็จสิ้น',detail:'คืนข้อมูลแล้ว',completed:6,total:6,
+    result:{restoredSongs:6,message:'คืนค่าเดิม 6 เพลง'},logs:[]};
   await pc.waitForFunction(()=>document.querySelector('#lyric-group-undo')?.disabled===true);
-  assert.deepEqual(pcErrors,[], 'Bulk lyric group UI must not produce JavaScript errors');
+  assert.deepEqual(pcErrors,[], 'Multi-group search and pending queue must not cause browser errors');
   simulatedJob={id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
     completed:0,total:0,logs:[]};
   // Independent AI lyrics menu: import -> select -> proof playback -> review.
