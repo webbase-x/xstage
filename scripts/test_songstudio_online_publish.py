@@ -121,8 +121,48 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(self.drive.upload_order[-1], "current.json")
         # Neither fake absolute local path nor user OAuth credentials leak.
         self.assertNotIn(str(self.base), json.dumps(remote))
-        # Root has songs/ media, immutable catalog, current.json, staging marker.
-        self.assertEqual(len(self.folder_files(self.remote_root())), 4)
+        # Direct audio/ and lyrics/ live beside the immutable catalog,
+        # published pointer and staging marker (never songs/ for new songs).
+        self.assertEqual(len(self.folder_files(self.remote_root())), 5)
+
+    def test_new_drive_publishes_requested_stageweb_root_with_direct_media(self):
+        # Explicit consent only: existing old XStageWeb must never silently
+        # split into a second library. New Drive uses exactly StageWeb.
+        self.drive.items.clear()
+        result = self.publisher.publish(
+            self.root, [self.first], create_new_library=True)
+        self.assertEqual(result["newSongs"], 1)
+        folder = next(
+            f["metadata"] for f in self.drive.items.values()
+            if f["parent"] == "root" and f["metadata"]["name"] == "StageWeb")
+        children = self.folder_files(folder["id"])
+        names = {f["name"] for f in children}
+        self.assertTrue({"audio", "lyrics", "current.json"}.issubset(names))
+        self.assertNotIn("songs", names)
+        self.assertTrue(any(name.startswith("catalog-base-") for name in names))
+        pointer_id = next(f["id"] for f in children if f["name"] == "current.json")
+        pointer = self.publisher._json(pointer_id)
+        songs = self.publisher._json(pointer["catalogFileId"])["songs"]
+        self.assertEqual(len(songs), 1)
+        self.assertTrue(songs[0]["audio"]["path"].startswith("audio/"))
+        self.assertTrue(songs[0]["lyrics"]["path"].startswith("lyrics/"))
+        self.assertTrue(songs[0]["lrc"]["path"].startswith("lyrics/"))
+        self.drive.locked = True
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            got = self.drive.download_library(self.base / "stage-download", "songs")
+            db = self.drive.download_library(self.base / "stage-db", "db")
+        self.assertEqual(got["source"], "StageWeb")
+        self.assertEqual(Path(got["path"]).name, "StageWeb")
+        self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
+        self.assertEqual(db["files"], 2)
+
+    def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
+        self.drive.folder("root", "StageWeb")
+        before = len(self.drive.items)
+        with self.assertRaisesRegex(online.PublishError, "มากกว่าหนึ่ง"):
+            self.publisher.publish(self.root, [self.first], create_new_library=True)
+        self.assertEqual(len(self.drive.items), before)
 
     def _download_private_json(self, url, **kwargs):
         ident = urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1]
