@@ -16,7 +16,7 @@ import unicodedata
 import zipfile
 from collections import defaultdict
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 POSITIONS = {
     "first": (0, "บรรทัดแรก"),
@@ -66,7 +66,7 @@ def _load(root, row, export):
         raise ValueError("Lyrics JSON ไม่มีบรรทัดและเวลาในรูปแบบที่รองรับ")
     # The companion LRC must be independently validated: a malicious
     # symlink inside lyrics/ must never redirect a bulk write outside songs/.
-    lrc_rel = str(Path(rel).with_suffix(".lrc")).replace("\\\\", "/")
+    lrc_rel = PurePosixPath(rel).with_suffix(".lrc").as_posix()
     lrc_path = export.safe_media_path(root, lrc_rel, "lyrics")
     raw = doc.get("rawLrc")
     file_raw = lrc_path.read_text(encoding="utf-8-sig") if lrc_path.is_file() else None
