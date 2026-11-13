@@ -63,10 +63,16 @@ def _valid_row(root, row):
         raise PublishError("M4A ว่างหรือไม่สมบูรณ์: " + sound.name)
     try:
         doc = json.loads(lyric.read_text(encoding="utf-8-sig"))
+        assert doc.get("schemaVersion") == 1
         assert isinstance(doc.get("lines"), list) and doc["lines"]
         assert all(isinstance(entry, dict) and isinstance(entry.get("text"), str)
+                   and entry["text"].strip()
                    and isinstance(entry.get("startTime"), (int, float))
+                   and not isinstance(entry["startTime"], bool)
+                   and 0 <= float(entry["startTime"]) < 86400
                    for entry in doc["lines"])
+        assert all(doc["lines"][i]["startTime"] <= doc["lines"][i+1]["startTime"]
+                   for i in range(len(doc["lines"])-1))
     except (OSError, ValueError, TypeError, AttributeError, AssertionError) as exc:
         raise PublishError("Lyrics JSON ไม่พร้อมเล่นบน X-Stage: " + lyric.name) from exc
     return True
