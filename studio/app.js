@@ -724,6 +724,46 @@
     const finish=Number.isFinite(end)&&end>start?end:start+0.05;
     return Math.max(0,Math.min(1,(time-start)/(finish-start)));
   }
+  function karaokeCueWindows(units,lineStart,lineEnd){
+    // A MIDI/NCN cursor can assign several characters to the same tick.
+    // The old renderer painted those letters in one frame and appeared to
+    // freeze, then jump. Spread tied cues across the following beat.
+    if(!Array.isArray(units)||!units.length)return null;
+    const times=units.map(u=>Number(u.startTime));
+    if(times.some((t,i)=>!Number.isFinite(t)||t<0||
+        (i&&t<times[i-1]-.001)))return null;
+    if(times.length===1||times.every(t=>Math.abs(t-times[0])<=.001))
+      return null; // No meaningful character timing: use whole-line sweep.
+    const unique=[];
+    for(let i=0;i<times.length;i++)
+      if(i===0||times[i]>times[i-1]+.001)unique.push(times[i]);
+    const gaps=unique.slice(1).map((t,i)=>t-unique[i])
+      .filter(d=>d>.001).sort((a,b)=>a-b);
+    const cadence=gaps.length?gaps[Math.floor(gaps.length/2)]:.45;
+    const windows=[];
+    for(let i=0;i<times.length;){
+      let j=i+1;
+      while(j<times.length&&Math.abs(times[j]-times[i])<=.001)j++;
+      const from=times[i],next=j<times.length?times[j]:NaN;
+      let finish;
+      if(j-i>1){
+        finish=Number.isFinite(next)?next:
+          Math.min(lineEnd,from+Math.max(.12,Math.min(1.2,cadence)));
+        if(finish-from<.04*(j-i))return null;
+      }else{
+        finish=Number.isFinite(next)?next:
+          Math.min(lineEnd,from+Math.max(.15,Math.min(1.25,cadence*1.25)));
+      }
+      if(!Number.isFinite(finish)||finish<=from)return null;
+      for(let k=i;k<j;k++){
+        const a=from+(finish-from)*(k-i)/(j-i);
+        const b=from+(finish-from)*(k-i+1)/(j-i);
+        windows.push({start:a,end:b});
+      }
+      i=j;
+    }
+    return windows;
+  }
   function karaokeWipeSpan(text,start,end){
     const el=document.createElement('span');
     el.className='karaoke-wipe-text';
@@ -771,19 +811,18 @@
         const validCues = data.status==='found' && units.length>0 &&
           units.map(u=>String(u.text||'')).join('')===String(entry.text||'') &&
           units.every(u=>Number.isFinite(Number(u.startTime))&&
-            Number(u.startTime)>=start&&Number(u.startTime)<=end) &&
-          units.every((u,j)=>j===0 ||
-            Number(u.startTime)>=Number(units[j-1].startTime));
-        if(validCues){
+            Number(u.startTime)>=start&&Number(u.startTime)<=end);
+        const windows=validCues?karaokeCueWindows(units,start,end):null;
+        if(windows){
           for(let j=0;j<units.length;j++){
-            const unit=units[j];
-            const begin=Number(unit.startTime);
-            const next=j+1<units.length?Number(units[j+1].startTime):end;
-            line.append(karaokeWipeSpan(String(unit.text||''),begin,
-              next>begin?next:begin+.05));
+            const unit=units[j],window=windows[j];
+            line.append(karaokeWipeSpan(String(unit.text||''),
+              window.start,window.end));
           }
           line.dataset.cueType='midi';
         }else{
+          // No reliable separate cue intervals: never flash all characters
+          // simultaneously. Estimate a continuous whole-line sweep instead.
           line.append(karaokeWipeSpan(String(entry.text||''),start,end));
           line.dataset.cueType='line-estimate';
         }
