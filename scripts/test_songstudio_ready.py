@@ -237,7 +237,7 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
                   "code": "102030", "artist": "Test"}
     audio_only = engine.build_library([source_row], "original", {"audio_only": True})
     assert (audio_only["created"], audio_only["lyricsCount"]) == (1, 0)
-    destination = temp / "production" / "songs"
+    destination = temp / "production" / "StageWeb"
     audio_files = list((destination / "audio").rglob("*.m4a"))
     assert len(audio_files) == 1
     # A source WAV has no built-in words. Supply REAL timed LRC before
@@ -313,7 +313,7 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
         assert first_http["result"]["created"] == 1 and first_http["result"]["m4aCount"] == 1
         second_http = do_real_pc_build(False)
         assert second_http["result"]["created"] == 0 and second_http["result"]["lyricsCount"] == 1
-        output_dir = temp / "browser_pc_real_jobs" / "songs"
+        output_dir = temp / "browser_pc_real_jobs" / "StageWeb"
         assert len(list((output_dir / "audio").rglob("*.m4a"))) == 1
         assert len(list((output_dir / "lyrics").rglob("*.json"))) == 1
         assert (output_dir / "current.json").is_file()
