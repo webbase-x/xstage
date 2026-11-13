@@ -14,6 +14,7 @@ FILES = {
     "songstudio-pc/ncn_lyrics.py": "ncn_lyrics.py",
     "songstudio-pc/ai_lyrics.py": "ai_lyrics.py",
     "songstudio-pc/google_drive.py": "google_drive.py",
+    "songstudio-pc/online_publish.py": "online_publish.py",
     "songstudio-pc/song_export.py": "song_export.py",
     "songstudio-pc/live_preview.py": "live_preview.py",
     "songstudio-pc/ai_separate.py": "ai_separate.py",
