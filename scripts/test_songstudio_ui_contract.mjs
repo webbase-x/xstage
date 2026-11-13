@@ -37,7 +37,7 @@ for(const handler of ['ai-lyrics-import','ai-lyrics-start','ai-lyrics-play',
   assert.ok(js.includes("$('"+handler+"')"),'Missing event/UI binding for '+handler);
 
 assert.ok(js.includes("run('ai-align'"),'Missing AI alignment job handler');
-assert.ok(js.includes('pendingAiAlignment'),'Missing safeguard for owner's pasted words');
+assert.ok(js.includes('pendingAiAlignment'),'Missing safeguard for pasted original lyrics');
 assert.ok(css.includes('.ai-lyrics-paste-panel'),'Missing pasted lyrics UX styles');
 assert.ok(js.includes('aiRemoveImportedSong('),'Missing AI imported song removal workflow');
 assert.ok(js.includes('data-ai-remove') || js.includes('dataset.aiRemove'),'Missing per-row remove action');
