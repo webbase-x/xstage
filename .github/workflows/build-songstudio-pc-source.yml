@@ -48,6 +48,7 @@ jobs:
           python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
           python -m unittest discover -s scripts -p test_songstudio_drive_download.py -v
           python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
+          python -m unittest discover -s scripts -p test_songstudio_online_publish.py -v
           python -m unittest discover -s scripts -p test_songstudio_build_outcomes.py -v
       - name: Build verified source ZIP and SHA256
         run: |
