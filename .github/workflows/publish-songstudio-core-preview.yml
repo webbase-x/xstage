@@ -1,0 +1,81 @@
+name: Publish Song Studio tested core ZIP (download repair)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-songstudio-core-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Retrieve successful Windows build artifact (not the incomplete chat attachment)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 43334462504 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name "X-Stage-Song-Studio-PC-Ready-v0.3.14-build314" \
+            --dir dist
+          ls -lh dist
+      - name: Verify exact tested ZIP bytes and online publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, pathlib, zipfile
+          out=pathlib.Path('dist')
+          name='X-Stage-Song-Studio-PC-Ready-v0.3.14-build314.zip'
+          file=out/name
+          sha=out/(name+'.sha256')
+          assert file.is_file() and sha.is_file(), 'ZIP and checksum must both exist'
+          expected=sha.read_text(encoding='utf-8-sig').strip().split()[0].lower()
+          assert len(expected)==64 and all(ch in '0123456789abcdef' for ch in expected), 'invalid checksum'
+          assert expected=='60b89f5a70d55b1542caca64a4ef00b2c697a6769e0836441df296114b0a7ae0', 'different build from tested Ready ZIP'
+          actual=hashlib.file_digest(file.open('rb'), 'sha256').hexdigest()
+          assert actual==expected, f'Checksum mismatch: {actual} != {expected}'
+          assert file.stat().st_size>300_000_000, 'incomplete or truncated archive'
+          with zipfile.ZipFile(file) as archive:
+              assert archive.testzip() is None, 'corrupt ZIP member'
+              names=archive.namelist()
+              for basename in ('engine.py','online_publish.py','google_drive.py','ncn_lyrics.py','song_export.py','studio/index.html'):
+                  assert any(s.endswith('/'+basename) or s==basename for s in names), 'Missing '+basename
+          print('PASS: full Windows Ready ZIP, sha256',actual,'bytes',file.stat().st_size)
+          PY
+      - name: Publish clearly labeled Core Preview release without embedded Google OAuth
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="song-studio-pc-core-preview-v0.3.14-build314"
+          zip="dist/X-Stage-Song-Studio-PC-Ready-v0.3.14-build314.zip"
+          sha="${zip}.sha256"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Preview release already exists; preserving the immutable tested release."
+            exit 0
+          fi
+          cat > /tmp/release-notes.md <<'NOTES'
+          ### X-Stage Song Studio PC v0.3.14 Build 314 — Core Preview
+          This Windows x64 portable ZIP was verified by the original CI build (GitHub Actions run 43334462504): bundled FFmpeg, FluidSynth, SoundFont, offline Whisper and ONNX resources, MIDI/KAR/NCN lyrics extraction, real MIDI to 48 kHz AAC/M4A conversion, web karaoke lyrics JSON, and an incremental XStageWeb publisher with Drive File IDs. Includes matching SHA-256 checksum.
+
+          **Extract the ZIP completely, then run Start-Song-Studio.cmd.**
+
+          **Important limitation:** This ZIP does NOT include a preconfigured Google Desktop OAuth client ID and matching secret, and real end-to-end upload to the owner's Google Drive was NOT tested. Import your own Google Desktop OAuth Client JSON under Advanced Settings before Google Login. Existing libraries created by another OAuth application may be inaccessible with drive.file; never create a new XStageWeb library when an existing one should be reused. The download SONG/DB/ZIP menu still uses the older Song Studio backup layout and is not a complete XStageWeb restore workflow.
+
+          This is a **Core Preview**, not the full-featured release. No user Google tokens or private music are included.
+          NOTES
+          gh release create "$tag" "$zip" "$sha" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "X-Stage Song Studio PC Core Preview v0.3.14 Build 314" \
+            --notes-file /tmp/release-notes.md --prerelease --latest=false \
+            --target 2d4bde61dc24b7d7ad41b79c8b71a20e80e7bf1b
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,assets
