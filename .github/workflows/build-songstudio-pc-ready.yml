@@ -22,6 +22,7 @@ on:
       - "scripts/test_songstudio_ncn.py"
       - "scripts/test_songstudio_drive_download.py"
       - "scripts/test_songstudio_pc.py"
+      - "scripts/test_songstudio_drive_layout.py"
       - "studio/index.html"
       - "studio/app-icon.svg"
       - "studio/site.webmanifest"
@@ -108,6 +109,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Batch head/tail lyrics replacement regression failed" }
           & python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
           if ($LASTEXITCODE -ne 0) { throw "Independent AI import and reviewed lyrics regressions failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_drive_layout.py -v
+          if ($LASTEXITCODE -ne 0) { throw "XStageWeb v2 Drive layout regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
           if ($LASTEXITCODE -ne 0) { throw "Google Drive upload/download/ZIP round-trip regression failed" }
           & python -m unittest discover -s scripts -p test_songstudio_code_registry.py -v
