@@ -74,6 +74,39 @@ class PcSourceTests(unittest.TestCase):
         self.assertTrue(all(
             item["path"].startswith("database-") for item in pointer["catalogFiles"]))
 
+    def test_catalog_media_path_traversal_rejected_before_database_publish(self):
+        export=engine._song_export_module()
+        stage=self.dest/"StageWeb"
+        (stage/"audio"/"0").mkdir(parents=True)
+        valid=stage/"audio"/"0"/"song.m4a"
+        valid.write_bytes(b"M"*5200)
+        self.assertEqual(export.safe_media_path(
+            stage,"audio/0/song.m4a","audio"),valid.resolve())
+        for rel in ("audio/../current.json","audio/./0/song.m4a",
+                    "audio//0/song.m4a","audio/../../other.mp3",
+                    "audio\\0\\song.m4a","audio/0/../0/song.m4a",
+                    "audio/0/evil:other.m4a"):
+            with self.subTest(rel=rel):
+                with self.assertRaises(ValueError):
+                    export.safe_media_path(stage,rel,"audio")
+                unsafe={"webSongId":"bad","bucket":"0",
+                        "audio":{"path":rel}}
+                with self.assertRaises(ValueError):
+                    export.publish_batch(stage,[unsafe])
+                self.assertFalse((stage/"current.json").exists())
+        link=stage/"audio"/"0"/"alias.m4a"
+        try:
+            link.symlink_to(valid)
+        except (OSError, NotImplementedError):
+            pass  # Some Windows test runners prohibit symlink creation.
+        else:
+            with self.assertRaises(ValueError):
+                export.safe_media_path(stage,"audio/0/alias.m4a","audio")
+            with self.assertRaises(ValueError):
+                export.publish_batch(stage,[{
+                    "webSongId":"alias","bucket":"0",
+                    "audio":{"path":"audio/0/alias.m4a"}}])
+
     def test_stageweb_and_legacy_songs_conflict_fails_without_changes(self):
         export=engine._song_export_module()
         legacy=self.dest/"songs"
