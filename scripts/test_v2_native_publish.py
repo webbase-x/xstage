@@ -68,15 +68,15 @@ class NativeV2Tests(unittest.TestCase):
     def test_rejects_incomplete_ncn_and_unsafe_files(self):
         bad={"schemaVersion":2,"songs":[{"code":"B","sources":{"ncn":{
             "song":"input/X01.MID","lyrics":"input/X01.LYR","cursor":"input/missing.cur"}}}]}
-        with self.assertRaises(online.PublishError):
+        with self.assertRaises(native.PublishError):
             self.pub.publish(self.root,bad)
         traversal={"schemaVersion":2,"songs":[{"code":"B","sources":{"mp3":"../escape.mp3"}}]}
-        with self.assertRaises(online.PublishError):
+        with self.assertRaises(native.PublishError):
             self.pub.publish(self.root,traversal)
 
     def test_rejects_duplicate_code_before_upload(self):
         row={"code":"A","sources":{"mp3":"input/audio.mp3"}}
-        with self.assertRaises(online.PublishError):
+        with self.assertRaises(native.PublishError):
             self.pub.publish(self.root,{"schemaVersion":2,"songs":[row,row]})
 
 if __name__=="__main__":
