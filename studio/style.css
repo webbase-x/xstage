@@ -290,3 +290,24 @@ button.preview-lyric-line{cursor:pointer}
 .google-login-help p{font-size:12px;line-height:1.65;margin:6px 0 0;color:#c8edf2}
 .google-login-help button{flex-shrink:0;white-space:nowrap}
 @media(max-width:740px){.google-login-help{flex-direction:column;align-items:stretch}.google-login-help button{width:100%}}
+
+/* Frequency-ranked, exact-position intro/outro lyric text editing */
+.lyric-group-actions,.lyric-group-positions{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:12px 0}
+.lyric-group-positions>.button{flex:1;min-width:135px}
+.lyric-group-filter{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.lyric-group-filter>label:first-child{font-weight:700;white-space:nowrap}
+.lyric-group-filter>input{flex:1;min-width:195px}
+.lyric-group-repeats{display:flex;align-items:center;gap:8px;font-size:12px;white-space:normal}
+.lyric-group-repeats input{accent-color:#45d8cb}
+.lyric-group-results{display:flex;flex-direction:column;gap:6px;min-height:90px;max-height:460px;overflow-y:auto;overscroll-behavior:contain;border-radius:12px;border:1px solid #355f73;background:#091f30;padding:8px}
+.lyric-group-row{display:flex;gap:13px;align-items:center;justify-content:space-between;width:100%;min-width:0;text-align:left;background:#103047;border:1px solid transparent;border-radius:9px;padding:12px;color:#f2fcff;cursor:pointer}
+.lyric-group-row:hover,.lyric-group-row:focus-visible{border-color:#75d7e4;background:#17445d}
+.lyric-group-row.active{border-color:#6ee5ca;background:#14535c}
+.lyric-group-row-text{min-width:0;flex:1;overflow-wrap:anywhere;white-space:pre-wrap}
+.lyric-group-row-count{flex:none;background:#1c5062;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.lyric-group-selection{background:#102e43;border-radius:10px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:45px}
+.lyric-group-examples{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;margin:11px 0}
+.lyric-group-example{font-size:12px;color:#bcd8e4;padding:6px 9px;background:#112f43;border-radius:6px;overflow-wrap:anywhere}
+.lyric-group-edit>label{display:block;font-weight:700;margin:14px 0 8px}
+.lyric-group-edit textarea{width:100%;min-height:90px;line-height:1.7;resize:vertical;font-family:"Leelawadee UI","Noto Sans Thai",monospace}
+.lyric-group-overview .hint,.lyric-group-edit .hint{line-height:1.7;white-space:pre-wrap}
