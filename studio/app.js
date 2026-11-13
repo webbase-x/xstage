@@ -48,7 +48,7 @@
   const selected = new Set();
   let activeTab = 'create';
   let page = 0, pageSize = 100, total = 0, search = '', searchTimer = 0;
-  let songs = [], prefs = {}, googleConnected = false;
+  let songs = [], prefs = {}, googleConnected = false, googleConfigured = false;
   let lastJobId = '', lastJobState = 'idle', refreshTimer = 0;
   let busy = false, editingId = null, notificationTimer = null;
   let createStep = 1;
@@ -238,8 +238,11 @@
     control.value = prefs.midi_preset || 'balanced';
   }
   function setGoogle(google) {
+    const previousGoogle = googleConnected;
+    const previousConfigured = googleConfigured;
     googleConnected = !!google?.connected;
     const configured = !!google?.configured;
+    googleConfigured = configured;
     const badge = $('google-badge');
     badge.classList.toggle('offline', !googleConnected);
     const label = googleConnected ? `เชื่อม Google · ${google.email}`
@@ -257,6 +260,14 @@
           ') · ผู้ใช้เพียงเลือกบัญชี Google ครั้งแรก'
         : 'ยังไม่มี Desktop OAuth Client ในแอป · ผู้ดูแลต้องเพิ่ม Client ID ในแพ็กเกจ หรือเลือก JSON ครั้งเดียวในตัวเลือกขั้นสูง';
     }
+    const loginState = $('google-login-state');
+    if (loginState) {
+      loginState.dataset.ready = googleConnected ? 'true' : 'false';
+      loginState.textContent = googleConnected
+        ? '✓ เชื่อมต่อ Google Drive ใน Song Studio PC แล้ว · ' + (google?.email || 'บัญชี Google')
+        : !configured ? 'ยังไม่ได้เชื่อมต่อ: รุ่น Core Preview ต้องนำเข้า Google Desktop OAuth Client JSON ในตัวเลือกขั้นสูงก่อน ไม่สามารถใช้การล็อกอินของ X-Stage Karaoke Online แทนได้' + (google?.error ? ' · ' + google.error : '')
+        : 'OAuth Client พร้อมแล้ว แต่ Song Studio PC ยังไม่ได้รับ Google refresh token' + (google?.error ? ' · ' + google.error : ' · กด Google Login และอนุญาตสิทธิ์ในหน้าต่างเบราว์เซอร์');
+    }
     const advanced = $('oauth-advanced');
     if (advanced && !advanced.dataset.initialized) {
       advanced.open = !configured;
@@ -264,6 +275,12 @@
     }
     for (const id of ['upload-button', 'settings-logout']) $(id).disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
+    // The environment panel previously remained stale after an OAuth import
+    // or successful login even while the header badge was live.
+    if (activeTab === 'settings' &&
+        (previousGoogle !== googleConnected || previousConfigured !== configured)) {
+      void refreshEnvironment();
+    }
   }
   async function loadState({initialize = false} = {}) {
     const data = await api('/api/status');
@@ -342,6 +359,8 @@
     if (patch.workspace && previousWorkspace !== prefs.workspace) { selected.clear(); page = 0; await refreshSongs(); }
     if ('soundfont' in patch || 'workspace' in patch) soundfontOptions(response.soundfonts || []);
     setFields();
+    if (response.google) setGoogle(response.google);
+    if ('oauth' in patch) await refreshEnvironment();
     return response;
   }
   const fields = {'create-source': 'source', 'create-workspace': 'workspace',
@@ -1415,9 +1434,31 @@
   $('edit-button').addEventListener('click',()=>{void openEdit();});
   $('edit-dialog').addEventListener('close',event=>{if($('edit-dialog').returnValue==='save')void saveEdit();});
   for (const button of [$('upload-login'),$('settings-login'),$('google-login-header')]) button.addEventListener('click',async()=>{
-    // Client ID is now embedded or stored in per-user AppData. The user does
-    // not have to browse for a JSON file on every launch or release.
-    try { await run('login'); } catch(e) { message(e.message); }
+    try {
+      // A manually pasted JSON path must be imported before starting OAuth;
+      // clicking Login immediately after editing used to skip that step.
+      const proposed = $('settings-oauth').value.trim();
+      if (proposed && proposed !== (prefs.oauth || '')) {
+        await config({oauth:proposed});
+      }
+      const latest = await api('/api/status');
+      setGoogle(latest.google);
+      if (!latest.google?.configured) {
+        $('oauth-advanced').open = true;
+        tab('settings');
+        message('Song Studio PC ยังไม่มี Google Desktop OAuth Client JSON · กรุณาเปิดตัวเลือกขั้นสูง เลือกไฟล์ JSON ชนิด Desktop App แล้วกด Google Login อีกครั้ง' + (latest.google?.error ? ' · ' + latest.google.error : ''));
+        return;
+      }
+      if (latest.google?.connected) {
+        message('Song Studio PC เชื่อม Google Drive อยู่แล้ว: ' + (latest.google.email || 'บัญชี Google'), false);
+        await refreshEnvironment();
+        return;
+      }
+      await run('login');
+    } catch(e) {
+      message('เริ่ม Google Login ไม่สำเร็จ: ' + e.message);
+      await refreshEnvironment();
+    }
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-button').addEventListener('click',()=>{void startUpload();});
