@@ -87,7 +87,7 @@ class LyricPreviewTests(unittest.TestCase):
     def test_ai_transcription_creates_only_unverified_private_draft(self):
         mock_model = self.dir / "model"
         mock_model.mkdir()
-        with patch.object(ai, "available", return_value=True):
+        with patch.object(ai, "readiness", return_value=(True, "")):
             def fake_run(cmd, cancelled, phase, on_status, **_):
                 if "ffmpeg" in str(cmd[0]):
                     Path(cmd[-1]).write_bytes(b"WAV-data" * 10000)
@@ -109,6 +109,56 @@ class LyricPreviewTests(unittest.TestCase):
         self.assertEqual(response["status"], "ai-draft")
         self.assertEqual(response["source"], "AI · Whisper (ยังไม่ยืนยัน)")
         self.assertTrue(response["requiresReview"])
+
+    def test_whisper_readiness_explains_missing_executable(self):
+        good, reason = ai.readiness(self.dir)
+        self.assertFalse(good)
+        self.assertIn("whisper-cli.exe", reason)
+
+    def test_ai_retries_auto_language_once_when_first_pass_has_no_words(self):
+        source = self.dir / "new-vocals.wav"
+        source.write_bytes(b"RIFF" + b"z" * 90000)
+        attempts = []
+
+        def fake_run(cmd, cancelled, phase, on_status, **_):
+            if "ffmpeg" in str(cmd[0]):
+                Path(cmd[-1]).write_bytes(b"WAV" * 11000)
+                return
+            language = str(cmd[cmd.index("-l") + 1])
+            attempts.append(language)
+            dest = Path(str(cmd[cmd.index("-of") + 1]) + ".json")
+            text = [{"text": "เสียงร้อง", "offsets": {"from": 1000, "to": 2200}}] \
+                if language == "auto" else []
+            dest.write_text(json.dumps({"transcription": text}), encoding="utf-8")
+
+        with patch.object(ai, "readiness", return_value=(True, "")), \
+             patch.object(ai, "_run", side_effect=fake_run):
+            draft = ai.transcribe(
+                source, "NEWVOCALS", self.dir, self.dir, "ffmpeg",
+                __import__("threading").Event(), lambda status: None, language="th")
+        self.assertEqual(attempts, ["th", "auto"])
+        self.assertEqual(draft["language"], "auto")
+        self.assertEqual(draft["lines"][0]["text"], "เสียงร้อง")
+        self.assertTrue(draft["requiresReview"])
+
+    def test_short_ffmpeg_pipe_reads_do_not_insert_silence(self):
+        live = load("live_preview.py", "xstage_short_read_live_preview_test")
+        class ShortReadPipe:
+            def __init__(self, data):
+                self.data, self.offset = data, 0
+            def read(self, count):
+                take = min(3, count)
+                out = self.data[self.offset:self.offset + take]
+                self.offset += len(out)
+                return out
+        pcm = bytes(range(32))
+        pipe = ShortReadPipe(pcm)
+        self.assertEqual(live.read_pcm_block(pipe, 16), pcm[:16])
+        self.assertEqual(live.read_pcm_block(pipe, 16), pcm[16:])
+        self.assertEqual(live.read_pcm_block(pipe, 16), b"")
+        tail = ShortReadPipe(b"\x01\x00\x01\x00")
+        self.assertEqual(live.read_pcm_block(tail, 8),
+                         b"\x01\x00\x01\x00" + b"\x00" * 4)
 
     def test_ai_cannot_generate_true_words_from_instrumental_midi(self):
         midi = self.dir / "000012.mid"
