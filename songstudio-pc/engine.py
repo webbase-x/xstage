@@ -1211,22 +1211,25 @@ def execute_job(action, options, started):
             if index is None:
                 raise ValueError("กรุณากดวิเคราะห์ข้อความก่อนเริ่มแทนที่")
             root = _song_export_module().songs_root(PREFS["workspace"])
-            group_id = options.get("group")
+            groups = options.get("groups")
+            if groups is None and options.get("group"):
+                groups = [options["group"]]
             new_text = options.get("replacement")
-            count = options.get("expectedCount")
-            group = index["groups"].get(group_id)
-            if not group:
-                raise ValueError("ไม่พบกลุ่มข้อความที่เลือก")
+            search = options.get("search", "")
+            planned = LYRIC_TEXT.plan(index, groups, search=search,
+                                      replacement=new_text)
             with LOCK:
-                JOB["total"] = group["count"]
-            update(f"กำลังสำรองและแทนที่ข้อความ {group['label']} · {group['count']:,} เพลง")
-            result = LYRIC_TEXT.apply(
+                JOB["total"] = planned["changedSongs"]
+            update(f"กำลังสำรองและแทนที่ {planned['groups']:,} กลุ่ม · "
+                   f"{planned['changedLines']:,} บรรทัดใน {planned['changedSongs']:,} เพลง")
+            result = LYRIC_TEXT.apply_many(
                 root, _song_export_module(), index,
-                group_id, new_text, LYRIC_TEXT_BACKUPS, expected_count=count,
+                groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
+                expected_count=options.get("expectedCount"),
                 cancelled=CANCEL,
                 on_progress=lambda detail, done: update(detail, done))
-            with LOCK:
-                LYRIC_TEXT_INDEX = None
+            # Keep LYRIC_TEXT_INDEX: apply_many updates only changed members.
+            # All unedited groups remain available for the next batch.
         elif action == "lyric-groups-undo":
             root = _song_export_module().songs_root(PREFS["workspace"])
             update("กำลังตรวจไฟล์หลังแก้ไขและย้อนคืนจากชุดสำรอง")
@@ -1441,12 +1444,19 @@ def start_job(data):
         # thread that could change many files at once.
         with LOCK:
             snapshot = LYRIC_TEXT_INDEX
-        group = (snapshot or {}).get("groups", {}).get(data.get("group"))
-        if not group or type(data.get("expectedCount")) is not int or data["expectedCount"] != group["count"]:
-            raise ValueError("กลุ่มข้อความหรือจำนวนเพลงไม่ตรงกับผลวิเคราะห์ล่าสุด")
-        if not isinstance(data.get("replacement"), str) or not data["replacement"].strip():
-            raise ValueError("กรุณาระบุข้อความแทนที่ก่อนยืนยัน")
-        validation = {"total": group["count"]}
+        if snapshot is None:
+            raise ValueError("ยังไม่ได้วิเคราะห์ข้อความหัว–ท้ายเพลง")
+        groups = data.get("groups")
+        if groups is None and data.get("group"):
+            groups = [data["group"]]
+        plan = LYRIC_TEXT.plan(
+            snapshot, groups, search=data.get("search", ""),
+            replacement=data.get("replacement"))
+        if type(data.get("expectedCount")) is not int or data["expectedCount"] != plan["changedLines"]:
+            raise ValueError("จำนวนบรรทัดที่จะเปลี่ยนไม่ตรง กรุณาตรวจกลุ่มที่เลือกใหม่")
+        if plan["changedSongs"] < 1:
+            raise ValueError("ไม่มีเพลงที่ต้องแก้ไข กรุณาเลือกกลุ่มอื่น")
+        validation = {"total": plan["changedSongs"], "changedLines": plan["changedLines"]}
     if action == "lyric-groups-undo":
         backup = LYRIC_TEXT.latest_backup(
             LYRIC_TEXT_BACKUPS, _song_export_module().songs_root(PREFS["workspace"]))
@@ -2148,7 +2158,9 @@ class Handler(BaseHTTPRequestHandler):
                     snapshot = LYRIC_TEXT_INDEX
                 if snapshot is None:
                     raise ValueError("กลุ่มข้อความหมดอายุ กรุณาวิเคราะห์ใหม่")
-                self._json(LYRIC_TEXT.preview(snapshot, query.get("group", [""])[0]))
+                self._json(LYRIC_TEXT.preview(
+                    snapshot, query.get("group", [""])[0],
+                    search=query.get("search", [""])[0]))
             elif path == "/api/lyric-groups-backup":
                 root = _song_export_module().songs_root(PREFS["workspace"])
                 self._json({"latest": LYRIC_TEXT.latest_backup(LYRIC_TEXT_BACKUPS, root)})
@@ -2246,6 +2258,14 @@ class Handler(BaseHTTPRequestHandler):
                     restore_song_catalog()
                 self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
                             "google": GOOGLE.status()})
+            elif path == "/api/lyric-groups-plan":
+                with LOCK:
+                    snapshot = LYRIC_TEXT_INDEX
+                if snapshot is None:
+                    raise ValueError("กรุณาวิเคราะห์ข้อความหัว–ท้ายเพลงก่อน")
+                self._json(LYRIC_TEXT.plan(
+                    snapshot, payload.get("groups"), search=payload.get("search", ""),
+                    replacement=payload.get("replacement")))
             elif path == "/api/ai-import":
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
