@@ -809,7 +809,7 @@ class GoogleDrive:
             for item in self.list_children(folder_id):
                 name = item.get("name")
                 if (not isinstance(name, str) or name in ("", ".", "..")
-                        or "/" in name or "\\\\" in name or ":" in name
+                        or "/" in name or chr(92) in name or ":" in name
                         or any(ord(char) < 32 for char in name)):
                     raise GoogleError("ชื่อไฟล์หรือโฟลเดอร์ XStageWeb ไม่ปลอดภัย")
                 relative = prefix + name
