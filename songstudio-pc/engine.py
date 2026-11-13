@@ -821,6 +821,29 @@ def reconcile_local_codes(root, records, registry, remote, export):
     return allocator, len(changes)
 
 
+def code_registry_preview():
+    """Read-only two-source preview; UI can verify before new conversion."""
+    export = _song_export_module()
+    root = export.songs_root(PREFS["workspace"])
+    records = export.existing_records(root)
+    registry, remote, verified, generation = code_registry_snapshot(root)
+    allocator = registry.CodeAllocator(records, remote, root)
+    changes = allocator.reconcile_existing()
+    return {
+        "pcSongs": len(records), "driveSongs": len(remote),
+        "onlineVerified": verified, "driveGeneration": generation,
+        "localCodeConflicts": len(changes),
+        "sampleRemaps": [{"oldCode": x.get("code"), "newCode": code,
+                          "title": x.get("title", "")} for x, code in changes[:10]],
+        "message": (
+            f"ตรวจครบ PC {len(records):,} และ Google Drive {len(remote):,} เพลง "
+            f"· ต้องปรับรหัสในคลัง PC {len(changes):,} รายการ"
+            if verified else
+            f"ตรวจเฉพาะ PC {len(records):,} เพลง · ยังไม่สามารถยืนยันรหัส Google Drive "
+            f"· รหัสใหม่ยังเป็นรหัสชั่วคราว")
+    }
+
+
 def _source_digest(row, export):
     """Deduplicate complete NCN *song packages*, not just MIDI bytes.
 
@@ -1992,6 +2015,8 @@ class Handler(BaseHTTPRequestHandler):
                     "soundfonts": font_list(), "presets": formats(),
                     "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
+            elif path == "/api/code-registry":
+                self._json(code_registry_preview())
             elif path == "/api/environment":
                 google = GOOGLE.status()
                 self._json({"Python Runtime": True, "FFmpeg": bool(ffmpeg_binary()),
