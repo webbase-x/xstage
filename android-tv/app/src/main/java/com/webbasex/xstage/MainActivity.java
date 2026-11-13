@@ -2,6 +2,8 @@ package com.webbasex.xstage;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.content.Context;
 import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
@@ -188,6 +190,17 @@ public final class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 Uri uri = Uri.parse(url);
                 if (isTrustedXStageUrl(uri) && updateManager != null) {
+                    // Report device resource limits; never grant a WebView file or Drive permission.
+                    ActivityManager manager=(ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
+                    if(manager!=null){
+                        JSONObject profile=new JSONObject();
+                        try {
+                            profile.put("memoryClassMb",manager.getMemoryClass());
+                            profile.put("lowRam",manager.isLowRamDevice());
+                            profile.put("androidSdk",Build.VERSION.SDK_INT);
+                        }catch(Exception ignored){}
+                        view.evaluateJavascript("window.XStageDeviceProfile="+profile.toString()+";",null);
+                    }
                     // Wait until the web UI and its deferred scripts are ready before the native
                     // updater reports availability. Otherwise a fast version check can finish
                     // before window.XStageAndroidUpdateAvailable exists and the notice is lost.
