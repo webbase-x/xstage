@@ -300,6 +300,8 @@ SONG_INDEX = _module("song_index.py", "xstage_song_index")
 AI_LYRICS = _module("ai_lyrics.py", "xstage_ai_lyrics")
 LYRIC_ALIGNMENT = _module("lyric_alignment.py", "xstage_lyric_alignment")
 LYRIC_TEXT = _module("lyric_text_groups.py", "xstage_lyric_text_groups")
+HISTORY = _module("history_store.py", "xstage_history_store")
+HISTORY_FILE = DATA / "edit-history.json"
 LYRIC_TEXT_INDEX = None
 LYRIC_TEXT_BACKUPS = DATA / "lyric-text-backups"
 # Normalize old absolute JSON paths to a stable per-user copy when possible.
@@ -2374,6 +2376,9 @@ class Handler(BaseHTTPRequestHandler):
                     "soundfonts": font_list(), "presets": formats(),
                     "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
+            elif path == "/api/history":
+                with LOCK:
+                    self._json({"events": HISTORY.list_events(HISTORY_FILE)})
             elif path == "/api/code-registry":
                 self._json(code_registry_preview())
             elif path == "/api/environment":
@@ -2511,6 +2516,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("คำสั่งไม่ถูกต้อง")
             path = urllib.parse.urlsplit(self.path).path
             if path == "/api/config":
+                previous_preferences = HISTORY.safe_preferences(PREFS)
                 previous_catalog_key = (PREFS["source"], PREFS["workspace"])
                 for key, value in payload.items():
                     if key not in PREFS or not isinstance(value, str):
@@ -2527,6 +2533,9 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         PREFS[key] = value[:2048]
                 save_json(PREFS_FILE, PREFS)
+                with LOCK:
+                    HISTORY.append(HISTORY_FILE, "settings", "preferences",
+                                   previous_preferences, PREFS)
                 if previous_catalog_key != (PREFS["source"], PREFS["workspace"]):
                     with LOCK:
                         global LYRIC_TEXT_INDEX
@@ -2534,6 +2543,39 @@ class Handler(BaseHTTPRequestHandler):
                     restore_song_catalog()
                 self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
                             "google": GOOGLE.status()})
+            elif path == "/api/history/restore":
+                if JOB.get("state") == "running":
+                    raise ValueError("มีงานกำลังประมวลผล · หยุดก่อนคืนค่าประวัติ")
+                with LOCK:
+                    event = HISTORY.get_event(HISTORY_FILE, payload.get("id"))
+                    if event["kind"] == "settings":
+                        old = HISTORY.safe_preferences(PREFS)
+                        selected = HISTORY.safe_preferences(event["before"])
+                        # Never restore OAuth identity or tokens from history.
+                        previous_catalog_key = (PREFS["source"], PREFS["workspace"])
+                        PREFS.update(selected)
+                        save_json(PREFS_FILE, PREFS)
+                        HISTORY.append(HISTORY_FILE, "settings", "restore", old, PREFS)
+                        needs_scan = previous_catalog_key != (PREFS["source"], PREFS["workspace"])
+                    elif event["kind"] == "song":
+                        target = event["target"]
+                        row = next((r for r in FILE_BY_ID.values()
+                                    if r.get("path") == target), None)
+                        if row is None:
+                            raise ValueError("ไม่พบเพลงต้นฉบับในรายการที่สแกน · ไม่คืนค่าทับเพลงอื่น")
+                        current = dict(NOTES.get(target, {}))
+                        restored = HISTORY.safe_song(event["before"])
+                        NOTES[target] = {**current, **restored}
+                        save_json(NOTES_FILE, NOTES)
+                        HISTORY.append(HISTORY_FILE, "song", target, current, NOTES[target])
+                        row["title"], row["artist"] = restored["title"], restored["artist"]
+                        needs_scan = False
+                    else:
+                        raise ValueError("ประวัติไม่รองรับการคืนค่า")
+                if needs_scan:
+                    restore_song_catalog()
+                self._json({"ok": True, "preferences": dict(PREFS),
+                            "message": "คืนค่าจากประวัติและบันทึกอัตโนมัติแล้ว"})
             elif path == "/api/lyric-groups-plan":
                 with LOCK:
                     snapshot = LYRIC_TEXT_INDEX
@@ -2632,12 +2674,15 @@ class Handler(BaseHTTPRequestHandler):
                 if not row:
                     raise ValueError("ไม่พบเพลง")
                 value = NOTES.setdefault(row["path"], {})
+                before_edit = dict(value)
                 for key in ("title", "artist", "lyrics"):
                     if isinstance(payload.get(key), str):
                         value[key] = payload[key][:100000]
                 row["title"] = value.get("title", row["title"])
                 row["artist"] = value.get("artist", row["artist"])
                 save_json(NOTES_FILE, NOTES)
+                with LOCK:
+                    HISTORY.append(HISTORY_FILE, "song", row["path"], before_edit, value)
                 self._json({"ok": True})
             elif path == "/api/open-browser":
                 webbrowser.open(f"{ALLOWED_ORIGIN}/xstage/studio/#engine=" +
