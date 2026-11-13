@@ -98,6 +98,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Build outcome status regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_ncn.py -v
           if ($LASTEXITCODE -ne 0) { throw "NCN Song/Lyrics/Cursor regressions failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_smart_scan.py -v
+          if ($LASTEXITCODE -ne 0) { throw "SQLite Smart Scan regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
           if ($LASTEXITCODE -ne 0) { throw "Real lyrics and AI draft regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
