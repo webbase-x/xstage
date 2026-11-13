@@ -302,7 +302,7 @@
     $('upload-selected-count').textContent = 'ซิงค์คลังเพลงทั้งหมด';
     const buttons = ['scan-button','reconcile-button','preview-button','edit-button','build-button',
       'build-audio-button','select-all','select-page','clear-selection','upload-login','settings-login',
-      'settings-logout','google-login-header','update-button'];
+      'settings-logout','google-login-header','update-button','verify-code-registry'];
     for (const name of buttons) $(name).disabled = busy;
     $('build-button').disabled = busy || selected.size === 0;
     $('build-audio-button').disabled = busy || selected.size === 0;
@@ -314,6 +314,36 @@
     for (const el of document.querySelectorAll('[data-pick],.field,.song-table input[type=checkbox]')) el.disabled = busy;
     $('cancel-job').hidden = !busy;
     updateCreateWizard();
+  }
+  async function verifyCodeRegistry() {
+    const button = $('verify-code-registry');
+    const indicator = $('code-registry-state');
+    if (busy || button.disabled) return;
+    button.disabled = true;
+    const priorLabel = button.textContent;
+    button.textContent = 'กำลังเทียบรหัสทั้งสองคลัง…';
+    indicator.textContent = 'กำลังอ่าน Catalog ในเครื่องและ XStageWeb บน Google Drive · ยังไม่เปลี่ยนรหัสหรือไฟล์ใด ๆ';
+    try {
+      await saveInputs(['create-workspace']);
+      const report = await api('/api/code-registry');
+      let messageText = report.message || '';
+      if (report.sampleRemaps?.length) {
+        const examples = report.sampleRemaps.slice(0,3)
+          .map(x => x.oldCode + ' → ' + x.newCode).join(' · ');
+        messageText += ' · ตัวอย่าง ' + examples;
+      }
+      indicator.textContent = messageText;
+      indicator.dataset.verified = report.onlineVerified ? 'true' : 'false';
+      message(messageText, !report.onlineVerified);
+    } catch (error) {
+      indicator.textContent = 'ตรวจทะเบียนรหัสไม่สำเร็จ: ' + error.message +
+        ' · ระบบยังไม่ได้เปลี่ยนเพลงเดิมหรือรหัสใด';
+      indicator.dataset.verified = 'false';
+      message(indicator.textContent);
+    } finally {
+      button.textContent = priorLabel;
+      button.disabled = busy;
+    }
   }
   async function refreshSongs() {
     const data = await api('/api/songs?limit=' + pageSize + '&offset=' + (page * pageSize) + '&search=' + encodeURIComponent(search));
@@ -1337,6 +1367,7 @@
     try {await saveInputs([id]);} catch(error){message(error.message);}
   });
   for (const el of document.querySelectorAll('[data-pick]')) el.addEventListener('click',()=>pick(el.dataset.pick).catch(e=>message(e.message)));
+  $('verify-code-registry').addEventListener('click',()=>{void verifyCodeRegistry();});
   $('scan-button').addEventListener('click',async()=>{
     try{await saveInputs(['create-source']);await run('scan');}catch(e){message(e.message);}
   });
