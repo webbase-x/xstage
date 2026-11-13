@@ -28,6 +28,7 @@ assert str(manifest["build"]) == str(engine.STATUS_BUILD), (
     "Ready manifest build does not match the bundled PC Engine")
 print("PASS: Ready ZIP manifest matches PC Engine version and build")
 assert (root / "online_publish.py").is_file(), "XStageWeb online publisher missing from Ready ZIP"
+assert (root / "code_registry.py").is_file(), "Two-source song-code registry missing from Ready ZIP"
 print("PASS: XStageWeb Drive File-ID incremental publisher bundled")
 
 assert engine.ffmpeg_binary() is not None, "FFmpeg is missing"
