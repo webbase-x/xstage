@@ -97,7 +97,7 @@ class PcSourceTests(unittest.TestCase):
             done = finish()
             self.assertEqual(done["state"], "success", done.get("detail"))
             self.assertEqual((done["created"], done["m4aCount"]), (1, 1))
-            audio = self.dest / "songs/audio/0/004210.m4a"
+            audio = self.dest / "StageWeb/audio/0/004210.m4a"
             self.assertEqual(audio.read_bytes(), original.read_bytes())
             status, second = request("/api/jobs", {"action":"build",
                                    "ids":[1], "audio_only":False})
@@ -106,8 +106,8 @@ class PcSourceTests(unittest.TestCase):
             done = finish()
             self.assertEqual(done["state"], "success", done.get("detail"))
             self.assertEqual((done["created"], done["skipped"], done["lyricsCount"]), (0, 1, 1))
-            self.assertTrue((self.dest / "songs/lyrics/0/004210.json").is_file())
-            self.assertEqual(len(list((self.dest / "songs/audio").rglob("*.m4a"))), 1)
+            self.assertTrue((self.dest / "StageWeb/lyrics/0/004210.json").is_file())
+            self.assertEqual(len(list((self.dest / "StageWeb/audio").rglob("*.m4a"))), 1)
         finally:
             server.shutdown()
             server.server_close()
@@ -140,7 +140,7 @@ class PcSourceTests(unittest.TestCase):
             response = client.getresponse()
             result = json.loads(response.read().decode("utf-8"))
             self.assertEqual(response.status,200,result)
-            self.assertEqual(result["songs"],93597)
+            self.assertEqual(result["StageWeb"],93597)
             self.assertTrue(result["warning"])
             self.assertIn("freeBytes",result)
             self.assertIn("estimatedOutputBytes",result)
@@ -158,7 +158,7 @@ class PcSourceTests(unittest.TestCase):
         engine.FILE_BY_ID[1] = row
         with self.assertRaisesRegex(ValueError, "NCN ทั้งหมด"):
             engine.validate_build_request({"ids": [1], "audio_only": False})
-        self.assertFalse((self.dest / "songs").exists())
+        self.assertFalse((self.dest / "StageWeb").exists())
 
     def test_supported_format_preflight_counts_and_rejects_missing(self):
         source = self.source / "test.m4a"
@@ -177,7 +177,7 @@ class PcSourceTests(unittest.TestCase):
                     "code": "001234", "kind": "M4A"}
         engine.CANCEL.clear()
         first = engine.build_library([original], "original", {"audio_only": False})
-        root = self.dest / "songs"
+        root = self.dest / "StageWeb"
         self.assertEqual(first["created"], 1)
         self.assertEqual(first["skipped"], 0)
         self.assertTrue((root / "audio/0/001234.m4a").is_file())
@@ -220,10 +220,10 @@ class PcSourceTests(unittest.TestCase):
         engine.CANCEL.clear()
         result = engine.build_library(originals, "original", {"audio_only": False})
         self.assertEqual(result["created"], 2)
-        audio_dir = self.dest / "songs" / "audio" / "0"
+        audio_dir = self.dest / "StageWeb" / "audio" / "0"
         self.assertEqual(sorted(file.name for file in audio_dir.glob("*.m4a")),
                          ["001234.m4a", "001235.m4a"])
-        records = engine._song_export_module().existing_records(self.dest / "songs")
+        records = engine._song_export_module().existing_records(self.dest / "StageWeb")
         self.assertEqual({r["code"] for r in records}, {"001234", "001235"})
         self.assertEqual({r["originalCode"] for r in records}, {"001234"})
         repeat = engine.build_library(originals, "original", {"audio_only": False})
@@ -242,7 +242,7 @@ class PcSourceTests(unittest.TestCase):
                 "original", {"audio_only": False})
         # Unverified legacy output must not be counted as a successful skip.
         self.assertEqual(legacy.read_bytes(), b"OLD" * 4096)
-        self.assertFalse((self.dest / "songs" / "audio" / "0" / "007007.m4a").exists())
+        self.assertFalse((self.dest / "StageWeb" / "audio" / "0" / "007007.m4a").exists())
 
     def test_scan_ignores_previous_song_studio_output_inside_source_tree(self):
         # Source can be the workspace's parent; generated audio must not be
@@ -251,7 +251,7 @@ class PcSourceTests(unittest.TestCase):
         audio = self.dir / "originals" / "000001.m4a"
         audio.parent.mkdir(parents=True)
         audio.write_bytes(b"F" * 4096)
-        generated = self.dest / "songs" / "audio" / "0" / "000001.m4a"
+        generated = self.dest / "StageWeb" / "audio" / "0" / "000001.m4a"
         generated.parent.mkdir(parents=True)
         generated.write_bytes(audio.read_bytes())
         self.assertEqual(engine.scan_source(), 1)
@@ -267,7 +267,7 @@ class PcSourceTests(unittest.TestCase):
         export_spec.loader.exec_module(export)
         audio = self.source / "000777.m4a"
         audio.write_bytes(b"Q" * 4096)
-        root = self.dest / "songs"
+        root = self.dest / "StageWeb"
         target = root / "audio/0/000777.m4a"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(audio.read_bytes())
@@ -290,7 +290,7 @@ class PcSourceTests(unittest.TestCase):
     def test_preexisting_unindexed_file_is_not_duplicated(self):
         original = self.source / "000888.m4a"
         original.write_bytes(b"D" * 4096)
-        target = self.dest / "songs" / "audio" / "0" / original.name
+        target = self.dest / "StageWeb" / "audio" / "0" / original.name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"OLD" * 4096)
         with self.assertRaisesRegex(RuntimeError, "ERR 1"):
@@ -308,15 +308,15 @@ class PcSourceTests(unittest.TestCase):
         engine.CANCEL.clear()
         first = engine.build_library([row], "original", {"audio_only": True})
         self.assertEqual((first["created"], first["lyricsCount"]), (1, 0))
-        audio = self.dest / "songs/audio/0/021999.m4a"
+        audio = self.dest / "StageWeb/audio/0/021999.m4a"
         old_data = audio.read_bytes()
         second = engine.build_library([row], "original", {"audio_only": False})
         self.assertEqual((second["created"], second["skipped"], second["lyricsCount"]), (0, 1, 1))
         self.assertEqual(audio.read_bytes(), old_data)
-        self.assertTrue((self.dest / "songs/lyrics/0/021999.json").is_file())
+        self.assertTrue((self.dest / "StageWeb/lyrics/0/021999.json").is_file())
         third = engine.build_library([row], "original", {"audio_only": False})
         self.assertEqual((third["created"], third["skipped"], third["lyricsCount"]), (0, 1, 0))
-        self.assertEqual(len(list((self.dest / "songs/audio").rglob("*.m4a"))), 1)
+        self.assertEqual(len(list((self.dest / "StageWeb/audio").rglob("*.m4a"))), 1)
 
     def test_live_controls_update_gains_soundfont_and_midi_preset(self):
         spec = importlib.util.spec_from_file_location("songstudio_live_test",
