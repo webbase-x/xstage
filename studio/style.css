@@ -359,3 +359,12 @@ button.preview-lyric-line{cursor:pointer}
 .drive-layout-section code{font-size:11px;line-height:1.6;overflow-wrap:anywhere;color:#e1f2ff;background:#102f43;border-radius:6px;padding:5px 9px}
 .drive-layout-section small{color:#95b9c9;font-size:11px;line-height:1.6}
 @media(max-width:750px){.drive-layout-grid{grid-template-columns:1fr}.drive-layout-section{padding:11px}}
+
+/* Automatic per-user history with explicit undo */
+.history-list{display:grid;gap:8px;max-height:370px;overflow:auto}
+.history-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #34566c;background:#0c283a;border-radius:10px;padding:10px 13px}
+.history-row>div{min-width:0}
+.history-row strong{display:block;font-size:12px;overflow-wrap:anywhere}
+.history-row small{display:block;font-size:11px;color:#a2c1d0;margin-top:4px}
+.history-row .button{flex:none}
+@media(max-width:600px){.history-row{align-items:stretch;flex-direction:column}.history-row .button{align-self:flex-start}}
