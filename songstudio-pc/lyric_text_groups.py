@@ -363,8 +363,8 @@ def latest_backup(backup_root, root):
     for path in sorted(backup_root.glob("*.json"), reverse=True):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if data.get("root") == str(Path(root).expanduser().resolve()) and data.get("state") == "committed":
-                return {k: data[k] for k in ("id", "position", "oldText", "newText", "songs", "createdAt")}
+            if data.get("root") == str(Path(root).expanduser().resolve()) and data.get("state") in ("committed", "prepared", "recovery-required"):
+                return {k: data[k] for k in ("id", "position", "oldText", "newText", "songs", "createdAt", "state")}
         except (ValueError, KeyError, OSError):
             continue
     return None
@@ -378,9 +378,23 @@ def undo(backup_root, root, operation):
     manifest_path = base / (operation + ".json")
     backup_zip = base / (operation + ".zip")
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if data.get("root") != str(root) or data.get("state") != "committed":
+    state = data.get("state")
+    if data.get("root") != str(root) or state not in ("committed", "prepared", "recovery-required"):
         raise ValueError("ชุดสำรองไม่ตรงกับคลังปัจจุบันหรือย้อนคืนไปแล้ว")
-    _restore_files(root, backup_zip, data["files"], strict=True)
+    if state == "committed":
+        _restore_files(root, backup_zip, data["files"], strict=True)
+    else:
+        # Recover a crash/interruption between two atomic file writes:
+        # every file must still be either the original or this operation's
+        # replacement. Abort if another program changed anything meanwhile.
+        for item in data["files"]:
+            target = (root / item["path"]).resolve()
+            if not target.is_relative_to(root) or not target.is_file():
+                raise ValueError("มีไฟล์สูญหายระหว่างการกู้คืน กรุณาตรวจชุดสำรอง")
+            checksum = _sha(target.read_bytes())
+            if checksum not in (item["before"], item["after"]):
+                raise ValueError("มีไฟล์แก้ไขโดยงานอื่นแล้ว ไม่สามารถกู้คืนอย่างปลอดภัย")
+        _restore_files(root, backup_zip, data["files"], strict=False)
     data["state"] = "undone"
     _atomic_bytes(manifest_path, (json.dumps(data, ensure_ascii=False) + "\n").encode("utf-8"))
     return {"message": f"ย้อนคืนข้อความ {data['songs']:,} เพลงสำเร็จ · ไฟล์เสียงไม่เปลี่ยน",
