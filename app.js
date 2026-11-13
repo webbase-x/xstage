@@ -1717,16 +1717,17 @@ function queuePreloadAllowed(){
   return remaining>=0&&remaining<=(policy?.preloadRemainingSeconds||12);
 }
 function scheduleQueuePreload(){
-  clearTimeout(state.queuePreloadTimer);
   if(!state.token||!state.queue.length){releaseQueuePreload();return;}
   const song=state.queue[0],token=state.token;
   if(state.queuePrepared?.song===song&&state.queuePrepared.token===token)return;
   if(state.queuePrepared?.song!==song)state.queuePrepared=null;
   if(state.queuePreload?.song===song&&state.queuePreload.token===token)return;
-  if(!queuePreloadAllowed())return;
+  if(!queuePreloadAllowed()||state.queuePreloadTimer)return;
   const delay=window.XStageRuntime?.deviceInfo?.().preloadIdleDelayMs||700;
   state.queuePreloadTimer=setTimeout(()=>{
-    if(queuePreloadAllowed())void preloadFirstQueueSong(song,token);
+    state.queuePreloadTimer=null;
+    if(queuePreloadAllowed()&&state.queue[0]===song&&state.token===token)
+      void preloadFirstQueueSong(song,token);
   },delay);
 }
 async function preloadFirstQueueSong(song,token){
