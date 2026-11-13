@@ -17,7 +17,8 @@ const required={
           'preview-file-type','preview-lyrics-lines','build-button','build-audio-button'],
   lyrics_bulk:['lyric-group-scan','lyric-group-results','lyric-group-apply',
                'lyric-group-undo','lyric-group-replacement','lyric-group-examples',
-               'lyric-group-search','lyric-group-repeats','lyric-group-stats'],
+               'lyric-group-search','lyric-group-repeats','lyric-group-stats',
+               'lyric-group-select-page','lyric-group-clear','lyric-group-selected-count'],
   ai:['ai-lyrics-import','ai-lyrics-results','ai-lyrics-start','ai-lyrics-play',
       'ai-lyrics-editor','ai-lyrics-karaoke','ai-lyrics-save',
       'ai-lyrics-download','ai-lyrics-insert-time',
@@ -45,7 +46,11 @@ assert.ok(css.includes('.ai-lyrics-paste-panel'),'Missing pasted lyrics UX style
 assert.ok(js.includes("run('lyric-groups-replace'"),'Missing safe grouped lyrics replace job');
 assert.ok(js.includes("run('lyric-groups-undo'"),'Missing bulk edit undo job');
 assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job');
-assert.ok(js.includes('phraseChosen'),'Missing selected phrase state');
+assert.ok(js.includes('phraseSelected'),'Missing multi-group selection state');
+assert.ok(js.includes('/api/lyric-groups-plan'),'Missing server-side multi-group preview');
+assert.ok(js.includes('data-lyric-group'),'Missing per-row selected checkbox');
+assert.ok(js.includes('phraseReady=true') && js.includes('await refreshPhraseGroups()'),
+  'Remaining unedited groups must refresh automatically after replacement');
 assert.ok(css.includes('.lyric-group-row'),'Missing grouped lyric frequency styles');
 assert.ok(js.includes('aiRemoveImportedSong('),'Missing AI imported song removal workflow');
 assert.ok(js.includes('data-ai-remove') || js.includes('dataset.aiRemove'),'Missing per-row remove action');
@@ -53,4 +58,4 @@ assert.ok(js.includes('นำออกจากรายการ') && js.includ
 assert.ok(css.includes('.ai-lyrics-song-remove'),'Missing remove button styling');
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
-console.log('PASS: PC/Web Control UI syntax, 5 tabs, 147 unique IDs, AI import/preview/export and Drive controls.');
+console.log('PASS: PC/Web Control UI syntax, bulk multi-select, lyric-body search, AI and Drive controls.');
