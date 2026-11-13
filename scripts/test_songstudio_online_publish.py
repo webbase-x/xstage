@@ -115,8 +115,8 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(self.drive.upload_order[-1], "current.json")
         # Neither fake absolute local path nor user OAuth credentials leak.
         self.assertNotIn(str(self.base), json.dumps(remote))
-        # Root has songs/ media folder, immutable catalog, and current.json.
-        self.assertEqual(len(self.folder_files(self.remote_root())), 3)
+        # Root has songs/ media, immutable catalog, current.json, staging marker.
+        self.assertEqual(len(self.folder_files(self.remote_root())), 4)
 
     def test_duplicate_rerun_never_creates_another_song_or_pointer(self):
         self.publisher.publish(self.root, [self.first])
@@ -200,6 +200,23 @@ class OnlinePublishTests(unittest.TestCase):
         with self.assertRaisesRegex(online.PublishError, "Lyrics"):
             self.publisher.publish(self.root, [only])
         self.assertEqual(len(self.drive.items), 1)  # Keep existing empty root untouched
+
+    def test_initial_sync_interruption_can_resume_from_verified_staging(self):
+        original = self.drive.upload_file
+        def fails_initial_lyrics(parent, path, name, **kwargs):
+            if name.startswith("00001-") and name.endswith(".json"):
+                raise online.PublishError("first sync interrupted")
+            return original(parent, path, name, **kwargs)
+        with patch.object(self.drive, "upload_file", side_effect=fails_initial_lyrics):
+            with self.assertRaisesRegex(online.PublishError, "first sync interrupted"):
+                self.publisher.publish(self.root, [self.first])
+        root_id = self.remote_root()
+        names = [f["name"] for f in self.folder_files(root_id)]
+        self.assertIn(online.STAGING_MARKER, names)
+        self.assertNotIn("current.json", names)
+        recovered = self.publisher.publish(self.root, [self.first])
+        self.assertTrue(recovered["published"])
+        self.assertEqual(len(self.published()), 1)
 
     def test_missing_online_root_never_silently_creates_duplicate_library(self):
         self.drive.items.clear()
