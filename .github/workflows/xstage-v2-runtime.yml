@@ -1,0 +1,25 @@
+name: X-Stage v2 device runtime checks
+on:
+  push:
+    branches: [feature/xstage-v2-device-runtime]
+  pull_request:
+    paths:
+      - device-runtime.js
+      - app.js
+      - index.html
+      - scripts/device-runtime-test.mjs
+      - .github/workflows/xstage-v2-runtime.yml
+permissions:
+  contents: read
+jobs:
+  device-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check device-runtime.js
+      - run: node --check app.js
+      - run: node scripts/device-runtime-test.mjs
+      - run: python scripts/test_songstudio_online_publish.py
