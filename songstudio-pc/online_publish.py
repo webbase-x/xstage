@@ -380,8 +380,9 @@ class OnlinePublisher:
                      upload(sound, row["audio"]["path"]))
             lyrics = upload(lyric, row["lyrics"]["path"])
             lrc_path = str(Path(row["lyrics"]["path"]).with_suffix(".lrc")).replace("\\", "/")
+            lrc_media = None
             if (local_songs / lrc_path).is_file():
-                upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path)
+                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path)
             vocals = None
             if row.get("vocals") and row["vocals"].get("path"):
                 src = _local_path(local_songs, row["vocals"]["path"], "audio")
@@ -392,6 +393,8 @@ class OnlinePublisher:
                     "artist": str(row.get("artist") or ""),
                     "sourceFormat": str(row.get("sourceFormat") or ""),
                     "audio": audio, "lyrics": lyrics}
+            if lrc_media:
+                item["lrc"] = lrc_media
             if vocals:
                 item["vocals"] = vocals
             elif same_audio and same_audio.get("vocals"):
