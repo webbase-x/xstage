@@ -457,6 +457,10 @@ class GoogleDrive:
     def folder(self, parent, name):
         existing = [x for x in self.list_children(parent) if
                     x["name"] == name and x.get("mimeType") == "application/vnd.google-apps.folder"]
+        if len(existing) > 1:
+            raise GoogleError(
+                "พบโฟลเดอร์ Google Drive ชื่อเดียวกันหลายรายการ · "
+                "ไม่เลือกคลังเพลงแบบสุ่มเพื่อป้องกันฐานเพลงซ้ำ: " + name)
         if existing:
             return existing[0]["id"]
         item = self.api("/files", {"fields": "id,name"}, method="POST",
@@ -648,8 +652,15 @@ class GoogleDrive:
         # Online bulk sync can pass one verified folder listing for the whole
         # batch, avoiding one Drive files.list request for every music file.
         children = self.list_children(parent) if existing_items is None else existing_items
-        matches = [f for f in children
-                   if f.get("name") == name and f.get("mimeType") != "application/vnd.google-apps.folder"]
+        if isinstance(children, dict):
+            # Online bulk sync passes a pre-indexed folder snapshot. Looking
+            # up 10,000 songs by walking the entire folder for EACH upload
+            # caused quadratic work; this reduces name lookup to O(1).
+            candidates = children.get(name, [])
+        else:
+            candidates = [f for f in children if f.get("name") == name]
+        matches = [f for f in candidates
+                   if f.get("mimeType") != "application/vnd.google-apps.folder"]
         for match in matches:
             if match.get("md5Checksum", "").lower() == expected.hexdigest():
                 return ("skipped", match)
