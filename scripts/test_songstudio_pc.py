@@ -140,7 +140,7 @@ class PcSourceTests(unittest.TestCase):
             response = client.getresponse()
             result = json.loads(response.read().decode("utf-8"))
             self.assertEqual(response.status,200,result)
-            self.assertEqual(result["StageWeb"],93597)
+            self.assertEqual(result["songs"],93597)
             self.assertTrue(result["warning"])
             self.assertIn("freeBytes",result)
             self.assertIn("estimatedOutputBytes",result)
