@@ -103,6 +103,15 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(songs), pointer["songCount"])
         return songs
 
+    def test_typed_cloud_media_paths_keep_original_filenames_and_buckets(self):
+        self.assertEqual(str(online.cloud_media_path("audio/12/0001.m4a")), "m4a/12/0001.m4a")
+        self.assertEqual(str(online.cloud_media_path("audio/12/0001.mp3")), "mp3/12/0001.mp3")
+        self.assertEqual(str(online.cloud_media_path("audio/12/0001.mid", "NCN")), "midi/NCN/12/0001.mid")
+        self.assertEqual(str(online.cloud_media_path("audio/12/0001.kar", "KAR")), "midi/KAR/12/0001.kar")
+        self.assertEqual(str(online.cloud_media_path("audio/12/0001.mid")), "midi/MID/12/0001.mid")
+        with self.assertRaises(online.PublishError):
+            online.cloud_media_path("../escaped.mid")
+
     def test_first_publish_matches_online_schema_and_uploads_real_private_files(self):
         result = self.publisher.publish(self.root, [self.first])
         self.assertTrue(result["published"])
