@@ -799,8 +799,8 @@ async function openSharedLibraryPicker(){
           ui.gateStatus.textContent='ไม่ได้รับรหัสโฟลเดอร์จาก Google Picker';
           return;
         }
-        if(name&&name!=='XStageWeb'){
-          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ชื่อ XStageWeb ที่เจ้าของแชร์ให้';
+        if(name&&name!=='StageWeb'&&name!=='XStageWeb'){
+          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ StageWeb หรือ XStageWeb ที่เจ้าของแชร์ให้';
           return;
         }
         ui.gateStatus.textContent='อนุญาตคลังที่แชร์แล้ว · กำลังเปิดเพลง…';
@@ -990,7 +990,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   }
 
   try{
-    const roots=await driveList("name='XStageWeb' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+    const roots=await driveList("(name='StageWeb' or name='XStageWeb') and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
@@ -1034,7 +1034,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     }
     const pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
-    if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง XStageWeb');
+    if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง StageWeb/XStageWeb');
     const pointer=await privateJson(pointers[0].id,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
     if(authId!==state.authId)return;
