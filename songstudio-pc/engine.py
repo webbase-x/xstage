@@ -860,14 +860,24 @@ def build_library(rows, mode, options):
     else:
         allocator = registry.CodeAllocator(records, [], root)
         log("ยังไม่ได้ยืนยันรหัสกับ Google Drive · รหัสเพลงที่สร้างขณะออฟไลน์เป็นรหัสชั่วคราวจนกว่าจะอัปโหลด")
-    by_path, by_sha = {}, {}
+    # Build these indices ONCE. Looking up an incomplete source by scanning
+    # every catalog row for each new song was quadratic for large libraries
+    # (e.g. 90,000 tracks). Preserve the same verified duplicate rules.
+    by_path, by_sha, by_incomplete = {}, {}, {}
+    indexed_audio_paths = set()
     for record in records:
+        marker = record.get("sourceIdentity") or {}
+        source_key = marker.get("canonicalPath")
+        audio_path = (record.get("audio") or {}).get("path")
+        if audio_path:
+            indexed_audio_paths.add(audio_path)
         if export.record_is_complete(root, record):
-            marker = record.get("sourceIdentity") or {}
-            if marker.get("canonicalPath"):
-                by_path[marker["canonicalPath"]] = record
+            if source_key:
+                by_path[source_key] = record
             if marker.get("sha256"):
                 by_sha[marker["sha256"]] = record
+        elif source_key:
+            by_incomplete[source_key] = record
 
     created = skipped = errors = audio_count = lyrics_count = 0
     details = []
@@ -942,7 +952,7 @@ def build_library(rows, mode, options):
 
                 # Never create a second filename while repairing a known
                 # incomplete prior record. Existing media stays untouched.
-                partial = export.find_incomplete(root, records, source)
+                partial = by_incomplete.get(canonical)
                 if partial:
                     # Older releases sometimes published blank Lyrics JSON.
                     # Repair from the original components; NEVER re-encode or
@@ -971,6 +981,7 @@ def build_library(rows, mode, options):
                     records.append(revised)
                     by_path[canonical] = revised
                     by_sha[digest] = revised
+                    by_incomplete.pop(canonical, None)
                     lyrics_count += 1
                     skipped += 1
                     log("ซ่อม Lyrics JSON เดิมที่ผิดพลาดสำเร็จโดยไม่สร้าง M4A ซ้ำ: " + source.name)
@@ -981,9 +992,8 @@ def build_library(rows, mode, options):
                 # different number and accidentally duplicate that song.
                 preferred = (root / "audio" / export.source_bucket(source.name) /
                              (export.safe_filename(source.stem) + ".m4a"))
-                if preferred.exists() and not any(
-                        item.get("audio", {}).get("path") ==
-                        preferred.relative_to(root).as_posix() for item in records):
+                if (preferred.exists() and
+                        preferred.relative_to(root).as_posix() not in indexed_audio_paths):
                     raise RuntimeError(
                         "พบ M4A เดิมที่ไม่มีข้อมูลตรวจต้นฉบับ: " +
                         str(preferred.relative_to(root)) +
@@ -1070,6 +1080,7 @@ def build_library(rows, mode, options):
                 records.append(record)
                 by_path[canonical] = record
                 by_sha[digest] = record
+                indexed_audio_paths.add(record["audio"]["path"])
                 created += 1
                 audio_count += 1
                 if lyric_file:
