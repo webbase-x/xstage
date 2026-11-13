@@ -2248,31 +2248,67 @@ function drawLine(text,y,maxWidth,fontSize,fill,progress=null,centerX=ui.lyrics.
 function lineProgress(line,when){
   const start=Number(line.startTime)||0;
   const end=Number(line.endTime)||start+1;
-  const fallback=Math.min(1,Math.max(0,(when-start)/Math.max(.01,end-start)));
+  const clamp=x=>Math.max(0,Math.min(1,x));
+  const fallback=clamp((when-start)/Math.max(.01,end-start));
   const units=Array.isArray(line.syllables)?line.syllables:[];
   if(!units.length)return fallback;
-  // This method is safe with Thai grapheme clusters, including combining
-  // marks, when measuring each prefix with the same canvas font as drawLine.
-  const chars=units.map(u=>String(u.text||''));
-  if(chars.join('')!==String(line.text||''))return fallback;
-  const totalWidth=pen.measureText(String(line.text||'')).width;
+  const pieces=units.map(u=>String(u.text||''));
+  const text=String(line.text||'');
+  if(pieces.join('')!==text)return fallback;
+  const times=units.map(u=>Number(u.start));
+  if(times.some((value,i)=>!Number.isFinite(value)||value<0||
+      (i&&value<times[i-1]-.001)))return fallback;
+  // If a cursor marks an entire line at one instant, the recording contains
+  // no usable intra-line timing. Sweep that line evenly rather than jumping.
+  if(times.length===1||times.every(t=>Math.abs(t-times[0])<.001))
+    return fallback;
+  const totalWidth=pen.measureText(text).width;
   if(!totalWidth)return fallback;
-  let prefix='', previousWidth=0, sweepWidth=0;
-  for(let i=0;i<units.length;i++){
-    const unit=units[i];
-    prefix+=chars[i];
-    const nextWidth=Math.max(previousWidth,pen.measureText(prefix).width);
-    const unitStart=Number(unit.start);
-    const duration=Number(unit.duration);
-    if(!Number.isFinite(unitStart)||!Number.isFinite(duration) || duration<0)
-      return fallback;
-    const fraction=duration>0
-      ? Math.max(0,Math.min(1,(when-unitStart)/duration))
-      : (when>=unitStart?1:0);
-    sweepWidth+=(nextWidth-previousWidth)*fraction;
-    previousWidth=nextWidth;
+  // Measure each prefix, not glyph count: Thai vowels and tone marks are not
+  // equally wide, and some occupy no horizontal advance.
+  const widths=[0];let prefix='';
+  for(const part of pieces){
+    prefix+=part;
+    widths.push(Math.max(widths[widths.length-1],
+      pen.measureText(prefix).width));
   }
-  return Math.max(0,Math.min(1,sweepWidth/totalWidth));
+  const measured=widths[widths.length-1];
+  if(!measured)return fallback;
+  let painted=0;
+  const distinct=[];
+  for(let i=0;i<times.length;i++)
+    if(i===0||times[i]>times[i-1]+.001)distinct.push(times[i]);
+  const gaps=distinct.slice(1).map((t,i)=>t-distinct[i])
+    .filter(d=>d>.001).sort((a,b)=>a-b);
+  const cadence=gaps.length?gaps[Math.floor(gaps.length/2)]:.45;
+  for(let i=0;i<units.length;){
+    let j=i+1;
+    while(j<units.length&&Math.abs(times[j]-times[i])<=.001)j++;
+    const from=times[i],next=j<units.length?times[j]:NaN;
+    let finish;
+    if(j-i>1){
+      // Multiple CUR/KAR letters at the same tick used to flash instantly.
+      // Paint their combined displayed width over the next available beat.
+      // If the next cue is too close to render, use the safe line fallback.
+      finish=Number.isFinite(next)?next:Math.min(end,from+Math.max(.12,
+        Math.min(1.2,cadence)));
+      if(finish-from<.04*(j-i))return fallback;
+    }else{
+      const duration=Number(units[i].duration);
+      const derived=Number.isFinite(next)?Math.max(.01,next-from):
+        Math.max(.15,Math.min(1.25,cadence));
+      // The last syllable must not creep across a lengthy instrumental rest
+      // merely because endTime equals the NEXT lyric line's start.
+      const limit=Number.isFinite(next)?Math.max(.04,next-from):
+        Math.max(.15,Math.min(1.25,cadence*1.25));
+      finish=from+(Number.isFinite(duration)&&duration>0
+        ? Math.min(duration,limit):Math.min(derived,limit));
+    }
+    const fraction=clamp((when-from)/Math.max(.01,finish-from));
+    painted+=(widths[j]-widths[i])*fraction;
+    i=j;
+  }
+  return clamp(painted/measured);
 }
 function drawLyrics(){
   try {
