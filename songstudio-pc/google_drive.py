@@ -541,6 +541,96 @@ class GoogleDrive:
             raise GoogleError("Google Drive MD5 ไม่ตรงกับต้นฉบับ: " + name)
         return ("updated" if matches else "created", answer)
 
+    def _download_verified(self, item, dest, *, rel="", cancelled=None, on_status=None):
+        """Resume partial private Drive downloads, verify MD5 before publish.
+
+        Partial files stay hidden and never appear in the song catalog. A
+        retry uses HTTP Range only if the Google response confirms 206 and
+        the exact expected offset. If Range is ignored, restart the transfer
+        from byte zero instead of appending duplicated bytes.
+        """
+        expected = str(item.get("md5Checksum") or "").lower()
+        if not re.fullmatch(r"[0-9a-f]{32}", expected):
+            raise GoogleError("Google Drive ไม่คืน MD5 ที่ตรวจสอบได้: " + rel)
+        if not isinstance(item.get("id"), str) or not item["id"]:
+            raise GoogleError("ไม่พบรหัสไฟล์ Google Drive: " + rel)
+        partial = dest.with_name("." + dest.name + "." + expected[:16] + ".xstagepart")
+        if partial.is_symlink() or (partial.exists() and not partial.is_file()):
+            raise GoogleError("มีไฟล์ชั่วคราวที่ไม่ปลอดภัย: " + str(partial))
+        if partial.exists() and file_md5(partial) == expected:
+            if dest.exists():
+                raise GoogleError("มีไฟล์ปลายทางอยู่แล้ว: " + str(dest))
+            partial.replace(dest)
+            return
+        url = API + "/files/" + urllib.parse.quote(item["id"], safe="") + "?alt=media"
+        import http.client
+        for attempt in range(1, 5):
+            if cancelled and cancelled.is_set():
+                raise GoogleError("ผู้ใช้ยกเลิกดาวน์โหลด · เก็บข้อมูลชั่วคราวเพื่อทำต่อ")
+            offset = partial.stat().st_size if partial.is_file() else 0
+            if offset > (1 << 47):
+                raise GoogleError("ไฟล์ดาวน์โหลดชั่วคราวใหญ่ผิดปกติ: " + rel)
+            headers = {"Authorization": "Bearer " + self.token()}
+            if offset:
+                headers["Range"] = f"bytes={offset}-"
+            try:
+                with _request(url, headers=headers, timeout=120) as response:
+                    status = getattr(response, "status", None)
+                    if status is None:
+                        status = response.getcode() if hasattr(response, "getcode") else 200
+                    if status not in (200, 206):
+                        raise GoogleError("Google Drive ไม่ยอมรับคำขอดาวน์โหลด: HTTP " +
+                                          str(status))
+                    if offset and status == 206:
+                        content_range = response.headers.get("Content-Range", "") if hasattr(response, "headers") else ""
+                        if not content_range.startswith(f"bytes {offset}-"):
+                            raise GoogleError("Google Drive ส่งช่วงข้อมูลไม่ตรงกับไฟล์ที่ดาวน์โหลดค้างไว้")
+                    # Some proxies ignore Range and respond 200 with the
+                    # complete resource. Replace the PARTIAL bytes, never
+                    # append a second copy of the resource.
+                    append = bool(offset and status == 206)
+                    total = offset if append else 0
+                    with partial.open("ab" if append else "wb") as sink:
+                        while True:
+                            if cancelled and cancelled.is_set():
+                                raise GoogleError("ผู้ใช้ยกเลิกดาวน์โหลด · เก็บข้อมูลชั่วคราวเพื่อทำต่อ")
+                            block = response.read(1024 * 1024)
+                            if not block:
+                                break
+                            sink.write(block)
+                            total += len(block)
+                            if on_status and total % (16 * 1024 * 1024) < len(block):
+                                on_status(f"ดาวน์โหลด {rel} · รับแล้ว {total // (1024 * 1024):,} MB")
+                if file_md5(partial) != expected:
+                    # A full successful HTTP response that disagrees with
+                    # Drive's checksum is corrupt. Do not concatenate it on
+                    # retry or publish the corrupted bytes.
+                    partial.unlink(missing_ok=True)
+                    raise GoogleError("MD5 ดาวน์โหลดไม่ตรง: " + rel)
+                if dest.exists():
+                    raise GoogleError("ไฟล์ปลายทางปรากฏระหว่างดาวน์โหลด: " + str(dest))
+                partial.replace(dest)
+                return
+            except (GoogleError, OSError, http.client.HTTPException) as exc:
+                if cancelled and cancelled.is_set():
+                    raise
+                message = str(exc)
+                recoverable = not isinstance(exc, GoogleError) or (
+                    message.startswith("เชื่อมต่อ Google ไม่สำเร็จ") or
+                    any(("Google API HTTP " + str(code)) in message
+                        for code in (429, 500, 502, 503, 504)))
+                if not recoverable or attempt >= 4:
+                    raise
+                seconds = min(2 ** (attempt - 1), 8)
+                if on_status:
+                    on_status(f"การเชื่อมต่อขัดข้อง · ทำต่อไฟล์ {rel} "
+                              f"ครั้งที่ {attempt + 1}/4 จาก {offset:,} bytes")
+                if cancelled:
+                    if cancelled.wait(seconds):
+                        raise GoogleError("ผู้ใช้ยกเลิกดาวน์โหลด")
+                else:
+                    time.sleep(seconds)
+
     def _tree_folder(self, *, create=True):
         """Resolve the private library; downloads must NEVER create empty folders."""
         if create:
@@ -813,38 +903,39 @@ class GoogleDrive:
                         done += 1
                         continue
                     raise GoogleError("ไฟล์ในเครื่องชื่อเดียวกันแต่ต่างเนื้อหา: " + str(dest))
-                url = API + "/files/" + urllib.parse.quote(item["id"], safe="") + "?alt=media"
-                temp = dest.with_name("." + dest.name + ".download")
-                try:
-                    with _request(url, headers={"Authorization": "Bearer " + self.token()}, timeout=90) as response:
-                        with temp.open("xb") as sink:
-                            while True:
-                                if cancelled and cancelled.is_set():
-                                    raise GoogleError("ผู้ใช้ยกเลิกดาวน์โหลด")
-                                part = response.read(1024 * 1024)
-                                if not part:
-                                    break
-                                sink.write(part)
-                    if item.get("md5Checksum") and file_md5(temp) != item["md5Checksum"]:
-                        raise GoogleError("MD5 ดาวน์โหลดไม่ตรง: " + rel)
-                    if dest.exists():
-                        raise GoogleError("ไฟล์มีอยู่แล้ว: " + str(dest))
-                    temp.replace(dest)
-                finally:
-                    temp.unlink(missing_ok=True)
+                self._download_verified(item, dest, rel=rel,
+                                        cancelled=cancelled, on_status=on_status)
                 done += 1
                 if on_status:
                     on_status(f"ดาวน์โหลด {done}/{len(collected)} · {rel}")
             if kind == "zip":
                 target_root.mkdir(parents=True, exist_ok=True)
-                name = "X-Stage-Songs-" + time.strftime("%Y%m%d-%H%M%S") + ".zip"
+                name = ("X-Stage-Songs-" + time.strftime("%Y%m%d-%H%M%S") +
+                        "-" + secrets.token_hex(4) + ".zip")
                 out = target_root / name
-                with zipfile.ZipFile(out, "x", zipfile.ZIP_DEFLATED,
-                                     compresslevel=6, allowZip64=True) as archive:
-                    for f in base.rglob("*"):
-                        if f.is_file():
-                            archive.write(f, library_name + "/" + f.relative_to(base).as_posix())
-                return {"files": done, "path": str(out)}
+                temp_zip = target_root / ("." + name + ".partial")
+                try:
+                    # M4A/MP3/AAC/FLAC are already compressed: ZIP_STORED
+                    # avoids burning CPU compressing them a second time.
+                    with zipfile.ZipFile(temp_zip, "x", allowZip64=True) as archive:
+                        for f in base.rglob("*"):
+                            if cancelled and cancelled.is_set():
+                                raise GoogleError("ผู้ใช้ยกเลิกการสร้าง ZIP")
+                            if f.is_file():
+                                already_compressed = f.suffix.lower() in (
+                                    ".m4a", ".mp3", ".aac", ".flac", ".mp4",
+                                    ".ogg", ".opus", ".jpg", ".png")
+                                archive.write(f,
+                                    library_name + "/" + f.relative_to(base).as_posix(),
+                                    compress_type=(zipfile.ZIP_STORED if already_compressed
+                                                   else zipfile.ZIP_DEFLATED),
+                                    compresslevel=(None if already_compressed else 4))
+                    if out.exists():
+                        raise GoogleError("ไฟล์ ZIP ปลายทางมีอยู่แล้ว: " + str(out))
+                    temp_zip.replace(out)
+                finally:
+                    temp_zip.unlink(missing_ok=True)
+                return {"files": done, "path": str(out), "source": library_name}
             return {"files": done, "path": str(base), "source": library_name}
         finally:
             if kind == "zip":
