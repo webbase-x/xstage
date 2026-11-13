@@ -175,6 +175,10 @@ try {
         message:'กำลังเล่นดนตรีกับ SoundFont ผสมกันแบบสตรีมสด'};
     } else if (url.pathname === '/api/estimate') {
       response = {songs:1,bytes:12000,enoughDisk:true,warning:false};
+    } else if (url.pathname === '/api/code-registry') {
+      response = {pcSongs:2,driveSongs:1,onlineVerified:true,localCodeConflicts:1,
+        message:'ตรวจครบ PC 2 และ Google Drive 1 เพลง · ต้องปรับรหัสในคลัง PC 1 รายการ',
+        sampleRemaps:[{oldCode:'TEST001',newCode:'000001',title:'เพลงใหม่'}]};
     } else if (url.pathname === '/api/environment') {
       response = {'Bundled FFmpeg':true, 'Bundled SoundFont':true};
     } else if (url.pathname === '/api/jobs') {
@@ -197,6 +201,10 @@ try {
   });
   assert.equal(await pc.locator('link[rel="icon"]').getAttribute('href'), './app-icon.svg');
   assert.equal(await pc.locator('#create-stage-1').isVisible(), true, 'step 1 should be visible initially');
+  await pc.click('#verify-code-registry');
+  await pc.waitForFunction(() => document.querySelector('#code-registry-state')?.textContent.includes('TEST001'));
+  assert.match(await pc.locator('#code-registry-state').innerText(), /000001/,
+    'Two-source code-registry preview must show the proposed non-colliding code');
   assert.equal(await pc.locator('#create-stage-2').isVisible(), false, 'step 2 should be hidden initially');
   await pc.click('#create-step-next');
   assert.equal(await pc.locator('#create-stage-2').isVisible(), true, 'step 2 should open');
