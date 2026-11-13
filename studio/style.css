@@ -350,3 +350,12 @@ button.preview-lyric-line{cursor:pointer}
 #ai-mic-timer{font-variant-numeric:tabular-nums;font-weight:800;min-width:64px;text-align:center}
 #ai-mic-status{line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:620px){.ai-microphone-buttons .button{flex:1 1 45%}.ai-microphone-preview audio{width:100%;flex-basis:100%}}
+
+/* XStageWeb v2: legible file taxonomy on wide PC and compact mobile screens. */
+.drive-layout-panel{margin-bottom:18px}
+.drive-layout-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.drive-layout-section{display:flex;flex-direction:column;gap:6px;border:1px solid #31586b;border-radius:12px;padding:14px;background:#0a2335;min-width:0}
+.drive-layout-section strong{font-size:13px;color:#77e8df;letter-spacing:.03em}
+.drive-layout-section code{font-size:11px;line-height:1.6;overflow-wrap:anywhere;color:#e1f2ff;background:#102f43;border-radius:6px;padding:5px 9px}
+.drive-layout-section small{color:#95b9c9;font-size:11px;line-height:1.6}
+@media(max-width:750px){.drive-layout-grid{grid-template-columns:1fr}.drive-layout-section{padding:11px}}
