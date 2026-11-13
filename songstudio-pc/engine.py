@@ -1364,9 +1364,14 @@ def execute_job(action, options, started):
                 **synced}
         elif action == "download":
             kind = options.get("kind", "songs")
-            update("กำลังดาวน์โหลดคลังเพลงส่วนตัวจาก Google Drive")
+            update("กำลังอ่าน Catalog จาก Google Drive โดยไม่สร้างคลังใหม่")
+            def downloaded_item(done, total):
+                with LOCK:
+                    JOB["total"] = total
+                update(f"ดาวน์โหลดและตรวจ MD5 {done:,}/{total:,} ไฟล์", done)
             result = GOOGLE.download_library(
-                PREFS["download"], kind=kind, cancelled=CANCEL, on_status=update)
+                PREFS["download"], kind=kind, cancelled=CANCEL,
+                on_status=update, on_item=downloaded_item)
             result["message"] = f"ดาวน์โหลด {result['files']} ไฟล์เสร็จแล้ว · {result['path']}"
         elif action == "check-update":
             result = {"message": "ยังไม่มีตัวอัปเดตอัตโนมัติ กรุณาตรวจสอบรุ่น PC Ready ที่ GitHub Releases"}
