@@ -28,7 +28,7 @@ $owner.Opacity = 0.01
 $owner.StartPosition = 'CenterScreen'
 $dialog = $null
 try {
-    if ($Kind -in @('source','workspace','download')) {
+    if ($Kind -in @('source','workspace','download','upload_folder')) {
         $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
         $dialog.Description = @{
             source = 'เลือกโฟลเดอร์เพลงต้นฉบับ'
@@ -66,7 +66,7 @@ try {
     [void]$owner.Activate()
     $answer = $dialog.ShowDialog($owner)
     if ($answer -eq [System.Windows.Forms.DialogResult]::OK) {
-        $chosen = if ($Kind -eq 'vocal') { ConvertTo-Json -InputObject @($dialog.FileNames) -Compress } elseif ($Kind -in @('source','workspace','download')) { $dialog.SelectedPath } else { $dialog.FileName }
+        $chosen = if ($Kind -eq 'vocal') { ConvertTo-Json -InputObject @($dialog.FileNames) -Compress } elseif ($Kind -in @('source','workspace','download','upload_folder')) { $dialog.SelectedPath } else { $dialog.FileName }
         if ([string]::IsNullOrWhiteSpace($chosen)) {
             throw 'หน้าต่างเลือกไฟล์ไม่คืนค่าที่เลือก'
         }
