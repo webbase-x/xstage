@@ -59,6 +59,16 @@ class CodeAllocator:
             if NUMERIC.fullmatch(code):
                 widths[len(code)] += 1
         self.default_width = max(widths, key=lambda w: (widths[w], w)) if widths else 6
+        # A library may contain 90,000+ songs. Do not re-sort the entire
+        # registry for EACH new ID; scan the gaps once, incrementally.
+        self.numeric_by_width = defaultdict(set)
+        for code in self.used:
+            if NUMERIC.fullmatch(code):
+                self.numeric_by_width[len(code)].add(int(code))
+        self.next_free = {width: min(numbers) for width, numbers
+                          in self.numeric_by_width.items() if numbers}
+        self.max_number = {width: max(numbers) for width, numbers
+                           in self.numeric_by_width.items() if numbers}
         self.changed = []
         self.allocated = []
 
@@ -78,27 +88,34 @@ class CodeAllocator:
         except OSError:
             return False
 
+    def _track_numeric(self, code):
+        if not NUMERIC.fullmatch(code):
+            return
+        width, number = len(code), int(code)
+        numbers = self.numeric_by_width[width]
+        if width not in self.next_free:
+            self.next_free[width] = number
+        elif number < self.next_free[width]:
+            self.next_free[width] = number
+        self.max_number[width] = max(self.max_number.get(width, number), number)
+        numbers.add(number)
+
     def _new_code(self, suggested):
         suggested = str(suggested or "")
         width = len(suggested) if NUMERIC.fullmatch(suggested) else self.default_width
-        used_numbers = sorted({int(c) for c in self.used
-                               if len(c) == width and NUMERIC.fullmatch(c)})
-        if used_numbers:
-            # Never allocate below the lowest previously-used number. Filling
-            # true gaps from BOTH sources is the first preference.
-            candidate = used_numbers[0]
-            for occupied in used_numbers:
-                if occupied > candidate:
-                    break
-                candidate = occupied + 1
-        else:
-            candidate = 1
+        numbers = self.numeric_by_width[width]
+        candidate = self.next_free.get(width, 1)
+        # O(1) amortized over successive allocations; each occupied number
+        # is skipped at most once for a given width.
+        while candidate in numbers:
+            candidate += 1
         if candidate >= 10 ** width:
             raise CodeConflict("รหัสตัวเลขครบช่วงความยาว " + str(width) + " หลัก")
         assigned = str(candidate).zfill(width)
-        if assigned.casefold() in self.used:
-            raise CodeConflict("ไม่สามารถจัดสรรรหัสที่ไม่ซ้ำได้")
         self.used.add(assigned.casefold())
+        numbers.add(candidate)
+        self.next_free[width] = candidate + 1
+        self.max_number[width] = max(self.max_number.get(width, 0), candidate)
         self.allocated.append(assigned)
         return assigned
 
@@ -151,6 +168,7 @@ class CodeAllocator:
         preferred = str(preferred or "").strip()
         if preferred and preferred.casefold() not in self.used:
             self.used.add(preferred.casefold())
+            self._track_numeric(preferred)
             return preferred
         return self._new_code(preferred)
 
