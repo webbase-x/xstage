@@ -68,6 +68,7 @@
   let liveStreamId = '', liveControlTimer = 0, liveControlPending = false, liveControlDirty = false;
   let previewSourceSeq = 0, previewPlaySerial = 0, previewPendingChange = false;
   let previewSourceSongId = null, karaokeAnimationFrame = 0;
+  let previewClockLast = -1, previewClockStalledAt = 0, previewLyricCoverageWarned = false;
   let aiSongId = null, aiSongs = [], aiOffset = 0, aiTotal = 0;
   let aiSearchTimer = 0, aiSearchSeq = 0, aiDraftSeq = 0;
   let aiStreamId = '', aiPlaySerial = 0, aiDraftReady = false, aiEngineReady = false;
@@ -686,6 +687,9 @@
     previewPlaySerial++;
     if (karaokeAnimationFrame) cancelAnimationFrame(karaokeAnimationFrame);
     karaokeAnimationFrame = 0;
+    previewClockLast = -1;
+    previewClockStalledAt = 0;
+    previewLyricCoverageWarned = false;
     clearTimeout(liveControlTimer);
     const stopping = liveStreamId;
     liveStreamId = '';
@@ -848,13 +852,43 @@
       karaokeUpdateSpans(line,time);
     }
   }
+  function previewLyricClockHealth() {
+    // Live streaming MP3 has no stable duration/seek table in every browser.
+    // Never guess a second clock: follow the media's actual decoded playhead.
+    const now = performance.now();
+    const time = Number(previewAudio.currentTime);
+    if (!Number.isFinite(time) || time < 0) return;
+    if (Math.abs(time - previewClockLast) > .025) {
+      previewClockLast = time;
+      previewClockStalledAt = now;
+    } else if (!previewAudio.paused && !previewAudio.seeking &&
+               previewAudio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+               previewClockStalledAt && now - previewClockStalledAt > 3500) {
+      $('preview-lyrics-status').textContent =
+        'เวลาการเล่นเสียงไม่เดินต่อ · ตรวจการโหลดสตรีม/การพักเสียง แล้วกดเล่นใหม่';
+      previewClockStalledAt = now; // Do not update this warning every animation frame.
+    }
+    const lines = previewLyrics?.lines;
+    if (!lines?.length || previewLyricCoverageWarned || previewAudio.paused) return;
+    const last = lines[lines.length - 1];
+    const end = Math.max(Number(last.endTime) || 0, Number(last.startTime) || 0);
+    if (time > end + 6 && !previewAudio.ended) {
+      previewLyricCoverageWarned = true;
+      $('preview-lyrics-status').textContent =
+        'เสียงยังเล่น แต่เวลาเนื้อร้องสิ้นสุดที่ ' +
+        Math.floor(end / 60) + ':' + String(Math.floor(end % 60)).padStart(2, '0') +
+        ' · ตรวจไฟล์ LRC/LYR/CUR ที่นำเข้า (ไม่มีการแต่งเวลาเพิ่ม)';
+    }
+  }
   function animateKaraoke() {
     karaokeAnimationFrame = 0;
     if (previewAudio.paused || previewAudio.ended) return;
     updateLyricTime(previewAudio.currentTime);
+    previewLyricClockHealth();
     karaokeAnimationFrame = requestAnimationFrame(animateKaraoke);
   }
   function startKaraokeAnimation() {
+    updateLyricTime(previewAudio.currentTime);
     if (!karaokeAnimationFrame) karaokeAnimationFrame = requestAnimationFrame(animateKaraoke);
   }
   function showPreviewIdentity(song) {
@@ -953,6 +987,7 @@
     const seq = ++previewLyricsSeq;
     previewLyrics = null;
     currentLyricIndex = -2;
+    previewLyricCoverageWarned = false;
     const panel = $('preview-lyrics-lines');
     panel.replaceChildren();
     const empty = document.createElement('div');
@@ -2223,8 +2258,15 @@
   });
   $('preview-ai-transcribe').addEventListener('click',()=>{void transcribePreviewWithAi();});
   $('preview-ai-review').addEventListener('click',()=>{void reviewAiLyrics();});
-  previewAudio.addEventListener('timeupdate',()=>updateLyricTime(previewAudio.currentTime));
+  previewAudio.addEventListener('timeupdate',()=>{
+    updateLyricTime(previewAudio.currentTime);
+    previewLyricClockHealth();
+  });
   previewAudio.addEventListener('play', startKaraokeAnimation);
+  previewAudio.addEventListener('playing', startKaraokeAnimation);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !previewAudio.paused) startKaraokeAnimation();
+  });
   previewAudio.addEventListener('pause', () => {
     if (karaokeAnimationFrame) cancelAnimationFrame(karaokeAnimationFrame);
     karaokeAnimationFrame = 0;
@@ -2233,7 +2275,13 @@
     if (karaokeAnimationFrame) cancelAnimationFrame(karaokeAnimationFrame);
     karaokeAnimationFrame = 0;
   });
-  previewAudio.addEventListener('seeked',()=>{currentLyricIndex=-2;updateLyricTime(previewAudio.currentTime);});
+  previewAudio.addEventListener('seeked',()=>{
+    currentLyricIndex=-2;
+    previewClockLast=-1;
+    previewLyricCoverageWarned=false;
+    updateLyricTime(previewAudio.currentTime);
+    if (!previewAudio.paused) startKaraokeAnimation();
+  });
   $('preview-song-search').addEventListener('input', () => {
     clearTimeout(previewSearchTimer);
     previewSearchTimer = setTimeout(() => {void searchPreviewSongs();}, 180);
