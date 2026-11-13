@@ -92,7 +92,8 @@ PREFS = {
     "source": str(HOME_MUSIC),
     "workspace": str(HOME_MUSIC / "X-Stage-Song-Studio"),
     "download": str(Path.home() / "Downloads"),
-    "soundfont": "", "midi_preset": "balanced", "mode": "original", "oauth": ""
+    "soundfont": "", "midi_preset": "balanced", "mode": "original", "oauth": "",
+    "upload_folder": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
@@ -301,6 +302,7 @@ AI_LYRICS = _module("ai_lyrics.py", "xstage_ai_lyrics")
 LYRIC_ALIGNMENT = _module("lyric_alignment.py", "xstage_lyric_alignment")
 LYRIC_TEXT = _module("lyric_text_groups.py", "xstage_lyric_text_groups")
 HISTORY = _module("history_store.py", "xstage_history_store")
+FOLDER_UPLOAD = _module("folder_upload.py", "xstage_folder_upload")
 HISTORY_FILE = DATA / "edit-history.json"
 LYRIC_TEXT_INDEX = None
 LYRIC_TEXT_BACKUPS = DATA / "lyric-text-backups"
@@ -1620,6 +1622,17 @@ def execute_job(action, options, started):
         elif action == "logout":
             GOOGLE.logout()
             result = {"message": "ออกจาก Google บน PC เครื่องนี้แล้ว (สิทธิ์ใน Google Account ยังถอนได้จากบัญชี Google)"}
+        elif action == "upload-folder":
+            root = PREFS.get("upload_folder", "").strip()
+            with LOCK:
+                JOB["total"] = 1
+            update("กำลังตรวจเพลงและไฟล์ประกอบในโฟลเดอร์ที่เลือก")
+            result = FOLDER_UPLOAD.upload(
+                GOOGLE, root,
+                create_new_library=(options.get("create_new_library") is True),
+                cancelled=CANCEL,
+                progress=lambda done, total, name: update(
+                    f"อัปโหลดชุดที่ {done:,}/{total:,} · {name}", done))
         elif action == "upload":
             export = _song_export_module()
             root = export.songs_root(PREFS["workspace"])
@@ -1884,7 +1897,7 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "soundfont", "oauth", "vocal"):
+    if kind not in ("source", "workspace", "download", "upload_folder", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
@@ -2481,6 +2494,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/history":
                 with LOCK:
                     self._json({"events": HISTORY.list_events(HISTORY_FILE)})
+            elif path == "/api/upload-folder/inspect":
+                self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", "")))
             elif path == "/api/code-registry":
                 self._json(code_registry_preview())
             elif path == "/api/environment":
@@ -2690,7 +2705,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
-                if kind not in ("source", "workspace", "download", "soundfont", "oauth", "vocal"):
+                if kind not in ("source", "workspace", "download", "upload_folder", "soundfont", "oauth", "vocal"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
             elif path == "/api/live-preview":
