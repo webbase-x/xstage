@@ -9,6 +9,7 @@ deletions and in-place edits, but unchanged media/NCN metadata is reused.
 from __future__ import annotations
 
 import hashlib
+from contextlib import closing
 import json
 import os
 import sqlite3
@@ -76,7 +77,7 @@ def restore(source, workspace, db_path, notes):
         return []
     scope = _scope(source, workspace)
     try:
-        with _connect(db_path) as db:
+        with closing(_connect(db_path)) as db:
             info = db.execute(
                 "SELECT count, version FROM song_index_info WHERE scope=?",
                 (scope,)).fetchone()
@@ -93,7 +94,7 @@ def restore(source, workspace, db_path, notes):
 
 def _save_checkpoint(db_path, scope, records):
     """Resume from known inspected files without replacing the live catalog."""
-    with _connect(db_path) as db:
+    with closing(_connect(db_path)) as db:
         with db:
             db.execute("DELETE FROM song_checkpoint WHERE scope=?", (scope,))
             db.executemany(
@@ -131,7 +132,7 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
         if item == origin_real or origin_real in item.parents
     }
     scope = _scope(origin, work)
-    with _connect(db_path) as db:
+    with closing(_connect(db_path)) as db:
         previous = _read_rows(db, "song_index", scope)
         staging = {} if full else _read_rows(db, "song_checkpoint", scope)
     used = set()
@@ -319,7 +320,7 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
     # The disk database, not the UI thread, is the long-lived source of truth.
     if on_progress:
         on_progress(f"กำลังบันทึกดัชนีเพลง {len(rows):,} รายการในเครื่อง", scanned)
-    with _connect(db_path) as db:
+    with closing(_connect(db_path)) as db:
         with db:
             if full:
                 db.execute("DELETE FROM song_index WHERE scope=?", (scope,))
