@@ -257,6 +257,30 @@ def blend_pcm(backing, overlay, music_volume, synth_volume):
     return out.tobytes()
 
 
+
+def read_pcm_block(stream, expected_bytes):
+    """Read a whole aligned PCM frame block, even from short-reading pipes.
+
+    Raw FFmpeg pipes can return fewer bytes than requested without EOF. Padding
+    each such read with silence causes rhythmic dropouts during playback.
+    Only the final true EOF block is padded.
+    """
+    pieces = []
+    remaining = expected_bytes
+    while remaining:
+        part = stream.read(remaining)
+        if not part:
+            break
+        pieces.append(part)
+        remaining -= len(part)
+    block = b"".join(pieces)
+    if len(block) % SAMPLE_BYTES:
+        block = block[:len(block) - (len(block) % SAMPLE_BYTES)]
+    if block and len(block) < expected_bytes:
+        block += b"\x00" * (expected_bytes - len(block))
+    return block
+
+
 def stream_mp3(*, audio, midi, soundfont, ffmpeg, runtime,
                music_volume=0.8, synth_volume=0.8, controls=None):
     """Return progressively encoded MP3, honoring live controls every ~46ms.
@@ -307,11 +331,7 @@ def stream_mp3(*, audio, midi, soundfont, ffmpeg, runtime,
             clock_start = time.monotonic()
             try:
                 while not state.cancelled.is_set() and block_count * CHUNK_FRAMES < MAX_SECONDS * SAMPLE_RATE:
-                    original = decoder.stdout.read(bytes_per_block) if decoder else b""
-                    if original and len(original) % SAMPLE_BYTES:
-                        original = original[:len(original) - len(original) % SAMPLE_BYTES]
-                    if original and len(original) < bytes_per_block:
-                        original = original + b"\x00" * (bytes_per_block - len(original))
+                    original = read_pcm_block(decoder.stdout, bytes_per_block) if decoder else b""
                     orig_ended = decoder is None or not original
                     midi_ended = not midi or (overlay_synth and overlay_synth.ended())
                     if orig_ended and midi_ended and (not midi or midi_tail >= SAMPLE_RATE):
