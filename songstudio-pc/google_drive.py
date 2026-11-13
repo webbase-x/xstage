@@ -14,6 +14,7 @@ import http.server
 import io
 import json
 import mimetypes
+import re
 import os
 import secrets
 import shutil
@@ -566,6 +567,140 @@ class GoogleDrive:
                 "· ไม่มีการสร้างโฟลเดอร์ใหม่")
         return songs
 
+    def _online_download_plan(self, kind):
+        """Plan a read-only, checksum-verified snapshot of XStageWeb.
+
+        The actual Online publisher uses XStageWeb/current.json, with
+        immutable catalogs and media referenced by private Google file IDs.
+        The legacy Song Studio/songs path is a DIFFERENT backup format.
+        """
+        roots = [f for f in self.list_children("root")
+                 if f.get("name") == "XStageWeb" and
+                 f.get("mimeType") == "application/vnd.google-apps.folder"]
+        if len(roots) > 1:
+            raise GoogleError("พบ XStageWeb หลายคลังที่มองเห็นได้ · กรุณาเลือกคลังให้ชัดเจน")
+        if not roots:
+            return None
+        children = self.list_children(roots[0]["id"])
+        pointers = [f for f in children if f.get("name") == "current.json"
+                    and f.get("mimeType") != "application/vnd.google-apps.folder"]
+        if len(pointers) != 1:
+            raise GoogleError(
+                "พบ XStageWeb แต่ไม่มี current.json ที่เผยแพร่ครบหรือมีไฟล์ซ้ำ "
+                "· ตรวจสถานะซิงค์จาก Song Studio PC ก่อน · ไม่สร้างคลังใหม่")
+        def checksum(value, label):
+            if not isinstance(value, str) or not re.fullmatch("[0-9a-fA-F]{32}", value):
+                raise GoogleError("ไม่พบ MD5 สำหรับตรวจสอบไฟล์: " + label)
+            return value.lower()
+        def read_json(item, label):
+            expected = checksum(item.get("md5Checksum"), label)
+            url = API + "/files/" + urllib.parse.quote(item["id"], safe="") + "?alt=media"
+            try:
+                with _request(url, headers={"Authorization": "Bearer " + self.token()},
+                              timeout=120) as stream:
+                    raw = stream.read(128 * 1024 * 1024 + 1)
+            except GoogleError as exc:
+                raise GoogleError("ไม่สามารถอ่าน " + label +
+                                  " · ตรวจบัญชี Google และ OAuth Client ที่มีสิทธิ์ "
+                                  "drive.file เข้าถึงไฟล์เดิม: " + str(exc)) from exc
+            if len(raw) > 128 * 1024 * 1024 or hashlib.md5(raw).hexdigest() != expected:
+                raise GoogleError(label + " มีขนาดหรือ MD5 ไม่ถูกต้อง")
+            try:
+                obj = json.loads(raw.decode("utf-8-sig"))
+            except (ValueError, UnicodeError) as exc:
+                raise GoogleError(label + " ไม่ใช่ JSON ที่สมบูรณ์") from exc
+            if not isinstance(obj, dict):
+                raise GoogleError(label + " มีโครงสร้างไม่ถูกต้อง")
+            return obj
+        pointer_file = pointers[0]
+        pointer = read_json(pointer_file, "XStageWeb/current.json")
+        base_id, deltas = pointer.get("catalogFileId"), pointer.get("deltaFileIds")
+        count = pointer.get("songCount")
+        if (pointer.get("schemaVersion") != 1 or not isinstance(base_id, str)
+                or not base_id or not isinstance(deltas, list) or len(deltas) > 32
+                or any(not isinstance(x, str) or not x for x in deltas)
+                or len(set(deltas)) != len(deltas)
+                or type(count) is not int or count < 0):
+            raise GoogleError("โครงสร้าง XStageWeb/current.json ไม่ถูกต้อง")
+        files, known = [], {}
+        def add(relative, file_id, digest):
+            if (not isinstance(relative, str) or not relative or
+                    relative.startswith("/") or "\\" in relative or ":" in relative
+                    or any(s in ("", ".", "..") for s in relative.split("/"))):
+                raise GoogleError("พบพาธไฟล์ไม่ปลอดภัยใน XStageWeb")
+            digest = checksum(digest, relative)
+            if not isinstance(file_id, str) or not file_id:
+                raise GoogleError("แค็ตตาล็อกไม่มี Drive File ID: " + relative)
+            duplicate = known.get(relative)
+            if duplicate is not None:
+                if duplicate != (file_id, digest):
+                    raise GoogleError("พาธไฟล์ซ้ำที่มีข้อมูลต่างกัน: " + relative)
+                return
+            known[relative] = (file_id, digest)
+            files.append((relative, {"id": file_id, "md5Checksum": digest}))
+        def catalog(file_id, prefix):
+            try:
+                meta = self.api("/files/" + urllib.parse.quote(file_id, safe=""),
+                                {"fields": "id,name,mimeType,size,md5Checksum"})
+            except GoogleError as exc:
+                raise GoogleError("ไม่สามารถอ่าน Catalog XStageWeb เดิม · "
+                                  "ตรวจบัญชี/OAuth Client และสิทธิ์ drive.file: " +
+                                  str(exc)) from exc
+            name = meta.get("name")
+            if (not isinstance(name, str) or not name.startswith(prefix) or
+                    not name.endswith(".json") or "/" in name or "\\" in name):
+                raise GoogleError("ชื่อ Catalog ไม่ตรงกับ XStageWeb/current.json")
+            doc = read_json(meta, "XStageWeb/" + name)
+            add(name, file_id, meta.get("md5Checksum"))
+            return doc
+        base = catalog(base_id, "catalog-base-")
+        if base.get("schemaVersion") != 1 or not isinstance(base.get("songs"), list):
+            raise GoogleError("Catalog หลัก XStageWeb ไม่สมบูรณ์")
+        songs = {}
+        def row_id(row):
+            if (not isinstance(row, dict) or
+                    not isinstance(row.get("webSongId"), str) or not row["webSongId"]):
+                raise GoogleError("Catalog มีรายการเพลงที่ไม่มี webSongId")
+            return row["webSongId"]
+        for row in base["songs"]:
+            key = row_id(row)
+            if key in songs:
+                raise GoogleError("Catalog หลักมีรหัสเพลงซ้ำ")
+            songs[key] = row
+        for file_id in deltas:
+            delta = catalog(file_id, "catalog-delta-")
+            if (delta.get("schemaVersion") != 1 or
+                    not isinstance(delta.get("upserts"), list) or
+                    not isinstance(delta.get("removes"), list)):
+                raise GoogleError("Catalog ส่วนเพิ่ม XStageWeb ไม่สมบูรณ์")
+            for key in delta["removes"]:
+                if not isinstance(key, str):
+                    raise GoogleError("Catalog มีรหัสเพลงที่จะลบไม่ถูกต้อง")
+                songs.pop(key, None)
+            for row in delta["upserts"]:
+                songs[row_id(row)] = row
+        if len(songs) != count:
+            raise GoogleError("จำนวนเพลงใน current.json และ Catalog ไม่ตรงกัน")
+        if kind != "db":
+            if not songs:
+                raise GoogleError("XStageWeb ยังไม่มีเพลงที่เผยแพร่")
+            for row in songs.values():
+                for field, prefix in (
+                    ("audio", "songs/audio/"), ("lyrics", "songs/lyrics/"),
+                    ("lrc", "songs/lyrics/"), ("vocals", "songs/"),
+                ):
+                    media = row.get(field)
+                    if field in ("lrc", "vocals") and media is None:
+                        continue
+                    if not isinstance(media, dict):
+                        raise GoogleError("Catalog มีเพลงที่ไม่มีไฟล์ " + field)
+                    rel = media.get("path")
+                    if not isinstance(rel, str) or not rel.startswith(prefix):
+                        raise GoogleError("พาธไฟล์ " + field + " ใน Catalog ไม่ถูกต้อง")
+                    add(rel, media.get("fileId"), media.get("md5Checksum"))
+        add("current.json", pointer_file["id"], pointer_file.get("md5Checksum"))
+        return files
+
     def upload_library(self, local_songs, selected_records, cancelled=None, on_progress=None):
         """Upload completed selected songs, catalogs, then current.json LAST."""
         local_songs = Path(local_songs)
@@ -619,33 +754,38 @@ class GoogleDrive:
         if kind not in ("songs", "db", "zip"):
             raise GoogleError("ประเภทดาวน์โหลดไม่ถูกต้อง")
         target_root = Path(target_root)
-        # Download is strictly read-only until a verified existing library is found.
-        songs_folder = self._tree_folder(create=False)
-        collected = []
-        def walk(parent, prefix=""):
-            for item in self.list_children(parent):
-                rel = f"{prefix}{item['name']}"
-                if rel.startswith("/") or any(p in ("..", "") for p in Path(rel).parts):
-                    raise GoogleError("พบพาธ Google Drive ที่ไม่ปลอดภัย")
-                if item.get("mimeType") == "application/vnd.google-apps.folder":
-                    walk(item["id"], rel + "/")
-                elif kind != "db" or rel.startswith("catalogs/") or rel == "current.json":
-                    collected.append((rel, item))
-        walk(songs_folder)
-        if not collected:
-            description = ("ฐานข้อมูล current.json หรือ catalogs" if kind == "db"
-                           else "ไฟล์เพลง/คลังเพลง")
-            raise GoogleError(
-                "พบโฟลเดอร์คลังเพลง แต่ไม่พบ" + description +
-                "ที่แอปเข้าถึงได้ · ตรวจสอบว่าได้อัปโหลด songs/current.json "
-                "และ catalogs จาก Song Studio PC แล้ว "
-                "และใช้บัญชี Google/OAuth Client ที่มีสิทธิ์ drive.file")
-        # A private upload publishes current.json LAST; its absence means a
-        # partial/incomplete library must not be presented as a good restore.
-        if not any(rel == "current.json" for rel, _ in collected):
-            raise GoogleError(
-                "คลังเพลงบน Drive ยังไม่มี songs/current.json · อัปโหลดอาจไม่ครบ "
-                "กรุณาซิงค์เพลงจาก PC อีกครั้งก่อนดาวน์โหลด")
+        online = self._online_download_plan(kind)
+        if online is not None:
+            collected = online
+            library_name = "XStageWeb"
+        else:
+            # Compatibility with an older, separately uploaded PC backup.
+            # The current Karaoke Online uploader does NOT publish here.
+            songs_folder = self._tree_folder(create=False)
+            library_name = "songs"
+            collected = []
+            def walk(parent, prefix=""):
+                for item in self.list_children(parent):
+                    rel = f"{prefix}{item['name']}"
+                    if (rel.startswith("/") or "\\" in rel or ":" in rel or
+                            any(p in ("..", "") for p in rel.split("/"))):
+                        raise GoogleError("พบพาธ Google Drive ที่ไม่ปลอดภัย")
+                    if item.get("mimeType") == "application/vnd.google-apps.folder":
+                        walk(item["id"], rel + "/")
+                    elif kind != "db" or rel.startswith("catalogs/") or rel == "current.json":
+                        collected.append((rel, item))
+            walk(songs_folder)
+            if not collected:
+                raise GoogleError(
+                    "พบโฟลเดอร์สำรองแบบเก่า X-Stage Song Studio/songs ที่ว่าง "
+                    "และไม่พบ XStageWeb ที่แอปมองเห็นได้ · การอัปโหลดปัจจุบันใช้ "
+                    "XStageWeb/current.json ไม่ใช่ songs/current.json · "
+                    "ตรวจบัญชี Google และ OAuth Client ของการซิงค์เดิม "
+                    "· ห้ามสร้างคลังใหม่เพื่อแก้ข้อผิดพลาดนี้")
+            if not any(rel == "current.json" for rel, _ in collected):
+                raise GoogleError(
+                    "คลังสำรองแบบเก่าไม่มี songs/current.json ที่เผยแพร่ครบ "
+                    "· ไม่ดาวน์โหลดฐานที่อาจไม่สมบูรณ์")
         missing_hashes = [rel for rel, item in collected if not item.get("md5Checksum")]
         if missing_hashes:
             raise GoogleError(
@@ -655,6 +795,7 @@ class GoogleDrive:
             on_status("พบคลังเพลงบน Google Drive · " + str(len(collected)) +
                       " ไฟล์ · กำลังดาวน์โหลด " + kind.upper())
         base = (Path(tempfile.mkdtemp(prefix="xstage-drive-zip-")) if kind == "zip"
+                else target_root / "XStageWeb" if library_name == "XStageWeb"
                 else target_root / "X-Stage Song Studio" / "songs")
         done = 0
         try:
@@ -700,9 +841,9 @@ class GoogleDrive:
                                      compresslevel=6, allowZip64=True) as archive:
                     for f in base.rglob("*"):
                         if f.is_file():
-                            archive.write(f, "songs/" + f.relative_to(base).as_posix())
+                            archive.write(f, library_name + "/" + f.relative_to(base).as_posix())
                 return {"files": done, "path": str(out)}
-            return {"files": done, "path": str(base)}
+            return {"files": done, "path": str(base), "source": library_name}
         finally:
             if kind == "zip":
                 shutil.rmtree(base, ignore_errors=True)
