@@ -121,7 +121,7 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
     if not origin.is_dir():
         raise ValueError("โฟลเดอร์ต้นฉบับไม่มีอยู่ กรุณาเลือกโฟลเดอร์ก่อนสแกน")
     origin_real = origin.resolve()
-    excludes = {work / "songs", work / "song"}
+    excludes = {work / "songs", work / "song", work / "StageWeb"}
     if any(origin_real == item or item in origin_real.parents for item in excludes):
         raise ValueError("โฟลเดอร์ต้นฉบับต้องไม่อยู่ในโฟลเดอร์ผลลัพธ์ของโปรแกรม")
     # Map excluded output locations back to the user's original root prefix.
