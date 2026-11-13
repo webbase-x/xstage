@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -186,15 +187,23 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
             raise ValueError("ไฟล์เสียงสั้นเกินไปหรือไม่สามารถแปลงเป็น WAV สำหรับ AI")
         name = folder / "draft"
         result_file = folder / "draft.json"
-        # whisper.cpp MSVC Windows builds may interpret an absolute -m path
-        # containing Thai/non-ASCII characters as non-UTF8 argv and terminate
-        # with 0xC0000409. Resolve the model relative to a Unicode-safe cwd.
-        # CreateProcessW accepts a Unicode working directory; the -m argument
-        # itself now consists entirely of ASCII characters.
-        whisper_cwd = Path(runtime)
-        model_arg = str(Path("models") / model.name)
-        if not (whisper_cwd / model_arg).is_file():
-            raise RuntimeError("ไม่พบโมเดล Whisper ในโฟลเดอร์โปรแกรม")
+        # whisper.cpp on Windows may terminate (0xC0000409) when the model
+        # filename contains Thai/non-ASCII argv bytes, and can also reject an
+        # absolute Unicode WAV path as "input file not found" (exit 2).
+        # All native CLI arguments must therefore be ASCII *relative* names.
+        # Work inside a private temp cwd (CreateProcessW supports Unicode cwd).
+        # A same-volume hardlink avoids copying the large model; a cross-drive
+        # copy preserves compatibility. Neither touches the source model.
+        model_stage = folder / "model.bin"
+        on_status("AI กำลังเตรียมโมเดลสำหรับ Whisper โดยไม่เปลี่ยนไฟล์ต้นฉบับ")
+        try:
+            os.link(model, model_stage)
+        except OSError:
+            shutil.copyfile(model, model_stage)
+        if model_stage.stat().st_size != model.stat().st_size:
+            raise RuntimeError("คัดลอกโมเดล Whisper ชั่วคราวไม่สมบูรณ์")
+        whisper_cwd = folder
+        model_arg = "model.bin"
 
         # A chosen-language pass can reject sung/dialectal phrases as silence.
         # Retry once with multilingual automatic language detection, using the
@@ -207,8 +216,8 @@ def transcribe(source: Path, code: str, data_dir: Path, runtime: Path,
             result_file.unlink(missing_ok=True)
             if attempt:
                 on_status("ไม่พบคำร้องจากภาษาที่เลือก · ลองตรวจจับภาษาอัตโนมัติอีกครั้ง")
-            args = [cli, "-m", model_arg, "-f", wav, "-l", detected_language,
-                    "-oj", "-of", name, "-np"]
+            args = [cli, "-m", model_arg, "-f", "audio-16k.wav",
+                    "-l", detected_language, "-oj", "-of", "draft", "-np"]
             on_status("Whisper กำลังถอดเสียงร้องเป็นร่างเนื้อร้อง ไม่แก้ต้นฉบับ")
             _run(args, cancelled, "Whisper AI กำลังถอดเนื้อร้อง", on_status,
                  timeout=MAX_PROCESS_SECONDS, cwd=whisper_cwd)
