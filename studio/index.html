@@ -256,6 +256,17 @@
                 <button id="ai-lyrics-save" class="button primary" type="button" disabled>✓ ตรวจแล้ว บันทึกเนื้อร้อง</button>
               </div>
               <p id="ai-lyrics-validation" class="ai-lyrics-validation" role="status" aria-live="polite">ยังไม่มีเนื้อร้องให้ตรวจ</p>
+              <div class="ai-export-panel" aria-label="ส่งออกไฟล์เนื้อร้องและเพลงตัดเสียงร้อง">
+                <strong>6. เลือกไฟล์ที่ต้องการส่งออก</strong>
+                <p class="hint">เลือกได้อย่างใดอย่างหนึ่งหรือทั้งสองอย่าง · หากยังไม่มีเพลงตัดเสียงร้อง ระบบจะแยกด้วย AI ก่อนส่งออก · เนื้อร้องต้องตรวจและบันทึกแล้ว</p>
+                <div class="ai-export-options">
+                  <label><input id="ai-export-lyrics" type="checkbox" checked> เนื้อเพลง LRC ที่ตรวจแล้ว</label>
+                  <label><input id="ai-export-instrumental" type="checkbox" checked> เพลงตัดเสียงร้อง M4A (Instrumental)</label>
+                </div>
+                <div class="ai-export-location"><span>บันทึกที่: <strong id="ai-export-folder">กำลังอ่านตำแหน่งที่ตั้งไว้…</strong></span><button id="ai-export-choose-folder" type="button" class="button ghost">เปลี่ยนโฟลเดอร์</button></div>
+                <button id="ai-export-button" type="button" class="button primary" disabled>↓ ส่งออกไฟล์ที่เลือก</button>
+                <p id="ai-export-status" class="hint" role="status" aria-live="polite">ไฟล์เดิมจะไม่ถูกเขียนทับ และไม่มีการอัปโหลด Google Drive อัตโนมัติ</p>
+              </div>
               <p class="hint">AI อาจฟังภาษาไทยหรือเสียงร้องที่ปนดนตรีผิด และระบุเวลาไม่ตรงทุกคำ ต้องตรวจด้วยการฟังจริงก่อนบันทึก · ผลลัพธ์เป็นร่างส่วนตัว ไม่อัปโหลดเพลงหรือเผยแพร่เนื้อร้องอัตโนมัติ</p>
             </div>
           </article>
