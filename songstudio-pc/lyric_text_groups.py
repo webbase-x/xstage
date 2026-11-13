@@ -64,7 +64,10 @@ def _load(root, row, export):
                isinstance(x.get("startTime"), (int, float)) and
                not isinstance(x.get("startTime"), bool) for x in lines):
         raise ValueError("Lyrics JSON ไม่มีบรรทัดและเวลาในรูปแบบที่รองรับ")
-    lrc_path = path.with_suffix(".lrc")
+    # The companion LRC must be independently validated: a malicious
+    # symlink inside lyrics/ must never redirect a bulk write outside songs/.
+    lrc_rel = str(Path(rel).with_suffix(".lrc")).replace("\\\\", "/")
+    lrc_path = export.safe_media_path(root, lrc_rel, "lyrics")
     raw = doc.get("rawLrc")
     file_raw = lrc_path.read_text(encoding="utf-8-sig") if lrc_path.is_file() else None
     if raw is None and file_raw is not None:
