@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-SAFE_PREFS = {"source", "workspace", "download", "soundfont", "midi_preset", "mode"}
+SAFE_PREFS = {"source", "workspace", "download", "soundfont", "midi_preset", "mode", "upload_folder"}
 MAX_EVENTS = 50
 MAX_TEXT = 100_000
 
