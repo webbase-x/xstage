@@ -910,10 +910,14 @@ class GoogleDrive:
                 raise GoogleError("XStageWeb ยังไม่มีเพลงที่เผยแพร่")
             for row in songs.values():
                 for field, prefixes in (
-                    ("audio", ("audio/", "m4a/", "mp3/", "midi/")),
-                    ("lyrics", ("lyrics/",)),
-                    ("lrc", ("lyrics/",)),
-                    ("vocals", ("audio/", "m4a/")),
+                    ("audio", ("audio/", "m4a/", "mp3/", "midi/",
+                               "AUDIO/M4A/Songs/", "AUDIO/MP3/Songs/",
+                               "MIDI/NCN/Songs/", "MIDI/E-MK/")),
+                    ("lyrics", ("lyrics/", "AUDIO/M4A/Lyrics/",
+                                "AUDIO/MP3/Lyrics/", "MIDI/NCN/Lyrics/")),
+                    ("lrc", ("lyrics/", "AUDIO/M4A/Lyrics/",
+                             "AUDIO/MP3/Lyrics/", "MIDI/NCN/Lyrics/")),
+                    ("vocals", ("audio/", "m4a/", "AUDIO/M4A/Songs/")),
                 ):
                     media = row.get(field)
                     if field in ("lrc", "vocals") and media is None:
