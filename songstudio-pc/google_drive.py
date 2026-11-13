@@ -790,7 +790,7 @@ class GoogleDrive:
                 "· ไม่มีการสร้างโฟลเดอร์ใหม่")
         return songs
 
-    def _raw_library_download_plan(self, root_id, kind, *, library_name):
+    def _raw_library_download_plan(self, root_id, kind, *, library_name, on_status=None):
         """Read an existing categorized Drive tree without requiring current.json.
 
         A missing catalog means files can be backed up, NOT that their song
@@ -801,8 +801,13 @@ class GoogleDrive:
         seen_paths = set()
         visited = set()
         max_items = 300000
+        scanned_folders = 0
 
         def walk(folder_id, prefix="", depth=0):
+            nonlocal scanned_folders
+            scanned_folders += 1
+            if on_status and (scanned_folders == 1 or scanned_folders % 20 == 0):
+                on_status(f"กำลังสำรวจโฟลเดอร์ {library_name} · {scanned_folders:,} โฟลเดอร์")
             if depth > 12 or folder_id in visited:
                 raise GoogleError("โครงสร้างโฟลเดอร์ Drive ซ้อนลึกหรือวนซ้ำผิดปกติ")
             visited.add(folder_id)
@@ -830,6 +835,8 @@ class GoogleDrive:
                              relative.startswith("database-"))
                     if kind == "db" and not is_db:
                         continue
+                    if kind == "songs" and is_db:
+                        continue
                     if kind in ("songs", "zip") and relative.startswith(".xstage-"):
                         continue
                     if not item.get("md5Checksum"):
@@ -846,7 +853,7 @@ class GoogleDrive:
         records.sort(key=lambda x: x[0])
         return records, library_name
 
-    def _online_download_plan(self, kind):
+    def _online_download_plan(self, kind, *, on_status=None):
         """Plan a read-only, checksum-verified snapshot of XStageWeb.
 
         The actual Online publisher uses XStageWeb/current.json, with
@@ -871,7 +878,8 @@ class GoogleDrive:
             # as files even when the online catalog was never published.
             # This is a backup, not a playable song-code registry.
             return self._raw_library_download_plan(
-                roots[0]["id"], kind, library_name=library_name)
+                roots[0]["id"], kind, library_name=library_name,
+                on_status=on_status)
         def checksum(value, label):
             if not isinstance(value, str) or not re.fullmatch("[0-9a-fA-F]{32}", value):
                 raise GoogleError("ไม่พบ MD5 สำหรับตรวจสอบไฟล์: " + label)
@@ -1046,7 +1054,7 @@ class GoogleDrive:
         if kind not in ("songs", "db", "zip"):
             raise GoogleError("ประเภทดาวน์โหลดไม่ถูกต้อง")
         target_root = Path(target_root)
-        online = self._online_download_plan(kind)
+        online = self._online_download_plan(kind, on_status=on_status)
         if online is not None:
             collected, library_name = online
         else:
