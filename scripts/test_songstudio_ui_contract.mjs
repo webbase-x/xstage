@@ -15,6 +15,9 @@ assert.doesNotThrow(()=>new Function(js),'PC Control JS must parse');
 const required={
   create:['scan-button','song-rows','create-soundfont','preview-button',
           'preview-file-type','preview-lyrics-lines','build-button','build-audio-button'],
+  lyrics_bulk:['lyric-group-scan','lyric-group-results','lyric-group-apply',
+               'lyric-group-undo','lyric-group-replacement','lyric-group-examples',
+               'lyric-group-search','lyric-group-repeats','lyric-group-stats'],
   ai:['ai-lyrics-import','ai-lyrics-results','ai-lyrics-start','ai-lyrics-play',
       'ai-lyrics-editor','ai-lyrics-karaoke','ai-lyrics-save',
       'ai-lyrics-download','ai-lyrics-insert-time',
@@ -25,7 +28,7 @@ for(const [area,elements] of Object.entries(required))
  for(const id of elements)
    assert.ok(unique.has(id),'Missing '+area+' control #'+id);
 
-for(const tab of ['create','ai-lyrics','upload','download','settings']){
+for(const tab of ['create','ai-lyrics','lyric-head-tail','upload','download','settings']){
   assert.ok(html.includes('data-tab="'+tab+'"'),'Missing sidebar tab '+tab);
   assert.ok(html.includes('id="tab-'+tab+'"'),'Missing tab panel '+tab);
 }
@@ -39,6 +42,11 @@ for(const handler of ['ai-lyrics-import','ai-lyrics-start','ai-lyrics-play',
 assert.ok(js.includes("run('ai-align'"),'Missing AI alignment job handler');
 assert.ok(js.includes('pendingAiAlignment'),'Missing safeguard for pasted original lyrics');
 assert.ok(css.includes('.ai-lyrics-paste-panel'),'Missing pasted lyrics UX styles');
+assert.ok(js.includes("run('lyric-groups-replace'"),'Missing safe grouped lyrics replace job');
+assert.ok(js.includes("run('lyric-groups-undo'"),'Missing bulk edit undo job');
+assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job');
+assert.ok(js.includes('phraseChosen'),'Missing selected phrase state');
+assert.ok(css.includes('.lyric-group-row'),'Missing grouped lyric frequency styles');
 assert.ok(js.includes('aiRemoveImportedSong('),'Missing AI imported song removal workflow');
 assert.ok(js.includes('data-ai-remove') || js.includes('dataset.aiRemove'),'Missing per-row remove action');
 assert.ok(js.includes('นำออกจากรายการ') && js.includes('ไม่ลบไฟล์เพลงต้นฉบับ'),'Missing destructive-action warning');
