@@ -368,3 +368,15 @@ button.preview-lyric-line{cursor:pointer}
 .history-row small{display:block;font-size:11px;color:#a2c1d0;margin-top:4px}
 .history-row .button{flex:none}
 @media(max-width:600px){.history-row{align-items:stretch;flex-direction:column}.history-row .button{align-self:flex-start}}
+
+/* Selectable AI Lyrics export */
+.ai-export-panel{display:grid;gap:12px;margin-top:17px;padding:16px;border:1px solid #326778;border-radius:13px;background:#092c3c}
+.ai-export-panel>strong{font-size:14px;color:#dbffff}
+.ai-export-panel .hint{margin:0}
+.ai-export-options{display:flex;flex-wrap:wrap;gap:10px}
+.ai-export-options label{display:flex;gap:9px;align-items:center;padding:11px 13px;border:1px solid #426578;border-radius:9px;background:#102f44;color:#e6f7ff;font-size:12px}
+.ai-export-options input{width:18px;height:18px;accent-color:#54d7df}
+.ai-export-location{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;color:#acd5df;font-size:12px}
+.ai-export-location strong{overflow-wrap:anywhere;color:#d9f8f1}
+#ai-export-button{justify-self:start}
+@media(max-width:650px){.ai-export-panel{padding:12px}.ai-export-options{flex-direction:column}.ai-export-location{align-items:stretch;flex-direction:column}#ai-export-button{width:100%}}
