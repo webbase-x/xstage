@@ -1008,7 +1008,7 @@
     $('ai-lyrics-status').textContent='กำลังเปิดเสียงต้นฉบับสำหรับทดลองเนื้อร้อง…';
     try{
       const res=await post('/api/live-preview',{
-        id:chosen,source_choice:'auto',music_volume:0.9,synth_volume:0
+        id:chosen,source_choice:'audio:'+chosen,music_volume:1,synth_volume:0
       });
       if(serial!==aiPlaySerial||chosen!==aiSongId){
         if(res.stream_id)void post('/api/live-stop',{stream_id:res.stream_id}).catch(()=>{});
