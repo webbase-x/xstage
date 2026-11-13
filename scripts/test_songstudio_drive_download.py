@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+import json
 import io
 import tempfile
 import unittest
@@ -121,6 +122,106 @@ class ReadOnlyDriveDownloadTests(unittest.TestCase):
                         cancelled=event)
             self.assertEqual(partial.read_bytes(),payload[:12])
             self.assertFalse(destination.exists())
+
+    def test_upload_chunk_acks_drive_range_before_advancing(self):
+        payload = b"M" * (8 * 1024 * 1024 + 1024)
+        class Session:
+            headers = {"Location":
+                "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=test"}
+            def __enter__(self): return self
+            def __exit__(self, *_): return False
+        class MockDriveUpload:
+            def __init__(self): self.calls=[]
+            def __call__(self, session, mime_type, total, *, offset=0,
+                         data=None, cancelled=None, on_progress=None):
+                self.calls.append((offset, len(data) if data is not None else None))
+                if len(self.calls) == 1:
+                    return 308, f"bytes=0-{len(data)-1}", b""
+                return 200, "", json.dumps(
+                    {"id":"uploaded-123","md5Checksum":hashlib.md5(payload).hexdigest()}
+                ).encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/"large.m4a"
+            source.write_bytes(payload)
+            fake=self.setup_drive()
+            fake.token=lambda:"mock"
+            uploaded=MockDriveUpload()
+            with patch.object(drive.urllib.request,"urlopen",return_value=Session()), \
+                 patch.object(drive.GoogleDrive,"_upload_session_request",
+                              side_effect=uploaded):
+                response=fake._resumable_put(source,"folder-id","large.m4a")
+            self.assertEqual(response["id"],"uploaded-123")
+            self.assertEqual(uploaded.calls,[(0,8*1024*1024),(8*1024*1024,1024)])
+
+    def test_upload_interruption_asks_server_offset_before_resending(self):
+        payload=b"M"*(512*1024)
+        class Session:
+            headers={"Location":"https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=test"}
+            def __enter__(self): return self
+            def __exit__(self,*_): return False
+        calls=[]
+        def upload(session,mime_type,total,*,offset=0,data=None,**kwargs):
+            calls.append(("probe" if data is None else "put",offset,
+                          len(data) if data is not None else 0))
+            if len(calls)==1:
+                raise ConnectionResetError("simulated upload interrupt")
+            if len(calls)==2:
+                return 308,"bytes=0-262143",b""
+            return 201,"",json.dumps({"id":"same-file-after-resume",
+                    "md5Checksum":hashlib.md5(payload).hexdigest()}).encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/"source.m4a"
+            source.write_bytes(payload)
+            fake=self.setup_drive()
+            fake.token=lambda:"mock"
+            with patch.object(drive.urllib.request,"urlopen",return_value=Session()), \
+                 patch.object(drive.GoogleDrive,"_upload_session_request",side_effect=upload), \
+                 patch.object(drive.time,"sleep",return_value=None):
+                answer=fake._resumable_put(source,"folder","source.m4a")
+            self.assertEqual(answer["id"],"same-file-after-resume")
+            self.assertEqual(calls,[("put",0,len(payload)),("probe",0,0),
+                                    ("put",262144,262144)])
+
+    def test_lost_upload_final_ack_does_not_create_second_remote_file(self):
+        payload=b"unchanged M4A" * 300
+        class Session:
+            headers={"Location":"https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=test"}
+            def __enter__(self): return self
+            def __exit__(self,*_): return False
+        calls=[]
+        def upload(*args,offset=0,data=None,**kwargs):
+            calls.append("probe" if data is None else "put")
+            if len(calls)==1:
+                raise ConnectionResetError("lost final response, server committed")
+            return 200,"",json.dumps({"id":"committed-once"}).encode()
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/"source.m4a"
+            source.write_bytes(payload)
+            fake=self.setup_drive()
+            fake.token=lambda:"mock"
+            with patch.object(drive.urllib.request,"urlopen",return_value=Session()), \
+                 patch.object(drive.GoogleDrive,"_upload_session_request",side_effect=upload), \
+                 patch.object(drive.time,"sleep",return_value=None):
+                answer=fake._resumable_put(source,"folder","source.m4a")
+            self.assertEqual(answer["id"],"committed-once")
+            self.assertEqual(calls,["put","probe"])
+
+    def test_upload_403_is_not_retried_or_published(self):
+        class Session:
+            headers={"Location":"https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=test"}
+            def __enter__(self): return self
+            def __exit__(self,*_): return False
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/"source.m4a"
+            source.write_bytes(b"M"*1024)
+            fake=self.setup_drive()
+            fake.token=lambda:"mock"
+            with patch.object(drive.urllib.request,"urlopen",return_value=Session()), \
+                 patch.object(drive.GoogleDrive,"_upload_session_request",
+                              return_value=(403,"",b"forbidden")) as sent:
+                with self.assertRaisesRegex(drive.GoogleError,"403"):
+                    fake._resumable_put(source,"folder","source.m4a")
+                sent.assert_called_once()
 
     def test_missing_root_is_read_only_for_all_download_types(self):
         for kind in ("songs", "db", "zip"):
