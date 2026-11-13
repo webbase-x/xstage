@@ -89,8 +89,9 @@ def _focus_google_browser_window(stop_signal=None, timeout=4):
                 browser = ("chrome_widgetwin" in window_class or
                            "mozillawindowclass" in window_class)
                 google = any(x in title for x in (
-                    "google", "accounts.google.com", "เลือกบัญชี",
-                    "ลงชื่อเข้าใช้", "choose an account"))
+                    "google accounts", "accounts.google.com", "เลือกบัญชี",
+                    "ลงชื่อเข้าใช้บัญชี", "choose an account",
+                    "sign in - google", "เข้าสู่ระบบ - google"))
                 if browser and google:
                     windows.append(hwnd)
                 return True
