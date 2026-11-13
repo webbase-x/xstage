@@ -235,8 +235,16 @@ button.preview-lyric-line{cursor:pointer}
 .preview-proof-message{width:100%;margin:4px 0 0;color:#d5eaf0;font-size:11px;line-height:1.65}
 .preview-file-inspection{border:1px solid #3c6577;background:#091f30;padding:12px;border-radius:10px;margin-top:11px;min-width:0;color:#d5f5f4;font-size:12px}
 .preview-file-inspection pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font-family:inherit;line-height:1.7;margin:9px 0 0}
-.preview-lyric-line .karaoke-character{color:#acc5d0;transition:color .07s linear,text-shadow .07s linear}
-.preview-lyric-line.active .karaoke-character.sung{color:#6affda;text-shadow:0 0 8px #49efc8aa;font-weight:900}
+/* MIDI/CUR: each real timed glyph fills continuously; LRC: a line-only estimate. */
+.preview-lyric-line .karaoke-character,.preview-lyric-line .karaoke-approximate{
+  --karaoke-fill:0%;color:#acc5d0;
+}
+.preview-lyric-line.active .karaoke-character,
+.preview-lyric-line.active .karaoke-approximate{
+  background:linear-gradient(to right,#ffdd78 0%,#ffdd78 var(--karaoke-fill),#eaf9ff var(--karaoke-fill),#eaf9ff 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  -webkit-text-fill-color:transparent;text-shadow:none;font-weight:900;
+}
 .preview-lyric-line.active{font-size:clamp(18px,1.6vw,25px);line-height:1.7}
 .preview-lyric-line.active:not(:has(.karaoke-character)){color:#f0fbff}
 
@@ -275,7 +283,9 @@ button.preview-lyric-line{cursor:pointer}
 .ai-lyrics-player-row audio{flex:1;min-width:220px;max-width:100%}
 .ai-lyrics-karaoke{margin-top:15px;min-height:150px;border:1px solid #35627a;border-radius:13px;background:linear-gradient(140deg,#041525,#11364b);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;color:#92bbce;padding:18px;overflow-wrap:anywhere}
 .ai-karaoke-line{font-size:clamp(16px,1.7vw,25px);font-weight:760;color:#afc4d7;line-height:1.65}
-.ai-karaoke-line.active{font-size:clamp(20px,2vw,31px);color:#75f3d3;text-shadow:0 2px 12px #20bbaf88}
+.ai-karaoke-line.active{font-size:clamp(20px,2vw,31px);color:#eaf9ff}
+.ai-karaoke-wipe{--karaoke-fill:0%;display:inline;background:linear-gradient(to right,#ffdd78 0%,#ffdd78 var(--karaoke-fill),#eaf9ff var(--karaoke-fill),#eaf9ff 100%);background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-fill-color:transparent;font-weight:900}
+.ai-lyrics-sweep-note{font-size:11px;color:#a8c9d7;line-height:1.55}
 .ai-lyrics-edit{margin-top:20px}
 .ai-lyrics-edit textarea{font-family:"Leelawadee UI","Noto Sans Thai",monospace;line-height:1.8;resize:vertical;min-height:215px}
 .ai-lyrics-editor-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
