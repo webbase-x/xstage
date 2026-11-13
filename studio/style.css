@@ -340,3 +340,13 @@ button.preview-lyric-line{cursor:pointer}
 .lyric-group-edit>label{display:block;font-weight:700;margin:14px 0 8px}
 .lyric-group-edit textarea{width:100%;min-height:90px;line-height:1.7;resize:vertical;font-family:"Leelawadee UI","Noto Sans Thai",monospace}
 .lyric-group-overview .hint,.lyric-group-edit .hint{line-height:1.7;white-space:pre-wrap}
+
+/* Private microphone capture within AI lyrics: consent, preview, then save. */
+.ai-microphone-panel{border:1px solid #31697a;background:#0b2538}
+.ai-microphone-buttons{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+.ai-microphone-buttons .button{min-height:42px}
+.ai-microphone-preview{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:10px 0}
+.ai-microphone-preview audio{min-width:210px;max-width:650px;flex:1}
+#ai-mic-timer{font-variant-numeric:tabular-nums;font-weight:800;min-width:64px;text-align:center}
+#ai-mic-status{line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:620px){.ai-microphone-buttons .button{flex:1 1 45%}.ai-microphone-preview audio{width:100%;flex-basis:100%}}
