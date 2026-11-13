@@ -34,6 +34,59 @@ class PcSourceTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_stageweb_flat_catalog_and_legacy_atomic_directory_migration(self):
+        export=engine._song_export_module()
+        old=self.dest/"songs"
+        (old/"audio"/"0").mkdir(parents=True)
+        (old/"lyrics"/"0").mkdir(parents=True)
+        audio=old/"audio"/"0"/"00001.m4a"
+        audio.write_bytes(b"A"*5200)
+        lyric=old/"lyrics"/"0"/"00001.json"
+        lyric.write_text(json.dumps({"schemaVersion":1,"lines":[
+            {"text":"ทดสอบ","startTime":1.0,"endTime":3.0}
+        ]},ensure_ascii=False),encoding="utf-8")
+        record={"webSongId":"audio/0/00001","bucket":"0","code":"00001",
+                "title":"ทดสอบ","audio":{"path":"audio/0/00001.m4a"},
+                "lyrics":{"path":"lyrics/0/00001.json"}}
+        old_pointer=export.publish_batch(old,[record])
+        self.assertTrue(old_pointer["catalogFiles"][0]["path"].startswith("database-"))
+        old_database=old/old_pointer["catalogFiles"][0]["path"]
+        original=old_database.read_bytes()
+        new=export.songs_root(self.dest)
+        self.assertEqual(new,self.dest/"StageWeb")
+        self.assertFalse(old.exists())
+        self.assertEqual((new/old_database.name).read_bytes(),original)
+        self.assertEqual(export._read_current(new)[0]["songCount"],1)
+        self.assertEqual(export.existing_records(new)[0]["code"],"00001")
+        self.assertEqual((new/"audio"/"0"/"00001.m4a").read_bytes(),b"A"*5200)
+        self.assertFalse((new/"catalogs").exists())
+        # A second song updates the same StageWeb root; published DB files
+        # stay directly under StageWeb alongside current.json.
+        (new/"audio"/"0"/"00002.m4a").write_bytes(b"B"*5200)
+        (new/"lyrics"/"0"/"00002.json").write_text(
+            (new/"lyrics"/"0"/"00001.json").read_text(encoding="utf-8"),
+            encoding="utf-8")
+        second={**record,"webSongId":"audio/0/00002","code":"00002",
+                "audio":{"path":"audio/0/00002.m4a"},
+                "lyrics":{"path":"lyrics/0/00002.json"}}
+        pointer=export.publish_batch(new,[second])
+        self.assertEqual(pointer["songCount"],2)
+        self.assertTrue(all(
+            item["path"].startswith("database-") for item in pointer["catalogFiles"]))
+
+    def test_stageweb_and_legacy_songs_conflict_fails_without_changes(self):
+        export=engine._song_export_module()
+        legacy=self.dest/"songs"
+        stage=self.dest/"StageWeb"
+        legacy.mkdir()
+        stage.mkdir()
+        (legacy/"current.json").write_bytes(b"legacy-pointer")
+        (stage/"current.json").write_bytes(b"existing-stage-pointer")
+        with self.assertRaisesRegex(RuntimeError,"พบคลัง songs"):
+            export.songs_root(self.dest)
+        self.assertEqual((legacy/"current.json").read_bytes(),b"legacy-pointer")
+        self.assertEqual((stage/"current.json").read_bytes(),b"existing-stage-pointer")
+
     def test_scan_and_lyrics_and_safe_naming(self):
         (self.source / "ทดสอบ.mp3").write_bytes(b"ID3-test")
         (self.source / "ทดสอบ.lrc").write_text("[00:01.00]สวัสดี", encoding="utf-8")
