@@ -217,13 +217,19 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
                            "ยังคงดัชนีเดิม ไม่ลบรายการที่มองไม่เห็น · " +
                            "; ".join(failed_dirs[:3]))
 
-    next_id = max((item[2].get("id", 0) for item in previous.values()), default=0) + 1
+    next_id = (max([0] + [item[2].get("id", 0) for item in previous.values()] +
+                   [record[2].get("id", 0) for record in records.values()]) + 1)
     for path, (_, _, row) in records.items():
         if not row.get("id"):
             row["id"] = next_id
             next_id += 1
 
     songs = list(records.values())
+    # If users select only NCN/Song, Lyrics and Cursor are siblings outside
+    # the scanned tree. Resolve those from disk (once per bucket via cache).
+    # A full NCN tree uses the in-memory companion index with zero fallback
+    # folder searches; clearing the fallback cache prevents stale deletions.
+    ncn._file_names.cache_clear()
     for number, (_, _, row) in enumerate(songs, 1):
         if is_cancelled():
             _save_checkpoint(db_path, scope, records)
@@ -233,15 +239,34 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
             continue
         # During scans use ONLY the already enumerated companion index.
         # The old fallback scanned the same Lyrics/Cursor folders for each MIDI.
-        trio = ncn.resolve_companions(original, component_index, indexed_only=True)
+        description = ncn.describe(original)
+        if description is None or description[1] != "song":
+            trio = None
+        else:
+            ncn_root = description[0]
+            whole_ncn_tree = origin == ncn_root or origin in ncn_root.parents
+            trio = ncn.resolve_companions(
+                original, component_index, indexed_only=whole_ncn_tree)
         if trio is None:
             row.pop("ncn", None)
             row.pop("components", None)
             row.pop("_ncn_stamp", None)
             continue
+        def companion_stamp(name):
+            if not name:
+                return []
+            if name in component_stamps:
+                return list(component_stamps[name])
+            # Source selection may include only NCN/Song. Check sibling
+            # Lyrics/Cursor timestamps to invalidate just affected songs.
+            try:
+                info = Path(name).stat()
+                return [info.st_size, info.st_mtime_ns]
+            except OSError:
+                return []
         stamp = {
-            "lyrics": list(component_stamps.get(trio["lyrics"], ())) if trio["lyrics"] else [],
-            "cursor": list(component_stamps.get(trio["cursor"], ())) if trio["cursor"] else [],
+            "lyrics": companion_stamp(trio["lyrics"]),
+            "cursor": companion_stamp(trio["cursor"]),
             "paths": [trio["lyrics"], trio["cursor"]],
         }
         prior_stamp = row.get("_ncn_stamp")
