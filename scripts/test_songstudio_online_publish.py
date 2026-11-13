@@ -5,6 +5,10 @@ run; only the Google network transport is mocked.
 """
 from __future__ import annotations
 import importlib.util
+import hashlib
+import io
+import urllib.parse
+import zipfile
 import json
 import tempfile
 import unittest
@@ -12,6 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test_songstudio_drive_roundtrip import FakePrivateDrive
+import test_songstudio_drive_roundtrip as roundtrip
 
 REPO = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
@@ -118,6 +123,99 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertNotIn(str(self.base), json.dumps(remote))
         # Root has songs/ media, immutable catalog, current.json, staging marker.
         self.assertEqual(len(self.folder_files(self.remote_root())), 4)
+
+    def _download_private_json(self, url, **kwargs):
+        ident = urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1]
+        return io.BytesIO(self.drive.items[ident]["body"])
+
+    def test_download_published_xstageweb_from_real_online_schema(self):
+        self.publisher.publish(self.root, [self.first])
+        # An old empty PC backup tree should not shadow a valid online
+        # library. Download never creates folders or changes Drive media.
+        self.drive.folder(self.drive.folder("root", "X-Stage Song Studio"), "songs")
+        self.drive.locked = True
+        original_count = len(self.drive.items)
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            folder = self.drive.download_library(self.base / "restore", kind="songs")
+            restored = Path(folder["path"])
+            self.assertEqual(folder["source"], "XStageWeb")
+            self.assertEqual(restored.name, "XStageWeb")
+            self.assertTrue((restored / "current.json").is_file())
+            self.assertEqual(len(list(restored.glob("catalog-base-*.json"))), 1)
+            self.assertTrue(list(restored.rglob("*.m4a")))
+            self.assertTrue(list(restored.rglob("*.lrc")))
+            self.assertTrue(list(restored.rglob("*.json")))
+            db = self.drive.download_library(self.base / "db", kind="db")
+            self.assertEqual(db["files"], 2)
+            self.assertTrue((Path(db["path"]) / "current.json").is_file())
+            self.assertFalse(list(Path(db["path"]).rglob("*.m4a")))
+            archive = self.drive.download_library(self.base / "zip", kind="zip")
+        with zipfile.ZipFile(archive["path"]) as bundle:
+            self.assertIn("XStageWeb/current.json", bundle.namelist())
+            self.assertTrue(any(x.startswith("XStageWeb/songs/audio/") for x in bundle.namelist()))
+        self.assertEqual(len(self.drive.items), original_count)
+
+    def test_online_restore_includes_delta_and_current_media_only(self):
+        self.publisher.publish(self.root, [self.first])
+        next_song = self.make_song("10002", b"B" * 5200, "เพลงสอง")
+        self.publisher.publish(self.root, [self.first, next_song])
+        # The second generation references the existing immutable base
+        # plus a delta; all current songs must be downloaded.
+        self.drive.locked = True
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            result = self.drive.download_library(self.base / "delta", "songs")
+            db = self.drive.download_library(self.base / "delta-db", "db")
+        downloaded = Path(result["path"])
+        self.assertEqual(len(list(downloaded.rglob("*.m4a"))), 2)
+        self.assertTrue(list(downloaded.glob("catalog-delta-*.json")))
+        self.assertEqual(db["files"], 3)
+        pointer = json.loads((downloaded / "current.json").read_text(encoding="utf-8"))
+        self.assertEqual(pointer["songCount"], 2)
+
+    def test_online_download_rejects_unpublished_staging_without_creating_files(self):
+        self.drive.folder("root", "XStageWeb")
+        self.drive.locked = True
+        target = self.base / "not-started"
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "current.json"):
+                self.drive.download_library(target, kind="songs")
+        self.assertFalse(target.exists())
+
+    def test_online_download_missing_catalog_access_does_not_fallback_to_legacy(self):
+        self.publisher.publish(self.root, [self.first])
+        pointer, _ = self.pointer()
+        self.drive.items.pop(pointer["catalogFileId"])
+        self.drive.locked = True
+        target = self.base / "catalog-invisible"
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            with self.assertRaises((KeyError, roundtrip.drive.GoogleError)):
+                self.drive.download_library(target, kind="db")
+        self.assertFalse(target.exists())
+
+    def test_online_download_corrupt_md5_and_target_collision_fail_closed(self):
+        self.publisher.publish(self.root, [self.first])
+        pointer, pointer_id = self.pointer()
+        self.drive.items[pointer_id]["metadata"]["md5Checksum"] = "f" * 32
+        self.drive.locked = True
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "MD5"):
+                self.drive.download_library(self.base / "corrupt", "songs")
+        self.assertFalse((self.base / "corrupt").exists())
+        self.drive.items[pointer_id]["metadata"]["md5Checksum"] = hashlib.md5(
+            self.drive.items[pointer_id]["body"]).hexdigest()
+        conflicting = self.base / "conflict" / "XStageWeb" / "current.json"
+        conflicting.parent.mkdir(parents=True)
+        conflicting.write_bytes(b"owner-existing-content")
+        with patch.object(roundtrip.drive, "_request",
+                          side_effect=self._download_private_json):
+            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ต่างเนื้อหา"):
+                self.drive.download_library(self.base / "conflict", "db")
+        self.assertEqual(conflicting.read_bytes(), b"owner-existing-content")
 
     def test_duplicate_rerun_never_creates_another_song_or_pointer(self):
         self.publisher.publish(self.root, [self.first])
