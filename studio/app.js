@@ -1530,7 +1530,7 @@
         '✓ พบไฟล์เสียงร้องแยก M4A · '+aiSeparatedPath+
         ' · เลือกช่องเพื่อใช้ถอดคำร้องกับ Whisper AI':
         aiSeparationAvailable?
-        'ยังไม่มีเสียงร้องแยก · กดแยกเสียงร้องและบันทึก M4A ได้โดยไม่แก้ต้นฉบับ':
+        'ยังไม่มีเสียงแยก · กดสร้าง M4A เสียงร้องและดนตรีโดยไม่แก้ต้นฉบับ':
         'HTDemucs ไม่พร้อม · ตรวจแพ็กเกจ PC Ready และโมเดล AI';
       $('ai-lyrics-editor').value=String(data.approvedLrc||data.draft?.rawLrc||'');
       $('ai-lyrics-engine-state').textContent=aiEngineReady ?
