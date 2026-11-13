@@ -338,20 +338,19 @@
             <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
             <div class="toolbar"><button id="upload-inspect" class="button ghost" type="button">⌕ ตรวจความพร้อมไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลดเฉพาะชุดที่สมบูรณ์</button></div>
             <div id="upload-folder-report" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจโฟลเดอร์ · ระบบจะไม่ส่งไฟล์ที่ไม่มีเนื้อร้อง/ไฟล์ประกอบตามประเภทเพลง</div>
-            <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" style="width:18px;height:18px;flex:none"><span>หากไม่พบ XStageWeb ที่แอปมองเห็น ให้สร้างโฟลเดอร์ใหม่ก่อนอัปโหลด (ต้องยืนยันอีกครั้งเพื่อป้องกันคลังซ้ำจากสิทธิ์ Google ที่ไม่ครบ)</span></label>
+            <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageWeb อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
             <p class="hint">ไฟล์จากโฟลเดอร์นี้เก็บใน Drive ส่วนตัวและตรวจ MD5 · ยังไม่เพิ่มลงฐานเล่นออนไลน์ current.json โดยอัตโนมัติ · การเผยแพร่เพลงพร้อมเล่นให้ใช้เมนูซิงค์คลังที่สร้างเสร็จด้านล่าง</p>
           </article>
           <article class="panel drive-layout-panel">
             <div class="section-heading"><div><h2>โครงสร้าง XStageWeb บน Google Drive</h2><p>แสดงตำแหน่งปลายทางก่อนอัปโหลด · สร้างโฟลเดอร์ย่อยตามไฟล์ที่มีจริง ไม่สร้างโฟลเดอร์ว่างจำนวนมาก</p></div><span class="chip info">LAYOUT V2</span></div>
             <div class="drive-layout-grid">
               <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>MP3 / Songs / 0–9, A–Z</code><code>MP3 / Lyrics / 0–9, A–Z</code><code>M4A / Songs / 0–9, A–Z</code><code>M4A / Lyrics / 0–9, A–Z</code></div>
-              <div class="drive-layout-section"><strong>▶ VIDEO</strong><code>AVI · MPG · VCD · WMV</code><small>แสดงหมวดที่กำหนดไว้ · ยังไม่เปิดอัปโหลดวิดีโอในกระบวนการสร้าง M4A</small></div>
-              <div class="drive-layout-section"><strong>♬ MIDI</strong><code>NCN / Songs · Lyrics · Cursor / 0–9, A–Z</code><code>EMK / 0–9, A–Z</code><small>รองรับโครงสร้างหมวด · ยังไม่เผยแพร่ MIDI/NCN โดยตรงผ่านตัวซิงค์ M4A</small></div>
+              <div class="drive-layout-section"><strong>▶ VIDEO</strong><code>AVI · MPG · VCD · WMV</code><small>แสดงหมวดที่กำหนดไว้ · อัปโหลดวิดีโอที่มี LRC ชื่อคู่กันเท่านั้น</small></div>
+              <div class="drive-layout-section"><strong>♬ MIDI</strong><code>NCN / Songs · Lyrics · Cursor / 0–9, A–Z</code><code>EMK / 0–9, A–Z</code><small>รองรับโครงสร้างหมวด · อัปโหลดเฉพาะ NCN ที่ตรวจพบไฟล์ Song + LYR + CUR ครบ</small></div>
               <div class="drive-layout-section"><strong>▤ DB</strong><code>DB / catalog-base-*.json</code><code>DB / catalog-delta-*.json</code><code>current.json ที่ราก XStageWeb</code><small>คง current.json สำหรับ X-Stage Online รุ่นเดิม</small></div>
             </div>
             <p class="hint">ความปลอดภัย: หากพบคลัง StageWeb/XStageWeb เดิม ระบบใช้ File ID และฐานเดิม ไม่ย้ายหรือลบไฟล์อัตโนมัติ · หมวด 0–9, A–Z แยกตามอักขระตัวแรกของรหัสเพลง</p>
           </article>
-          <article class="panel"><div class="section-heading"><div><h2>ซิงค์คลังเพลงขึ้น Drive</h2><p>จัด M4A และเนื้อร้องลง AUDIO/M4A/Songs และ Lyrics ตามรหัสเพลง พร้อมฐาน catalog ใน DB โดยตรวจ File ID/MD5 และเก็บเพลงเดิม</p></div><span id="upload-selected-count" class="chip">ซิงค์คลังทั้งหมด</span></div><div class="toolbar"><button id="go-create" class="button ghost">กลับไปเลือกเพลง</button><button id="upload-button" class="button primary">↑ เพิ่มเพลงเข้า XStageWeb</button></div><label class="hint" style="display:flex;align-items:start;gap:10px;margin-top:12px"><input id="upload-create-library" type="checkbox" style="width:19px;height:19px;flex:none;margin-top:2px"><span><strong>สร้างคลัง XStageWeb ใหม่</strong> — เลือกเฉพาะ Google Drive ที่แน่ใจว่าไม่เคยมีคลัง XStageWeb เดิม หากมีเพลงอยู่แล้วอย่าเลือก ระบบจะหยุดเมื่อไม่มีสิทธิ์เห็นคลังเดิมเพื่อป้องกันฐานเพลงแยกซ้ำ</span></label><div class="hint">ใช้สิทธิ์ Google Drive เฉพาะไฟล์ที่แอปได้รับอนุญาต (drive.file) · อ่านฐานเดิมก่อน · ตรวจรหัสและ MD5 เพื่อข้ามซ้ำ · เผยแพร่ XStageWeb/current.json หลังตรวจไฟล์ครบแล้วเท่านั้น</div></article>
         </section>
 
         <section id="tab-download" class="tab">
