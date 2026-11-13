@@ -27,11 +27,11 @@ class NativeV2Tests(unittest.TestCase):
         self.pub.reader._json=lambda ident: json.loads(self.drive.items[str(ident)]["body"].decode("utf8"))
         self.write("input/audio.mp3",b"ID3"+b"X"*2500)
         self.write("input/audio.m4a",b"A"*4000)
-        track=b"\\x00\\xff\\x51\\x03\\x07\\xa1\\x20\\x00\\xff\\x2f\\x00"
+        track=b"\x00\xff\x51\x03\x07\xa1\x20\x00\xff\x2f\x00"
         midi=b"MThd"+struct.pack(">IHHH",6,0,1,480)+b"MTrk"+struct.pack(">I",len(track))+track
         self.write("input/X01.MID",midi)
-        self.write("input/X01.LYR","Test Song\\nSinger\\nC\\n\\nHello\\n".encode("cp874"))
-        self.write("input/X01.CUR",struct.pack("<"+"H"*6,*([0]+[i*12 for i in range(5)]))+b"\\xff")
+        self.write("input/X01.LYR","Test Song\nSinger\nC\n\nHello\n".encode("cp874"))
+        self.write("input/X01.CUR",struct.pack("<"+"H"*6,*([0]+[i*12 for i in range(5)]))+b"\xff")
         self.write("input/clip.avi",b"RIFF"+b"x"*2000)
         self.write("input/words.json",
                    json.dumps({"schemaVersion":1,
