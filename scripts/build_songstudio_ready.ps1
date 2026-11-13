@@ -34,9 +34,23 @@ function Step([string]$Text) {
 }
 function Download([string]$Url, [string]$Target) {
     if (!$Url.StartsWith('https://')) { throw "Refusing insecure dependency URL: $Url" }
-    Step "Downloading $Url"
-    Invoke-WebRequest -Uri $Url -OutFile $Target -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 240
-    if (!(Test-Path $Target) -or (Get-Item $Target).Length -lt 64) { throw "Empty dependency: $Url" }
+    # GitHub runner dependencies are externally hosted. A temporary 429/503
+    # must not abort an otherwise successful PC Ready build immediately.
+    # Retry only the same HTTPS source, then validate its existing SHA check.
+    for ($Attempt = 1; $Attempt -le 4; $Attempt++) {
+        try {
+            Step "Downloading $Url (attempt $Attempt/4)"
+            Invoke-WebRequest -Uri $Url -OutFile $Target -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 240
+            if (!(Test-Path $Target) -or (Get-Item $Target).Length -lt 64) { throw "Empty dependency: $Url" }
+            return
+        } catch {
+            if (Test-Path -LiteralPath $Target) { Remove-Item -LiteralPath $Target -Force -ErrorAction SilentlyContinue }
+            if ($Attempt -eq 4) { throw }
+            $Pause = [int][Math]::Min(20, [Math]::Pow(2, $Attempt + 1))
+            Step "Dependency temporarily unavailable: $Url · retry in $Pause s"
+            Start-Sleep -Seconds $Pause
+        }
+    }
 }
 function CheckSHA([string]$File, [string]$Expected) {
     if ($Expected -notmatch '^[a-fA-F0-9]{64}$') { throw "Invalid pinned SHA for $File" }
