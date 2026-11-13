@@ -17,7 +17,7 @@ global.XStageCreatePlayerAdapter=function(audio){
   return new Proxy(audio,{
     get(target,prop){
       const m=midi();
-      if(Object.hasOwn(methods,prop))return methods[prop];
+      if(Object.prototype.hasOwnProperty.call(methods,prop))return methods[prop];
       if(prop==='src'&&m?.active)return 'midi://xstage-current';
       if(prop==='readyState'&&m?.active)return 4;
       if(attrs.includes(prop)&&m?.active)return m[prop];
