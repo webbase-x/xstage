@@ -1143,8 +1143,12 @@ def execute_job(action, options, started):
         elif action == "login":
             update("เปิด Google Login บนเบราว์เซอร์ · รออนุญาตจากเจ้าของบัญชี")
             account = GOOGLE.login(cancelled=CANCEL, on_status=update)
+            if not account.get("configured") or not account.get("connected"):
+                raise RuntimeError("Google คืนผลลัพธ์ แต่ Song Studio ยังไม่ได้บันทึกสิทธิ์ Google Drive")
             log("Google Login สำเร็จ: " + account.get("email", "(ไม่มีชื่ออีเมล)"))
-            result = {"message": "เชื่อม Google Drive ส่วนตัวเรียบร้อยแล้ว"}
+            result = {"message": "Google Drive เชื่อมต่อแล้วใน Song Studio PC · " +
+                      account.get("email", "(ไม่พบชื่อบัญชี)"),
+                      "google": account}
         elif action == "logout":
             GOOGLE.logout()
             result = {"message": "ออกจาก Google บน PC เครื่องนี้แล้ว (สิทธิ์ใน Google Account ยังถอนได้จากบัญชี Google)"}
@@ -1273,6 +1277,17 @@ def start_job(data):
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
     validation = validate_build_request(data) if action == "build" else {}
+    if action == "login":
+        # A Core Preview ZIP intentionally ships without an app-wide Desktop
+        # OAuth client. Fail synchronously BEFORE claiming that Google Login
+        # started; a Google login elsewhere does not authorize the PC app.
+        info = GOOGLE.status()
+        if not info["configured"]:
+            raise ValueError(
+                "Song Studio PC ยังไม่พร้อม Google OAuth: " +
+                str(info.get("error") or "ไม่พบ Google Desktop OAuth Client JSON") +
+                " · เปิดตั้งค่า > ตัวเลือกขั้นสูง > เลือก Google Desktop OAuth Client JSON "
+                "แล้วลอง Google Login ใหม่")
     if action == "ai-lyrics":
         song_id = data.get("id")
         if type(song_id) is not int or song_id not in FILE_BY_ID:
@@ -1896,11 +1911,12 @@ class Handler(BaseHTTPRequestHandler):
                     "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
             elif path == "/api/environment":
+                google = GOOGLE.status()
                 self._json({"Python Runtime": True, "FFmpeg": bool(ffmpeg_binary()),
                     "SoundFont": sf_available(), "FluidSynth": bool(fluidsynth_binary()),
                     "Local file mode": True,
-                    "Google OAuth Client configured": GOOGLE.status()["configured"],
-                    "Google Drive signed in": GOOGLE.status()["connected"],
+                    "Google OAuth Client configured": google["configured"],
+                    "Google Drive signed in": google["connected"],
                     "AI separation": ai_available(),
                     "AI lyrics transcription": AI_LYRICS.available(RUNTIME)})
             elif path == "/api/songs/ids":
