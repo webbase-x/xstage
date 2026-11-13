@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 ONLINE_ROOT = "XStageWeb"
+STAGING_MARKER = ".xstage-songstudio-staging.json"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 MAX_CATALOG_BYTES = 128 * 1024 * 1024
 MAX_DELTAS = 32
@@ -123,6 +124,16 @@ class OnlinePublisher:
             raise PublishError("พบ XStageWeb/current.json ซ้ำบน Drive · หยุดเพื่อป้องกันฐานเสีย")
         if not pointers:
             if children:
+                markers = [x for x in children if x.get("name") == STAGING_MARKER
+                           and x.get("mimeType") != FOLDER_MIME]
+                expected = {STAGING_MARKER, "songs"}
+                if (len(markers) == 1 and all(x.get("name") in expected for x in children)
+                        and self._json(markers[0]["id"]).get("format") ==
+                        "xstage-songstudio-upload-staging-v1"):
+                    # Previous first-time upload stopped before its first
+                    # published pointer. Resume only our own verified staging
+                    # work, never a foreign, unindexed XStageWeb library.
+                    return None, {}, {x["name"]: x for x in children}
                 raise PublishError("XStageWeb มีไฟล์เดิมแต่ไม่มี current.json · ไม่สร้างฐานใหม่ทับ")
             return None, {}, {}
         pointer_file = pointers[0]
@@ -186,7 +197,22 @@ class OnlinePublisher:
                 "หากมีเพลงเดิม ห้ามสร้างคลังใหม่จนกว่าจะอนุญาตให้ Song Studio "
                 "เข้าถึงคลังเดิมผ่าน Google OAuth/Picker · "
                 "ถ้าเป็น Google Drive ว่างจริง ให้เลือก 'สร้างคลังใหม่' โดยชัดเจน")
+        if root is None:
+            root = self.drive.folder("root", ONLINE_ROOT)
         active, remote, root_files = self._read_online(root)
+        if active is None and STAGING_MARKER not in root_files:
+            # Durable evidence for safe first-run recovery. This marker is
+            # published BEFORE the first media file, so an interrupted upload
+            # cannot be mistaken for an unrelated old library.
+            with tempfile.TemporaryDirectory(prefix="xstage-online-marker-") as temp:
+                marker_file = Path(temp) / STAGING_MARKER
+                marker_file.write_text(json.dumps({
+                    "format": "xstage-songstudio-upload-staging-v1",
+                    "schemaVersion": 1,
+                    "note": "Private staged upload. No playable DB is published yet."
+                }), encoding="utf-8")
+                self.drive.upload_file(root, marker_file, STAGING_MARKER,
+                                       cancelled=cancelled)
         pointer_file, old_pointer = active if active else (None, None)
         by_code = {}
         for item in remote.values():
