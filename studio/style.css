@@ -235,6 +235,23 @@ button.preview-lyric-line{cursor:pointer}
 .preview-proof-message{width:100%;margin:4px 0 0;color:#d5eaf0;font-size:11px;line-height:1.65}
 .preview-file-inspection{border:1px solid #3c6577;background:#091f30;padding:12px;border-radius:10px;margin-top:11px;min-width:0;color:#d5f5f4;font-size:12px}
 .preview-file-inspection pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font-family:inherit;line-height:1.7;margin:9px 0 0}
+/* Unified progressive karaoke wipe, used by both proof preview and AI.
+   Actual MIDI/CUR cues sweep unit-by-unit; ordinary LRC is an estimated
+   line-length sweep and must not be interpreted as real syllable timings. */
+.preview-lyric-line .karaoke-wipe-text,
+.ai-karaoke-line .karaoke-wipe-text{
+  --karaoke-wipe:0%;
+  color:inherit;
+}
+.preview-lyric-line.active .karaoke-wipe-text,
+.ai-karaoke-line.active .karaoke-wipe-text{
+  background-image:linear-gradient(to right,
+    #ffe076 0%,#ffe076 var(--karaoke-wipe),
+    #eaf9ff var(--karaoke-wipe),#eaf9ff 100%);
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+  text-shadow:none;
+}
 /* MIDI/CUR: each real timed glyph fills continuously; LRC: a line-only estimate. */
 .preview-lyric-line .karaoke-character,.preview-lyric-line .karaoke-approximate{
   --karaoke-fill:0%;color:#acc5d0;
