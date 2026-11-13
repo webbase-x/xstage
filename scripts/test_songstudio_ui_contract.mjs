@@ -56,6 +56,27 @@ assert.ok(js.includes('aiRemoveImportedSong('),'Missing AI imported song removal
 assert.ok(js.includes('data-ai-remove') || js.includes('dataset.aiRemove'),'Missing per-row remove action');
 assert.ok(js.includes('นำออกจากรายการ') && js.includes('ไม่ลบไฟล์เพลงต้นฉบับ'),'Missing destructive-action warning');
 assert.ok(css.includes('.ai-lyrics-song-remove'),'Missing remove button styling');
+assert.ok(js.includes('karaokeWipeSpan('),'Missing real-time karaoke sweep spans');
+assert.ok(js.includes('karaokeUpdateSpans('),'Missing karaoke sweep update loop');
+assert.ok(js.includes('aiStartKaraokeAnimation'),'Missing smooth AI lyrics animation');
+assert.ok(css.includes('.karaoke-wipe-text') && css.includes('--karaoke-wipe'),
+  'MIDI/LRC sweep spans require real color clipping CSS');
+assert.ok(css.includes('linear-gradient(to right'),'Karaoke color wipe must fill left-to-right');
+const stage=fs.readFileSync('app.js','utf8');
+const begin=stage.indexOf('function lineProgress(line,when){');
+const end=stage.indexOf('\nfunction drawLyrics(){',begin);
+assert.ok(begin>=0 && end>begin,'Online stage is missing MIDI timed sweep');
+const stageProgress=new Function('pen','return ('+stage.slice(begin,end)+')')({
+  measureText(s){return {width:[...s].reduce((sum,ch)=>sum+(ch==='M'?20:5),0)};}
+});
+const note={text:'MW',startTime:0,endTime:2,
+  syllables:[{text:'M',start:0,duration:1},{text:'W',start:1,duration:1}]};
+assert.ok(Math.abs(stageProgress(note,.5)-.4)<.001,
+  'MIDI sweep must follow measured glyph width, not character count');
+assert.ok(Math.abs(stageProgress(note,1.5)-.9)<.001,
+  'MIDI sweep must continue smoothly into the next timed syllable');
+assert.equal(stageProgress({text:'AB',startTime:0,endTime:2},1),.5,
+  'Untimed standard LRC must use approximate whole-line interpolation');
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
 console.log('PASS: PC/Web Control UI syntax, bulk multi-select, lyric-body search, AI and Drive controls.');
