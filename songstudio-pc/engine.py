@@ -848,7 +848,7 @@ def build_library(rows, mode, options):
     export = _song_export_module()
     root = export.songs_root(PREFS["workspace"])
     root.mkdir(parents=True, exist_ok=True)
-    for name in ("audio", "lyrics", "catalogs"):
+    for name in ("audio", "lyrics"):
         (root / name).mkdir(exist_ok=True)
     records = export.existing_records(root)
     registry, remote, online_verified, online_generation = code_registry_snapshot(root)
@@ -1299,7 +1299,7 @@ def execute_job(action, options, started):
             root = export.songs_root(PREFS["workspace"])
             pointer, _ = export._read_current(root)
             if not pointer:
-                raise ValueError("ไม่พบ songs/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
+                raise ValueError("ไม่พบ StageWeb/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
             records = [x for x in export.existing_records(root)
                        if export.record_is_complete(root, x)]
             if len(records) != pointer.get("songCount"):
