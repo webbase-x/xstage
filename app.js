@@ -400,7 +400,7 @@ async function loadLatestCachedCatalog(sub,rootId=''){
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(![1,2].includes(catalog?.schemaVersion)||!Array.isArray(catalog.songs))return null;
     return {
       catalog,
       generation:String(saved.generation||''),
@@ -846,8 +846,22 @@ $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
-  if(pointer?.schemaVersion!==1 || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
+  if(![1,2].includes(pointer?.schemaVersion) || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
     throw Error('รูปแบบ current.json ไม่รองรับ');
+  if(pointer.schemaVersion===2){
+    const base=await privateJson(pointer.catalogFileId,token);
+    if(base?.schemaVersion!==2||!Array.isArray(base.songs)||
+       (Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount))
+      throw Error('ฐานเพลง XStageWeb/DB รุ่น 2 ไม่สมบูรณ์');
+    const ids=new Set();
+    for(const song of base.songs){
+      if(typeof song?.id!=='string'||!song.id||ids.has(song.id)||
+         typeof song.code!=='string'||!song.code||typeof song.media!=='object')
+        throw Error('รายการเพลงฐาน V2 ขัดแย้งหรือซ้ำ');
+      ids.add(song.id);
+    }
+    return {schemaVersion:2,generation:pointer.generation,songs:base.songs};
+  }
   const deltaIds=pointer.deltaFileIds||[];
   if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
     throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
@@ -1054,9 +1068,17 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    const pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
+    // V2 is the authoritative new layout. Allow the old root pointer only
+    // during migration when no DB/current.json exists yet.
+    const dbFolders=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
+    if(dbFolders.length>1)throw Error('พบโฟลเดอร์ XStageWeb/DB ซ้ำ');
+    let pointers=dbFolders.length===1
+      ?await driveList(`'${dbFolders[0].id}' in parents and name='current.json' and trashed=false`,token)
+      :[];
+    if(!pointers.length)
+      pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
-    if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง StageWeb/XStageWeb');
+    if(pointers.length!==1)throw Error('ไม่พบ XStageWeb/DB/current.json ที่เผยแพร่ครบ');
     const pointer=await privateJson(pointers[0].id,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
     if(authId!==state.authId)return;
@@ -1069,7 +1091,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     let catalog=instant?.catalog||null;
     let downloaded=false;
     if(!sameAsInstant){
-      if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์ M4A',42);
+      if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์เสียงหรือเนื้อร้อง',42);
       else setStatus(`กำลังอัปเดตฐานเพลงเบื้องหลัง · ยังใช้ ${num(state.songs.length)} เพลงเดิมได้ตามปกติ`);
       catalog=await readPublishedCatalog(pointer,token,{
         sub:cacheOwner,
