@@ -2097,6 +2097,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("คำสั่งไม่ถูกต้อง")
             path = urllib.parse.urlsplit(self.path).path
             if path == "/api/config":
+                previous_catalog_key = (PREFS["source"], PREFS["workspace"])
                 for key, value in payload.items():
                     if key not in PREFS or not isinstance(value, str):
                         continue
@@ -2112,7 +2113,7 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         PREFS[key] = value[:2048]
                 save_json(PREFS_FILE, PREFS)
-                if any(key in payload for key in ("source", "workspace")):
+                if previous_catalog_key != (PREFS["source"], PREFS["workspace"]):
                     restore_song_catalog()
                 self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
                             "google": GOOGLE.status()})
