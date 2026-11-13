@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import http.client
+import threading
 import json
 import tempfile
 import unittest
@@ -31,6 +34,8 @@ class IndependentAIImportTests(unittest.TestCase):
         self.old_workspace = engine.PREFS["workspace"]
         self.old_data = engine.DATA
         self.old_import_file = engine.AI_IMPORTS_FILE
+        self.old_pending=dict(engine.AI_RECORDINGS_PENDING)
+        engine.AI_RECORDINGS_PENDING.clear()
         engine.AI_IMPORTED.clear()
         engine.FILES.clear()
         engine.FILE_BY_ID.clear()
@@ -50,7 +55,96 @@ class IndependentAIImportTests(unittest.TestCase):
         engine.PREFS["workspace"] = self.old_workspace
         engine.DATA = self.old_data
         engine.AI_IMPORTS_FILE = self.old_import_file
+        engine.AI_RECORDINGS_PENDING.clear()
+        engine.AI_RECORDINGS_PENDING.update(self.old_pending)
         self.temp.cleanup()
+
+    def test_microphone_upload_requires_real_media_and_complete_bytes(self):
+        sound=b"\x1a\x45\xdf\xa3"+b"recorded-microphone"*150
+        with patch.object(engine,"AI_RECORDING_INBOX",self.root/"recording-inbox"):
+            with self.assertRaisesRegex(ValueError,"WebM"):
+                engine.stage_microphone_recording(io.BytesIO(sound),len(sound),"text/plain")
+            with self.assertRaisesRegex(ValueError,"ชนิดไฟล์"):
+                engine.stage_microphone_recording(io.BytesIO(b"nope"*600),2400,"audio/webm")
+            with self.assertRaisesRegex(ValueError,"ส่งมาไม่ครบ"):
+                engine.stage_microphone_recording(
+                    io.BytesIO(sound[:1000]),len(sound),"audio/webm")
+            self.assertEqual(list((self.root/"recording-inbox").glob("*")),[])
+            result=engine.stage_microphone_recording(
+                io.BytesIO(sound),len(sound),"audio/webm;codecs=opus")
+            self.assertIn(result["recordingId"],engine.AI_RECORDINGS_PENDING)
+            self.assertEqual(engine.AI_RECORDINGS_PENDING[result["recordingId"]].read_bytes(),sound)
+            engine.AI_RECORDINGS_PENDING.pop(result["recordingId"]).unlink()
+            self.assertFalse(list((self.root/"recording-inbox").glob("*")))
+
+    def test_recording_is_saved_as_new_private_m4a_and_imported_into_ai(self):
+        sound=b"\x1a\x45\xdf\xa3"+b"microphone"*250
+        with patch.object(engine,"AI_RECORDING_INBOX",self.root/"recording-inbox"), \
+             patch.object(engine,"ffmpeg_binary",return_value="ffmpeg-fake"), \
+             patch.object(engine,"run_process",side_effect=lambda args:
+                Path(args[-1]).write_bytes(b"fLaC" + b"A" * 5000)):
+            engine.PREFS["workspace"]=str(self.root/"recordings-workspace")
+            upload=engine.stage_microphone_recording(
+                io.BytesIO(sound),len(sound),"audio/webm")
+            done=engine.save_microphone_recording(upload["recordingId"])
+        target=Path(done["path"])
+        self.assertTrue(target.is_file())
+        self.assertEqual(target.suffix,".m4a")
+        self.assertEqual(target.parent.parent.parent.name,"StageWeb")
+        self.assertEqual(target.parent.parent.name,"audio")
+        self.assertEqual(target.read_bytes(),b"fLaC"+b"A"*5000)
+        self.assertEqual(done["song"]["id"],engine.AI_IMPORTED[done["song"]["id"]]["id"])
+        self.assertFalse((target.parent.parent.parent/"current.json").exists(),
+                         "Recording must not publish Karaoke Online catalog")
+        self.assertNotIn(upload["recordingId"],engine.AI_RECORDINGS_PENDING)
+        self.assertFalse(list((self.root/"recording-inbox").glob("*")))
+        with self.assertRaisesRegex(ValueError,"ไม่พบเสียง"):
+            engine.save_microphone_recording(upload["recordingId"])
+
+    def test_failed_recording_conversion_does_not_leave_partial_m4a(self):
+        sound=b"\x1a\x45\xdf\xa3"+b"recorded"*300
+        with patch.object(engine,"AI_RECORDING_INBOX",self.root/"inbox"), \
+             patch.object(engine,"ffmpeg_binary",return_value="ffmpeg-fake"), \
+             patch.object(engine,"run_process",side_effect=RuntimeError("bad audio codec")):
+            engine.PREFS["workspace"]=str(self.root/"safe-workspace")
+            upload=engine.stage_microphone_recording(
+                io.BytesIO(sound),len(sound),"audio/webm")
+            with self.assertRaisesRegex(RuntimeError,"bad audio"):
+                engine.save_microphone_recording(upload["recordingId"])
+            self.assertFalse(list((self.root/"safe-workspace").rglob("*.m4a")))
+            self.assertEqual(len(engine.AI_IMPORTED),0)
+            engine.AI_RECORDINGS_PENDING.pop(upload["recordingId"]).unlink()
+
+    def test_microphone_http_requires_token_and_does_not_accept_malformed_mime(self):
+        from http.server import ThreadingHTTPServer
+        sound=b"\x1a\x45\xdf\xa3"+b"recorded"*300
+        with patch.object(engine,"AI_RECORDING_INBOX",self.root/"inbox"):
+            with ThreadingHTTPServer(("127.0.0.1",0),engine.Handler) as server:
+                original_port=engine.PORT
+                engine.PORT=server.server_port
+                thread=threading.Thread(target=server.serve_forever,daemon=True)
+                thread.start()
+                try:
+                    def attempt(token,mime,data):
+                        conn=http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=5)
+                        try:
+                            conn.request("POST","/api/ai-recording-upload",body=data,headers={
+                                "X-XStage-Token":token,"Content-Type":mime})
+                            r=conn.getresponse()
+                            return r.status,json.loads(r.read().decode())
+                        finally:
+                            conn.close()
+                    status,_=attempt("invalid","audio/webm",sound)
+                    self.assertEqual(status,403)
+                    status,_=attempt(engine.TOKEN,"text/plain",sound)
+                    self.assertEqual(status,400)
+                    status,payload=attempt(engine.TOKEN,"audio/webm",sound)
+                    self.assertEqual(status,200)
+                    self.assertIn("recordingId",payload)
+                    engine.AI_RECORDINGS_PENDING.pop(payload["recordingId"]).unlink()
+                finally:
+                    server.shutdown();thread.join(timeout=3)
+                    engine.PORT=original_port
 
     def test_import_picker_json_contract_and_removal(self):
         with patch.object(engine, "open_picker", return_value=json.dumps(
