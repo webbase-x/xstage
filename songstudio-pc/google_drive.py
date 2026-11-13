@@ -354,10 +354,16 @@ class GoogleDrive:
                 received["code"] = params.get("code", [""])[0]
                 received["error"] = params.get("error", [""])[0]
                 signal.set()
+                detail = (
+                    "<h2>Google ไม่อนุญาตให้เชื่อมบัญชี</h2>"
+                    "<p>กลับไป X-Stage Song Studio PC เพื่อตรวจข้อผิดพลาดและลองใหม่</p>"
+                    if received["error"] else
+                    "<h2>Google ส่งรหัสยืนยันแล้ว</h2>"
+                    "<p>โปรดกลับไป X-Stage Song Studio PC "
+                    "ระบบกำลังตรวจสอบและบันทึกสิทธิ์ Google Drive</p>")
                 content = ("<!doctype html><meta charset=utf-8><title>X-Stage Song Studio</title>"
                            "<style>body{font:18px sans-serif;background:#102536;color:#d5faff;"
-                           "padding:50px;text-align:center}</style>"
-                           "<h2>ได้รับคำอนุญาตจาก Google แล้ว</h2><p>กำลังตรวจสอบและเชื่อมต่อใน X-Stage Song Studio PC</p>")
+                           "padding:50px;text-align:center}</style>" + detail)
                 content = content.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
