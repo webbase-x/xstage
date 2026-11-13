@@ -55,6 +55,8 @@ def _load(root, row, export):
     rel = lyric.get("path")
     if not rel:
         return None
+    if (root / rel).is_symlink():
+        raise ValueError("ไม่แก้ไขไฟล์เนื้อร้องแบบลิงก์ เพราะอาจกระทบเพลงอื่น")
     path = export.safe_media_path(root, rel, "lyrics")
     doc = json.loads(path.read_text(encoding="utf-8-sig"))
     lines = doc.get("lines")
@@ -67,6 +69,8 @@ def _load(root, row, export):
     # The companion LRC must be independently validated: a malicious
     # symlink inside lyrics/ must never redirect a bulk write outside songs/.
     lrc_rel = PurePosixPath(rel).with_suffix(".lrc").as_posix()
+    if (root / lrc_rel).is_symlink():
+        raise ValueError("ไม่แก้ไขไฟล์ LRC แบบลิงก์ เพราะอาจกระทบเพลงอื่น")
     lrc_path = export.safe_media_path(root, lrc_rel, "lyrics")
     raw = doc.get("rawLrc")
     file_raw = lrc_path.read_text(encoding="utf-8-sig") if lrc_path.is_file() else None
@@ -276,6 +280,12 @@ def apply(root, export, snapshot, group_id, new_text, backup_root,
     # automatically. The restore action checks post-edit hashes before undo.
     backup_root = Path(backup_root)
     backup_root.mkdir(parents=True, exist_ok=True)
+    # Even when ZIP compresses well, reserve conservatively for the full
+    # byte-for-byte backup so an almost-full disk never causes partial edits.
+    import shutil
+    needed = sum(len(before) for item in changes for _, before, _ in item["files"])
+    if shutil.disk_usage(backup_root).free < needed + 32 * 1024 * 1024:
+        raise RuntimeError("พื้นที่สำหรับสำรองเนื้อร้องไม่พอ · ยังไม่ได้แก้ไขไฟล์ใด")
     operation = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + secrets.token_hex(4)
     zip_path = backup_root / (operation + ".zip")
     manifest_path = backup_root / (operation + ".json")
