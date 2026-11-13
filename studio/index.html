@@ -258,7 +258,7 @@
           </article>
           <article class="panel lyric-group-catalog">
             <div class="section-heading"><div><h3>2. เลือกตำแหน่งและกลุ่มข้อความ</h3>
-              <p>แต่ละตำแหน่งนับแยกกัน ข้อความเดียวกันที่อยู่คนละตำแหน่งจะไม่ถูกแก้พร้อมกัน</p></div></div>
+              <p>ติ๊กเลือกได้หลายกลุ่ม แม้ข้ามตำแหน่งหรือข้ามหน้ารายการ แล้วแทนที่ข้อความเดียวกันทุกกลุ่มที่เลือก</p></div></div>
             <div class="lyric-group-positions" role="group" aria-label="ตำแหน่งบรรทัดที่ต้องการแก้">
               <button type="button" class="button primary" data-lyric-position="first" aria-pressed="true">บรรทัดที่ 1</button>
               <button type="button" class="button ghost" data-lyric-position="second" aria-pressed="false">บรรทัดที่ 2</button>
@@ -266,9 +266,15 @@
               <button type="button" class="button ghost" data-lyric-position="last" aria-pressed="false">สุดท้าย</button>
             </div>
             <div class="lyric-group-filter">
-              <label for="lyric-group-search">ค้นหาข้อความ</label>
-              <input id="lyric-group-search" type="search" class="field" placeholder="ค้นหาข้อความหัวเพลงหรือท้ายเพลง" disabled>
-              <label class="lyric-group-repeats"><input id="lyric-group-repeats" type="checkbox" checked disabled> เฉพาะข้อความซ้ำตั้งแต่ 2 เพลง</label>
+              <label for="lyric-group-search">ค้นหาในเนื้อเพลงทุกบรรทัด</label>
+              <input id="lyric-group-search" type="search" class="field" placeholder="ค้นหาคำในเนื้อเพลง รวมท่อนกลางเพลง" disabled>
+              <label class="lyric-group-repeats"><input id="lyric-group-repeats" type="checkbox" checked disabled> เฉพาะกลุ่มที่ซ้ำในคลังตั้งแต่ 2 เพลง</label>
+            </div>
+            <p class="hint">เมื่อค้นหา ระบบจะแสดงเฉพาะเพลงที่มีคำนั้นในเนื้อร้อง และจะแก้เฉพาะเพลงที่ตรงคำค้นหาในกลุ่มที่เลือก ไม่กระทบเพลงอื่นในกลุ่ม</p>
+            <div class="lyric-group-actions">
+              <button id="lyric-group-select-page" class="button ghost" type="button" disabled>☑ เลือกทั้งหมดในหน้านี้</button>
+              <button id="lyric-group-clear" class="button ghost" type="button" disabled>ยกเลิกที่เลือกทั้งหมด</button>
+              <span id="lyric-group-selected-count" class="chip" role="status" aria-live="polite">เลือก 0 กลุ่ม</span>
             </div>
             <div id="lyric-group-results" class="lyric-group-results" role="list" aria-live="polite">ยังไม่ได้วิเคราะห์คลังเพลง</div>
             <div class="ai-lyrics-pager">
@@ -278,17 +284,17 @@
             </div>
           </article>
           <article class="panel lyric-group-edit">
-            <div class="section-heading"><div><h3>3. ตรวจตัวอย่างและแทนที่ข้อความในกลุ่ม</h3>
-              <p>เลือกกลุ่มด้านบนแล้วตรวจชื่อเพลงที่ได้รับผลกระทบก่อนแก้ไขทุกครั้ง</p></div></div>
+            <div class="section-heading"><div><h3>3. ตรวจกลุ่มที่เลือกและแทนที่ข้อความพร้อมกัน</h3>
+              <p>เลือกได้หลายกลุ่มใน 4 ตำแหน่ง ระบบจะแสดงจำนวนเพลงและบรรทัดที่เปลี่ยนจริง ก่อนยืนยันแก้ทั้งชุด</p></div></div>
             <div id="lyric-group-selection" class="lyric-group-selection">ยังไม่ได้เลือกกลุ่มข้อความ</div>
             <div id="lyric-group-examples" class="lyric-group-examples" aria-live="polite"></div>
-            <label for="lyric-group-replacement">ข้อความใหม่สำหรับแทนที่ทั้งกลุ่ม (เฉพาะตำแหน่งที่เลือก)</label>
+            <label for="lyric-group-replacement">ข้อความใหม่เดียวกันสำหรับทุกกลุ่มที่เลือก</label>
             <textarea id="lyric-group-replacement" class="field" rows="3" maxlength="400"
               placeholder="เช่น [X-Stage Karaoke]" disabled></textarea>
             <div class="lyric-group-actions">
-              <button id="lyric-group-apply" type="button" class="button primary" disabled>✓ ตรวจแล้ว แทนที่ข้อความทั้งกลุ่ม</button>
+              <button id="lyric-group-apply" type="button" class="button primary" disabled>✓ ตรวจแล้ว แทนที่ทุกกลุ่มที่เลือก</button>
             </div>
-            <p id="lyric-group-preview-status" class="hint">ระบบสำรอง JSON/LRC เดิมก่อนแก้ · รักษาเวลาเดิม · ข้อความเสียงร้องแบบแยกพยางค์ที่แก้จะไม่ใช้เวลาไฮไลต์ของคำเดิม</p>
+            <p id="lyric-group-preview-status" class="hint">เมื่อแก้เสร็จ กลุ่มที่ยังไม่แก้จะคงอยู่เพื่อดำเนินการต่อทันที · สำรอง JSON/LRC ก่อนแก้ · คงเวลาเดิม · ไม่อัปโหลดอัตโนมัติ</p>
           </article>
         </section>
 
