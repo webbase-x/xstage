@@ -354,6 +354,8 @@ def remove_vocal_source(song_id):
     if type(song_id) is not int:
         raise ValueError("รหัสไฟล์เพลงไม่ถูกต้อง")
     with LOCK:
+        if JOB.get("state") == "running":
+            raise ValueError("มีงานกำลังดำเนินการ · ไม่สามารถนำเพลงออกระหว่างประมวลผลได้")
         removed = AI_IMPORTED.pop(song_id, None)
         if not removed:
             raise ValueError("ไม่พบรายการเพลงที่นำเข้าในเมนู AI")
@@ -367,7 +369,7 @@ def remove_vocal_source(song_id):
             AI_IMPORTED[song_id] = removed
             FILE_BY_ID[song_id] = removed
             raise
-    return {"ok": True, "message": "ลบรายการออกจากเมนู AI แล้ว · ไม่ลบเพลงต้นฉบับ"}
+    return {"ok": True, "message": "นำเพลงออกจากรายการ AI แล้ว · ไม่ลบไฟล์ต้นฉบับหรือร่างเนื้อร้อง"}
 
 
 def visible_files(search=""):
