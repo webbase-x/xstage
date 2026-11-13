@@ -4,12 +4,13 @@
 'use strict';
 const PREF='xstage-runtime-v2';
 const MAX_PREVIEW=16*1024*1024;
-const DEFAULTS=Object.freeze({mode:'auto',quality:'balanced',soundFontCache:true});
+const DEFAULTS=Object.freeze({mode:'auto',format:'auto',quality:'balanced',soundFontCache:true});
 function setting(){
   try{
     const v=JSON.parse(global.localStorage.getItem(PREF)||'{}');
     return {
       mode:['auto','midi','audio'].includes(v.mode)?v.mode:DEFAULTS.mode,
+      format:['auto','m4a','mp3','midi','video'].includes(v.format)?v.format:DEFAULTS.format,
       quality:['low','balanced','high'].includes(v.quality)?v.quality:DEFAULTS.quality,
       soundFontCache:v.soundFontCache!==false
     };
@@ -38,22 +39,41 @@ function deviceInfo(){
 }
 function chooseFormat(song,device=deviceInfo(),prefs=setting()){
   const files=song?.media||{};
-  const supportsMidi=device.wasm&&device.worklet&&!!global.XStageMidiEngine?.ready;
-  const hasM4a=!!(files.m4a?.fileId||song?.audio?.fileId);
-  const hasMp3=!!files.mp3?.fileId;
-  const hasMidi=!!files.midi?.fileId;
-  const hasVideo=!!files.video?.fileId;
-  if(prefs.mode==='midi'&&hasMidi&&supportsMidi)return 'midi';
-  if(prefs.mode!=='midi'){
-    if(hasM4a&&device.m4a)return 'm4a';
-    if(hasMp3&&device.mp3)return 'mp3';
-  }
-  if(hasMidi&&supportsMidi)return 'midi';
-  if(hasM4a&&device.m4a)return 'm4a';
-  if(hasMp3&&device.mp3)return 'mp3';
-  if(hasVideo&&!!global.XStageVideoEngine?.ready)return 'video';
+  const hasId=x=>typeof x?.fileId==='string'&&x.fileId.length>0;
+  // Engine readiness is explicit: WASM/AudioWorklet support alone is insufficient.
+  const midiReady=device.wasm&&device.worklet&&!!global.XStageMidiEngine?.ready;
+  const original=song?.audio?.path||'';
+  const legacyM4a=hasId(song?.audio)&&(/\.m4a(?:$|[?#])/i.test(original)||!original);
+  const legacyMp3=hasId(song?.audio)&&/\.mp3(?:$|[?#])/i.test(original);
+  const available={
+    m4a:device.m4a&&(hasId(files.m4a)||legacyM4a),
+    mp3:device.mp3&&(hasId(files.mp3)||legacyMp3),
+    midi:midiReady&&hasId(files.midi),
+    video:!!global.XStageVideoEngine?.ready&&hasId(files.video)
+  };
+  const requested=prefs.format||'auto';
+  if(requested!=='auto')return available[requested]?requested:null;
+  if(prefs.mode==='midi'&&available.midi)return 'midi';
+  if(available.m4a)return 'm4a';
+  if(available.mp3)return 'mp3';
+  if(available.midi)return 'midi';
+  return available.video?'video':null;
+}
+function selectedMedia(song,format=chooseFormat(song)){
+  const source=song?.media?.[format];
+  if(source?.fileId)return source;
+  const path=song?.audio?.path||'';
+  if((format==='m4a'&&(!path||/\.m4a(?:$|[?#])/i.test(path)))||
+     (format==='mp3'&&/\.mp3(?:$|[?#])/i.test(path)))return song.audio;
   return null;
 }
+function saveFormat(format){
+  if(!['auto','m4a','mp3','midi','video'].includes(format))throw Error('Unsupported playback selection');
+  let raw={};
+  try{raw=JSON.parse(global.localStorage.getItem(PREF)||'{}')||{};}catch{}
+  global.localStorage.setItem(PREF,JSON.stringify({...raw,format}));
+}
+
 let readyPromise=null;
 function preloadEnvironment(){
   if(readyPromise)return readyPromise;
@@ -71,7 +91,7 @@ function preloadEnvironment(){
   })();
   return readyPromise;
 }
-const api=Object.freeze({setting,deviceInfo,chooseFormat,preloadEnvironment,
+const api=Object.freeze({setting,saveFormat,deviceInfo,chooseFormat,selectedMedia,preloadEnvironment,
   MAX_PREVIEW,DEFAULTS});
 global.XStageRuntime=api;
 })(window);
