@@ -154,7 +154,7 @@ class SongSmartScanTests(unittest.TestCase):
 
     def test_excludes_generated_output_but_never_deletes_it(self):
         self.source = self.root
-        generated = self.output / "songs" / "audio" / "0" / "fake.m4a"
+        generated = self.output / "StageWeb" / "audio" / "0" / "fake.m4a"
         generated.parent.mkdir(parents=True, exist_ok=True)
         generated.write_bytes(b"existing" * 600)
         rows, _ = self.run_scan()
