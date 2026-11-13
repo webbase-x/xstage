@@ -2094,6 +2094,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(remove_vocal_source(payload.get("id")))
             elif path == "/api/ai-lyrics-approve":
                 self._json(approve_ai_lyrics(payload.get("id"), payload.get("lrc")))
+            elif path == "/api/google-login-focus":
+                # Reopen the exact in-progress Google OAuth URL. The browser
+                # never receives the OAuth URL or the refresh token via our API.
+                self._json(GOOGLE.show_pending_login())
             elif path == "/api/jobs":
                 self._json(start_job(payload))
             elif path == "/api/jobs/cancel":
