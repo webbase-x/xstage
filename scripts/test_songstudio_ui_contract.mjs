@@ -77,6 +77,39 @@ assert.ok(Math.abs(stageProgress(note,1.5)-.9)<.001,
   'MIDI sweep must continue smoothly into the next timed syllable');
 assert.equal(stageProgress({text:'AB',startTime:0,endTime:2},1),.5,
   'Untimed standard LRC must use approximate whole-line interpolation');
+const tied={text:'MWX',startTime:0,endTime:3,
+  syllables:[{text:'M',start:0,duration:0},{text:'W',start:0,duration:0},
+             {text:'X',start:2,duration:1}]};
+const duringTie=[.25,.5,1,1.5,1.9].map(time=>stageProgress(tied,time));
+assert.ok(duringTie.every((value,i)=>i===0||value>duringTie[i-1]),
+  'Simultaneous MIDI/CUR cursor cues must animate smoothly, never remain frozen');
+assert.ok(duringTie[0]>0 && duringTie.at(-1)<1,
+  'The sweep must move continuously through a multi-glyph tied timestamp');
+const wholeLine={text:'MWX',startTime:0,endTime:4,
+  syllables:[{text:'M',start:0,duration:0},{text:'W',start:0,duration:0},
+             {text:'X',start:0,duration:0}]};
+assert.equal(stageProgress(wholeLine,2),.5,
+  'When every MIDI cursor cue has identical timing, use smooth line approximation');
+const outroPause={text:'MW',startTime:0,endTime:12,
+  syllables:[{text:'M',start:0,duration:1},{text:'W',start:1,duration:11}]};
+assert.ok(stageProgress(outroPause,3)>.99,
+  'The final glyph should finish naturally rather than creeping across a long instrumental rest');
+const beginning=js.indexOf('  function karaokeCueWindows(');
+const ending=js.indexOf('  function karaokeWipeSpan(',beginning);
+assert.ok(beginning>=0&&ending>beginning,
+  'Studio preview requires safe interpolation for duplicate CUR timestamps');
+const studioCueWindows=new Function('return ('+js.slice(beginning,ending).trim()+')')();
+const windows=studioCueWindows([
+  {text:'ก',startTime:0},{text:'า',startTime:0},{text:'ข',startTime:2}
+],0,3);
+assert.deepEqual(windows.map(x=>Number(x.start.toFixed(2))),[0,1,2],
+  'Studio must distribute tied cursor letters across the next available beat');
+assert.deepEqual(windows.map(x=>Number(x.end.toFixed(2))),[1,2,3],
+  'Studio preview must not leave gaps or flash simultaneous letters');
+assert.equal(studioCueWindows([
+  {text:'A',startTime:0},{text:'B',startTime:0}
+],0,4),null,
+  'Studio should use smooth whole-line LRC approximation when no usable character times exist');
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
 console.log('PASS: PC/Web Control UI syntax, bulk multi-select, lyric-body search, AI and Drive controls.');
