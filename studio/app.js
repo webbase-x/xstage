@@ -41,6 +41,7 @@
   const tabNames = {
     create: ['สร้างเพลงใหม่', 'เตรียมต้นฉบับให้ครบในเครื่องก่อนเริ่มสร้าง M4A'],
     'ai-lyrics': ['สร้างเนื้อร้อง AI', 'นำเข้าเพลงใหม่ ถอดเสียงร้อง จัดเวลา และทดลองฟัง LRC'],
+    'lyric-head-tail': ['จัดการข้อความหัว–ท้ายเพลง', 'ตรวจข้อความซ้ำ 4 ตำแหน่ง · แทนที่ทั้งกลุ่มและย้อนคืนได้'],
     upload: ['อัปโหลด', 'ตรวจไฟล์ซ้ำบน Google Drive · ส่งเฉพาะเพลงที่เปลี่ยน'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
@@ -71,6 +72,8 @@
   let aiSearchTimer = 0, aiSearchSeq = 0, aiDraftSeq = 0;
   let aiStreamId = '', aiPlaySerial = 0, aiDraftReady = false, aiEngineReady = false;
   let aiTimed = [], aiActiveIndex = -2;
+  let phraseReady=false,phrasePosition='first',phraseOffset=0,phraseRows=[];
+  let phraseChosen=null,phraseSeq=0,phraseSearchTimer=0,phraseBackup=null;
   // Keep the owner's pasted words independent from Whisper's guessed text.
   const aiPastedLyrics = new Map();
   let pendingAiAlignment = null;
@@ -226,6 +229,10 @@
     if (activeTab !== 'create') stopLivePreview();
     if (activeTab !== 'ai-lyrics') aiStopPlayback();
     if (name === 'ai-lyrics') void aiRefreshSongList();
+    if (name === 'lyric-head-tail') {
+      void refreshPhraseBackup();
+      if(phraseReady)void refreshPhraseGroups();
+    }
     if (name === 'settings') void refreshEnvironment();
   }
   function setFields() {
@@ -329,6 +336,7 @@
     for (const el of document.querySelectorAll('[data-pick],.field,.song-table input[type=checkbox]')) el.disabled = busy;
     $('cancel-job').hidden = !busy;
     updateCreateWizard();
+    phraseUpdateButtons();
   }
   async function verifyCodeRegistry() {
     const button = $('verify-code-registry');
