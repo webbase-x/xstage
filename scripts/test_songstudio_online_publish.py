@@ -144,6 +144,35 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(self.published()[self.first["webSongId"]], original)
         self.assertIn(second["webSongId"], self.published())
 
+    def test_small_batches_publish_immediately_and_player_sees_each_batch(self):
+        second = self.make_song("10002", b"B" * 5200, "เพลงสอง")
+        third = self.make_song("20003", b"C" * 5300, "เพลงสาม")
+        observations = []
+        result = self.publisher.publish(
+            self.root, [self.first, second, third], batch_size=1,
+            on_batch=lambda batch, total, created, revised:
+            observations.append((batch, total, len(self.published()))))
+        self.assertEqual(result["batches"], 3)
+        self.assertEqual(result["totalSongs"], 3)
+        self.assertEqual(observations, [(1, 1, 1), (2, 2, 2), (3, 3, 3)])
+        self.assertEqual(len(self.pointer()[0]["deltaFileIds"]), 2)
+
+    def test_failure_in_second_batch_leaves_first_batch_playable(self):
+        second = self.make_song("10004", b"Z" * 5300, "เพลงสี่")
+        original = self.drive.upload_file
+        def fail_second(parent, path, name, **kwargs):
+            if name.startswith("10004-") and name.endswith(".m4a"):
+                raise online.PublishError("upload interrupted")
+            return original(parent, path, name, **kwargs)
+        with patch.object(self.drive, "upload_file", side_effect=fail_second):
+            with self.assertRaisesRegex(online.PublishError, "upload interrupted"):
+                self.publisher.publish(self.root, [self.first, second], batch_size=1)
+        self.assertEqual(len(self.published()), 1)
+        again = self.publisher.publish(self.root, [self.first, second], batch_size=1)
+        self.assertEqual(again["duplicates"], 1)
+        self.assertEqual(again["newSongs"], 1)
+        self.assertEqual(len(self.published()), 2)
+
     def test_same_code_different_audio_is_conflict_not_silent_overwrite(self):
         self.publisher.publish(self.root, [self.first])
         before = dict(self.published())
