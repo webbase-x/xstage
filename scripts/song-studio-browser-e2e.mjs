@@ -99,6 +99,8 @@ try {
     mode: 'original', download: 'C:\\XStage\\Downloads', oauth: ''
   };
   let fakeGoogleConnected = false;
+  const importedAI = new Map();
+  let removedAIRequests=0;
   let simulatedJob = {id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
                       completed:0,total:0,logs:[]};
   const uploadRequests = [];
@@ -151,13 +153,24 @@ try {
         timedLyricsReady:true, proofMessage:'พบต้นฉบับครบสามส่วน'
       };
     } else if (url.pathname === '/api/vocal-songs') {
-      response = {rows:[{id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',
-                         code:'AINEW',kind:'MP3',size:10000,status:'ai-import'}],total:1};
+      const rows=[...importedAI.values()];
+      response = {rows,total:rows.length};
     } else if (url.pathname === '/api/vocal-import') {
-      response = {added:1,skipped:0,total:1,errors:[],
-                  song:{id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',
-                        code:'AINEW',kind:'MP3',size:10000},
+      const song={id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',
+                  code:'AINEW',kind:'MP3',size:10000,status:'ai-import'};
+      importedAI.set(song.id,song);
+      response = {added:1,skipped:0,total:importedAI.size,errors:[],song,
                   message:'นำเข้าเพลงใหม่ 1 เพลง'};
+    } else if (url.pathname === '/api/vocal-remove') {
+      const id=request.postDataJSON()?.id;
+      if(importedAI.delete(id)){
+        removedAIRequests++;
+        response={ok:true,message:'นำเพลงออกจากรายการ AI แล้ว · ไม่ลบไฟล์ต้นฉบับหรือร่างเนื้อร้อง'};
+      } else {
+        await route.fulfill({status:400,contentType:'application/json',
+          body:JSON.stringify({error:'ไม่พบรายการเพลงที่นำเข้าในเมนู AI'})});
+        return;
+      }
     } else if (url.pathname === '/api/ai-lyrics-draft') {
       response = {id:-1,title:'เพลง AI นำเข้า',artist:'นักร้องทดลอง',code:'AINEW',
                   available:true,hasDraft:true,approvedLrc:'',
@@ -311,7 +324,31 @@ try {
   const exportedLrc = pc.waitForEvent('download');
   await pc.click('#ai-lyrics-download');
   assert.match((await exportedLrc).suggestedFilename(),/\.lrc$/);
-  assert.deepEqual(pcErrors,[], 'AI Lyrics menu must not produce browser errors');
+  // Removing an imported song must ask first, preserve the row on Cancel,
+  // then clear the selected editor and list only after an accepted API call.
+  const removeButton=pc.locator('#ai-lyrics-results [data-ai-remove="-1"]');
+  await removeButton.waitFor();
+  await removeButton.click();
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  assert.match(await pc.locator('#studio-confirm-title').innerText(),/นำเพลงออก/);
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/ไม่ลบไฟล์เพลงต้นฉบับ/);
+  assert.equal(await pc.locator('#studio-confirm-ok').innerText(),'นำออกจากรายการ');
+  await pc.click('#studio-confirm-cancel');
+  assert.equal(removedAIRequests,0,'Cancel must not invoke /api/vocal-remove');
+  assert.equal(await removeButton.count(),1,'Cancel must preserve the imported row');
+  await removeButton.click();
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  await pc.click('#studio-confirm-ok');
+  await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-count')?.textContent.includes('ยังไม่มีเพลงที่นำเข้า'));
+  assert.equal(removedAIRequests,1,'Confirm must remove only the selected import');
+  assert.equal(await pc.locator('#ai-lyrics-selected').innerText(),'ยังไม่ได้เลือกเพลง');
+  assert.equal(await pc.locator('#ai-lyrics-editor').inputValue(),'');
+  assert.equal(await pc.locator('#ai-lyrics-start').isDisabled(),true);
+  // Importing the same local audio again must remain possible.
+  await pc.click('#ai-lyrics-import');
+  await pc.locator('#ai-lyrics-results [data-ai-remove="-1"]').waitFor();
+  assert.equal(await pc.locator('#ai-lyrics-count').innerText(),'1–1 จาก 1 ไฟล์');
+  assert.deepEqual(pcErrors,[], 'AI import/remove must not cause browser errors');
   // Cloud UI smoke uses mocked API only; network/account integration is
   // independently covered by the Drive round-trip Python tests.
   await pc.click('.nav-button[data-tab="settings"]');
