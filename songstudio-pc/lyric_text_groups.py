@@ -320,103 +320,164 @@ def plan(snapshot, group_ids, *, search="", replacement=None):
 
 def apply(root, export, snapshot, group_id, new_text, backup_root,
           *, expected_count, cancelled=None, on_progress=None):
+    """Backward-compatible single-group edit using one atomic multi-group batch."""
+    return apply_many(root, export, snapshot, [group_id], new_text, backup_root,
+                      expected_count=expected_count, cancelled=cancelled,
+                      on_progress=on_progress)
+
+
+def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
+               *, search="", expected_count, cancelled=None, on_progress=None):
+    """Edit only selected groups/songs (possibly at different positions).
+
+    Each song is opened and saved ONCE even if two or more positions are
+    selected. Backups are complete before the first write. The live group
+    index is patched in memory after commit, keeping the unedited queue
+    visible immediately without rescanning a large song library.
+    """
     root = Path(root).expanduser().resolve()
-    group = snapshot["groups"].get(group_id)
-    if not group or snapshot["root"] != str(root):
-        raise ValueError("กลุ่มข้อความนี้หมดอายุ กรุณาวิเคราะห์คลังอีกครั้ง")
-    if not isinstance(new_text, str):
-        raise ValueError("กรุณาระบุข้อความใหม่")
-    new_text = unicodedata.normalize("NFC", new_text.strip())
-    if (not new_text or len(new_text) > MAX_TEXT or
-            "\r" in new_text or "\n" in new_text or "\0" in new_text):
-        raise ValueError("ข้อความแทนที่ต้องเป็นบรรทัดเดียว ความยาวไม่เกิน 400 ตัวอักษร")
-    if _same(new_text) == group["text"]:
-        raise ValueError("ข้อความใหม่เหมือนข้อความเดิม ไม่จำเป็นต้องเปลี่ยน")
-    if type(expected_count) is not int or expected_count != group["count"]:
-        raise ValueError("จำนวนเพลงเปลี่ยนไป กรุณาตรวจกลุ่มใหม่ก่อนยืนยัน")
+    if snapshot["root"] != str(root):
+        raise ValueError("กลุ่มข้อความไม่ตรงกับพื้นที่เก็บเพลง กรุณาวิเคราะห์ใหม่")
+    new_text = _new_text(new_text)
+    targets, chosen, unchanged = _targets(snapshot, group_ids, search, new_text)
+    number_of_lines = sum(len(target["edits"]) for target in targets.values())
+    if type(expected_count) is not int or expected_count != number_of_lines:
+        raise ValueError("จำนวนเพลงหรือบรรทัดที่เลือกเปลี่ยนไป กรุณาตรวจรายการก่อนยืนยัน")
+    if not number_of_lines:
+        raise ValueError("ทุกกลุ่มที่เลือกมีข้อความใหม่นี้อยู่แล้ว ไม่ต้องแก้ไขซ้ำ")
     pointer, _ = export._read_current(root)
     if pointer.get("generation") != snapshot["generation"]:
         raise ValueError("ฐานเพลงมีการเปลี่ยนแปลงหลังวิเคราะห์ กรุณากดวิเคราะห์อีกครั้ง")
-    # Preflight the entire batch before modifying any local output. Any
-    # external edit detected now aborts the batch, not just an individual song.
+
+    # Full preflight. A selected song can match multiple groups at different
+    # line positions, but must produce only one JSON and one LRC output.
     changes = []
-    for number, item in enumerate(group["members"], 1):
+    for number, target in enumerate(targets.values(), 1):
         if cancelled is not None and cancelled.is_set():
             raise RuntimeError("ยกเลิกก่อนแก้ไข · เพลงยังไม่เปลี่ยนแปลง")
-        path, lrc, doc, raw = _record_bytes(root, item["record"], export)
-        pos = POSITIONS[group["position"]][0]
-        if _same(doc["lines"][pos]["text"]) != group["text"]:
-            raise ValueError("ข้อความในเพลงมีการแก้ไขหลังวิเคราะห์ กรุณาสแกนใหม่: " + item["code"])
-        revised, revised_lrc, lost_tokens = _replacement(
-            doc, raw, group["position"], new_text)
+        parsed = _record_bytes(root, target["record"], export)
+        if parsed is None:
+            raise ValueError("เนื้อร้องของเพลงที่เลือกไม่ครบ 4 บรรทัด")
+        path, lrc, doc, raw = parsed
+        revised_doc, revised_lrc = doc, raw
+        lost_tokens = 0
+        chosen_positions = set()
+        for group, item in target["edits"]:
+            index = POSITIONS[group["position"]][0]
+            if index % len(doc["lines"]) in chosen_positions:
+                raise ValueError("พบตำแหน่งที่ถูกเลือกซ้ำในเพลงเดียวกัน")
+            chosen_positions.add(index % len(doc["lines"]))
+            if _same(doc["lines"][index]["text"]) != group["text"]:
+                raise ValueError("ข้อความในเพลงมีการแก้ไขภายหลัง กรุณาวิเคราะห์ใหม่: " + item["code"])
+            revised_doc, revised_lrc, removed = _replacement(
+                revised_doc, revised_lrc, group["position"], new_text)
+            lost_tokens += bool(removed)
+
         original_json = path.read_bytes()
-        new_json = (json.dumps(revised, ensure_ascii=False,
+        new_json = (json.dumps(revised_doc, ensure_ascii=False,
                                separators=(",", ":")) + "\n").encode("utf-8")
-        before = [(path, original_json, new_json)]
+        original_files = [(path, original_json, new_json)]
         if lrc is not None:
             if revised_lrc is None:
-                raise ValueError("LRC ไม่พร้อมแก้ไข: " + item["code"])
-            before.append((lrc, lrc.read_bytes(), revised_lrc.encode("utf-8")))
-        changes.append({"files": before, "songId": item["songId"],
-                        "lostTokens": lost_tokens})
+                raise ValueError("ไม่สามารถสร้าง LRC ที่แก้ไขได้ครบถ้วน: " + target["songId"])
+            original_files.append((lrc, lrc.read_bytes(), revised_lrc.encode("utf-8")))
+        changes.append({"files": original_files, "songId": target["songId"],
+                        "lostTokens": lost_tokens, "updated": revised_doc,
+                        "edits": target["edits"]})
         if on_progress and number % 300 == 0:
-            on_progress(f"ตรวจเงื่อนไขและเตรียมสำรอง {number:,}/{group['count']:,} เพลง", number)
-    # A full backup is written before the first replace and is never removed
-    # automatically. The restore action checks post-edit hashes before undo.
+            on_progress(f"ตรวจและเตรียมสำรอง {number:,}/{len(targets):,} เพลง", number)
+
     backup_root = Path(backup_root)
     backup_root.mkdir(parents=True, exist_ok=True)
-    # Even when ZIP compresses well, reserve conservatively for the full
-    # byte-for-byte backup so an almost-full disk never causes partial edits.
     import shutil
     needed = sum(len(before) for item in changes for _, before, _ in item["files"])
     if shutil.disk_usage(backup_root).free < needed + 32 * 1024 * 1024:
-        raise RuntimeError("พื้นที่สำหรับสำรองเนื้อร้องไม่พอ · ยังไม่ได้แก้ไขไฟล์ใด")
+        raise RuntimeError("พื้นที่สำรองเนื้อร้องไม่พอ · ยังไม่ได้แก้ไฟล์ใด")
     operation = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + secrets.token_hex(4)
     zip_path = backup_root / (operation + ".zip")
     manifest_path = backup_root / (operation + ".json")
-    files = []
+    specs = []
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED,
                          compresslevel=3) as bundle:
         for item in changes:
             for path, original, revised in item["files"]:
                 rel = path.relative_to(root).as_posix()
                 bundle.writestr(rel, original)
-                files.append({"path": rel, "before": _sha(original),
+                specs.append({"path": rel, "before": _sha(original),
                               "after": _sha(revised)})
+    first = chosen[0][0] if len(chosen) == 1 else None
     manifest = {
-        "version": 1, "id": operation, "state": "prepared",
-        "root": str(root), "position": group["position"],
-        "oldText": group["text"], "newText": new_text,
-        "songs": len(changes), "files": files, "createdAt": datetime.now(timezone.utc).isoformat()
+        "version": 2, "id": operation, "state": "prepared",
+        "root": str(root),
+        "position": first["position"] if first else "mixed",
+        "oldText": first["text"] if first else f"{len(chosen)} กลุ่มข้อความ",
+        "newText": new_text, "groups": list(group_ids),
+        "search": _same(search), "songs": len(changes),
+        "lines": number_of_lines, "files": specs,
+        "createdAt": datetime.now(timezone.utc).isoformat()
     }
-    _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
-    # Update in-place only after the complete backup exists.
+    _atomic_bytes(manifest_path,
+                  (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
     try:
         for number, item in enumerate(changes, 1):
             if cancelled is not None and cancelled.is_set():
-                raise RuntimeError("ผู้ใช้ยกเลิกการแทนที่ · กำลังคืนข้อความเดิม")
+                raise RuntimeError("ผู้ใช้ยกเลิกระหว่างแทนที่ · กำลังคืนค่าเดิม")
             for path, before, revised in item["files"]:
                 if _sha(path.read_bytes()) != _sha(before):
-                    raise ValueError("ไฟล์เพลงเปลี่ยนระหว่างแก้ไข กำลังคืนค่าเดิม: " + str(path.name))
+                    raise ValueError("ไฟล์เปลี่ยนระหว่างแก้ไข · กำลังคืนค่าเดิม: " + path.name)
                 _atomic_bytes(path, revised)
             if on_progress and number % 100 == 0:
-                on_progress(f"แทนที่ข้อความแล้ว {number:,}/{len(changes):,} เพลง", number)
+                on_progress(f"แทนที่แล้ว {number:,}/{len(changes):,} เพลง", number)
     except BaseException:
         try:
-            _restore_files(root, zip_path, files, strict=False)
+            _restore_files(root, zip_path, specs, strict=False)
             manifest["state"] = "rolled-back"
-            _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
         except Exception:
             manifest["state"] = "recovery-required"
-            _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
+        _atomic_bytes(manifest_path,
+                      (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
         raise
+
     manifest["state"] = "committed"
-    _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
+    _atomic_bytes(manifest_path,
+                  (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
+    # Patch only the edited members of the in-memory search/group index. This
+    # preserves all other rows, counts and pagination in the operator's queue.
+    for group, members in chosen:
+        removed = {item["songId"] for item in members}
+        group["members"][:] = [
+            item for item in group["members"] if item["songId"] not in removed]
+        group["count"] = len(group["members"])
+        if not group["members"]:
+            snapshot["groups"].pop(group["id"], None)
+    for item in changes:
+        doc = item["updated"]
+        snapshot["searchable"][item["songId"]] = "\n".join(
+            _same(line["text"]).casefold() for line in doc["lines"])
+        for old_group, old_item in item["edits"]:
+            position = old_group["position"]
+            identity = _group_id(position, new_text)
+            group = snapshot["groups"].setdefault(identity, {
+                "id": identity, "position": position,
+                "label": POSITIONS[position][1],
+                "text": new_text, "count": 0, "members": []
+            })
+            member = dict(old_item)
+            member["text"] = new_text
+            group["members"].append(member)
+            group["count"] = len(group["members"])
+    snapshot["groupCount"] = len(snapshot["groups"])
     return {
-        "message": f"แก้ข้อความ {group['label']} สำเร็จ {len(changes):,} เพลง · ไฟล์เสียงและเวลาเดิมไม่เปลี่ยน",
-        "changedSongs": len(changes), "changedFiles": len(files),
-        "removedSyllableCues": sum(bool(x["lostTokens"]) for x in changes),
+        "message": (
+            f"แก้ข้อความ {len(chosen)} กลุ่ม · {number_of_lines:,} บรรทัด "
+            f"ใน {len(changes):,} เพลงเรียบร้อย · รายการที่ยังไม่แก้คงอยู่"
+        ),
+        "changedSongs": len(changes), "changedLines": number_of_lines,
+        "changedGroups": len(chosen),
+        "alreadyCorrect": unchanged, "changedFiles": len(specs),
+        "removedSyllableCues": sum(item["lostTokens"] for item in changes),
         "backupId": operation,
+        "remainingGroups": snapshot["groupCount"],
     }
 
 
