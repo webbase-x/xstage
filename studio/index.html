@@ -201,8 +201,19 @@
               <button id="ai-lyrics-start" class="button primary" type="button" disabled>✦ ให้ AI ถอดเสียงร้องและจัดเวลา</button>
               <span id="ai-lyrics-status" class="ai-lyrics-status" role="status" aria-live="polite">รอนำเข้าเพลงใหม่หรือเลือกเพลงที่เคยนำเข้า</span>
             </div>
+            <div class="ai-lyrics-paste-panel">
+              <label for="ai-lyrics-paste"><strong>3. มีเนื้อเพลงถูกต้องอยู่แล้ว? วางคำร้องโดยไม่ต้องใส่เวลา</strong></label>
+              <p class="hint">วางหนึ่งบรรทัดต่อหนึ่งท่อนร้อง · ใช้คำที่คุณวางไว้ตามเดิม ไม่ใช้คำที่ Whisper ฟังผิดมาแทน · ระบบจะเทียบคำกับช่วงเสียงร้องจริงและจัดเวลาเบื้องต้น</p>
+              <textarea id="ai-lyrics-paste" class="field" rows="7" spellcheck="false"
+                placeholder="เนื้อร้องบรรทัดแรก&#10;เนื้อร้องบรรทัดที่สอง&#10;เนื้อร้องบรรทัดที่สาม"
+                disabled></textarea>
+              <div class="ai-lyrics-editor-actions">
+                <button id="ai-lyrics-align" type="button" class="button primary" disabled>✦ AI จัดเวลาให้เนื้อเพลงที่วาง</button>
+              </div>
+              <p id="ai-lyrics-align-review" class="ai-lyrics-validation" role="status" aria-live="polite">ยังไม่จัดเวลา · ถ้าเสียงร้องไม่ชัด หรือเนื้อเพลงไม่ตรงไฟล์ AI จะไม่สร้างเวลาที่อ้างว่าแม่นยำ</p>
+            </div>
             <div class="ai-lyrics-monitor">
-              <strong>3. ทดลองเล่นเพลงพร้อมตรวจเนื้อร้อง</strong>
+              <strong>4. ทดลองเล่นเพลงพร้อมตรวจเนื้อร้อง</strong>
               <div class="ai-lyrics-player-row">
                 <button id="ai-lyrics-play" class="button ghost" type="button" disabled>▶ ฟังเสียงต้นฉบับ</button>
                 <button id="ai-lyrics-stop" class="button ghost" type="button">■ หยุด</button>
@@ -213,7 +224,7 @@
               </div>
             </div>
             <div class="ai-lyrics-edit">
-              <label for="ai-lyrics-editor">4. ตรวจแก้เนื้อร้องและเวลารูปแบบ LRC ก่อนบันทึก</label>
+              <label for="ai-lyrics-editor">5. ตรวจแก้เนื้อร้องและเวลารูปแบบ LRC ก่อนบันทึก</label>
               <textarea id="ai-lyrics-editor" class="field" rows="12" spellcheck="false"
                 placeholder="[00:12.50]เนื้อร้องบรรทัดแรก&#10;[00:18.75]เนื้อร้องบรรทัดที่สอง"
                 disabled></textarea>
