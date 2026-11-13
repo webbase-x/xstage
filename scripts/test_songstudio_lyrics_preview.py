@@ -183,10 +183,10 @@ class LyricPreviewTests(unittest.TestCase):
                 dest.write_text(json.dumps({"transcription": [
                     {"text": "เพลงทดสอบ", "offsets": {"from": 1000, "to": 3000}}
                 ]}), encoding="utf-8")
-        with patch.object(ai, "readiness", return_value=(True, "")), \\
-             patch.object(ai, "_run", side_effect=fake_run), \\
-             patch.object(ai, "resources", return_value=(runtime / "whisper" / "whisper-cli.exe",
-                                                        runtime / "models" / "ggml-base.bin")):
+        with (patch.object(ai, "readiness", return_value=(True, "")),
+              patch.object(ai, "_run", side_effect=fake_run),
+              patch.object(ai, "resources", return_value=(runtime / "whisper" / "whisper-cli.exe",
+                                                         runtime / "models" / "ggml-base.bin"))):
             result = ai.transcribe(source, "001", self.dir, runtime,
                                    "ffmpeg", __import__("threading").Event(),
                                    lambda _: None)
