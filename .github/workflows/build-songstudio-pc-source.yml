@@ -12,6 +12,7 @@ on:
       - "scripts/test_songstudio_pc.py"
       - "scripts/test_songstudio_ai_import.py"
       - "scripts/test_songstudio_drive_roundtrip.py"
+      - "scripts/test_songstudio_online_publish.py"
       - "scripts/test_songstudio_lyrics_preview.py"
       - "scripts/test_songstudio_ncn.py"
       - "scripts/test_songstudio_drive_download.py"
