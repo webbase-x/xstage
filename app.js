@@ -636,7 +636,23 @@ function timeLabel(t) {
 function getFileId(data) {
   return typeof data?.fileId === 'string' && data.fileId.length > 0 ? data.fileId : '';
 }
-function playable(song) { return !!(getFileId(song?.audio) && getFileId(song?.lyrics)); }
+function songPlayFormat(song){
+  return window.XStageRuntime?.chooseFormat?.(song)||null;
+}
+function playable(song) {
+  const format=songPlayFormat(song);
+  const media=window.XStageRuntime?.selectedMedia?.(song,format);
+  // MIDI and VIDEO are intentionally excluded until their stage engines and
+  // synchronized lyrics have been validated end to end.
+  return !!(getFileId(media)&&getFileId(song?.lyrics)&&['m4a','mp3'].includes(format));
+}
+function songAudioMedia(song){
+  return window.XStageRuntime?.selectedMedia?.(song,songPlayFormat(song))||null;
+}
+function matchesSongFormat(song){
+  const selected=document.getElementById('song-format-filter')?.value||'auto';
+  return selected==='auto'?playable(song):playable(song)&&songPlayFormat(song)===selected;
+}
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
 const GOOGLE_FETCH_TIMEOUT_MS=18_000;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -1555,7 +1571,7 @@ function renderSongs() {
     return;
   }
   setLiveSearchExpanded(true);
-  const ranked=rankedSearchEntries(state.songs,term);
+  const ranked=rankedSearchEntries(state.songs.filter(matchesSongFormat),term);
   state.shown=ranked.slice(0,5).map(item=>item.song);
   state.selectedIndex=Math.max(0,Math.min(state.selectedIndex,state.shown.length-1));
   ui.resultCount.textContent=`พบ ${num(ranked.length)} เพลง${ranked.length>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''}`;
@@ -1737,7 +1753,7 @@ async function preloadFirstQueueSong(song,token){
   const task={song,token,controller};state.queuePreload=task;
   try{
     const [response,lyrics]=await Promise.all([
-      privateFile(song.audio.fileId,token,{signal:controller.signal}),
+      privateFile(songAudioMedia(song).fileId,token,{signal:controller.signal}),
       privateJson(song.lyrics.fileId,token,{signal:controller.signal})
     ]);
     const limit=window.XStageRuntime?.deviceInfo?.().maxPreloadBytes||2*1024*1024;
@@ -1757,7 +1773,7 @@ function prefetchMedleyNext(){
   const song=nextMedleyCandidate(),token=state.token;
   if(!song||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
   const task={song,token};state.medleyPrefetch=task;
-  Promise.all([privateFile(song.audio.fileId,token),privateJson(song.lyrics.fileId,token)])
+  Promise.all([privateFile(songAudioMedia(song).fileId,token),privateJson(song.lyrics.fileId,token)])
     .then(async ([response,lyrics])=>{
       const limit=window.XStageRuntime?.deviceInfo?.().maxPreloadBytes||2*1024*1024;
       const size=Number(response.headers.get('content-length'))||0;
@@ -1923,7 +1939,7 @@ function togglePlayback(){
 async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=true}={}) {
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
-  if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มี M4A/JSON ที่พร้อมเล่น');return;}
+  if (!playable(song)) {setPlayStatus('ไม่พบไฟล์เสียงและเนื้อร้องที่อุปกรณ์นี้รองรับ · เปลี่ยนรูปแบบค้นหา');return;}
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
@@ -1937,7 +1953,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     const [audio,lyrics]=prepared
       ? [prepared.blob,prepared.lyrics]
       : await boundedPlaybackTask(Promise.all([
-          privateFile(song.audio.fileId,token,{signal:controller.signal}).then(r=>r.blob()),
+          privateFile(songAudioMedia(song).fileId,token,{signal:controller.signal}).then(r=>r.blob()),
           privateJson(song.lyrics.fileId,token,{signal:controller.signal})
         ]),90,'โหลดเพลงจาก Google Drive นานเกินไป กรุณาตรวจการเชื่อมต่อ');
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
@@ -2950,6 +2966,16 @@ ui.search.addEventListener('input',()=>{
   if(ui.search.value.trim())setLiveSearchExpanded(true);
 });
 ui.search.addEventListener('keydown',onSearchKey);
+const songFormatFilter=document.getElementById('song-format-filter');
+if(songFormatFilter){
+  songFormatFilter.value=window.XStageRuntime?.setting?.().format||'auto';
+  songFormatFilter.addEventListener('change',()=>{
+    window.XStageRuntime?.saveFormat?.(songFormatFilter.value);
+    state.shown=[];state.selectedIndex=0;
+    // Only show playable items; never ask the audio engine to decode MIDI.
+    renderSongs();updateTransport();
+  });
+}
 ui.search.addEventListener('blur',restoreViewportAfterKeyboard);
 
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
