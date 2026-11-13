@@ -104,6 +104,11 @@ try {
   let simulatedJob = {id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
                       completed:0,total:0,logs:[]};
   const uploadRequests = [];
+  let lyricBulkReady=false,bulkBackup=null;
+  const bulkGroup={id:'intro-verified-1234',position:'first',
+    label:'บรรทัดแรก',text:'[X-Stage Karaoke]',count:3,
+    examples:[{code:'001',title:'เพลงหนึ่ง',artist:'XStage'},
+              {code:'002',title:'เพลงสอง',artist:'XStage'}]};
   const list = [
     {id: 1, title: 'เสียงทดสอบ 1', artist: 'XStage', code: 'TEST001', kind: 'MID', size: 12000, status: 'ready'},
     {id: 2, title: 'เสียงทดสอบ 2', artist: 'XStage', code: 'TEST002', kind: 'MP3', size: 32000, status: 'ready'}
@@ -152,6 +157,15 @@ try {
                     {type:'Cursor · CUR',name:'TEST001.cur',found:true,required:true}],
         timedLyricsReady:true, proofMessage:'พบต้นฉบับครบสามส่วน'
       };
+    } else if (url.pathname === '/api/lyric-groups') {
+      const position=url.searchParams.get('position')||'first';
+      const groups=lyricBulkReady&&position==='first'?[bulkGroup]:[];
+      response={rows:groups.map(({id,position,text,count})=>({id,position,text,count})),
+                total:groups.length,songs:3,inspected:3,withoutLyrics:0,skippedInvalid:0};
+    } else if (url.pathname === '/api/lyric-groups-preview') {
+      response=bulkGroup;
+    } else if (url.pathname === '/api/lyric-groups-backup') {
+      response={latest:bulkBackup};
     } else if (url.pathname === '/api/vocal-songs') {
       const rows=[...importedAI.values()];
       response = {rows,total:rows.length};
@@ -198,6 +212,15 @@ try {
     } else if (url.pathname === '/api/environment') {
       response = {'Bundled FFmpeg':true, 'Bundled SoundFont':true};
     } else if (url.pathname === '/api/jobs') {
+      const action=request.postDataJSON()?.action;
+      if(action==='lyric-groups-scan')lyricBulkReady=true;
+      if(action==='lyric-groups-replace'){
+        bulkBackup={id:'20261113T153000000000Z-a1b2c3d4',position:'first',
+          oldText:bulkGroup.text,newText:'[X-Stage Karaoke Online]',
+          songs:3,createdAt:'2026-11-13T15:30:00+07:00'};
+        lyricBulkReady=false;
+      }
+      if(action==='lyric-groups-undo')bulkBackup=null;
       if (request.postDataJSON()?.action === 'login') fakeGoogleConnected = true;
       if (request.postDataJSON()?.action === 'upload') uploadRequests.push(request.postDataJSON());
       response = {id:'pc-wizard-smoke-job'};
@@ -293,6 +316,60 @@ try {
   });
   await pc.click('#studio-confirm-ok');
   await audioBuild;
+  // Grouped opening/closing text editor operates independently per line
+  // position and never sends any upload request without the owner's action.
+  await pc.click('.nav-button[data-tab="lyric-head-tail"]');
+  assert.equal(await pc.locator('#tab-lyric-head-tail').isVisible(),true);
+  const scanJob=pc.waitForRequest(req=>{
+    try{return new URL(req.url()).pathname==='/api/jobs'&&
+      req.postDataJSON()?.action==='lyric-groups-scan';}catch{return false;}
+  });
+  await pc.click('#lyric-group-scan');
+  await scanJob;
+  simulatedJob={id:'lyric-scan-complete',kind:'lyric-groups-scan',state:'success',
+    stage:'เสร็จสิ้น',detail:'วิเคราะห์แล้ว',completed:3,total:3,
+    result:{message:'จัดกลุ่มข้อความแล้ว',songs:3,groups:1},logs:[]};
+  await pc.locator('#lyric-group-results [data-lyric-group="intro-verified-1234"]')
+    .waitFor({timeout:10000});
+  assert.match(await pc.locator('#lyric-group-results').innerText(),/3 เพลง/);
+  await pc.click('#lyric-group-results [data-lyric-group="intro-verified-1234"]');
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-selection')?.textContent.includes('บรรทัดแรก'));
+  assert.match(await pc.locator('#lyric-group-examples').innerText(),/เพลงหนึ่ง/);
+  await pc.locator('#lyric-group-replacement').fill('[X-Stage Karaoke Online]');
+  await pc.click('#lyric-group-apply');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/3 เพลง/);
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/ไม่เปลี่ยน/);
+  await pc.click('#studio-confirm-cancel');
+  await pc.click('#lyric-group-apply');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  const replaceRequest=pc.waitForRequest(req=>{
+    try{const d=req.postDataJSON();return new URL(req.url()).pathname==='/api/jobs'&&
+      d?.action==='lyric-groups-replace'&&d?.expectedCount===3&&
+      d?.group==='intro-verified-1234'&&d?.replacement==='[X-Stage Karaoke Online]';}catch{return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await replaceRequest;
+  simulatedJob={id:'lyric-bulk-complete',kind:'lyric-groups-replace',state:'success',
+    stage:'เสร็จสิ้น',detail:'แทนที่แล้ว',completed:3,total:3,
+    result:{changedSongs:3,message:'แก้ข้อความบรรทัดแรกสำเร็จ 3 เพลง'},logs:[]};
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-undo')?.disabled===false);
+  assert.match(await pc.locator('#lyric-group-results').innerText(),/วิเคราะห์/);
+  await pc.click('#lyric-group-undo');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  const undoRequest=pc.waitForRequest(req=>{
+    try{const d=req.postDataJSON();return new URL(req.url()).pathname==='/api/jobs'&&
+      d?.action==='lyric-groups-undo'&&d?.backupId===bulkBackup.id;}catch{return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await undoRequest;
+  simulatedJob={id:'lyric-undo-complete',kind:'lyric-groups-undo',state:'success',
+    stage:'เสร็จสิ้น',detail:'คืนข้อมูลแล้ว',completed:3,total:3,
+    result:{restoredSongs:3,message:'คืนค่าเดิม 3 เพลง'},logs:[]};
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-undo')?.disabled===true);
+  assert.deepEqual(pcErrors,[], 'Bulk lyric group UI must not produce JavaScript errors');
+  simulatedJob={id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
+    completed:0,total:0,logs:[]};
   // Independent AI lyrics menu: import -> select -> proof playback -> review.
   await pc.click('.nav-button[data-tab="ai-lyrics"]');
   assert.equal(await pc.locator('#tab-ai-lyrics').isVisible(),true,
