@@ -6,6 +6,7 @@ import importlib.util
 import json
 import tempfile
 import threading
+import zipfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -181,6 +182,26 @@ class LyricHeadTailTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"แก้ไขภายหลัง"):
             bulk.undo(self.backups,self.root,result["backupId"])
         self.assertIn("ข้อความใหม่",path.read_text(encoding="utf-8"))
+
+    def test_crash_during_batch_can_be_restored_from_prepared_backup(self):
+        snap=self.snapshot()
+        group=bulk.list_groups(snap,"first")["rows"][0]
+        original=(self.root/"lyrics"/"0"/"001.json").read_bytes()
+        result=bulk.apply(self.root,export,snap,group["id"],"บทเกริ่นใหม่",
+                          self.backups,expected_count=3)
+        manifest=self.backups/(result["backupId"]+".json")
+        data=json.loads(manifest.read_text(encoding="utf-8"))
+        data["state"]="prepared"  # Simulate the program terminating before commit.
+        manifest.write_text(json.dumps(data,ensure_ascii=False),encoding="utf-8")
+        with zipfile.ZipFile(self.backups/(result["backupId"]+".zip")) as archive:
+            restored=archive.read("lyrics/0/001.json")
+        (self.root/"lyrics"/"0"/"001.json").write_bytes(restored)
+        latest=bulk.latest_backup(self.backups,self.root)
+        self.assertEqual(latest["state"],"prepared")
+        answer=bulk.undo(self.backups,self.root,result["backupId"])
+        self.assertEqual(answer["restoredSongs"],3)
+        self.assertEqual((self.root/"lyrics"/"0"/"001.json").read_bytes(),original)
+        self.assertIsNone(bulk.latest_backup(self.backups,self.root))
 
     def test_inconsistent_lrc_and_short_lyrics_are_excluded(self):
         lrc=self.root/"lyrics"/"0"/"001.lrc"
