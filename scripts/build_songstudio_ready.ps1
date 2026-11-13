@@ -80,6 +80,7 @@ $map = @{
  'songstudio-pc/lyric_text_groups.py' = 'lyric_text_groups.py'
  'songstudio-pc/google_drive.py' = 'google_drive.py'
  'songstudio-pc/online_publish.py' = 'online_publish.py'
+ 'songstudio-pc/folder_upload.py' = 'folder_upload.py'
  'songstudio-pc/code_registry.py' = 'code_registry.py'
  'songstudio-pc/song_export.py' = 'song_export.py'
  'songstudio-pc/live_preview.py' = 'live_preview.py'
