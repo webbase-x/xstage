@@ -1573,6 +1573,35 @@ def execute_job(action, options, started):
                     (" · ฐานใหม่เผยแพร่แล้ว" if synced['published']
                      else " · ฐานเดิมไม่เปลี่ยน")),
                 **synced}
+        elif action == "upload-native-v2":
+            # Native files are uploaded as their original formats. The
+            # manifest must be inside the selected workspace, never a browser
+            # supplied arbitrary absolute path.
+            work = Path(PREFS["workspace"]).resolve()
+            manifest_path = Path(str(options.get("manifest") or "")).resolve()
+            if (not manifest_path.is_relative_to(work) or
+                    manifest_path.suffix.lower() != ".json" or
+                    manifest_path.is_symlink() or
+                    not manifest_path.is_file() or
+                    manifest_path.stat().st_size > 32 * 1024 * 1024):
+                raise ValueError("Manifest V2 ต้องเป็น JSON ใน Workspace ที่เลือก")
+            update("ตรวจสอบเพลง MP3/VIDEO/MIDI และชุด NCN ก่อนอัปโหลด")
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "xstage_native_v2", Path(__file__).with_name("v2_native_publish.py"))
+            native = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(native)
+            doc = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+            with LOCK:
+                JOB["total"] = len(doc.get("songs", []))
+            synced = native.V2NativePublisher(GOOGLE).publish(
+                manifest_path.parent, doc,
+                create_new_library=options.get("create_new_library") is True,
+                cancelled=CANCEL,
+                on_progress=lambda done,total:
+                update(f"อัปโหลดต้นฉบับ V2 {done:,}/{total:,} เพลง",done))
+            result = {"message": "เผยแพร่ XStageWeb/DB/current.json รุ่นใหม่แล้ว · "
+                      + str(synced["totalSongs"]) + " เพลง", **synced}
         elif action == "download":
             kind = options.get("kind", "songs")
             update("กำลังอ่าน Catalog จาก Google Drive โดยไม่สร้างคลังใหม่")
