@@ -777,7 +777,7 @@ class GoogleDrive:
             walk(songs_folder)
             if not collected:
                 raise GoogleError(
-                    "พบโฟลเดอร์สำรองแบบเก่า X-Stage Song Studio/songs ที่ว่าง "
+                    "พบโฟลเดอร์คลังเพลงสำรองแบบเก่า X-Stage Song Studio/songs ที่ว่าง "
                     "และไม่พบ XStageWeb ที่แอปมองเห็นได้ · การอัปโหลดปัจจุบันใช้ "
                     "XStageWeb/current.json ไม่ใช่ songs/current.json · "
                     "ตรวจบัญชี Google และ OAuth Client ของการซิงค์เดิม "
