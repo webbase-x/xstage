@@ -201,6 +201,7 @@ def google_client_path():
 GOOGLE = _module("google_drive.py", "xstage_google_drive").GoogleDrive(
     DATA, google_client_path)
 NCN = _module("ncn_lyrics.py", "xstage_ncn_lyrics")
+SONG_INDEX = _module("song_index.py", "xstage_song_index")
 AI_LYRICS = _module("ai_lyrics.py", "xstage_ai_lyrics")
 # Normalize old absolute JSON paths to a stable per-user copy when possible.
 if not (DATA / "oauth-client.json").is_file() and not (ROOT / "config" / "google-oauth-client.json").is_file():
@@ -264,82 +265,45 @@ def font_list():
         fonts.append(str(DEFAULT_SOUNDFONT))
     return fonts
 
-def scan_source():
-    source = Path(PREFS["source"]).expanduser()
-    if not source.is_dir():
-        raise ValueError("โฟลเดอร์ต้นฉบับไม่มีอยู่ กรุณาเลือกโฟลเดอร์ก่อนสแกน")
-    rows = []
-    index = 1
-    ncn = NCN
-    companion_index = {}
-    # Never re-import our own output as new source songs when users choose
-    # a parent folder containing both originals and the output directory.
-    workspace = Path(PREFS["workspace"]).expanduser().resolve()
-    excluded = {workspace / "songs", workspace / "song"}
-    origin = source.resolve()
-    if any(origin == folder or folder in origin.parents for folder in excluded):
-        raise ValueError("โฟลเดอร์ต้นฉบับต้องไม่อยู่ในโฟลเดอร์ผลลัพธ์ของโปรแกรม")
-    for base, dirs, files in os.walk(source, followlinks=False):
-        dirs[:] = sorted(d for d in dirs
-                         if not (Path(base) / d).is_symlink()
-                         and not any((Path(base) / d).resolve() == x or
-                                     x in (Path(base) / d).resolve().parents
-                                     for x in excluded))
-        for name in sorted(files):
-            path = Path(base) / name
-            ext = path.suffix.lower()
-            if path.is_symlink():
-                continue
-            if ext in (".lyr", ".cur"):
-                ncn.index_component(path, companion_index)
-                continue
-            if ext not in (EXT_AUDIO | EXT_MIDI | EXT_UNSUPPORTED):
-                continue
-            try:
-                stat = path.stat()
-            except OSError:
-                continue
-            data = NOTES.get(str(path), {})
-            rows.append({
-                "id": index, "path": str(path), "title": data.get("title") or path.stem,
-                "artist": data.get("artist", ""),
-                "code": path.stem, "kind": ext[1:].upper(),
-                "size": stat.st_size, "status": "ready" if ext not in EXT_UNSUPPORTED else "unsupported",
-                "lyrics_edit": data.get("lyrics", "")
-            })
-            index += 1
-            if index > 100000:
-                raise ValueError("พบเพลงเกิน 100,000 รายการ กรุณาเลือกโฟลเดอร์ย่อย")
-    # Bind all three NCN components using mirrored Song/Lyrics/Cursor paths.
-    # Only MIDI within Song becomes a song; .LYR and .CUR never become rows.
-    for row in rows:
-        original = Path(row["path"])
-        if original.suffix.lower() not in (".mid", ".midi"):
-            continue
-        trio = ncn.resolve_companions(original, companion_index)
-        if trio is None:
-            continue
-        row["ncn"] = trio
-        row["source_format"] = "NCN"
-        row["components"] = {
-            "song": trio["midi"], "lyrics": trio["lyrics"], "cursor": trio["cursor"]
-        }
-        row["status"] = "ready" if not trio["missing"] else "missing-companion"
-        if trio["lyrics"]:
-            try:
-                meta = ncn.lyric_metadata(Path(trio["lyrics"]))
-                row["title"] = NOTES.get(row["path"], {}).get("title") or meta["title"] or row["title"]
-                row["artist"] = NOTES.get(row["path"], {}).get("artist") or meta["artist"]
-            except (OSError, ValueError) as exc:
-                row["status"] = "lyrics-error"
-                row["component_error"] = str(exc)
-        if trio["missing"]:
-            row["component_error"] = "NCN ขาด " + ", ".join(trio["missing"])
+LAST_SCAN_STATS = {}
+
+
+def restore_song_catalog():
+    """Restore a complete, source-specific SQLite catalog without scanning."""
+    rows = SONG_INDEX.restore(
+        PREFS["source"], PREFS["workspace"], DATA / "song-index.sqlite3", NOTES)
     with LOCK:
         FILES[:] = rows
         FILE_BY_ID.clear()
-        FILE_BY_ID.update((x["id"], x) for x in rows)
+        FILE_BY_ID.update((row["id"], row) for row in rows)
         FILE_BY_ID.update(AI_IMPORTED)
+    return len(rows)
+
+
+def scan_source(full=False):
+    """Fast incremental scan. Full mode rebuilds metadata without deleting media."""
+    global LAST_SCAN_STATS
+
+    def progress(message, completed):
+        with LOCK:
+            JOB["total"] = 0  # Enumeration count is unknown; never invent a percentage.
+            JOB["completed"] = completed
+        update(message)
+
+    with LOCK:
+        running_scan = JOB.get("state") == "running" and JOB.get("kind") == "scan"
+    rows, stats = SONG_INDEX.scan(
+        PREFS["source"], PREFS["workspace"], DATA / "song-index.sqlite3",
+        NOTES, NCN, full=bool(full),
+        cancelled=CANCEL if running_scan else None, on_progress=progress)
+    with LOCK:
+        FILES[:] = rows
+        FILE_BY_ID.clear()
+        FILE_BY_ID.update((row["id"], row) for row in rows)
+        FILE_BY_ID.update(AI_IMPORTED)
+        LAST_SCAN_STATS = stats
+        JOB["total"] = len(rows)
+        JOB["completed"] = len(rows)
     return len(rows)
 
 
@@ -1186,11 +1150,24 @@ def build_preview(rows, mode):
 def execute_job(action, options, started):
     try:
         if action == "scan":
-            update("กำลังสแกนไฟล์เพลง")
-            amount = scan_source()
-            log(f"ตรวจพบ {amount:,} เพลง")
-            result = {"message": f"สแกนเสร็จแล้ว {amount:,} เพลง · ยังไม่ได้สร้างไฟล์ M4A/Lyrics",
-                      "songs": amount}
+            full = options.get("full") is True
+            update("กำลังตรวจคลังเพลงใหม่ทั้งหมด" if full else
+                   "กำลังสแกนด่วน · ใช้ดัชนีเดิมที่บันทึกไว้")
+            amount = scan_source(full=full)
+            stats = dict(LAST_SCAN_STATS)
+            log(f"ตรวจพบ {amount:,} เพลง · เพิ่ม {stats.get('added', 0):,} "
+                f"· เปลี่ยน {stats.get('changed', 0):,} "
+                f"· ลบจากดัชนี {stats.get('removed', 0):,} "
+                f"· ใช้ข้อมูลเดิม {stats.get('reused', 0):,}")
+            result = {
+                "message": (f"สแกนเสร็จแล้ว {amount:,} เพลง · "
+                            f"เพิ่ม {stats.get('added', 0):,} · "
+                            f"เปลี่ยน {stats.get('changed', 0):,} · "
+                            f"ลบจากดัชนี {stats.get('removed', 0):,} · "
+                            f"ใช้ดัชนีเดิม {stats.get('reused', 0):,} "
+                            "· ยังไม่ได้สร้าง M4A/Lyrics"),
+                **stats
+            }
         elif action in ("build", "preview"):
             mode = PREFS.get("mode", "original")
             if mode not in ("original", "instrumental"):
@@ -1875,8 +1852,10 @@ def job_snapshot():
         elapsed = max(0, time.monotonic() - job["started"])
         job["elapsed"] = elapsed
         job["idleFor"] = round(time.monotonic() - job["updated"])
-        if job["completed"] > 0:
+        if job["total"] > 0 and 0 < job["completed"] <= job["total"]:
             job["eta"] = (elapsed / job["completed"]) * (job["total"] - job["completed"])
+        else:
+            job["eta"] = None
     job.pop("updated", None)
     job.pop("started", None)
     return job
@@ -2133,6 +2112,8 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         PREFS[key] = value[:2048]
                 save_json(PREFS_FILE, PREFS)
+                if any(key in payload for key in ("source", "workspace")):
+                    restore_song_catalog()
                 self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
                             "google": GOOGLE.status()})
             elif path == "/api/ai-import":
@@ -2246,6 +2227,12 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global PORT
+    try:
+        count = restore_song_catalog()
+        if count:
+            JOB["detail"] = f"โหลดดัชนีเพลงเดิมแล้ว {count:,} เพลง · กดสแกนด่วนเพื่ออัปเดต"
+    except (OSError, ValueError) as exc:
+        JOB["detail"] = "ไม่สามารถโหลดดัชนีเดิม: " + str(exc)
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
         PORT = server.server_port
         url = f"http://127.0.0.1:{PORT}/#auth={TOKEN}"
