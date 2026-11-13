@@ -1709,6 +1709,13 @@ function releaseQueuePreload(){
   state.queuePreload?.controller.abort();
   state.queuePreload=null;state.queuePrepared=null;
 }
+function queuePreloadAllowed(){
+  // Fetch only near the end: avoid fighting the active song for network/RAM.
+  if(state.loading||!state.current||player.paused||!Number.isFinite(player.duration))return false;
+  const remaining=player.duration-player.currentTime;
+  const policy=window.XStageRuntime?.deviceInfo?.();
+  return remaining>=0&&remaining<=(policy?.preloadRemainingSeconds||12);
+}
 function scheduleQueuePreload(){
   clearTimeout(state.queuePreloadTimer);
   if(!state.token||!state.queue.length){releaseQueuePreload();return;}
@@ -1716,7 +1723,11 @@ function scheduleQueuePreload(){
   if(state.queuePrepared?.song===song&&state.queuePrepared.token===token)return;
   if(state.queuePrepared?.song!==song)state.queuePrepared=null;
   if(state.queuePreload?.song===song&&state.queuePreload.token===token)return;
-  state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(song,token);},300);
+  if(!queuePreloadAllowed())return;
+  const delay=window.XStageRuntime?.deviceInfo?.().preloadIdleDelayMs||700;
+  state.queuePreloadTimer=setTimeout(()=>{
+    if(queuePreloadAllowed())void preloadFirstQueueSong(song,token);
+  },delay);
 }
 async function preloadFirstQueueSong(song,token){
   if(state.queue[0]!==song||state.token!==token)return;
@@ -1728,7 +1739,12 @@ async function preloadFirstQueueSong(song,token){
       privateFile(song.audio.fileId,token,{signal:controller.signal}),
       privateJson(song.lyrics.fileId,token,{signal:controller.signal})
     ]);
+    const limit=window.XStageRuntime?.deviceInfo?.().maxPreloadBytes||2*1024*1024;
+    const size=Number(response.headers.get('content-length'))||0;
+    if(size>limit){controller.abort();return;}
+    // If length was omitted, never retain a large track in the queue cache.
     const blob=await response.blob();
+    if(blob.size>limit)return;
     if(version!==state.queuePreloadVersion||state.queue[0]!==song||state.token!==token||
        !blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return;
     state.queuePrepared={song,token,blob,lyrics};
@@ -1736,13 +1752,17 @@ async function preloadFirstQueueSong(song,token){
   finally{if(state.queuePreload===task)state.queuePreload=null;}
 }
 function prefetchMedleyNext(){
-  if(!state.medley||!state.token||state.loading)return;
+  if(!state.medley||!state.token||state.loading||!queuePreloadAllowed()&&state.queue.length)return;
   const song=nextMedleyCandidate(),token=state.token;
   if(!song||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
   const task={song,token};state.medleyPrefetch=task;
   Promise.all([privateFile(song.audio.fileId,token),privateJson(song.lyrics.fileId,token)])
     .then(async ([response,lyrics])=>{
+      const limit=window.XStageRuntime?.deviceInfo?.().maxPreloadBytes||2*1024*1024;
+      const size=Number(response.headers.get('content-length'))||0;
+      if(size>limit)return;
       const blob=await response.blob();
+      if(blob.size>limit)return;
       if(state.medleyPrefetch!==task||!state.medley||state.token!==token||
           nextMedleyCandidate()!==song)return;
       if(!blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return;
@@ -2972,6 +2992,7 @@ let playbackSnapshotTick=0;
 player.addEventListener('timeupdate',()=>{
   updateTransport();
   medleyTick();
+  if(state.queue.length&&!state.queuePrepared)scheduleQueuePreload();
   const now=Date.now();
   if(now-playbackSnapshotTick>2000){playbackSnapshotTick=now;savePlaybackResumeState();}
 });
@@ -3008,6 +3029,9 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('pagehide',savePlaybackResumeState);
 window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);setupNativeAndroidTvUi();setupAppUpdateWatcher();
+void window.XStageRuntime?.preloadEnvironment?.().then(info=>{
+  console.info('X-Stage runtime ready:',info.device.conservative?'conservative':'balanced');
+}).catch(error=>console.warn('X-Stage environment:',error?.message||error));
 window.XStageSoftRefresh=async function(){
   if(state.current||player.src){
     savePlaybackResumeState();
