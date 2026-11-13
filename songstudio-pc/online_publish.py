@@ -41,16 +41,17 @@ LAYOUT_VERSION = 2
 BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-def media_drive_path(relative, *, code=""):
+def media_drive_path(relative, *, code="", audio_format="M4A"):
     """Map a local immutable media path into the private Drive taxonomy.
 
     The extension of the rendered file, NOT its original source type, selects
     MP3 vs M4A. The public catalog references the resulting Drive file ID.
     """
+    if not isinstance(relative, str):
+        raise PublishError("พาธสื่อเพลงต้องเป็นข้อความ")
     rel = PurePosixPath(relative)
-    if (not isinstance(relative, str) or rel.is_absolute() or
-            any(part in (".", "..", "") for part in rel.parts) or
-            len(rel.parts) < 2 or "\\\\" in relative or ":" in relative):
+    if (rel.is_absolute() or any(part in (".", "..", "") for part in relative.split("/"))
+            or len(rel.parts) < 2 or chr(92) in relative or ":" in relative):
         raise PublishError("พาธสื่อเพลงไม่ปลอดภัย: " + str(relative))
     group = str(code or rel.stem).strip()[:1].upper()
     if group not in BUCKETS:
@@ -61,7 +62,9 @@ def media_drive_path(relative, *, code=""):
         fmt = "M4A" if suffix == ".m4a" else "MP3"
         return PurePosixPath("AUDIO", fmt, "Songs", group, rel.name)
     if kind == "lyrics" and suffix in (".json", ".lrc", ".lyr"):
-        return PurePosixPath("AUDIO", "M4A", "Lyrics", group, rel.name)
+        if audio_format not in ("M4A", "MP3"):
+            raise PublishError("ประเภทไฟล์เสียงสำหรับ Lyrics ไม่ถูกต้อง")
+        return PurePosixPath("AUDIO", audio_format, "Lyrics", group, rel.name)
     raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวด AUDIO: " + str(relative))
 
 
@@ -330,9 +333,23 @@ class OnlinePublisher:
                     folder_cache[key] = self.drive.folder(parent, name)
                 parent = folder_cache[key]
             return parent
-        def upload(local_file, rel, *, code=""):
+        # Create the fixed category tree once; 0-9/A-Z buckets are created
+        # lazily, only when a song is actually uploaded to that bucket.
+        for category in (
+            ("AUDIO", "MP3", "Songs"), ("AUDIO", "MP3", "Lyrics"),
+            ("AUDIO", "M4A", "Songs"), ("AUDIO", "M4A", "Lyrics"),
+            ("VIDEO", "AVI"), ("VIDEO", "MPG"), ("VIDEO", "VCD"),
+            ("VIDEO", "WMV"), ("MIDI", "NCN", "Songs"),
+            ("MIDI", "NCN", "Lyrics"), ("MIDI", "NCN", "Cursor"),
+            ("MIDI", "EMK"), ("DB",),
+        ):
+            if cancelled and cancelled.is_set():
+                raise PublishError("ยกเลิกการเตรียมโครงสร้าง Google Drive")
+            folder(category)
+
+        def upload(local_file, rel, *, code="", audio_format="M4A"):
             checksum = _md5(local_file)
-            path = media_drive_path(rel, code=code)
+            path = media_drive_path(rel, code=code, audio_format=audio_format)
             # Immutable, content-named media avoids overwriting an older song
             # with the same basename and prevents blind filename deduplication.
             name = path.stem + "-" + checksum[:16] + path.suffix
@@ -462,11 +479,14 @@ class OnlinePublisher:
                 continue
             audio = (dict(same_audio["audio"]) if same_audio else
                      upload(sound, row["audio"]["path"], code=row["code"]))
-            lyrics = upload(lyric, row["lyrics"]["path"], code=row["code"])
+            source_format = "MP3" if sound.suffix.lower() == ".mp3" else "M4A"
+            lyrics = upload(lyric, row["lyrics"]["path"], code=row["code"],
+                            audio_format=source_format)
             lrc_path = str(Path(row["lyrics"]["path"]).with_suffix(".lrc")).replace("\\", "/")
             lrc_media = None
             if (local_songs / lrc_path).is_file():
-                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path, code=row["code"])
+                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path,
+                                   code=row["code"], audio_format=source_format)
             vocals = None
             if row.get("vocals") and row["vocals"].get("path"):
                 src = _local_path(local_songs, row["vocals"]["path"], "audio")
