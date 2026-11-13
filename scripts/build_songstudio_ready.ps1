@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.22-build322'
+$Version = 'v0.3.23-build323'
 if ($Version -match '^v(\d+\.\d+\.\d+)-build(\d+)$') {
     $AppVersion = $Matches[1]
     $AppBuild = [int]$Matches[2]
