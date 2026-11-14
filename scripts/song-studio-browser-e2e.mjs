@@ -88,6 +88,45 @@ try {
   assert.ok(archive.includes(Buffer.from('ทดสอบเนื้อร้อง')), 'LRC must contain editable timed lyric');
   console.log('PASS: Chromium loaded WebAssembly Engine and converted demo.wav to M4A + LRC locally.');
 
+  // Real standalone browser workflow: import NCN MID/LYR/CUR, read true CUR
+  // timestamps, synthesize a preview and export the original source bytes.
+  const midiPage=await browser.newPage({acceptDownloads:true});
+  midiPage.on('pageerror',error=>{throw Error('MIDI PAGE ERROR: '+error.message);});
+  await midiPage.goto('http://127.0.0.1:'+port+'/studio/web.html',{waitUntil:'load'});
+  const demoTrack=[0,0xc0,0,0,0x90,60,100,0x60,0x80,60,0,0,0xff,0x2f,0];
+  const demoMidi=Buffer.from([77,84,104,100,0,0,0,6,0,0,0,1,0,96,
+    77,84,114,107,0,0,0,demoTrack.length,...demoTrack]);
+  const demoLyr=Buffer.from('Test Song\\nArtist\\nC\\n.\\nHI\\n');
+  const demoCur=Buffer.from([0,0,0,0,24,0]);
+  await midiPage.setInputFiles('#file-input',[
+    {name:'NCN001.mid',mimeType:'audio/midi',buffer:demoMidi},
+    {name:'NCN001.lyr',mimeType:'application/octet-stream',buffer:demoLyr},
+    {name:'NCN001.cur',mimeType:'application/octet-stream',buffer:demoCur}
+  ]);
+  await midiPage.waitForFunction(()=>document.querySelector('#catalog-note')
+    .textContent.includes('พร้อมสร้าง 1'));
+  await midiPage.locator('#song-list tr').first().click();
+  await midiPage.waitForFunction(()=>document.querySelector('#midi-status')
+    .textContent.includes('NCN จริง'));
+  assert.equal(await midiPage.locator('#midi-workspace').isVisible(),true);
+  assert.match(await midiPage.locator('#lyrics-text').inputValue(),/\\[00:00.00\\]HI/);
+  assert.equal(await midiPage.locator('#preview-midi').isEnabled(),true);
+  await midiPage.click('#preview-midi');
+  await midiPage.waitForFunction(()=>document.querySelector('#player').src.startsWith('blob:'),
+    null,{timeout:30000});
+  assert.ok(await midiPage.locator('#resource-status').textContent());
+  await midiPage.click('#build');
+  await midiPage.locator('#download-result:visible').waitFor({timeout:30000});
+  const midiDownload=midiPage.waitForEvent('download',{timeout:20000});
+  await midiPage.click('#download-result');
+  const midiZip=await fsp.readFile(await (await midiDownload).path());
+  for(const name of ['NCN001.mid','NCN001.lyr','NCN001.cur','NCN001.json','NCN001.lrc'])
+    assert.ok(midiZip.includes(Buffer.from(name)),'Browser ZIP must include '+name);
+  assert.ok(midiZip.includes(demoMidi),'NCN MIDI bytes must be kept unchanged');
+  assert.ok(midiZip.includes(demoCur),'NCN CUR bytes must be kept unchanged');
+  console.log('PASS: Browser NCN preview, real CUR timing and source-preserving ZIP export');
+  await midiPage.close();
+
   // The PC Ready package and authenticated PC Web Control share this UI.
   // Simulate its local API; exercise all four visible steps in Chromium.
   const pc = await browser.newPage({acceptDownloads:true});
