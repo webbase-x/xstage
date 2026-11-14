@@ -153,7 +153,15 @@
               <div><span>SoundFont</span><strong id="review-soundfont">—</strong></div>
               <div><span>ประเภทเสียง</span><strong id="review-mode">—</strong></div>
             </div>
-            <div class="builder-actions"><button id="build-audio-button" class="button ghost" type="button">สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">▶ สร้าง M4A + เนื้อร้องจากเพลงที่เลือก</button></div>
+            <div class="sound-settings">
+              <label for="create-export-format">รูปแบบส่งออก (ใช้ Lyrics JSON เป็นมาตรฐาน)</label>
+              <select id="create-export-format" class="field">
+                <option value="xstage" selected>มาตรฐาน X-Stage · MIDI คัดลอกเดิมทุกไบต์ + Lyrics JSON</option>
+                <option value="m4a">แปลงเป็น M4A + Lyrics JSON · MIDI ต้นฉบับไม่เปลี่ยน</option>
+              </select>
+              <p class="hint">มาตรฐาน: MIDI/KAR คัดลอกพร้อมตรวจ SHA-256 ไม่แก้โน้ตหรือเวลา · MP3/WAV และเสียงอื่นใช้การแปลง M4A ตามเครื่องมือเดิม · รูปแบบ NCN ใช้เป็นต้นทางเท่านั้น ไม่สร้างหรือแก้ MID/LYR/CUR</p>
+            </div>
+            <div class="builder-actions"><button id="build-audio-button" class="button ghost" type="button">สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">▶ สร้างไฟล์เพลง + Lyrics JSON</button></div>
             <div id="create-build-feedback" class="create-build-feedback" data-state="idle" role="status" aria-live="polite">
               <span id="create-build-feedback-icon" class="create-build-feedback-icon" aria-hidden="true">♫</span>
               <div class="create-build-feedback-body"><strong id="create-build-feedback-title">พร้อมสร้างเพลง</strong><p id="create-build-feedback-detail">เลือกเพลงแล้วกดสร้าง ระบบจะแสดงผลรับคำสั่งและข้อผิดพลาดในหน้านี้ทันที</p></div>
@@ -280,20 +288,20 @@
           </div>
           <article class="panel lyric-group-overview">
             <div class="section-heading"><div><h3>1. เลือกโฟลเดอร์และวิเคราะห์เนื้อร้อง</h3>
-              <p>สำหรับ NCN วิเคราะห์เฉพาะไฟล์ .LYR ในโฟลเดอร์ Lyrics และโฟลเดอร์ย่อย ไม่อ่าน MID/CUR ระหว่างวิเคราะห์ · เลือก Lyrics โดยตรงหรือโฟลเดอร์ NCN ก็ได้ · โหมด StageWeb/LRC ยังทำงานตามเดิม</p></div></div>
+              <p>ใช้คลัง Lyrics JSON ที่สร้างแล้วเป็นหลัก · ไม่แก้ NCN ต้นฉบับทุกกรณี</p></div></div>
             <label for="lyric-group-folder" class="lyric-source-label">โฟลเดอร์ต้นทางสำหรับข้อความหัว–ท้ายเพลง</label>
             <div class="path-row lyric-source-row">
               <input id="lyric-group-folder" type="text" class="field" placeholder="ค่าเริ่มต้น: คลัง StageWeb ในโฟลเดอร์งานหลัก" autocomplete="off" spellcheck="false">
               <button type="button" class="button ghost" data-pick="lyric_source">เลือกโฟลเดอร์</button>
               <button id="lyric-group-reset" type="button" class="button ghost">ใช้คลังหลัก</button>
             </div>
-            <p id="lyric-group-source-status" class="hint" role="status" aria-live="polite">เลือก StageWeb, โฟลเดอร์ .lrc หรือ NCN/Lyrics ที่มี .LYR ได้โดยตรง · วิเคราะห์เฉพาะไฟล์ LYR</p>
+            <p id="lyric-group-source-status" class="hint" role="status" aria-live="polite">เลือกคลัง StageWeb ที่สร้าง Lyrics JSON แล้วเพื่อแก้ข้อความ โดยไม่แก้ไฟล์ MID/LYR/CUR</p>
             <div class="lyric-group-actions">
               <button id="lyric-group-scan" class="button primary" type="button">⌕ วิเคราะห์ข้อความหัว–ท้ายเพลง</button>
               <button id="lyric-group-undo" class="button ghost" type="button" disabled>↶ ย้อนคืนการแก้ไขชุดล่าสุด</button>
             </div>
             <p id="lyric-group-stats" class="hint" role="status" aria-live="polite">กดวิเคราะห์เพื่ออ่านบรรทัดที่ 1, 2, รองสุดท้าย และสุดท้ายจากคลังที่สร้างแล้ว</p>
-            <details id="lyric-skipped-panel" class="lyric-skipped-panel" hidden>
+            <details id="lyric-skipped-panel" class="lyric-skipped-panel" hidden aria-hidden="true">
               <summary>รายการ LYR ที่ข้าม <strong id="lyric-skipped-count">0 ไฟล์</strong> · ดูชื่อไฟล์และสาเหตุ</summary>
               <p class="hint">แสดงผลการวิเคราะห์ครั้งล่าสุดเท่านั้น · ไม่ลบ ไม่ย้าย ไม่แก้ไขไฟล์ที่ข้าม · การข้ามไม่ใช่การตรวจพบเพลงซ้ำ</p>
               <div id="lyric-skipped-breakdown" class="lyric-skipped-breakdown" aria-label="สรุปเหตุผลการข้าม"></div>
@@ -313,7 +321,7 @@
                 <button type="button" id="lyric-skipped-export" class="button ghost" disabled>ส่งออกรายงาน CSV ทั้งหมด</button>
               </div>
             </details>
-            <p class="hint">คำเตือน: การวิเคราะห์ LYR ไม่ยืนยันว่า CUR/MID ครบชุด · เมื่อต้องการแทนที่จริง ระบบจะตรวจ MID/LYR/CUR เฉพาะเพลงที่เลือก สำรอง LYR/CUR และปฏิเสธการแก้หากไฟล์จับคู่หรือเวลาไม่ครบ · โฟลเดอร์ Lyrics ที่ไม่มี Song/Cursor วิเคราะห์ได้แต่ยังแก้ไม่ได้ · อักขระใหม่ต้องรองรับ CP874</p>
+            <p class="hint">ปรับคำร้องใน Lyrics JSON เท่านั้น · สร้างเวลาไฮไลต์ทีละอักษรจากช่วงเวลาที่มีอยู่ โดยไม่เติมจุดหรือคำว่า ดนตรี · สำรองก่อนแก้และไม่แตะ MIDI/NCN ต้นฉบับ</p>
           </article>
           <article class="panel lyric-group-catalog">
             <div class="section-heading"><div><h3>2. เลือกตำแหน่งและกลุ่มข้อความ</h3>
@@ -361,7 +369,7 @@
             <div class="lyric-group-actions">
               <button id="lyric-group-apply" type="button" class="button primary" disabled>✓ ตรวจแล้ว แทนที่ทุกกลุ่มที่เลือก</button>
             </div>
-            <p id="lyric-group-preview-status" class="hint">เมื่อแก้เสร็จ กลุ่มที่ยังไม่แก้จะคงอยู่เพื่อดำเนินการต่อทันที · NCN วิเคราะห์เฉพาะ LYR; ก่อนแทนที่จริงจะตรวจคู่ MID/CUR และสำรอง LYR/CUR · ไม่เปลี่ยน MIDI/เสียง · ไม่อัปโหลดอัตโนมัติ</p>
+            <p id="lyric-group-preview-status" class="hint">หลังแก้ไขจะบันทึก Lyrics JSON พร้อมเวลาไฮไลต์ทีละอักษรที่ประมาณจากช่วงเดิม · ไม่แก้ MIDI และไม่อัปโหลด Google Drive อัตโนมัติ</p>
           </article>
         </section>
 
