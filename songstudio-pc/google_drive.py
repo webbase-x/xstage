@@ -764,32 +764,6 @@ class GoogleDrive:
                 else:
                     time.sleep(seconds)
 
-    def _tree_folder(self, *, create=True):
-        """Resolve the private library; downloads must NEVER create empty folders."""
-        if create:
-            root = self.folder("root", ROOT_NAME)
-            return self.folder(root, "songs")
-
-        def existing_folder(parent, name):
-            matches = [item for item in self.list_children(parent)
-                       if item.get("name") == name
-                       and item.get("mimeType") == "application/vnd.google-apps.folder"]
-            return matches[0]["id"] if matches else None
-
-        root = existing_folder("root", ROOT_NAME)
-        if not root:
-            raise GoogleError(
-                "ไม่พบโฟลเดอร์ '" + ROOT_NAME + "' ในไฟล์ที่แอปได้รับสิทธิ์ Google Drive "
-                "(drive.file) · ตรวจสอบบัญชี Google/OAuth Client ที่ใช้ซิงค์เพลง "
-                "หรือซิงค์คลังจาก Song Studio PC ก่อน · ไม่มีการสร้างโฟลเดอร์ใหม่")
-        songs = existing_folder(root, "songs")
-        if not songs:
-            raise GoogleError(
-                "พบโฟลเดอร์ '" + ROOT_NAME + "' แต่ไม่พบโฟลเดอร์ songs "
-                "ที่แอปเข้าถึงได้ · ตรวจสอบการซิงค์เพลงและสิทธิ์ drive.file "
-                "· ไม่มีการสร้างโฟลเดอร์ใหม่")
-        return songs
-
     def _online_download_plan(self, kind):
         """Read and validate only XStageWeb/DB V2; no legacy folder fallback.
 
@@ -896,55 +870,6 @@ class GoogleDrive:
                     add(rel,lyric["fileId"],lyric.get("md5Checksum"))
         add("DB/current.json",pointer_meta["id"],pointer_meta.get("md5Checksum"))
         return files, "XStageWeb"
-
-    def upload_library(self, local_songs, selected_records, cancelled=None, on_progress=None):
-        """Upload completed selected songs, catalogs, then current.json LAST."""
-        local_songs = Path(local_songs)
-        if not (local_songs / "current.json").is_file():
-            raise GoogleError("ยังไม่มี songs/current.json กรุณาสร้างเพลงก่อน")
-        songs_dir = self._tree_folder()
-        folder_cache = {"": songs_dir}
-        def subdir(parts):
-            parent = songs_dir
-            key = ""
-            for name in parts:
-                key = (key + "/" + name).lstrip("/")
-                if key not in folder_cache:
-                    folder_cache[key] = self.folder(parent, name)
-                parent = folder_cache[key]
-            return parent
-        files = {}
-        for row in selected_records:
-            for kind in ("audio", "lyrics", "vocals"):
-                field = row.get(kind)
-                if field and field.get("path"):
-                    relative = field["path"]
-                    files[relative] = False
-                    if kind == "lyrics":
-                        lrc = str(Path(relative).with_suffix(".lrc")).replace("\\", "/")
-                        if (local_songs / lrc).is_file():
-                            files[lrc] = False
-        # Catalog snapshots and pointer must be uploaded after media; the
-        # published pointer references ALL buckets and can be restored later.
-        for path in sorted((local_songs / "catalogs").glob("*.json")):
-            files[path.relative_to(local_songs).as_posix()] = False
-        counts = {"created": 0, "skipped": 0, "updated": 0}
-        for rel in sorted(files):
-            if cancelled and cancelled.is_set():
-                raise GoogleError("ผู้ใช้ยกเลิกอัปโหลด")
-            file = local_songs / rel
-            if not file.is_file() or not file.resolve().is_relative_to(local_songs.resolve()):
-                raise GoogleError("ไม่พบไฟล์ที่จะส่ง Google Drive: " + rel)
-            parts = Path(rel).parts
-            status, _ = self.upload_file(subdir(parts[:-1]), file, parts[-1],
-                                         cancelled=cancelled, on_progress=on_progress)
-            counts[status] += 1
-        pointer = local_songs / "current.json"
-        status, _ = self.upload_file(songs_dir, pointer, "current.json",
-                                     replace_pointer=True, cancelled=cancelled,
-                                     on_progress=on_progress)
-        counts[status] += 1
-        return counts
 
     def download_library(self, target_root, kind="songs", cancelled=None, on_status=None,
                          on_item=None):
