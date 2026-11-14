@@ -61,13 +61,23 @@ function parseMidi(source){
   }
   events.sort((a,b)=>a.tick-b.tick||Number(b.kind==='tempo')-Number(a.kind==='tempo'));
   let prev=0,tempo=500000,clock=0;
+  // NCN CUR stores 24 positions per quarter note, not seconds. Retain
+  // the exact MIDI tempo timeline for converting its positions later.
+  const tempoMap=[{tick:0,seconds:0,tempo}];
   const channels=Array.from({length:16},()=>({program:0,bank:0,volume:100,expression:127,notes:new Map(),sustain:false,held:[]}));
   const notes=[],lyricEvents=[];
   const endNote=(note,at)=>{if(!note)return;note.end=Math.max(note.start+.06,at);notes.push(note);};
   for(const e of events){
     clock+=(e.tick-prev)*tempo/(division*1000000);prev=e.tick;
     if(!Number.isFinite(clock)||clock>MAX_SECONDS+60)fail('MIDI ยาวเกินขอบเขตเรนเดอร์');
-    if(e.kind==='tempo'){tempo=e.value;continue;}
+    if(e.kind==='tempo'){
+      tempo=e.value;
+      const latest=tempoMap[tempoMap.length-1];
+      const point={tick:e.tick,seconds:clock,tempo};
+      if(latest.tick===e.tick)tempoMap[tempoMap.length-1]=point;
+      else tempoMap.push(point);
+      continue;
+    }
     if(e.kind==='text'){if(e.meta===5||e.meta===1)lyricEvents.push({time:clock,text:e.value,meta:e.meta,track:e.track});continue;}
     const c=channels[e.ch],id=e.a;
     if(e.k===0xc0)c.program=id;
@@ -95,7 +105,7 @@ function parseMidi(source){
   if(!notes.length)fail('MIDI ไม่มีโน้ตที่เล่นได้');
   const duration=Math.max(clock,...notes.map(x=>x.end))+1;
   if(duration>MAX_SECONDS)fail('MIDI ยาวเกิน 15 นาทีสำหรับตัวเรนเดอร์บนเว็บ');
-  return {notes,duration,lyricEvents};
+  return {notes,duration,lyricEvents,division,tempoMap};
 }
 function midiLyrics(parsed,code){
   let title='',artist='';const pieces=[];
@@ -127,34 +137,128 @@ function midiLyrics(parsed,code){
   if(!lines.length)lines.push({startTime:0,endTime:Math.min(parsed.duration,10),text:'♪ ดนตรีบรรเลง ♪'});
   return {schemaVersion:1,songCode:code,title,artist,lines};
 }
-function ncnLyrics(lyrBytes,curBytes,code,duration){
-  const raw=text(lyrBytes).replace(/\r\n?/g,'\n');
-  const rows=raw.split('\n');if(rows.length<5)fail('LYR NCN ต้องมีส่วนหัวสี่บรรทัด');
-  const body=rows.slice(4),cur=curBytes instanceof Uint8Array?curBytes:new Uint8Array(curBytes);
-  if(!cur.length||(cur.length&1)||cur.length>2*1024*1024)fail('CUR NCN ขนาดไม่ถูกต้อง');
-  const ticks=new DataView(cur.buffer,cur.byteOffset,cur.byteLength);
-  const textChars=body.join('\n');
-  const count=[...textChars].filter(c=>c!=='\n').length;
-  if(count>ticks.byteLength/2)fail('CUR NCN จำนวนตำแหน่งน้อยกว่าอักษร LYR');
-  let ix=0;const lines=[];
-  for(const row of body){
-    if(!row){continue;}
-    const syllables=[];
-    for(const char of row){
-      const at=ticks.getUint16(ix*2,true)/24;ix++;
-      if(at>duration+20)fail('CUR NCN มีเวลานอกช่วงเพลง');
-      syllables.push({text:char,start:at,duration:.08});
-    }
-    if(!syllables.length)continue;
-    for(let i=0;i<syllables.length;i++)
-      syllables[i].duration=Math.max(.03,(syllables[i+1]?.start??(syllables[i].start+.4))-syllables[i].start);
-    const start=syllables[0].start;
-    lines.push({startTime:start,endTime:Math.max(start+.1,syllables[syllables.length-1].start+.5),
-      text:row,syllables});
+function ncnTickSeconds(position,midi){
+  // CUR is NCN24: 24 cursor positions per quarter, independent of MIDI PPQ.
+  // Each MIDI tempo change owns the time interval until the next change.
+  const tick=position*midi.division/24,entries=midi.tempoMap;
+  let low=0,high=entries.length-1;
+  while(low<high){
+    const mid=Math.ceil((low+high)/2);
+    if(entries[mid].tick<=tick)low=mid;
+    else high=mid-1;
   }
-  if(!lines.length)fail('LYR/CUR NCN ไม่มีเนื้อร้อง');
-  return {schemaVersion:1,songCode:code,title:rows[0].trim(),artist:rows[1].trim(),lines};
+  const point=entries[low];
+  return point.seconds+(tick-point.tick)*point.tempo/(midi.division*1000000);
 }
+function ncnLyrics(lyrBytes,curBytes,code,midi){
+  // LYR/CUR uses *source CP874 bytes*, not JS characters. NCN consumes one
+  // invisible CUR entry before every nonblank lyric line, then one per byte.
+  if(!midi||!Number.isFinite(midi.division)||midi.division<=0||
+      !Array.isArray(midi.tempoMap)||!midi.tempoMap.length||
+      !Number.isFinite(midi.duration))fail('NCN ต้องใช้ผลอ่าน MIDI และ Tempo จริงในการแปลงเวลา');
+  const source=lyrBytes instanceof Uint8Array?lyrBytes:new Uint8Array(lyrBytes);
+  if(source.length>1024*1024)fail('LYR NCN ใหญ่เกิน 1 MB');
+  const eof=source.indexOf(0x1a),last=eof<0?source.length:eof;
+  const rows=[];
+  let from=0;
+  for(let p=0;p<last;p++){
+    if(source[p]===13||source[p]===10){
+      rows.push(source.subarray(from,p));
+      if(source[p]===13&&p+1<last&&source[p+1]===10)p++;
+      from=p+1;
+    }
+  }
+  rows.push(source.subarray(from,last));
+  if(rows.length<5)fail('LYR NCN ต้องมีส่วนหัวสี่บรรทัด');
+  const decoder=new TextDecoder('windows-874');
+  const decode=bytes=>{
+    const content=decoder.decode(bytes);
+    if(content.includes('\ufffd'))fail('LYR NCN มีไบต์ข้อความที่รหัส CP874 ไม่รองรับ');
+    return content;
+  };
+  const cur=curBytes instanceof Uint8Array?curBytes:new Uint8Array(curBytes);
+  if(cur.length<2||cur.length>2*1024*1024)fail('CUR NCN ขนาดไม่ถูกต้อง');
+  let valid=cur.length;
+  // Historic NCN exporters may terminate a uint16-le CUR with one FF byte.
+  if(valid%2){
+    if(cur[valid-1]!==255)fail('CUR NCN มีไบต์ท้ายไม่ครบหนึ่งค่าเวลา');
+    valid--;
+  }
+  const positions=new DataView(cur.buffer,cur.byteOffset,valid);
+  const count=valid/2;
+  if(!count)fail('CUR NCN ไม่มีตำแหน่งเวลา');
+  const body=rows.slice(4);
+  while(body.length&&!body[body.length-1].some(x=>x!==0&&x!==32&&x!==9))
+    body.pop();
+  let index=0,previous=0,partial=false,removedFooter=0;
+  const warnings=[],lines=[];
+  const vendorFooter=/^(?:nick[\s_-]*karaoke(?:\s+professional)?|นิค[\s_-]*คาราโอเกะ|by[\s_-]*นิค[\s_-]*คาราโอเกะ)$/i;
+  const isNonempty=bytes=>bytes.some(x=>x!==0&&x!==32&&x!==9);
+  const needed=bytes=>bytes.length+1;
+  // Exclude only *untimed* vendor credits at the end. A timed vendor line
+  // is kept as real stage text, as on the existing X-Stage PC parser.
+  while(body.length&&count<body.filter(isNonempty).reduce((n,row)=>n+needed(row),0)){
+    const trailing=body[body.length-1],caption=decode(trailing).trim();
+    if(!vendorFooter.test(caption))break;
+    body.pop();removedFooter++;
+    while(body.length&&!isNonempty(body[body.length-1]))body.pop();
+  }
+  const mark=/\p{M}/u;
+  let stop=false;
+  for(const row of body){
+    if(!isNonempty(row))continue;
+    if(index>=count){partial=true;warnings.push('CUR มีเวลาไม่พอสำหรับเนื้อร้องทั้งหมด');break;}
+    index++; // one NCN newline/line-marker cue, not a printable character
+    const syllables=[];
+    let displayed='';
+    for(const byte of row){
+      if(index>=count){partial=true;stop=true;break;}
+      const position=positions.getUint16(index*2,true);index++;
+      if(position===65535){
+        partial=true;
+        // 65535 is untimed, not an absolute 2730-second lyric position.
+        warnings.push('CUR มีค่า 65535 ในตำแหน่งอักษร · ข้ามเฉพาะอักษรที่ไม่มีเวลา');
+        continue;
+      }
+      const effective=Math.max(previous,position);
+      if(effective!==position)warnings.push('CUR มีเวลาย้อนกลับ · คงลำดับเวลาตามตัวเล่น PC');
+      previous=effective;
+      const at=ncnTickSeconds(effective,midi);
+      if(!Number.isFinite(at)||at>midi.duration+10){
+        partial=true;stop=true;
+        warnings.push('CUR มีเวลาเกินช่วง MIDI · ไม่สร้างเวลาแทน');
+        break;
+      }
+      const letter=decode(Uint8Array.of(byte));
+      displayed+=letter;
+      if(mark.test(letter)&&syllables.length)syllables[syllables.length-1].text+=letter;
+      else syllables.push({text:letter,start:at,duration:.08});
+    }
+    if(syllables.length&&displayed.trim()){
+      for(let k=0;k<syllables.length;k++){
+        const next=syllables[k+1]?.start;
+        syllables[k].duration=Math.max(.03,(next??syllables[k].start+.4)-syllables[k].start);
+      }
+      const startTime=syllables[0].start;
+      const endTime=Math.max(startTime+.1,
+        syllables[syllables.length-1].start+.5);
+      lines.push({startTime,endTime,text:displayed,syllables});
+    }
+    if(stop)break;
+  }
+  if(!lines.length)fail('LYR/CUR NCN ไม่มีเนื้อร้องที่จับคู่เวลาจริงได้');
+  if(partial)warnings.push('เนื้อร้องบางส่วนไม่มีเวลา CUR จริง · ใช้เฉพาะส่วนที่ตรวจสอบได้');
+  const metadata={
+    timingComplete:!partial, cursorValues:count,
+    unusedCursorValues:Math.max(0,count-index),
+    removedUntimedFooterLines:removedFooter,
+    timingWarnings:[...new Set(warnings)]
+  };
+  return {schemaVersion:1,songCode:code,sourceFormat:'NCN',
+    title:decode(rows[0]).trim(),artist:decode(rows[1]).trim(),
+    lines,metadata};
+}
+
 function parseFont(data){
   const b=data instanceof Uint8Array?data:new Uint8Array(data);
   if(b.byteLength<256||b.byteLength>MAX_FONT||str(b,0,4)!=='RIFF'||str(b,8,4)!=='sfbk')
