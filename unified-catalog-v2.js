@@ -38,9 +38,14 @@ function locator(value,{cloud=false,label='media'}={}){
        value[name].length!==len||!/^[a-fA-F0-9]+$/.test(value[name])))fail(label+'.'+name+' ไม่ถูกต้อง');
   return value;
 }
+function songId(value){
+  string(value,'id',{max:256});
+  if(/[?#]/.test(value))fail('รหัสอ้างอิงเพลงไม่ถูกต้อง');
+  return value;
+}
 function song(item,{cloud=false}={}){
   if(!item||typeof item!=='object'||Array.isArray(item))fail('เพลงไม่ใช่ object');
-  key(item.id,'id');key(item.code,'code');
+  songId(item.id);key(item.code,'code');
   if(item.code.length>64)fail('รหัสเพลงยาวเกิน 64 ตัว');
   if(item.webSongId!==undefined&&item.webSongId!==item.id)fail('id และ webSongId ไม่ตรงกัน');
   string(item.title,'title');
