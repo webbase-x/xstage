@@ -470,11 +470,12 @@ class Importer {
         ...this.plan.songs.map(x=>({...x,isFont:false}))];
       let revisions=[],finished=0;
       const show=(text,part=0)=>{this.status(text);this.progress(finished,work.length,part);};
-      const uploadMedia=async(file,code,parts,name,mime,hash,index)=>{
+      const uploadMedia=async(file,code,parts,name,mime,hash,from=0,span=1)=>{
         this.check();
         const parent=await drive.ensurePath(rootId,parts);
         const item=await drive.upload(parent,file,name,mime,hash,
-          (done,total)=>show('อัปโหลด '+file.name+' · '+(done/1024/1024).toFixed(1)+' / '+(total/1024/1024).toFixed(1)+' MB',Math.min(.97,(done/Math.max(1,total))*.97)));
+          (done,total)=>show('อัปโหลด '+(file.name||name)+' · '+(done/1024/1024).toFixed(1)+' / '+(total/1024/1024).toFixed(1)+' MB',
+            Math.min(.99,from+(done/Math.max(1,total))*span)));
         return {fileId:item.id,path:[...parts,name].join('/'),md5Checksum:hash,size:file.size};
       };
       const publish=async()=>{
@@ -557,18 +558,26 @@ class Importer {
             if(!media){
               const name=base+'-'+audioHash.slice(0,16)+'.'+kind.toLowerCase();
               media=await uploadMedia(audio.file,code,[...prefix,'Songs',folder],name,
-                kind==='MP3'?'audio/mpeg':'audio/mp4',audioHash);
+                kind==='MP3'?'audio/mpeg':'audio/mp4',audioHash,0,.83);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash);
+            const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash,.83,.09);
             const rawBlob=new Blob([raw],{type:'text/plain'});
             const lrcHash=await core.hashBlob(rawBlob,()=>this.check());
             const lname=base+'-'+lrcHash.slice(0,16)+'.lrc';
-            const lrcInfo=await uploadMedia(rawBlob,code,[...prefix,'Lyrics',folder],lname,'text/plain',lrcHash);
+            const lrcInfo=await uploadMedia(rawBlob,code,[...prefix,'Lyrics',folder],lname,'text/plain',lrcHash,.92,.08);
             const ident=same?.webSongId||('browser/'+audioHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิงออนไลน์ชนกับเพลงอื่น');
-            const record={webSongId:ident,code,title:doc.title||code,
+            // Preserve the original linked MIDI/video/vocal media when only
+            // a same-audio song's timed lyrics have changed.
+            const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
               artist:doc.artist||'',sourceFormat:kind,audio:media,lyrics:lyric,lrc:lrcInfo};
+            if(same){
+              const oldPair=String(same.audio?.md5Checksum||'').toLowerCase()+':'+
+                String(same.lyrics?.md5Checksum||'').toLowerCase();
+              byPair.delete(oldPair);
+              byCode.set(code.toLowerCase(),candidates.filter(x=>x.webSongId!==ident));
+            }
             rows.set(ident,record);addMaps(record);byPair.set(pair,record);
             revisions.push(record);
             this.stats[same?'updated':'newSongs']++;
