@@ -271,6 +271,8 @@ class Importer {
       'allow-create','source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
     this.dom.open?.addEventListener('click',()=>this.open());
+    this.dom.gateOpen=$('cloud-import-open-gate');
+    this.dom.gateOpen?.addEventListener('click',()=>this.open());
     this.dom.close?.addEventListener('click',()=>this.close());
     this.dom.dialog?.addEventListener('cancel',event=>{event.preventDefault();this.close();});
     this.dom.pick?.addEventListener('click',()=>this.choose());
@@ -297,6 +299,8 @@ class Importer {
     const auth=this.session();
     this.dom.open.hidden=!auth?.token;
     this.dom.open.disabled=this.running||this.lockPending;
+    if(this.dom.gateOpen){this.dom.gateOpen.hidden=!auth?.token;
+      this.dom.gateOpen.disabled=this.running||this.lockPending;}
   }
   status(message){if(this.dom.status)this.dom.status.textContent=message;}
   progress(index,total,ratio=0){
