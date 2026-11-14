@@ -89,6 +89,47 @@ class FolderUploadTests(unittest.TestCase):
         self.assertEqual(uploaded["newSongs"], 1)
         self.assertEqual(publisher.published[0]["webSongId"], record["webSongId"])
 
+    def test_soundfont_header_and_private_folder_upload(self):
+        font = self.root / "Piano.sf2"
+        # A minimal RIFF sfbk header is adequate for header-only preflight.
+        font.write_bytes(b"RIFF" + b"\x00"*4 + b"sfbk" + b"x"*1000)
+        self.assertEqual(folder.inspect_soundfont(str(font))["format"], "SF2")
+
+        class FakeDrive:
+            def __init__(self):
+                self.folders = {}
+                self.files = {}
+            def list_children(self, parent):
+                return [dict(id=ident, name=name,
+                    mimeType=folder.FOLDER) for (p,name), ident in self.folders.items()
+                    if p == parent]
+            def folder(self, parent, name):
+                key=(parent,name)
+                if key not in self.folders:
+                    self.folders[key]=str(len(self.folders)+1)
+                return self.folders[key]
+            def upload_file(self, parent, path, name, **kwargs):
+                key=(parent,name)
+                value=folder.digest(path)
+                if key in self.files:
+                    return "skipped", self.files[key]
+                item={"id":"media1", "md5Checksum":value}
+                self.files[key]=item
+                return "created", item
+        drive=FakeDrive()
+        first=folder.upload_soundfont(drive,str(font),create_new_library=True)
+        second=folder.upload_soundfont(drive,str(font),create_new_library=True)
+        self.assertTrue(first["uploaded"])
+        self.assertTrue(second["skipped"])
+        self.assertEqual(first["path"].split("/")[:3], ["XStageWeb","SOUNDFONT","SF2"])
+        self.assertFalse(first["webMidiReady"])
+
+    def test_invalid_soundfont_is_rejected_without_upload(self):
+        font = self.root / "fake.sf3"
+        font.write_bytes(b"not a SoundFont"*100)
+        with self.assertRaisesRegex(ValueError,"RIFF"):
+            folder.inspect_soundfont(str(font))
+
     def test_missing_lyrics_does_not_publish(self):
         self.lrc.unlink()
         self.assertEqual(folder.report(str(self.root))["ready"], 0)
