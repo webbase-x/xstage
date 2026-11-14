@@ -155,7 +155,8 @@ def write_published_v2(drive,db,records,*,previous=None,revisions=None,
             file=temp/name
             file.write_text(json.dumps(data,ensure_ascii=False,
                         separators=(",",":")),encoding="utf-8")
-            _,meta=drive.upload_file(folder,file,name,cancelled=cancelled)
+            _,meta=drive.upload_file(folder,file,name,
+                replace_pointer=(name=="current.json"),cancelled=cancelled)
             if not isinstance(meta.get("id"),str) or not meta["id"]:
                 raise PublishError("Google Drive ไม่คืนรหัสไฟล์ฐานข้อมูล")
             return meta["id"]
@@ -199,10 +200,6 @@ def write_published_v2(drive,db,records,*,previous=None,revisions=None,
         if precommit is not None:
             precommit()
         upload(db,"current.json",pointer)
-        # Drive API replace_pointer is required: do not create two pointers.
-        # The upload helper above cannot set this flag, so re-uploading a
-        # differently named current file would be unsafe. See replacement
-        # below in the final pointer block.
     return pointer
 
 class V2NativePublisher:
