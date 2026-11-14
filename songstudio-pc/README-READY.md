@@ -158,9 +158,15 @@ as verified karaoke lyrics. A pure MIDI/NCN instrumental contains note
 events, **not a singer's words**, so transcription is not offered unless
 an actual audio recording with vocals exists.
 
+### Google Drive V2 storage
+
+- Cloud publishing and verified private downloads use **XStageWeb/DB/current.json (V2)** only, separate from the local `songs/current.json` and `songs.sqlite3`. The local `songs/audio/` and `songs/lyrics/` paths are PC workspace paths, not Google Drive destination paths.
+- After Google Login, the **เตรียมและตรวจสอบคลัง XStageWeb V2** button creates a verified zero-song V2 database and the typed folder skeleton if missing. The normal Upload button can also initialize a new cloud library automatically when media is complete.
+- The Ready ZIP must include `online_publish.py`, `v2_native_publish.py` and `unified_catalog_v2.py` alongside `google_drive.py`. Users should not need to install these Python components separately.
+
 ### Limitations
 
-- **NCN** music handling, **Google Drive access to files owned by a different OAuth application** remain unimplemented in the source engine. The UI still shows legacy controls for PC/Web parity; these actions will display a clear unsupported error rather than silently claiming success.
+- Direct original-format NCN/MP3/video/E-MK publication requires complete source components and a verified V2 manifest. NCN conversion in the M4A creation wizard is not a turnkey feature. Files owned or created through another Google OAuth app might require matching Cloud configuration or explicit authorization via Google Picker; this remains unverified on real accounts.
 - Users may choose their own compatible SoundFont; the default bundled SF2 works out of the box.
 - Actual music performance depends on CPU speed, RAM and file codec.
 - The app does not have a signed native Windows installer/executable. It is a portable ZIP with a double-click CMD launcher, not a signed EXE.
