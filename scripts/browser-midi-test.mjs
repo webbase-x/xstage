@@ -37,14 +37,65 @@ assert.throws(()=>runtime.parseMidi(new Uint8Array(30)),/MIDI/);
 const lyrics=runtime.midiLyrics(parsed,'A100');
 assert.equal(lyrics.schemaVersion,1);
 assert.equal(lyrics.lines.length,1,'Instrumental MIDI gets an explicit music-only marker');
-const ascii=new TextEncoder().encode('Test Song\nArtist\nC\n\nHI\n');
-const cursors=new Uint8Array([0,0,24,0]);
-const ncn=runtime.ncnLyrics(ascii,cursors,'A100',parsed.duration);
+const ascii=new TextEncoder().encode('Test Song\nArtist\nC\n.\nHI\n');
+const cursors=new Uint8Array([0,0,0,0,24,0]); // line marker + H + I
+const ncn=runtime.ncnLyrics(ascii,cursors,'A100',parsed);
 assert.equal(ncn.title,'Test Song');
 assert.equal(ncn.artist,'Artist');
 assert.equal(ncn.lines[0].text,'HI');
 assert.equal(ncn.lines[0].syllables.length,2);
-assert.throws(()=>runtime.ncnLyrics(ascii,new Uint8Array([0,0]),'A100',2),/CUR/);
+assert.equal(ncn.lines[0].syllables[1].start,.5,'24 CUR positions = one MIDI quarter');
+assert.equal(ncn.metadata.timingComplete,true);
+assert.throws(()=>runtime.ncnLyrics(ascii,new Uint8Array([0,0]),'A100',parsed),/LYR\/CUR/);
+assert.throws(()=>runtime.ncnLyrics(ascii,cursors,'A100',parsed.duration),/Tempo/);
+
+// Tempo changes must affect NCN lyrics at the SAME MIDI clock as the audio.
+const tempoTrack=[0,255,81,3,7,161,32,0,144,60,100,
+  131,96,255,81,3,15,66,64,131,96,128,60,0,0,255,47,0];
+const tempoMidi=new Uint8Array([77,84,104,100,0,0,0,6,0,0,0,1,1,224,
+  77,84,114,107,0,0,0,tempoTrack.length,...tempoTrack]);
+const tempoSong=runtime.parseMidi(tempoMidi);
+assert.equal(tempoSong.division,480);
+assert.equal(tempoSong.tempoMap.length,2);
+assert.ok(Math.abs(tempoSong.tempoMap[1].seconds-.5)<1e-9);
+assert.ok(Math.abs(tempoSong.duration-2.5)<1e-9);
+const titleAndLyrics=new TextEncoder().encode('Song\nArtist\nC\n.\nABCD\n');
+// A Thai combining mark uses a *separate CP874 byte* but one displayed glyph.
+const lyricsBytes=new Uint8Array([...titleAndLyrics,161,212,162,10]);
+const uint16=(...values)=>new Uint8Array(values.flatMap(value=>[value&255,value>>8]));
+const timed=uint16(0,0,12,24,48,48,48,48,60);
+const actualCues=runtime.ncnLyrics(lyricsBytes,timed,'T100',tempoSong);
+assert.equal(actualCues.lines.length,2);
+assert.deepEqual(Array.from(actualCues.lines[1].syllables,x=>x.text),['กิ','ข']);
+assert.equal(actualCues.lines[0].syllables[3].start,1.5,
+  'NCN position 48 must cross the 120-to-60 BPM tempo change');
+assert.equal(actualCues.lines[1].syllables[1].start,2,
+  'NCN position 60 must use the new 60 BPM tempo');
+assert.equal(actualCues.metadata.cursorValues,9);
+assert.equal(actualCues.metadata.unusedCursorValues,0);
+assert.equal(actualCues.metadata.timingComplete,true);
+// Legacy NCN files can contain unused trailing FFFF sentinels and a DOS FF tail.
+const legacy=new Uint8Array([...timed,...Array(200).fill(255),255]);
+const legacyDoc=runtime.ncnLyrics(lyricsBytes,legacy,'T100',tempoSong);
+assert.equal(legacyDoc.metadata.unusedCursorValues,100);
+assert.equal(legacyDoc.metadata.timingComplete,true);
+assert.equal(legacyDoc.lines.length,2);
+assert.equal(legacyDoc.lines[1].text,'กิข');
+// The invisible marker is not a glyph; backward historical positions are
+// clamped like the PC renderer, not turned into a negative syllable duration.
+const backwards=uint16(65535,0,12,6,48,48,48,48,60);
+const backwardDoc=runtime.ncnLyrics(lyricsBytes,backwards,'T100',tempoSong);
+assert.equal(backwardDoc.lines[0].syllables[2].start,
+  backwardDoc.lines[0].syllables[1].start);
+assert.ok(backwardDoc.metadata.timingWarnings.some(x=>x.includes('ย้อนกลับ')));
+assert.equal(backwardDoc.metadata.timingComplete,true);
+// Truncated CUR cannot produce fabricated timestamps; mark import invalid.
+const incomplete=runtime.ncnLyrics(lyricsBytes,uint16(0,0,12,24,48,48,48),'T100',tempoSong);
+assert.equal(incomplete.metadata.timingComplete,false);
+assert.ok(incomplete.metadata.timingWarnings.length);
+assert.throws(()=>runtime.ncnLyrics(lyricsBytes,new Uint8Array([0,0,1]),'T100',tempoSong),
+  /CUR NCN/);
+
 // A minimal in-memory SF2 preset exercises real RIFF/zone/sample mapping.
 const pack=(...chunks)=>Buffer.concat(chunks.map(x=>Buffer.from(x)));
 const word=n=>{const b=Buffer.alloc(2);b.writeUInt16LE(n);return b;};
