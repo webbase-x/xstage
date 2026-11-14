@@ -297,8 +297,16 @@
               <summary>รายการ LYR ที่ข้าม <strong id="lyric-skipped-count">0 ไฟล์</strong> · ดูชื่อไฟล์และสาเหตุ</summary>
               <p class="hint">แสดงผลการวิเคราะห์ครั้งล่าสุดเท่านั้น · ไม่ลบ ไม่ย้าย ไม่แก้ไขไฟล์ที่ข้าม · การข้ามไม่ใช่การตรวจพบเพลงซ้ำ</p>
               <div id="lyric-skipped-breakdown" class="lyric-skipped-breakdown" aria-label="สรุปเหตุผลการข้าม"></div>
+              <p id="lyric-skipped-recheck-stats" class="hint" role="status" aria-live="polite">ตรวจซ้ำเฉพาะไฟล์ที่ข้าม โดยไม่เขียนทับไฟล์ต้นฉบับ</p>
               <div id="lyric-skipped-list" class="lyric-skipped-list" role="list" aria-live="polite"></div>
               <div class="lyric-skipped-controls">
+                <button type="button" id="lyric-skipped-recheck" class="button primary" disabled>ตรวจซ้ำเฉพาะ LYR ที่ข้ามเพื่อยืนยัน</button>
+                <label for="lyric-skipped-view">แสดงผล</label>
+                <select id="lyric-skipped-view" class="field" aria-label="เลือกสถานะไฟล์ LYR ที่ตรวจซ้ำ">
+                  <option value="skipped">ไฟล์ที่ยังข้ามอยู่</option>
+                  <option value="rechecked">รายการที่ตรวจซ้ำทั้งหมด</option>
+                  <option value="recovered">ไฟล์ที่กลับมาอ่านได้</option>
+                </select>
                 <span id="lyric-skipped-page" class="hint">ยังไม่มีรายการ</span>
                 <button type="button" id="lyric-skipped-prev" class="button ghost" disabled>‹ ก่อนหน้า</button>
                 <button type="button" id="lyric-skipped-next" class="button ghost" disabled>ถัดไป ›</button>
