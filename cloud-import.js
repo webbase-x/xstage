@@ -29,8 +29,8 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function aborted(error){return error?.name==='AbortError'||String(error?.message||'').includes('หยุดงาน');}
 function encode(document){return new Blob([JSON.stringify(document)],{type:'application/json'});}
 function pathFor(code,kind,role,name){
-  // Flat AUDIO for all media/SoundFonts, TEXT for Lyrics/catalogs.
-  return [kind==='json'?'TEXT':'AUDIO',name];
+  // Flat AUDIO for all media/SoundFonts, LYRICS for Lyrics/catalogs.
+  return [kind==='json'?'LYRICS':'AUDIO',name];
 }
 async function db(){
   if(!('indexedDB' in scope))return null;
@@ -263,24 +263,27 @@ class Drive {
 }
 async function loadCatalog(drive,root){
   const children=await drive.listChildren(root);
-  const texts=children.filter(x=>x.name==='TEXT'&&x.mimeType===MIME_FOLDER);
-  if(texts.length>1)fail('พบโฟลเดอร์ TEXT ซ้ำบน Drive');
-  const textChildren=texts.length?await drive.listChildren(texts[0].id):[];
-  const modern=textChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
+  const lyricDirs=children.filter(x=>['LYRICS','TEXT'].includes(x.name)&&x.mimeType===MIME_FOLDER);
+  if(lyricDirs.filter(x=>x.name==='LYRICS').length>1||
+     lyricDirs.filter(x=>x.name==='TEXT').length>1)
+    fail('พบโฟลเดอร์ LYRICS/TEXT ซ้ำบน Drive');
+  const lyricChildSets=await Promise.all(lyricDirs.map(x=>drive.listChildren(x.id)));
+  const lyricChildren=lyricChildSets.flat();
+  const modern=lyricChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
   const old=children.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
-  if(modern.length&&old.length)fail('พบ current.json ทั้งใน TEXT และรากคลัง');
+  if(modern.length&&old.length)fail('พบ current.json ทั้งใน LYRICS และรากคลัง');
   const pointers=modern.length?modern:old;
   if(pointers.length>1)fail('พบ current.json ซ้ำ · หยุดเพื่อไม่ให้ DB เสีย');
   if(!pointers.length){
-    const marker=textChildren.find(x=>x.name==='.xstage-songstudio-staging.json')||
+    const marker=lyricChildren.find(x=>x.name==='.xstage-songstudio-staging.json')||
       children.find(x=>x.name==='.xstage-songstudio-staging.json');
-    const unknown=children.filter(x=>!['SOUNDFONT','AUDIO','TEXT','VIDEO','MIDI','DB',
+    const unknown=children.filter(x=>!['SOUNDFONT','AUDIO','LYRICS','TEXT','VIDEO','MIDI','DB',
       '.xstage-songstudio-staging.json'].includes(x.name));
     if(unknown.length)fail('พบไฟล์ใน XStageWeb แต่ไม่มี current.json · ต้องตรวจคลังเดิมก่อน');
-    if(!marker&&children.some(x=>!['AUDIO','TEXT','SOUNDFONT'].includes(x.name)))
+    if(!marker&&children.some(x=>!['AUDIO','LYRICS','SOUNDFONT'].includes(x.name)))
       fail('XStageWeb ยังไม่มี current.json หรือหลักฐานนำเข้าที่ปลอดภัย · ไม่เริ่มทับ');
-    if(!marker&&textChildren.length)
-      fail('พบข้อมูล TEXT เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
+    if(!marker&&lyricChildren.length)
+      fail('พบข้อมูล LYRICS เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
     if(marker){
       const data=await drive.getJson(marker.id);
       if(data.format!=='xstage-songstudio-upload-staging-v1')
@@ -552,10 +555,10 @@ class Importer {
         rootId=await drive.folder('root','XStageWeb');
       }
       let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
-      if(pointer && pointer.layoutVersion!==3)
-        fail('พบคลังเก่าที่ใช้โครงสร้างอื่น · เพื่อไม่ให้ข้อมูลสูญหาย กรุณาสำรองและยืนยันการย้ายคลังก่อนอัปโหลดแบบ AUDIO/TEXT');
+      if(pointer && pointer.layoutVersion!==4)
+        fail('พบคลังเก่าที่ใช้โครงสร้างอื่น · เพื่อไม่ให้ข้อมูลสูญหาย กรุณาสำรองและยืนยันการย้ายคลังก่อนอัปโหลดแบบ AUDIO/LYRICS');
       if(!pointerFile){
-        const textRoot=await drive.ensurePath(rootId,['TEXT']);
+        const textRoot=await drive.ensurePath(rootId,['LYRICS']);
         const textFiles=await drive.listChildren(textRoot);
         const rootFiles=await drive.listChildren(rootId);
         if(!textFiles.some(x=>x.name==='.xstage-songstudio-staging.json')&&
@@ -598,7 +601,7 @@ class Importer {
         const generation=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
           .map(x=>x.toString(16).padStart(2,'0')).join('');
         let catalogId,deltaIds;
-        const dbRoot=await drive.ensurePath(rootId,['TEXT']);
+        const dbRoot=await drive.ensurePath(rootId,['LYRICS']);
         const pushJson=async(name,value)=>{
           const blob=encode(value),digest=await core.hashBlob(blob,()=>this.check());
           const item=await drive.upload(dbRoot,blob,name,'application/json',digest);
@@ -614,19 +617,19 @@ class Importer {
             {schemaVersion:1,songs:[...rows.values()]});
           deltaIds=[];
         }
-        const next={schemaVersion:1,layoutVersion:3,generation,catalogFileId:catalogId,
+        const next={schemaVersion:1,layoutVersion:4,generation,catalogFileId:catalogId,
           deltaFileIds:deltaIds,songCount:rows.size};
         // Verify the pointer generation again. Never blindly overwrite a PC
         // publish performed while the browser was uploading a long batch.
-        const currentRoot=pointer?.layoutVersion===3
-           ? await drive.ensurePath(rootId,['TEXT']) : rootId;
+        const currentRoot=pointer?.layoutVersion===4
+           ? await drive.ensurePath(rootId,['LYRICS']) : rootId;
          const pointers=(await drive.listChildren(currentRoot)).filter(x=>x.name==='current.json');
         if(pointerFile){
           const current=await drive.getJson(pointerFile.id);
           if(current.generation!==pointer.generation)
             fail('มีการอัปเดตฐานเพลงจากอีกอุปกรณ์ระหว่างงาน · หยุดเพื่อไม่เขียนทับ');
         }else{
-          const textRoot=await drive.ensurePath(rootId,['TEXT']);
+          const textRoot=await drive.ensurePath(rootId,['LYRICS']);
            const again=await drive.list("'"+driveId(textRoot)+"' in parents and name='current.json' and trashed=false");
           if(again.length)fail('พบ current.json ใหม่จากอีกอุปกรณ์ · ยกเลิกเพื่อป้องกันฐานซ้ำ');
         }
@@ -634,7 +637,7 @@ class Importer {
         if(pointerFile){
           await drive.updatePointer(pointerFile.id,blob,hash);
         }else{
-          const textRoot=await drive.ensurePath(rootId,['TEXT']);
+          const textRoot=await drive.ensurePath(rootId,['LYRICS']);
            const item=await drive.upload(textRoot,blob,'current.json','application/json',hash);
           pointerFile={id:item.id,name:'current.json'};
         }
@@ -695,7 +698,7 @@ class Importer {
                 'audio/midi',midiHash,0,.75);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyrics=await uploadMedia(json,code,['TEXT'],jname,
+            const lyrics=await uploadMedia(json,code,['LYRICS'],jname,
               'application/json',jsonHash,.75,.25);
             // NCN .LYR/.CUR are decoded locally; do not store the raw
             // cursor or lyric source in the private Drive song library.
@@ -820,7 +823,7 @@ class Importer {
                 MEDIA_MIME[uploadKind]||'application/octet-stream',audioHash,0,.83);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyric=await uploadMedia(json,code,['TEXT'],jname,'application/json',jsonHash,.83,.09);
+            const lyric=await uploadMedia(json,code,['LYRICS'],jname,'application/json',jsonHash,.83,.09);
             // LRC is a local input/editing format; JSON is the only
             // lyric artifact stored on Drive in layout v3.
             let videoMedia=same?.video;
