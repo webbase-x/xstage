@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
 const source=fs.readFileSync(new URL('../browser-midi.js',import.meta.url),'utf8');
-const context={Uint8Array,ArrayBuffer,DataView,TextDecoder,Blob,console};
+const context={Uint8Array,ArrayBuffer,DataView,TextDecoder,Blob,console,setTimeout};
 context.window=context;
 context.document={getElementById:()=>null};
 class StubNode{
