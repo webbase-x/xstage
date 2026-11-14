@@ -66,6 +66,8 @@ def populate_context_menu(app, menu, factory, screens):
     command(tools, 'แก้ไขเนื้อร้อง LRC…', app.lyric_editor)
     command(tools, 'ชดเชยเวลาเนื้อร้อง…', app.show_controls, enabled=loaded)
     tools.add_separator()
+    command(tools, 'ส่งออกฐานเพลง Unified V2…', app.export_unified_catalog_v2)
+    command(tools, 'นำเข้าฐานเพลง Unified V2…', app.import_unified_catalog_v2)
     command(tools, 'กู้คืนข้อมูล…', app.restore_data)
     command(tools, 'วิธีใช้ / ปุ่มลัด', app.help)
     command(tools, 'ความสามารถที่รองรับ', app.capabilities)
