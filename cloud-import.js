@@ -147,24 +147,60 @@ class Drive {
     if(location.protocol!=='https:'||location.hostname!=='www.googleapis.com'||
        !location.pathname.startsWith('/upload/drive/v3/files'))
       fail('Google Drive คืน Upload URL ที่ไม่อยู่ในโดเมนที่อนุญาต');
-    let answer=null;
-    for(let start=0;start<file.size;){
+    // Google requires Range verification for every 308 response. Never
+    // assume a chunk was committed when the Range header is absent.
+    let answer=null,start=0,retries=0;
+    const uploadStatus=async()=>{
       this.assertLive();
-      const end=Math.min(start+CHUNK,file.size),last=end===file.size;
       const response=await fetch(location.href,{method:'PUT',cache:'no-store',
-        headers:this.headers({'Content-Type':mime,
-          'Content-Range':'bytes '+start+'-'+(end-1)+'/'+file.size}),
-        body:file.slice(start,end),signal:this.signal?.()});
+        headers:this.headers({'Content-Range':'bytes */'+file.size}),
+        signal:this.signal?.()});
       if(response.status===308){
-        const range=response.headers.get('Range');
-        if(range&&/bytes=0-\d+/.test(range)){
-          const accepted=Number(range.match(/bytes=0-(\d+)/)[1])+1;
-          if(accepted<=start||accepted>end)fail('Google Drive ตอบช่วงไฟล์อัปโหลดผิดตำแหน่ง');
-          start=accepted;
-        }else start=end;
+        const match=String(response.headers.get('Range')||'').match(/^bytes=0-(\d+)$/);
+        return {position:match?Number(match[1])+1:0};
+      }
+      if(response.ok)return {complete:await response.json(),position:file.size};
+      fail('สอบถามตำแหน่งอัปโหลด Drive ไม่สำเร็จ (HTTP '+response.status+')');
+    };
+    while(start<file.size){
+      this.assertLive();
+      const end=Math.min(start+CHUNK,file.size);
+      let response=null;
+      try{
+        response=await fetch(location.href,{method:'PUT',cache:'no-store',
+          headers:this.headers({'Content-Type':mime,
+            'Content-Range':'bytes '+start+'-'+(end-1)+'/'+file.size}),
+          body:file.slice(start,end),signal:this.signal?.()});
+      }catch(error){
+        if(error?.name==='AbortError'||this.signal?.()?.aborted)throw error;
+        if(++retries>4)fail('การเชื่อมต่อ Google Drive ขาดหลายครั้ง · หยุดและทำต่อภายหลัง');
+        await sleep(Math.min(4000,350*2**retries));
+        const status=await uploadStatus();
+        if(status.complete){answer=status.complete;start=file.size;break;}
+        start=status.position;continue;
+      }
+      if(response.status===308){
+        const match=String(response.headers.get('Range')||'').match(/^bytes=0-(\d+)$/);
+        const accepted=match?Number(match[1])+1:0;
+        if(accepted>end)fail('Google Drive ตอบช่วงไฟล์เกินขนาดที่ส่ง');
+        if(accepted<=start){
+          if(++retries>4)fail('Google Drive ไม่ยืนยันช่วงข้อมูลที่ส่ง · หยุดอย่างปลอดภัย');
+          await sleep(Math.min(4000,350*2**retries));
+          const status=await uploadStatus();
+          if(status.complete){answer=status.complete;start=file.size;break;}
+          start=status.position;
+          continue;
+        }
+        start=accepted;retries=0;
       }else if(response.ok){
         answer=await response.json();
-        start=end;
+        start=file.size;retries=0;
+      }else if(response.status===429||response.status>=500){
+        if(++retries>4)fail('Google Drive ขัดข้องซ้ำหลายครั้ง (HTTP '+response.status+')');
+        await sleep(Math.min(4000,350*2**retries));
+        const status=await uploadStatus();
+        if(status.complete){answer=status.complete;start=file.size;break;}
+        start=status.position;
       }else{
         if(response.status===401||response.status===403)fail('สิทธิ์ Google Drive หมดอายุหรือไม่อนุญาตให้อัปโหลด');
         fail('ส่งข้อมูลขึ้น Google Drive ไม่สำเร็จ (HTTP '+response.status+')');
