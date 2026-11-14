@@ -2,8 +2,8 @@
   "name": "X-Stage Android Google Play release",
   "package": "com.webbasex.xstage",
   "available": false,
-  "version": "1.0.96",
-  "build": 1096,
+  "version": "1.0.97",
+  "build": 1097,
   "store_url": null,
-  "note": "Unified WEB/Android source build with browser MIDI and SoundFont work; production Google Play availability remains false. No verified Google Play production APK/AAB released yet. Test sideload APK remains a separate signing channel."
+  "note": "Unified source version only. Production Google Play APK/AAB is not published; test sideload APK has its own verified channel."
 }
