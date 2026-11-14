@@ -34,6 +34,23 @@ assert.equal(result.fonts.length,1);
 assert.ok(!result.blocked.some(x=>x.key.includes('C300')),'Complete NCN must not be blocked');
 assert.ok(result.blocked.some(x=>x.reason.includes('ต้องมีไฟล์ MP3')));
 assert.equal(core.groupKey('AUDIO/MP3/Songs/A/A100.mp3'),core.groupKey('AUDIO/MP3/Lyrics/A/A100.lrc'));
+const media=core.scan([
+  {file:fake('W100.wav'),relative:'AUDIO/WAV/Song/W100.wav'},
+  {file:fake('W100.lrc',40),relative:'AUDIO/WAV/Lyrics/W100.lrc'},
+  {file:fake('O100.ogg'),relative:'AUDIO/OGG/Song/O100.ogg'},
+  {file:fake('O100.lrc',40),relative:'AUDIO/OGG/Lyrics/O100.lrc'},
+  {file:fake('V100.mp4'),relative:'VIDEO/MP4/Song/V100.mp4'},
+  {file:fake('V100.lrc',40),relative:'VIDEO/MP4/Lyrics/V100.lrc'}
+]);
+assert.deepEqual(Array.from(media.songs,x=>x.kind).sort(),['MP4','OGG','WAV'],
+  'Native browser-audio and video containers must scan with timed lyrics');
+assert.equal(media.songs.find(x=>x.kind==='MP4').video.kind,'mp4');
+const wavHead=Buffer.alloc(1500);
+wavHead.write('RIFF',0);wavHead.write('WAVE',8);
+const wavBlob=new Blob([wavHead]);wavBlob.name='sample.wav';
+assert.equal(await core.validAudio(wavBlob),true,'WAV RIFF/WAVE signature');
+const bad=new Blob([Buffer.alloc(1500)]);bad.name='sample.wav';
+assert.equal(await core.validAudio(bad),false,'Invalid WAV must be rejected by signature');
 assert.equal(core.bucket('1234'),'1');
 assert.equal(core.bucket('คำไทย'),'_');
 const lrc=core.lrcToJson('[ti:เพลงทดสอบ]\n[ar:ศิลปิน]\n[00:01.50]สวัสดี\n[00:03.00]ขอบคุณ\n','AB100');
