@@ -45,7 +45,7 @@ const sampleMp3=new Blob([Buffer.from([73,68,51]),Buffer.alloc(1500)],{type:'aud
 sampleMp3.name='sound.mp3';
 assert.equal(await core.validAudio(sampleMp3),true);
 // SoundFonts must declare a bounded RIFF sfbk with INFO, sdta and pdta.
-function sfList(name,bytes=64){
+function sfList(name,bytes=80){
   const body=Buffer.alloc(4+bytes);
   body.write(name,0,'ascii');
   const head=Buffer.alloc(8);head.write('LIST',0,'ascii');head.writeUInt32LE(body.length,4);
