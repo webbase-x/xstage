@@ -661,11 +661,11 @@ function publishPlaybackStatus(state,song,message=''){
     detail:{state,title:String(song?.title||song?.code||''),message:String(message||'')}
   }));
 }
-async function boundedPlaybackTask(task,seconds,message){
+async function boundedPlaybackTask(task,seconds,message,controller=null){
   let timer;
   try{
     return await Promise.race([task,new Promise((_,reject)=>{
-      timer=setTimeout(()=>reject(Error(message)),seconds*1000);
+      timer=setTimeout(()=>{reject(Error(message));controller?.abort();},seconds*1000);
     })]);
   }finally{clearTimeout(timer);}
 }
@@ -1011,20 +1011,22 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
 
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
-  if (expectedSub && state.token && state.accountSub===account.sub) {
+  if (state.token && state.accountSub===account.sub && state.libraryRootId) {
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;
     rememberLogin(true);
     saveActiveAuth(token,tokenExpiresAt,account.sub);
     clearPendingAuth();
     setStatus('ต่ออายุ Google Drive สำเร็จ · เพลงและคิวเดิมเล่นต่อเนื่อง','success');
-    if(state.libraryRootId)void window.XStageBrowserMidi?.refreshFonts({token,rootId:state.libraryRootId,sub:account.sub})
+    if(state.libraryRootId)void window.XStageBrowserMidi?.refreshFonts({token,rootId:state.libraryRootId,sub:account.sub,ownedByMe:state.libraryRootOwnedByMe})
       .catch(error=>console.warn('SoundFont auth refresh:',error.message));
     window.dispatchEvent(new CustomEvent('xstage:auth-refreshed',{detail:{sub:String(account.sub)}}));
     // An already verified same-account Drive session can reopen after renewal.
     if(androidTvVerifiedConnectionSub===account.sub)setAndroidTvStageAccess(true);
     return;
   }
+  // Switch account only after Google confirms the new immutable account ID.
+  if(state.accountSub && state.accountSub!==account.sub)resetPrivate({revoke:false,keepAuth:true});
   if(state.token && state.token!==token)state.catalogCache.clear();
   // Authentication is complete. Activate the account immediately.
   state.token=token;
@@ -1096,7 +1098,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       state.manifest=null;state.songs=[];state.shown=[];renderSongs();
     }
     state.libraryRootId=root.id;
-    void window.XStageBrowserMidi?.refreshFonts({token,rootId:root.id,sub:account.sub})
+    void window.XStageBrowserMidi?.refreshFonts({token,rootId:root.id,sub:account.sub,ownedByMe:!!root.ownedByMe})
       .catch(error=>console.warn('SoundFont selector:',error.message));
     state.libraryRootOwnedByMe=!!root.ownedByMe;
     state.libraryRootCanShare=!!root.capabilities?.canShare;
@@ -1326,7 +1328,7 @@ function login({automatic=false} = {}) {
         finish();
         if(result?.error){setStatus(googleAuthErrorMessage(result),'error');return;}
         if (!result?.access_token) { setStatus('ไม่ได้รับสิทธิ์จาก Google · กรุณากดเข้าสู่ระบบอีกครั้ง', 'error'); return; }
-        resetPrivate({revoke:false, keepAuth:true});
+        // Do not reset a playing track until the new Google account is verified.
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
         savePendingAuth(result.access_token,expiresAt);
@@ -1337,6 +1339,9 @@ function login({automatic=false} = {}) {
               hideCatalogLoading();
               setStatus('เข้าสู่ระบบบัญชีผู้รับเชิญแล้ว · กรุณาเปิดคลังที่แชร์','success');
               return;
+            }
+            if(state.token&&state.accountSub&&state.tokenExpiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS){
+              clearPendingAuth();setStatus('การเชื่อมต่อ Google ใหม่ไม่สำเร็จ · เพลงและคิวเดิมยังอยู่: '+e.message,'error');return;
             }
             clearActiveAuth();resetPrivate({keepAuth:true});
             if(!/เชื่อมต่อไม่สำเร็จ|ใช้เวลานาน|อินเทอร์เน็ต/.test(String(e.message||'')))clearPendingAuth();
@@ -1850,8 +1855,10 @@ function prefetchMedleyNext(){
   if(!state.medley||!state.token||state.loading)return;
   const song=nextMedleyCandidate(),token=state.token;
   if(!song||song.midi||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
-  const task={song,token};state.medleyPrefetch=task;
-  Promise.all([privateFile(song.audio.fileId,token),privateJson(song.lyrics.fileId,token)])
+  state.medleyPrefetch?.controller?.abort();
+  const task={song,token,controller:new AbortController()};state.medleyPrefetch=task;
+  Promise.all([privateFile(song.audio.fileId,token,{signal:task.controller.signal}),
+    privateJson(song.lyrics.fileId,token,{signal:task.controller.signal})])
     .then(async ([response,lyrics])=>{
       const blob=await response.blob();
       if(state.medleyPrefetch!==task||!state.medley||state.token!==token||
@@ -2047,9 +2054,9 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
       : await boundedPlaybackTask(Promise.all([
           loadMedia(),
           privateJson(song.lyrics.fileId,token,{signal:controller.signal})
-        ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป');
+        ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป',controller);
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
-    if (request!==state.requestId||token!==state.token)return;
+    if (request!==state.requestId||token!==state.token){controller.abort();return;}
     if (!audio.size)throw Error('ไฟล์เสียงว่างเปล่า');
     const url=URL.createObjectURL(audio);
     if (remember && state.current)state.history.push(state.current);
@@ -2536,7 +2543,17 @@ function drawLyrics(){
       }
     }
   }catch(e){/* Preserve audio playback even if a malformed lyric line cannot draw. */}
-  requestAnimationFrame(drawLyrics);
+  if(!player.paused&&!player.ended)scheduleLyricsDraw();
+}
+let lyricsFrame=0;
+function scheduleLyricsDraw(){
+  if(lyricsFrame)return;
+  lyricsFrame=requestAnimationFrame(()=>{lyricsFrame=0;drawLyrics();});
+}
+for(const name of ['play','playing','pause','ended','seeked','timeupdate','loadedmetadata','emptied']){
+  player.addEventListener(name,()=>{
+    if(name==='play'||name==='playing'||player.paused||player.ended)scheduleLyricsDraw();
+  });
 }
 
 // The stage clock runs independently in index.html.
@@ -3075,7 +3092,16 @@ ui.volume.addEventListener('input',()=>{player.volume=Number(ui.volume.value)/10
 ui.repeat.addEventListener('change',()=>{player.loop=ui.repeat.checked;saveUiPrefs({repeat:ui.repeat.checked});});
 player.addEventListener('volumechange',()=>saveUiPrefs({volume:Math.round(player.volume*100),muted:player.muted}));
 ui.seek.addEventListener('input',()=>{const d=Number.isFinite(player.duration)?player.duration:Number(state.current?.duration)||0;if(d>0)player.currentTime=d*Number(ui.seek.value)/1000;updateTransport();});
-ui.fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await ui.stage.requestFullscreen();}catch{setPlayStatus('อุปกรณ์นี้ไม่รองรับการแสดงเต็มหน้าจอ');}});
+ui.fullscreen.addEventListener('click',async()=>{
+  try{
+    if(document.fullscreenElement||document.webkitFullscreenElement){
+      if(document.exitFullscreen)await document.exitFullscreen();
+      else await document.webkitExitFullscreen?.();
+    }else if(ui.stage.requestFullscreen)await ui.stage.requestFullscreen();
+    else if(ui.stage.webkitRequestFullscreen)await ui.stage.webkitRequestFullscreen();
+    else throw Error('Fullscreen API unavailable');
+  }catch{setPlayStatus('อุปกรณ์นี้ไม่รองรับการแสดงเต็มหน้าจอ');}
+});
 
 function setupMediaSession(){
   if(!('mediaSession' in navigator))return;
@@ -3144,7 +3170,7 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('pagehide',savePlaybackResumeState);
 window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
-renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);setupNativeAndroidTvUi();setupAppUpdateWatcher();
+renderSongs();renderQueue();updateTransport();scheduleLyricsDraw();setupNativeAndroidTvUi();setupAppUpdateWatcher();
 const xstageCloudImporter=window.XStageCloudImport?.init({
   // The browser importer obtains only an in-memory short-lived token and the
   // current verified account. No token, password or refresh token is stored.
