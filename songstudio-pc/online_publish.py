@@ -255,7 +255,7 @@ class OnlinePublisher:
         return {"created":True,"totalSongs":0,
                 "generation":pointer["generation"],"schemaVersion":2}
 
-    def publish(self, local_songs, selected_records, *, create_new_library=False,
+    def publish(self, local_songs, selected_records, *,
                 cancelled=None, on_progress=None, on_batch=None, on_row=None,
                 batch_size=100):
         from v2_native_publish import write_published_v2, validate_unique_song_codes
