@@ -343,6 +343,8 @@ button.preview-lyric-line{cursor:pointer}
 .lyric-group-examples{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;margin:11px 0}
 .lyric-group-example{font-size:12px;color:#bcd8e4;padding:6px 9px;background:#112f43;border-radius:6px;overflow-wrap:anywhere}
 .lyric-group-edit>label{display:block;font-weight:700;margin:14px 0 8px}
+.lyric-group-edit .lyric-replacement-mode{width:100%;min-height:44px;max-width:100%;font:inherit}
+.lyric-group-edit #lyric-replacement-hint{margin:8px 0 2px;line-height:1.6}
 .lyric-group-edit textarea{width:100%;min-height:90px;line-height:1.7;resize:vertical;font-family:"Leelawadee UI","Noto Sans Thai",monospace}
 .lyric-group-overview .hint,.lyric-group-edit .hint{line-height:1.7;white-space:pre-wrap}
 
