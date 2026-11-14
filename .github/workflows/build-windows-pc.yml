@@ -18,8 +18,28 @@ permissions:
   contents: read
 
 jobs:
+  inspect-windows-source:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.verify.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: verify
+        shell: bash
+        run: |
+          if [ -f windows-pc/source/Build-Source.ps1 ] &&
+             [ -f windows-pc/source/karaoke/continuous_medley.py ] &&
+             python3 -c "import json,sys; m=json.load(open('windows-pc/manifest.json')); sys.exit(0 if m.get('source_imported') is True and m.get('version')=='1.0.76' and m.get('build')==1076 else 1)"; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Windows source verified and imported; installer build can proceed."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Windows installer build skipped: source ZIP is available but source files are not yet imported and verified."
+          fi
+
   windows-build-and-installer:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    needs: inspect-windows-source
+    if: needs.inspect-windows-source.outputs.ready == 'true' && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     runs-on: windows-latest
     timeout-minutes: 90
     steps:

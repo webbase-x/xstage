@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 X-Stage Song Studio PC Ready — offline-only launcher.
 The ZIP must already contain Python, FFmpeg, FluidSynth and a SoundFont.
