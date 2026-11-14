@@ -552,6 +552,8 @@ class Importer {
         rootId=await drive.folder('root','XStageWeb');
       }
       let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
+      if(pointer && pointer.layoutVersion!==3)
+        fail('พบคลังเก่าที่ใช้โครงสร้างอื่น · เพื่อไม่ให้ข้อมูลสูญหาย กรุณาสำรองและยืนยันการย้ายคลังก่อนอัปโหลดแบบ AUDIO/TEXT');
       if(!pointerFile){
         const textRoot=await drive.ensurePath(rootId,['TEXT']);
         const textFiles=await drive.listChildren(textRoot);
