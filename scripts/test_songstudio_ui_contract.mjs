@@ -5,6 +5,27 @@ import assert from 'node:assert/strict';
 const html=fs.readFileSync('studio/index.html','utf8');
 const js=fs.readFileSync('studio/app.js','utf8');
 const css=fs.readFileSync('studio/style.css','utf8');
+const onlinePlayer=fs.readFileSync('app.js','utf8');
+const onlinePublisher=fs.readFileSync('songstudio-pc/online_publish.py','utf8');
+const folderUploader=fs.readFileSync('songstudio-pc/folder_upload.py','utf8');
+assert.ok(onlinePlayer.includes('pointer.catalogFileId') &&
+          onlinePlayer.includes('pointer.deltaFileIds') &&
+          onlinePlayer.includes('privateFile(song.audio.fileId') &&
+          onlinePlayer.includes('privateJson(song.lyrics.fileId'),
+          'Online player must consume publisher catalog IDs and private media');
+assert.ok(onlinePublisher.includes('"catalogFileId": catalog_id') &&
+          onlinePublisher.includes('"deltaFileIds": delta_ids') &&
+          onlinePublisher.includes('"audio": audio, "lyrics": lyrics') &&
+          onlinePublisher.includes('replace_pointer=True'),
+          'Publisher must expose the exact online reader fields and atomically switch pointer');
+assert.ok(folderUploader.includes('publisher.publish(') &&
+          folderUploader.includes('validator(library["root"], row)') &&
+          folderUploader.includes('export.lrc_to_json('),
+          'Folder upload must publish verified timed lyrics through the existing online schema');
+assert.ok(folderUploader.includes('"webMidiReady": False') &&
+          !onlinePlayer.includes('SOUNDFONT/SF2'),
+          'Do not claim browser SoundFont playback when only private Drive storage exists');
+
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
 const unique=new Set(ids);
 assert.equal(ids.length,unique.size,'HTML IDs must be unique');
