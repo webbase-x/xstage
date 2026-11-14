@@ -30,8 +30,7 @@ MAX_DELTAS = 32
 class PublishError(RuntimeError):
     pass
 
-# Drive folder layout v2. The original local StageWeb paths are intentionally
-# unchanged: they are used by recovery journals and local catalogs.
+# Drive Layout V4. Local StageWeb staging paths are separate from Drive paths.
 LAYOUT_VERSION = 4
 BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -154,15 +153,12 @@ class OnlinePublisher:
         return result
 
     def _existing_root(self):
-        # Inspect names to fail safely, not to open or migrate old libraries.
-        roots = [x for x in self.drive.list_children("root") if
-                 x.get("mimeType") == FOLDER_MIME and
-                 x.get("name") in ("XStageWeb", "StageWeb")]
-        if any(x["name"] == "StageWeb" for x in roots):
-            raise PublishError("ตรวจพบ StageWeb รุ่นเก่า · ไม่รองรับและไม่สร้างคลังใหม่ทับ กรุณาจัดการคลังเก่าแยกต่างหาก")
-        if len(roots) > 1:
+        # Only XStageWeb is part of the V4 online protocol.
+        found = [x for x in self.drive.list_children("root") if
+                 x.get("name") == ONLINE_ROOT and x.get("mimeType") == FOLDER_MIME]
+        if len(found) > 1:
             raise PublishError("พบ XStageWeb ซ้ำ · หยุดก่อนอัปโหลด")
-        return roots[0]["id"] if roots else None
+        return found[0]["id"] if found else None
 
     def _read_online(self, root):
         if not root:
@@ -263,7 +259,7 @@ class OnlinePublisher:
             if allow_missing_root:
                 return {"songs": [], "generation": "", "visible": False}
             raise PublishError(
-                "ไม่ไม่พบคลัง XStageWeb V4ที่ Google OAuth ของ Song Studio เข้าถึงได้ "
+                "ไม่พบคลัง XStageWeb V4 ที่ Google OAuth ของ Song Studio เข้าถึงได้ "
                 "· ห้ามอ้างว่าไม่มีรหัสซ้ำจนกว่าจะเชื่อมต่อคลังเดิม")
         active, songs, _ = self._read_online(root)
         if active is None:
@@ -295,7 +291,7 @@ class OnlinePublisher:
         root = self._existing_root()
         # drive.file is app-scoped. If the existing Karaoke Online library was
         # created by a different OAuth application, it may be invisible here.
-        # Never silently make a second XStageWeb and strand the old songs.
+        # Never silently create XStageWeb if its existing V4 library is inaccessible.
         if root is None and not create_new_library:
             raise PublishError(
                 "ไม่พบ XStageWeb V4 ที่บัญชี/แอปนี้เข้าถึงได้ · "
