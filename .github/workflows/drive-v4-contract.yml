@@ -4,6 +4,8 @@ on:
     paths:
       - 'songstudio-pc/online_publish.py'
       - 'songstudio-pc/google_drive.py'
+      - 'songstudio-pc/engine.py'
+      - 'scripts/test_songstudio_audio_capabilities.py'
       - 'browser-midi.js'
       - 'scripts/test_songstudio_drive_roundtrip.py'
       - 'songstudio-pc/folder_upload.py'
@@ -41,3 +43,5 @@ jobs:
         run: python -m unittest discover -s scripts -p "test_songstudio_drive_layout.py" -v
       - name: Verify fresh-install does not create legacy backup trees
         run: python -m unittest discover -s scripts -p "test_songstudio_drive_roundtrip.py" -v
+      - name: Verify PC hardware profiling and SoundFont estimates
+        run: python -m unittest discover -s scripts -p "test_songstudio_audio_capabilities.py" -v
