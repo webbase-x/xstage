@@ -1046,18 +1046,26 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
-      // Drive API verified access even if XStageWeb folder is not configured yet.
+      // A verified empty Drive is NOT a valid cached library. An account
+      // whose XStageWeb was deleted must never show ghost songs that fail 404.
+      // Do not erase the user's browser cache permanently: their library may
+      // reappear after a Google Drive permission grant or restored ownership.
+      state.libraryRootId='';
+      state.manifest=null;
+      state.songs=[];
+      state.shown=[];
+      state.catalogCache.clear();
+      state.queue=[];
+      releaseQueuePreload();
+      renderSongs();
+      renderQueue();
       setAndroidTvStageAccess(true,account.sub);
-      if(instant){
-        ui.libraryState.textContent='ใช้ฐานเพลงในเครื่อง · ยังไม่ได้อนุญาตคลังที่แชร์บนอุปกรณ์นี้';
-        return;
-      }
       hideCatalogLoading();
       ui.songTotal.textContent='0 เพลง';
-      ui.resultCount.textContent='รอเปิดคลังที่แชร์';
-      ui.libraryState.textContent='บัญชี Google พร้อมแล้ว · ต้องอนุญาตโฟลเดอร์ที่แชร์ให้ X-Stage';
-      setStatus('เข้าสู่ระบบบัญชีผู้รับเชิญแล้ว · กรุณากด “ใช้คลังเพลงจากผู้แชร์”','success');
-      setSharedLibraryGate(true,'เข้าสู่ระบบสำเร็จ · เลือก XStageWeb ที่ได้รับแชร์');
+      ui.resultCount.textContent='ยังไม่มีคลัง XStageWeb';
+      ui.libraryState.textContent='เชื่อม Google Drive แล้ว · ยังไม่มีคลังเพลงออนไลน์';
+      setStatus('บัญชี Google พร้อมแล้ว · ใช้ X-Stage Song Studio สร้าง XStageWeb และอัปโหลดเพลงครั้งแรก','success');
+      setSharedLibraryGate(true,'ยังไม่มี XStageWeb ในบัญชีนี้ · อัปโหลดด้วย Song Studio หรือเลือกคลังที่แชร์');
       return;
     }
     setSharedLibraryGate(false);
