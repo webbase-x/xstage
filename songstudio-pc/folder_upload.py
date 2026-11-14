@@ -422,7 +422,7 @@ def upload_soundfont(drive, path, *, create_new_library=False,
     stem = re.sub(r"[^\w .()-]", "_", source.stem, flags=re.UNICODE).strip(" .")[:100] or "SoundFont"
     filename = stem + "-" + fingerprint[:16] + source.suffix.lower()
     if progress:
-        progress("ตรวจ MD5 และอัปโหลด SoundFont ไปยัง XStageWeb/AUDIO)
+        progress("ตรวจ MD5 และอัปโหลด SoundFont ไปยัง XStageWeb/AUDIO")
     status, meta = drive.upload_file(target, source, filename, cancelled=cancelled)
     if str(meta.get("md5Checksum", "")).lower() != fingerprint:
         raise ValueError("Google Drive ไม่ยืนยัน MD5 SoundFont ให้ตรงกับไฟล์ต้นฉบับ")
