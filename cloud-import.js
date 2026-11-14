@@ -632,6 +632,11 @@ class Importer {
             if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้าม MIDI ซ้ำ MD5: '+code);continue;}
             const candidates=byCode.get(code.toLowerCase())||[];
             const same=candidates.find(x=>String(x.midi?.md5Checksum||'').toLowerCase()===midiHash);
+            const existingMidi=rows.get('browser/midi/'+midiHash);
+            if(existingMidi&&!same){
+              this.stats.duplicates++;finished++;
+              show('ข้าม MIDI เนื้อไฟล์ซ้ำรหัสอื่น: '+code);continue;
+            }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;
               show('รหัส MIDI ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;}
             const type=item.kind==='NCN'?'NCN':item.kind==='KAR'?'KAR':'SMF';
@@ -680,9 +685,22 @@ class Importer {
           }else{
             const {audio,video,lrc,json:lyricsJson,kind}=item;
             let code=item.code;
-            if(!await core.validAudio(audio.file))throw Error('ไฟล์ '+kind+' ไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
-            if(video&&video.file!==audio.file&&!await core.validAudio(video.file))
-              throw Error('ไฟล์วิดีโอประกอบไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
+            let audioFile=audio.file,videoFile=video?.file||null,uploadKind=kind;
+            let sourceVideoMd5=null;
+            if(videoFile&&core.needsVideoConversion(videoFile.name)){
+              if(!scope.XStageVideoTranscode)throw Error('วิดีโอ: ไม่พบตัวแปลงวิดีโอของเว็บ · กรุณาอัปเดตหน้าเว็บ');
+              sourceVideoMd5=await core.hashBlob(videoFile,()=>this.check());
+              const wasPrimary=videoFile===audioFile;
+              videoFile=await scope.XStageVideoTranscode.convert(videoFile,{
+                signal:this.controller.signal,requireAudio:wasPrimary,
+                onStatus:message=>show(message,.12)
+              });
+              this.check();
+              if(wasPrimary){audioFile=videoFile;uploadKind='MP4';}
+            }
+            if(!await core.validAudio(audioFile))throw Error('ไฟล์ '+uploadKind+' ไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
+            if(videoFile&&!await core.validVideo(videoFile))
+              throw Error('วิดีโอ: ไฟล์วิดีโอไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
             let raw=null,doc,json;
             if(lyricsJson){
               if(lyricsJson.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
@@ -695,28 +713,40 @@ class Importer {
                 if(lrc.file.size>MAX_LRC)throw Error('LRC ใหญ่เกิน 2 MB');
                 raw=await lrc.file.text();
               }else if(typeof doc.rawLrc==='string'&&doc.rawLrc.length<=MAX_LRC)raw=doc.rawLrc;
-            }else{
-              if(!lrc||lrc.file.size>MAX_LRC)throw Error('LRC ไม่ครบหรือใหญ่เกิน 2 MB');
+            }else if(lrc){
+              if(lrc.file.size>MAX_LRC)throw Error('LRC ไม่ครบหรือใหญ่เกิน 2 MB');
               raw=await lrc.file.text();
               doc=core.lrcToJson(raw,code);
               json=encode(doc);
-            }
+            }else if(videoFile){
+              // A VDO with burned-in lyrics needs catalog metadata, not invented
+              // text or timestamps. The video remains its own lyric source.
+              doc=core.embeddedVideoLyrics(code);
+              json=encode(doc);
+            }else throw Error('LRC ต้องมีเวลาจริงสำหรับเพลงเสียง');
             const [audioHash,jsonHash]=await Promise.all([
-              core.hashBlob(audio.file,()=>this.check()),
+              core.hashBlob(audioFile,()=>this.check()),
               core.hashBlob(json,()=>this.check())
             ]);
             const pair=audioHash+':'+jsonHash;
             if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้ามเพลงซ้ำ MD5: '+code);continue;}
             const candidates=byCode.get(code.toLowerCase())||[];
             const same=candidates.find(x=>String(x.audio?.md5Checksum||'').toLowerCase()===audioHash);
+            // Same bytes with a different filename/code are a duplicate, not
+            // a fatal primary-key collision. Never overwrite another record.
+            const existingAudio=rows.get('browser/'+audioHash);
+            if(existingAudio&&!same){
+              this.stats.duplicates++;finished++;
+              show('ข้ามไฟล์เพลงซ้ำ MD5 แม้เปลี่ยนชื่อ/รหัส: '+code);continue;
+            }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
-            const folder=core.bucket(code),prefix=[kind==='MP4'||kind==='WEBM'?'VIDEO':'AUDIO',kind];
+            const folder=core.bucket(code),prefix=[uploadKind==='MP4'||uploadKind==='WEBM'?'VIDEO':'AUDIO',uploadKind];
             let media=same?.audio;
             if(!media){
-              const name=base+'-'+audioHash.slice(0,16)+'.'+kind.toLowerCase();
-              media=await uploadMedia(audio.file,code,[...prefix,'Songs',folder],name,
-                MEDIA_MIME[kind]||'application/octet-stream',audioHash,0,.83);
+              const name=base+'-'+audioHash.slice(0,16)+'.'+uploadKind.toLowerCase();
+              media=await uploadMedia(audioFile,code,[...prefix,'Songs',folder],name,
+                MEDIA_MIME[uploadKind]||'application/octet-stream',audioHash,0,.83);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash,.83,.09);
@@ -728,12 +758,12 @@ class Importer {
               lrcInfo=await uploadMedia(rawBlob,code,[...prefix,'Lyrics',folder],lname,'text/plain',lrcHash,.92,.08);
             }
             let videoMedia=same?.video;
-            if(video){
-              if(video.file===audio.file)videoMedia=media;
+            if(videoFile){
+              if(videoFile===audioFile)videoMedia=media;
               else{
-                const vh=await core.hashBlob(video.file,()=>this.check());
-                const ve=core.ext(video.file.name).toUpperCase();
-                videoMedia=await uploadMedia(video.file,code,['VIDEO',ve,'Song',folder],
+                const vh=await core.hashBlob(videoFile,()=>this.check());
+                const ve=core.ext(videoFile.name).toUpperCase();
+                videoMedia=await uploadMedia(videoFile,code,['VIDEO',ve,'Song',folder],
                   base+'-'+vh.slice(0,16)+'.'+ve.toLowerCase(),
                   MEDIA_MIME[ve]||'application/octet-stream',vh);
               }
@@ -743,8 +773,10 @@ class Importer {
             // Preserve the original linked MIDI/video/vocal media when only
             // a same-audio song's timed lyrics have changed.
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:kind,audio:media,lyrics:lyric,lrc:lrcInfo,
-              ...(videoMedia?{video:videoMedia}:{})};
+              artist:doc.artist||'',sourceFormat:uploadKind,lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
+              audio:media,lyrics:lyric,lrc:lrcInfo,
+              ...(videoMedia?{video:videoMedia}:{}),
+              ...(sourceVideoMd5?{sourceVideoMd5,originalVideoFormat:core.ext(video.file.name).toUpperCase()}:{})};
             if(same){
               const oldPair=String(same.audio?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase();
@@ -760,7 +792,7 @@ class Importer {
           if(aborted(error)||this.stopRequested)throw error;
           // Only corrupt/incomplete LOCAL files are skippable. Drive failures,
           // auth changes and DB integrity errors must abort the whole job.
-          if(!/^(?:ไฟล์ |LRC |Lyrics JSON |SF2\/SF3 |รูปแบบไฟล์)/.test(String(error.message||'')))throw error;
+          if(!/^(?:ไฟล์ |วิดีโอ:|LRC |Lyrics JSON |SF2\/SF3 |รูปแบบไฟล์)/.test(String(error.message||'')))throw error;
           this.stats.errors++;
           console.warn('Skipped invalid import item:',item.key||item.relative||item.code,error?.message||error);
           this.dom.detail.textContent='ข้าม '+(item.code||item.file?.name)+': '+error.message+

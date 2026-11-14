@@ -22,9 +22,9 @@
   if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
-  <link rel="stylesheet" href="style.css?v=1100">
-  <link rel="stylesheet" href="xstage-ux.css?v=1100">
-  <link rel="stylesheet" href="cloud-import.css?v=1100">
+  <link rel="stylesheet" href="style.css?v=1101">
+  <link rel="stylesheet" href="xstage-ux.css?v=1101">
+  <link rel="stylesheet" href="cloud-import.css?v=1101">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -35,7 +35,7 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1100" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1101" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -52,6 +52,7 @@
       <section class="stage-column" aria-label="เวทีคาราโอเกะ">
         <div id="stage" class="stage" role="group" aria-label="เวที X-Stage Karaoke">
           <video id="karaoke-video" playsinline muted preload="metadata" hidden aria-label="ภาพวิดีโอประกอบเพลง"></video>
+          <button id="video-lyrics-toggle" type="button" hidden aria-pressed="true" aria-label="เปิดหรือปิดเนื้อร้องซ้อนภาพวิดีโอ">เนื้อร้อง: แสดง</button>
           <div class="stage-shade"></div>
           <div id="music-loader" class="music-loader" role="status" aria-label="กำลังโหลดเพลง" aria-hidden="true">
             <span class="music-loader-ring" aria-hidden="true"></span>
@@ -70,7 +71,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1100" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1101" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -243,7 +244,7 @@
               <span id="xstage-eq-mode">31 BAND · 1/3 OCTAVE</span>
             </div>
             <div class="xstage-eq-rta-wrap">
-              <canvas id="xstage-eq-rta" width="1100" height="145" aria-label="Spectrum analyzer"></canvas>
+              <canvas id="xstage-eq-rta" width="1101" height="145" aria-label="Spectrum analyzer"></canvas>
             </div>
             <div class="xstage-eq-main">
               <div id="xstage-eq-bands" class="xstage-eq-bands"></div>
@@ -319,7 +320,7 @@
         <span id="cloud-import-progress-label">0%</span>
       </div>
       <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
-      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A/WAV/AAC/FLAC/OGG และ MP4/WebM ที่มี LRC/JSON, MIDI/KAR, ชุด NCN (MID + LYR + CUR) · เลือก SoundFont SF2/SF3 ได้ · ความสามารถถอดรหัสเสียงขึ้นอยู่กับเบราว์เซอร์</p>
+      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV แปลงบนเครื่องเป็น H.264/AAC MP4 ด้วย FFmpeg.wasm ก่อนนำเข้า (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · การเล่นขึ้นอยู่กับ Codec/เบราว์เซอร์</p>
       <footer class="cloud-import-footer">
         <button id="cloud-import-start" type="button" disabled>เริ่มตรวจซ้ำและอัปโหลด</button>
         <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
@@ -334,18 +335,19 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script>window.XSTAGE_RELEASE={version:'1.0.100',build:1100};</script>
-<script src="config.js?v=1100"></script>
+<script>window.XSTAGE_RELEASE={version:'1.0.101',build:1101};</script>
+<script src="config.js?v=1101"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="cloud-import-core.js?v=1100" defer></script>
-  <script src="browser-midi.js?v=1100" defer></script>
-  <script src="cloud-import.js?v=1100" defer></script>
-  <script src="app.js?v=1100" defer></script><script src="pc-extensions.js?v=1100" defer></script>
-  <script src="native-audio-meter.js?v=1100" defer></script>
-  <script src="stage-controls.js?v=1100" defer></script>
-  <script src="mobile-layout.js?v=1100" defer></script>
-  <script src="android-apk-download.js?v=1100" defer></script>
+  <script src="cloud-import-core.js?v=1101" defer></script>
+  <script src="browser-midi.js?v=1101" defer></script>
+  <script src="video-transcode.js?v=1101" defer></script>
+  <script src="cloud-import.js?v=1101" defer></script>
+  <script src="app.js?v=1101" defer></script><script src="pc-extensions.js?v=1101" defer></script>
+  <script src="native-audio-meter.js?v=1101" defer></script>
+  <script src="stage-controls.js?v=1101" defer></script>
+  <script src="mobile-layout.js?v=1101" defer></script>
+  <script src="android-apk-download.js?v=1101" defer></script>
 
-  <script src="stage-ui.js?v=1100" defer></script>
+  <script src="stage-ui.js?v=1101" defer></script>
 </body>
 </html>

@@ -32,7 +32,7 @@ assert.equal(result.midis.length,1,'Complete NCN MIDI+LYR+CUR must be importable
 assert.equal(result.midis[0].kind,'NCN');
 assert.equal(result.fonts.length,1);
 assert.ok(!result.blocked.some(x=>x.key.includes('C300')),'Complete NCN must not be blocked');
-assert.ok(result.blocked.some(x=>x.reason.includes('ต้องมีไฟล์ MP3')));
+assert.ok(result.blocked.some(x=>x.reason.includes('ไฟล์เสียงต้องมี LRC/JSON')));
 assert.equal(core.groupKey('AUDIO/MP3/Songs/A/A100.mp3'),core.groupKey('AUDIO/MP3/Lyrics/A/A100.lrc'));
 const media=core.scan([
   {file:fake('W100.wav'),relative:'AUDIO/WAV/Song/W100.wav'},

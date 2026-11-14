@@ -501,7 +501,8 @@ assert.ok(app.includes("window.XStageBrowserMidi.render(midiBytes"),
 assert.ok(index.includes('id="karaoke-video"') &&
           index.includes('playsinline muted preload="metadata"'),
           'WEB and Android stage must have a safe muted video layer');
-assert.ok(app.includes('await privateFile(song.video.fileId,token)') &&
+assert.ok(app.includes('await privateFile(song.video.fileId,token,{signal})') &&
+          app.includes('signal?.aborted') &&
           app.includes('function syncSongVideo()') &&
           app.includes('karaokeVideo.playbackRate=player.playbackRate'),
           'Video must load from the private Drive ID and follow audio speed');

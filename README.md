@@ -1,3 +1,11 @@
+## v1.0.101 — Video Karaoke VDO on WEB / Android player
+
+- MP4/WebM with real LRC/JSON overlay or embedded lyrics (no separate timed file) can be imported as a private catalog song. For embedded lyrics the system publishes `lyricsMode: "embedded-video"` and `lines: []`; it never fabricates lyric timestamps.
+- AVI, MPG, MPEG, DAT (MPEG-PS VCD), VOB, MKV, MOV, WMV and FLV are checked by file signature and converted **locally** to H.264/AAC MP4 via an isolated FFmpeg.wasm Web Worker before upload. The original file is not uploaded or overwritten. The worker has no access to the Google OAuth token in the page.
+- Browser conversion is optional/on demand, depends on download of pinned FFmpeg.wasm assets and supports up to **192 MiB per source** as a memory safety limit. For larger files or unsupported codecs use the FFmpeg-included Song Studio PC Ready. Web/Android HTML5 decoders cannot be guaranteed for every source codec/device.
+- While a video is playing, the stage hides its background banner, keeps audio as the master clock, synchronizes muted picture playback, and lets users show/hide separately timed lyrics. Pause, stop and cancel release the video media and in-flight Drive download.
+- This revision preserves existing Google Drive private library / MD5 deduplication, audio/MIDI/NCN/SoundFont imports, and no public media hosting. Tests: `npm test`, browser-import Chromium E2E, and Android TV regression.
+
 
 ## v1.0.50 — TrueID TV / TV Bro Google Login helper
 
