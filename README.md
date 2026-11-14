@@ -1,4 +1,9 @@
-## X-Stage Karaoke Online v1.0.105 (Build 1105) — paginated private Drive discovery
+## X-Stage Karaoke Online v1.0.106 (Build 1106) — faster high-volume Drive imports
+
+- Drive importer builds an exact-name in-memory index per folder, replacing repeated linear scans of tens of thousands of media files. It preserves duplicate-name conflicts, MD5 verification, resumable uploads and cancellation behavior.
+- Drive import scanning now detects invalid page responses and repeating page tokens; large mocked-folder and cursor regressions were added to CI.
+
+### Previous v1.0.105 — paginated private Drive discovery
 
 - Web/Android shared hosted library discovery now follows every Google Drive `nextPageToken`, including empty pages, instead of silently returning the first 1,000 files. Malformed pages, repeated page tokens, and oversized listings fail safely. No stored private music or pointers are modified by this fix.
 - Automatic regression exercises more than 1,000 returned items and failure handling; browser importer and Android builds are checked before publication.
