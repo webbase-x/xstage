@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 # X-Stage Song Studio PC Source Launcher
 # Performs a one-time download of official Python and Windows FFmpeg builds.
 # The program itself runs against the user's local files, without uploading songs.

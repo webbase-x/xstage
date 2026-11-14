@@ -1,4 +1,4 @@
-# X-Stage Windows PC release update. Do not advertise source ZIPs as installers.
+﻿# X-Stage Windows PC release update. Do not advertise source ZIPs as installers.
 # The installed X-Stage launcher or app calls this when the app starts.
 # -Install launches a verified newer Windows installer, with Windows consent.
 param(

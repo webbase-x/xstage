@@ -1,4 +1,4 @@
-# Starts the existing X-Stage Windows PC app and checks for a verified
+﻿# Starts the existing X-Stage Windows PC app and checks for a verified
 # installer update without blocking startup. This launcher must be used as the
 # desktop shortcut target to cover old EXEs that lack a built-in updater.
 param(

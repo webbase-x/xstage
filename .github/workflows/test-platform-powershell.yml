@@ -41,7 +41,7 @@ jobs:
           foreach ($path in $scripts) {
             $errors = $null
             [System.Management.Automation.PSParser]::Tokenize(
-              (Get-Content -LiteralPath $path -Raw), [ref]$errors
+              (Get-Content -LiteralPath $path -Encoding UTF8 -Raw), [ref]$errors
             ) | Out-Null
             if ($errors -and $errors.Count) {
               throw "$path has PowerShell syntax errors: $($errors | Out-String)"

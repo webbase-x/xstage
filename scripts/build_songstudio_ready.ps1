@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 Build X-Stage Song Studio PC Ready portable ZIP on Windows GitHub Actions.
 Downloads happen ON THE BUILD RUNNER ONLY. Users receive all runtimes prebundled.
