@@ -2823,9 +2823,11 @@ class Handler(BaseHTTPRequestHandler):
                     snapshot = LYRIC_TEXT_INDEX
                 if snapshot is None:
                     raise ValueError("กรุณาวิเคราะห์ข้อความหัว–ท้ายเพลงก่อน")
-                self._json(LYRIC_TEXT.plan(
+                planned = LYRIC_TEXT.plan(
                     snapshot, payload.get("groups"), search=payload.get("search", ""),
-                    replacement=payload.get("replacement")))
+                    replacement=payload.get("replacement"))
+                planned["sourceMode"] = snapshot.get("mode", "stageweb")
+                self._json(planned)
             elif path == "/api/ai-import":
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
