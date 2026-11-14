@@ -1,8 +1,8 @@
-"""Read-only folder preflight and private, non-catalog media upload.
+"""Preflight private songs, then publish verified playable files and online DB.
 
-Raw uploaded files never modify XStageWeb/current.json or pretend to be
-playable in Karaoke Online. Verified complete source sets use the requested
-AUDIO / VIDEO / MIDI taxonomy and immutable content names on private Drive.
+Existing StageWeb catalogs retain their original publishing logic. New MP3/M4A
+and timed LRC pairs are staged for the same verified online publisher.
+Unsupported VIDEO/NCN never appear as falsely playable catalog rows.
 """
 from __future__ import annotations
 import hashlib
@@ -165,7 +165,32 @@ def scan(folder):
             "fileCount": len(paths), "total": len(complete)}
 
 
-def report(folder):
+def existing_local_catalog(folder, export):
+    """Detect a complete locally generated Song Studio StageWeb library."""
+    if export is None:
+        return None
+    chosen = _safe_root(folder)
+    candidates = [chosen]
+    if chosen.name.casefold() != "stageweb":
+        candidates.append(chosen / "StageWeb")
+    for root in candidates:
+        if not (root / "current.json").is_file():
+            continue
+        pointer, _ = export._read_current(root)  # Invalid DB must fail closed.
+        rows = export.existing_records(root)
+        ready = [row for row in rows if export.record_is_complete(root, row)]
+        return {"root": root, "rows": ready, "incomplete": len(rows) - len(ready),
+                "pointerCount": pointer.get("songCount", 0)}
+    return None
+
+
+def report(folder, export=None):
+    library = existing_local_catalog(folder, export)
+    if library is not None:
+        return {"folder": str(library["root"]), "fileCount": library["pointerCount"],
+                "ready": len(library["rows"]), "incomplete": library["incomplete"],
+                "unsupported": 0, "examples": [],
+                "kinds": {"M4A": len(library["rows"])}, "source": "StageWeb catalog"}
     result = scan(folder)
     return {"folder": result["folder"], "fileCount": result["fileCount"],
             "ready": result["total"], "incomplete": len(result["incomplete"]),
@@ -188,6 +213,27 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
     import tempfile
     if export is None or publisher is None or staging_root is None:
         raise ValueError("ต้องใช้ Online Publisher และตัวแปลง LRC ของ X-Stage")
+    library = existing_local_catalog(folder, export)
+    if library is not None:
+        if not library["rows"]:
+            raise ValueError("ไม่พบเพลงพร้อมเล่นใน StageWeb Catalog ที่เลือก")
+        # Preserve the original production publishing flow: local DB rows,
+        # stable song IDs and incremental remote catalogs. Only the remote
+        # folder layout is changed by OnlinePublisher.
+        synced = publisher.publish(
+            library["root"], library["rows"],
+            create_new_library=create_new_library, cancelled=cancelled,
+            on_row=(lambda done, total, skipped:
+                    progress(done + skipped, total + skipped, "กำลังอัปเดต DB"))
+                   if progress else None)
+        return {**synced, "ready": len(library["rows"]),
+                "incomplete": library["incomplete"], "deferred": 0,
+                "message": (
+                    f"ซิงค์คลังเดิมพร้อม DB · เพิ่ม {synced['newSongs']} · "
+                    f"แก้เนื้อร้อง {synced['updatedSongs']} · "
+                    f"ข้ามซ้ำ {synced['duplicates']} · "
+                    f"รหัสต้องตรวจ {synced['conflicts']} · "
+                    f"ข้ามไฟล์ไม่ครบ {library['incomplete']}")}
     result = scan(folder)
     supported = [r for r in result["complete"] if r["kind"] in ("MP3", "M4A")]
     deferred = [r for r in result["complete"] if r["kind"] not in ("MP3", "M4A")]
