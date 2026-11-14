@@ -439,6 +439,16 @@ assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.incl
 assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
 
+// An empty new Drive must never retain orphaned songs from IndexedDB or
+// present guest-only instructions to the owner who cleared the library.
+const noRootBranch=app.split('if(!roots.length){')[1]?.split('    setSharedLibraryGate(false);')[0]||'';
+assert.ok(noRootBranch.includes('state.songs=[]') &&
+          noRootBranch.includes('state.shown=[]') &&
+          noRootBranch.includes('state.catalogCache.clear()') &&
+          noRootBranch.includes('X-Stage Song Studio') &&
+          !noRootBranch.includes('if(instant){'),
+          'Empty Drive should show a clean catalog and actionable first-upload instructions');
+
 // WEB/APK use the same HTML5 stage. Video must be optional, muted and
 // synchronized to the authoritative audio clock, never cover karaoke lyrics.
 assert.ok(index.includes('id="karaoke-video"') &&
