@@ -80,6 +80,15 @@ class UnifiedWindowsV2Tests(unittest.TestCase):
         self.assertEqual(json.loads(self.output.read_text(encoding="utf8"))["songs"],[])
         self.assertNotEqual(self.output.read_bytes(),original)
 
+    def test_import_rejects_mismatched_media_type(self):
+        export_catalog(self.library.path,self.output)
+        doc=json.loads(self.output.read_text(encoding="utf8"))
+        item=doc["songs"][0]
+        item["media"]={"m4a":{"localPath":str(self.mp3)}}
+        self.output.write_text(json.dumps(doc,ensure_ascii=False),encoding="utf8")
+        with self.assertRaisesRegex(CatalogValidationError,"extension"):
+            preview_import(self.library.path,self.output)
+
     def test_ncn_requires_lyr_cur_verified(self):
         root=self.base/"MIDI"/"NCN"
         midi=root/"Songs"/"0"/"B0001.mid"
