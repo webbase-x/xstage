@@ -17,7 +17,7 @@ assert.ok(onlinePublisher.includes('"catalogFileId": catalog_id') &&
           onlinePublisher.includes('"deltaFileIds": delta_ids') &&
           onlinePublisher.includes('"lyrics": lyrics') &&
           onlinePublisher.includes('"midi" if is_midi else "audio"') &&
-          onlinePublisher.includes('LAYOUT_VERSION = 3') &&
+          onlinePublisher.includes('LAYOUT_VERSION = 4') &&
           onlinePublisher.includes('replace_pointer=True'),
           'Publisher must expose the exact online reader fields and atomically switch pointer');
 assert.ok(folderUploader.includes('publisher.publish(') &&
