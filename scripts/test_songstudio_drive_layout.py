@@ -1,4 +1,4 @@
-"""Regression tests for private XStageWeb v2 Drive layout and legacy safety."""
+"""Regression tests for private XStageWeb v4 AUDIO/LYRICS Drive layout and legacy safety."""
 from __future__ import annotations
 
 import importlib.util
@@ -16,31 +16,30 @@ class XStageWebLayoutTests(unittest.TestCase):
     def test_new_root_and_pointer_compatibility(self):
         self.assertEqual(layout.ONLINE_ROOT, "XStageWeb")
         self.assertEqual(layout.LEGACY_ONLINE_ROOT, "StageWeb")
-        self.assertEqual(layout.LAYOUT_VERSION, 2)
+        self.assertEqual(layout.LAYOUT_VERSION, 4)
 
-    def test_audio_buckets_by_code_not_local_folder(self):
-        self.assertEqual(str(layout.media_drive_path(
-            "audio/8/My Song.m4a", code="A205")),
-            "AUDIO/M4A/Songs/A/My Song.m4a")
-        self.assertEqual(str(layout.media_drive_path(
-            "audio/_/Song.mp3", code="9012")),
-            "AUDIO/MP3/Songs/9/Song.mp3")
-        self.assertEqual(str(layout.media_drive_path(
-            "audio/4/Track.m4a", code="Z101")),
-            "AUDIO/M4A/Songs/Z/Track.m4a")
+    def test_all_media_use_one_flat_audio_folder(self):
+        for source, expected in (
+                ("audio/8/My Song.m4a", "AUDIO/My Song.m4a"),
+                ("audio/_/Song.mp3", "AUDIO/Song.mp3"),
+                ("midi/4/Track.mid", "AUDIO/Track.mid"),
+                ("video/_/Movie.mp4", "AUDIO/Movie.mp4"),
+                ("audio/_/Piano.sf2", "AUDIO/Piano.sf2")):
+            with self.subTest(source=source):
+                self.assertEqual(str(layout.media_drive_path(source, code="A205")), expected)
 
-    def test_lyrics_follow_code_bucket(self):
+    def test_lyrics_json_only_in_one_flat_folder(self):
         self.assertEqual(str(layout.media_drive_path(
-            "lyrics/_/Track.json", code="B88")),
-            "AUDIO/M4A/Lyrics/B/Track.json")
-        self.assertEqual(str(layout.media_drive_path(
-            "lyrics/0/Track.lrc", code="05")),
-            "AUDIO/M4A/Lyrics/0/Track.lrc")
+            "lyrics/0/Track.json", code="B88")), "LYRICS/Track.json")
+        for source in ("lyrics/0/Track.lrc", "lyrics/0/Track.lyr",
+                       "midi_cursor/0/Track.cur", "midi_lyrics/0/Track.lyr"):
+            with self.subTest(source=source):
+                with self.assertRaises(layout.PublishError):
+                    layout.media_drive_path(source, code="B88")
 
     def test_unknown_code_does_not_lose_file(self):
         self.assertEqual(str(layout.media_drive_path(
-            "audio/_/เพลง.m4a", code="เพลง")),
-            "AUDIO/M4A/Songs/_/เพลง.m4a")
+            "audio/_/เพลง.m4a", code="เพลง")), "AUDIO/เพลง.m4a")
 
     def test_traversal_and_unhandled_types_fail_closed(self):
         for name in ("audio/../../secret.m4a", "/absolute.m4a",
