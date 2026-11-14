@@ -71,8 +71,6 @@ def populate_context_menu(app, menu, factory, screens):
     command(tools, 'ความสามารถที่รองรับ', app.capabilities)
 
     command(menu, 'จัดการข้อมูลเพลง', app.manage_songs, 'F2')
-    if hasattr(app, 'web_online_data'):
-        command(menu, 'X-Stage Karaoke Online…', app.web_online_data)
     menu.add_separator()
 
     command(menu, 'เลือกมิดิขาออก…', app.choose_midi_output)
