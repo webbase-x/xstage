@@ -10,19 +10,16 @@ const remote=read('remote.js');
 const index=read('index.html');
 const css=read('xstage-ux.css');
 const style=read('style.css');
-const pwa=read('pwa-install.js');
-const pwaManifest=JSON.parse(read('xstage.webmanifest'));
+const apk=read('android-apk-download.js');
 const config=read('config.js');
-const sw=read('sw.js');
 const version=JSON.parse(read('version.json'));
 const pkg=JSON.parse(read('package.json'));
 const remoteHtml=read('remote.html');
 const stageUi=read('stage-ui.js');
 const mobile=read('mobile-layout.js');
-const legacyManifest=JSON.parse(read('manifest.webmanifest'));
 const iconSvg=read('assets/xstage-app-icon.svg');
 const iconBuilder=read('scripts/build_xstage_icons.py');
-const iconWorkflow=read('.github/workflows/build-xstage-pwa-icons.yml');
+const iconWorkflow=read('.github/workflows/build-xstage-icons.yml');
 const singerStage=read('stage.html');
 const androidGradle=read('android-tv/app/build.gradle');
 const androidManifest=read('android-tv/app/src/main/AndroidManifest.xml');
@@ -32,7 +29,7 @@ const androidUpdate=read('android-tv/app/src/main/java/com/webbasex/xstage/XStag
 const androidDebugManifest=read('android-tv/app/src/debug/AndroidManifest.xml');
 const androidWorkflow=read('.github/workflows/build-android-tv.yml');
 
-for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['pwa-install.js',pwa]]){
+for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['android-apk-download.js',apk]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
 }
 
@@ -102,15 +99,6 @@ assert.ok(pc.includes("FAVORITES_STORE='xstage-favorites-v2'"),'favorites must p
 assert.ok(pc.includes("HISTORY_STORE='xstage-play-history-v1'"),'play history must persist');
 assert.ok(index.includes('id="library-select"'),'multi-library selector must exist');
 assert.ok(index.includes('id="gate-close"'),'login gate must be dismissible for stage preview');
-assert.ok(app.includes('function startManualGoogleLogin()'),'manual Google login must pass through the install-first decision');
-assert.ok(app.includes("window.XStageBeforeGoogleLogin"),'manual Google login must consult the PWA install gate');
-assert.ok(pwa.includes("window.XStageBeforeGoogleLogin=proceed=>"),'PWA module must expose the pre-login install gate');
-assert.ok(pwa.includes("ติดตั้ง X-Stage ก่อนเข้าสู่ระบบไหม?"),'pre-login flow must ask to install before Google authentication');
-assert.ok(pwa.includes('function showInitialInstallChoice'),'browser entry must have an install-first prompt before the user presses Google Login');
-assert.ok(pwa.includes('const installCapabilityWaitMs=1800'),'install UI must wait briefly for a late browser install capability');
-assert.ok(pwa.includes("actionButton('ติดตั้ง X-Stage ตอนนี้','primary'"),'supported browsers must show a direct install-now button');
-assert.ok(pwa.includes('เบราว์เซอร์นี้ไม่รองรับการติดตั้ง Web App จากหน้าเว็บโดยตรง'),'unsupported browsers must explain why no real install button can be shown');
-assert.ok(!pwa.includes("actionButton('ดูวิธีติดตั้ง','primary'"),'initial login flow must not use the ambiguous install-instructions CTA');
 assert.ok(app.includes('function androidTvNativeBridgeReady()'),'web app must detect the native Android TV bridge');
 assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Google device codes from Android');
 assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
@@ -128,7 +116,6 @@ assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must res
 assert.ok(androidAuth.includes('boolean hasStoredSession()'),'native Google auth must expose whether a refresh token is stored');
 assert.ok(androidMain.includes('public boolean hasStoredGoogleSession()'),'Android JS bridge must expose the stored-session check');
 assert.ok(app.includes('window.XStageReceiveAndroidToken'),'web app must accept the Android TV OAuth access token');
-assert.ok(pwa.includes("params.get('source')==='android-tv'")&&pwa.includes("params.get('source')==='android-tablet'"),'native Android TV/tablet app launch must skip browser PWA install prompts');
 assert.ok(androidGradle.includes("applicationId 'com.webbasex.xstage'"),'Android TV package id must stay stable for Google Play');
 assert.ok(androidGradle.includes('minSdk 23'),'Android TV app must remain compatible with Android 10 and older supported TVs');
 assert.ok(androidGradle.includes('targetSdk 34'),'Android TV app must meet the current Google Play TV target requirement');
@@ -203,11 +190,6 @@ assert.ok(app.includes('if(playbackBusyForUpdate())return false;'),'automatic we
 assert.ok(app.includes("window.XStageAndroidUpdateAvailable=(version,build)=>"),'older installed APKs must receive new release notifications through the hosted UI');
 assert.ok(app.includes("android-tv-update-now')?.addEventListener('click'")&&app.includes("installAvailableUpdate"),'native APK upgrades must require the explicit Update Now button');
 assert.ok(!app.includes("button?.click();"),'a new release notification must never auto-tap the installer button');
-assert.ok(pwa.includes('offerPublishedAndroidApk(apk)'),'Android browsers must offer a real APK download choice at entry');
-assert.ok(pwa.includes("actionButton('ใช้ X-Stage Web ต่อ'"),'Android APK offer must allow continuing the Web app');
-assert.ok(pwa.includes('ANDROID_APK_NEVER_ASK_KEY'),'Android APK offer must support opting out');
-assert.ok(pwa.includes('verifiedAndroidApk'),'Android APK offer must use published, validated metadata rather than a stale fallback');
-assert.ok(!pwa.includes('ANDROID_TV_APK_FALLBACK'),'a stale hardcoded APK fallback must never be advertised as the newest release');
 
 assert.ok(index.includes('id="desktop-update-version"')&&index.includes('id="mobile-update-version"'),'version update controls must be available on desktop and compact/mobile UI');
 assert.ok(app.includes('triggerImmediateVersionUpdate'),'all version-update controls must share the immediate update path');
@@ -219,25 +201,23 @@ assert.ok(androidMain.includes('updateManager.checkForUpdates(true)'),'Android m
 assert.ok(style.includes('calc(100% - 24px)')&&style.includes('overflow-x:hidden'),'QR rendering must remain contained inside its panel');
 assert.ok(app.includes('installAvailableUpdate'),'update-now button must invoke the native updater');
 assert.ok(index.includes('id="android-tv-apk-download"'),'main menu must expose a direct Android TV APK download link');
-assert.ok(pwa.includes("ANDROID_TV_LATEST_URL='./downloads/android-tv-latest.json'")&&pwa.includes('refreshAndroidTvApkLink()'),'PWA APK download must resolve the latest versioned APK from GitHub Pages metadata');
-assert.ok(pwa.includes("actionButton('ดาวน์โหลด APK X-Stage','primary',downloadAndroidTvApk)"),'unsupported Android browsers must offer the APK download as the primary action');
-assert.ok(pwa.includes("if(shouldAskInstallOnEntry())setTimeout(()=>{void showInitialInstallChoice();},0)"),'install-first choice must appear automatically on initial browser entry');
-assert.ok(pwa.includes("document.getElementById('gate-login')?.focus?.()"),'choosing browser mode must return focus to the normal Google Login button without authenticating automatically');
-assert.ok(pwa.includes("params.get('source')==='installed'"),'installed-app launch must not show the browser install-first prompt again');
-assert.ok(pwa.includes("buttons.push(actionButton('ใช้เบราว์เซอร์ต่อ','secondary',runPendingLogin))"),'install-first prompt must allow an explicit browser-login fallback');
-assert.ok(pwa.includes('// Never authenticate in the browser tab after choosing install-first.'),'accepted install-first flow must not authenticate in the old browser tab');
-assert.ok(pwa.includes('function attemptImmediateLaunch()'),'successful installation must immediately attempt to open the installed X-Stage app');
-assert.ok(pwa.includes("new URL('./?source=installed&after_install=1',location.href)"),'installed-app launch must stay inside the X-Stage PWA scope');
-assert.equal(pwaManifest.launch_handler?.client_mode,'navigate-existing','installed X-Stage should reuse/navigate its existing app window when supported');
-assert.ok(style.includes('.xstage-install-actions'),'install-first choices must have dedicated responsive styling');
+assert.ok(app.includes('function startManualGoogleLogin()')&&!app.includes('XStageBeforeGoogleLogin'),'Google login must not use the removed PWA gate');
+assert.ok(index.includes('android-apk-download.js?v='+version.build),'browser must load the APK-only helper');
+assert.ok(!index.includes('rel="manifest"')&&!index.includes('mobile-install-app')&&!index.includes('pc-install-app'),'browser must not advertise PWA installation');
+assert.ok(!fs.existsSync(new URL('../pwa-install.js',import.meta.url))&&!fs.existsSync(new URL('../sw.js',import.meta.url)),'retired PWA script and worker must be removed');
+assert.ok(!fs.existsSync(new URL('../xstage.webmanifest',import.meta.url))&&!fs.existsSync(new URL('../manifest.webmanifest',import.meta.url)),'retired root web manifests must be removed');
+assert.ok(apk.includes('retireLegacyPwa()')&&apk.includes('reg.unregister()')&&!apk.includes('serviceWorker.register'),'old scoped PWA worker must be removed, never re-registered');
+assert.ok(apk.includes('offerPublishedAndroidApk(apk)')&&apk.includes("actionButton('ใช้ X-Stage Web ต่อ'"),'APK offer must still allow web-only operation');
+assert.ok(apk.includes('ANDROID_APK_NEVER_ASK_KEY')&&apk.includes('verifiedAndroidApk'),'APK must respect opt-out and validated metadata');
+assert.ok(apk.includes("ANDROID_TV_LATEST_URL='./downloads/android-tv-latest.json'")&&apk.includes('refreshAndroidTvApkLink()'),'APK must use the latest versioned artifact metadata');
+assert.ok(!apk.includes('beforeinstallprompt')&&!index.includes('apple-mobile-web-app-capable'),'PWA affordances must stay removed');
 assert.ok(index.includes('property="og:title"'),'Open Graph title must exist');
 assert.ok(index.includes(`src="assets/xstage-app-icon.svg?v=${version.build}"`),'topbar must use the canonical stage emblem at the current build');
 assert.ok(index.includes('assets/xstage-favicon-32.png'),'web favicon must use the stage-emblem icon set');
 assert.ok(!index.includes('xstage-logo.jpg'),'legacy photographic logo must not remain in the live page');
 assert.ok(iconSvg.includes('M18 18 78 78M78 18 18 78'),'canonical app icon must reuse the exact X geometry from the stage emblem');
 assert.ok(iconSvg.includes('M32 48v5a16 16 0 0 0 32 0v-5M48 69v10M38 80h20'),'canonical app icon must reuse the stage microphone/stand geometry');
-assert.equal(legacyManifest.name,'X-Stage Karaoke Online','legacy manifest must not retain AI Thai Browser branding');
-assert.ok(iconBuilder.includes('SOURCE = ASSETS / "xstage-app-icon.svg"'),'PWA PNG builder must render from the canonical stage emblem SVG');
+assert.ok(iconBuilder.includes('SOURCE = ASSETS / "xstage-app-icon.svg"'),'Icon PNG builder must render from the canonical stage emblem SVG');
 assert.ok(iconBuilder.includes('xstage-favicon-32.png'),'icon builder must generate a browser favicon');
 assert.ok(iconWorkflow.includes('assets/xstage-app-icon.svg'),'icon workflow must trigger from the canonical stage emblem');
 assert.ok(!iconWorkflow.includes('assets/xstage-logo.jpg'),'icon workflow must not rebuild from the retired photographic logo');
@@ -397,15 +377,12 @@ let braces=0;
 for(const ch of css){if(ch==='{')braces++;else if(ch==='}')braces--;}
 assert.equal(braces,0,'xstage-ux.css braces must balance');
 
-assert.ok(sw.includes("xstage-shell-"),'service worker must use X-Stage cache namespace');
-assert.ok(!sw.includes('ai-thai-browser'),'legacy service-worker cache name must stay removed');
 
 const releaseMatch=config.match(/XSTAGE_RELEASE\s*=\s*\{\s*version:\s*'([^']+)',\s*build:\s*(\d+)\s*\}/);
 assert.ok(releaseMatch,'config release metadata must exist');
 assert.equal(version.version,releaseMatch[1],'version.json version must match config');
 assert.equal(Number(version.build),Number(releaseMatch[2]),'version.json build must match config');
 assert.equal(pkg.version,version.version,'package version must match release');
-assert.ok(sw.includes('xstage-shell-v'+String(version.build)),'service worker cache must match release build');
 const localBuildRefs=[...index.matchAll(/\?v=(\d+)/g)].map(m=>Number(m[1]));
 assert.ok(localBuildRefs.length>0,'index must version local assets');
 assert.ok(localBuildRefs.every(v=>v===Number(version.build)),'all index asset versions must match release build');

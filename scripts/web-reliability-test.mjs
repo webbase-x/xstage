@@ -22,12 +22,12 @@ assert.equal(solo.lines[0].endTime,4,'Solo marker must end previous lyric');
 assert.equal(solo.lines[1].startTime,13,'Next verse start preserved');
 assert.throws(()=>core.lrcToJson('[00:02.00]\n','A102'),/ไม่มีบรรทัด/);
 
-const app=read('app.js'),pwa=read('pwa-install.js'),midi=read('browser-midi.js'),
+const app=read('app.js'),apk=read('android-apk-download.js'),midi=read('browser-midi.js'),
   importer=read('cloud-import.js'),meter=read('native-audio-meter.js'),
-  sw=read('sw.js'),pc=read('pc-extensions.js'),stage=read('stage-ui.js'),
+  pc=read('pc-extensions.js'),stage=read('stage-ui.js'),
   index=read('index.html'),remote=read('stage-controls.js');
 for(const [name,source] of [['app',app],['midi',midi],['importer',importer],['meter',meter],
-  ['pwa',pwa],['pc',pc],['stage',stage],['remote',remote],['sw',sw]]){
+  ['apk',apk],['pc',pc],['stage',stage],['remote',remote],]){
   assert.doesNotThrow(()=>new Function(source),name+' JavaScript must parse');
 }
 assert.match(app,/controller\?\.abort\(\);\s*\},seconds\*1000/,'Media timeout must abort work');
@@ -43,10 +43,10 @@ assert.match(importer,/response\.body\?\.getReader/,'Catalog JSON must be stream
 assert.match(importer,/resumeAfterPicker=false/,'Folder cancel/resume flag must clear');
 assert.match(meter,/sampleData=new Uint8Array/,'Meter samples should be allocated once per graph');
 assert.match(meter,/cancelAnimationFrame\(frame\)/,'Meter rendering must stop when paused');
-assert.match(pwa,/X-Stage-Karaoke-Android-TV-v/,'Allow explicitly named Android TV APK');
+assert.match(apk,/X-Stage-Karaoke-Android-TV-v/,'Allow explicitly named Android TV APK');
+assert.doesNotMatch(index,/rel="manifest"|pwa-install\.js|sw\.js/,'Web entry must not reference retired PWA assets');
 assert.match(pc,/e\.isComposing/,'Do not steal IME composition events');
 assert.match(stage,/webkitRequestFullscreen/,'WebKit fullscreen compatibility');
-assert.match(sw,/new URL\('\.\/index\.html'/,'Offline navigation shell should pre-cache');
 assert.match(index,/<footer class="bottom-bar">[^]*?<\/footer>/,'Stage footer must close correctly');
 assert.match(remote,/const nativeTvMode=\(\(\)=>/,'Native TV detection is a Boolean, not a function');
 console.log('PASS: AAC signatures, solo lyric timing and Web reliability contracts');

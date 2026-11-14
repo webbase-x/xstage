@@ -1,10 +1,10 @@
-name: Build X-Stage PWA icons
+name: Build X-Stage icon assets
 
 on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/build-xstage-pwa-icons.yml"
+      - ".github/workflows/build-xstage-icons.yml"
       - "scripts/build_xstage_icons.py"
       - "assets/xstage-app-icon.svg"
   workflow_dispatch:
@@ -34,6 +34,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/xstage-favicon-32.png assets/xstage-app-icon-192.png assets/xstage-app-icon-512.png assets/xstage-app-icon-maskable-512.png assets/xstage-apple-touch-icon.png
           if ! git diff --cached --quiet; then
-            git commit -m "build(pwa): update X-Stage Home Screen icons"
+            git commit -m "build(icons): update X-Stage icon assets"
             git push
           fi

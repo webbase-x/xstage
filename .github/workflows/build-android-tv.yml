@@ -7,7 +7,7 @@ on:
       - "android-tv/**"
       - "version.json"
       - "app.js"
-      - "pwa-install.js"
+      - "android-apk-download.js"
       - "style.css"
       - "index.html"
       - "xstage-ux.css"
@@ -15,14 +15,13 @@ on:
       - "remote.js"
       - "remote.html"
       - "scripts/**"
-      - "sw.js"
       - ".github/workflows/build-android-tv.yml"
   pull_request:
     paths:
       - "android-tv/**"
       - "version.json"
       - "app.js"
-      - "pwa-install.js"
+      - "android-apk-download.js"
       - "style.css"
       - ".github/workflows/build-android-tv.yml"
 
