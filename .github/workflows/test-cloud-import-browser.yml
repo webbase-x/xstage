@@ -9,6 +9,13 @@ on:
       - "app.js"
       - "scripts/cloud-import-browser-e2e.mjs"
       - ".github/workflows/test-cloud-import-browser.yml"
+  pull_request:
+    paths:
+      - "cloud-import*.js"
+      - "index.html"
+      - "app.js"
+      - "scripts/cloud-import-browser-e2e.mjs"
+      - ".github/workflows/test-cloud-import-browser.yml"
   workflow_dispatch:
 permissions:
   contents: read
