@@ -208,10 +208,15 @@ function ncnLyrics(lyrBytes,curBytes,code,midi){
   for(const row of body){
     if(!isNonempty(row))continue;
     if(index>=count){partial=true;warnings.push('CUR มีเวลาไม่พอสำหรับเนื้อร้องทั้งหมด');break;}
+    // Windows-874 is single-byte; decode the whole line only once and keep
+    // each raw byte's exact glyph offset for CUR alignment (important for
+    // large NCN folders on older TV WebViews).
+    const rowText=decode(row);
+    if(rowText.length!==row.length)fail('LYR NCN ไม่ใช่ CP874 ไบต์ต่ออักษร');
     index++; // one NCN newline/line-marker cue, not a printable character
     const syllables=[];
     let displayed='';
-    for(const byte of row){
+    for(let byteIndex=0;byteIndex<row.length;byteIndex++){
       if(index>=count){partial=true;stop=true;break;}
       const position=positions.getUint16(index*2,true);index++;
       if(position===65535){
@@ -229,7 +234,7 @@ function ncnLyrics(lyrBytes,curBytes,code,midi){
         warnings.push('CUR มีเวลาเกินช่วง MIDI · ไม่สร้างเวลาแทน');
         break;
       }
-      const letter=decode(Uint8Array.of(byte));
+      const letter=rowText[byteIndex];
       displayed+=letter;
       if(mark.test(letter)&&syllables.length)syllables[syllables.length-1].text+=letter;
       else syllables.push({text:letter,start:at,duration:.08});
