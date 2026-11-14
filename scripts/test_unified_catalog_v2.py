@@ -8,7 +8,7 @@ from pathlib import Path
 REPO=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(REPO/"songstudio-pc"))
 import unified_catalog_v2 as c
-from v2_native_publish import V2NativePublisher, PublishError
+from v2_native_publish import V2NativePublisher, PublishError, read_published_v2, write_published_v2
 from test_songstudio_online_publish import FakeOnlineDrive
 from online_publish import OnlinePublisher
 
@@ -65,6 +65,64 @@ class UnifiedSongCatalogTests(unittest.TestCase):
             c.validate_song({**record(),"media":{"mp3":{"fileId":"a","path":"AUDIO/../etc"}}},cloud=True)
 
 
+class LargeCatalogTests(unittest.TestCase):
+    def setUp(self):
+        self.drive=FakeOnlineDrive()
+        root=self.drive.folder("root","XStageWeb")
+        self.db=self.drive.folder(root,"DB")
+        self.reader=lambda ident: json.loads(
+            self.drive.items[str(ident)]["body"].decode("utf-8"))
+
+    def songs(self,n):
+        return {
+            "S"+str(i):{
+                "id":"S"+str(i),"code":str(i).zfill(5),
+                "title":"ทดสอบ "+str(i),"artist":"",
+                "media":{"mp3":{"fileId":"file_"+str(i)}},
+                "lyrics":None
+            } for i in range(n)
+        }
+
+    def test_2501_songs_use_bounded_shards_and_incremental_delta(self):
+        records=self.songs(2501)
+        pointer=write_published_v2(self.drive,self.db,records)
+        self.assertNotIn("catalogFileId",pointer)
+        self.assertEqual(len(pointer["catalogFiles"]),2)
+        self.assertTrue(all(p["songCount"]<=2500 for p in pointer["catalogFiles"]))
+        self.assertEqual(len(read_published_v2(self.reader,pointer)),2501)
+        added=self.songs(2502)["S2501"]
+        records[added["id"]]=added
+        after=write_published_v2(self.drive,self.db,records,
+                                 previous=pointer,revisions=[added])
+        self.assertEqual(after["catalogFiles"],pointer["catalogFiles"])
+        self.assertEqual(len(after["deltaFileIds"]),1)
+        self.assertEqual(len(read_published_v2(self.reader,after)),2502)
+        pointer_file=[x for x in self.drive.list_children(self.db)
+                      if x["name"]=="current.json"]
+        self.assertEqual(len(pointer_file),1)
+
+    def test_failing_precommit_retains_old_active_pointer(self):
+        old=write_published_v2(self.drive,self.db,self.songs(1))
+        previous=[x for x in self.drive.list_children(self.db)
+                  if x["name"]=="current.json"][0]
+        def block():
+            raise PublishError("Simulated concurrent update")
+        with self.assertRaisesRegex(PublishError,"concurrent"):
+            write_published_v2(self.drive,self.db,self.songs(2),
+                               previous=old,revisions=None,precommit=block)
+        self.assertEqual(self.reader(previous["id"]),old)
+        self.assertEqual(len([x for x in self.drive.list_children(self.db)
+                              if x["name"]=="current.json"]),1)
+
+    def test_pointer_rejects_duplicate_shard_and_large_delta_list(self):
+        with self.assertRaises(c.CatalogValidationError):
+            c.validate_pointer({"schemaVersion":2,"generation":"a","songCount":2,
+                "catalogFiles":[{"fileId":"id","songCount":1},{"fileId":"id","songCount":1}]})
+        with self.assertRaises(c.CatalogValidationError):
+            c.validate_pointer({"schemaVersion":2,"generation":"a","songCount":1,
+                "catalogFileId":"id","deltaFileIds":["d"]*2})
+
+
 class MigrationTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
@@ -111,9 +169,8 @@ class MigrationTests(unittest.TestCase):
         c.validate_pointer(converted)
         c.validate_catalog(catalog,cloud=True,expected_count=1)
         self.assertEqual(catalog["songs"][0]["id"],"audio/0/00001")
-        self.assertEqual(catalog["songs"][0]["media"]["m4a"]["fileId"],
-                         self.legacy._json(old_pointer["id"])["catalogFileId"] if False else
-                         catalog["songs"][0]["media"]["m4a"]["fileId"])
+        self.assertIn(catalog["songs"][0]["media"]["m4a"]["fileId"],
+                      self.drive.items)
 
     def test_malformed_v1_does_not_publish_v2(self):
         root=self.drive.folder("root","XStageWeb")
