@@ -2,15 +2,15 @@
   "name": "X-Stage Song Studio PC Ready",
   "platform": "windows-x64",
   "channel": "pc-ready",
-  "version": "0.3.30",
-  "build": 330,
+  "version": "0.3.31",
+  "build": 331,
   "available": true,
   "package_type": "portable_zip",
   "installer_available": false,
   "installer_file": null,
-  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.30-build330.zip",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.30-build330/X-Stage-Song-Studio-PC-Ready-v0.3.30-build330.zip",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.30-build330",
-  "sha256": "26c303a0b8ced34089bbc3603c551f4ea7f57d2574602a1b612c1b9c6506e3a9",
-  "notes": "Verified Windows 10/11 x64 portable ZIP. NCN intro/outro analysis now scans ONLY .LYR files under Lyrics (including subfolders), without reading MIDI or CUR. It reports total LYR count and progress. Standalone Lyrics folders are analysis-only. On confirmed replacements, only selected records get full MID/LYR/CUR validity checks and safe paired LYR/CUR backups/undo; MIDI files remain unchanged. Existing StageWeb/LRC workflows and customizable X-Stage Karaoke replacements remain supported. Extract the ZIP and run Start-Song-Studio.cmd."
+  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.31-build331.zip",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.31-build331/X-Stage-Song-Studio-PC-Ready-v0.3.31-build331.zip",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.31-build331",
+  "sha256": "fa629b89971da963e4db272d256b902aec1917d95600ea9ddec7ad7357e2b3c9",
+  "notes": "Windows 10/11 x64 ready offline portable ZIP. The LYR-only NCN head/tail analysis records every skipped filename, categorized reason and totals, then offers focused recheck of only skipped LYR files, without accessing MIDI/CUR or altering originals. Recheck preserves original reasons, confirms ongoing skips, restores repaired files into the grouped lyric index and keeps cumulative recovered reports. Paginated UI and authenticated BOM UTF-8 CSV export with spreadsheet formula-injection protection; includes exact total/progress counts and a report even if every LYR is invalid. MID/CUR checked only for confirmed lyric replacements; paired backups and undo. Extract full ZIP and run Start-Song-Studio.cmd."
 }
