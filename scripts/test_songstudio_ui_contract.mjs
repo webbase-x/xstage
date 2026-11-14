@@ -98,6 +98,18 @@ assert.ok(js.includes('pendingAiAlignment'),'Missing safeguard for pasted origin
 assert.ok(css.includes('.ai-lyrics-paste-panel'),'Missing pasted lyrics UX styles');
 assert.ok(js.includes("run('lyric-groups-replace'"),'Missing safe grouped lyrics replace job');
 assert.ok(js.includes("run('lyric-groups-undo'"),'Missing bulk edit undo job');
+assert.ok(html.includes('id="lyric-group-replacement-mode"') &&
+          html.includes('<option value="custom" selected>') &&
+          html.includes('<option value="X-Stage Karaoke">') &&
+          html.includes('<option value="X-Stage Karaoke Online">') &&
+          html.includes('<option value="X-Stage Song Studio">'),
+  'Bulk lyrics require branded presets and a custom-entry choice');
+assert.ok(js.includes("$('lyric-group-replacement-mode').addEventListener('change'") &&
+          js.includes("$('lyric-group-replacement-mode').value='custom'") &&
+          js.includes("$('lyric-group-replacement').value!==chosen"),
+  'Preset selection must populate editable text, while manual typing restores custom mode');
+assert.ok(css.includes('.lyric-group-edit .lyric-replacement-mode'),
+  'Preset menu must fit inside the lyric editor');
 assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job');
 for(const id of ['lyric-group-folder','lyric-group-reset','lyric-group-source-status']){
   assert.ok(html.includes('id="'+id+'"'), 'Bulk lyrics must have an independent folder selector: '+id);
