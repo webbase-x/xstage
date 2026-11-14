@@ -220,7 +220,7 @@ class V2NativePublisher:
         self.drive = drive
         self.reader = OnlinePublisher(drive)
 
-    def publish(self, root_path: Path, manifest: dict, *, create_new_library=False,
+    def publish(self, root_path: Path, manifest: dict, *,
                 cancelled=None, on_progress=None):
         root_path = Path(root_path).resolve()
         items = manifest.get("songs") if isinstance(manifest, dict) and manifest.get("schemaVersion") == 2 else None
