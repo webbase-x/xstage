@@ -27,9 +27,11 @@ const result=core.scan([
   {file:fake('C300.cur',200),relative:'MIDI/NCN/Cursor/C300.cur'},
   {file:fake('SF-General.sf2',1024),relative:'SOUNDFONT/SF2/SF-General.sf2'}
 ]);
-assert.equal(result.songs.length,1,'Only audio plus timed LRC must enter playable candidate queue');
+assert.equal(result.songs.length,1,'MP3 plus timed LRC remains playable');
+assert.equal(result.midis.length,1,'Complete NCN MIDI+LYR+CUR must be importable');
+assert.equal(result.midis[0].kind,'NCN');
 assert.equal(result.fonts.length,1);
-assert.ok(result.blocked.some(x=>x.reason.includes('Song Studio PC')),'MIDI cannot be silently claimed playable');
+assert.ok(!result.blocked.some(x=>x.key.includes('C300')),'Complete NCN must not be blocked');
 assert.ok(result.blocked.some(x=>x.reason.includes('ต้องมีไฟล์ MP3')));
 assert.equal(core.groupKey('AUDIO/MP3/Songs/A/A100.mp3'),core.groupKey('AUDIO/MP3/Lyrics/A/A100.lrc'));
 assert.equal(core.bucket('1234'),'1');
