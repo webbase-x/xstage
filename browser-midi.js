@@ -616,7 +616,14 @@ async function selectedFont(token,signal){
   const bytes=await boundedFontResponse(res,signal);
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(selected!==id||context?.token!==token||context?.sub!==sub)fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
-  parseFont(bytes);fontCache={id,sub,bytes};return bytes;
+  parseFont(bytes);
+  fontCache={id,sub,bytes};
+  if(advisor){
+    const verified=advisor.assessFont(bytes.byteLength,advisor.profile);
+    fontStatus(verified,'โหลด SoundFont สำเร็จ '+advisor.fmt(bytes.byteLength)+
+      ' · อยู่ใน RAM ชั่วคราว · '+verified.text);
+  }
+  return bytes;
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,transformNotes,render,
   refreshFonts,selectedFont,selectedFontInfo,
