@@ -1,11 +1,11 @@
 """Publish Song Studio M4A + timed JSON directly into X-Stage Karaoke Online.
 
-Drive layout v3 (only AUDIO and TEXT; no nested buckets):
+Drive layout v4 (only AUDIO and LYRICS; no nested buckets):
     XStageWeb/AUDIO/<code>-<digest>.mid|.m4a|.mp4|.sf2|.sf3
-    XStageWeb/TEXT/<code>-<digest>.json (Lyrics JSON)
-    XStageWeb/TEXT/catalog-base-<generation>.json
-    XStageWeb/TEXT/catalog-delta-<generation>.json
-    XStageWeb/TEXT/current.json (published LAST, as an atomic pointer)
+    XStageWeb/LYRICS/<code>-<digest>.json (Lyrics JSON)
+    XStageWeb/LYRICS/catalog-base-<generation>.json
+    XStageWeb/LYRICS/catalog-delta-<generation>.json
+    XStageWeb/LYRICS/current.json (published LAST, as an atomic pointer)
 Legacy v1/v2 catalogs are read for compatibility but never removed implicitly.
 
 Never publish a new pointer until media and immutable catalog are uploaded and
@@ -33,7 +33,7 @@ class PublishError(RuntimeError):
 
 # Drive folder layout v2. The original local StageWeb paths are intentionally
 # unchanged: they are used by recovery journals and local catalogs.
-LAYOUT_VERSION = 3
+LAYOUT_VERSION = 4
 BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
@@ -56,7 +56,7 @@ def media_drive_path(relative, *, code="", audio_format="M4A"):
             ".mp4", ".webm", ".mid", ".midi", ".kar", ".sf2", ".sf3"):
         return PurePosixPath("AUDIO", rel.name)
     if kind == "lyrics" and suffix == ".json":
-        return PurePosixPath("TEXT", rel.name)
+        return PurePosixPath("LYRICS", rel.name)
     # .LYR/.CUR and .LRC are local source/editing formats, not stored online.
     raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวดสื่อ: " + str(relative))
 
@@ -172,15 +172,22 @@ class OnlinePublisher:
         if not root:
             return None, {}, {}
         children = self.drive.list_children(root)
-        text_folder = next((x for x in children if x.get("name") == "TEXT"
-                            and x.get("mimeType") == FOLDER_MIME), None)
-        text_children = self.drive.list_children(text_folder["id"]) if text_folder else []
-        modern = [x for x in text_children if x.get("name") == "current.json"
-                  and x.get("mimeType") != FOLDER_MIME]
+        lyric_folders = [x for x in children if x.get("name") in ("LYRICS", "TEXT")
+                         and x.get("mimeType") == FOLDER_MIME]
+        if len([x for x in lyric_folders if x["name"] == "LYRICS"]) > 1 or len(
+                [x for x in lyric_folders if x["name"] == "TEXT"]) > 1:
+            raise PublishError("พบโฟลเดอร์ LYRICS/TEXT ซ้ำ · หยุดตรวจคลัง")
+        lyric_children = []
+        modern = []
+        for section in lyric_folders:
+            items = self.drive.list_children(section["id"])
+            lyric_children.extend(items)
+            modern.extend(x for x in items if x.get("name") == "current.json"
+                          and x.get("mimeType") != FOLDER_MIME)
         legacy = [x for x in children if x.get("name") == "current.json"
                   and x.get("mimeType") != FOLDER_MIME]
         if modern and legacy:
-            raise PublishError("พบ current.json ที่รากและ TEXT พร้อมกัน · หยุดก่อนย้ายคลัง")
+            raise PublishError("พบ current.json ที่รากและ LYRICS/TEXT พร้อมกัน · หยุดก่อนย้ายคลัง")
         pointers = modern or legacy
         if len(pointers) > 1:
             raise PublishError("พบ XStageWeb/current.json ซ้ำบน Drive · หยุดเพื่อป้องกันฐานเสีย")
@@ -190,22 +197,22 @@ class OnlinePublisher:
                 # the user's first playable song. Preserve it and allow the
                 # first verified online DB to be published. Other unindexed
                 # media remain blocked to avoid reinitializing an old catalog.
-                if (all(x.get("name") in ("AUDIO", "TEXT", "SOUNDFONT") and
+                if (all(x.get("name") in ("AUDIO", "LYRICS", "SOUNDFONT") and
                         x.get("mimeType") == FOLDER_MIME for x in children)
                         and len(children) <= 3
-                        and not text_children):
+                        and not lyric_children):
                     return None, {}, {x["name"]: x for x in children}
-                markers = [x for x in [*children, *text_children]
+                markers = [x for x in [*children, *lyric_children]
                            if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "TEXT", "VIDEO", "MIDI", "DB", "SOUNDFONT"}
+                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "LYRICS", "VIDEO", "MIDI", "DB", "SOUNDFONT"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
                         and self._json(markers[0]["id"]).get("format") ==
                         "xstage-songstudio-upload-staging-v1"):
                     # Previous first-time upload stopped before its first
                     # published pointer. Resume only our own verified staging
                     # work, never a foreign, unindexed XStageWeb library.
-                    return None, {}, {x["name"]: x for x in [*children, *text_children]}
+                    return None, {}, {x["name"]: x for x in [*children, *lyric_children]}
                 raise PublishError("XStageWeb มีไฟล์เดิมแต่ไม่มี current.json · ไม่สร้างฐานใหม่ทับ")
             return None, {}, {}
         pointer_file = pointers[0]
@@ -299,7 +306,7 @@ class OnlinePublisher:
         if active is not None and active[1].get("layoutVersion") != LAYOUT_VERSION:
             raise PublishError(
                 "พบคลัง Google Drive โครงสร้างเก่า · ไม่ย้ายหรือแก้ฐานอัตโนมัติ "
-                "กรุณาสำรองและยืนยันการย้ายคลังเก่าก่อนเผยแพร่แบบ AUDIO/TEXT")
+                "กรุณาสำรองและยืนยันการย้ายคลังเก่าก่อนเผยแพร่แบบ AUDIO/LYRICS")
         if active is None and STAGING_MARKER not in root_files:
             # Durable evidence for safe first-run recovery. This marker is
             # published BEFORE the first media file, so an interrupted upload
@@ -311,7 +318,7 @@ class OnlinePublisher:
                     "schemaVersion": 1,
                     "note": "Private staged upload. No playable DB is published yet."
                 }), encoding="utf-8")
-                self.drive.upload_file(self.drive.folder(root, "TEXT"),
+                self.drive.upload_file(self.drive.folder(root, "LYRICS"),
                                        marker_file, STAGING_MARKER,
                                        cancelled=cancelled)
         pointer_file, old_pointer = active if active else (None, None)
@@ -359,7 +366,7 @@ class OnlinePublisher:
                 parent = folder_cache[key]
             return parent
         # Only two Drive content folders, never nested by format or bucket.
-        for category in (("AUDIO",), ("TEXT",)):
+        for category in (("AUDIO",), ("LYRICS",)):
             if cancelled and cancelled.is_set():
                 raise PublishError("ยกเลิกการเตรียมโครงสร้าง Google Drive")
             folder(category)
@@ -404,7 +411,7 @@ class OnlinePublisher:
                     path.write_text(json.dumps(document, ensure_ascii=False,
                                                separators=(",", ":")), encoding="utf-8")
                     _, metadata = self.drive.upload_file(
-                        folder(("TEXT",)), path, name, cancelled=cancelled)
+                        folder(("LYRICS",)), path, name, cancelled=cancelled)
                     return metadata["id"]
                 if old_pointer and len(old_pointer.get("deltaFileIds", [])) < MAX_DELTAS:
                     delta_id = push_json("catalog-delta-" + generation + ".json", {
@@ -433,7 +440,7 @@ class OnlinePublisher:
                 pointer_path.write_text(json.dumps(next_pointer, ensure_ascii=False,
                                                    separators=(",", ":")), encoding="utf-8")
                 _, pointer_file = self.drive.upload_file(
-                    folder(("TEXT",)), pointer_path, "current.json",
+                    folder(("LYRICS",)), pointer_path, "current.json",
                     replace_pointer=True, cancelled=cancelled)
             old_pointer = next_pointer
             revisions.clear()
