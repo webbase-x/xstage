@@ -77,8 +77,29 @@ assert.ok(!web.includes('FormData('),'No local music bytes may be uploaded to th
 const start=web.indexOf('  async function createSongAssets(');
 const end=web.indexOf('  async function reserveSongAssetNames(',start);
 assert.ok(start>=0&&end>start);
-const buildAssets=new Function('Blob','File','midiCore','midiRuntime','usesMidi','$',
-  'lyricsFor','renderAudio','renderMidiWave','state','log','safeName','parseLrc','setProgress',
+const buildAssets=new Function('Blob','File','midiCore','midiRuntime','usesMidi','  web.slice(start,end)+'\nreturn createSongAssets;')(
+  Blob,Blob,core,midi,()=>true,()=>({value:'xstage'}),
+  async song=>song.lyricsText||song.midiInfo?.lrc||'',
+  async()=>{throw Error('Original MIDI must not be transcoded in X-Stage mode');},
+  async()=>{throw Error('No SoundFont render required for original source mode');},
+  {cancelled:false},()=>{},v=>v,x=>[],()=>{},
+  name=>String(name).split('.').pop().toLowerCase()
+);
+song.midiInfo=info;
+const assets=await buildAssets(song,1);
+assert.deepEqual(assets.map(x=>x.name),
+  ['NCN001.mid','NCN001.lyr','NCN001.cur','NCN001.json','NCN001.lrc']);
+assert.deepEqual(Array.from(new Uint8Array(await assets[0].blob.arrayBuffer())),original,
+  'MIDI source bytes must be preserved exactly');
+assert.deepEqual(Array.from(new Uint8Array(await assets[1].blob.arrayBuffer())),
+  Array.from(lyrBytes),'LYR CP874 bytes must remain unchanged');
+assert.deepEqual(Array.from(new Uint8Array(await assets[2].blob.arrayBuffer())),
+  Array.from(cursorBytes),'CUR bytes must remain unchanged');
+assert.equal(JSON.parse(await assets[3].blob.text()).lines[0].syllables[1].start,.5);
+await assert.rejects(buildAssets({...song,midiInfo:warning},1),/CUR/);
+console.log('PASS: Song Studio Web NCN grouping, real CUR tempo, safe source preservation and resource gates');
+,
+  'lyricsFor','renderAudio','renderMidiWave','state','log','safeName','parseLrc','setProgress','extOf',
   web.slice(start,end)+'\nreturn createSongAssets;')(
   Blob,Blob,core,midi,()=>true,()=>({value:'xstage'}),
   async song=>song.lyricsText||song.midiInfo?.lrc||'',
