@@ -32,6 +32,12 @@ try{
     status:200,contentType:'application/json',body:'{}'}));
   await page.goto('http://127.0.0.1:'+server.address().port+'/',{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.XStagePianoCore?.FIRST===48,{timeout:15000});
+  // This isolated layout smoke has no Google account. Dismiss the login gate
+  // deliberately; functional account authorization remains tested separately.
+  await page.evaluate(()=>{
+    const gate=document.getElementById('gate');
+    if(gate){gate.hidden=true;gate.style.pointerEvents='none';}
+  });
   const open=page.locator('#toggle-piano');
   await open.click();
   assert.equal(await page.locator('#stage-piano').isVisible(),true);
