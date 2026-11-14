@@ -151,14 +151,15 @@ try{
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'3',
     'Two unreviewed videos must not silently become embedded karaoke');
   await page.locator('#cloud-import-video-editor:not([hidden])').waitFor();
-  await page.locator('#cloud-import-video-select').selectOption('v400');
+  const videoPick=page.locator('#cloud-import-video-select');
+  await videoPick.selectOption(await videoPick.locator('option',{hasText:'V400.mp4'}).getAttribute('value'));
   await page.locator('#cloud-import-video-title').fill('วิดีโอทดสอบ');
   await page.locator('#cloud-import-video-artist').fill('นักร้องตัวอย่าง');
   await page.locator('#cloud-import-video-album').fill('อัลบั้มทดสอบ');
   await page.locator('#cloud-import-video-mode').selectOption('embedded');
   await page.click('#cloud-import-video-save');
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
-  await page.locator('#cloud-import-video-select').selectOption('a500');
+  await videoPick.selectOption(await videoPick.locator('option',{hasText:'A500.avi'}).getAttribute('value'));
   await page.locator('#cloud-import-video-title').fill('วิดีโอ AVI ไม่มีเนื้อร้องฝัง');
   await page.locator('#cloud-import-video-artist').fill('นักร้อง AVI');
   await page.locator('#cloud-import-video-mode').selectOption('timed');
