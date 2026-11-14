@@ -4420,3 +4420,103 @@ html body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage #lyric
     height:clamp(23px,6cqh,55px)!important;
   }
 }
+
+
+/* On-stage GM piano. Kept above transport but below the lyric canvas region;
+   small screens scroll the keys horizontally rather than shrinking touch targets. */
+body.xstage-ui-v2 .stage .stage-piano{
+  position:absolute;z-index:39;left:clamp(8px,2.6vw,38px);right:clamp(8px,2.6vw,38px);
+  bottom:calc(var(--xs-bottom) + 6px);
+  height:clamp(86px,18dvh,152px);min-height:0;
+  display:flex;flex-direction:column;overflow:hidden;
+  background:linear-gradient(180deg,#0b1c38f5,#061123f7);
+  border:1px solid #4c81ba;border-radius:13px 13px 8px 8px;
+  box-shadow:0 8px 28px #000a,0 0 0 1px #102d50 inset;
+  -webkit-user-select:none;user-select:none;touch-action:pan-x;
+}
+body.xstage-ui-v2 .stage .stage-piano[hidden]{display:none!important}
+body.xstage-ui-v2 .stage .stage-piano-head{
+  min-height:29px;display:flex;align-items:center;gap:9px;
+  padding:3px 9px;background:#07182cf0;color:#ddecff;
+  font-size:clamp(.58rem,.87vw,.76rem);line-height:1.15
+}
+body.xstage-ui-v2 .stage .stage-piano-head strong{
+  flex:none;color:#84e5fc;letter-spacing:.07em
+}
+body.xstage-ui-v2 .stage #stage-piano-state{
+  flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  color:#adc6df
+}
+body.xstage-ui-v2 .stage .stage-piano-head label{flex:none}
+body.xstage-ui-v2 .stage .stage-piano-head select{
+  max-width:135px;min-width:68px;min-height:24px;
+  padding:2px 5px;border:1px solid #4675a3;border-radius:6px;
+  background:#0a294b;color:#f0f7ff;font-size:.7rem
+}
+body.xstage-ui-v2 .stage .stage-piano-head button{
+  flex:none;min-height:24px;min-width:28px;padding:2px 6px;
+  border:1px solid #5875a0;border-radius:6px;
+  background:#153354;color:white;cursor:pointer
+}
+body.xstage-ui-v2 .stage .stage-piano-viewport{
+  flex:1;min-height:0;width:100%;overflow-x:auto;overflow-y:hidden;
+  scrollbar-color:#49709d #08182f;scrollbar-width:thin;
+  overscroll-behavior-x:contain
+}
+body.xstage-ui-v2 .stage .stage-piano-keys{
+  height:100%;min-height:0;position:relative;margin-inline:auto
+}
+body.xstage-ui-v2 .stage .stage-piano-key{
+  box-sizing:border-box;position:absolute;top:0;margin:0;padding:0;
+  appearance:none;border-radius:0 0 4px 4px;cursor:pointer;
+  touch-action:none;outline-offset:-3px;-webkit-tap-highlight-color:transparent
+}
+body.xstage-ui-v2 .stage .stage-piano-key.white{
+  width:24px;height:100%;z-index:1;
+  border:1px solid #7689a1;border-top:0;
+  background:linear-gradient(180deg,#fefefe 5%,#e2e8f0 82%,#b5c0cd);
+  box-shadow:inset -2px 0 2px #0002;color:#344c65
+}
+body.xstage-ui-v2 .stage .stage-piano-key.black{
+  width:16px;height:61%;z-index:2;
+  border:1px solid #425a75;border-top:0;
+  background:linear-gradient(100deg,#202c40,#020817 65%,#142338);
+  box-shadow:2px 3px 4px #0008
+}
+body.xstage-ui-v2 .stage .stage-piano-key span{
+  position:absolute;bottom:4px;left:0;right:0;text-align:center;
+  font-size:9px;font-weight:750;pointer-events:none
+}
+body.xstage-ui-v2 .stage .stage-piano-key.white.midi-active{
+  background:linear-gradient(180deg,#b5f7ff,#45c8fc 88%,#1884c5)
+}
+body.xstage-ui-v2 .stage .stage-piano-key.black.midi-active{
+  background:linear-gradient(180deg,#ffe7a6,#dd952c 90%)
+}
+body.xstage-ui-v2 .stage .stage-piano-key.white.manual-active{
+  background:linear-gradient(180deg,#b2ffde,#27dba8)
+}
+body.xstage-ui-v2 .stage .stage-piano-key.black.manual-active{
+  background:linear-gradient(180deg,#a9f6d9,#13795b)
+}
+body.xstage-ui-v2 .stage .stage-piano-key:focus-visible{
+  outline:3px solid #ffdb67;z-index:3
+}
+@media(max-width:760px){
+  body.xstage-ui-v2 .stage .stage-piano{
+    left:5px;right:5px;bottom:calc(var(--xs-bottom) + 5px);
+    height:clamp(82px,20dvh,116px);border-radius:9px
+  }
+  body.xstage-ui-v2 .stage .stage-piano-head{gap:5px;padding:2px 6px;min-height:25px}
+  body.xstage-ui-v2 .stage .stage-piano-head label{display:none}
+  body.xstage-ui-v2 .stage .stage-piano-head select{max-width:94px}
+  body.xstage-ui-v2 .stage .stage-piano-head strong{font-size:.64rem;letter-spacing:0}
+}
+@media(max-height:500px) and (orientation:landscape){
+  body.xstage-ui-v2 .stage .stage-piano{height:clamp(70px,22dvh,95px)}
+  body.xstage-ui-v2 .stage .stage-piano-head{min-height:23px}
+}
+/* Native TV retains its display-only design; piano controls are a Web feature. */
+body.xstage-native-tv .stage .stage-piano,
+body.xstage-native-tv .stage #toggle-piano,
+body.xstage-native-tv #mobile-piano-toggle{display:none!important}
