@@ -830,9 +830,10 @@ class GoogleDrive:
                     # Google native Docs are not binary song library files.
                     continue
                 else:
-                    is_db = (relative in ("current.json", "TEXT/current.json")
+                    is_db = (relative in ("current.json", "TEXT/current.json", "LYRICS/current.json")
                              or relative.startswith("DB/")
                              or relative.startswith("TEXT/catalog-")
+                             or relative.startswith("LYRICS/catalog-")
                              or relative.startswith("catalog-")
                              or relative.startswith("database-"))
                     if kind == "db" and not is_db:
@@ -871,16 +872,19 @@ class GoogleDrive:
             return None
         library_name = roots[0]["name"]
         children = self.list_children(roots[0]["id"])
-        text_folders = [f for f in children if f.get("name") == "TEXT"
-                        and f.get("mimeType") == "application/vnd.google-apps.folder"]
-        if len(text_folders) > 1:
-            raise GoogleError("พบ TEXT หลายโฟลเดอร์ใน XStageWeb")
-        modern = [f for f in self.list_children(text_folders[0]["id"])
-                  if f.get("name") == "current.json"] if text_folders else []
+        lyric_folders = [f for f in children if f.get("name") in ("LYRICS", "TEXT")
+                         and f.get("mimeType") == "application/vnd.google-apps.folder"]
+        if (len([f for f in lyric_folders if f.get("name") == "LYRICS"]) > 1 or
+                len([f for f in lyric_folders if f.get("name") == "TEXT"]) > 1):
+            raise GoogleError("พบ LYRICS/TEXT ซ้ำใน XStageWeb")
+        modern = [f for section in lyric_folders
+                  for f in self.list_children(section["id"])
+                  if f.get("name") == "current.json"
+                  and f.get("mimeType") != "application/vnd.google-apps.folder"]
         legacy = [f for f in children if f.get("name") == "current.json"
                   and f.get("mimeType") != "application/vnd.google-apps.folder"]
         if modern and legacy:
-            raise GoogleError("พบ current.json ทั้งใน TEXT และรากคลัง · หยุด")
+            raise GoogleError("พบ current.json ทั้งใน LYRICS/TEXT และรากคลัง · หยุด")
         pointers = modern or legacy
         if len(pointers) > 1:
             raise GoogleError("พบ current.json ซ้ำใน XStageWeb · หยุดเพื่อป้องกันกู้คืนฐานผิด")
@@ -954,7 +958,8 @@ class GoogleDrive:
                     not name.endswith(".json") or "/" in name or "\\" in name):
                 raise GoogleError("ชื่อ Catalog ไม่ตรงกับ XStageWeb/current.json")
             doc = read_json(meta, library_name + "/" + name)
-            prefix = ("TEXT/" if pointer.get("layoutVersion") == 3 else
+            prefix = ("LYRICS/" if pointer.get("layoutVersion") == 4 else
+                       "TEXT/" if pointer.get("layoutVersion") == 3 else
                       "DB/" if pointer.get("layoutVersion") == 2 else "")
             add(prefix + name, file_id, meta.get("md5Checksum"))
             return doc
@@ -1008,7 +1013,8 @@ class GoogleDrive:
                     rel = media.get("path")
                     allowed_new = (isinstance(rel, str) and
                                    ((rel.startswith("AUDIO/") and field != "lyrics") or
-                                    (rel.startswith("TEXT/") and field == "lyrics")))
+                                    (rel.startswith("LYRICS/") and field == "lyrics") or
+                                     (rel.startswith("TEXT/") and field == "lyrics")))
                     allowed_old = (isinstance(rel, str) and (
                         rel.startswith("audio/") or rel.startswith("lyrics/") or
                         rel.startswith("songs/") or rel.startswith("MIDI/") or
@@ -1016,7 +1022,8 @@ class GoogleDrive:
                     if not (allowed_new or allowed_old):
                         raise GoogleError("พาธไฟล์ " + field + " ใน Catalog ไม่ถูกต้อง")
                     add(rel, media.get("fileId"), media.get("md5Checksum"))
-        add("TEXT/current.json" if pointer.get("layoutVersion") == 3
+        add("LYRICS/current.json" if pointer.get("layoutVersion") == 4
+            else "TEXT/current.json" if pointer.get("layoutVersion") == 3
             else "current.json", pointer_file["id"], pointer_file.get("md5Checksum"))
         return files, library_name
 
