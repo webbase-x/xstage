@@ -366,7 +366,21 @@ jobs:
           } else {
             git commit -m "Update verified Song Studio PC Ready latest metadata to Build 335 [skip ci]"
             if ($LASTEXITCODE -ne 0) { throw "Cannot commit latest metadata" }
-            git push origin HEAD:main
-            if ($LASTEXITCODE -ne 0) { throw "Cannot publish latest PC Ready metadata to main" }
+            # The long Windows build may finish after another contributor
+            # advances main. Rebase the metadata-only commit without forcing.
+            $published = $false
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              git fetch origin main
+              if ($LASTEXITCODE -ne 0) { throw "Cannot refresh main for latest metadata" }
+              git rebase origin/main
+              if ($LASTEXITCODE -ne 0) { throw "Latest metadata conflicts with main; stop without force push" }
+              git push origin HEAD:main
+              if ($LASTEXITCODE -eq 0) {
+                $published = $true
+                break
+              }
+              Write-Warning ("main moved during metadata publication; retry " + $attempt)
+            }
+            if (!$published) { throw "Cannot publish latest PC Ready metadata after three verified retries" }
           }
 
