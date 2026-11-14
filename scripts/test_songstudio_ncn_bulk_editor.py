@@ -150,41 +150,90 @@ class NCNEditTests(unittest.TestCase):
         self.assertEqual(edit._parse(lyr.read_bytes(), cur.read_bytes(), bulk)["lines"][0],
                          "X-Stage Karaoke")
 
-    def test_selected_line_with_sentinel_or_backward_cue_still_blocks_edit(self):
-        for reason, index, value in (
-                ("65535", 1, 65535),
-                ("ย้อนกลับ", 3, 0)):
-            with self.subTest(reason=reason):
-                _, lyr, cur = self.song("00233")
-                raw = cur.read_bytes()
-                times = list(struct.unpack("<"+"H"*((len(raw)-1)//2), raw[:-1]))
-                times[index] = value
-                cur.write_bytes(struct.pack("<"+"H"*len(times),*times)+b"\xff")
-                original = (lyr.read_bytes(), cur.read_bytes())
-                snapshot = edit.scan(self.root, ncn, bulk)
-                group = bulk.list_groups(snapshot, "first", repeats_only=False)["rows"][0]["id"]
-                with self.assertRaisesRegex(ValueError, "ไม่ปลอดภัย.*"+reason):
-                    edit.apply(self.root,ncn,bulk,snapshot,[group],
-                               "X-Stage Karaoke",self.backup,expected_count=1)
-                self.assertEqual((lyr.read_bytes(),cur.read_bytes()),original)
-                self.assertFalse(self.backup.exists())
+    def test_selected_line_with_untimed_character_still_blocks_edit(self):
+        _, lyr, cur = self.song("00233")
+        raw = cur.read_bytes()
+        times = list(struct.unpack("<"+"H"*((len(raw)-1)//2), raw[:-1]))
+        times[1] = 65535
+        cur.write_bytes(struct.pack("<"+"H"*len(times), *times)+b"\xff")
+        original = (lyr.read_bytes(), cur.read_bytes())
+        snapshot = edit.scan(self.root, ncn, bulk)
+        group = bulk.list_groups(snapshot, "first", repeats_only=False)["rows"][0]["id"]
+        with self.assertRaisesRegex(ValueError, "ไม่มีข้อมูลจริง.*65535"):
+            edit.apply(self.root,ncn,bulk,snapshot,[group],
+                       "X-Stage Karaoke",self.backup,expected_count=1)
+        self.assertEqual((lyr.read_bytes(),cur.read_bytes()),original)
+        self.assertFalse(self.backup.exists())
 
-    def test_selected_line_backwards_relative_to_previous_song_line_is_refused(self):
+    def test_selected_line_with_backward_character_cue_uses_existing_player_times(self):
+        mid, lyr, cur = self.song("02386")
+        raw = cur.read_bytes()
+        positions = list(struct.unpack("<"+"H"*((len(raw)-1)//2), raw[:-1]))
+        # Simulates the backward cue in the user-reported lyric, which older
+        # builds refused before backing up and modifying any content.
+        positions[3] = 0
+        cur.write_bytes(struct.pack("<"+"H"*len(positions), *positions)+b"\xff")
+        initial = (mid.read_bytes(),lyr.read_bytes(),cur.read_bytes())
+        before = edit._parse(lyr.read_bytes(),cur.read_bytes(),bulk)
+        first = before["entries"][0]
+        original_effective, corrections = edit._effective_cues(before["entries"], 0)
+        self.assertGreater(corrections, 0)
+        self.assertEqual(original_effective, sorted(original_effective))
+        snapshot = edit.scan(self.root,ncn,bulk)
+        group = bulk.list_groups(snapshot,"first",repeats_only=False)["rows"][0]["id"]
+        report = edit.apply(self.root,ncn,bulk,snapshot,[group],
+                            "X-Stage Karaoke",self.backup,expected_count=1)
+        self.assertGreater(report["projectedCursorCues"],0)
+        after = edit._parse(lyr.read_bytes(),cur.read_bytes(),bulk)
+        self.assertEqual(after["entries"][0]["times"][1], original_effective[0])
+        self.assertEqual(after["entries"][0]["times"][-1], original_effective[-1])
+        self.assertEqual(after["entries"][0]["times"][1:],
+                         sorted(after["entries"][0]["times"][1:]))
+        self.assertEqual([entry["times"] for entry in before["entries"][1:]],
+                         [entry["times"] for entry in after["entries"][1:]])
+        self.assertEqual(mid.read_bytes(),initial[0])
+        bulk.undo(self.backup,self.root,report["backupId"])
+        self.assertEqual((mid.read_bytes(),lyr.read_bytes(),cur.read_bytes()),initial)
+
+    def test_reversed_within_selected_line_of_same_cp874_byte_length_leaves_cur_exact(self):
+        _,lyr,cur=self.song("00235")
+        raw=cur.read_bytes()
+        times=list(struct.unpack("<"+"H"*((len(raw)-1)//2),raw[:-1]))
+        times[3]=0
+        cur.write_bytes(struct.pack("<"+"H"*len(times),*times)+b"\xff")
+        unchanged_cur=cur.read_bytes()
+        snapshot=edit.scan(self.root,ncn,bulk)
+        group=bulk.list_groups(snapshot,"first",repeats_only=False)["rows"][0]["id"]
+        original_text="หัวเพลงเดิม"
+        same_length="A"*len(original_text.encode("cp874"))
+        report=edit.apply(self.root,ncn,bulk,snapshot,[group],same_length,
+                          self.backup,expected_count=1)
+        self.assertEqual(report["projectedCursorCues"],0)
+        self.assertEqual(cur.read_bytes(),unchanged_cur)
+        self.assertEqual(edit._parse(lyr.read_bytes(),cur.read_bytes(),bulk)["lines"][0],
+                         same_length)
+
+    def test_selected_line_backwards_relative_to_previous_song_line_uses_player_semantics(self):
         _, lyr, cur = self.song("00234")
         raw = cur.read_bytes()
         times = list(struct.unpack("<"+"H"*((len(raw)-1)//2), raw[:-1]))
         parsed = edit._parse(lyr.read_bytes(), raw, bulk)
         last = parsed["entries"][-1]
-        # Set a valid monotonic line with an onset earlier than other lyrics.
+        # A monotone line whose onset is earlier than the previous lyric.
         start = last["cursor"] + 1
         for j in range(len(last["raw"])):
             times[start+j] = j
         cur.write_bytes(struct.pack("<"+"H"*len(times), *times)+b"\xff")
         snapshot = edit.scan(self.root,ncn,bulk)
         group = bulk.list_groups(snapshot,"last",repeats_only=False)["rows"][0]["id"]
-        with self.assertRaisesRegex(ValueError,"ไม่ปลอดภัย"):
-            edit.apply(self.root,ncn,bulk,snapshot,[group],"X-Stage",
-                       self.backup,expected_count=1)
+        result=edit.apply(self.root,ncn,bulk,snapshot,[group],"X-Stage",
+                          self.backup,expected_count=1)
+        self.assertGreater(result["projectedCursorCues"],0)
+        after=edit._parse(lyr.read_bytes(),cur.read_bytes(),bulk)
+        self.assertEqual(after["entries"][-1]["cueIssue"],None)
+        previous=max(position for row in after["entries"][:-1]
+                     for position in row["times"][1:] if position!=65535)
+        self.assertGreaterEqual(after["entries"][-1]["times"][1],previous)
 
     def test_stale_files_and_unsupported_cp874_block_changes(self):
         _,lyr,cur=self.song()
