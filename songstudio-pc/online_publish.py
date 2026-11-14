@@ -1,20 +1,15 @@
-"""Publish Song Studio M4A + timed JSON directly into X-Stage Karaoke Online.
+"""Private Google Drive XStageWeb V2 publisher.
 
-Online layout (NOT the local Song Studio pointer format):
-    XStageWeb/current.json: {schemaVersion, generation, catalogFileId,
-                            deltaFileIds, songCount}
-    XStageWeb/catalog-base-<generation>.json: {schemaVersion, songs: [...]}
-    XStageWeb/catalog-delta-<generation>.json: {schemaVersion, upserts, removes}
-    XStageWeb/AUDIO/{MP3,M4A}/{Songs,Lyrics}/[0-9A-Z]/...
-    XStageWeb/VIDEO/{AVI,MPG,VCD,WMV}/...
-    XStageWeb/MIDI/NCN/{Songs,Lyrics,Cursor}/[0-9A-Z]/...
-    XStageWeb/MIDI/E-MK/[0-9A-Z]/...
-    XStageWeb/DB/ (reserved; root current.json stays for web compatibility)
-    Existing catalog paths retain their private Drive file IDs.
+Song Studio publishes complete M4A + timed JSON under:
+    XStageWeb/AUDIO/M4A/Songs/<bucket>/
+    XStageWeb/AUDIO/M4A/Lyrics/<bucket>/
+    XStageWeb/DB/catalog-base-v2-<generation>.json
+    XStageWeb/DB/catalogs/*.json or DB/deltas/*.json
+    XStageWeb/DB/current.json
 
-Never publish a new pointer until media and immutable catalog are uploaded and
-MD5 checked. Existing online songs are merged; this is NOT a whole-library
-replacement and never deletes or overwrites an existing song.
+Native MP3, video, MIDI NCN and E-MK use the same DB V2 contract through
+v2_native_publish.py. No StageWeb or root-level current.json is used.
+All data remains private to the authenticated Google account.
 """
 from __future__ import annotations
 
@@ -50,7 +45,7 @@ def _bucket(code):
     key = str(code or "").strip().upper()
     if key and key[0] in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ":
         return key[0]
-    # Legacy Thai/non-ASCII codes remain representable without extra folders.
+    # Non-ASCII codes receive a deterministic first-level bucket.
     # Use a stable hex hash instead of guessing a letter from the filename.
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[0].upper()
 
