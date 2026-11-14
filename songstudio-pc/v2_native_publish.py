@@ -168,6 +168,23 @@ class V2NativePublisher:
                 raise PublishError("Google Drive checksum ไม่ตรงกัน")
             return {"fileId": meta["id"], "path": str(rel.parent / file_name),
                     "md5Checksum": md5, "size": path.stat().st_size}
+        # Preflight conflicts BEFORE uploading bytes. Linear-time lookups
+        # support libraries containing hundreds of thousands of songs.
+        code_owners={}
+        for ident,row in existing.items():
+            code=row["code"].casefold()
+            if code in code_owners and code_owners[code]!=ident:
+                raise PublishError("รหัสเพลงซ้ำในฐาน V2 เดิม: "+row["code"])
+            code_owners[code]=ident
+        for item in songs:
+            code=item["code"].casefold()
+            prior_id=code_owners.get(code)
+            if prior_id is not None and prior_id!=item["id"]:
+                raise PublishError("รหัสเพลงชนกับฐานเดิม: "+item["code"])
+            prior=existing.get(item["id"])
+            if prior and prior["code"].casefold()!=code:
+                raise PublishError("ID เพลงเดิมมีรหัสไม่ตรงกัน: "+item["id"])
+            code_owners[code]=item["id"]
         result = dict(existing)
         for index, item in enumerate(songs, 1):
             if cancelled is not None and cancelled.is_set():
@@ -215,15 +232,13 @@ class V2NativePublisher:
                 "title": item["title"], "artist": item["artist"],
                 "media": media, "lyrics": lyrics
             }
-            # Stable id is authoritative. Reject silent replacement of a
-            # different song with the same code or a stale reused ID.
-            by_code = {row["code"].casefold(): ident for ident,row in result.items()}
-            code_owner = by_code.get(item["code"].casefold())
-            if code_owner is not None and code_owner != item["id"]:
-                raise PublishError("รหัสเพลงชนกับฐานเดิม: " + item["code"])
+            # Updating one format must not drop other previously published
+            # formats (e.g. native MP3 added after M4A conversion).
             existing_record = result.get(item["id"])
-            if existing_record and existing_record["code"].casefold()!=item["code"].casefold():
-                raise PublishError("ID เพลงเดิมมีรหัสไม่ตรงกัน: " + item["id"])
+            if existing_record:
+                published["media"]={**existing_record["media"],**media}
+                if lyrics is None:
+                    published["lyrics"]=existing_record.get("lyrics")
             result[item["id"]] = published
             if on_progress: on_progress(index, len(songs))
         # All files may have uploaded; still NEVER publish an invalid catalog.
