@@ -256,6 +256,7 @@
     $('lyric-group-reset').disabled=busy||!prefs.lyric_source;
     $('lyric-group-search').disabled=!allow;
     $('lyric-group-repeats').disabled=!allow;
+    $('lyric-group-replacement-mode').disabled=busy;
     $('lyric-group-replacement').disabled=!allow||phraseSelected.size===0;
     $('lyric-group-apply').disabled=!allow||phraseSelected.size===0||
       !$('lyric-group-replacement').value.trim();
@@ -2339,7 +2340,21 @@
     phraseOffset+=40;
     void refreshPhraseGroups();
   });
+  $('lyric-group-replacement-mode').addEventListener('change',()=>{
+    const value=$('lyric-group-replacement-mode').value;
+    if(value!=='custom')$('lyric-group-replacement').value=value;
+    else if(!$('lyric-group-replacement').disabled){
+      $('lyric-group-replacement').focus();
+      $('lyric-group-replacement').select();
+    }
+    phraseUpdateButtons();
+    clearTimeout(phraseSearchTimer);
+    phraseSearchTimer=setTimeout(()=>{void phraseRefreshSelection();},220);
+  });
   $('lyric-group-replacement').addEventListener('input',()=>{
+    const chosen=$('lyric-group-replacement-mode').value;
+    if(chosen!=='custom'&&$('lyric-group-replacement').value!==chosen)
+      $('lyric-group-replacement-mode').value='custom';
     phraseUpdateButtons();
     clearTimeout(phraseSearchTimer);
     phraseSearchTimer=setTimeout(()=>{void phraseRefreshSelection();},220);
