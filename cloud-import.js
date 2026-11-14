@@ -12,6 +12,9 @@ const MIME_FOLDER='application/vnd.google-apps.folder';
 const API='https://www.googleapis.com/drive/v3/files';
 const UPLOAD='https://www.googleapis.com/upload/drive/v3/files';
 const CHUNK=8*1024*1024,MAX_LRC=2*1024*1024,MAX_JSON=128*1024*1024;
+const MEDIA_MIME={MP3:'audio/mpeg',M4A:'audio/mp4',WAV:'audio/wav',
+  AAC:'audio/aac',FLAC:'audio/flac',OGG:'audio/ogg',OGA:'audio/ogg',
+  MP4:'video/mp4',WEBM:'video/webm'};
 function fail(message){throw Error(message);}
 function driveId(value){
   const id=String(value||'');
@@ -628,9 +631,11 @@ class Importer {
             await uploadMedia(item.file,stem,path.slice(0,-1),name,'application/octet-stream',hash);
             this.stats.fonts++;
           }else{
-            const {audio,lrc,json:lyricsJson,kind}=item;
+            const {audio,video,lrc,json:lyricsJson,kind}=item;
             let code=item.code;
             if(!await core.validAudio(audio.file))throw Error('ไฟล์ '+kind+' ไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
+            if(video&&video.file!==audio.file&&!await core.validAudio(video.file))
+              throw Error('ไฟล์วิดีโอประกอบไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
             let raw=null,doc,json;
             if(lyricsJson){
               if(lyricsJson.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
@@ -659,12 +664,12 @@ class Importer {
             const same=candidates.find(x=>String(x.audio?.md5Checksum||'').toLowerCase()===audioHash);
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
-            const folder=core.bucket(code),prefix=['AUDIO',kind];
+            const folder=core.bucket(code),prefix=[kind==='MP4'||kind==='WEBM'?'VIDEO':'AUDIO',kind];
             let media=same?.audio;
             if(!media){
               const name=base+'-'+audioHash.slice(0,16)+'.'+kind.toLowerCase();
               media=await uploadMedia(audio.file,code,[...prefix,'Songs',folder],name,
-                kind==='MP3'?'audio/mpeg':'audio/mp4',audioHash,0,.83);
+                MEDIA_MIME[kind]||'application/octet-stream',audioHash,0,.83);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash,.83,.09);
@@ -675,12 +680,24 @@ class Importer {
               const lname=base+'-'+lrcHash.slice(0,16)+'.lrc';
               lrcInfo=await uploadMedia(rawBlob,code,[...prefix,'Lyrics',folder],lname,'text/plain',lrcHash,.92,.08);
             }
+            let videoMedia=same?.video;
+            if(video){
+              if(video.file===audio.file)videoMedia=media;
+              else{
+                const vh=await core.hashBlob(video.file,()=>this.check());
+                const ve=core.ext(video.file.name).toUpperCase();
+                videoMedia=await uploadMedia(video.file,code,['VIDEO',ve,'Song',folder],
+                  base+'-'+vh.slice(0,16)+'.'+ve.toLowerCase(),
+                  MEDIA_MIME[ve]||'application/octet-stream',vh);
+              }
+            }
             const ident=same?.webSongId||('browser/'+audioHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิงออนไลน์ชนกับเพลงอื่น');
             // Preserve the original linked MIDI/video/vocal media when only
             // a same-audio song's timed lyrics have changed.
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:kind,audio:media,lyrics:lyric,lrc:lrcInfo};
+              artist:doc.artist||'',sourceFormat:kind,audio:media,lyrics:lyric,lrc:lrcInfo,
+              ...(videoMedia?{video:videoMedia}:{})};
             if(same){
               const oldPair=String(same.audio?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase();
