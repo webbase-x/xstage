@@ -1,4 +1,9 @@
-## X-Stage Karaoke Online v1.0.104 (Build 1104) — two-folder Google Drive
+## X-Stage Karaoke Online v1.0.105 (Build 1105) — paginated private Drive discovery
+
+- Web/Android shared hosted library discovery now follows every Google Drive `nextPageToken`, including empty pages, instead of silently returning the first 1,000 files. Malformed pages, repeated page tokens, and oversized listings fail safely. No stored private music or pointers are modified by this fix.
+- Automatic regression exercises more than 1,000 returned items and failure handling; browser importer and Android builds are checked before publication.
+
+### Previous v1.0.104 — two-folder Google Drive
 
 - New private `XStageWeb/` libraries use exactly **AUDIO/** and **LYRICS/** as flat Drive directories (no format, code, or category subfolders).
 - `AUDIO/`: immutable original MIDI, user-selected rendered M4A, browser-playable audio/video, and SF2/SF3 SoundFonts. The source MIDI is copied without modification; M4A creation is a distinct optional output.
