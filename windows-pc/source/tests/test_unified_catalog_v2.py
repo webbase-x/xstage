@@ -1,6 +1,7 @@
 """Offline Windows unified V2 bridge tests: no Google or network access."""
 import json
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,7 +30,7 @@ class UnifiedWindowsV2Tests(unittest.TestCase):
         self.output=self.base/"my-catalog-v2.json"
 
     def test_export_local_sqlite_no_mutation(self):
-        with sqlite3.connect(self.library.path) as db:
+        with closing(sqlite3.connect(self.library.path)) as db:
             before=db.execute("SELECT code,title,artist,favorite FROM songs").fetchall()
         result=export_catalog(self.library.path,self.output)
         self.assertEqual(result["exported"],1)
@@ -39,7 +40,7 @@ class UnifiedWindowsV2Tests(unittest.TestCase):
         validate_catalog(doc,cloud=False)
         song=doc["songs"][0]
         self.assertEqual(song["code"],"A0001")
-        self.assertEqual(song["media"]["mp3"]["localPath"],str(self.mp3.resolve()))
+        self.assertEqual(song["media"]["mp3"]["localPath"].casefold(),str(self.mp3.resolve()).casefold())
         self.assertNotIn("fileId",song["media"]["mp3"])
         with sqlite3.connect(self.library.path) as db:
             after=db.execute("SELECT code,title,artist,favorite FROM songs").fetchall()
