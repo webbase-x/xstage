@@ -107,6 +107,11 @@
             <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
             <button type="button" id="cloud-import-open" hidden>☁ นำเข้าเพลง / SoundFont</button>
+             <label class="xstage-font-control" for="xstage-soundfont-select"><span>ซาวด์ฟอนต์ MIDI</span>
+               <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
+                 <option value="">เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)</option>
+               </select>
+             </label>
             <button type="button" id="mobile-home-toggle" aria-label="หน้าแรก">หน้าแรก</button>
             <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
             <button type="button" id="mobile-stage-pop" aria-label="เปิดจอร้องแยก">เปิดจอร้องแยก</button>
@@ -318,7 +323,7 @@
         <span id="cloud-import-progress-label">0%</span>
       </div>
       <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
-      <p id="cloud-import-detail" class="cloud-import-detail">เพลง MP3/M4A ต้องมี LRC รหัสเดียวกันและมีเวลาเนื้อร้องจริง · SoundFont SF2/SF3 ต้องผ่านการตรวจ RIFF sfbk · ชนิดอื่นต้องแปลงด้วย Song Studio PC ก่อน</p>
+      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A + LRC/JSON, MIDI/KAR และชุด NCN (MID + LYR + CUR) · SoundFont SF2/SF3 ตรวจโครงสร้างก่อนอัปโหลด · สื่ออื่นให้ตรวจการรองรับของเบราว์เซอร์</p>
       <footer class="cloud-import-footer">
         <button id="cloud-import-start" type="button" disabled>เริ่มตรวจซ้ำและอัปโหลด</button>
         <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
@@ -337,6 +342,7 @@
 <script src="config.js?v=1095"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
   <script src="cloud-import-core.js?v=1095" defer></script>
+  <script src="browser-midi.js?v=1095" defer></script>
   <script src="cloud-import.js?v=1095" defer></script>
   <script src="app.js?v=1095" defer></script><script src="pc-extensions.js?v=1095" defer></script>
   <script src="native-audio-meter.js?v=1095" defer></script>
