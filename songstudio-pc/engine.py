@@ -1199,6 +1199,9 @@ def build_library(rows, mode, options):
     5. Fsync each finished record, then atomically replace current.json once.
     """
     export = _song_export_module()
+    export_format = options.get("export_format", "xstage")
+    if export_format not in ("xstage", "m4a"):
+        raise ValueError("ประเภทส่งออกต้องเป็น MIDI/Audio + Lyrics JSON หรือ M4A + Lyrics JSON")
     root = export.songs_root(PREFS["workspace"])
     root.mkdir(parents=True, exist_ok=True)
     for name in ("audio", "lyrics"):
@@ -1260,6 +1263,17 @@ def build_library(rows, mode, options):
                     digest = _source_digest(row, export)
                     previous = by_sha.get(digest)
                 if previous is not None:
+                    is_midi_source = source.suffix.lower() in (".mid", ".midi", ".kar")
+                    desired_ext = (source.suffix.lower() if
+                                   is_midi_source and export_format == "xstage" and
+                                   mode == "original" and not options.get("audio_only", False)
+                                   else ".m4a")
+                    prior_ext = Path((previous.get("audio") or {}).get("path") or "").suffix.lower()
+                    if is_midi_source and prior_ext != desired_ext:
+                        raise ValueError(
+                            "เพลงนี้เคยสร้างในรูปแบบ " + prior_ext +
+                            " แล้ว · ไม่สร้างเพลงซ้ำหรือเปลี่ยนรหัสโดยอัตโนมัติ "
+                            "กรุณาเลือกไฟล์ต้นฉบับ/ชุดส่งออกแยกต่างหาก")
                     # The original source's filename is NOT the assigned code
                     # after an earlier two-source reconciliation.
                     row["code"] = str(previous["code"])
@@ -1386,13 +1400,24 @@ def build_library(rows, mode, options):
                 lyric_info = ("", None, "")
                 if not options.get("audio_only", False):
                     lyric_info = lyrics_package(row)
-                target = export.next_target(root, assigned_code + source.suffix)
+                copy_midi = (source.suffix.lower() in (".mid", ".midi", ".kar") and
+                             export_format == "xstage" and mode == "original"
+                             and not options.get("audio_only", False))
+                target = export.next_target(
+                    root, assigned_code + source.suffix,
+                    media_ext=source.suffix.lower() if copy_midi else ".m4a")
                 staged = export.temporary_audio(target)
                 update(f"กำลังสร้างเพลงใหม่ {idx}/{len(rows)}: {row['title']}")
-                if mode == "instrumental":
+                if copy_midi:
+                    # Byte-for-byte copy. MIDI source is never opened for write
+                    # and neither its track data nor its tempo events change.
+                    shutil.copyfile(source, staged)
+                    if export.source_sha256(source) != export.source_sha256(staged):
+                        raise RuntimeError("SHA-256 หลังคัดลอก MIDI ไม่ตรงต้นฉบับ")
+                elif mode == "instrumental":
                     staged_vocals = separate_ai(row, staged, preview=False)
                 elif source.suffix.lower() == ".m4a":
-                    shutil.copy2(source, staged)  # Preserve source audio; zero transcoding
+                    shutil.copyfile(source, staged)  # Preserve source bytes
                 else:
                     convert(row, staged)
 
@@ -1438,7 +1463,8 @@ def build_library(rows, mode, options):
                 audio_count += 1
                 if lyric_file:
                     lyrics_count += 1
-                log(f"สร้างสำเร็จ: {record['code']} · {record['audio']['path']}")
+                log(f"สร้างสำเร็จ: {record['code']} · {record['audio']['path']}"
+                    + (" · MIDI คัดลอกโดย SHA-256 ตรงต้นฉบับ" if copy_midi else ""))
             except Exception as exc:
                 errors += 1
                 reason = f"{source.name}: {type(exc).__name__} — {exc}"
@@ -1477,7 +1503,7 @@ def build_library(rows, mode, options):
         "m4aCount": audio_count, "lyricsCount": lyrics_count,
         "output": str(root), "issues": details[-50:],
         "message": (f"สร้างใหม่ {created} เพลง · ข้ามซ้ำ {skipped} เพลง · ERR {errors} "
-                    f"· M4A {audio_count} · Lyrics {lyrics_count} · {root}")
+                    f"· ไฟล์เพลง {audio_count} · Lyrics JSON {lyrics_count} · {root}")
     }
     if not created and not skipped:
         raise RuntimeError(
