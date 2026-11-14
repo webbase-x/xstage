@@ -123,7 +123,8 @@ class SkippedReportTests(unittest.TestCase):
         self.assertEqual(changed["songs"], 2)
         self.assertEqual(changed["skippedInvalid"], 4)
         self.assertEqual(changed["recheckSummary"], {
-            "total": 5, "confirmed": 4, "recovered": 1, "reasonChanged": 0
+            "total": 5, "lastPass": 5, "confirmed": 4,
+            "recovered": 1, "reasonChanged": 0
         })
         self.assertEqual(editor.skipped_page(changed, view="recovered")["total"], 1)
         self.assertEqual(editor.skipped_page(changed, view="rechecked")["total"], 5)
@@ -136,6 +137,16 @@ class SkippedReportTests(unittest.TestCase):
         self.assertEqual(len(csvrows), 6)
         self.assertEqual(sum("อ่านได้หลังตรวจซ้ำ" in row[1] for row in csvrows[1:]), 1)
         self.assertEqual(sum("ยืนยันข้ามหลังตรวจซ้ำ" in row[1] for row in csvrows[1:]), 4)
+        # Rechecking the remaining four must preserve the first recovery
+        # and original failure reason, without rescanning accepted files.
+        again = editor.recheck_skipped(changed, bulk)
+        self.assertEqual(again["recheckSummary"], {
+            "total": 5, "lastPass": 4, "confirmed": 4,
+            "recovered": 1, "reasonChanged": 0
+        })
+        self.assertEqual(editor.skipped_page(again, view="rechecked")["total"], 5)
+        self.assertEqual(editor.skipped_page(again, view="recovered")["total"], 1)
+        self.assertEqual(again["songs"], 2)
 
     def test_reason_changes_are_reflected_and_no_reclassified_files_are_lost(self):
         _, short, _, _, _, _ = self.seed()
@@ -144,6 +155,11 @@ class SkippedReportTests(unittest.TestCase):
         short.write_bytes(b"1\r\n2\r\n3\r\n4\r\n" + b"\x81" * 5)
         changed = editor.recheck_skipped(snapshot, bulk)
         self.assertEqual(changed["recheckSummary"]["reasonChanged"], 1)
+        confirmed_again = editor.recheck_skipped(changed, bulk)
+        self.assertEqual(confirmed_again["recheckSummary"]["reasonChanged"], 1)
+        repeated = next(r for r in confirmed_again["recheckRows"]
+                        if r["file"].endswith("S02.LYR"))
+        self.assertEqual(repeated["originalCategory"], "short_lyrics")
         revised = next(r for r in changed["recheckRows"] if r["file"].endswith("S02.LYR"))
         self.assertEqual(revised["status"], "confirmed")
         self.assertEqual(revised["originalCategory"], "short_lyrics")
