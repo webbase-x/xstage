@@ -133,11 +133,35 @@ def validate_pointer(pointer):
     generation = pointer.get("generation")
     if not isinstance(generation, str) or not SAFE_ID.fullmatch(generation):
         raise CatalogValidationError("Invalid catalog generation")
-    if not isinstance(pointer.get("catalogFileId"), str) or not SAFE_ID.fullmatch(pointer["catalogFileId"]):
+    flat = pointer.get("catalogFileId")
+    shards = pointer.get("catalogFiles")
+    if flat is not None and shards is not None:
+        raise CatalogValidationError("Pointer cannot mix catalogFileId with catalogFiles")
+    if shards is not None:
+        if not isinstance(shards, list) or not 0 < len(shards) <= 1024:
+            raise CatalogValidationError("Invalid V2 catalog shard list")
+        seen=set()
+        for shard in shards:
+            if not isinstance(shard, dict):
+                raise CatalogValidationError("Catalog shard is not an object")
+            ident=shard.get("fileId")
+            if not isinstance(ident, str) or not SAFE_ID.fullmatch(ident) or ident in seen:
+                raise CatalogValidationError("Missing or duplicate catalog shard ID")
+            seen.add(ident)
+            if type(shard.get("songCount")) is not int or not 0 <= shard["songCount"] <= MAX_SONGS:
+                raise CatalogValidationError("Invalid shard songCount")
+    elif not isinstance(flat, str) or not SAFE_ID.fullmatch(flat):
         raise CatalogValidationError("Missing Drive catalog file ID")
+    deltas=pointer.get("deltaFileIds",[])
+    if (not isinstance(deltas,list) or len(deltas)>32 or
+            any(not isinstance(x,str) or not SAFE_ID.fullmatch(x) for x in deltas) or
+            len(set(deltas))!=len(deltas)):
+        raise CatalogValidationError("Invalid immutable delta references")
     count = pointer.get("songCount")
     if type(count) is not int or not 0 <= count <= MAX_SONGS:
         raise CatalogValidationError("Invalid songCount")
+    if shards is not None and not deltas and sum(s["songCount"] for s in shards)!=count:
+        raise CatalogValidationError("Shard songCount does not match pointer total")
     return pointer
 
 
