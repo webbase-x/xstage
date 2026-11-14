@@ -2170,7 +2170,11 @@
         :'ยังไม่ได้เลือก SoundFont SF2/SF3 ที่มีอยู่ในเครื่อง';
       for(const id of ['pc-create-soundfont-advice','pc-upload-soundfont-advice']){
         const node=$(id);if(!node)continue;
-        node.dataset.level=font?.level||'caution';node.textContent=label;
+        const upload=id==='pc-upload-soundfont-advice';
+        const blocked=upload&&font?.cloudCompatible===false;
+        node.dataset.level=blocked?'blocked':font?.level||'caution';
+        node.textContent=label+(blocked?
+          ' · ห้ามอัปโหลด: XStageWeb Web/Android รองรับ SoundFont ไม่เกิน 256 MB':'');
       }
       return result;
     } catch(error) {
