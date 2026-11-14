@@ -224,9 +224,9 @@ try{
     });
   },v4Root.id);
   const fontChoices=await page.locator('#xstage-soundfont-select option').allTextContents();
-  assert.ok(fontChoices.some(x=>x.includes('General.sf2')),'Web SF selector must read from V4 AUDIO');
+  assert.ok(fontChoices.some(x=>x.includes('General-')&&x.includes('.sf2')),'Web SF selector must read hashed immutable filename from V4 AUDIO');
   const fontDetail=await page.locator('#xstage-font-file-list').textContent();
-  assert.ok(fontDetail.includes('General.sf2')&&fontDetail.includes('RAM'),
+  assert.ok(fontDetail.includes('General-')&&fontDetail.includes('.sf2')&&fontDetail.includes('RAM'),
     'Web SF table must expose file size and forecast RAM before download');
   const firstCount=payloadUploads;
   // After first DB exists, reopen the importer from the visible stage menu.
