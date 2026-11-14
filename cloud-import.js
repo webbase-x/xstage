@@ -713,7 +713,7 @@ class Importer {
           if(aborted(error)||this.stopRequested)throw error;
           // Only corrupt/incomplete LOCAL files are skippable. Drive failures,
           // auth changes and DB integrity errors must abort the whole job.
-          if(!/^(?:ไฟล์ |LRC |SF2\/SF3 |รูปแบบไฟล์)/.test(String(error.message||'')))throw error;
+          if(!/^(?:ไฟล์ |LRC |Lyrics JSON |SF2\/SF3 |รูปแบบไฟล์)/.test(String(error.message||'')))throw error;
           this.stats.errors++;
           console.warn('Skipped invalid import item:',item.key||item.relative||item.code,error?.message||error);
           this.dom.detail.textContent='ข้าม '+(item.code||item.file?.name)+': '+error.message+
