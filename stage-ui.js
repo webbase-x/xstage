@@ -12,7 +12,8 @@
   const home=$('mobile-home-toggle');
   const about=$('mobile-about-toggle');
   const fullscreen=$('fullscreen');
-  const fullscreenSupported=!!(document.fullscreenEnabled&&typeof stage?.requestFullscreen==='function'&&typeof document.exitFullscreen==='function');
+  const fullscreenSupported=!!((document.fullscreenEnabled&&typeof stage?.requestFullscreen==='function'&&typeof document.exitFullscreen==='function')||
+    (document.webkitFullscreenEnabled&&typeof stage?.webkitRequestFullscreen==='function'&&typeof document.webkitExitFullscreen==='function'));
   document.body.classList.toggle('xstage-no-fullscreen',!fullscreenSupported);
   document.documentElement.classList.toggle('xstage-no-fullscreen',!fullscreenSupported);
   if(!fullscreenSupported){
@@ -169,12 +170,14 @@
   if(queueCount)new MutationObserver(syncQueue).observe(queueCount,{childList:true,subtree:true,characterData:true});
   new MutationObserver(syncQueue).observe(queueDock,{attributes:true,attributeFilter:['class']});
   fullscreen?.addEventListener('click',()=>queueDock.classList.remove('mobile-expanded'));
-  document.addEventListener('fullscreenchange',()=>{
+  const refreshFullscreenLabel=()=>{
     if(!fullscreen)return;
-    const full=document.fullscreenElement===stage;
+    const full=(document.fullscreenElement||document.webkitFullscreenElement)===stage;
     fullscreen.setAttribute('aria-label',full?'ออกจากเต็มหน้าจอ':'แสดงเต็มหน้าจอ');
     fullscreen.title=full?'ออกจากเต็มหน้าจอ':'เต็มหน้าจอ';
-  });
+  };
+  document.addEventListener('fullscreenchange',refreshFullscreenLabel);
+  document.addEventListener('webkitfullscreenchange',refreshFullscreenLabel);
   home?.addEventListener('click',()=>{
     $('search').value='';
     $('search').dispatchEvent(new Event('input',{bubbles:true}));
