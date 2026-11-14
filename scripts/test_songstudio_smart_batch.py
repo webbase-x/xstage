@@ -74,6 +74,10 @@ class AnchorTests(unittest.TestCase):
         broken = {"startTime": 1, "endTime": 1, "syllables": []}
         with self.assertRaisesRegex(ValueError, "ช่วงเวลา"):
             bulk._retime_visual_units(broken, "ABC", "XYZ")
+        outside = {"startTime": 1, "endTime": 4, "syllables": [
+            {"text": "A", "start": 1}, {"text": "B", "start": 8}]}
+        with self.assertRaisesRegex(ValueError, "ไม่ปลอดภัย"):
+            bulk._retime_visual_units(outside, "AB", "AXB")
 
 
 class BatchSafetyTests(unittest.TestCase):
@@ -187,6 +191,17 @@ class BatchSafetyTests(unittest.TestCase):
             bulk.apply_many_smart(self.root, export, snapshot, [group["id"]],
                                   "NEW", self.backups, expected_count=4)
         self.assertFalse(self.backups.exists())
+
+    def test_incomplete_ncn_is_excluded_before_grouping(self):
+        file = self.root / "lyrics" / "0" / "0004.json"
+        doc = json.loads(file.read_text(encoding="utf-8"))
+        doc["sourceFormat"] = "NCN"
+        doc["metadata"] = {"timingComplete": False}
+        file.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        snap = bulk.scan(self.root, export)
+        self.assertEqual(snap["songs"], 3)
+        self.assertEqual(snap["skippedInvalid"], 1)
+        self.assertEqual(bulk.list_groups(snap, "first")["rows"][0]["count"], 3)
 
     def test_all_invalid_returns_safe_skip_report(self):
         snapshot, group = self.snapshot_and_group()
