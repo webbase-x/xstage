@@ -136,7 +136,7 @@ function profileSync(){
   if(!state.profile)state.profile=normalizeProfile({
     cores:Number(navigator?.hardwareConcurrency)||null,
     ramGB:Number(navigator?.deviceMemory)||null,
-    video:true,offlineAudio:typeof scope.OfflineAudioContext==='function'
+    video:false,offlineAudio:typeof scope.OfflineAudioContext==='function'
   });
   return state.profile;
 }
@@ -147,8 +147,12 @@ function showProfile(){
   const cpu=p.cores===null?'ไม่เปิดเผย CPU':'CPU logical '+p.cores+' คอร์';
   const space=p.freeQuota===null?'พื้นที่โควตาเบราว์เซอร์: ไม่ทราบ':
     'โควตาเบราว์เซอร์ที่เหลือ '+fmt(p.freeQuota);
-  el.textContent=cpu+' · '+ram+' · '+space+
-    ' · ไม่ใช่พื้นที่ว่างจริงของทั้งเครื่อง';
+  const weak=(p.cores!==null&&p.cores<4)||(p.ramGB!==null&&p.ramGB<2);
+  const unknown=p.cores===null||p.ramGB===null;
+  el.dataset.level=weak?'caution':unknown?'caution':'safe';
+  el.textContent=(weak?'🟡 เครื่องทรัพยากรจำกัด · ':
+    unknown?'🟡 ข้อมูลเครื่องไม่ครบ · ':'🟢 เครื่องมีทรัพยากรเบื้องต้นเพียงพอ · ')+
+    cpu+' · '+ram+' · '+space+' · ไม่ใช่พื้นที่ว่างจริงของทั้งเครื่อง';
 }
 function renderStats(songs){
   state.songs=Array.isArray(songs)?songs:[];
