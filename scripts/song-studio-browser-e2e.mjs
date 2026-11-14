@@ -186,6 +186,28 @@ try {
   console.log('PASS: Browser rejects equal-size conflicting NCN cursor files');
   await midiPage.close();
 
+  // Mobile layout must remain usable without a page-wide horizontal overflow.
+  // The song table itself may scroll inside its designated .table-wrap.
+  const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true});
+  await mobile.goto('http://127.0.0.1:'+port+'/studio/web.html',{waitUntil:'load'});
+  const layout=await mobile.evaluate(()=>{
+    const main=document.querySelector('.main').getBoundingClientRect();
+    const links=[...document.querySelectorAll('.navigation .nav-button')];
+    return {bodyWidth:document.documentElement.scrollWidth,viewport:innerWidth,
+      mainRight:main.right,mainLeft:main.left,navigation:links.length,
+      fontLabel:!!document.querySelector('label[for="soundfont-select"]'),
+      buttonHeight:document.querySelector('#choose-files').getBoundingClientRect().height};
+  });
+  assert.equal(layout.navigation,4,'Mobile Web editor must match the four PC create steps');
+  assert.ok(layout.fontLabel,'PC-like SoundFont panel should exist on mobile');
+  assert.ok(layout.bodyWidth<=layout.viewport+2,
+    'Mobile layout must avoid page-wide horizontal overflow');
+  assert.ok(layout.mainLeft>=-2&&layout.mainRight<=layout.viewport+2,
+    'Mobile Studio content must stay inside viewport');
+  assert.ok(layout.buttonHeight>=40,'Primary picker must have adequate touch target');
+  await mobile.close();
+  console.log('PASS: Song Studio Web four-step mobile layout, SoundFont and touch sizing');
+
   // The PC Ready package and authenticated PC Web Control share this UI.
   // Simulate its local API; exercise all four visible steps in Chromium.
   const pc = await browser.newPage({acceptDownloads:true});
