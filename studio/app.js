@@ -475,7 +475,7 @@
     $('create-workspace').value = prefs.workspace || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
-      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · ตรวจเฉพาะ StageWeb ที่เลือก'
+      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · รองรับคลัง StageWeb หรือไฟล์ .lrc ในโฟลเดอร์ย่อย'
       : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · StageWeb';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
