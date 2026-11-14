@@ -15,6 +15,7 @@ import tempfile
 import threading
 from tkinter import messagebox
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 FEED = 'https://webbase-x.github.io/xstage/downloads/windows-pc-latest.json'
 DOWNLOADS = 'https://webbase-x.github.io/xstage/downloads/'
@@ -46,7 +47,19 @@ def validate_manifest(info, current, current_build=0):
     digest = str(info.get('sha256', ''))
     if not FILE_PATTERN.fullmatch(name) or not HEX_PATTERN.fullmatch(digest):
         raise ValueError('ข้อมูลไฟล์ติดตั้งหรือ SHA-256 ไม่ถูกต้อง')
-    return {'version': latest, 'name': name, 'sha256': digest.lower()}
+    asset_url = info.get('installer_url')
+    if asset_url is not None:
+        if not isinstance(asset_url, str):
+            raise ValueError('ลิงก์รุ่นใหม่ไม่ถูกต้อง')
+        parsed = urlsplit(asset_url)
+        expected_path = '/webbase-x/xstage/releases/download/windows-v' + latest + '-build' + str(latest_build) + '/' + name
+        if (parsed.scheme != 'https' or parsed.hostname != 'github.com'
+                or parsed.username or parsed.password or parsed.port or
+                parsed.path != expected_path or parsed.query or parsed.fragment):
+            raise ValueError('ลิงก์รุ่นใหม่ต้องเป็น GitHub Release ของ X-Stage เท่านั้น')
+    else:
+        asset_url = DOWNLOADS + name
+    return {'version': latest, 'name': name, 'sha256': digest.lower(), 'url': asset_url}
 
 
 def check_release(current, current_build=None):
@@ -69,7 +82,7 @@ def fetch_verified_installer(update):
     digest = hashlib.sha256()
     count = 0
     try:
-        request = Request(DOWNLOADS + update['name'], headers={'User-Agent': 'XStageWindowsUpdater/1'})
+        request = Request(update.get('url') or (DOWNLOADS + update['name']), headers={'User-Agent': 'XStageWindowsUpdater/1'})
         with urlopen(request, timeout=45) as remote, partial.open('wb') as local:
             while chunk := remote.read(1024 * 1024):
                 count += len(chunk)
