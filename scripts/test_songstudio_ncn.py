@@ -118,7 +118,7 @@ class NcnSourceTests(unittest.TestCase):
         self.assertEqual(list(self.workspace.rglob("*.m4a")), [])
         self.assertEqual(list(self.workspace.rglob("*.json")), [])
 
-    def test_create_ncn_m4a_and_timed_lyrics_then_repair_without_reencoding(self):
+    def test_create_ncn_byte_identical_midi_and_timed_lyrics_then_repair_without_reencoding(self):
         mid, lyr, cur = self.make_ncn()
         engine.scan_source()
         row = engine.FILES[0]
@@ -128,9 +128,9 @@ class NcnSourceTests(unittest.TestCase):
             first = engine.build_library([row], "original", {"audio_only": False})
             self.assertEqual(first["created"], 1)
             self.assertEqual(first["lyricsCount"], 1)
-            audio = self.workspace / "StageWeb" / "audio" / "0" / "00001.m4a"
+            audio = self.workspace / "StageWeb" / "audio" / "0" / "00001.mid"
             lyrics_file = self.workspace / "StageWeb" / "lyrics" / "0" / "00001.json"
-            self.assertTrue(audio.is_file())
+            self.assertEqual(audio.read_bytes(), mid.read_bytes())
             self.assertTrue(lyrics_file.is_file())
             saved = json.loads(lyrics_file.read_text(encoding="utf-8"))
             self.assertEqual(saved["sourceFormat"], "NCN")
@@ -138,7 +138,7 @@ class NcnSourceTests(unittest.TestCase):
             second = engine.build_library([row], "original", {"audio_only": False})
             self.assertEqual((second["created"], second["skipped"], second["lyricsCount"]),
                              (0, 1, 0))
-            self.assertEqual(convert.call_count, 1)
+            self.assertEqual(convert.call_count, 0)
             # Preserve original MIDI, and repair newly updated LYR on rerun.
             lyr.write_bytes("ชื่อเพลงทดสอบ\nนักร้องทดสอบ\nC\n\nเนื้อร้องใหม่\n".encode("cp874"))
             cur.write_bytes(struct.pack("<"+"H"* (len("เนื้อร้องใหม่")+1),
@@ -149,7 +149,7 @@ class NcnSourceTests(unittest.TestCase):
             self.assertEqual(convert.call_count, 1)
             corrected = json.loads(lyrics_file.read_text(encoding="utf-8"))
             self.assertEqual(corrected["lines"][0]["text"], "เนื้อร้องใหม่")
-            self.assertEqual(len(list(self.workspace.rglob("*.m4a"))), 1)
+            self.assertEqual(len(list(self.workspace.rglob("*.mid"))), 1)
             self.assertTrue(list(lyrics_file.parent.glob("00001.json.before-repair-*.bak")))
 
     def test_same_midi_different_ncn_lyrics_are_different_songs(self):
@@ -164,7 +164,7 @@ class NcnSourceTests(unittest.TestCase):
                           Path(target).write_bytes(b"A" * 5000)):
             result = engine.build_library(rows, "original", {"audio_only": False})
         self.assertEqual(result["created"], 2)
-        self.assertEqual(len(list(self.workspace.rglob("*.m4a"))), 2)
+        self.assertEqual(len(list(self.workspace.rglob("*.mid"))), 2)
 
     def test_kar_embedded_lyrics_ignore_title_metadata(self):
         title = "เพลงตัวอย่าง".encode("cp874")
@@ -294,7 +294,7 @@ class NcnSourceTests(unittest.TestCase):
         self.assertAlmostEqual(doc["lines"][2]["startTime"], 1.5)
         self.assertEqual(doc["lines"][0]["characters"][0]["text"], "หนึ่ง")
 
-    def test_karaoke_pc_midi_to_m4a_plus_real_lrc_published_as_pair(self):
+    def test_karaoke_pc_byte_identical_mid_plus_real_lyrics_json(self):
         """Existing publishing engine saves both outputs under ONE song code."""
         mid, lyr, cur = self.make_ncn("00046", "0", lyric="เพลงทดสอบ")
         engine.scan_source()
@@ -305,10 +305,10 @@ class NcnSourceTests(unittest.TestCase):
         self.assertEqual((completed["created"], completed["lyricsCount"],
                           completed["errors"]), (1, 1, 0), completed)
         root = self.workspace / "StageWeb"
-        audio = root / "audio" / "0" / "00046.m4a"
+        audio = root / "audio" / "0" / "00046.mid"
         lrc = root / "lyrics" / "0" / "00046.lrc"
         timed = root / "lyrics" / "0" / "00046.json"
-        self.assertGreater(audio.stat().st_size, 1000)
+        self.assertEqual(audio.read_bytes(),mid.read_bytes())
         self.assertIn("เพลงทดสอบ", lrc.read_text(encoding="utf-8"))
         self.assertEqual(json.loads(timed.read_text(encoding="utf-8"))["sourceFormat"], "NCN")
         self.assertTrue((root / "current.json").is_file())
