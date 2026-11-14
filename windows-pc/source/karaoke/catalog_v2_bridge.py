@@ -143,8 +143,24 @@ def preview_import(db_path, catalog_path):
         if "localPath" not in ref or "fileId" in ref:
             raise CatalogValidationError("Remote file references are not allowed in Windows PC")
         path=Path(ref["localPath"])
-        if not path.is_absolute() or not path.is_file():
-            raise CatalogValidationError("Missing local song: "+str(path))
+        if not path.is_absolute() or not path.is_file() or path.is_symlink():
+            raise CatalogValidationError("Missing local song or unsafe symlink: "+str(path))
+        ext=path.suffix.lower()
+        allowed={
+            "mp3":{".mp3"},"m4a":{".m4a"},
+            "midi":{".mid",".midi",".kar",".emk"},
+            "video":{".avi",".mpg",".mpeg",".dat",".wmv",".mp4"}
+        }[kind]
+        if ext not in allowed:
+            raise CatalogValidationError("File extension does not match declared media: "+str(path))
+        if kind=="midi" and ref["type"]=="ncn" and ext not in {".mid",".midi"}:
+            raise CatalogValidationError("NCN requires a MID/MIDI original")
+        if kind=="video":
+            typ=ref["type"]
+            expected={"avi":{".avi"},"mpg":{".mpg",".mpeg"},
+                      "vcd":{".dat"},"wmv":{".wmv"},"mp4":{".mp4"}}[typ]
+            if ext not in expected:
+                raise CatalogValidationError("Video container type does not match file")
         if kind=="midi":
             fmt=ref["type"].upper()
             if fmt=="NCN":
