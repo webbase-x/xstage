@@ -486,7 +486,6 @@ const initialUiPrefs=readUiPrefs();
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
 const ACTIVE_AUTH_KEY = 'xstage-google-token-v2';
 const PENDING_AUTH_KEY = 'xstage-google-pending-token-v1';
-const LEGACY_ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
 // Google Identity Services token callbacks can arrive after Safari refocuses.
 // Only Google callbacks, an explicit new attempt, or the full timeout can settle a flow.
@@ -497,7 +496,7 @@ function authRecordValid(current){
     Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS);
 }
 function clearActiveAuth(){
-  try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);sessionStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
+  try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);}catch{}
   try{localStorage.removeItem(ACTIVE_AUTH_KEY);}catch{}
 }
 function clearPendingAuth(){
@@ -532,7 +531,7 @@ function readActiveAuth(){
   try{stores.push(localStorage);}catch{}
   for(const store of stores){
     try{
-      const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||store.getItem(LEGACY_ACTIVE_AUTH_KEY)||'null');
+      const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||'null');
       if(authRecordValid(current))return current;
     }catch{}
   }
