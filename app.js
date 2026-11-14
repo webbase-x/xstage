@@ -1394,7 +1394,9 @@ function login({automatic=false} = {}) {
         }finally{finish();}
       },
       error_callback: error => {
-        if (authId !== state.authId) return;
+        // A delayed/duplicate popup event must not override a successful
+        // token response while Drive userinfo is still being verified.
+        if(authId!==state.authId||settled)return;
         finish();
         setStatus(googleAuthErrorMessage(error),'error');
       }
