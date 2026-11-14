@@ -1,3 +1,12 @@
+## X-Stage Karaoke Online v1.0.104 (Build 1104) — two-folder Google Drive
+
+- New private `XStageWeb/` libraries use exactly **AUDIO/** and **LYRICS/** as flat Drive directories (no format, code, or category subfolders).
+- `AUDIO/`: immutable original MIDI, user-selected rendered M4A, browser-playable audio/video, and SF2/SF3 SoundFonts. The source MIDI is copied without modification; M4A creation is a distinct optional output.
+- `LYRICS/`: validated per-song Lyrics JSON, immutable `catalog-base-*.json` and `catalog-delta-*.json`, with `current.json` published only after checksum verification.
+- Importing local NCN `MID + LYR + CUR` generates the Lyrics JSON; only MIDI and JSON are uploaded. Original `.lyr`, `.cur`, and `.lrc` remain local, and the NCN source editor is removed from Song Studio PC.
+- Web/TV read v4 `LYRICS/current.json` while old v3 `TEXT/current.json` and v1/v2 root pointers are readable for compatibility. Legacy Drive layouts are **not silently migrated or deleted**; uploading requires verified conversion to v4.
+- MD5 file integrity and private Google OAuth access remain required. An imported song's updated JSON must be reflected in the catalog to appear on Web/TV.
+
 ## X-Stage Karaoke Online v1.0.103 (Build 1103) — NCN timing on Web and Android TV
 
 - The Web importer now reads .LYR using the original CP874 bytes, consumes one invisible CUR cue before each nonblank lyric line, and converts each CUR position from NCN24 units using actual MIDI tempo changes rather than dividing by 24 as seconds. Thai combining marks remain synchronized with the preceding displayed glyph.
