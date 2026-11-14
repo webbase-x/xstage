@@ -1566,6 +1566,17 @@ def execute_job(action, options, started):
                     (" · ฐานใหม่เผยแพร่แล้ว" if synced['published']
                      else " · ฐานเดิมไม่เปลี่ยน")),
                 **synced}
+        elif action == "initialize-cloud-v2":
+            if not GOOGLE.status().get("connected"):
+                raise ValueError("ต้อง Google Login ก่อนเตรียม XStageWeb V2")
+            online = _module("online_publish.py", "xstage_online_publish")
+            update("กำลังเตรียมโครงสร้าง Google Drive ส่วนตัว XStageWeb V2")
+            created = online.OnlinePublisher(GOOGLE).initialize_cloud_v2(
+                cancelled=CANCEL)
+            result = {**created, "message":
+                ("สร้างโครงสร้าง XStageWeb/DB รุ่น V2 พร้อมแล้ว" if created["created"]
+                 else "พบ XStageWeb/DB V2 พร้อมใช้งานอยู่แล้ว") +
+                " · "+str(created["totalSongs"])+" เพลง"}
         elif action == "upload-native-v2":
             # Native files are uploaded as their original formats. The
             # manifest must be inside the selected workspace, never a browser
