@@ -333,8 +333,8 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
             on_progress(
                 f"วิเคราะห์ LYR {number:,}/{total:,} · อ่านได้ {counted:,} · ข้าม {skipped:,}",
                 number, total)
-    if not counted:
-        raise ValueError(f"พบ LYR {total:,} ไฟล์ แต่ไม่พบเนื้อร้อง CP874 ที่มีอย่างน้อย 4 บรรทัด")
+    # Even when EVERY file is invalid, return a report instead of hiding
+    # its filenames and reasons behind a fatal "no valid lyrics" exception.
     groups = {}
     for pos, mapping in grouped.items():
         for gid, members in mapping.items():
