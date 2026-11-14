@@ -243,12 +243,9 @@ class V2NativePublisher:
         if current:
             previous = self.reader._json(current[0]["id"])
             try:
-                validate_pointer(previous)
-                catalog = self.reader._json(previous["catalogFileId"])
-                validate_catalog(catalog, cloud=True, expected_count=previous["songCount"])
+                existing = read_published_v2(self.reader._json,previous)
             except (CatalogValidationError, KeyError, TypeError) as exc:
                 raise PublishError("ฐาน V2 เดิมไม่สมบูรณ์ · หยุดก่อนเขียนทับ") from exc
-            existing = {s["id"]: s for s in catalog["songs"]}
         directory_cache = {}
         def folder(parts):
             parent = root
@@ -350,24 +347,19 @@ class V2NativePublisher:
                               "songs":list(result.values())}, cloud=True)
         except CatalogValidationError as exc:
             raise PublishError("ตรวจฐาน V2 ก่อนเผยแพร่ไม่ผ่าน: "+str(exc)) from exc
-        if current:
-            fresh = self.reader._json(current[0]["id"])
-            if fresh.get("generation") != previous.get("generation"):
-                raise PublishError("ฐาน V2 ถูกอัปเดตระหว่างอัปโหลด")
-        generation = secrets.token_hex(12)
-        with tempfile.TemporaryDirectory(prefix="xstage-db-v2-") as temp:
-            target = Path(temp)
-            catalog_file = target / "catalog.json"
-            catalog_file.write_text(json.dumps({"schemaVersion":2,"format":CATALOG_FORMAT,"songs":list(result.values())},
-                                               ensure_ascii=False,separators=(",",":")),encoding="utf-8")
-            _, catalog_meta = self.drive.upload_file(db,catalog_file,
-                                     "catalog-base-v2-"+generation+".json",cancelled=cancelled)
-            pointer_file = target / "current.json"
-            pointer_file.write_text(json.dumps({"schemaVersion":2,"format":CATALOG_FORMAT,"generation":generation,
-                                "catalogFileId":catalog_meta["id"],
-                                "songCount":len(result)},separators=(",",":")),encoding="utf-8")
-            self.drive.upload_file(db,pointer_file,"current.json",replace_pointer=True,cancelled=cancelled)
-        return {"generation":generation,"newSongs":len(songs),"totalSongs":len(result)}
+        def precommit():
+            if current:
+                fresh=self.reader._json(current[0]["id"])
+                if fresh.get("generation")!=previous["generation"]:
+                    raise PublishError("ฐาน V2 ถูกอัปเดตระหว่างอัปโหลด · หยุดเผยแพร่")
+            elif any(x.get("name")=="current.json" for x in self.drive.list_children(db)):
+                raise PublishError("พบฐาน V2 ที่เพิ่งสร้างระหว่างอัปโหลด · กรุณาเริ่มใหม่")
+        pointer=write_published_v2(
+            self.drive,db,result,previous=previous,
+            revisions=[result[item["id"]] for item in songs],
+            cancelled=cancelled,precommit=precommit)
+        return {"generation":pointer["generation"],
+                "newSongs":len(songs),"totalSongs":len(result)}
 
     def migrate_legacy_v1(self, *, dry_run=True, confirm=False, cancelled=None):
         """Convert private Drive V1 metadata to V2 without reuploading media.
@@ -408,14 +400,12 @@ class V2NativePublisher:
                 old_ptr_file=pointers[0]
                 try:
                     old_ptr=validate_pointer(self.reader._json(old_ptr_file["id"]))
-                    old_catalog=validate_catalog(
-                        self.reader._json(old_ptr["catalogFileId"]),
-                        cloud=True, expected_count=old_ptr["songCount"])
+                    old_catalog=read_published_v2(self.reader._json,old_ptr)
                 except (CatalogValidationError,KeyError,TypeError) as exc:
                     raise PublishError("ฐาน V2 เดิมไม่สมบูรณ์ · ไม่เขียนทับ") from exc
                 # Existing V2 records always win: migration can only fill
                 # records absent from V2; it cannot downgrade a native track.
-                candidate.update({song["id"]:song for song in old_catalog["songs"]})
+                candidate.update(old_catalog)
         validate_catalog({"schemaVersion":2,"format":CATALOG_FORMAT,
                           "songs":list(candidate.values())},cloud=True)
         report={"schemaVersion":2,"dryRun":bool(dry_run),
@@ -437,26 +427,21 @@ class V2NativePublisher:
                 raise PublishError("ฐาน V2 ถูกอัปเดตระหว่างตรวจ · กรุณาลองใหม่")
         if not db:
             db=self.drive.folder(root,"DB")
-        generation=secrets.token_hex(12)
-        with tempfile.TemporaryDirectory(prefix="xstage-v1-to-v2-") as tmp:
-            catalog_file=Path(tmp)/"catalog.json"
-            catalog_file.write_text(json.dumps({
-                "schemaVersion":2,"format":CATALOG_FORMAT,
-                "songs":list(candidate.values())
-            },ensure_ascii=False,separators=(",",":")),encoding="utf-8")
-            _,metadata=self.drive.upload_file(db,catalog_file,
-               "catalog-base-v2-migration-"+generation+".json",cancelled=cancelled)
-            if cancelled is not None and cancelled.is_set():
-                raise PublishError("ยกเลิกก่อนเปลี่ยนตัวชี้ฐาน")
-            pointer=Path(tmp)/"current.json"
-            pointer.write_text(json.dumps({
-                "schemaVersion":2,"format":CATALOG_FORMAT,
-                "generation":generation,"catalogFileId":metadata["id"],
-                "songCount":len(candidate)
-            },ensure_ascii=False,separators=(",",":")),encoding="utf-8")
-            validate_pointer(json.loads(pointer.read_text(encoding="utf-8")))
-            # Final pointer is the only mutable DB V2 file. Any failure above
-            # leaves the previous active pointer readable.
-            self.drive.upload_file(db,pointer,"current.json",
-                                   replace_pointer=True,cancelled=cancelled)
-        return {**report,"dryRun":False,"generation":generation}
+        def precommit():
+            latest=self.reader._json(v1file["id"])
+            if latest.get("generation")!=v1pointer["generation"]:
+                raise PublishError("ฐาน V1 เปลี่ยนระหว่างย้าย · ยกเลิกเผยแพร่ V2")
+            pointers=[x for x in self.drive.list_children(db)
+                      if x.get("name")=="current.json" and
+                      x.get("mimeType")!="application/vnd.google-apps.folder"]
+            if old_ptr_file:
+                if len(pointers)!=1 or pointers[0]["id"]!=old_ptr_file["id"]:
+                    raise PublishError("พบตัวชี้ V2 เปลี่ยนระหว่างย้ายฐาน")
+                latest_v2=self.reader._json(old_ptr_file["id"])
+                if latest_v2.get("generation")!=old_ptr["generation"]:
+                    raise PublishError("ฐาน V2 เปลี่ยนระหว่างย้าย · ยกเลิก")
+            elif pointers:
+                raise PublishError("พบฐาน V2 ใหม่ระหว่างย้าย · ยกเลิก")
+        pointer=write_published_v2(
+            self.drive,db,candidate,cancelled=cancelled,precommit=precommit)
+        return {**report,"dryRun":False,"generation":pointer["generation"]}
