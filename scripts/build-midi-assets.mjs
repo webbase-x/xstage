@@ -11,8 +11,8 @@ const pkg=JSON.parse(readFileSync('node_modules/spessasynth_lib/package.json','u
 if(pkg.version!=='4.4.8')throw Error('Pinned SpessaSynth version mismatch: '+pkg.version);
 const worklet='node_modules/spessasynth_lib/dist/spessasynth_processor.min.js';
 if(!existsSync(worklet))throw Error('SpessaSynth worklet missing in installed package');
-const esbuild='node_modules/esbuild/bin/esbuild';
-execFileSync(process.execPath,[esbuild,'assets/midi/spessasynth-entry.js',
+const esbuild=process.platform==='win32'?'node_modules/.bin/esbuild.cmd':'node_modules/.bin/esbuild';
+execFileSync(esbuild,['assets/midi/spessasynth-entry.js',
   '--bundle','--format=esm','--platform=browser','--target=es2020','--minify',
   '--outfile=assets/vendor/spessasynth-lib.min.js'],{stdio:'inherit'});
 const outWorklet=join(vendor,'spessasynth_processor.min.js');
