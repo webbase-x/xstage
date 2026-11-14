@@ -252,6 +252,8 @@
   function phraseUpdateButtons(){
     const allow=phraseReady&&!busy;
     $('lyric-group-scan').disabled=busy;
+    $('lyric-group-folder').disabled=busy;
+    $('lyric-group-reset').disabled=busy||!prefs.lyric_source;
     $('lyric-group-search').disabled=!allow;
     $('lyric-group-repeats').disabled=!allow;
     $('lyric-group-replacement').disabled=!allow||phraseSelected.size===0;
@@ -288,6 +290,16 @@
     for(const input of $('lyric-group-results').querySelectorAll('[data-lyric-group]'))
       input.checked=false;
     phraseUpdateButtons();
+  }
+  function phraseInvalidate(){
+    ++phraseSeq;
+    phraseReady=false;phraseRows=[];phraseOffset=0;phraseBackup=null;
+    phraseClearSelection();
+    $('lyric-group-results').textContent=
+      'เปลี่ยนโฟลเดอร์ต้นทางแล้ว · กดวิเคราะห์เพื่ออ่านคลังที่เลือก';
+    $('lyric-group-page-count').dataset.total='0';
+    $('lyric-group-page-count').textContent='ยังไม่ได้วิเคราะห์คลังนี้';
+    $('lyric-group-stats').textContent='กรุณาวิเคราะห์คลังต้นทางที่เลือก';
   }
   async function refreshPhraseBackup(){
     try{
@@ -460,6 +472,10 @@
   function setFields() {
     $('create-source').value = prefs.source || '';
     $('create-workspace').value = prefs.workspace || '';
+    $('lyric-group-folder').value = prefs.lyric_source || '';
+    $('lyric-group-source-status').textContent = prefs.lyric_source
+      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · ตรวจเฉพาะ StageWeb ที่เลือก'
+      : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · StageWeb';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
     $('upload-soundfont-path').value = prefs.soundfont || '';
@@ -640,6 +656,7 @@
   async function config(patch) {
     const previousWorkspace = prefs.workspace;
     const previousSource = prefs.source;
+    const previousLyricSource = prefs.lyric_source || '';
     const response = await post('/api/config', patch);
     prefs = response.preferences || prefs;
     if ((patch.workspace && previousWorkspace !== prefs.workspace) ||
@@ -647,6 +664,11 @@
       selected.clear(); page = 0; await refreshSongs();
     }
     if ('soundfont' in patch || 'workspace' in patch) soundfontOptions(response.soundfonts || []);
+    if ((('lyric_source' in patch) && previousLyricSource !== (prefs.lyric_source || '')) ||
+        (('workspace' in patch) && previousWorkspace !== prefs.workspace && !prefs.lyric_source)) {
+      phraseInvalidate();
+      void refreshPhraseBackup();
+    }
     setFields();
     if (response.google) setGoogle(response.google);
     if ('oauth' in patch) await refreshEnvironment();
@@ -656,6 +678,7 @@
                   'create-soundfont': 'soundfont', 'create-preset': 'midi_preset',
                   'create-mode': 'mode', 'download-destination': 'download',
                   'upload-folder': 'upload_folder',
+                  'lyric-group-folder': 'lyric_source',
                   'upload-soundfont-path': 'soundfont',
                   'settings-oauth': 'oauth'};
   async function saveInputs(keys = Object.keys(fields)) {
@@ -680,13 +703,15 @@
         return;
       }
       const field = ({source:'create-source',workspace:'create-workspace',soundfont:'create-soundfont',
-          download:'download-destination',upload_folder:'upload-folder',oauth:'settings-oauth'})[kind];
+          download:'download-destination',upload_folder:'upload-folder',
+          lyric_source:'lyric-group-folder',oauth:'settings-oauth'})[kind];
       const element = $(field);
       if (kind === 'soundfont' && ![...element.options].some(opt => opt.value === response.path)) {
         element.add(new Option(response.path.split(/[\\/]/).pop(), response.path));
       }
       element.value = response.path;
-      await config({[kind]: response.path});
+      try { await config({[kind]: response.path}); }
+      catch(error) { element.value = prefs[kind] || ''; throw error; }
       message('เลือกและบันทึกตำแหน่งใหม่เรียบร้อยแล้ว', false);
     } finally {
       if (button) {
@@ -2259,8 +2284,19 @@
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
-  $('lyric-group-scan').addEventListener('click',()=>{
-    if(!busy)void run('lyric-groups-scan');
+  $('lyric-group-scan').addEventListener('click',async()=>{
+    if(busy)return;
+    try {
+      await saveInputs(['lyric-group-folder']);
+      if(!busy)await run('lyric-groups-scan');
+    }catch(error){message('เลือกโฟลเดอร์ต้นทางไม่สำเร็จ: '+error.message);}
+  });
+  $('lyric-group-reset').addEventListener('click',async()=>{
+    if(busy)return;
+    try{
+      await config({lyric_source:''});
+      message('กลับไปใช้คลัง StageWeb ของโฟลเดอร์งานหลักแล้ว',false);
+    }catch(error){message(error.message);}
   });
   $('lyric-group-undo').addEventListener('click',()=>{void phraseUndo();});
   for(const btn of document.querySelectorAll('[data-lyric-position]')){
