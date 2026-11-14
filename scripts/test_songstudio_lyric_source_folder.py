@@ -54,9 +54,10 @@ class SelectedLyricFolderTests(unittest.TestCase):
     def test_choose_stageweb_or_parent_with_thai_path(self):
         parent = self.home / "เพลงสำรอง"
         library = self.catalog(parent / "StageWeb")
-        self.assertEqual(self.resolve(str(library)), library)
-        self.assertEqual(self.resolve(str(parent)), library)
-        self.assertEqual(self.resolve(str(parent / ".")), library)
+        expected = library.resolve()
+        self.assertEqual(self.resolve(str(library)), expected)
+        self.assertEqual(self.resolve(str(parent)), expected)
+        self.assertEqual(self.resolve(str(parent / ".")), expected)
 
     def test_reject_raw_folder_without_mutating_it(self):
         folder = self.home / "ต้นฉบับ"
