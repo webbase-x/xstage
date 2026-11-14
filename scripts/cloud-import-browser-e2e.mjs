@@ -151,6 +151,7 @@ try{
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'3',
     'Two unreviewed videos must not silently become embedded karaoke');
   await page.locator('#cloud-import-video-editor:not([hidden])').waitFor();
+  await page.locator('#cloud-import-video-select').selectOption('v400');
   await page.locator('#cloud-import-video-title').fill('วิดีโอทดสอบ');
   await page.locator('#cloud-import-video-artist').fill('นักร้องตัวอย่าง');
   await page.locator('#cloud-import-video-album').fill('อัลบั้มทดสอบ');
