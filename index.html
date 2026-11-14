@@ -299,7 +299,7 @@
         <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
-      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ระบบตรวจความสมบูรณ์และ MD5 ก่อนส่งเข้า XStageWeb · ไม่ลบหรือแก้ไฟล์ต้นฉบับ</p>
+      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageWeb พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
@@ -314,13 +314,48 @@
         <div><b id="cloud-import-blocked">0</b><span>ชุดที่ไม่พร้อม</span></div>
       </div>
       <div id="cloud-import-examples" class="cloud-import-examples" aria-live="polite"></div>
+      <section id="cloud-import-video-editor" class="cloud-import-video-editor" hidden aria-labelledby="cloud-import-video-heading">
+        <h3 id="cloud-import-video-heading">ข้อมูลวิดีโอคาราโอเกะก่อนนำเข้า</h3>
+        <p>เลือกไฟล์วิดีโอ ตรวจชื่อเพลงและนักร้อง ระบุว่าเนื้อร้องฝังในภาพหรือยังไม่มีเนื้อร้อง ระบบไม่เดาจากภาพว่าวิดีโอมีคาราโอเกะหรือไม่ และจะไม่สร้างเวลาเนื้อร้องปลอม</p>
+        <div class="cloud-import-video-choice">
+          <label>ค้นหาวิดีโอ <input id="cloud-import-video-filter" type="search" placeholder="ชื่อไฟล์หรือรหัสเพลง" autocomplete="off"></label>
+          <label>รายการวิดีโอ <select id="cloud-import-video-select" aria-label="เลือกวิดีโอแก้ไขข้อมูล"></select></label>
+        </div>
+        <div class="cloud-import-video-fields">
+          <label>รหัสเพลง <input id="cloud-import-video-code" maxlength="140" autocomplete="off"></label>
+          <label>ชื่อเพลง <input id="cloud-import-video-title" maxlength="180" autocomplete="off"></label>
+          <label>นักร้อง / ศิลปิน <input id="cloud-import-video-artist" maxlength="180" autocomplete="off"></label>
+          <label>อัลบั้ม <input id="cloud-import-video-album" maxlength="180" autocomplete="off"></label>
+          <label>ผู้แต่งเพลง <input id="cloud-import-video-composer" maxlength="180" autocomplete="off"></label>
+          <label>แนวเพลง <input id="cloud-import-video-genre" maxlength="80" autocomplete="off"></label>
+          <label>ภาษา <input id="cloud-import-video-language" maxlength="60" autocomplete="off"></label>
+          <label>ปีที่เผยแพร่ <input id="cloud-import-video-year" type="number" min="1900" max="2100" placeholder="ถ้าทราบ"></label>
+        </div>
+        <label>รูปแบบเนื้อร้อง
+          <select id="cloud-import-video-mode">
+            <option value="review">ยังไม่ได้ตรวจสอบ — ยังไม่นำเข้า</option>
+            <option value="embedded">มีเนื้อร้องคาราโอเกะฝังอยู่ในภาพแล้ว</option>
+            <option value="timed">ไม่มีเนื้อร้องฝังภาพ — เพิ่ม LRC พร้อมเวลาจริง</option>
+          </select>
+        </label>
+        <label id="cloud-import-video-lrc-wrap" hidden>สร้างหรือแก้ไขเนื้อร้อง LRC พร้อมเวลา
+          <textarea id="cloud-import-video-lrc" rows="5" spellcheck="false" placeholder="[00:12.50]เนื้อร้องบรรทัดแรก&#10;[00:16.25]เนื้อร้องบรรทัดต่อไป"></textarea>
+        </label>
+        <div class="cloud-import-video-tools">
+          <button type="button" id="cloud-import-video-preview-btn">▶ ทดลองดูวิดีโอ/ฟังเพลง</button>
+          <button type="button" id="cloud-import-video-stamp" hidden>+ เวลา ณ ตำแหน่งเล่น</button>
+          <button type="button" id="cloud-import-video-save">บันทึกข้อมูลเพลง</button>
+        </div>
+        <video id="cloud-import-video-preview" controls playsinline preload="metadata" hidden aria-label="ดูตัวอย่างวิดีโอเพื่อตรวจเนื้อร้องและเวลา"></video>
+        <p id="cloud-import-video-hint" class="cloud-import-video-hint" aria-live="polite"></p>
+      </section>
       <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageWeb ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
       <div class="cloud-import-progress">
         <progress id="cloud-import-progress" value="0" max="100"></progress>
         <span id="cloud-import-progress-label">0%</span>
       </div>
       <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
-      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV แปลงบนเครื่องเป็น H.264/AAC MP4 ด้วย FFmpeg.wasm ก่อนนำเข้า (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · การเล่นขึ้นอยู่กับ Codec/เบราว์เซอร์</p>
+      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV เก็บไฟล์ต้นฉบับไว้ใน Drive และสร้าง MP4 สำหรับเว็บเมื่อเบราว์เซอร์เล่นต้นฉบับไม่ได้ (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · รูปแบบที่เล่นต้นฉบับโดยตรงได้ขึ้นกับ Codec/เบราว์เซอร์ · วิดีโอไม่มีเนื้อร้องต้องใส่ LRC พร้อมเวลาจริง</p>
       <footer class="cloud-import-footer">
         <button id="cloud-import-start" type="button" disabled>เริ่มตรวจซ้ำและอัปโหลด</button>
         <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
