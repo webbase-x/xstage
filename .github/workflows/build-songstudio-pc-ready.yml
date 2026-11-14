@@ -45,7 +45,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build332
+  group: xstage-songstudio-ready-build333
   cancel-in-progress: true
 
 jobs:
@@ -170,7 +170,7 @@ jobs:
       - name: Validate complete bundled Desktop OAuth pair (never user tokens)
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.33-build333"
           $config = Join-Path $base "config/google-oauth-client.json"
           $hasId = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID)
           $hasSecret = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)
@@ -194,7 +194,7 @@ jobs:
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.33-build333"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -202,7 +202,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.33-build333"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -215,7 +215,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.33-build333.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -243,10 +243,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.32-build332
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.33-build333
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.33-build333.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.33-build333.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -266,8 +266,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.32-build332"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332.zip"
+          $tag = "song-studio-pc-ready-v0.3.33-build333"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.33-build333.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
@@ -285,6 +285,10 @@ jobs:
           Fast native NCN scan reads only Lyrics/*.LYR and subfolders.
           MID and CUR are opened only for selected songs during verified
           replacement. Selected changes preserve unrelated timing and MIDI.
+          Selected NCN lyric lines with backwards CUR character cues now
+          use existing player-effective positions (monotone clamp) when the
+          replacement length changes; no guessed musical timestamps.
+          A sentinel 65535 still prevents unsafe selected-line conversion.
           Legacy NCN CUR 65535 and backwards timing in unselected lines is
           preserved; edited lines must have safe printed-character cues.
           Line-marker timing irregularities do not block safe edits.
@@ -317,6 +321,6 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" --clobber --repo "$env:GITHUB_REPOSITORY"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.32 Build 332" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.33 Build 333" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
