@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.28-build328'
+$Version = 'v0.3.29-build329'
 if ($Version -match '^v(\d+\.\d+\.\d+)-build(\d+)$') {
     $AppVersion = $Matches[1]
     $AppBuild = [int]$Matches[2]
@@ -75,6 +75,7 @@ $map = @{
  'songstudio-pc/engine.py' = 'engine.py'
   'songstudio-pc/history_store.py' = 'history_store.py'
  'songstudio-pc/ncn_lyrics.py' = 'ncn_lyrics.py'
+ 'songstudio-pc/ncn_bulk_editor.py' = 'ncn_bulk_editor.py'
  'songstudio-pc/song_index.py' = 'song_index.py'
  'songstudio-pc/ai_lyrics.py' = 'ai_lyrics.py'
  'songstudio-pc/lyric_alignment.py' = 'lyric_alignment.py'
