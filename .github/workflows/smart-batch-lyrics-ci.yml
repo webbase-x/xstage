@@ -11,7 +11,7 @@ on:
       - "scripts/test_songstudio_smart_batch.py"
       - ".github/workflows/smart-batch-lyrics-ci.yml"
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     paths:
       - "songstudio-pc/lyric_text_groups.py"
       - "songstudio-pc/engine.py"
