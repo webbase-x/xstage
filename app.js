@@ -400,12 +400,15 @@ async function loadLatestCachedCatalog(sub,rootId=''){
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
-    if(![1,2].includes(catalog?.schemaVersion)||!Array.isArray(catalog.songs))return null;
+    if(catalog?.schemaVersion!==2||!Array.isArray(catalog.songs))return null;
+    if(!window.XStageCatalogV2)return null;
+    window.XStageCatalogV2.catalog(catalog,{cloud:true});
     return {
       catalog,
       generation:String(saved.generation||''),
       catalogFileId:String(saved.catalogFileId||''),
-      deltaFileIds:Array.isArray(saved.deltaFileIds)?saved.deltaFileIds:[]
+      deltaFileIds:Array.isArray(saved.deltaFileIds)?saved.deltaFileIds:[],
+      catalogFiles:Array.isArray(saved.catalogFiles)?saved.catalogFiles:[]
     };
   }catch{return null;}
 }
@@ -426,9 +429,11 @@ async function loadCachedCatalog(ownerKey,pointer){
   try{
     const saved=await catalogStorage('get',ownerKey);
     if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
-       JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
+       JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[])||
+       JSON.stringify(saved.catalogFiles||[])!==JSON.stringify(pointer.catalogFiles||[]))return null;
     const catalog=saved.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(![1,2].includes(catalog?.schemaVersion)||!Array.isArray(catalog.songs))return null;
+    window.XStageCatalogV2?.catalog(catalog,{cloud:true,expectedCount:pointer.songCount});
     if(Number.isSafeInteger(pointer.songCount)&&catalog.songs.length!==pointer.songCount)return null;
     return catalog;
   }catch{return null;}
@@ -656,7 +661,7 @@ function songAudioMedia(song){
 function matchesSongFormat(song){
   const selected=document.getElementById('song-format-filter')?.value||'auto';
   const format=songPlayFormat(song);
-  return playable(song)&&['m4a','mp3'].includes(format)&&
+  return playable(song)&&['m4a','mp3','midi'].includes(format)&&
     (selected==='auto'||format===selected);
 }
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
@@ -700,6 +705,72 @@ async function driveList(q, token) {
   if (!result.ok) throw driveError(result.status, 'รายการไฟล์');
   const json = await result.json();
   return Array.isArray(json.files) ? json.files : [];
+}
+async function createDriveV2Folder(parent,name,token){
+  const res=await googleFetch('https://www.googleapis.com/drive/v3/files?fields=id,name,mimeType,ownedByMe',{
+    method:'POST',cache:'no-store',
+    headers:{...requestHeaders(token),'Content-Type':'application/json'},
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parent]})
+  },'Google Drive · สร้างโฟลเดอร์ V2',0);
+  if(!res.ok)throw driveError(res.status,'โฟลเดอร์ XStageWeb V2');
+  const info=await res.json();
+  if(!info?.id)throw Error('Google Drive ไม่คืนรหัสโฟลเดอร์ใหม่');
+  return info.id;
+}
+async function createDriveV2Json(parent,name,document,token){
+  const boundary='xstagev2'+Array.from(crypto.getRandomValues(new Uint8Array(12)),
+    b=>b.toString(16).padStart(2,'0')).join('');
+  const meta=JSON.stringify({name,mimeType:'application/json',parents:[parent]});
+  const payload=JSON.stringify(document);
+  const prefix='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+
+    '\r\n--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n';
+  const blob=new Blob([prefix,payload,'\r\n--'+boundary+'--\r\n'],
+    {type:'multipart/related; boundary='+boundary});
+  const response=await googleFetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,md5Checksum',{
+      method:'POST',headers:{...requestHeaders(token),
+        'Content-Type':'multipart/related; boundary='+boundary},
+      body:blob,cache:'no-store'
+    },'Google Drive · เผยแพร่ฐาน V2',0);
+  if(!response.ok)throw driveError(response.status,'ฐานเพลง V2');
+  const info=await response.json();
+  if(!info?.id||!info?.md5Checksum)throw Error('Google Drive ไม่ยืนยัน MD5 ของฐานเพลง');
+  return info.id;
+}
+async function initializeWebV2Library(token,existingRoot=''){
+  // Only create a private V2 library after an authenticated Google session.
+  // Do not touch other folders and never reinitialize a published V2 pointer.
+  if(!token)throw Error('กรุณาเข้าสู่ Google ก่อนเตรียมคลัง');
+  const root=existingRoot||await createDriveV2Folder('root','XStageWeb',token);
+  const query="'"+root+"' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+  const dbs=await driveList(query,token);
+  if(dbs.length>1)throw Error('พบ XStageWeb/DB ซ้ำ · ไม่เขียนตัวชี้ฐาน');
+  const db=dbs[0]?.id||await createDriveV2Folder(root,'DB',token);
+  const pointerQuery="'"+db+"' in parents and name='current.json' and trashed=false";
+  const existing=await driveList(pointerQuery,token);
+  if(existing.length>1)throw Error('พบ DB/current.json ซ้ำ · ไม่เขียนฐาน');
+  if(existing.length===1){
+    const pointer=await privateJson(existing[0].id,token);
+    window.XStageCatalogV2?.pointer(pointer);
+    return root;
+  }
+  const generation=Array.from(crypto.getRandomValues(new Uint8Array(12)),
+    b=>b.toString(16).padStart(2,'0')).join('');
+  const catalogId=await createDriveV2Json(db,'catalog-base-v2-'+generation+'.json',{
+    schemaVersion:2,format:'xstage-unified-v2',songs:[]
+  },token);
+  // Existing pointer always wins; avoid a second current.json on a stale tab.
+  if((await driveList(pointerQuery,token)).length)
+    throw Error('มีผู้อื่นสร้างฐาน V2 ระหว่างเตรียมคลัง · โปรดโหลดใหม่');
+  const pointer={schemaVersion:2,format:'xstage-unified-v2',
+    generation,catalogFileId:catalogId,songCount:0};
+  window.XStageCatalogV2?.pointer(pointer);
+  const pointerId=await createDriveV2Json(db,'current.json',pointer,token);
+  const verified=await privateJson(pointerId,token);
+  window.XStageCatalogV2?.pointer(verified);
+  if(verified.generation!==generation||verified.catalogFileId!==catalogId)
+    throw Error('Google Drive ไม่ยืนยันฐาน V2 ที่เพิ่งสร้าง');
+  return root;
 }
 async function privateFile(id, token, opts = {}) {
   const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
@@ -821,8 +892,8 @@ async function openSharedLibraryPicker(){
           ui.gateStatus.textContent='ไม่ได้รับรหัสโฟลเดอร์จาก Google Picker';
           return;
         }
-        if(name&&name!=='StageWeb'&&name!=='XStageWeb'){
-          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ StageWeb หรือ XStageWeb ที่เจ้าของแชร์ให้';
+        if(name&&name!=='XStageWeb'){
+          ui.gateStatus.textContent='กรุณาเลือกเฉพาะโฟลเดอร์ XStageWeb V2 ที่เจ้าของแชร์ให้';
           return;
         }
         ui.gateStatus.textContent='อนุญาตคลังที่แชร์แล้ว · กำลังเปิดเพลง…';
@@ -842,86 +913,74 @@ async function openSharedLibraryPicker(){
 }
 $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 
-// The Windows sync publisher switches current.json after each verified batch.
-// Older snapshots contain songs[]; newer pointers may include immutable deltas.
-// Catalog media URLs remain private and are never exposed outside this account.
+// V2 is the only published catalog. No V1 root-pointer fallback.
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
-  if(![1,2].includes(pointer?.schemaVersion) || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
+  if(pointer?.schemaVersion!==2)
     throw Error('รูปแบบ current.json ไม่รองรับ');
-  if(pointer.schemaVersion===2){
-    const base=await privateJson(pointer.catalogFileId,token);
-    if(base?.schemaVersion!==2||!Array.isArray(base.songs)||
-       (Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount))
-      throw Error('ฐานเพลง XStageWeb/DB รุ่น 2 ไม่สมบูรณ์');
-    const ids=new Set();
-    for(const song of base.songs){
-      if(typeof song?.id!=='string'||!song.id||ids.has(song.id)||
-         typeof song.code!=='string'||!song.code||typeof song.media!=='object')
-        throw Error('รายการเพลงฐาน V2 ขัดแย้งหรือซ้ำ');
-      ids.add(song.id);
+  {
+    const v2=window.XStageCatalogV2;
+    if(!v2)throw Error('ตัวตรวจฐานเพลง V2 ไม่พร้อม · กรุณาโหลดหน้าใหม่');
+    v2.pointer(pointer);
+    const shards=pointer.catalogFiles||[{fileId:pointer.catalogFileId,songCount:null}];
+    const deltaIds=pointer.deltaFileIds||[];
+    const total=shards.length+deltaIds.length;
+    let completed=0;
+    async function fetchPiece(id,label){
+      let data=state.catalogCache.get(id);
+      if(!data)data=await loadCatalogPiece(sub,id);
+      if(!data)data=await privateJson(id,token);
+      if(!data||typeof data!=='object')throw Error('อ่านฐานเพลง '+label+' ไม่สำเร็จ');
+      state.catalogCache.set(id,data);
+      if(state.catalogCache.size>40)state.catalogCache.delete(state.catalogCache.keys().next().value);
+      await saveCatalogPiece(sub,id,data);
+      completed++;
+      if(typeof onProgress==='function')onProgress({
+        completed,total,message:'ตรวจสอบ '+label,
+        percent:42+Math.round(completed/Math.max(1,total)*48)
+      });
+      return data;
     }
-    return {schemaVersion:2,generation:pointer.generation,songs:base.songs};
-  }
-  const deltaIds=pointer.deltaFileIds||[];
-  if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
-    throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
-  const totalPieces=1+deltaIds.length;
-  let completedPieces=0;
-  const report=(message,fromCache=false)=>{
-    completedPieces++;
-    if(typeof onProgress==='function')onProgress({
-      completed:completedPieces,total:totalPieces,message,fromCache,
-      percent:42+Math.round((completedPieces/Math.max(1,totalPieces))*48)
+    const pieces=new Array(shards.length);
+    let next=0;
+    // Never issue an unbounded number of authenticated requests on Android TV.
+    const workers=Array.from({length:Math.min(3,shards.length)},async()=>{
+      while(next<shards.length){
+        const index=next++;
+        const part=shards[index];
+        const data=await fetchPiece(part.fileId,'ฐานหมวด '+(index+1)+'/'+shards.length);
+        v2.catalog(data,{cloud:true,
+          expectedCount:part.songCount===null?undefined:part.songCount});
+        pieces[index]=data;
+      }
     });
-  };
-  async function fetchImmutable(id,label){
-    if(typeof id!=='string'||!id)throw Error('ฐานเพลงไม่มี Drive File ID');
-    if(state.catalogCache.has(id)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(id);}
-    const persisted=await loadCatalogPiece(sub,id);
-    if(persisted){
-      state.catalogCache.set(id,persisted);
-      report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
-      return persisted;
+    await Promise.all(workers);
+    const songs=new Map();
+    for(const part of pieces){
+      for(const song of part.songs){
+        if(songs.has(song.id))throw Error('ฐาน V2 มี ID เพลงซ้ำข้ามหมวด: '+song.id);
+        songs.set(song.id,song);
+      }
     }
-    const data=await privateJson(id,token);
-    state.catalogCache.set(id,data);
-    await saveCatalogPiece(sub,id,data);
-    if(state.catalogCache.size>40){
-      const oldest=state.catalogCache.keys().next().value;
-      state.catalogCache.delete(oldest);
+    for(let i=0;i<deltaIds.length;i++){
+      const delta=await fetchPiece(deltaIds[i],'ข้อมูลเปลี่ยนแปลง '+(i+1)+'/'+deltaIds.length);
+      if(delta?.schemaVersion!==2||delta.format&&delta.format!=='xstage-unified-v2'||
+         !Array.isArray(delta.upserts)||!Array.isArray(delta.removes))
+        throw Error('ฐาน V2 Delta ไม่สมบูรณ์');
+      for(const id of delta.removes){
+        if(typeof id!=='string'||!id)throw Error('Delta มี ID ลบเพลงไม่ถูกต้อง');
+        songs.delete(id);
+      }
+      for(const song of delta.upserts){
+        v2.song(song,{cloud:true});
+        songs.set(song.id,song);
+      }
     }
-    report(label+' · ดาวน์โหลดแล้ว',false);
-    return data;
+    const merged={schemaVersion:2,format:'xstage-unified-v2',
+                  generation:pointer.generation,songs:[...songs.values()]};
+    v2.catalog(merged,{cloud:true,expectedCount:pointer.songCount});
+    return merged;
   }
-  const base=await fetchImmutable(pointer.catalogFileId,'ฐานหลัก');
-  if(base?.schemaVersion!==1||!Array.isArray(base.songs))
-    throw Error('ฐานเพลงหลักบน Drive ไม่รองรับ');
-  if(!deltaIds.length){
-    if(Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount)
-      throw Error('ฐานเพลงชุดนี้มีจำนวนเพลงไม่ตรงกับข้อมูลเผยแพร่');
-    return base;
-  }
-  const songs=new Map();
-  for(const song of base.songs){
-    if(song && typeof song.webSongId==='string')songs.set(song.webSongId,song);
-  }
-  for(let deltaIndex=0;deltaIndex<deltaIds.length;deltaIndex++){
-    const id=deltaIds[deltaIndex];
-    const delta=await fetchImmutable(id,'ส่วนอัปเดต '+(deltaIndex+1)+'/'+deltaIds.length);
-    if(delta?.schemaVersion!==1 || !Array.isArray(delta.upserts)||!Array.isArray(delta.removes))
-      throw Error('ข้อมูลอัปเดตเพลงบางชุดไม่ถูกต้อง');
-    for(const key of delta.removes){
-      if(typeof key!=='string')throw Error('ข้อมูลลบเพลงไม่ถูกต้อง');
-      songs.delete(key);
-    }
-    for(const song of delta.upserts){
-      if(!song || typeof song.webSongId!=='string')throw Error('รายการเพลงที่อัปเดตไม่ถูกต้อง');
-      songs.set(song.webSongId,song);
-    }
-  }
-  if(Number.isSafeInteger(pointer.songCount) && songs.size!==pointer.songCount)
-    throw Error('จำนวนเพลงที่เผยแพร่บางชุดไม่ตรงกัน กรุณาตรวจการซิงค์');
-  return {schemaVersion:1,generation:pointer.generation,songs:[...songs.values()]};
+  throw Error('XStageWeb/DB/current.json ต้องเป็น Schema V2');
 }
 async function pollPublishedCatalog(){
   if(!state.token||!state.catalogPointerId||state.catalogPolling)return;
@@ -1026,24 +1085,17 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
   }
 
   try{
-    const roots=await driveList("(name='StageWeb' or name='XStageWeb') and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+    let roots=await driveList("name='XStageWeb' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
-      // Drive API verified access even if XStageWeb folder is not configured yet.
-      setAndroidTvStageAccess(true,account.sub);
-      if(instant){
-        ui.libraryState.textContent='ใช้ฐานเพลงในเครื่อง · ยังไม่ได้อนุญาตคลังที่แชร์บนอุปกรณ์นี้';
-        return;
-      }
-      hideCatalogLoading();
-      ui.songTotal.textContent='0 เพลง';
-      ui.resultCount.textContent='รอเปิดคลังที่แชร์';
-      ui.libraryState.textContent='บัญชี Google พร้อมแล้ว · ต้องอนุญาตโฟลเดอร์ที่แชร์ให้ X-Stage';
-      setStatus('เข้าสู่ระบบบัญชีผู้รับเชิญแล้ว · กรุณากด “ใช้คลังเพลงจากผู้แชร์”','success');
-      setSharedLibraryGate(true,'เข้าสู่ระบบสำเร็จ · เลือก XStageWeb ที่ได้รับแชร์');
-      return;
+      showCatalogLoading('สร้างคลังใหม่','กำลังเตรียม XStageWeb/DB รุ่น V2 ส่วนตัว…',20);
+      await initializeWebV2Library(token);
+      roots=await driveList("name='XStageWeb' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+      if(roots.length!==1)throw Error('สร้าง XStageWeb V2 แล้วแต่ไม่พบโฟลเดอร์ที่เข้าถึงได้');
     }
+    if(roots.filter(x=>x.ownedByMe).length>1)
+      throw Error('พบ XStageWeb ที่เป็นของบัญชีนี้มากกว่าหนึ่งชุด · ตรวจโฟลเดอร์ซ้ำก่อนเปิดคลัง');
     setSharedLibraryGate(false);
     const ownedRoots=roots.filter(item=>item.ownedByMe);
     const sharedRoots=roots.filter(item=>!item.ownedByMe).sort((a,b)=>String(b.sharedWithMeTime||'').localeCompare(String(a.sharedWithMeTime||'')));
@@ -1068,15 +1120,18 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    // V2 is the authoritative new layout. Allow the old root pointer only
-    // during migration when no DB/current.json exists yet.
-    const dbFolders=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
+    // Only the private DB V2 pointer is authoritative.
+    let dbFolders=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
     if(dbFolders.length>1)throw Error('พบโฟลเดอร์ XStageWeb/DB ซ้ำ');
     let pointers=dbFolders.length===1
       ?await driveList(`'${dbFolders[0].id}' in parents and name='current.json' and trashed=false`,token)
       :[];
-    if(!pointers.length)
-      pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
+    if(!pointers.length && root.ownedByMe){
+      await initializeWebV2Library(token,root.id);
+      dbFolders=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
+      if(dbFolders.length!==1)throw Error('โครงสร้าง DB V2 ไม่พร้อม');
+      pointers=await driveList(`'${dbFolders[0].id}' in parents and name='current.json' and trashed=false`,token);
+    }
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
     if(pointers.length!==1)throw Error('ไม่พบ XStageWeb/DB/current.json ที่เผยแพร่ครบ');
     const pointer=await privateJson(pointers[0].id,token);

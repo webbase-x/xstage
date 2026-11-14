@@ -1,0 +1,65 @@
+name: X-Stage Unified DB V2 cross-platform contract checks
+on:
+  push:
+    branches:
+      - feature/xstage-unified-db-v2
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "unified-catalog-v2.js"
+      - "app.js"
+      - "index.html"
+      - "device-runtime.js"
+      - "songstudio-pc/unified_catalog_v2.py"
+      - "songstudio-pc/v2_native_publish.py"
+      - "songstudio-pc/engine.py"
+      - "songstudio-pc/online_publish.py"
+      - "scripts/test_unified_catalog_v2.py"
+      - "scripts/unified-catalog-v2-test.mjs"
+      - "scripts/xstage-v2-first-run-test.mjs"
+      - ".github/workflows/test-unified-catalog-v2.yml"
+permissions:
+  contents: read
+jobs:
+  unify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JavaScript syntax and unified contract
+        run: |
+          node --check unified-catalog-v2.js
+          node --check app.js
+          node --check device-runtime.js
+          node scripts/unified-catalog-v2-test.mjs
+          node scripts/xstage-v2-first-run-test.mjs
+          node scripts/device-runtime-test.mjs
+          node scripts/midi-stage-test.mjs
+      - name: Python schema and legacy migration safety
+        run: |
+          python -m py_compile songstudio-pc/unified_catalog_v2.py songstudio-pc/v2_native_publish.py songstudio-pc/engine.py
+          python scripts/test_unified_catalog_v2.py
+          python scripts/test_v2_native_publish.py
+          python scripts/test_songstudio_online_publish.py
+      - name: Validate Source ZIP includes all V2 private Drive modules
+        run: |
+          python scripts/package-song-studio-pc.py
+          python - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          zip_file=Path('downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip')
+          with ZipFile(zip_file) as bundle:
+              names=set(bundle.namelist())
+              for filename in ('online_publish.py','v2_native_publish.py',
+                               'unified_catalog_v2.py','google_drive.py'):
+                  found=[x for x in names if x.endswith('/'+filename)]
+                  assert len(found)==1, f'Missing or duplicate bundled {filename}'
+          print('PC source packaging includes all V2 modules')
+          PY
+      - name: Check full Web and Android integration regression
+        run: node scripts/regression.mjs

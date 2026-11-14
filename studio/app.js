@@ -512,6 +512,7 @@
       advanced.dataset.initialized = 'true';
     }
     for (const id of ['upload-button', 'settings-logout']) $(id).disabled = busy || !googleConnected;
+    $('catalog-v2-setup').disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     // The environment panel previously remained stale after an OAuth import
     // or successful login even while the header badge was live.
@@ -551,6 +552,7 @@
     $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     $('edit-button').disabled = busy || selected.size !== 1;
     $('upload-button').disabled = busy || !googleConnected;
+    $('catalog-v2-setup').disabled = busy || !googleConnected;
     $('settings-logout').disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('[data-pick],.field,.song-table input[type=checkbox]')) el.disabled = busy;
@@ -1734,18 +1736,12 @@
     }
   }
   async function startUpload({confirmedAfterBuild = false} = {}) {
-    // Post-build consent never inherits a manually checked "new library"
-    // option: uploads must merge into an existing, accessible Drive catalog.
-    if (!googleConnected) return message('กรุณา Google Login ก่อนซิงค์คลังเพลง');
-    const createNew = !confirmedAfterBuild && $('upload-create-library').checked === true;
-    const details = 'ส่ง M4A + Lyrics JSON ที่พร้อมใช้งานจากคลังในเครื่องไปยัง X-Stage Song Karaoke Online ผ่าน Google Drive ส่วนตัว\n'+
-      'ตรวจเพลงซ้ำด้วยรหัสเพลงและ MD5 ของไฟล์จริง · ไม่ลบเพลงเดิม\n'+
-      'เพิ่มเฉพาะเพลงใหม่หรือข้อมูลที่แก้ไข และเผยแพร่ current.json หลังตรวจไฟล์ครบแล้ว';
-    const warning = createNew
-      ? '\n\n⚠ เลือกสร้างคลังใหม่: ยืนยันว่า Google Drive นี้ไม่มีคลัง XStageWeb เดิมที่ต้องใช้ต่อ'
-      : '\n\nหากมองไม่เห็นคลังเดิมเพราะสิทธิ์ Google ไม่ครบ ระบบจะหยุดโดยไม่สร้างคลังซ้ำ';
-    if (confirmedAfterBuild || await confirmStudio(details + warning, 'ยืนยันเผยแพร่เพลงไปยัง X-Stage Song Karaoke Online')) {
-      await run('upload',{create_new_library:createNew});
+    if(!googleConnected)return message('กรุณา Google Login ก่อนอัปโหลดเพลง');
+    const details='ส่งเพลง M4A + Lyrics JSON ที่ตรวจสอบครบไปยัง XStageWeb V2 บน Google Drive ส่วนตัว\n'+
+      'ระบบสร้างโครงสร้าง XStageWeb ใหม่อัตโนมัติเมื่อยังไม่มี · ตรวจรหัสเพลง/MD5 ก่อนส่ง\n'+
+      'เผยแพร่เฉพาะ XStageWeb/DB/current.json (Schema V2) หลังไฟล์สมบูรณ์';
+    if(confirmedAfterBuild||await confirmStudio(details,'ยืนยันอัปโหลดเพลงไปยัง XStageWeb V2')){
+      await run('upload');
     }
   }
 
@@ -1774,7 +1770,6 @@
       return;
     }
     tab('upload');
-    $('upload-create-library').checked = false;
     try {
       // OAuth may have expired while the build was running. Check the local
       // engine's current connection before sending a single song.
@@ -1790,6 +1785,20 @@
       message('ยังไม่ได้เริ่มอัปโหลด: ' + error.message);
     }
   }
+  async function initializeV2Library() {
+    if(!googleConnected)return message('กรุณาเชื่อม Google Drive ก่อนเตรียมคลัง V2');
+    if(busy)return message('มีงานกำลังดำเนินการอยู่');
+    const yes=await confirmStudio(
+      'ตรวจสอบคลัง XStageWeb V2 ในบัญชีที่เชื่อมอยู่\n'+
+      'ถ้ายังไม่มี ระบบจะสร้างโฟลเดอร์ AUDIO, VIDEO, MIDI, DB และฐานเพลง V2 ว่าง\n'+
+      'ถ้ามีฐานเพลง V2 อยู่แล้ว จะตรวจสอบและเก็บเพลงเดิมทั้งหมด',
+      'เตรียม Google Drive รุ่น V2',
+      {acceptLabel:'เตรียมคลัง V2'});
+    if(!yes)return;
+    $('catalog-v2-setup-status').textContent='กำลังสร้าง/ตรวจสอบโครงสร้าง XStageWeb V2…';
+    await run('initialize-cloud-v2');
+  }
+
   async function startDownload(kind) {
     if (!googleConnected) return message('ต้อง Google Login ก่อนดาวน์โหลด');
     try {
@@ -1950,10 +1959,16 @@
               $('lyric-group-page-count').dataset.total='0';
               await refreshPhraseBackup();
               message(job.result?.message||'ย้อนคืนสำเร็จ',false);
+            } else if (job.kind === 'initialize-cloud-v2') {
+              $('catalog-v2-setup-status').textContent=job.result?.message||
+                'XStageWeb/DB V2 พร้อมใช้งาน';
+              message(job.result?.message||'เตรียมคลัง V2 สำเร็จ',false);
             } else if (job.kind === 'check-update') {
               message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
           } else if (job.state === 'error') {
+            if(job.kind==='initialize-cloud-v2')
+              $('catalog-v2-setup-status').textContent='เตรียมคลัง V2 ไม่สำเร็จ · ตรวจ Log เพื่อแก้ไข';
             if(job.kind==='ai-recording-save'){
               aiMicPending=false;
               $('ai-mic-status').textContent=
@@ -2319,6 +2334,7 @@
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-button').addEventListener('click',()=>{void startUpload();});
+  $('catalog-v2-setup').addEventListener('click',()=>{void initializeV2Library();});
   $('go-create').addEventListener('click',()=>tab('create'));
   for(const button of document.querySelectorAll('.download-action')) button.addEventListener('click',()=>{void startDownload(button.dataset.kind);});
   $('refresh-environment').addEventListener('click',()=>{void refreshEnvironment();});

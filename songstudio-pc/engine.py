@@ -1521,23 +1521,17 @@ def execute_job(action, options, started):
             root = export.songs_root(PREFS["workspace"])
             pointer, _ = export._read_current(root)
             if not pointer:
-                raise ValueError("ไม่พบ StageWeb/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
+                raise ValueError("ไม่พบฐานเพลงในเครื่อง กรุณาสร้างเพลงก่อนอัปโหลด")
             records = [x for x in export.existing_records(root)
                        if export.record_is_complete(root, x)]
             if len(records) != pointer.get("songCount"):
                 raise RuntimeError("ฐานเพลงในเครื่องไม่ครบ · ไม่เผยแพร่ฐานที่อาจเสียหาย")
             registry = _module("code_registry.py", "xstage_code_registry")
             online = _module("online_publish.py", "xstage_online_publish")
-            if options.get("create_new_library") is True:
-                # Explicit first-library creation only. If already visible,
-                # the existing library still wins. No invisible old library
-                # is treated as empty without the user's explicit consent.
-                snapshot = online.OnlinePublisher(GOOGLE).read_code_registry(
-                    allow_missing_root=True)
-                remote = snapshot["songs"]
-            else:
-                snapshot = online.OnlinePublisher(GOOGLE).read_code_registry()
-                remote = snapshot["songs"]
+            # XStageWeb V2 is created automatically after a verified Google
+            # Login. A fresh accessible Drive is a valid empty code registry.
+            snapshot = online.OnlinePublisher(GOOGLE).read_code_registry()
+            remote = snapshot["songs"]
             allocator, remapped = reconcile_local_codes(root, records, registry, remote, export)
             if remapped:
                 records = [x for x in export.existing_records(root)
@@ -1549,15 +1543,14 @@ def execute_job(action, options, started):
                 f"· ปรับรหัส PC {remapped:,}")
             with LOCK:
                 JOB["total"] = len(records)
-            update("ตรวจเพลงซ้ำจาก XStageWeb เดิมก่อนอัปโหลด · ไม่ลบเพลงเดิม")
+            update("ตรวจเพลงซ้ำใน XStageWeb/DB V2 · สร้างโฟลเดอร์ให้อัตโนมัติเมื่อยังไม่มี")
             synced = online.OnlinePublisher(GOOGLE).publish(
                 root, records,
-                create_new_library=(options.get("create_new_library") is True),
                 cancelled=CANCEL,
                 on_progress=lambda sent, total:
                 update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"),
                 on_batch=lambda batch, total, created, revised:
-                update(f"เผยแพร่ฐาน StageWeb ชุดที่ {batch} แล้ว · "
+                update(f"เผยแพร่ฐาน XStageWeb/DB V2 ชุดที่ {batch} แล้ว · "
                        f"พร้อมเล่น {total:,} เพลง · เพิ่ม {created:,} · แก้ Lyrics {revised:,}"),
                 on_row=lambda done, total, skipped:
                 update(f"ตรวจและอัปโหลด {done + skipped:,}/{total + skipped:,} เพลง "
@@ -1573,6 +1566,17 @@ def execute_job(action, options, started):
                     (" · ฐานใหม่เผยแพร่แล้ว" if synced['published']
                      else " · ฐานเดิมไม่เปลี่ยน")),
                 **synced}
+        elif action == "initialize-cloud-v2":
+            if not GOOGLE.status().get("connected"):
+                raise ValueError("ต้อง Google Login ก่อนเตรียม XStageWeb V2")
+            online = _module("online_publish.py", "xstage_online_publish")
+            update("กำลังเตรียมโครงสร้าง Google Drive ส่วนตัว XStageWeb V2")
+            created = online.OnlinePublisher(GOOGLE).initialize_cloud_v2(
+                cancelled=CANCEL)
+            result = {**created, "message":
+                ("สร้างโครงสร้าง XStageWeb/DB รุ่น V2 พร้อมแล้ว" if created["created"]
+                 else "พบ XStageWeb/DB V2 พร้อมใช้งานอยู่แล้ว") +
+                " · "+str(created["totalSongs"])+" เพลง"}
         elif action == "upload-native-v2":
             # Native files are uploaded as their original formats. The
             # manifest must be inside the selected workspace, never a browser
@@ -1596,7 +1600,6 @@ def execute_job(action, options, started):
                 JOB["total"] = len(doc.get("songs", []))
             synced = native.V2NativePublisher(GOOGLE).publish(
                 manifest_path.parent, doc,
-                create_new_library=options.get("create_new_library") is True,
                 cancelled=CANCEL,
                 on_progress=lambda done,total:
                 update(f"อัปโหลดต้นฉบับ V2 {done:,}/{total:,} เพลง",done))

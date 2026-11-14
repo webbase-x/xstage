@@ -452,8 +452,12 @@ try {
   assert.equal(await pc.locator('#ai-lyrics-import').isVisible(),true);
   await pc.click('#ai-lyrics-import');
   await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-selected')?.textContent.includes('เพลง AI นำเข้า'));
+  await pc.waitForFunction(()=>{
+    const start=document.querySelector('#ai-lyrics-start');
+    return !!start&&!start.disabled;
+  },null,{timeout:15000});
   assert.equal(await pc.locator('#ai-lyrics-start').isEnabled(),true,
-    'Independent imported file can use Whisper when a model is available');
+    'Independent imported file can use Whisper when the mock engine reports a ready model');
   assert.match(await pc.locator('#ai-lyrics-editor').inputValue(),/ท่อนแรก AI/);
   assert.equal(await pc.locator('#ai-lyrics-save').isEnabled(),true);
   const aiLive = pc.waitForRequest((req)=>{
@@ -593,19 +597,20 @@ try {
   assert.equal(await pc.locator('#studio-confirm-ok').innerText(),'อัปโหลดตอนนี้');
   assert.equal(await pc.locator('#studio-confirm-cancel').innerText(),'ไว้ภายหลัง');
   assert.equal(uploadRequests.length,manualUploadCount,'No upload without post-build consent');
-  await pc.locator('#upload-create-library').evaluate(el=>el.checked=true);
+  assert.equal(await pc.locator('#upload-create-library').count(),0,
+    'V2-only Song Studio must not ask for legacy Drive library creation');
   const automaticFollowup = pc.waitForResponse(res=>{
     try {
       const req=res.request(),data=req.postDataJSON();
       return new URL(req.url()).pathname==='/api/jobs' &&
-        data?.action==='upload' && data?.create_new_library===false;
+        data?.action==='upload' && data?.create_new_library===undefined;
     } catch {return false;}
   });
   await pc.click('#studio-confirm-ok');
   await automaticFollowup;
   assert.equal(uploadRequests.length,manualUploadCount+1);
-  assert.equal(uploadRequests.at(-1).create_new_library,false,
-    'Post-build upload MUST NOT inherit create-new-library flag');
+  assert.equal(uploadRequests.at(-1).create_new_library,undefined,
+    'Post-build upload must use V2 auto-create and never send a V1 creation flag');
   assert.equal(await pc.locator('#tab-upload').isVisible(),true);
 
   simulatedJob = {id:'finished-build-2',kind:'build',state:'success',

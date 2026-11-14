@@ -1,7 +1,7 @@
-"""XStageWeb V2 native media publisher, separate from the M4A-only V1 pipeline.
+"""XStageWeb V2 native media publisher for verified MP3, M4A, MIDI and video.
 
-No deletion or mutation of V1 pointers. A V2 catalog is committed in
-XStageWeb/DB/current.json only after each immutable media upload succeeds.
+Google Drive contains only XStageWeb/{AUDIO,VIDEO,MIDI,DB}. Catalog updates
+commit DB/current.json after all referenced private files have uploaded.
 """
 from __future__ import annotations
 import hashlib
@@ -12,6 +12,8 @@ from pathlib import Path, PurePosixPath
 
 from online_publish import cloud_media_path, PublishError, OnlinePublisher
 from ncn_lyrics import ncn_document, kar_document
+from unified_catalog_v2 import (CATALOG_FORMAT, CatalogValidationError,
+    validate_catalog, validate_pointer, validate_song, MAX_SONGS)
 
 MAX_MANIFEST_SONGS = 1000000
 MAX_MEDIA_BYTES = 2 * 1024 * 1024 * 1024
@@ -97,18 +99,140 @@ def _read_song(root, item):
             "artist": str(item.get("artist") or ""), "media": media, "lyrics": lyrics}
 
 
+
+SHARD_SONGS = 2500
+MAX_V2_DELTAS = 32
+MAX_V2_DELTA_UPSERTS = 200
+
+
+def validate_unique_song_codes(records):
+    """Never publish distinct cloud songs under the same case-insensitive code."""
+    seen={}
+    for item in records.values():
+        code=item["code"].casefold()
+        owner=seen.get(code)
+        if owner is not None and owner!=item["id"]:
+            raise CatalogValidationError("Two songs share code "+item["code"]+"; resolve before publish")
+        seen[code]=item["id"]
+
+
+def read_published_v2(reader, pointer):
+    """Verify immutable base shards and deltas before exposing any new songs."""
+    validate_pointer(pointer)
+    records={}
+    parts=(pointer["catalogFiles"] if "catalogFiles" in pointer else
+           [{"fileId":pointer["catalogFileId"],"songCount":None}])
+    for part in parts:
+        doc=reader(part["fileId"])
+        validate_catalog(doc,cloud=True,expected_count=part["songCount"])
+        for song in doc["songs"]:
+            if song["id"] in records:
+                raise CatalogValidationError("Duplicate song ID across V2 shards")
+            records[song["id"]]=song
+    for delta_id in pointer.get("deltaFileIds",[]):
+        delta=reader(delta_id)
+        if (not isinstance(delta,dict) or delta.get("schemaVersion")!=2
+                or delta.get("format",CATALOG_FORMAT)!=CATALOG_FORMAT
+                or not isinstance(delta.get("upserts"),list)
+                or not isinstance(delta.get("removes"),list)
+                or len(delta["upserts"])>MAX_SONGS):
+            raise CatalogValidationError("Corrupt immutable V2 delta")
+        for song_id in delta["removes"]:
+            if not isinstance(song_id,str):
+                raise CatalogValidationError("Invalid removed song ID")
+            records.pop(song_id,None)
+        for song in delta["upserts"]:
+            validate_song(song,cloud=True)
+            records[song["id"]]=song
+    validate_catalog({"schemaVersion":2,"format":CATALOG_FORMAT,
+                      "songs":list(records.values())},cloud=True,
+                      expected_count=pointer["songCount"])
+    validate_unique_song_codes(records)
+    return records
+
+
+def write_published_v2(drive,db,records,*,previous=None,revisions=None,
+                       cancelled=None,precommit=None):
+    """Publish immutable data first; update DB/current.json only after success.
+
+    Small incremental batches append one verified delta; 32 deltas trigger
+    compaction. Large libraries are bucketed into immutable <=2500-song shards.
+    """
+    validate_unique_song_codes(records)
+    generation=secrets.token_hex(12)
+    with tempfile.TemporaryDirectory(prefix="xstage-v2-catalog-") as tmp:
+        temp=Path(tmp)
+        def upload(folder, name, data):
+            if cancelled is not None and cancelled.is_set():
+                raise PublishError("ยกเลิกก่อนเผยแพร่ฐาน V2")
+            file=temp/name
+            file.write_text(json.dumps(data,ensure_ascii=False,
+                        separators=(",",":")),encoding="utf-8")
+            _,meta=drive.upload_file(folder,file,name,
+                replace_pointer=(name=="current.json"),cancelled=cancelled)
+            if not isinstance(meta.get("id"),str) or not meta["id"]:
+                raise PublishError("Google Drive ไม่คืนรหัสไฟล์ฐานข้อมูล")
+            return meta["id"]
+        update_mode=(previous is not None and revisions and
+                     len(revisions)<=MAX_V2_DELTA_UPSERTS and
+                     len(previous.get("deltaFileIds",[]))<MAX_V2_DELTAS)
+        pointer={"schemaVersion":2,"format":CATALOG_FORMAT,
+                 "generation":generation,"songCount":len(records)}
+        if update_mode:
+            delta_folder=drive.folder(db,"deltas")
+            delta_id=upload(delta_folder,"catalog-delta-v2-"+generation+".json",
+                            {"schemaVersion":2,"format":CATALOG_FORMAT,
+                             "upserts":list(revisions),"removes":[]})
+            for name in ("catalogFileId","catalogFiles"):
+                if name in previous:pointer[name]=previous[name]
+            pointer["deltaFileIds"]=[*previous.get("deltaFileIds",[]),delta_id]
+        elif len(records)<=SHARD_SONGS:
+            pointer["catalogFileId"]=upload(db,"catalog-base-v2-"+generation+".json",
+                        {"schemaVersion":2,"format":CATALOG_FORMAT,
+                         "songs":list(records.values())})
+        else:
+            catalog_folder=drive.folder(db,"catalogs")
+            buckets={}
+            for song in records.values():
+                first=song["code"][0].upper()
+                bucket=first if first in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" else "_"
+                buckets.setdefault(bucket,[]).append(song)
+            shards=[]
+            for bucket,items in sorted(buckets.items()):
+                items.sort(key=lambda song:song["id"])
+                for offset in range(0,len(items),SHARD_SONGS):
+                    part=items[offset:offset+SHARD_SONGS]
+                    name="catalog-v2-"+bucket+"-"+str(offset//SHARD_SONGS)+"-"+generation+".json"
+                    file_id=upload(catalog_folder,name,{
+                        "schemaVersion":2,"format":CATALOG_FORMAT,"songs":part})
+                    shards.append({"bucket":bucket,"fileId":file_id,"songCount":len(part)})
+            if len(shards)>1024:
+                raise PublishError("ฐานเพลงมีจำนวน Shards เกินขีดจำกัด")
+            pointer["catalogFiles"]=shards
+        validate_pointer(pointer)
+        if precommit is not None:
+            precommit()
+        upload(db,"current.json",pointer)
+    return pointer
+
 class V2NativePublisher:
     def __init__(self, drive):
         self.drive = drive
         self.reader = OnlinePublisher(drive)
 
-    def publish(self, root_path: Path, manifest: dict, *, create_new_library=False,
+    def publish(self, root_path: Path, manifest: dict, *,
                 cancelled=None, on_progress=None):
         root_path = Path(root_path).resolve()
         items = manifest.get("songs") if isinstance(manifest, dict) and manifest.get("schemaVersion") == 2 else None
         if not isinstance(items, list) or not 0 < len(items) <= MAX_MANIFEST_SONGS:
             raise PublishError("Manifest V2 ไม่ถูกต้อง")
         songs = [_read_song(root_path, x) for x in items]
+        for song in songs:
+            kinds=set(song["media"])
+            if len(kinds.intersection({"avi","mpg","vcd","wmv"}))>1:
+                raise PublishError("เพลงหนึ่งรายการต้องระบุ VIDEO หลักได้เพียงประเภทเดียว")
+            if "ncn" in kinds and "emk" in kinds:
+                raise PublishError("เพลงหนึ่งรายการต้องระบุ MIDI ต้นฉบับหลักเพียงชนิดเดียว")
         if len({x["id"] for x in songs}) != len(songs):
             raise PublishError("พบ ID เพลงซ้ำในรายการอัปโหลด")
         if len({x["code"].casefold() for x in songs}) != len(songs):
@@ -118,8 +242,6 @@ class V2NativePublisher:
                  x.get("mimeType") == "application/vnd.google-apps.folder"]
         if len(roots) > 1:
             raise PublishError("พบ XStageWeb ซ้ำหลายโฟลเดอร์")
-        if not roots and not create_new_library:
-            raise PublishError("ไม่พบ XStageWeb ที่แอปเข้าถึงได้ · ต้องยืนยันการสร้างคลังใหม่")
         root = roots[0]["id"] if roots else self.drive.folder("root", "XStageWeb")
         db = self.drive.folder(root, "DB")
         current = [x for x in self.drive.list_children(db)
@@ -131,12 +253,10 @@ class V2NativePublisher:
         previous, existing = None, {}
         if current:
             previous = self.reader._json(current[0]["id"])
-            if previous.get("schemaVersion") != 2:
-                raise PublishError("DB/current.json ไม่ใช่ Schema V2")
-            catalog = self.reader._json(previous["catalogFileId"])
-            if catalog.get("schemaVersion") != 2:
-                raise PublishError("ฐานเพลง V2 ไม่ถูกต้อง")
-            existing = {s["id"]: s for s in catalog.get("songs", [])}
+            try:
+                existing = read_published_v2(self.reader._json,previous)
+            except (CatalogValidationError, KeyError, TypeError) as exc:
+                raise PublishError("ฐาน V2 เดิมไม่สมบูรณ์ · หยุดก่อนเขียนทับ") from exc
         directory_cache = {}
         def folder(parts):
             parent = root
@@ -159,6 +279,23 @@ class V2NativePublisher:
                 raise PublishError("Google Drive checksum ไม่ตรงกัน")
             return {"fileId": meta["id"], "path": str(rel.parent / file_name),
                     "md5Checksum": md5, "size": path.stat().st_size}
+        # Preflight conflicts BEFORE uploading bytes. Linear-time lookups
+        # support libraries containing hundreds of thousands of songs.
+        code_owners={}
+        for ident,row in existing.items():
+            code=row["code"].casefold()
+            if code in code_owners and code_owners[code]!=ident:
+                raise PublishError("รหัสเพลงซ้ำในฐาน V2 เดิม: "+row["code"])
+            code_owners[code]=ident
+        for item in songs:
+            code=item["code"].casefold()
+            prior_id=code_owners.get(code)
+            if prior_id is not None and prior_id!=item["id"]:
+                raise PublishError("รหัสเพลงชนกับฐานเดิม: "+item["code"])
+            prior=existing.get(item["id"])
+            if prior and prior["code"].casefold()!=code:
+                raise PublishError("ID เพลงเดิมมีรหัสไม่ตรงกัน: "+item["id"])
+            code_owners[code]=item["id"]
         result = dict(existing)
         for index, item in enumerate(songs, 1):
             if cancelled is not None and cancelled.is_set():
@@ -177,7 +314,8 @@ class V2NativePublisher:
                 else:
                     media["midi"] = {"type":"ncn", **payload["song"],
                                      "lyr":payload["lyrics"], "cur":payload["cursor"]}
-            lyrics = upload(item["lyrics"], "M4A", "lyrics", item["code"]) if item["lyrics"] else None
+            lyric_format = "MP3" if "mp3" in item["media"] and "m4a" not in item["media"] else "M4A"
+            lyrics = upload(item["lyrics"], lyric_format, "lyrics", item["code"]) if item["lyrics"] else None
             # Derive verified timing from original CUR/LYR or embedded KAR events;
             # never guess lyric timing from MIDI notes. Publish lyrics JSON
             # together with the native track so the stage can stream it.
@@ -200,27 +338,37 @@ class V2NativePublisher:
                     tmp=Path(tmpdir)/(item["code"]+".json")
                     tmp.write_text(json.dumps(doc,ensure_ascii=False),encoding="utf-8")
                     lyrics=upload(tmp,native_type,"native-timed",item["code"])
-            result[item["id"]] = {
+            published = {
                 "id": item["id"], "webSongId": item["id"], "code": item["code"],
                 "title": item["title"], "artist": item["artist"],
                 "media": media, "lyrics": lyrics
             }
+            # Updating one format must not drop other previously published
+            # formats (e.g. native MP3 added after M4A conversion).
+            existing_record = result.get(item["id"])
+            if existing_record:
+                published["media"]={**existing_record["media"],**media}
+                if lyrics is None:
+                    published["lyrics"]=existing_record.get("lyrics")
+            result[item["id"]] = published
             if on_progress: on_progress(index, len(songs))
-        if current:
-            fresh = self.reader._json(current[0]["id"])
-            if fresh.get("generation") != previous.get("generation"):
-                raise PublishError("ฐาน V2 ถูกอัปเดตระหว่างอัปโหลด")
-        generation = secrets.token_hex(12)
-        with tempfile.TemporaryDirectory(prefix="xstage-db-v2-") as temp:
-            target = Path(temp)
-            catalog_file = target / "catalog.json"
-            catalog_file.write_text(json.dumps({"schemaVersion":2,"songs":list(result.values())},
-                                               ensure_ascii=False,separators=(",",":")),encoding="utf-8")
-            _, catalog_meta = self.drive.upload_file(db,catalog_file,
-                                     "catalog-base-v2-"+generation+".json",cancelled=cancelled)
-            pointer_file = target / "current.json"
-            pointer_file.write_text(json.dumps({"schemaVersion":2,"generation":generation,
-                                "catalogFileId":catalog_meta["id"],
-                                "songCount":len(result)},separators=(",",":")),encoding="utf-8")
-            self.drive.upload_file(db,pointer_file,"current.json",replace_pointer=True,cancelled=cancelled)
-        return {"generation":generation,"newSongs":len(songs),"totalSongs":len(result)}
+        # All files may have uploaded; still NEVER publish an invalid catalog.
+        try:
+            validate_catalog({"schemaVersion":2,"format":CATALOG_FORMAT,
+                              "songs":list(result.values())}, cloud=True)
+        except CatalogValidationError as exc:
+            raise PublishError("ตรวจฐาน V2 ก่อนเผยแพร่ไม่ผ่าน: "+str(exc)) from exc
+        def precommit():
+            if current:
+                fresh=self.reader._json(current[0]["id"])
+                if fresh.get("generation")!=previous["generation"]:
+                    raise PublishError("ฐาน V2 ถูกอัปเดตระหว่างอัปโหลด · หยุดเผยแพร่")
+            elif any(x.get("name")=="current.json" for x in self.drive.list_children(db)):
+                raise PublishError("พบฐาน V2 ที่เพิ่งสร้างระหว่างอัปโหลด · กรุณาเริ่มใหม่")
+        pointer=write_published_v2(
+            self.drive,db,result,previous=previous,
+            revisions=[result[item["id"]] for item in songs],
+            cancelled=cancelled,precommit=precommit)
+        return {"generation":pointer["generation"],
+                "newSongs":len(songs),"totalSongs":len(result)}
+

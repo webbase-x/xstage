@@ -1,479 +1,248 @@
-"""XStageWeb online publish protocol tests against a private mock Drive.
+"""XStageWeb V2-only Song Studio/Google Drive tests (all requests mocked).
 
-No real Google OAuth is used. The production publisher and upload_file paths
-run; only the Google network transport is mocked.
+Exercises production media publisher and private V2 download planner. No
+OAuth secrets or actual Drive accounts are accessed by these tests.
 """
 from __future__ import annotations
-import importlib.util
 import hashlib
 import io
-import urllib.parse
-import zipfile
 import json
+import sys
 import tempfile
+import urllib.parse
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from test_songstudio_drive_roundtrip import FakePrivateDrive
 import test_songstudio_drive_roundtrip as roundtrip
+from test_songstudio_drive_roundtrip import FakePrivateDrive
 
-REPO = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location(
-    "xstage_online_publish_test", REPO / "songstudio-pc" / "online_publish.py")
-online = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(online)
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"songstudio-pc"))
+import online_publish as online
+from v2_native_publish import read_published_v2
 
 
 class FakeOnlineDrive(FakePrivateDrive):
     def api(self, route, query=None, *, method="GET", data=None):
-        if route.startswith("/files/") and method == "GET":
-            ident = route.split("/")[-1]
-            return dict(self.items[ident]["metadata"])
-        raise AssertionError("Unexpected Google API call: " + route)
+        if route.startswith("/files/") and method=="GET":
+            return dict(self.items[route.split("/")[-1]]["metadata"])
+        raise AssertionError("Unexpected Google API call: "+route)
 
 
-class OnlinePublishTests(unittest.TestCase):
+class V2OnlinePublishTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp.name)
-        self.root = self.base / "songs"
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base=Path(self.temp.name)
+        self.root=self.base/"songs"
         self.root.mkdir()
-        (self.root / "current.json").write_text('{"songCount":1}', encoding="utf-8")
-        self.drive = FakeOnlineDrive()
-        # Existing visible XStageWeb library is normal for incremental syncing.
-        self.drive.folder("root", "XStageWeb")
-        self.publisher = online.OnlinePublisher(self.drive)
-        self.source_json = self.publisher._json
-        # Mock ONLY the private Drive GET file body. Actual JSON schema
-        # parsing, upload_file, pointer switching and metadata reads stay real.
-        self.publisher._json = lambda ident: json.loads(
-            self.drive.items[str(ident)]["body"].decode("utf-8"))
-        self.first = self.make_song("00001", b"A" * 5200, "เพลงหนึ่ง")
+        (self.root/"current.json").write_text('{"songCount":1}',encoding="utf8")
+        self.drive=FakeOnlineDrive()
+        self.publisher=online.OnlinePublisher(self.drive)
+        self.publisher._json=self.read_json
 
-    def tearDown(self):
-        self.temp.cleanup()
+    def read_json(self,ident):
+        return json.loads(self.drive.items[str(ident)]["body"].decode("utf-8"))
 
-    def make_song(self, code, audio, lyric, *, with_lyrics=True):
-        bucket = code[0]
-        audio_path = "audio/" + bucket + "/" + code + ".m4a"
-        lyric_path = "lyrics/" + bucket + "/" + code + ".json"
-        (self.root / audio_path).parent.mkdir(parents=True, exist_ok=True)
-        (self.root / audio_path).write_bytes(audio)
-        record = {"webSongId": "audio/" + bucket + "/" + code,
-                  "code": code, "title": "เพลง " + code, "artist": "ศิลปิน",
-                  "sourceFormat": "NCN", "audio": {"path": audio_path}}
-        if with_lyrics:
-            (self.root / lyric_path).parent.mkdir(parents=True, exist_ok=True)
-            (self.root / lyric_path).write_text(json.dumps({
-                "schemaVersion": 1, "lines": [{"startTime": 1, "endTime": 4,
-                                               "text": lyric}]}, ensure_ascii=False),
-                                               encoding="utf-8")
-            (self.root / ("lyrics/" + bucket + "/" + code + ".lrc")).write_text(
-                "[00:01.00]" + lyric, encoding="utf-8")
-            record["lyrics"] = {"path": lyric_path}
-        return record
+    def make_song(self,code="00001",audio=b"A"*4500,text="Hello"):
+        folder=code[0].upper()
+        m4a="audio/"+folder+"/"+code+".m4a"
+        lyric="lyrics/"+folder+"/"+code+".json"
+        for path in (m4a,lyric):
+            (self.root/path).parent.mkdir(parents=True,exist_ok=True)
+        (self.root/m4a).write_bytes(audio)
+        (self.root/lyric).write_text(json.dumps({
+            "schemaVersion":1,"lines":[{"startTime":1,"endTime":5,"text":text}]
+        },ensure_ascii=False),encoding="utf8")
+        return {"webSongId":"audio/"+folder+"/"+code,
+                "code":code,"title":"เพลง "+code,"artist":"ศิลปิน",
+                "audio":{"path":m4a},"lyrics":{"path":lyric}}
 
-    def folder_files(self, parent="root"):
-        return [r["metadata"] for r in self.drive.items.values()
-                if r["parent"] == parent]
-
-    def remote_root(self):
-        root = [f for f in self.folder_files() if f["name"] == "XStageWeb"]
-        self.assertEqual(len(root), 1)
-        return root[0]["id"]
+    def root_id(self):
+        roots=[x for x in self.drive.list_children("root") if x["name"]=="XStageWeb"]
+        self.assertEqual(len(roots),1)
+        return roots[0]["id"]
 
     def pointer(self):
-        root_id = self.remote_root()
-        entries = [f for f in self.folder_files(root_id) if f["name"] == "current.json"]
-        self.assertEqual(len(entries), 1)
-        ident = entries[0]["id"]
-        return self.publisher._json(ident), ident
+        root=self.root_id()
+        db=next(x["id"] for x in self.drive.list_children(root) if x["name"]=="DB")
+        pointers=[x for x in self.drive.list_children(db) if x["name"]=="current.json"]
+        self.assertEqual(len(pointers),1)
+        return self.read_json(pointers[0]["id"]),pointers[0]["id"],db
 
     def published(self):
-        pointer, _ = self.pointer()
-        base = self.publisher._json(pointer["catalogFileId"])
-        songs = {s["webSongId"]:s for s in base["songs"]}
-        for ident in pointer["deltaFileIds"]:
-            part = self.publisher._json(ident)
-            for key in part["removes"]:
-                songs.pop(key, None)
-            for row in part["upserts"]:
-                songs[row["webSongId"]] = row
-        self.assertEqual(len(songs), pointer["songCount"])
-        return songs
+        pointer,_,_=self.pointer()
+        return read_published_v2(self.read_json,pointer)
 
-    def test_typed_cloud_media_paths_keep_original_filenames_and_buckets(self):
-        route = online.cloud_media_path
-        self.assertEqual(str(route("audio/12/0001.m4a", code="A0001")),
-                         "AUDIO/M4A/Songs/A/0001.m4a")
-        self.assertEqual(str(route("audio/12/0001.mp3", code="90001")),
-                         "AUDIO/MP3/Songs/9/0001.mp3")
-        self.assertEqual(str(route("lyrics/12/0001.json", role="lyrics", code="00001")),
-                         "AUDIO/M4A/Lyrics/0/0001.json")
-        self.assertEqual(str(route("lyrics/12/0001.lrc", role="lrc", code="00001")),
-                         "AUDIO/M4A/Lyrics/0/0001.lrc")
-        self.assertEqual(str(route("audio/12/0001.mid", "NCN", code="B0001")),
-                         "MIDI/NCN/Songs/B/0001.mid")
-        self.assertEqual(str(route("midi/12/0001.lyr", "NCN", code="B0001")),
-                         "MIDI/NCN/Lyrics/B/0001.lyr")
-        self.assertEqual(str(route("midi/12/0001.cur", "NCN", code="B0001")),
-                         "MIDI/NCN/Cursor/B/0001.cur")
-        self.assertEqual(str(route("audio/12/0001.kar", code="C0001")),
-                         "MIDI/E-MK/C/0001.kar")
-        self.assertEqual(str(route("video/sample.dat", code="D0001")),
-                         "VIDEO/VCD/sample.dat")
-        self.assertEqual(str(route("video/sample.mpg")), "VIDEO/MPG/sample.mpg")
-        self.assertEqual(str(route("video/sample.wmv")), "VIDEO/WMV/sample.wmv")
-        self.assertEqual(str(route("video/sample.avi")), "VIDEO/AVI/sample.avi")
-        for bad in ("../escaped.mid", "/absolute.mid", "audio//bad.mid",
-                    "audio/../../bad.mid", "audio\\\\bad.mid"):
-            with self.subTest(path=bad):
-                with self.assertRaises(online.PublishError):
-                    route(bad)
+    def drive_response(self,url,**kwargs):
+        fileid=urllib.parse.urlsplit(url).path.rsplit("/",1)[-1]
+        return io.BytesIO(self.drive.items[fileid]["body"])
 
-    def test_first_publish_matches_online_schema_and_uploads_real_private_files(self):
-        result = self.publisher.publish(self.root, [self.first])
-        self.assertTrue(result["published"])
-        self.assertEqual(result["newSongs"], 1)
-        pointer, _ = self.pointer()
-        self.assertEqual(pointer["schemaVersion"], 1)
-        self.assertEqual(pointer["songCount"], 1)
-        self.assertEqual(pointer["deltaFileIds"], [])
-        remote = self.published()[self.first["webSongId"]]
-        self.assertEqual(remote["code"], "00001")
-        self.assertTrue(remote["audio"]["fileId"])
-        self.assertTrue(remote["lyrics"]["fileId"])
-        self.assertIn(remote["audio"]["fileId"], self.drive.items)
-        self.assertIn(remote["lyrics"]["fileId"], self.drive.items)
-        self.assertIn(remote["lrc"]["fileId"], self.drive.items)
-        self.assertEqual(self.drive.upload_order[-1], "current.json")
-        # Neither fake absolute local path nor user OAuth credentials leak.
-        self.assertNotIn(str(self.base), json.dumps(remote))
-        # Media folders and lyrics/ live beside the immutable catalog,
-        # published pointer and staging marker (never songs/ for new songs).
-        self.assertEqual(len(self.folder_files(self.remote_root())), 7)
+    def test_path_contract(self):
+        route=online.cloud_media_path
+        self.assertEqual(str(route("audio/0/a.m4a",code="00001")),"AUDIO/M4A/Songs/0/a.m4a")
+        self.assertEqual(str(route("lyrics/0/a.json",role="lyrics",code="00001")),
+                         "AUDIO/M4A/Lyrics/0/a.json")
+        self.assertEqual(str(route("lyrics/0/a.json","MP3",role="lyrics",code="00001")),
+                         "AUDIO/MP3/Lyrics/0/a.json")
+        self.assertEqual(str(route("music/0/a.mid","NCN",code="B0001")),
+                         "MIDI/NCN/Songs/B/a.mid")
+        for invalid in ("../escape.m4a","/absolute.m4a","audio//bad.mp3","audio\\bad.mp3"):
+            with self.subTest(path=invalid),self.assertRaises(online.PublishError):
+                route(invalid)
 
-    def test_new_drive_publishes_requested_stageweb_root_with_direct_media(self):
-        # Explicit consent only: existing old XStageWeb must never silently
-        # split into a second library. New Drive uses exactly XStageWeb.
-        self.drive.items.clear()
-        result = self.publisher.publish(
-            self.root, [self.first], create_new_library=True)
-        self.assertEqual(result["newSongs"], 1)
-        folder = next(
-            f["metadata"] for f in self.drive.items.values()
-            if f["parent"] == "root" and f["metadata"]["name"] == "XStageWeb")
-        children = self.folder_files(folder["id"])
-        names = {f["name"] for f in children}
-        self.assertTrue({"AUDIO", "VIDEO", "MIDI", "DB", "current.json"}.issubset(names))
-        self.assertNotIn("songs", names)
-        self.assertTrue(any(name.startswith("catalog-base-") for name in names))
-        pointer_id = next(f["id"] for f in children if f["name"] == "current.json")
-        pointer = self.publisher._json(pointer_id)
-        songs = self.publisher._json(pointer["catalogFileId"])["songs"]
-        self.assertEqual(len(songs), 1)
-        self.assertTrue(songs[0]["audio"]["path"].startswith("AUDIO/M4A/Songs/0/"))
-        midi_folder = next(f["id"] for f in children if f["name"] == "MIDI")
-        self.assertEqual({x["name"] for x in self.folder_files(midi_folder)}, {"NCN", "E-MK"})
-        self.assertTrue(songs[0]["lyrics"]["path"].startswith("AUDIO/M4A/Lyrics/0/"))
-        self.assertTrue(songs[0]["lrc"]["path"].startswith("AUDIO/M4A/Lyrics/0/"))
-        self.drive.locked = True
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            got = self.drive.download_library(self.base / "stage-download", "songs")
-            db = self.drive.download_library(self.base / "stage-db", "db")
-        self.assertEqual(got["source"], "XStageWeb")
-        self.assertEqual(Path(got["path"]).name, "XStageWeb")
-        self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
-        self.assertEqual(db["files"], 2)
+    def test_fresh_google_drive_auto_creates_only_v2(self):
+        row=self.make_song()
+        before=len(self.drive.items)
+        preview=self.publisher.read_code_registry()
+        self.assertTrue(preview["visible"])
+        self.assertEqual(preview["songs"],[])
+        self.assertEqual(len(self.drive.items),before)
+        outcome=self.publisher.publish(self.root,[row])
+        self.assertTrue(outcome["published"])
+        self.assertEqual(outcome["newSongs"],1)
+        pointer,pointer_id,db=self.pointer()
+        self.assertEqual(pointer["schemaVersion"],2)
+        self.assertEqual(pointer["songCount"],1)
+        self.assertEqual(len(self.published()),1)
+        self.assertEqual(self.drive.upload_order[-1],"current.json")
+        root=self.root_id()
+        self.assertFalse(any(x["name"]=="current.json" for x in self.drive.list_children(root)))
+        data=next(iter(self.published().values()))
+        self.assertEqual(data["id"],row["webSongId"])
+        self.assertEqual(data["media"]["m4a"]["fileId"] in self.drive.items,True)
+        self.assertTrue(data["media"]["m4a"]["path"].startswith("AUDIO/M4A/Songs/0/"))
+        self.assertTrue(data["lyrics"]["path"].startswith("AUDIO/M4A/Lyrics/0/"))
+        self.assertNotIn(str(self.base),json.dumps(data,ensure_ascii=False))
+        self.assertNotIn("StageWeb",json.dumps(pointer))
 
-    def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
-        self.drive.folder("root", "StageWeb")
-        before = len(self.drive.items)
-        with self.assertRaisesRegex(online.PublishError, "มากกว่าหนึ่ง"):
-            self.publisher.publish(self.root, [self.first], create_new_library=True)
-        self.assertEqual(len(self.drive.items), before)
+    def test_initialize_empty_v2_can_be_repeated_without_reset(self):
+        before=len(self.drive.items)
+        p=self.publisher.initialize_cloud_v2()
+        self.assertTrue(p["created"])
+        self.assertEqual(p["totalSongs"],0)
+        pointer,_,_=self.pointer()
+        self.assertEqual(pointer["songCount"],0)
+        names={x["name"] for x in self.drive.list_children(self.root_id())}
+        self.assertTrue({"DB","AUDIO","VIDEO","MIDI"}.issubset(names))
+        stable=self.publisher.initialize_cloud_v2()
+        self.assertFalse(stable["created"])
+        self.assertEqual(stable["generation"],p["generation"])
+        self.assertEqual(len(self.published()),0)
+        self.assertGreater(len(self.drive.items),before)
 
-    def _download_private_json(self, url, **kwargs):
-        ident = urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1]
-        return io.BytesIO(self.drive.items[ident]["body"])
+    def test_duplicate_upload_is_unchanged(self):
+        row=self.make_song()
+        self.publisher.publish(self.root,[row])
+        prior, pointer_id, _=self.pointer()
+        files=len(self.drive.items)
+        outcome=self.publisher.publish(self.root,[row])
+        self.assertEqual(outcome["duplicates"],1)
+        self.assertFalse(outcome["published"])
+        self.assertEqual(len(self.drive.items),files)
+        self.assertEqual(self.pointer()[1],pointer_id)
+        self.assertEqual(self.pointer()[0]["generation"],prior["generation"])
 
-    def test_download_published_xstageweb_from_real_online_schema(self):
-        self.publisher.publish(self.root, [self.first])
-        # An old empty PC backup tree should not shadow a valid online
-        # library. Download never creates folders or changes Drive media.
-        self.drive.folder(self.drive.folder("root", "X-Stage Song Studio"), "songs")
-        self.drive.locked = True
-        original_count = len(self.drive.items)
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            folder = self.drive.download_library(self.base / "restore", kind="songs")
-            restored = Path(folder["path"])
-            self.assertEqual(folder["source"], "XStageWeb")
-            self.assertEqual(restored.name, "XStageWeb")
-            self.assertTrue((restored / "current.json").is_file())
-            self.assertEqual(len(list(restored.glob("catalog-base-*.json"))), 1)
-            self.assertTrue(list(restored.rglob("*.m4a")))
-            self.assertTrue(list(restored.rglob("*.lrc")))
-            self.assertTrue(list(restored.rglob("*.json")))
-            db = self.drive.download_library(self.base / "db", kind="db")
-            self.assertEqual(db["files"], 2)
-            self.assertTrue((Path(db["path"]) / "current.json").is_file())
-            self.assertFalse(list(Path(db["path"]).rglob("*.m4a")))
-            archive = self.drive.download_library(self.base / "zip", kind="zip")
-        with zipfile.ZipFile(archive["path"]) as bundle:
-            self.assertIn("XStageWeb/current.json", bundle.namelist())
-            self.assertTrue(any(x.startswith("XStageWeb/AUDIO/M4A/Songs/") for x in bundle.namelist()))
-        self.assertEqual(len(self.drive.items), original_count)
+    def test_same_code_changed_audio_is_conflict_without_mutation(self):
+        row=self.make_song()
+        self.publisher.publish(self.root,[row])
+        before=self.published()
+        pointer,_,_=self.pointer()
+        (self.root/row["audio"]["path"]).write_bytes(b"B"*4500)
+        outcome=self.publisher.publish(self.root,[row])
+        self.assertEqual(outcome["conflicts"],1)
+        self.assertFalse(outcome["published"])
+        self.assertEqual(self.published(),before)
+        self.assertEqual(self.pointer()[0]["generation"],pointer["generation"])
 
-    def test_online_restore_includes_delta_and_current_media_only(self):
-        self.publisher.publish(self.root, [self.first])
-        next_song = self.make_song("10002", b"B" * 5200, "เพลงสอง")
-        self.publisher.publish(self.root, [self.first, next_song])
-        # The second generation references the existing immutable base
-        # plus a delta; all current songs must be downloaded.
-        self.drive.locked = True
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            result = self.drive.download_library(self.base / "delta", "songs")
-            db = self.drive.download_library(self.base / "delta-db", "db")
-        downloaded = Path(result["path"])
-        self.assertEqual(len(list(downloaded.rglob("*.m4a"))), 2)
-        self.assertTrue(list(downloaded.glob("catalog-delta-*.json")))
-        self.assertEqual(db["files"], 3)
-        pointer = json.loads((downloaded / "current.json").read_text(encoding="utf-8"))
-        self.assertEqual(pointer["songCount"], 2)
+    def test_same_audio_changed_lyric_keeps_file_id(self):
+        row=self.make_song()
+        self.publisher.publish(self.root,[row])
+        old=self.published()[row["webSongId"]]
+        (self.root/row["lyrics"]["path"]).write_text(json.dumps({
+            "schemaVersion":1,"lines":[{"startTime":1,"endTime":5,"text":"NEW"}]
+        }),encoding="utf8")
+        result=self.publisher.publish(self.root,[row])
+        fresh=self.published()[row["webSongId"]]
+        self.assertEqual(result["updatedSongs"],1)
+        self.assertEqual(old["media"]["m4a"]["fileId"],fresh["media"]["m4a"]["fileId"])
+        self.assertNotEqual(old["lyrics"]["fileId"],fresh["lyrics"]["fileId"])
+        self.assertEqual(len(self.pointer()[0].get("deltaFileIds",[])),1)
 
-    def test_online_download_rejects_unpublished_staging_without_creating_files(self):
-        self.drive.folder("root", "XStageWeb")
-        self.drive.locked = True
-        target = self.base / "not-started"
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "current.json"):
-                self.drive.download_library(target, kind="songs")
-        self.assertFalse(target.exists())
+    def test_two_distinct_codes_identical_bytes_do_not_duplicate(self):
+        a=self.make_song("00001")
+        b=self.make_song("00002")
+        # Both songs have the same media/lyrics but use different codes.
+        self.publisher.publish(self.root,[a])
+        outcome=self.publisher.publish(self.root,[b])
+        self.assertEqual(outcome["duplicates"],1)
+        self.assertEqual(len(self.published()),1)
 
-    def test_online_download_missing_catalog_access_does_not_fallback_to_legacy(self):
-        self.publisher.publish(self.root, [self.first])
-        pointer, _ = self.pointer()
-        self.drive.items.pop(pointer["catalogFileId"])
-        self.drive.locked = True
-        target = self.base / "catalog-invisible"
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            with self.assertRaises((KeyError, roundtrip.drive.GoogleError)):
-                self.drive.download_library(target, kind="db")
-        self.assertFalse(target.exists())
-
-    def test_online_download_corrupt_md5_and_target_collision_fail_closed(self):
-        self.publisher.publish(self.root, [self.first])
-        pointer, pointer_id = self.pointer()
-        self.drive.items[pointer_id]["metadata"]["md5Checksum"] = "f" * 32
-        self.drive.locked = True
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "MD5"):
-                self.drive.download_library(self.base / "corrupt", "songs")
-        self.assertFalse((self.base / "corrupt").exists())
-        self.drive.items[pointer_id]["metadata"]["md5Checksum"] = hashlib.md5(
-            self.drive.items[pointer_id]["body"]).hexdigest()
-        conflicting = self.base / "conflict" / "XStageWeb" / "current.json"
-        conflicting.parent.mkdir(parents=True)
-        conflicting.write_bytes(b"owner-existing-content")
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ต่างเนื้อหา"):
-                self.drive.download_library(self.base / "conflict", "db")
-        self.assertEqual(conflicting.read_bytes(), b"owner-existing-content")
-
-    def test_duplicate_rerun_never_creates_another_song_or_pointer(self):
-        self.publisher.publish(self.root, [self.first])
-        pointer, _ = self.pointer()
-        before = len(self.drive.items)
-        second = self.publisher.publish(self.root, [self.first])
-        after, _ = self.pointer()
-        self.assertEqual(second["duplicates"], 1)
-        self.assertFalse(second["published"])
-        self.assertEqual(after["generation"], pointer["generation"])
-        self.assertEqual(len(self.drive.items), before)
-
-    def test_incremental_delta_preserves_existing_drive_songs(self):
-        self.publisher.publish(self.root, [self.first])
-        prior, _ = self.pointer()
-        original = self.published()[self.first["webSongId"]]
-        second = self.make_song("10002", b"B" * 5500, "เพลงสอง")
-        added = self.publisher.publish(self.root, [self.first, second])
-        self.assertEqual(added["newSongs"], 1)
-        self.assertEqual(added["duplicates"], 1)
-        pointer, _ = self.pointer()
-        self.assertEqual(pointer["catalogFileId"], prior["catalogFileId"])
-        self.assertEqual(len(pointer["deltaFileIds"]), 1)
-        self.assertEqual(pointer["songCount"], 2)
-        self.assertEqual(self.published()[self.first["webSongId"]], original)
-        self.assertIn(second["webSongId"], self.published())
-
-    def test_small_batches_publish_immediately_and_player_sees_each_batch(self):
-        second = self.make_song("10002", b"B" * 5200, "เพลงสอง")
-        third = self.make_song("20003", b"C" * 5300, "เพลงสาม")
-        observations = []
-        result = self.publisher.publish(
-            self.root, [self.first, second, third], batch_size=1,
-            on_batch=lambda batch, total, created, revised:
-            observations.append((batch, total, len(self.published()))))
-        self.assertEqual(result["batches"], 3)
-        self.assertEqual(result["totalSongs"], 3)
-        self.assertEqual(observations, [(1, 1, 1), (2, 2, 2), (3, 3, 3)])
-        self.assertEqual(len(self.pointer()[0]["deltaFileIds"]), 2)
-
-    def test_failure_in_second_batch_leaves_first_batch_playable(self):
-        second = self.make_song("10004", b"Z" * 5300, "เพลงสี่")
-        original = self.drive.upload_file
-        def fail_second(parent, path, name, **kwargs):
-            if name.startswith("10004-") and name.endswith(".m4a"):
-                raise online.PublishError("upload interrupted")
-            return original(parent, path, name, **kwargs)
-        with patch.object(self.drive, "upload_file", side_effect=fail_second):
-            with self.assertRaisesRegex(online.PublishError, "upload interrupted"):
-                self.publisher.publish(self.root, [self.first, second], batch_size=1)
-        self.assertEqual(len(self.published()), 1)
-        again = self.publisher.publish(self.root, [self.first, second], batch_size=1)
-        self.assertEqual(again["duplicates"], 1)
-        self.assertEqual(again["newSongs"], 1)
-        self.assertEqual(len(self.published()), 2)
-
-    def test_exact_duplicate_audio_and_lyrics_across_two_codes_is_skipped(self):
-        duplicate = self.make_song("90009", b"A" * 5200, "เพลงหนึ่ง")
-        result = self.publisher.publish(self.root, [self.first, duplicate], batch_size=1)
-        self.assertEqual(result["newSongs"], 1)
-        self.assertEqual(result["duplicates"], 1)
-        self.assertEqual(result["totalSongs"], 1)
-        self.assertEqual(len(self.published()), 1)
-
-    def test_same_code_different_audio_is_conflict_not_silent_overwrite(self):
-        self.publisher.publish(self.root, [self.first])
-        before = dict(self.published())
-        original_pointer, _ = self.pointer()
-        self.make_song("00001", b"Z" * 6000, "อีกเนื้อเพลง")
-        result = self.publisher.publish(self.root, [self.first])
-        self.assertEqual(result["conflicts"], 1)
+    def test_same_audio_different_lyrics_and_code_does_not_create_duplicate(self):
+        first=self.make_song("00001",audio=b"A"*4500,text="first words")
+        second=self.make_song("00002",audio=b"A"*4500,text="other words")
+        self.publisher.publish(self.root,[first])
+        before=self.published()
+        pointer,_,_=self.pointer()
+        result=self.publisher.publish(self.root,[second])
+        self.assertEqual(result["duplicates"],1)
+        self.assertEqual(result["newSongs"],0)
         self.assertFalse(result["published"])
-        self.assertEqual(self.published(), before)
-        self.assertEqual(self.pointer()[0]["generation"], original_pointer["generation"])
+        self.assertEqual(before,self.published())
+        self.assertEqual(pointer["generation"],self.pointer()[0]["generation"])
 
-    def test_same_websongid_different_audio_and_code_keeps_original_drive_song(self):
-        self.publisher.publish(self.root, [self.first])
-        original = dict(self.published())
-        changed = self.make_song("00001", b"Z" * 5200, "เพลงใหม่คนละเพลง")
-        changed["code"] = "00002"
-        changed["originalCode"] = "00001"
-        result = self.publisher.publish(self.root, [changed])
-        self.assertEqual(result["newSongs"], 1)
-        self.assertEqual(result["conflicts"], 0)
-        after = self.published()
-        self.assertEqual(len(after), 2)
-        self.assertEqual(after[self.first["webSongId"]], original[self.first["webSongId"]])
-        self.assertEqual({x["code"] for x in after.values()}, {"00001", "00002"})
-
-    def test_registry_read_requires_visible_pointer_not_just_similar_folder(self):
-        with self.assertRaisesRegex(online.PublishError, "ยังไม่มี current.json"):
-            self.publisher.read_code_registry()
-        self.publisher.publish(self.root, [self.first])
-        verified = self.publisher.read_code_registry()
-        self.assertTrue(verified["visible"])
-        self.assertEqual([x["code"] for x in verified["songs"]], ["00001"])
-        self.assertTrue(verified["generation"])
-
-    def test_same_audio_changed_lyrics_preserves_audio_file_id(self):
-        self.publisher.publish(self.root, [self.first])
-        old = self.published()[self.first["webSongId"]]
-        self.make_song("00001", b"A" * 5200, "แก้ไขเนื้อร้องแล้ว")
-        result = self.publisher.publish(self.root, [self.first])
-        new = self.published()[self.first["webSongId"]]
-        self.assertEqual(result["updatedSongs"], 1)
-        self.assertEqual(result["newSongs"], 0)
-        self.assertEqual(new["audio"]["fileId"], old["audio"]["fileId"])
-        self.assertNotEqual(new["lyrics"]["fileId"], old["lyrics"]["fileId"])
-
-    def test_audio_only_does_not_publish_unplayable_song(self):
-        only = self.make_song("20003", b"C" * 5200, "", with_lyrics=False)
-        with self.assertRaisesRegex(online.PublishError, "Lyrics"):
-            self.publisher.publish(self.root, [only])
-        self.assertEqual(len(self.drive.items), 1)  # Keep existing empty root untouched
-
-    def test_initial_sync_interruption_can_resume_from_verified_staging(self):
-        original = self.drive.upload_file
-        def fails_initial_lyrics(parent, path, name, **kwargs):
+    def test_interrupted_initial_upload_never_publishes_pointer(self):
+        row=self.make_song()
+        original=self.drive.upload_file
+        def broken(parent,path,name,**opts):
             if name.startswith("00001-") and name.endswith(".json"):
-                raise online.PublishError("first sync interrupted")
-            return original(parent, path, name, **kwargs)
-        with patch.object(self.drive, "upload_file", side_effect=fails_initial_lyrics):
-            with self.assertRaisesRegex(online.PublishError, "first sync interrupted"):
-                self.publisher.publish(self.root, [self.first])
-        root_id = self.remote_root()
-        names = [f["name"] for f in self.folder_files(root_id)]
-        self.assertIn(online.STAGING_MARKER, names)
-        self.assertNotIn("current.json", names)
-        recovered = self.publisher.publish(self.root, [self.first])
-        self.assertTrue(recovered["published"])
-        self.assertEqual(len(self.published()), 1)
+                raise RuntimeError("Simulated Drive loss")
+            return original(parent,path,name,**opts)
+        with patch.object(self.drive,"upload_file",side_effect=broken):
+            with self.assertRaises(RuntimeError):
+                self.publisher.publish(self.root,[row])
+        root=self.root_id()
+        db=next(x["id"] for x in self.drive.list_children(root) if x["name"]=="DB")
+        self.assertFalse(any(x["name"]=="current.json" for x in self.drive.list_children(db)))
+        self.publisher.publish(self.root,[row])
+        self.assertEqual(len(self.published()),1)
+        self.assertEqual(len([x for x in self.drive.items.values() if
+          x["metadata"]["name"].endswith(".m4a")]),1)
 
-    def test_missing_online_root_never_silently_creates_duplicate_library(self):
-        self.drive.items.clear()
-        with self.assertRaisesRegex(online.PublishError, "ไม่พบ XStageWeb"):
-            self.publisher.publish(self.root, [self.first])
-        self.assertEqual(self.drive.items, {})
+    def test_v2_download_and_db_plan_keep_private_tree(self):
+        row=self.make_song()
+        self.publisher.publish(self.root,[row])
+        with patch.object(roundtrip.drive,"_request",side_effect=self.drive_response):
+            songs=self.drive.download_library(self.base/"restored","songs")
+            database=self.drive.download_library(self.base/"db-only","db")
+        self.assertEqual(songs["source"],"XStageWeb")
+        self.assertEqual(database["source"],"XStageWeb")
+        path=Path(songs["path"])
+        self.assertTrue((path/"DB/current.json").is_file())
+        self.assertEqual(len(list(path.rglob("*.m4a"))),1)
+        self.assertEqual(len(list(path.rglob("*.json")))>=3,True)
+        dbpath=Path(database["path"])
+        self.assertTrue((dbpath/"DB/current.json").is_file())
+        self.assertFalse(list(dbpath.rglob("*.m4a")))
 
-    def test_explicit_fresh_drive_consent_creates_new_online_root(self):
-        self.drive.items.clear()
-        result = self.publisher.publish(
-            self.root, [self.first], create_new_library=True)
-        self.assertTrue(result["published"])
-        self.assertEqual(result["totalSongs"], 1)
+    def test_v2_download_rejects_tampering_before_writing(self):
+        row=self.make_song()
+        self.publisher.publish(self.root,[row])
+        pointer,_,db=self.pointer()
+        base_id=pointer.get("catalogFileId")
+        self.drive.items[base_id]["body"]=b'{"schemaVersion":2,"songs":[]}'
+        with patch.object(roundtrip.drive,"_request",side_effect=self.drive_response):
+            with self.assertRaises(Exception):
+                self.drive.download_library(self.base/"tampered","songs")
+        self.assertFalse((self.base/"tampered"/"XStageWeb").exists())
 
-    def test_legacy_unindexed_online_root_stays_untouched(self):
-        root = self.drive.folder("root", "XStageWeb")
-        self.drive.folder(root, "audio")
-        before = dict(self.drive.items)
-        with self.assertRaisesRegex(online.PublishError, "ไม่มี current.json"):
-            self.publisher.publish(self.root, [self.first])
-        self.assertEqual(self.drive.items, before)
-
-    def test_partial_failure_never_switches_online_pointer(self):
-        self.publisher.publish(self.root, [self.first])
-        old, _ = self.pointer()
-        next_song = self.make_song("30004", b"D" * 5000, "บรรทัดใหม่")
-        upload = self.drive.upload_file
-        def broken_upload(parent, path, name, **kwargs):
-            if name.endswith(".json") and name != "current.json":
-                raise online.PublishError("network down")
-            return upload(parent, path, name, **kwargs)
-        with patch.object(self.drive, "upload_file", side_effect=broken_upload):
-            with self.assertRaisesRegex(online.PublishError, "network down"):
-                self.publisher.publish(self.root, [next_song])
-        self.assertEqual(self.pointer()[0]["generation"], old["generation"])
-        self.assertEqual(len(self.published()), 1)
-        retry = self.publisher.publish(self.root, [next_song])
-        self.assertEqual(retry["newSongs"], 1)
-        self.assertEqual(len(self.published()), 2)
-
-    def test_external_generation_change_aborts_pointer_switch(self):
-        self.publisher.publish(self.root, [self.first])
-        old, pointer_id = self.pointer()
-        new = self.make_song("40005", b"E" * 5000, "เพลงใหม่")
-        upload = self.drive.upload_file
-        def concurrent_upload(parent, path, name, **kwargs):
-            if name.startswith("catalog-delta-"):
-                latest = dict(old)
-                latest["generation"] = "another-publisher"
-                self.drive.items[pointer_id]["body"] = json.dumps(latest).encode("utf-8")
-            return upload(parent, path, name, **kwargs)
-        with patch.object(self.drive, "upload_file", side_effect=concurrent_upload):
-            with self.assertRaisesRegex(online.PublishError, "ผู้อื่นอัปเดต"):
-                self.publisher.publish(self.root, [new])
-        self.assertEqual(self.pointer()[0]["generation"], "another-publisher")
+    def test_download_does_not_create_a_missing_cloud_root(self):
+        before=len(self.drive.items)
+        with self.assertRaises(Exception):
+            self.drive.download_library(self.base/"missing","songs")
+        self.assertEqual(len(self.drive.items),before)
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
     unittest.main()

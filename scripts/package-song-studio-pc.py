@@ -18,6 +18,8 @@ FILES = {
     "songstudio-pc/lyric_text_groups.py": "lyric_text_groups.py",
     "songstudio-pc/google_drive.py": "google_drive.py",
     "songstudio-pc/online_publish.py": "online_publish.py",
+    "songstudio-pc/v2_native_publish.py": "v2_native_publish.py",
+    "songstudio-pc/unified_catalog_v2.py": "unified_catalog_v2.py",
     "songstudio-pc/code_registry.py": "code_registry.py",
     "songstudio-pc/song_export.py": "song_export.py",
     "songstudio-pc/live_preview.py": "live_preview.py",
