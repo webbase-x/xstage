@@ -322,30 +322,29 @@
         <section id="tab-upload" class="tab">
           <div class="section-top"><div><div class="eyebrow">PRIVATE GOOGLE DRIVE</div><h2>อัปโหลดเพลงที่สร้างเสร็จแล้ว</h2><p>เช็กไฟล์ต้นทางและ MD5 บน Drive ก่อนส่ง ลดการอัปโหลดซ้ำ</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageWeb ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
-          <article class="panel"><div class="section-heading"><div><h2>ซิงค์คลังเพลงขึ้น Drive</h2><p>เพิ่มเฉพาะ M4A และเนื้อร้อง JSON ที่พร้อมใช้งาน สร้างฐานเพลงบน XStageWeb ด้วย Drive File ID โดยเก็บเพลงเดิมไว้ทั้งหมด</p></div><span id="upload-selected-count" class="chip">ซิงค์คลังทั้งหมด</span></div><div class="toolbar"><button id="go-create" class="button ghost">กลับไปเลือกเพลง</button><button id="upload-button" class="button primary">↑ เพิ่มเพลงเข้า XStageWeb</button></div><label class="hint" style="display:flex;align-items:start;gap:10px;margin-top:12px"><input id="upload-create-library" type="checkbox" style="width:19px;height:19px;flex:none;margin-top:2px"><span><strong>สร้างคลัง XStageWeb ใหม่</strong> — เลือกเฉพาะ Google Drive ที่แน่ใจว่าไม่เคยมีคลัง XStageWeb เดิม หากมีเพลงอยู่แล้วอย่าเลือก ระบบจะหยุดเมื่อไม่มีสิทธิ์เห็นคลังเดิมเพื่อป้องกันฐานเพลงแยกซ้ำ</span></label><div class="hint">ใช้สิทธิ์ Google Drive เฉพาะไฟล์ที่แอปได้รับอนุญาต (drive.file) · อ่านฐานเดิมก่อน · ตรวจรหัสและ MD5 เพื่อข้ามซ้ำ · เผยแพร่ XStageWeb/current.json หลังตรวจไฟล์ครบแล้วเท่านั้น</div></article>
-          <article class="panel" aria-labelledby="catalog-v2-migration-title">
+          <article class="panel"><div class="section-heading"><div><h2>ซิงค์คลังเพลงขึ้น Drive</h2><p>เพิ่มเฉพาะ M4A และเนื้อร้อง JSON ที่พร้อมใช้งาน สร้างฐานเพลงบน XStageWeb ด้วย Drive File ID โดยเก็บเพลงเดิมไว้ทั้งหมด</p></div><span id="upload-selected-count" class="chip">ซิงค์คลังทั้งหมด</span></div><div class="toolbar"><button id="go-create" class="button ghost">กลับไปเลือกเพลง</button><button id="upload-button" class="button primary">↑ เพิ่มเพลงเข้า XStageWeb</button></div><div class="hint">ใช้สิทธิ์ Google Drive เฉพาะไฟล์ที่แอปได้รับอนุญาต (drive.file) · อ่านฐานเดิมก่อน · ตรวจรหัสและ MD5 เพื่อข้ามซ้ำ · เผยแพร่ XStageWeb/DB/current.json (V2) หลังตรวจไฟล์ครบแล้วเท่านั้น</div></article>
+          <article class="panel" aria-labelledby="catalog-v2-title">
             <div class="section-heading"><div>
-              <h2 id="catalog-v2-migration-title">Unified Song Database V2</h2>
-              <p>ตรวจและย้ายฐานรายการเพลง XStageWeb V1 ไปยัง XStageWeb/DB/current.json โดยไม่ลบเพลงหรือฐานเดิม</p>
-            </div><span class="chip">V2 · PRIVATE DB</span></div>
+              <h2 id="catalog-v2-title">Google Drive · XStageWeb V2</h2>
+              <p>ใช้คลังใหม่เท่านั้น: XStageWeb/AUDIO, VIDEO, MIDI และ DB/current.json · สร้างโครงสร้างเมื่อยังไม่มีได้ทันที</p>
+            </div><span class="chip">V2 ONLY</span></div>
             <div class="toolbar">
-              <button id="catalog-v2-dry-run" type="button" class="button ghost">⌕ ตรวจย้ายฐาน V2 (Dry Run)</button>
-              <button id="catalog-v2-confirm" type="button" class="button primary" disabled>✓ ยืนยันย้ายฐาน V2</button>
+              <button id="catalog-v2-setup" type="button" class="button ghost">✓ เตรียมและตรวจสอบคลัง XStageWeb V2</button>
             </div>
-            <p id="catalog-v2-migration-status" class="hint" role="status" aria-live="polite">เริ่มด้วย Dry Run เพื่อเทียบจำนวนเพลงและตรวจโครงสร้าง · จะไม่แก้ฐาน Google Drive ก่อนกดยืนยัน</p>
-            <p class="hint">ระบบอ่านเฉพาะข้อมูล Catalog จากบัญชี Google Drive ที่เชื่อมอยู่ และสร้าง DB/current.json รุ่น V2 หลังผ่านการตรวจสอบเท่านั้น · เพลงต้นฉบับและ XStageWeb/current.json รุ่น V1 คงเดิม · ห้ามเรียกการย้ายพร้อมกับตัวเผยแพร่บนเครื่องอื่น</p>
+            <p id="catalog-v2-setup-status" class="hint" role="status" aria-live="polite">เข้าสู่ระบบ Google แล้วกดเตรียมคลัง หรือเริ่มอัปโหลดเพลงได้ทันที · หากมีฐาน V2 อยู่แล้วจะไม่ล้างเพลง</p>
+            <p class="hint">จัดเตรียมโฟลเดอร์และตัวชี้ฐาน V2 แบบว่างได้โดยไม่ต้องนำเข้า StageWeb/V1 · ตรวจรหัสและ MD5 ก่อนเพิ่มเพลง · เพลงและฐานอยู่ใน Google Drive ส่วนตัวของบัญชีที่เชื่อมต่อ</p>
           </article>
         </section>
 
         <section id="tab-download" class="tab">
-          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageWeb/current.json ที่เผยแพร่จริงบน Google Drive ส่วนตัว (รองรับคลังสำรอง PC รูปแบบเก่า) · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageWeb/DB/current.json รุ่น V2 จาก Google Drive ส่วนตัว · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel"><div class="section-heading"><div><h2>ตำแหน่งเก็บไฟล์ดาวน์โหลด</h2><p>เลือกใหม่ได้ ระบบจำค่าไว้เปิดครั้งต่อไป</p></div></div><div class="path-row"><input id="download-destination" type="text" class="field" placeholder="เลือกโฟลเดอร์เก็บข้อมูล"><button type="button" class="button ghost" data-pick="download">เลือกที่เก็บ</button></div></article>
           <div class="download-grid">
             <article class="panel download-card"><div class="download-symbol">♫</div><h3>โฟลเดอร์เพลง</h3><p>ดาวน์โหลด M4A/เนื้อร้องตาม Catalog ของ XStageWeb ไม่ต้องไล่ค้นไฟล์ในทุกโฟลเดอร์ และไม่สร้างคลังใหม่</p><button class="button primary download-action" data-kind="songs" type="button">↓ ดาวน์โหลด SONG</button></article>
-            <article class="panel download-card"><div class="download-symbol">▤</div><h3>ฐานเพลง DB</h3><p>ดาวน์โหลด XStageWeb/current.json พร้อม Catalog หลัก/ส่วนเพิ่มที่อ้างถึง โดยไม่โหลด M4A</p><button class="button ghost download-action" data-kind="db" type="button">↓ ดาวน์โหลด DB</button></article>
-            <article class="panel download-card"><div class="download-symbol">▦</div><h3>ชุดสำรอง ZIP</h3><p>สำรองคลังเพลงและ Catalog ที่เผยแพร่เป็น ZIP โดยตรวจ MD5 ทุกไฟล์</p><button class="button ghost download-action" data-kind="zip" type="button">↓ ดาวน์โหลด ZIP</button></article>
+            <article class="panel download-card"><div class="download-symbol">▤</div><h3>ฐานเพลง DB</h3><p>ดาวน์โหลด XStageWeb/DB/current.json พร้อม Catalog V2 ตามส่วนที่อ้างถึง โดยไม่โหลด M4A</p><button class="button ghost download-action" data-kind="db" type="button">↓ ดาวน์โหลด DB</button></article>
+            <article class="panel download-card"><div class="download-symbol">▦</div><h3>ชุดสำรอง ZIP</h3><p>สำรองคลังเพลงและ Catalog V2 ที่เผยแพร่เป็น ZIP โดยตรวจ MD5 ทุกไฟล์</p><button class="button ghost download-action" data-kind="zip" type="button">↓ ดาวน์โหลด ZIP</button></article>
           </div>
-          <p class="hint">ผลดาวน์โหลดคลังออนไลน์จะเก็บในโฟลเดอร์ XStageWeb แยกจากคลังสร้างเพลงในเครื่อง ไม่เขียนทับฐานเพลง PC เดิม และไม่อัปโหลดหรือเปิดสิทธิ์สาธารณะโดยอัตโนมัติ · หาก XStageWeb มองไม่เห็น กรุณาตรวจบัญชี Google และ OAuth Client เดิมที่ใช้เผยแพร่ ห้ามเลือกสร้างคลังใหม่เพื่อแก้ปัญหาการดาวน์โหลด</p>
+          <p class="hint">ผลดาวน์โหลดคลังออนไลน์จะเก็บในโฟลเดอร์ XStageWeb แยกจากคลังสร้างเพลงในเครื่อง ไม่เขียนทับฐานเพลง PC เดิม และไม่อัปโหลดหรือเปิดสิทธิ์สาธารณะโดยอัตโนมัติ · หาก XStageWeb มองไม่เห็น ให้ตรวจบัญชี Google และสิทธิ์ที่ให้แอป · การดาวน์โหลดไม่สร้างโฟลเดอร์ใหม่</p>
         </section>
 
         <section id="tab-settings" class="tab">
