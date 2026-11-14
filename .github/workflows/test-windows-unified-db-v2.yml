@@ -1,0 +1,43 @@
+name: Windows PC Unified Song DB V2 offline bridge tests
+on:
+  push:
+    branches:
+      - feature/windows-pc-unified-db-v2
+  pull_request:
+    paths:
+      - 'windows-pc/source/karaoke/unified_catalog_v2.py'
+      - 'windows-pc/source/karaoke/catalog_v2_bridge.py'
+      - 'windows-pc/source/karaoke/ui.py'
+      - 'windows-pc/source/karaoke/context_menu.py'
+      - 'windows-pc/source/tests/test_unified_catalog_v2.py'
+      - '.github/workflows/test-windows-unified-db-v2.yml'
+permissions:
+  contents: read
+jobs:
+  offline-db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile portable Windows SQLite bridge
+        run: |
+          python -m py_compile windows-pc/source/karaoke/unified_catalog_v2.py
+          python -m py_compile windows-pc/source/karaoke/catalog_v2_bridge.py
+          python -m py_compile windows-pc/source/karaoke/ui.py
+          python -m py_compile windows-pc/source/karaoke/context_menu.py
+      - name: Test SQLite export/import, backups, NCN and offline-only isolation
+        working-directory: windows-pc/source
+        run: python -m unittest tests.test_unified_catalog_v2 -v
+      - name: Verify no X-Stage Online wizard in PC menus
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          base=Path('windows-pc/source/karaoke')
+          for name in ('ui.py','classic.py','context_menu.py'):
+              content=(base/name).read_text(encoding='utf-8')
+              assert 'X-Stage Karaoke Online…' not in content
+              assert 'web_online_data' not in content
+          print('Windows PC retains offline-only player menus')
+          PY
