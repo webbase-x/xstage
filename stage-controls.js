@@ -53,6 +53,7 @@
     search.blur();
   }
   function showKeyboard(){
+    window.dispatchEvent(new Event('xstage:piano-collapse'));
     keyboard.hidden = false;
     stage.classList.add('keyboard-open');
     kbToggle.setAttribute('aria-expanded','true');

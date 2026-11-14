@@ -121,6 +121,11 @@ assert.equal(font.find(0,0,30,100).length,1,'SF2 without key range must accept a
 assert.throws(()=>runtime.parseFont(new Uint8Array(300)),/SoundFont/);
 const rendered=await runtime.render(file);
 assert.equal(rendered.audio.type,'audio/wav');
+assert.equal(rendered.notes.length,1,'MIDI render exports visible on-stage piano timing');
+assert.equal(rendered.notes[0].key,60);
+assert.equal(rendered.notes[0].channel,0);
+assert.equal(rendered.notes[0].start,0);
+assert.ok(Math.abs(rendered.notes[0].end-.5)<1e-8);
 const wave=new Uint8Array(await rendered.audio.slice(0,44).arrayBuffer());
 assert.equal(String.fromCharCode(...wave.subarray(0,4)),'RIFF');
 assert.equal(String.fromCharCode(...wave.subarray(8,12)),'WAVE');

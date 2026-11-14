@@ -88,6 +88,7 @@
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
       </aside></div>
             <button id="toggle-keyboard" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="virtual-keyboard" aria-expanded="false" title="เปิดหรือซ่อนแป้นพิมพ์">⌨ <span>แป้นพิมพ์</span></button>
+            <button id="toggle-piano" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="stage-piano" aria-expanded="false" title="เปิดหรือซ่อนเปียโนบนเวที">🎹 <span>เปียโน</span></button>
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
           </header>
@@ -135,6 +136,7 @@
               </div>
             </details>
             <button type="button" id="mobile-keyboard-toggle">แป้นพิมพ์บนจอ</button>
+            <button type="button" id="mobile-piano-toggle" aria-expanded="false" aria-controls="stage-piano">🎹 เปียโน MIDI บนเวที</button>
             <button type="button" id="toggle-remote" class="menu-direct" aria-controls="remote-pair-panel" aria-expanded="false">รีโมทมือถือ QR</button>
             <button type="button" id="remote-request-toggle" aria-controls="remote-request-panel" aria-expanded="false">เพลงจากมือถือ <span id="remote-request-count">0</span></button>
             <button type="button" id="mobile-update-version">ตรวจสอบ / อัปเดต X-Stage</button>
@@ -148,6 +150,18 @@
           <div class="stage-label"><span class="on-air-dot"></span><span>NOW PLAYING</span><span id="stage-code" class="stage-code">—</span></div>
           <div id="stage-idle" class="stage-idle"><span class="stage-idle-icon" aria-hidden="true">♪</span><strong>พร้อมร้องเพลง</strong><span>ค้นหาเพลงและกด Enter เพื่อเริ่มเล่น</span></div>
           <canvas id="lyrics" aria-label="เนื้อร้องคาราโอเกะแสดงแบบไฮไลต์ตามเวลา" width="1200" height="300"></canvas>
+          <section id="stage-piano" class="stage-piano" hidden aria-label="คีย์บอร์ดเปียโนบนเวที">
+            <div class="stage-piano-head">
+              <strong>🎹 X-STAGE PIANO</strong>
+              <span id="stage-piano-state" role="status">เลือกเพลง MIDI เพื่อดูโน้ต</span>
+              <label for="stage-piano-channel">แชนเนล</label>
+              <select id="stage-piano-channel" aria-label="เลือกแชนเนล MIDI ที่จะแสดงบนเปียโน"><option value="-1">ทุกแชนเนล</option></select>
+              <button type="button" id="stage-piano-close" aria-label="ซ่อนเปียโน">✕</button>
+            </div>
+            <div id="stage-piano-viewport" class="stage-piano-viewport" tabindex="0" aria-label="เปียโน 49 คีย์ C3 ถึง C7 เลื่อนแนวนอนเพื่อดูโน้ต">
+              <div id="stage-piano-keys" class="stage-piano-keys" role="group" aria-label="กดคีย์เพื่อฟังเสียงเปียโนสังเคราะห์"></div>
+            </div>
+          </section>
           <section id="virtual-keyboard" class="virtual-keyboard" hidden aria-label="แป้นพิมพ์บนหน้าจอ">
             <div class="virtual-key-head"><strong id="virtual-language">ภาษาไทย</strong><button id="virtual-close" type="button">ซ่อนแป้นพิมพ์ ✕</button></div>
             <div id="virtual-keys" class="virtual-keys"></div>
@@ -376,6 +390,7 @@
   <script src="https://accounts.google.com/gsi/client" defer></script>
   <script src="cloud-import-core.js?v=1104" defer></script>
   <script src="browser-midi.js?v=1104" defer></script>
+  <script src="stage-piano.js?v=1104" defer></script>
   <script src="video-metadata-editor.js?v=1104" defer></script>
   <script src="video-transcode.js?v=1104" defer></script>
   <script src="cloud-import.js?v=1104" defer></script>
