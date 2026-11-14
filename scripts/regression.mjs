@@ -464,6 +464,12 @@ assert.ok(app.includes("พบ current.json หลายรายการ · �
 
 // WEB/APK use the same HTML5 stage. Video must be optional, muted and
 // synchronized to the authoritative audio clock, never cover karaoke lyrics.
+assert.ok(index.includes('browser-midi.js?v='+version.build),
+          'Bundled MIDI renderer must load without a third-party installation');
+assert.ok(index.includes('id="xstage-soundfont-select"'),
+          'SoundFont selector must be present in the stage menu');
+assert.ok(app.includes("window.XStageBrowserMidi.render(midiBytes"),
+          'Main player must send MIDI songs through the bundled synthesizer');
 assert.ok(index.includes('id="karaoke-video"') &&
           index.includes('playsinline muted preload="metadata"'),
           'WEB and Android stage must have a safe muted video layer');
@@ -474,7 +480,7 @@ assert.ok(app.includes('await privateFile(song.video.fileId,token)') &&
 assert.match(app,/function clearIdleStage\(message\)\{\s*resetSongVideo\(\)/,
              'Stop, cancel and exhausted queue must release any old video');
 assert.ok(app.includes("console.warn('Video unavailable; using verified audio + timed lyrics:") &&
-          app.includes("function playable(song) { return !!(getFileId(song?.audio) && getFileId(song?.lyrics)); }"),
+          app.includes("function playable(song) { return !!(getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))); }"),
           'Unsupported MP4 must not prevent original AAC + timed lyrics playback');
 assert.ok(style.includes('#karaoke-video[hidden]') &&
           style.includes('.stage:has(#karaoke-video:not([hidden])) #lyrics'),
