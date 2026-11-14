@@ -142,7 +142,8 @@ async function validAudio(file){
   if(type==='wav')return signature(0,'RIFF')&&signature(8,'WAVE');
   if(type==='flac')return signature(0,'fLaC');
   if(type==='ogg'||type==='oga')return signature(0,'OggS');
-  if(type==='aac')return b[0]===255&&(b[1]===241||b[1]===249);
+  if(type==='aac')return (b[0]===0xff&&(b[1]&0xf6)===0xf0)||
+    (b[0]===0x41&&b[1]===0x44&&b[2]===0x49&&b[3]===0x46);
   if(type==='webm')return b[0]===26&&b[1]===69&&b[2]===223&&b[3]===163;
   return false;
 }
@@ -194,12 +195,13 @@ function lrcToJson(raw,code){
     if(!tags.length)continue;
     const body=row.replace(stamp,'');
     const text=body.replace(cue,'').trim();
-    if(!text)continue;
+    // Preserve empty timed cues: they end the preceding lyric before a solo.
     const wordTags=[...body.matchAll(cue)];
     for(const tag of tags){
       const startTime=when(tag);
       if(!Number.isFinite(startTime)||startTime<0||startTime>=86400)continue;
       const entry={startTime,text};
+      if(!text){entry._clear=true;lines.push(entry);continue;}
       if(wordTags.length){
         const segments=[];
         const head=body.slice(0,wordTags[0].index);
@@ -226,8 +228,9 @@ function lrcToJson(raw,code){
       delete line._words;
     }
   }
-  if(!lines.length)throw Error('LRC ไม่มีบรรทัดข้อความพร้อมเวลาใช้งานจริง');
-  return {schemaVersion:1,songCode:code,audioOffsetMs:offset,lines,rawLrc:value,title,artist};
+  const visibleLines=lines.filter(line=>!line._clear);
+  if(!visibleLines.length)throw Error('LRC ไม่มีบรรทัดข้อความพร้อมเวลาใช้งานจริง');
+  return {schemaVersion:1,songCode:code,audioOffsetMs:offset,lines:visibleLines,rawLrc:value,title,artist};
 }
 function validLyricsJson(raw,code){
   let document;
