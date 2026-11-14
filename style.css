@@ -905,3 +905,11 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
 #karaoke-video[hidden]{display:none!important}
 .stage:has(#karaoke-video:not([hidden])) .stage-shade{position:absolute;z-index:1;inset:0;pointer-events:none;background:linear-gradient(180deg,#0004,#0001 45%,#000b 100%)}
 .stage:has(#karaoke-video:not([hidden])) #lyrics{z-index:4;filter:drop-shadow(0 2px 4px #000)}
+
+/* Video karaoke: keep the movie visible with optional timed text above it. */
+.stage:has(#karaoke-video:not([hidden])) .stage-hero,
+.stage:has(#karaoke-video:not([hidden])) .stage-ambience{visibility:hidden!important}
+#video-lyrics-toggle{position:absolute;top:clamp(64px,7.5vw,95px);right:12px;z-index:11;background:#081e34db;color:#f0f8ff;border:1px solid #70b9ce;border-radius:9px;padding:7px 11px;font-weight:750;font-size:.72rem;cursor:pointer}
+#video-lyrics-toggle:focus-visible{outline:2px solid #52edd2;outline-offset:3px}
+.stage.video-lyrics-off #lyrics{visibility:hidden!important}
+@media(max-width:700px){#video-lyrics-toggle{top:65px;right:7px;padding:6px 7px;font-size:.64rem}}
