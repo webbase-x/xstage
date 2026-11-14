@@ -99,6 +99,16 @@ assert.ok(css.includes('.ai-lyrics-paste-panel'),'Missing pasted lyrics UX style
 assert.ok(js.includes("run('lyric-groups-replace'"),'Missing safe grouped lyrics replace job');
 assert.ok(js.includes("run('lyric-groups-undo'"),'Missing bulk edit undo job');
 assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job');
+for(const id of ['lyric-group-folder','lyric-group-reset','lyric-group-source-status']){
+  assert.ok(html.includes('id="'+id+'"'), 'Bulk lyrics must have an independent folder selector: '+id);
+}
+assert.ok(html.includes('data-pick="lyric_source"'),
+  'The Windows lyrics editor must offer a native source folder picker');
+assert.ok(js.includes("'lyric-group-folder': 'lyric_source'") &&
+          js.includes("saveInputs(['lyric-group-folder'])") &&
+          js.includes("config({lyric_source:''})") &&
+          js.includes("phraseInvalidate()"),
+  'Bulk lyric source must persist, reset and invalidate stale selected groups');
 assert.ok(js.includes('phraseSelected'),'Missing multi-group selection state');
 assert.ok(js.includes('/api/lyric-groups-plan'),'Missing server-side multi-group preview');
 assert.ok(js.includes('data-lyric-group'),'Missing per-row selected checkbox');
