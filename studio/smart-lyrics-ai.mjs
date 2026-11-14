@@ -17,8 +17,14 @@ if(button&&status){
     }
     const originalId=chosen[0].dataset.lyricGroup,seq=++request;
     let session;
-    pending=true;button.disabled=true;show('กำลังให้ AI ภายในเครื่องตรวจคำผิด · ไม่ส่งเพลงไปยังเซิร์ฟเวอร์...');
+    pending=true;button.disabled=true;show('กำลังตรวจความพร้อมของ AI ภายในเครื่อง...');
     try{
+      if(typeof modelApi.availability==='function'){
+        const availability=await modelApi.availability();
+        if(availability==='unavailable')throw Error('โมเดล AI ใช้งานไม่ได้บนเครื่องหรือเบราว์เซอร์นี้');
+        if(availability==='downloadable'||availability==='downloading')
+          show('กำลังเตรียมโมเดล AI ภายในเครื่อง (อาจต้องดาวน์โหลดโมเดลของเบราว์เซอร์)');
+      }
       session=await modelApi.create();
       const response=await session.prompt(makePrompt(source));
       if(seq!==request)return;
