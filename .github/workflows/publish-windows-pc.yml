@@ -1,0 +1,107 @@
+name: Publish verified X-Stage Karaoke Windows PC release
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: "Successful Windows PC installer candidate run on main"
+        required: true
+        type: string
+      approve_release:
+        description: "Type RELEASE to approve making the verified installer public"
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: windows-release-publish
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main' && inputs.approve_release == 'RELEASE'
+    environment: windows-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Verify candidate run originated from successful main build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]{6,15}$ ]] || { echo "::error::Invalid run ID"; exit 1; }
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" > /tmp/candidate.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/candidate.json'))
+          assert p['conclusion']=='success', 'Candidate must pass all Windows tests/build gates'
+          assert p['head_branch']=='main', 'Cannot publish an unmerged feature branch build'
+          assert p['name']=='X-Stage Windows PC installer candidate (v1.0.76)', 'Wrong build workflow'
+          assert p['repository']['full_name']=='webbase-x/xstage'
+          print('Approved CI candidate:',p['id'],p['head_sha'])
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Karaoke-Windows-v1.0.76-build1076-CANDIDATE
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Validate installer SHA-256, file signature and release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="candidate/windows-pc/installer/output/X-Stage-Karaoke-Windows-v1.0.76-build1076.exe"
+          if [[ ! -f "$EXE" ]]; then EXE="$(find candidate -name X-Stage-Karaoke-Windows-v1.0.76-build1076.exe -type f -print -quit)"; fi
+          test -s "$EXE"
+          SHA_FILE="$EXE.sha256"
+          test -s "$SHA_FILE"
+          EXPECTED="$(awk '{print $1}' "$SHA_FILE")"
+          [[ "$EXPECTED" =~ ^[a-f0-9]{64}$ ]] || exit 1
+          ACTUAL="$(sha256sum "$EXE" | awk '{print $1}')"
+          [[ "$ACTUAL" == "$EXPECTED" ]] || { echo '::error::Installer checksum mismatch'; exit 1; }
+          test "$(stat -c%s "$EXE")" -gt 1000000
+          echo "WINDOWS_EXE=$EXE" >> "$GITHUB_ENV"
+          echo "WINDOWS_SHA=$ACTUAL" >> "$GITHUB_ENV"
+          echo "Installer SHA256 verified: $ACTUAL"
+      - name: Publish installer as release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="windows-v1.0.76-build1076"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Windows release tag already exists; refuse to overwrite"
+            exit 1
+          fi
+          gh release create "$TAG" "$WINDOWS_EXE" "$WINDOWS_EXE.sha256" \
+            --title "X-Stage Karaoke Windows PC v1.0.76 (Build 1076)" \
+            --notes "Standalone Windows PC player. X-Stage Karaoke Online sync removed from the PC edition. Update checker verifies published SHA-256 before installation. Windows installer candidate passed the GitHub Actions build and full source regression. This is an unsigned executable; Windows may display a security confirmation."
+      - name: Publish safe Windows updater feed to GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          name='X-Stage-Karaoke-Windows-v1.0.76-build1076.exe'
+          link='https://github.com/webbase-x/xstage/releases/download/windows-v1.0.76-build1076/'+name
+          data={
+            'name':'X-Stage Karaoke Windows PC','version':'1.0.76','build':1076,
+            'available':True,'installer_file':name,'installer_url':link,
+            'sha256':os.environ['WINDOWS_SHA'],'minimum_updater_version':'1.0.76',
+            'message':'Official verified Windows installer release'
+          }
+          Path('downloads/windows-pc-latest.json').write_text(
+            json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads/windows-pc-latest.json
+          git diff --cached --exit-code && { echo '::error::Release feed unchanged'; exit 1; } || true
+          git commit -m "release(windows): publish verified installer v1.0.76 build1076 update feed"
+          git push origin HEAD:main
