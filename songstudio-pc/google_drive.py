@@ -830,9 +830,11 @@ class GoogleDrive:
                     # Google native Docs are not binary song library files.
                     continue
                 else:
-                    is_db = (relative == "current.json" or relative.startswith("DB/")
-                             or relative.startswith("catalog-") or
-                             relative.startswith("database-"))
+                    is_db = (relative in ("current.json", "TEXT/current.json")
+                             or relative.startswith("DB/")
+                             or relative.startswith("TEXT/catalog-")
+                             or relative.startswith("catalog-")
+                             or relative.startswith("database-"))
                     if kind == "db" and not is_db:
                         continue
                     if kind == "songs" and is_db:
@@ -869,8 +871,17 @@ class GoogleDrive:
             return None
         library_name = roots[0]["name"]
         children = self.list_children(roots[0]["id"])
-        pointers = [f for f in children if f.get("name") == "current.json"
-                    and f.get("mimeType") != "application/vnd.google-apps.folder"]
+        text_folders = [f for f in children if f.get("name") == "TEXT"
+                        and f.get("mimeType") == "application/vnd.google-apps.folder"]
+        if len(text_folders) > 1:
+            raise GoogleError("พบ TEXT หลายโฟลเดอร์ใน XStageWeb")
+        modern = [f for f in self.list_children(text_folders[0]["id"])
+                  if f.get("name") == "current.json"] if text_folders else []
+        legacy = [f for f in children if f.get("name") == "current.json"
+                  and f.get("mimeType") != "application/vnd.google-apps.folder"]
+        if modern and legacy:
+            raise GoogleError("พบ current.json ทั้งใน TEXT และรากคลัง · หยุด")
+        pointers = modern or legacy
         if len(pointers) > 1:
             raise GoogleError("พบ current.json ซ้ำใน XStageWeb · หยุดเพื่อป้องกันกู้คืนฐานผิด")
         if not pointers:
@@ -943,8 +954,9 @@ class GoogleDrive:
                     not name.endswith(".json") or "/" in name or "\\" in name):
                 raise GoogleError("ชื่อ Catalog ไม่ตรงกับ XStageWeb/current.json")
             doc = read_json(meta, library_name + "/" + name)
-            add(("DB/" + name if pointer.get("layoutVersion") == 2 else name),
-                file_id, meta.get("md5Checksum"))
+            prefix = ("TEXT/" if pointer.get("layoutVersion") == 3 else
+                      "DB/" if pointer.get("layoutVersion") == 2 else "")
+            add(prefix + name, file_id, meta.get("md5Checksum"))
             return doc
         base = catalog(base_id, "catalog-base-")
         if base.get("schemaVersion") != 1 or not isinstance(base.get("songs"), list):
@@ -978,26 +990,34 @@ class GoogleDrive:
             if not songs:
                 raise GoogleError("XStageWeb ยังไม่มีเพลงที่เผยแพร่")
             for row in songs.values():
-                for field, prefix in (
-                    ("audio", "audio/"), ("lyrics", "lyrics/"),
-                    ("lrc", "lyrics/"), ("vocals", "audio/"),
-                ):
+                for field in ("audio", "midi", "video", "originalVideo",
+                              "lyrics", "vocals", "lrc"):
                     media = row.get(field)
-                    if field in ("lrc", "vocals") and media is None:
-                        continue
                     if not isinstance(media, dict):
-                        raise GoogleError("Catalog มีเพลงที่ไม่มีไฟล์ " + field)
+                        if field in ("audio", "midi") and (
+                                isinstance(row.get("audio"), dict) or
+                                isinstance(row.get("midi"), dict)):
+                            continue
+                        if field in ("audio", "midi") and not isinstance(
+                                row.get("audio"), dict) and not isinstance(
+                                row.get("midi"), dict):
+                            raise GoogleError("Catalog ไม่มีไฟล์ MIDI หรือไฟล์เสียง")
+                        if field == "lyrics":
+                            raise GoogleError("Catalog ไม่มี Lyrics JSON")
+                        continue
                     rel = media.get("path")
-                    new_layout = (isinstance(rel, str) and
-                                  rel.startswith("AUDIO/") and
-                                  ("/Songs/" in rel if field in ("audio", "vocals")
-                                   else "/Lyrics/" in rel))
-                    if (not isinstance(rel, str) or
-                            not (new_layout or rel.startswith(prefix) or
-                                 rel.startswith("songs/" + prefix))):
+                    allowed_new = (isinstance(rel, str) and
+                                   ((rel.startswith("AUDIO/") and field != "lyrics") or
+                                    (rel.startswith("TEXT/") and field == "lyrics")))
+                    allowed_old = (isinstance(rel, str) and (
+                        rel.startswith("audio/") or rel.startswith("lyrics/") or
+                        rel.startswith("songs/") or rel.startswith("MIDI/") or
+                        rel.startswith("VIDEO/") or rel.startswith("AUDIO/")))
+                    if not (allowed_new or allowed_old):
                         raise GoogleError("พาธไฟล์ " + field + " ใน Catalog ไม่ถูกต้อง")
                     add(rel, media.get("fileId"), media.get("md5Checksum"))
-        add("current.json", pointer_file["id"], pointer_file.get("md5Checksum"))
+        add("TEXT/current.json" if pointer.get("layoutVersion") == 3
+            else "current.json", pointer_file["id"], pointer_file.get("md5Checksum"))
         return files, library_name
 
     def upload_library(self, local_songs, selected_records, cancelled=None, on_progress=None):
