@@ -41,5 +41,7 @@ assert.equal(lrc.lines[0].endTime,3);
 assert.equal(lrc.title,'เพลงทดสอบ');
 assert.equal(lrc.artist,'ศิลปิน');
 assert.throws(()=>core.lrcToJson('ข้อความไม่มีเวลา','A'),/ไม่มีบรรทัด/);
-assert.equal(await core.validAudio(new Blob([Buffer.from([73,68,51]),Buffer.alloc(1500)],{type:'audio/mpeg'}).arrayBuffer().then(async data=>({name:'sound.mp3',size:data.byteLength,slice:(a,b)=>new Blob([data.slice(a,b)])}))),true);
+const sampleMp3=new Blob([Buffer.from([73,68,51]),Buffer.alloc(1500)],{type:'audio/mpeg'});
+sampleMp3.name='sound.mp3';
+assert.equal(await core.validAudio(sampleMp3),true);
 console.log('PASS: streaming MD5, song pairing, typed validation and timed LRC contracts');
