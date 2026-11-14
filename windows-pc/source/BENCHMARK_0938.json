@@ -1,0 +1,29 @@
+{
+  "benchmark": "v0.9.38 bounded preview synthetic Linux; file creation excluded",
+  "results": [
+    {
+      "catalog_songs": 1000,
+      "requested": 10,
+      "returned": 10,
+      "matched": 1000,
+      "elapsed_seconds": 0.0538,
+      "peak_python_mb": 0.687
+    },
+    {
+      "catalog_songs": 5000,
+      "requested": 10,
+      "returned": 10,
+      "matched": 5000,
+      "elapsed_seconds": 0.0181,
+      "peak_python_mb": 0.169
+    },
+    {
+      "catalog_songs": 20000,
+      "requested": 10,
+      "returned": 10,
+      "matched": 20000,
+      "elapsed_seconds": 0.0366,
+      "peak_python_mb": 0.212
+    }
+  ]
+}
