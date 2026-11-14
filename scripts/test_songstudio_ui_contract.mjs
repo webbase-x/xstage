@@ -114,10 +114,11 @@ assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job'
 for(const id of ['lyric-group-folder','lyric-group-reset','lyric-group-source-status']){
   assert.ok(html.includes('id="'+id+'"'), 'Bulk lyrics must have an independent folder selector: '+id);
 }
-assert.ok(html.includes('Song / Lyrics / Cursor') &&
-          html.includes('ไม่ต้องมี current.json') &&
-          html.includes('MID/LYR/CUR'),
-  'Editor must describe StageWeb, raw LRC and native mirrored NCN sources');
+assert.ok(html.includes('วิเคราะห์เฉพาะไฟล์ .LYR') &&
+          html.includes('ไม่อ่าน MID/CUR') &&
+          html.includes('โฟลเดอร์ Lyrics ที่ไม่มี Song/Cursor วิเคราะห์ได้แต่ยังแก้ไม่ได้') &&
+          html.includes('StageWeb'),
+  'NCN editor must explain LYR-only analysis and deferred MID/CUR safety checks');
 assert.ok(html.includes('data-pick="lyric_source"'),
   'The Windows lyrics editor must offer a native source folder picker');
 assert.ok(js.includes("'lyric-group-folder': 'lyric_source'") &&
