@@ -1,0 +1,47 @@
+name: X-Stage Smart Batch Lyrics regression
+
+on:
+  pull_request:
+    paths:
+      - "songstudio-pc/lyric_text_groups.py"
+      - "songstudio-pc/engine.py"
+      - "studio/app.js"
+      - "studio/index.html"
+      - "scripts/test_songstudio_lyric_text_groups.py"
+      - "scripts/test_songstudio_smart_batch.py"
+      - ".github/workflows/smart-batch-lyrics-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "songstudio-pc/lyric_text_groups.py"
+      - "songstudio-pc/engine.py"
+      - "studio/app.js"
+      - "studio/index.html"
+      - "scripts/test_songstudio_lyric_text_groups.py"
+      - "scripts/test_songstudio_smart_batch.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-and-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Compile Python and check Studio JavaScript
+        run: |
+          python -m compileall -q songstudio-pc/lyric_text_groups.py songstudio-pc/engine.py scripts/test_songstudio_smart_batch.py
+          node --check studio/app.js
+          node scripts/test_songstudio_ui_contract.mjs
+      - name: Existing bulk editing and Undo regression
+        run: python -m unittest discover -s scripts -p 'test_songstudio_lyric_text_groups.py' -v
+      - name: Smart anchored timing, invalid skips and rollback
+        run: python -m unittest discover -s scripts -p 'test_songstudio_smart_batch.py' -v
