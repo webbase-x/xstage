@@ -39,3 +39,5 @@ jobs:
         run: python -m unittest discover -s scripts -p "test_songstudio_online_publish.py" -v
       - name: Verify two-folder layout and no-pointer safeguards
         run: python -m unittest discover -s scripts -p "test_songstudio_drive_layout.py" -v
+      - name: Verify fresh-install does not create legacy backup trees
+        run: python -m unittest discover -s scripts -p "test_songstudio_drive_roundtrip.py" -v
