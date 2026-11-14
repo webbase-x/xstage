@@ -1,0 +1,370 @@
+/* X-Stage browser MIDI renderer. No external executable, CDN or third-party script required.
+ * Renders SMF/KAR to a seekable WAV with Web Audio. SF2 PCM and SF3 Ogg sample banks
+ * are read from the owner's private Drive only after explicit SoundFont selection.
+ * This is a bounded compatibility renderer, not a bit-exact FluidSynth replacement. */
+(function(scope){
+'use strict';
+const MAX_MIDI=12*1024*1024, MAX_FONT=256*1024*1024, MAX_SECONDS=900, RATE=32000;
+const $=id=>document.getElementById(id);
+const u16=(d,p)=>d.getUint16(p,true),i16=(d,p)=>d.getInt16(p,true),u32=(d,p)=>d.getUint32(p,true);
+const str=(a,p,n)=>String.fromCharCode(...a.subarray(p,p+n));
+function fail(message){throw Error(message);}
+function text(bytes){
+  const b=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
+  for(const enc of ['utf-8','windows-874']){
+    try{const s=new TextDecoder(enc,{fatal:enc==='utf-8'}).decode(b);
+      if(s&&!s.includes('\ufffd'))return s;}catch{}
+  }
+  return new TextDecoder().decode(b);
+}
+function parseMidi(source){
+  const b=source instanceof Uint8Array?source:new Uint8Array(source);
+  if(b.byteLength<22||b.byteLength>MAX_MIDI||str(b,0,4)!=='MThd')fail('ไม่ใช่ไฟล์ MIDI มาตรฐานหรือไฟล์ใหญ่เกิน 12 MB');
+  const d=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  const be16=p=>d.getUint16(p,false),be32=p=>d.getUint32(p,false);
+  const header=be32(4),format=be16(8),ntracks=be16(10),division=be16(12);
+  if(header<6||header>256||format>1||!ntracks||ntracks>256||(division&0x8000)||!division)
+    fail('MIDI format/division นี้ไม่รองรับ');
+  let cursor=8+header; const events=[];
+  for(let track=0;track<ntracks;track++){
+    if(cursor+8>b.length||str(b,cursor,4)!=='MTrk')fail('MIDI track ไม่สมบูรณ์');
+    const size=be32(cursor+4);cursor+=8;
+    const end=cursor+size;if(end>b.length)fail('MIDI track มีความยาวผิด');
+    let tick=0,run=0,count=0;
+    const varlen=()=>{let n=0;for(let i=0;i<4;i++){if(cursor>=end)fail('MIDI delta/length ไม่ครบ');const c=b[cursor++];n=(n<<7)|(c&127);if(!(c&128))return n;}fail('MIDI variable-length ผิดรูปแบบ');};
+    while(cursor<end){
+      if(++count>250000)fail('จำนวน MIDI events มากเกินขีดจำกัด');
+      tick+=varlen();if(tick>200000000)fail('MIDI tick เกินขอบเขต');
+      let s=b[cursor];if(s&128){cursor++;if(s<0xf0)run=s;}else{if(!run)fail('MIDI running status ผิด');s=run;}
+      if(s===0xff){
+        if(cursor>=end)fail('MIDI meta event ไม่ครบ');
+        const type=b[cursor++],len=varlen();if(cursor+len>end)fail('MIDI meta ยาวเกิน track');
+        if(type===0x51&&len===3){
+          const tempo=(b[cursor]<<16)|(b[cursor+1]<<8)|b[cursor+2];
+          if(tempo>=10000&&tempo<=10000000)events.push({tick,kind:'tempo',value:tempo,track});
+        }else if((type===0x05||type===0x01||type===0x03)&&len&&len<4096){
+          events.push({tick,kind:'text',value:text(b.subarray(cursor,cursor+len)),meta:type,track});
+        }
+        cursor+=len;
+        if(type===0x2f){cursor=end;break;}
+      }else if(s===0xf0||s===0xf7){
+        const len=varlen();if(cursor+len>end)fail('MIDI SysEx ไม่ครบ');cursor+=len;run=0;
+      }else if(s>=0x80&&s<=0xef){
+        const k=s&0xf0,ch=s&15,n=k===0xc0||k===0xd0?1:2;
+        if(cursor+n>end)fail('MIDI channel event ไม่ครบ');
+        const a=b[cursor++],v=n===2?b[cursor++]:0;
+        if(a>127||v>127)fail('MIDI channel data ผิด');
+        events.push({tick,kind:'channel',k,ch,a,v,track});
+      }else fail('MIDI system event ไม่รองรับ');
+    }
+    cursor=end;
+  }
+  events.sort((a,b)=>a.tick-b.tick||(a.kind==='tempo'?-1:0));
+  let prev=0,tempo=500000,clock=0;
+  const channels=Array.from({length:16},()=>({program:0,bank:0,volume:100,expression:127,notes:new Map(),sustain:false,held:[]}));
+  const notes=[],lyricEvents=[];
+  const endNote=(note,at)=>{if(!note)return;note.end=Math.max(note.start+.06,at);notes.push(note);};
+  for(const e of events){
+    clock+=(e.tick-prev)*tempo/(division*1000000);prev=e.tick;
+    if(!Number.isFinite(clock)||clock>MAX_SECONDS+60)fail('MIDI ยาวเกินขอบเขตเรนเดอร์');
+    if(e.kind==='tempo'){tempo=e.value;continue;}
+    if(e.kind==='text'){if(e.meta===5||e.meta===1)lyricEvents.push({time:clock,text:e.value,meta:e.meta,track:e.track});continue;}
+    const c=channels[e.ch],id=e.a;
+    if(e.k===0xc0)c.program=id;
+    if(e.k===0xb0){
+      if(id===0)c.bank=e.v;
+      if(id===7)c.volume=e.v;
+      if(id===11)c.expression=e.v;
+      if(id===64){const down=e.v>=64;if(c.sustain&&!down){for(const n of c.held)endNote(n,clock);c.held=[];}c.sustain=down;}
+      if(id===120||id===123){for(const q of c.notes.values())for(const n of q)endNote(n,clock);c.notes.clear();for(const n of c.held)endNote(n,clock);c.held=[];}
+    }
+    if(e.k===0x90&&e.v>0){
+      const note={start:clock,end:clock+.25,key:id,velocity:e.v,channel:e.ch,
+        program:c.program,bank:e.ch===9?128:c.bank,level:c.volume*c.expression/(127*127)};
+      if(!c.notes.has(id))c.notes.set(id,[]);c.notes.get(id).push(note);
+    }
+    if(e.k===0x80||(e.k===0x90&&e.v===0)){
+      const stack=c.notes.get(id);const note=stack?.shift();if(stack&&!stack.length)c.notes.delete(id);
+      if(note){if(c.sustain)c.held.push(note);else endNote(note,clock);}
+    }
+  }
+  for(const c of channels){
+    for(const q of c.notes.values())for(const note of q)endNote(note,clock+.15);
+    for(const note of c.held)endNote(note,clock+.15);
+  }
+  if(!notes.length)fail('MIDI ไม่มีโน้ตที่เล่นได้');
+  const duration=Math.max(clock,...notes.map(x=>x.end))+1;
+  if(duration>MAX_SECONDS)fail('MIDI ยาวเกิน 15 นาทีสำหรับตัวเรนเดอร์บนเว็บ');
+  return {notes,duration,lyricEvents};
+}
+function midiLyrics(parsed,code){
+  let title='',artist='';const pieces=[];
+  for(const e of parsed.lyricEvents){
+    let v=e.text.replace(/\0/g,'').trim();
+    if(!v)continue;
+    if(v.startsWith('@T')){if(!title)title=v.slice(2);else if(!artist)artist=v.slice(2);continue;}
+    if(v.startsWith('@'))continue;
+    if(e.meta!==5&&!/[\\/]/.test(v))continue;
+    if(v.startsWith('\\')||v.startsWith('/'))v=v.slice(1);
+    v=v.replace(/[\\/]/g,'').trim();
+    if(v)pieces.push({time:e.time,text:v});
+  }
+  const lines=[];
+  let group=[];
+  function flush(){
+    if(!group.length)return;
+    const start=group[0].time,end=Math.max(start+.25,group[group.length-1].time+1);
+    lines.push({startTime:start,endTime:end,text:group.map(x=>x.text).join(''),
+      syllables:group.map((x,i)=>({text:x.text,start:x.time,
+        duration:Math.max(.04,(group[i+1]?.time||end)-x.time)}))});
+    group=[];
+  }
+  for(const x of pieces){
+    if(group.length&&(x.time-group[group.length-1].time>3.8||group.length>120))flush();
+    group.push(x);
+  }
+  flush();
+  if(!lines.length)lines.push({startTime:0,endTime:Math.min(parsed.duration,10),text:'♪ ดนตรีบรรเลง ♪'});
+  return {schemaVersion:1,songCode:code,title,artist,lines};
+}
+function ncnLyrics(lyrBytes,curBytes,code,duration){
+  const raw=text(lyrBytes).replace(/\r\n?/g,'\n');
+  const rows=raw.split('\n');if(rows.length<5)fail('LYR NCN ต้องมีส่วนหัวสี่บรรทัด');
+  const body=rows.slice(4),cur=curBytes instanceof Uint8Array?curBytes:new Uint8Array(curBytes);
+  if(!cur.length||(cur.length&1)||cur.length>2*1024*1024)fail('CUR NCN ขนาดไม่ถูกต้อง');
+  const ticks=new DataView(cur.buffer,cur.byteOffset,cur.byteLength);
+  const textChars=body.join('\n');
+  const count=[...textChars].filter(c=>c!=='\n').length;
+  if(count>ticks.byteLength/2)fail('CUR NCN จำนวนตำแหน่งน้อยกว่าอักษร LYR');
+  let ix=0;const lines=[];
+  for(const row of body){
+    if(!row){continue;}
+    const syllables=[];
+    for(const char of row){
+      const at=ticks.getUint16(ix*2,true)/24;ix++;
+      if(at>duration+20)fail('CUR NCN มีเวลานอกช่วงเพลง');
+      syllables.push({text:char,start:at,duration:.08});
+    }
+    if(!syllables.length)continue;
+    for(let i=0;i<syllables.length;i++)
+      syllables[i].duration=Math.max(.03,(syllables[i+1]?.start??(syllables[i].start+.4))-syllables[i].start);
+    const start=syllables[0].start;
+    lines.push({startTime:start,endTime:Math.max(start+.1,syllables[syllables.length-1].start+.5),
+      text:row,syllables});
+  }
+  if(!lines.length)fail('LYR/CUR NCN ไม่มีเนื้อร้อง');
+  return {schemaVersion:1,songCode:code,title:rows[0].trim(),artist:rows[1].trim(),lines};
+}
+function parseFont(data){
+  const b=data instanceof Uint8Array?data:new Uint8Array(data);
+  if(b.byteLength<256||b.byteLength>MAX_FONT||str(b,0,4)!=='RIFF'||str(b,8,4)!=='sfbk')
+    fail('SoundFont ไม่ใช่ SF2/SF3 ที่สมบูรณ์ หรือเกิน 256 MB');
+  const d=new DataView(b.buffer,b.byteOffset,b.byteLength),chunks=new Map();
+  const end=Math.min(b.length,8+u32(d,4));
+  if(end!==b.length&&end+1!==b.length)fail('RIFF SoundFont ขนาดไม่ตรง');
+  for(let at=12;at+12<=end;){
+    const type=str(b,at,4),len=u32(d,at+4);
+    if(at+8+len>end)fail('SoundFont RIFF chunk เสีย');
+    if(type==='LIST'){
+      const base=str(b,at+8,4);
+      if(base==='sdta'||base==='pdta'||base==='INFO'){
+        for(let p=at+12;p+8<=at+8+len;){
+          const id=str(b,p,4),size=u32(d,p+4);
+          if(p+8+size>at+8+len)fail('SoundFont subchunk เสีย');
+          chunks.set(id,{at:p+8,len:size});
+          p+=8+size+(size&1);
+        }
+      }
+    }
+    at+=8+len+(len&1);
+  }
+  for(const name of ['smpl','phdr','pbag','pgen','inst','ibag','igen','shdr'])
+    if(!chunks.has(name))fail('SoundFont ขาดโครงสร้าง '+name);
+  const records=(name,size,fn)=>{
+    const c=chunks.get(name),n=Math.floor(c.len/size),out=[];
+    if(n>400000)fail('SoundFont metadata มีขนาดผิด');
+    for(let i=0;i<n;i++)out.push(fn(c.at+i*size));
+    return out;
+  };
+  const presets=records('phdr',38,p=>({program:u16(d,p+20),bank:u16(d,p+22),bag:u16(d,p+24)}));
+  const pbag=records('pbag',4,p=>u16(d,p)),pgen=records('pgen',4,p=>[u16(d,p),u16(d,p+2)]);
+  const inst=records('inst',22,p=>u16(d,p+20));
+  const ibag=records('ibag',4,p=>u16(d,p)),igen=records('igen',4,p=>[u16(d,p),u16(d,p+2)]);
+  const samples=records('shdr',46,p=>({start:u32(d,p+20),end:u32(d,p+24),loopStart:u32(d,p+28),loopEnd:u32(d,p+32),
+    rate:u32(d,p+36),pitch:b[p+40],correct:d.getInt8(p+41),type:u16(d,p+44)}));
+  const zone=(bags,gens,i)=>{const start=bags[i],end=bags[i+1]??gens.length;
+    const g=new Map();for(let j=start;j<end&&j<gens.length;j++)g.set(gens[j][0],gens[j][1]);return g;};
+  const within=(g,key,vel)=>{const k=g.get(43),v=g.get(44);
+    return (k===undefined||(key>=(k&255)&&key<=(k>>8)))&&
+      (v===undefined||(vel>=(v&255)&&vel<=(v>>8)));};
+  const combine=(a,b)=>new Map([...a,...b]);
+  function find(bank,program,key,velocity){
+    const p=presets.findIndex(x=>x.bank===bank&&x.program===program);
+    const selected=p>=0?p:presets.findIndex(x=>x.bank===0&&x.program===program);
+    if(selected<0||selected>=presets.length-1)return [];
+    const result=[],first=presets[selected].bag,last=presets[selected+1].bag;
+    let pg=new Map();
+    for(let i=first;i<last;i++){
+      const a=zone(pbag,pgen,i);
+      if(!a.has(41)){pg=combine(pg,a);continue;}
+      const g=combine(pg,a);if(!within(g,key,velocity))continue;
+      const number=g.get(41);if(number>=inst.length-1)continue;
+      let ig=new Map();
+      for(let z=inst[number];z<inst[number+1];z++){
+        const b=zone(ibag,igen,z);
+        if(!b.has(53)){ig=combine(ig,b);continue;}
+        const c=combine(g,combine(ig,b));
+        if(within(c,key,velocity)&&c.get(53)<samples.length-1)result.push(c);
+        if(result.length>=4)return result;
+      }
+    }
+    return result;
+  }
+  return {b,d,chunks,samples,find,cache:new Map()};
+}
+async function sampleBuffer(font,index,context){
+  if(font.cache.has(index))return font.cache.get(index);
+  const sample=font.samples[index],chunk=font.chunks.get('smpl');
+  if(!sample||!sample.rate||sample.rate>192000)fail('SoundFont sample header ผิด');
+  let buffer;
+  if(sample.type&0x10){
+    const start=chunk.at+sample.start,end=chunk.at+sample.end;
+    if(start<chunk.at||end>chunk.at+chunk.len||end-start<32||end-start>24*1024*1024)
+      fail('SF3 compressed sample อยู่นอกขอบเขต');
+    try{buffer=await context.decodeAudioData(font.b.slice(start,end).buffer);}
+    catch{fail('เบราว์เซอร์นี้ถอดรหัสเสียง SF3 ไม่ได้ · กรุณาเลือก SF2 หรือเสียงพื้นฐาน');}
+  }else{
+    const n=sample.end-sample.start,at=chunk.at+sample.start*2;
+    if(n<1||n>sample.rate*90||at<chunk.at||at+n*2>chunk.at+chunk.len)
+      fail('SF2 PCM sample อยู่นอกขอบเขต');
+    buffer=context.createBuffer(1,n,sample.rate);
+    const out=buffer.getChannelData(0);
+    for(let i=0;i<n;i++)out[i]=font.d.getInt16(at+i*2,true)/32768;
+  }
+  if(font.cache.size>=80)font.cache.delete(font.cache.keys().next().value);
+  font.cache.set(index,buffer);
+  return buffer;
+}
+function toWav(audio){
+  const n=audio.length,channels=Math.min(2,audio.numberOfChannels),bytes=n*channels*2,buf=new ArrayBuffer(44+bytes),d=new DataView(buf);
+  const ascii=(p,s)=>{for(let i=0;i<s.length;i++)d.setUint8(p+i,s.charCodeAt(i));};
+  ascii(0,'RIFF');d.setUint32(4,36+bytes,true);ascii(8,'WAVE');ascii(12,'fmt ');
+  d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,channels,true);
+  d.setUint32(24,audio.sampleRate,true);d.setUint32(28,audio.sampleRate*channels*2,true);
+  d.setUint16(32,channels*2,true);d.setUint16(34,16,true);ascii(36,'data');d.setUint32(40,bytes,true);
+  const data=Array.from({length:channels},(_,i)=>audio.getChannelData(i));
+  let pos=44;
+  for(let i=0;i<n;i++)for(let c=0;c<channels;c++){
+    const x=Math.max(-1,Math.min(1,data[c][i]));
+    d.setInt16(pos,x<0?x*32768:x*32767,true);pos+=2;
+  }
+  return new Blob([buf],{type:'audio/wav'});
+}
+async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
+  const check=()=>{if(signal?.aborted)fail('ยกเลิกการเตรียม MIDI แล้ว');};
+  check();const song=parseMidi(source),ctx=new OfflineAudioContext(2,Math.ceil((song.duration+.5)*RATE),RATE);
+  const font=fontBytes?parseFont(fontBytes):null;
+  let num=0;
+  const master=ctx.createGain();master.gain.value=font?.75:.24;master.connect(ctx.destination);
+  for(const note of song.notes){
+    if(num++%200===0){check();onStatus?.('เตรียม MIDI '+Math.floor(num*100/song.notes.length)+'%');await Promise.resolve();}
+    const start=Math.max(0,note.start),end=Math.max(start+.06,note.end);
+    let regions=font?font.find(note.bank,note.program,note.key,note.velocity):[];
+    if(font&&!regions.length)continue;
+    if(!font)regions=[null];
+    for(const g of regions){
+      const gain=ctx.createGain(),velocity=Math.pow(note.velocity/127,1.5),level=Math.max(0,Math.min(1,note.level));
+      const attenuation=g?(g.get(48)||0):0;
+      const amp=Math.max(.00001,velocity*level*Math.pow(10,-attenuation/200)*(.5/Math.max(1,regions.length)));
+      const release=g?Math.max(.04,Math.min(4,Math.pow(2,(i16(new DataView(new Uint16Array([g.get(38)||0]).buffer),0))/1200))):.12;
+      const attack=g?Math.max(.005,Math.min(.5,Math.pow(2,(i16(new DataView(new Uint16Array([g.get(34)||0]).buffer),0))/1200))):.015;
+      gain.gain.setValueAtTime(.00001,start);
+      gain.gain.linearRampToValueAtTime(amp,start+Math.min(attack,Math.max(.01,(end-start)/2)));
+      gain.gain.setValueAtTime(amp,end);
+      gain.gain.exponentialRampToValueAtTime(.00001,Math.min(song.duration+.3,end+release));
+      gain.connect(master);
+      if(g){
+        const si=g.get(53),s=font.samples[si],buffer=await sampleBuffer(font,si,ctx);
+        const src=ctx.createBufferSource();src.buffer=buffer;
+        const pitch=g.has(58)?g.get(58):s.pitch;
+        const coarse=g.has(51)?(g.get(51)<<16>>16):0;
+        const fine=g.has(52)?(g.get(52)<<16>>16):0;
+        src.playbackRate.value=Math.pow(2,(note.key-pitch+coarse+(fine+s.correct)/100)/12);
+        const mode=g.get(54)||0;
+        if((mode&1)&&s.loopEnd>s.loopStart+8&&!(s.type&0x10)){
+          src.loop=true;src.loopStart=(s.loopStart-s.start)/s.rate;src.loopEnd=(s.loopEnd-s.start)/s.rate;
+        }
+        src.connect(gain);src.start(start);src.stop(Math.min(song.duration+.4,end+release+.03));
+      }else{
+        const src=ctx.createOscillator();
+        src.type=note.channel===9?'square':note.program>=80?'sawtooth':note.program>=40?'triangle':'sine';
+        src.frequency.value=440*Math.pow(2,(note.key-69)/12);
+        src.connect(gain);src.start(start);src.stop(Math.min(song.duration+.4,end+release+.03));
+      }
+    }
+  }
+  if(font&&!num)fail('SoundFont ไม่มี preset ที่ใช้กับ MIDI นี้');
+  onStatus?.('กำลังสังเคราะห์เสียง MIDI…');
+  const result=await ctx.startRendering();check();
+  onStatus?.('กำลังเตรียมเสียงสำหรับเล่น…');
+  return {audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration};
+}
+let context=null,selected='',fontCache=null;
+async function listFolder(parent,token){
+  const list=[];let page='';
+  do{
+    const q=new URLSearchParams({q:"'"+parent+"' in parents and trashed=false",
+      fields:'nextPageToken,files(id,name,mimeType,size)',pageSize:'1000'});
+    if(page)q.set('pageToken',page);
+    const response=await fetch('https://www.googleapis.com/drive/v3/files?'+q,
+      {headers:{Authorization:'Bearer '+token},cache:'no-store'});
+    if(!response.ok)fail('อ่านรายการ SoundFont บน Drive ไม่สำเร็จ HTTP '+response.status);
+    const json=await response.json();list.push(...(json.files||[]));page=json.nextPageToken||'';
+  }while(page&&list.length<10000);
+  return list;
+}
+async function refreshFonts(auth){
+  const select=$('xstage-soundfont-select');if(!select)return;
+  context=auth;const sub=auth?.sub||'',rootId=auth?.rootId||'';
+  select.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)',''));
+  if(!auth?.token||!rootId){selected='';fontCache=null;return;}
+  try{
+    const categories=await listFolder(rootId,auth.token);
+    const root=categories.find(x=>x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
+    if(root){
+      const types=await listFolder(root.id,auth.token);
+      const dirs=types.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&['SF2','SF3'].includes(x.name.toUpperCase()));
+      for(const dir of dirs){
+        const files=await listFolder(dir.id,auth.token);
+        for(const f of files.filter(x=>/\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder'))
+          select.append(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
+      }
+    }
+    const storageKey='xstage-font-pref:'+sub+':'+rootId;
+    const saved=localStorage.getItem(storageKey)||'';
+    select.value=Array.from(select.options).some(x=>x.value===saved)?saved:'';
+    selected=select.value;select.onchange=()=>{
+      selected=select.value;fontCache=null;
+      try{localStorage.setItem(storageKey,selected);}catch{}
+    };
+  }catch(error){
+    const o=new Option('SoundFont: '+String(error.message).slice(0,80),'');o.disabled=true;select.append(o);
+  }
+}
+async function selectedFont(token,signal){
+  if(!selected)return null;
+  if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
+  if(fontCache?.id===selected&&fontCache?.sub===context.sub)return fontCache.bytes;
+  const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(selected)+'?alt=media',
+    {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
+  if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
+  const len=Number(res.headers.get('Content-Length')||0);
+  if(len>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
+  const bytes=new Uint8Array(await res.arrayBuffer());
+  if(bytes.byteLength>MAX_FONT)fail('SoundFont ใหญ่เกินขอบเขตหน่วยความจำ');
+  parseFont(bytes);fontCache={id:selected,sub:context.sub,bytes};return bytes;
+}
+scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,
+  reset(){context=null;selected='';fontCache=null;const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
+scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
+})(typeof window!=='undefined'?window:globalThis);
