@@ -1607,9 +1607,9 @@ def execute_job(action, options, started):
                                       replacement=new_text)
             with LOCK:
                 JOB["total"] = planned["changedSongs"]
-            update(f"กำลังสำรองและแทนที่ {planned['groups']:,} กลุ่ม · "
+            update(f"Smart Batch: ตรวจทุกเพลงและเตรียมสำรอง {planned['groups']:,} กลุ่ม · "
                    f"{planned['changedLines']:,} บรรทัดใน {planned['changedSongs']:,} เพลง")
-            result = LYRIC_TEXT.apply_many(
+            result = LYRIC_TEXT.apply_many_smart(
                 root, _song_export_module(), index,
                 groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
                 expected_count=options.get("expectedCount"),
