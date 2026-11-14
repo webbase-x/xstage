@@ -27,6 +27,7 @@ on:
       - "scripts/test_songstudio_lyrics_preview.py"
       - "scripts/test_songstudio_ncn.py"
       - "scripts/test_songstudio_ncn_bulk_editor.py"
+      - "scripts/test_songstudio_lyr_skipped_report.py"
       - "scripts/test_songstudio_drive_download.py"
       - "scripts/test_songstudio_pc.py"
       - "scripts/test_songstudio_drive_layout.py"
@@ -108,6 +109,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "NCN Song/Lyrics/Cursor regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_ncn_bulk_editor.py -v
           if ($LASTEXITCODE -ne 0) { throw "NCN native bulk LYR/CUR regression tests failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_lyr_skipped_report.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Skipped LYR audit, recovery and CSV regression tests failed" }
           & python -m unittest discover -s scripts -p test_songstudio_smart_scan.py -v
           if ($LASTEXITCODE -ne 0) { throw "SQLite Smart Scan regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
