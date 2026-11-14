@@ -63,6 +63,25 @@ class XStageWebLayoutTests(unittest.TestCase):
         self.assertEqual(layout.OnlinePublisher(drive)._existing_root(), "old-123")
         self.assertFalse(drive.made)
 
+    def test_no_pointer_does_not_discard_unindexed_media(self):
+        class Drive:
+            def __init__(self, filename):
+                self.filename = filename
+            def list_children(self, parent):
+                if parent == "library":
+                    return [{"id": "a", "name": "AUDIO", "mimeType": layout.FOLDER_MIME},
+                            {"id": "l", "name": "LYRICS", "mimeType": layout.FOLDER_MIME}]
+                if parent == "a":
+                    return [{"id": "f", "name": self.filename, "mimeType": "audio/mpeg"}]
+                return []
+        for media in ("song.mp3", "song.mid", "movie.mp4"):
+            with self.subTest(media=media):
+                with self.assertRaisesRegex(layout.PublishError, "current.json"):
+                    layout.OnlinePublisher(Drive(media))._read_online("library")
+        result = layout.OnlinePublisher(Drive("piano.sf2"))._read_online("library")
+        self.assertIsNone(result[0])
+        self.assertEqual(result[1], {})
+
     def test_two_visible_roots_stop_instead_of_merging(self):
         class Drive:
             def list_children(self, parent):
