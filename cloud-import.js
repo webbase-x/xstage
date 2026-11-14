@@ -552,9 +552,8 @@ class Importer {
     drive.signal=()=>this.controller.signal;
     try{
       this.status('กำลังตรวจคลัง XStageWeb และ current.json บน Google Drive…');
-      const rootQuery="'root' in parents and (name='XStageWeb' or name='StageWeb') and mimeType='"+MIME_FOLDER+"' and trashed=false";
+      const rootQuery="'root' in parents and name='XStageWeb' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
-      if(roots.some(x=>x.name==='StageWeb'))fail('พบคลัง StageWeb รุ่นเก่า · ไม่รองรับและไม่สร้าง XStageWeb ใหม่ทับ');
       if(roots.length>1)fail('พบ XStageWeb หลายโฟลเดอร์ · หยุดป้องกันฐานแยก');
       let rootId;
       if(roots.length){
@@ -835,7 +834,7 @@ class Importer {
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyric=await uploadMedia(json,code,['LYRICS'],jname,'application/json',jsonHash,.83,.09);
             // LRC is a local input/editing format; JSON is the only
-            // lyric artifact stored on Drive in layout v3.
+            // lyric artifact stored on Drive in layout v4.
             let videoMedia=same?.video;
             if(videoFile){
               if(videoFile===audioFile)videoMedia=media;
