@@ -1,4 +1,9 @@
-## X-Stage Karaoke Online v1.0.106 (Build 1106) — faster high-volume Drive imports
+## X-Stage Karaoke Online v1.0.107 (Build 1107) — bounded fast song search
+
+- Search retains only the best 5 visible results (or explicitly requested remote limit) while counting every matching song, instead of allocating and sorting every matching row across the library. Exact-title/code/artist relevance and original catalog tie order are unchanged.
+- Precompute multi-word query tokens once per search; regression compares 100,000 synthetic songs to the previous full-sort reference for counts, ordering and remote results.
+
+### Previous v1.0.106 — faster high-volume Drive imports
 
 - Drive importer builds an exact-name in-memory index per folder, replacing repeated linear scans of tens of thousands of media files. It preserves duplicate-name conflicts, MD5 verification, resumable uploads and cancellation behavior.
 - Drive import scanning now detects invalid page responses and repeating page tokens; large mocked-folder and cursor regressions were added to CI.
