@@ -69,3 +69,5 @@ select,input[type=number]{background:#081d2d;border:1px solid #345468;border-rad
 .file-state.unsupported{background:#493328;color:#f5bd8b}
 @media(max-width:1030px){.layout{grid-template-columns:1fr}.sidebar nav a.nav-button{min-width:160px}.topbar{padding:18px}}
 @media(max-width:650px){.midi-channels{grid-template-columns:1fr}.midi-font-picker select{min-width:100%}.sidebar nav a.nav-button{min-width:150px}.midi-options{align-items:stretch}.export-mode-row{padding:10px}}
+
+.brand-mark img{display:block;width:100%;height:100%;object-fit:contain}
