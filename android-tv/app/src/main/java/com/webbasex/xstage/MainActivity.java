@@ -29,6 +29,11 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.json.JSONObject;
 
@@ -173,6 +178,40 @@ public final class MainActivity extends Activity {
                 if (isTrustedXStageUrl(uri)) return false;
                 openExternal(uri);
                 return true;
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                // Bundle only public, audited synth assets with the APK. Music,
+                // lyrics, tokens and private Google Drive API responses must
+                // NEVER pass through the native asset interceptor.
+                final String prefix = XSTAGE_PATH_PREFIX + "/assets/vendor/";
+                if (request.isForMainFrame() || !"GET".equalsIgnoreCase(request.getMethod())
+                        || !isTrustedXStageUrl(uri) || !uri.getPath().startsWith(prefix))
+                    return super.shouldInterceptRequest(view, request);
+
+                String name = uri.getPath().substring(prefix.length());
+                Set<String> allowed = new HashSet<>(Arrays.asList(
+                        "spessasynth-lib.min.js", "spessasynth_processor.min.js",
+                        "FluidR3Mono_GM.sf3", "midi-assets.json"));
+                if (!allowed.contains(name)) return super.shouldInterceptRequest(view, request);
+                String mime = name.endsWith(".js") ? "application/javascript"
+                        : name.endsWith(".json") ? "application/json"
+                        : "application/octet-stream";
+                try {
+                    InputStream stream = getAssets().open("xstage/vendor/" + name);
+                    WebResourceResponse response = new WebResourceResponse(mime, null, stream);
+                    response.setResponseHeaders(java.util.Collections.singletonMap(
+                            "Cache-Control", "public, max-age=31536000, immutable"));
+                    return response;
+                } catch (IOException error) {
+                    android.util.Log.e("XStage", "Packaged MIDI asset missing: " + name);
+                    return new WebResourceResponse("text/plain", "utf-8",
+                            new java.io.ByteArrayInputStream(
+                                    "Packaged MIDI engine missing; reinstall verified X-Stage APK."
+                                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                }
             }
 
             @Override

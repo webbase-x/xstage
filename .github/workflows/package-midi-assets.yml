@@ -1,0 +1,76 @@
+name: Package self-hosted MIDI engine and GM SoundFont
+on:
+  push:
+    branches: [feature/xstage-v2-multiformat-catalog]
+    paths:
+      - "scripts/build-midi-assets.mjs"
+      - "assets/midi/spessasynth-entry.js"
+      - "assets/vendor/THIRD_PARTY_MIDI.md"
+      - "midi-soundfont-engine.js"
+      - ".github/workflows/package-midi-assets.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: package-midi-assets-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    if: github.repository == 'webbase-x/xstage'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned build dependencies (CI only)
+        run: npm install --no-save --no-package-lock --ignore-scripts=false spessasynth_lib@4.4.8 esbuild@0.25.12
+      - name: Download pinned MIT FluidR3Mono GM during packaging (not at playback)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/vendor
+          curl --fail --location --retry 3 --connect-timeout 20 --max-time 180             --output assets/vendor/FluidR3Mono_GM.sf3             https://raw.githubusercontent.com/musescore/MuseScore/v2.3.2/share/sound/FluidR3Mono_GM.sf3
+          echo 'cfcd66d89e8386823400eca64934b14fbea7bf48ba1f00d21189af1262794ec2  assets/vendor/FluidR3Mono_GM.sf3' | sha256sum --check
+      - name: Build and verify self-hosted engine and worklet
+        run: |
+          node scripts/build-midi-assets.mjs
+          node --check midi-soundfont-engine.js
+          node --check midi-stage-adapter.js
+          node scripts/midi-stage-test.mjs
+      - name: Check for runtime dependency on external MIDI CDNs
+        shell: bash
+        run: |
+          if grep -En 'https://(esm.sh|cdn.jsdelivr.net)/.*spessasynth' midi-soundfont-engine.js; then
+            echo '::error::Browser MIDI must use same-origin packaged assets only.'
+            exit 1
+          fi
+          test -s assets/vendor/midi-assets.json
+          test -s assets/vendor/THIRD_PARTY_MIDI.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xstage-midi-self-contained-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            assets/vendor/spessasynth-lib.min.js
+            assets/vendor/spessasynth_processor.min.js
+            assets/vendor/FluidR3Mono_GM.sf3
+            assets/vendor/midi-assets.json
+            assets/vendor/THIRD_PARTY_MIDI.md
+      - name: Commit generated public software assets to feature branch
+        if: github.ref == 'refs/heads/feature/xstage-v2-multiformat-catalog' && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/vendor/spessasynth-lib.min.js assets/vendor/spessasynth_processor.min.js assets/vendor/FluidR3Mono_GM.sf3 assets/vendor/midi-assets.json
+          if git diff --cached --quiet; then
+            echo 'Packaged assets are already at the requested pinned version.'
+            exit 0
+          fi
+          git commit -m 'build(midi): package offline-ready SoundFont and WebAudio engine [skip ci]'
+          git push origin HEAD:feature/xstage-v2-multiformat-catalog

@@ -2,8 +2,8 @@
   "name": "X-Stage Android Google Play release",
   "package": "com.webbasex.xstage",
   "available": false,
-  "version": "1.0.93",
-  "build": 1093,
+  "version": "1.0.94",
+  "build": 1094,
   "store_url": null,
-  "note": "Android direct-audio-bypass and stage level meter source revision. No verified Google Play production APK/AAB released yet. Test sideload APK remains a separate signing channel."
+  "note": "No production Google Play APK/AAB published. Placeholder metadata aligned to source release only; test APK uses separate artifact/version and is not advertised here."
 }

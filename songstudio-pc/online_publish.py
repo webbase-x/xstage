@@ -68,6 +68,10 @@ def cloud_media_path(local_relative, source_format="", role="audio", code=""):
     if typ:
         leaf = "Lyrics" if role in ("lyrics", "lrc") else "Songs"
         return PurePosixPath("AUDIO", typ, leaf, bucket, path.name)
+    if role == "native-timed" and ext == ".json":
+        if str(source_format).upper() == "NCN":
+            return PurePosixPath("MIDI", "NCN", "Lyrics", bucket, path.name)
+        return PurePosixPath("MIDI", "E-MK", bucket, path.name)
     if role in ("lyrics", "lrc") and ext in (".json", ".lrc"):
         # A currently rendered M4A needs its own timed lyrics, even when
         # the sourceFormat says NCN. Native NCN .LYR/.CUR are separate files.

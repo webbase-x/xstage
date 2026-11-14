@@ -400,7 +400,7 @@ async function loadLatestCachedCatalog(sub,rootId=''){
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(![1,2].includes(catalog?.schemaVersion)||!Array.isArray(catalog.songs))return null;
     return {
       catalog,
       generation:String(saved.generation||''),
@@ -521,7 +521,7 @@ function readActiveAuth(){
 }
 function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
-const player = ui.player;
+const player = window.XStageCreatePlayerAdapter?.(ui.player) || ui.player;
 const initialVolume=Math.max(0,Math.min(100,Number(initialUiPrefs.volume)));
 if(Number.isFinite(initialVolume)){
   ui.volume.value=String(initialVolume);
@@ -636,7 +636,29 @@ function timeLabel(t) {
 function getFileId(data) {
   return typeof data?.fileId === 'string' && data.fileId.length > 0 ? data.fileId : '';
 }
-function playable(song) { return !!(getFileId(song?.audio) && getFileId(song?.lyrics)); }
+function songPlayFormat(song){
+  return window.XStageRuntime?.chooseFormat?.(song)||null;
+}
+function availableAudioFormat(song){
+  const rt=window.XStageRuntime;
+  return rt?.chooseFormat?.(song,rt.deviceInfo(),{...rt.setting(),format:'auto',mode:'audio'})||null;
+}
+function playable(song) {
+  // Keep the searchable catalog independent of the current filter selection.
+  const format=availableAudioFormat(song);
+  const media=window.XStageRuntime?.selectedMedia?.(song,format);
+  // MIDI/video will join this list once the corresponding stage engine is ready.
+  return !!(getFileId(media)&&getFileId(song?.lyrics)&&['m4a','mp3','midi'].includes(format));
+}
+function songAudioMedia(song){
+  return window.XStageRuntime?.selectedMedia?.(song,songPlayFormat(song))||null;
+}
+function matchesSongFormat(song){
+  const selected=document.getElementById('song-format-filter')?.value||'auto';
+  const format=songPlayFormat(song);
+  return playable(song)&&['m4a','mp3'].includes(format)&&
+    (selected==='auto'||format===selected);
+}
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
 const GOOGLE_FETCH_TIMEOUT_MS=18_000;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -824,8 +846,22 @@ $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
-  if(pointer?.schemaVersion!==1 || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
+  if(![1,2].includes(pointer?.schemaVersion) || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
     throw Error('รูปแบบ current.json ไม่รองรับ');
+  if(pointer.schemaVersion===2){
+    const base=await privateJson(pointer.catalogFileId,token);
+    if(base?.schemaVersion!==2||!Array.isArray(base.songs)||
+       (Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount))
+      throw Error('ฐานเพลง XStageWeb/DB รุ่น 2 ไม่สมบูรณ์');
+    const ids=new Set();
+    for(const song of base.songs){
+      if(typeof song?.id!=='string'||!song.id||ids.has(song.id)||
+         typeof song.code!=='string'||!song.code||typeof song.media!=='object')
+        throw Error('รายการเพลงฐาน V2 ขัดแย้งหรือซ้ำ');
+      ids.add(song.id);
+    }
+    return {schemaVersion:2,generation:pointer.generation,songs:base.songs};
+  }
   const deltaIds=pointer.deltaFileIds||[];
   if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
     throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
@@ -1032,9 +1068,17 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    const pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
+    // V2 is the authoritative new layout. Allow the old root pointer only
+    // during migration when no DB/current.json exists yet.
+    const dbFolders=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
+    if(dbFolders.length>1)throw Error('พบโฟลเดอร์ XStageWeb/DB ซ้ำ');
+    let pointers=dbFolders.length===1
+      ?await driveList(`'${dbFolders[0].id}' in parents and name='current.json' and trashed=false`,token)
+      :[];
+    if(!pointers.length)
+      pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
-    if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง StageWeb/XStageWeb');
+    if(pointers.length!==1)throw Error('ไม่พบ XStageWeb/DB/current.json ที่เผยแพร่ครบ');
     const pointer=await privateJson(pointers[0].id,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
     if(authId!==state.authId)return;
@@ -1047,7 +1091,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     let catalog=instant?.catalog||null;
     let downloaded=false;
     if(!sameAsInstant){
-      if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์ M4A',42);
+      if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์เสียงหรือเนื้อร้อง',42);
       else setStatus(`กำลังอัปเดตฐานเพลงเบื้องหลัง · ยังใช้ ${num(state.songs.length)} เพลงเดิมได้ตามปกติ`);
       catalog=await readPublishedCatalog(pointer,token,{
         sub:cacheOwner,
@@ -1555,7 +1599,7 @@ function renderSongs() {
     return;
   }
   setLiveSearchExpanded(true);
-  const ranked=rankedSearchEntries(state.songs,term);
+  const ranked=rankedSearchEntries(state.songs.filter(matchesSongFormat),term);
   state.shown=ranked.slice(0,5).map(item=>item.song);
   state.selectedIndex=Math.max(0,Math.min(state.selectedIndex,state.shown.length-1));
   ui.resultCount.textContent=`พบ ${num(ranked.length)} เพลง${ranked.length>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''}`;
@@ -1737,7 +1781,7 @@ async function preloadFirstQueueSong(song,token){
   const task={song,token,controller};state.queuePreload=task;
   try{
     const [response,lyrics]=await Promise.all([
-      privateFile(song.audio.fileId,token,{signal:controller.signal}),
+      privateFile(songAudioMedia(song).fileId,token,{signal:controller.signal}),
       privateJson(song.lyrics.fileId,token,{signal:controller.signal})
     ]);
     const limit=window.XStageRuntime?.deviceInfo?.().maxPreloadBytes||2*1024*1024;
@@ -1757,7 +1801,7 @@ function prefetchMedleyNext(){
   const song=nextMedleyCandidate(),token=state.token;
   if(!song||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
   const task={song,token};state.medleyPrefetch=task;
-  Promise.all([privateFile(song.audio.fileId,token),privateJson(song.lyrics.fileId,token)])
+  Promise.all([privateFile(songAudioMedia(song).fileId,token),privateJson(song.lyrics.fileId,token)])
     .then(async ([response,lyrics])=>{
       const limit=window.XStageRuntime?.deviceInfo?.().maxPreloadBytes||2*1024*1024;
       const size=Number(response.headers.get('content-length'))||0;
@@ -1920,10 +1964,73 @@ function togglePlayback(){
   else{state.userPaused=true;state.resumeAfterInterruption=false;player.pause();}
 }
 
+async function playMidiSong(song,{remember=true,resumeAt=0,autoplay=true}={}){
+  const engine=window.XStageMidiEngine;
+  const media=songAudioMedia(song);
+  if(!engine?.ready||!media?.fileId||!song?.lyrics?.fileId){
+    setPlayStatus('MIDI ต้องโหลด SoundFont ก่อน หรือเพลงไม่มีเนื้อร้องที่ซิงค์แล้ว');
+    return;
+  }
+  if(!state.token){setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
+  const request=++state.requestId;
+  state.controller?.abort();
+  const controller=new AbortController();
+  state.controller=controller;
+  const token=state.token;
+  state.loading=true;updateTransport();setPlayStatus('กำลังโหลด MIDI และ Lyrics จาก Google Drive…');
+  publishPlaybackStatus('loading',song,'กำลังเตรียม MIDI/SoundFont');
+  try{
+    const [response,lyrics]=await boundedPlaybackTask(Promise.all([
+      privateFile(media.fileId,token,{signal:controller.signal}),
+      privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+    ]),90,'โหลด MIDI จาก Google Drive นานเกินไป');
+    if(lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines)||!lyrics.lines.length)
+      throw Error('MIDI ยังไม่มี Lyrics JSON ที่ซิงค์แล้ว');
+    const size=Number(response.headers.get('content-length'))||0;
+    if(size>32*1024*1024)throw Error('MIDI ใหญ่เกิน 32 MiB');
+    const buffer=await response.arrayBuffer();
+    if(request!==state.requestId||token!==state.token)return;
+    if(remember&&state.current)state.history.push(state.current);
+    player.pause();
+    ui.player.pause();
+    ui.player.removeAttribute('src');ui.player.load();
+    ui.player.loop=false; // MIDI owns repeat; avoid stale HTML audio loop blocking ended event.
+    if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl='';
+    await engine.start(buffer,{autoplay,resumeAt});
+    engine.volume=Number(ui.volume.value)/100;
+    engine.playbackRate=Number(ui.speed.value);
+    engine.loop=ui.repeat.checked;
+    state.current=song;state.lyrics=lyrics;
+    ui.nowPlaying.textContent=song.title||song.code||'MIDI';
+    ui.nowArtist.textContent=song.artist||'';
+    ui.stageCode.textContent=song.code||'—';
+    if(ui.songKey)ui.songKey.textContent='คีย์ '+(song.key||'—');
+    ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
+    syncMediaSessionMetadata(song);
+    state.loading=false;state.userPaused=!autoplay;state.resumeAfterInterruption=false;
+    renderQueue();updateTransport();
+    setPlayStatus(autoplay?'กำลังเล่น MIDI · '+(song.title||song.code):'MIDI พร้อมเล่น');
+    publishPlaybackStatus(autoplay?'playing':'paused',song,'MIDI/SoundFont พร้อมแล้ว');
+  }catch(error){
+    if(request!==state.requestId||error?.name==='AbortError')return;
+    engine?.stop();
+    setPlayStatus('เล่น MIDI ไม่สำเร็จ: '+(error?.message||error));
+    publishPlaybackStatus('error',song,error?.message||'เล่น MIDI ไม่สำเร็จ');
+  }finally{
+    if(request===state.requestId){
+      state.loading=false;state.controller=null;updateTransport();
+    }
+  }
+}
 async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=true}={}) {
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
-  if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มี M4A/JSON ที่พร้อมเล่น');return;}
+  if(songPlayFormat(song)==='midi')
+    return playMidiSong(song,{remember,resumeAt,autoplay});
+  // Audio decode must release any running MIDI synthesizer before reusing HTML5.
+  window.XStageMidiEngine?.stop();
+  if (!playable(song)||!songAudioMedia(song)) {setPlayStatus('ไม่พบไฟล์เสียงและเนื้อร้องที่อุปกรณ์นี้รองรับ · เปลี่ยนรูปแบบค้นหา');return;}
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
@@ -1937,7 +2044,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     const [audio,lyrics]=prepared
       ? [prepared.blob,prepared.lyrics]
       : await boundedPlaybackTask(Promise.all([
-          privateFile(song.audio.fileId,token,{signal:controller.signal}).then(r=>r.blob()),
+          privateFile(songAudioMedia(song).fileId,token,{signal:controller.signal}).then(r=>r.blob()),
           privateJson(song.lyrics.fileId,token,{signal:controller.signal})
         ]),90,'โหลดเพลงจาก Google Drive นานเกินไป กรุณาตรวจการเชื่อมต่อ');
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
@@ -2949,7 +3056,24 @@ ui.search.addEventListener('input',()=>{
   updateTransport();
   if(ui.search.value.trim())setLiveSearchExpanded(true);
 });
+window.XStageMidiEngine&&(window.XStageMidiEngine.onReady=()=>{
+  if(Array.isArray(state.manifest?.songs)){
+    state.songs=state.manifest.songs.filter(playable);
+    ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
+    renderSongs();renderQueue();
+  }
+});
 ui.search.addEventListener('keydown',onSearchKey);
+const songFormatFilter=document.getElementById('song-format-filter');
+if(songFormatFilter){
+  songFormatFilter.value=window.XStageRuntime?.setting?.().format||'auto';
+  songFormatFilter.addEventListener('change',()=>{
+    window.XStageRuntime?.saveFormat?.(songFormatFilter.value);
+    state.shown=[];state.selectedIndex=0;
+    // Only show playable items; never ask the audio engine to decode MIDI.
+    renderSongs();updateTransport();
+  });
+}
 ui.search.addEventListener('blur',restoreViewportAfterKeyboard);
 
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
