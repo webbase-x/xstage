@@ -183,7 +183,7 @@ class V2OnlinePublishTests(unittest.TestCase):
         row=self.make_song()
         original=self.drive.upload_file
         def broken(parent,path,name,**opts):
-            if "Lyrics" in str(path):
+            if name.startswith("00001-") and name.endswith(".json"):
                 raise RuntimeError("Simulated Drive loss")
             return original(parent,path,name,**opts)
         with patch.object(self.drive,"upload_file",side_effect=broken):
