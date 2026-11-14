@@ -16,6 +16,7 @@ on:
       - "songstudio-pc/online_publish.py"
       - "scripts/test_unified_catalog_v2.py"
       - "scripts/unified-catalog-v2-test.mjs"
+      - "scripts/xstage-v2-first-run-test.mjs"
       - ".github/workflows/test-unified-catalog-v2.yml"
 permissions:
   contents: read
@@ -36,6 +37,7 @@ jobs:
           node --check app.js
           node --check device-runtime.js
           node scripts/unified-catalog-v2-test.mjs
+          node scripts/xstage-v2-first-run-test.mjs
           node scripts/device-runtime-test.mjs
           node scripts/midi-stage-test.mjs
       - name: Python schema and legacy migration safety
