@@ -1602,6 +1602,21 @@ def execute_job(action, options, started):
                 update(f"อัปโหลดต้นฉบับ V2 {done:,}/{total:,} เพลง",done))
             result = {"message": "เผยแพร่ XStageWeb/DB/current.json รุ่นใหม่แล้ว · "
                       + str(synced["totalSongs"]) + " เพลง", **synced}
+        elif action == "migrate-catalog-v2":
+            if not GOOGLE.status().get("connected"):
+                raise ValueError("ต้องเข้าสู่ระบบ Google Drive ใน Song Studio ก่อนตรวจย้ายฐาน")
+            from v2_native_publish import V2NativePublisher
+            dry = options.get("dryRun") is not False
+            approved = options.get("confirmation") == "MIGRATE_XSTAGEWEB_V2"
+            if not dry and not approved:
+                raise ValueError("การย้ายฐาน V2 ต้องยืนยัน MIGRATE_XSTAGEWEB_V2")
+            update("ตรวจฐาน V1/V2 โดยไม่ลบเพลงต้นฉบับ")
+            migrated = V2NativePublisher(GOOGLE).migrate_legacy_v1(
+                dry_run=dry,confirm=approved,cancelled=CANCEL)
+            result = {**migrated,"message":
+                ("Dry Run: พร้อมย้ายข้อมูล " if dry else "เผยแพร่ฐาน V2 แล้ว ") +
+                str(migrated["v2Songs"]) +
+                " เพลง · ไม่ลบฐาน V1 หรือไฟล์สื่อ"}
         elif action == "download":
             kind = options.get("kind", "songs")
             update("กำลังอ่าน Catalog จาก Google Drive โดยไม่สร้างคลังใหม่")
