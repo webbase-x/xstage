@@ -61,7 +61,7 @@ try {
     }
     $num = 0
     foreach ($item in $Manifest.files) {
-        if ($item.path -notmatch '^[a-zA-Z0-9._/ +()-]+ {
+        if ($item.path -notmatch '^[a-zA-Z0-9._/ +()-]+
             throw 'Unsafe manifest path.'
         }
         $file = Check-File ($item.path.Replace('/', '\'))
@@ -115,115 +115,8 @@ try {
 catch {
     Write-Status ('ERROR: ' + $_.Exception.Message)
     exit 1
-} -or $item.path.Contains('..')) {
-            throw 'Unsafe manifest path.'
-        }
-        $file = Check-File ($item.path.Replace('/', '\'))
-        if (-not ($item.sha256 -match '^[a-fA-F0-9]{64}$')) { throw "Invalid checksum for $($item.path)" }
-        $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
-        if ($actual -ne $item.sha256.ToUpperInvariant()) {
-            throw "Bundled component integrity failure: $($item.path). Extract ZIP again."
-        }
-        $num++
-    }
-    Write-Status ("Verified {0} bundled component files and SHA-256 checksums." -f $num)
-    $versionOutput = & $py -c "import json,subprocess,pathlib,http.server; print('PYTHON_OK')" 2>&1
-    if ($LASTEXITCODE -ne 0 -or ($versionOutput -notcontains 'PYTHON_OK')) { throw 'Bundled Python runtime check failed.' }
-    # Collect all output before testing exit code. Select-Object -First 1 can close
-    # the native process stdout pipe early and cause a false failure on Windows.
-    $ffText = (& $ffmpeg -hide_banner -version 2>&1 | Out-String)
-    $ffExit = $LASTEXITCODE
-    $ffVersion = (($ffText -split "\r?\n") | Where-Object { $_ -match 'ffmpeg version' } | Select-Object -First 1)
-    if ($ffExit -ne 0 -or !$ffVersion) { throw ("Bundled FFmpeg runtime check failed (exit {0}): {1}" -f $ffExit, $ffText) }
-    Write-Status ("FFmpeg: {0}" -f $ffVersion)
-    # SoundFont RIFF header includes 'sfbk' at byte offset 8.
-    $stream = [IO.File]::OpenRead($sfont)
-    try {
-        $header = New-Object byte[] 12
-        if ($stream.Read($header,0,12) -ne 12 -or
-            [Text.Encoding]::ASCII.GetString($header,0,4) -ne 'RIFF' -or
-            [Text.Encoding]::ASCII.GetString($header,8,4) -ne 'sfbk') {
-            throw 'Bundled SoundFont file is invalid.'
-        }
-    } finally { $stream.Dispose() }
-    if ((Get-Item $aiModel).Length -lt 100MB) { throw 'AI Separation model is incomplete.' }
-    Write-Status 'SoundFont and bundled AI ONNX dependencies verified. Nothing to install or download.'
-    if ($NoLaunch) {
-        Write-Status 'Offline readiness check passed (NoLaunch mode).'
-        exit 0
-    }
-    $start = New-Object System.Diagnostics.ProcessStartInfo
-    $start.FileName = $pyw
-    $start.Arguments = '"' + $engine + '"'
-    $start.WorkingDirectory = $Root
-    $start.UseShellExecute = $false
-    $start.CreateNoWindow = $true
-    $proc = [System.Diagnostics.Process]::Start($start)
-    if ($null -eq $proc) { throw 'Could not launch the local Song Studio Engine.' }
-    Start-Sleep -Milliseconds 900
-    if ($proc.HasExited) { throw ('Local Engine failed at launch (exit {0}).' -f $proc.ExitCode) }
-    Write-Status ("Ready: Engine PID {0}, local UI opens in Edge or default browser." -f $proc.Id)
-    Write-Status 'All audio processing and files remain on this PC.'
-    exit 0
 }
-catch {
-    Write-Status ('ERROR: ' + $_.Exception.Message)
-    exit 1
-} -or $item.path.Contains('..')) {
-            throw 'Unsafe manifest path.'
-        }
-        $file = Check-File ($item.path.Replace('/', '\'))
-        if (-not ($item.sha256 -match '^[a-fA-F0-9]{64}$')) { throw "Invalid checksum for $($item.path)" }
-        $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
-        if ($actual -ne $item.sha256.ToUpperInvariant()) {
-            throw "Bundled component integrity failure: $($item.path). Extract ZIP again."
-        }
-        $num++
-    }
-    Write-Status ("Verified {0} bundled component files and SHA-256 checksums." -f $num)
-    $versionOutput = & $py -c "import json,subprocess,pathlib,http.server; print('PYTHON_OK')" 2>&1
-    if ($LASTEXITCODE -ne 0 -or ($versionOutput -notcontains 'PYTHON_OK')) { throw 'Bundled Python runtime check failed.' }
-    # Collect all output before testing exit code. Select-Object -First 1 can close
-    # the native process stdout pipe early and cause a false failure on Windows.
-    $ffText = (& $ffmpeg -hide_banner -version 2>&1 | Out-String)
-    $ffExit = $LASTEXITCODE
-    $ffVersion = (($ffText -split "\r?\n") | Where-Object { $_ -match 'ffmpeg version' } | Select-Object -First 1)
-    if ($ffExit -ne 0 -or !$ffVersion) { throw ("Bundled FFmpeg runtime check failed (exit {0}): {1}" -f $ffExit, $ffText) }
-    Write-Status ("FFmpeg: {0}" -f $ffVersion)
-    # SoundFont RIFF header includes 'sfbk' at byte offset 8.
-    $stream = [IO.File]::OpenRead($sfont)
-    try {
-        $header = New-Object byte[] 12
-        if ($stream.Read($header,0,12) -ne 12 -or
-            [Text.Encoding]::ASCII.GetString($header,0,4) -ne 'RIFF' -or
-            [Text.Encoding]::ASCII.GetString($header,8,4) -ne 'sfbk') {
-            throw 'Bundled SoundFont file is invalid.'
-        }
-    } finally { $stream.Dispose() }
-    if ((Get-Item $aiModel).Length -lt 100MB) { throw 'AI Separation model is incomplete.' }
-    Write-Status 'SoundFont and bundled AI ONNX dependencies verified. Nothing to install or download.'
-    if ($NoLaunch) {
-        Write-Status 'Offline readiness check passed (NoLaunch mode).'
-        exit 0
-    }
-    $start = New-Object System.Diagnostics.ProcessStartInfo
-    $start.FileName = $pyw
-    $start.Arguments = '"' + $engine + '"'
-    $start.WorkingDirectory = $Root
-    $start.UseShellExecute = $false
-    $start.CreateNoWindow = $true
-    $proc = [System.Diagnostics.Process]::Start($start)
-    if ($null -eq $proc) { throw 'Could not launch the local Song Studio Engine.' }
-    Start-Sleep -Milliseconds 900
-    if ($proc.HasExited) { throw ('Local Engine failed at launch (exit {0}).' -f $proc.ExitCode) }
-    Write-Status ("Ready: Engine PID {0}, local UI opens in Edge or default browser." -f $proc.Id)
-    Write-Status 'All audio processing and files remain on this PC.'
-    exit 0
-}
-catch {
-    Write-Status ('ERROR: ' + $_.Exception.Message)
-    exit 1
-} -or $item.path.Contains('..')) {
+ -or $item.path.Contains('..')) {
             throw 'Unsafe manifest path.'
         }
         $file = Check-File ($item.path.Replace('/', '\'))
