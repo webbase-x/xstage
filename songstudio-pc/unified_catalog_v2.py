@@ -16,6 +16,7 @@ MEDIA_KEYS = frozenset(("mp3", "m4a", "midi", "video"))
 VIDEO_TYPES = frozenset(("avi", "mpg", "vcd", "wmv", "mp4"))
 MIDI_TYPES = frozenset(("ncn", "emk"))
 SAFE_ID = re.compile(r"^[^\x00-\x1f/\\\\?#]{1,256}$")
+SONG_ID = re.compile(r"^[^\\x00-\\x1f?#]{1,256}$")  # V1 IDs can contain audio/0/00001
 DIGEST = re.compile(r"^[0-9a-fA-F]{64}$")
 MD5 = re.compile(r"^[0-9a-fA-F]{32}$")
 
@@ -78,7 +79,7 @@ def validate_song(item, *, cloud=False):
     if not isinstance(item, dict):
         raise CatalogValidationError("Song must be an object")
     song_id = item.get("id")
-    if not isinstance(song_id, str) or not SAFE_ID.fullmatch(song_id):
+    if not isinstance(song_id, str) or not SONG_ID.fullmatch(song_id):
         raise CatalogValidationError("Song id missing or invalid")
     if item.get("webSongId", song_id) != song_id:
         raise CatalogValidationError("id and webSongId must match")
@@ -145,7 +146,7 @@ def migrate_v1_song(row):
     if not isinstance(row, dict):
         raise CatalogValidationError("Invalid V1 song")
     sid = row.get("webSongId") or row.get("id")
-    if not isinstance(sid, str) or not SAFE_ID.fullmatch(sid):
+    if not isinstance(sid, str) or not SONG_ID.fullmatch(sid):
         raise CatalogValidationError("V1 missing stable song ID")
     audio = row.get("audio")
     if not isinstance(audio, dict) or not audio.get("fileId"):
