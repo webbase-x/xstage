@@ -552,12 +552,27 @@ class Importer {
             await uploadMedia(item.file,stem,path.slice(0,-1),name,'application/octet-stream',hash);
             this.stats.fonts++;
           }else{
-            const {audio,lrc,code,kind}=item;
+            const {audio,lrc,json:lyricsJson,kind}=item;
+            let code=item.code;
             if(!await core.validAudio(audio.file))throw Error('ไฟล์ '+kind+' ไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
-            if(lrc.file.size>MAX_LRC)throw Error('LRC ใหญ่เกิน 2 MB');
-            const raw=await lrc.file.text();
-            const doc=core.lrcToJson(raw,code);
-            const json=encode(doc);
+            let raw=null,doc,json;
+            if(lyricsJson){
+              if(lyricsJson.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
+              const source=await lyricsJson.file.text();
+              try{doc=core.validLyricsJson(source,code);}
+              catch(error){throw Error('Lyrics JSON ไม่สมบูรณ์: '+error.message);}
+              code=String(doc.songCode||code);
+              json=lyricsJson.file; // Keep bytes unchanged for PC/Web MD5 parity.
+              if(lrc){
+                if(lrc.file.size>MAX_LRC)throw Error('LRC ใหญ่เกิน 2 MB');
+                raw=await lrc.file.text();
+              }else if(typeof doc.rawLrc==='string'&&doc.rawLrc.length<=MAX_LRC)raw=doc.rawLrc;
+            }else{
+              if(!lrc||lrc.file.size>MAX_LRC)throw Error('LRC ไม่ครบหรือใหญ่เกิน 2 MB');
+              raw=await lrc.file.text();
+              doc=core.lrcToJson(raw,code);
+              json=encode(doc);
+            }
             const [audioHash,jsonHash]=await Promise.all([
               core.hashBlob(audio.file,()=>this.check()),
               core.hashBlob(json,()=>this.check())
@@ -577,10 +592,13 @@ class Importer {
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash,.83,.09);
-            const rawBlob=new Blob([raw],{type:'text/plain'});
-            const lrcHash=await core.hashBlob(rawBlob,()=>this.check());
-            const lname=base+'-'+lrcHash.slice(0,16)+'.lrc';
-            const lrcInfo=await uploadMedia(rawBlob,code,[...prefix,'Lyrics',folder],lname,'text/plain',lrcHash,.92,.08);
+            let lrcInfo=same?.lrc;
+            if(raw!==null){
+              const rawBlob=new Blob([raw],{type:'text/plain'});
+              const lrcHash=await core.hashBlob(rawBlob,()=>this.check());
+              const lname=base+'-'+lrcHash.slice(0,16)+'.lrc';
+              lrcInfo=await uploadMedia(rawBlob,code,[...prefix,'Lyrics',folder],lname,'text/plain',lrcHash,.92,.08);
+            }
             const ident=same?.webSongId||('browser/'+audioHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิงออนไลน์ชนกับเพลงอื่น');
             // Preserve the original linked MIDI/video/vocal media when only
