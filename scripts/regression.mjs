@@ -215,6 +215,14 @@ assert.ok(style.includes('calc(100% - 24px)')&&style.includes('overflow-x:hidden
 assert.ok(app.includes('installAvailableUpdate'),'update-now button must invoke the native updater');
 assert.ok(index.includes('id="android-tv-apk-download"'),'main menu must expose a direct Android TV APK download link');
 assert.ok(app.includes('function startManualGoogleLogin()')&&!app.includes('XStageBeforeGoogleLogin'),'Google login must not use the removed PWA gate');
+assert.ok(app.includes('let webGoogleAuthFlow=null;')&&app.includes("flow.phase='verifying'")&&
+          app.includes('if(webGoogleAuthFlow||state.authRecovering)return false;'),
+          'Google GIS token flow must guard Safari callbacks and defer web auto-update during authorization');
+assert.ok(app.includes("document.addEventListener('visibilitychange',scheduleOAuthReturnRecovery)")&&
+          !app.includes('กลับจาก Google แล้วแต่ Safari ยังไม่ได้ส่งสิทธิ์กลับมา'),
+          'Safari refocus must not declare failure or invalidate a late Google callback');
+assert.ok(app.includes('clearTimeout(retryTimer)')&&app.includes('if(authId!==state.authId||settled)return;'),
+          'OAuth retry and popup error callbacks must not cancel a verified token');
 assert.ok(index.includes('android-apk-download.js?v='+version.build),'browser must load the APK-only helper');
 assert.ok(!index.includes('rel="manifest"')&&!index.includes('mobile-install-app')&&!index.includes('pc-install-app'),'browser must not advertise PWA installation');
 assert.ok(!fs.existsSync(new URL('../pwa-install.js',import.meta.url))&&!fs.existsSync(new URL('../sw.js',import.meta.url)),'retired PWA script and worker must be removed');

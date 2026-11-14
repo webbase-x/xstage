@@ -47,6 +47,15 @@
 - คงปุ่มควบคุมเพลงหลักและแถบเวลาการเล่นไว้สำหรับการใช้งานทันที
 - ในโหมดเต็มจอบนจอเล็ก เมนู โลโก้ และช่องค้นหายังคงอยู่บนเวที; การเปิดคิวเพลงหรือเครื่องมือจะออกจากเต็มจอก่อนเพื่อเข้าถึงแผงเดิม
 
+## Safari Google OAuth delayed-callback hardening (v1.0.100, Build 1100)
+
+- The Web Google Identity Services token client uses popup callback UX. Safari can regain focus before Google delivers a token; focus/pageshow is no longer treated as an authorization failure and never invalidates an in-flight request.
+- Keep token callback alive through userinfo and private Drive verification; prevent a parallel pending-token recovery and ignore duplicate popup errors after receiving a token.
+- Defer automatic web update reload while the Google popup is awaiting a callback or Drive is verifying. This also prevents incidental 15-second update checks from destroying an OAuth result.
+- After 12 seconds without a Google response, re-enable the login controls for **explicit user retry** without discarding a valid delayed response. Only Google's actual callback/error, a user-requested new login, or the 90-second request timeout can terminate that request.
+- Use the supported GIS token popup model for private Google Drive; no unsupported static-page OAuth code redirect, refresh-token persistence, or PWA functionality is added.
+- CI simulates Safari focus at 2.5 seconds, late token receipt, duplicate popup close, slow Drive verification, manual retry, timeout, and update deferral.
+
 ## Platform hardening and separate release channels (v1.0.99)
 
 - Android TV: preserve native D-Pad/IME cursor and text selection while editing, request Android media Audio Focus before playback, and handle transient/permanent loss distinctly. Restore playback on focus gain only when the user has not paused/stopped.
