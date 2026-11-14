@@ -30,3 +30,14 @@
 .cloud-import-dialog small{display:block;margin:12px 0 0}
 @media(max-width:700px){.cloud-import-dialog{max-height:94dvh;width:98vw}.cloud-import-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.cloud-import-footer button{flex:1 1 44%}#cloud-import-open{font-size:.68rem;padding:7px 8px;min-height:36px}}
 @media(max-width:430px){#cloud-import-open{max-width:98px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+
+/* Bundled, private SoundFont chooser: visible in the stage menu on desktop and mobile. */
+.xstage-font-control{display:flex;flex-direction:column;gap:4px;max-width:100%;min-width:0;
+  font-size:13px;color:#d3f9f6;padding:8px 10px;border:1px solid rgba(81,201,216,.34);
+  border-radius:12px;background:rgba(4,27,43,.75)}
+.xstage-font-control select{display:block;width:100%;min-width:0;max-width:100%;
+  box-sizing:border-box;padding:9px 8px;border-radius:8px;
+  border:1px solid rgba(90,193,214,.45);background:#092c43;color:#f2fcff;
+  font:inherit;font-size:14px}
+.xstage-font-control select:focus-visible{outline:2px solid #58dfd6;outline-offset:2px}
