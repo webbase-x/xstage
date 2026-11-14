@@ -82,8 +82,10 @@ function assessFont(bytes,device){
   let level='safe',notes=[];
   if(size>MAX_FONT){level='blocked';notes.push('เกินขีดจำกัด Web 256 MB');}
   if(p.ramGB===null){
-    if(level!=='blocked')level='caution';
-    notes.push('เบราว์เซอร์ไม่แจ้ง RAM');
+    if(level!=='blocked')level=size>160*MB?'blocked':'caution';
+    notes.push(size>160*MB?
+      'เบราว์เซอร์ไม่แจ้ง RAM และไฟล์เกิน 160 MB · ป้องกันเครื่องค้าง':
+      'เบราว์เซอร์ไม่แจ้ง RAM');
   }else if(estimatedRamBytes>p.ramGB*1073741824*.48){
     level='blocked';notes.push('RAM ประมาณการไม่เพียงพอ');
   }else if(estimatedRamBytes>p.ramGB*1073741824*.24&&level!=='blocked'){
@@ -117,8 +119,8 @@ function recommend(song,profile={},preference='auto',font=null){
   if(preference==='video'&&video&&audio&&p.video)return output('video',
     'เล่นเสียงที่ตรวจสอบพร้อมภาพวิดีโอ ถ้า Codec ไม่รองรับจะใช้เสียงอย่างเดียว');
   if(audio){
-    if(preference==='auto'&&video&&p.video&&(p.cores===null||p.cores>=4)&&
-      (p.ramGB===null||p.ramGB>=2))return output('video','แนะนำภาพวิดีโอพร้อมเสียงต้นฉบับ');
+    if(preference==='auto'&&video&&p.video&&p.cores!==null&&p.cores>=4&&
+      p.ramGB!==null&&p.ramGB>=2)return output('video','แนะนำภาพวิดีโอพร้อมเสียงต้นฉบับ');
     return output('audio','แนะนำไฟล์เสียงต้นฉบับ ประหยัด CPU/RAM กว่าการเรนเดอร์ MIDI');
   }
   if(fontReady&&(p.cores===null||p.cores>=4)&&
@@ -232,6 +234,14 @@ scope.XStageAudioAdvisor={MB,MAX_FONT,types,guide,fmt,classifySong,countSongs,
   clear(){renderStats([]);onSong(null);renderFontList([]);}
 };
 function initialize(){
+  const transpose=$('xstage-midi-transpose');
+  if(transpose){
+    transpose.replaceChildren();
+    for(let i=-12;i<=12;i++){
+      transpose.add(new Option((i>0?'+':'')+i+' ครึ่งเสียง'+(i===0?' (คีย์เดิม)':''),String(i)));
+    }
+    transpose.value='0';
+  }
   const guideEl=$('xstage-format-guide');
   if(guideEl){
     for(const [name,description] of guide){
@@ -254,6 +264,7 @@ function initialize(){
   $('xstage-audio-close')?.addEventListener('click',()=>show(false));
   $('xstage-profile-refresh')?.addEventListener('click',()=>{void updateProfile();});
   $('xstage-play-mode')?.addEventListener('change',updateAdvice);
+  scope.addEventListener('xstage:font-choice-change',updateAdvice);
   $('xstage-midi-apply')?.addEventListener('click',()=>{
     scope.dispatchEvent(new CustomEvent('xstage:midi-settings-apply',
       {detail:getSettings()}));
