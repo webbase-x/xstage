@@ -543,8 +543,29 @@ function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_L
 const player = ui.player;
 const karaokeVideo = document.getElementById('karaoke-video');
 const videoLyricsToggle=document.getElementById('video-lyrics-toggle');
-let videoObjectUrl = '';
-let videoLyricsVisible=true;
+const videoOriginalToggle=document.getElementById('video-original-toggle');
+let videoObjectUrl='',videoLoadRevision=0;
+let videoLyricsVisible=true,preferOriginalVideo=true,videoWasOriginal=false;
+function originalVideoSupported(song){
+  if(!karaokeVideo||!getFileId(song?.originalVideo)||!getFileId(song?.video)||
+      getFileId(song.originalVideo)===getFileId(song.video))return false;
+  const mime=window.XStageImportCore?.videoMime(song.originalVideo.path||'')||'';
+  return !!(mime&&karaokeVideo.canPlayType(mime));
+}
+function updateOriginalVideoToggle(song){
+  if(!videoOriginalToggle)return;
+  const hasOriginal=!!getFileId(song?.originalVideo)&&
+    getFileId(song.originalVideo)!==getFileId(song?.video);
+  videoOriginalToggle.hidden=!hasOriginal;
+  const supported=originalVideoSupported(song);
+  videoOriginalToggle.disabled=!supported;
+  videoOriginalToggle.title=supported
+    ?'สลับภาพจากไฟล์ต้นฉบับกับ MP4 ที่เข้ากันได้ · เสียงใช้แทร็กหลัก'
+    :'เบราว์เซอร์นี้ถอดรหัสวิดีโอต้นฉบับไม่ได้ · ใช้ MP4 และเก็บต้นฉบับบน Drive';
+  videoOriginalToggle.setAttribute('aria-pressed',String(videoWasOriginal));
+  videoOriginalToggle.textContent=hasOriginal
+    ?videoWasOriginal?'ภาพวิดีโอ: ต้นฉบับ':'ภาพวิดีโอ: MP4':'';
+}
 function updateVideoLyricsToggle(){
   if(!videoLyricsToggle)return;
   const timed=!!state.lyrics?.lines?.length;
@@ -557,10 +578,19 @@ videoLyricsToggle?.addEventListener('click',()=>{
   videoLyricsVisible=!videoLyricsVisible;
   updateVideoLyricsToggle();
 });
+videoOriginalToggle?.addEventListener('click',()=>{
+  const song=state.current;
+  if(!song||!state.token||!originalVideoSupported(song))return;
+  preferOriginalVideo=!preferOriginalVideo;
+  resetSongVideo();
+  void loadSongVideo(song,state.requestId,state.token,undefined,{forceCompatible:!preferOriginalVideo});
+});
 function resetSongVideo(){
+  videoLoadRevision++;
   if(!karaokeVideo)return;
-  videoLyricsVisible=true;
+  videoLyricsVisible=true;videoWasOriginal=false;
   videoLyricsToggle&&(videoLyricsToggle.hidden=true);
+  videoOriginalToggle&&(videoOriginalToggle.hidden=true);
   ui.stage.classList.remove('video-lyrics-off');
   karaokeVideo.pause();
   karaokeVideo.hidden=true;
@@ -577,42 +607,48 @@ function syncSongVideo(){
   }
   if(player.paused||player.ended){karaokeVideo.pause();}
   else if(karaokeVideo.paused)karaokeVideo.play().catch(()=>{
-    // Unsupported video or autoplay policy should never stop the audio.
-    // HTML5 audio+timed lyrics remain the playable fallback.
+    // Playback keeps using verified audio if the source video is unavailable.
   });
 }
-async function loadSongVideo(song,request,token,signal){
+async function loadSongVideo(song,request,token,signal,{forceCompatible=false}={}){
   if(!karaokeVideo||!getFileId(song?.video))return;
+  const useOriginal=!forceCompatible&&preferOriginalVideo&&originalVideoSupported(song);
+  const media=useOriginal?song.originalVideo:song.video;
+  const revision=++videoLoadRevision;
   try{
     if(request!==state.requestId||signal?.aborted)return;
-    // A video-only karaoke song can use the same authenticated media Blob
-    // for its audio clock and muted video layer, without a second Drive download.
-    if(getFileId(song.video)===getFileId(song.audio)&&state.objectUrl){
+    if(getFileId(media)===getFileId(song.audio)&&state.objectUrl){
       karaokeVideo.src=state.objectUrl;
-      karaokeVideo.muted=true;
-      karaokeVideo.hidden=false;
-      karaokeVideo.load();
-      updateVideoLyricsToggle();
-      syncSongVideo();
-      return;
+    }else{
+      const response=useOriginal
+        ?await privateFile(song.originalVideo.fileId,token,{signal})
+        :await privateFile(song.video.fileId,token,{signal});
+      const data=await response.blob();
+      if(revision!==videoLoadRevision||request!==state.requestId||
+          signal?.aborted||token!==state.token||state.current!==song)return;
+      if(data.size<1024)throw Error('วิดีโอว่างเปล่า');
+      const mime=window.XStageImportCore?.videoMime(media.path||'')||
+        (String(media.path||'').toLowerCase().endsWith('.webm')?'video/webm':'video/mp4');
+      if(videoObjectUrl)URL.revokeObjectURL(videoObjectUrl);
+      videoObjectUrl=URL.createObjectURL(data.type===mime?data:new Blob([data],{type:mime}));
+      karaokeVideo.src=videoObjectUrl;
     }
-    const response=await privateFile(song.video.fileId,token,{signal});
-    const data=await response.blob();
-    if(request!==state.requestId||signal?.aborted||token!==state.token||state.current!==song)return;
-    if(data.size<1024)throw Error('วิดีโอว่างเปล่า');
-    const ext=String(song.video.path||'').toLowerCase();
-    const mime=data.type?.startsWith('video/')?data.type:
-      ext.endsWith('.webm')?'video/webm':'video/mp4';
-    videoObjectUrl=URL.createObjectURL(data.type===mime?data :
-      new Blob([data],{type:mime}));
-    karaokeVideo.src=videoObjectUrl;
+    if(revision!==videoLoadRevision||request!==state.requestId)return;
+    videoWasOriginal=useOriginal;
     karaokeVideo.muted=true;
     karaokeVideo.hidden=false;
     karaokeVideo.load();
+    updateOriginalVideoToggle(song);
     updateVideoLyricsToggle();
     syncSongVideo();
   }catch(error){
-    if(request!==state.requestId)return;
+    if(revision!==videoLoadRevision||request!==state.requestId||signal?.aborted)return;
+    if(useOriginal){
+      preferOriginalVideo=false;
+      resetSongVideo();
+      void loadSongVideo(song,request,token,signal,{forceCompatible:true});
+      return;
+    }
     resetSongVideo();
     console.warn('Video unavailable; using verified audio + timed lyrics:',error.message);
   }
@@ -621,6 +657,13 @@ if(karaokeVideo){
   karaokeVideo.addEventListener('loadedmetadata',()=>{updateVideoLyricsToggle();syncSongVideo();});
   karaokeVideo.addEventListener('canplay',syncSongVideo);
   karaokeVideo.addEventListener('error',()=>{
+    if(videoWasOriginal&&state.current&&state.token){
+      const song=state.current;
+      preferOriginalVideo=false;resetSongVideo();
+      setPlayStatus('Codec ต้นฉบับเล่นไม่ได้ · เปลี่ยนกลับเป็น MP4 อัตโนมัติ');
+      void loadSongVideo(song,state.requestId,state.token,undefined,{forceCompatible:true});
+      return;
+    }
     console.warn('Video codec unsupported: using audio and available lyrics where possible');
     if(state.current?.lyricsMode==='embedded-video'||state.lyrics?.lyricsMode==='embedded-video')
       setPlayStatus('เบราว์เซอร์ไม่รองรับ Codec ของวิดีโอนี้ · ให้แปลงเป็น H.264/AAC MP4');
@@ -2134,6 +2177,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
     state.objectUrl=url;state.current=song;state.lyrics=lyrics;
     resetSongVideo();
+    preferOriginalVideo=true;
     if(getFileId(song.video))void loadSongVideo(song,request,token,controller.signal);
     syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
@@ -2785,7 +2829,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1101';
+    script.src='./assets/vendor/qrcode.min.js?v=1102';
     script.async=true;
     let done=false;
     const finish=error=>{

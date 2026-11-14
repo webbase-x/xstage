@@ -8,6 +8,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {chromium} from 'playwright';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -114,6 +115,10 @@ const m4a=Buffer.alloc(4096);m4a.write('ftyp',4,'ascii');
 fs.writeFileSync(path.join(dir,'J200.m4a'),m4a);
 const mp4=Buffer.alloc(4096);mp4.write('ftyp',4,'ascii');mp4.write('XSTAGE-UNIQUE-VDO',32,'ascii');
 fs.writeFileSync(path.join(dir,'V400.mp4'),mp4); // embedded VDO metadata; codec not exercised here
+execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y',
+  '-f','lavfi','-i','testsrc2=duration=1:size=128x72:rate=8',
+  '-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','1',
+  '-c:v','mpeg4','-c:a','mp3','-f','avi',path.join(dir,'A500.avi')],{timeout:30000});
 fs.writeFileSync(path.join(dir,'J200.json'),JSON.stringify({
   schemaVersion:1,songCode:'J200',lines:[{startTime:1,endTime:4,text:'Lyrics JSON พร้อมเวลา'}]
 }));
@@ -141,8 +146,26 @@ try{
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='2');
   assert.equal(await page.locator('#cloud-import-fonts').textContent(),'1');
+  assert.equal(await page.locator('#cloud-import-blocked').textContent(),'3',
+    'Two unreviewed videos must not silently become embedded karaoke');
+  await page.locator('#cloud-import-video-editor:not([hidden])').waitFor();
+  const videoPick=page.locator('#cloud-import-video-select');
+  await videoPick.selectOption(await videoPick.locator('option',{hasText:'V400.mp4'}).getAttribute('value'));
+  await page.locator('#cloud-import-video-title').fill('วิดีโอทดสอบ');
+  await page.locator('#cloud-import-video-artist').fill('นักร้องตัวอย่าง');
+  await page.locator('#cloud-import-video-album').fill('อัลบั้มทดสอบ');
+  await page.locator('#cloud-import-video-mode').selectOption('embedded');
+  await page.click('#cloud-import-video-save');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
+  await videoPick.selectOption(await videoPick.locator('option',{hasText:'A500.avi'}).getAttribute('value'));
+  await page.locator('#cloud-import-video-title').fill('วิดีโอ AVI ไม่มีเนื้อร้องฝัง');
+  await page.locator('#cloud-import-video-artist').fill('นักร้อง AVI');
+  await page.locator('#cloud-import-video-mode').selectOption('timed');
+  await page.locator('#cloud-import-video-lrc').fill(['[00:00.10]ทดสอบเสียงและภาพ AVI','[00:00.60]สร้าง LRC จากเวลาจริง'].join(String.fromCharCode(10)));
+  await page.click('#cloud-import-video-save');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
   await page.check('#cloud-import-allow-create');
   await page.click('#cloud-import-start');
@@ -156,16 +179,39 @@ try{
     throw error;
   }
   const status=await page.locator('#cloud-import-status').textContent();
-  assert.ok(status.includes('เพลงใหม่ 3'),status);
+  assert.ok(status.includes('เพลงใหม่ 4'),status);
   assert.ok(status.includes('SoundFont 1'),status);
   assert.equal(rootCreated,1,'Only one private XStageWeb root should be created');
   assert.ok([...records.values()].some(x=>x.name==='current.json'),'Playable DB pointer must be created');
   const pointer=[...records.values()].find(x=>x.name==='current.json');
-  assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,3);
+  assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,4);
   assert.ok([...records.values()].some(x=>x.name.endsWith('.mp4')));
   const published=[...records.values()].filter(x=>x.name.startsWith('catalog-'));
   assert.ok(published.some(x=>x.data.toString('utf8').includes('embedded-video')),
     'Standalone video must publish metadata without invented timed lyrics');
+  const publishedRows=published.flatMap(x=>{
+    const v=JSON.parse(x.data.toString('utf8'));
+    return v.songs||v.upserts||[];
+  });
+  const videoRow=publishedRows.find(x=>x.code==='V400');
+  assert.ok(videoRow&&videoRow.title==='วิดีโอทดสอบ'&&
+    videoRow.artist==='นักร้องตัวอย่าง','Artist/title metadata must be published');
+  assert.equal(videoRow.originalVideo?.fileId,videoRow.video?.fileId,
+    'Native MP4 should retain source reference without duplicate Drive upload');
+  const legacyRow=publishedRows.find(x=>x.code==='A500');
+  assert.ok(legacyRow&&legacyRow.artist==='นักร้อง AVI'&&legacyRow.lyricsMode==='timed',
+    'AVI without burned-in lyrics must use user-authored timed LRC');
+  assert.notEqual(legacyRow.originalVideo?.fileId,legacyRow.video?.fileId,
+    'AVI source must be preserved separately from the compatible MP4');
+  const orig=records.get(legacyRow.originalVideo.fileId);
+  assert.ok(orig&&orig.name.endsWith('.avi')&&orig.data.length>1024,
+    'Drive must store the original AVI bytes');
+  const derivative=records.get(legacyRow.video.fileId);
+  assert.ok(derivative&&derivative.name.endsWith('.mp4'),
+    'WEB/TV video must point to the playable MP4');
+  const textDoc=records.get(legacyRow.lyrics.fileId);
+  assert.ok(textDoc&&JSON.parse(textDoc.data.toString('utf8')).lines.length===2,
+    'Manually timed LRC must become real lyrics JSON');
   assert.ok([...records.values()].some(x=>x.name.endsWith('.sf2')));
   const firstCount=payloadUploads;
   // After first DB exists, reopen the importer from the visible stage menu.
@@ -176,7 +222,7 @@ try{
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
-    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 3'),{timeout:60000});
+    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),{timeout:60000});
   assert.equal(payloadUploads,firstCount,'Second upload should be 100% deduplicated by MD5');
   // Cancel/pause while an additional large file is being prepared. A browser
   // restart should not lose the completed DB and can reselect the same folder.
@@ -184,7 +230,7 @@ try{
   fs.writeFileSync(path.join(dir,'K300.mp3'),k300);
   fs.writeFileSync(path.join(dir,'K300.lrc'),'[00:01.00]เพลงที่หยุดกลางทาง\n');
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
   await page.click('#cloud-import-start');
   await page.locator('#cloud-import-pause:not([disabled])').waitFor();
   await page.click('#cloud-import-pause');
@@ -201,7 +247,7 @@ try{
   await chooser.setFiles(dir);
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),null,{timeout:90000});
   const finalPointer=[...records.values()].find(x=>x.name==='current.json');
-  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,4,
+  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,5,
     'Reopening and resuming must publish the missing track without losing previous entries');
   assert.deepEqual(scriptErrors,[], 'No browser JavaScript errors are allowed');
   console.log('PASS: Chromium folder selection, Google session, private Drive uploads, pointer/catalog and replay-safe MD5 dedup');

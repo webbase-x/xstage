@@ -19,7 +19,7 @@ async function convert(file,{signal,onStatus=()=>{},requireAudio=true}={}){
   if(activeWorker)throw Error('วิดีโอ: มีการแปลงอื่นกำลังทำงาน');
   if(typeof Worker==='undefined')throw Error('วิดีโอ: เบราว์เซอร์ไม่รองรับ Worker · ใช้ Song Studio PC');
   let worker;
-  try{worker=new Worker('./video-transcode-worker.js?v=1101',{type:'module'});}
+  try{worker=new Worker('./video-transcode-worker.js?v=1102',{type:'module'});}
   catch(error){throw Error('วิดีโอ: เปิด Worker สำหรับแปลงไฟล์ไม่ได้ ('+(error?.message||error)+')');}
   activeWorker=worker;
   try{

@@ -175,6 +175,42 @@ function embeddedVideoLyrics(code){
   return {schemaVersion:1,songCode:String(code),lyricsMode:'embedded-video',
     lines:[],audioOffsetMs:0};
 }
+const VIDEO_MIME={mp4:'video/mp4',webm:'video/webm',mov:'video/quicktime',
+  mkv:'video/x-matroska',avi:'video/x-msvideo',mpg:'video/mpeg',
+  mpeg:'video/mpeg',dat:'video/mpeg',vob:'video/mpeg',
+  wmv:'video/x-ms-wmv',flv:'video/x-flv'};
+function videoMime(name){return VIDEO_MIME[ext(name)]||'';}
+function videoFingerprint(item){
+  const file=item?.video?.file;
+  return [item?.key||'',String(file?.name||''),Number(file?.size||0),
+    Number(file?.lastModified||0)].join('|');
+}
+function validateVideoDetails(item,metadata){
+  if(!item?.video||!metadata||typeof metadata!=='object')
+    throw Error('วิดีโอ: ยังไม่ได้กรอกข้อมูลเพลง');
+  const field=(name,limit)=>String(metadata[name]??'').normalize('NFC').trim().slice(0,limit);
+  const code=field('code',140),title=field('title',180),artist=field('artist',180);
+  if(!code||!title||!artist)
+    throw Error('วิดีโอ: ต้องระบุรหัสเพลง ชื่อเพลง และนักร้องให้ครบ');
+  if(/[\\/\u0000-\u001f]/.test(code))
+    throw Error('วิดีโอ: รหัสเพลงมีอักขระไม่ปลอดภัย');
+  const mode=String(metadata.mode||'review');
+  if(!['embedded','timed'].includes(mode))
+    throw Error('วิดีโอ: ต้องเลือกว่ามีเนื้อร้องฝังภาพหรือจะสร้าง LRC พร้อมเวลา');
+  let lrc=String(metadata.lrc||'').replace(/\r\n?/g,'\n');
+  if(lrc.length>2*1024*1024)throw Error('วิดีโอ: LRC ใหญ่เกิน 2 MB');
+  if(mode==='timed'&&!item.lrc&&!item.json){
+    try{lrcToJson(lrc,code);}
+    catch(error){throw Error('วิดีโอ: LRC ต้องมีข้อความพร้อมเวลาจริง ('+error.message+')');}
+  }
+  const year=String(metadata.year||'').trim();
+  if(year&&(!/^\d{4}$/.test(year)||Number(year)<1900||Number(year)>2100))
+    throw Error('วิดีโอ: ปีที่เผยแพร่ไม่ถูกต้อง');
+  return {code,title,artist,mode,lrc:mode==='timed'?lrc:'',
+    album:field('album',180),composer:field('composer',180),
+    genre:field('genre',80),language:field('language',60),
+    year:year?Number(year):null};
+}
 async function validFont(file){
   const extension=ext(file.name);
   if(!FONTS.has(extension)||file.size<256||file.size>2*1024*1024*1024)return false;
@@ -287,5 +323,5 @@ function validLyricsJson(raw,code){
   return document;
 }
 function bucket(code){const c=String(code||'').charAt(0).toUpperCase();return /[0-9A-Z]/.test(c)?c:'_';}
-scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,validFont,lrcToJson,validLyricsJson,bucket};
+scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,bucket};
 })(typeof window!=='undefined'?window:globalThis);

@@ -913,3 +913,9 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
 #video-lyrics-toggle:focus-visible{outline:2px solid #52edd2;outline-offset:3px}
 .stage.video-lyrics-off #lyrics{visibility:hidden!important}
 @media(max-width:700px){#video-lyrics-toggle{top:65px;right:7px;padding:6px 7px;font-size:.64rem}}
+
+/* Original video display: offered only when the device browser advertises native support. */
+#video-original-toggle{position:absolute;top:clamp(103px,10.6vw,135px);right:12px;z-index:11;background:#091d34df;color:#c8eefa;border:1px solid #73b3cb;border-radius:9px;padding:7px 11px;font-weight:750;font-size:.72rem;cursor:pointer}
+#video-original-toggle:disabled{opacity:.6;cursor:default}
+#video-original-toggle:focus-visible{outline:2px solid #60e4d5;outline-offset:3px}
+@media(max-width:700px){#video-original-toggle{top:99px;right:7px;padding:6px 7px;font-size:.64rem}}

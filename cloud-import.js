@@ -309,6 +309,7 @@ class Importer {
     for(const key of ['open','dialog','close','pick','input','scan','start','pause','resume','cancel',
       'allow-create','source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
+    this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
     this.dom.open?.addEventListener('click',()=>this.open());
     this.dom.gateOpen=$('cloud-import-open-gate');
     this.dom.gateOpen?.addEventListener('click',()=>this.open());
@@ -338,6 +339,7 @@ class Importer {
     scope.addEventListener('xstage:auth-cleared',()=>{
       this.stop('ออกจาก Google · พักงานทันที');
       this.selected=null;this.plan=null;this.folderHandle=null;this.selectedSub='';
+      this.videoEditor?.releasePreview();this.videoEditor?.setPlan(null);
       this.updateOpen();this.refreshButtons();
     });
     this.updateOpen();
@@ -357,8 +359,23 @@ class Importer {
     this.dom.progress.value=percent;
     this.dom['progress-label'].textContent=percent+'%';
   }
+  updateVideoStats(){
+    if(!this.plan)return;
+    const editor=this.videoEditor;
+    const pending=editor?.pendingCount()||0;
+    const ready=this.plan.songs.length-pending+this.plan.midis.length;
+    this.dom.ready.textContent=ready.toLocaleString('th-TH');
+    this.dom.blocked.textContent=(this.plan.blocked.length+pending).toLocaleString('th-TH');
+    const samples=this.plan.blocked.slice(0,6).map(x=>x.key+' · '+x.reason);
+    if(pending)samples.push('วิดีโอ '+pending+' รายการรอตรวจชื่อเพลง/นักร้องและยืนยันรูปแบบเนื้อร้อง');
+    this.dom.examples.textContent=samples.join('\n')+
+      (this.plan.blocked.length>6?'\nและอีก '+(this.plan.blocked.length-6)+' ชุด':'');
+    this.refreshButtons();
+  }
   refreshButtons(){
-    const selected=!!this.plan&&(this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length)>0;
+    const approvedVideos=this.videoEditor?.eligibleCount()||0;
+    const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
+    const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+this.plan.fonts.length)>0;
     this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
@@ -384,6 +401,7 @@ class Importer {
   close(){
     this.resumeAfterPicker=false;
     if(this.running)this.stop('ปิดหน้าต่าง · งานถูกพักโดยไม่ลบไฟล์ที่ส่งสำเร็จ');
+    this.videoEditor?.releasePreview();
     if(this.dom.dialog.close)this.dom.dialog.close();
     else this.dom.dialog.removeAttribute('open');
   }
@@ -423,6 +441,7 @@ class Importer {
     this.selected=files;this.folderHandle=handle;
     this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
+    this.videoEditor?.setPlan(this.plan,this.saved?.videoEdits);
     const hasRelativePaths=files.some(entry=>String(entry.relative||'').includes('/'));
     this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+
       (handle?' (จำสิทธิ์โฟลเดอร์สำหรับทำต่อได้ถ้าเบราว์เซอร์อนุญาต)'
@@ -434,6 +453,7 @@ class Importer {
     this.dom.blocked.textContent=this.plan.blocked.length.toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,7).map(x=>x.key+' · '+x.reason);
     this.dom.examples.textContent=samples.join('\n')+(this.plan.blocked.length>7?'\nและอีก '+(this.plan.blocked.length-7)+' ชุด':'');
+    this.updateVideoStats();
     this.progress(0,1);
     this.status('ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์');
     await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length});
@@ -443,7 +463,8 @@ class Importer {
     const auth=this.session();
     if(!auth?.sub)return;
     const data={version:1,label:this.dom.source.textContent,updatedAt:Date.now(),
-      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0),fonts:this.plan?.fonts.length||0,...extra};
+      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0),
+      fonts:this.plan?.fonts.length||0,videoEdits:this.videoEditor?.exportEdits()||[],...extra};
     if(this.folderHandle)data.handle=this.folderHandle;
     this.saved=data;await checkpoint(auth.sub,data);
   }
@@ -503,6 +524,7 @@ class Importer {
     if(!auth?.token||!auth.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
     if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
     this.account=auth.sub;
+    this.videoEditor?.releasePreview();
     this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
@@ -542,8 +564,12 @@ class Importer {
       }
       for(const row of rows.values())addMaps(row);
       const work=[...this.plan.fonts.map(x=>({...x,isFont:true})),
-        ...this.plan.songs.map(x=>({...x,isFont:false,isMidi:false})),
+        ...this.plan.songs.filter(x=>!x.video||this.videoEditor?.get(x))
+          .map(x=>({...x,isFont:false,isMidi:false})),
         ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true}))];
+      const pendingVideos=this.videoEditor?.pendingCount()||0;
+      if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
+        ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
       let revisions=[],finished=0;
       const show=(text,part=0)=>{this.status(text);this.progress(finished,work.length,part);};
       const uploadMedia=async(file,code,parts,name,mime,hash,from=0,span=1)=>{
@@ -669,7 +695,8 @@ class Importer {
             if(same){
               byPair.delete(String(same.midi?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase());
-              byCode.set(code.toLowerCase(),candidates.filter(x=>x.webSongId!==ident));
+              const oldCode=String(same.code||'').toLowerCase();
+              byCode.set(oldCode,(byCode.get(oldCode)||[]).filter(x=>x.webSongId!==ident));
             }
             rows.set(ident,record);addMaps(record);byPair.set(pair,record);
             revisions.push(record);this.stats[same?'updated':'newSongs']++;
@@ -684,12 +711,18 @@ class Importer {
             this.stats.fonts++;
           }else{
             const {audio,video,lrc,json:lyricsJson,kind}=item;
-            let code=item.code;
+            const videoMeta=video?this.videoEditor?.get(item):null;
+            if(video&&!videoMeta)throw Error('วิดีโอ: ยังไม่ได้ยืนยันข้อมูลเพลง/เนื้อร้อง');
+            let code=videoMeta?.code||item.code;
             let audioFile=audio.file,videoFile=video?.file||null,uploadKind=kind;
+            const originalVideoFile=video?.file||null;
             let sourceVideoMd5=null;
+            if(originalVideoFile&&!await core.validVideo(originalVideoFile))
+              throw Error('วิดีโอ: ไฟล์ต้นฉบับไม่ผ่านการตรวจหัวไฟล์');
+            if(originalVideoFile)
+              sourceVideoMd5=await core.hashBlob(originalVideoFile,()=>this.check());
             if(videoFile&&core.needsVideoConversion(videoFile.name)){
               if(!scope.XStageVideoTranscode)throw Error('วิดีโอ: ไม่พบตัวแปลงวิดีโอของเว็บ · กรุณาอัปเดตหน้าเว็บ');
-              sourceVideoMd5=await core.hashBlob(videoFile,()=>this.check());
               const wasPrimary=videoFile===audioFile;
               videoFile=await scope.XStageVideoTranscode.convert(videoFile,{
                 signal:this.controller.signal,requireAudio:wasPrimary,
@@ -702,13 +735,20 @@ class Importer {
             if(videoFile&&!await core.validVideo(videoFile))
               throw Error('วิดีโอ: ไฟล์วิดีโอไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
             let raw=null,doc,json;
-            if(lyricsJson){
+            if(videoMeta?.mode==='embedded'){
+              doc=core.embeddedVideoLyrics(code);
+              json=encode(doc);
+            }else if(videoMeta?.mode==='timed'&&videoMeta.lrc.trim()){
+              raw=videoMeta.lrc;
+              doc=core.lrcToJson(raw,code);
+              json=encode(doc);
+            }else if(lyricsJson){
               if(lyricsJson.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
               const source=await lyricsJson.file.text();
               try{doc=core.validLyricsJson(source,code);}
               catch(error){throw Error('Lyrics JSON ไม่สมบูรณ์: '+error.message);}
-              code=String(doc.songCode||code);
-              json=lyricsJson.file; // Keep bytes unchanged for PC/Web MD5 parity.
+              if(!videoMeta)code=String(doc.songCode||code);
+              json=lyricsJson.file; // Keep original JSON bytes for ordinary audio songs.
               if(lrc){
                 if(lrc.file.size>MAX_LRC)throw Error('LRC ใหญ่เกิน 2 MB');
                 raw=await lrc.file.text();
@@ -719,25 +759,44 @@ class Importer {
               doc=core.lrcToJson(raw,code);
               json=encode(doc);
             }else if(videoFile){
-              // A VDO with burned-in lyrics needs catalog metadata, not invented
-              // text or timestamps. The video remains its own lyric source.
-              doc=core.embeddedVideoLyrics(code);
-              json=encode(doc);
+              throw Error('วิดีโอ: ไม่มีเนื้อร้องพร้อมเวลา · เพิ่ม LRC หรือยืนยันว่ามีเนื้อร้องฝังภาพ');
             }else throw Error('LRC ต้องมีเวลาจริงสำหรับเพลงเสียง');
+            if(videoMeta){
+              doc={...doc,songCode:code,title:videoMeta.title,artist:videoMeta.artist,
+                lyricsMode:videoMeta.mode==='embedded'?'embedded-video':'timed'};
+              json=encode(doc);
+            }
             const [audioHash,jsonHash]=await Promise.all([
               core.hashBlob(audioFile,()=>this.check()),
               core.hashBlob(json,()=>this.check())
             ]);
             const pair=audioHash+':'+jsonHash;
-            if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้ามเพลงซ้ำ MD5: '+code);continue;}
+            const matchedPair=byPair.get(pair);
+            const sameMetadata=videoMeta&&matchedPair&&
+              matchedPair.code===videoMeta.code&&
+              matchedPair.title===videoMeta.title&&
+              matchedPair.artist===videoMeta.artist&&
+              (matchedPair.album||'')===videoMeta.album&&
+              (matchedPair.composer||'')===videoMeta.composer&&
+              (matchedPair.genre||'')===videoMeta.genre&&
+              (matchedPair.language||'')===videoMeta.language&&
+              (matchedPair.year||null)===videoMeta.year&&
+              matchedPair.originalVideo?.fileId&&
+              matchedPair.originalVideo.md5Checksum===sourceVideoMd5;
+            if(matchedPair&&(!videoMeta||sameMetadata)){
+              this.stats.duplicates++;finished++;show('ข้ามเพลงซ้ำ MD5: '+code);continue;
+            }
             const candidates=byCode.get(code.toLowerCase())||[];
-            const same=candidates.find(x=>String(x.audio?.md5Checksum||'').toLowerCase()===audioHash);
+            let same=candidates.find(x=>String(x.audio?.md5Checksum||'').toLowerCase()===audioHash);
             // Same bytes with a different filename/code are a duplicate, not
             // a fatal primary-key collision. Never overwrite another record.
             const existingAudio=rows.get('browser/'+audioHash);
             if(existingAudio&&!same){
-              this.stats.duplicates++;finished++;
-              show('ข้ามไฟล์เพลงซ้ำ MD5 แม้เปลี่ยนชื่อ/รหัส: '+code);continue;
+              if(videoMeta&&!candidates.length)same=existingAudio;
+              else{
+                this.stats.duplicates++;finished++;
+                show('ข้ามไฟล์เพลงซ้ำ MD5 แม้เปลี่ยนชื่อ/รหัส: '+code);continue;
+              }
             }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
@@ -750,7 +809,7 @@ class Importer {
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash,.83,.09);
-            let lrcInfo=same?.lrc;
+            let lrcInfo=videoMeta?.mode==='embedded'?null:same?.lrc;
             if(raw!==null){
               const rawBlob=new Blob([raw],{type:'text/plain'});
               const lrcHash=await core.hashBlob(rawBlob,()=>this.check());
@@ -768,15 +827,31 @@ class Importer {
                   MEDIA_MIME[ve]||'application/octet-stream',vh);
               }
             }
+            let originalVideoMedia=same?.originalVideo||null;
+            if(originalVideoFile){
+              if(originalVideoFile===videoFile)originalVideoMedia=videoMedia;
+              else if(!originalVideoMedia||originalVideoMedia.md5Checksum!==sourceVideoMd5){
+                const originalKind=core.ext(originalVideoFile.name).toUpperCase();
+                const originalName=base+'-'+sourceVideoMd5.slice(0,16)+
+                  '.'+originalKind.toLowerCase();
+                originalVideoMedia=await uploadMedia(originalVideoFile,code,
+                  ['VIDEO','ORIGINAL',originalKind,'Songs',folder],
+                  originalName,core.videoMime(originalVideoFile.name)||
+                  'application/octet-stream',sourceVideoMd5);
+              }
+            }
             const ident=same?.webSongId||('browser/'+audioHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิงออนไลน์ชนกับเพลงอื่น');
-            // Preserve the original linked MIDI/video/vocal media when only
-            // a same-audio song's timed lyrics have changed.
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:uploadKind,lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
+              artist:doc.artist||'',sourceFormat:uploadKind,
+              lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
               audio:media,lyrics:lyric,lrc:lrcInfo,
               ...(videoMedia?{video:videoMedia}:{}),
-              ...(sourceVideoMd5?{sourceVideoMd5,originalVideoFormat:core.ext(video.file.name).toUpperCase()}:{})};
+              ...(originalVideoMedia?{originalVideo:originalVideoMedia}:{}),
+              ...(videoMeta?{album:videoMeta.album,composer:videoMeta.composer,
+                genre:videoMeta.genre,language:videoMeta.language,year:videoMeta.year}:{}),
+              ...(sourceVideoMd5?{sourceVideoMd5,
+                originalVideoFormat:core.ext(originalVideoFile.name).toUpperCase()}:{})};
             if(same){
               const oldPair=String(same.audio?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase();

@@ -22,9 +22,9 @@
   if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
-  <link rel="stylesheet" href="style.css?v=1101">
-  <link rel="stylesheet" href="xstage-ux.css?v=1101">
-  <link rel="stylesheet" href="cloud-import.css?v=1101">
+  <link rel="stylesheet" href="style.css?v=1102">
+  <link rel="stylesheet" href="xstage-ux.css?v=1102">
+  <link rel="stylesheet" href="cloud-import.css?v=1102">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -35,7 +35,7 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1101" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1102" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -53,6 +53,7 @@
         <div id="stage" class="stage" role="group" aria-label="เวที X-Stage Karaoke">
           <video id="karaoke-video" playsinline muted preload="metadata" hidden aria-label="ภาพวิดีโอประกอบเพลง"></video>
           <button id="video-lyrics-toggle" type="button" hidden aria-pressed="true" aria-label="เปิดหรือปิดเนื้อร้องซ้อนภาพวิดีโอ">เนื้อร้อง: แสดง</button>
+          <button id="video-original-toggle" type="button" hidden aria-pressed="false" aria-label="เลือกแสดงภาพต้นฉบับวิดีโอหากเบราว์เซอร์รองรับ">ภาพวิดีโอ: MP4</button>
           <div class="stage-shade"></div>
           <div id="music-loader" class="music-loader" role="status" aria-label="กำลังโหลดเพลง" aria-hidden="true">
             <span class="music-loader-ring" aria-hidden="true"></span>
@@ -71,7 +72,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1101" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1102" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -244,7 +245,7 @@
               <span id="xstage-eq-mode">31 BAND · 1/3 OCTAVE</span>
             </div>
             <div class="xstage-eq-rta-wrap">
-              <canvas id="xstage-eq-rta" width="1101" height="145" aria-label="Spectrum analyzer"></canvas>
+              <canvas id="xstage-eq-rta" width="1102" height="145" aria-label="Spectrum analyzer"></canvas>
             </div>
             <div class="xstage-eq-main">
               <div id="xstage-eq-bands" class="xstage-eq-bands"></div>
@@ -299,7 +300,7 @@
         <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
-      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ระบบตรวจความสมบูรณ์และ MD5 ก่อนส่งเข้า XStageWeb · ไม่ลบหรือแก้ไฟล์ต้นฉบับ</p>
+      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageWeb พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
@@ -314,13 +315,48 @@
         <div><b id="cloud-import-blocked">0</b><span>ชุดที่ไม่พร้อม</span></div>
       </div>
       <div id="cloud-import-examples" class="cloud-import-examples" aria-live="polite"></div>
+      <section id="cloud-import-video-editor" class="cloud-import-video-editor" hidden aria-labelledby="cloud-import-video-heading">
+        <h3 id="cloud-import-video-heading">ข้อมูลวิดีโอคาราโอเกะก่อนนำเข้า</h3>
+        <p>เลือกไฟล์วิดีโอ ตรวจชื่อเพลงและนักร้อง ระบุว่าเนื้อร้องฝังในภาพหรือยังไม่มีเนื้อร้อง ระบบไม่เดาจากภาพว่าวิดีโอมีคาราโอเกะหรือไม่ และจะไม่สร้างเวลาเนื้อร้องปลอม</p>
+        <div class="cloud-import-video-choice">
+          <label>ค้นหาวิดีโอ <input id="cloud-import-video-filter" type="search" placeholder="ชื่อไฟล์หรือรหัสเพลง" autocomplete="off"></label>
+          <label>รายการวิดีโอ <select id="cloud-import-video-select" aria-label="เลือกวิดีโอแก้ไขข้อมูล"></select></label>
+        </div>
+        <div class="cloud-import-video-fields">
+          <label>รหัสเพลง <input id="cloud-import-video-code" maxlength="140" autocomplete="off"></label>
+          <label>ชื่อเพลง <input id="cloud-import-video-title" maxlength="180" autocomplete="off"></label>
+          <label>นักร้อง / ศิลปิน <input id="cloud-import-video-artist" maxlength="180" autocomplete="off"></label>
+          <label>อัลบั้ม <input id="cloud-import-video-album" maxlength="180" autocomplete="off"></label>
+          <label>ผู้แต่งเพลง <input id="cloud-import-video-composer" maxlength="180" autocomplete="off"></label>
+          <label>แนวเพลง <input id="cloud-import-video-genre" maxlength="80" autocomplete="off"></label>
+          <label>ภาษา <input id="cloud-import-video-language" maxlength="60" autocomplete="off"></label>
+          <label>ปีที่เผยแพร่ <input id="cloud-import-video-year" type="number" min="1900" max="2100" placeholder="ถ้าทราบ"></label>
+        </div>
+        <label>รูปแบบเนื้อร้อง
+          <select id="cloud-import-video-mode">
+            <option value="review">ยังไม่ได้ตรวจสอบ — ยังไม่นำเข้า</option>
+            <option value="embedded">มีเนื้อร้องคาราโอเกะฝังอยู่ในภาพแล้ว</option>
+            <option value="timed">ไม่มีเนื้อร้องฝังภาพ — เพิ่ม LRC พร้อมเวลาจริง</option>
+          </select>
+        </label>
+        <label id="cloud-import-video-lrc-wrap" hidden>สร้างหรือแก้ไขเนื้อร้อง LRC พร้อมเวลา
+          <textarea id="cloud-import-video-lrc" rows="5" spellcheck="false" placeholder="[00:12.50]เนื้อร้องบรรทัดแรก&#10;[00:16.25]เนื้อร้องบรรทัดต่อไป"></textarea>
+        </label>
+        <div class="cloud-import-video-tools">
+          <button type="button" id="cloud-import-video-preview-btn">▶ ทดลองดูวิดีโอ/ฟังเพลง</button>
+          <button type="button" id="cloud-import-video-stamp" hidden>+ เวลา ณ ตำแหน่งเล่น</button>
+          <button type="button" id="cloud-import-video-save">บันทึกข้อมูลเพลง</button>
+        </div>
+        <video id="cloud-import-video-preview" controls playsinline preload="metadata" hidden aria-label="ดูตัวอย่างวิดีโอเพื่อตรวจเนื้อร้องและเวลา"></video>
+        <p id="cloud-import-video-hint" class="cloud-import-video-hint" aria-live="polite"></p>
+      </section>
       <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageWeb ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
       <div class="cloud-import-progress">
         <progress id="cloud-import-progress" value="0" max="100"></progress>
         <span id="cloud-import-progress-label">0%</span>
       </div>
       <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
-      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV แปลงบนเครื่องเป็น H.264/AAC MP4 ด้วย FFmpeg.wasm ก่อนนำเข้า (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · การเล่นขึ้นอยู่กับ Codec/เบราว์เซอร์</p>
+      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV เก็บไฟล์ต้นฉบับไว้ใน Drive และสร้าง MP4 สำหรับเว็บเมื่อเบราว์เซอร์เล่นต้นฉบับไม่ได้ (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · รูปแบบที่เล่นต้นฉบับโดยตรงได้ขึ้นกับ Codec/เบราว์เซอร์ · วิดีโอไม่มีเนื้อร้องต้องใส่ LRC พร้อมเวลาจริง</p>
       <footer class="cloud-import-footer">
         <button id="cloud-import-start" type="button" disabled>เริ่มตรวจซ้ำและอัปโหลด</button>
         <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
@@ -335,19 +371,20 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script>window.XSTAGE_RELEASE={version:'1.0.101',build:1101};</script>
-<script src="config.js?v=1101"></script>
+<script>window.XSTAGE_RELEASE={version:'1.0.102',build:1102};</script>
+<script src="config.js?v=1102"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="cloud-import-core.js?v=1101" defer></script>
-  <script src="browser-midi.js?v=1101" defer></script>
-  <script src="video-transcode.js?v=1101" defer></script>
-  <script src="cloud-import.js?v=1101" defer></script>
-  <script src="app.js?v=1101" defer></script><script src="pc-extensions.js?v=1101" defer></script>
-  <script src="native-audio-meter.js?v=1101" defer></script>
-  <script src="stage-controls.js?v=1101" defer></script>
-  <script src="mobile-layout.js?v=1101" defer></script>
-  <script src="android-apk-download.js?v=1101" defer></script>
+  <script src="cloud-import-core.js?v=1102" defer></script>
+  <script src="browser-midi.js?v=1102" defer></script>
+  <script src="video-metadata-editor.js?v=1102" defer></script>
+  <script src="video-transcode.js?v=1102" defer></script>
+  <script src="cloud-import.js?v=1102" defer></script>
+  <script src="app.js?v=1102" defer></script><script src="pc-extensions.js?v=1102" defer></script>
+  <script src="native-audio-meter.js?v=1102" defer></script>
+  <script src="stage-controls.js?v=1102" defer></script>
+  <script src="mobile-layout.js?v=1102" defer></script>
+  <script src="android-apk-download.js?v=1102" defer></script>
 
-  <script src="stage-ui.js?v=1101" defer></script>
+  <script src="stage-ui.js?v=1102" defer></script>
 </body>
 </html>

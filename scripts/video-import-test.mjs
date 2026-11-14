@@ -60,4 +60,46 @@ assert.ok(page.includes('video-transcode.js?v=')&&page.includes('id="video-lyric
 assert.ok(app.includes('updateVideoLyricsToggle()')&&
   app.includes('signal?.aborted'),'Video loading must handle cancel and captions');
 assert.ok(css.includes('.stage.video-lyrics-off #lyrics'));
+const videoItem=plan.songs.find(item=>item.code==='VideoOne');
+assert.equal(core.videoMime('a.mov'),'video/quicktime');
+assert.equal(core.videoMime('a.avi'),'video/x-msvideo');
+assert.equal(core.videoMime('a.dat'),'video/mpeg');
+assert.ok(core.videoFingerprint(videoItem).includes('VideoOne.mp4'));
+assert.throws(()=>core.validateVideoDetails(videoItem,{
+  code:'V400',title:'ตัวอย่าง',artist:'',mode:'embedded'
+}),/นักร้อง/,'Artist is a required catalog field');
+assert.throws(()=>core.validateVideoDetails(videoItem,{
+  code:'V400',title:'ตัวอย่าง',artist:'นักร้อง',mode:'review'
+}),/ต้องเลือก/,'Unconfirmed embedded subtitles cannot be silently inferred');
+assert.throws(()=>core.validateVideoDetails(videoItem,{
+  code:'V400',title:'ตัวอย่าง',artist:'นักร้อง',mode:'timed',lrc:'ไม่มีเวลา'
+}),/LRC/,'Video without embedded lyrics needs verified LRC timestamps');
+const verified=core.validateVideoDetails(videoItem,{
+  code:'V400',title:'ตัวอย่าง',artist:'นักร้อง',mode:'timed',
+  lrc:'[00:01.00]เนื้อร้องบรรทัดแรก\\n[00:03.40]บรรทัดสอง',
+  album:'อัลบั้ม',composer:'ผู้แต่ง',genre:'ลูกทุ่ง',year:'2025',language:'ไทย'
+});
+assert.equal(verified.year,2025);
+assert.equal(verified.album,'อัลบั้ม');
+assert.equal(core.lrcToJson(verified.lrc,verified.code).lines.length,2);
+assert.throws(()=>core.validateVideoDetails(videoItem,{
+  code:'../bad',title:'ตัวอย่าง',artist:'นักร้อง',mode:'embedded'
+}),/ปลอดภัย/);
+const embeddedDetails=core.validateVideoDetails(videoItem,{
+  code:'V400',title:'ตัวอย่าง',artist:'นักร้อง',mode:'embedded'
+});
+assert.equal(embeddedDetails.lrc,'');
+assert.equal(embeddedDetails.mode,'embedded');
+const script=read('video-metadata-editor.js');
+assert.doesNotThrow(()=>new Function(script),'Metadata editor must parse');
+assert.ok(script.includes('validateVideoDetails')&&script.includes('insertStamp')&&
+  script.includes('previewCurrent'),'Editor must include validation and real-time LRC preview');
+assert.ok(importer.includes('originalVideo:originalVideoMedia')&&
+  importer.includes("['VIDEO','ORIGINAL',originalKind,'Songs',folder]"),
+  'Legacy source must be uploaded privately, not replaced by conversion');
+assert.ok(page.includes('id="cloud-import-video-artist"')&&
+  page.includes('id="cloud-import-video-lrc"')&&page.includes('id="video-original-toggle"'));
+assert.ok(app.includes('originalVideoSupported(song)')&&
+  app.includes('forceCompatible:true'),'Native source playback must fall back to compatible MP4');
+
 console.log('PASS: VDO classification, signatures, embedded lyrics, converter safety and stage control');
