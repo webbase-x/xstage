@@ -8,7 +8,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 - Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.29 Build 329, packaging explicitly `portable_zip`).
 - Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.5 Build 205, not a ready installer).
-- The published PC Ready ZIP SHA-256 is `8f3f87e0e489dfd6cf80bb86f4d6156de9553cee0ecc6b9a96aa8e24e73232c3`, reported by the GitHub Release asset digest. The ZIP is **not** a signed EXE or MSI installer.
+- Verify the published ZIP checksum with the matching GitHub Release `.zip.sha256` asset or the `sha256` field in `downloads/song-studio-latest.json` (after the release is published). Do not use hashes from older builds. This is **not** a signed EXE or MSI installer.
 - Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
 
 ## Open from Windows
@@ -36,6 +36,7 @@ All listed components are predownloaded and tested during **GitHub Actions build
 ### Functions implemented in this source engine
 
 - Scan source folders, search/select songs, persist source/output preferences
+- **NCN head/tail editor:** Choose the NCN folder containing `Song`, `Lyrics`, `Cursor` (or its parent `MIDI`, or `NCN/Song`). Scanning pairs `MID/LYR/CUR` by code and subfolder. Select one or more repeating first/second/penultimate/last *timed* lines, pick an X-Stage preset or custom CP874-compatible phrase. Backup both `.LYR` and `.CUR` before rewriting; MIDI and all unselected line timings remain unchanged. Undo restores exact bytes. Incomplete CUR/timing or untimed legacy footer credits are not bulk-edited. No StageWeb/current.json or LRC needed.
 - Convert supported audio formats to M4A (AAC 192 kbps) using FFmpeg; preserve existing M4A audio
 - Render MIDI/KAR to WAV using bundled FluidSynth and default SF2, then convert to M4A
 - **Offline AI Separation:** HTDemucs ONNX model and NumPy/ONNX Runtime are included in the Ready ZIP. Choose “แยกเสียงร้อง AI (Full Offline)” in create-step 3; create-step 4 exports the instrumental M4A plus a separate vocals M4A. Preview uses the same local AI model. No additional downloads on the user's PC.
