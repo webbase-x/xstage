@@ -79,6 +79,7 @@
   let aiMicSaving=false,aiMicPending=false;
   let phraseReady=false,phrasePosition='first',phraseOffset=0,phraseRows=[];
   let phraseSeq=0,phraseSearchTimer=0,phraseBackup=null;
+  let phraseSkippedOffset=0,phraseSkippedTotal=0,phraseRecheckTotal=0;
   const phraseSelected=new Map();
   let phrasePlan=null,phraseSelectionSeq=0;
   // Keep the owner's pasted words independent from Whisper's guessed text.
@@ -261,6 +262,13 @@
     $('lyric-group-apply').disabled=!allow||phraseSelected.size===0||
       !$('lyric-group-replacement').value.trim();
     $('lyric-group-undo').disabled=busy||!phraseBackup;
+    $('lyric-skipped-recheck').disabled=busy||!phraseReady||phraseSkippedTotal===0;
+    $('lyric-skipped-export').disabled=busy||!phraseReady||(
+      phraseSkippedTotal===0&&phraseRecheckTotal===0);
+    $('lyric-skipped-prev').disabled=busy||phraseSkippedOffset===0;
+    $('lyric-skipped-next').disabled=busy||phraseSkippedOffset+40>=
+      Number($('lyric-skipped-page').dataset.total||0);
+    $('lyric-skipped-view').disabled=busy||!phraseReady;
     $('lyric-group-select-page').disabled=!allow||phraseRows.length===0;
     $('lyric-group-clear').disabled=busy||phraseSelected.size===0;
     $('lyric-group-selected-count').textContent=
@@ -301,6 +309,96 @@
     $('lyric-group-page-count').dataset.total='0';
     $('lyric-group-page-count').textContent='ยังไม่ได้วิเคราะห์คลังนี้';
     $('lyric-group-stats').textContent='กรุณาวิเคราะห์คลังต้นทางที่เลือก';
+    phraseSkippedOffset=0;phraseSkippedTotal=0;phraseRecheckTotal=0;
+    $('lyric-skipped-panel').hidden=true;
+    $('lyric-skipped-panel').open=false;
+    $('lyric-skipped-list').replaceChildren();
+    $('lyric-skipped-breakdown').replaceChildren();
+    $('lyric-skipped-page').dataset.total='0';
+    $('lyric-skipped-count').textContent='0 ไฟล์';
+  }
+  async function refreshSkippedLyrics(){
+    if(!phraseReady)return;
+    try {
+      const view=$('lyric-skipped-view').value;
+      const args=new URLSearchParams({offset:String(phraseSkippedOffset),
+        limit:'40',view});
+      const data=await api('/api/lyric-groups-skipped?'+args.toString());
+      if(phraseSkippedOffset>0&&phraseSkippedOffset>=data.total){
+        phraseSkippedOffset=Math.max(0,Math.floor((data.total-1)/40)*40);
+        return refreshSkippedLyrics();
+      }
+      phraseSkippedTotal=Number(data.skipped||0);
+      phraseRecheckTotal=Number(data.recheck?.total||0);
+      const panel=$('lyric-skipped-panel');
+      panel.hidden=phraseSkippedTotal===0&&phraseRecheckTotal===0;
+      $('lyric-skipped-count').textContent=fmtNum(phraseSkippedTotal)+' ไฟล์';
+      $('lyric-skipped-recheck-stats').textContent=data.recheck
+        ? 'ตรวจซ้ำ '+fmtNum(data.recheck.total)+' ไฟล์ · ยืนยันข้าม '+
+          fmtNum(data.recheck.confirmed)+' · กลับมาอ่านได้ '+
+          fmtNum(data.recheck.recovered)+' · สาเหตุเปลี่ยน '+
+          fmtNum(data.recheck.reasonChanged)
+        : 'ยังไม่ตรวจซ้ำ · กดตรวจซ้ำเพื่อยืนยันเฉพาะไฟล์ที่ข้าม โดยไม่แก้ต้นฉบับ';
+      const breakdown=$('lyric-skipped-breakdown');breakdown.replaceChildren();
+      for(const reason of data.reasons||[]){
+        const item=document.createElement('span');
+        item.className='lyric-skipped-reason';
+        item.textContent=reason.label+' '+fmtNum(reason.count)+' ไฟล์';
+        breakdown.append(item);
+      }
+      const list=$('lyric-skipped-list');list.replaceChildren();
+      for(const row of data.rows||[]){
+        const item=document.createElement('div');
+        item.className='lyric-skipped-item';
+        item.setAttribute('role','listitem');
+        const name=document.createElement('strong');
+        name.textContent=row.file;
+        const desc=document.createElement('span');
+        const status=row.status==='recovered'?'✓ อ่านได้หลังตรวจซ้ำ · ':
+          row.status==='confirmed'?'ตรวจซ้ำแล้วยังข้าม · ':'';
+        desc.textContent=status+row.label+(row.reason&&row.reason!==row.label?' · '+row.reason:'');
+        item.append(name,desc);
+        if(row.originalReason&&row.originalReason!==row.reason){
+          const old=document.createElement('small');
+          old.textContent='รอบแรก: '+row.originalReason;
+          item.append(old);
+        }
+        list.append(item);
+      }
+      if(!data.rows?.length){
+        const none=document.createElement('p');none.className='hint';
+        none.textContent=view==='recovered'?'ยังไม่มีไฟล์ที่กลับมาอ่านได้':
+          view==='rechecked'?'ยังไม่ได้ตรวจซ้ำ':
+          'ไม่เหลือไฟล์ LYR ที่ข้าม';
+        list.append(none);
+      }
+      const total=Number(data.total||0);
+      $('lyric-skipped-page').dataset.total=String(total);
+      $('lyric-skipped-page').textContent=total
+        ? fmtNum(phraseSkippedOffset+1)+'–'+fmtNum(Math.min(total,phraseSkippedOffset+data.rows.length))+
+          ' จาก '+fmtNum(total)+' ไฟล์'
+        : '0 ไฟล์ในรายการนี้';
+      phraseUpdateButtons();
+    }catch(error){
+      $('lyric-skipped-recheck-stats').textContent='อ่านรายงาน LYR ไม่สำเร็จ: '+error.message;
+      message(error.message);
+    }
+  }
+  async function exportSkippedLyrics(){
+    try{
+      const response=await fetch(engineAddress('/api/lyric-groups-skipped.csv'),{
+        cache:'no-store',credentials:onlinePage?'omit':'same-origin',
+        mode:onlinePage?'cors':'same-origin',
+        headers:{'X-XStage-Token':token}
+      });
+      if(!response.ok)throw new Error('ดึงรายงาน CSV ไม่สำเร็จ · HTTP '+response.status);
+      const url=URL.createObjectURL(await response.blob());
+      const link=document.createElement('a');
+      link.href=url;link.download='X-Stage-LYR-Skipped-Report.csv';
+      document.body.append(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      message('ส่งออกรายงาน LYR ที่ข้ามและผลตรวจซ้ำเป็น CSV แล้ว',false);
+    }catch(error){message(error.message);}
   }
   async function refreshPhraseBackup(){
     try{
@@ -2053,9 +2151,21 @@
               phraseOffset=0;phraseClearSelection();
               await refreshPhraseGroups();
               await refreshPhraseBackup();
+              phraseSkippedOffset=0;
+              $('lyric-skipped-view').value='skipped';
+              await refreshSkippedLyrics();
               if(job.result?.sourceMode==='ncn-folder')
                 $('lyric-group-source-status').textContent='NCN: วิเคราะห์เฉพาะ LYR ใน '+($('lyric-group-folder').value||'คลังที่เลือก')+' · จะตรวจ MID/CUR เฉพาะเพลงที่เลือกก่อนแทนที่';
               message(job.result?.message||'จัดกลุ่มข้อความเสร็จแล้ว',false);
+            } else if (job.kind === 'lyric-skipped-recheck') {
+              phraseReady=true;phraseOffset=0;
+              phraseClearSelection();
+              await refreshPhraseGroups();
+              phraseSkippedOffset=0;
+              $('lyric-skipped-view').value='rechecked';
+              await refreshSkippedLyrics();
+              $('lyric-skipped-panel').open=true;
+              message(job.result?.message||'ตรวจซ้ำไฟล์ LYR ที่ข้ามเสร็จแล้ว',false);
             } else if (job.kind === 'lyric-groups-replace') {
               // Keep the current position, lyric search and page: the backend
               // already patched the live groups without a full rescan.
@@ -2304,6 +2414,21 @@
     }catch(error){message(error.message);}
   });
   $('lyric-group-undo').addEventListener('click',()=>{void phraseUndo();});
+  $('lyric-skipped-recheck').addEventListener('click',async()=>{
+    if(!busy&&phraseSkippedTotal>0)await run('lyric-skipped-recheck');
+  });
+  $('lyric-skipped-export').addEventListener('click',()=>{void exportSkippedLyrics();});
+  $('lyric-skipped-view').addEventListener('change',()=>{
+    phraseSkippedOffset=0;void refreshSkippedLyrics();
+  });
+  $('lyric-skipped-prev').addEventListener('click',()=>{
+    if(phraseSkippedOffset>=40){
+      phraseSkippedOffset-=40;void refreshSkippedLyrics();
+    }
+  });
+  $('lyric-skipped-next').addEventListener('click',()=>{
+    phraseSkippedOffset+=40;void refreshSkippedLyrics();
+  });
   for(const btn of document.querySelectorAll('[data-lyric-position]')){
     btn.addEventListener('click',()=>{
       if(busy)return;
