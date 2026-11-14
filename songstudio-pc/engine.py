@@ -1585,6 +1585,7 @@ def execute_job(action, options, started):
                             f"· ข้ามเนื้อร้องไม่รองรับ {index['skippedInvalid']:,} รายการ"),
                 "songs": index["songs"], "groups": index["groupCount"],
                 "skippedInvalid": index["skippedInvalid"],
+                "skippedReasons": index.get("skippedReasons", []),
                 "withoutLyrics": index["withoutLyrics"],
                 "sourceMode": index.get("mode", "stageweb")
             }
@@ -2641,6 +2642,19 @@ class Handler(BaseHTTPRequestHandler):
                     page_rows = [{**item, **preview_song_identity(item)}
                                  for item in page_rows]
                 self._json({"rows": page_rows, "total": len(rows)})
+            elif path in ("/api/lyric-groups-skipped", "/api/lyric-groups-skipped.csv"):
+                with LOCK:
+                    snapshot = LYRIC_TEXT_INDEX
+                if snapshot is None:
+                    raise ValueError("ยังไม่มีผลวิเคราะห์ LYR · กรุณากดวิเคราะห์ก่อน")
+                if path.endswith(".csv"):
+                    self._response(200, LYRIC_NCN.skipped_csv(snapshot),
+                                   "text/csv; charset=utf-8", cors=True)
+                else:
+                    offset = max(0, int(query.get("offset", ["0"])[0]))
+                    limit = max(1, min(100, int(query.get("limit", ["40"])[0])))
+                    self._json(LYRIC_NCN.skipped_page(
+                        snapshot, offset=offset, limit=limit))
             elif path == "/api/lyric-groups":
                 with LOCK:
                     snapshot = LYRIC_TEXT_INDEX
