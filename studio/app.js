@@ -2498,7 +2498,6 @@
   $('upload-soundfont-picker').addEventListener('click',()=>{void chooseUploadSoundfont();});
   $('upload-soundfont-button').addEventListener('click',()=>{void startSoundfontUpload();});
   $('upload-folder-button').addEventListener('click',()=>{void startFolderUpload();});
-  $('go-create').addEventListener('click',()=>tab('create'));
   for(const button of document.querySelectorAll('.download-action')) button.addEventListener('click',()=>{void startDownload(button.dataset.kind);});
   $('refresh-environment').addEventListener('click',()=>{void refreshEnvironment();});
   $('open-web').addEventListener('click',async()=>{
