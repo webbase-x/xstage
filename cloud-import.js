@@ -710,12 +710,18 @@ class Importer {
             this.stats.fonts++;
           }else{
             const {audio,video,lrc,json:lyricsJson,kind}=item;
-            let code=item.code;
+            const videoMeta=video?this.videoEditor?.get(item):null;
+            if(video&&!videoMeta)throw Error('วิดีโอ: ยังไม่ได้ยืนยันข้อมูลเพลง/เนื้อร้อง');
+            let code=videoMeta?.code||item.code;
             let audioFile=audio.file,videoFile=video?.file||null,uploadKind=kind;
+            const originalVideoFile=video?.file||null;
             let sourceVideoMd5=null;
+            if(originalVideoFile&&!await core.validVideo(originalVideoFile))
+              throw Error('วิดีโอ: ไฟล์ต้นฉบับไม่ผ่านการตรวจหัวไฟล์');
+            if(originalVideoFile)
+              sourceVideoMd5=await core.hashBlob(originalVideoFile,()=>this.check());
             if(videoFile&&core.needsVideoConversion(videoFile.name)){
               if(!scope.XStageVideoTranscode)throw Error('วิดีโอ: ไม่พบตัวแปลงวิดีโอของเว็บ · กรุณาอัปเดตหน้าเว็บ');
-              sourceVideoMd5=await core.hashBlob(videoFile,()=>this.check());
               const wasPrimary=videoFile===audioFile;
               videoFile=await scope.XStageVideoTranscode.convert(videoFile,{
                 signal:this.controller.signal,requireAudio:wasPrimary,
@@ -728,13 +734,20 @@ class Importer {
             if(videoFile&&!await core.validVideo(videoFile))
               throw Error('วิดีโอ: ไฟล์วิดีโอไม่ผ่านการตรวจหัวไฟล์ต้นฉบับ');
             let raw=null,doc,json;
-            if(lyricsJson){
+            if(videoMeta?.mode==='embedded'){
+              doc=core.embeddedVideoLyrics(code);
+              json=encode(doc);
+            }else if(videoMeta?.mode==='timed'&&videoMeta.lrc.trim()){
+              raw=videoMeta.lrc;
+              doc=core.lrcToJson(raw,code);
+              json=encode(doc);
+            }else if(lyricsJson){
               if(lyricsJson.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
               const source=await lyricsJson.file.text();
               try{doc=core.validLyricsJson(source,code);}
               catch(error){throw Error('Lyrics JSON ไม่สมบูรณ์: '+error.message);}
-              code=String(doc.songCode||code);
-              json=lyricsJson.file; // Keep bytes unchanged for PC/Web MD5 parity.
+              if(!videoMeta)code=String(doc.songCode||code);
+              json=lyricsJson.file; // Keep original JSON bytes for ordinary audio songs.
               if(lrc){
                 if(lrc.file.size>MAX_LRC)throw Error('LRC ใหญ่เกิน 2 MB');
                 raw=await lrc.file.text();
@@ -745,11 +758,13 @@ class Importer {
               doc=core.lrcToJson(raw,code);
               json=encode(doc);
             }else if(videoFile){
-              // A VDO with burned-in lyrics needs catalog metadata, not invented
-              // text or timestamps. The video remains its own lyric source.
-              doc=core.embeddedVideoLyrics(code);
-              json=encode(doc);
+              throw Error('วิดีโอ: ไม่มีเนื้อร้องพร้อมเวลา · เพิ่ม LRC หรือยืนยันว่ามีเนื้อร้องฝังภาพ');
             }else throw Error('LRC ต้องมีเวลาจริงสำหรับเพลงเสียง');
+            if(videoMeta){
+              doc={...doc,songCode:code,title:videoMeta.title,artist:videoMeta.artist,
+                lyricsMode:videoMeta.mode==='embedded'?'embedded-video':'timed'};
+              json=encode(doc);
+            }
             const [audioHash,jsonHash]=await Promise.all([
               core.hashBlob(audioFile,()=>this.check()),
               core.hashBlob(json,()=>this.check())
