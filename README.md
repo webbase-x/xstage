@@ -25,7 +25,7 @@
 
 ค้นหาเพลงบนเวทีเหมือนรุ่น Windows, แสดงผลแบบเรียลไทม์, เรียกผลด้วย F3/Ctrl+F และซ่อนหลังเลือกเพลง ระบบรองรับคิว, การเล่น, ประวัติ, เพลงโปรดเฉพาะแท็บ, สุ่มเพลง, ช่วงวน A–B, Web Audio EQ, สี/ขนาดเนื้อร้องและพื้นหลัง, ส่งออก/นำเข้าคิว และจอร้องแยก
 
-เมนูที่ต้องเข้าถึง BASSMIDI/SoundFont, MIDI Mixer, Windows MIDI ports, ASIO, การแก้ไข SQLite ต้นทาง และการเปลี่ยนคีย์อิสระจากเสียง M4A ยังคงใช้บน Windows เท่านั้น เว็บไซต์ไม่เก็บไฟล์เพลงส่วนตัวหรือ Google OAuth Token ใน GitHub
+การควบคุม BASSMIDI, Windows MIDI ports, ASIO และแก้ไข SQLite ต้นทางยังคงใช้บน Windows เท่านั้น เว็บ v1.0.96 เพิ่มตัวเรนเดอร์ MIDI/KAR/NCN และตัวอ่าน SoundFont SF2/SF3 ภายในเบราว์เซอร์ (ไม่ใช่ BASSMIDI/FluidSynth และคุณภาพเสียงอาจไม่เท่ากัน) เว็บไซต์ไม่เก็บไฟล์เพลงส่วนตัวหรือ Google OAuth Token ใน GitHub
 
 เครื่องมือเพิ่มเติม: แก้ชื่อผู้ร้อง/ความเร็วเฉพาะเพลงในคิว, นำเข้า/แก้ไขเนื้อร้อง LRC ชั่วคราว, บันทึกเสียงไมโครโฟนเมื่ออนุญาต และเลือกเสียงเอฟเฟกต์จากไฟล์ของผู้ใช้ในเบราว์เซอร์ ฟังก์ชันเหล่านี้ไม่เขียนทับ Catalog หรือไฟล์เพลงบน Drive
 
@@ -121,3 +121,15 @@
 - While signed in, the web player checks `current.json` **every 45 seconds**. When the generation changes, it updates the searchable song catalog without interrupting audio playback or clearing the existing queue.
 - All media, lyrics, catalog and delta files are kept private in the owner's Google Drive. This feature does not expose them on GitHub Pages, and it never shares Google tokens with mobile remotes.
 - Each checkpoint switches `current.json` only **after M4A and Lyrics JSON are both uploaded and verified**. Interrupted Windows sync may be resumed later. The final Windows pass compacts deltas into one complete snapshot.
+
+## X-Stage Karaoke Online v1.0.96 — browser media/MIDI/SoundFont
+
+* **ติดตั้งเพิ่มเติม:** ไม่ต้องดาวน์โหลดโปรแกรม, runtime, executable หรือไลบรารีจาก CDN เพื่อเล่น MIDI; โค้ด `browser-midi.js` ส่งจาก origin เดียวกับ X-Stage บน GitHub Pages และใช้ Web Audio API ของเบราว์เซอร์
+* **คลังส่วนตัว:** ไฟล์เพลง/เสียง/เนื้อร้อง/SoundFont เก็บใน Google Drive ของเจ้าของบัญชี ค้นหาโฟลเดอร์ `XStageWeb/SOUNDFONT/SF2` และ `SF3` เพื่อแสดงตัวเลือก SoundFont ไม่เก็บ token หรือเสียงลง GitHub
+* **MIDI/KAR:** นำเข้าไฟล์ Standard MIDI `.mid`/`.midi`, Karaoke MIDI `.kar` ได้ โดยตรวจ track และสร้าง Lyrics JSON จากข้อความ KAR หรือระบุว่าเป็นเพลงบรรเลง; เล่นผ่าน Web Audio OfflineAudioContext เพื่อให้คิว/เล่นต่อ/เลื่อนเวลาใช้ตัวควบคุมเสียงเดิมได้
+* **NCN:** รับชุดชื่อรหัสเดียวกัน `.mid + .lyr + .cur` (แยก Song/Lyrics/Cursor ได้) และเก็บต้นฉบับทั้งสามใน `MIDI/NCN` พร้อมสร้าง Lyrics JSON สำหรับเวที ต้องมีครบสามไฟล์จึงนำเข้าเป็น NCN
+* **SoundFont:** รองรับ RIFF SF2 และ SF3 ที่มีข้อมูลครบ เลือกจากเมนูเวทีภายหลัง Google Login; SF2 สังเคราะห์เสียงด้วย sample bank, SF3 ใช้ native Ogg decoder ของเบราว์เซอร์และอาจใช้ไม่ได้ในบางรุ่น/อุปกรณ์ ถ้าไม่ได้เลือก SoundFont ใช้ oscillator พื้นฐานที่ฝังมากับเว็บ; ไม่แอบใช้เสียงพื้นฐานแทน SF3 ที่ถอดรหัสไม่สำเร็จ
+* **เสียงและวิดีโออื่น:** นำเข้า MP3/M4A/WAV/AAC/FLAC/OGG/OGA รวมถึง MP4/WebM พร้อม Lyrics JSON/LRC ที่มีเวลาได้ โดยตรวจ magic bytes ก่อนอัปโหลด แต่การถอดรหัสจริงยังขึ้นกับ codec และ HTMLMediaElement ของเบราว์เซอร์ ไม่มีคำรับประกันว่าไฟล์ทุก codec เล่นได้
+* **ขีดจำกัด:** MIDI 12 MiB/ความยาวไม่เกิน 15 นาที; SF2/SF3 ไม่เกิน 256 MiB; เรนเดอร์ทั้งเพลงเป็น WAV ภายในหน่วยความจำก่อนเล่น (อาจช้าบนมือถือและไฟล์ใหญ่) ไม่รองรับ EMK/AVI/WMV/VOB/FLV/MKV ที่ต้องถอดรหัสเฉพาะ และไม่ใช่เครื่องเล่น MIDI ระดับ BASSMIDI/FluidSynth ที่จำลองทุก controller/effect ได้ครบ
+* **ความปลอดภัย:** MD5 ตรวจไฟล์เมื่อส่งขึ้น Drive, คู่รหัสไม่ตรงถูกข้าม, ชุดไม่สมบูรณ์ไม่เผยแพร่เข้า DB, เขียน `current.json` หลังอัปโหลดและตรวจ catalog สำเร็จเท่านั้น; token Google มีอายุตาม OAuth เดิม
+* **การตรวจ:** `npm test` เพิ่มสคริปต์ `scripts/browser-midi-test.mjs` สำหรับ parser, NCN cursor และ WAV contract; ต้องทดสอบเล่น/อัปโหลดจริงบน Chrome, Safari iOS, Android TV และ SoundFont ตัวอย่างก่อนประกาศว่าครบทุกอุปกรณ์
