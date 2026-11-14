@@ -25,14 +25,11 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 ONLINE_ROOT = "XStageWeb"
-LEGACY_ONLINE_ROOT = "StageWeb"
-STAGING_MARKER = ".xstage-songstudio-staging.json"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 MAX_CATALOG_BYTES = 128 * 1024 * 1024
 MAX_DELTAS = 32
 
-# Only new Drive uploads use typed folders. All paths in existing catalog
-# entries remain untouched; local StageWeb/audio and StageWeb/lyrics are unchanged.
+# XStageWeb V2 is the only Drive layout. Local build paths are not Drive paths.
 MEDIA_ROOTS = (
     ("AUDIO", "MP3", "Songs"), ("AUDIO", "MP3", "Lyrics"),
     ("AUDIO", "M4A", "Songs"), ("AUDIO", "M4A", "Lyrics"),
@@ -144,11 +141,16 @@ def _valid_row(root, row):
 
 
 class OnlinePublisher:
+    """Private XStageWeb V2 publisher for complete local M4A+timed JSON songs.
+
+    Missing XStageWeb/DB is a new library, not a V1 migration error.
+    The only mutable Drive object is DB/current.json. Never publish songs
+    directly under the root or store OAuth tokens inside a catalog.
+    """
     def __init__(self, drive):
         self.drive = drive
 
     def _json(self, file_id):
-        """Read large immutable catalogs without the small OAuth API JSON limit."""
         import urllib.error
         import urllib.parse
         import urllib.request
@@ -160,381 +162,203 @@ class OnlinePublisher:
             with urllib.request.urlopen(request, timeout=120) as stream:
                 raw = stream.read(MAX_CATALOG_BYTES + 1)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
-            raise PublishError("อ่านฐานเพลงเดิมใน Google Drive ไม่ได้ · ตรวจสิทธิ์ drive.file") from exc
+            raise PublishError("อ่านฐานเพลง V2 จาก Google Drive ไม่ได้") from exc
         if len(raw) > MAX_CATALOG_BYTES:
-            raise PublishError("ฐานเพลง Google Drive ใหญ่เกินขอบเขตความปลอดภัย")
+            raise PublishError("ชิ้นส่วนฐานเพลง V2 ใหญ่เกินขีดจำกัด")
         try:
             obj = json.loads(raw.decode("utf-8-sig"))
         except (UnicodeDecodeError, ValueError) as exc:
-            raise PublishError("อ่านฐานเพลง Google Drive ไม่สำเร็จ") from exc
+            raise PublishError("ฐานเพลง V2 ไม่ใช่ JSON ที่ถูกต้อง") from exc
         if not isinstance(obj, dict):
-            raise PublishError("โครงสร้างฐานเพลงบน Drive ไม่ถูกต้อง")
+            raise PublishError("ฐานเพลง V2 มีรูปแบบไม่ถูกต้อง")
         return obj
 
-    def _metadata(self, file_id):
-        result = self.drive.api("/files/" + str(file_id),
-                                {"fields": "id,name,mimeType,size,md5Checksum"})
-        if not result.get("md5Checksum"):
-            raise PublishError("Google Drive ไม่ให้ค่า MD5 เพื่อตรวจเพลงซ้ำ: " + str(file_id))
-        return result
-
     def _existing_root(self):
-        # Existing XStageWeb databases keep their original Google Drive ID.
-        # Never generate a second StageWeb tree when the legacy library is
-        # already visible; code and MD5 duplicate checks must cover both.
-        found = [x for x in self.drive.list_children("root") if
-                 x.get("name") in (ONLINE_ROOT, LEGACY_ONLINE_ROOT) and
-                 x.get("mimeType") == FOLDER_MIME]
+        found = [x for x in self.drive.list_children("root")
+                 if x.get("name") == ONLINE_ROOT and x.get("mimeType") == FOLDER_MIME]
         if len(found) > 1:
-            raise PublishError(
-                "พบคลัง StageWeb และ XStageWeb มากกว่าหนึ่งรายการ · "
-                "หยุดก่อนอัปโหลดเพื่อไม่ให้แยกฐานเพลงซ้ำ "
-                "กรุณาตรวจเลือกคลังเดิมให้ชัดเจน")
+            raise PublishError("พบ XStageWeb ซ้ำใน Google Drive · เลือกคลังไม่ได้อย่างปลอดภัย")
         return found[0]["id"] if found else None
 
-    def _read_online(self, root):
-        if not root:
-            return None, {}, {}
-        children = self.drive.list_children(root)
-        pointers = [x for x in children if x.get("name") == "current.json"
-                    and x.get("mimeType") != FOLDER_MIME]
-        if len(pointers) > 1:
-            raise PublishError("พบ XStageWeb/current.json ซ้ำบน Drive · หยุดเพื่อป้องกันฐานเสีย")
-        if not pointers:
-            if children:
-                markers = [x for x in children if x.get("name") == STAGING_MARKER
-                           and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs", "audio", "lyrics",
-                            "mp3", "m4a", "midi", "AUDIO", "MIDI", "VIDEO", "DB"}
-                if (len(markers) == 1 and all(x.get("name") in expected for x in children)
-                        and self._json(markers[0]["id"]).get("format") ==
-                        "xstage-songstudio-upload-staging-v1"):
-                    # Previous first-time upload stopped before its first
-                    # published pointer. Resume only our own verified staging
-                    # work, never a foreign, unindexed XStageWeb library.
-                    return None, {}, {x["name"]: x for x in children}
-                raise PublishError("XStageWeb มีไฟล์เดิมแต่ไม่มี current.json · ไม่สร้างฐานใหม่ทับ")
-            return None, {}, {}
-        pointer_file = pointers[0]
-        pointer = self._json(pointer_file["id"])
-        ids = pointer.get("deltaFileIds", [])
-        if (pointer.get("schemaVersion") != 1
-                or not isinstance(pointer.get("catalogFileId"), str)
-                or not pointer["catalogFileId"]
-                or not isinstance(ids, list) or len(ids) > MAX_DELTAS
-                or any(not isinstance(i, str) for i in ids)
-                or len(set(ids)) != len(ids)):
-            raise PublishError("ฐาน XStageWeb/current.json ไม่เข้ากับ X-Stage Online")
-        base = self._json(pointer["catalogFileId"])
-        if base.get("schemaVersion") != 1 or not isinstance(base.get("songs"), list):
-            raise PublishError("ฐานเพลงหลักของ XStageWeb ไม่ถูกต้อง")
-        songs = {}
-        for item in base["songs"]:
-            if not isinstance(item, dict) or not isinstance(item.get("webSongId"), str):
-                raise PublishError("ข้อมูลเพลงเดิมบน Drive ไม่ถูกต้อง")
-            songs[item["webSongId"]] = item
-        for ident in ids:
-            delta = self._json(ident)
-            if (delta.get("schemaVersion") != 1 or not isinstance(delta.get("upserts"), list)
-                    or not isinstance(delta.get("removes"), list)):
-                raise PublishError("ฐานเพลงส่วนอัปเดตบน Drive ไม่สมบูรณ์")
-            for ident in delta["removes"]:
-                if not isinstance(ident, str):
-                    raise PublishError("รายการลบเพลงในฐาน Drive ไม่ถูกต้อง")
-                songs.pop(ident, None)
-            for item in delta["upserts"]:
-                if not isinstance(item, dict) or not isinstance(item.get("webSongId"), str):
-                    raise PublishError("เพลงในฐานอัปเดตไม่ถูกต้อง")
-                songs[item["webSongId"]] = item
-        if pointer.get("songCount") != len(songs):
-            raise PublishError("จำนวนเพลงบน Drive ไม่ตรงกับฐาน XStageWeb · ไม่เผยแพร่ทับ")
-        return (pointer_file, pointer), songs, {x["name"]: x for x in children}
-
-    def read_code_registry(self, *, allow_missing_root=False):
-        """Return a verified code snapshot from the ACTUAL private XStageWeb DB.
-
-        An invisible existing library is never interpreted as an empty catalog.
-        This is read-only; no staging markers, Drive folders or music are made.
-        """
+    def _read_v2(self):
+        """Read-only snapshot; no Drive folder is created by this call."""
+        from v2_native_publish import read_published_v2
         root = self._existing_root()
         if root is None:
-            if allow_missing_root:
-                return {"songs": [], "generation": "", "visible": False}
-            raise PublishError(
-                "ไม่พบคลัง XStageWeb/StageWeb เดิมที่ Google OAuth ของ Song Studio เข้าถึงได้ "
-                "· ห้ามอ้างว่าไม่มีรหัสซ้ำจนกว่าจะเชื่อมต่อคลังเดิม")
-        active, songs, _ = self._read_online(root)
-        if active is None:
-            if allow_missing_root:
-                return {"songs": [], "generation": "", "visible": False}
-            raise PublishError("คลัง XStageWeb ยังไม่มี current.json ที่ตรวจยืนยันได้ "
-                               "· ไม่สามารถกำหนดรหัสจากสองแหล่ง")
-        _, pointer = active
-        return {"songs": list(songs.values()), "generation": pointer["generation"],
-                "visible": True}
+            return None, None, None, {}
+        folders = [x for x in self.drive.list_children(root)
+                   if x.get("name") == "DB" and x.get("mimeType") == FOLDER_MIME]
+        if len(folders) > 1:
+            raise PublishError("XStageWeb/DB มีโฟลเดอร์ซ้ำ")
+        if not folders:
+            return root, None, None, {}
+        db = folders[0]["id"]
+        pointers = [x for x in self.drive.list_children(db)
+                    if x.get("name") == "current.json" and x.get("mimeType") != FOLDER_MIME]
+        if len(pointers) > 1:
+            raise PublishError("พบ DB/current.json ซ้ำ")
+        if not pointers:
+            return root, db, None, {}
+        pointer = self._json(pointers[0]["id"])
+        try:
+            songs = read_published_v2(self._json, pointer)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise PublishError("ฐานเพลง V2 เดิมไม่สมบูรณ์ · หยุดก่อนอัปโหลด") from exc
+        return root, db, (pointers[0], pointer), songs
+
+    @staticmethod
+    def _registry_song(song):
+        """Existing local code allocator uses the older *local* audio key."""
+        result = dict(song)
+        media = song.get("media") or {}
+        result["audio"] = media.get("m4a") or media.get("mp3") or {}
+        return result
+
+    def read_code_registry(self, *, allow_missing_root=False):
+        """An empty accessible Drive is a verified empty V2 code namespace."""
+        root, db, active, songs = self._read_v2()
+        return {"songs": [self._registry_song(x) for x in songs.values()],
+                "generation": active[1]["generation"] if active else "",
+                "visible": True, "rootExists": bool(root),
+                "catalogExists": bool(active), "schemaVersion": 2}
 
     def publish(self, local_songs, selected_records, *, create_new_library=False,
                 cancelled=None, on_progress=None, on_batch=None, on_row=None,
                 batch_size=100):
-        local_songs = Path(local_songs)
+        from v2_native_publish import write_published_v2, validate_unique_song_codes
+        from unified_catalog_v2 import validate_catalog, CATALOG_FORMAT
+        local_songs = Path(local_songs).resolve()
         if not (local_songs / "current.json").is_file():
             raise PublishError("กรุณาสร้างฐานเพลงในเครื่องก่อนอัปโหลด")
-        ready = []
-        not_ready = 0
+        if type(batch_size) is not int or not 1 <= batch_size <= 1000:
+            raise PublishError("ขนาดชุดเพลงไม่ถูกต้อง")
+        ready, not_ready = [], 0
         for row in selected_records:
             if _valid_row(local_songs, row):
                 ready.append(row)
             else:
                 not_ready += 1
         if not ready:
-            raise PublishError("ยังไม่มีเพลงพร้อมใช้ X-Stage Online: ต้องมี M4A และ Lyrics JSON พร้อมเวลาจริง")
-        if type(batch_size) is not int or not 1 <= batch_size <= 1000:
-            raise PublishError("ขนาดชุดเผยแพร่ต้องอยู่ระหว่าง 1–1000 เพลง")
-        root = self._existing_root()
-        # drive.file is app-scoped. If the existing Karaoke Online library was
-        # created by a different OAuth application, it may be invisible here.
-        # Never silently make a second XStageWeb and strand the old songs.
-        if root is None and not create_new_library:
-            raise PublishError(
-                "ไม่พบ XStageWeb/StageWeb ที่บัญชี/แอปนี้เข้าถึงได้ · "
-                "หากมีเพลงเดิม ห้ามสร้างคลังใหม่จนกว่าจะอนุญาตให้ Song Studio "
-                "เข้าถึงคลังเดิมผ่าน Google OAuth/Picker · "
-                "ถ้าเป็น Google Drive ว่างจริง ให้เลือก 'สร้างคลังใหม่' โดยชัดเจน")
-        if root is None:
-            root = self.drive.folder("root", ONLINE_ROOT)
-        active, remote, root_files = self._read_online(root)
-        if active is None and STAGING_MARKER not in root_files:
-            # Durable evidence for safe first-run recovery. This marker is
-            # published BEFORE the first media file, so an interrupted upload
-            # cannot be mistaken for an unrelated old library.
-            with tempfile.TemporaryDirectory(prefix="xstage-online-marker-") as temp:
-                marker_file = Path(temp) / STAGING_MARKER
-                marker_file.write_text(json.dumps({
-                    "format": "xstage-songstudio-upload-staging-v1",
-                    "schemaVersion": 1,
-                    "note": "Private staged upload. No playable DB is published yet."
-                }), encoding="utf-8")
-                self.drive.upload_file(root, marker_file, STAGING_MARKER,
-                                       cancelled=cancelled)
-        pointer_file, old_pointer = active if active else (None, None)
-        by_code = {}
-        by_pair = {}
-        for item in remote.values():
-            by_code.setdefault(str(item.get("code") or "").casefold(), []).append(item)
-            audio_hash = (item.get("audio") or {}).get("md5Checksum")
-            lyric_hash = (item.get("lyrics") or {}).get("md5Checksum")
-            if (isinstance(audio_hash, str) and len(audio_hash) == 32
-                    and isinstance(lyric_hash, str) and len(lyric_hash) == 32):
-                by_pair.setdefault((audio_hash.lower(), lyric_hash.lower()), item)
-        # Compute duplicate evidence only for same-code candidates. Never skip
-        # or overwrite on title match alone. Older clients may use an unrelated
-        # OAuth app; in that case a metadata 403 must stop safely.
-        revisions = []
-        counts = {"newSongs": 0, "updatedSongs": 0, "duplicates": 0,
-                  "conflicts": 0, "notReady": not_ready, "filesUploaded": 0}
-        root_id = root
-        folder_cache = {}
-        file_lists = {}  # one files.list per parent, not per song
-        metadata_cache = {}
-        def matches_md5(media, expected):
-            if not isinstance(media, dict) or not media.get("fileId"):
-                return False
-            ident = media["fileId"]
-            checksum = media.get("md5Checksum")
-            if not isinstance(checksum, str) or len(checksum) != 32:
-                if ident not in metadata_cache:
-                    metadata_cache[ident] = self._metadata(ident)["md5Checksum"]
-                checksum = metadata_cache[ident]
-            return checksum.lower() == expected
-        def ensure_root():
-            nonlocal root_id
-            if not root_id:
-                root_id = self.drive.folder("root", ONLINE_ROOT)
-            return root_id
-        def folder(parts):
-            parent = ensure_root()
-            key = ""
-            for name in parts:
-                key += "/" + name
-                if key not in folder_cache:
-                    folder_cache[key] = self.drive.folder(parent, name)
-                parent = folder_cache[key]
-            return parent
-        def upload(local_file, rel, source_format="", role="audio", code=""):
-            checksum = _md5(local_file)
-            path = cloud_media_path(rel, source_format, role=role, code=code)
-            # Immutable, content-named media avoids overwriting an older song
-            # with the same basename and prevents blind filename deduplication.
-            name = path.stem + "-" + checksum[:16] + path.suffix
-            parent = folder(tuple(path.parts[:-1]))
-            if parent not in file_lists:
-                # Build the folder index ONCE per parent, rather than a
-                # linear search through every previous song on every upload.
-                lookup = {}
-                for item in self.drive.list_children(parent):
-                    lookup.setdefault(item.get("name"), []).append(item)
-                file_lists[parent] = lookup
-            result, meta = self.drive.upload_file(
-                parent, local_file, name, cancelled=cancelled,
-                on_progress=on_progress, existing_items=file_lists[parent])
-            if result == "created":
-                counts["filesUploaded"] += 1
-                file_lists[parent].setdefault(name, []).append(meta)
-            return {"fileId": meta["id"], "path":
-                    str(path.parent).replace("\\", "/") + "/" + name,
-                    "md5Checksum": checksum,
-                    "size": local_file.stat().st_size}
-        # Only fixed category directories are created up front. The 0-9 and
-        # A-Z leaf buckets are created on demand to avoid 36*many Drive calls.
-        for parts in MEDIA_ROOTS:
-            folder(parts)
-        counts["published"] = False
-        counts["batches"] = 0
-        def flush():
-            nonlocal old_pointer, pointer_file
-            if not revisions:
-                return
-            if cancelled and cancelled.is_set():
-                raise PublishError(
-                    "ยกเลิกก่อนเผยแพร่รอบปัจจุบัน · รอบก่อนหน้าที่เผยแพร่แล้วยังใช้งานได้")
-            generation = secrets.token_hex(12)
-            with tempfile.TemporaryDirectory(prefix="xstage-online-publish-") as temp:
-                def push_json(name, document):
-                    path = Path(temp) / name
-                    path.write_text(json.dumps(document, ensure_ascii=False,
-                                               separators=(",", ":")), encoding="utf-8")
-                    _, metadata = self.drive.upload_file(
-                        ensure_root(), path, name, cancelled=cancelled)
-                    return metadata["id"]
-                if old_pointer and len(old_pointer.get("deltaFileIds", [])) < MAX_DELTAS:
-                    delta_id = push_json("catalog-delta-" + generation + ".json", {
-                        "schemaVersion": 1, "upserts": list(revisions), "removes": []})
-                    catalog_id = old_pointer["catalogFileId"]
-                    delta_ids = [*old_pointer.get("deltaFileIds", []), delta_id]
-                else:
-                    # Compact immutable base only after 32 online deltas,
-                    # never rewrite the main DB for every single song.
-                    catalog_id = push_json("catalog-base-" + generation + ".json", {
-                        "schemaVersion": 1, "songs": list(remote.values())})
-                    delta_ids = []
-                next_pointer = {
-                    "schemaVersion": 1, "generation": generation,
-                    "catalogFileId": catalog_id, "deltaFileIds": delta_ids,
-                    "songCount": len(remote)
-                }
-                if pointer_file:
-                    current = self._json(pointer_file["id"])
-                    if current.get("generation") != old_pointer.get("generation"):
-                        raise PublishError(
-                            "ฐาน Drive มีผู้อื่นอัปเดตระหว่างซิงค์ · "
-                            "หยุดก่อนเผยแพร่รอบใหม่เพื่อป้องกันข้อมูลสูญหาย")
-                pointer_path = Path(temp) / "current.json"
-                pointer_path.write_text(json.dumps(next_pointer, ensure_ascii=False,
-                                                   separators=(",", ":")), encoding="utf-8")
-                _, pointer_file = self.drive.upload_file(
-                    ensure_root(), pointer_path, "current.json",
-                    replace_pointer=True, cancelled=cancelled)
-            old_pointer = next_pointer
-            revisions.clear()
-            counts["published"] = True
-            counts["batches"] += 1
-            counts["generation"] = generation
-            counts["totalSongs"] = len(remote)
-            if on_batch:
-                on_batch(counts["batches"], len(remote),
-                         counts["newSongs"], counts["updatedSongs"])
-        for i, row in enumerate(ready, 1):
-            # Report completed rows, not merely bytes in one current upload.
-            # This also advances progress through verified duplicates.
-            if on_row:
-                on_row(i - 1, len(ready), not_ready)
-            if cancelled and cancelled.is_set():
-                raise PublishError("ยกเลิกซิงค์ Google Drive · ชุดเพลงที่เผยแพร่ก่อนหน้ายังคงใช้งานได้")
-            code = str(row["code"]).casefold()
+            raise PublishError("ไม่มีเพลงที่มี M4A และ Lyrics JSON พร้อมเวลาให้เผยแพร่")
+        if len({row["webSongId"] for row in ready}) != len(ready):
+            raise PublishError("รายการเพลงที่เลือกมี ID ซ้ำ")
+        if len({str(row["code"]).casefold() for row in ready}) != len(ready):
+            raise PublishError("รายการเพลงมีรหัสเพลงซ้ำ")
+        # Preflight all local files and checksums BEFORE creating Drive folders.
+        staged = []
+        for row in ready:
             sound = _local_path(local_songs, row["audio"]["path"], "audio")
-            lyric = _local_path(local_songs, row["lyrics"]["path"], "lyrics")
-            s_hash, l_hash = _md5(sound), _md5(lyric)
-            # Exact M4A+Lyrics bytes are the same song even if the local
-            # filename or catalog code was changed. Never infer equivalence
-            # from title alone.
-            pair = (s_hash, l_hash)
-            if pair in by_pair:
+            lyrics = _local_path(local_songs, row["lyrics"]["path"], "lyrics")
+            staged.append((row, sound, lyrics, _md5(sound), _md5(lyrics)))
+        root, db, active, existing = self._read_v2()
+        validate_unique_song_codes(existing)
+        by_code = {str(x["code"]).casefold(): x for x in existing.values()}
+        by_pair = {}
+        for x in existing.values():
+            media = (x.get("media") or {}).get("m4a") or {}
+            lyric = x.get("lyrics") or {}
+            if media.get("md5Checksum") and lyric.get("md5Checksum"):
+                by_pair[(media["md5Checksum"].lower(), lyric["md5Checksum"].lower())] = x
+        counts = {"newSongs": 0, "updatedSongs": 0, "duplicates": 0,
+                  "conflicts": 0, "notReady": not_ready, "filesUploaded": 0,
+                  "batches": 0, "published": False}
+        # Only create XStageWeb if at least one vetted file is ready to upload.
+        if not root:
+            root = self.drive.folder("root", ONLINE_ROOT)
+        if not db:
+            db = self.drive.folder(root, "DB")
+        old_pointer = active[1] if active else None
+        old_pointer_id = active[0]["id"] if active else None
+        folders = {}
+        parent_lists = {}
+        def folder(parts):
+            parent = root
+            for index, part in enumerate(parts):
+                key = tuple(parts[:index+1])
+                if key not in folders:
+                    folders[key] = self.drive.folder(parent, part)
+                parent = folders[key]
+            return parent
+        def upload(path, role, code, md5):
+            rel = cloud_media_path(path.relative_to(local_songs).as_posix(),
+                                   "M4A", role=role, code=code)
+            parent = folder(rel.parts[:-1])
+            name = rel.stem + "-" + md5[:16] + rel.suffix
+            if parent not in parent_lists:
+                cache = {}
+                for x in self.drive.list_children(parent):
+                    cache.setdefault(x.get("name"), []).append(x)
+                parent_lists[parent] = cache
+            status, meta = self.drive.upload_file(
+                parent, path, name, cancelled=cancelled, existing_items=parent_lists[parent])
+            if not isinstance(meta.get("id"), str) or meta.get("md5Checksum","").lower() != md5:
+                raise PublishError("Google Drive ไม่ยืนยันไฟล์อัปโหลดให้ตรงกับ MD5")
+            if status != "skipped":
+                counts["filesUploaded"] += 1
+            parent_lists[parent].setdefault(name, []).append(meta)
+            return {"fileId": meta["id"], "path": str(rel.parent / name),
+                    "md5Checksum": md5, "size": path.stat().st_size}
+        result = dict(existing)
+        revisions = []
+        completed_bytes = 0
+        total_bytes = sum(x[1].stat().st_size + x[2].stat().st_size for x in staged)
+        for index, (row, sound, lyric, sound_md5, lyric_md5) in enumerate(staged, 1):
+            if cancelled is not None and cancelled.is_set():
+                raise PublishError("ยกเลิกการซิงค์ก่อนเผยแพร่ฐาน V2")
+            sid = str(row["webSongId"])
+            code = str(row["code"])
+            prior = result.get(sid) or by_code.get(code.casefold())
+            # Same file contents already known to Drive under any code:
+            # skip rather than create another catalog entry.
+            if (sound_md5, lyric_md5) in by_pair and not prior:
                 counts["duplicates"] += 1
+                if on_row: on_row(index, len(staged), not_ready)
                 continue
-            candidates = list(by_code.get(code, []))
-            exact_id = remote.get(str(row["webSongId"]))
-            if exact_id and str(exact_id.get("code") or "").casefold() != code:
-                # A PC catalog can use a filename-derived webSongId that
-                # already exists remotely for an entirely different track.
-                # Never overwrite that remote song's identity or its code.
-                if matches_md5(exact_id.get("audio"), s_hash):
-                    counts["conflicts"] += 1
-                    continue
-            elif exact_id and exact_id not in candidates:
-                candidates.append(exact_id)
-            same_audio, same_both = None, None
-            for candidate in candidates:
-                if str(candidate.get("code") or "").casefold() != code:
-                    continue
-                a_id = (candidate.get("audio") or {}).get("fileId")
-                l_id = (candidate.get("lyrics") or {}).get("fileId")
-                if not a_id or not l_id:
-                    continue
-                if matches_md5(candidate.get("audio"), s_hash):
-                    same_audio = candidate
-                    if matches_md5(candidate.get("lyrics"), l_hash):
-                        same_both = candidate
-                        break
-            if same_both:
-                counts["duplicates"] += 1
-                continue
-            if candidates and not same_audio:
-                # A matching code with DIFFERENT audio is ambiguous even when
-                # title/artist happen to match. Keep old song and flag conflict.
+            if prior and (prior["id"] != sid or prior["code"].casefold() != code.casefold()):
                 counts["conflicts"] += 1
+                if on_row: on_row(index, len(staged), not_ready)
                 continue
-            audio = (dict(same_audio["audio"]) if same_audio else
-                     upload(sound, row["audio"]["path"], row.get("sourceFormat", ""), code=row["code"]))
-            lyrics = upload(lyric, row["lyrics"]["path"], role="lyrics", code=row["code"])
-            lrc_path = str(Path(row["lyrics"]["path"]).with_suffix(".lrc")).replace("\\", "/")
-            lrc_media = None
-            if (local_songs / lrc_path).is_file():
-                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path, role="lrc", code=row["code"])
-            vocals = None
-            if row.get("vocals") and row["vocals"].get("path"):
-                src = _local_path(local_songs, row["vocals"]["path"], "audio")
-                vocals = upload(src, row["vocals"]["path"], code=row["code"])
-            ident = (str(same_audio["webSongId"]) if same_audio else str(row["webSongId"]))
-            if not same_audio and ident in remote:
-                # Keep the old Drive entry immutable. A new online ID is
-                # derived from the assigned code and actual M4A checksum;
-                # only the metadata identity changes, not the user's files.
-                ident = ident + "-assigned-" + str(row["code"]) + "-" + s_hash[:16]
-                if ident in remote:
-                    counts["conflicts"] += 1
-                    continue
-            item = {"webSongId": ident, "code": str(row["code"]),
-                    "title": str(row.get("title") or row["code"]),
-                    "artist": str(row.get("artist") or ""),
-                    "sourceFormat": str(row.get("sourceFormat") or ""),
-                    "audio": audio, "lyrics": lyrics}
-            if row.get("originalCode"):
-                item["originalCode"] = str(row["originalCode"])
-            if lrc_media:
-                item["lrc"] = lrc_media
-            if vocals:
-                item["vocals"] = vocals
-            elif same_audio and same_audio.get("vocals"):
-                item["vocals"] = same_audio["vocals"]
-            remote[ident] = item
-            revisions.append(item)
-            by_code.setdefault(code, []).append(item)
-            by_pair[pair] = item
-            counts["updatedSongs" if same_audio else "newSongs"] += 1
-            if len(revisions) >= batch_size:
-                flush()
-        flush()
-        if on_row:
-            on_row(len(ready), len(ready), not_ready)
-        counts["totalSongs"] = len(remote)
+            previous_audio = ((prior or {}).get("media") or {}).get("m4a") or {}
+            if prior and previous_audio.get("md5Checksum","").lower() != sound_md5:
+                counts["conflicts"] += 1
+                if on_row: on_row(index, len(staged), not_ready)
+                continue
+            previous_lyrics = (prior or {}).get("lyrics") or {}
+            if prior and previous_lyrics.get("md5Checksum","").lower() == lyric_md5:
+                counts["duplicates"] += 1
+                if on_row: on_row(index, len(staged), not_ready)
+                continue
+            audio = previous_audio if prior else upload(sound, "audio", code, sound_md5)
+            timed = upload(lyric, "lyrics", code, lyric_md5)
+            published = {"id": sid, "webSongId": sid, "code": code,
+                         "title": str(row.get("title") or code),
+                         "artist": str(row.get("artist") or ""),
+                         "media": {**((prior or {}).get("media") or {}), "m4a": audio},
+                         "lyrics": timed}
+            result[sid] = published
+            revisions.append(published)
+            by_code[code.casefold()] = published
+            by_pair[(sound_md5, lyric_md5)] = published
+            counts["updatedSongs" if prior else "newSongs"] += 1
+            if on_row: on_row(index, len(staged), not_ready)
+            completed_bytes += sound.stat().st_size + lyric.stat().st_size
+            if on_progress: on_progress(completed_bytes, total_bytes)
+        if revisions:
+            validate_unique_song_codes(result)
+            validate_catalog({"schemaVersion":2, "format":CATALOG_FORMAT,
+                              "songs":list(result.values())}, cloud=True)
+            def precommit():
+                if old_pointer_id:
+                    current = self._json(old_pointer_id)
+                    if current.get("generation") != old_pointer["generation"]:
+                        raise PublishError("ฐาน V2 เปลี่ยนระหว่างอัปโหลด · ไม่เผยแพร่ทับ")
+                elif any(x.get("name") == "current.json" for x in self.drive.list_children(db)):
+                    raise PublishError("มีฐาน V2 ที่สร้างระหว่างอัปโหลด · โปรดลองใหม่")
+            pointer = write_published_v2(self.drive, db, result, previous=old_pointer,
+                                         revisions=revisions, cancelled=cancelled,
+                                         precommit=precommit)
+            counts.update(published=True, batches=1, generation=pointer["generation"])
+            if on_batch:
+                on_batch(1, len(result), counts["newSongs"], counts["updatedSongs"])
+        counts["totalSongs"] = len(result)
         return counts
