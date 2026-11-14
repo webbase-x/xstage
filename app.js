@@ -706,6 +706,72 @@ async function driveList(q, token) {
   const json = await result.json();
   return Array.isArray(json.files) ? json.files : [];
 }
+async function createDriveV2Folder(parent,name,token){
+  const res=await googleFetch('https://www.googleapis.com/drive/v3/files?fields=id,name,mimeType,ownedByMe',{
+    method:'POST',cache:'no-store',
+    headers:{...requestHeaders(token),'Content-Type':'application/json'},
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parent]})
+  },'Google Drive · สร้างโฟลเดอร์ V2');
+  if(!res.ok)throw driveError(res.status,'โฟลเดอร์ XStageWeb V2');
+  const info=await res.json();
+  if(!info?.id)throw Error('Google Drive ไม่คืนรหัสโฟลเดอร์ใหม่');
+  return info.id;
+}
+async function createDriveV2Json(parent,name,document,token){
+  const boundary='xstagev2'+Array.from(crypto.getRandomValues(new Uint8Array(12)),
+    b=>b.toString(16).padStart(2,'0')).join('');
+  const meta=JSON.stringify({name,mimeType:'application/json',parents:[parent]});
+  const payload=JSON.stringify(document);
+  const prefix='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+
+    '\r\n--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n';
+  const blob=new Blob([prefix,payload,'\r\n--'+boundary+'--\r\n'],
+    {type:'multipart/related; boundary='+boundary});
+  const response=await googleFetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,md5Checksum',{
+      method:'POST',headers:{...requestHeaders(token),
+        'Content-Type':'multipart/related; boundary='+boundary},
+      body:blob,cache:'no-store'
+    },'Google Drive · เผยแพร่ฐาน V2');
+  if(!response.ok)throw driveError(response.status,'ฐานเพลง V2');
+  const info=await response.json();
+  if(!info?.id||!info?.md5Checksum)throw Error('Google Drive ไม่ยืนยัน MD5 ของฐานเพลง');
+  return info.id;
+}
+async function initializeWebV2Library(token,existingRoot=''){
+  // Only create a private V2 library after an authenticated Google session.
+  // Do not touch other folders and never reinitialize a published V2 pointer.
+  if(!token)throw Error('กรุณาเข้าสู่ Google ก่อนเตรียมคลัง');
+  const root=existingRoot||await createDriveV2Folder('root','XStageWeb',token);
+  const query="'"+root+"' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+  const dbs=await driveList(query,token);
+  if(dbs.length>1)throw Error('พบ XStageWeb/DB ซ้ำ · ไม่เขียนตัวชี้ฐาน');
+  const db=dbs[0]?.id||await createDriveV2Folder(root,'DB',token);
+  const pointerQuery="'"+db+"' in parents and name='current.json' and trashed=false";
+  const existing=await driveList(pointerQuery,token);
+  if(existing.length>1)throw Error('พบ DB/current.json ซ้ำ · ไม่เขียนฐาน');
+  if(existing.length===1){
+    const pointer=await privateJson(existing[0].id,token);
+    window.XStageCatalogV2?.pointer(pointer);
+    return root;
+  }
+  const generation=Array.from(crypto.getRandomValues(new Uint8Array(12)),
+    b=>b.toString(16).padStart(2,'0')).join('');
+  const catalogId=await createDriveV2Json(db,'catalog-base-v2-'+generation+'.json',{
+    schemaVersion:2,format:'xstage-unified-v2',songs:[]
+  },token);
+  // Existing pointer always wins; avoid a second current.json on a stale tab.
+  if((await driveList(pointerQuery,token)).length)
+    throw Error('มีผู้อื่นสร้างฐาน V2 ระหว่างเตรียมคลัง · โปรดโหลดใหม่');
+  const pointer={schemaVersion:2,format:'xstage-unified-v2',
+    generation,catalogFileId:catalogId,songCount:0};
+  window.XStageCatalogV2?.pointer(pointer);
+  const pointerId=await createDriveV2Json(db,'current.json',pointer,token);
+  const verified=await privateJson(pointerId,token);
+  window.XStageCatalogV2?.pointer(verified);
+  if(verified.generation!==generation||verified.catalogFileId!==catalogId)
+    throw Error('Google Drive ไม่ยืนยันฐาน V2 ที่เพิ่งสร้าง');
+  return root;
+}
 async function privateFile(id, token, opts = {}) {
   const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
     headers: requestHeaders(token), cache:'no-store',signal:opts.signal
