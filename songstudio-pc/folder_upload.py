@@ -12,8 +12,11 @@ from pathlib import Path
 FOLDER = "application/vnd.google-apps.folder"
 BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 VIDEO = {".avi": "AVI", ".mpg": "MPG", ".mpeg": "MPG", ".dat": "VCD",
-         ".wmv": "WMV", ".vob": "VCD"}
-AUDIO = {".mp3": "MP3", ".m4a": "M4A"}
+         ".wmv": "WMV", ".vob": "VCD", ".mp4": "MP4", ".mkv": "MKV",
+         ".mov": "MOV", ".flv": "FLV", ".webm": "WEBM"}
+AUDIO = {".mp3": "MP3", ".m4a": "M4A", ".wav": "WAV",
+         ".flac": "FLAC", ".aac": "AAC", ".wma": "WMA",
+         ".ogg": "OGG", ".oga": "OGG"}
 MIDI = {".mid", ".midi", ".kar"}
 LYRIC = {".lrc"}
 SCAN_LIMIT = 250000
@@ -201,7 +204,8 @@ def report(folder, export=None):
 
 
 def upload(drive, folder, *, create_new_library=False, cancelled=None,
-           progress=None, export=None, publisher=None, staging_root=None, validator=None):
+           progress=None, export=None, publisher=None, staging_root=None, validator=None,
+           renderer=None, ncn=None, video_renderer=None):
     """Publish supported ready audio+lyrics sets through the SAME online DB.
 
     The existing Karaoke Online schema supports audio+timed JSON. Do not put
@@ -247,11 +251,10 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                     f"รหัสต้องตรวจ {synced['conflicts']} · "
                     f"ข้ามไฟล์ไม่ครบ {library['incomplete']}")}
     result = scan(folder)
-    supported = [r for r in result["complete"] if r["kind"] in ("MP3", "M4A")]
-    deferred = [r for r in result["complete"] if r["kind"] not in ("MP3", "M4A")]
+    supported = [r for r in result["complete"] if r["kind"] != "EMK"]
+    deferred = [r for r in result["complete"] if r["kind"] == "EMK"]
     if not supported:
-        raise ValueError("ยังไม่มี MP3/M4A พร้อมเนื้อร้องให้เผยแพร่ทันที · "
-                         "VIDEO/NCN ยังไม่รองรับ Catalog สำหรับเล่นออนไลน์ จึงไม่อัปโหลดโดยอ้างว่าพร้อมเล่น")
+        raise ValueError("ไม่พบเพลงพร้อมเนื้อร้องสำหรับเผยแพร่ · ชุดที่ไม่รองรับจะไม่ถูกส่ง")
     # Check the live catalogue before creating local files or modifying Drive.
     preview = publisher.read_code_registry(allow_missing_root=create_new_library)
     if not preview.get("visible") and not create_new_library:
@@ -267,12 +270,12 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
         for row in supported:
             if cancelled and cancelled.is_set():
                 raise ValueError("ยกเลิกก่อนเผยแพร่")
-            media = next((p for p, _ in row["files"] if p.suffix.lower() in AUDIO), None)
+            media = next((p for p, _ in row["files"]
+                          if p.suffix.lower() in AUDIO or p.suffix.lower() in VIDEO
+                          or p.suffix.lower() in MIDI), None)
             lyric = next((p for p, _ in row["files"] if p.suffix.lower() == ".lrc"), None)
-            if media is None or lyric is None:
+            if media is None:
                 continue
-            # Content fingerprint allows distinct same-name songs, while the
-            # remote publisher will verify MD5 and code collisions again.
             source_id = digest(media)
             if source_id in seen:
                 continue
@@ -280,27 +283,57 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             code = row["name"].strip()
             if not code or len(code) > 140:
                 continue
-            name = export.safe_filename(code)
-            suffix = media.suffix.lower()
-            file = stage / "audio" / (source_id[:16] + suffix)
+            source_kind = media.suffix.lower()
+            is_video = source_kind in VIDEO
+            is_midi = source_kind in MIDI
+            file = stage / "audio" / (source_id[:16] +
+                    (source_kind if source_kind in (".mp3", ".m4a") else ".m4a"))
             lyrics_file = stage / "lyrics" / (source_id[:16] + ".json")
             lrc_file = lyrics_file.with_suffix(".lrc")
-            document = export.lrc_to_json(lyric.read_text(encoding="utf-8-sig"), code)
+            if is_midi:
+                if ncn is None:
+                    raise ValueError("ไม่มีตัวอ่านเนื้อร้อง NCN/MIDI ในแพ็กเกจ")
+                companions = {p.suffix.lower(): p for p, _ in row["files"]}
+                pair = {"midi": str(media), "lyrics": str(companions[".lyr"]),
+                        "cursor": str(companions[".cur"]), "code": code, "missing": []}
+                document = ncn.ncn_document(pair)
+                raw_lrc = ncn.to_lrc(document["lines"]).encode("utf-8")
+            else:
+                if lyric is None:
+                    continue
+                raw_lrc = lyric.read_bytes()
+                document = export.lrc_to_json(lyric.read_text(encoding="utf-8-sig"), code)
             if not document.get("lines"):
                 continue
-            # Use ordinary copies for cross-volume safety. Avoid mutating user
-            # originals; ephemeral staging is deleted even after cancellation.
-            shutil.copy2(media, file)
-            raw_lrc = lyric.read_bytes()
+            if file.suffix.lower() == source_kind:
+                shutil.copy2(media, file)
+            elif renderer is not None:
+                renderer(media, file)
+            else:
+                raise ValueError("ต้องใช้ FFmpeg/FluidSynth ที่มากับ PC Ready เพื่อแปลงเพลง " + media.name)
+            if not file.is_file() or file.stat().st_size < 1000:
+                raise ValueError("ผลการแปลงไฟล์เพลงไม่สมบูรณ์: " + media.name)
             lrc_file.write_bytes(raw_lrc)
             lyrics_file.write_text(json.dumps(document, ensure_ascii=False),
                                    encoding="utf-8")
-            prepared.append({
+            record = {
                 "webSongId": "import/" + source_id,
                 "code": code, "title": row["name"], "artist": "",
                 "sourceFormat": row["kind"],
                 "audio": {"path": "audio/" + file.name},
-                "lyrics": {"path": "lyrics/" + lyrics_file.name}})
+                "lyrics": {"path": "lyrics/" + lyrics_file.name}}
+            if is_midi:
+                (stage / "midi").mkdir(exist_ok=True)
+                midi_file = stage / "midi" / (source_id[:16] + source_kind)
+                shutil.copy2(media, midi_file)
+                record["midi"] = {"path": "midi/" + midi_file.name}
+            if is_video and video_renderer is not None:
+                (stage / "video").mkdir(exist_ok=True)
+                video = stage / "video" / (source_id[:16] + ".mp4")
+                video_renderer(media, video)
+                if video.is_file() and video.stat().st_size > 1000:
+                    record["video"] = {"path": "video/" + video.name}
+            prepared.append(record)
         if not prepared:
             raise ValueError("ไม่มีเนื้อร้องที่แปลงเป็น JSON พร้อมเวลาได้")
         (stage / "current.json").write_text('{"staging":true}', encoding="utf-8")
@@ -318,7 +351,7 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             f"ปรับเนื้อร้อง {result_db['updatedSongs']} · "
             f"ข้ามซ้ำ {result_db['duplicates']} · รหัสชนกัน {result_db['conflicts']} · "
             f"ข้ามรายการไม่สมบูรณ์ {len(result['incomplete'])} · "
-            f"ยังไม่เผยแพร่ VIDEO/NCN {len(deferred)} รายการ (ยังไม่มี Online Catalog ที่รองรับ)")
+            f"ข้ามประเภทที่ยังแปลงไม่ได้ {len(deferred)} รายการ")
     }
 
 
