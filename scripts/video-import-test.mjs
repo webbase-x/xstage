@@ -95,8 +95,8 @@ assert.doesNotThrow(()=>new Function(script),'Metadata editor must parse');
 assert.ok(script.includes('validateVideoDetails')&&script.includes('insertStamp')&&
   script.includes('previewCurrent'),'Editor must include validation and real-time LRC preview');
 assert.ok(importer.includes('originalVideo:originalVideoMedia')&&
-  importer.includes("['VIDEO','ORIGINAL',originalKind,'Songs',folder]"),
-  'Legacy source must be uploaded privately, not replaced by conversion');
+  importer.includes("['AUDIO']"),
+  'Original video source stays private in flat AUDIO, not replaced by conversion');
 assert.ok(page.includes('id="cloud-import-video-artist"')&&
   page.includes('id="cloud-import-video-lrc"')&&page.includes('id="video-original-toggle"'));
 assert.ok(app.includes('originalVideoSupported(song)')&&
