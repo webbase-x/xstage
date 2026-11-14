@@ -316,3 +316,53 @@ jobs:
             gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.35 Build 335" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
+
+      - name: Publish verified PC Ready latest.json after release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Never advertise a new ZIP until the release and ZIP checksum
+          # have both succeeded. Source metadata itself contains no secrets.
+          $version = "0.3.35"
+          $build = 335
+          $tag = "song-studio-pc-ready-v$version-build$build"
+          $archive = "X-Stage-Song-Studio-PC-Ready-v$version-build$build.zip"
+          $file = "dist/$archive"
+          if (!(Test-Path $file)) { throw "Verified PC Ready ZIP is missing" }
+          $assets = gh release view $tag --repo "$env:GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0 -or $assets -notcontains $archive) {
+            throw "Cannot confirm newly published release ZIP"
+          }
+          $sha = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+          $base = "https://github.com/$env:GITHUB_REPOSITORY/releases"
+          $metadata = [ordered]@{
+            name = "X-Stage Song Studio PC Ready"
+            platform = "windows-x64"
+            channel = "pc-ready"
+            version = $version
+            build = $build
+            available = $true
+            package_type = "portable_zip"
+            installer_available = $false
+            installer_file = $null
+            archive_file = $archive
+            download_url = "$base/download/$tag/$archive"
+            release_url = "$base/tag/$tag"
+            sha256 = $sha
+            notes = "Smart Batch Lyrics Correction: anchored timing, skipped-song audit, ZIP backup and Undo. Tested with 10,000 synthetic songs. Windows portable ZIP; extract completely and run Start-Song-Studio.cmd."
+          }
+          ($metadata | ConvertTo-Json -Depth 5) | Set-Content -Path downloads/song-studio-latest.json -Encoding utf8
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/song-studio-latest.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Latest PC Ready metadata already matches verified release."
+          } else {
+            git commit -m "Update verified Song Studio PC Ready latest metadata to Build 335 [skip ci]"
+            if ($LASTEXITCODE -ne 0) { throw "Cannot commit latest metadata" }
+            git push origin HEAD:main
+            if ($LASTEXITCODE -ne 0) { throw "Cannot publish latest PC Ready metadata to main" }
+          }
+
