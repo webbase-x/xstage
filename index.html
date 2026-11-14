@@ -45,7 +45,7 @@
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
       <div class="account-tools">
         <span id="account" class="account-name" aria-label="บัญชี Google ปัจจุบัน" hidden></span>
-        <button id="cloud-import-open" class="button button-primary" type="button" hidden>☁ นำเข้าเพลง / SoundFont</button>
+
         <button id="desktop-update-version" class="button button-ghost" type="button">อัปเดต X-Stage</button>
         <button id="login" class="button button-google" type="button"><span class="google-g" aria-hidden="true">G</span> เชื่อมต่อ Google Drive</button>
         <button id="logout" class="button button-ghost" type="button" hidden>ออกจากระบบ</button>
@@ -106,6 +106,7 @@
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
             <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
+            <button type="button" id="cloud-import-open" hidden>☁ นำเข้าเพลง / SoundFont</button>
             <button type="button" id="mobile-home-toggle" aria-label="หน้าแรก">หน้าแรก</button>
             <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
             <button type="button" id="mobile-stage-pop" aria-label="เปิดจอร้องแยก">เปิดจอร้องแยก</button>
@@ -272,7 +273,7 @@
             </div>
             <small>การแชร์นี้ให้สิทธิ์ Google Drive แก่อีเมลที่ระบุโดยตรง · ผู้รับต้องใช้บัญชี Google เดียวกัน และการเปิดคลังใน X-Stage ต้องเป็นไฟล์/โฟลเดอร์ที่ผู้รับอนุญาตให้ X-Stage เข้าถึงตามนโยบาย drive.file</small>
           </dialog>
-          <div id="gate" class="login-gate" role="dialog" aria-modal="false" aria-labelledby="gate-title"><div class="gate-panel"><button id="gate-close" class="gate-close" type="button" aria-label="ปิดหน้าต่างเข้าสู่ระบบและชมหน้าเวที" title="ชมหน้าเวทีก่อน">×</button><span class="gate-glow">✦ PRIVATE STAGE</span><h1 id="gate-title">เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p id="gate-copy">เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><button id="gate-shared-library" class="button button-primary gate-shared-library" type="button" hidden>ใช้คลังเพลงจากผู้แชร์</button><div id="gate-auth-status" class="gate-auth-status" role="status" aria-live="polite">พร้อมเชื่อมต่อ Google</div><small id="gate-footnote">ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small><small class="gate-preview-note">กด × เพื่อชมหน้าเวทีและเมนูก่อนได้ · การค้นหาและเล่นเพลงต้องเชื่อมต่อ Google Drive</small></div></div>
+          <div id="gate" class="login-gate" role="dialog" aria-modal="false" aria-labelledby="gate-title"><div class="gate-panel"><button id="gate-close" class="gate-close" type="button" aria-label="ปิดหน้าต่างเข้าสู่ระบบและชมหน้าเวที" title="ชมหน้าเวทีก่อน">×</button><span class="gate-glow">✦ PRIVATE STAGE</span><h1 id="gate-title">เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p id="gate-copy">เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><button id="gate-shared-library" class="button button-primary gate-shared-library" type="button" hidden>ใช้คลังเพลงจากผู้แชร์</button><button id="cloud-import-open-gate" class="button button-primary" type="button" hidden>☁ นำเข้าเพลงจากเครื่อง</button><div id="gate-auth-status" class="gate-auth-status" role="status" aria-live="polite">พร้อมเชื่อมต่อ Google</div><small id="gate-footnote">ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small><small class="gate-preview-note">กด × เพื่อชมหน้าเวทีและเมนูก่อนได้ · การค้นหาและเล่นเพลงต้องเชื่อมต่อ Google Drive</small></div></div>
           <div id="catalog-loading" class="catalog-loading" hidden role="status" aria-live="polite">
             <span class="catalog-spinner" aria-hidden="true"></span>
             <div class="catalog-loading-copy">
