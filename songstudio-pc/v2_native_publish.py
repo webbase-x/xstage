@@ -105,6 +105,17 @@ MAX_V2_DELTAS = 32
 MAX_V2_DELTA_UPSERTS = 200
 
 
+def validate_unique_song_codes(records):
+    """Never publish distinct cloud songs under the same case-insensitive code."""
+    seen={}
+    for item in records.values():
+        code=item["code"].casefold()
+        owner=seen.get(code)
+        if owner is not None and owner!=item["id"]:
+            raise CatalogValidationError("Two songs share code "+item["code"]+"; resolve before publish")
+        seen[code]=item["id"]
+
+
 def read_published_v2(reader, pointer):
     """Verify immutable base shards and deltas before exposing any new songs."""
     validate_pointer(pointer)
@@ -136,6 +147,7 @@ def read_published_v2(reader, pointer):
     validate_catalog({"schemaVersion":2,"format":CATALOG_FORMAT,
                       "songs":list(records.values())},cloud=True,
                       expected_count=pointer["songCount"])
+    validate_unique_song_codes(records)
     return records
 
 
@@ -146,6 +158,7 @@ def write_published_v2(drive,db,records,*,previous=None,revisions=None,
     Small incremental batches append one verified delta; 32 deltas trigger
     compaction. Large libraries are bucketed into immutable <=2500-song shards.
     """
+    validate_unique_song_codes(records)
     generation=secrets.token_hex(12)
     with tempfile.TemporaryDirectory(prefix="xstage-v2-catalog-") as tmp:
         temp=Path(tmp)
@@ -408,6 +421,7 @@ class V2NativePublisher:
                 candidate.update(old_catalog)
         validate_catalog({"schemaVersion":2,"format":CATALOG_FORMAT,
                           "songs":list(candidate.values())},cloud=True)
+        validate_unique_song_codes(candidate)
         report={"schemaVersion":2,"dryRun":bool(dry_run),
                 "v1Songs":len(legacy),"v2Songs":len(candidate),
                 "preservedNative":old_ptr["songCount"] if old_ptr else 0,
