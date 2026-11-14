@@ -38,11 +38,11 @@ jobs:
         run: |
           npm install --no-save --ignore-scripts playwright@1.56.0
           npx playwright install --with-deps chromium
-      - name: Test browser Google Drive private-folder workflow
-        run: node scripts/cloud-import-browser-e2e.mjs
       - name: Install test-only FFmpeg to generate a real AVI fixture
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
+      - name: Test browser Google Drive private-folder workflow
+        run: node scripts/cloud-import-browser-e2e.mjs
       - name: Verify real AVI to H.264/AAC conversion in browser Worker
         run: node scripts/video-browser-transcode-e2e.mjs
