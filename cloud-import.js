@@ -118,7 +118,31 @@ class Drive {
     const response=await this.fetch(API+'/'+driveId(fileId)+'?alt=media');
     const size=Number(response.headers.get('Content-Length')||0);
     if(size>MAX_JSON)fail('ฐานเพลงใหญ่เกินขอบเขตการอ่านอย่างปลอดภัย');
-    const document=await response.json().catch(()=>fail('ไฟล์ฐานเพลง JSON ไม่ถูกต้อง'));
+    // Content-Length may be omitted for chunked Drive responses. Enforce
+    // the byte limit while streaming, before allocating an unbounded JSON body.
+    let raw='';
+    if(response.body?.getReader){
+      const reader=response.body.getReader(),decoder=new TextDecoder();
+      let total=0;
+      try{
+        while(true){
+          this.assertLive();
+          const {done,value}=await reader.read();
+          if(done)break;
+          total+=value.byteLength;
+          if(total>MAX_JSON){await reader.cancel();fail('ฐานเพลงใหญ่เกินขอบเขตการอ่านอย่างปลอดภัย');}
+          raw+=decoder.decode(value,{stream:true});
+        }
+        raw+=decoder.decode();
+      }finally{try{reader.releaseLock();}catch{}}
+    }else{
+      // Legacy response mocks and older browsers without ReadableStream.
+      raw=await response.text();
+      if(new TextEncoder().encode(raw).byteLength>MAX_JSON)
+        fail('ฐานเพลงใหญ่เกินขอบเขตการอ่านอย่างปลอดภัย');
+    }
+    let document;
+    try{document=JSON.parse(raw);}catch{fail('ไฟล์ฐานเพลง JSON ไม่ถูกต้อง');}
     if(!document||typeof document!=='object'||Array.isArray(document))fail('โครงสร้าง JSON ของฐานเพลงไม่ถูกต้อง');
     return document;
   }
@@ -154,16 +178,28 @@ class Drive {
     // assume a chunk was committed when the Range header is absent.
     let answer=null,start=0,retries=0;
     const uploadStatus=async()=>{
-      this.assertLive();
-      const response=await fetch(location.href,{method:'PUT',cache:'no-store',
-        headers:this.headers({'Content-Range':'bytes */'+file.size}),
-        signal:this.signal?.()});
-      if(response.status===308){
-        const match=String(response.headers.get('Range')||'').match(/^bytes=0-(\d+)$/);
-        return {position:match?Number(match[1])+1:0};
+      // Retry only transient failures; never guess a committed byte range.
+      for(let attempt=0;attempt<4;attempt++){
+        this.assertLive();
+        try{
+          const response=await fetch(location.href,{method:'PUT',cache:'no-store',
+            headers:this.headers({'Content-Range':'bytes */'+file.size}),
+            signal:this.signal?.()});
+          if(response.status===308){
+            const match=String(response.headers.get('Range')||'').match(/^bytes=0-(\d+)$/);
+            return {position:match?Number(match[1])+1:0};
+          }
+          if(response.ok)return {complete:await response.json(),position:file.size};
+          if(response.status!==429&&response.status<500)
+            fail('สอบถามตำแหน่งอัปโหลด Drive ไม่สำเร็จ (HTTP '+response.status+')');
+        }catch(error){
+          if(aborted(error)||this.signal?.()?.aborted)throw error;
+          if(attempt===3)throw error;
+        }
+        if(attempt===3)fail('สอบถามตำแหน่งอัปโหลด Drive ไม่สำเร็จหลังลองซ้ำ');
+        await sleep(Math.min(4000,350*2**attempt));
       }
-      if(response.ok)return {complete:await response.json(),position:file.size};
-      fail('สอบถามตำแหน่งอัปโหลด Drive ไม่สำเร็จ (HTTP '+response.status+')');
+      fail('ไม่สามารถยืนยันตำแหน่งอัปโหลดกับ Google Drive');
     };
     while(start<file.size){
       this.assertLive();
@@ -286,10 +322,16 @@ class Importer {
     this.dom.resume?.addEventListener('click',()=>this.resume());
     this.dom.input?.addEventListener('change',async()=>{
       const files=Array.from(this.dom.input.files||[]);
-      if(!files.length)return;
-      await this.acceptFiles(files.map(file=>({file,relative:file.webkitRelativePath||file.name})),null);
-      if(this.resumeAfterPicker){this.resumeAfterPicker=false;await this.start();}
+      const shouldResume=this.resumeAfterPicker;
+      this.resumeAfterPicker=false;
+      try{
+        if(!files.length)return;
+        await this.acceptFiles(files.map(file=>({file,relative:file.webkitRelativePath||file.name})),null);
+        if(shouldResume)await this.start();
+      }catch(error){this.status('ตรวจโฟลเดอร์ไม่สำเร็จ: '+error.message);}
+      finally{this.dom.input.value='';}
     });
+    this.dom.input?.addEventListener('cancel',()=>{this.resumeAfterPicker=false;});
     scope.addEventListener('pagehide',()=>this.stop('ปิดหน้าเว็บ · หยุดและจดจำจุดทำต่อ'));
     scope.addEventListener('xstage:auth-ready',()=>this.updateOpen());
     scope.addEventListener('xstage:auth-refreshed',()=>this.updateOpen());
@@ -340,6 +382,7 @@ class Importer {
     this.refreshButtons();
   }
   close(){
+    this.resumeAfterPicker=false;
     if(this.running)this.stop('ปิดหน้าต่าง · งานถูกพักโดยไม่ลบไฟล์ที่ส่งสำเร็จ');
     if(this.dom.dialog.close)this.dom.dialog.close();
     else this.dom.dialog.removeAttribute('open');
@@ -353,7 +396,7 @@ class Importer {
         await this.acceptFiles(list,handle);
         return;
       }catch(e){
-        if(e?.name==='AbortError')return;
+        if(e?.name==='AbortError'){this.resumeAfterPicker=false;return;}
         this.status('อ่านโฟลเดอร์ด้วยระบบใหม่ไม่ได้ · เลือกด้วยตัวเลือกปกติ: '+e.message);
       }
     }
