@@ -570,34 +570,174 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
     }
 
 
-def skipped_page(snapshot, *, offset=0, limit=50):
-    """Read-only, bounded view of all skipped LYR and the reason breakdown."""
-    rows = snapshot.get("skippedRows") or []
+def _safe_recheck_lyr(root, relative):
+    """Resolve an indexed LYR path without following newly introduced symlinks."""
+    folder = _lyrics_folder(root)
+    if not isinstance(relative, str) or not relative.lower().endswith(".lyr"):
+        raise ValueError("ไม่ใช่ไฟล์ LYR ในผลวิเคราะห์")
+    logical = PurePosixPath(relative)
+    if logical.is_absolute() or not logical.parts or any(
+            part in ("", ".", "..") or ":" in part for part in logical.parts):
+        raise ValueError("พาธ LYR ไม่ปลอดภัย")
+    path = folder
+    for part in logical.parts:
+        path = path / part
+        if path.is_symlink():
+            raise ValueError("LYR เป็นลิงก์")
+    resolved = path.resolve()
+    if not resolved.is_relative_to(folder.resolve()):
+        raise ValueError("LYR อยู่นอกโฟลเดอร์ที่เลือก")
+    if not resolved.is_file():
+        raise OSError("ไม่พบไฟล์ LYR หรืออ่านไฟล์ไม่ได้")
+    return resolved
+
+
+def recheck_skipped(snapshot, bulk, *, cancelled=None, on_progress=None):
+    """Revalidate ONLY previously skipped .LYR and stage updates atomically.
+
+    Source files stay read-only; any recovered records join the original
+    indexed groups without rescanning successful songs. On cancellation, the
+    previously completed analysis stays intact.
+    """
+    if snapshot.get("mode") != "ncn-folder" or snapshot.get("scanMode") != "lyr-only":
+        raise ValueError("ตรวจซ้ำเฉพาะคลัง LYR ที่วิเคราะห์แล้วเท่านั้น")
+    root = locate(snapshot.get("root", ""))
+    if root is None or str(root) != snapshot.get("root"):
+        raise ValueError("โฟลเดอร์ต้นทางเปลี่ยน กรุณาวิเคราะห์ใหม่")
+    original = list(snapshot.get("skippedRows") or [])
+    if not original:
+        raise ValueError("ไม่มีไฟล์ LYR ที่ถูกข้ามให้ตรวจซ้ำ")
+    remaining, review, recovered = [], [], []
+    change_reason = 0
+    total = len(original)
+    if on_progress:
+        on_progress(f"ตรวจซ้ำเฉพาะ LYR ที่ข้าม {total:,} ไฟล์ · ไม่แตะ MID/CUR", 0, total)
+    for number, old in enumerate(original, 1):
+        if cancelled is not None and cancelled.is_set():
+            raise RuntimeError("ยกเลิกการตรวจซ้ำ · ผลวิเคราะห์เดิมไม่เปลี่ยน")
+        relative = old["file"]
+        try:
+            path = _safe_recheck_lyr(root, relative)
+            raw = path.read_bytes()
+            parsed = _parse_lyrics_only(raw, bulk)
+        except (OSError, ValueError, UnicodeError, TypeError) as exc:
+            code, reason = _skip_reason(exc)
+            entry = {
+                "file": relative, "category": code,
+                "label": SKIP_LABELS[code], "reason": reason
+            }
+            remaining.append(entry)
+            review.append({
+                **entry, "status": "confirmed",
+                "originalCategory": old.get("category", ""),
+                "originalReason": old.get("reason", "")
+            })
+            if code != old.get("category") or reason != old.get("reason"):
+                change_reason += 1
+        else:
+            recovered.append((relative, parsed, bulk._sha(raw)))
+            review.append({
+                "file": relative, "category": "recovered",
+                "label": "อ่านเนื้อร้องได้หลังตรวจซ้ำ",
+                "reason": f"อ่านเนื้อร้องได้ {len(parsed['lines'])} บรรทัด",
+                "status": "recovered",
+                "originalCategory": old.get("category", ""),
+                "originalReason": old.get("reason", "")
+            })
+        if on_progress and (number % 20 == 0 or number == total):
+            on_progress(
+                f"ตรวจซ้ำ LYR {number:,}/{total:,} · ยืนยันข้าม {len(remaining):,} "
+                f"· กลับมาอ่านได้ {len(recovered):,}", number, total)
+    # No mutations before all files have been checked and cancellation
+    # honored. Existing group membership is cloned only when necessary.
+    if cancelled is not None and cancelled.is_set():
+        raise RuntimeError("ยกเลิกการตรวจซ้ำ · ผลวิเคราะห์เดิมไม่เปลี่ยน")
+    groups = dict(snapshot["groups"])
+    searchable = dict(snapshot["searchable"])
+    cloned = set()
+    for relative, parsed, digest in recovered:
+        record = {"lyrics": relative, "digestLyrics": digest, "source": "lyr-only"}
+        searchable[relative] = "\n".join(x.casefold() for x in parsed["lines"])
+        for position, (idx, label) in bulk.POSITIONS.items():
+            phrase = parsed["lines"][idx]
+            if not phrase:
+                continue
+            gid = bulk._group_id(position, phrase)
+            if gid not in groups:
+                groups[gid] = {"id": gid, "position": position, "label": label,
+                               "text": phrase, "count": 0, "members": []}
+                cloned.add(gid)
+            elif gid not in cloned:
+                groups[gid] = {**groups[gid],
+                               "members": list(groups[gid]["members"])}
+                cloned.add(gid)
+            groups[gid]["members"].append({
+                "songId": relative, "code": Path(relative).stem[:80],
+                "title": parsed["title"] or Path(relative).stem,
+                "artist": parsed["artist"], "text": phrase,
+                "record": record
+            })
+            groups[gid]["count"] = len(groups[gid]["members"])
+    counts = Counter(row["category"] for row in remaining)
+    summary = {
+        "total": total, "confirmed": len(remaining),
+        "recovered": len(recovered), "reasonChanged": change_reason
+    }
+    return {
+        **snapshot, "groups": groups, "searchable": searchable,
+        "songs": snapshot["songs"] + len(recovered),
+        "skippedInvalid": len(remaining), "skippedRows": remaining,
+        "skippedReasons": [
+            {"code": code, "label": SKIP_LABELS[code], "count": counts[code]}
+            for code in SKIP_LABELS if counts[code]
+        ],
+        "groupCount": len(groups), "recheckRows": review,
+        "recheckSummary": summary
+    }
+
+
+def skipped_page(snapshot, *, offset=0, limit=50, view="skipped"):
+    """Read-only paginated skipped and confirmed/recovered LYR diagnostics."""
+    if view not in ("skipped", "rechecked", "recovered"):
+        raise ValueError("ตัวกรองรายงานตรวจซ้ำไม่ถูกต้อง")
+    rows = (snapshot.get("skippedRows") or []) if view == "skipped" else (
+        snapshot.get("recheckRows") or [])
+    if view == "recovered":
+        rows = [row for row in rows if row.get("status") == "recovered"]
     offset = max(0, int(offset))
     limit = max(1, min(100, int(limit)))
     return {
         "rows": rows[offset:offset + limit], "total": len(rows),
-        "offset": offset, "limit": limit,
+        "offset": offset, "limit": limit, "view": view,
+        "recheck": snapshot.get("recheckSummary"),
         "reasons": snapshot.get("skippedReasons") or [],
+        "skipped": len(snapshot.get("skippedRows") or []),
         "inspected": snapshot.get("inspected", 0),
         "songs": snapshot.get("songs", 0)
     }
 
 
 def skipped_csv(snapshot):
-    """UTF-8 BOM CSV with strict spreadsheet formula-injection protection."""
+    """UTF-8 BOM CSV containing original skips and verified recheck outcomes."""
     output = io.StringIO(newline="")
     writer = csv.writer(output, dialect="excel", lineterminator="\r\n")
-    writer.writerow(("ชื่อไฟล์ LYR", "ประเภทปัญหา", "สาเหตุการข้าม", "รหัสเหตุผล"))
+    writer.writerow(("ชื่อไฟล์ LYR", "สถานะ", "ประเภทปัญหาปัจจุบัน",
+                     "สาเหตุปัจจุบัน", "สาเหตุรอบแรก", "รหัสเหตุผล"))
     def safe(value):
         value = str(value or "")
-        # Spreadsheet programs can evaluate formulas in untrusted filenames.
         if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
             return "'" + value
         return value
-    for row in snapshot.get("skippedRows") or []:
+    rows = snapshot.get("recheckRows") or snapshot.get("skippedRows") or []
+    for row in rows:
+        state = {
+            "confirmed": "ยืนยันข้ามหลังตรวจซ้ำ",
+            "recovered": "อ่านได้หลังตรวจซ้ำ"
+        }.get(row.get("status"), "ยังไม่ได้ตรวจซ้ำ")
         writer.writerow((
-            safe(row.get("file")), safe(row.get("label")),
-            safe(row.get("reason")), safe(row.get("category"))
+            safe(row.get("file")), safe(state),
+            safe(row.get("label")), safe(row.get("reason")),
+            safe(row.get("originalReason") or row.get("reason")),
+            safe(row.get("category"))
         ))
     return b"\xef\xbb\xbf" + output.getvalue().encode("utf-8")
