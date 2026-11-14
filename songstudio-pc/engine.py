@@ -302,7 +302,6 @@ SONG_INDEX = _module("song_index.py", "xstage_song_index")
 AI_LYRICS = _module("ai_lyrics.py", "xstage_ai_lyrics")
 LYRIC_ALIGNMENT = _module("lyric_alignment.py", "xstage_lyric_alignment")
 LYRIC_TEXT = _module("lyric_text_groups.py", "xstage_lyric_text_groups")
-LYRIC_NCN = _module("ncn_bulk_editor.py", "xstage_ncn_bulk_editor")
 HISTORY = _module("history_store.py", "xstage_history_store")
 FOLDER_UPLOAD = _module("folder_upload.py", "xstage_folder_upload")
 HISTORY_FILE = DATA / "edit-history.json"
@@ -1096,14 +1095,9 @@ def lyric_source_root(selected=None):
                 pointer.get("format") != "xstage-local-current" or
                 pointer.get("schemaVersion") != 1):
             raise ValueError("โฟลเดอร์ต้นทางไม่ใช่คลัง StageWeb ที่รองรับ")
-    # Raw NCN libraries hold MID/LYR/CUR in three mirrored directories.
-    # Normalize NCN/Song or a parent MIDI folder to the canonical NCN root
-    # so that backup/undo always refer to one stable folder.
+    # Raw NCN/LRC folders are no longer editable. Only catalogued JSON may be modified.
     if not pointer_file.is_file():
-        ncn_root = LYRIC_NCN.locate(root)
-        if ncn_root is not None:
-            return ncn_root
-    # Without a catalog, raw .lrc files can still be scanned directly.
+        raise ValueError("กรุณาเลือกคลัง StageWeb ที่มี current.json และ Lyrics JSON")
     return root.resolve()
 
 
@@ -1581,71 +1575,22 @@ def execute_job(action, options, started):
             result = build_library(rows, mode, options) if action == "build" else build_preview(rows, mode)
         elif action == "lyric-groups-scan":
             root = lyric_source_root()
-            is_catalog = (root / "current.json").is_file()
-            is_ncn = not is_catalog and LYRIC_NCN.locate(root) is not None
-            update("กำลังตรวจเนื้อร้องจากคลัง StageWeb" if is_catalog
-                   else "กำลังอ่านเฉพาะ NCN/Lyrics/*.LYR · ไม่อ่าน MID/CUR" if is_ncn
-                   else "กำลังค้นหาไฟล์ LRC ในโฟลเดอร์ต้นทาง · ไม่อ่านไฟล์เสียง")
-            if is_catalog:
-                index = LYRIC_TEXT.scan(
-                    root, _song_export_module(), cancelled=CANCEL,
-                    on_progress=lambda detail, done: update(detail, done))
-            elif is_ncn:
-                def lyric_progress(detail, done, total=None):
-                    if type(total) is int and total > 0:
-                        with LOCK:
-                            JOB["total"] = total
-                    update(detail, done)
-                index = LYRIC_NCN.scan(
-                    root, NCN, LYRIC_TEXT, cancelled=CANCEL,
-                    on_progress=lyric_progress)
-            else:
-                index = LYRIC_TEXT.scan_lrc_folder(
-                    root, cancelled=CANCEL,
-                    on_progress=lambda detail, done: update(detail, done))
+            if not (root / "current.json").is_file():
+                raise ValueError("รองรับเฉพาะคลัง Lyrics JSON ที่สร้างแล้ว · ไม่แก้ LYR/CUR/NCN ต้นฉบับ")
+            update("กำลังวิเคราะห์ข้อความใน Lyrics JSON · ไม่อ่าน MID/LYR/CUR")
+            index = LYRIC_TEXT.scan(
+                root, _song_export_module(), cancelled=CANCEL,
+                on_progress=lambda detail, done: update(detail, done))
             with LOCK:
                 global LYRIC_TEXT_INDEX
                 LYRIC_TEXT_INDEX = index
             result = {
-                "message": (f"วิเคราะห์ข้อความหัว–ท้ายเพลงเสร็จ {index['songs']:,} เพลง "
+                "message": (f"วิเคราะห์ Lyrics JSON เสร็จ {index['songs']:,} เพลง "
                             f"· กลุ่มข้อความ {index['groupCount']:,} กลุ่ม "
-                            f"· ข้ามเนื้อร้องไม่รองรับ {index['skippedInvalid']:,} รายการ"),
+                            f"· ข้ามไม่สมบูรณ์ {index['skippedInvalid']:,} รายการ"),
                 "songs": index["songs"], "groups": index["groupCount"],
                 "skippedInvalid": index["skippedInvalid"],
-                "skippedReasons": index.get("skippedReasons", []),
-                "withoutLyrics": index["withoutLyrics"],
-                "sourceMode": index.get("mode", "stageweb")
-            }
-        elif action == "lyric-skipped-recheck":
-            with LOCK:
-                index = LYRIC_TEXT_INDEX
-            if index is None:
-                raise ValueError("ยังไม่ได้วิเคราะห์ LYR กรุณาสแกนก่อน")
-            if str(lyric_source_root()) != index["root"]:
-                raise ValueError("โฟลเดอร์ต้นทางเปลี่ยนแล้ว กรุณาวิเคราะห์ใหม่")
-            update("กำลังตรวจซ้ำไฟล์ LYR ที่ข้ามเท่านั้น · ไม่อ่าน MID/CUR")
-            def skipped_progress(detail, done, total=None):
-                if type(total) is int and total > 0:
-                    with LOCK:
-                        JOB["total"] = total
-                update(detail, done)
-            rechecked = LYRIC_NCN.recheck_skipped(
-                index, LYRIC_TEXT, cancelled=CANCEL,
-                on_progress=skipped_progress)
-            with LOCK:
-                LYRIC_TEXT_INDEX = rechecked
-            summary = rechecked["recheckSummary"]
-            result = {
-                "message": (
-                    f"ตรวจซ้ำไฟล์ที่ข้ามรอบนี้ {summary['lastPass']:,} ไฟล์ "
-                    f"· ยืนยันข้าม {summary['confirmed']:,} "
-                    f"· กลับมาอ่านได้ {summary['recovered']:,} "
-                    f"· เปลี่ยนสาเหตุ {summary['reasonChanged']:,}"),
-                "sourceMode": rechecked["mode"],
-                "skippedInvalid": rechecked["skippedInvalid"],
-                "skippedReasons": rechecked["skippedReasons"],
-                "recheck": summary, "songs": rechecked["songs"],
-                "groups": rechecked["groupCount"]
+                "withoutLyrics": index["withoutLyrics"], "sourceMode": "stageweb"
             }
         elif action == "lyric-groups-replace":
             with LOCK:
@@ -1664,26 +1609,12 @@ def execute_job(action, options, started):
                 JOB["total"] = planned["changedSongs"]
             update(f"กำลังสำรองและแทนที่ {planned['groups']:,} กลุ่ม · "
                    f"{planned['changedLines']:,} บรรทัดใน {planned['changedSongs']:,} เพลง")
-            if index.get("mode") == "ncn-folder":
-                result = LYRIC_NCN.apply(
-                    root, NCN, LYRIC_TEXT, index, groups, new_text,
-                    LYRIC_TEXT_BACKUPS, search=search,
-                    expected_count=options.get("expectedCount"),
-                    cancelled=CANCEL,
-                    on_progress=lambda detail, done: update(detail, done))
-            elif index.get("mode") == "lrc-folder":
-                result = LYRIC_TEXT.apply_many_lrc_folder(
-                    root, index, groups, new_text, LYRIC_TEXT_BACKUPS,
-                    search=search, expected_count=options.get("expectedCount"),
-                    cancelled=CANCEL,
-                    on_progress=lambda detail, done: update(detail, done))
-            else:
-                result = LYRIC_TEXT.apply_many(
-                    root, _song_export_module(), index,
-                    groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
-                    expected_count=options.get("expectedCount"),
-                    cancelled=CANCEL,
-                    on_progress=lambda detail, done: update(detail, done))
+            result = LYRIC_TEXT.apply_many(
+                root, _song_export_module(), index,
+                groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
+                expected_count=options.get("expectedCount"),
+                cancelled=CANCEL,
+                on_progress=lambda detail, done: update(detail, done))
             # Keep LYRIC_TEXT_INDEX: apply_many updates only changed members.
             # All unedited groups remain available for the next batch.
         elif action == "lyric-groups-undo":
@@ -1965,16 +1896,7 @@ def start_job(data):
             raise ValueError("มีงานกำลังดำเนินการอยู่")
     validation = validate_build_request(data) if action == "build" else {}
     if action == "lyric-skipped-recheck":
-        with LOCK:
-            snapshot = LYRIC_TEXT_INDEX
-        if snapshot is None or snapshot.get("scanMode") != "lyr-only":
-            raise ValueError("กรุณาวิเคราะห์โฟลเดอร์ LYR ก่อนตรวจซ้ำไฟล์ที่ข้าม")
-        if snapshot["root"] != str(lyric_source_root()):
-            raise ValueError("โฟลเดอร์ต้นทางเปลี่ยนแล้ว กรุณาวิเคราะห์ใหม่")
-        count = len(snapshot.get("skippedRows") or [])
-        if not count:
-            raise ValueError("ไม่มีรายการไฟล์ LYR ที่ข้ามให้ตรวจซ้ำ")
-        validation = {"total": count}
+        raise ValueError("ยกเลิกเครื่องมือตรวจแก้ LYR/NCN · ให้แก้เฉพาะ Lyrics JSON")
     if action == "lyric-groups-replace":
         # Reject stale/ambiguous confirmation before starting a background
         # thread that could change many files at once.
@@ -2714,19 +2636,7 @@ class Handler(BaseHTTPRequestHandler):
                                  for item in page_rows]
                 self._json({"rows": page_rows, "total": len(rows)})
             elif path in ("/api/lyric-groups-skipped", "/api/lyric-groups-skipped.csv"):
-                with LOCK:
-                    snapshot = LYRIC_TEXT_INDEX
-                if snapshot is None:
-                    raise ValueError("ยังไม่มีผลวิเคราะห์ LYR · กรุณากดวิเคราะห์ก่อน")
-                if path.endswith(".csv"):
-                    self._response(200, LYRIC_NCN.skipped_csv(snapshot),
-                                   "text/csv; charset=utf-8", cors=True)
-                else:
-                    offset = max(0, int(query.get("offset", ["0"])[0]))
-                    limit = max(1, min(100, int(query.get("limit", ["40"])[0])))
-                    view = query.get("view", ["skipped"])[0]
-                    self._json(LYRIC_NCN.skipped_page(
-                        snapshot, offset=offset, limit=limit, view=view))
+                raise ValueError("ยกเลิกเมนูจัดการ NCN ต้นฉบับแล้ว · ใช้ Lyrics JSON")
             elif path == "/api/lyric-groups":
                 with LOCK:
                     snapshot = LYRIC_TEXT_INDEX
