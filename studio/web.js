@@ -1,7 +1,7 @@
-/* X-Stage Song Studio Web Beta 0.3.0
- * All input audio, lyrics and rendered output stay inside the browser.
- * Only FFmpeg library/wasm code is downloaded from jsDelivr when requested.
- * This page never uploads song files to a network endpoint. */
+/* X-Stage Song Studio Web MIDI/NCN edition.
+ * Sources stay on the user's device. Shared, bundled MIDI/NCN and SF2/SF3
+ * parsing uses XStageBrowserMidi; FFmpeg is only for M4A conversion.
+ * Never upload music or silently modify source MID/LYR/CUR bytes. */
 'use strict';
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -12,10 +12,18 @@
   const ALL = new Set([...AUDIO, ...MIDI, ...SIDE]);
   const entries = new Map();
   const selected = new Set();
+  const fonts = new Map();
+  const midiCore = window.XStageStudioMidiCore;
+  const midiRuntime = window.XStageBrowserMidi;
+  if (!midiCore || !midiRuntime) throw Error('Song Studio Web: MIDI/NCN modules are missing');
   const encoder = new TextEncoder();
   const state = { active: null, previewURL: '', dest: null, ffmpeg: null, busy: false,
                   cancelled: false, currentIndex: 0, total: 0, currentFraction: 0,
-                  archive: null, archiveName: '' };
+                  archive: null, archiveName: '', activation: 0,
+                  midiController: null, midiRenderSequence: 0, renderingMidi: false,
+                  fontCache: null, fontID: '', scanActive: false,
+                  channelMutes: Array(16).fill(false),
+                  channelVolumes: Array(16).fill(1) };
   const ffmpegUrls = [
     'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js',
     'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js',
@@ -49,28 +57,64 @@
       item.disabled = flag;
     $('download-result').disabled = flag || !state.archive;
     for (const id of ['choose-files', 'choose-folder', 'clear-all', 'select-all', 'deselect-all',
-                      'pick-destination', 'load-engine', 'build', 'save-lyrics', 'insert-time']) {
+                      'pick-destination', 'load-engine', 'build', 'save-lyrics', 'insert-time',
+                      'choose-soundfont', 'soundfont-select', 'export-format', 'midi-transpose']) {
       $(id).disabled = flag;
     }
-    $('build').disabled = flag || ![...selected].some((id) => entries.get(id)?.audio);
+    $('build').disabled = flag || ![...selected].some((id) => canExport(entries.get(id)));
     $('cancel').hidden = !flag;
     if (!flag) {
       $('save-lyrics').disabled = !state.active;
-      $('insert-time').disabled = !entries.get(state.active)?.audio;
+      $('insert-time').disabled = !state.active || !state.previewURL;
     }
   }
   function safeName(name) {
     return String(name || 'untitled').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
       .replace(/\s+/g, ' ').replace(/[. ]+$/, '').slice(0, 160) || 'untitled';
   }
+  function invalidateArchive() {
+    state.archive = null; state.archiveName = '';
+    $('download-result').hidden = true;
+    $('download-result').disabled = true;
+  }
+  function usesMidi(song) {
+    return !!song?.midi && (!song.audio || song.useMidi === true);
+  }
+  function canExport(song) {
+    if (!song || song.conflicts?.size) return false;
+    if (usesMidi(song)) return midiCore.companionState(song).complete;
+    return !!song.audio;
+  }
+  function isMIDI(song) { return !!song?.midi; }
+  function refreshFontChoices() {
+    const select=$('soundfont-select');
+    const previous=select.value;
+    select.replaceChildren(new Option('เสียง MIDI พื้นฐาน (สำรอง)',''));
+    for (const [id,file] of fonts)select.add(new Option(
+      file.name+' · '+readableBytes(file.size),id));
+    select.value=fonts.has(previous)?previous:'';
+    state.fontID=select.value;
+    updateFontStatus();
+  }
+  function updateFontStatus() {
+    const file=fonts.get($('soundfont-select').value);
+    $('soundfont-status').textContent=file
+      ? file.name+' · '+readableBytes(file.size)+' · อ่านจากเครื่องเท่านั้น'
+      : 'เสียง MIDI พื้นฐาน (ไม่มี SF2/SF3) · คุณภาพเสียงต่างจาก Song Studio PC';
+  }
+  function selectStateChanged() {
+    invalidateArchive();
+    updateOverview();
+  }
   function updateOverview() {
     const songs = [...entries.values()].filter((e) => e.audio || e.midi);
     const bytes = [...entries.values()].reduce((n, e) => n + [...e.parts.values()]
-      .reduce((sum, part) => sum + part.size, 0), 0);
+      .reduce((sum, part) => sum + part.size, 0), 0) +
+      [...fonts.values()].reduce((n,font)=>n+font.size,0);
     $('file-count').textContent = songs.length.toLocaleString('th-TH') + ' เพลง';
     $('source-size').textContent = readableBytes(bytes);
     $('selected-counter').textContent = 'เลือก ' + selected.size.toLocaleString('th-TH');
-    $('build').disabled = state.busy || ![...selected].some((id) => entries.get(id)?.audio);
+    $('build').disabled = state.busy || ![...selected].some((id) => canExport(entries.get(id)));
   }
   function songTitle(e) {
     return e.name || 'ไม่ทราบชื่อ';
@@ -81,12 +125,12 @@
     const check = document.createElement('input');
     check.type = 'checkbox';
     check.checked = selected.has(e.id);
-    check.disabled = !e.audio || state.busy;
+    check.disabled = !canExport(e) || state.busy;
     check.setAttribute('aria-label', 'เลือก ' + songTitle(e));
     check.addEventListener('click', (event) => event.stopPropagation());
     check.addEventListener('change', () => {
       if (check.checked) selected.add(e.id); else selected.delete(e.id);
-      updateOverview();
+      selectStateChanged();
     });
     tdSelect.appendChild(check);
     const tdTitle = document.createElement('td');
@@ -98,8 +142,11 @@
     tdTitle.appendChild(hint);
     const tdType = document.createElement('td');
     const badge = document.createElement('span');
-    badge.className = 'file-state' + (e.audio ? '' : ' unsupported');
-    badge.textContent = e.audio ? extOf(e.audio.name).toUpperCase() : 'MIDI · รอ Engine';
+    const partState=midiCore.companionState(e);
+    badge.className = 'file-state' + ((!canExport(e) || e.conflicts?.size) ? ' unsupported' : '');
+    badge.textContent = e.conflicts?.size ? 'ชื่อซ้ำ · ตรวจไฟล์' :
+      usesMidi(e) ? (partState.complete?partState.kind:partState.kind+' · ไม่ครบ') :
+      (e.audio ? extOf(e.audio.name).toUpperCase() : partState.kind+' · ไม่ครบ');
     tdType.appendChild(badge);
     if (e.audioFiles?.size > 1) {
       const picker = document.createElement('select');
@@ -118,13 +165,34 @@
         event.stopPropagation();
         e.audio = e.audioFiles.get(picker.value);
         badge.textContent = picker.value.toUpperCase();
-        updateOverview();
+        selectStateChanged();
         if (state.active === e.id) void activate(e.id);
       });
       tdType.appendChild(picker);
     }
+    if (e.audio && e.midi) {
+      const sourcePicker=document.createElement('select');
+      sourcePicker.dataset.sourceSelect=e.id;
+      sourcePicker.setAttribute('aria-label','เลือกไฟล์เสียงหรือ MIDI: '+songTitle(e));
+      sourcePicker.add(new Option('ใช้ไฟล์เสียง','audio'));
+      sourcePicker.add(new Option('ใช้ MIDI/NCN','midi'));
+      sourcePicker.value=e.useMidi?'midi':'audio';
+      sourcePicker.disabled=state.busy;
+      sourcePicker.addEventListener('click',event=>event.stopPropagation());
+      sourcePicker.addEventListener('change',event=>{
+        event.stopPropagation();
+        e.useMidi=sourcePicker.value==='midi';
+        badge.textContent=e.useMidi?partState.kind:extOf(e.audio.name).toUpperCase();
+        badge.className='file-state'+(!canExport(e)?' unsupported':'');
+        if(!canExport(e))selected.delete(e.id);
+        selectStateChanged();
+        if(state.active===e.id)void activate(e.id);
+      });
+      tdType.appendChild(sourcePicker);
+    }
     const tdLyric = document.createElement('td');
-    tdLyric.textContent = e.lyricsText || e.lrc ? 'มี LRC' : '—';
+    tdLyric.textContent = e.conflicts?.size?'ชื่อชน':e.lyricsText||e.lrc?'มี LRC':
+      e.lyr&&e.cur?'มี NCN CUR':e.midi?'MIDI/KAR':'—';
     const tdSize = document.createElement('td');
     tdSize.textContent = readableBytes(e.audio?.size || e.midi?.size || 0);
     tr.append(tdSelect, tdTitle, tdType, tdLyric, tdSize);
@@ -146,44 +214,74 @@
       td.textContent = entries.size ? 'ไม่พบเพลงที่ค้นหา' : 'ยังไม่มีเพลง กรุณาเลือกไฟล์หรือโฟลเดอร์';
       tr.appendChild(td); tbody.appendChild(tr);
     }
-    $('catalog-note').textContent = 'แสดง ' + Math.min(songs.length, 500) + ' จาก ' + songs.length +
-      ' เพลง · ไฟล์ MIDI/KAR/NCN ต้องใช้ SoundFont Engine ซึ่งยังไม่พร้อมในรุ่นเว็บนี้';
+    const incomplete=songs.filter(song=>!canExport(song)).length;
+    $('catalog-note').textContent = 'แสดง '+Math.min(songs.length,500)+' จาก '+songs.length+
+      ' เพลง · พร้อมสร้าง '+(songs.length-incomplete)+' · ต้องตรวจสอบ '+incomplete+
+      ' · รองรับ MIDI/KAR/NCN + SF2/SF3 · แสดงสูงสุด 500 แถวเพื่อให้เลื่อนเร็ว';
     updateOverview();
   }
-  function addFiles(files, prefix) {
-    let accepted = 0;
+  async function addFiles(files, prefix) {
+    let accepted = 0, collisions = 0, importedFonts = 0;
+    invalidateArchive();
     for (const item of files) {
+      if(state.cancelled)break;
       const file = item.file || item;
       const ext = extOf(file.name);
       if (!ALL.has(ext) || !file.size) continue;
+      if(ext==='sf2'||ext==='sf3'){
+        if(file.size>midiCore.MAX_FONT){collisions++;continue;}
+        const fontId=[file.name,file.size,file.lastModified||0].join('|');
+        if(!fonts.has(fontId)){fonts.set(fontId,file);importedFonts++;}
+        accepted++;
+        continue;
+      }
       const path = item.path !== undefined ? item.path :
-        (file.webkitRelativePath ? file.webkitRelativePath.split('/').slice(0, -1).join('/') : (prefix || ''));
+        (file.webkitRelativePath ? file.webkitRelativePath.split('/').slice(0,-1).join('/') : (prefix || ''));
       const stem = baseOf(file.name);
-      const id = (path + '/' + stem).toLocaleLowerCase();
+      const id = midiCore.groupIdentity(path,file.name);
       if (!entries.has(id)) entries.set(id, {
-        id, name: stem, path, audio: null, midi: null, lrc: null,
-        lyricsText: null, parts: new Map(), audioFiles: new Map()
+        id, name: stem, path, audio: null, midi: null, lrc: null, lyr:null, cur:null,
+        lyricsText: null, editedLyrics:false, midiInfo:null, conflicts:new Set(),
+        parts: new Map(), audioFiles: new Map(), midiFiles:new Map(),useMidi:false
       });
       const song = entries.get(id);
+      const previous=song.parts.get(ext);
+      if(previous && previous!==file && (previous.size!==file.size ||
+          previous.lastModified!==file.lastModified || previous.name!==file.name)){
+        song.conflicts.add(ext);selected.delete(id);collisions++;continue;
+      }
       song.parts.set(ext, file);
       if (AUDIO.has(ext)) {
         const prior = song.audio;
-        song.audioFiles.set(ext, file);
-        // Never silently pick the LAST imported audio variant. Use a stable
-        // priority and let the user select an alternative in the catalog.
+        song.audioFiles.set(ext,file);
         if (!prior || AUDIO_PRIORITY.indexOf(ext) < AUDIO_PRIORITY.indexOf(extOf(prior.name)))
-          song.audio = file;
-        else if (extOf(prior.name) === ext) song.audio = file;
+          song.audio=file;
+        else if(extOf(prior.name)===ext) song.audio=file;
       }
-      if (MIDI.has(ext)) song.midi = file;
-      if (ext === 'lrc') { song.lrc = file; song.lyricsText = null; }
-      if (AUDIO.has(ext)) selected.add(id);
+      if(MIDI.has(ext)){
+        song.midiFiles.set(ext,file);
+        if(!song.midi||ext==='mid')song.midi=file;
+        song.midiInfo=null;
+      }
+      if(ext==='lyr'){song.lyr=file;song.midiInfo=null;}
+      if(ext==='cur'){song.cur=file;song.midiInfo=null;}
+      if(ext==='lrc'){song.lrc=file;song.lyricsText=null;song.editedLyrics=false;}
       accepted++;
+      if(accepted%500===0){
+        notice('นำเข้ารายการแล้ว '+accepted.toLocaleString('th-TH')+' ไฟล์ · กำลังจัดกลุ่มเพลง/NCN…');
+        await new Promise(resolve=>setTimeout(resolve,0));
+      }
     }
+    for(const song of entries.values()){
+      if(canExport(song))selected.add(song.id);
+      else selected.delete(song.id);
+    }
+    refreshFontChoices();
     renderTable();
     notice(accepted
-      ? 'เพิ่ม ' + accepted + ' ไฟล์จากเครื่องแล้ว · ไฟล์ต้นฉบับยังอยู่ที่เดิม' :
-        'ไม่พบไฟล์ที่รองรับในรายการที่เลือก', accepted ? 'good' : 'error');
+      ? 'เพิ่ม '+accepted.toLocaleString('th-TH')+' ไฟล์ · SoundFont '+importedFonts+
+        ' · รายการต้องตรวจชื่อซ้ำ/ขนาด '+collisions+' · ต้นฉบับยังอยู่ที่เดิม'
+      : 'ไม่พบไฟล์ที่รองรับในรายการที่เลือก',accepted?'good':'error');
   }
   async function walkFolder(handle, path, output, depth) {
     if (depth > 12) throw new Error('โฟลเดอร์ซ้อนลึกเกิน 12 ระดับ');
