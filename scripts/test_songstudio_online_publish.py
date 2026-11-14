@@ -218,6 +218,18 @@ class OnlinePublishTests(unittest.TestCase):
             self.drive.download_library(self.base / "unsafe", "songs")
         self.assertFalse((self.base / "unsafe").exists())
 
+    def test_first_catalog_after_soundfont_only_root_preserves_font(self):
+        root = self.remote_root()
+        fonts = self.drive.folder(root, "SOUNDFONT")
+        sf2 = self.drive.folder(fonts, "SF2")
+        font = self.base / "default.sf2"
+        font.write_bytes(b"RIFF" + b"\\0" * 4 + b"sfbk" + b"x" * 1200)
+        _, uploaded = self.drive.upload_file(sf2, font, "default.sf2")
+        result = self.publisher.publish(self.root, [self.first])
+        self.assertTrue(result["published"])
+        self.assertIn(uploaded["id"], self.drive.items)
+        self.assertIn("current.json", {x["name"] for x in self.folder_files(root)})
+
     def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
         self.drive.folder("root", "StageWeb")
         before = len(self.drive.items)
