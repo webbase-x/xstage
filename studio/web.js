@@ -830,15 +830,97 @@
     $('load-engine').textContent = '↓ ดาวน์โหลด Web Engine';
     notice('ได้รับคำสั่งหยุด · กำลังยุติงานปัจจุบัน', 'error');
   }
+  function setupMidiMixer(){
+    const panel=$('midi-channels');
+    panel.replaceChildren();
+    for(let channel=0;channel<16;channel++){
+      const row=document.createElement('div');row.className='midi-channel';
+      const title=document.createElement('strong');
+      title.textContent='ช่อง '+(channel+1)+(channel===9?' กลอง':'');
+      const muted=document.createElement('label');
+      const toggle=document.createElement('input');
+      toggle.type='checkbox';toggle.checked=false;toggle.dataset.channelMute=String(channel);
+      const muteText=document.createElement('span');muteText.textContent='ปิด';
+      muted.append(toggle,muteText);
+      const volume=document.createElement('input');
+      volume.type='range';volume.min='0';volume.max='100';volume.step='5';volume.value='100';
+      volume.dataset.channelVolume=String(channel);
+      volume.setAttribute('aria-label','ระดับเสียงช่อง '+(channel+1));
+      const indicator=document.createElement('output');indicator.textContent='100%';
+      toggle.addEventListener('change',()=>{
+        state.channelMutes[channel]=toggle.checked;invalidateArchive();
+        $('midi-status').textContent='มิกเซอร์เปลี่ยนแล้ว · กดสังเคราะห์ใหม่เพื่อฟัง';
+      });
+      volume.addEventListener('input',()=>{
+        state.channelVolumes[channel]=Number(volume.value)/100;
+        indicator.textContent=volume.value+'%';invalidateArchive();
+        $('midi-status').textContent='มิกเซอร์เปลี่ยนแล้ว · กดสังเคราะห์ใหม่เพื่อฟัง';
+      });
+      row.append(title,muted,volume,indicator);panel.appendChild(row);
+    }
+  }
+  setupMidiMixer();
+  $('choose-soundfont').addEventListener('click',()=>$('soundfont-input').click());
+  $('soundfont-input').addEventListener('change',event=>{
+    void addFiles([...event.target.files]).catch(error=>notice(error.message,'error'));
+    event.target.value='';
+  });
+  $('soundfont-select').addEventListener('change',()=>{
+    state.fontID=$('soundfont-select').value;state.fontCache=null;
+    invalidateArchive();updateFontStatus();
+    const active=entries.get(state.active);
+    if(active?.midiInfo&&usesMidi(active))updateMidiResource(active.midiInfo);
+    $('midi-status').textContent='SoundFont เปลี่ยนแล้ว · กดสังเคราะห์ใหม่เพื่อฟัง';
+  });
+  $('midi-transpose').addEventListener('change',()=>{
+    const input=$('midi-transpose');
+    input.value=String(Math.max(-12,Math.min(12,Math.round(Number(input.value)||0))));
+    invalidateArchive();
+    $('midi-status').textContent='คีย์เปลี่ยนแล้ว · กดสังเคราะห์ใหม่เพื่อฟัง';
+  });
+  $('reset-midi-mixer').addEventListener('click',()=>{
+    state.channelMutes.fill(false);state.channelVolumes.fill(1);
+    $('midi-transpose').value='0';
+    for(const input of document.querySelectorAll('[data-channel-mute]'))input.checked=false;
+    for(const input of document.querySelectorAll('[data-channel-volume]')){
+      input.value='100';input.closest('.midi-channel').querySelector('output').textContent='100%';
+    }
+    invalidateArchive();$('midi-status').textContent='คืนค่ามิกเซอร์ 16 ช่องแล้ว';
+  });
+  $('preview-midi').addEventListener('click',()=>{void previewMidi();});
+  $('stop-midi').addEventListener('click',()=>stopMidiPreview());
+  $('export-format').addEventListener('change',()=>{
+    invalidateArchive();
+    notice($('export-format').value==='xstage'
+      ? 'ส่งออก MIDI/KAR เดิมทุกไบต์ + Lyrics JSON โดยไม่แปลงเสียง'
+      : 'MIDI จะสังเคราะห์ผ่าน SoundFont แล้วแปลงเป็น M4A · ต้องมี RAM และ FFmpeg เพียงพอ');
+  });
+  const stepLinks=[...document.querySelectorAll('.navigation a[href^="#"]')];
+  for(const link of stepLinks){
+    link.addEventListener('click',()=>{
+      for(const item of stepLinks){item.classList.toggle('active',item===link);
+        if(item===link)item.setAttribute('aria-current','step');
+        else item.removeAttribute('aria-current');}
+    });
+  }
   $('choose-files').addEventListener('click', () => $('file-input').click());
   $('choose-folder').addEventListener('click', () => {void chooseFolder();});
-  $('file-input').addEventListener('change', (e) => {addFiles([...e.target.files]);e.target.value='';});
-  $('folder-input').addEventListener('change', (e) => {addFiles([...e.target.files]);e.target.value='';});
+  $('file-input').addEventListener('change',e=>{
+    void addFiles([...e.target.files]).catch(error=>notice('นำเข้าไม่สำเร็จ: '+error.message,'error'));
+    e.target.value='';
+  });
+  $('folder-input').addEventListener('change',e=>{
+    void addFiles([...e.target.files]).catch(error=>notice('นำเข้าไม่สำเร็จ: '+error.message,'error'));
+    e.target.value='';
+  });
   $('clear-all').addEventListener('click', () => {
+    stopMidiPreview(false);
     if (state.previewURL) URL.revokeObjectURL(state.previewURL);
     state.previewURL = '';
     $('player').pause(); $('player').removeAttribute('src'); $('player').load();
     entries.clear(); selected.clear(); state.active = null;
+    state.fontCache=null;fonts.clear();refreshFontChoices();
+    $('midi-workspace').hidden=true;
     state.archive = null; state.archiveName = '';
     $('download-result').hidden = true;
     $('active-title').textContent = 'ยังไม่ได้เลือกเพลง'; $('active-kind').textContent = '—';
@@ -849,10 +931,10 @@
   });
   $('search').addEventListener('input', renderTable);
   $('select-all').addEventListener('click', () => {
-    for (const e of entries.values()) if (e.audio) selected.add(e.id);
-    renderTable();
+    for(const e of entries.values())if(canExport(e))selected.add(e.id);
+    invalidateArchive();renderTable();
   });
-  $('deselect-all').addEventListener('click', () => {selected.clear();renderTable();});
+  $('deselect-all').addEventListener('click',()=>{selected.clear();invalidateArchive();renderTable();});
   $('player').addEventListener('timeupdate', syncActiveLyric);
   $('insert-time').addEventListener('click', () => {
     if (!state.active) return;
@@ -862,13 +944,19 @@
     el.value = prefix + tag + suffix;
     el.focus(); el.setSelectionRange(index + tag.length, index + tag.length);
     entries.get(state.active).lyricsText = el.value;
+    entries.get(state.active).editedLyrics=true;invalidateArchive();
   });
-  $('lyrics-text').addEventListener('input', () => {
-    if (state.active) entries.get(state.active).lyricsText = $('lyrics-text').value;
+  $('lyrics-text').addEventListener('input',()=>{
+    if(state.active){
+      const song=entries.get(state.active);
+      song.lyricsText=$('lyrics-text').value;song.editedLyrics=true;
+      invalidateArchive();
+    }
   });
   $('save-lyrics').addEventListener('click', () => {
     if (!state.active) return;
     entries.get(state.active).lyricsText = $('lyrics-text').value;
+    invalidateArchive();
     renderTable(); notice('บันทึกเนื้อร้องไว้ในหน้านี้แล้ว · กดสร้างเพลงหรือดาวน์โหลด LRC เพื่อเก็บในเครื่อง', 'good');
   });
   $('download-lyrics').addEventListener('click', () => {
@@ -901,7 +989,9 @@
   ['dragleave', 'drop'].forEach((eventName) => drop.addEventListener(eventName, (event) => {
     event.preventDefault(); drop.classList.remove('dragging');
   }));
-  drop.addEventListener('drop', (event) => addFiles([...event.dataTransfer.files]));
+  drop.addEventListener('drop',event=>{
+    void addFiles([...event.dataTransfer.files]).catch(error=>notice('นำเข้าไม่สำเร็จ: '+error.message,'error'));
+  });
   drop.addEventListener('click', (event) => {
     if (event.target.closest('button')) return;
     $('file-input').click();
@@ -912,6 +1002,7 @@
       event.preventDefault(); $('file-input').click();
     }
   });
+  refreshFontChoices();
   renderTable();
   if (typeof window.showDirectoryPicker !== 'function') {
     $('pick-destination').disabled = true;
