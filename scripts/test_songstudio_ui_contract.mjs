@@ -111,28 +111,18 @@ assert.ok(js.includes("$('lyric-group-replacement-mode').addEventListener('chang
 assert.ok(css.includes('.lyric-group-edit .lyric-replacement-mode'),
   'Preset menu must fit inside the lyric editor');
 assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job');
-for(const id of ['lyric-skipped-panel','lyric-skipped-count','lyric-skipped-breakdown',
-                 'lyric-skipped-list','lyric-skipped-recheck-stats','lyric-skipped-recheck',
-                 'lyric-skipped-export','lyric-skipped-prev','lyric-skipped-next',
-                 'lyric-skipped-view','lyric-skipped-page']){
-  assert.ok(html.includes('id="'+id+'"'), 'Missing skipped LYR diagnostics UI: '+id);
-}
-assert.ok(js.includes("run('lyric-skipped-recheck'") &&
-          js.includes('refreshSkippedLyrics()') &&
-          js.includes('/api/lyric-groups-skipped.csv') &&
-          js.includes('X-XStage-Token') &&
-          js.includes('URL.createObjectURL'),
- 'Recheck and CSV must be authenticated and display skipped vs recovered LYR safely');
-assert.ok(css.includes('.lyric-skipped-item')&&css.includes('.lyric-skipped-breakdown'),
- 'Skipped LYR report must fit both desktop and compact UI');
+assert.ok(html.includes('id="create-export-format"') &&
+  html.includes('<option value="xstage" selected>') &&
+  html.includes('<option value="m4a">'),
+  'Song Studio must default to original MIDI + timed JSON with optional M4A');
+assert.ok(js.includes("export_format:audioOnly?'m4a'") &&
+  js.includes("'create-export-format': 'export_format'"),
+  'Export selection must reach the engine and persist');
 for(const id of ['lyric-group-folder','lyric-group-reset','lyric-group-source-status']){
-  assert.ok(html.includes('id="'+id+'"'), 'Bulk lyrics must have an independent folder selector: '+id);
+  assert.ok(html.includes('id="'+id+'"'), 'JSON lyrics editor folder selector missing: '+id);
 }
-assert.ok(html.includes('วิเคราะห์เฉพาะไฟล์ .LYR') &&
-          html.includes('ไม่อ่าน MID/CUR') &&
-          html.includes('โฟลเดอร์ Lyrics ที่ไม่มี Song/Cursor วิเคราะห์ได้แต่ยังแก้ไม่ได้') &&
-          html.includes('StageWeb'),
-  'NCN editor must explain LYR-only analysis and deferred MID/CUR safety checks');
+assert.ok(html.includes('Lyrics JSON') && html.includes('ไม่แก้ MIDI'),
+  'Bulk editing must describe JSON-only behavior, preserving original media');
 assert.ok(html.includes('data-pick="lyric_source"'),
   'The Windows lyrics editor must offer a native source folder picker');
 assert.ok(js.includes("'lyric-group-folder': 'lyric_source'") &&
