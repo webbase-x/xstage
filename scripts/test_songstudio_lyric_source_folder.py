@@ -1,4 +1,4 @@
-"""Safeguards for selecting a separate local StageWeb lyrics catalog."""
+"""Safeguards for selecting StageWeb or an independent LRC lyrics folder."""
 import ast
 import json
 import tempfile
@@ -59,14 +59,19 @@ class SelectedLyricFolderTests(unittest.TestCase):
         self.assertEqual(self.resolve(str(parent)), expected)
         self.assertEqual(self.resolve(str(parent / ".")), expected)
 
-    def test_reject_raw_folder_without_mutating_it(self):
+    def test_choose_raw_folder_without_mutating_it(self):
         folder = self.home / "ต้นฉบับ"
         folder.mkdir()
         (folder / "song.mp3").write_bytes(b"data")
-        with self.assertRaisesRegex(ValueError, "StageWeb/current.json"):
-            self.resolve(str(folder))
+        self.assertEqual(self.resolve(str(folder)), folder.resolve())
         self.assertFalse((folder / "StageWeb").exists())
         self.assertEqual((folder / "song.mp3").read_bytes(), b"data")
+
+    def test_choose_stageweb_lyrics_subfolder(self):
+        library = self.catalog(self.home / "SongStudio" / "StageWeb")
+        lyrics = library / "lyrics"
+        lyrics.mkdir()
+        self.assertEqual(self.resolve(str(lyrics)), library.resolve())
 
     def test_reject_nonexistent_and_file_paths(self):
         with self.assertRaises(ValueError):
@@ -95,6 +100,8 @@ class SelectedLyricFolderTests(unittest.TestCase):
         self.assertIn('root = lyric_source_root()\n            groups = options.get("groups")', code)
         self.assertIn('LYRIC_TEXT_BACKUPS, lyric_source_root())', code)
         self.assertIn('previous_lyric_source != PREFS["lyric_source"]', code)
+        self.assertIn('LYRIC_TEXT.scan_lrc_folder(', code)
+        self.assertIn('LYRIC_TEXT.apply_many_lrc_folder(', code)
 
 
 if __name__ == "__main__":
