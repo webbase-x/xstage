@@ -10,6 +10,8 @@ interpolated beats); other lyric lines, their CUR timing and MIDI are unchanged.
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
@@ -566,3 +568,36 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
         "changedFiles": len(specs), "removedSyllableCues": 0,
         "backupId": op, "remainingGroups": snapshot["groupCount"]
     }
+
+
+def skipped_page(snapshot, *, offset=0, limit=50):
+    """Read-only, bounded view of all skipped LYR and the reason breakdown."""
+    rows = snapshot.get("skippedRows") or []
+    offset = max(0, int(offset))
+    limit = max(1, min(100, int(limit)))
+    return {
+        "rows": rows[offset:offset + limit], "total": len(rows),
+        "offset": offset, "limit": limit,
+        "reasons": snapshot.get("skippedReasons") or [],
+        "inspected": snapshot.get("inspected", 0),
+        "songs": snapshot.get("songs", 0)
+    }
+
+
+def skipped_csv(snapshot):
+    """UTF-8 BOM CSV with strict spreadsheet formula-injection protection."""
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, dialect="excel", lineterminator="\r\n")
+    writer.writerow(("ชื่อไฟล์ LYR", "ประเภทปัญหา", "สาเหตุการข้าม", "รหัสเหตุผล"))
+    def safe(value):
+        value = str(value or "")
+        # Spreadsheet programs can evaluate formulas in untrusted filenames.
+        if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
+            return "'" + value
+        return value
+    for row in snapshot.get("skippedRows") or []:
+        writer.writerow((
+            safe(row.get("file")), safe(row.get("label")),
+            safe(row.get("reason")), safe(row.get("category"))
+        ))
+    return b"\xef\xbb\xbf" + output.getvalue().encode("utf-8")
