@@ -149,6 +149,12 @@ try{
   assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,1);
   assert.ok([...records.values()].some(x=>x.name.endsWith('.sf2')));
   const firstCount=payloadUploads;
+  // After first DB exists, reopen the importer from the visible stage menu.
+  await page.click('#cloud-import-close');
+  await page.click('#mobile-menu-toggle');
+  await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
+  await page.click('#cloud-import-open');
+  await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
     document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 1'),{timeout:60000});
