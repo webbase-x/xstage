@@ -2,8 +2,9 @@
  * SoundFont may persist locally by explicit user setting; never cache songs. */
 (function(global){
 'use strict';
-const LIB='https://esm.sh/spessasynth_lib@4.4.8?bundle';
-const WORKLET='https://cdn.jsdelivr.net/npm/spessasynth_lib@4.4.8/dist/spessasynth_processor.min.js';
+const LIB='./assets/vendor/spessasynth-lib.min.js';
+const WORKLET='./assets/vendor/spessasynth_processor.min.js';
+const DEFAULT_FONT='./assets/vendor/FluidR3Mono_GM.sf3';
 const DB='xstage-sf-v2',LIMIT=64*1024*1024;
 let ctx=null,gain=null,synth=null,seq=null,fontKey='',ready=false,active=false,clock=null,finished=false,repeat=false;
 let onReady=()=>{},lastError='';
@@ -118,8 +119,22 @@ const api={
   get onReady(){return onReady;},set onReady(v){onReady=typeof v==='function'?v:()=>{};},
   async fromFile(file){if(!file||!/\.(sf2|sf3)$/i.test(file.name))throw Error('เลือก SF2/SF3');
     const bytes=await file.arrayBuffer();await initialize(bytes);try{await saveFont(bytes);}catch{}},
-  async restore(){if(ready||global.XStageRuntime?.setting?.().soundFontCache===false)return;
-    const bytes=await loadFont().catch(()=>null);if(bytes)await initialize(bytes);},
+  async restore(){
+    if(ready)return;
+    let bytes=null;
+    if(global.XStageRuntime?.setting?.().soundFontCache!==false)
+      bytes=await loadFont().catch(()=>null);
+    if(!bytes){
+      setStatus('กำลังโหลด SoundFont ที่ติดมากับ X-Stage…');
+      const response=await fetch(DEFAULT_FONT,{cache:'force-cache'});
+      if(!response.ok)throw Error('SoundFont ในแพ็กเกจไม่พร้อม: HTTP '+response.status);
+      bytes=await response.arrayBuffer();
+      if(!isSoundFont(bytes))throw Error('SoundFont ในแพ็กเกจไม่สมบูรณ์');
+      if(global.XStageRuntime?.setting?.().soundFontCache!==false)
+        await saveFont(bytes).catch(()=>{});
+    }
+    await initialize(bytes);
+  },
   async clearCachedFont(){await clearFont();setStatus('ล้างแคช SoundFont แล้ว')}
 };
 global.XStageMidiEngine=api;
