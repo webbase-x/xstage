@@ -96,6 +96,7 @@
                 <h3>1. เลือกเสียงที่ใช้สร้างเพลง</h3>
                 <label for="create-soundfont">SoundFont สำหรับ MIDI / KAR</label>
                 <div class="path-row"><select id="create-soundfont" class="field"><option value="">ยังไม่ได้เลือก SoundFont</option></select><button class="button ghost" type="button" data-pick="soundfont">เลือกไฟล์</button></div>
+                <p id="pc-create-soundfont-advice" class="pc-resource-status" data-level="caution" role="status">กำลังตรวจขนาด SoundFont และทรัพยากรเครื่อง…</p>
                 <div class="form-2">
                   <div><label for="create-preset">โทนเสียง MIDI</label><select class="field" id="create-preset"><option value="balanced">สมดุล</option></select></div>
                   <div><label for="create-mode">ประเภทเสียง</label><select class="field" id="create-mode"><option value="original">คงเสียงต้นฉบับ</option><option value="instrumental">แยกเสียงร้อง AI (Full Offline)</option></select></div>
@@ -368,6 +369,7 @@
           <article class="panel">
             <div class="section-heading"><div><h2>SoundFont สำหรับ MIDI (Google Drive ส่วนตัว)</h2><p>เลือก SoundFont .sf2/.sf3 เพื่อตรวจรูปแบบและ MD5 ก่อนอัปโหลดไปยัง XStageWeb/AUDIO</p></div></div>
             <div class="path-row"><input id="upload-soundfont-path" type="text" class="field" placeholder="เลือกไฟล์ SoundFont .sf2 / .sf3"><button id="upload-soundfont-picker" type="button" class="button ghost">เลือก SoundFont</button></div>
+            <p id="pc-upload-soundfont-advice" class="pc-resource-status" data-level="caution" role="status">เลือกไฟล์แล้วระบบจะประเมินขนาด, RAM และพื้นที่ปลายทาง</p>
             <div class="toolbar"><button id="upload-soundfont-button" type="button" class="button primary">↑ อัปโหลด SoundFont ไป Drive</button></div>
             <p class="hint">ใช้ตัวเลือกสร้าง XStageWeb ใหม่ร่วมกับเมนูอัปโหลดเพลงด้านบน · อัปโหลดแล้วเก็บเป็นไฟล์ส่วนตัวโดยไม่เขียนทับต้นฉบับหรือแก้ current.json · สามารถเลือก SoundFont ได้จากเมนูเสียง MIDI บนเว็บและ Android TV ที่รองรับ</p>
             <p id="upload-soundfont-status" class="hint" role="status" aria-live="polite">ยังไม่ได้อัปโหลด SoundFont</p>
@@ -409,6 +411,21 @@
               <div class="hint">การตั้งค่า Client ID เป็นข้อมูลของแอป ไม่ใช่บัญชีผู้ใช้ · ผู้ใช้ Google แต่ละคนอนุญาตสิทธิ์ครั้งแรกด้วยตนเอง · โทเค็นเก็บแยกบัญชี Windows และเข้ารหัสด้วย DPAPI</div>
             </article>
             <article class="panel"><div class="section-heading"><div><h2>เครื่องมือประมวลผล</h2><button id="refresh-environment" class="button ghost">ตรวจซ้ำ</button></div></div><div id="environment-list" class="environment-list">กำลังตรวจ FFmpeg, FluidSynth, SoundFont…</div><div class="hint">ส่วนประกอบต้องพร้อมก่อนสร้าง Installer; งานสร้าง M4A ทำบน Local Engine ไม่ต้องให้เว็บดาวน์โหลดเครื่องมือใหม่ทุกเพลง</div></article>
+            <article class="panel" id="pc-audio-readiness">
+              <div class="section-heading"><div><h2>วิเคราะห์เครื่องและคุณภาพเสียง</h2><p>ประเมิน RAM/CPU/พื้นที่จริงจาก Local Engine และ SoundFont ที่เลือกก่อนสร้าง/อัปโหลด</p></div><button id="pc-audio-refresh" class="button ghost">ตรวจซ้ำ</button></div>
+              <p id="pc-audio-machine" class="hint" role="status">กำลังตรวจเครื่อง…</p>
+              <p id="pc-audio-recommendations" class="hint">กำลังเลือกวิธีเล่นที่เหมาะสม…</p>
+              <strong>จำนวนเพลงที่สแกนแล้วตามรูปแบบต้นฉบับ</strong>
+              <p id="pc-audio-format-counts" class="hint">ยังไม่ได้สแกนเพลง</p>
+              <details class="pc-audio-guide"><summary>คำอธิบายคุณภาพเสียงแต่ละชนิด</summary>
+                <p><strong>MIDI/KAR/NCN:</strong> ข้อมูลโน้ตและเวลา ไม่ใช่เสียงบันทึก คุณภาพขึ้นกับ SoundFont/FluidSynth · MIDI ปรับคีย์และเครื่องดนตรีได้</p>
+                <p><strong>MP3/AAC/OGG:</strong> เสียงบีบอัดแบบสูญเสียคุณภาพขึ้นกับบิตเรต · ฟังเสียงต้นฉบับได้ทันที</p>
+                <p><strong>M4A:</strong> อาจเป็น AAC หรือ ALAC ต้องตรวจ Codec ก่อนสรุปว่า lossless</p>
+                <p><strong>WAV/FLAC:</strong> ส่วนใหญ่เก็บเสียงแบบไม่สูญเสีย แต่ไฟล์ใหญ่กว่า</p>
+                <p><strong>Video:</strong> คุณภาพเสียงและภาพขึ้นกับ Codec, ความละเอียด และความสามารถเครื่อง</p>
+              </details>
+              <p class="hint">การประมาณ RAM สำหรับ SoundFont ไม่ใช่ค่าที่วัดระหว่างเล่นจริง · การอัปโหลดจาก PC ไม่จำเป็นต้องดาวน์โหลดไฟล์ต้นฉบับซ้ำ</p>
+            </article>
           </div>
           <article class="panel" id="edit-history-panel">
             <div class="section-heading"><div><h2>ประวัติการแก้ไขและตั้งค่าอัตโนมัติ</h2><p>บันทึกเมื่อกดบันทึกข้อมูลเพลงหรือเปลี่ยนการตั้งค่า · คืนค่าที่ใช้ครั้งก่อนเมื่อเปิดแอปอีกครั้ง · เก็บประวัติสูงสุด 50 รายการในเครื่อง</p></div><button id="history-refresh" class="button ghost" type="button">↻ โหลดประวัติ</button></div>
