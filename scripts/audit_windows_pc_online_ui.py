@@ -40,6 +40,23 @@ def main():
     for group,locs in groups.items():
       print(f"GROUP {group}: {len(locs)}")
       for path,n in locs[:80]:print(f"  {path}:{n}")
+    focus={
+      "karaoke/ui.py":[(1,115),(170,210),(300,425),(740,805)],
+      "karaoke/context_menu.py":[(1,112)],
+      "karaoke/classic.py":[(60,112)],
+      "karaoke/shutdown.py":[(25,65)],
+      "karaoke/google_account_ui.py":[(75,125)],
+      "main.py":[(1,108)],
+      "karaoke/__init__.py":[(1,130)]
+    }
+    for source,ranges in focus.items():
+      if source not in names:continue
+      try:contents=z.read(source).decode("utf-8-sig").splitlines()
+      except UnicodeDecodeError:continue
+      for lo,hi in ranges:
+        print(f"FOCUS {source} {lo}-{hi}")
+        for i in range(lo-1,min(hi,len(contents))):
+          print(f"  {i+1:04d} {contents[i][:210]}")
     print("CANDIDATE UI MODULES")
     for name in names:
       if re.search(r"(?i)menu|action|toolbar|web|online|sync|settings|main\.py",name):
