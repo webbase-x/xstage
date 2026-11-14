@@ -1483,6 +1483,7 @@ function login({automatic=false} = {}) {
   } catch (e) { finish();setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
+  window.dispatchEvent(new Event('xstage:piano-clear'));
   if(revoke){rememberLogin(false);clearActiveAuth();clearPendingAuth();}
   if (!keepAuth){state.authId++;webGoogleAuthFlow=null;}
   const pendingSearch=keepAuth?String(ui.search?.value||''):'';
@@ -2070,6 +2071,7 @@ function syncMediaSessionPosition(){
   try{navigator.mediaSession.setPositionState({duration,playbackRate:player.playbackRate||1,position});}catch{}
 }
 function clearIdleStage(message){
+  window.dispatchEvent(new Event('xstage:piano-clear'));
   resetSongVideo();
   state.userStopped=true;
   state.requestId++;
@@ -2146,6 +2148,9 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
+  // Clear previous song's piano timeline before loading a new media source.
+  window.dispatchEvent(new Event('xstage:piano-clear'));
+  let midiNotes=null;
   state.loading=true;updateTransport();setPlayStatus('กำลังโหลดเสียงและเนื้อร้องจาก Google Drive…');
   publishPlaybackStatus('loading',song,'กำลังเตรียมไฟล์เพลงจาก Google Drive');
   try {
@@ -2168,6 +2173,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
         fontBytes,signal:controller.signal,
         onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
       });
+      midiNotes=rendered.notes||[];
       return rendered.audio;
     };
     const [audio,lyrics]=prepared&&!getFileId(song.midi)
@@ -2193,6 +2199,8 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     player.src=url;
+    if(getFileId(song.midi))window.dispatchEvent(
+      new CustomEvent('xstage:midi-ready',{detail:{notes:midiNotes||[]}}));
     try{
       if('preservesPitch' in player)player.preservesPitch=true;
       if('mozPreservesPitch' in player)player.mozPreservesPitch=true;
@@ -2586,7 +2594,9 @@ function drawLyrics(){
         const transportHeight=ui.stage.querySelector('.transport-panel')?.getBoundingClientRect().height||0;
         const keyboard=ui.stage.querySelector('#virtual-keyboard');
         const keyboardHeight=keyboard&&!keyboard.hidden?keyboard.getBoundingClientRect().height+7:0;
-        const usableBottom=h-(transportHeight+keyboardHeight+12)*density;
+        const piano=ui.stage.querySelector('#stage-piano');
+        const pianoHeight=piano&&!piano.hidden?piano.getBoundingClientRect().height+7:0;
+        const usableBottom=h-(transportHeight+Math.max(keyboardHeight,pianoHeight)+12)*density;
         // Lift both karaoke rows by about one full lyric line while preserving spacing.
         const lyricLift=fontSize*1.45;
         let nextY=Math.max(h*.22,Math.min(h*.83,usableBottom-fontSize*.8)-lyricLift);
