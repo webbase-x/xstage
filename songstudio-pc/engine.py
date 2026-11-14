@@ -1582,7 +1582,7 @@ def execute_job(action, options, started):
             result = {
                 "message": (f"วิเคราะห์ข้อความหัว–ท้ายเพลงเสร็จ {index['songs']:,} เพลง "
                             f"· กลุ่มข้อความ {index['groupCount']:,} กลุ่ม "
-                            f"· ข้ามโครงสร้างไม่รองรับ {index['skippedInvalid']:,} เพลง"),
+                            f"· ข้ามเนื้อร้องไม่รองรับ {index['skippedInvalid']:,} รายการ"),
                 "songs": index["songs"], "groups": index["groupCount"],
                 "skippedInvalid": index["skippedInvalid"],
                 "withoutLyrics": index["withoutLyrics"],
