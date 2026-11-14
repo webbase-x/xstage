@@ -246,6 +246,8 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
                 files_to_read.append(Path(dirpath) / name)
                 if len(files_to_read) > bulk.MAX_ROWS:
                     raise ValueError("ไฟล์ LYR มากเกินขีดจำกัด กรุณาเลือกโฟลเดอร์ย่อย")
+                if on_progress and len(files_to_read) % 2000 == 0:
+                    on_progress(f"กำลังนับ LYR จาก Lyrics · พบ {len(files_to_read):,} ไฟล์", 0, None)
     total = len(files_to_read)
     if not total:
         raise ValueError("ไม่พบไฟล์ .LYR ใน Lyrics หรือโฟลเดอร์ที่เลือก")
@@ -256,6 +258,10 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
     for number, path in enumerate(files_to_read, 1):
         if cancelled is not None and cancelled.is_set():
             raise RuntimeError("ยกเลิกการวิเคราะห์ LYR · ยังไม่ได้แก้เพลง")
+        if on_progress and (number % 100 == 0 or number == total):
+            on_progress(
+                f"วิเคราะห์ LYR {number:,}/{total:,} · อ่านได้ {counted:,} · ข้าม {skipped:,}",
+                number, total)
         try:
             if path.is_symlink() or not path.is_file():
                 raise ValueError("LYR เป็นลิงก์")
@@ -284,10 +290,6 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
                 "artist": parsed["artist"], "text": phrase,
                 "record": record
             })
-        if on_progress and (number % 100 == 0 or number == total):
-            on_progress(
-                f"วิเคราะห์ LYR {number:,}/{total:,} · อ่านได้ {counted:,} · ข้าม {skipped:,}",
-                number, total)
     if not counted:
         raise ValueError(f"พบ LYR {total:,} ไฟล์ แต่ไม่พบเนื้อร้อง CP874 ที่มีอย่างน้อย 4 บรรทัด")
     groups = {}
