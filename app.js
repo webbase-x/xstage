@@ -542,9 +542,26 @@ function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_K
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
 const player = ui.player;
 const karaokeVideo = document.getElementById('karaoke-video');
+const videoLyricsToggle=document.getElementById('video-lyrics-toggle');
 let videoObjectUrl = '';
+let videoLyricsVisible=true;
+function updateVideoLyricsToggle(){
+  if(!videoLyricsToggle)return;
+  const timed=!!state.lyrics?.lines?.length;
+  videoLyricsToggle.hidden=!(karaokeVideo&&!karaokeVideo.hidden&&timed);
+  videoLyricsToggle.setAttribute('aria-pressed',String(videoLyricsVisible));
+  videoLyricsToggle.textContent=videoLyricsVisible?'เนื้อร้อง: แสดง':'เนื้อร้อง: ซ่อน';
+  ui.stage.classList.toggle('video-lyrics-off',!videoLyricsVisible&&timed);
+}
+videoLyricsToggle?.addEventListener('click',()=>{
+  videoLyricsVisible=!videoLyricsVisible;
+  updateVideoLyricsToggle();
+});
 function resetSongVideo(){
   if(!karaokeVideo)return;
+  videoLyricsVisible=true;
+  videoLyricsToggle&&(videoLyricsToggle.hidden=true);
+  ui.stage.classList.remove('video-lyrics-off');
   karaokeVideo.pause();
   karaokeVideo.hidden=true;
   karaokeVideo.removeAttribute('src');
@@ -559,14 +576,15 @@ function syncSongVideo(){
     try{karaokeVideo.currentTime=player.currentTime;}catch{}
   }
   if(player.paused||player.ended){karaokeVideo.pause();}
-  else karaokeVideo.play().catch(()=>{
+  else if(karaokeVideo.paused)karaokeVideo.play().catch(()=>{
     // Unsupported video or autoplay policy should never stop the audio.
     // HTML5 audio+timed lyrics remain the playable fallback.
   });
 }
-async function loadSongVideo(song,request,token){
+async function loadSongVideo(song,request,token,signal){
   if(!karaokeVideo||!getFileId(song?.video))return;
   try{
+    if(request!==state.requestId||signal?.aborted)return;
     // A video-only karaoke song can use the same authenticated media Blob
     // for its audio clock and muted video layer, without a second Drive download.
     if(getFileId(song.video)===getFileId(song.audio)&&state.objectUrl){
@@ -574,12 +592,13 @@ async function loadSongVideo(song,request,token){
       karaokeVideo.muted=true;
       karaokeVideo.hidden=false;
       karaokeVideo.load();
+      updateVideoLyricsToggle();
       syncSongVideo();
       return;
     }
-    const response=await privateFile(song.video.fileId,token);
+    const response=await privateFile(song.video.fileId,token,{signal});
     const data=await response.blob();
-    if(request!==state.requestId||token!==state.token||state.current!==song)return;
+    if(request!==state.requestId||signal?.aborted||token!==state.token||state.current!==song)return;
     if(data.size<1024)throw Error('วิดีโอว่างเปล่า');
     const ext=String(song.video.path||'').toLowerCase();
     const mime=data.type?.startsWith('video/')?data.type:
@@ -590,6 +609,7 @@ async function loadSongVideo(song,request,token){
     karaokeVideo.muted=true;
     karaokeVideo.hidden=false;
     karaokeVideo.load();
+    updateVideoLyricsToggle();
     syncSongVideo();
   }catch(error){
     if(request!==state.requestId)return;
@@ -598,10 +618,12 @@ async function loadSongVideo(song,request,token){
   }
 }
 if(karaokeVideo){
-  karaokeVideo.addEventListener('loadedmetadata',syncSongVideo);
+  karaokeVideo.addEventListener('loadedmetadata',()=>{updateVideoLyricsToggle();syncSongVideo();});
   karaokeVideo.addEventListener('canplay',syncSongVideo);
   karaokeVideo.addEventListener('error',()=>{
-    console.warn('Unsupported MP4 video: continue karaoke using audio and lyrics');
+    console.warn('Video codec unsupported: using audio and available lyrics where possible');
+    if(state.current?.lyricsMode==='embedded-video'||state.lyrics?.lyricsMode==='embedded-video')
+      setPlayStatus('เบราว์เซอร์ไม่รองรับ Codec ของวิดีโอนี้ · ให้แปลงเป็น H.264/AAC MP4');
     resetSongVideo();
   });
 }
@@ -2112,7 +2134,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
     state.objectUrl=url;state.current=song;state.lyrics=lyrics;
     resetSongVideo();
-    if(getFileId(song.video))void loadSongVideo(song,request,token);
+    if(getFileId(song.video))void loadSongVideo(song,request,token,controller.signal);
     syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
     const musicalKey=String(song.key||song.musicKey||song.originalKey||song.keySignature||'').trim();
