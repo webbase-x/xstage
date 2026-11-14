@@ -273,6 +273,9 @@ async function loadCatalog(drive,root){
   const old=children.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
   if(modern.length&&old.length)fail('พบ current.json ทั้งใน LYRICS และรากคลัง');
   const pointers=modern.length?modern:old;
+  const pointerFolder=modern.length
+    ? lyricDirs.find((folder,index)=>lyricChildSets[index].some(file=>file.id===pointers[0]?.id))?.name
+    : 'root';
   if(pointers.length>1)fail('พบ current.json ซ้ำ · หยุดเพื่อไม่ให้ DB เสีย');
   if(!pointers.length){
     const marker=lyricChildren.find(x=>x.name==='.xstage-songstudio-staging.json')||
@@ -309,7 +312,7 @@ async function loadCatalog(drive,root){
     for(const row of delta.upserts){if(!row||typeof row.webSongId!=='string')fail('รายการเพลงใหม่ไม่ถูกต้อง');rows.set(row.webSongId,row);}
   }
   if(pointer.songCount!==rows.size)fail('จำนวนเพลงบน Drive ไม่ตรงกับ Catalog');
-  return {pointerFile:pointers[0],pointer,rows};
+  return {pointerFile:pointers[0],pointer,pointerFolder,rows};
 }
 class Importer {
   constructor(options){
@@ -554,9 +557,9 @@ class Importer {
           fail('ไม่พบ XStageWeb ที่บัญชีนี้เข้าถึงได้ · ให้ยืนยันการสร้างคลังใหม่ก่อน (หากมีคลังเดิมที่มองไม่เห็นอย่าเพิ่งสร้าง)');
         rootId=await drive.folder('root','XStageWeb');
       }
-      let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
-      if(pointer && pointer.layoutVersion!==4)
-        fail('พบคลังเก่าที่ใช้โครงสร้างอื่น · เพื่อไม่ให้ข้อมูลสูญหาย กรุณาสำรองและยืนยันการย้ายคลังก่อนอัปโหลดแบบ AUDIO/LYRICS');
+      let {pointerFile,pointer,pointerFolder,rows}=await loadCatalog(drive,rootId);
+      if(pointer && (pointer.layoutVersion!==4 || pointerFolder!=='LYRICS'))
+        fail('พบคลังเก่าหรือ current.json อยู่นอก LYRICS · เพื่อไม่ให้ข้อมูลสูญหาย กรุณาสำรองและยืนยันการย้ายคลังก่อนอัปโหลดแบบ AUDIO/LYRICS');
       if(!pointerFile){
         const textRoot=await drive.ensurePath(rootId,['LYRICS']);
         const textFiles=await drive.listChildren(textRoot);
