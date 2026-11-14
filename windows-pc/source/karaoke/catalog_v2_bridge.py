@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import closing
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -174,7 +175,10 @@ def import_catalog(db_path, catalog_path, *, confirmation=None):
         raise FileNotFoundError("ไม่พบฐานเพลงในเครื่อง")
     backup=db_path.with_name(db_path.stem+"-before-unified-v2-"+
           datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")+"-"+uuid4().hex[:8]+".sqlite3")
-    with sqlite3.connect(db_path,timeout=30) as src,sqlite3.connect(backup,timeout=30) as dest:
+    # sqlite3's connection context manager commits but does not CLOSE.
+    # Close both handles explicitly or Windows cannot reopen/delete backups.
+    with closing(sqlite3.connect(db_path,timeout=30)) as src, \
+         closing(sqlite3.connect(backup,timeout=30)) as dest:
         src.backup(dest)
         if dest.execute("PRAGMA integrity_check").fetchone()[0]!="ok":
             raise CatalogValidationError("SQLite backup integrity check failed")
