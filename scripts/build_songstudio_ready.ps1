@@ -304,6 +304,8 @@ $paths = @(
  'song_export.py',
  'code_registry.py',
  'online_publish.py',
+ 'folder_upload.py',
+ 'history_store.py',
  'live_preview.py',
  'ai_separate.py',
  'ai-model.lock.json',
