@@ -327,9 +327,17 @@
               <p>เลือกได้หลายกลุ่มใน 4 ตำแหน่ง ระบบจะแสดงจำนวนเพลงและบรรทัดที่เปลี่ยนจริง ก่อนยืนยันแก้ทั้งชุด</p></div></div>
             <div id="lyric-group-selection" class="lyric-group-selection">ยังไม่ได้เลือกกลุ่มข้อความ</div>
             <div id="lyric-group-examples" class="lyric-group-examples" aria-live="polite"></div>
+            <label for="lyric-group-replacement-mode">ข้อความแทนที่ที่ต้องการใช้</label>
+            <select id="lyric-group-replacement-mode" class="field lyric-replacement-mode" aria-describedby="lyric-replacement-hint">
+              <option value="custom" selected>กำหนดเอง · พิมพ์หรือแก้ไขข้อความ</option>
+              <option value="X-Stage Karaoke">X-Stage Karaoke</option>
+              <option value="X-Stage Karaoke Online">X-Stage Karaoke Online</option>
+              <option value="X-Stage Song Studio">X-Stage Song Studio</option>
+            </select>
+            <p id="lyric-replacement-hint" class="hint">เลือกข้อความสำเร็จรูป หรือพิมพ์ข้อความเองด้านล่างได้ · เมื่อแก้ไขข้อความ ระบบจะเปลี่ยนเป็น “กำหนดเอง” อัตโนมัติ</p>
             <label for="lyric-group-replacement">ข้อความใหม่เดียวกันสำหรับทุกกลุ่มที่เลือก</label>
             <textarea id="lyric-group-replacement" class="field" rows="3" maxlength="400"
-              placeholder="เช่น [X-Stage Karaoke]" disabled></textarea>
+              placeholder="พิมพ์ข้อความที่ต้องการ เช่น [X-Stage Karaoke]" disabled></textarea>
             <div class="lyric-group-actions">
               <button id="lyric-group-apply" type="button" class="button primary" disabled>✓ ตรวจแล้ว แทนที่ทุกกลุ่มที่เลือก</button>
             </div>
