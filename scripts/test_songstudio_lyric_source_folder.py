@@ -107,7 +107,7 @@ class SelectedLyricFolderTests(unittest.TestCase):
         self.assertIn('LYRIC_TEXT_BACKUPS, lyric_source_root())', code)
         self.assertIn('previous_lyric_source != PREFS["lyric_source"]', code)
         self.assertIn('LYRIC_TEXT.scan(', code)
-        self.assertIn('LYRIC_TEXT.apply_many(', code)
+        self.assertIn('LYRIC_TEXT.apply_many_smart(', code)
         self.assertNotIn('LYRIC_NCN.', code)
         self.assertIn('ไม่แก้ LYR/CUR/NCN ต้นฉบับ', code)
 
