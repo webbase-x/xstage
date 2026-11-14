@@ -562,7 +562,10 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
                 raise RuntimeError("พื้นที่เก็บข้อมูลเหลือน้อยก่อนบันทึก · ยังไม่แก้เพลง")
             # A committed ZIP backup must survive a sudden power loss before
             # its manifest permits any song writes.
-            with zip_path.open("rb") as stream:
+            # Windows requires a writable CRT handle for os.fsync; Linux
+            # also accepts r+b. Never change ZIP contents after verification.
+            with zip_path.open("r+b") as stream:
+                stream.flush()
                 os.fsync(stream.fileno())
             if rejected:
                 _atomic_bytes(report_path, (json.dumps({
