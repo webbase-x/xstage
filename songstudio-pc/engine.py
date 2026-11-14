@@ -1622,6 +1622,15 @@ def execute_job(action, options, started):
         elif action == "logout":
             GOOGLE.logout()
             result = {"message": "ออกจาก Google บน PC เครื่องนี้แล้ว (สิทธิ์ใน Google Account ยังถอนได้จากบัญชี Google)"}
+        elif action == "upload-soundfont":
+            with LOCK:
+                JOB["total"] = 1
+            update("กำลังตรวจ SoundFont SF2/SF3 ก่อนอัปโหลด")
+            result = FOLDER_UPLOAD.upload_soundfont(
+                GOOGLE, PREFS.get("soundfont", ""),
+                create_new_library=(options.get("create_new_library") is True),
+                cancelled=CANCEL, progress=lambda stage: update(stage))
+            update(result["message"], 1)
         elif action == "upload-folder":
             root = PREFS.get("upload_folder", "").strip()
             with LOCK:
