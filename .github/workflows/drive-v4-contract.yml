@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'songstudio-pc/online_publish.py'
+      - 'songstudio-pc/google_drive.py'
+      - 'browser-midi.js'
+      - 'scripts/test_songstudio_drive_roundtrip.py'
       - 'songstudio-pc/folder_upload.py'
       - 'cloud-import.js'
       - 'app.js'
