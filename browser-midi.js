@@ -277,8 +277,12 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
       const gain=ctx.createGain(),velocity=Math.pow(note.velocity/127,1.5),level=Math.max(0,Math.min(1,note.level));
       const attenuation=g?(g.get(48)||0):0;
       const amp=Math.max(.00001,velocity*level*Math.pow(10,-attenuation/200)*(.5/Math.max(1,regions.length)));
-      const release=g?Math.max(.04,Math.min(4,Math.pow(2,(i16(new DataView(new Uint16Array([g.get(38)||0]).buffer),0))/1200))):.12;
-      const attack=g?Math.max(.005,Math.min(.5,Math.pow(2,(i16(new DataView(new Uint16Array([g.get(34)||0]).buffer),0))/1200))):.015;
+      // SF2 omitted envelope generators use -12000 timecents, not zero seconds
+      // (zero timecents means a full one-second envelope).
+      const signed=v=>v>32767?v-65536:v;
+      const volSeconds=(operator,fallback)=>Math.pow(2,signed(g?.get(operator)??fallback)/1200);
+      const release=g?Math.max(.04,Math.min(4,volSeconds(38,-12000))):.12;
+      const attack=g?Math.max(.005,Math.min(.5,volSeconds(34,-12000))):.015;
       gain.gain.setValueAtTime(.00001,start);
       gain.gain.linearRampToValueAtTime(amp,start+Math.min(attack,Math.max(.01,(end-start)/2)));
       gain.gain.setValueAtTime(amp,end);
