@@ -82,6 +82,8 @@ const WEB_AUTO_UPDATE_GUARD='xstage-web-auto-update-target-v1';
 let webUpdateReloading=false;
 function autoApplyWebUpdate(remote){
   if(androidTvNativeBridgeReady()||!remote||webUpdateReloading)return false;
+  // Never navigate away while a GIS popup is returning or its token is being verified.
+  if(webGoogleAuthFlow||state.authRecovering)return false;
   if(playbackBusyForUpdate())return false;
   const target=Number(remote.build);
   try{
@@ -486,6 +488,9 @@ const ACTIVE_AUTH_KEY = 'xstage-google-token-v2';
 const PENDING_AUTH_KEY = 'xstage-google-pending-token-v1';
 const LEGACY_ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
+// Google Identity Services token callbacks can arrive after Safari refocuses.
+// Only Google callbacks, an explicit new attempt, or the full timeout can settle a flow.
+let webGoogleAuthFlow=null;
 function authRecordValid(current){
   return !!(current&&typeof current.token==='string'&&current.token.length>25&&
     typeof current.sub==='string'&&current.sub.length>0&&
@@ -1314,6 +1319,10 @@ function googleAuthErrorMessage(error){
 }
 
 function login({automatic=false} = {}) {
+  if(webGoogleAuthFlow?.phase==='verifying'){
+    setStatus('ได้รับสิทธิ์จาก Google แล้ว · กำลังตรวจสอบบัญชีและคลังเพลง…');
+    return;
+  }
   if(!automatic&&!popupPreflightForTv())return;
   if(!navigator.onLine){setStatus('อุปกรณ์ออฟไลน์ · กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่','error');return;}
   if (typeof google === 'undefined' || !google.accounts?.oauth2?.initTokenClient) {
@@ -1325,23 +1334,44 @@ function login({automatic=false} = {}) {
   ui.login.disabled = ui.gateLogin.disabled = true;
   setStatus(automatic?'กำลังเชื่อมต่อบัญชี Google ที่เคยใช้…':'กำลังเปิดการอนุญาต Google…');
   const authId = ++state.authId;
+  const flow={id:authId,startedAt:Date.now(),phase:'waiting'};
+  webGoogleAuthFlow=flow;
   let settled=false;
-  const finish=()=>{settled=true;clearTimeout(watchdog);ui.login.disabled=ui.gateLogin.disabled=false;};
+  const finish=()=>{
+    settled=true;
+    clearTimeout(watchdog);
+    clearTimeout(retryTimer);
+    if(webGoogleAuthFlow===flow)webGoogleAuthFlow=null;
+    if(authId===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
+  };
   const watchdog=setTimeout(()=>{
     if(settled||authId!==state.authId)return;
+    finish();
     state.authId++;
-    ui.login.disabled=ui.gateLogin.disabled=false;
-    setStatus('Google Sign-In ไม่ตอบกลับภายในเวลาที่กำหนด · ปิดหน้าต่าง Google ที่ค้างแล้วกดเข้าสู่ระบบอีกครั้ง','error');
+    setStatus('Google ยังไม่ส่งผลการอนุญาตกลับมา · หากปิดหน้าต่าง Google แล้ว กรุณากดเข้าสู่ระบบอีกครั้ง','error');
   },90_000);
+  // Safari may return focus before postMessage/callback; do not invalidate the
+  // original request. An explicit second click is permitted if the popup hangs.
+  const retryTimer=setTimeout(()=>{
+    if(settled||authId!==state.authId||flow.phase!=='waiting'||state.token)return;
+    ui.login.disabled=ui.gateLogin.disabled=false;
+    setStatus('กำลังรอ Google ยืนยันสิทธิ์ · หากหน้าต่าง Google ปิดแล้วสามารถกดเข้าสู่ระบบอีกครั้ง');
+  },12_000);
   try {
     const client = google.accounts.oauth2.initTokenClient({
       client_id:cfg.googleClientId,
       scope:'openid email https://www.googleapis.com/auth/drive.file',
       callback: async result => {
-        if (authId !== state.authId) return;
-        finish();
-        if(result?.error){setStatus(googleAuthErrorMessage(result),'error');return;}
-        if (!result?.access_token) { setStatus('ไม่ได้รับสิทธิ์จาก Google · กรุณากดเข้าสู่ระบบอีกครั้ง', 'error'); return; }
+        if(authId!==state.authId||settled)return;
+        if(result?.error){finish();setStatus(googleAuthErrorMessage(result),'error');return;}
+        if(!result?.access_token){finish();setStatus('ไม่ได้รับสิทธิ์จาก Google · กรุณากดเข้าสู่ระบบอีกครั้ง','error');return;}
+        // Keep this request active while userinfo/Drive is verified. A Safari
+        // focus/pageshow event must not start a competing pending-token recovery.
+        settled=true;
+        clearTimeout(watchdog);
+        clearTimeout(retryTimer);
+        flow.phase='verifying';
+        setStatus('ได้รับสิทธิ์ Google แล้ว · กำลังตรวจสอบบัญชีและคลังเพลง…');
         // Do not reset a playing track until the new Google account is verified.
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
@@ -1361,10 +1391,12 @@ function login({automatic=false} = {}) {
             if(!/เชื่อมต่อไม่สำเร็จ|ใช้เวลานาน|อินเทอร์เน็ต/.test(String(e.message||'')))clearPendingAuth();
             setStatus(e.message, 'error');
           }
-        }
+        }finally{finish();}
       },
       error_callback: error => {
-        if (authId !== state.authId) return;
+        // A delayed/duplicate popup event must not override a successful
+        // token response while Drive userinfo is still being verified.
+        if(authId!==state.authId||settled)return;
         finish();
         setStatus(googleAuthErrorMessage(error),'error');
       }
@@ -1377,7 +1409,7 @@ function login({automatic=false} = {}) {
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
   if(revoke){rememberLogin(false);clearActiveAuth();clearPendingAuth();}
-  if (!keepAuth) state.authId++;
+  if (!keepAuth){state.authId++;webGoogleAuthFlow=null;}
   const pendingSearch=keepAuth?String(ui.search?.value||''):'';
   const oldToken = state.token;
   state.requestId++;
@@ -2731,7 +2763,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1099';
+    script.src='./assets/vendor/qrcode.min.js?v=1100';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -3300,15 +3332,22 @@ window.addEventListener('online',()=>{
 let oauthReturnRecoveryTimer=0;
 function scheduleOAuthReturnRecovery(){
   clearTimeout(oauthReturnRecoveryTimer);
-  if(document.hidden||state.token)return;
+  if(document.hidden||state.token||androidTvNativeBridgeReady())return;
   oauthReturnRecoveryTimer=setTimeout(()=>{
-    if(state.token)return;
-    if(readPendingAuth())void recoverPendingGoogleAuth('กลับจาก Google แล้ว · กำลังเชื่อมต่อคลังเพลงต่อ…');
-    else if(ui.login.disabled||ui.gateLogin.disabled){
-      state.authId++;
-      ui.login.disabled=ui.gateLogin.disabled=false;
-      setStatus('กลับจาก Google แล้วแต่ Safari ยังไม่ได้ส่งสิทธิ์กลับมา · กดเข้าสู่ระบบ Google อีกครั้งได้ทันที','error');
+    if(document.hidden||state.token||androidTvNativeBridgeReady())return;
+    const flow=webGoogleAuthFlow;
+    if(flow&&flow.id===state.authId){
+      // A focus/pageshow event is NOT proof of OAuth failure: the popup may
+      // still be open, and Safari can deliver the GIS callback seconds later.
+      if(flow.phase==='verifying'){
+        setStatus('ได้รับสิทธิ์จาก Google แล้ว · กำลังตรวจสอบบัญชีและคลังเพลง…');
+      }else{
+        setStatus('กลับมาที่ X-Stage แล้ว · กำลังรอ Google ส่งผลการอนุญาต…');
+      }
+      return;
     }
+    if(!state.authRecovering&&readPendingAuth())
+      void recoverPendingGoogleAuth('กลับจาก Google แล้ว · กำลังเชื่อมต่อคลังเพลงต่อ…');
   },2500);
 }
 document.addEventListener('visibilitychange',scheduleOAuthReturnRecovery);
