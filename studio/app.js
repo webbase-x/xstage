@@ -462,6 +462,7 @@
     $('create-workspace').value = prefs.workspace || '';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
+    $('upload-soundfont-path').value = prefs.soundfont || '';
     $('ai-export-folder').textContent = prefs.download || 'ยังไม่ได้เลือกโฟลเดอร์';
     $('settings-oauth').value = prefs.oauth || '';
     $('create-preset').value = prefs.midi_preset || 'balanced';
@@ -516,6 +517,8 @@
       advanced.dataset.initialized = 'true';
     }
     $('upload-folder-button').disabled = busy || !googleConnected;
+    $('upload-soundfont-button').disabled = busy || !googleConnected;
+    $('upload-soundfont-picker').disabled = busy;
     for (const id of ['settings-logout']) $(id).disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     // The environment panel previously remained stale after an OAuth import
@@ -547,6 +550,8 @@
   function updateButtons() {
     $('selected-count').textContent = `เลือกแล้ว ${fmtNum(selected.size)} เพลง`;
     $('upload-inspect').disabled = busy;
+    $('upload-soundfont-button').disabled = busy || !googleConnected;
+    $('upload-soundfont-picker').disabled = busy;
     $('upload-folder-button').disabled = busy || !googleConnected;
     const buttons = ['scan-button','reconcile-button','scan-full-button','preview-button','edit-button','build-button',
       'build-audio-button','select-all','select-page','clear-selection','upload-login','settings-login',
@@ -651,6 +656,7 @@
                   'create-soundfont': 'soundfont', 'create-preset': 'midi_preset',
                   'create-mode': 'mode', 'download-destination': 'download',
                   'upload-folder': 'upload_folder',
+                  'upload-soundfont-path': 'soundfont',
                   'settings-oauth': 'oauth'};
   async function saveInputs(keys = Object.keys(fields)) {
     const payload = {};
@@ -1798,6 +1804,34 @@
       message(error.message);
     }
   }
+  async function chooseUploadSoundfont() {
+    if (busy) return;
+    try {
+      const result=await post('/api/folder-picker',{kind:'soundfont'});
+      if (!result.path) return;
+      await config({soundfont:result.path});
+      $('upload-soundfont-path').value=result.path;
+      $('upload-soundfont-status').textContent='เลือก SoundFont แล้ว · ตรวจความพร้อมก่อนอัปโหลด';
+    } catch (error) { message('เลือก SoundFont ไม่สำเร็จ: '+error.message); }
+  }
+  async function startSoundfontUpload() {
+    if (busy || !googleConnected)
+      return message('กรุณาล็อกอิน Google Drive ก่อนอัปโหลด SoundFont');
+    try {
+      await saveInputs(['upload-soundfont-path']);
+      const createNew=$('upload-allow-new').checked;
+      const agreed=await confirmStudio(
+        'อัปโหลด SoundFont ที่เลือกไปยัง XStageWeb/SOUNDFONT ตามชนิด SF2/SF3'+
+        '\\nตรวจไฟล์และ MD5 ก่อนส่ง ไม่ทับ SoundFont เดิม'+
+        (createNew?'\\nถ้ามองไม่เห็น XStageWeb ระบบจะสร้างใหม่ โปรดตรวจบัญชีและสิทธิ์ Google ก่อน':'')+
+        '\\n\\nหมายเหตุ: เว็บหลักยังไม่มี MIDI SoundFont Engine พร้อมเล่น',
+        'ยืนยันอัปโหลด SoundFont',
+        {acceptLabel:'เริ่มอัปโหลด',cancelLabel:'ยกเลิก'});
+      if (!agreed) return;
+      $('upload-soundfont-status').textContent='กำลังอัปโหลด SoundFont · ตรวจความคืบหน้าในแผงงาน';
+      await run('upload-soundfont',{create_new_library:createNew});
+    } catch(error){$('upload-soundfont-status').textContent=error.message;message(error.message);}
+  }
   async function inspectUploadFolder() {
     try {
       await saveInputs(['upload-folder']);
@@ -2461,6 +2495,8 @@
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
+  $('upload-soundfont-picker').addEventListener('click',()=>{void chooseUploadSoundfont();});
+  $('upload-soundfont-button').addEventListener('click',()=>{void startSoundfontUpload();});
   $('upload-folder-button').addEventListener('click',()=>{void startFolderUpload();});
   $('go-create').addEventListener('click',()=>tab('create'));
   for(const button of document.querySelectorAll('.download-action')) button.addEventListener('click',()=>{void startDownload(button.dataset.kind);});
