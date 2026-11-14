@@ -26,8 +26,6 @@ on:
       - "scripts/test_songstudio_code_registry.py"
       - "scripts/test_songstudio_lyrics_preview.py"
       - "scripts/test_songstudio_ncn.py"
-      - "scripts/test_songstudio_ncn_bulk_editor.py"
-      - "scripts/test_songstudio_lyr_skipped_report.py"
       - "scripts/test_songstudio_drive_download.py"
       - "scripts/test_songstudio_pc.py"
       - "scripts/test_songstudio_drive_layout.py"
@@ -107,10 +105,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Build outcome status regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_ncn.py -v
           if ($LASTEXITCODE -ne 0) { throw "NCN Song/Lyrics/Cursor regressions failed" }
-          & python -m unittest discover -s scripts -p test_songstudio_ncn_bulk_editor.py -v
-          if ($LASTEXITCODE -ne 0) { throw "NCN native bulk LYR/CUR regression tests failed" }
-          & python -m unittest discover -s scripts -p test_songstudio_lyr_skipped_report.py -v
-          if ($LASTEXITCODE -ne 0) { throw "Skipped LYR audit, recovery and CSV regression tests failed" }
           & python -m unittest discover -s scripts -p test_songstudio_smart_scan.py -v
           if ($LASTEXITCODE -ne 0) { throw "SQLite Smart Scan regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
@@ -128,7 +122,7 @@ jobs:
           & python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
           if ($LASTEXITCODE -ne 0) { throw "Independent AI import and reviewed lyrics regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_layout.py -v
-          if ($LASTEXITCODE -ne 0) { throw "XStageWeb v2 Drive layout regressions failed" }
+          if ($LASTEXITCODE -ne 0) { throw "XStageWeb v4 Drive layout regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
           if ($LASTEXITCODE -ne 0) { throw "Google Drive upload/download/ZIP round-trip regression failed" }
           & python -m unittest discover -s scripts -p test_songstudio_code_registry.py -v
@@ -279,21 +273,19 @@ jobs:
           shortcut uses the matching Windows ICO. Live karaoke preview
           streams music with MIDI SoundFont without creating preview files.
           Extract full ZIP and run Start-Song-Studio.cmd.
-          LYR skip reports now show each filename, reason categories and
-          authenticated UTF-8 CSV, with focused recheck of only failed LYR.
-          Recheck reports confirmed skips and recovered files without edits.
-          Fast native NCN scan reads only Lyrics/*.LYR and subfolders.
-          MID and CUR are opened only for selected songs during verified
-          replacement. Selected changes preserve unrelated timing and MIDI.
-          Selected NCN lyric lines with backwards CUR character cues now
-          use existing player-effective positions (monotone clamp) when the
-          replacement length changes; no guessed musical timestamps.
-          A sentinel 65535 still prevents unsafe selected-line conversion.
-          Legacy NCN CUR 65535 and backwards timing in unselected lines is
-          preserved; edited lines must have safe printed-character cues.
-          Line-marker timing irregularities do not block safe edits.
-          NCN mirrored Song/Lyrics/Cursor native head/tail editing now supported.
-          Changes backup both LYR and CUR, preserving all other lyric times.
+          Default song export uses byte-identical original MIDI/KAR plus timed
+          Lyrics JSON (SHA-256 verified), or optional M4A conversion plus JSON.
+          Original NCN .LYR/.CUR is local read-only import material and is
+          never modified or uploaded to Google Drive. Raw NCN editing and
+          LYR skip/recheck tooling have been removed. The head/tail and
+          search/replace editor modifies Lyrics JSON only and maintains
+          Thai per-character highlight timing within the original line
+          duration, marking estimated timing as such and backing up before edits.
+          Google Drive private library v4 contains ONLY AUDIO and LYRICS
+          folders. AUDIO stores all playable media including MIDI, M4A and
+          SoundFonts. LYRICS stores JSON lyric files, immutable catalogs and
+          LYRICS/current.json. Legacy catalogs are read-only until a verified
+          migration is explicitly performed; no user files are auto-deleted.
           Bulk head/tail lyrics replacement offers X-Stage Karaoke presets
           plus editable custom wording, keeping confirmation and rollback.
           NEW: live separate music/SoundFont mixer, maximized PC interface,
