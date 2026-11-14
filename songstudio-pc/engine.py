@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.34" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "334" if READY_BUNDLE else "205-SRC"
+STATUS_VERSION = "0.3.35" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "335" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -1607,9 +1607,9 @@ def execute_job(action, options, started):
                                       replacement=new_text)
             with LOCK:
                 JOB["total"] = planned["changedSongs"]
-            update(f"กำลังสำรองและแทนที่ {planned['groups']:,} กลุ่ม · "
+            update(f"Smart Batch: ตรวจทุกเพลงและเตรียมสำรอง {planned['groups']:,} กลุ่ม · "
                    f"{planned['changedLines']:,} บรรทัดใน {planned['changedSongs']:,} เพลง")
-            result = LYRIC_TEXT.apply_many(
+            result = LYRIC_TEXT.apply_many_smart(
                 root, _song_export_module(), index,
                 groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
                 expected_count=options.get("expectedCount"),

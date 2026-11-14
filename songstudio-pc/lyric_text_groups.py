@@ -15,6 +15,8 @@ import tempfile
 import unicodedata
 import zipfile
 from collections import defaultdict
+from difflib import SequenceMatcher
+from math import isfinite
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -59,6 +61,14 @@ def _load(root, row, export):
         raise ValueError("ไม่แก้ไขไฟล์เนื้อร้องแบบลิงก์ เพราะอาจกระทบเพลงอื่น")
     path = export.safe_media_path(root, rel, "lyrics")
     doc = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(doc, dict):
+        raise ValueError("Lyrics JSON ต้องเป็นข้อมูลวัตถุ ไม่ใช่รายการหรือข้อความ")
+    metadata = doc.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        raise ValueError("ข้อมูล metadata ใน Lyrics JSON ไม่ถูกต้อง")
+    if (doc.get("sourceFormat") == "NCN"
+            and metadata.get("timingComplete") is False):
+        raise ValueError("NCN CUR มีเวลาไม่ครบ · ไม่แก้ข้อความบน Lyrics JSON ที่ยังจับเวลาไม่สมบูรณ์")
     lines = doc.get("lines")
     if not isinstance(lines, list) or len(lines) < 4:
         return None
@@ -105,64 +115,106 @@ def _display_units(value):
 
 
 def _retime_visual_units(line, old_text, new_text):
-    """Remap only Lyrics JSON timed highlight cues; preserve line boundaries.
+    """Use verified original glyph timestamps as fixed anchors.
 
-    Equal visual lengths keep original per-glyph time positions. Different
-    lengths interpolate monotonically *inside the old timed line*, label the
-    mapping as estimated and preserve the start/end of that line. These are
-    display estimates, NOT claims of newly transcribed sung syllables.
+    For unequal lengths, align unchanged Unicode display units and interpolate
+    ONLY unmatched spans between their fixed timing anchors. The algorithm
+    never reads/modifies NCN source and never claims an inferred timestamp is
+    an observed sung syllable. Preserve the original line time boundaries.
     """
     units = _display_units(new_text)
     if not units:
         raise ValueError("ไม่มีอักษรที่จะจัดเวลาไฮไลต์")
     old_units = _display_units(old_text)
     original = line.get("syllables") or []
-    start = float(line.get("startTime", 0))
-    end = float(line.get("endTime", 0) or 0)
-    if original and not isinstance(original, list):
+    start = line.get("startTime")
+    end = line.get("endTime")
+    if (isinstance(start, bool) or isinstance(end, bool)
+            or not isinstance(start, (int, float))
+            or not isinstance(end, (int, float))
+            or not isfinite(start) or not isfinite(end)
+            or start < 0 or end <= start):
+        raise ValueError("Lyrics JSON ไม่มีช่วงเวลาบรรทัดที่ถูกต้อง · ข้ามเพื่อรักษาต้นฉบับ")
+    if not isinstance(original, list):
         raise ValueError("ข้อมูลไฮไลต์ Lyrics JSON เดิมไม่ถูกต้อง")
-    valid = (len(original) == len(old_units) and len(original)>0 and
-             all(isinstance(x, dict) and
-                 isinstance(x.get("start"), (int, float)) and
-                 not isinstance(x.get("start"), bool) for x in original))
-    source = [float(x["start"]) for x in original] if valid else []
-    if source:
-        if any(source[j] > source[j+1] for j in range(len(source)-1)):
-            raise ValueError("เวลาไฮไลต์เดิมย้อนหลัง · ไม่สร้างเวลาทดแทนอัตโนมัติ")
-        start = max(0, min(start, source[0]))
-        tail = float(original[-1].get("duration") or .04)
-        end = max(end, source[-1] + max(.03, tail))
-    if end <= start:
-        # With no reliable end time, do not invent an extended duration.
-        # Allow the original timestamp only; a human must set a full range
-        # before a new per-character highlighting scheme can be saved.
-        raise ValueError("Lyrics JSON ไม่มีเวลาสิ้นสุดของบรรทัด · ไม่สามารถสร้างเวลาไฮไลต์")
-    exact = bool(source) and len(old_units) == len(units)
-    if exact:
-        positions = list(source)
-    elif source and len(source)>1:
-        positions = []
-        for j in range(len(units)):
-            fractional = j*(len(source)-1)/max(1,len(units)-1)
-            left = int(fractional)
-            right = min(len(source)-1,left+1)
-            weight = fractional-left
-            positions.append(source[left]+(source[right]-source[left])*weight)
+    start, end = float(start), float(end)
+    # An explicitly present but broken cue is NOT the same as a file that
+    # legitimately contains only line timing. Never hide malformed character
+    # timestamps by manufacturing a new evenly spaced track.
+    if original and any(
+            not isinstance(c, dict)
+            or isinstance(c.get("start"), bool)
+            or not isinstance(c.get("start"), (int, float))
+            or not isfinite(c["start"])
+            or c["start"] < start - .001 or c["start"] > end + .001
+            for c in original):
+        raise ValueError("เวลาไฮไลต์ต้นฉบับไม่ปลอดภัย · ข้ามไฟล์แทนสร้างเวลาใหม่")
+    valid = (
+        len(original) == len(old_units) and len(original) > 0
+        and all(isinstance(c, dict)
+                and c.get("text") == old_units[i]
+                and isinstance(c.get("start"), (int, float))
+                and not isinstance(c.get("start"), bool)
+                and isfinite(c["start"])
+                and start - 0.001 <= c["start"] <= end + 0.001
+                for i, c in enumerate(original))
+    )
+    source = [float(c["start"]) for c in original] if valid else []
+    if source and any(a > b for a, b in zip(source, source[1:])):
+        raise ValueError("เวลาไฮไลต์เดิมย้อนหลัง · ข้ามโดยไม่แก้เพลง")
+    if source and len(old_units) == len(units):
+        # Same number of visible characters: never move any timestamp.
+        positions = source[:]
+        method = "original-cue-positions"
+    elif source:
+        positions = [None] * len(units)
+        matcher = SequenceMatcher(a=old_units, b=units, autojunk=False)
+        for a, b, size in matcher.get_matching_blocks():
+            for delta in range(size):
+                positions[b + delta] = source[a + delta]
+        # Every matching glyph is now a fixed anchor. Only the inserted or
+        # substituted runs are assigned estimated positions.
+        pos = 0
+        while pos < len(positions):
+            if positions[pos] is not None:
+                pos += 1
+                continue
+            first = pos
+            while pos < len(positions) and positions[pos] is None:
+                pos += 1
+            left_index, right_index = first - 1, pos
+            left = positions[left_index] if left_index >= 0 else start
+            right = positions[right_index] if right_index < len(positions) else end
+            if right < left or (right == left and pos > first):
+                # No measured time interval to insert extra character cues.
+                # Never shift the existing anchors to hide the conflict.
+                raise ValueError("ช่วงเวลาระหว่างอักษรเดิมไม่พอสำหรับข้อความใหม่ · ข้ามเพลง")
+            count = pos - first
+            for index in range(first, pos):
+                fraction = (index - first + 1) / (count + (1 if right_index < len(positions) else 1))
+                positions[index] = left + (right - left) * fraction
+        method = "anchored-changed-spans"
     else:
-        positions = [start + (end-start)*j/max(1,len(units))
-                     for j in range(len(units))]
-    # Never allow the position to jump beyond the original line's end.
-    positions = [max(start, min(end, t)) for t in positions]
-    cues=[]
-    for j, text in enumerate(units):
-        at=positions[j]
-        finish=positions[j+1] if j+1<len(units) else end
-        cues.append({"text":text,"start":round(at,4),
-                     "duration":round(max(.001,finish-at),4)})
-    line["syllables"]=cues
-    line["timingEstimated"]=not exact
-    line["timingMethod"]="original-cues" if exact else "interpolated-original-line"
-    return not exact
+        # A source that has only line timestamps can produce an explicitly
+        # estimated display effect, never an allegedly verified CUR timing.
+        positions = [start + (end - start) * i / max(1, len(units))
+                     for i in range(len(units))]
+        method = "estimated-line-only"
+    if any(not isfinite(t) or t < start - .001 or t > end + .001
+           for t in positions):
+        raise ValueError("เวลาเนื้อร้องอยู่นอกช่วงเดิม · ข้ามเพลง")
+    if any(a > b for a, b in zip(positions, positions[1:])):
+        raise ValueError("เวลาไฮไลต์หลังแก้ย้อนหลัง · ข้ามเพลง")
+    cues = []
+    for i, glyph in enumerate(units):
+        at = positions[i]
+        following = positions[i + 1] if i + 1 < len(units) else end
+        cues.append({"text": glyph, "start": round(at, 4),
+                     "duration": round(max(0.0, following - at), 4)})
+    line["syllables"] = cues
+    line["timingEstimated"] = True  # Text was replaced, even if cue positions were reused.
+    line["timingMethod"] = method
+    return method != "original-cue-positions"
 
 
 def _replacement(document, raw, position, new_text):
@@ -387,6 +439,241 @@ def plan(snapshot, group_ids, *, search="", replacement=None):
                          for row in members[:3]],
         } for group, members in chosen],
         "search": _same(search),
+    }
+
+
+
+def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
+                     *, search="", expected_count, cancelled=None,
+                     on_progress=None):
+    """Scale safe local JSON/LRC replacement to large collections.
+
+    Preflight EVERY selected song, skip only individual corrupt or changed
+    local lyric records, spool replacements to disk, archive ALL originals
+    before the first write, then commit atomically per file. An interruption
+    rolls the whole successful subset back from the single durable backup.
+    Source MID/LYR/CUR/media and Drive are never written.
+    """
+    import shutil
+
+    root = Path(root).expanduser().resolve()
+    if snapshot.get("root") != str(root):
+        raise ValueError("กลุ่มข้อความไม่ตรงคลังเพลง กรุณาวิเคราะห์ใหม่")
+    new_text = _new_text(new_text)
+    targets, chosen, unchanged = _targets(snapshot, group_ids, search, new_text)
+    expected_lines = sum(len(item["edits"]) for item in targets.values())
+    if type(expected_count) is not int or expected_count != expected_lines:
+        raise ValueError("จำนวนบรรทัดที่เลือกเปลี่ยน กรุณาตรวจรายการก่อนแก้ไข")
+    if not expected_lines:
+        raise ValueError("ไม่มีข้อความใหม่ที่จะเปลี่ยน")
+    pointer, _ = export._read_current(root)
+    if pointer.get("generation") != snapshot.get("generation"):
+        raise ValueError("ฐานเพลงเปลี่ยนหลังวิเคราะห์ · ต้องสแกนใหม่")
+
+    # This log intentionally contains only song IDs and bounded error messages,
+    # never OAuth tokens or audio, and stays on the local PC.
+    rejected = []
+    committed = []
+    spec_list = []
+    seen_paths = set()
+    operation = (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+                 + "-" + secrets.token_hex(4))
+    backup_root = Path(backup_root)
+    backup_root.mkdir(parents=True, exist_ok=True)
+    zip_path = backup_root / (operation + ".zip")
+    manifest_path = backup_root / (operation + ".json")
+    report_path = backup_root / (operation + ".skipped.json")
+    changed_lines = 0
+    estimated_lines = 0
+
+    with tempfile.TemporaryDirectory(prefix=".xstage-batch-stage-", dir=backup_root) as temp:
+        stage = Path(temp)
+        try:
+            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED,
+                                 compresslevel=3, allowZip64=True) as archive:
+                for number, item in enumerate(targets.values(), 1):
+                    if cancelled is not None and cancelled.is_set():
+                        raise RuntimeError("ยกเลิกระหว่างตรวจไฟล์ · ยังไม่แก้เพลง")
+                    song_id = item["songId"]
+                    try:
+                        parsed = _record_bytes(root, item["record"], export)
+                        if parsed is None:
+                            raise ValueError("ไม่มี Lyrics JSON อย่างน้อย 4 บรรทัด")
+                        path, lrc, doc, raw = parsed
+                        if path.stat().st_size > 8 * 1024 * 1024:
+                            raise ValueError("Lyrics JSON ใหญ่เกิน 8 MB")
+                        if lrc and lrc.stat().st_size > 2 * 1024 * 1024:
+                            raise ValueError("LRC ใหญ่เกิน 2 MB")
+                        query = _same(search).casefold()
+                        if query and query not in "\n".join(
+                                _same(line["text"]).casefold() for line in doc["lines"]):
+                            raise ValueError("คำค้นไม่ตรงกับเนื้อร้องล่าสุด")
+                        revised_doc, revised_lrc = doc, raw
+                        edits_here = []
+                        estimated_here = 0
+                        positions = set()
+                        for group, entry in item["edits"]:
+                            index = POSITIONS[group["position"]][0]
+                            slot = index % len(doc["lines"])
+                            if slot in positions:
+                                raise ValueError("เลือกตำแหน่งข้อความซ้ำในเพลง")
+                            positions.add(slot)
+                            if _same(revised_doc["lines"][index]["text"]) != group["text"]:
+                                raise ValueError("ข้อความเปลี่ยนหลังการสแกน")
+                            revised_doc, revised_lrc, estimated = _replacement(
+                                revised_doc, revised_lrc, group["position"], new_text)
+                            estimated_here += int(estimated)
+                            edits_here.append((group, entry))
+                        json_bytes = (json.dumps(revised_doc, ensure_ascii=False,
+                                                 separators=(",", ":")) + "\n").encode("utf-8")
+                        file_data = [(path, path.read_bytes(), json_bytes)]
+                        if lrc is not None:
+                            if revised_lrc is None:
+                                raise ValueError("ไม่สามารถปรับ LRC ให้ตรงกับ JSON")
+                            file_data.append((lrc, lrc.read_bytes(),
+                                              revised_lrc.encode("utf-8")))
+                        paths = [p.relative_to(root).as_posix() for p, _, _ in file_data]
+                        if any(p in seen_paths for p in paths):
+                            raise ValueError("ไฟล์ Lyrics ถูกอ้างซ้ำในคลัง · ไม่แก้ทับ")
+                    except (ValueError, OSError, TypeError, KeyError, IndexError,
+                            UnicodeError, OverflowError) as exc:
+                        rejected.append({"songId": str(song_id)[:180],
+                                         "code": str(item["record"].get("code", ""))[:100],
+                                         "reason": str(exc)[:400]})
+                        if on_progress and number % 250 == 0:
+                            on_progress(f"ตรวจ {number:,}/{len(targets):,} · ข้ามผิดปกติ {len(rejected):,}", number)
+                        continue
+
+                    # Operational write/disk failures are NOT skippable:
+                    # archive and stage must both be durable before commit.
+                    stage_files = []
+                    for path, original, revised in file_data:
+                        relative = path.relative_to(root).as_posix()
+                        archive.writestr(relative, original)
+                        name = str(len(spec_list)) + ".data"
+                        (stage / name).write_bytes(revised)
+                        before, after = _sha(original), _sha(revised)
+                        spec_list.append({"path": relative, "before": before,
+                                          "after": after})
+                        stage_files.append((path, name, before))
+                        seen_paths.add(relative)
+                    committed.append({"songId": song_id, "edits": edits_here,
+                                      "files": stage_files,
+                                      "jsonPath": path if lrc is None else file_data[0][0]})
+                    changed_lines += len(edits_here)
+                    estimated_lines += estimated_here
+                    if on_progress and number % 250 == 0:
+                        on_progress(f"เตรียม {number:,}/{len(targets):,} · พร้อม {len(committed):,} · ข้าม {len(rejected):,}", number)
+
+            if not committed:
+                zip_path.unlink(missing_ok=True)
+                _atomic_bytes(report_path, (json.dumps({
+                    "operation": operation, "attemptedSongs": len(targets),
+                    "skippedInvalid": len(rejected), "rows": rejected
+                }, ensure_ascii=False) + "\n").encode("utf-8"))
+                return {"message": f"ไม่มีไฟล์ที่แก้ได้ · ข้ามผิดปกติ {len(rejected):,} เพลง",
+                        "changedSongs": 0, "changedLines": 0, "skippedInvalid": len(rejected),
+                        "skippedExamples": rejected[:20], "skippedReport": str(report_path),
+                        "backupId": None, "estimatedLines": 0,
+                        "remainingGroups": snapshot["groupCount"]}
+
+            if shutil.disk_usage(backup_root).free < 32 * 1024 * 1024:
+                raise RuntimeError("พื้นที่เก็บข้อมูลเหลือน้อยก่อนบันทึก · ยังไม่แก้เพลง")
+            # A committed ZIP backup must survive a sudden power loss before
+            # its manifest permits any song writes.
+            # Windows requires a writable CRT handle for os.fsync; Linux
+            # also accepts r+b. Never change ZIP contents after verification.
+            with zip_path.open("r+b") as stream:
+                stream.flush()
+                os.fsync(stream.fileno())
+            if rejected:
+                _atomic_bytes(report_path, (json.dumps({
+                    "operation": operation, "attemptedSongs": len(targets),
+                    "skippedInvalid": len(rejected), "rows": rejected
+                }, ensure_ascii=False) + "\n").encode("utf-8"))
+            first = chosen[0][0] if len(chosen) == 1 else None
+            manifest = {
+                "version": 3, "id": operation, "state": "prepared",
+                "root": str(root), "position": first["position"] if first else "mixed",
+                "oldText": first["text"] if first else f"{len(chosen)} กลุ่มข้อความ",
+                "newText": new_text, "groups": list(group_ids), "search": _same(search),
+                "songs": len(committed), "lines": changed_lines,
+                "estimatedLines": estimated_lines,
+                "skippedInvalid": len(rejected), "files": spec_list,
+                "createdAt": datetime.now(timezone.utc).isoformat()
+            }
+            _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False)
+                                          + "\n").encode("utf-8"))
+            try:
+                for number, change in enumerate(committed, 1):
+                    if cancelled is not None and cancelled.is_set():
+                        raise RuntimeError("ยกเลิกระหว่างเขียน · คืนค่าไฟล์จากชุดสำรอง")
+                    for target, staged_name, before in change["files"]:
+                        if _sha(target.read_bytes()) != before:
+                            raise ValueError("ไฟล์เปลี่ยนระหว่างงาน · คืนค่าจากชุดสำรอง")
+                        _atomic_bytes(target, (stage / staged_name).read_bytes())
+                    if on_progress and number % 250 == 0:
+                        on_progress(f"บันทึก {number:,}/{len(committed):,} เพลง · สำรองพร้อม Undo", number)
+            except BaseException:
+                try:
+                    _restore_files(root, zip_path, spec_list, strict=False)
+                    manifest["state"] = "rolled-back"
+                except Exception:
+                    manifest["state"] = "recovery-required"
+                _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False)
+                                              + "\n").encode("utf-8"))
+                raise
+            manifest["state"] = "committed"
+            _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False)
+                                          + "\n").encode("utf-8"))
+        except BaseException:
+            # No manifest = no file was edited. Orphans are cleaned, but never
+            # discard backups after writes have begun or recovery is required.
+            if not manifest_path.exists():
+                zip_path.unlink(missing_ok=True)
+                report_path.unlink(missing_ok=True)
+            raise
+
+    # Patch the cached group index only AFTER the durable commit. Invalid
+    # files remain in their original groups for later diagnosis/re-scan.
+    changed_ids = {row["songId"] for row in committed}
+    for group, members in chosen:
+        affected = {item["songId"] for item in members if item["songId"] in changed_ids}
+        if not affected:
+            continue
+        was_repeated = group["count"] >= 2
+        group["members"][:] = [item for item in group["members"]
+                              if item["songId"] not in affected]
+        group["count"] = len(group["members"])
+        if was_repeated and group["count"]:
+            group["queuePending"] = True
+        if not group["members"]:
+            snapshot["groups"].pop(group["id"], None)
+    for change in committed:
+        updated = json.loads(change["jsonPath"].read_text(encoding="utf-8"))
+        song_id = change["songId"]
+        snapshot["searchable"][song_id] = "\n".join(
+            _same(line["text"]).casefold() for line in updated["lines"])
+        for previous, item in change["edits"]:
+            identity = _group_id(previous["position"], new_text)
+            group = snapshot["groups"].setdefault(identity, {
+                "id": identity, "position": previous["position"],
+                "label": POSITIONS[previous["position"]][1],
+                "text": new_text, "count": 0, "members": []})
+            new_item = dict(item)
+            new_item["text"] = new_text
+            group["members"].append(new_item)
+            group["count"] = len(group["members"])
+    snapshot["groupCount"] = len(snapshot["groups"])
+    return {
+        "message": (f"แก้เนื้อร้อง {changed_lines:,} บรรทัดใน {len(committed):,} เพลง "
+                    f"· ข้ามผิดปกติ {len(rejected):,} เพลง · สำรองพร้อมย้อนคืน"),
+        "changedSongs": len(committed), "changedLines": changed_lines,
+        "changedFiles": len(spec_list), "changedGroups": len(chosen),
+        "estimatedLines": estimated_lines, "skippedInvalid": len(rejected),
+        "skippedExamples": rejected[:20], "skippedReport": str(report_path) if rejected else "",
+        "backupId": operation, "remainingGroups": snapshot["groupCount"],
+        "alreadyCorrect": unchanged,
     }
 
 

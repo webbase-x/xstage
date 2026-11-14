@@ -447,8 +447,8 @@
       'จำนวนบรรทัดที่เปลี่ยน: '+fmtNum(planned.changedLines)+' บรรทัด\n'+
       (search?'ค้นหาในทุกบรรทัด: '+search+'\nแก้เฉพาะเพลงที่ตรงคำค้นหานี้\n':'')+
       '\nข้อความใหม่ร่วมกัน:\n'+replacement+'\n\n'+
-      'สำรอง Lyrics JSON ก่อนแก้ · ปรับเวลาไฮไลต์อักษรโดยประมาณภายในช่วงเดิม · ไม่แก้ MIDI'+
-      '\nรายการอื่นยังคงอยู่เพื่อแก้ต่อ · อัปโหลด Google Drive ต้องสั่งเอง',
+      'Smart Batch: รักษาเวลาเดิมของส่วนไม่เปลี่ยน · ประมาณเฉพาะช่วงแก้ · สำรองก่อนบันทึก'+
+      '\nข้ามเพลงผิดปกติพร้อมรายงาน · ไม่แก้ MID/LYR/CUR · อัปโหลด Drive ต้องสั่งเอง',
       'ยืนยันแทนที่ข้อความหลายกลุ่ม',
       {acceptLabel:'สำรองและแทนที่',cancelLabel:'ยกเลิก'});
     if(!approved||busy||ids.some(id=>!phraseSelected.has(id))||
@@ -2068,8 +2068,14 @@
               phraseClearSelection();
               await refreshPhraseGroups();
               await refreshPhraseBackup();
+              const summary=job.result||{};
               $('lyric-group-preview-status').textContent=
-                'แก้ไขแล้ว · รายการที่ยังไม่แก้คงอยู่ด้านบน เลือกชุดถัดไปได้ทันที';
+                'Smart Batch เสร็จ · แก้ '+fmtNum(summary.changedSongs)+' เพลง / '+
+                fmtNum(summary.changedLines)+' บรรทัด · เวลาโดยประมาณ '+
+                fmtNum(summary.estimatedLines)+' บรรทัด · ข้ามผิดปกติ '+
+                fmtNum(summary.skippedInvalid)+' เพลง'+
+                (summary.skippedReport?' · รายงานบน PC: '+summary.skippedReport:'')+
+                ' · ย้อนคืนได้ด้วย Undo · รายการที่ยังไม่แก้คงอยู่';
               message(job.result?.message||'แทนที่ข้อความสำเร็จ',false);
             } else if (job.kind === 'lyric-groups-undo') {
               phraseReady=false;phraseRows=[];phraseOffset=0;
