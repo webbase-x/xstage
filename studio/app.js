@@ -447,7 +447,9 @@
       'จำนวนบรรทัดที่เปลี่ยน: '+fmtNum(planned.changedLines)+' บรรทัด\n'+
       (search?'ค้นหาในทุกบรรทัด: '+search+'\nแก้เฉพาะเพลงที่ตรงคำค้นหานี้\n':'')+
       '\nข้อความใหม่ร่วมกัน:\n'+replacement+'\n\n'+
-      'สำรอง JSON/LRC ก่อนแก้ทุกเพลง · ไฟล์เสียงและเวลาเดิมไม่เปลี่ยน'+
+      (planned.sourceMode==='ncn-folder' ?
+         'NCN: สำรอง LYR/CUR ทุกเพลง · ไม่แก้ MIDI · คงเวลาของบรรทัดอื่น\nอักขระใหม่ใช้ตำแหน่งเวลาเดิมในบรรทัดนั้น ไม่สร้างจังหวะใหม่' :
+         'สำรอง JSON/LRC ก่อนแก้ทุกเพลง · ไฟล์เสียงและเวลาเดิมไม่เปลี่ยน')+
       '\nรายการอื่นยังคงอยู่เพื่อแก้ต่อ · อัปโหลด Google Drive ต้องสั่งเอง',
       'ยืนยันแทนที่ข้อความหลายกลุ่ม',
       {acceptLabel:'สำรองและแทนที่',cancelLabel:'ยกเลิก'});
@@ -475,7 +477,7 @@
     $('create-workspace').value = prefs.workspace || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
-      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · รองรับคลัง StageWeb หรือไฟล์ .lrc ในโฟลเดอร์ย่อย'
+      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · รองรับ StageWeb / LRC / NCN (Song + Lyrics + Cursor)'
       : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · StageWeb';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
@@ -2051,6 +2053,8 @@
               phraseOffset=0;phraseClearSelection();
               await refreshPhraseGroups();
               await refreshPhraseBackup();
+              if(job.result?.sourceMode==='ncn-folder')
+                $('lyric-group-source-status').textContent='NCN: พบชุด MID + LYR + CUR ใน '+($('lyric-group-folder').value||'คลังที่เลือก')+' · จะแก้ LYR/CUR คู่กันหลังสำรอง';
               message(job.result?.message||'จัดกลุ่มข้อความเสร็จแล้ว',false);
             } else if (job.kind === 'lyric-groups-replace') {
               // Keep the current position, lyric search and page: the backend
