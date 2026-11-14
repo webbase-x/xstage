@@ -481,8 +481,11 @@ class OnlinePublishTests(unittest.TestCase):
                 self.publisher.publish(self.root, [self.first])
         root_id = self.remote_root()
         names = [f["name"] for f in self.folder_files(root_id)]
-        self.assertIn(online.STAGING_MARKER, names)
-        self.assertNotIn("current.json", names)
+        self.assertEqual(set(names), {"AUDIO", "LYRICS"})
+        lyrics_id=next(x["id"] for x in self.folder_files(root_id) if x["name"]=="LYRICS")
+        lyric_names=[x["name"] for x in self.folder_files(lyrics_id)]
+        self.assertIn(online.STAGING_MARKER, lyric_names)
+        self.assertNotIn("current.json", lyric_names)
         recovered = self.publisher.publish(self.root, [self.first])
         self.assertTrue(recovered["published"])
         self.assertEqual(len(self.published()), 1)
