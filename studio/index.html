@@ -348,6 +348,10 @@
             <textarea id="lyric-group-replacement" class="field" rows="3" maxlength="400"
               placeholder="พิมพ์ข้อความที่ต้องการ เช่น [X-Stage Karaoke]" disabled></textarea>
             <div class="lyric-group-actions">
+              <button id="lyric-group-ai-suggest" type="button" class="button ghost">✦ AI ตรวจคำผิดในกลุ่มที่เลือก</button>
+            </div>
+            <p id="lyric-group-ai-status" class="hint" role="status" aria-live="polite">ใช้ AI ภายในเครื่องเมื่อเบราว์เซอร์รองรับ · เลือก 1 กลุ่มเพื่อเสนอคำแก้ · AI ไม่เขียนไฟล์เอง · ไม่แก้ NCN LYR/CUR</p>
+            <div class="lyric-group-actions">
               <button id="lyric-group-apply" type="button" class="button primary" disabled>✓ ตรวจแล้ว แทนที่ทุกกลุ่มที่เลือก</button>
             </div>
             <p id="lyric-group-preview-status" class="hint">หลังแก้ไขจะบันทึก Lyrics JSON พร้อมเวลาไฮไลต์ทีละอักษรที่ประมาณจากช่วงเดิม · ไม่แก้ MIDI และไม่อัปโหลด Google Drive อัตโนมัติ</p>
@@ -438,6 +442,7 @@
   <dialog id="edit-dialog" class="modal"><form method="dialog"><h2>แก้ไขข้อมูลเพลง</h2><p id="edit-code" class="hint">—</p><label for="edit-title">ชื่อเพลง</label><input id="edit-title" class="field" type="text" maxlength="180"><label for="edit-artist">ศิลปิน</label><input id="edit-artist" class="field" type="text" maxlength="180"><label for="edit-lyrics">เนื้อร้องแบบ LRC (มีเวลา)</label><textarea id="edit-lyrics" class="field lyrics-editor" placeholder="[00:12.50]เนื้อร้องบรรทัดแรก"></textarea><div class="modal-actions"><button value="cancel" class="button ghost">ยกเลิก</button><button id="edit-save" value="save" class="button primary">บันทึก</button></div></form></dialog>
   <script src="./entry.js"></script>
   <script src="./app.js" defer></script>
+  <script type="module" src="./smart-lyrics-ai.mjs"></script>
   <div id="online-connection-gate" class="connection-gate" hidden role="dialog" aria-modal="true" aria-labelledby="online-gate-title">
     <div class="connection-gate-card">
       <div class="gate-mark">X</div>
