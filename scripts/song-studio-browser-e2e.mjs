@@ -230,6 +230,9 @@ try {
                                 {startTime:0.5,endTime:1,text:'ท่อนที่สอง AI'}]}};
     } else if (url.pathname === '/api/ai-lyrics-approve') {
       response = {ok:true,lines:2,message:'บันทึก LRC ที่ผู้ใช้ตรวจแก้แล้ว'};
+    } else if (url.pathname === '/api/upload-folder/inspect') {
+      response = {folder:'C:/XStage/StageWeb',fileCount:4,ready:2,
+                  incomplete:1,unsupported:1,kinds:{M4A:2},examples:[]};
     } else if (url.pathname === '/api/songs/ids') {
       response = {ids:list.map((song) => song.id)};
     } else if (url.pathname === '/api/config') {
@@ -261,7 +264,7 @@ try {
       }
       if(action==='lyric-groups-undo')bulkBackup=null;
       if (request.postDataJSON()?.action === 'login') fakeGoogleConnected = true;
-      if (request.postDataJSON()?.action === 'upload') uploadRequests.push(request.postDataJSON());
+      if (['upload-folder','upload-soundfont'].includes(request.postDataJSON()?.action)) uploadRequests.push(request.postDataJSON());
       response = {id:'pc-wizard-smoke-job'};
     }
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)});
@@ -560,15 +563,28 @@ try {
   assert.match(await pc.locator('#google-config-state').innerText(), /ตั้งค่าแล้ว/,
     'OAuth client readiness must remain visible after Google Login');
   await pc.click('.nav-button[data-tab="upload"]');
-  assert.equal(await pc.locator('#upload-button').isEnabled(),true);
-  await pc.click('#upload-button');
+  await pc.fill('#upload-folder','C:/XStage/StageWeb');
+  assert.equal(await pc.locator('#upload-folder-button').isEnabled(),true);
+  await pc.click('#upload-inspect');
+  await pc.waitForFunction(()=>document.querySelector('#upload-folder-report')?.textContent.includes('ชุดสมบูรณ์ 2'));
+  await pc.click('#upload-folder-button');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
   const uploadJob=pc.waitForRequest(req=>{
     try{return new URL(req.url()).pathname==='/api/jobs' &&
-      req.postDataJSON()?.action==='upload';}catch{return false;}
+      req.postDataJSON()?.action==='upload-folder';}catch{return false;}
   });
   await pc.click('#studio-confirm-ok');
   await uploadJob;
+  await pc.fill('#upload-soundfont-path','C:/SoundFonts/demo.sf2');
+  await pc.click('#upload-soundfont-button');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  const sfJob=pc.waitForRequest(req=>{
+    try{return new URL(req.url()).pathname==='/api/jobs' &&
+      req.postDataJSON()?.action==='upload-soundfont';}catch{return false;}
+  });
+  await pc.click('#studio-confirm-ok');
+  await sfJob;
+  assert.deepEqual(uploadRequests.map(x=>x.action),['upload-folder','upload-soundfont']);
   await pc.click('.nav-button[data-tab="download"]');
   const downloadButton=pc.locator('.download-action[data-kind="songs"]');
   assert.equal(await downloadButton.isEnabled(),true);
@@ -583,68 +599,27 @@ try {
   await downloadJob;
   assert.deepEqual(pcErrors,[], 'Cloud UI actions should not produce JavaScript errors');
 
-  // Post-build consent: a completed build must ASK instead of uploading.
-  const manualUploadCount = uploadRequests.length;
-  simulatedJob = {id:'finished-build-1',kind:'build',state:'success',
+  // The retired upload wizard must NOT reappear after a build finishes.
+  // Users explicitly select a source folder and verify it before uploading.
+  const manualUploadCount=uploadRequests.length;
+  simulatedJob={id:'finished-build-1',kind:'build',state:'success',
     stage:'เสร็จสิ้น',detail:'สร้างเพลงสำเร็จ',completed:1,total:1,
     created:1,skipped:0,errors:0,result:{created:1,skipped:0,errors:0},logs:[]};
-  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
-  assert.match(await pc.locator('#studio-confirm-title').innerText(),/X-Stage Song Karaoke Online/);
-  assert.equal(await pc.locator('#studio-confirm-ok').innerText(),'อัปโหลดตอนนี้');
-  assert.equal(await pc.locator('#studio-confirm-cancel').innerText(),'ไว้ภายหลัง');
-  assert.equal(uploadRequests.length,manualUploadCount,'No upload without post-build consent');
-  await pc.locator('#upload-create-library').evaluate(el=>el.checked=true);
-  const automaticFollowup = pc.waitForResponse(res=>{
-    try {
-      const req=res.request(),data=req.postDataJSON();
-      return new URL(req.url()).pathname==='/api/jobs' &&
-        data?.action==='upload' && data?.create_new_library===false;
-    } catch {return false;}
-  });
-  await pc.click('#studio-confirm-ok');
-  await automaticFollowup;
-  assert.equal(uploadRequests.length,manualUploadCount+1);
-  assert.equal(uploadRequests.at(-1).create_new_library,false,
-    'Post-build upload MUST NOT inherit create-new-library flag');
-  assert.equal(await pc.locator('#tab-upload').isVisible(),true);
-
-  simulatedJob = {id:'finished-build-2',kind:'build',state:'success',
-    stage:'เสร็จสิ้น',detail:'สร้างเพลงสำเร็จ',completed:1,total:1,
-    created:1,skipped:0,errors:0,result:{created:1,skipped:0,errors:0},logs:[]};
-  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
-  await pc.click('#studio-confirm-cancel');
-  await pc.waitForTimeout(1800);
-  assert.equal(uploadRequests.length,manualUploadCount+1,
-    'Choosing Later must not upload anything');
+  await pc.waitForFunction(()=>document.querySelector('#global-message')?.textContent.includes('เปิดเมนูอัปโหลด'),
+    {timeout:10000}).catch(()=>{});
+  await pc.waitForTimeout(700);
   assert.equal(await pc.locator('#studio-confirm-dialog').isVisible(),false,
-    'Build completion prompt must not reopen on repeated polling');
-
-  fakeGoogleConnected=false;
-  simulatedJob = {id:'finished-build-3',kind:'build',state:'success',
-    stage:'เสร็จสิ้น',detail:'สร้างเพลงสำเร็จ',completed:1,total:1,
-    created:1,skipped:0,errors:0,result:{created:1,skipped:0,errors:0},logs:[]};
-  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
-  await pc.click('#studio-confirm-ok');
-  await pc.waitForFunction(()=>document.querySelector('#global-message')?.textContent.includes('ยังไม่ได้เชื่อม Google Drive'));
-  assert.equal(uploadRequests.length,manualUploadCount+1,
-    'Offline Google login must NOT start an unauthorized upload');
-  assert.equal(await pc.locator('#tab-upload').isVisible(),true);
-
-  simulatedJob = {id:'finished-build-4',kind:'build',state:'error',
-    stage:'สร้างบางรายการไม่สำเร็จ',detail:'มี ERR',completed:2,total:2,
-    created:1,skipped:0,errors:1,result:{created:1,skipped:0,errors:1},logs:[]};
-  await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:10000});
-  assert.match(await pc.locator('#studio-confirm-message').innerText(),/บางเพลงสร้างไม่สำเร็จ/);
-  await pc.click('#studio-confirm-cancel');
-
-  simulatedJob = {id:'finished-build-5',kind:'build',state:'error',
-    stage:'ไม่สำเร็จ',detail:'ไม่มีไฟล์สำเร็จ',completed:1,total:1,
+    'Finished build must not reopen the retired upload dialog');
+  assert.equal(uploadRequests.length,manualUploadCount,'Finished build must not upload automatically');
+  simulatedJob={id:'finished-build-2',kind:'build',state:'error',
+    stage:'ไม่สำเร็จ',detail:'มี ERR',completed:1,total:1,
     created:0,skipped:0,errors:1,result:{created:0,skipped:0,errors:1},logs:[]};
-  await pc.waitForTimeout(1500);
+  await pc.waitForTimeout(1200);
   assert.equal(await pc.locator('#studio-confirm-dialog').isVisible(),false,
-    'No upload prompt when build has no successful or verified output');
-
-  assert.deepEqual(pcErrors, [], 'Post-build consent must not cause browser errors');
+    'Failed build must not prompt for upload');
+  assert.equal(uploadRequests.length,manualUploadCount,
+    'Failed build must not upload');
+  assert.deepEqual(pcErrors, [], 'Selected-folder and SoundFont upload UI must not produce errors');
   assert.deepEqual(pcErrors, [], 'PC wizard should not produce JavaScript errors');
   console.log('PASS: Both Create buttons submit real build jobs after ONE confirmation; acknowledgment stays visible.');
 
