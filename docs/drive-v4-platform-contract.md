@@ -6,7 +6,7 @@
 
 **Edits:** Changing a local Lyrics JSON never changes the published library automatically. The new verified JSON must be uploaded and its catalog row upserted before a new generation is visible on Web/Android. Unsupported, corrupt or conflicting items are excluded. The automatic editing of original NCN `.LYR/.CUR` is out of scope; conversion to a separate timed Lyrics JSON does not mutate them.
 
-**Strict V4 only:** All active PC, Web and Android readers reject older root pointers, `TEXT/current.json`, old `StageWeb` online roots and legacy SoundFont folders. No migration, legacy fallback, or automatic deletion of old data is performed.
+**Strict V4 only:** There are no previous-version users to support. Cloud discovery only considers `XStageWeb`; PC, Web and Android require its V4 `LYRICS/current.json` pointer and flat `AUDIO`/`LYRICS` objects. There is no legacy reader, converter or migration path. Local `StageWeb` remains an internal PC working directory, **not** an old cloud library. No Drive data is deleted automatically.
 
 **No-pointer protection:** A folder named `AUDIO` is not proof of an empty library. Without a verified `current.json` or our staging marker, both PC and Web now refuse to create a catalog over stranded media, MIDI or video. A genuinely empty library or one containing only SoundFont files may be initialized. Do **not** delete orphan files to bypass this safeguard: inspect their origin and recover the missing pointer where possible.
 
