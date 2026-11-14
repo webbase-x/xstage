@@ -461,15 +461,6 @@ async function refreshFonts(auth){
         for(const f of files.filter(x=>/\.sf[23]$/i.test(x.name)&&
           x.mimeType!=='application/vnd.google-apps.folder'))
           choices.push(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
-      }else{
-        // Old library still readable; new uploads always use flat AUDIO.
-        const old=categories.find(x=>x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
-        if(old){
-          for(const dir of (await listFolder(old.id,auth.token)).filter(x=>
-            x.mimeType==='application/vnd.google-apps.folder'&&['SF2','SF3'].includes(x.name.toUpperCase())))
-            for(const f of (await listFolder(dir.id,auth.token)).filter(x=>/\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder'))
-              choices.push(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
-        }
       }
       if(sequence!==fontRefreshSequence)return;
       const storageKey='xstage-font-pref:'+sub+':'+rootId;
