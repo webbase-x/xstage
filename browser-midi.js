@@ -395,6 +395,12 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
   const check=()=>{if(signal?.aborted)fail('ยกเลิกการเตรียม MIDI แล้ว');};
   check();const song=parseMidi(source);
   const activeNotes=transformNotes(song.notes,{transpose,channels});
+  if(song.notes.length>180000)fail('เพลง MIDI มีโน้ตมากเกินสำหรับเรนเดอร์ในเบราว์เซอร์ · ใช้ Song Studio PC แปลงเป็นเสียงก่อน');
+  const estimatedBytes=Math.ceil((song.duration+.5)*RATE*2*6+
+    (fontBytes?.byteLength||0)*3+activeNotes.length*256);
+  const memoryGB=scope.XStageAudioAdvisor?.profile?.ramGB;
+  if(Number.isFinite(memoryGB)&&estimatedBytes>memoryGB*1073741824*.42)
+    fail('ประมาณการหน่วยความจำ MIDI สูงเกินความเหมาะสมของเครื่อง · แนะนำเล่นไฟล์ M4A/MP3 หรือแปลงใน Song Studio PC');
   const ctx=new OfflineAudioContext(2,Math.ceil((song.duration+.5)*RATE),RATE);
   const font=fontBytes?parseFont(fontBytes):null;
   let num=0,scheduled=0;
@@ -567,6 +573,33 @@ async function refreshFonts(auth){
   try{await pending;}
   finally{if(fontRefreshPromise===pending)fontRefreshPromise=null;}
 }
+async function boundedFontResponse(response,signal){
+  const length=Number(response.headers.get('Content-Length')||0);
+  if(length>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
+  if(!response.body?.getReader){
+    const bytes=new Uint8Array(await response.arrayBuffer());
+    if(bytes.length>MAX_FONT)fail('SoundFont ใหญ่เกินขีดจำกัดเบราว์เซอร์');
+    return bytes;
+  }
+  const reader=response.body.getReader(),parts=[];let total=0;
+  try{
+    for(;;){
+      if(signal?.aborted)fail('ยกเลิกการโหลด SoundFont');
+      const {done,value}=await reader.read();
+      if(done)break;
+      if(!value)continue;
+      total+=value.byteLength;
+      if(total>MAX_FONT)fail('SoundFont ที่ดาวน์โหลดใหญ่กว่า 256 MB · หยุดก่อนใช้ RAM เกิน');
+      parts.push(value);
+    }
+  }catch(error){
+    try{await reader.cancel();}catch{}
+    throw error;
+  }finally{try{reader.releaseLock();}catch{}}
+  const bytes=new Uint8Array(total);let offset=0;
+  for(const part of parts){bytes.set(part,offset);offset+=part.length;}
+  return bytes;
+}
 async function selectedFont(token,signal){
   if(fontRefreshPromise)await fontRefreshPromise;
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
@@ -580,10 +613,7 @@ async function selectedFont(token,signal){
   const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
     {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
   if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
-  const len=Number(res.headers.get('Content-Length')||0);
-  if(len>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
-  const bytes=new Uint8Array(await res.arrayBuffer());
-  if(bytes.byteLength>MAX_FONT)fail('SoundFont ใหญ่เกินขอบเขตหน่วยความจำ');
+  const bytes=await boundedFontResponse(res,signal);
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(selected!==id||context?.token!==token||context?.sub!==sub)fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
   parseFont(bytes);fontCache={id,sub,bytes};return bytes;
