@@ -145,7 +145,7 @@ def _parse(lyr_bytes, cur_bytes, bulk):
             backwards = next((i for i, (a, b) in enumerate(
                 zip(char_cues, char_cues[1:]), 2) if b < a), None)
             if backwards is not None:
-                cue_issue = f"เวลาอักษรย้อนกลับที่ตำแหน่ง {backwards + 1}"
+                cue_issue = f"เวลาอักษรย้อนกลับที่ตำแหน่ง {backwards}"
             elif char_cues and char_cues[0] < previous_printed:
                 cue_issue = "เวลาเริ่มบรรทัดน้อยกว่าเวลาของเนื้อร้องก่อนหน้า"
         if cue_issue:
@@ -433,6 +433,35 @@ def _remap_times(old, length):
             for i in range(length)]
 
 
+def _effective_cues(entries, selected):
+    """Follow the karaoke *player's* existing nondecreasing CUR rule.
+
+    The selected line may have historical backward positions. The player
+    clamps these to the most recently displayed position; applying that same
+    projection uses original CUR numbers only, without inventing musical
+    ticks. Never map a selected line containing 65535 (an untimed character).
+    Return the player-equivalent positions and number of corrected cues.
+    """
+    prior = 0
+    for entry in entries[:selected]:
+        for position in entry["times"][1:]:
+            if position != 65535:
+                prior = max(prior, position)
+    actual = entries[selected]["times"][1:]
+    if not actual:
+        raise ValueError("ไม่มีตำแหน่งอักษร CUR ในบรรทัดที่เลือก")
+    if 65535 in actual:
+        raise ValueError("พบค่า 65535 ในตำแหน่งอักษร CUR · ไม่สามารถกำหนดเวลาที่ไม่มีอยู่จริง")
+    effective = []
+    corrected = 0
+    for position in actual:
+        projected = max(prior, position)
+        corrected += int(projected != position)
+        effective.append(projected)
+        prior = projected
+    return effective, corrected
+
+
 def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
           *, search="", expected_count, cancelled=None, on_progress=None):
     root = locate(root)
@@ -469,6 +498,7 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
         if query and query not in "\n".join(x.casefold() for x in parsed["lines"]):
             raise ValueError("คำค้นหาไม่ตรงกับเพลง NCN อีกต่อไป")
         changes = {}
+        normalized_cues = {}
         for group, item in target["edits"]:
             index = bulk.POSITIONS[group["position"]][0] % len(parsed["entries"])
             if index in changes:
@@ -476,11 +506,15 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
             if parsed["lines"][index] != group["text"]:
                 raise ValueError("ข้อความ NCN เปลี่ยนหลังสแกน: " + mid.name)
             cue_issue = parsed["entries"][index].get("cueIssue")
-            if cue_issue:
+            if cue_issue and "65535" in cue_issue:
                 raise ValueError(
                     f"ไม่แก้ไฟล์ {lyr.name} · บรรทัด {parsed['entries'][index]['row']+1} "
-                    f"มีเวลาตัวอักษร CUR ไม่ปลอดภัย: {cue_issue} · "
-                    "เลือกกลุ่มข้อความอื่นหรือซ่อม CUR ด้วยข้อมูลเวลาที่ตรวจสอบได้")
+                    f"มีเวลาอักษร CUR ที่ไม่มีข้อมูลจริง: {cue_issue} · "
+                    "ไม่สามารถสร้างเวลาทดแทนโดยไม่มีต้นฉบับที่ตรวจสอบได้")
+            # Historically reversed cues play with clamping in ncn_document.
+            # Reuse precisely those player-effective source positions for a
+            # new text length; no extrapolation or fabricated timestamp.
+            normalized_cues[index] = _effective_cues(parsed["entries"], index)
             changes[index] = encoded
         lyric_rows = list(parsed["rows"])
         cursor_values = list(parsed["values"])
@@ -492,10 +526,16 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
             start = line["cursor"]
             length = line["count"]
             segment = line["times"]
-            # Keep the original line-marker time; distribute replacement
-            # bytes across existing original positions, preserving start/end.
-            cursor_values[start:start+length] = [segment[0]] + _remap_times(
-                segment[1:], len(changes[index]))
+            effective, corrected = normalized_cues[index]
+            # Preserve the raw line marker. Select only original timestamps
+            # after applying the same monotonic rule as the NCN player.
+            # If replacement has the same source-byte length, keep original
+            # cue bytes *exactly*: the player already knows how to render them.
+            if len(changes[index]) == len(line["raw"]):
+                remapped = segment[1:]
+            else:
+                remapped = _remap_times(effective, len(changes[index]))
+            cursor_values[start:start+length] = [segment[0]] + remapped
         updated_lyr = b"".join(lyric_rows) + parsed["tail"]
         updated_cur = struct.pack("<" + "H" * len(cursor_values),
                                   *cursor_values) + parsed["cursorTail"]
@@ -513,7 +553,11 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
                       "files": [(lyr, original_lyr, updated_lyr),
                                 (cur, original_cur, updated_cur)],
                       "lines": verified["lines"], "edits": target["edits"],
-                      "preservedTimingWarnings": len(parsed["timingWarnings"])})
+                      "preservedTimingWarnings": len(parsed["timingWarnings"]),
+                      "projectedCursorCues": sum(
+                          correction for idx, (cues, correction)
+                          in normalized_cues.items()
+                          if len(changes[idx]) != len(parsed["entries"][idx]["raw"]))})
         if on_progress and number % 300 == 0:
             on_progress(f"ตรวจ LYR/CUR {number:,}/{len(targets):,} เพลง", number)
 
@@ -595,16 +639,20 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
             group["count"] = len(group["members"])
     snapshot["groupCount"] = len(snapshot["groups"])
     preserved = sum(item["preservedTimingWarnings"] for item in edits)
+    projected = sum(item["projectedCursorCues"] for item in edits)
     return {
         "message": (f"แก้ NCN {len(edits):,} เพลง · {count:,} บรรทัดสำเร็จ "
                     "· สำรอง LYR/CUR และคง MIDI เดิม"
-                    + (f" · คงข้อมูลเวลาเดิมที่ผิดปกติในบรรทัดอื่น {preserved:,} จุด"
+                    + (f" · จัดตำแหน่ง CUR ย้อนกลับตามกติกาตัวเล่น {projected:,} ค่า"
+                       if projected else "")
+                    + (f" · คงเวลาผิดปกติในบรรทัดอื่น {preserved:,} จุด"
                        if preserved else "")),
         "changedSongs": len(edits), "changedLines": count,
         "changedGroups": len(chosen), "alreadyCorrect": unchanged,
         "changedFiles": len(specs), "removedSyllableCues": 0,
         "backupId": op, "remainingGroups": snapshot["groupCount"],
-        "preservedTimingWarnings": preserved
+        "preservedTimingWarnings": preserved,
+        "projectedCursorCues": projected
     }
 
 
