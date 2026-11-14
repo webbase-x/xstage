@@ -282,10 +282,12 @@
     }
     refreshFontChoices();
     renderTable();
-    notice(accepted
+    notice(state.cancelled
+      ? 'หยุดนำเข้าแล้ว · เก็บเฉพาะรายการที่อ่านได้ '+accepted+' ไฟล์ · ตรวจเพลงที่ไม่ครบก่อนสร้าง'
+      : accepted
       ? 'เพิ่ม '+accepted.toLocaleString('th-TH')+' ไฟล์ · SoundFont '+importedFonts+
         ' · รายการต้องตรวจชื่อซ้ำ/ขนาด '+collisions+' · ต้นฉบับยังอยู่ที่เดิม'
-      : 'ไม่พบไฟล์ที่รองรับในรายการที่เลือก',accepted?'good':'error');
+      : 'ไม่พบไฟล์ที่รองรับในรายการที่เลือก',state.cancelled||!accepted?'error':'good');
   }
   async function walkFolder(handle, path, output, depth) {
     if (depth > 12) throw new Error('โฟลเดอร์ซ้อนลึกเกิน 12 ระดับ');
@@ -827,12 +829,27 @@
   }
   function cancel() {
     state.cancelled = true;
+    if(state.scanActive){
+      notice('ได้รับคำสั่งหยุดสแกน · จะหยุดเมื่ออ่านรายการปัจจุบันเสร็จ','error');
+      return;
+    }
     if(state.midiController)state.midiController.abort();
     try { state.ffmpeg?.terminate(); } catch (_) { /* ignore */ }
     state.ffmpeg = null;
     $('engine-caption').textContent = 'Engine ถูกหยุด สามารถโหลดใหม่ได้';
     $('load-engine').textContent = '↓ ดาวน์โหลด Web Engine';
     notice('ได้รับคำสั่งหยุด · กำลังยุติงานปัจจุบัน', 'error');
+  }
+  async function withImportGuard(operation){
+    if(state.busy){notice('กำลังทำงานอื่นอยู่ · หยุดหรือทำงานให้เสร็จก่อน','error');return;}
+    state.scanActive=true;state.cancelled=false;
+    setBusy(true);
+    try{await operation();}
+    catch(error){if(error?.name!=='AbortError')notice('นำเข้าไม่สำเร็จ: '+error.message,'error');}
+    finally{
+      state.scanActive=false;
+      setBusy(false);
+    }
   }
   function setupMidiMixer(){
     const panel=$('midi-channels');
@@ -866,8 +883,8 @@
   setupMidiMixer();
   $('choose-soundfont').addEventListener('click',()=>$('soundfont-input').click());
   $('soundfont-input').addEventListener('change',event=>{
-    void addFiles([...event.target.files]).catch(error=>notice(error.message,'error'));
-    event.target.value='';
+    const files=[...event.target.files];event.target.value='';
+    void withImportGuard(()=>addFiles(files));
   });
   $('soundfont-select').addEventListener('change',()=>{
     state.fontID=$('soundfont-select').value;state.fontCache=null;
@@ -908,14 +925,14 @@
     });
   }
   $('choose-files').addEventListener('click', () => $('file-input').click());
-  $('choose-folder').addEventListener('click', () => {void chooseFolder();});
+  $('choose-folder').addEventListener('click',()=>{void withImportGuard(chooseFolder);});
   $('file-input').addEventListener('change',e=>{
-    void addFiles([...e.target.files]).catch(error=>notice('นำเข้าไม่สำเร็จ: '+error.message,'error'));
-    e.target.value='';
+    const files=[...e.target.files];e.target.value='';
+    void withImportGuard(()=>addFiles(files));
   });
   $('folder-input').addEventListener('change',e=>{
-    void addFiles([...e.target.files]).catch(error=>notice('นำเข้าไม่สำเร็จ: '+error.message,'error'));
-    e.target.value='';
+    const files=[...e.target.files];e.target.value='';
+    void withImportGuard(()=>addFiles(files));
   });
   $('clear-all').addEventListener('click', () => {
     stopMidiPreview(false);
@@ -994,7 +1011,8 @@
     event.preventDefault(); drop.classList.remove('dragging');
   }));
   drop.addEventListener('drop',event=>{
-    void addFiles([...event.dataTransfer.files]).catch(error=>notice('นำเข้าไม่สำเร็จ: '+error.message,'error'));
+    const files=[...event.dataTransfer.files];
+    void withImportGuard(()=>addFiles(files));
   });
   drop.addEventListener('click', (event) => {
     if (event.target.closest('button')) return;
