@@ -401,3 +401,17 @@ button.preview-lyric-line{cursor:pointer}
 .ai-export-location strong{overflow-wrap:anywhere;color:#d9f8f1}
 #ai-export-button{justify-self:start}
 @media(max-width:650px){.ai-export-panel{padding:12px}.ai-export-options{flex-direction:column}.ai-export-location{align-items:stretch;flex-direction:column}#ai-export-button{width:100%}}
+
+
+/* CPU/RAM/Drive readiness shared by PC and the authenticated Song Studio Web Control. */
+.pc-resource-status{
+  margin:8px 0 12px!important;padding:9px 11px!important;border-left:4px solid #d8ad5c;
+  background:#172d3d;border-radius:7px;color:#ffe0aa!important;
+  font-size:12px!important;line-height:1.6;overflow-wrap:anywhere
+}
+.pc-resource-status[data-level="safe"]{border-left-color:#40d2a1;color:#9cf4d0!important}
+.pc-resource-status[data-level="blocked"]{border-left-color:#ea6574;color:#ffbac3!important}
+.pc-audio-guide{margin-top:11px;background:#0b2637;padding:10px;border:1px solid #35617b;border-radius:9px}
+.pc-audio-guide summary{cursor:pointer;color:#8ae2ef;font-size:12px;font-weight:750}
+.pc-audio-guide p{color:#bfdeeb;font-size:11px;margin:9px 0 0;line-height:1.7}
+#pc-audio-machine,#pc-audio-recommendations,#pc-audio-format-counts{overflow-wrap:anywhere}
