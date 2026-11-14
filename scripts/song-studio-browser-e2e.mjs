@@ -154,6 +154,36 @@ try {
   assert.ok(midiZip.includes(demoMidi),'NCN MIDI bytes must be kept unchanged');
   assert.ok(midiZip.includes(demoCur),'NCN CUR bytes must be kept unchanged');
   console.log('PASS: Browser NCN preview, real CUR timing and source-preserving ZIP export');
+
+  // The second output mode must actually synthesize SF2 -> WAV and encode a
+  // separate AAC/M4A locally, without copying MIDI or corrupting the lyrics.
+  await midiPage.locator('#export-format').selectOption('m4a');
+  await midiPage.click('#build');
+  await midiPage.locator('#download-result:visible').waitFor({timeout:120000});
+  const m4aDownload=midiPage.waitForEvent('download',{timeout:30000});
+  await midiPage.click('#download-result');
+  const m4aZip=await fsp.readFile(await (await m4aDownload).path());
+  assert.ok(m4aZip.includes(Buffer.from('NCN001.m4a')),
+    'MIDI M4A export must include encoded audio');
+  assert.ok(m4aZip.includes(Buffer.from('NCN001.json')),
+    'MIDI M4A export must retain timed Lyrics JSON');
+  assert.ok(m4aZip.includes(Buffer.from('ftyp')),
+    'MIDI rendered M4A must be real ISO BMFF encoded audio');
+  assert.ok(!m4aZip.includes(Buffer.from('NCN001.cur')),
+    'Rendered M4A mode must not falsely claim unneeded NCN source sidecar');
+  console.log('PASS: Browser SF2 MIDI converted to genuine M4A + real-time Lyrics JSON');
+
+  // Conflict protection: equal-size replacement with different CUR bytes is
+  // NOT a verified duplicate. Never overwrite the NCN timing in the catalog.
+  await midiPage.setInputFiles('#file-input',[{
+    name:'NCN001.cur',mimeType:'application/octet-stream',
+    buffer:Buffer.from([0,0,0,0,48,0])
+  }]);
+  await midiPage.waitForFunction(()=>document.querySelector('#catalog-note')
+    .textContent.includes('ต้องตรวจสอบ 1'));
+  assert.equal(await midiPage.locator('#build').isEnabled(),false,
+    'Duplicate CUR with different bytes must disable unsafe NCN export');
+  console.log('PASS: Browser rejects equal-size conflicting NCN cursor files');
   await midiPage.close();
 
   // The PC Ready package and authenticated PC Web Control share this UI.
