@@ -106,6 +106,26 @@
     invalidateArchive();
     updateOverview();
   }
+  // A renamed or reselected same-size file is not proof of duplicate content.
+  // Compare at bounded chunks without loading 2 whole multi-GB sources into RAM.
+  async function sameSourceBytes(a,b){
+    if(a===b)return true;
+    if(!a||!b||a.size!==b.size)return false;
+    const CHUNK=512*1024;
+    for(let offset=0;offset<a.size;offset+=CHUNK){
+      if(state.cancelled)throw Error('ยกเลิกการตรวจไฟล์ซ้ำ');
+      const last=Math.min(offset+CHUNK,a.size);
+      const [left,right]=await Promise.all([
+        a.slice(offset,last).arrayBuffer(),b.slice(offset,last).arrayBuffer()
+      ]);
+      const x=new Uint8Array(left),y=new Uint8Array(right);
+      if(x.length!==y.length)return false;
+      for(let i=0;i<x.length;i++)if(x[i]!==y[i])return false;
+      if(offset && offset%(16*CHUNK)===0)
+        await new Promise(resolve=>setTimeout(resolve,0));
+    }
+    return true;
+  }
   function updateOverview() {
     const songs = [...entries.values()].filter((e) => e.audio || e.midi);
     const bytes = [...entries.values()].reduce((n, e) => n + [...e.parts.values()]
@@ -233,7 +253,14 @@
       if(ext==='sf2'||ext==='sf3'){
         if(file.size>midiCore.MAX_FONT){collisions++;continue;}
         const fontId=[file.name,file.size,file.lastModified||0].join('|');
-        if(!fonts.has(fontId)){fonts.set(fontId,file);importedFonts++;}
+        const prior=fonts.get(fontId);
+        if(prior && !(await sameSourceBytes(prior,file))){
+          collisions++;
+          notice('SoundFont ชื่อ/ขนาดเดียวกัน แต่ข้อมูลไม่ตรง: '+file.name+
+            ' · ไม่แทนที่ไฟล์เดิม','error');
+          continue;
+        }
+        if(!prior){fonts.set(fontId,file);importedFonts++;}
         accepted++;
         continue;
       }
@@ -248,9 +275,14 @@
       });
       const song = entries.get(id);
       const previous=song.parts.get(ext);
-      if(previous && previous!==file && (previous.size!==file.size ||
-          previous.lastModified!==file.lastModified || previous.name!==file.name)){
-        song.conflicts.add(ext);selected.delete(id);collisions++;continue;
+      if(previous && previous!==file){
+        if(!(await sameSourceBytes(previous,file))){
+          song.conflicts.add(ext);selected.delete(id);collisions++;continue;
+        }
+        // Real byte-for-byte duplicate: keep the verified first source and
+        // the user's existing selection, rather than replacing it silently.
+        accepted++;
+        continue;
       }
       song.parts.set(ext, file);
       touched.add(id);
@@ -506,14 +538,20 @@
       $('player').src=state.previewURL;
       $('insert-time').disabled=false;
       $('midi-status').textContent='สังเคราะห์เสียงแล้ว · เล่น/เลื่อนเวลาเพื่อดูเนื้อร้องตาม MIDI/CUR';
-      await $('player').play();
+      try{
+        await $('player').play();
+      }catch(playError){
+        if(playError?.name!=='NotAllowedError')throw playError;
+        $('midi-status').textContent='เสียง MIDI เตรียมเสร็จแล้ว · เบราว์เซอร์ปิดเล่นอัตโนมัติ กรุณากด ▶ บนตัวเล่น';
+      }
     }catch(error){
       if(sequence===state.midiRenderSequence&&!controller.signal.aborted)
         notice('ทดลองฟัง MIDI ไม่สำเร็จ: '+error.message,'error');
     }finally{
       if(sequence===state.midiRenderSequence){
         state.renderingMidi=false;state.midiController=null;
-        $('preview-midi').disabled=false;$('stop-midi').disabled=true;
+        if(song.midiInfo)updateMidiResource(song.midiInfo);
+        $('stop-midi').disabled=true;
       }
     }
   }
