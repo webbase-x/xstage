@@ -1589,6 +1589,37 @@ def execute_job(action, options, started):
                 "withoutLyrics": index["withoutLyrics"],
                 "sourceMode": index.get("mode", "stageweb")
             }
+        elif action == "lyric-skipped-recheck":
+            with LOCK:
+                index = LYRIC_TEXT_INDEX
+            if index is None:
+                raise ValueError("ยังไม่ได้วิเคราะห์ LYR กรุณาสแกนก่อน")
+            if str(lyric_source_root()) != index["root"]:
+                raise ValueError("โฟลเดอร์ต้นทางเปลี่ยนแล้ว กรุณาวิเคราะห์ใหม่")
+            update("กำลังตรวจซ้ำไฟล์ LYR ที่ข้ามเท่านั้น · ไม่อ่าน MID/CUR")
+            def skipped_progress(detail, done, total=None):
+                if type(total) is int and total > 0:
+                    with LOCK:
+                        JOB["total"] = total
+                update(detail, done)
+            rechecked = LYRIC_NCN.recheck_skipped(
+                index, LYRIC_TEXT, cancelled=CANCEL,
+                on_progress=skipped_progress)
+            with LOCK:
+                LYRIC_TEXT_INDEX = rechecked
+            summary = rechecked["recheckSummary"]
+            result = {
+                "message": (
+                    f"ตรวจซ้ำไฟล์ที่ข้าม {summary['total']:,} ไฟล์ "
+                    f"· ยืนยันข้าม {summary['confirmed']:,} "
+                    f"· กลับมาอ่านได้ {summary['recovered']:,} "
+                    f"· เปลี่ยนสาเหตุ {summary['reasonChanged']:,}"),
+                "sourceMode": rechecked["mode"],
+                "skippedInvalid": rechecked["skippedInvalid"],
+                "skippedReasons": rechecked["skippedReasons"],
+                "recheck": summary, "songs": rechecked["songs"],
+                "groups": rechecked["groupCount"]
+            }
         elif action == "lyric-groups-replace":
             with LOCK:
                 index = LYRIC_TEXT_INDEX
@@ -1904,6 +1935,17 @@ def start_job(data):
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
     validation = validate_build_request(data) if action == "build" else {}
+    if action == "lyric-skipped-recheck":
+        with LOCK:
+            snapshot = LYRIC_TEXT_INDEX
+        if snapshot is None or snapshot.get("scanMode") != "lyr-only":
+            raise ValueError("กรุณาวิเคราะห์โฟลเดอร์ LYR ก่อนตรวจซ้ำไฟล์ที่ข้าม")
+        if snapshot["root"] != str(lyric_source_root()):
+            raise ValueError("โฟลเดอร์ต้นทางเปลี่ยนแล้ว กรุณาวิเคราะห์ใหม่")
+        count = len(snapshot.get("skippedRows") or [])
+        if not count:
+            raise ValueError("ไม่มีรายการไฟล์ LYR ที่ข้ามให้ตรวจซ้ำ")
+        validation = {"total": count}
     if action == "lyric-groups-replace":
         # Reject stale/ambiguous confirmation before starting a background
         # thread that could change many files at once.
@@ -2653,8 +2695,9 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     offset = max(0, int(query.get("offset", ["0"])[0]))
                     limit = max(1, min(100, int(query.get("limit", ["40"])[0])))
+                    view = query.get("view", ["skipped"])[0]
                     self._json(LYRIC_NCN.skipped_page(
-                        snapshot, offset=offset, limit=limit))
+                        snapshot, offset=offset, limit=limit, view=view))
             elif path == "/api/lyric-groups":
                 with LOCK:
                     snapshot = LYRIC_TEXT_INDEX
