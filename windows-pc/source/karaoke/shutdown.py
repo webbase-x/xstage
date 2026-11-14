@@ -30,30 +30,6 @@ def finish(app):
 
 def wait_for_index(app):
     """Cancel and wait without destroying Tk while a file job still owns resources."""
-    if app.__dict__.get('_cloud_backup_busy',False):
-        # A completed/idle online dialog is not an active Drive operation.
-        # Close that dialog and release its old busy state when the PC quits;
-        # only wait for a genuinely live sync worker.
-        worker = app.__dict__.get('_online_sync_thread')
-        dialog = app.__dict__.get('_cloud_progress_window')
-        if worker is None or not worker.is_alive():
-            if dialog is not None:
-                try:
-                    if dialog.winfo_exists():
-                        dialog.destroy()
-                except Exception:
-                    logging.exception('SHUTDOWN_ONLINE_DIALOG_CLOSE_FAILED')
-            app.__dict__['_cloud_progress_window'] = None
-            app.__dict__['_cloud_backup_busy'] = False
-            app.__dict__['_online_sync_thread'] = None
-        else:
-            try:app.status_var.set('กำลังรอการซิงก์ X-Stage Karaoke Online ให้เสร็จก่อนปิดโปรแกรม…')
-            except Exception:logging.exception('SHUTDOWN_WAIT_BACKUP_STATUS_FAILED')
-            if app.__dict__.get('_close_wait_timer') is None:
-                def again_backup():
-                    app._close_wait_timer=None;app.close_app()
-                app._close_wait_timer=app.after(250,again_backup)
-            return True
     worker=app.__dict__.get('_index_thread')
     if worker is None:return False
     alive=worker.is_alive()
