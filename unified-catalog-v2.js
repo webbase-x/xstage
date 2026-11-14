@@ -83,8 +83,29 @@ function catalog(doc,{cloud=false,expectedCount=undefined}={}){
 function pointer(doc){
   if(!doc||doc.schemaVersion!==2||doc.format&&doc.format!=='xstage-unified-v2')fail('current.json V2 ผิดรูปแบบ');
   key(doc.generation,'generation');
-  key(doc.catalogFileId,'catalogFileId');
+  if(doc.catalogFileId!==undefined&&doc.catalogFiles!==undefined)
+    fail('ต้องใช้ catalogFileId หรือ catalogFiles อย่างใดอย่างหนึ่ง');
+  if(doc.catalogFiles!==undefined){
+    if(!Array.isArray(doc.catalogFiles)||!doc.catalogFiles.length||doc.catalogFiles.length>1024)
+      fail('จำนวน Catalog Shards ไม่ถูกต้อง');
+    const ids=new Set();
+    for(const part of doc.catalogFiles){
+      if(!part||typeof part!=='object')fail('Shard ไม่ใช่ object');
+      key(part.fileId,'shard.fileId');
+      if(ids.has(part.fileId))fail('Shard ID ซ้ำ');
+      ids.add(part.fileId);
+      if(!Number.isSafeInteger(part.songCount)||part.songCount<0||part.songCount>MAX_SONGS)
+        fail('Shard songCount ไม่ถูกต้อง');
+    }
+  }else key(doc.catalogFileId,'catalogFileId');
+  const deltas=doc.deltaFileIds??[];
+  if(!Array.isArray(deltas)||deltas.length>32||new Set(deltas).size!==deltas.length)
+    fail('Delta references ไม่ถูกต้อง');
+  for(const id of deltas)key(id,'deltaFileId');
   if(!Number.isSafeInteger(doc.songCount)||doc.songCount<0||doc.songCount>MAX_SONGS)fail('จำนวนเพลงไม่ถูกต้อง');
+  if(doc.catalogFiles&&!deltas.length&&
+     doc.catalogFiles.reduce((count,part)=>count+part.songCount,0)!==doc.songCount)
+    fail('ผลรวมจำนวนเพลงใน Shards ไม่ตรงกัน');
   return doc;
 }
 global.XStageCatalogV2=Object.freeze({schemaVersion:2,catalog,pointer,song,locator});
