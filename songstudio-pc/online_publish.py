@@ -291,7 +291,7 @@ class OnlinePublisher:
         root = self._existing_root()
         # drive.file is app-scoped. If the existing Karaoke Online library was
         # created by a different OAuth application, it may be invisible here.
-        # Never silently create XStageWeb if its existing V4 library is inaccessible.
+        # A missing visible root must never be interpreted as an empty accessible library.
         if root is None and not create_new_library:
             raise PublishError(
                 "ไม่พบ XStageWeb V4 ที่บัญชี/แอปนี้เข้าถึงได้ · "
