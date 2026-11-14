@@ -548,10 +548,15 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
 
             if not committed:
                 zip_path.unlink(missing_ok=True)
+                _atomic_bytes(report_path, (json.dumps({
+                    "operation": operation, "attemptedSongs": len(targets),
+                    "skippedInvalid": len(rejected), "rows": rejected
+                }, ensure_ascii=False) + "\n").encode("utf-8"))
                 return {"message": f"ไม่มีไฟล์ที่แก้ได้ · ข้ามผิดปกติ {len(rejected):,} เพลง",
                         "changedSongs": 0, "changedLines": 0, "skippedInvalid": len(rejected),
-                        "skippedExamples": rejected[:20], "backupId": None,
-                        "estimatedLines": 0, "remainingGroups": snapshot["groupCount"]}
+                        "skippedExamples": rejected[:20], "skippedReport": str(report_path),
+                        "backupId": None, "estimatedLines": 0,
+                        "remainingGroups": snapshot["groupCount"]}
 
             if shutil.disk_usage(backup_root).free < 32 * 1024 * 1024:
                 raise RuntimeError("พื้นที่เก็บข้อมูลเหลือน้อยก่อนบันทึก · ยังไม่แก้เพลง")
