@@ -313,7 +313,7 @@ class Importer {
     this.dom['progress-label'].textContent=percent+'%';
   }
   refreshButtons(){
-    const selected=!!this.plan&&(this.plan.songs.length+this.plan.fonts.length)>0;
+    const selected=!!this.plan&&(this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length)>0;
     this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
@@ -379,21 +379,21 @@ class Importer {
     this.plan=core.scan(files);
     this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+(handle?' (จำสิทธิ์โฟลเดอร์สำหรับทำต่อได้ถ้าเบราว์เซอร์อนุญาต)':' (เปิดใหม่ต้องเลือกโฟลเดอร์เดิมอีกครั้ง)');
     this.dom.total.textContent=this.plan.files.toLocaleString('th-TH');
-    this.dom.ready.textContent=this.plan.songs.length.toLocaleString('th-TH');
+    this.dom.ready.textContent=(this.plan.songs.length+this.plan.midis.length).toLocaleString('th-TH');
     this.dom.fonts.textContent=this.plan.fonts.length.toLocaleString('th-TH');
     this.dom.blocked.textContent=this.plan.blocked.length.toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,7).map(x=>x.key+' · '+x.reason);
     this.dom.examples.textContent=samples.join('\n')+(this.plan.blocked.length>7?'\nและอีก '+(this.plan.blocked.length-7)+' ชุด':'');
     this.progress(0,1);
     this.status('ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์');
-    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.fonts.length});
+    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length});
     this.refreshButtons();
   }
   async save(extra={}){
     const auth=this.session();
     if(!auth?.sub)return;
     const data={version:1,label:this.dom.source.textContent,updatedAt:Date.now(),
-      count:this.plan?.songs.length||0,fonts:this.plan?.fonts.length||0,...extra};
+      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0),fonts:this.plan?.fonts.length||0,...extra};
     if(this.folderHandle)data.handle=this.folderHandle;
     this.saved=data;await checkpoint(auth.sub,data);
   }
@@ -487,12 +487,13 @@ class Importer {
         const code=String(row.code||'').toLowerCase();
         if(!byCode.has(code))byCode.set(code,[]);
         byCode.get(code).push(row);
-        const a=row.audio?.md5Checksum,l=row.lyrics?.md5Checksum;
+        const a=(row.audio||row.midi)?.md5Checksum,l=row.lyrics?.md5Checksum;
         if(a&&l)byPair.set(a.toLowerCase()+':'+l.toLowerCase(),row);
       }
       for(const row of rows.values())addMaps(row);
       const work=[...this.plan.fonts.map(x=>({...x,isFont:true})),
-        ...this.plan.songs.map(x=>({...x,isFont:false}))];
+        ...this.plan.songs.map(x=>({...x,isFont:false,isMidi:false})),
+        ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true}))];
       let revisions=[],finished=0;
       const show=(text,part=0)=>{this.status(text);this.progress(finished,work.length,part);};
       const uploadMedia=async(file,code,parts,name,mime,hash,from=0,span=1)=>{
@@ -553,7 +554,72 @@ class Importer {
       for(const item of work){
         this.check();
         try{
-          if(item.isFont){
+          if(item.isMidi){
+            const runtime=scope.XStageBrowserMidi;
+            if(!runtime)fail('ไม่พบระบบ MIDI ที่ติดมากับหน้าเว็บ · อัปเดตเว็บก่อนนำเข้า');
+            const midiFile=item.midi.file,code=item.code;
+            let parsed,doc,json;
+            try{
+              parsed=runtime.parseMidi(await midiFile.arrayBuffer());
+              if(item.lyr&&item.cur){
+                doc=runtime.ncnLyrics(new Uint8Array(await item.lyr.file.arrayBuffer()),
+                  new Uint8Array(await item.cur.file.arrayBuffer()),code,parsed.duration);
+              }else if(item.json){
+                if(item.json.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
+                doc=core.validLyricsJson(await item.json.file.text(),code);
+              }else if(item.lrc){
+                if(item.lrc.file.size>MAX_LRC)throw Error('LRC ใหญ่เกิน 2 MB');
+                doc=core.lrcToJson(await item.lrc.file.text(),code);
+              }else doc=runtime.midiLyrics(parsed,code);
+              doc.songCode=code;
+              json=encode(doc);
+            }catch(error){throw Error('ไฟล์ MIDI/NCN ไม่สมบูรณ์: '+error.message);}
+            const [midiHash,jsonHash]=await Promise.all([
+              core.hashBlob(midiFile,()=>this.check()),
+              core.hashBlob(json,()=>this.check())
+            ]);
+            const pair=midiHash+':'+jsonHash;
+            if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้าม MIDI ซ้ำ MD5: '+code);continue;}
+            const candidates=byCode.get(code.toLowerCase())||[];
+            const same=candidates.find(x=>String(x.midi?.md5Checksum||'').toLowerCase()===midiHash);
+            if(candidates.length&&!same){this.stats.conflicts++;finished++;
+              show('รหัส MIDI ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;}
+            const type=item.kind==='NCN'?'NCN':item.kind==='KAR'?'KAR':'SMF';
+            const prefix=['MIDI',type],folder=core.bucket(code),base=safeName(code);
+            let media=same?.midi;
+            if(!media){
+              const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
+              media=await uploadMedia(midiFile,code,[...prefix,'Song',folder],name,
+                'audio/midi',midiHash,0,.75);
+            }
+            const jname=base+'-'+jsonHash.slice(0,16)+'.json';
+            const lyrics=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,
+              'application/json',jsonHash,.75,.25);
+            let lyrMeta=same?.lyr,curMeta=same?.cur;
+            if(item.lyr&&item.cur){
+              const [lyrHash,curHash]=await Promise.all([
+                core.hashBlob(item.lyr.file,()=>this.check()),
+                core.hashBlob(item.cur.file,()=>this.check())
+              ]);
+              lyrMeta=await uploadMedia(item.lyr.file,code,[...prefix,'Lyrics',folder],
+                base+'-'+lyrHash.slice(0,16)+'.lyr','text/plain',lyrHash);
+              curMeta=await uploadMedia(item.cur.file,code,[...prefix,'Cursor',folder],
+                base+'-'+curHash.slice(0,16)+'.cur','application/octet-stream',curHash);
+            }
+            const ident=same?.webSongId||('browser/midi/'+midiHash);
+            if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
+            const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
+              artist:doc.artist||'',sourceFormat:type,midi:media,lyrics,
+              lyr:lyrMeta,cur:curMeta};
+            if(same){
+              byPair.delete(String(same.midi?.md5Checksum||'').toLowerCase()+':'+
+                String(same.lyrics?.md5Checksum||'').toLowerCase());
+              byCode.set(code.toLowerCase(),candidates.filter(x=>x.webSongId!==ident));
+            }
+            rows.set(ident,record);addMaps(record);byPair.set(pair,record);
+            revisions.push(record);this.stats[same?'updated':'newSongs']++;
+            if(revisions.length>=25)await publish();
+          }else if(item.isFont){
             if(!await core.validFont(item.file))throw Error('SF2/SF3 ไม่มีหัว RIFF sfbk หรือขนาดไม่สมบูรณ์');
             const hash=await core.hashBlob(item.file,()=>this.check());
             const suffix=core.ext(item.file.name),stem=safeName(item.file.name.replace(/\.[^.]+$/,''));
