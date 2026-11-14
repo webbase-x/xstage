@@ -141,8 +141,17 @@ try{
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='2');
   assert.equal(await page.locator('#cloud-import-fonts').textContent(),'1');
+  assert.equal(await page.locator('#cloud-import-blocked').textContent(),'2',
+    'Unreviewed video must not silently become embedded karaoke');
+  await page.locator('#cloud-import-video-editor:not([hidden])').waitFor();
+  await page.locator('#cloud-import-video-title').fill('วิดีโอทดสอบ');
+  await page.locator('#cloud-import-video-artist').fill('นักร้องตัวอย่าง');
+  await page.locator('#cloud-import-video-album').fill('อัลบั้มทดสอบ');
+  await page.locator('#cloud-import-video-mode').selectOption('embedded');
+  await page.click('#cloud-import-video-save');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
   await page.check('#cloud-import-allow-create');
   await page.click('#cloud-import-start');
@@ -166,6 +175,15 @@ try{
   const published=[...records.values()].filter(x=>x.name.startsWith('catalog-'));
   assert.ok(published.some(x=>x.data.toString('utf8').includes('embedded-video')),
     'Standalone video must publish metadata without invented timed lyrics');
+  const publishedRows=published.flatMap(x=>{
+    const v=JSON.parse(x.data.toString('utf8'));
+    return v.songs||v.upserts||[];
+  });
+  const videoRow=publishedRows.find(x=>x.code==='V400');
+  assert.ok(videoRow&&videoRow.title==='วิดีโอทดสอบ'&&
+    videoRow.artist==='นักร้องตัวอย่าง','Artist/title metadata must be published');
+  assert.equal(videoRow.originalVideo?.fileId,videoRow.video?.fileId,
+    'Native MP4 should retain source reference without duplicate Drive upload');
   assert.ok([...records.values()].some(x=>x.name.endsWith('.sf2')));
   const firstCount=payloadUploads;
   // After first DB exists, reopen the importer from the visible stage menu.
