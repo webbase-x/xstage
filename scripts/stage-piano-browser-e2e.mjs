@@ -50,6 +50,34 @@ try{
   });
   assert.ok(geometry.left>=0&&geometry.right<=1280,'Desktop piano must fit stage horizontally');
   assert.ok(geometry.bottom<=geometry.transportTop+2,'Desktop piano must sit above playback bar');
+  // Device advisor and 16-channel MIDI mixer are interactive on the real page.
+  await page.waitForFunction(()=>window.XStageAudioAdvisor &&
+    document.querySelectorAll('#xstage-midi-channels [data-midi-channel]').length===16);
+  await page.locator('#toggle-audio-tools').click();
+  assert.equal(await page.locator('#xstage-audio-tools').isVisible(),true);
+  assert.equal(await page.locator('#xstage-midi-transpose option').count(),25);
+  await page.locator('#xstage-midi-settings summary').click();
+  await page.locator('#xstage-midi-transpose').selectOption('3');
+  await page.locator('[data-midi-channel="0"] [data-action="mute"]').check();
+  await page.locator('[data-midi-channel="1"] [data-action="solo"]').check();
+  await page.locator('[data-midi-channel="1"] [data-action="gain"]').fill('60');
+  const mix=await page.evaluate(()=>window.XStageAudioAdvisor.getMidiSettings());
+  assert.equal(mix.transpose,3);
+  assert.equal(mix.channels[0].mute,true);
+  assert.equal(mix.channels[1].solo,true);
+  assert.equal(mix.channels[1].gain,.6);
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('xstage:fonts-updated',{
+    detail:{files:[{id:'small',name:'Small.sf2',size:24*1048576},
+      {id:'oversize',name:'TooLarge.sf3',size:280*1048576}]}
+  })));
+  assert.equal(await page.locator('#xstage-font-file-list .xstage-font-row').count(),2);
+  assert.equal(await page.locator('#xstage-font-file-list .xstage-font-row').last().getAttribute('data-level'),'blocked');
+  await page.locator('#xstage-midi-reset').click();
+  const reset=await page.evaluate(()=>window.XStageAudioAdvisor.getMidiSettings());
+  assert.equal(reset.transpose,0);
+  assert.ok(reset.channels.every(c=>c.gain===1&&!c.mute&&!c.solo));
+  await page.locator('#xstage-audio-close').click();
+  assert.equal(await page.locator('#xstage-audio-tools').isVisible(),false);
   // Change to mobile viewport and use the actual onstage mobile menu control.
   await page.setViewportSize({width:390,height:844});
   await page.locator('#stage-piano-close').click();
