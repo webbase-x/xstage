@@ -161,7 +161,7 @@ try{
   await page.locator('#cloud-import-video-title').fill('วิดีโอ AVI ไม่มีเนื้อร้องฝัง');
   await page.locator('#cloud-import-video-artist').fill('นักร้อง AVI');
   await page.locator('#cloud-import-video-mode').selectOption('timed');
-  await page.locator('#cloud-import-video-lrc').fill('[00:00.10]ทดสอบเสียงและภาพ AVI\\n[00:00.60]สร้าง LRC จากเวลาจริง');
+  await page.locator('#cloud-import-video-lrc').fill(['[00:00.10]ทดสอบเสียงและภาพ AVI','[00:00.60]สร้าง LRC จากเวลาจริง'].join(String.fromCharCode(10)));
   await page.click('#cloud-import-video-save');
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
