@@ -15,14 +15,17 @@ assert.ok(onlinePlayer.includes('pointer.catalogFileId') &&
           'Online player must consume publisher catalog IDs and private media');
 assert.ok(onlinePublisher.includes('"catalogFileId": catalog_id') &&
           onlinePublisher.includes('"deltaFileIds": delta_ids') &&
-          onlinePublisher.includes('"audio": audio, "lyrics": lyrics') &&
+          onlinePublisher.includes('"lyrics": lyrics') &&
+          onlinePublisher.includes('"midi" if is_midi else "audio"') &&
+          onlinePublisher.includes('LAYOUT_VERSION = 3') &&
           onlinePublisher.includes('replace_pointer=True'),
           'Publisher must expose the exact online reader fields and atomically switch pointer');
 assert.ok(folderUploader.includes('publisher.publish(') &&
           folderUploader.includes('validator(library["root"], row)') &&
           folderUploader.includes('export.lrc_to_json('),
           'Folder upload must publish verified timed lyrics through the existing online schema');
-assert.ok(folderUploader.includes('"webMidiReady": False') &&
+assert.ok(folderUploader.includes('"webMidiReady": True') &&
+          folderUploader.includes('drive.folder(root, "AUDIO")') &&
           !onlinePlayer.includes('SOUNDFONT/SF2'),
           'Do not claim browser SoundFont playback when only private Drive storage exists');
 
