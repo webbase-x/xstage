@@ -1627,12 +1627,13 @@ def execute_job(action, options, started):
             with LOCK:
                 JOB["total"] = 1
             update("กำลังตรวจเพลงและไฟล์ประกอบในโฟลเดอร์ที่เลือก")
+            online_module = _module("online_publish.py", "xstage_online_publish")
             result = FOLDER_UPLOAD.upload(
                 GOOGLE, root,
                 create_new_library=(options.get("create_new_library") is True),
                 cancelled=CANCEL, export=_song_export_module(),
-                publisher=_module("online_publish.py", "xstage_online_publish").OnlinePublisher(GOOGLE),
-                staging_root=DATA,
+                publisher=online_module.OnlinePublisher(GOOGLE),
+                staging_root=DATA, validator=online_module._valid_row,
                 progress=lambda done, total, name: update(
                     f"ตรวจและเผยแพร่ {done:,}/{total:,} · {name}", done))
         elif action == "upload":
