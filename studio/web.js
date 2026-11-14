@@ -222,6 +222,8 @@
   }
   async function addFiles(files, prefix) {
     let accepted = 0, collisions = 0, importedFonts = 0;
+    const touched=new Set();
+    state.cancelled=false;
     invalidateArchive();
     for (const item of files) {
       if(state.cancelled)break;
@@ -251,6 +253,7 @@
         song.conflicts.add(ext);selected.delete(id);collisions++;continue;
       }
       song.parts.set(ext, file);
+      touched.add(id);
       if (AUDIO.has(ext)) {
         const prior = song.audio;
         song.audioFiles.set(ext,file);
@@ -272,9 +275,10 @@
         await new Promise(resolve=>setTimeout(resolve,0));
       }
     }
-    for(const song of entries.values()){
-      if(canExport(song))selected.add(song.id);
-      else selected.delete(song.id);
+    for(const id of touched){
+      const song=entries.get(id);
+      if(canExport(song))selected.add(id);
+      else selected.delete(id);
     }
     refreshFontChoices();
     renderTable();
