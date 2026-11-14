@@ -309,6 +309,7 @@ class Importer {
     for(const key of ['open','dialog','close','pick','input','scan','start','pause','resume','cancel',
       'allow-create','source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
+    this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
     this.dom.open?.addEventListener('click',()=>this.open());
     this.dom.gateOpen=$('cloud-import-open-gate');
     this.dom.gateOpen?.addEventListener('click',()=>this.open());
@@ -338,6 +339,7 @@ class Importer {
     scope.addEventListener('xstage:auth-cleared',()=>{
       this.stop('ออกจาก Google · พักงานทันที');
       this.selected=null;this.plan=null;this.folderHandle=null;this.selectedSub='';
+      this.videoEditor?.releasePreview();this.videoEditor?.setPlan(null);
       this.updateOpen();this.refreshButtons();
     });
     this.updateOpen();
@@ -357,8 +359,23 @@ class Importer {
     this.dom.progress.value=percent;
     this.dom['progress-label'].textContent=percent+'%';
   }
+  updateVideoStats(){
+    if(!this.plan)return;
+    const editor=this.videoEditor;
+    const pending=editor?.pendingCount()||0;
+    const ready=this.plan.songs.length-pending+this.plan.midis.length;
+    this.dom.ready.textContent=ready.toLocaleString('th-TH');
+    this.dom.blocked.textContent=(this.plan.blocked.length+pending).toLocaleString('th-TH');
+    const samples=this.plan.blocked.slice(0,6).map(x=>x.key+' · '+x.reason);
+    if(pending)samples.push('วิดีโอ '+pending+' รายการรอตรวจชื่อเพลง/นักร้องและยืนยันรูปแบบเนื้อร้อง');
+    this.dom.examples.textContent=samples.join('\n')+
+      (this.plan.blocked.length>6?'\nและอีก '+(this.plan.blocked.length-6)+' ชุด':'');
+    this.refreshButtons();
+  }
   refreshButtons(){
-    const selected=!!this.plan&&(this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length)>0;
+    const approvedVideos=this.videoEditor?.eligibleCount()||0;
+    const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
+    const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+this.plan.fonts.length)>0;
     this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
@@ -384,6 +401,7 @@ class Importer {
   close(){
     this.resumeAfterPicker=false;
     if(this.running)this.stop('ปิดหน้าต่าง · งานถูกพักโดยไม่ลบไฟล์ที่ส่งสำเร็จ');
+    this.videoEditor?.releasePreview();
     if(this.dom.dialog.close)this.dom.dialog.close();
     else this.dom.dialog.removeAttribute('open');
   }
@@ -423,6 +441,7 @@ class Importer {
     this.selected=files;this.folderHandle=handle;
     this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
+    this.videoEditor?.setPlan(this.plan,this.saved?.videoEdits);
     const hasRelativePaths=files.some(entry=>String(entry.relative||'').includes('/'));
     this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+
       (handle?' (จำสิทธิ์โฟลเดอร์สำหรับทำต่อได้ถ้าเบราว์เซอร์อนุญาต)'
@@ -434,6 +453,7 @@ class Importer {
     this.dom.blocked.textContent=this.plan.blocked.length.toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,7).map(x=>x.key+' · '+x.reason);
     this.dom.examples.textContent=samples.join('\n')+(this.plan.blocked.length>7?'\nและอีก '+(this.plan.blocked.length-7)+' ชุด':'');
+    this.updateVideoStats();
     this.progress(0,1);
     this.status('ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์');
     await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length});
@@ -443,7 +463,8 @@ class Importer {
     const auth=this.session();
     if(!auth?.sub)return;
     const data={version:1,label:this.dom.source.textContent,updatedAt:Date.now(),
-      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0),fonts:this.plan?.fonts.length||0,...extra};
+      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0),
+      fonts:this.plan?.fonts.length||0,videoEdits:this.videoEditor?.exportEdits()||[],...extra};
     if(this.folderHandle)data.handle=this.folderHandle;
     this.saved=data;await checkpoint(auth.sub,data);
   }
@@ -503,6 +524,7 @@ class Importer {
     if(!auth?.token||!auth.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
     if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
     this.account=auth.sub;
+    this.videoEditor?.releasePreview();
     this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
@@ -542,8 +564,12 @@ class Importer {
       }
       for(const row of rows.values())addMaps(row);
       const work=[...this.plan.fonts.map(x=>({...x,isFont:true})),
-        ...this.plan.songs.map(x=>({...x,isFont:false,isMidi:false})),
+        ...this.plan.songs.filter(x=>!x.video||this.videoEditor?.get(x))
+          .map(x=>({...x,isFont:false,isMidi:false})),
         ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true}))];
+      const pendingVideos=this.videoEditor?.pendingCount()||0;
+      if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
+        ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
       let revisions=[],finished=0;
       const show=(text,part=0)=>{this.status(text);this.progress(finished,work.length,part);};
       const uploadMedia=async(file,code,parts,name,mime,hash,from=0,span=1)=>{
