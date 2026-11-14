@@ -44,4 +44,23 @@ assert.throws(()=>core.lrcToJson('ข้อความไม่มีเวล�
 const sampleMp3=new Blob([Buffer.from([73,68,51]),Buffer.alloc(1500)],{type:'audio/mpeg'});
 sampleMp3.name='sound.mp3';
 assert.equal(await core.validAudio(sampleMp3),true);
+// SoundFonts must declare a bounded RIFF sfbk with INFO, sdta and pdta.
+function sfList(name,bytes=64){
+  const body=Buffer.alloc(4+bytes);
+  body.write(name,0,'ascii');
+  const head=Buffer.alloc(8);head.write('LIST',0,'ascii');head.writeUInt32LE(body.length,4);
+  return Buffer.concat([head,body]);
+}
+const sfBody=Buffer.concat([Buffer.from('sfbk'),sfList('INFO'),sfList('sdta'),sfList('pdta')]);
+const sfHead=Buffer.alloc(8);sfHead.write('RIFF',0,'ascii');sfHead.writeUInt32LE(sfBody.length,4);
+const sfFile=new Blob([sfHead,sfBody]);sfFile.name='General.sf2';
+assert.equal(await core.validFont(sfFile),true,'Complete RIFF SoundFont must pass');
+const truncated=new Blob([Buffer.concat([sfHead,Buffer.from('sfbk')])]);
+truncated.name='Incomplete.sf2';
+assert.equal(await core.validFont(truncated),false,'Truncated SoundFont cannot be imported');
+const corrupt=Buffer.concat([sfHead,sfBody]);
+corrupt.write('WRNG',12,'ascii');
+const corruptFile=new Blob([corrupt]);corruptFile.name='Corrupt.sf3';
+assert.equal(await core.validFont(corruptFile),false,'SoundFont missing INFO LIST must fail');
+
 console.log('PASS: streaming MD5, song pairing, typed validation and timed LRC contracts');
