@@ -665,6 +665,42 @@
   async function createSongAssets(song, number) {
     const assets = [];
     const name = safeName(song.name);
+    if (song.midi && usesMidi(song)) {
+      const info=song.midiInfo||await midiCore.inspectSong(song,midiRuntime);
+      song.midiInfo=info;
+      if(!info.safe)throw Error(info.warning||'NCN มีเวลาไม่ปลอดภัย · ข้ามไฟล์นี้');
+      const inputKind=extOf(song.midi.name);
+      if($('export-format').value==='m4a'){
+        const audio=await renderMidiWave(song,{onStatus:message=>setProgress(
+          message,100*state.currentIndex/Math.max(1,state.total))});
+        if(state.cancelled)throw Error('ยกเลิกโดยผู้ใช้');
+        // Only a separate output file is converted; original MIDI stays intact.
+        const waveFile=new File([audio.audio],name+'.wav',{type:'audio/wav'});
+        const m4a=await renderAudio({audio:waveFile},number);
+        assets.push({name:name+'.m4a',blob:m4a});
+      }else{
+        assets.push({name:name+'.'+inputKind,blob:song.midi});
+        if(info.kind==='NCN'){
+          assets.push({name:name+'.lyr',blob:song.lyr},{name:name+'.cur',blob:song.cur});
+        }
+      }
+      const lyrics=await lyricsFor(song);
+      let doc=null;
+      if(lyrics.trim()){
+        doc=(song.editedLyrics||song.lrc)
+          ? midiCore.lrcToDocument(lyrics,song.name,'LRC')
+          : info.safeLyrics?info.document:null;
+      }
+      if(doc?.lines?.length){
+        assets.push({name:name+'.json',blob:new Blob([JSON.stringify(doc)],
+          {type:'application/json'})});
+        assets.push({name:name+'.lrc',blob:new Blob([
+          lyrics.replace(/\r?\n/g,'\r\n')],{type:'text/plain;charset=utf-8'})});
+      }else if(lyrics.trim()){
+        throw Error('เนื้อร้องไม่มีเวลา LRC/CUR ที่ยืนยันได้ · ไม่สร้าง JSON เทียม');
+      }
+      return assets;
+    }
     const audioBlob = await renderAudio(song, number);
     if (state.cancelled) throw new Error('ยกเลิกโดยผู้ใช้');
     assets.push({name: name + '.m4a', blob: audioBlob});
@@ -698,9 +734,10 @@
   }
   async function build() {
     if (state.busy) return;
-    const work = [...selected].map((id) => entries.get(id)).filter((e) => e?.audio);
-    if (!work.length) return notice('กรุณาเลือกไฟล์เสียงอย่างน้อยหนึ่งเพลง', 'error');
-    const totalSize = work.reduce((n, e) => n + e.audio.size, 0);
+    const work=[...selected].map(id=>entries.get(id)).filter(canExport);
+    if(!work.length)return notice('กรุณาเลือกเพลงที่มีชุดไฟล์ครบอย่างน้อยหนึ่งเพลง','error');
+    const totalSize=work.reduce((n,e)=>n+(usesMidi(e)?e.midi.size+
+      (e.lyr?.size||0)+(e.cur?.size||0):e.audio.size),0);
     if (!state.dest && totalSize > 500 * 1048576) {
       notice('ไฟล์รวมเกิน 500MB · เพื่อหลีกเลี่ยงหน่วยความจำไม่พอ กรุณาเลือกโฟลเดอร์ปลายทางหรือแบ่งงาน', 'error');
       return;
@@ -712,7 +749,7 @@
     state.currentIndex = 0; state.total = work.length;
     setBusy(true);
     $('results').replaceChildren();
-    let success = 0, errors = 0, audioCount = 0, lyricCount = 0;
+    let success = 0, errors = 0, audioCount = 0, midiCount = 0, lyricCount = 0;
     const zipAssets = [];
     // Reserve a shared basename per song so .m4a and .lrc always stay paired.
     const usedNames = new Map();
@@ -742,9 +779,9 @@
             } else zipAssets.push(asset);
           }
           success++;
-          audioCount++;
-          if (assets.some(asset => asset.name.toLowerCase().endsWith('.lrc'))) lyricCount++;
-          else log('สร้าง M4A สำหรับ ' + song.name + ' แต่ยังไม่มี LRC พร้อมเวลาจริง · ต้องเพิ่มเนื้อร้องก่อนส่งออก LRC', true);
+          if(usesMidi(song))midiCount++;else audioCount++;
+          if(assets.some(asset=>asset.name.toLowerCase().endsWith('.lrc')))lyricCount++;
+          else log('ส่งออก '+song.name+' โดยไม่มีคำร้องพร้อมเวลาจริง · ไม่สร้าง LRC/JSON เทียม',true);
           log('สร้าง ' + song.name + ' เรียบร้อย (' + assets.map((a) => a.name).join(', ') + ')');
         } catch (error) {
           if (state.cancelled) break;
@@ -770,12 +807,11 @@
         setProgress('ยกเลิกงาน', 0);
       } else {
         notice(success
-          ? 'สร้าง M4A ' + audioCount + ' ไฟล์ · LRC ' + lyricCount + ' ไฟล์' +
-            (audioCount > lyricCount ? ' · บางเพลงยังไม่มีเนื้อร้องที่มีเวลา (ไม่สร้างเนื้อร้องปลอม)' : '') +
-            ' · ข้อผิดพลาด ' + errors +
-            (state.archive ? ' · กด “ดาวน์โหลด ZIP ผลลัพธ์” เพื่อรับไฟล์' : ' · บันทึกลงโฟลเดอร์ที่เลือกแล้ว')
+          ? 'สร้างเพลงเสียง '+audioCount+' · MIDI/NCN '+midiCount+' · มี LRC '+lyricCount+
+            ' · ข้ามรายการผิดปกติ '+errors+
+            (state.archive?' · กด “ดาวน์โหลด ZIP ผลลัพธ์”':' · บันทึกลงโฟลเดอร์ที่เลือกแล้ว')
           : 'สร้างเพลงไม่สำเร็จ · ตรวจรายละเอียดข้อผิดพลาดด้านล่าง',
-          errors || !success || audioCount !== lyricCount ? 'error' : 'good');
+          errors||!success?'error':'good');
         setProgress('เสร็จสิ้น ' + success + '/' + work.length + ' เพลง', 100);
       }
     } catch (error) {
@@ -787,6 +823,7 @@
   }
   function cancel() {
     state.cancelled = true;
+    if(state.midiController)state.midiController.abort();
     try { state.ffmpeg?.terminate(); } catch (_) { /* ignore */ }
     state.ffmpeg = null;
     $('engine-caption').textContent = 'Engine ถูกหยุด สามารถโหลดใหม่ได้';
