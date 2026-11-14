@@ -207,12 +207,13 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertIn(uploaded["id"], self.drive.items)
         self.assertEqual(self.pointer()[0]["layoutVersion"], 4)
 
-    def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
+    def test_v4_root_is_used_even_when_unrelated_folder_exists(self):
         self.drive.folder("root", "StageWeb")
-        before = len(self.drive.items)
-        with self.assertRaisesRegex(online.PublishError, "StageWeb รุ่นเก่า"):
-            self.publisher.publish(self.root, [self.first], create_new_library=True)
-        self.assertEqual(len(self.drive.items), before)
+        result = self.publisher.publish(self.root, [self.first], create_new_library=True)
+        self.assertTrue(result["published"])
+        self.assertEqual(self.pointer()[0]["layoutVersion"], 4)
+        self.assertEqual(sum(1 for x in self.folder_files()
+                             if x["name"] == "XStageWeb"), 1)
 
     def _download_private_json(self, url, **kwargs):
         ident = urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1]
