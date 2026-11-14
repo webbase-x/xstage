@@ -296,7 +296,7 @@ class Importer {
     if(!this.dom.open)return;
     const auth=this.session();
     this.dom.open.hidden=!auth?.token;
-    this.dom.open.disabled=this.running;
+    this.dom.open.disabled=this.running||this.lockPending;
   }
   status(message){if(this.dom.status)this.dom.status.textContent=message;}
   progress(index,total,ratio=0){
@@ -306,10 +306,10 @@ class Importer {
   }
   refreshButtons(){
     const selected=!!this.plan&&(this.plan.songs.length+this.plan.fonts.length)>0;
-    this.dom.start.disabled=this.running||!selected;
+    this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
-    this.dom.resume.disabled=this.running||(!selected&&!this.saved);
+    this.dom.resume.disabled=this.running||this.lockPending||(!selected&&!this.saved);
     this.dom.pick.disabled=this.running;
     this.dom.scan.disabled=this.running||!this.selected;
     this.updateOpen();
@@ -423,6 +423,21 @@ class Importer {
     await this.start();
   }
   async start(){
+    if(this.running||this.lockPending||!this.plan)return;
+    const auth=this.session();
+    if(!auth?.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
+    this.lockPending=true;this.refreshButtons();
+    try{
+      if(scope.navigator?.locks?.request){
+        await scope.navigator.locks.request('xstage-drive-import-'+auth.sub,
+          {mode:'exclusive',ifAvailable:true},async lock=>{
+            if(!lock){this.status('บัญชีนี้มีงานนำเข้าในอีกแท็บ · หยุดงานซ้ำเพื่อป้องกัน DB ชนกัน');return;}
+            await this.performStart();
+          });
+      }else await this.performStart();
+    }finally{this.lockPending=false;this.refreshButtons();}
+  }
+  async performStart(){
     if(this.running||!this.plan)return;
     const auth=this.session();
     if(!auth?.token||!auth.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
