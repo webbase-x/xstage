@@ -176,6 +176,13 @@ class OnlinePublisher:
             raise PublishError("พบ XStageWeb/current.json ซ้ำบน Drive · หยุดเพื่อป้องกันฐานเสีย")
         if not pointers:
             if children:
+                # A SoundFont-only library can be created by Song Studio before
+                # the user's first playable song. Preserve it and allow the
+                # first verified online DB to be published. Other unindexed
+                # media remain blocked to avoid reinitializing an old catalog.
+                if (len(children) == 1 and children[0].get("name") == "SOUNDFONT"
+                        and children[0].get("mimeType") == FOLDER_MIME):
+                    return None, {}, {x["name"]: x for x in children}
                 markers = [x for x in children if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
                 expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "VIDEO", "MIDI", "DB"}
