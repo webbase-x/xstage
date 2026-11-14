@@ -74,7 +74,14 @@ class SkippedReportTests(unittest.TestCase):
         self.assertTrue(csvbytes.startswith(b"\xef\xbb\xbf"))
         csvrows = list(csv.reader(io.StringIO(csvbytes[3:].decode("utf-8"))))
         self.assertEqual(len(csvrows), 6)
-        self.assertTrue(any(r[0].startswith("'=SUM") for r in csvrows[1:]))
+        self.assertTrue(any("=SUM(1+1).LYR" in r[0] for r in csvrows[1:]))
+        # Filename is safe when nested under a bucket; also test a *bare*
+        # filename starting with "=" to verify formula-injection prevention.
+        malicious = {"skippedRows": [{"file": "=2+2.LYR", "category": "other",
+            "label": "ทดสอบ", "reason": "ไม่รองรับ"}]}
+        sample = list(csv.reader(io.StringIO(
+            editor.skipped_csv(malicious)[3:].decode("utf-8"))))
+        self.assertEqual(sample[1][0], "'=2+2.LYR")
         self.assertTrue(all("ยังไม่ได้ตรวจซ้ำ" in r[1] for r in csvrows[1:]))
         for path, value in originals.items():
             self.assertEqual(path.read_bytes(), value)
