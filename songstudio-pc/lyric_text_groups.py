@@ -61,8 +61,13 @@ def _load(root, row, export):
         raise ValueError("ไม่แก้ไขไฟล์เนื้อร้องแบบลิงก์ เพราะอาจกระทบเพลงอื่น")
     path = export.safe_media_path(root, rel, "lyrics")
     doc = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(doc, dict):
+        raise ValueError("Lyrics JSON ต้องเป็นข้อมูลวัตถุ ไม่ใช่รายการหรือข้อความ")
+    metadata = doc.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        raise ValueError("ข้อมูล metadata ใน Lyrics JSON ไม่ถูกต้อง")
     if (doc.get("sourceFormat") == "NCN"
-            and (doc.get("metadata") or {}).get("timingComplete") is False):
+            and metadata.get("timingComplete") is False):
         raise ValueError("NCN CUR มีเวลาไม่ครบ · ไม่แก้ข้อความบน Lyrics JSON ที่ยังจับเวลาไม่สมบูรณ์")
     lines = doc.get("lines")
     if not isinstance(lines, list) or len(lines) < 4:
