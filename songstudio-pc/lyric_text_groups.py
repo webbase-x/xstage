@@ -92,15 +92,87 @@ def _load(root, row, export):
     return path, lrc_path if file_raw is not None else None, doc, raw
 
 
+def _display_units(value):
+    """Keep Thai vowel/tone combining marks attached to their displayed glyph."""
+    units = []
+    for char in value:
+        category = unicodedata.category(char)
+        if units and (category.startswith("M") or char in ("\u200d", "\ufe0f")):
+            units[-1] += char
+        else:
+            units.append(char)
+    return units
+
+
+def _retime_visual_units(line, old_text, new_text):
+    """Remap only Lyrics JSON timed highlight cues; preserve line boundaries.
+
+    Equal visual lengths keep original per-glyph time positions. Different
+    lengths interpolate monotonically *inside the old timed line*, label the
+    mapping as estimated and preserve the start/end of that line. These are
+    display estimates, NOT claims of newly transcribed sung syllables.
+    """
+    units = _display_units(new_text)
+    if not units:
+        raise ValueError("ไม่มีอักษรที่จะจัดเวลาไฮไลต์")
+    old_units = _display_units(old_text)
+    original = line.get("syllables") or []
+    start = float(line.get("startTime", 0))
+    end = float(line.get("endTime", 0) or 0)
+    if original and not isinstance(original, list):
+        raise ValueError("ข้อมูลไฮไลต์ Lyrics JSON เดิมไม่ถูกต้อง")
+    valid = (len(original) == len(old_units) and len(original)>0 and
+             all(isinstance(x, dict) and
+                 isinstance(x.get("start"), (int, float)) and
+                 not isinstance(x.get("start"), bool) for x in original))
+    source = [float(x["start"]) for x in original] if valid else []
+    if source:
+        if any(source[j] > source[j+1] for j in range(len(source)-1)):
+            raise ValueError("เวลาไฮไลต์เดิมย้อนหลัง · ไม่สร้างเวลาทดแทนอัตโนมัติ")
+        start = max(0, min(start, source[0]))
+        tail = float(original[-1].get("duration") or .04)
+        end = max(end, source[-1] + max(.03, tail))
+    if end <= start:
+        # With no reliable end time, do not invent an extended duration.
+        # Allow the original timestamp only; a human must set a full range
+        # before a new per-character highlighting scheme can be saved.
+        raise ValueError("Lyrics JSON ไม่มีเวลาสิ้นสุดของบรรทัด · ไม่สามารถสร้างเวลาไฮไลต์")
+    exact = bool(source) and len(old_units) == len(units)
+    if exact:
+        positions = list(source)
+    elif source and len(source)>1:
+        positions = []
+        for j in range(len(units)):
+            fractional = j*(len(source)-1)/max(1,len(units)-1)
+            left = int(fractional)
+            right = min(len(source)-1,left+1)
+            weight = fractional-left
+            positions.append(source[left]+(source[right]-source[left])*weight)
+    else:
+        positions = [start + (end-start)*j/max(1,len(units))
+                     for j in range(len(units))]
+    # Never allow the position to jump beyond the original line's end.
+    positions = [max(start, min(end, t)) for t in positions]
+    cues=[]
+    for j, text in enumerate(units):
+        at=positions[j]
+        finish=positions[j+1] if j+1<len(units) else end
+        cues.append({"text":text,"start":round(at,4),
+                     "duration":round(max(.001,finish-at),4)})
+    line["syllables"]=cues
+    line["timingEstimated"]=not exact
+    line["timingMethod"]="original-cues" if exact else "interpolated-original-line"
+    return not exact
+
+
 def _replacement(document, raw, position, new_text):
     lines = document["lines"]
     index = POSITIONS[position][0]
     changed = json.loads(json.dumps(document, ensure_ascii=False))
     changed_line = changed["lines"][index]
+    old_text = changed_line["text"]
+    estimated = _retime_visual_units(changed_line, old_text, new_text)
     changed_line["text"] = new_text
-    # Enhanced LRC syllable timing belongs to the old words; retaining it
-    # would display wrongly highlighted syllables. Preserve line timing only.
-    had_syllables = bool(changed_line.pop("syllables", None))
     updated_raw = None
     if raw is not None:
         chunks, entries = _timestamped_rows(raw)
@@ -108,7 +180,7 @@ def _replacement(document, raw, position, new_text):
         chunks[chunk_idx] = match.group(1) + new_text + match.group(3)
         updated_raw = "".join(chunks)
         changed["rawLrc"] = updated_raw
-    return changed, updated_raw, had_syllables
+    return changed, updated_raw, estimated
 
 
 def _sha(payload):
