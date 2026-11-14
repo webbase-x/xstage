@@ -4,7 +4,15 @@
 const CACHE='xstage-shell-v1096';
 
 self.addEventListener('install',event=>{
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil((async()=>{
+    // Navigation fallback must exist before the user goes offline.
+    try{
+      const shell=new URL('./index.html',self.registration.scope);
+      const response=await fetch(shell,{cache:'no-store'});
+      if(response.ok)(await caches.open(CACHE)).put(shell,response.clone()).catch(()=>{});
+    }catch{/* An offline install may still activate; never cache private Drive files. */}
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate',event=>{
@@ -51,12 +59,14 @@ self.addEventListener('fetch',event=>{
     event.respondWith((async()=>{
       const cached=await caches.match(event.request);
       if(cached)return cached;
-      const response=await fetch(event.request);
-      if(response.ok){
-        const cache=await caches.open(CACHE);
-        await cache.put(event.request,response.clone());
-      }
-      return response;
+      try{
+        const response=await fetch(event.request);
+        if(response.ok){
+          const cache=await caches.open(CACHE);
+          await cache.put(event.request,response.clone());
+        }
+        return response;
+      }catch{return cached||Response.error();}
     })());
   }
 });
