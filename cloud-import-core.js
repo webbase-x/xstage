@@ -74,7 +74,12 @@ function ext(name){const dot=String(name||'').lastIndexOf('.');return dot<0?'':n
 function groupKey(path){
   const pieces=String(path||'').replace(/\\/g,'/').split('/').filter(Boolean);
   const base=(pieces.pop()||'').replace(/\.[^.]+$/,'');
-  return [...pieces.filter(p=>!ROLES.has(p.toLowerCase())),base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
+  const folders=pieces.filter(p=>!ROLES.has(p.toLowerCase()));
+  // Pair separately organized AUDIO/<format> and VIDEO/<format> sources by
+  // relative bucket/basename. Duplicate companions still fail closed.
+  if(folders.length>=2&&['audio','video'].includes(folders[0].toLowerCase()))
+    folders.splice(0,2);
+  return [...folders,base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
 }
 function scan(files){
   const groups=new Map(),fonts=[],blocked=[],seen=new Set();
