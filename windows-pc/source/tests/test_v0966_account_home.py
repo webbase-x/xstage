@@ -42,14 +42,14 @@ class ProfileAndLoginTests(unittest.TestCase):
         valid=fetch_google_profile('test',request=lambda *_args,**kw:data({'email':'a@b.com','email_verified':True,'name':'Name','picture':'https://lh3.googleusercontent.com/x'}))
         self.assertEqual(valid['name'],'Name')
 
-    def test_sync_does_not_expose_manual_oauth_picker_or_create_new_token(self):
+    def test_pc_player_does_not_start_google_login_or_online_sync(self):
         from karaoke import ui
         import inspect
-        code=inspect.getsource(ui.KaraokeApp.web_online_data)
-        self.assertNotIn('เลือก OAuth JSON เดิม',code)
-        self.assertNotIn('choose_online_oauth_json_file',code)
-        self.assertNotIn("sign_in(client_id, client_secret, cancel)",code)
-        self.assertIn('หน้าแรก / จัดการ Google Login',code)
+        self.assertFalse(hasattr(ui.KaraokeApp, 'web_online_data'))
+        self.assertFalse(hasattr(ui.KaraokeApp, 'open_karaoke_online'))
+        code=inspect.getsource(ui.KaraokeApp.__init__)
+        self.assertNotIn('GoogleAccountUI(',code)
+        self.assertNotIn('google_account',code)
 
 
 if __name__=='__main__':unittest.main()
