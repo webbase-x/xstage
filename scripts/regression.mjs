@@ -255,8 +255,8 @@ assert.ok(app.includes('function normalizeSearchText'),'search text must be norm
 assert.ok(app.includes('function indexedSongs'),'catalog search index must exist for larger libraries');
 assert.ok(app.includes('function searchScore'),'search relevance scoring must exist');
 assert.ok(app.includes('function rankedSearchEntries'),'ranked search helper must exist');
-assert.ok(app.includes("state.shown=ranked.slice(0,5).map(item=>item.song);"),'live search must show only the five highest-ranked songs');
-assert.ok(app.includes("ranked.length>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''"),'search summary must describe ranked five-result output');
+assert.ok(app.includes("state.shown=ranked.results.map(item=>item.song);"),'live search must show only the five highest-ranked songs');
+assert.ok(app.includes("ranked.total>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''"),'search summary must describe ranked five-result output');
 assert.ok(index.includes('id="search-refine-hint"'),'search must offer a refinement hint when many songs match');
 assert.ok(!app.includes("matches.slice(0,120)"),'legacy 120-result live search limit must stay removed');
 assert.ok(css.includes("/* 1.0.44: karaoke-scale search input and five-result presentation. */"),'large karaoke search styling must exist');

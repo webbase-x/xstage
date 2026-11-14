@@ -1722,7 +1722,7 @@ function indexedSongs(songs){
   });
   return searchIndex;
 }
-function searchScore(entry,term){
+function searchScore(entry,term,words){
   if(!term)return Number.POSITIVE_INFINITY;
   if(entry.code===term)return 0;
   if(entry.title===term)return 10;
@@ -1730,7 +1730,6 @@ function searchScore(entry,term){
   if(entry.code.startsWith(term))return 30;
   if(entry.artist===term)return 40;
   if(entry.artist.startsWith(term))return 50;
-  const words=term.split(' ').filter(Boolean);
   if(words.length>1&&words.every(word=>entry.combined.includes(word)))return 55;
   if(entry.title.includes(term))return 60;
   if(entry.artist.includes(term))return 70;
@@ -1738,17 +1737,40 @@ function searchScore(entry,term){
   if(entry.combined.includes(term))return 90;
   return Number.POSITIVE_INFINITY;
 }
-function rankedSearchEntries(songs,rawTerm){
+function rankedSearchEntries(songs,rawTerm,maxResults=5){
   const term=normalizeSearchText(rawTerm);
-  if(!term)return [];
-  return indexedSongs(songs)
-    .map(entry=>({entry,score:searchScore(entry,term)}))
-    .filter(item=>Number.isFinite(item.score))
-    .sort((a,b)=>a.score-b.score||a.entry.index-b.entry.index)
-    .map(item=>({...item.entry,score:item.score}));
+  if(!term)return {results:[],total:0};
+  const words=term.split(' ').filter(Boolean);
+  const requested=Number(maxResults);
+  const limit=Number.isFinite(requested)?Math.max(0,Math.floor(requested)):5;
+  const results=[];
+  let total=0;
+  // Full catalog scan is needed for substring matching, but the stage only
+  // needs 5 winners (or 200 for remotes). Avoid sorting every match on each key.
+  for(const entry of indexedSongs(songs)){
+    const score=searchScore(entry,term,words);
+    if(!Number.isFinite(score))continue;
+    total++;
+    if(!limit)continue;
+    if(results.length>=limit){
+      const worst=results[results.length-1];
+      if(score>worst.score||(score===worst.score&&entry.index>=worst.index))
+        continue;
+    }
+    const candidate={...entry,score};
+    let low=0,high=results.length;
+    while(low<high){
+      const mid=(low+high)>>>1,old=results[mid];
+      if(old.score<score||(old.score===score&&old.index<candidate.index))low=mid+1;
+      else high=mid;
+    }
+    results.splice(low,0,candidate);
+    if(results.length>limit)results.pop();
+  }
+  return {results,total};
 }
 window.XStageRankSearch=(songs,rawTerm,limit=5)=>
-  rankedSearchEntries(songs,rawTerm).slice(0,Math.max(0,Number(limit)||0));
+  rankedSearchEntries(songs,rawTerm,limit).results;
 
 function setLiveSearchExpanded(open){
   const dock=ui.search?.closest('.search-dock');
@@ -1813,12 +1835,12 @@ function renderSongs() {
     return;
   }
   setLiveSearchExpanded(true);
-  const ranked=rankedSearchEntries(state.songs,term);
-  state.shown=ranked.slice(0,5).map(item=>item.song);
+  const ranked=rankedSearchEntries(state.songs,term,5);
+  state.shown=ranked.results.map(item=>item.song);
   state.selectedIndex=Math.max(0,Math.min(state.selectedIndex,state.shown.length-1));
-  ui.resultCount.textContent=`พบ ${num(ranked.length)} เพลง${ranked.length>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''}`;
+  ui.resultCount.textContent=`พบ ${num(ranked.total)} เพลง${ranked.total>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''}`;
   if(ui.searchRefine){
-    ui.searchRefine.hidden=ranked.length<=5;
+    ui.searchRefine.hidden=ranked.total<=5;
     ui.searchRefine.textContent='พิมพ์เพิ่มเพื่อเจาะจงผลค้นหา';
   }
   if (!state.shown.length) {
