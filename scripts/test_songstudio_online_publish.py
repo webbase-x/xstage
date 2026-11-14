@@ -85,7 +85,8 @@ class OnlinePublishTests(unittest.TestCase):
 
     def pointer(self):
         root_id = self.remote_root()
-        entries = [f for f in self.folder_files(root_id) if f["name"] == "current.json"]
+        text_id = next(f["id"] for f in self.folder_files(root_id) if f["name"] == "TEXT")
+        entries = [f for f in self.folder_files(text_id) if f["name"] == "current.json"]
         self.assertEqual(len(entries), 1)
         ident = entries[0]["id"]
         return self.publisher._json(ident), ident
@@ -140,14 +141,14 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertTrue(remote["lyrics"]["fileId"])
         self.assertIn(remote["audio"]["fileId"], self.drive.items)
         self.assertIn(remote["lyrics"]["fileId"], self.drive.items)
-        self.assertIn(remote["lrc"]["fileId"], self.drive.items)
+        self.assertNotIn("lrc", remote)
         self.assertEqual(self.drive.upload_order[-1], "current.json")
         # Neither fake absolute local path nor user OAuth credentials leak.
         self.assertNotIn(str(self.base), json.dumps(remote))
         # Category folders and a compatible current.json are in the root;
         # immutable catalog files are stored under DB/.
         names = {x["name"] for x in self.folder_files(self.remote_root())}
-        self.assertTrue({"AUDIO", "VIDEO", "MIDI", "DB", "current.json"}.issubset(names))
+        self.assertTrue(names == {"AUDIO", "TEXT"})
 
     def test_new_drive_publishes_requested_xstageweb_taxonomy(self):
         # Explicit consent only. A genuinely empty Drive gets XStageWeb.
@@ -160,16 +161,17 @@ class OnlinePublishTests(unittest.TestCase):
             if f["parent"] == "root" and f["metadata"]["name"] == "XStageWeb")
         children = self.folder_files(folder["id"])
         names = {f["name"] for f in children}
-        self.assertTrue({"AUDIO", "VIDEO", "MIDI", "DB", "current.json"}.issubset(names))
+        self.assertTrue(names == {"AUDIO", "TEXT"})
         self.assertNotIn("songs", names)
         self.assertNotIn("audio", names)
-        pointer_id = next(f["id"] for f in children if f["name"] == "current.json")
+        text_id = next(f["id"] for f in children if f["name"] == "TEXT")
+        pointer_id = next(f["id"] for f in self.folder_files(text_id) if f["name"] == "current.json")
         pointer = self.publisher._json(pointer_id)
         songs = self.publisher._json(pointer["catalogFileId"])["songs"]
         self.assertEqual(len(songs), 1)
-        self.assertTrue(songs[0]["audio"]["path"].startswith("AUDIO/M4A/Songs/0/"))
-        self.assertTrue(songs[0]["lyrics"]["path"].startswith("AUDIO/M4A/Lyrics/0/"))
-        self.assertTrue(songs[0]["lrc"]["path"].startswith("AUDIO/M4A/Lyrics/0/"))
+        self.assertTrue(songs[0]["audio"]["path"].startswith("AUDIO/"))
+        self.assertTrue(songs[0]["lyrics"]["path"].startswith("TEXT/"))
+        self.assertNotIn("lrc", songs[0])
         self.drive.locked = True
         with patch.object(roundtrip.drive, "_request",
                           side_effect=self._download_private_json):
@@ -251,7 +253,7 @@ class OnlinePublishTests(unittest.TestCase):
         result = self.publisher.publish(self.root, [self.first])
         self.assertTrue(result["published"])
         self.assertIn(uploaded["id"], self.drive.items)
-        self.assertIn("current.json", {x["name"] for x in self.folder_files(root)})
+        self.assertEqual(self.pointer()[0]["layoutVersion"],3)
 
     def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
         self.drive.folder("root", "StageWeb")
@@ -277,19 +279,20 @@ class OnlinePublishTests(unittest.TestCase):
             restored = Path(folder["path"])
             self.assertEqual(folder["source"], "XStageWeb")
             self.assertEqual(restored.name, "XStageWeb")
-            self.assertTrue((restored / "current.json").is_file())
-            self.assertEqual(len(list(restored.glob("DB/catalog-base-*.json"))), 1)
+            self.assertTrue((restored / "TEXT/current.json").is_file())
+            self.assertEqual(len(list(restored.glob("TEXT/catalog-base-*.json"))), 1)
             self.assertTrue(list(restored.rglob("*.m4a")))
-            self.assertTrue(list(restored.rglob("*.lrc")))
+            self.assertFalse(list(restored.rglob("*.lrc")),
+                            "LRC is an import-only source, never stored in Drive")
             self.assertTrue(list(restored.rglob("*.json")))
             db = self.drive.download_library(self.base / "db", kind="db")
             self.assertEqual(db["files"], 2)
-            self.assertTrue((Path(db["path"]) / "current.json").is_file())
+            self.assertTrue((Path(db["path"]) / "TEXT/current.json").is_file())
             self.assertFalse(list(Path(db["path"]).rglob("*.m4a")))
             archive = self.drive.download_library(self.base / "zip", kind="zip")
         with zipfile.ZipFile(archive["path"]) as bundle:
-            self.assertIn("XStageWeb/current.json", bundle.namelist())
-            self.assertTrue(any(x.startswith("XStageWeb/AUDIO/M4A/Songs/") for x in bundle.namelist()))
+            self.assertIn("XStageWeb/TEXT/current.json", bundle.namelist())
+            self.assertTrue(any(x.startswith("XStageWeb/AUDIO/") for x in bundle.namelist()))
         self.assertEqual(len(self.drive.items), original_count)
 
     def test_online_restore_includes_delta_and_current_media_only(self):
@@ -305,9 +308,9 @@ class OnlinePublishTests(unittest.TestCase):
             db = self.drive.download_library(self.base / "delta-db", "db")
         downloaded = Path(result["path"])
         self.assertEqual(len(list(downloaded.rglob("*.m4a"))), 2)
-        self.assertTrue(list(downloaded.glob("DB/catalog-delta-*.json")) )
+        self.assertTrue(list(downloaded.glob("TEXT/catalog-delta-*.json")) )
         self.assertEqual(db["files"], 3)
-        pointer = json.loads((downloaded / "current.json").read_text(encoding="utf-8"))
+        pointer = json.loads((downloaded / "TEXT/current.json").read_text(encoding="utf-8"))
         self.assertEqual(pointer["songCount"], 2)
 
     def test_online_download_rejects_unpublished_staging_without_creating_files(self):
@@ -344,7 +347,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertFalse((self.base / "corrupt").exists())
         self.drive.items[pointer_id]["metadata"]["md5Checksum"] = hashlib.md5(
             self.drive.items[pointer_id]["body"]).hexdigest()
-        conflicting = self.base / "conflict" / "XStageWeb" / "current.json"
+        conflicting = self.base / "conflict" / "XStageWeb" / "TEXT" / "current.json"
         conflicting.parent.mkdir(parents=True)
         conflicting.write_bytes(b"owner-existing-content")
         with patch.object(roundtrip.drive, "_request",
