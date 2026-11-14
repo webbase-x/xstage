@@ -439,6 +439,24 @@ assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.incl
 assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
 
+// WEB/APK use the same HTML5 stage. Video must be optional, muted and
+// synchronized to the authoritative audio clock, never cover karaoke lyrics.
+assert.ok(index.includes('id="karaoke-video"') &&
+          index.includes('playsinline muted preload="metadata"'),
+          'WEB and Android stage must have a safe muted video layer');
+assert.ok(app.includes('await privateFile(song.video.fileId,token)') &&
+          app.includes('function syncSongVideo()') &&
+          app.includes('karaokeVideo.playbackRate=player.playbackRate'),
+          'Video must load from the private Drive ID and follow audio speed');
+assert.match(app,/function clearIdleStage\(message\)\{\s*resetSongVideo\(\)/,
+             'Stop, cancel and exhausted queue must release any old video');
+assert.ok(app.includes("console.warn('Video unavailable; using verified audio + timed lyrics:") &&
+          app.includes("function playable(song) { return !!(getFileId(song?.audio) && getFileId(song?.lyrics)); }"),
+          'Unsupported MP4 must not prevent original AAC + timed lyrics playback');
+assert.ok(style.includes('#karaoke-video[hidden]') &&
+          style.includes('.stage:has(#karaoke-video:not([hidden])) #lyrics'),
+          'Video must hide when stopped and lyrics must stay above the video');
+
 console.log('X-Stage regression checks passed for '+version.version+' build '+version.build);
 
 assert.ok(index.includes('xstage-native-auth-pending'),'native stage must be locked before first paint');
