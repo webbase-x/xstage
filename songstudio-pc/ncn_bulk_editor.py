@@ -195,8 +195,9 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
                     raise ValueError("NCN MIDI เป็นลิงก์")
                 record = _matched_parts(root, midi, ncn)
                 mid, lyr, cur = _source_files(root, record)
-                if mid.open("rb").read(4) != b"MThd":
-                    raise ValueError("MIDI ไม่ใช่ไฟล์มาตรฐาน")
+                with mid.open("rb") as midi_check:
+                    if midi_check.read(4) != b"MThd":
+                        raise ValueError("MIDI ไม่ใช่ไฟล์มาตรฐาน")
                 lyr_bytes, cur_bytes = lyr.read_bytes(), cur.read_bytes()
                 parsed = _parse(lyr_bytes, cur_bytes, bulk)
                 record.update({
@@ -360,7 +361,6 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
             if cancelled is not None and cancelled.is_set():
                 raise RuntimeError("ยกเลิกขณะแก้ NCN · กำลังย้อนคืน")
             for path, before, after in item["files"]:
-                kind = path.parent
                 if path.suffix.lower() == ".lyr":
                     clean = _component(root, "lyrics", item["record"]["lyrics"])
                 else:
