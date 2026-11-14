@@ -301,6 +301,7 @@ SONG_INDEX = _module("song_index.py", "xstage_song_index")
 AI_LYRICS = _module("ai_lyrics.py", "xstage_ai_lyrics")
 LYRIC_ALIGNMENT = _module("lyric_alignment.py", "xstage_lyric_alignment")
 LYRIC_TEXT = _module("lyric_text_groups.py", "xstage_lyric_text_groups")
+LYRIC_NCN = _module("ncn_bulk_editor.py", "xstage_ncn_bulk_editor")
 HISTORY = _module("history_store.py", "xstage_history_store")
 FOLDER_UPLOAD = _module("folder_upload.py", "xstage_folder_upload")
 HISTORY_FILE = DATA / "edit-history.json"
@@ -1094,8 +1095,14 @@ def lyric_source_root(selected=None):
                 pointer.get("format") != "xstage-local-current" or
                 pointer.get("schemaVersion") != 1):
             raise ValueError("โฟลเดอร์ต้นทางไม่ใช่คลัง StageWeb ที่รองรับ")
-    # Without a catalog, scan_lrc_folder validates individual timed .lrc;
-    # this must not create a synthetic StageWeb tree or modify audio files.
+    # Raw NCN libraries hold MID/LYR/CUR in three mirrored directories.
+    # Normalize NCN/Song or a parent MIDI folder to the canonical NCN root
+    # so that backup/undo always refer to one stable folder.
+    if not pointer_file.is_file():
+        ncn_root = LYRIC_NCN.locate(root)
+        if ncn_root is not None:
+            return ncn_root
+    # Without a catalog, raw .lrc files can still be scanned directly.
     return root.resolve()
 
 
@@ -1548,11 +1555,17 @@ def execute_job(action, options, started):
         elif action == "lyric-groups-scan":
             root = lyric_source_root()
             is_catalog = (root / "current.json").is_file()
+            is_ncn = not is_catalog and LYRIC_NCN.locate(root) is not None
             update("กำลังตรวจเนื้อร้องจากคลัง StageWeb" if is_catalog
+                   else "กำลังตรวจ MID / LYR / CUR ใน NCN โดยไม่แก้ไฟล์" if is_ncn
                    else "กำลังค้นหาไฟล์ LRC ในโฟลเดอร์ต้นทาง · ไม่อ่านไฟล์เสียง")
             if is_catalog:
                 index = LYRIC_TEXT.scan(
                     root, _song_export_module(), cancelled=CANCEL,
+                    on_progress=lambda detail, done: update(detail, done))
+            elif is_ncn:
+                index = LYRIC_NCN.scan(
+                    root, NCN, LYRIC_TEXT, cancelled=CANCEL,
                     on_progress=lambda detail, done: update(detail, done))
             else:
                 index = LYRIC_TEXT.scan_lrc_folder(
@@ -1567,7 +1580,8 @@ def execute_job(action, options, started):
                             f"· ข้ามโครงสร้างไม่รองรับ {index['skippedInvalid']:,} เพลง"),
                 "songs": index["songs"], "groups": index["groupCount"],
                 "skippedInvalid": index["skippedInvalid"],
-                "withoutLyrics": index["withoutLyrics"]
+                "withoutLyrics": index["withoutLyrics"],
+                "sourceMode": index.get("mode", "stageweb")
             }
         elif action == "lyric-groups-replace":
             with LOCK:
@@ -1586,7 +1600,14 @@ def execute_job(action, options, started):
                 JOB["total"] = planned["changedSongs"]
             update(f"กำลังสำรองและแทนที่ {planned['groups']:,} กลุ่ม · "
                    f"{planned['changedLines']:,} บรรทัดใน {planned['changedSongs']:,} เพลง")
-            if index.get("mode") == "lrc-folder":
+            if index.get("mode") == "ncn-folder":
+                result = LYRIC_NCN.apply(
+                    root, NCN, LYRIC_TEXT, index, groups, new_text,
+                    LYRIC_TEXT_BACKUPS, search=search,
+                    expected_count=options.get("expectedCount"),
+                    cancelled=CANCEL,
+                    on_progress=lambda detail, done: update(detail, done))
+            elif index.get("mode") == "lrc-folder":
                 result = LYRIC_TEXT.apply_many_lrc_folder(
                     root, index, groups, new_text, LYRIC_TEXT_BACKUPS,
                     search=search, expected_count=options.get("expectedCount"),
