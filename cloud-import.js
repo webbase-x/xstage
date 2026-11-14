@@ -695,7 +695,8 @@ class Importer {
             if(same){
               byPair.delete(String(same.midi?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase());
-              byCode.set(code.toLowerCase(),candidates.filter(x=>x.webSongId!==ident));
+              const oldCode=String(same.code||'').toLowerCase();
+              byCode.set(oldCode,(byCode.get(oldCode)||[]).filter(x=>x.webSongId!==ident));
             }
             rows.set(ident,record);addMaps(record);byPair.set(pair,record);
             revisions.push(record);this.stats[same?'updated':'newSongs']++;
@@ -770,15 +771,32 @@ class Importer {
               core.hashBlob(json,()=>this.check())
             ]);
             const pair=audioHash+':'+jsonHash;
-            if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้ามเพลงซ้ำ MD5: '+code);continue;}
+            const matchedPair=byPair.get(pair);
+            const sameMetadata=videoMeta&&matchedPair&&
+              matchedPair.code===videoMeta.code&&
+              matchedPair.title===videoMeta.title&&
+              matchedPair.artist===videoMeta.artist&&
+              (matchedPair.album||'')===videoMeta.album&&
+              (matchedPair.composer||'')===videoMeta.composer&&
+              (matchedPair.genre||'')===videoMeta.genre&&
+              (matchedPair.language||'')===videoMeta.language&&
+              (matchedPair.year||null)===videoMeta.year&&
+              matchedPair.originalVideo?.fileId&&
+              matchedPair.originalVideo.md5Checksum===sourceVideoMd5;
+            if(matchedPair&&(!videoMeta||sameMetadata)){
+              this.stats.duplicates++;finished++;show('ข้ามเพลงซ้ำ MD5: '+code);continue;
+            }
             const candidates=byCode.get(code.toLowerCase())||[];
-            const same=candidates.find(x=>String(x.audio?.md5Checksum||'').toLowerCase()===audioHash);
+            let same=candidates.find(x=>String(x.audio?.md5Checksum||'').toLowerCase()===audioHash);
             // Same bytes with a different filename/code are a duplicate, not
             // a fatal primary-key collision. Never overwrite another record.
             const existingAudio=rows.get('browser/'+audioHash);
             if(existingAudio&&!same){
-              this.stats.duplicates++;finished++;
-              show('ข้ามไฟล์เพลงซ้ำ MD5 แม้เปลี่ยนชื่อ/รหัส: '+code);continue;
+              if(videoMeta&&!candidates.length)same=existingAudio;
+              else{
+                this.stats.duplicates++;finished++;
+                show('ข้ามไฟล์เพลงซ้ำ MD5 แม้เปลี่ยนชื่อ/รหัส: '+code);continue;
+              }
             }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
@@ -791,7 +809,7 @@ class Importer {
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash,.83,.09);
-            let lrcInfo=same?.lrc;
+            let lrcInfo=videoMeta?.mode==='embedded'?null:same?.lrc;
             if(raw!==null){
               const rawBlob=new Blob([raw],{type:'text/plain'});
               const lrcHash=await core.hashBlob(rawBlob,()=>this.check());
@@ -809,15 +827,31 @@ class Importer {
                   MEDIA_MIME[ve]||'application/octet-stream',vh);
               }
             }
+            let originalVideoMedia=same?.originalVideo||null;
+            if(originalVideoFile){
+              if(originalVideoFile===videoFile)originalVideoMedia=videoMedia;
+              else if(!originalVideoMedia||originalVideoMedia.md5Checksum!==sourceVideoMd5){
+                const originalKind=core.ext(originalVideoFile.name).toUpperCase();
+                const originalName=base+'-'+sourceVideoMd5.slice(0,16)+
+                  '.'+originalKind.toLowerCase();
+                originalVideoMedia=await uploadMedia(originalVideoFile,code,
+                  ['VIDEO','ORIGINAL',originalKind,'Songs',folder],
+                  originalName,core.videoMime(originalVideoFile.name)||
+                  'application/octet-stream',sourceVideoMd5);
+              }
+            }
             const ident=same?.webSongId||('browser/'+audioHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิงออนไลน์ชนกับเพลงอื่น');
-            // Preserve the original linked MIDI/video/vocal media when only
-            // a same-audio song's timed lyrics have changed.
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:uploadKind,lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
+              artist:doc.artist||'',sourceFormat:uploadKind,
+              lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
               audio:media,lyrics:lyric,lrc:lrcInfo,
               ...(videoMedia?{video:videoMedia}:{}),
-              ...(sourceVideoMd5?{sourceVideoMd5,originalVideoFormat:core.ext(video.file.name).toUpperCase()}:{})};
+              ...(originalVideoMedia?{originalVideo:originalVideoMedia}:{}),
+              ...(videoMeta?{album:videoMeta.album,composer:videoMeta.composer,
+                genre:videoMeta.genre,language:videoMeta.language,year:videoMeta.year}:{}),
+              ...(sourceVideoMd5?{sourceVideoMd5,
+                originalVideoFormat:core.ext(originalVideoFile.name).toUpperCase()}:{})};
             if(same){
               const oldPair=String(same.audio?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase();
