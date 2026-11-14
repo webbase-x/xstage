@@ -16,7 +16,7 @@ import re
 import shutil
 import struct
 import zipfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -224,6 +224,38 @@ def _lyrics_folder(root):
     return root
 
 
+SKIP_LABELS = {
+    "read_error": "อ่านไฟล์ไม่ได้หรือสิทธิ์ไม่เพียงพอ",
+    "symlink": "ไฟล์ลิงก์ ไม่อ่านเพื่อความปลอดภัย",
+    "too_large": "ไฟล์ใหญ่เกิน 1 MB",
+    "short_header": "หัวไฟล์ LYR ไม่ครบ",
+    "short_lyrics": "เนื้อร้องที่ใช้วิเคราะห์น้อยกว่า 4 บรรทัด",
+    "encoding": "รหัสข้อความไม่รองรับ CP874",
+    "invalid_chars": "พบอักขระ NUL ที่ไม่รองรับ",
+    "other": "รูปแบบ LYR ไม่รองรับ"
+}
+
+
+def _skip_reason(exc):
+    """Translate validation failures into stable, auditable categories."""
+    if isinstance(exc, OSError):
+        return "read_error", str(exc.strerror or "ไม่สามารถอ่านไฟล์")
+    text = str(exc)
+    if "เป็นลิงก์" in text:
+        return "symlink", text
+    if "ใหญ่เกิน" in text:
+        return "too_large", text
+    if "ข้อมูลหัวเพลง" in text:
+        return "short_header", text
+    if "อย่างน้อย 4 บรรทัด" in text:
+        return "short_lyrics", text
+    if "CP874" in text:
+        return "encoding", text
+    if "อักขระ" in text:
+        return "invalid_chars", text
+    return "other", text or SKIP_LABELS["other"]
+
+
 def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
     """Index ONLY .LYR in Lyrics and its subdirectories.
 
@@ -236,6 +268,7 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
     folder = _lyrics_folder(root)
     grouped = {name: defaultdict(list) for name in bulk.POSITIONS}
     searchable, counted, skipped = {}, 0, 0
+    skipped_rows, skipped_types = [], Counter()
     files_to_read = []
     for dirpath, subdirs, files in os.walk(folder, topdown=True, followlinks=False):
         if cancelled is not None and cancelled.is_set():
@@ -258,38 +291,46 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
     for number, path in enumerate(files_to_read, 1):
         if cancelled is not None and cancelled.is_set():
             raise RuntimeError("ยกเลิกการวิเคราะห์ LYR · ยังไม่ได้แก้เพลง")
+        relative = path.relative_to(folder).as_posix()
+        try:
+            if path.is_symlink() or not path.is_file():
+                raise ValueError("LYR เป็นลิงก์")
+            raw = path.read_bytes()
+            parsed = _parse_lyrics_only(raw, bulk)
+        except (OSError, ValueError, UnicodeError, TypeError) as exc:
+            skipped += 1
+            code, reason = _skip_reason(exc)
+            skipped_types[code] += 1
+            skipped_rows.append({
+                "file": relative, "category": code,
+                "label": SKIP_LABELS[code], "reason": reason
+            })
+        else:
+            song_id = relative
+            record = {
+                "lyrics": relative,
+                "digestLyrics": bulk._sha(raw),
+                "source": "lyr-only"
+            }
+            counted += 1
+            searchable[song_id] = "\n".join(item.casefold() for item in parsed["lines"])
+            for pos, (idx, _) in bulk.POSITIONS.items():
+                phrase = parsed["lines"][idx]
+                if not phrase:
+                    continue
+                gid = bulk._group_id(pos, phrase)
+                grouped[pos][gid].append({
+                    "songId": song_id, "code": path.stem[:80],
+                    "title": parsed["title"] or path.stem,
+                    "artist": parsed["artist"], "text": phrase,
+                    "record": record
+                })
+        # Only report a file after its validation has finished. This ensures
+        # scanned = accepted + skipped, even at exact 100-file boundaries.
         if on_progress and (number % 100 == 0 or number == total):
             on_progress(
                 f"วิเคราะห์ LYR {number:,}/{total:,} · อ่านได้ {counted:,} · ข้าม {skipped:,}",
                 number, total)
-        try:
-            if path.is_symlink() or not path.is_file():
-                raise ValueError("LYR เป็นลิงก์")
-            relative = path.relative_to(folder).as_posix()
-            raw = path.read_bytes()
-            parsed = _parse_lyrics_only(raw, bulk)
-        except (OSError, ValueError, UnicodeError, TypeError):
-            skipped += 1
-            continue
-        song_id = relative
-        record = {
-            "lyrics": relative,
-            "digestLyrics": bulk._sha(raw),
-            "source": "lyr-only"
-        }
-        counted += 1
-        searchable[song_id] = "\n".join(item.casefold() for item in parsed["lines"])
-        for pos, (idx, _) in bulk.POSITIONS.items():
-            phrase = parsed["lines"][idx]
-            if not phrase:
-                continue
-            gid = bulk._group_id(pos, phrase)
-            grouped[pos][gid].append({
-                "songId": song_id, "code": path.stem[:80],
-                "title": parsed["title"] or path.stem,
-                "artist": parsed["artist"], "text": phrase,
-                "record": record
-            })
     if not counted:
         raise ValueError(f"พบ LYR {total:,} ไฟล์ แต่ไม่พบเนื้อร้อง CP874 ที่มีอย่างน้อย 4 บรรทัด")
     groups = {}
@@ -304,6 +345,11 @@ def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
         "root": str(root), "mode": "ncn-folder", "scanMode": "lyr-only",
         "generation": None, "groups": groups, "searchable": searchable,
         "songs": counted, "inspected": total, "skippedInvalid": skipped,
+        "skippedRows": skipped_rows,
+        "skippedReasons": [
+            {"code": code, "label": SKIP_LABELS[code], "count": skipped_types[code]}
+            for code in SKIP_LABELS if skipped_types[code]
+        ],
         "withoutLyrics": 0, "groupCount": len(groups)
     }
 
