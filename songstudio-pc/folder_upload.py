@@ -320,3 +320,65 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             f"ข้ามรายการไม่สมบูรณ์ {len(result['incomplete'])} · "
             f"ยังไม่เผยแพร่ VIDEO/NCN {len(deferred)} รายการ (ยังไม่มี Online Catalog ที่รองรับ)")
     }
+
+
+def inspect_soundfont(path):
+    """Check the SoundFont file signature, not merely its extension."""
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("กรุณาเลือกไฟล์ SoundFont .sf2 หรือ .sf3")
+    source = Path(path).expanduser()
+    if not source.is_file() or source.is_symlink():
+        raise ValueError("ไม่พบ SoundFont ที่เลือก หรือไฟล์เป็น Symbolic Link")
+    suffix = source.suffix.lower()
+    if suffix not in (".sf2", ".sf3"):
+        raise ValueError("รองรับ SoundFont .sf2/.sf3 เท่านั้น")
+    size = source.stat().st_size
+    if size < 256 or size > 2 * 1024 * 1024 * 1024:
+        raise ValueError("ขนาด SoundFont ไม่ถูกต้องหรือใหญ่เกิน 2 GB")
+    with source.open("rb") as stream:
+        header = stream.read(12)
+    if header[:4] != b"RIFF" or header[8:12] != b"sfbk":
+        raise ValueError("ไฟล์ SoundFont ไม่ใช่ RIFF sfbk ที่ถูกต้อง")
+    return {"path": str(source), "name": source.name, "format": suffix[1:].upper(),
+            "bytes": size}
+
+
+def upload_soundfont(drive, path, *, create_new_library=False,
+                     cancelled=None, progress=None):
+    """Upload private SF2/SF3 without altering the playable songs catalog.
+
+    XStageWeb/SOUNDFONT/SF2|SF3/ is a storage convention. Until the browser
+    MIDI engine implements loading these private Drive IDs, it is not a claim
+    that a SoundFont can be played in Karaoke Online.
+    """
+    info = inspect_soundfont(path)
+    roots = [item for item in drive.list_children("root")
+             if item.get("name") in ("XStageWeb", "StageWeb")
+             and item.get("mimeType") == FOLDER]
+    if len(roots) > 1:
+        raise ValueError("พบ StageWeb/XStageWeb ซ้ำกัน · หยุดก่อนอัปโหลด SoundFont")
+    if not roots and not create_new_library:
+        raise ValueError("ไม่พบ XStageWeb ที่เข้าถึงได้ · ต้องยืนยันสร้างคลังใหม่")
+    if cancelled and cancelled.is_set():
+        raise ValueError("ยกเลิกการอัปโหลด SoundFont")
+    root = roots[0]["id"] if roots else drive.folder("root", "XStageWeb")
+    section = drive.folder(root, "SOUNDFONT")
+    target = drive.folder(section, info["format"])
+    source = Path(info["path"])
+    fingerprint = digest(source)
+    # Immutably named artifacts: same name + same bytes is skipped, changed
+    # bytes are versioned without overwriting a working SoundFont.
+    stem = re.sub(r"[^\w .()-]", "_", source.stem, flags=re.UNICODE).strip(" .")[:100] or "SoundFont"
+    filename = stem + "-" + fingerprint[:16] + source.suffix.lower()
+    if progress:
+        progress("ตรวจ MD5 และอัปโหลด SoundFont ไปยัง XStageWeb/SOUNDFONT/" + info["format"])
+    status, meta = drive.upload_file(target, source, filename, cancelled=cancelled)
+    if str(meta.get("md5Checksum", "")).lower() != fingerprint:
+        raise ValueError("Google Drive ไม่ยืนยัน MD5 SoundFont ให้ตรงกับไฟล์ต้นฉบับ")
+    return {"uploaded": status == "created", "skipped": status == "skipped",
+            "name": filename, "fileId": meta["id"], "md5": fingerprint,
+            "bytes": info["bytes"], "path": "XStageWeb/SOUNDFONT/" + info["format"] + "/" + filename,
+            "webMidiReady": False,
+            "message": ("อัปโหลด SoundFont สำเร็จ" if status == "created"
+                        else "พบ SoundFont เดิมที่ตรงกัน · ข้ามซ้ำ") +
+                       " · " + info["format"] + " · ยังไม่เปิด MIDI SoundFont Web Engine"}
