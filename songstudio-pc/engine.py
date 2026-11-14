@@ -452,6 +452,8 @@ def pc_audio_capabilities():
             else:
                 size = font.stat().st_size
                 font_info = {"name": font.name, "sizeBytes": size,
+                             "cloudCompatible": size <= 256 * 1024 ** 2,
+                             "cloudMaximumBytes": 256 * 1024 ** 2,
                              **soundfont_pc_assessment(size, available_ram, free_disk)}
         except OSError:
             font_info = None
