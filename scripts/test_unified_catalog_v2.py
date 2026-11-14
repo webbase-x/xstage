@@ -114,6 +114,14 @@ class LargeCatalogTests(unittest.TestCase):
         self.assertEqual(len([x for x in self.drive.list_children(self.db)
                               if x["name"]=="current.json"]),1)
 
+    def test_duplicate_code_never_uploads_or_changes_current_pointer(self):
+        records=self.songs(2)
+        records["S1"]["code"]=records["S0"]["code"]
+        before=set(self.drive.items)
+        with self.assertRaises(c.CatalogValidationError):
+            write_published_v2(self.drive,self.db,records)
+        self.assertEqual(set(self.drive.items),before)
+
     def test_pointer_rejects_duplicate_shard_and_large_delta_list(self):
         with self.assertRaises(c.CatalogValidationError):
             c.validate_pointer({"schemaVersion":2,"generation":"a","songCount":2,
