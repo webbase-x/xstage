@@ -299,7 +299,8 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             is_video = source_kind in VIDEO
             is_midi = source_kind in MIDI
             file = stage / "audio" / (source_id[:16] +
-                    (source_kind if source_kind in (".mp3", ".m4a") else ".m4a"))
+                    (source_kind if source_kind in (".mid", ".midi", ".kar", ".mp3", ".m4a")
+                     else ".m4a"))
             lyrics_file = stage / "lyrics" / (source_id[:16] + ".json")
             lrc_file = lyrics_file.with_suffix(".lrc")
             if is_midi:
@@ -321,13 +322,16 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             if not document.get("lines"):
                 continue
             if file.suffix.lower() == source_kind:
-                shutil.copy2(media, file)
+                shutil.copyfile(media, file)
+                if digest(file) != source_id:
+                    raise ValueError("SHA-256 ไฟล์ที่คัดลอกไม่ตรงต้นฉบับ: " + media.name)
             elif renderer is not None:
                 renderer(media, file)
             else:
                 raise ValueError("ต้องใช้ FFmpeg/FluidSynth ที่มากับ PC Ready เพื่อแปลงเพลง " + media.name)
-            if not file.is_file() or file.stat().st_size < 1000:
-                raise ValueError("ผลการแปลงไฟล์เพลงไม่สมบูรณ์: " + media.name)
+            minimum = 22 if is_midi else 1000
+            if not file.is_file() or file.stat().st_size < minimum:
+                raise ValueError("ไฟล์เพลงที่เตรียมไว้ไม่สมบูรณ์: " + media.name)
             lrc_file.write_bytes(raw_lrc)
             lyrics_file.write_text(json.dumps(document, ensure_ascii=False),
                                    encoding="utf-8")
@@ -337,20 +341,9 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                 "sourceFormat": row["kind"],
                 "audio": {"path": "audio/" + file.name},
                 "lyrics": {"path": "lyrics/" + lyrics_file.name}}
-            if is_midi:
-                (stage / "midi").mkdir(exist_ok=True)
-                midi_file = stage / "midi" / (source_id[:16] + source_kind)
-                shutil.copy2(media, midi_file)
-                record["midi"] = {"path": "midi/" + midi_file.name}
-                if ".lyr" in companions and ".cur" in companions:
-                    (stage / "midi_lyrics").mkdir(exist_ok=True)
-                    (stage / "midi_cursor").mkdir(exist_ok=True)
-                    for extension, key, section in (
-                        (".lyr", "midiLyrics", "midi_lyrics"),
-                        (".cur", "midiCursor", "midi_cursor")):
-                        target_file = stage / section / (source_id[:16] + extension)
-                        shutil.copy2(companions[extension], target_file)
-                        record[key] = {"path": section + "/" + target_file.name}
+            # NCN sources (LYR/CUR) remain on the local computer only.
+            # For Web/TV only the unmodified MIDI and timed Lyrics JSON
+            # are published; no extra source-type folders or companion files.
             if is_video and video_renderer is not None:
                 (stage / "video").mkdir(exist_ok=True)
                 video = stage / "video" / (source_id[:16] + ".mp4")
