@@ -99,15 +99,17 @@ def songs_root(workspace: str | Path) -> Path:
     return target
 
 
-def next_target(root: Path, source_filename: str) -> Path:
+def next_target(root: Path, source_filename: str, *, media_ext: str = ".m4a") -> Path:
     """Reserve a *name*, not a file; use one writer job at a time."""
+    if media_ext not in {".m4a", ".mid", ".midi", ".kar"}:
+        raise ValueError("รูปแบบส่งออกไม่รองรับสำหรับคลัง X-Stage")
     bucket = source_bucket(source_filename)
     folder = root / "audio" / bucket
     folder.mkdir(parents=True, exist_ok=True)
     base = safe_filename(Path(source_filename).stem)
     for counter in range(1, 100001):
         suffix = f" ({counter})" if counter > 1 else ""
-        target = folder / (base + suffix + ".m4a")
+        target = folder / (base + suffix + media_ext)
         lyric = root / "lyrics" / bucket / (base + suffix + ".json")
         if not target.exists() and not lyric.exists():
             return target
@@ -115,14 +117,15 @@ def next_target(root: Path, source_filename: str) -> Path:
 
 
 def temporary_audio(target: Path) -> Path:
-    """Same-directory staging; FFmpeg still sees .m4a as output extension."""
-    return target.parent / (".xstage-" + secrets.token_hex(12) + ".m4a")
+    """Stage in the target folder, retaining media type for exact MIDI copy."""
+    return target.parent / (".xstage-" + secrets.token_hex(12) + target.suffix)
 
 
 def commit_audio(staged: Path, target: Path) -> None:
     """No silent overwrites; finalize only complete audio files."""
-    if not staged.is_file() or staged.stat().st_size < 1000:
-        raise RuntimeError("ไฟล์เสียง M4A ที่สร้างไม่สมบูรณ์")
+    minimum = 22 if target.suffix.lower() in {".mid", ".midi", ".kar"} else 1000
+    if not staged.is_file() or staged.stat().st_size < minimum:
+        raise RuntimeError("ไฟล์เพลงที่สร้างไม่สมบูรณ์")
     if target.exists():
         raise FileExistsError(f"ไฟล์เพลงมีอยู่แล้ว: {target}")
     try:
@@ -379,7 +382,8 @@ def record_is_complete(root: Path, record: dict) -> bool:
     """Only a fully published audio/lyrics/vocals set can block rebuilding."""
     try:
         audio = safe_media_path(root, record["audio"]["path"], "audio")
-        if not audio.is_file() or audio.stat().st_size < 1000:
+        minimum = 22 if audio.suffix.lower() in {".mid", ".midi", ".kar"} else 1000
+        if not audio.is_file() or audio.stat().st_size < minimum:
             return False
         lyric = record.get("lyrics")
         if lyric:
