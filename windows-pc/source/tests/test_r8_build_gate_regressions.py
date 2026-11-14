@@ -37,7 +37,7 @@ class BuildGateR8Tests(unittest.TestCase):
         app._keyboard_voice.close.side_effect = OSError('test local MIDI voice cleanup')
         app._fx_rack = Mock()
         app.system_volume = Mock()
-        with patch('karaoke.medley_decks.cleanup') as medley_cleanup, \\
+        with patch('karaoke.medley_decks.cleanup') as medley_cleanup, \
              self.assertLogs(level='ERROR'), self.assertRaises(ShutdownError):
             PlaybackApp.close_app(app)
         medley_cleanup.assert_called_once()
