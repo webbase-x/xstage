@@ -154,17 +154,15 @@ class OnlinePublisher:
         return result
 
     def _existing_root(self):
-        # Existing XStageWeb databases keep their original Google Drive ID.
-        # Never generate a second StageWeb tree when the legacy library is
-        # already visible; code and MD5 duplicate checks must cover both.
-        found = [x for x in self.drive.list_children("root") if
-                 x.get("name") == ONLINE_ROOT and x.get("mimeType") == FOLDER_MIME]
-        if len(found) > 1:
-            raise PublishError(
-                "พบคลัง StageWeb และ XStageWeb มากกว่าหนึ่งรายการ · "
-                "หยุดก่อนอัปโหลดเพื่อไม่ให้แยกฐานเพลงซ้ำ "
-                "กรุณาตรวจเลือกคลังเดิมให้ชัดเจน")
-        return found[0]["id"] if found else None
+        # Inspect names to fail safely, not to open or migrate old libraries.
+        roots = [x for x in self.drive.list_children("root") if
+                 x.get("mimeType") == FOLDER_MIME and
+                 x.get("name") in ("XStageWeb", "StageWeb")]
+        if any(x["name"] == "StageWeb" for x in roots):
+            raise PublishError("ตรวจพบ StageWeb รุ่นเก่า · ไม่รองรับและไม่สร้างคลังใหม่ทับ กรุณาจัดการคลังเก่าแยกต่างหาก")
+        if len(roots) > 1:
+            raise PublishError("พบ XStageWeb ซ้ำ · หยุดก่อนอัปโหลด")
+        return roots[0]["id"] if roots else None
 
     def _read_online(self, root):
         if not root:
