@@ -688,7 +688,7 @@ function timeLabel(t) {
 function getFileId(data) {
   return typeof data?.fileId === 'string' && data.fileId.length > 0 ? data.fileId : '';
 }
-function playable(song) { return !!(getFileId(song?.audio) && getFileId(song?.lyrics)); }
+function playable(song) { return !!(getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))); }
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
 const GOOGLE_FETCH_TIMEOUT_MS=18_000;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -1081,6 +1081,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       state.manifest=null;state.songs=[];state.shown=[];renderSongs();
     }
     state.libraryRootId=root.id;
+    void window.XStageBrowserMidi?.refreshFonts({token,rootId:root.id,sub:account.sub})
+      .catch(error=>console.warn('SoundFont selector:',error.message));
     state.libraryRootOwnedByMe=!!root.ownedByMe;
     state.libraryRootCanShare=!!root.capabilities?.canShare;
     state.libraryRootOwnerEmail=String(root.owners?.[0]?.emailAddress||'');
@@ -1802,6 +1804,8 @@ function releaseQueuePreload(){
 }
 function scheduleQueuePreload(){
   clearTimeout(state.queuePreloadTimer);
+  // A MIDI track is synthesized on demand; queue prefetch must not treat it as an audio file.
+  if(state.queue[0]?.midi){releaseQueuePreload();return;}
   if(!state.token||!state.queue.length){releaseQueuePreload();return;}
   const song=state.queue[0],token=state.token;
   if(state.queuePrepared?.song===song&&state.queuePrepared.token===token)return;
@@ -1810,6 +1814,7 @@ function scheduleQueuePreload(){
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(song,token);},300);
 }
 async function preloadFirstQueueSong(song,token){
+  if(song?.midi)return;
   if(state.queue[0]!==song||state.token!==token)return;
   const controller=new AbortController(),version=++state.queuePreloadVersion;
   state.queuePreload?.controller.abort();
@@ -1829,7 +1834,7 @@ async function preloadFirstQueueSong(song,token){
 function prefetchMedleyNext(){
   if(!state.medley||!state.token||state.loading)return;
   const song=nextMedleyCandidate(),token=state.token;
-  if(!song||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
+  if(!song||song.midi||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
   const task={song,token};state.medleyPrefetch=task;
   Promise.all([privateFile(song.audio.fileId,token),privateJson(song.lyrics.fileId,token)])
     .then(async ([response,lyrics])=>{
@@ -1994,7 +1999,7 @@ function togglePlayback(){
 async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=true}={}) {
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
-  if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มี M4A/JSON ที่พร้อมเล่น');return;}
+  if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มีไฟล์เสียง/MIDI และ Lyrics JSON ที่พร้อมเล่น');return;}
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
@@ -2005,12 +2010,29 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
       :state.queuePrepared?.song===song&&state.queuePrepared.token===token
       ?state.queuePrepared:state.medleyCache?.song===song&&state.token===token?state.medleyCache:null);
     if(prepared){if(state.queuePrepared===prepared)state.queuePrepared=null;if(state.medleyCache===prepared)state.medleyCache=null;}
-    const [audio,lyrics]=prepared
+    const loadMedia=async()=>{
+      if(!getFileId(song.midi))return privateFile(song.audio.fileId,token,
+        {signal:controller.signal}).then(r=>r.blob());
+      if(!window.XStageBrowserMidi)throw Error('ไม่พบเครื่องเล่น MIDI ของเว็บ กรุณาอัปเดตหน้าเว็บ');
+      setPlayStatus('กำลังโหลด MIDI และ SoundFont จาก Google Drive…');
+      const [midiResponse,fontBytes]=await Promise.all([
+        privateFile(song.midi.fileId,token,{signal:controller.signal}),
+        window.XStageBrowserMidi.selectedFont(token,controller.signal)
+      ]);
+      if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
+      const midiBytes=new Uint8Array(await midiResponse.arrayBuffer());
+      const rendered=await window.XStageBrowserMidi.render(midiBytes,{
+        fontBytes,signal:controller.signal,
+        onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
+      });
+      return rendered.audio;
+    };
+    const [audio,lyrics]=prepared&&!getFileId(song.midi)
       ? [prepared.blob,prepared.lyrics]
       : await boundedPlaybackTask(Promise.all([
-          privateFile(song.audio.fileId,token,{signal:controller.signal}).then(r=>r.blob()),
+          loadMedia(),
           privateJson(song.lyrics.fileId,token,{signal:controller.signal})
-        ]),90,'โหลดเพลงจาก Google Drive นานเกินไป กรุณาตรวจการเชื่อมต่อ');
+        ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป');
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token)return;
     if (!audio.size)throw Error('ไฟล์เสียงว่างเปล่า');
