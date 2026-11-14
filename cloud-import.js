@@ -281,8 +281,12 @@ class Importer {
     this.dom.pause?.addEventListener('click',()=>this.stop('พักงาน'));
     this.dom.cancel?.addEventListener('click',()=>this.stop('ยกเลิกงาน · เก็บรายการที่ทำเสร็จไว้บน Drive'));
     this.dom.resume?.addEventListener('click',()=>this.resume());
-    this.dom.input?.addEventListener('change',()=>this.acceptFiles(Array.from(this.dom.input.files||[]).map(file=>({
-      file,relative:file.webkitRelativePath||file.name})),null));
+    this.dom.input?.addEventListener('change',async()=>{
+      const files=Array.from(this.dom.input.files||[]);
+      if(!files.length)return;
+      await this.acceptFiles(files.map(file=>({file,relative:file.webkitRelativePath||file.name})),null);
+      if(this.resumeAfterPicker){this.resumeAfterPicker=false;await this.start();}
+    });
     scope.addEventListener('pagehide',()=>this.stop('ปิดหน้าเว็บ · หยุดและจดจำจุดทำต่อ'));
     scope.addEventListener('xstage:auth-ready',()=>this.updateOpen());
     scope.addEventListener('xstage:auth-refreshed',()=>this.updateOpen());
@@ -325,7 +329,7 @@ class Importer {
       else this.dom.dialog.setAttribute('open','');
     }
     this.saved=await checkpoint(this.session().sub,undefined);
-    if(this.saved&&!this.selected){
+    if(this.saved?.status!=='completed'&&this.saved&&!this.selected){
       this.status('พบงานค้างของบัญชีนี้ · กดทำต่อ (อาจต้องอนุญาตโฟลเดอร์เดิม)');
       this.dom.source.textContent='งานเดิม: '+String(this.saved.label||'โฟลเดอร์เพลง');
       if(this.saved.handle)this.folderHandle=this.saved.handle;
@@ -420,8 +424,10 @@ class Importer {
         }catch(e){this.status('เปิดโฟลเดอร์เดิมไม่ได้ กรุณาเลือกใหม่: '+e.message);return;}
       }else{
         this.status('กรุณาเลือกโฟลเดอร์เดิมอีกครั้ง · ระบบตรวจ MD5/Drive และข้ามไฟล์ที่ส่งสำเร็จแล้ว');
+        this.resumeAfterPicker=true;
         await this.choose();
         if(!this.selected)return;
+        this.resumeAfterPicker=false;
       }
     }
     await this.start();
@@ -638,7 +644,7 @@ class Importer {
         if(finished%5===0)await this.save({status:'uploading',done:finished,total:work.length});
       }
       await publish();
-      await this.save({status:'completed',done:finished,total:work.length});
+      await checkpoint(this.account,null);this.saved=null;
       this.progress(1,1);
       this.status('เสร็จสิ้น · เพลงใหม่ '+this.stats.newSongs+' · แก้เนื้อร้อง '+this.stats.updated+
         ' · ข้ามซ้ำ '+this.stats.duplicates+' · รหัสชน '+this.stats.conflicts+
