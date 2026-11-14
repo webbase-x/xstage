@@ -179,6 +179,19 @@ class V2OnlinePublishTests(unittest.TestCase):
         self.assertEqual(outcome["duplicates"],1)
         self.assertEqual(len(self.published()),1)
 
+    def test_same_audio_different_lyrics_and_code_does_not_create_duplicate(self):
+        first=self.make_song("00001",audio=b"A"*4500,text="first words")
+        second=self.make_song("00002",audio=b"A"*4500,text="other words")
+        self.publisher.publish(self.root,[first])
+        before=self.published()
+        pointer,_,_=self.pointer()
+        result=self.publisher.publish(self.root,[second])
+        self.assertEqual(result["duplicates"],1)
+        self.assertEqual(result["newSongs"],0)
+        self.assertFalse(result["published"])
+        self.assertEqual(before,self.published())
+        self.assertEqual(pointer["generation"],self.pointer()[0]["generation"])
+
     def test_interrupted_initial_upload_never_publishes_pointer(self):
         row=self.make_song()
         original=self.drive.upload_file
