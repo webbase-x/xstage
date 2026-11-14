@@ -2,15 +2,15 @@
   "name": "X-Stage Song Studio PC Ready",
   "platform": "windows-x64",
   "channel": "pc-ready",
-  "version": "0.3.31",
-  "build": 331,
+  "version": "0.3.32",
+  "build": 332,
   "available": true,
   "package_type": "portable_zip",
   "installer_available": false,
   "installer_file": null,
-  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.31-build331.zip",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.31-build331/X-Stage-Song-Studio-PC-Ready-v0.3.31-build331.zip",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.31-build331",
-  "sha256": "fa629b89971da963e4db272d256b902aec1917d95600ea9ddec7ad7357e2b3c9",
-  "notes": "Windows 10/11 x64 ready offline portable ZIP. The LYR-only NCN head/tail analysis records every skipped filename, categorized reason and totals, then offers focused recheck of only skipped LYR files, without accessing MIDI/CUR or altering originals. Recheck preserves original reasons, confirms ongoing skips, restores repaired files into the grouped lyric index and keeps cumulative recovered reports. Paginated UI and authenticated BOM UTF-8 CSV export with spreadsheet formula-injection protection; includes exact total/progress counts and a report even if every LYR is invalid. MID/CUR checked only for confirmed lyric replacements; paired backups and undo. Extract full ZIP and run Start-Song-Studio.cmd."
+  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.32-build332.zip",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.32-build332/X-Stage-Song-Studio-PC-Ready-v0.3.32-build332.zip",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.32-build332",
+  "sha256": "84273fdd3b5aba7ee614ac52ba96a5710c55624b46a5d2dad6773d1cd6e8d9f0",
+  "notes": "Verified Windows 10/11 x64 offline portable ZIP. Fix NCN CUR editor false rejection: historical 65535 and backwards cursor positions in unselected lines remain byte-for-byte preserved. The non-printable per-line marker may be untimed without blocking a safe edit. Selected lines with invalid printed-character timing are still refused with the affected filename/line, before file changes. Rewrites preserve all other LYR/CUR timing, back up both files and support undo. Source LYR-only analysis, skipped reason audit/recheck and custom X-Stage text remain available. Extract all ZIP contents and launch Start-Song-Studio.cmd."
 }
