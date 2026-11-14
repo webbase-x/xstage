@@ -111,6 +111,20 @@ assert.ok(js.includes("$('lyric-group-replacement-mode').addEventListener('chang
 assert.ok(css.includes('.lyric-group-edit .lyric-replacement-mode'),
   'Preset menu must fit inside the lyric editor');
 assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job');
+for(const id of ['lyric-skipped-panel','lyric-skipped-count','lyric-skipped-breakdown',
+                 'lyric-skipped-list','lyric-skipped-recheck-stats','lyric-skipped-recheck',
+                 'lyric-skipped-export','lyric-skipped-prev','lyric-skipped-next',
+                 'lyric-skipped-view','lyric-skipped-page']){
+  assert.ok(html.includes('id="'+id+'"'), 'Missing skipped LYR diagnostics UI: '+id);
+}
+assert.ok(js.includes("run('lyric-skipped-recheck'") &&
+          js.includes('refreshSkippedLyrics()') &&
+          js.includes('/api/lyric-groups-skipped.csv') &&
+          js.includes('X-XStage-Token') &&
+          js.includes('URL.createObjectURL'),
+ 'Recheck and CSV must be authenticated and display skipped vs recovered LYR safely');
+assert.ok(css.includes('.lyric-skipped-item')&&css.includes('.lyric-skipped-breakdown'),
+ 'Skipped LYR report must fit both desktop and compact UI');
 for(const id of ['lyric-group-folder','lyric-group-reset','lyric-group-source-status']){
   assert.ok(html.includes('id="'+id+'"'), 'Bulk lyrics must have an independent folder selector: '+id);
 }
