@@ -8,6 +8,9 @@ on:
       - "index.html"
       - "app.js"
       - "scripts/cloud-import-browser-e2e.mjs"
+      - "scripts/stage-piano-browser-e2e.mjs"
+      - "stage-piano.js"
+      - "xstage-ux.css"
       - "scripts/video-browser-transcode-e2e.mjs"
       - "video-transcode*.js"
       - ".github/workflows/test-cloud-import-browser.yml"
@@ -42,6 +45,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
+      - name: Verify on-stage MIDI piano in real Chromium (desktop/phone)
+        run: node scripts/stage-piano-browser-e2e.mjs
       - name: Test browser Google Drive private-folder workflow
         run: node scripts/cloud-import-browser-e2e.mjs
       - name: Verify real AVI to H.264/AAC conversion in browser Worker
