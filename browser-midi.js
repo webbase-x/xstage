@@ -369,24 +369,33 @@ function toWav(audio){
   }
   return new Blob([buf],{type:'audio/wav'});
 }
-async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
+async function render(source,{fontBytes=null,signal=null,onStatus=null,
+  transpose=0,channelMutes=null,channelVolumes=null}={}){
   const check=()=>{if(signal?.aborted)fail('ยกเลิกการเตรียม MIDI แล้ว');};
   check();const song=parseMidi(source),ctx=new OfflineAudioContext(2,Math.ceil((song.duration+.5)*RATE),RATE);
+  const shift=Math.max(-12,Math.min(12,Math.trunc(Number(transpose)||0)));
+  const muted=Array.isArray(channelMutes)?channelMutes:[];
+  const levels=Array.isArray(channelVolumes)?channelVolumes:[];
   const font=fontBytes?parseFont(fontBytes):null;
   let num=0,scheduled=0;
   const master=ctx.createGain();master.gain.value=font?.75:.24;master.connect(ctx.destination);
   for(const note of song.notes){
     if(num++%200===0){check();onStatus?.('เตรียม MIDI '+Math.floor(num*100/song.notes.length)+'%');
       await new Promise(resolve=>setTimeout(resolve,0));}
+    if(muted[note.channel])continue;
+    const pitchKey=note.channel===9?note.key:Math.max(0,Math.min(127,note.key+shift));
+    const userLevel=Number(levels[note.channel]);
+    const channelLevel=Number.isFinite(userLevel)?Math.max(0,Math.min(1,userLevel)):1;
+    if(!channelLevel)continue;
     const start=Math.max(0,note.start),end=Math.max(start+.06,note.end);
-    let regions=font?font.find(note.bank,note.program,note.key,note.velocity):[];
+    let regions=font?font.find(note.bank,note.program,pitchKey,note.velocity):[];
     if(font&&!regions.length)continue;
     if(!font)regions=[null];
     for(const g of regions){
       scheduled++;
       const gain=ctx.createGain(),velocity=Math.pow(note.velocity/127,1.5),level=Math.max(0,Math.min(1,note.level));
       const attenuation=g?(g.get(48)||0):0;
-      const amp=Math.max(.00001,velocity*level*Math.pow(10,-attenuation/200)*(.5/Math.max(1,regions.length)));
+      const amp=Math.max(.00001,velocity*level*channelLevel*Math.pow(10,-attenuation/200)*(.5/Math.max(1,regions.length)));
       // SF2 omitted envelope generators use -12000 timecents, not zero seconds
       // (zero timecents means a full one-second envelope).
       const signed=v=>v>32767?v-65536:v;
@@ -404,7 +413,7 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
         const pitch=g.has(58)?g.get(58):s.pitch;
         const coarse=g.has(51)?(g.get(51)<<16>>16):0;
         const fine=g.has(52)?(g.get(52)<<16>>16):0;
-        src.playbackRate.value=Math.pow(2,(note.key-pitch+coarse+(fine+s.correct)/100)/12);
+        src.playbackRate.value=Math.pow(2,(pitchKey-pitch+coarse+(fine+s.correct)/100)/12);
         const mode=g.get(54)||0;
         if((mode&1)&&s.loopStart>=s.start&&s.loopEnd<=s.end&&
             s.loopEnd>s.loopStart+8&&!(s.type&0x10)){
@@ -414,7 +423,7 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
       }else{
         const src=ctx.createOscillator();
         src.type=note.channel===9?'square':note.program>=80?'sawtooth':note.program>=40?'triangle':'sine';
-        src.frequency.value=440*Math.pow(2,(note.key-69)/12);
+        src.frequency.value=440*Math.pow(2,(pitchKey-69)/12);
         src.connect(gain);src.start(start);src.stop(Math.min(song.duration+.4,end+release+.03));
       }
     }

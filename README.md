@@ -1,4 +1,10 @@
-## X-Stage Karaoke Online v1.0.107 (Build 1107) — bounded fast song search
+## X-Stage Karaoke Online v1.0.108 (Build 1108) — browser MIDI/NCN SoundFont and Song Studio Web PC-style workflow
+
+- Song Studio Web now uses the shared, tested MIDI/NCN parser, locally selected SF2/SF3 SoundFont preview, 16-channel mixer and resource preflight with PC-style four-step layout; can export unchanged NCN source and real Lyrics JSON or optional FFmpeg M4A.
+- This shared browser MIDI module also adds transpose and channel mute/volume controls to its API. Existing karaoke playback behavior is unchanged when optional controls are not used.
+- Browser renderer is not PC FluidSynth. Do not claim real Android TV hardware or private Google Drive verification without device/account testing.
+
+### Previous v1.0.107 — bounded fast song search
 
 - Search retains only the best 5 visible results (or explicitly requested remote limit) while counting every matching song, instead of allocating and sorting every matching row across the library. Exact-title/code/artist relevance and original catalog tie order are unchanged.
 - Precompute multi-word query tokens once per search; regression compares 100,000 synthetic songs to the previous full-sort reference for counts, ordering and remote results.

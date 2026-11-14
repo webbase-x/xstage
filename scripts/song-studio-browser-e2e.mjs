@@ -88,6 +88,126 @@ try {
   assert.ok(archive.includes(Buffer.from('ทดสอบเนื้อร้อง')), 'LRC must contain editable timed lyric');
   console.log('PASS: Chromium loaded WebAssembly Engine and converted demo.wav to M4A + LRC locally.');
 
+  // Real standalone browser workflow: import NCN MID/LYR/CUR, read true CUR
+  // timestamps, synthesize a preview and export the original source bytes.
+  const midiPage=await browser.newPage({acceptDownloads:true});
+  midiPage.on('pageerror',error=>{throw Error('MIDI PAGE ERROR: '+error.message);});
+  await midiPage.goto('http://127.0.0.1:'+port+'/studio/web.html',{waitUntil:'load'});
+  const demoTrack=[0,0xc0,0,0,0x90,60,100,0x60,0x80,60,0,0,0xff,0x2f,0];
+  const demoMidi=Buffer.from([77,84,104,100,0,0,0,6,0,0,0,1,0,96,
+    77,84,114,107,0,0,0,demoTrack.length,...demoTrack]);
+  const demoLyr=Buffer.from('Test Song\nArtist\nC\n.\nHI\n');
+  const demoCur=Buffer.from([0,0,0,0,24,0]);
+  await midiPage.setInputFiles('#file-input',[
+    {name:'NCN001.mid',mimeType:'audio/midi',buffer:demoMidi},
+    {name:'NCN001.lyr',mimeType:'application/octet-stream',buffer:demoLyr},
+    {name:'NCN001.cur',mimeType:'application/octet-stream',buffer:demoCur}
+  ]);
+  await midiPage.waitForFunction(()=>document.querySelector('#catalog-note')
+    .textContent.includes('พร้อมสร้าง 1'));
+  await midiPage.locator('#song-list tr').first().click();
+  await midiPage.waitForFunction(()=>document.querySelector('#midi-status')
+    .textContent.includes('NCN จริง'));
+  assert.equal(await midiPage.locator('#midi-workspace').isVisible(),true);
+  assert.match(await midiPage.locator('#lyrics-text').inputValue(),/\[00:00\.00\]HI/);
+  assert.equal(await midiPage.locator('#preview-midi').isEnabled(),true);
+  // Load a real small in-memory SF2. The browser must parse the RIFF preset,
+  // not silently fall back to a generic oscillator after selecting a bank.
+  const pack=(...items)=>Buffer.concat(items.map(x=>Buffer.from(x)));
+  const u16=n=>{const b=Buffer.alloc(2);b.writeUInt16LE(n);return b;};
+  const chunk=(id,data)=>{
+    const size=Buffer.alloc(4);size.writeUInt32LE(data.length);
+    return pack(Buffer.from(id),size,data,data.length%2?Buffer.alloc(1):Buffer.alloc(0));
+  };
+  const fontList=(id,...children)=>chunk('LIST',pack(Buffer.from(id),...children));
+  const phdr=Buffer.alloc(76);phdr.writeUInt16LE(1,38+24);
+  const pbag=pack(u16(0),u16(0),u16(1),u16(0));
+  const inst=Buffer.alloc(44);inst.writeUInt16LE(1,22+20);
+  const shdr=Buffer.alloc(92);shdr.writeUInt32LE(1000,24);
+  shdr.writeUInt32LE(100,28);shdr.writeUInt32LE(900,32);
+  shdr.writeUInt32LE(22050,36);shdr[40]=60;shdr.writeUInt16LE(1,44);
+  const sf2=chunk('RIFF',pack(Buffer.from('sfbk'),
+    fontList('INFO',chunk('ifil',pack(u16(2),u16(1)))),
+    fontList('sdta',chunk('smpl',Buffer.alloc(2000))),
+    fontList('pdta',chunk('phdr',phdr),chunk('pbag',pbag),
+      chunk('pgen',pack(u16(41),u16(0))),chunk('inst',inst),
+      chunk('ibag',pbag),chunk('igen',pack(u16(53),u16(0))),
+      chunk('shdr',shdr))));
+  await midiPage.setInputFiles('#soundfont-input',[
+    {name:'test-bank.sf2',mimeType:'application/octet-stream',buffer:sf2}
+  ]);
+  await midiPage.waitForFunction(()=>document.querySelector('#soundfont-select').options.length===2);
+  const sfOption=await midiPage.locator('#soundfont-select option').nth(1).getAttribute('value');
+  await midiPage.locator('#soundfont-select').selectOption(sfOption);
+  assert.match(await midiPage.locator('#soundfont-status').innerText(),/test-bank\.sf2/);
+  await midiPage.click('#preview-midi');
+  await midiPage.waitForFunction(()=>document.querySelector('#player').src.startsWith('blob:'),
+    null,{timeout:30000});
+  assert.ok(await midiPage.locator('#resource-status').textContent());
+  await midiPage.click('#build');
+  await midiPage.locator('#download-result:visible').waitFor({timeout:30000});
+  const midiDownload=midiPage.waitForEvent('download',{timeout:20000});
+  await midiPage.click('#download-result');
+  const midiZip=await fsp.readFile(await (await midiDownload).path());
+  for(const name of ['NCN001.mid','NCN001.lyr','NCN001.cur','NCN001.json','NCN001.lrc'])
+    assert.ok(midiZip.includes(Buffer.from(name)),'Browser ZIP must include '+name);
+  assert.ok(midiZip.includes(demoMidi),'NCN MIDI bytes must be kept unchanged');
+  assert.ok(midiZip.includes(demoCur),'NCN CUR bytes must be kept unchanged');
+  console.log('PASS: Browser NCN preview, real CUR timing and source-preserving ZIP export');
+
+  // The second output mode must actually synthesize SF2 -> WAV and encode a
+  // separate AAC/M4A locally, without copying MIDI or corrupting the lyrics.
+  await midiPage.locator('#export-format').selectOption('m4a');
+  await midiPage.click('#build');
+  await midiPage.locator('#download-result:visible').waitFor({timeout:120000});
+  const m4aDownload=midiPage.waitForEvent('download',{timeout:30000});
+  await midiPage.click('#download-result');
+  const m4aZip=await fsp.readFile(await (await m4aDownload).path());
+  assert.ok(m4aZip.includes(Buffer.from('NCN001.m4a')),
+    'MIDI M4A export must include encoded audio');
+  assert.ok(m4aZip.includes(Buffer.from('NCN001.json')),
+    'MIDI M4A export must retain timed Lyrics JSON');
+  assert.ok(m4aZip.includes(Buffer.from('ftyp')),
+    'MIDI rendered M4A must be real ISO BMFF encoded audio');
+  assert.ok(!m4aZip.includes(Buffer.from('NCN001.cur')),
+    'Rendered M4A mode must not falsely claim unneeded NCN source sidecar');
+  console.log('PASS: Browser SF2 MIDI converted to genuine M4A + real-time Lyrics JSON');
+
+  // Conflict protection: equal-size replacement with different CUR bytes is
+  // NOT a verified duplicate. Never overwrite the NCN timing in the catalog.
+  await midiPage.setInputFiles('#file-input',[{
+    name:'NCN001.cur',mimeType:'application/octet-stream',
+    buffer:Buffer.from([0,0,0,0,48,0])
+  }]);
+  await midiPage.waitForFunction(()=>document.querySelector('#catalog-note')
+    .textContent.includes('ต้องตรวจสอบ 1'));
+  assert.equal(await midiPage.locator('#build').isEnabled(),false,
+    'Duplicate CUR with different bytes must disable unsafe NCN export');
+  console.log('PASS: Browser rejects equal-size conflicting NCN cursor files');
+  await midiPage.close();
+
+  // Mobile layout must remain usable without a page-wide horizontal overflow.
+  // The song table itself may scroll inside its designated .table-wrap.
+  const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true});
+  await mobile.goto('http://127.0.0.1:'+port+'/studio/web.html',{waitUntil:'load'});
+  const layout=await mobile.evaluate(()=>{
+    const main=document.querySelector('.main').getBoundingClientRect();
+    const links=[...document.querySelectorAll('.navigation .nav-button')];
+    return {bodyWidth:document.documentElement.scrollWidth,viewport:innerWidth,
+      mainRight:main.right,mainLeft:main.left,navigation:links.length,
+      fontLabel:!!document.querySelector('label[for="soundfont-select"]'),
+      buttonHeight:document.querySelector('#choose-files').getBoundingClientRect().height};
+  });
+  assert.equal(layout.navigation,4,'Mobile Web editor must match the four PC create steps');
+  assert.ok(layout.fontLabel,'PC-like SoundFont panel should exist on mobile');
+  assert.ok(layout.bodyWidth<=layout.viewport+2,
+    'Mobile layout must avoid page-wide horizontal overflow');
+  assert.ok(layout.mainLeft>=-2&&layout.mainRight<=layout.viewport+2,
+    'Mobile Studio content must stay inside viewport');
+  assert.ok(layout.buttonHeight>=40,'Primary picker must have adequate touch target');
+  await mobile.close();
+  console.log('PASS: Song Studio Web four-step mobile layout, SoundFont and touch sizing');
+
   // The PC Ready package and authenticated PC Web Control share this UI.
   // Simulate its local API; exercise all four visible steps in Chromium.
   const pc = await browser.newPage({acceptDownloads:true});

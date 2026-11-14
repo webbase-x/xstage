@@ -18,3 +18,56 @@
 footer{font-size:11px;color:#607e96;text-align:center;line-height:1.7;margin-top:25px}footer a{color:#8cbeea}
 @media(max-width:1030px){.layout{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px;gap:9px}.sidebar nav{display:flex;overflow:auto;gap:7px}.sidebar nav a{padding:10px 12px;white-space:nowrap;border:1px solid #203f56}.sidebar-foot{display:none}.edition{display:none}.main{padding:20px}.topbar{margin-top:9px}}@media(max-width:650px){.topbar{display:block}.top-status{display:inline-flex;margin-top:17px}.panel{padding:15px}.section-head{display:block}.section-head .pill{display:inline-block;margin-top:11px}.editor-grid,.export-grid{grid-template-columns:1fr}.catalog-toolbar input{min-width:100%}table{min-width:540px}.source-summary{gap:8px;flex-wrap:wrap}.source-summary .btn{margin-left:0}.drop-zone{padding:18px 10px}.sidebar nav a{font-size:11px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+/* Web Studio: match the PC four-step workflow, palette, and control density. */
+:root{font-family:"Leelawadee UI","Noto Sans Thai",system-ui,-apple-system,sans-serif;--bg:#071321;--side:#091a2a;--panel:#0f2538;--line:#29475a;--ink:#f0f9fd;--cyan:#57ddeb;--teal:#51e3bd;color:var(--ink)}
+body{background:radial-gradient(ellipse 60% 22% at 54% -8%,#174b65aa,transparent),var(--bg);line-height:1.52}
+.layout{grid-template-columns:252px minmax(0,1fr)}
+.sidebar{background:linear-gradient(160deg,#0b2034,#081321 85%);border-right-color:#223e53}
+.brand-mark{width:46px;height:46px;border-radius:13px;background:linear-gradient(130deg,#46dbf7,#5171e8 65%,#9666d9)}
+.brand b{font-size:20px}.brand small{color:#97e6f3;font-weight:850}
+.navigation{gap:7px!important}
+.sidebar nav a.nav-button{border:1px solid transparent;text-align:left;display:flex;gap:13px;padding:12px 13px;font-size:14px;font-weight:850;white-space:normal}
+.sidebar nav a.nav-button.active{border-color:#2e7596;background:linear-gradient(110deg,#165779,#103249);color:#f0ffff;box-shadow:inset 3px 0 #69e9ed}
+.sidebar nav .nav-glyph{font-size:21px;color:#7cdbed;width:25px;flex:none}
+.sidebar nav a small{display:block;font-size:10px;font-weight:550;color:#86abbf;line-height:1.5}
+.topbar{border-bottom:1px solid #20394d;background:linear-gradient(100deg,#0c2235ce,#08172499);padding:24px;min-height:124px;border-radius:13px}
+.topbar h1{font-size:clamp(24px,2.4vw,34px)}
+.panel{background:linear-gradient(145deg,rgba(18,44,65,.96),rgba(10,30,47,.98));border-color:var(--line);box-shadow:0 10px 35px #0002}
+.btn.primary{background:linear-gradient(125deg,#38bad3,#2a8fbb);color:#001826;border:1px solid #54cbdd}
+.btn.secondary{background:#183b51;border-color:#416177;color:#d6f0fa}
+.catalog-toolbar input,textarea,select,input[type=number]{font:inherit}
+select,input[type=number]{background:#081d2d;border:1px solid #345468;border-radius:9px;color:#f4fbff;padding:9px;min-height:38px}
+:focus-visible{outline:3px solid #8cf8ff;outline-offset:2px}
+.midi-workspace[hidden]{display:none!important}
+.midi-workspace{padding:14px;border:1px solid #356477;border-radius:13px;background:linear-gradient(140deg,#0f3549,#0a2337);display:grid;gap:11px}
+.midi-workspace-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.midi-workspace-head strong{font-size:13px;color:#e1f9ff}
+.midi-workspace>label,.export-mode-row>label{display:block;font-size:12px;font-weight:850;color:#b7dce5}
+.midi-font-picker{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.midi-font-picker select{flex:1;min-width:180px;max-width:100%}
+.midi-font-picker button{white-space:normal}
+.midi-options{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.midi-options label{font-size:12px;font-weight:800;color:#cbe6ed}
+.midi-options input{width:65px;margin-inline:8px;text-align:center}
+.midi-options small{display:block;color:#85b6c9;font-size:10px;margin-top:4px}
+.midi-mixer{border:1px solid #305368;border-radius:10px;background:#071c2f;padding:9px 10px}
+.midi-mixer summary{cursor:pointer;font-size:12px;font-weight:800;color:#a9e8e7}
+.midi-channels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:10px}
+.midi-channel{display:flex;gap:7px;align-items:center;padding:8px;background:#123146;border:1px solid #244f67;border-radius:9px;font-size:11px}
+.midi-channel strong{min-width:45px;color:#d2f0f8}.midi-channel input[type=range]{flex:1;min-width:30px;accent-color:#53d5cf}
+.midi-channel label{display:flex;align-items:center;gap:5px;white-space:nowrap}.midi-channel input[type=checkbox]{width:14px;height:14px}
+.midi-channel output{min-width:26px;color:#8fe4e0;font-variant-numeric:tabular-nums}
+.midi-resource-status{font-size:11px;color:#a9dbe5;border:1px solid #355c71;border-radius:9px;padding:10px;line-height:1.6;margin:0;background:#082338}
+.midi-resource-status[data-state=warning]{color:#ffd29e;border-color:#8f6843;background:#34271c}
+.midi-resource-status[data-state=ready]{color:#93ecca;border-color:#376d5e;background:#10332e}
+.midi-workspace .footnote{margin:0;line-height:1.65}
+.active-lyric{min-height:112px;line-height:1.7;font-weight:760;font-size:clamp(14px,1.5vw,20px)}
+.active-lyric .karaoke-cue{white-space:pre-wrap;color:#e6f7ff;background:linear-gradient(to right,#ffe079 0,#ffe079 var(--fill,0%),#e6f7ff var(--fill,0%),#e6f7ff 100%);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.export-mode-row{display:grid;gap:8px;border:1px solid #335c70;background:#0b283a;border-radius:12px;padding:13px;margin-bottom:15px}
+.export-mode-row select{width:100%;max-width:750px}
+.export-mode-row small{font-size:11px;color:#91bacb;line-height:1.6}
+.file-state.unsupported{background:#493328;color:#f5bd8b}
+@media(max-width:1030px){.layout{grid-template-columns:1fr}.sidebar nav a.nav-button{min-width:160px}.topbar{padding:18px}}
+@media(max-width:650px){.midi-channels{grid-template-columns:1fr}.midi-font-picker select{min-width:100%}.sidebar nav a.nav-button{min-width:150px}.midi-options{align-items:stretch}.export-mode-row{padding:10px}}
+
+.brand-mark img{display:block;width:100%;height:100%;object-fit:contain}

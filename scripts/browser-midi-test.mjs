@@ -6,6 +6,7 @@ const source=fs.readFileSync(new URL('../browser-midi.js',import.meta.url),'utf8
 const context={Uint8Array,ArrayBuffer,DataView,TextDecoder,Blob,console,setTimeout};
 context.window=context;
 context.document={getElementById:()=>null};
+const oscillatorNodes=[];
 class StubNode{
   constructor(){this.gain={value:0,setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}};
     this.frequency={value:0};}
@@ -16,7 +17,7 @@ class StubNode{
 context.OfflineAudioContext=class{
   constructor(channels,length,sampleRate){this.length=length;this.rate=sampleRate;this.destination={};}
   createGain(){return new StubNode();}
-  createOscillator(){return new StubNode();}
+  createOscillator(){const node=new StubNode();oscillatorNodes.push(node);return node;}
   async startRendering(){
     const data=new Float32Array(this.length);
     return {length:this.length,numberOfChannels:2,sampleRate:this.rate,getChannelData:()=>data};
@@ -125,4 +126,16 @@ const wave=new Uint8Array(await rendered.audio.slice(0,44).arrayBuffer());
 assert.equal(String.fromCharCode(...wave.subarray(0,4)),'RIFF');
 assert.equal(String.fromCharCode(...wave.subarray(8,12)),'WAVE');
 assert.ok(rendered.audio.size>44);
-console.log('PASS: self-contained MIDI parsing, NCN LYR/CUR timing, bounded WAV output');
+// Browser-only studio can transpose melody without moving percussion channel 10.
+const baseline=oscillatorNodes.length;
+await runtime.render(file,{transpose:12});
+assert.equal(oscillatorNodes.length,baseline+1);
+assert.ok(Math.abs(oscillatorNodes.at(-1).frequency.value/
+  oscillatorNodes.at(-2).frequency.value-2)<.001,
+  'Transpose +12 must raise MIDI pitch by exactly one octave');
+const beforeMute=oscillatorNodes.length;
+await runtime.render(file,{channelMutes:[true]});
+assert.equal(oscillatorNodes.length,beforeMute,'Muted MIDI channel must not render audio');
+await runtime.render(file,{channelVolumes:[0]});
+assert.equal(oscillatorNodes.length,beforeMute,'Zero MIDI channel gain must not render audio');
+console.log('PASS: self-contained MIDI parsing, NCN LYR/CUR timing, 16-channel mute and transpose');

@@ -4,12 +4,17 @@ on:
     paths:
       - "studio/**"
       - "scripts/song-studio-web-test.mjs"
+      - "scripts/song-studio-web-midi-test.mjs"
       - "scripts/song-studio-browser-e2e.mjs"
+      - "browser-midi.js"
       - ".github/workflows/test-song-studio-web.yml"
   pull_request:
     paths:
       - "studio/**"
       - "scripts/song-studio-web-test.mjs"
+      - "scripts/song-studio-web-midi-test.mjs"
+      - "scripts/song-studio-browser-e2e.mjs"
+      - "browser-midi.js"
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,8 +30,12 @@ jobs:
         run: |
           node --check studio/entry.js
           node --check studio/web.js
+          node --check studio/web-midi-core.js
+          node --check browser-midi.js
       - name: Test local file workflows and PC pairing routing
-        run: node scripts/song-studio-web-test.mjs
+        run: |
+          node scripts/song-studio-web-test.mjs
+          node scripts/song-studio-web-midi-test.mjs
 
   chromium-conversion:
     runs-on: ubuntu-24.04
