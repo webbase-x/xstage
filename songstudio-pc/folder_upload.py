@@ -88,7 +88,7 @@ def _route(file, group, fmt):
             bucket(file.stem))
 
 
-def scan(folder):
+def scan(folder, ncn=None):
     root = _safe_root(folder)
     paths = _indexed(root)
     by_dir = {}
@@ -147,16 +147,28 @@ def scan(folder):
         elif midis:
             cursors = candidates.get(".cur", [])
             lyrs = candidates.get(".lyr", [])
-            if len(midis) != 1 or len(cursors) != 1 or len(lyrs) != 1:
-                add("NCN ต้องมี MIDI/KAR + .LYR + .CUR ชื่อเดียวกัน", members)
+            if len(midis) != 1:
+                add("พบไฟล์ MIDI ชื่อเดียวกันหลายรายการ", members)
                 continue
-            trio = (midis[0], lyrs[0], cursors[0])
-            if any(p.stat().st_size < 8 for p in trio):
-                add("NCN มีไฟล์ว่างหรือไม่สมบูรณ์", members)
-                continue
-            complete.append({"name": midis[0].stem, "kind": "NCN", "files": [
-                (p, _route(p, "midi", ext)) for p, ext in
-                zip(trio, ("mid", "lyr", "cur"))]})
+            if len(cursors) == 1 and len(lyrs) == 1:
+                trio = (midis[0], lyrs[0], cursors[0])
+                if any(p.stat().st_size < 8 for p in trio):
+                    add("NCN มีไฟล์ว่างหรือไม่สมบูรณ์", members)
+                    continue
+                complete.append({"name": midis[0].stem, "kind": "NCN", "files": [
+                    (p, _route(p, "midi", ext)) for p, ext in
+                    zip(trio, ("mid", "lyr", "cur"))]})
+            elif not cursors and not lyrs and ncn is not None:
+                try:
+                    doc = ncn.kar_document(midis[0], midis[0].stem)
+                    if not doc.get("lines"):
+                        raise ValueError("ไม่พบข้อความพร้อมเวลา")
+                    complete.append({"name": midis[0].stem, "kind": "KAR",
+                                     "files": [(midis[0], _route(midis[0], "midi", "mid"))]})
+                except (OSError, ValueError) as exc:
+                    add("MIDI ไม่มี .LYR/.CUR หรือเนื้อร้องฝังที่มีเวลาจริง: " + str(exc), members)
+            else:
+                add("NCN ต้องมี MIDI + .LYR + .CUR ชื่อเดียวกัน", members)
         elif members:
             if any(p.suffix.lower() in (".emk", ".lrc", ".lyr", ".cur") for p in members):
                 incomplete.append({"name": members[0].stem,
@@ -187,14 +199,14 @@ def existing_local_catalog(folder, export):
     return None
 
 
-def report(folder, export=None):
+def report(folder, export=None, ncn=None):
     library = existing_local_catalog(folder, export)
     if library is not None:
         return {"folder": str(library["root"]), "fileCount": library["pointerCount"],
                 "ready": len(library["rows"]), "incomplete": library["incomplete"],
                 "unsupported": 0, "examples": [],
                 "kinds": {"M4A": len(library["rows"])}, "source": "StageWeb catalog"}
-    result = scan(folder)
+    result = scan(folder, ncn=ncn)
     return {"folder": result["folder"], "fileCount": result["fileCount"],
             "ready": result["total"], "incomplete": len(result["incomplete"]),
             "unsupported": len(result["unsupported"]),
@@ -250,7 +262,7 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                     f"ข้ามซ้ำ {synced['duplicates']} · "
                     f"รหัสต้องตรวจ {synced['conflicts']} · "
                     f"ข้ามไฟล์ไม่ครบ {library['incomplete']}")}
-    result = scan(folder)
+    result = scan(folder, ncn=ncn)
     supported = [r for r in result["complete"] if r["kind"] != "EMK"]
     deferred = [r for r in result["complete"] if r["kind"] == "EMK"]
     if not supported:
@@ -294,9 +306,12 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                 if ncn is None:
                     raise ValueError("ไม่มีตัวอ่านเนื้อร้อง NCN/MIDI ในแพ็กเกจ")
                 companions = {p.suffix.lower(): p for p, _ in row["files"]}
-                pair = {"midi": str(media), "lyrics": str(companions[".lyr"]),
-                        "cursor": str(companions[".cur"]), "code": code, "missing": []}
-                document = ncn.ncn_document(pair)
+                if ".lyr" in companions and ".cur" in companions:
+                    pair = {"midi": str(media), "lyrics": str(companions[".lyr"]),
+                            "cursor": str(companions[".cur"]), "code": code, "missing": []}
+                    document = ncn.ncn_document(pair)
+                else:
+                    document = ncn.kar_document(media, code)
                 raw_lrc = ncn.to_lrc(document["lines"]).encode("utf-8")
             else:
                 if lyric is None:
@@ -327,6 +342,15 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                 midi_file = stage / "midi" / (source_id[:16] + source_kind)
                 shutil.copy2(media, midi_file)
                 record["midi"] = {"path": "midi/" + midi_file.name}
+                if ".lyr" in companions and ".cur" in companions:
+                    (stage / "midi_lyrics").mkdir(exist_ok=True)
+                    (stage / "midi_cursor").mkdir(exist_ok=True)
+                    for extension, key, section in (
+                        (".lyr", "midiLyrics", "midi_lyrics"),
+                        (".cur", "midiCursor", "midi_cursor")):
+                        target_file = stage / section / (source_id[:16] + extension)
+                        shutil.copy2(companions[extension], target_file)
+                        record[key] = {"path": section + "/" + target_file.name}
             if is_video and video_renderer is not None:
                 (stage / "video").mkdir(exist_ok=True)
                 video = stage / "video" / (source_id[:16] + ".mp4")
