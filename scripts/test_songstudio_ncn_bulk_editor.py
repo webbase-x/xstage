@@ -4,6 +4,7 @@ import struct
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 BASE = Path(__file__).resolve().parents[1] / "songstudio-pc"
 
@@ -109,19 +110,64 @@ class NCNEditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"CP874"):
             edit.apply(self.root,ncn,bulk,snap,[group],"🎤",self.backup,expected_count=1)
         self.assertEqual(lyr.read_bytes(),before)
-        cur.write_bytes(cur.read_bytes()+b"\x00")
-        changed=cur.read_bytes()
-        with self.assertRaisesRegex(ValueError,"เปลี่ยนหลังสแกน"):
+        # LYR changes are detected against the SHA recorded by the scan.
+        lyr.write_bytes(before + b"changed after scan")
+        changed_lyr = lyr.read_bytes()
+        with self.assertRaisesRegex(ValueError,"LYR เปลี่ยนหลังวิเคราะห์"):
             edit.apply(self.root,ncn,bulk,snap,[group],"X-Stage",self.backup,expected_count=1)
-        self.assertEqual(cur.read_bytes(),changed)
+        self.assertEqual(lyr.read_bytes(),changed_lyr)
         self.assertFalse(self.backup.exists())
 
-    def test_incomplete_ncn_is_skipped(self):
-        self.song("00001")
+    def test_incomplete_ncn_is_analyzed_but_cannot_be_replaced_without_cur(self):
+        first=self.song("00001")
         _,_,missing=self.song("00002")
         missing.unlink()
+        original=[(path,path.read_bytes()) for path in first]
         snap=edit.scan(self.root,ncn,bulk)
-        self.assertEqual((snap["songs"],snap["skippedInvalid"]),(1,1))
+        self.assertEqual((snap["songs"],snap["skippedInvalid"]),(2,0))
+        group=bulk.list_groups(snap,"first")["rows"][0]["id"]
+        with self.assertRaisesRegex(ValueError,"MID|CUR|ไม่ครบ"):
+            edit.apply(self.root,ncn,bulk,snap,[group],"X-Stage Karaoke",
+                       self.backup,expected_count=2)
+        for path,raw in original:
+            self.assertEqual(path.read_bytes(),raw)
+        self.assertFalse(self.backup.exists())
+
+    def test_scan_only_reads_lyr_and_updates_percentage_without_midi_or_cur(self):
+        self.song("00001")
+        self.song("00002")
+        open_lyr=[]
+        progress=[]
+        original=Path.read_bytes
+        def read_only_lyr(file):
+            self.assertEqual(file.suffix.lower(),".lyr",
+                             "Analysis must not read MID/CUR")
+            open_lyr.append(file)
+            return original(file)
+        with patch.object(Path,"read_bytes",read_only_lyr), patch.object(
+                edit,"_matched_parts",side_effect=AssertionError(
+                    "Analysis attempted MID/CUR lookup")):
+            snap=edit.scan(self.root,ncn,bulk,
+                           on_progress=lambda text,done,total: progress.append((done,total)))
+        self.assertEqual(snap["songs"],2)
+        self.assertEqual(snap["scanMode"],"lyr-only")
+        self.assertEqual(len(open_lyr),2)
+        self.assertEqual(progress[0],(0,2))
+        self.assertEqual(progress[-1],(2,2))
+
+    def test_standalone_lyrics_folder_is_analyzed_read_only(self):
+        _,source,_=self.song("00001")
+        standalone=Path(self.tmp.name)/"StandAlone"/"Lyrics"
+        standalone.mkdir(parents=True)
+        target=standalone/"00001.LYR"
+        target.write_bytes(source.read_bytes())
+        snap=edit.scan(standalone,ncn,bulk)
+        self.assertEqual((snap["songs"],snap["inspected"]),(1,1))
+        group=bulk.list_groups(snap,"first",repeats_only=False)["rows"][0]["id"]
+        with self.assertRaisesRegex(ValueError,"NCN/Song.*NCN/Cursor"):
+            edit.apply(standalone,ncn,bulk,snap,[group],"X-Stage Karaoke",
+                       self.backup,expected_count=1)
+        self.assertEqual(target.read_bytes(),source.read_bytes())
 
 if __name__=="__main__":
     unittest.main()
