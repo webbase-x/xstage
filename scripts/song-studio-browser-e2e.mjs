@@ -111,6 +111,35 @@ try {
   assert.equal(await midiPage.locator('#midi-workspace').isVisible(),true);
   assert.match(await midiPage.locator('#lyrics-text').inputValue(),/\[00:00\.00\]HI/);
   assert.equal(await midiPage.locator('#preview-midi').isEnabled(),true);
+  // Load a real small in-memory SF2. The browser must parse the RIFF preset,
+  // not silently fall back to a generic oscillator after selecting a bank.
+  const pack=(...items)=>Buffer.concat(items.map(x=>Buffer.from(x)));
+  const u16=n=>{const b=Buffer.alloc(2);b.writeUInt16LE(n);return b;};
+  const chunk=(id,data)=>{
+    const size=Buffer.alloc(4);size.writeUInt32LE(data.length);
+    return pack(Buffer.from(id),size,data,data.length%2?Buffer.alloc(1):Buffer.alloc(0));
+  };
+  const fontList=(id,...children)=>chunk('LIST',pack(Buffer.from(id),...children));
+  const phdr=Buffer.alloc(76);phdr.writeUInt16LE(1,38+24);
+  const pbag=pack(u16(0),u16(0),u16(1),u16(0));
+  const inst=Buffer.alloc(44);inst.writeUInt16LE(1,22+20);
+  const shdr=Buffer.alloc(92);shdr.writeUInt32LE(1000,24);
+  shdr.writeUInt32LE(100,28);shdr.writeUInt32LE(900,32);
+  shdr.writeUInt32LE(22050,36);shdr[40]=60;shdr.writeUInt16LE(1,44);
+  const sf2=chunk('RIFF',pack(Buffer.from('sfbk'),
+    fontList('INFO',chunk('ifil',pack(u16(2),u16(1)))),
+    fontList('sdta',chunk('smpl',Buffer.alloc(2000))),
+    fontList('pdta',chunk('phdr',phdr),chunk('pbag',pbag),
+      chunk('pgen',pack(u16(41),u16(0))),chunk('inst',inst),
+      chunk('ibag',pbag),chunk('igen',pack(u16(53),u16(0))),
+      chunk('shdr',shdr))));
+  await midiPage.setInputFiles('#soundfont-input',[
+    {name:'test-bank.sf2',mimeType:'application/octet-stream',buffer:sf2}
+  ]);
+  await midiPage.waitForFunction(()=>document.querySelector('#soundfont-select').options.length===2);
+  const sfOption=await midiPage.locator('#soundfont-select option').nth(1).getAttribute('value');
+  await midiPage.locator('#soundfont-select').selectOption(sfOption);
+  assert.match(await midiPage.locator('#soundfont-status').innerText(),/test-bank\\.sf2/);
   await midiPage.click('#preview-midi');
   await midiPage.waitForFunction(()=>document.querySelector('#player').src.startsWith('blob:'),
     null,{timeout:30000});
