@@ -22,9 +22,9 @@
   if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
-  <link rel="stylesheet" href="style.css?v=1098">
-  <link rel="stylesheet" href="xstage-ux.css?v=1098">
-  <link rel="stylesheet" href="cloud-import.css?v=1098">
+  <link rel="stylesheet" href="style.css?v=1099">
+  <link rel="stylesheet" href="xstage-ux.css?v=1099">
+  <link rel="stylesheet" href="cloud-import.css?v=1099">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -35,7 +35,7 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1098" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1099" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -70,7 +70,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1098" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1099" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -299,6 +299,7 @@
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
       <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ระบบตรวจความสมบูรณ์และ MD5 ก่อนส่งเข้า XStageWeb · ไม่ลบหรือแก้ไฟล์ต้นฉบับ</p>
+      <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
         <button id="cloud-import-scan" type="button" disabled>ตรวจสอบอีกครั้ง</button>
@@ -333,18 +334,18 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script>window.XSTAGE_RELEASE={version:'1.0.98',build:1098};</script>
-<script src="config.js?v=1098"></script>
+<script>window.XSTAGE_RELEASE={version:'1.0.99',build:1099};</script>
+<script src="config.js?v=1099"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="cloud-import-core.js?v=1098" defer></script>
-  <script src="browser-midi.js?v=1098" defer></script>
-  <script src="cloud-import.js?v=1098" defer></script>
-  <script src="app.js?v=1098" defer></script><script src="pc-extensions.js?v=1098" defer></script>
-  <script src="native-audio-meter.js?v=1098" defer></script>
-  <script src="stage-controls.js?v=1098" defer></script>
-  <script src="mobile-layout.js?v=1098" defer></script>
-  <script src="android-apk-download.js?v=1098" defer></script>
+  <script src="cloud-import-core.js?v=1099" defer></script>
+  <script src="browser-midi.js?v=1099" defer></script>
+  <script src="cloud-import.js?v=1099" defer></script>
+  <script src="app.js?v=1099" defer></script><script src="pc-extensions.js?v=1099" defer></script>
+  <script src="native-audio-meter.js?v=1099" defer></script>
+  <script src="stage-controls.js?v=1099" defer></script>
+  <script src="mobile-layout.js?v=1099" defer></script>
+  <script src="android-apk-download.js?v=1099" defer></script>
 
-  <script src="stage-ui.js?v=1098" defer></script>
+  <script src="stage-ui.js?v=1099" defer></script>
 </body>
 </html>

@@ -1,0 +1,67 @@
+name: X-Stage platform PowerShell validation
+
+on:
+  push:
+    paths:
+      - "windows-pc/*.ps1"
+      - "windows-pc/manifest.json"
+      - "songstudio-pc/Start-Song-Studio.ps1"
+      - "scripts/build_songstudio_ready.ps1"
+      - "downloads/song-studio*.json"
+      - ".github/workflows/test-platform-powershell.yml"
+  pull_request:
+    paths:
+      - "windows-pc/*.ps1"
+      - "windows-pc/manifest.json"
+      - "songstudio-pc/Start-Song-Studio.ps1"
+      - "scripts/build_songstudio_ready.ps1"
+      - "downloads/song-studio*.json"
+      - ".github/workflows/test-platform-powershell.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-windows-scripts:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse PowerShell 5.1 and confirm pinned runtime SHA-256
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scripts = @(
+            'windows-pc/Start-XStage-With-Updates.ps1',
+            'windows-pc/Check-Update.ps1',
+            'songstudio-pc/Start-Song-Studio.ps1',
+            'scripts/build_songstudio_ready.ps1'
+          )
+          foreach ($path in $scripts) {
+            $errors = $null
+            [System.Management.Automation.PSParser]::Tokenize(
+              (Get-Content -LiteralPath $path -Encoding UTF8 -Raw), [ref]$errors
+            ) | Out-Null
+            if ($errors -and $errors.Count) {
+              throw "$path has PowerShell syntax errors: $($errors | Out-String)"
+            }
+            Write-Host "PASS syntax: $path"
+          }
+          $source = Get-Content songstudio-pc/Start-Song-Studio.ps1 -Raw
+          $builder = Get-Content scripts/build_songstudio_ready.ps1 -Raw
+          $sha = '42a6995f5badcde341d8cf28b1479dc62d97c6cb153aee694eeeef09b56b9f70'
+          if (!$source.Contains($sha) -or !$builder.Contains($sha)) {
+            throw 'Python embedded SHA-256 lock mismatch'
+          }
+          if (!$source.Contains('Get-FileHash -LiteralPath $Zip -Algorithm SHA256')) {
+            throw 'Source launcher must check the downloaded Python ZIP'
+          }
+          if (!$builder.Contains('CheckSHA $PyZip $PythonSHA256')) {
+            throw 'Ready builder must check Python before extracting'
+          }
+          $ready = Get-Content downloads/song-studio-latest.json -Raw | ConvertFrom-Json
+          if ($ready.package_type -ne 'portable_zip' -or $ready.installer_available -ne $false) {
+            throw 'Ready release cannot masquerade as an EXE installer'
+          }
+          Write-Host 'PASS: platform scripts and packaging metadata'

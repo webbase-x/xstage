@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 Build X-Stage Song Studio PC Ready portable ZIP on Windows GitHub Actions.
 Downloads happen ON THE BUILD RUNNER ONLY. Users receive all runtimes prebundled.
@@ -21,6 +21,7 @@ $Stage = Join-Path $OutputRoot $DirName
 $Downloads = Join-Path $OutputRoot 'dependency-cache'
 $Runtime = Join-Path $Stage '.runtime'
 $PythonURL = 'https://www.python.org/ftp/python/3.13.10/python-3.13.10-embeddable-amd64.zip'
+$PythonSHA256 = '42a6995f5badcde341d8cf28b1479dc62d97c6cb153aee694eeeef09b56b9f70' # python.org/ftp/python/3.13.10/windows-3.13.10.json
 $FfmpegURL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
 $FfmpegShaURL = $FfmpegURL + '.sha256'
 $FluidURL = 'https://github.com/FluidSynth/fluidsynth/releases/download/v2.6.2/fluidsynth-v2.6.2-win10-x64-cpp11.zip'
@@ -144,6 +145,7 @@ foreach ($asset in @('studio/app-icon.svg','studio/app-icon.ico','studio/app-ico
 # 1. Python embeddable runtime: no Python installation or pip necessary
 $PyZip = Join-Path $Downloads 'python-embedded.zip'
 Download $PythonURL $PyZip
+CheckSHA $PyZip $PythonSHA256
 $PyDir = Join-Path $Runtime 'python'
 New-Item -ItemType Directory -Force -Path $PyDir | Out-Null
 Expand-Archive -LiteralPath $PyZip -DestinationPath $PyDir -Force

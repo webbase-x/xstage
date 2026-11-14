@@ -10,7 +10,7 @@ on:
   push:
     paths:
       - 'windows-pc/source/**'
-      - 'windows-pc/manifest.json'
+      # Metadata-only updates must not run an installer build without imported Windows source.
       - 'windows-pc/installer/**'
       - '.github/workflows/build-windows-pc.yml'
 

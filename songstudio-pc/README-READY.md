@@ -4,6 +4,13 @@
 
 This is the new bundled distribution of the existing `songstudio-pc` preview engine. It is **not** a recovered copy of the original v0.2.5 Build 205. We keep both in the same repository but explicitly differentiate the available features.
 
+## Release metadata
+
+- Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.25 Build 325, packaging explicitly `portable_zip`).
+- Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.5 Build 205, not a ready installer).
+- The published PC Ready ZIP SHA-256 is `8f3f87e0e489dfd6cf80bb86f4d6156de9553cee0ecc6b9a96aa8e24e73232c3`, reported by the GitHub Release asset digest. The ZIP is **not** a signed EXE or MSI installer.
+- Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
+
 ## Open from Windows
 
 1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.25-build325.zip** from the GitHub Releases page.

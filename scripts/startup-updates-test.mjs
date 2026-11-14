@@ -86,5 +86,12 @@ assert.ok(windows.includes('Get-FileHash')&&windows.includes('available -ne $tru
 assert.ok(launcher.includes("'-Install'")&&launcher.includes("'-Startup'"),'Windows legacy launcher must start the verified updater');
 assert.equal(play.available,false,'never claim that Google Play production update is published');
 assert.equal(windowsRelease.available,false,'never claim that unbuilt Windows installer is available');
+assert.ok(launcher.includes("Join-Path $PSScriptRoot 'XStageKaraoke.exe'"),'Launcher must support portable installation paths');
+assert.ok(windows.includes("if ($CurrentBuild -le 0 -and $CurrentVersion -ne '0.0.0')"),
+  'Updater must read local manifest if the running app does not supply its build number');
+const ready=JSON.parse(read('downloads/song-studio-latest.json'));
+assert.equal(ready.package_type,'portable_zip','PC Ready must never masquerade as an EXE installer');
+assert.equal(ready.installer_available,false);
+assert.match(ready.sha256,/^[a-f0-9]{64}$/);
 assert.ok(publishedApk.build>0&&/^[a-fA-F0-9]{64}$/.test(publishedApk.sha256),'published APK metadata must identify an actual signed artifact');
 console.log('X-Stage startup updater contract: 4 web behaviors and 12 release/channel safety checks passed');

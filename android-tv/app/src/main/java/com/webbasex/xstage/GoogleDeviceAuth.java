@@ -57,7 +57,7 @@ final class GoogleDeviceAuth {
         this.listener = listener;
     }
 
-    boolean hasStoredSession() {
+    synchronized boolean hasStoredSession() {
         String refreshToken = tokenStore.read();
         return refreshToken != null && !refreshToken.isEmpty();
     }

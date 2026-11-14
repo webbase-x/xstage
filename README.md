@@ -47,6 +47,14 @@
 - คงปุ่มควบคุมเพลงหลักและแถบเวลาการเล่นไว้สำหรับการใช้งานทันที
 - ในโหมดเต็มจอบนจอเล็ก เมนู โลโก้ และช่องค้นหายังคงอยู่บนเวที; การเปิดคิวเพลงหรือเครื่องมือจะออกจากเต็มจอก่อนเพื่อเข้าถึงแผงเดิม
 
+## Platform hardening and separate release channels (v1.0.99)
+
+- Android TV: preserve native D-Pad/IME cursor and text selection while editing, request Android media Audio Focus before playback, and handle transient/permanent loss distinctly. Restore playback on focus gain only when the user has not paused/stopped.
+- Native Google session inspection synchronizes with concurrent login, restore, and logout.
+- Windows PC launcher resolves EXE relative to the script or known installation locations and accepts explicit `-AppPath`. The updater reads matching local release metadata to compare builds but never advertises an unverified Windows installer.
+- Song Studio Ready v0.3.25 Build 325 is a verified portable ZIP with a separate Source Preview channel. Python 3.13.10 embedded downloads are pinned to the SHA-256 published by Python.org.
+- Safari on iPhone/iPad: explain folder picking on iOS 18.4+ and the limitations of older file pickers. No PWA is reintroduced.
+
 ## X-Stage Web + Android APK + Windows EXE (v1.0.98)
 
 - รุ่นเว็บเปิดผ่านเบราว์เซอร์ปกติ โดยไม่มี PWA Manifest, Service Worker หรือปุ่มติดตั้งเว็บแอป

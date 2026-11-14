@@ -4,6 +4,11 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -41,6 +46,62 @@ public final class MainActivity extends Activity {
     private GoogleDeviceAuth googleAuth;
     private XStageUpdateManager updateManager;
     private boolean webAppReady;
+    private volatile boolean webTextEditingActive;
+    private volatile boolean playbackAudioFocusHeld;
+    private AudioManager audioManager;
+    private AudioFocusRequest playbackFocusRequest;
+    private final AudioManager.OnAudioFocusChangeListener playbackFocusListener = change -> {
+        if (change == AudioManager.AUDIOFOCUS_GAIN) {
+            playbackAudioFocusHeld = true;
+            dispatchPlaybackFocusState("gain");
+        } else if (change == AudioManager.AUDIOFOCUS_LOSS) {
+            playbackAudioFocusHeld = false;
+            dispatchPlaybackFocusState("loss-permanent");
+        } else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT ||
+                   change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+            // Pause karaoke rather than mixing its vocals with another audio source.
+            dispatchPlaybackFocusState("loss-transient");
+        }
+    };
+
+    private void dispatchPlaybackFocusState(String state) {
+        callJavascript("window.dispatchEvent(new CustomEvent('xstage-native-audio-focus'," +
+                "{detail:{state:" + JSONObject.quote(state) + "}}));");
+    }
+
+    private synchronized boolean acquirePlaybackAudioFocus() {
+        if (audioManager == null) return false;
+        if (playbackAudioFocusHeld) return true;
+        int result;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (playbackFocusRequest == null) {
+                AudioAttributes attributes = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
+                playbackFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                        .setAudioAttributes(attributes)
+                        .setWillPauseWhenDucked(true)
+                        .setOnAudioFocusChangeListener(playbackFocusListener, new Handler(Looper.getMainLooper()))
+                        .build();
+            }
+            result = audioManager.requestAudioFocus(playbackFocusRequest);
+        } else {
+            result = audioManager.requestAudioFocus(playbackFocusListener,
+                    AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        }
+        playbackAudioFocusHeld = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        return playbackAudioFocusHeld;
+    }
+
+    private synchronized void releasePlaybackAudioFocus() {
+        if (audioManager == null || !playbackAudioFocusHeld) return;
+        playbackAudioFocusHeld = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playbackFocusRequest != null) {
+            audioManager.abandonAudioFocusRequest(playbackFocusRequest);
+        } else {
+            audioManager.abandonAudioFocus(playbackFocusListener);
+        }
+    }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -49,6 +110,7 @@ public final class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         enterImmersiveMode();
+        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(6,19,33));
@@ -186,6 +248,7 @@ public final class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                webTextEditingActive = false;
                 Uri uri = Uri.parse(url);
                 if (isTrustedXStageUrl(uri) && updateManager != null) {
                     // Wait until the web UI and its deferred scripts are ready before the native
@@ -264,7 +327,7 @@ public final class MainActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (isTelevisionDevice() && event != null && event.getAction() == KeyEvent.ACTION_DOWN) {
+        if (isTelevisionDevice() && event != null && event.getAction() == KeyEvent.ACTION_DOWN && !webTextEditingActive) {
             switch (event.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_LEFT:
                     moveWebFocus("left");
@@ -360,6 +423,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        releasePlaybackAudioFocus();
         if (googleAuth != null) googleAuth.close();
         if (updateManager != null) updateManager.close();
         if (webView != null) {
@@ -390,6 +454,22 @@ public final class MainActivity extends Activity {
     }
 
     public final class AndroidBridge {
+        @JavascriptInterface
+        public void setTextEditingActive(boolean active) {
+            // DOM focus state is supplied by the trusted hosted application.
+            webTextEditingActive = active;
+        }
+
+        @JavascriptInterface
+        public boolean requestPlaybackAudioFocus() {
+            return acquirePlaybackAudioFocus();
+        }
+
+        @JavascriptInterface
+        public void releasePlaybackAudioFocus() {
+            MainActivity.this.releasePlaybackAudioFocus();
+        }
+
         @JavascriptInterface
         public void onLoginScreenReady() {
             runOnUiThread(() -> {
