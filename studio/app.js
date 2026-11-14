@@ -54,6 +54,7 @@
   // A finished build offers uploading once per job, never automatically.
   const promptedBuildUploadJobs = new Set();
   let busy = false, editingId = null, notificationTimer = null;
+  let v2MigrationPreview = null;
   let createStep = 1;
   const createStepLabels = [
     'เลือกต้นฉบับและสแกนไฟล์',
@@ -511,7 +512,10 @@
       advanced.open = !configured;
       advanced.dataset.initialized = 'true';
     }
+    if(!googleConnected)v2MigrationPreview=null;
     for (const id of ['upload-button', 'settings-logout']) $(id).disabled = busy || !googleConnected;
+    $('catalog-v2-dry-run').disabled = busy || !googleConnected;
+    $('catalog-v2-confirm').disabled = busy || !googleConnected || !v2MigrationPreview;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     // The environment panel previously remained stale after an OAuth import
     // or successful login even while the header badge was live.
@@ -551,6 +555,8 @@
     $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     $('edit-button').disabled = busy || selected.size !== 1;
     $('upload-button').disabled = busy || !googleConnected;
+    $('catalog-v2-dry-run').disabled = busy || !googleConnected;
+    $('catalog-v2-confirm').disabled = busy || !googleConnected || !v2MigrationPreview;
     $('settings-logout').disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('[data-pick],.field,.song-table input[type=checkbox]')) el.disabled = busy;
@@ -1790,6 +1796,34 @@
       message('ยังไม่ได้เริ่มอัปโหลด: ' + error.message);
     }
   }
+  async function startV2Migration(dryRun) {
+    const status=$('catalog-v2-migration-status');
+    if(!googleConnected) return message('กรุณาเชื่อม Google Drive ใน Song Studio ก่อนตรวจฐาน V2');
+    if(busy) return message('มีงานกำลังทำอยู่ · ไม่สามารถย้ายฐานพร้อมงานอื่นได้');
+    if(dryRun){
+      v2MigrationPreview=null;
+      updateButtons();
+      status.textContent='กำลังตรวจความครบถ้วนของฐาน V1/V2 · ยังไม่แก้ไข Google Drive';
+      await run('migrate-catalog-v2',{dryRun:true});
+      return;
+    }
+    if(!v2MigrationPreview)return message('กรุณาตรวจฐาน V2 แบบ Dry Run สำเร็จก่อน');
+    const info=v2MigrationPreview;
+    const approved=await confirmStudio(
+      'ผลตรวจ Dry Run: V1 '+fmtNum(info.v1Songs)+' เพลง · ฐาน V2 ใหม่ '+fmtNum(info.v2Songs)+' เพลง'+
+      '\\nเก็บรายการ V2 เดิม '+fmtNum(info.preservedNative)+' เพลง'+
+      '\\n\\nยืนยันเผยแพร่ XStageWeb/DB/current.json ใหม่?'+
+      '\\nระบบตรวจฐานซ้ำอีกครั้งก่อนเขียนตัวชี้ ไม่ลบฐาน V1 และไฟล์เพลงเดิม'+
+      '\\nอย่าใช้งานตัวเผยแพร่ Drive จากอุปกรณ์อื่นพร้อมกัน',
+      'ยืนยันย้ายฐานเพลงเป็น Unified V2',
+      {acceptLabel:'ย้ายฐาน V2',cancelLabel:'ยกเลิก'});
+    if(!approved)return;
+    v2MigrationPreview=null;updateButtons();
+    status.textContent='ยืนยันแล้ว · กำลังตรวจซ้ำก่อนเผยแพร่ V2 · โปรดดูสถานะงานด้านล่าง';
+    await run('migrate-catalog-v2',{
+      dryRun:false,confirmation:'MIGRATE_XSTAGEWEB_V2'});
+  }
+
   async function startDownload(kind) {
     if (!googleConnected) return message('ต้อง Google Login ก่อนดาวน์โหลด');
     try {
@@ -1950,10 +1984,30 @@
               $('lyric-group-page-count').dataset.total='0';
               await refreshPhraseBackup();
               message(job.result?.message||'ย้อนคืนสำเร็จ',false);
+            } else if (job.kind === 'migrate-catalog-v2') {
+              const info=job.result||{};
+              const summary='ฐาน V1 '+fmtNum(info.v1Songs)+' เพลง · V2 '+fmtNum(info.v2Songs)+
+                ' เพลง · เก็บ V2 เดิม '+fmtNum(info.preservedNative)+' เพลง';
+              if(info.dryRun){
+                v2MigrationPreview={...info};
+                $('catalog-v2-migration-status').textContent='Dry Run สำเร็จ · '+summary+
+                  ' · ตรวจสอบจำนวนเพลงก่อนกดยืนยัน · ไม่มีการเปลี่ยน Google Drive';
+              }else{
+                v2MigrationPreview=null;
+                $('catalog-v2-migration-status').textContent='เผยแพร่ฐาน V2 สำเร็จ · '+summary+
+                  ' · V1 ยังคงเดิม · รุ่นเว็บใหม่สามารถอ่าน DB/current.json ได้';
+              }
+              updateButtons();
+              message(job.result?.message||summary,false);
             } else if (job.kind === 'check-update') {
               message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
           } else if (job.state === 'error') {
+            if(job.kind==='migrate-catalog-v2'){
+              v2MigrationPreview=null;
+              $('catalog-v2-migration-status').textContent='ตรวจหรือย้ายฐานไม่สำเร็จ · ไม่มีการยืนยันฐานใหม่ · ตรวจรายละเอียด Log';
+              updateButtons();
+            }
             if(job.kind==='ai-recording-save'){
               aiMicPending=false;
               $('ai-mic-status').textContent=
@@ -2319,6 +2373,8 @@
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-button').addEventListener('click',()=>{void startUpload();});
+  $('catalog-v2-dry-run').addEventListener('click',()=>{void startV2Migration(true);});
+  $('catalog-v2-confirm').addEventListener('click',()=>{void startV2Migration(false);});
   $('go-create').addEventListener('click',()=>tab('create'));
   for(const button of document.querySelectorAll('.download-action')) button.addEventListener('click',()=>{void startDownload(button.dataset.kind);});
   $('refresh-environment').addEventListener('click',()=>{void refreshEnvironment();});
