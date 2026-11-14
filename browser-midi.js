@@ -423,7 +423,11 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
   onStatus?.('กำลังสังเคราะห์เสียง MIDI…');
   const result=await ctx.startRendering();check();
   onStatus?.('กำลังเตรียมเสียงสำหรับเล่น…');
-  return {audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration};
+  // Return compact note timing from the same MIDI tempo clock as the WAV.
+  // The stage piano only needs the visible C3-C7 notes, not the original file.
+  const notes=song.notes.filter(n=>n.key>=48&&n.key<=96)
+    .map(n=>({start:n.start,end:n.end,key:n.key,channel:n.channel}));
+  return {audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration,notes};
 }
 let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 async function listFolder(parent,token){
