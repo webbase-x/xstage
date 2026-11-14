@@ -31,6 +31,27 @@ const state = {
   updateAvailable:null,updateAfterTrack:false,nativeUpdateAvailable:null,nativeUpdateStatus:''
 };
 
+let nativeAudioFocusBlocked=false;
+function requestNativePlaybackAudioFocus(){
+  if(!androidTvNativeBridgeReady()||typeof window.XStageAndroid?.requestPlaybackAudioFocus!=='function')return true;
+  try{
+    if(window.XStageAndroid.requestPlaybackAudioFocus()){nativeAudioFocusBlocked=false;return true;}
+  }catch(error){console.warn('Android audio focus:',error);}
+  setPlayStatus('Android ไม่อนุญาตให้เริ่มเสียงขณะนี้ · ลองอีกครั้งเมื่อแอปอื่นหยุดเสียง');
+  return false;
+}
+function releaseNativePlaybackAudioFocus(){
+  try{window.XStageAndroid?.releasePlaybackAudioFocus?.();}catch{}
+}
+function syncNativeTextEditingState(){
+  const field=document.activeElement;
+  const editing=!!field&&(field.isContentEditable||field.tagName==='TEXTAREA'||
+    (field.tagName==='INPUT'&&/^(text|search|number|email|url|tel|password)$/.test(field.type)));
+  try{window.XStageAndroid?.setTextEditingActive?.(editing);}catch{}
+}
+document.addEventListener('focusin',syncNativeTextEditingState,true);
+document.addEventListener('focusout',()=>setTimeout(syncNativeTextEditingState,0),true);
+window.addEventListener('pageshow',syncNativeTextEditingState);
 const XSTAGE_RELEASE=window.XSTAGE_RELEASE||{version:'0.0.0',build:0};
 function appUpdateElements(){
   return {notice:$('app-update-notice'),text:$('app-update-text'),action:$('app-update-action')};
@@ -1952,6 +1973,7 @@ function clearIdleStage(message){
   state.controller=null;
   state.loading=false;
   player.pause();
+  releaseNativePlaybackAudioFocus();
   player.removeAttribute('src');
   player.load();
   if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
@@ -1991,12 +2013,14 @@ function cancelCurrentSong(){
 function restartCurrentSong(){
   if(!state.current||state.loading)return;
   try{player.currentTime=0;}catch{}
+  if(!requestNativePlaybackAudioFocus())return;
   player.play().catch(()=>setPlayStatus('เพลงพร้อมแล้ว · กด ▶ เพื่อเริ่มเล่น'));
   updateTransport();
 }
 async function resumePlaybackFromSystem(){
   if(state.loading)return false;
   if(!player.src){if(state.queue.length){playNext();return true;}return false;}
+  if(!requestNativePlaybackAudioFocus())return false;
   state.userPaused=false;
   state.userStopped=false;
   state.resumeAfterInterruption=false;
@@ -2085,6 +2109,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     state.loading=false;renderQueue();updateTransport();
     state.userPaused=!autoplay;state.resumeAfterInterruption=false;
     if(autoplay){
+      if(!requestNativePlaybackAudioFocus())throw Error('Android Audio Focus ไม่พร้อม · ยังไม่เริ่มเสียงเพลง');
       try{await window.XStageResumeAudioGraph?.();}catch{}
       try{
         await boundedPlaybackTask(player.play(),18,'ทีวีไม่เริ่มเล่นเสียงภายใน 18 วินาที');
@@ -2706,7 +2731,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1098';
+    script.src='./assets/vendor/qrcode.min.js?v=1099';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -3109,10 +3134,30 @@ function setupMediaSession(){
 setupMediaSession();
 
 function tryRecoverInterruptedPlayback(){
-  if(!state.resumeAfterInterruption||state.userPaused||state.userStopped||!state.current||state.loading)return;
+  if(nativeAudioFocusBlocked||!state.resumeAfterInterruption||state.userPaused||state.userStopped||!state.current||state.loading)return;
   setTimeout(()=>{if(state.resumeAfterInterruption&&!state.userPaused&&!state.userStopped)resumePlaybackFromSystem();},180);
 }
-window.addEventListener('xstage-audio-interrupted',()=>{state.resumeAfterInterruption=true;});
+window.addEventListener('xstage-audio-interrupted',()=>{
+  if(!state.userPaused&&!state.userStopped)state.resumeAfterInterruption=true;
+});
+window.addEventListener('xstage-native-audio-focus',event=>{
+  const change=event?.detail?.state;
+  if(change==='loss-transient'){
+    nativeAudioFocusBlocked=true;
+    if(state.current&&!state.userPaused&&!state.userStopped&&!player.paused){
+      window.dispatchEvent(new Event('xstage-audio-interrupted'));
+      player.pause();
+    }
+  }else if(change==='loss-permanent'){
+    nativeAudioFocusBlocked=true;
+    state.resumeAfterInterruption=false;
+    state.userPaused=true;
+    player.pause();
+  }else if(change==='gain'){
+    nativeAudioFocusBlocked=false;
+    tryRecoverInterruptedPlayback();
+  }
+});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)tryRecoverInterruptedPlayback();});
 window.addEventListener('pageshow',tryRecoverInterruptedPlayback);
 window.addEventListener('focus',tryRecoverInterruptedPlayback);

@@ -47,6 +47,9 @@ assert.match(apk,/X-Stage-Karaoke-Android-TV-v/,'Allow explicitly named Android 
 assert.doesNotMatch(index,/rel="manifest"|pwa-install\.js|sw\.js/,'Web entry must not reference retired PWA assets');
 assert.match(pc,/e\.isComposing/,'Do not steal IME composition events');
 assert.match(stage,/webkitRequestFullscreen/,'WebKit fullscreen compatibility');
+assert.match(index,/id="cloud-import-ios-help"/,'Safari folder picker must explain its iOS support and limitations');
+assert.match(app,/requestNativePlaybackAudioFocus/,'Native playback must acquire Audio Focus');
+assert.match(importer,/hasRelativePaths/,'Flat file-picker results should identify missing folder hierarchy');
 assert.match(index,/<footer class="bottom-bar">[^]*?<\/footer>/,'Stage footer must close correctly');
 assert.match(remote,/const nativeTvMode=\(\(\)=>/,'Native TV detection is a Boolean, not a function');
 console.log('PASS: AAC signatures, solo lyric timing and Web reliability contracts');

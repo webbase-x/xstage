@@ -423,7 +423,11 @@ class Importer {
     this.selected=files;this.folderHandle=handle;
     this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
-    this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+(handle?' (จำสิทธิ์โฟลเดอร์สำหรับทำต่อได้ถ้าเบราว์เซอร์อนุญาต)':' (เปิดใหม่ต้องเลือกโฟลเดอร์เดิมอีกครั้ง)');
+    const hasRelativePaths=files.some(entry=>String(entry.relative||'').includes('/'));
+    this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+
+      (handle?' (จำสิทธิ์โฟลเดอร์สำหรับทำต่อได้ถ้าเบราว์เซอร์อนุญาต)'
+        :hasRelativePaths?' (เปิดใหม่ต้องเลือกโฟลเดอร์เดิมอีกครั้ง)'
+        :' (เบราว์เซอร์ไม่ได้ส่งโครงสร้างโฟลเดอร์ · ตรวจสอบชุดเพลงให้ครบก่อนนำเข้า)');
     this.dom.total.textContent=this.plan.files.toLocaleString('th-TH');
     this.dom.ready.textContent=(this.plan.songs.length+this.plan.midis.length).toLocaleString('th-TH');
     this.dom.fonts.textContent=this.plan.fonts.length.toLocaleString('th-TH');

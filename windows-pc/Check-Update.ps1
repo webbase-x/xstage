@@ -9,6 +9,21 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $metadataUri = 'https://webbase-x.github.io/xstage/downloads/windows-pc-latest.json'
+# When called without -CurrentBuild, try the local installed manifest rather
+# than treating a same-version newer build as identical to the current build.
+if ($CurrentBuild -le 0 -and $CurrentVersion -ne '0.0.0') {
+    foreach ($manifestPath in @((Join-Path $PSScriptRoot 'manifest.json'),
+                                (Join-Path (Split-Path -Parent $PSScriptRoot) 'manifest.json'))) {
+        try {
+            if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { continue }
+            $installed = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+            if ([string]$installed.version -eq $CurrentVersion -and [int]$installed.build -gt 0) {
+                $CurrentBuild = [int]$installed.build
+                break
+            }
+        } catch { Write-Warning "Cannot inspect local version manifest: $manifestPath" }
+    }
+}
 
 try {
     $metaUrl = $metadataUri + '?t=' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -23,7 +38,13 @@ try {
     $newer = ($latest -gt $current) -or ($latest -eq $current -and
         $CurrentBuild -gt 0 -and $newBuild -gt $CurrentBuild)
     if (-not $newer) {
-        if (-not $Startup) { Write-Host "X-Stage Windows PC $CurrentVersion เป็นรุ่นล่าสุดแล้ว" }
+        if (-not $Startup) {
+            if ($latest -eq $current -and $CurrentBuild -le 0) {
+                Write-Host 'ไม่ทราบเลข Build ของโปรแกรมที่ติดตั้ง · ตรวจ manifest.json หรือส่ง -CurrentBuild เพื่อเปรียบเทียบรุ่นเดียวกัน'
+            } else {
+                Write-Host "X-Stage Windows PC $CurrentVersion เป็นรุ่นล่าสุดแล้ว"
+            }
+        }
         exit 0
     }
     $file = [string]$meta.installer_file

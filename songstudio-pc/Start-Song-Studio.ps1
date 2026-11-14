@@ -10,6 +10,8 @@ $Tools = Join-Path $Runtime 'tools'
 $PyDir = Join-Path $Runtime 'python'
 $LogFile = Join-Path $Root 'setup.log'
 $PythonURL = 'https://www.python.org/ftp/python/3.13.10/python-3.13.10-embeddable-amd64.zip'
+# Published by Python.org in windows-3.13.10.json (pythonembed-3.13-64).
+$PythonSHA256 = '42a6995f5badcde341d8cf28b1479dc62d97c6cb153aee694eeeef09b56b9f70'
 $FFMPEGURL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
 $FFMPEGHashURL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256'
 
@@ -43,6 +45,12 @@ try {
     if (-not (Test-Path -LiteralPath $Python)) {
         $Zip = Join-Path $Runtime 'python-download.zip'
         Download-Verified -URL $PythonURL -Output $Zip
+        Status 'Verifying official Python 3.13.10 SHA-256 before extraction...'
+        $PythonActualSHA = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($PythonActualSHA -ne $PythonSHA256) {
+            Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
+            throw 'Python 3.13.10 SHA-256 mismatch: download rejected; no runtime extracted.'
+        }
         Status 'Extracting official Python 3.13.10 embedded runtime...'
         Expand-Archive -LiteralPath $Zip -DestinationPath $PyDir -Force
         Remove-Item -LiteralPath $Zip -ErrorAction SilentlyContinue

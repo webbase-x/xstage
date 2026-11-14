@@ -151,6 +151,19 @@ assert.ok(androidMain.includes('public void installAvailableUpdate()'),'Android 
 assert.ok(androidMain.includes('public boolean dispatchKeyEvent(KeyEvent event)'),'Android TV must intercept remote key events before WebView consumes them');
 assert.ok(androidMain.includes('KEYCODE_DPAD_CENTER')&&androidMain.includes('KEYCODE_ENTER')&&androidMain.includes('KEYCODE_NUMPAD_ENTER')&&androidMain.includes('KEYCODE_BUTTON_A'),'Android TV OK/Enter variants must activate the focused web control');
 assert.ok(androidMain.includes('KEYCODE_DPAD_LEFT')&&androidMain.includes('KEYCODE_DPAD_RIGHT')&&androidMain.includes('KEYCODE_DPAD_UP')&&androidMain.includes('KEYCODE_DPAD_DOWN'),'Android TV D-pad directions must drive web focus');
+assert.ok(androidMain.includes('!webTextEditingActive')&&androidMain.includes('void setTextEditingActive(boolean active)')&&app.includes("document.addEventListener('focusin',syncNativeTextEditingState,true)"),
+  'Android TV must let the WebView/IME handle arrows and Enter when text is being edited');
+assert.ok(androidMain.includes('AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)')&&
+          androidMain.includes('setWillPauseWhenDucked(true)')&&
+          androidMain.includes('requestPlaybackAudioFocus()')&&
+          androidMain.includes('releasePlaybackAudioFocus()'),
+  'Android native audio focus must be acquired before playback and released when idle');
+assert.ok(app.includes("window.addEventListener('xstage-native-audio-focus'")&&
+          app.includes("change==='loss-transient'")&&app.includes("change==='loss-permanent'")&&
+          app.includes("nativeAudioFocusBlocked||!state.resumeAfterInterruption"),
+  'Android audio interruptions must preserve manual pause and block autoplay until focus returns');
+assert.ok(androidAuth.includes('synchronized boolean hasStoredSession()'),
+  'Google session inspection must serialize with login and logout');
 assert.ok(app.includes('window.XStageTvMoveFocus=direction=>'),'hosted UI must expose spatial focus navigation for TV remotes');
 assert.ok(app.includes('window.XStageTvActivateFocused=()=>'),'hosted UI must expose focused-control activation for TV remotes');
 assert.ok(app.includes('function setupNativeAndroidTvUi()'),'native Android TV must have a dedicated display-only UI setup');
@@ -414,6 +427,36 @@ assert.ok(windowsStartupLauncher.includes("Start-Process -FilePath $executable")
 assert.ok(windowsStartupLauncher.includes("'-Install'")&&windowsStartupLauncher.includes("'-Startup'"),'Windows launcher must check and start a verified update automatically');
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('available -ne $true'),'Windows updater may only launch a hash-verified published installer');
 assert.equal(windowsUpdateMetadata.available,false,'Windows update metadata must not advertise an unverified installer');
+assert.ok(windowsStartupLauncher.includes("[string]$AppPath = ''")&&
+          windowsStartupLauncher.includes("Join-Path $PSScriptRoot 'XStageKaraoke.exe'")&&
+          windowsStartupLauncher.includes("Test-Path -LiteralPath $candidate"),
+          'Windows launcher must search portable/installed paths rather than require D:');
+assert.ok(windowsUpdateHelper.includes("if ($CurrentBuild -le 0 -and $CurrentVersion -ne '0.0.0')")&&
+          windowsUpdateHelper.includes('ConvertFrom-Json')&&windowsUpdateHelper.includes('$newBuild -gt $CurrentBuild'),
+          'Windows updater must resolve installed Build from a matching manifest before comparison');
+assert.equal(windowsSourceManifest.source_imported,false,'Windows source-import status must not be falsely marked complete');
+assert.equal(windowsSourceManifest.windows_build_verified,false,'Windows unverified build must remain explicitly unverified');
+assert.equal(windowsSourceManifest.installer_published,false,'Windows source ZIP is not a published installer');
+assert.equal(windowsSourceManifest.status,'SOURCE_ZIP_AVAILABLE_AWAITING_IMPORT_AND_BUILD',
+  'Windows manifest must acknowledge uploaded source ZIP without claiming a finished build');
+const studioReady=JSON.parse(read('downloads/song-studio-latest.json'));
+const studioPreview=JSON.parse(read('downloads/song-studio-source-preview-latest.json'));
+assert.equal(studioReady.version,'0.3.25');
+assert.equal(studioReady.build,325);
+assert.equal(studioReady.package_type,'portable_zip');
+assert.equal(studioReady.installer_available,false);
+assert.match(studioReady.sha256,/^[a-f0-9]{64}$/,'Ready ZIP must pin the GitHub Release digest');
+assert.equal(studioPreview.channel,'source-preview');
+assert.equal(studioPreview.version,'0.2.5');
+assert.equal(studioPreview.installer_available,false);
+const studioLegacy=read('songstudio-pc/Start-Song-Studio.ps1');
+const studioBuilder=read('scripts/build_songstudio_ready.ps1');
+const pythonSha='42a6995f5badcde341d8cf28b1479dc62d97c6cb153aee694eeeef09b56b9f70';
+assert.ok(studioLegacy.includes(pythonSha)&&studioLegacy.includes('Get-FileHash -LiteralPath $Zip -Algorithm SHA256')&&
+          studioLegacy.indexOf('Verifying official Python')<studioLegacy.indexOf('Expand-Archive -LiteralPath $Zip -DestinationPath $PyDir'),
+          'Source launcher must hash-check the official Python embed ZIP before extraction');
+assert.ok(studioBuilder.includes(pythonSha)&&studioBuilder.includes('CheckSHA $PyZip $PythonSHA256'),
+          'Ready build must validate pinned Python archive prior to packaging');
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
 
 // An empty new Drive must never retain orphaned songs from IndexedDB or
