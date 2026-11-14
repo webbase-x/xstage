@@ -316,7 +316,7 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
   onStatus?.('กำลังเตรียมเสียงสำหรับเล่น…');
   return {audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration};
 }
-let context=null,selected='',fontCache=null;
+let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 async function listFolder(parent,token){
   const list=[];let page='';
   do{
@@ -331,47 +331,73 @@ async function listFolder(parent,token){
   return list;
 }
 async function refreshFonts(auth){
+  const sequence=++fontRefreshSequence;
   const select=$('xstage-soundfont-select');if(!select)return;
-  context=auth;const sub=auth?.sub||'',rootId=auth?.rootId||'';
-  select.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)',''));
-  if(!auth?.token||!rootId){selected='';fontCache=null;return;}
-  try{
-    const categories=await listFolder(rootId,auth.token);
-    const root=categories.find(x=>x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
-    if(root){
-      const types=await listFolder(root.id,auth.token);
-      const dirs=types.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&['SF2','SF3'].includes(x.name.toUpperCase()));
-      for(const dir of dirs){
-        const files=await listFolder(dir.id,auth.token);
-        for(const f of files.filter(x=>/\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder'))
-          select.append(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
-      }
+  const sameLibrary=context?.sub===auth?.sub&&context?.rootId===auth?.rootId;
+  context=auth;
+  if(!sameLibrary){selected='';fontCache=null;}
+  select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
+  const pending=(async()=>{
+    const sub=auth?.sub||'',rootId=auth?.rootId||'';
+    const choices=[new Option('เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)','')];
+    if(!auth?.token||!rootId){
+      if(sequence===fontRefreshSequence){selected='';fontCache=null;select.replaceChildren(...choices);}
+      return;
     }
-    const storageKey='xstage-font-pref:'+sub+':'+rootId;
-    const saved=localStorage.getItem(storageKey)||'';
-    select.value=Array.from(select.options).some(x=>x.value===saved)?saved:'';
-    selected=select.value;select.onchange=()=>{
-      selected=select.value;fontCache=null;
-      try{localStorage.setItem(storageKey,selected);}catch{}
-    };
-  }catch(error){
-    const o=new Option('SoundFont: '+String(error.message).slice(0,80),'');o.disabled=true;select.append(o);
-  }
+    try{
+      const categories=await listFolder(rootId,auth.token);
+      const root=categories.find(x=>x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
+      if(root){
+        const types=await listFolder(root.id,auth.token);
+        const dirs=types.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&['SF2','SF3'].includes(x.name.toUpperCase()));
+        for(const dir of dirs){
+          const files=await listFolder(dir.id,auth.token);
+          for(const f of files.filter(x=>/\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder'))
+            choices.push(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
+        }
+      }
+      if(sequence!==fontRefreshSequence)return;
+      const storageKey='xstage-font-pref:'+sub+':'+rootId;
+      let saved='';
+      try{saved=localStorage.getItem(storageKey)||'';}catch{}
+      select.replaceChildren(...choices);
+      select.value=choices.some(x=>x.value===saved)?saved:'';
+      selected=select.value;
+      select.onchange=()=>{
+        selected=select.value;fontCache=null;
+        try{localStorage.setItem(storageKey,selected);}catch{}
+      };
+    }catch(error){
+      if(sequence!==fontRefreshSequence)return;
+      select.replaceChildren(...choices);
+      const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
+      option.disabled=true;select.append(option);
+      selected='';fontCache=null;
+    }
+  })();
+  fontRefreshPromise=pending;
+  try{await pending;}
+  finally{if(fontRefreshPromise===pending)fontRefreshPromise=null;}
 }
 async function selectedFont(token,signal){
+  if(fontRefreshPromise)await fontRefreshPromise;
+  if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(!selected)return null;
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
-  if(fontCache?.id===selected&&fontCache?.sub===context.sub)return fontCache.bytes;
-  const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(selected)+'?alt=media',
+  const id=selected,sub=context.sub;
+  if(fontCache?.id===id&&fontCache?.sub===sub)return fontCache.bytes;
+  const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
     {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
   if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
   const len=Number(res.headers.get('Content-Length')||0);
   if(len>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
   const bytes=new Uint8Array(await res.arrayBuffer());
   if(bytes.byteLength>MAX_FONT)fail('SoundFont ใหญ่เกินขอบเขตหน่วยความจำ');
-  parseFont(bytes);fontCache={id:selected,sub:context.sub,bytes};return bytes;
+  if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
+  if(selected!==id||context?.token!==token||context?.sub!==sub)fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
+  parseFont(bytes);fontCache={id,sub,bytes};return bytes;
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,
-  reset(){context=null;selected='';fontCache=null;const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
+  reset(){fontRefreshSequence++;fontRefreshPromise=null;context=null;selected='';fontCache=null;const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);
