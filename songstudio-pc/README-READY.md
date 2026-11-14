@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.32 Build 332
+# X-Stage Song Studio PC Ready v0.3.33 Build 333
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,14 +6,14 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Release metadata
 
-- Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.32 Build 332, packaging explicitly `portable_zip`).
+- Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.33 Build 333, packaging explicitly `portable_zip`).
 - Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.5 Build 205, not a ready installer).
 - Verify the published ZIP checksum with the matching GitHub Release `.zip.sha256` asset or the `sha256` field in `downloads/song-studio-latest.json` (after the release is published). Do not use hashes from older builds. This is **not** a signed EXE or MSI installer.
 - Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.32-build332.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.33-build333.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -37,6 +37,7 @@ All listed components are predownloaded and tested during **GitHub Actions build
 
 - Scan source folders, search/select songs, persist source/output preferences
 - **NCN skipped-file audit/recheck:** The analysis keeps each skipped LYR filename, a categorized reason and the total by cause. Expand the skipped-files report to page through individual files, export all entries as an authenticated UTF-8 CSV, or recheck *only* skipped files. Recheck records confirmed skips, changed reasons and recovered readable files, updates group counts safely, and never modifies source files. Reports remain available even if every LYR fails initial validation. The before/after report is included in the CSV; filenames are protected against spreadsheet formula injection.
+- **Backward CUR cues on selected lyrics (Build 333):** When a selected lyric line has historical backward character timestamps (such as the case reported for `02386.lyr`, line 100), use only original CUR time positions projected by the existing player rule (`max(previous_timed_cue, current_cue)`) before mapping the new text. No MIDI beat, fractional time, or synthesized timestamp is invented. Preserve the old CUR intact on same-byte-length replacements; retain unselected line CUR bytes exactly; keep full ZIP backups and undo. A selected line with `65535` (untimed printed character) still refuses an unsafe length-changing replacement. Test cases simulate the fault but are not verification of the user's actual song files.
 - **Legacy CUR timing compatibility:** Preserves original `65535`/non-monotonic CUR cue bytes in *unselected* lyric lines instead of rejecting an entire song. A CUR line-break marker is not a visible glyph and can be out of order without blocking a safe edit. If a *selected* line contains untimed or backward printable-character cues, the editor refuses modification with filename and line number; neither its LYR nor CUR is overwritten. Safe changes still back up both parts and verify all unselected line cues remain identical.
 - **NCN head/tail editor (fast LYR-only scan):** Choose `NCN`, `NCN/Lyrics`, or a standalone `Lyrics` folder. Scan only `.LYR` in `Lyrics` and subfolders; do not read MID or CUR until you explicitly select text and confirm replacement. Displays LYR file count and progress. At replacement time only, require matching MID/LYR/CUR by code and bucket, validate CUR timing and LYR integrity, back up both `.LYR` and `.CUR`, and leave MIDI and other line timings unchanged. Standalone Lyrics without MID/CUR is analysis-only and cannot be modified safely. Undo restores original bytes. Custom wording must encode in CP874; no StageWeb/current.json or LRC required.
 - Convert supported audio formats to M4A (AAC 192 kbps) using FFmpeg; preserve existing M4A audio
@@ -186,12 +187,12 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.32-build332`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.33-build333`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
 
-## Google Drive library layout v2 (Build 332)
+## Google Drive library layout v2 (Build 333)
 
 New private Google Drive libraries use `XStageWeb/` and create the following
 category directories. Alphabet/digit subfolders (`0`–`9`, `A`–`Z`) are
