@@ -347,6 +347,20 @@ button.preview-lyric-line{cursor:pointer}
 .lyric-group-edit #lyric-replacement-hint{margin:8px 0 2px;line-height:1.6}
 .lyric-group-edit textarea{width:100%;min-height:90px;line-height:1.7;resize:vertical;font-family:"Leelawadee UI","Noto Sans Thai",monospace}
 .lyric-group-overview .hint,.lyric-group-edit .hint{line-height:1.7;white-space:pre-wrap}
+.lyric-skipped-panel{margin:15px 0 4px;padding:13px;border:1px solid #376f86;border-radius:12px;background:#0c2a3c}
+.lyric-skipped-panel summary{cursor:pointer;font-weight:700;color:#e4fbff;line-height:1.7}
+.lyric-skipped-panel summary strong{color:#ffe5ab}
+.lyric-skipped-breakdown{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.lyric-skipped-reason{background:#174253;border:1px solid #3c6377;border-radius:999px;padding:5px 11px;font-size:12px;color:#d5e8f0}
+.lyric-skipped-list{display:flex;flex-direction:column;gap:7px;max-height:440px;overflow:auto;margin:10px 0}
+.lyric-skipped-item{display:flex;flex-direction:column;gap:3px;padding:9px 12px;border:1px solid #2e5970;background:#102d41;border-radius:9px;overflow-wrap:anywhere}
+.lyric-skipped-item strong{font-size:13px;color:#fff}
+.lyric-skipped-item span,.lyric-skipped-item small{font-size:12px;color:#b5d6e3;line-height:1.5}
+.lyric-skipped-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px}
+.lyric-skipped-controls .field{max-width:235px;min-width:160px}
+.lyric-skipped-controls>label{font-size:12px;font-weight:600}
+.lyric-skipped-controls .button{min-height:38px}
+@media(max-width:640px){.lyric-skipped-controls .field{max-width:100%;flex:1 1 100%}.lyric-skipped-controls .button{flex:1 1 auto}}
 
 /* Private microphone capture within AI lyrics: consent, preview, then save. */
 .ai-microphone-panel{border:1px solid #31697a;background:#0b2538}
