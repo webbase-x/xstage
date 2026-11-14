@@ -96,7 +96,7 @@ try {
   const demoTrack=[0,0xc0,0,0,0x90,60,100,0x60,0x80,60,0,0,0xff,0x2f,0];
   const demoMidi=Buffer.from([77,84,104,100,0,0,0,6,0,0,0,1,0,96,
     77,84,114,107,0,0,0,demoTrack.length,...demoTrack]);
-  const demoLyr=Buffer.from('Test Song\\nArtist\\nC\\n.\\nHI\\n');
+  const demoLyr=Buffer.from('Test Song\nArtist\nC\n.\nHI\n');
   const demoCur=Buffer.from([0,0,0,0,24,0]);
   await midiPage.setInputFiles('#file-input',[
     {name:'NCN001.mid',mimeType:'audio/midi',buffer:demoMidi},
@@ -109,7 +109,7 @@ try {
   await midiPage.waitForFunction(()=>document.querySelector('#midi-status')
     .textContent.includes('NCN จริง'));
   assert.equal(await midiPage.locator('#midi-workspace').isVisible(),true);
-  assert.match(await midiPage.locator('#lyrics-text').inputValue(),/\\[00:00.00\\]HI/);
+  assert.match(await midiPage.locator('#lyrics-text').inputValue(),/\[00:00\.00\]HI/);
   assert.equal(await midiPage.locator('#preview-midi').isEnabled(),true);
   await midiPage.click('#preview-midi');
   await midiPage.waitForFunction(()=>document.querySelector('#player').src.startsWith('blob:'),
