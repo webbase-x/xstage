@@ -15,15 +15,17 @@ const start = app.indexOf("const WEB_AUTO_UPDATE_GUARD=");
 const end = app.indexOf('async function checkAppVersion(){',start);
 assert.ok(start>=0&&end>start,'automatic web update function must be available');
 const makeWebUpdate = new Function('androidTvNativeBridgeReady','playbackBusyForUpdate','sessionStorage','performAppUpdateReload',
+  'webGoogleAuthFlow','state',
   app.slice(start,end)+'\nreturn autoApplyWebUpdate;');
 
-function scenario({busy=false,native=false}={}){
+function scenario({busy=false,native=false,oauth=false,recovering=false}={}){
   const data=new Map();let reloads=0;
   const storage={
     getItem:key=>data.get(key)||null,
     setItem:(key,value)=>data.set(key,value)
   };
-  const apply=makeWebUpdate(()=>native,()=>busy,storage,()=>{reloads++;});
+  const apply=makeWebUpdate(()=>native,()=>busy,storage,()=>{reloads++;},
+    oauth?{id:1,phase:'waiting'}:null,{authRecovering:recovering});
   return {apply,reloads:()=>reloads};
 }
 {
@@ -41,6 +43,16 @@ function scenario({busy=false,native=false}={}){
 {
   const test=scenario({native:true});
   assert.equal(test.apply({version:'1.0.78',build:1078}),false,'native APK uses its own updater');
+  assert.equal(test.reloads(),0);
+}
+{
+  const test=scenario({oauth:true});
+  assert.equal(test.apply({version:'1.0.101',build:1101}),false,'pending Google OAuth popup must block automatic web reload');
+  assert.equal(test.reloads(),0);
+}
+{
+  const test=scenario({recovering:true});
+  assert.equal(test.apply({version:'1.0.101',build:1101}),false,'stored Google token recovery must block automatic web reload');
   assert.equal(test.reloads(),0);
 }
 const nativeMain=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
