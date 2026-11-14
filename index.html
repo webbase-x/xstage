@@ -22,9 +22,9 @@
   if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
-  <link rel="stylesheet" href="style.css?v=1100">
-  <link rel="stylesheet" href="xstage-ux.css?v=1100">
-  <link rel="stylesheet" href="cloud-import.css?v=1100">
+  <link rel="stylesheet" href="style.css?v=1101">
+  <link rel="stylesheet" href="xstage-ux.css?v=1101">
+  <link rel="stylesheet" href="cloud-import.css?v=1101">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -35,7 +35,7 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1100" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1101" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -71,7 +71,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1100" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1101" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -244,7 +244,7 @@
               <span id="xstage-eq-mode">31 BAND · 1/3 OCTAVE</span>
             </div>
             <div class="xstage-eq-rta-wrap">
-              <canvas id="xstage-eq-rta" width="1100" height="145" aria-label="Spectrum analyzer"></canvas>
+              <canvas id="xstage-eq-rta" width="1101" height="145" aria-label="Spectrum analyzer"></canvas>
             </div>
             <div class="xstage-eq-main">
               <div id="xstage-eq-bands" class="xstage-eq-bands"></div>
@@ -335,19 +335,19 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script>window.XSTAGE_RELEASE={version:'1.0.100',build:1100};</script>
-<script src="config.js?v=1100"></script>
+<script>window.XSTAGE_RELEASE={version:'1.0.101',build:1101};</script>
+<script src="config.js?v=1101"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="cloud-import-core.js?v=1100" defer></script>
-  <script src="browser-midi.js?v=1100" defer></script>
-  <script src="video-transcode.js?v=1100" defer></script>
-  <script src="cloud-import.js?v=1100" defer></script>
-  <script src="app.js?v=1100" defer></script><script src="pc-extensions.js?v=1100" defer></script>
-  <script src="native-audio-meter.js?v=1100" defer></script>
-  <script src="stage-controls.js?v=1100" defer></script>
-  <script src="mobile-layout.js?v=1100" defer></script>
-  <script src="android-apk-download.js?v=1100" defer></script>
+  <script src="cloud-import-core.js?v=1101" defer></script>
+  <script src="browser-midi.js?v=1101" defer></script>
+  <script src="video-transcode.js?v=1101" defer></script>
+  <script src="cloud-import.js?v=1101" defer></script>
+  <script src="app.js?v=1101" defer></script><script src="pc-extensions.js?v=1101" defer></script>
+  <script src="native-audio-meter.js?v=1101" defer></script>
+  <script src="stage-controls.js?v=1101" defer></script>
+  <script src="mobile-layout.js?v=1101" defer></script>
+  <script src="android-apk-download.js?v=1101" defer></script>
 
-  <script src="stage-ui.js?v=1100" defer></script>
+  <script src="stage-ui.js?v=1101" defer></script>
 </body>
 </html>
