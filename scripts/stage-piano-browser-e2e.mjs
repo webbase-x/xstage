@@ -60,7 +60,9 @@ try{
   await page.locator('#xstage-midi-transpose').selectOption('3');
   await page.locator('[data-midi-channel="0"] [data-action="mute"]').check();
   await page.locator('[data-midi-channel="1"] [data-action="solo"]').check();
-  await page.locator('[data-midi-channel="1"] [data-action="gain"]').fill('60');
+  await page.locator('[data-midi-channel="1"] [data-action="gain"]').evaluate(element=>{
+    element.value='60';element.dispatchEvent(new Event('input',{bubbles:true}));
+  });
   const mix=await page.evaluate(()=>window.XStageAudioAdvisor.getMidiSettings());
   assert.equal(mix.transpose,3);
   assert.equal(mix.channels[0].mute,true);
