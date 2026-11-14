@@ -191,9 +191,11 @@ class OnlinePublisher:
                 # media remain blocked to avoid reinitializing an old catalog.
                 if (all(x.get("name") in ("AUDIO", "TEXT", "SOUNDFONT") and
                         x.get("mimeType") == FOLDER_MIME for x in children)
-                        and len(children) <= 3):
+                        and len(children) <= 3
+                        and not text_children):
                     return None, {}, {x["name"]: x for x in children}
-                markers = [x for x in children if x.get("name") == STAGING_MARKER
+                markers = [x for x in [*children, *text_children]
+                           if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
                 expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "TEXT", "VIDEO", "MIDI", "DB", "SOUNDFONT"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
@@ -202,7 +204,7 @@ class OnlinePublisher:
                     # Previous first-time upload stopped before its first
                     # published pointer. Resume only our own verified staging
                     # work, never a foreign, unindexed XStageWeb library.
-                    return None, {}, {x["name"]: x for x in children}
+                    return None, {}, {x["name"]: x for x in [*children, *text_children]}
                 raise PublishError("XStageWeb มีไฟล์เดิมแต่ไม่มี current.json · ไม่สร้างฐานใหม่ทับ")
             return None, {}, {}
         pointer_file = pointers[0]
@@ -293,6 +295,10 @@ class OnlinePublisher:
         if root is None:
             root = self.drive.folder("root", ONLINE_ROOT)
         active, remote, root_files = self._read_online(root)
+        if active is not None and active[1].get("layoutVersion") != LAYOUT_VERSION:
+            raise PublishError(
+                "พบคลัง Google Drive โครงสร้างเก่า · ไม่ย้ายหรือแก้ฐานอัตโนมัติ "
+                "กรุณาสำรองและยืนยันการย้ายคลังเก่าก่อนเผยแพร่แบบ AUDIO/TEXT")
         if active is None and STAGING_MARKER not in root_files:
             # Durable evidence for safe first-run recovery. This marker is
             # published BEFORE the first media file, so an interrupted upload
@@ -304,7 +310,8 @@ class OnlinePublisher:
                     "schemaVersion": 1,
                     "note": "Private staged upload. No playable DB is published yet."
                 }), encoding="utf-8")
-                self.drive.upload_file(root, marker_file, STAGING_MARKER,
+                self.drive.upload_file(self.drive.folder(root, "TEXT"),
+                                       marker_file, STAGING_MARKER,
                                        cancelled=cancelled)
         pointer_file, old_pointer = active if active else (None, None)
         by_code = {}
