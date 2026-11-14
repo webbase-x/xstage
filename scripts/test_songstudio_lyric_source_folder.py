@@ -86,7 +86,7 @@ class SelectedLyricFolderTests(unittest.TestCase):
         path.mkdir()
         pointer = path / "current.json"
         pointer.write_text("{}", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "ไม่ใช่คลังเพลง"):
+        with self.assertRaisesRegex(ValueError, "ไม่ใช่คลัง"):
             self.resolve(str(path))
         pointer.write_text("not-json", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "อ่าน current.json"):
