@@ -114,6 +114,8 @@ def _parse(lyr_bytes, cur_bytes, bulk):
         raise ValueError("NCN .CUR ไม่มีเวลา")
     offsets, lines = [], []
     cursor = 0
+    previous_printed = 0
+    timing_warnings = []
     for index in range(4, len(rows)):
         original = _body(rows[index])
         if not original.strip():
@@ -130,8 +132,27 @@ def _parse(lyr_bytes, cur_bytes, bulk):
                 break
             raise ValueError("NCN CUR ไม่ครบสำหรับเนื้อร้อง · ข้ามเพื่อความปลอดภัย")
         segment = values[cursor:cursor+needed]
-        if 65535 in segment or any(b < a for a, b in zip(segment, segment[1:])):
-            raise ValueError("NCN CUR มีเวลาไม่สมบูรณ์หรือย้อนหลัง")
+        # The FIRST CUR entry is a line-break marker, not a visible glyph.
+        # Legacy NCN may put 65535 or an out-of-order value here. X-Stage
+        # Karaoke's renderer ignores that marker and tolerates historical
+        # nonmonotone/untimed glyphs elsewhere. Preserve those source bytes
+        # unchanged; reject only if the operator selects an unsafe line.
+        cue_issue = None
+        char_cues = segment[1:]
+        if 65535 in char_cues:
+            cue_issue = "พบค่า 65535 (ตำแหน่งไม่มีเวลา) ในตัวอักษร"
+        else:
+            backwards = next((i for i, (a, b) in enumerate(
+                zip(char_cues, char_cues[1:]), 2) if b < a), None)
+            if backwards is not None:
+                cue_issue = f"เวลาอักษรย้อนกลับที่ตำแหน่ง {backwards + 1}"
+            elif char_cues and char_cues[0] < previous_printed:
+                cue_issue = "เวลาเริ่มบรรทัดน้อยกว่าเวลาของเนื้อร้องก่อนหน้า"
+        if cue_issue:
+            timing_warnings.append({"line": index + 1, "reason": cue_issue})
+        if char_cues:
+            previous_printed = max(previous_printed, *(
+                value for value in char_cues if value != 65535))
         try:
             raw_text = original.decode("cp874", errors="strict")
         except UnicodeError as exc:
@@ -141,7 +162,7 @@ def _parse(lyr_bytes, cur_bytes, bulk):
         normalized = bulk._same(raw_text)
         offsets.append({"row": index, "cursor": cursor, "count": needed,
                         "raw": original, "text": normalized,
-                        "times": segment})
+                        "times": segment, "cueIssue": cue_issue})
         lines.append(normalized)
         cursor += needed
     if len(lines) < 4:
@@ -153,7 +174,8 @@ def _parse(lyr_bytes, cur_bytes, bulk):
         raise ValueError("อ่านข้อมูลหัว NCN ไม่สำเร็จ") from exc
     return {"rows": rows, "tail": tail, "values": values,
             "cursorTail": cur_bytes[len(even):],
-            "lines": lines, "entries": offsets, "title": title, "artist": artist}
+            "lines": lines, "entries": offsets, "title": title, "artist": artist,
+            "timingWarnings": timing_warnings}
 
 
 def _matched_parts(root, midi, ncn):
@@ -402,10 +424,12 @@ def _selected_triplet(root, record, ncn, bulk):
 
 
 def _remap_times(old, length):
-    """Reuse original CUR values, never invent fractional/approximate beats."""
+    """Reuse existing CUR values, anchoring both original ends if possible."""
     if not old or length < 1:
         raise ValueError("NCN ไม่มีเวลาสำหรับข้อความ")
-    return [old[min(len(old)-1, (i * len(old)) // length)]
+    if length == 1:
+        return [old[0]]
+    return [old[(i * (len(old)-1)) // (length-1)]
             for i in range(length)]
 
 
@@ -451,6 +475,12 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
                 raise ValueError("เลือกบรรทัด NCN ซ้ำ")
             if parsed["lines"][index] != group["text"]:
                 raise ValueError("ข้อความ NCN เปลี่ยนหลังสแกน: " + mid.name)
+            cue_issue = parsed["entries"][index].get("cueIssue")
+            if cue_issue:
+                raise ValueError(
+                    f"ไม่แก้ไฟล์ {lyr.name} · บรรทัด {parsed['entries'][index]['row']+1} "
+                    f"มีเวลาตัวอักษร CUR ไม่ปลอดภัย: {cue_issue} · "
+                    "เลือกกลุ่มข้อความอื่นหรือซ่อม CUR ด้วยข้อมูลเวลาที่ตรวจสอบได้")
             changes[index] = encoded
         lyric_rows = list(parsed["rows"])
         cursor_values = list(parsed["values"])
@@ -474,12 +504,16 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
             expected = new_text if i in changes else text
             if verified["lines"][i] != expected:
                 raise ValueError("ตรวจ NCN หลังแก้แล้วเนื้อร้องไม่ตรง")
+            if i not in changes and (
+                    verified["entries"][i]["times"] != parsed["entries"][i]["times"]):
+                raise ValueError("ตรวจ NCN แล้วเวลาในบรรทัดที่ไม่เลือกเปลี่ยนไป")
         if len(verified["entries"]) != len(parsed["entries"]):
             raise ValueError("จำนวนบรรทัด NCN เปลี่ยนโดยไม่ตั้งใจ")
         edits.append({"songId": target["songId"], "record": record,
                       "files": [(lyr, original_lyr, updated_lyr),
                                 (cur, original_cur, updated_cur)],
-                      "lines": verified["lines"], "edits": target["edits"]})
+                      "lines": verified["lines"], "edits": target["edits"],
+                      "preservedTimingWarnings": len(parsed["timingWarnings"])})
         if on_progress and number % 300 == 0:
             on_progress(f"ตรวจ LYR/CUR {number:,}/{len(targets):,} เพลง", number)
 
@@ -560,13 +594,17 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
             group["members"].append(member)
             group["count"] = len(group["members"])
     snapshot["groupCount"] = len(snapshot["groups"])
+    preserved = sum(item["preservedTimingWarnings"] for item in edits)
     return {
         "message": (f"แก้ NCN {len(edits):,} เพลง · {count:,} บรรทัดสำเร็จ "
-                    "· สำรอง LYR/CUR และคง MIDI เดิม"),
+                    "· สำรอง LYR/CUR และคง MIDI เดิม"
+                    + (f" · คงข้อมูลเวลาเดิมที่ผิดปกติในบรรทัดอื่น {preserved:,} จุด"
+                       if preserved else "")),
         "changedSongs": len(edits), "changedLines": count,
         "changedGroups": len(chosen), "alreadyCorrect": unchanged,
         "changedFiles": len(specs), "removedSyllableCues": 0,
-        "backupId": op, "remainingGroups": snapshot["groupCount"]
+        "backupId": op, "remainingGroups": snapshot["groupCount"],
+        "preservedTimingWarnings": preserved
     }
 
 
