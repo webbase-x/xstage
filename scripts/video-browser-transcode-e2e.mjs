@@ -49,7 +49,7 @@ try{
     }catch(error){
       return {error:String(error?.message||error),statuses:statuses.slice(-10)};
     }
-  },bytes,{timeout:120000});
+  },bytes);
   assert.ok(!data.error,'AVI Web Worker conversion failed: '+JSON.stringify(data));
   assert.equal(data.mime,'video/mp4');
   assert.equal(data.ftyp,'ftyp');
