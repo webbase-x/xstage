@@ -852,17 +852,73 @@ $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
-  if(![1,2].includes(pointer?.schemaVersion) || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
+  if(![1,2].includes(pointer?.schemaVersion))
     throw Error('รูปแบบ current.json ไม่รองรับ');
   if(pointer.schemaVersion===2){
-    if(!window.XStageCatalogV2)
-      throw Error('ตัวตรวจสอบฐานเพลง V2 ไม่พร้อม · โหลดหน้าใหม่ก่อน');
-    window.XStageCatalogV2.pointer(pointer);
-    const base=await privateJson(pointer.catalogFileId,token);
-    window.XStageCatalogV2.catalog(base,{cloud:true,expectedCount:pointer.songCount});
-    return {schemaVersion:2,format:'xstage-unified-v2',
-            generation:pointer.generation,songs:base.songs};
+    const v2=window.XStageCatalogV2;
+    if(!v2)throw Error('ตัวตรวจฐานเพลง V2 ไม่พร้อม · กรุณาโหลดหน้าใหม่');
+    v2.pointer(pointer);
+    const shards=pointer.catalogFiles||[{fileId:pointer.catalogFileId,songCount:null}];
+    const deltaIds=pointer.deltaFileIds||[];
+    const total=shards.length+deltaIds.length;
+    let completed=0;
+    async function fetchPiece(id,label){
+      let data=state.catalogCache.get(id);
+      if(!data)data=await loadCatalogPiece(sub,id);
+      if(!data)data=await privateJson(id,token);
+      if(!data||typeof data!=='object')throw Error('อ่านฐานเพลง '+label+' ไม่สำเร็จ');
+      state.catalogCache.set(id,data);
+      if(state.catalogCache.size>40)state.catalogCache.delete(state.catalogCache.keys().next().value);
+      await saveCatalogPiece(sub,id,data);
+      completed++;
+      if(typeof onProgress==='function')onProgress({
+        completed,total,message:'ตรวจสอบ '+label,
+        percent:42+Math.round(completed/Math.max(1,total)*48)
+      });
+      return data;
+    }
+    const pieces=new Array(shards.length);
+    let next=0;
+    // Never issue an unbounded number of authenticated requests on Android TV.
+    const workers=Array.from({length:Math.min(3,shards.length)},async()=>{
+      while(next<shards.length){
+        const index=next++;
+        const part=shards[index];
+        const data=await fetchPiece(part.fileId,'ฐานหมวด '+(index+1)+'/'+shards.length);
+        v2.catalog(data,{cloud:true,
+          expectedCount:part.songCount===null?undefined:part.songCount});
+        pieces[index]=data;
+      }
+    });
+    await Promise.all(workers);
+    const songs=new Map();
+    for(const part of pieces){
+      for(const song of part.songs){
+        if(songs.has(song.id))throw Error('ฐาน V2 มี ID เพลงซ้ำข้ามหมวด: '+song.id);
+        songs.set(song.id,song);
+      }
+    }
+    for(let i=0;i<deltaIds.length;i++){
+      const delta=await fetchPiece(deltaIds[i],'ข้อมูลเปลี่ยนแปลง '+(i+1)+'/'+deltaIds.length);
+      if(delta?.schemaVersion!==2||delta.format&&delta.format!=='xstage-unified-v2'||
+         !Array.isArray(delta.upserts)||!Array.isArray(delta.removes))
+        throw Error('ฐาน V2 Delta ไม่สมบูรณ์');
+      for(const id of delta.removes){
+        if(typeof id!=='string'||!id)throw Error('Delta มี ID ลบเพลงไม่ถูกต้อง');
+        songs.delete(id);
+      }
+      for(const song of delta.upserts){
+        v2.song(song,{cloud:true});
+        songs.set(song.id,song);
+      }
+    }
+    const merged={schemaVersion:2,format:'xstage-unified-v2',
+                  generation:pointer.generation,songs:[...songs.values()]};
+    v2.catalog(merged,{cloud:true,expectedCount:pointer.songCount});
+    return merged;
   }
+  if(typeof pointer.catalogFileId!=='string'||!pointer.catalogFileId)
+    throw Error('รูปแบบ V1 current.json ไม่รองรับ');
   const deltaIds=pointer.deltaFileIds||[];
   if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
     throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
