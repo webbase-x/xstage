@@ -9,7 +9,7 @@ self.addEventListener('install',event=>{
     try{
       const shell=new URL('./index.html',self.registration.scope);
       const response=await fetch(shell,{cache:'no-store'});
-      if(response.ok)(await caches.open(CACHE)).put(shell,response.clone()).catch(()=>{});
+      if(response.ok)await (await caches.open(CACHE)).put(shell,response.clone());
     }catch{/* An offline install may still activate; never cache private Drive files. */}
     await self.skipWaiting();
   })());
