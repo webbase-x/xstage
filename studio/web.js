@@ -291,7 +291,11 @@
         await walkFolder(child, path ? path + '/' + child.name : child.name, output, depth + 1);
       } else if (ALL.has(extOf(child.name))) {
         output.push({ file: await child.getFile(), path });
-        if (output.length >= 5000) throw new Error('เกิน 5,000 ไฟล์ กรุณาเลือกโฟลเดอร์ย่อย');
+        if (output.length >= 120000) throw new Error('เกิน 120,000 ไฟล์ กรุณาเลือกโฟลเดอร์ย่อย');
+        if (output.length % 500 === 0) {
+          notice('กำลังสแกนต้นฉบับ '+output.length.toLocaleString('th-TH')+' ไฟล์ · ตรวจชุด NCN/SoundFont…');
+          await new Promise(resolve=>setTimeout(resolve,0));
+        }
       }
     }
   }
@@ -305,7 +309,8 @@
       notice('กำลังอ่านรายการไฟล์จากโฟลเดอร์ ' + handle.name);
       const files = [];
       await walkFolder(handle, handle.name, files, 0);
-      addFiles(files);
+      if(state.cancelled){notice('ยกเลิกการสแกน · ยังไม่ได้เปลี่ยนรายการเพลง','error');return;}
+      await addFiles(files);
     } catch (error) {
       if (error.name !== 'AbortError') notice('ไม่สามารถอ่านโฟลเดอร์: ' + error.message, 'error');
     }
@@ -328,25 +333,66 @@
     return song.lyricsText;
   }
   async function activate(id) {
-    if (state.busy) return;
-    const song = entries.get(id);
-    if (!song) return;
-    state.active = id;
-    $('active-title').textContent = songTitle(song);
-    $('active-kind').textContent = song.audio ? 'เสียงต้นฉบับ ' + extOf(song.audio.name).toUpperCase() :
-      'MIDI/KAR/NCN · ยังไม่มีตัวสังเคราะห์ SoundFont ในเว็บ';
-    if (state.previewURL) URL.revokeObjectURL(state.previewURL);
+    if(state.busy)return;
+    const song=entries.get(id);if(!song)return;
+    const activation=++state.activation;
+    stopMidiPreview(false);
+    state.active=id;
+    $('active-title').textContent=songTitle(song);
+    const midi=usesMidi(song),quality=midiCore.companionState(song);
+    $('active-kind').textContent=midi?quality.message:'เสียงต้นฉบับ '+extOf(song.audio.name).toUpperCase();
+    if(state.previewURL)URL.revokeObjectURL(state.previewURL);
     $('player').pause();
-    state.previewURL = song.audio ? URL.createObjectURL(song.audio) : '';
-    $('player').src = state.previewURL || '';
-    $('insert-time').disabled = !song.audio;
-    $('lyrics-text').disabled = false;
-    $('save-lyrics').disabled = false;
-    $('download-lyrics').disabled = false;
-    const text = await lyricsFor(song);
-    if (state.active === id) {
-      $('lyrics-text').value = text;
-      $('active-lyric').textContent = 'เนื้อร้องจะแสดงตามเวลาใน LRC';
+    state.previewURL=!midi&&song.audio?URL.createObjectURL(song.audio):'';
+    $('player').src=state.previewURL||'';
+    $('midi-workspace').hidden=!midi;
+    $('insert-time').disabled=!state.previewURL;
+    $('lyrics-text').disabled=false;
+    $('save-lyrics').disabled=false;
+    $('download-lyrics').disabled=false;
+    $('active-lyric').textContent='กำลังตรวจสอบเนื้อร้องและเวลา…';
+    if(midi){
+      $('midi-status').textContent='กำลังอ่านโน้ต MIDI และตรวจเวลาเนื้อร้องจริง…';
+      $('preview-midi').disabled=true;
+      if(!quality.complete){
+        $('midi-status').textContent=quality.message;
+        $('resource-status').textContent='ชุดเพลงไม่ครบ · ไม่อนุญาตให้สร้างข้อมูลเวลาแทน';
+        $('resource-status').dataset.state='warning';
+        $('lyrics-text').value='';
+        $('active-lyric').textContent=quality.message;
+        return;
+      }
+      try{
+        const info=await midiCore.inspectSong(song,midiRuntime);
+        if(state.activation!==activation)return;
+        song.midiInfo=info;
+        if(!song.editedLyrics&&!song.lrc)song.lyricsText=info.lrc;
+        const lyricText=await lyricsFor(song);
+        if(state.activation!==activation)return;
+        $('lyrics-text').value=lyricText;
+        $('active-lyric').textContent=info.lrc
+          ? 'อ่านเนื้อร้องจาก '+info.kind+' จริงแล้ว · กดสังเคราะห์เพื่อทดลองฟัง'
+          : '♪ ดนตรีบรรเลง · ไม่สร้างข้อความร้องหรือเวลาเทียม';
+        $('midi-status').textContent=info.warning||
+          (info.safeLyrics?'พบเวลา '+info.kind+' จริง · แก้ LRC ได้โดยไม่เปลี่ยนไฟล์ต้นฉบับ':
+            'MIDI ไม่มีคำร้องที่มีเวลาจริง · ส่งออกได้เฉพาะต้นฉบับ');
+        $('preview-midi').disabled=!info.parsed?.notes?.length;
+        updateMidiResource(info);
+      }catch(error){
+        if(state.activation!==activation)return;
+        song.midiInfo=null;
+        $('midi-status').textContent='ตรวจ MIDI/NCN ไม่ผ่าน: '+error.message;
+        $('resource-status').textContent='ไม่ผ่านการตรวจโครงสร้าง · หยุดก่อนสังเคราะห์/ส่งออก';
+        $('resource-status').dataset.state='warning';
+        $('active-lyric').textContent='ไม่สามารถตรวจเวลาได้ · '+error.message;
+        $('lyrics-text').value='';
+        $('preview-midi').disabled=true;
+      }
+    }else{
+      const text=await lyricsFor(song);
+      if(state.activation!==activation)return;
+      $('lyrics-text').value=text;
+      $('active-lyric').textContent='เนื้อร้องจะแสดงตามเวลาใน LRC';
     }
   }
   function stamp(time) {
@@ -355,10 +401,115 @@
       String(Math.floor((t % 1) * 100)).padStart(2, '0') + ']';
   }
   function syncActiveLyric() {
-    const lines = parseLrc($('lyrics-text').value);
-    const time = $('player').currentTime;
-    const active = lines.filter((line) => line.seconds <= time + 0.04).pop();
-    $('active-lyric').textContent = active?.text || '♪';
+    const song=entries.get(state.active);
+    const time=$('player').currentTime;
+    if(usesMidi(song)&&song?.midiInfo?.document?.lines?.length&&!song.editedLyrics&&!song.lrc){
+      const lines=song.midiInfo.document.lines;
+      const active=lines.filter(line=>line.startTime<=time+.04).pop();
+      if(!active){$('active-lyric').textContent='♪';return;}
+      const syllables=active.syllables||[];
+      if(!syllables.length){$('active-lyric').textContent=active.text||'♪';return;}
+      const root=$('active-lyric');
+      if(root.dataset.lyricLine!==String(lines.indexOf(active))||root.dataset.songId!==song.id){
+        root.replaceChildren();
+        root.dataset.lyricLine=String(lines.indexOf(active));
+        root.dataset.songId=song.id;
+        for(const cue of syllables){
+          const span=document.createElement('span');
+          span.className='karaoke-cue';span.textContent=cue.text;
+          root.appendChild(span);
+        }
+      }
+      [...root.children].forEach((span,i)=>{
+        const cue=syllables[i];if(!cue)return;
+        const pct=Math.max(0,Math.min(100,100*(time-cue.start)/Math.max(.03,cue.duration)));
+        span.style.setProperty('--fill',pct.toFixed(1)+'%');
+      });
+      return;
+    }
+    $('active-lyric').dataset.lyricLine='';
+    $('active-lyric').dataset.songId='';
+    const lines=parseLrc($('lyrics-text').value);
+    const active=lines.filter(line=>line.seconds<=time+.04).pop();
+    $('active-lyric').textContent=active?.text||'♪';
+  }
+  function stopMidiPreview(announce=true){
+    if(state.midiController){state.midiController.abort();state.midiController=null;}
+    state.midiRenderSequence++;
+    state.renderingMidi=false;
+    $('player').pause();
+    $('stop-midi').disabled=true;
+    if(announce)$('midi-status').textContent='หยุด MIDI แล้ว · ไฟล์ต้นฉบับไม่เปลี่ยน';
+  }
+  function updateMidiResource(info){
+    const font=fonts.get($('soundfont-select').value);
+    const capacity=midiCore.assessResources(info.parsed.duration,font?.size||0,
+      navigator.deviceMemory||null);
+    const mib=n=>Math.round((n||0)/1048576);
+    $('resource-status').textContent=(capacity.ok?'พร้อมประมวลผล':'ข้อจำกัดเครื่อง')+
+      ' · MIDI '+info.parsed.duration.toFixed(1)+' วินาที · RAM ประเมิน '+
+      mib(capacity.peakBytes)+' / '+mib(capacity.budgetBytes)+' MB · '+capacity.reason;
+    $('resource-status').dataset.state=capacity.ok?'ready':'warning';
+    $('preview-midi').disabled=!capacity.ok;
+    return capacity;
+  }
+  function midiMixerOptions(){
+    return {transpose:Number($('midi-transpose').value)||0,
+      channelMutes:[...state.channelMutes],channelVolumes:[...state.channelVolumes]};
+  }
+  async function fontBytes(){
+    const id=$('soundfont-select').value;
+    if(!id)return null;
+    if(state.fontCache?.id===id)return state.fontCache.bytes;
+    const font=fonts.get(id);
+    if(!font||font.size>midiCore.MAX_FONT)
+      throw Error('SoundFont ไม่พบหรือใหญ่เกินขอบเขตความจำ 256 MB');
+    $('soundfont-status').textContent='กำลังตรวจโครงสร้าง SoundFont '+font.name+'…';
+    const bytes=new Uint8Array(await font.arrayBuffer());
+    midiRuntime.parseFont(bytes);
+    if($('soundfont-select').value!==id)throw Error('เปลี่ยน SoundFont ระหว่างโหลด · กรุณาเริ่มใหม่');
+    state.fontCache={id,bytes};
+    updateFontStatus();
+    return bytes;
+  }
+  async function renderMidiWave(song,{signal=null,onStatus=null}={}){
+    const info=song.midiInfo||await midiCore.inspectSong(song,midiRuntime);
+    song.midiInfo=info;
+    const capacity=updateMidiResource(info);
+    if(!capacity.ok)throw Error(capacity.reason);
+    const bytes=new Uint8Array(await song.midi.arrayBuffer());
+    const sf=await fontBytes();
+    if(signal?.aborted)throw Error('ยกเลิก MIDI แล้ว');
+    return midiRuntime.render(bytes,{fontBytes:sf,signal,onStatus,...midiMixerOptions()});
+  }
+  async function previewMidi(){
+    const song=entries.get(state.active);
+    if(!song||!usesMidi(song)||state.busy||state.renderingMidi)return;
+    if(!song.midiInfo)return notice('ยังตรวจ MIDI/NCN ไม่สำเร็จ','error');
+    const sequence=++state.midiRenderSequence;
+    const controller=new AbortController();
+    state.midiController=controller;state.renderingMidi=true;
+    $('preview-midi').disabled=true;$('stop-midi').disabled=false;
+    $('midi-status').textContent='กำลังเตรียม SoundFont/โน้ต MIDI…';
+    try{
+      const output=await renderMidiWave(song,{signal:controller.signal,
+        onStatus:message=>{$('midi-status').textContent=message;}});
+      if(sequence!==state.midiRenderSequence||state.active!==song.id||controller.signal.aborted)return;
+      if(state.previewURL)URL.revokeObjectURL(state.previewURL);
+      state.previewURL=URL.createObjectURL(output.audio);
+      $('player').src=state.previewURL;
+      $('insert-time').disabled=false;
+      $('midi-status').textContent='สังเคราะห์เสียงแล้ว · เล่น/เลื่อนเวลาเพื่อดูเนื้อร้องตาม MIDI/CUR';
+      await $('player').play();
+    }catch(error){
+      if(sequence===state.midiRenderSequence&&!controller.signal.aborted)
+        notice('ทดลองฟัง MIDI ไม่สำเร็จ: '+error.message,'error');
+    }finally{
+      if(sequence===state.midiRenderSequence){
+        state.renderingMidi=false;state.midiController=null;
+        $('preview-midi').disabled=false;$('stop-midi').disabled=true;
+      }
+    }
   }
   async function blobFromURL(url, type) {
     const response = await fetch(url, {cache: 'force-cache'});
