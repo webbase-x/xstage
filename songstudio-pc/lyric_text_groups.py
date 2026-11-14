@@ -61,6 +61,9 @@ def _load(root, row, export):
         raise ValueError("ไม่แก้ไขไฟล์เนื้อร้องแบบลิงก์ เพราะอาจกระทบเพลงอื่น")
     path = export.safe_media_path(root, rel, "lyrics")
     doc = json.loads(path.read_text(encoding="utf-8-sig"))
+    if (doc.get("sourceFormat") == "NCN"
+            and (doc.get("metadata") or {}).get("timingComplete") is False):
+        raise ValueError("NCN CUR มีเวลาไม่ครบ · ไม่แก้ข้อความบน Lyrics JSON ที่ยังจับเวลาไม่สมบูรณ์")
     lines = doc.get("lines")
     if not isinstance(lines, list) or len(lines) < 4:
         return None
@@ -130,6 +133,17 @@ def _retime_visual_units(line, old_text, new_text):
     if not isinstance(original, list):
         raise ValueError("ข้อมูลไฮไลต์ Lyrics JSON เดิมไม่ถูกต้อง")
     start, end = float(start), float(end)
+    # An explicitly present but broken cue is NOT the same as a file that
+    # legitimately contains only line timing. Never hide malformed character
+    # timestamps by manufacturing a new evenly spaced track.
+    if original and any(
+            not isinstance(c, dict)
+            or isinstance(c.get("start"), bool)
+            or not isinstance(c.get("start"), (int, float))
+            or not isfinite(c["start"])
+            or c["start"] < start - .001 or c["start"] > end + .001
+            for c in original):
+        raise ValueError("เวลาไฮไลต์ต้นฉบับไม่ปลอดภัย · ข้ามไฟล์แทนสร้างเวลาใหม่")
     valid = (
         len(original) == len(old_units) and len(original) > 0
         and all(isinstance(c, dict)
