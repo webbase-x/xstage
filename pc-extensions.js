@@ -56,6 +56,7 @@ ui.search.addEventListener('input',()=>{if(state.token){expand(Boolean(ui.search
 ui.search.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();expand(false);ui.search.blur();}if(e.key==='Enter')queueMicrotask(()=>expand(false));},true);
 ui.songs.addEventListener('dblclick',()=>queueMicrotask(()=>expand(false)));
 document.addEventListener('keydown',e=>{
+ if(e.isComposing||e.keyCode===229||e.target?.isContentEditable||document.activeElement?.isContentEditable)return;
  if(e.key==='F3'&&state.token){e.preventDefault();focusSearch();return;}
  if(e.key==='Escape'&&dock.classList.contains('pc-expanded')){e.preventDefault();expand(false);return;}
  if(e.key==='F7'){e.preventDefault();cancelCurrentSong();}
