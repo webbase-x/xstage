@@ -285,6 +285,8 @@ async function loadCatalog(drive,root){
     if(!marker&&lyricChildren.length)
       fail('พบข้อมูล LYRICS เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
     if(!marker){
+      if(children.some(x=>['AUDIO','LYRICS','SOUNDFONT'].includes(x.name)&&x.mimeType!==MIME_FOLDER))
+        fail('ชื่อโฟลเดอร์คลังเพลงชนกับไฟล์บน Drive · หยุดตรวจ');
       // Only a genuinely empty first library (or SoundFont-only AUDIO)
       // can be initialized without a previously verified staging marker.
       // Unindexed audio/video/MIDI must never be interpreted as empty.
