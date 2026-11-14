@@ -2071,8 +2071,8 @@ function syncMediaSessionPosition(){
   try{navigator.mediaSession.setPositionState({duration,playbackRate:player.playbackRate||1,position});}catch{}
 }
 function clearIdleStage(message){
-  window.dispatchEvent(new Event('xstage:piano-clear'));
   resetSongVideo();
+  window.dispatchEvent(new Event('xstage:piano-clear'));
   state.userStopped=true;
   state.requestId++;
   state.controller?.abort();
