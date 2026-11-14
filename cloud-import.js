@@ -639,7 +639,12 @@ class Importer {
               parsed=runtime.parseMidi(await midiFile.arrayBuffer());
               if(item.lyr&&item.cur){
                 doc=runtime.ncnLyrics(new Uint8Array(await item.lyr.file.arrayBuffer()),
-                  new Uint8Array(await item.cur.file.arrayBuffer()),code,parsed.duration);
+                  new Uint8Array(await item.cur.file.arrayBuffer()),code,parsed);
+                // A complete MID/LYR/CUR trio can still have missing character
+                // timing. Do not publish an apparently complete karaoke song
+                // when the original CUR cannot time the entire LYR body.
+                if(doc.metadata?.timingComplete===false)
+                  throw Error('NCN CUR มีเวลาเนื้อร้องไม่ครบ · ไม่เผยแพร่ Lyrics JSON ที่มีเพียงบางส่วน');
               }else if(item.json){
                 if(item.json.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
                 doc=core.validLyricsJson(await item.json.file.text(),code);
