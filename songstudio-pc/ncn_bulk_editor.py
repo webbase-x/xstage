@@ -43,6 +43,17 @@ def locate(selected):
             continue
         if all(part in entries for part in PARTS):
             return candidate.resolve()
+    # Standalone Lyrics directories can be analyzed even without Song/Cursor.
+    # Replacement still requires a complete NCN triplet for every selected song.
+    if selected.is_dir() and not selected.is_symlink():
+        if selected.name.casefold() == "lyrics":
+            return selected
+        try:
+            if any(p.is_file() and not p.is_symlink() and p.suffix.lower() == ".lyr"
+                   for p in selected.iterdir()):
+                return selected
+        except OSError:
+            pass
     return None
 
 
@@ -170,79 +181,174 @@ def _source_files(root, record):
             _component(root, "cursor", record["cursor"]))
 
 
+def _parse_lyrics_only(raw, bulk):
+    """Read ONLY .LYR; no MIDI/CUR I/O, cursor interpretation or timing claims."""
+    if len(raw) > 1024 * 1024:
+        raise ValueError("NCN LYR ใหญ่เกิน 1 MB")
+    rows, tail = _lines(raw)
+    if len(rows) < 5:
+        raise ValueError("NCN LYR ไม่มีข้อมูลหัวเพลงหรือเนื้อร้อง")
+    try:
+        title = _body(rows[0]).decode("cp874", errors="strict").strip()
+        artist = _body(rows[1]).decode("cp874", errors="strict").strip()
+        body = []
+        for row in rows[4:]:
+            value = _body(row)
+            if not value.strip():
+                continue
+            if b"\x00" in value:
+                raise ValueError("NCN LYR มีอักขระไม่รองรับ")
+            body.append(bulk._same(value.decode("cp874", errors="strict")))
+    except UnicodeError as exc:
+        raise ValueError("NCN LYR ไม่ใช่รหัส CP874 ที่รองรับ") from exc
+    # The known Nick_Karaoke Professional end marker is commonly an
+    # untimed advertisement. Until CUR is checked we cannot prove its timing;
+    # exclude it conservatively, including from the "last" target selector.
+    if body and OLD_CREDIT.fullmatch(body[-1]):
+        body.pop()
+    if len(body) < 4:
+        raise ValueError("NCN LYR ต้องมีข้อความอย่างน้อย 4 บรรทัด")
+    return {"lines": body, "title": title, "artist": artist}
+
+
+def _lyrics_folder(root):
+    """Find the Lyrics component only; allow a standalone selected folder."""
+    if root.name.casefold() == "lyrics" and not any(
+            item.name.casefold() == "song" for item in root.iterdir() if item.is_dir()):
+        return root
+    for item in root.iterdir():
+        if item.name.casefold() == "lyrics" and item.is_dir() and not item.is_symlink():
+            return item
+    # Another explicitly selected folder containing loose .LYR is read-only
+    # until it is moved alongside a valid NCN Song and Cursor pair.
+    return root
+
+
 def scan(root, ncn, bulk, *, cancelled=None, on_progress=None):
+    """Index ONLY .LYR in Lyrics and its subdirectories.
+
+    Do not open or hash MID or CUR while scanning. Complete mirrored
+    MID/LYR/CUR checks and CP874 cursor remapping occur ONLY on apply.
+    """
     root = locate(root)
     if root is None:
-        raise ValueError("ไม่พบชุด NCN ที่มี Song / Lyrics / Cursor ครบ")
+        raise ValueError("เลือกโฟลเดอร์ Lyrics หรือคลัง NCN ที่มีไฟล์ .LYR")
+    folder = _lyrics_folder(root)
     grouped = {name: defaultdict(list) for name in bulk.POSITIONS}
-    search, counted, skipped = {}, 0, 0
-    total = 0
-    songs_folder = next(p for p in root.iterdir() if p.name.casefold() == "song"
-                        and p.is_dir() and not p.is_symlink())
-    for dirpath, subdirs, files in os.walk(songs_folder, topdown=True, followlinks=False):
+    searchable, counted, skipped = {}, 0, 0
+    files_to_read = []
+    for dirpath, subdirs, files in os.walk(folder, topdown=True, followlinks=False):
         if cancelled is not None and cancelled.is_set():
-            raise RuntimeError("ยกเลิกสแกน NCN · ยังไม่ได้แก้ไขไฟล์")
-        subdirs[:] = sorted(s for s in subdirs if not (Path(dirpath) / s).is_symlink())
-        for filename in sorted(files):
-            if Path(filename).suffix.lower() not in MIDI_TYPES:
-                continue
-            total += 1
-            if total > bulk.MAX_ROWS:
-                raise ValueError("จำนวนเพลง NCN มากกว่าที่รองรับ กรุณาเลือกโฟลเดอร์ย่อย")
-            try:
-                midi = Path(dirpath) / filename
-                if midi.is_symlink():
-                    raise ValueError("NCN MIDI เป็นลิงก์")
-                record = _matched_parts(root, midi, ncn)
-                mid, lyr, cur = _source_files(root, record)
-                with mid.open("rb") as midi_check:
-                    if midi_check.read(4) != b"MThd":
-                        raise ValueError("MIDI ไม่ใช่ไฟล์มาตรฐาน")
-                lyr_bytes, cur_bytes = lyr.read_bytes(), cur.read_bytes()
-                parsed = _parse(lyr_bytes, cur_bytes, bulk)
-                record.update({
-                    "digestLyrics": bulk._sha(lyr_bytes),
-                    "digestCursor": bulk._sha(cur_bytes),
-                    "midiSize": mid.stat().st_size,
-                    "midiModified": mid.stat().st_mtime_ns
-                })
-            except (OSError, ValueError, TypeError, UnicodeError, KeyError):
-                skipped += 1
-                continue
-            song_id = record["song"]
-            counted += 1
-            search[song_id] = "\n".join(x.casefold() for x in parsed["lines"])
-            for pos, (idx, _) in bulk.POSITIONS.items():
-                phrase = parsed["lines"][idx]
-                if not phrase:
-                    continue
-                gid = bulk._group_id(pos, phrase)
-                grouped[pos][gid].append({
-                    "songId": song_id, "code": midi.stem[:80],
-                    "title": parsed["title"] or midi.stem,
-                    "artist": parsed["artist"], "text": phrase,
-                    "record": record
-                })
-            if on_progress and total % 400 == 0:
-                on_progress(f"ตรวจชุด NCN {total:,} เพลง · พร้อมแก้ {counted:,}", total)
+            raise RuntimeError("ยกเลิกการวิเคราะห์ LYR · ยังไม่แก้ไฟล์")
+        subdirs[:] = sorted(d for d in subdirs if not (Path(dirpath) / d).is_symlink())
+        for name in files:
+            if Path(name).suffix.lower() == ".lyr":
+                files_to_read.append(Path(dirpath) / name)
+                if len(files_to_read) > bulk.MAX_ROWS:
+                    raise ValueError("ไฟล์ LYR มากเกินขีดจำกัด กรุณาเลือกโฟลเดอร์ย่อย")
+    total = len(files_to_read)
     if not total:
-        raise ValueError("ไม่พบ MIDI ในโฟลเดอร์ NCN/Song · โปรดเลือกโฟลเดอร์ NCN ที่มีเพลง")
+        raise ValueError("ไม่พบไฟล์ .LYR ใน Lyrics หรือโฟลเดอร์ที่เลือก")
+    if on_progress:
+        on_progress(f"พบ LYR {total:,} ไฟล์ · กำลังอ่านข้อความอย่างเดียว", 0, total)
+    # A second pass over file content avoids per-song companion lookup, CUR
+    # parsing and MIDI reads, which dominated analysis in Build 329.
+    for number, path in enumerate(files_to_read, 1):
+        if cancelled is not None and cancelled.is_set():
+            raise RuntimeError("ยกเลิกการวิเคราะห์ LYR · ยังไม่ได้แก้เพลง")
+        try:
+            if path.is_symlink() or not path.is_file():
+                raise ValueError("LYR เป็นลิงก์")
+            relative = path.relative_to(folder).as_posix()
+            raw = path.read_bytes()
+            parsed = _parse_lyrics_only(raw, bulk)
+        except (OSError, ValueError, UnicodeError, TypeError):
+            skipped += 1
+            continue
+        song_id = relative
+        record = {
+            "lyrics": relative,
+            "digestLyrics": bulk._sha(raw),
+            "source": "lyr-only"
+        }
+        counted += 1
+        searchable[song_id] = "\n".join(item.casefold() for item in parsed["lines"])
+        for pos, (idx, _) in bulk.POSITIONS.items():
+            phrase = parsed["lines"][idx]
+            if not phrase:
+                continue
+            gid = bulk._group_id(pos, phrase)
+            grouped[pos][gid].append({
+                "songId": song_id, "code": path.stem[:80],
+                "title": parsed["title"] or path.stem,
+                "artist": parsed["artist"], "text": phrase,
+                "record": record
+            })
+        if on_progress and (number % 100 == 0 or number == total):
+            on_progress(
+                f"วิเคราะห์ LYR {number:,}/{total:,} · อ่านได้ {counted:,} · ข้าม {skipped:,}",
+                number, total)
     if not counted:
-        raise ValueError(f"พบ MIDI {total:,} เพลง แต่ไม่มี NCN ที่จับคู่ MID/LYR/CUR "
-                         "และมี CUR/เนื้อร้องอย่างน้อย 4 บรรทัดครบถ้วน")
+        raise ValueError(f"พบ LYR {total:,} ไฟล์ แต่ไม่พบเนื้อร้อง CP874 ที่มีอย่างน้อย 4 บรรทัด")
     groups = {}
     for pos, mapping in grouped.items():
-        for ident, members in mapping.items():
-            groups[ident] = {
-                "id": ident, "position": pos, "label": bulk.POSITIONS[pos][1],
+        for gid, members in mapping.items():
+            groups[gid] = {
+                "id": gid, "position": pos, "label": bulk.POSITIONS[pos][1],
                 "text": members[0]["text"], "count": len(members),
                 "members": members
             }
-    return {"root": str(root), "mode": "ncn-folder",
-            "generation": None, "groups": groups, "searchable": search,
-            "songs": counted, "inspected": total,
-            "skippedInvalid": skipped, "withoutLyrics": 0,
-            "groupCount": len(groups)}
+    return {
+        "root": str(root), "mode": "ncn-folder", "scanMode": "lyr-only",
+        "generation": None, "groups": groups, "searchable": searchable,
+        "songs": counted, "inspected": total, "skippedInvalid": skipped,
+        "withoutLyrics": 0, "groupCount": len(groups)
+    }
+
+
+def _selected_triplet(root, record, ncn, bulk):
+    """Resolve MID/CUR only for selected LYR after explicit confirmation."""
+    lyrics_base = _lyrics_folder(root)
+    rel = record.get("lyrics")
+    if not isinstance(rel, str):
+        raise ValueError("รายการ LYR ไม่ถูกต้อง · กรุณาวิเคราะห์ใหม่")
+    if lyrics_base == root:
+        # Standalone Lyrics is read-only for analysis; no safe CUR edits
+        # without a canonical NCN root and matching MID.
+        raise ValueError("วิเคราะห์ LYR ได้ แต่จะแทนที่ต้องมี NCN/Song และ NCN/Cursor "
+                         "ครบชุดก่อน เพื่อไม่ทำให้จังหวะเนื้อร้องเสีย")
+    lyr = _component(root, "lyrics", rel)
+    raw = lyr.read_bytes()
+    if bulk._sha(raw) != record["digestLyrics"]:
+        raise ValueError("LYR เปลี่ยนหลังวิเคราะห์ กรุณาวิเคราะห์ใหม่: " + lyr.name)
+    # Enumerate only ONE mirrored Song bucket for the selected LYR. Never
+    # scan the entire MIDI library, never choose an ambiguous MIDI silently.
+    part = PurePosixPath(rel)
+    song_base = next((p for p in root.iterdir() if p.name.casefold() == "song"
+                      and p.is_dir() and not p.is_symlink()), None)
+    if song_base is None:
+        raise ValueError("ไม่พบโฟลเดอร์ NCN/Song สำหรับเพลงที่เลือก")
+    song_dir = song_base
+    for piece in part.parts[:-1]:
+        matches = [p for p in song_dir.iterdir() if p.name.casefold() == piece.casefold()
+                   and p.is_dir() and not p.is_symlink()]
+        if len(matches) != 1:
+            raise ValueError("ไม่พบโฟลเดอร์ย่อย NCN/Song รหัสตรงกับ LYR")
+        song_dir = matches[0]
+    midi_files = [p for p in song_dir.iterdir() if p.is_file() and not p.is_symlink()
+                  and p.stem.casefold() == part.stem.casefold()
+                  and p.suffix.lower() in MIDI_TYPES]
+    if len(midi_files) != 1:
+        raise ValueError("เพลงที่เลือกไม่มี MID รหัสตรงกับ LYR หรือพบรหัสซ้ำ")
+    record_parts = _matched_parts(root, midi_files[0], ncn)
+    mid, matched_lyr, cur = _source_files(root, record_parts)
+    if lyr != matched_lyr:
+        raise ValueError("MID/LYR/CUR ไม่ตรงรหัสหรือโฟลเดอร์ย่อย")
+    with mid.open("rb") as midi_check:
+        if midi_check.read(4) != b"MThd":
+            raise ValueError("ไฟล์ MID ของเพลงที่เลือกไม่ถูกต้อง")
+    return record_parts, mid, lyr, cur, raw
+
 
 
 def _remap_times(old, length):
@@ -276,15 +382,15 @@ def apply(root, ncn, bulk, snapshot, group_ids, replacement, backup_root,
         if cancelled is not None and cancelled.is_set():
             raise RuntimeError("ยกเลิกก่อนแก้ NCN")
         record = target["record"]
-        mid, lyr, cur = _source_files(root, record)
-        midstat = mid.stat()
-        if midstat.st_size != record["midiSize"] or midstat.st_mtime_ns != record["midiModified"]:
-            raise ValueError("ไฟล์ MIDI เปลี่ยนหลังสแกน กรุณาวิเคราะห์ใหม่: " + mid.name)
-        original_lyr, original_cur = lyr.read_bytes(), cur.read_bytes()
-        if (bulk._sha(original_lyr) != record["digestLyrics"] or
-                bulk._sha(original_cur) != record["digestCursor"]):
-            raise ValueError("NCN LYR/CUR เปลี่ยนหลังสแกน กรุณาวิเคราะห์ใหม่: " + mid.name)
+        triplet, mid, lyr, cur, original_lyr = _selected_triplet(
+            root, record, ncn, bulk)
+        original_cur = cur.read_bytes()
         parsed = _parse(original_lyr, original_cur, bulk)
+        lyric_index = _parse_lyrics_only(original_lyr, bulk)
+        if parsed["lines"] != lyric_index["lines"]:
+            raise ValueError("LYR/CUR มีบรรทัดไม่ตรงกัน กรุณาตรวจไฟล์เวลาของเพลงที่เลือก: " + lyr.name)
+        record["song"] = triplet["song"]
+        record["cursor"] = triplet["cursor"]
         query = bulk._same(search).casefold()
         if query and query not in "\n".join(x.casefold() for x in parsed["lines"]):
             raise ValueError("คำค้นหาไม่ตรงกับเพลง NCN อีกต่อไป")
