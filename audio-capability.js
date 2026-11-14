@@ -43,10 +43,25 @@ function normalizeProfile(profile={}){
   const ramGB=Number.isFinite(profile.ramGB)&&profile.ramGB>0?profile.ramGB:null;
   const quota=Number.isFinite(profile.quota)&&profile.quota>0?profile.quota:null;
   const usage=Number.isFinite(profile.usage)&&profile.usage>=0?profile.usage:null;
-  return {cores,ramGB,quota,usage,
+  const benchmarkMs=Number.isFinite(profile.benchmarkMs)&&profile.benchmarkMs>=0?
+    profile.benchmarkMs:null;
+  return {cores,ramGB,quota,usage,benchmarkMs,
     freeQuota:quota!==null&&usage!==null?Math.max(0,quota-usage):null,
     offlineAudio:profile.offlineAudio!==false,webAudio:profile.webAudio!==false,
     video:profile.video!==false,source:profile.source||'browser'};
+}
+async function benchmarkAudio(){
+  if(typeof scope.OfflineAudioContext!=='function')return null;
+  try{
+    const ctx=new scope.OfflineAudioContext(1,48000,48000);
+    const tone=ctx.createOscillator();tone.frequency.value=440;tone.connect(ctx.destination);
+    tone.start(0);tone.stop(.15);
+    const start=scope.performance?.now?.()??Date.now();
+    const finish=ctx.startRendering().then(()=>scope.performance?.now?.()??Date.now());
+    const deadline=new Promise(resolve=>setTimeout(()=>resolve(null),1600));
+    const end=await Promise.race([finish,deadline]);
+    return end!==null?Math.max(0,end-start):null;
+  }catch{return null;}
 }
 async function probeDevice(){
   const nav=typeof navigator==='object'?navigator:{};
@@ -62,10 +77,11 @@ async function probeDevice(){
   }catch{}
   const video=document.createElement?.('video');
   const codecSupport=!!video?.canPlayType?.('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+  const benchmarkMs=await benchmarkAudio();
   return normalizeProfile({
     cores:Number(nav.hardwareConcurrency)||null,
     ramGB:Number(nav.deviceMemory)||null,
-    quota,usage,video:codecSupport,
+    quota,usage,video:codecSupport,benchmarkMs,
     offlineAudio:typeof scope.OfflineAudioContext==='function',
     webAudio:!!(scope.AudioContext||scope.webkitAudioContext),
     source:'browser'
@@ -92,6 +108,9 @@ function assessFont(bytes,device){
     level='caution';notes.push('ใช้ RAM ค่อนข้างสูง');
   }
   if(p.cores!==null&&p.cores<4&&level==='safe'){level='caution';notes.push('CPU มีคอร์น้อย');}
+  if(p.benchmarkMs!==null&&p.benchmarkMs>550&&level==='safe'){
+    level='caution';notes.push('การทดสอบสังเคราะห์เสียงสั้นทำงานช้า');
+  }
   if(p.freeQuota!==null&&p.freeQuota<size*1.1&&level==='safe'){
     // This is only a browser-storage quota advisory. SoundFonts are kept in RAM.
     level='caution';notes.push('โควตาพื้นที่แคชเบราว์เซอร์ต่ำ (ไม่ได้บันทึก SoundFont ถาวร)');
@@ -120,10 +139,13 @@ function recommend(song,profile={},preference='auto',font=null){
     'เล่นเสียงที่ตรวจสอบพร้อมภาพวิดีโอ ถ้า Codec ไม่รองรับจะใช้เสียงอย่างเดียว');
   if(audio){
     if(preference==='auto'&&video&&p.video&&p.cores!==null&&p.cores>=4&&
-      p.ramGB!==null&&p.ramGB>=2)return output('video','แนะนำภาพวิดีโอพร้อมเสียงต้นฉบับ');
+      p.ramGB!==null&&p.ramGB>=2&&
+      (p.benchmarkMs===null||p.benchmarkMs<=550))
+      return output('video','แนะนำภาพวิดีโอพร้อมเสียงต้นฉบับ');
     return output('audio','แนะนำไฟล์เสียงต้นฉบับ ประหยัด CPU/RAM กว่าการเรนเดอร์ MIDI');
   }
   if(fontReady&&(p.cores===null||p.cores>=4)&&
+     (p.benchmarkMs===null||p.benchmarkMs<=550||preference==='soundfont')&&
      (fontResult.level==='safe'||preference==='soundfont'))
     return output('soundfont','ใช้ MIDI + SoundFont ตามที่เลือกไว้');
   return output('midi','ใช้ MIDI พื้นฐานเพื่อลดการใช้ RAM/การโหลด SoundFont');
@@ -150,9 +172,12 @@ function showProfile(){
   const weak=(p.cores!==null&&p.cores<4)||(p.ramGB!==null&&p.ramGB<2);
   const unknown=p.cores===null||p.ramGB===null;
   el.dataset.level=weak?'caution':unknown?'caution':'safe';
+  const benchmark=p.benchmarkMs===null?'ไม่สามารถทดสอบเสียงได้':
+    'ทดสอบสังเคราะห์เสียง 1 วินาที: '+Math.round(p.benchmarkMs)+' ms';
   el.textContent=(weak?'🟡 เครื่องทรัพยากรจำกัด · ':
     unknown?'🟡 ข้อมูลเครื่องไม่ครบ · ':'🟢 เครื่องมีทรัพยากรเบื้องต้นเพียงพอ · ')+
-    cpu+' · '+ram+' · '+space+' · ไม่ใช่พื้นที่ว่างจริงของทั้งเครื่อง';
+    cpu+' · '+ram+' · '+benchmark+' · '+space+
+    ' · การทดสอบสั้นไม่ใช่ผล Benchmark เต็มรูปแบบ';
 }
 function renderStats(songs){
   state.songs=Array.isArray(songs)?songs:[];
