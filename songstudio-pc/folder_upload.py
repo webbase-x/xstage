@@ -217,17 +217,33 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
     if library is not None:
         if not library["rows"]:
             raise ValueError("ไม่พบเพลงพร้อมเล่นใน StageWeb Catalog ที่เลือก")
-        # Preserve the original production publishing flow: local DB rows,
-        # stable song IDs and incremental remote catalogs. Only the remote
-        # folder layout is changed by OnlinePublisher.
+        # Validate each pair before publishing. Corrupt lyrics must be
+        # reported as skipped; they must not invalidate all healthy songs.
+        verified = []
+        for row in library["rows"]:
+            try:
+                if publisher.__class__.__module__:  # no side effects; publisher owns validation
+                    from importlib.util import spec_from_file_location, module_from_spec
+                    online_file = Path(__file__).with_name("online_publish.py")
+                    spec = spec_from_file_location("xstage_folder_validators", online_file)
+                    check = module_from_spec(spec)
+                    spec.loader.exec_module(check)
+                    if check._valid_row(library["root"], row):
+                        verified.append(row)
+            except (OSError, ValueError, RuntimeError):
+                pass
+        if not verified:
+            raise ValueError("ไม่พบเพลงที่มีไฟล์เสียงและเนื้อร้องพร้อมเวลาใช้งานจริง")
+        # Preserve original production publishing: stable song IDs and the
+        # incremental remote DB. Only remote media folder paths differ.
         synced = publisher.publish(
-            library["root"], library["rows"],
+            library["root"], verified,
             create_new_library=create_new_library, cancelled=cancelled,
             on_row=(lambda done, total, skipped:
                     progress(done + skipped, total + skipped, "กำลังอัปเดต DB"))
                    if progress else None)
-        return {**synced, "ready": len(library["rows"]),
-                "incomplete": library["incomplete"], "deferred": 0,
+        return {**synced, "ready": len(verified),
+                "incomplete": library["incomplete"] + len(library["rows"]) - len(verified), "deferred": 0,
                 "message": (
                     f"ซิงค์คลังเดิมพร้อม DB · เพิ่ม {synced['newSongs']} · "
                     f"แก้เนื้อร้อง {synced['updatedSongs']} · "
