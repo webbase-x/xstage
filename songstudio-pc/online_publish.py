@@ -91,8 +91,9 @@ def _valid_row(root, row):
         return False
     sound = _local_path(root, media.get("path"), "audio")
     lyric = _local_path(root, lyrics["path"], "lyrics")
-    if sound.stat().st_size < 1000:
-        raise PublishError("M4A ว่างหรือไม่สมบูรณ์: " + sound.name)
+    minimum = 22 if sound.suffix.lower() in (".mid", ".midi", ".kar") else 1000
+    if sound.stat().st_size < minimum:
+        raise PublishError("ไฟล์เพลงว่างหรือไม่สมบูรณ์: " + sound.name)
     try:
         doc = json.loads(lyric.read_text(encoding="utf-8-sig"))
         assert doc.get("schemaVersion") == 1
@@ -318,7 +319,7 @@ class OnlinePublisher:
         by_pair = {}
         for item in remote.values():
             by_code.setdefault(str(item.get("code") or "").casefold(), []).append(item)
-            audio_hash = (item.get("audio") or {}).get("md5Checksum")
+            audio_hash = (item.get("audio") or item.get("midi") or {}).get("md5Checksum")
             lyric_hash = (item.get("lyrics") or {}).get("md5Checksum")
             if (isinstance(audio_hash, str) and len(audio_hash) == 32
                     and isinstance(lyric_hash, str) and len(lyric_hash) == 32):
@@ -467,7 +468,7 @@ class OnlinePublisher:
                 # A PC catalog can use a filename-derived webSongId that
                 # already exists remotely for an entirely different track.
                 # Never overwrite that remote song's identity or its code.
-                if matches_md5(exact_id.get("audio"), s_hash):
+                if matches_md5(exact_id.get("audio") or exact_id.get("midi"), s_hash):
                     counts["conflicts"] += 1
                     continue
             elif exact_id and exact_id not in candidates:
@@ -476,11 +477,11 @@ class OnlinePublisher:
             for candidate in candidates:
                 if str(candidate.get("code") or "").casefold() != code:
                     continue
-                a_id = (candidate.get("audio") or {}).get("fileId")
+                a_id = (candidate.get("audio") or candidate.get("midi") or {}).get("fileId")
                 l_id = (candidate.get("lyrics") or {}).get("fileId")
                 if not a_id or not l_id:
                     continue
-                if matches_md5(candidate.get("audio"), s_hash):
+                if matches_md5(candidate.get("audio") or candidate.get("midi"), s_hash):
                     same_audio = candidate
                     if matches_md5(candidate.get("lyrics"), l_hash):
                         same_both = candidate
@@ -493,9 +494,9 @@ class OnlinePublisher:
                 # title/artist happen to match. Keep old song and flag conflict.
                 counts["conflicts"] += 1
                 continue
-            audio = (dict(same_audio["audio"]) if same_audio else
+            audio = (dict(same_audio.get("audio") or same_audio.get("midi")) if same_audio else
                      upload(sound, row["audio"]["path"], code=row["code"]))
-            source_format = "MP3" if sound.suffix.lower() == ".mp3" else "M4A"
+            source_format = sound.suffix.lstrip(".").upper()
             lyrics = upload(lyric, row["lyrics"]["path"], code=row["code"],
                             audio_format=source_format)
             # The timed JSON is the only published text artifact. Local LRC
@@ -514,15 +515,19 @@ class OnlinePublisher:
                 if ident in remote:
                     counts["conflicts"] += 1
                     continue
+            is_midi = sound.suffix.lower() in (".mid", ".midi", ".kar")
             item = {"webSongId": ident, "code": str(row["code"]),
                     "title": str(row.get("title") or row["code"]),
                     "artist": str(row.get("artist") or ""),
-                    "sourceFormat": str(row.get("sourceFormat") or ""),
-                    "audio": audio, "lyrics": lyrics}
+                    "sourceFormat": str(row.get("sourceFormat") or source_format),
+                    "lyrics": lyrics}
+            item["midi" if is_midi else "audio"] = audio
             # Files are uploaded and verified BEFORE publishing the pointer.
             # Android APK uses the same HTML5 video+audio player as WEB; MIDI
             # keeps both its original SMF and fallback pre-rendered M4A.
             for field, prefix in (("video", "video"), ("midi", "midi")):
+                if is_midi and field == "midi":
+                    continue
                 optional = row.get(field)
                 if optional and optional.get("path"):
                     media_path = optional["path"]
