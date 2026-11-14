@@ -112,7 +112,7 @@ fs.writeFileSync(path.join(dir,'X100.mp3'),Buffer.concat([Buffer.from('ID3'),Buf
 fs.writeFileSync(path.join(dir,'X100.lrc'),'[ti:ทดสอบเว็บ]\n[ar:ศิลปินทดสอบ]\n[00:01.00]สวัสดี\n[00:04.00]ขอบคุณ\n');
 const m4a=Buffer.alloc(4096);m4a.write('ftyp',4,'ascii');
 fs.writeFileSync(path.join(dir,'J200.m4a'),m4a);
-const mp4=Buffer.alloc(4096);mp4.write('ftyp',4,'ascii');
+const mp4=Buffer.alloc(4096);mp4.write('ftyp',4,'ascii');mp4.write('XSTAGE-UNIQUE-VDO',32,'ascii');
 fs.writeFileSync(path.join(dir,'V400.mp4'),mp4); // embedded VDO metadata; codec not exercised here
 fs.writeFileSync(path.join(dir,'J200.json'),JSON.stringify({
   schemaVersion:1,songCode:'J200',lines:[{startTime:1,endTime:4,text:'Lyrics JSON พร้อมเวลา'}]
