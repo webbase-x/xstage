@@ -292,8 +292,22 @@ $FluidLicense = Get-ChildItem -LiteralPath $FluidTemp -Filter 'LICENSE*' -File -
 if ($FluidLicense) { Copy-Item $FluidLicense.FullName (Join-Path $Licenses 'FluidSynth-LICENSE.txt') -Force }
 CopyFromRepo 'songstudio-pc/THIRD_PARTY_NOTICES.md' '.runtime/licenses/THIRD_PARTY_NOTICES.md'
 
+# Build the native Windows GUI launcher on the GitHub Windows runner. It is
+# portable but MUST remain beside bundled .runtime/ (not a fake one-file exe).
+Step 'Compile X-Stage Song Studio.exe Windows GUI launcher'
+$csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+if (!(Test-Path -LiteralPath $csc)) { throw 'Windows .NET Framework C# compiler is unavailable' }
+$launcher = Join-Path $Stage 'X-Stage Song Studio.exe'
+$cs = Join-Path $Repo 'songstudio-pc/StudioLauncher.cs'
+& $csc /nologo /target:winexe /platform:x64 /optimize+ /reference:System.Windows.Forms.dll ("/out:" + $launcher) $cs
+if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $launcher) -or (Get-Item $launcher).Length -lt 4096) {
+    throw 'Native Windows Song Studio EXE launcher compilation failed'
+}
+Step 'Native GUI EXE launcher compiled successfully'
+
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
+ 'X-Stage Song Studio.exe',
  'engine.py',
  'ncn_lyrics.py',
  'song_index.py',
@@ -380,7 +394,7 @@ with ZipFile(dest, "w", ZIP_DEFLATED, compresslevel=8, allowZip64=True) as archi
             archive.write(path, arcname=name)
 with ZipFile(dest) as archive:
     names = set(archive.namelist())
-    for mandatory in [".runtime/python/python.exe",
+    for mandatory in ["X-Stage Song Studio.exe", ".runtime/python/python.exe",
                       ".runtime/tools/ffmpeg.exe",
                       ".runtime/fluidsynth/bin/fluidsynth.exe",
                       ".runtime/soundfonts/GeneralUser-GS.sf2",
