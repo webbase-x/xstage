@@ -573,7 +573,7 @@ async function refreshFonts(auth){
   try{await pending;}
   finally{if(fontRefreshPromise===pending)fontRefreshPromise=null;}
 }
-async function boundedFontResponse(response,signal){
+async function boundedFontResponse(response,signal,onProgress=null){
   const length=Number(response.headers.get('Content-Length')||0);
   if(length>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
   if(!response.body?.getReader){
@@ -581,7 +581,7 @@ async function boundedFontResponse(response,signal){
     if(bytes.length>MAX_FONT)fail('SoundFont ใหญ่เกินขีดจำกัดเบราว์เซอร์');
     return bytes;
   }
-  const reader=response.body.getReader(),parts=[];let total=0;
+  const reader=response.body.getReader(),parts=[];let total=0,reported=0;
   try{
     for(;;){
       if(signal?.aborted)fail('ยกเลิกการโหลด SoundFont');
@@ -591,6 +591,9 @@ async function boundedFontResponse(response,signal){
       total+=value.byteLength;
       if(total>MAX_FONT)fail('SoundFont ที่ดาวน์โหลดใหญ่กว่า 256 MB · หยุดก่อนใช้ RAM เกิน');
       parts.push(value);
+      if(onProgress&&total-reported>=2*1048576){
+        reported=total;onProgress(total,length||null);
+      }
     }
   }catch(error){
     try{await reader.cancel();}catch{}
@@ -613,13 +616,18 @@ async function selectedFont(token,signal){
   const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
     {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
   if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
-  const bytes=await boundedFontResponse(res,signal);
+  const bytes=await boundedFontResponse(res,signal,(read,total)=>{
+    const report=advisor?.assessFont(meta.size,advisor.profile);
+    fontStatus(report,'กำลังดาวน์โหลด SoundFont '+(advisor?.fmt(read)||read+' bytes')+
+      (total?' / '+advisor.fmt(total):'')+' · '+(report?.text||''));
+  });
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(selected!==id||context?.token!==token||context?.sub!==sub)fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
+  const verified=advisor?.assessFont(bytes.byteLength,advisor.profile);
+  if(verified?.level==='blocked')fail('SoundFont ที่ดาวน์โหลดใช้ RAM เกินขีดจำกัด · '+verified.text);
   parseFont(bytes);
   fontCache={id,sub,bytes};
   if(advisor){
-    const verified=advisor.assessFont(bytes.byteLength,advisor.profile);
     fontStatus(verified,'โหลด SoundFont สำเร็จ '+advisor.fmt(bytes.byteLength)+
       ' · อยู่ใน RAM ชั่วคราว · '+verified.text);
   }
