@@ -267,7 +267,8 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
   let num=0,scheduled=0;
   const master=ctx.createGain();master.gain.value=font?.75:.24;master.connect(ctx.destination);
   for(const note of song.notes){
-    if(num++%200===0){check();onStatus?.('เตรียม MIDI '+Math.floor(num*100/song.notes.length)+'%');await Promise.resolve();}
+    if(num++%200===0){check();onStatus?.('เตรียม MIDI '+Math.floor(num*100/song.notes.length)+'%');
+      await new Promise(resolve=>setTimeout(resolve,0));}
     const start=Math.max(0,note.start),end=Math.max(start+.06,note.end);
     let regions=font?font.find(note.bank,note.program,note.key,note.velocity):[];
     if(font&&!regions.length)continue;
