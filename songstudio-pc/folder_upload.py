@@ -361,7 +361,8 @@ def upload_soundfont(drive, path, *, create_new_library=False,
         raise ValueError("ไม่พบ XStageWeb ที่เข้าถึงได้ · ต้องยืนยันสร้างคลังใหม่")
     if cancelled and cancelled.is_set():
         raise ValueError("ยกเลิกการอัปโหลด SoundFont")
-    root = roots[0]["id"] if roots else drive.folder("root", "XStageWeb")
+    library_name = roots[0]["name"] if roots else "XStageWeb"
+    root = roots[0]["id"] if roots else drive.folder("root", library_name)
     section = drive.folder(root, "SOUNDFONT")
     target = drive.folder(section, info["format"])
     source = Path(info["path"])
@@ -377,7 +378,7 @@ def upload_soundfont(drive, path, *, create_new_library=False,
         raise ValueError("Google Drive ไม่ยืนยัน MD5 SoundFont ให้ตรงกับไฟล์ต้นฉบับ")
     return {"uploaded": status == "created", "skipped": status == "skipped",
             "name": filename, "fileId": meta["id"], "md5": fingerprint,
-            "bytes": info["bytes"], "path": "XStageWeb/SOUNDFONT/" + info["format"] + "/" + filename,
+            "bytes": info["bytes"], "path": library_name + "/SOUNDFONT/" + info["format"] + "/" + filename,
             "webMidiReady": False,
             "message": ("อัปโหลด SoundFont สำเร็จ" if status == "created"
                         else "พบ SoundFont เดิมที่ตรงกัน · ข้ามซ้ำ") +
