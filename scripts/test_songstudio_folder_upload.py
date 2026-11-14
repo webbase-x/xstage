@@ -62,6 +62,33 @@ class FolderUploadTests(unittest.TestCase):
         self.assertEqual(self.audio.read_bytes(), b"ID3" + b"x" * 2500)
         self.assertFalse(list(self.root.glob("xstage-upload-*")))
 
+    def test_existing_stageweb_catalog_publishes_original_rows(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        library = self.root / "StageWeb"
+        audio = library / "audio" / "0" / "00001.m4a"
+        lyric = library / "lyrics" / "0" / "00001.json"
+        audio.parent.mkdir(parents=True)
+        lyric.parent.mkdir(parents=True)
+        audio.write_bytes(b"A" * 4500)
+        lyric.write_text(json.dumps(export.lrc_to_json(
+            "[00:05.00]ทดสอบต้นฉบับ", "00001"), ensure_ascii=False), encoding="utf-8")
+        lyric.with_suffix(".lrc").write_text("[00:05.00]ทดสอบต้นฉบับ", encoding="utf-8")
+        record = {"webSongId": "audio/0/00001", "code": "00001",
+                  "title": "เพลงทดสอบ", "artist": "", "bucket": "0",
+                  "audio": {"path": "audio/0/00001.m4a"},
+                  "lyrics": {"path": "lyrics/0/00001.json"}}
+        export.publish_batch(library, [record])
+        summary = folder.report(str(self.root), export)
+        self.assertEqual(summary["ready"], 1)
+        publisher = PublisherStub()
+        uploaded = folder.upload(object(), str(self.root),
+                                 create_new_library=True, export=export,
+                                 publisher=publisher, staging_root=self.root,
+                                 validator=online._valid_row)
+        self.assertEqual(uploaded["newSongs"], 1)
+        self.assertEqual(publisher.published[0]["webSongId"], record["webSongId"])
+
     def test_missing_lyrics_does_not_publish(self):
         self.lrc.unlink()
         self.assertEqual(folder.report(str(self.root))["ready"], 0)
