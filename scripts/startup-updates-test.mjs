@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const read = path => fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const app = read('app.js');
-const pwa = read('pwa-install.js');
+const apk = read('android-apk-download.js');
 const windows = read('windows-pc/Check-Update.ps1');
 const launcher = read('windows-pc/Start-XStage-With-Updates.ps1');
 const android = read('android-tv/app/src/main/java/com/webbasex/xstage/XStageUpdateManager.java');
@@ -79,10 +79,9 @@ assert.ok(app.includes("android-tv-update-now')?.addEventListener('click'"),'APK
 assert.ok(!app.includes("button?.click();"),'APK release notification cannot silently start installer');
 assert.ok(android.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest()'),'test APK must remain separate from production Play channel');
 assert.ok(android.includes('MessageDigest.getInstance("SHA-256")'),'APK updates must verify downloads');
-assert.ok(pwa.includes('offerPublishedAndroidApk(apk)'),'Android browser visitors must see an APK-or-Web choice');
-assert.ok(pwa.includes('ANDROID_APK_NEVER_ASK_KEY'),'APK offer must support opt-out');
-assert.ok(pwa.includes('ANDROID_APK_USE_WEB_KEY'),'Continue Web must not display the PWA prompt again');
-assert.ok(!pwa.includes('ANDROID_TV_APK_FALLBACK'),'do not offer an unverified stale APK link');
+assert.ok(apk.includes('offerPublishedAndroidApk(apk)'),'Android browser visitors must see an APK-or-Web choice');
+assert.ok(apk.includes('ANDROID_APK_NEVER_ASK_KEY'),'APK offer must support opt-out');
+assert.ok(!apk.includes('ANDROID_TV_APK_FALLBACK'),'do not offer an unverified stale APK link');
 assert.ok(windows.includes('Get-FileHash')&&windows.includes('available -ne $true'),'Windows updates require a published installer and SHA-256');
 assert.ok(launcher.includes("'-Install'")&&launcher.includes("'-Startup'"),'Windows legacy launcher must start the verified updater');
 assert.equal(play.available,false,'never claim that Google Play production update is published');

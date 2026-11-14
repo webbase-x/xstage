@@ -8,7 +8,6 @@
   const count=$('stage-queue-count');
   const volume=$('volume'),volumeLabel=$('stage-volume-value');
   const repeat=$('repeat'),repeatBtn=$('stage-repeat');
-  const install=$('toolbar-install-app');
   const home=$('mobile-home-toggle');
   const about=$('mobile-about-toggle');
   const fullscreen=$('fullscreen');

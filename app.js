@@ -51,19 +51,12 @@ function renderAppUpdateNotice(){
 }
 async function performAppUpdateReload(){
   try{savePlaybackResumeState();}catch{}
-  try{
-    const registrations=await navigator.serviceWorker?.getRegistrations?.();
-    if(Array.isArray(registrations))await Promise.race([
-      Promise.all(registrations.map(registration=>registration.update().catch(()=>{}))),
-      new Promise(resolve=>setTimeout(resolve,4000))
-    ]);
-  }catch{}
   const next=new URL(location.href);
   next.searchParams.set('xstage_update',String(Date.now()));
   location.replace(next.href);
 }
 // Automatic web hotfixes run on entry, never mid-song. Guard repeated
-// redirects if a CDN or Service Worker continues serving the older shell.
+// redirects if an intermediary cache continues serving the older shell.
 const WEB_AUTO_UPDATE_GUARD='xstage-web-auto-update-target-v1';
 let webUpdateReloading=false;
 function autoApplyWebUpdate(remote){
@@ -2713,7 +2706,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1097';
+    script.src='./assets/vendor/qrcode.min.js?v=1098';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -3051,8 +3044,6 @@ function startManualGoogleLogin(){
     startAndroidTvDeviceLogin(false);
     return;
   }
-  const gate=window.XStageBeforeGoogleLogin;
-  if(typeof gate==='function'&&gate(()=>login()))return;
   login();
 }
 ui.login.addEventListener('click',startManualGoogleLogin);ui.gateLogin.addEventListener('click',startManualGoogleLogin);
