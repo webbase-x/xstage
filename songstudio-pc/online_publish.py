@@ -185,7 +185,7 @@ class OnlinePublisher:
                     return None, {}, {x["name"]: x for x in children}
                 markers = [x for x in children if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "VIDEO", "MIDI", "DB"}
+                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "VIDEO", "MIDI", "DB", "SOUNDFONT"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
                         and self._json(markers[0]["id"]).get("format") ==
                         "xstage-songstudio-upload-staging-v1"):
