@@ -556,3 +556,268 @@ def undo(backup_root, root, operation):
     _atomic_bytes(manifest_path, (json.dumps(data, ensure_ascii=False) + "\n").encode("utf-8"))
     return {"message": f"ย้อนคืนข้อความ {data['songs']:,} เพลงสำเร็จ · ไฟล์เสียงไม่เปลี่ยน",
             "restoredSongs": data["songs"], "backupId": operation}
+
+
+# Raw-folder mode: edit timed .lrc lyric text in place (without requiring StageWeb).
+# Never touch MIDI/audio files. The existing grouping, planning, backup and
+# undo contracts also apply to this folder mode.
+def _decode_lrc_bytes(payload):
+    """Return a round-trippable encoding, BOM and the decoded LRC text."""
+    if payload.startswith(b"\xef\xbb\xbf"):
+        bom, codec, data = b"\xef\xbb\xbf", "utf-8", payload[3:]
+    elif payload.startswith(b"\xff\xfe"):
+        bom, codec, data = b"\xff\xfe", "utf-16-le", payload[2:]
+    elif payload.startswith(b"\xfe\xff"):
+        bom, codec, data = b"\xfe\xff", "utf-16-be", payload[2:]
+    else:
+        bom, data = b"", payload
+        try:
+            return data.decode("utf-8"), "utf-8", bom
+        except UnicodeDecodeError:
+            # Many legacy Thai lyric collections use the Windows-874 charset.
+            # Encode edits back to the SAME charset; never silently transcode.
+            codec = "cp874"
+    text = data.decode(codec, errors="strict")
+    if bom + text.encode(codec) != payload:
+        raise ValueError("รหัสอักขระเนื้อร้องไม่สามารถเก็บกลับได้โดยไม่เปลี่ยนข้อมูล")
+    return text, codec, bom
+
+
+def _parse_raw_lrc(payload):
+    if len(payload) > 1024 * 1024:
+        raise ValueError("ข้าม LRC ขนาดเกิน 1 MB")
+    raw, codec, bom = _decode_lrc_bytes(payload)
+    chunks, found = _timestamped_rows(raw)
+    if len(found) < 4:
+        raise ValueError("ต้องมีเนื้อร้องแบบมีเวลาอย่างน้อย 4 บรรทัด")
+    texts = []
+    for _, matched in found:
+        tail = matched.group(2)
+        # A line with multiple timestamps requires distinct semantics;
+        # refuse to bulk-edit it until manually normalized.
+        if re.search(r"\[\d{1,3}:[0-5]\d(?:[.:]\d{1,3})?\]", tail):
+            raise ValueError("ไม่รองรับ LRC หลายเวลาในบรรทัดเดียว")
+        texts.append(_same(ENHANCED.sub("", tail)))
+    return chunks, found, texts, codec, bom
+
+
+def _source_file(root, relative):
+    """Allow only real .lrc files strictly within the chosen local folder."""
+    if not isinstance(relative, str) or not relative.lower().endswith(".lrc"):
+        raise ValueError("ไฟล์เนื้อร้องต้นทางไม่ถูกต้อง")
+    name = PurePosixPath(relative)
+    if name.is_absolute() or not name.parts or any(part in (".", "..", "") for part in name.parts):
+        raise ValueError("พาธเนื้อร้องอยู่นอกโฟลเดอร์ที่เลือก")
+    candidate = root.joinpath(*name.parts)
+    if candidate.is_symlink() or any(p.is_symlink() for p in (candidate, *candidate.parents) if p != root):
+        raise ValueError("ไม่อนุญาตไฟล์หรือโฟลเดอร์ต้นทางแบบลิงก์")
+    path = candidate.resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise ValueError("ไม่พบไฟล์ LRC ภายในโฟลเดอร์ที่เลือก")
+    return path
+
+
+def scan_lrc_folder(root, *, cancelled=None, on_progress=None):
+    """Recursively index only timed LRC in an explicitly selected directory."""
+    root = Path(root).expanduser().resolve(strict=True)
+    grouped = {name: defaultdict(list) for name in POSITIONS}
+    searchable, seen, included = {}, set(), 0
+    skipped = 0
+    inspected = 0
+    for directory, folders, files in os.walk(root, topdown=True, followlinks=False):
+        if cancelled is not None and cancelled.is_set():
+            raise RuntimeError("ยกเลิกการวิเคราะห์แล้ว · ยังไม่ได้แก้ไขไฟล์")
+        folders[:] = sorted(f for f in folders if not f.startswith(".") and
+                            not (Path(directory) / f).is_symlink())
+        for filename in sorted(files):
+            if Path(filename).suffix.lower() != ".lrc":
+                continue
+            inspected += 1
+            if inspected > MAX_ROWS:
+                raise ValueError("จำนวนไฟล์ LRC เกินขนาดที่รองรับ · เลือกโฟลเดอร์ย่อย")
+            path = Path(directory) / filename
+            try:
+                if path.is_symlink() or not path.is_file():
+                    raise ValueError("ไฟล์แบบลิงก์ไม่รองรับ")
+                relative = path.relative_to(root).as_posix()
+                resolved = _source_file(root, relative)
+                original = resolved.read_bytes()
+                _, _, texts, _, _ = _parse_raw_lrc(original)
+            except (OSError, ValueError, UnicodeError, TypeError):
+                skipped += 1
+                continue
+            song_id = relative
+            if song_id in seen:
+                continue
+            seen.add(song_id)
+            included += 1
+            record = {"path": relative, "digest": _sha(original)}
+            searchable[song_id] = "\n".join(line.casefold() for line in texts)
+            for pos, (index, _) in POSITIONS.items():
+                phrase = texts[index]
+                if not phrase:
+                    continue
+                ident = _group_id(pos, phrase)
+                grouped[pos][ident].append({
+                    "songId": song_id, "code": path.stem[:80],
+                    "title": path.stem[:140], "artist": "",
+                    "text": phrase, "record": record
+                })
+            if on_progress and inspected % 400 == 0:
+                on_progress(f"อ่าน LRC {inspected:,} ไฟล์ · ตรวจใช้ได้ {included:,}", inspected)
+    if not inspected:
+        raise ValueError(
+            "โฟลเดอร์นี้ไม่พบไฟล์ .lrc · เลือกโฟลเดอร์เพลงที่มี LRC หรือคลัง StageWeb "
+            "· ไฟล์ MIDI/KAR/NCN ที่ไม่มี LRC ยังไม่รองรับการแทนที่ข้อความโดยตรง")
+    if not included:
+        raise ValueError(
+            f"พบ LRC {inspected:,} ไฟล์ แต่ไม่มีไฟล์ที่ตรวจใช้ได้ · "
+            "ต้องมีเนื้อร้องพร้อมเวลาอย่างน้อย 4 บรรทัดและเป็น UTF-8/UTF-16/Windows-874")
+    groups = {}
+    for pos, mapping in grouped.items():
+        for ident, members in mapping.items():
+            groups[ident] = {
+                "id": ident, "position": pos, "label": POSITIONS[pos][1],
+                "text": members[0]["text"], "count": len(members),
+                "members": members
+            }
+    return {
+        "root": str(root), "mode": "lrc-folder", "generation": None,
+        "groups": groups, "searchable": searchable, "songs": included,
+        "inspected": inspected, "skippedInvalid": skipped,
+        "withoutLyrics": 0, "groupCount": len(groups)
+    }
+
+
+def apply_many_lrc_folder(root, snapshot, group_ids, new_text, backup_root,
+                          *, search="", expected_count, cancelled=None,
+                          on_progress=None):
+    """Safely replace LRC text; preflight hashes, backup all, write atomically."""
+    root = Path(root).expanduser().resolve()
+    if snapshot.get("mode") != "lrc-folder" or snapshot["root"] != str(root):
+        raise ValueError("โฟลเดอร์หรือผลวิเคราะห์ไม่ตรงกัน กรุณาวิเคราะห์ใหม่")
+    new_text = _new_text(new_text)
+    targets, chosen, unchanged = _targets(snapshot, group_ids, search, new_text)
+    changed_lines = sum(len(target["edits"]) for target in targets.values())
+    if type(expected_count) is not int or expected_count != changed_lines:
+        raise ValueError("จำนวนบรรทัดที่จะเปลี่ยนไม่ตรง กรุณาตรวจรายการใหม่")
+    if not changed_lines:
+        raise ValueError("ข้อความเดิมตรงกับข้อความใหม่แล้ว")
+
+    changes = []
+    for number, target in enumerate(targets.values(), 1):
+        if cancelled is not None and cancelled.is_set():
+            raise RuntimeError("ยกเลิกก่อนแก้ไข · ยังไม่ได้เขียนไฟล์")
+        record = target["record"]
+        path = _source_file(root, record["path"])
+        original = path.read_bytes()
+        if _sha(original) != record["digest"]:
+            raise ValueError("ไฟล์ LRC เปลี่ยนจากตอนวิเคราะห์ กรุณาสแกนใหม่: " + path.name)
+        chunks, timed, texts, codec, bom = _parse_raw_lrc(original)
+        query = _same(search).casefold()
+        if query and query not in "\n".join(line.casefold() for line in texts):
+            raise ValueError("เนื้อร้องเปลี่ยนภายหลัง กรุณาวิเคราะห์ใหม่")
+        positions = set()
+        for group, item in target["edits"]:
+            index = POSITIONS[group["position"]][0] % len(timed)
+            if index in positions:
+                raise ValueError("ตำแหน่งข้อความซ้ำในไฟล์เดียวกัน")
+            positions.add(index)
+            if texts[index] != group["text"]:
+                raise ValueError("ข้อความใน LRC เปลี่ยนหลังวิเคราะห์: " + path.name)
+            line_index, match = timed[index]
+            # Only replace words. Timestamp, metadata, line endings remain.
+            chunks[line_index] = match.group(1) + new_text + match.group(3)
+            texts[index] = new_text
+        try:
+            revised = bom + "".join(chunks).encode(codec, errors="strict")
+        except UnicodeEncodeError as exc:
+            raise ValueError("ข้อความใหม่ไม่รองรับรหัสอักขระของ LRC: " + path.name +
+                             " · กรุณาแปลงเป็น UTF-8 ก่อน") from exc
+        changes.append({"path": path, "before": original, "after": revised,
+                        "songId": target["songId"],
+                        "record": record, "texts": texts,
+                        "edits": target["edits"]})
+        if on_progress and number % 300 == 0:
+            on_progress(f"ตรวจ LRC และเตรียมสำรอง {number:,}/{len(targets):,}", number)
+
+    import shutil
+    backup_root = Path(backup_root)
+    backup_root.mkdir(parents=True, exist_ok=True)
+    needed = sum(len(item["before"]) for item in changes)
+    if shutil.disk_usage(backup_root).free < needed + 32 * 1024 * 1024:
+        raise RuntimeError("พื้นที่ไม่พอสำหรับสำรอง LRC · ยังไม่มีไฟล์ถูกแก้")
+    operation = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + secrets.token_hex(4)
+    zip_path = backup_root / (operation + ".zip")
+    manifest_path = backup_root / (operation + ".json")
+    specs = []
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=3) as bundle:
+        for item in changes:
+            rel = item["path"].relative_to(root).as_posix()
+            bundle.writestr(rel, item["before"])
+            specs.append({"path": rel, "before": _sha(item["before"]),
+                          "after": _sha(item["after"])})
+    first = chosen[0][0] if len(chosen) == 1 else None
+    manifest = {
+        "version": 2, "id": operation, "state": "prepared", "root": str(root),
+        "mode": "lrc-folder",
+        "position": first["position"] if first else "mixed",
+        "oldText": first["text"] if first else f"{len(chosen)} กลุ่มข้อความ",
+        "newText": new_text, "groups": list(group_ids), "search": _same(search),
+        "songs": len(changes), "lines": changed_lines, "files": specs,
+        "createdAt": datetime.now(timezone.utc).isoformat()
+    }
+    _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
+    try:
+        for number, item in enumerate(changes, 1):
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("ยกเลิกระหว่างแทนที่ · กำลังคืนค่าเดิม")
+            path = _source_file(root, item["record"]["path"])
+            if _sha(path.read_bytes()) != _sha(item["before"]):
+                raise ValueError("ไฟล์ LRC เปลี่ยนขณะทำงาน: " + path.name)
+            _atomic_bytes(path, item["after"])
+            if on_progress and number % 100 == 0:
+                on_progress(f"แทนที่ LRC แล้ว {number:,}/{len(changes):,}", number)
+    except BaseException:
+        try:
+            _restore_files(root, zip_path, specs, strict=False)
+            manifest["state"] = "rolled-back"
+        except Exception:
+            manifest["state"] = "recovery-required"
+        _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
+        raise
+    manifest["state"] = "committed"
+    _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
+    for group, members in chosen:
+        removed = {item["songId"] for item in members}
+        was_repeated = group["count"] >= 2
+        group["members"][:] = [m for m in group["members"] if m["songId"] not in removed]
+        group["count"] = len(group["members"])
+        if was_repeated and group["count"] > 0:
+            group["queuePending"] = True
+        if not group["members"]:
+            snapshot["groups"].pop(group["id"], None)
+    for item in changes:
+        item["record"]["digest"] = _sha(item["after"])
+        snapshot["searchable"][item["songId"]] = "\n".join(line.casefold() for line in item["texts"])
+        for old_group, old_item in item["edits"]:
+            position = old_group["position"]
+            ident = _group_id(position, new_text)
+            group = snapshot["groups"].setdefault(ident, {
+                "id": ident, "position": position,
+                "label": POSITIONS[position][1],
+                "text": new_text, "count": 0, "members": []
+            })
+            member = dict(old_item)
+            member["text"] = new_text
+            group["members"].append(member)
+            group["count"] = len(group["members"])
+    snapshot["groupCount"] = len(snapshot["groups"])
+    return {
+        "message": f"แก้ LRC {len(changes):,} ไฟล์ · {changed_lines:,} บรรทัดสำเร็จ · สำรองก่อนแก้แล้ว",
+        "changedSongs": len(changes), "changedLines": changed_lines,
+        "changedGroups": len(chosen), "alreadyCorrect": unchanged,
+        "changedFiles": len(specs), "removedSyllableCues": 0,
+        "backupId": operation, "remainingGroups": snapshot["groupCount"]
+    }
