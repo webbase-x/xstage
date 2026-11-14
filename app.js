@@ -954,9 +954,14 @@ async function openSharedLibraryPicker(){
         }
         ui.gateStatus.textContent='อนุญาตคลังที่แชร์แล้ว · กำลังเปิดเพลง…';
         setSharedLibraryGate(false);
+        if(!state.accountSub){
+          setSharedLibraryGate(true,'ไม่พบข้อมูลบัญชี Google กรุณาเข้าสู่ระบบใหม่');
+          return;
+        }
+        savePreferredLibraryRoot(state.accountSub,id);
         const idNow=state.authId;
         try{
-          await openDrive(state.token,idNow,state.tokenExpiresAt,state.accountSub);
+          await openDrive(state.token,idNow,state.tokenExpiresAt,state.accountSub,false);
         }catch(error){
           setSharedLibraryGate(true,error?.message||'ยังเปิดคลังที่แชร์ไม่ได้ กรุณาเลือก XStageWeb อีกครั้ง');
         }
@@ -1533,19 +1538,16 @@ function openShareLibraryDialog(){
   status.textContent='';
   email.value='';
   ack.checked=false;
-  const pickerReady=sharedLibraryFeatureReady();
-  const canShare=!!(pickerReady&&state.token&&state.libraryRootId&&state.libraryRootOwnedByMe&&state.libraryRootCanShare);
+  const canShare=!!(state.token&&state.libraryRootId&&state.libraryRootOwnedByMe&&state.libraryRootCanShare);
   email.disabled=ack.disabled=!canShare;
   submit.disabled=true;
-  if(!pickerReady)status.textContent='ยังไม่เปิดใช้งานการแชร์ · เจ้าของเว็บไซต์ต้องตั้งค่า Google Picker API ก่อน';
-  else if(!state.token)status.textContent='กรุณาเข้าสู่ระบบ Google ก่อนแชร์';
+  if(!state.token)status.textContent='กรุณาเข้าสู่ระบบ Google ก่อนแชร์';
   else if(!state.libraryRootOwnedByMe)status.textContent='คลังนี้เป็นคลังที่ผู้อื่นแชร์ให้ จึงไม่สามารถแชร์ต่อจาก X-Stage ได้';
   else if(!state.libraryRootCanShare)status.textContent='บัญชีนี้ไม่มีสิทธิ์แชร์โฟลเดอร์ XStageWeb';
   dialog.showModal();
   if(canShare)setTimeout(()=>email.focus(),30);
 }
 async function shareLibraryWithEmail(email){
-  if(!sharedLibraryFeatureReady())throw Error('ระบบแชร์ยังไม่พร้อม · กรุณาตั้งค่า Google Picker API ก่อน');
   if(!state.token)throw Error('กรุณาเข้าสู่ระบบ Google ก่อนแชร์');
   if(!state.libraryRootId||!state.libraryRootOwnedByMe||!state.libraryRootCanShare)
     throw Error('บัญชีนี้ไม่มีสิทธิ์แชร์คลังเพลง');
@@ -1577,9 +1579,9 @@ async function shareLibraryWithEmail(email){
   return true;
 }
 function setupLibrarySharing(){
-  const sharingReady=sharedLibraryFeatureReady();
+  // Drive reader-permission sharing does not require a Google Picker API key.
   for(const button of [$('pc-share-library'),$('mobile-share-library'),document.querySelector('#xstage-context-menu [data-cmd="share"]')]){
-    if(button){button.hidden=!sharingReady;button.disabled=!sharingReady;}
+    if(button){button.hidden=false;button.disabled=false;}
   }
   const dialog=$('share-library-dialog');
   const email=$('share-library-email');
@@ -1587,7 +1589,7 @@ function setupLibrarySharing(){
   const submit=$('share-library-submit');
   const status=$('share-library-status');
   if(!dialog||!email||!ack||!submit||!status)return;
-  const sync=()=>{submit.disabled=!(ack.checked&&validShareEmail(email.value)&&state.libraryRootOwnedByMe&&state.libraryRootCanShare&&!submit.dataset.busy);};
+  const sync=()=>{submit.disabled=!(state.token&&ack.checked&&validShareEmail(email.value)&&state.libraryRootOwnedByMe&&state.libraryRootCanShare&&!submit.dataset.busy);};
   email.addEventListener('input',sync);ack.addEventListener('change',sync);
   $('share-library-close')?.addEventListener('click',()=>dialog.close());
   $('share-library-cancel')?.addEventListener('click',()=>dialog.close());
