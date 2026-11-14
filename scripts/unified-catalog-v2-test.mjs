@@ -21,6 +21,15 @@ assert.throws(()=>api.song({...song,media:{mp3:{fileId:'a',localPath:'/private/b
 assert.throws(()=>api.song({...song,media:{mp3:{fileId:'a',path:'../../etc'}}},{cloud:true}));
 assert.throws(()=>api.song({...song,media:{mp3:{fileId:'a',size:-1}}},{cloud:true}));
 assert.throws(()=>api.pointer({schemaVersion:2,generation:'a',catalogFileId:'b',songCount:-1}));
+const shards={schemaVersion:2,format:'xstage-unified-v2',generation:'shards_1',
+  songCount:2501,catalogFiles:[{fileId:'shard_1',bucket:'0',songCount:2500},
+    {fileId:'shard_2',bucket:'0',songCount:1}]};
+assert.equal(api.pointer(shards),shards);
+assert.throws(()=>api.pointer({...shards,catalogFileId:'old'}));
+assert.throws(()=>api.pointer({...shards,songCount:2500}),/ผลรวม/);
+assert.throws(()=>api.pointer({...shards,catalogFiles:[shards.catalogFiles[0],shards.catalogFiles[0]]}),/ซ้ำ/);
+assert.equal(api.pointer({...shards,deltaFileIds:['delta_v1'],songCount:2502}).songCount,2502);
+assert.throws(()=>api.pointer({...shards,deltaFileIds:['delta_v1','delta_v1']}),/Delta/);
 const local={...song,media:{mp3:{localPath:'C:/Music/00001.mp3'}}};
 assert.equal(api.song(local,{cloud:false}),local);
 assert.throws(()=>api.song(local,{cloud:true}),/Google Drive/);
