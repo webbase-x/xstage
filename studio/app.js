@@ -448,7 +448,7 @@
       (search?'ค้นหาในทุกบรรทัด: '+search+'\nแก้เฉพาะเพลงที่ตรงคำค้นหานี้\n':'')+
       '\nข้อความใหม่ร่วมกัน:\n'+replacement+'\n\n'+
       (planned.sourceMode==='ncn-folder' ?
-         'NCN: สำรอง LYR/CUR ทุกเพลง · ไม่แก้ MIDI · คงเวลาของบรรทัดอื่น\nอักขระใหม่ใช้ตำแหน่งเวลาเดิมในบรรทัดนั้น ไม่สร้างจังหวะใหม่' :
+         'NCN: วิเคราะห์เฉพาะ LYR แล้ว · เมื่อยืนยัน ระบบจะตรวจ MID/CUR ของเพลงที่เลือกและสำรอง LYR/CUR · ไม่แก้ MIDI\nถ้าไฟล์หรือเวลาไม่ครบจะปฏิเสธการแทนที่' :
          'สำรอง JSON/LRC ก่อนแก้ทุกเพลง · ไฟล์เสียงและเวลาเดิมไม่เปลี่ยน')+
       '\nรายการอื่นยังคงอยู่เพื่อแก้ต่อ · อัปโหลด Google Drive ต้องสั่งเอง',
       'ยืนยันแทนที่ข้อความหลายกลุ่ม',
@@ -477,7 +477,7 @@
     $('create-workspace').value = prefs.workspace || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
-      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · รองรับ StageWeb / LRC / NCN (Song + Lyrics + Cursor)'
+      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · NCN วิเคราะห์เฉพาะ Lyrics/*.LYR ไม่อ่าน MID/CUR จนกว่าจะสั่งแทนที่'
       : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · StageWeb';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
@@ -2054,7 +2054,7 @@
               await refreshPhraseGroups();
               await refreshPhraseBackup();
               if(job.result?.sourceMode==='ncn-folder')
-                $('lyric-group-source-status').textContent='NCN: พบชุด MID + LYR + CUR ใน '+($('lyric-group-folder').value||'คลังที่เลือก')+' · จะแก้ LYR/CUR คู่กันหลังสำรอง';
+                $('lyric-group-source-status').textContent='NCN: วิเคราะห์เฉพาะ LYR ใน '+($('lyric-group-folder').value||'คลังที่เลือก')+' · จะตรวจ MID/CUR เฉพาะเพลงที่เลือกก่อนแทนที่';
               message(job.result?.message||'จัดกลุ่มข้อความเสร็จแล้ว',false);
             } else if (job.kind === 'lyric-groups-replace') {
               // Keep the current position, lyric search and page: the backend
