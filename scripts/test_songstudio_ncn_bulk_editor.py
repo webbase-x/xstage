@@ -102,6 +102,90 @@ class NCNEditTests(unittest.TestCase):
         self.assertEqual([x["text"] for x in ncn.ncn_document(ncn.resolve_companions(triplet[0]))["lines"]],
                          ["X-Stage Karaoke","เนื้อร้องสอง","เนื้อร้องสาม","X-Stage Karaoke"])
 
+    def test_backward_and_sentinel_on_unselected_line_are_preserved(self):
+        mid, lyr, cur = self.song("00231")
+        raw = cur.read_bytes()
+        even = raw[:-1]
+        positions = list(struct.unpack("<"+"H"*(len(even)//2), even))
+        parsed = edit._parse(lyr.read_bytes(), raw, bulk)
+        second = parsed["entries"][1]
+        # Corrupt only the 2nd line's *printable cues*. The renderer already
+        # tolerates these legacy anomalies, but the bulk editor must NOT
+        # change or repair their timing while editing the first line.
+        positions[second["cursor"]+3] = 0
+        positions[second["cursor"]+4] = 65535
+        cur.write_bytes(struct.pack("<"+"H"*len(positions), *positions)+b"\xff")
+        baseline = (mid.read_bytes(), lyr.read_bytes(), cur.read_bytes())
+        parsed_before = edit._parse(lyr.read_bytes(), cur.read_bytes(), bulk)
+        self.assertTrue(any(row["line"] == second["row"]+1
+                            for row in parsed_before["timingWarnings"]))
+        snapshot = edit.scan(self.root, ncn, bulk)
+        group = bulk.list_groups(snapshot, "first", repeats_only=False)["rows"][0]["id"]
+        out = edit.apply(self.root, ncn, bulk, snapshot, [group],
+                         "X-Stage Karaoke", self.backup, expected_count=1)
+        self.assertGreaterEqual(out["preservedTimingWarnings"], 1)
+        parsed_after = edit._parse(lyr.read_bytes(), cur.read_bytes(), bulk)
+        for left, right in zip(parsed_before["entries"][1:],
+                               parsed_after["entries"][1:]):
+            self.assertEqual(left["times"], right["times"])
+        self.assertEqual(mid.read_bytes(), baseline[0])
+        bulk.undo(self.backup, self.root, out["backupId"])
+        self.assertEqual((mid.read_bytes(), lyr.read_bytes(), cur.read_bytes()),
+                         baseline)
+
+    def test_untimed_line_marker_does_not_reject_safe_selected_text(self):
+        _, lyr, cur = self.song("00232")
+        original = cur.read_bytes()
+        positions = list(struct.unpack("<"+"H"*((len(original)-1)//2), original[:-1]))
+        positions[0] = 65535  # first entry is an unprinted line marker
+        cur.write_bytes(struct.pack("<"+"H"*len(positions), *positions)+b"\xff")
+        snapshot = edit.scan(self.root, ncn, bulk)
+        group = bulk.list_groups(snapshot, "first", repeats_only=False)["rows"][0]["id"]
+        out = edit.apply(self.root, ncn, bulk, snapshot, [group],
+                         "X-Stage Karaoke", self.backup, expected_count=1)
+        new_positions = struct.unpack("<"+"H"*((len(cur.read_bytes())-1)//2),
+                                      cur.read_bytes()[:-1])
+        self.assertEqual(new_positions[0], 65535)
+        self.assertEqual(out["preservedTimingWarnings"], 0)
+        self.assertEqual(edit._parse(lyr.read_bytes(), cur.read_bytes(), bulk)["lines"][0],
+                         "X-Stage Karaoke")
+
+    def test_selected_line_with_sentinel_or_backward_cue_still_blocks_edit(self):
+        for reason, index, value in (
+                ("65535", 1, 65535),
+                ("ย้อนกลับ", 3, 0)):
+            with self.subTest(reason=reason):
+                _, lyr, cur = self.song("00233")
+                raw = cur.read_bytes()
+                times = list(struct.unpack("<"+"H"*((len(raw)-1)//2), raw[:-1]))
+                times[index] = value
+                cur.write_bytes(struct.pack("<"+"H"*len(times),*times)+b"\xff")
+                original = (lyr.read_bytes(), cur.read_bytes())
+                snapshot = edit.scan(self.root, ncn, bulk)
+                group = bulk.list_groups(snapshot, "first", repeats_only=False)["rows"][0]["id"]
+                with self.assertRaisesRegex(ValueError, "ไม่ปลอดภัย.*"+reason):
+                    edit.apply(self.root,ncn,bulk,snapshot,[group],
+                               "X-Stage Karaoke",self.backup,expected_count=1)
+                self.assertEqual((lyr.read_bytes(),cur.read_bytes()),original)
+                self.assertFalse(self.backup.exists())
+
+    def test_selected_line_backwards_relative_to_previous_song_line_is_refused(self):
+        _, lyr, cur = self.song("00234")
+        raw = cur.read_bytes()
+        times = list(struct.unpack("<"+"H"*((len(raw)-1)//2), raw[:-1]))
+        parsed = edit._parse(lyr.read_bytes(), raw, bulk)
+        last = parsed["entries"][-1]
+        # Set a valid monotonic line with an onset earlier than other lyrics.
+        start = last["cursor"] + 1
+        for j in range(len(last["raw"])):
+            times[start+j] = j
+        cur.write_bytes(struct.pack("<"+"H"*len(times), *times)+b"\xff")
+        snapshot = edit.scan(self.root,ncn,bulk)
+        group = bulk.list_groups(snapshot,"last",repeats_only=False)["rows"][0]["id"]
+        with self.assertRaisesRegex(ValueError,"ไม่ปลอดภัย"):
+            edit.apply(self.root,ncn,bulk,snapshot,[group],"X-Stage",
+                       self.backup,expected_count=1)
+
     def test_stale_files_and_unsupported_cp874_block_changes(self):
         _,lyr,cur=self.song()
         snap=edit.scan(self.root,ncn,bulk)
