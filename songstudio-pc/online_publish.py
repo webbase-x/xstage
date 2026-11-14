@@ -65,7 +65,15 @@ def media_drive_path(relative, *, code="", audio_format="M4A"):
         if audio_format not in ("M4A", "MP3"):
             raise PublishError("ประเภทไฟล์เสียงสำหรับ Lyrics ไม่ถูกต้อง")
         return PurePosixPath("AUDIO", audio_format, "Lyrics", group, rel.name)
-    raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวด AUDIO: " + str(relative))
+    if kind == "video" and suffix == ".mp4":
+        return PurePosixPath("VIDEO", "MP4", "Songs", group, rel.name)
+    if kind == "midi" and suffix in (".mid", ".midi", ".kar"):
+        return PurePosixPath("MIDI", "NCN", "Songs", group, rel.name)
+    if kind == "midi_lyrics" and suffix == ".lyr":
+        return PurePosixPath("MIDI", "NCN", "Lyrics", group, rel.name)
+    if kind == "midi_cursor" and suffix == ".cur":
+        return PurePosixPath("MIDI", "NCN", "Cursor", group, rel.name)
+    raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวดสื่อ: " + str(relative))
 
 
 
@@ -114,6 +122,14 @@ def _valid_row(root, row):
                    for i in range(len(doc["lines"])-1))
     except (OSError, ValueError, TypeError, AttributeError, AssertionError) as exc:
         raise PublishError("Lyrics JSON ไม่พร้อมเล่นบน X-Stage: " + lyric.name) from exc
+    for key, prefix in (("video", "video"), ("midi", "midi"),
+                        ("midiLyrics", "midi_lyrics"), ("midiCursor", "midi_cursor")):
+        optional = row.get(key)
+        if optional:
+            path = optional.get("path") if isinstance(optional, dict) else None
+            candidate = _local_path(root, path, prefix)
+            if candidate.stat().st_size < 8:
+                raise PublishError("ไฟล์เพิ่มเติมไม่สมบูรณ์: " + candidate.name)
     return True
 
 
@@ -346,7 +362,7 @@ class OnlinePublisher:
             ("AUDIO", "MP3", "Songs"), ("AUDIO", "MP3", "Lyrics"),
             ("AUDIO", "M4A", "Songs"), ("AUDIO", "M4A", "Lyrics"),
             ("VIDEO", "AVI"), ("VIDEO", "MPG"), ("VIDEO", "VCD"),
-            ("VIDEO", "WMV"), ("MIDI", "NCN", "Songs"),
+            ("VIDEO", "WMV"), ("VIDEO", "MP4", "Songs"), ("MIDI", "NCN", "Songs"),
             ("MIDI", "NCN", "Lyrics"), ("MIDI", "NCN", "Cursor"),
             ("MIDI", "EMK"), ("DB",),
         ):
@@ -512,6 +528,16 @@ class OnlinePublisher:
                     "artist": str(row.get("artist") or ""),
                     "sourceFormat": str(row.get("sourceFormat") or ""),
                     "audio": audio, "lyrics": lyrics}
+            # Files are uploaded and verified BEFORE publishing the pointer.
+            # Android APK uses the same HTML5 video+audio player as WEB; MIDI
+            # keeps both its original SMF and fallback pre-rendered M4A.
+            for field, prefix in (("video", "video"), ("midi", "midi"),
+                                  ("midiLyrics", "midi_lyrics"), ("midiCursor", "midi_cursor")):
+                optional = row.get(field)
+                if optional and optional.get("path"):
+                    media_path = optional["path"]
+                    item[field] = upload(_local_path(local_songs, media_path, prefix),
+                                         media_path, code=row["code"])
             if row.get("originalCode"):
                 item["originalCode"] = str(row["originalCode"])
             if lrc_media:
