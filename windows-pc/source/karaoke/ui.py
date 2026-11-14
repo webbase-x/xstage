@@ -1334,7 +1334,7 @@ class KaraokeApp(tk.Tk):
             try:
                 result=export_catalog(self.library.path,name)
             except (OSError,ValueError,RuntimeError) as error:
-                def failed():
+                def failed(error=error):
                     self._catalog_v2_busy=False
                     self.show_error(error)
                 self.after(0,failed)
@@ -1366,7 +1366,7 @@ class KaraokeApp(tk.Tk):
             try:
                 preview=import_catalog(self.library.path,path)
             except (OSError,ValueError,RuntimeError) as error:
-                def failed():
+                def failed(error=error):
                     self._catalog_v2_busy=False
                     self.show_error(error)
                 self.after(0,failed)
@@ -1384,7 +1384,7 @@ class KaraokeApp(tk.Tk):
                         result=import_catalog(self.library.path,path,
                                               confirmation="IMPORT_UNIFIED_V2")
                     except (OSError,ValueError,RuntimeError) as error:
-                        def failed():
+                        def failed(error=error):
                             self._catalog_v2_busy=False
                             self.show_error(error)
                         self.after(0,failed)
