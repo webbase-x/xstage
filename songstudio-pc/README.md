@@ -25,7 +25,7 @@ This is a **new, independently reconstructed PC source launcher** prepared from 
 ## Not yet supported or not equivalent to original Build 205
 
 - The original PC Engine/source bundle is **not available in the repository**. The code in this ZIP is newly created and not confirmed to match that release.
-- Google Drive OAuth, private upload/download and AI vocal separation are **not implemented** in this source preview.
+- The current source branch contains the **XStageWeb V2-only** private Google Drive publisher, reader, native media catalog and local AI components. These depend on valid Google Desktop OAuth credentials and required runtime/model files; a source-only ZIP does not bundle a complete turnkey AI or SoundFont environment.
 - NCN multi-file processing and FluidSynth/SoundFont provisioning are not implemented as a turnkey experience.
 - Windows startup and system-specific behavior need confirmation on a real Windows machine; automated CI is Linux-based.
 - Windows Defender/SmartScreen may alert because this is unsigned source, not a signed installer. The CMD and PowerShell contents can be inspected before running.
