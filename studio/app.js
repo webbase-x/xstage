@@ -547,9 +547,7 @@
       'จำนวนบรรทัดที่เปลี่ยน: '+fmtNum(planned.changedLines)+' บรรทัด\n'+
       (search?'ค้นหาในทุกบรรทัด: '+search+'\nแก้เฉพาะเพลงที่ตรงคำค้นหานี้\n':'')+
       '\nข้อความใหม่ร่วมกัน:\n'+replacement+'\n\n'+
-      (planned.sourceMode==='ncn-folder' ?
-         'NCN: วิเคราะห์เฉพาะ LYR แล้ว · เมื่อยืนยัน ระบบจะตรวจ MID/CUR ของเพลงที่เลือกและสำรอง LYR/CUR · ไม่แก้ MIDI\nถ้าไฟล์หรือเวลาไม่ครบจะปฏิเสธการแทนที่' :
-         'สำรอง JSON/LRC ก่อนแก้ทุกเพลง · ไฟล์เสียงและเวลาเดิมไม่เปลี่ยน')+
+      'สำรอง Lyrics JSON ก่อนแก้ · ปรับเวลาไฮไลต์อักษรโดยประมาณภายในช่วงเดิม · ไม่แก้ MIDI'+
       '\nรายการอื่นยังคงอยู่เพื่อแก้ต่อ · อัปโหลด Google Drive ต้องสั่งเอง',
       'ยืนยันแทนที่ข้อความหลายกลุ่ม',
       {acceptLabel:'สำรองและแทนที่',cancelLabel:'ยกเลิก'});
@@ -577,7 +575,7 @@
     $('create-workspace').value = prefs.workspace || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
-      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · NCN วิเคราะห์เฉพาะ Lyrics/*.LYR ไม่อ่าน MID/CUR จนกว่าจะสั่งแทนที่'
+      ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · ใช้ Lyrics JSON เท่านั้น'
       : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · StageWeb';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
@@ -586,6 +584,7 @@
     $('settings-oauth').value = prefs.oauth || '';
     $('create-preset').value = prefs.midi_preset || 'balanced';
     $('create-mode').value = prefs.mode || 'original';
+    $('create-export-format').value = prefs.export_format || 'xstage';
   }
   function soundfontOptions(items) {
     const chooser = $('create-soundfont'); const current = prefs.soundfont || '';
@@ -779,7 +778,8 @@
   }
   const fields = {'create-source': 'source', 'create-workspace': 'workspace',
                   'create-soundfont': 'soundfont', 'create-preset': 'midi_preset',
-                  'create-mode': 'mode', 'download-destination': 'download',
+                  'create-mode': 'mode', 'create-export-format': 'export_format',
+                  'download-destination': 'download',
                   'upload-folder': 'upload_folder',
                   'lyric-group-folder': 'lyric_source',
                   'upload-soundfont-path': 'soundfont',
@@ -1878,7 +1878,9 @@
       if (action === 'build') {
         buildFeedback('running', 'PC Engine รับคำสั่งสร้างเพลงแล้ว',
           'เลขงาน ' + response.id + ' · ' + fmtNum(response.total ?? options.ids?.length ?? 0) +
-          ' เพลง · ' + (options.audio_only ? 'สร้าง M4A อย่างเดียว' : 'สร้าง M4A และ Lyrics') +
+          ' เพลง · ' + (options.audio_only ? 'สร้าง M4A อย่างเดียว' :
+             options.export_format==='xstage' ? 'คัดลอก MIDI + Lyrics JSON' :
+             'สร้าง M4A + Lyrics JSON') +
           ' · กำลังติดตามสถานะ');
         message('รับคำสั่งสร้างเพลงแล้ว · ตรวจสถานะได้ในขั้นตอนที่ 4', false);
       }
@@ -1901,7 +1903,8 @@
     try {
       buildFeedback('starting', 'กำลังตรวจสอบไฟล์ต้นฉบับและพื้นที่ว่าง…',
         'ยังไม่เริ่มสร้างไฟล์ · ตรวจสอบรายการที่เลือกอยู่');
-      await saveInputs(['create-source','create-soundfont','create-preset','create-mode']);
+      await saveInputs(['create-source','create-soundfont','create-preset',
+         'create-mode','create-export-format']);
       const ids = selectedIDs();
       const estimate = await post('/api/estimate', {ids});
       if (!estimate.songs) throw new Error('ไม่พบเพลงที่เลือกในฐานข้อมูล กรุณาสแกนโฟลเดอร์ใหม่และเลือกเพลงอีกครั้ง');
@@ -1914,8 +1917,11 @@
         (estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ โปรแกรมจะสร้างทีละเพลง ไม่คัดลอกต้นฉบับทั้งหมด' : '') +
         (estimate.spaceWarning ? '\n⚠ พื้นที่ว่างอาจไม่พอสำหรับสร้างทุกเพลง หากเต็มจะหยุดรายการที่เหลือและเก็บเพลงที่สำเร็จไว้' : '') +
         (estimate.unsupported ? '\n⚠ มี ' + fmtNum(estimate.unsupported) + ' ไฟล์ NCN ซึ่งยังไม่รองรับ และจะแจ้ง ERR รายเพลง' : '');
+      const exportFormat=audioOnly?'m4a':$('create-export-format').value;
       const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
-        'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' : 'M4A พร้อม Lyrics') +
+        'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' :
+          exportFormat==='xstage' ? 'คัดลอก MIDI + Lyrics JSON (ไฟล์เสียงอื่นเป็น M4A)' :
+          'แปลง M4A + Lyrics JSON') +
         '\nไฟล์ที่สร้างแล้วจะถูกตรวจซ้ำและข้ามโดยไม่สร้างใหม่' + warning;
       buildFeedback('starting', 'ตรวจสอบพร้อม · รอผู้ใช้ยืนยันสร้างเพลง',
         'เลือก ' + fmtNum(ids.length) + ' เพลง · ยังไม่ได้เริ่ม Engine · กด “ยืนยัน” เพื่อสร้างไฟล์');
@@ -1926,7 +1932,8 @@
       }
       buildFeedback('starting', 'ยืนยันแล้ว · กำลังส่งงานให้ PC Engine…',
         'กำลังส่งรายการ ' + fmtNum(ids.length) + ' เพลง · รอเลขงานจาก Engine');
-      await run('build', {ids, audio_only:audioOnly});
+      await run('build', {ids, audio_only:audioOnly,
+         export_format:audioOnly?'m4a':$('create-export-format').value});
     } catch (error) {
       buildFeedback('error', 'เริ่มสร้างเพลงไม่ได้', error.message);
       message(error.message);
