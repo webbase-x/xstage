@@ -197,11 +197,21 @@ class OnlinePublisher:
                 # the user's first playable song. Preserve it and allow the
                 # first verified online DB to be published. Other unindexed
                 # media remain blocked to avoid reinitializing an old catalog.
+                # Root folder names alone are insufficient evidence that a
+                # library is empty: AUDIO may contain thousands of orphaned
+                # songs from a failed/foreign upload. Only verified SoundFonts
+                # are allowed before the first published catalog.
                 if (all(x.get("name") in ("AUDIO", "LYRICS", "SOUNDFONT") and
                         x.get("mimeType") == FOLDER_MIME for x in children)
-                        and len(children) <= 3
-                        and not lyric_children):
-                    return None, {}, {x["name"]: x for x in children}
+                        and len(children) <= 3 and not lyric_children):
+                    audio_folders = [x for x in children if x.get("name") == "AUDIO"]
+                    if len(audio_folders) <= 1:
+                        audio_items = (self.drive.list_children(audio_folders[0]["id"])
+                                       if audio_folders else [])
+                        if all(x.get("mimeType") != FOLDER_MIME and
+                               str(x.get("name") or "").lower().endswith((".sf2", ".sf3"))
+                               for x in audio_items):
+                            return None, {}, {x["name"]: x for x in children}
                 markers = [x for x in [*children, *lyric_children]
                            if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
