@@ -449,7 +449,7 @@ assert.equal(windowsSourceManifest.status,'SOURCE_ZIP_AVAILABLE_AWAITING_IMPORT_
   'Windows manifest must acknowledge uploaded source ZIP without claiming a finished build');
 const studioReady=JSON.parse(read('downloads/song-studio-latest.json'));
 const studioPreview=JSON.parse(read('downloads/song-studio-source-preview-latest.json'));
-assert.match(studioReady.version,/^\\d+\\.\\d+\\.\\d+$/,'Song Studio PC Ready must declare a semantic version');
+assert.match(studioReady.version,/^\d+\.\d+\.\d+$/,'Song Studio PC Ready must declare a semantic version');
 assert.ok(Number.isInteger(studioReady.build)&&studioReady.build>=325,
   'Song Studio PC Ready must not regress below verified build 325');
 assert.ok(studioReady.archive_file.includes('v'+studioReady.version+'-build'+studioReady.build),
