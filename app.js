@@ -1051,6 +1051,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
       // Do not erase the user's browser cache permanently: their library may
       // reappear after a Google Drive permission grant or restored ownership.
       state.libraryRootId='';
+      state.catalogPointerId='';
+      state.catalogGeneration='';
       state.manifest=null;
       state.songs=[];
       state.shown=[];
