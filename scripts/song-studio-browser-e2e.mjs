@@ -139,7 +139,7 @@ try {
   await midiPage.waitForFunction(()=>document.querySelector('#soundfont-select').options.length===2);
   const sfOption=await midiPage.locator('#soundfont-select option').nth(1).getAttribute('value');
   await midiPage.locator('#soundfont-select').selectOption(sfOption);
-  assert.match(await midiPage.locator('#soundfont-status').innerText(),/test-bank\\.sf2/);
+  assert.match(await midiPage.locator('#soundfont-status').innerText(),/test-bank\.sf2/);
   await midiPage.click('#preview-midi');
   await midiPage.waitForFunction(()=>document.querySelector('#player').src.startsWith('blob:'),
     null,{timeout:30000});
