@@ -1197,7 +1197,16 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    const pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
+    // Drive v3 keeps current.json under TEXT; v1/v2 at root are read-only
+    // compatibility. Never select one if both exist (ambiguous catalog).
+    const textDirs=await driveList(`'${root.id}' in parents and name='TEXT' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
+    if(textDirs.length>1)throw Error('พบโฟลเดอร์ TEXT ซ้ำใน XStageWeb');
+    const textPointers=textDirs.length
+      ?await driveList(`'${textDirs[0].id}' in parents and name='current.json' and trashed=false`,token):[];
+    const oldPointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
+    if(textPointers.length&&oldPointers.length)
+      throw Error('พบ current.json ซ้ำทั้งรากคลังและ TEXT · ต้องตรวจฐานก่อนใช้งาน');
+    const pointers=textPointers.length?textPointers:oldPointers;
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
     if(!pointers.length){
       // A newly created XStageWeb may contain only empty category folders or
