@@ -1,0 +1,17 @@
+name: Audit Windows PC Online integration only
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/windows-pc-remove-online-only]
+    paths:
+      - scripts/audit_windows_pc_online_ui.py
+      - .github/workflows/audit-windows-pc-online.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory Windows PC ZIP Online menu and integration locations
+        run: python3 scripts/audit_windows_pc_online_ui.py
