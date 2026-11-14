@@ -11,6 +11,6 @@
   "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.29-build329.zip",
   "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.29-build329/X-Stage-Song-Studio-PC-Ready-v0.3.29-build329.zip",
   "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.29-build329",
-  "sha256": "f44f6cc21733e48af891cfbdc65445776832364d3ef7eff703ef722b5d215892",
-  "notes": "Verified Windows 10/11 x64 portable ZIP. Native NCN sources with mirrored Song/MID, Lyrics/LYR, Cursor/CUR are supported directly in the head/tail lyrics editor; no LRC or StageWeb catalog required. Strict complete triplet and timing checks; paired LYR/CUR backups, conservative cursor remapping from existing values, safe undo; MIDI stays unchanged. Still supports separate LRC, StageWeb, and editable X-Stage Karaoke replacement presets. Extract ZIP and run Start-Song-Studio.cmd."
+  "sha256": "3c6965017e6764a78ea81de7023a658f4c7ed2bfe489e446293255ced6058a97",
+  "notes": "Verified Windows 10/11 x64 portable ZIP. Native NCN sources with mirrored Song/MID, Lyrics/LYR, Cursor/CUR are supported directly in the head/tail lyrics editor; no LRC or StageWeb catalog required. Strict complete triplet and timing checks; paired LYR/CUR backups, conservative cursor remapping from existing values, safe undo; MIDI stays unchanged. Still supports separate LRC, StageWeb, and editable X-Stage Karaoke replacement presets. Extract ZIP and run Start-Song-Studio.cmd. This checksum reflects the final reuploaded Build 329 package with corrected release verification instructions."
 }
