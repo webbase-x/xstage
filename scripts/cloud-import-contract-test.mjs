@@ -26,6 +26,12 @@ assert.equal((await loadCatalog({listChildren:async()=>[]},'root')).rows.size,0)
 await assert.rejects(loadCatalog({
   listChildren:async()=>[{name:'current.json',mimeType:'application/json',id:'fake1234'},
                         {name:'current.json',mimeType:'application/json',id:'fake5678'}]
+},'root'),/รุ่นเก่าไม่รองรับ/);
+await assert.rejects(loadCatalog({
+  listChildren:async id=>id==='root'
+    ?[{name:'LYRICS',mimeType:'application/vnd.google-apps.folder',id:'folder'}]
+    :[{name:'current.json',mimeType:'application/json',id:'a'},
+      {name:'current.json',mimeType:'application/json',id:'b'}]
 },'root'),/current.json ซ้ำ/);
 // A Drive root without current.json is NOT empty merely because it has
 // the two v4 folder names. Stranded audio must be rejected on both PC and Web.
