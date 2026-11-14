@@ -56,7 +56,7 @@ async function checkpoint(account,value){
   finally{try{database?.close();}catch{}}
 }
 class Drive {
-  constructor(getToken,assertLive){this.getToken=getToken;this.assertLive=assertLive;this.children=new Map();}
+  constructor(getToken,assertLive){this.getToken=getToken;this.assertLive=assertLive;this.children=new Map();this.childNames=new Map();}
   headers(extra={}){const token=this.getToken();if(!token)fail('Google Login หมดอายุ กรุณาเข้าสู่ระบบใหม่');return {Authorization:'Bearer '+token,...extra};}
   async fetch(url,options={}){
     this.assertLive();
@@ -71,28 +71,56 @@ class Drive {
     return response;
   }
   async list(q){
-    const rows=[];let next='';
+    const rows=[],seenPageTokens=new Set();let next='';
     do{
       this.assertLive();
       const params=new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,size,md5Checksum,ownedByMe,parents)',
         pageSize:'1000'});
       if(next)params.set('pageToken',next);
       const result=await (await this.fetch(API+'?'+params)).json();
-      rows.push(...(Array.isArray(result.files)?result.files:[]));
-      next=String(result.nextPageToken||'');
+      if(!result || (result.files!=null&&!Array.isArray(result.files)) ||
+         (result.nextPageToken!=null&&typeof result.nextPageToken!=='string'))
+        fail('Google Drive ส่งรายการไฟล์ที่มีโครงสร้างไม่ถูกต้อง');
+      rows.push(...(result.files||[]));
+      next=result.nextPageToken||'';
       if(rows.length>300000)fail('พบไฟล์บน Drive มากเกินขีดจำกัดการตรวจต่อครั้ง');
+      if(next&&seenPageTokens.has(next))
+        fail('Google Drive ส่งรหัสหน้ารายการซ้ำ · หยุดเพื่อไม่ให้สแกนวนหรืออ่านฐานเพลงไม่ครบ');
+      if(next)seenPageTokens.add(next);
     }while(next);
     return rows;
+  }
+  indexChild(parent,entry){
+    const names=this.childNames.get(parent);
+    if(!names)return;
+    const previous=names.get(entry.name);
+    // The common case is unique filenames: hold a single object rather
+    // than allocating a 1-element array for every song in a huge library.
+    if(!previous)names.set(entry.name,entry);
+    else if(Array.isArray(previous))previous.push(entry);
+    else names.set(entry.name,[previous,entry]);
   }
   async listChildren(id){
     if(this.children.has(id))return this.children.get(id);
     const query="'"+(id==='root'?'root':driveId(id))+"' in parents and trashed=false";
     const files=await this.list(query);
+    const names=new Map();
     this.children.set(id,files);
+    this.childNames.set(id,names);
+    for(const entry of files)this.indexChild(id,entry);
     return files;
   }
+  async namedChildren(parent,name){
+    await this.listChildren(parent);
+    const found=this.childNames.get(parent).get(name);
+    return !found?[]:Array.isArray(found)?found:[found];
+  }
+  rememberChild(parent,entry){
+    this.children.get(parent).push(entry);
+    this.indexChild(parent,entry);
+  }
   async folder(parent,name){
-    const files=(await this.listChildren(parent)).filter(x=>x.name===name);
+    const files=await this.namedChildren(parent,name);
     if(files.length>1)fail('โฟลเดอร์บน Drive ซ้ำกัน: '+name);
     if(files.length===1){
       if(files[0].mimeType!==MIME_FOLDER)fail('พบชื่อชนกับไฟล์ใน Drive: '+name);
@@ -104,7 +132,7 @@ class Drive {
     });
     const created=await response.json();
     if(!created.id)fail('สร้างโฟลเดอร์บน Drive ไม่สำเร็จ: '+name);
-    this.children.get(parent).push(created);
+    this.rememberChild(parent,created);
     return created.id;
   }
   async ensurePath(root,parts){
@@ -150,7 +178,7 @@ class Drive {
   }
   async upload(parent,file,name,mime,md5,onBytes){
     this.assertLive();
-    const matches=(await this.listChildren(parent)).filter(x=>x.name===name);
+    const matches=await this.namedChildren(parent,name);
     if(matches.length>1)fail('มีไฟล์ชื่อซ้ำหลายรายการใน Drive: '+name);
     if(matches.length===1){
       const old=matches[0];
@@ -249,7 +277,7 @@ class Drive {
     if(String(verified.md5Checksum||'').toLowerCase()!==md5.toLowerCase()||
        Number(verified.size)!==file.size)fail('MD5/ขนาดไฟล์ที่ Google Drive คืนมาไม่ตรงต้นฉบับ');
     const entry={...verified,id:answer.id,name,md5Checksum:md5,size:file.size};
-    this.children.get(parent).push(entry);
+    this.rememberChild(parent,entry);
     return {id:answer.id,md5Checksum:md5,size:file.size,reused:false};
   }
   async updatePointer(id,blob,hash){

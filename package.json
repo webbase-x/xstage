@@ -1,7 +1,7 @@
 {
   "name": "xstage-karaoke-online",
   "private": true,
-  "version": "1.0.105",
+  "version": "1.0.106",
   "type": "module",
   "scripts": {
     "test": "node scripts/regression.mjs && node scripts/remote-flow-test.mjs && node scripts/startup-updates-test.mjs && node scripts/android-native-meter-test.mjs && node scripts/android-tv-integration-test.mjs && node scripts/owner-remember-test.mjs && node scripts/drive-list-pagination-test.mjs && node scripts/cloud-import-test.mjs && node scripts/video-import-test.mjs && node scripts/browser-midi-test.mjs && node scripts/cloud-import-contract-test.mjs && node scripts/web-reliability-test.mjs && node scripts/test-safari-google-oauth.mjs"

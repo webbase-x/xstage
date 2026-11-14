@@ -107,6 +107,48 @@ assert.equal(again.reused,true);
 assert.equal(putRequests,2,'MD5 duplicate must skip sending the same asset again');
 await assert.rejects(drive.upload(target,payload,'111-'+digest.slice(0,16)+'.mp3','audio/mpeg',
   'f'.repeat(32)),/MD5/);
+// Fast exact-name index: loading a 30,000-file folder builds the index once.
+// Subsequent folder checks must not re-scan every existing song.
+const heavyParent=id(),heavyFiles=ensure(heavyParent);
+let inspectedNames=0;
+for(let i=0;i<30000;i++){
+  const name='song-'+String(i).padStart(5,'0');
+  const entry={id:'existing-'+String(i),mimeType:'application/vnd.google-apps.folder'};
+  Object.defineProperty(entry,'name',{enumerable:true,get(){inspectedNames++;return name;}});
+  heavyFiles.push(entry);
+}
+const indexedDrive=new Drive(()=> 'token_TEST',()=>{});
+await indexedDrive.listChildren(heavyParent);
+const beforeLookup=inspectedNames;
+for(let i=0;i<400;i++){
+  const found=await indexedDrive.folder(heavyParent,'song-'+String(i).padStart(5,'0'));
+  assert.equal(found,'existing-'+i);
+}
+assert.ok(inspectedNames-beforeLookup<50,
+  'Exact-name lookup must not repeatedly inspect 30,000 siblings');
+const duplicateParent=id();
+ensure(duplicateParent).push(
+  {id:'dupA',name:'duplicate',mimeType:'application/vnd.google-apps.folder'},
+  {id:'dupB',name:'duplicate',mimeType:'application/vnd.google-apps.folder'});
+await assert.rejects(indexedDrive.folder(duplicateParent,'duplicate'),/ซ้ำ/);
+const newParent=id();
+ensure(newParent);
+const created=await indexedDrive.folder(newParent,'new-folder');
+assert.equal(await indexedDrive.folder(newParent,'new-folder'),created,
+  'Newly created folders must enter the exact-name index immediately');
+
+// A broken Drive cursor must fail closed rather than spin forever.
+const originalFetch=ctx.fetch;
+let paginationRequests=0;
+ctx.fetch=async()=>{
+  if(++paginationRequests>3)throw Error('Unbounded Drive page loop');
+  return reply(200,{files:[],nextPageToken:'same-token'});
+};
+try {
+  await assert.rejects(indexedDrive.list("'root' in parents"),/รหัสหน้ารายการซ้ำ/);
+  assert.equal(paginationRequests,2);
+} finally { ctx.fetch=originalFetch; }
+
 assert.ok(!read('cloud-import.js').includes('localStorage.setItem('),
   'Never persist Drive bearer tokens or upload session URLs in localStorage');
 console.log('PASS: WEB upload DOM, Drive resumable chunks, MD5 dedup, catalog safety and auth isolation');
