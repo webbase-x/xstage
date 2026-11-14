@@ -18,9 +18,9 @@ from tests.test_v0944_web_sync import FakeWebDrive, StubRenderer
 
 
 class BuildGateR8Tests(unittest.TestCase):
-    def test_uninitialized_tk_account_close_failure_still_completes_all_shutdown_layers(self):
-        # Tk subclass without tk interpreter: getattr(...) previously infinitely
-        # recursed. Account close must also use the guarded shutdown pipeline.
+    def test_uninitialized_tk_local_cleanup_failure_still_completes_all_shutdown_layers(self):
+        # All local playback resources must be cleaned even after a failure.
+        # Windows PC no longer creates Google account or Online sync objects.
         app = PlaybackApp.__new__(PlaybackApp)
         app.cancel_scan = threading.Event()
         app.tick_after = None
@@ -34,14 +34,12 @@ class BuildGateR8Tests(unittest.TestCase):
         app.recorder = None
         app._search_condition = threading.Condition()
         app._keyboard_voice = Mock()
+        app._keyboard_voice.close.side_effect = OSError('test local MIDI voice cleanup')
         app._fx_rack = Mock()
         app.system_volume = Mock()
-        app.google_account = Mock()
-        app.google_account.close.side_effect = OSError('test Google account cleanup')
-        with patch('karaoke.medley_decks.cleanup') as medley_cleanup, \
+        with patch('karaoke.medley_decks.cleanup') as medley_cleanup, \\
              self.assertLogs(level='ERROR'), self.assertRaises(ShutdownError):
             PlaybackApp.close_app(app)
-        app.google_account.close.assert_called_once()
         medley_cleanup.assert_called_once()
         app._keyboard_voice.close.assert_called_once()
         app._fx_rack.close.assert_called_once()
@@ -50,7 +48,7 @@ class BuildGateR8Tests(unittest.TestCase):
         app.engine.close.assert_called_once()
         app.destroy.assert_called_once()
         self.assertTrue(app._search_stopping)
-        self.assertIn('ปิดบัญชี Google', [name for name, _ in app._shutdown_errors])
+        self.assertIn('ปิด keyboard voice', [name for name, _ in app._shutdown_errors])
 
     def test_verified_final_catalog_emits_expected_publication_progress(self):
         with tempfile.TemporaryDirectory() as tmp:
