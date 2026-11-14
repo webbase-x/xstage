@@ -1018,6 +1018,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     saveActiveAuth(token,tokenExpiresAt,account.sub);
     clearPendingAuth();
     setStatus('ต่ออายุ Google Drive สำเร็จ · เพลงและคิวเดิมเล่นต่อเนื่อง','success');
+    if(state.libraryRootId)void window.XStageBrowserMidi?.refreshFonts({token,rootId:state.libraryRootId,sub:account.sub})
+      .catch(error=>console.warn('SoundFont auth refresh:',error.message));
     window.dispatchEvent(new CustomEvent('xstage:auth-refreshed',{detail:{sub:String(account.sub)}}));
     // An already verified same-account Drive session can reopen after renewal.
     if(androidTvVerifiedConnectionSub===account.sub)setAndroidTvStageAccess(true);
