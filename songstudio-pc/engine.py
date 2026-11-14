@@ -1061,10 +1061,10 @@ def _song_export_module():
 
 
 def lyric_source_root(selected=None):
-    """Resolve the bulk-lyrics source without moving or creating files.
+    """Resolve StageWeb catalogs or an arbitrary folder with timed LRC.
 
-    The selected location is StageWeb or its parent workspace. A folder
-    containing raw original songs is never bulk-edited through this tool.
+    Original audio/MIDI is never edited. Folder mode updates only validated
+    .lrc files after explicit confirmation and a full recoverable backup.
     """
     folder = PREFS.get("lyric_source", "") if selected is None else selected
     if not isinstance(folder, str):
@@ -1077,17 +1077,25 @@ def lyric_source_root(selected=None):
         raise ValueError("ไม่พบโฟลเดอร์ต้นทางข้อความหัว–ท้ายเพลง กรุณาเลือกใหม่") from exc
     if not selected_path.is_dir():
         raise ValueError("ต้นทางข้อความหัว–ท้ายเพลงต้องเป็นโฟลเดอร์")
+    # Also recognize users choosing StageWeb/lyrics instead of StageWeb.
+    if (selected_path.name.casefold() == "lyrics" and
+            (selected_path.parent / "current.json").is_file()):
+        selected_path = selected_path.parent
     root = (selected_path if (selected_path / "current.json").is_file()
-            else selected_path / "StageWeb")
+            else selected_path / "StageWeb" if (selected_path / "StageWeb" / "current.json").is_file()
+            else selected_path)
     pointer_file = root / "current.json"
-    if not pointer_file.is_file():
-        raise ValueError("โฟลเดอร์นี้ไม่มีคลัง StageWeb/current.json กรุณาเลือก StageWeb หรือโฟลเดอร์ที่เก็บ StageWeb")
-    try:
-        pointer = json.loads(pointer_file.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError) as exc:
-        raise ValueError("อ่าน current.json ของโฟลเดอร์ที่เลือกไม่สำเร็จ") from exc
-    if not isinstance(pointer, dict) or pointer.get("format") != "xstage-local-current" or pointer.get("schemaVersion") != 1:
-        raise ValueError("โฟลเดอร์ต้นทางไม่ใช่คลังเพลง X-Stage Song Studio ที่รองรับ")
+    if pointer_file.is_file():
+        try:
+            pointer = json.loads(pointer_file.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            raise ValueError("อ่าน current.json ของโฟลเดอร์ที่เลือกไม่สำเร็จ") from exc
+        if (not isinstance(pointer, dict) or
+                pointer.get("format") != "xstage-local-current" or
+                pointer.get("schemaVersion") != 1):
+            raise ValueError("โฟลเดอร์ต้นทางไม่ใช่คลัง StageWeb ที่รองรับ")
+    # Without a catalog, scan_lrc_folder validates individual timed .lrc;
+    # this must not create a synthetic StageWeb tree or modify audio files.
     return root.resolve()
 
 
@@ -1539,10 +1547,17 @@ def execute_job(action, options, started):
             result = build_library(rows, mode, options) if action == "build" else build_preview(rows, mode)
         elif action == "lyric-groups-scan":
             root = lyric_source_root()
-            update("กำลังอ่านข้อความจากคลังเพลงที่สร้างแล้ว · ไม่อ่านไฟล์เสียง")
-            index = LYRIC_TEXT.scan(
-                root, _song_export_module(), cancelled=CANCEL,
-                on_progress=lambda detail, done: update(detail, done))
+            is_catalog = (root / "current.json").is_file()
+            update("กำลังตรวจเนื้อร้องจากคลัง StageWeb" if is_catalog
+                   else "กำลังค้นหาไฟล์ LRC ในโฟลเดอร์ต้นทาง · ไม่อ่านไฟล์เสียง")
+            if is_catalog:
+                index = LYRIC_TEXT.scan(
+                    root, _song_export_module(), cancelled=CANCEL,
+                    on_progress=lambda detail, done: update(detail, done))
+            else:
+                index = LYRIC_TEXT.scan_lrc_folder(
+                    root, cancelled=CANCEL,
+                    on_progress=lambda detail, done: update(detail, done))
             with LOCK:
                 global LYRIC_TEXT_INDEX
                 LYRIC_TEXT_INDEX = index
@@ -1571,12 +1586,19 @@ def execute_job(action, options, started):
                 JOB["total"] = planned["changedSongs"]
             update(f"กำลังสำรองและแทนที่ {planned['groups']:,} กลุ่ม · "
                    f"{planned['changedLines']:,} บรรทัดใน {planned['changedSongs']:,} เพลง")
-            result = LYRIC_TEXT.apply_many(
-                root, _song_export_module(), index,
-                groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
-                expected_count=options.get("expectedCount"),
-                cancelled=CANCEL,
-                on_progress=lambda detail, done: update(detail, done))
+            if index.get("mode") == "lrc-folder":
+                result = LYRIC_TEXT.apply_many_lrc_folder(
+                    root, index, groups, new_text, LYRIC_TEXT_BACKUPS,
+                    search=search, expected_count=options.get("expectedCount"),
+                    cancelled=CANCEL,
+                    on_progress=lambda detail, done: update(detail, done))
+            else:
+                result = LYRIC_TEXT.apply_many(
+                    root, _song_export_module(), index,
+                    groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
+                    expected_count=options.get("expectedCount"),
+                    cancelled=CANCEL,
+                    on_progress=lambda detail, done: update(detail, done))
             # Keep LYRIC_TEXT_INDEX: apply_many updates only changed members.
             # All unedited groups remain available for the next batch.
         elif action == "lyric-groups-undo":
