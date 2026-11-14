@@ -1610,7 +1610,7 @@ def execute_job(action, options, started):
             summary = rechecked["recheckSummary"]
             result = {
                 "message": (
-                    f"ตรวจซ้ำไฟล์ที่ข้าม {summary['total']:,} ไฟล์ "
+                    f"ตรวจซ้ำไฟล์ที่ข้ามรอบนี้ {summary['lastPass']:,} ไฟล์ "
                     f"· ยืนยันข้าม {summary['confirmed']:,} "
                     f"· กลับมาอ่านได้ {summary['recovered']:,} "
                     f"· เปลี่ยนสาเหตุ {summary['reasonChanged']:,}"),
