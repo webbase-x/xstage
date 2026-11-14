@@ -263,24 +263,20 @@ class Drive {
 }
 async function loadCatalog(drive,root){
   const children=await drive.listChildren(root);
-  const lyricDirs=children.filter(x=>['LYRICS','TEXT'].includes(x.name)&&x.mimeType===MIME_FOLDER);
-  if(lyricDirs.filter(x=>x.name==='LYRICS').length>1||
-     lyricDirs.filter(x=>x.name==='TEXT').length>1)
-    fail('พบโฟลเดอร์ LYRICS/TEXT ซ้ำบน Drive');
-  const lyricChildSets=await Promise.all(lyricDirs.map(x=>drive.listChildren(x.id)));
-  const lyricChildren=lyricChildSets.flat();
-  const modern=lyricChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
-  const old=children.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
-  if(modern.length&&old.length)fail('พบ current.json ทั้งใน LYRICS และรากคลัง');
-  const pointers=modern.length?modern:old;
+  if(children.some(x=>['TEXT','DB'].includes(x.name)||x.name==='current.json'))
+    fail('คลัง Google Drive รุ่นเก่าไม่รองรับ · ต้องใช้ XStageWeb/LYRICS/current.json Layout V4');
+  const lyricDirs=children.filter(x=>x.name==='LYRICS'&&x.mimeType===MIME_FOLDER);
+  if(lyricDirs.length>1)fail('พบ LYRICS ซ้ำบน Drive');
+  const lyricChildren=lyricDirs.length?await drive.listChildren(lyricDirs[0].id):[];
+  const pointers=lyricChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
   if(pointers.length>1)fail('พบ current.json ซ้ำ · หยุดเพื่อไม่ให้ DB เสีย');
   if(!pointers.length){
     const marker=lyricChildren.find(x=>x.name==='.xstage-songstudio-staging.json')||
       children.find(x=>x.name==='.xstage-songstudio-staging.json');
-    const unknown=children.filter(x=>!['SOUNDFONT','AUDIO','LYRICS','TEXT','VIDEO','MIDI','DB',
+    const unknown=children.filter(x=>!['AUDIO','LYRICS',
       '.xstage-songstudio-staging.json'].includes(x.name));
     if(unknown.length)fail('พบไฟล์ใน XStageWeb แต่ไม่มี current.json · ต้องตรวจคลังเดิมก่อน');
-    if(!marker&&children.some(x=>!['AUDIO','LYRICS','SOUNDFONT'].includes(x.name)))
+    if(!marker&&children.some(x=>!['AUDIO','LYRICS'].includes(x.name)))
       fail('XStageWeb ยังไม่มี current.json หรือหลักฐานนำเข้าที่ปลอดภัย · ไม่เริ่มทับ');
     if(!marker&&lyricChildren.length)
       fail('พบข้อมูล LYRICS เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
@@ -306,7 +302,7 @@ async function loadCatalog(drive,root){
     return {pointerFile:null,pointer:null,rows:new Map()};
   }
   const pointer=await drive.getJson(pointers[0].id);
-  if(pointer.schemaVersion!==1||typeof pointer.catalogFileId!=='string'||
+  if(pointer.schemaVersion!==1||pointer.layoutVersion!==4||typeof pointer.catalogFileId!=='string'||
      !Array.isArray(pointer.deltaFileIds)||pointer.deltaFileIds.length>32||
      new Set(pointer.deltaFileIds).size!==pointer.deltaFileIds.length)
     fail('current.json ไม่ตรงสัญญาฐานเพลง X-Stage Online');
@@ -556,9 +552,9 @@ class Importer {
     drive.signal=()=>this.controller.signal;
     try{
       this.status('กำลังตรวจคลัง XStageWeb และ current.json บน Google Drive…');
-      const rootQuery="'root' in parents and (name='XStageWeb' or name='StageWeb') and mimeType='"+MIME_FOLDER+"' and trashed=false";
+      const rootQuery="'root' in parents and name='XStageWeb' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
-      if(roots.length>1)fail('พบ StageWeb และ XStageWeb หลายโฟลเดอร์ · หยุดป้องกันฐานแยก');
+      if(roots.length>1)fail('พบ XStageWeb หลายโฟลเดอร์ · หยุดป้องกันฐานแยก');
       let rootId;
       if(roots.length){
         if(roots[0].ownedByMe===false)fail('ไม่สามารถนำเข้าไปยังโฟลเดอร์ที่ไม่ได้เป็นเจ้าของโดยไม่ได้อนุญาต');
@@ -635,8 +631,7 @@ class Importer {
           deltaFileIds:deltaIds,songCount:rows.size};
         // Verify the pointer generation again. Never blindly overwrite a PC
         // publish performed while the browser was uploading a long batch.
-        const currentRoot=pointer?.layoutVersion===4
-           ? await drive.ensurePath(rootId,['LYRICS']) : rootId;
+        const currentRoot=await drive.ensurePath(rootId,['LYRICS']);
          const pointers=(await drive.listChildren(currentRoot)).filter(x=>x.name==='current.json');
         if(pointerFile){
           const current=await drive.getJson(pointerFile.id);
