@@ -42,7 +42,7 @@ class UnifiedWindowsV2Tests(unittest.TestCase):
         self.assertEqual(song["code"],"A0001")
         self.assertEqual(song["media"]["mp3"]["localPath"].casefold(),str(self.mp3.resolve()).casefold())
         self.assertNotIn("fileId",song["media"]["mp3"])
-        with sqlite3.connect(self.library.path) as db:
+        with closing(sqlite3.connect(self.library.path)) as db:
             after=db.execute("SELECT code,title,artist,favorite FROM songs").fetchall()
         self.assertEqual(before,after)
 
