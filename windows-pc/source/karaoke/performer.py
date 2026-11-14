@@ -1630,13 +1630,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         if wait_for_index(self):return
         # Tk's __getattr__ recurses into self.tk before the Tk interpreter has
         # been constructed (e.g. partial startup / shutdown-failure recovery).
-        # Account state is a Python-owned attribute, so inspect __dict__ only.
-        account = self.__dict__.get('google_account')
         self.closing=True
-        if account is not None:
-            # A failed account cleanup must never skip the remaining audio,
-            # queue and window cleanup steps.
-            step(self,'ปิดบัญชี Google',account.close)
         step(self,'ปิด medley',lambda:cleanup(self))
         panel=self.__dict__.get('_midi_keyboard_window')
         if panel and hasattr(panel,'_keyboard_stop_input'):step(self,'ปิด MIDI input',panel._keyboard_stop_input)
