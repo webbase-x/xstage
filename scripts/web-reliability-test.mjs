@@ -31,8 +31,10 @@ for(const [name,source] of [['app',app],['midi',midi],['importer',importer],['me
   assert.doesNotThrow(()=>new Function(source),name+' JavaScript must parse');
 }
 assert.match(app,/controller\?\.abort\(\);\s*\},seconds\*1000/,'Media timeout must abort work');
-assert.match(app,/if \(state\.token && state\.accountSub===account\.sub && state\.libraryRootId\)/,
+assert.match(app,/if \(reuseExistingSession && state\.token && state\.accountSub===account\.sub && state\.libraryRootId\)/,
   'Same-account refresh must bypass catalog and playback reset');
+assert.match(app,/openDrive\(result\.access_token,authId,expiresAt,'',true\)/,'OAuth renewal opts into session reuse');
+assert.match(app,/await openDrive\(token,id,state\.tokenExpiresAt\);/,'Importer must force catalog reload after publishing');
 assert.match(app,/scheduleLyricsDraw/,'Lyrics redraw must be event driven');
 assert.doesNotMatch(app,/!lyrics\?\.schemaVersion!==1/,'Dead medley guard must not reappear');
 assert.match(midi,/fontRefreshPromise/,'SoundFont selection waits for ongoing refresh');
