@@ -121,6 +121,7 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try{
   const context=await browser.newContext({serviceWorkers:'block'});
   await context.addInitScript(()=>{
+    try{Object.defineProperty(window,'showDirectoryPicker',{value:undefined,configurable:true});}catch{}
     localStorage.setItem('xstage-google-token-v2',JSON.stringify({
       token:'TEST_BEARER_FOR_E2E_1234567890123456',sub:'SUB_MOCK_E2E',
       expiresAt:Date.now()+3600000}));
@@ -164,6 +165,31 @@ try{
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
     document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 2'),{timeout:60000});
   assert.equal(payloadUploads,firstCount,'Second upload should be 100% deduplicated by MD5');
+  // Cancel/pause while an additional large file is being prepared. A browser
+  // restart should not lose the completed DB and can reselect the same folder.
+  const k300=Buffer.alloc(9*1024*1024+77);k300.write('ID3',0,'ascii');
+  fs.writeFileSync(path.join(dir,'K300.mp3'),k300);
+  fs.writeFileSync(path.join(dir,'K300.lrc'),'[00:01.00]เพลงที่หยุดกลางทาง\n');
+  await page.locator('#cloud-import-input').setInputFiles(dir);
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
+  await page.click('#cloud-import-start');
+  await page.locator('#cloud-import-pause:not([disabled])').waitFor();
+  await page.click('#cloud-import-pause');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('หยุดงานแล้ว'),null,{timeout:30000});
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>{const item=document.getElementById('cloud-import-open');return item&&!item.hidden;});
+  await page.click('#mobile-menu-toggle');
+  await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
+  await page.click('#cloud-import-open');
+  await page.waitForFunction(()=>!document.getElementById('cloud-import-resume').disabled);
+  const chooserPromise=page.waitForEvent('filechooser');
+  await page.click('#cloud-import-resume');
+  const chooser=await chooserPromise;
+  await chooser.setFiles(dir);
+  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),null,{timeout:90000});
+  const finalPointer=[...records.values()].find(x=>x.name==='current.json');
+  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,3,
+    'Reopening and resuming must publish the missing track without losing previous entries');
   assert.deepEqual(scriptErrors,[], 'No browser JavaScript errors are allowed');
   console.log('PASS: Chromium folder selection, Google session, private Drive uploads, pointer/catalog and replay-safe MD5 dedup');
   await context.close();
