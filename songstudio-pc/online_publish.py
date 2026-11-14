@@ -1,16 +1,12 @@
 """Publish Song Studio M4A + timed JSON directly into X-Stage Karaoke Online.
 
-Online layout (NOT the local Song Studio pointer format):
-    XStageWeb/current.json: {schemaVersion, generation, catalogFileId,
-                            deltaFileIds, songCount}
-    XStageWeb/catalog-base-<generation>.json: {schemaVersion, songs: [...]}
-    XStageWeb/catalog-delta-<generation>.json: {schemaVersion, upserts, removes}
-    XStageWeb/AUDIO/M4A/{Songs,Lyrics}/0-9,A-Z/... (private Drive files)
-    XStageWeb/AUDIO/MP3/{Songs,Lyrics}/0-9,A-Z/... (supported layout)
-    XStageWeb/VIDEO/{AVI,MPG,VCD,WMV}/... (reserved categories)
-    XStageWeb/MIDI/{NCN/{Songs,Lyrics,Cursor},EMK}/... (reserved categories)
-    XStageWeb/DB/catalog-*.json (immutable catalogs)
-    XStageWeb/current.json (compatibility pointer for existing players)
+Drive layout v3 (only AUDIO and TEXT; no nested buckets):
+    XStageWeb/AUDIO/<code>-<digest>.mid|.m4a|.mp4|.sf2|.sf3
+    XStageWeb/TEXT/<code>-<digest>.json (Lyrics JSON)
+    XStageWeb/TEXT/catalog-base-<generation>.json
+    XStageWeb/TEXT/catalog-delta-<generation>.json
+    XStageWeb/TEXT/current.json (published LAST, as an atomic pointer)
+Legacy v1/v2 catalogs are read for compatibility but never removed implicitly.
 
 Never publish a new pointer until media and immutable catalog are uploaded and
 MD5 checked. Existing online songs are merged; this is NOT a whole-library
@@ -37,7 +33,7 @@ class PublishError(RuntimeError):
 
 # Drive folder layout v2. The original local StageWeb paths are intentionally
 # unchanged: they are used by recovery journals and local catalogs.
-LAYOUT_VERSION = 2
+LAYOUT_VERSION = 3
 BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
@@ -53,26 +49,15 @@ def media_drive_path(relative, *, code="", audio_format="M4A"):
     if (rel.is_absolute() or any(part in (".", "..", "") for part in relative.split("/"))
             or len(rel.parts) < 2 or chr(92) in relative or ":" in relative):
         raise PublishError("พาธสื่อเพลงไม่ปลอดภัย: " + str(relative))
-    group = str(code or rel.stem).strip()[:1].upper()
-    if group not in BUCKETS:
-        group = "_"
     suffix = rel.suffix.lower()
     kind = rel.parts[0].lower()
-    if kind == "audio" and suffix in (".m4a", ".mp3"):
-        fmt = "M4A" if suffix == ".m4a" else "MP3"
-        return PurePosixPath("AUDIO", fmt, "Songs", group, rel.name)
-    if kind == "lyrics" and suffix in (".json", ".lrc", ".lyr"):
-        if audio_format not in ("M4A", "MP3"):
-            raise PublishError("ประเภทไฟล์เสียงสำหรับ Lyrics ไม่ถูกต้อง")
-        return PurePosixPath("AUDIO", audio_format, "Lyrics", group, rel.name)
-    if kind == "video" and suffix == ".mp4":
-        return PurePosixPath("VIDEO", "MP4", "Songs", group, rel.name)
-    if kind == "midi" and suffix in (".mid", ".midi", ".kar"):
-        return PurePosixPath("MIDI", "NCN", "Songs", group, rel.name)
-    if kind == "midi_lyrics" and suffix == ".lyr":
-        return PurePosixPath("MIDI", "NCN", "Lyrics", group, rel.name)
-    if kind == "midi_cursor" and suffix == ".cur":
-        return PurePosixPath("MIDI", "NCN", "Cursor", group, rel.name)
+    if kind in ("audio", "video", "midi") and suffix in (
+            ".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".oga",
+            ".mp4", ".webm", ".mid", ".midi", ".kar", ".sf2", ".sf3"):
+        return PurePosixPath("AUDIO", rel.name)
+    if kind == "lyrics" and suffix == ".json":
+        return PurePosixPath("TEXT", rel.name)
+    # .LYR/.CUR and .LRC are local source/editing formats, not stored online.
     raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวดสื่อ: " + str(relative))
 
 
@@ -186,8 +171,16 @@ class OnlinePublisher:
         if not root:
             return None, {}, {}
         children = self.drive.list_children(root)
-        pointers = [x for x in children if x.get("name") == "current.json"
-                    and x.get("mimeType") != FOLDER_MIME]
+        text_folder = next((x for x in children if x.get("name") == "TEXT"
+                            and x.get("mimeType") == FOLDER_MIME), None)
+        text_children = self.drive.list_children(text_folder["id"]) if text_folder else []
+        modern = [x for x in text_children if x.get("name") == "current.json"
+                  and x.get("mimeType") != FOLDER_MIME]
+        legacy = [x for x in children if x.get("name") == "current.json"
+                  and x.get("mimeType") != FOLDER_MIME]
+        if modern and legacy:
+            raise PublishError("พบ current.json ที่รากและ TEXT พร้อมกัน · หยุดก่อนย้ายคลัง")
+        pointers = modern or legacy
         if len(pointers) > 1:
             raise PublishError("พบ XStageWeb/current.json ซ้ำบน Drive · หยุดเพื่อป้องกันฐานเสีย")
         if not pointers:
@@ -196,12 +189,13 @@ class OnlinePublisher:
                 # the user's first playable song. Preserve it and allow the
                 # first verified online DB to be published. Other unindexed
                 # media remain blocked to avoid reinitializing an old catalog.
-                if (len(children) == 1 and children[0].get("name") == "SOUNDFONT"
-                        and children[0].get("mimeType") == FOLDER_MIME):
+                if (all(x.get("name") in ("AUDIO", "TEXT", "SOUNDFONT") and
+                        x.get("mimeType") == FOLDER_MIME for x in children)
+                        and len(children) <= 3):
                     return None, {}, {x["name"]: x for x in children}
                 markers = [x for x in children if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "VIDEO", "MIDI", "DB", "SOUNDFONT"}
+                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "TEXT", "VIDEO", "MIDI", "DB", "SOUNDFONT"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
                         and self._json(markers[0]["id"]).get("format") ==
                         "xstage-songstudio-upload-staging-v1"):
@@ -356,16 +350,8 @@ class OnlinePublisher:
                     folder_cache[key] = self.drive.folder(parent, name)
                 parent = folder_cache[key]
             return parent
-        # Create the fixed category tree once; 0-9/A-Z buckets are created
-        # lazily, only when a song is actually uploaded to that bucket.
-        for category in (
-            ("AUDIO", "MP3", "Songs"), ("AUDIO", "MP3", "Lyrics"),
-            ("AUDIO", "M4A", "Songs"), ("AUDIO", "M4A", "Lyrics"),
-            ("VIDEO", "AVI"), ("VIDEO", "MPG"), ("VIDEO", "VCD"),
-            ("VIDEO", "WMV"), ("VIDEO", "MP4", "Songs"), ("MIDI", "NCN", "Songs"),
-            ("MIDI", "NCN", "Lyrics"), ("MIDI", "NCN", "Cursor"),
-            ("MIDI", "EMK"), ("DB",),
-        ):
+        # Only two Drive content folders, never nested by format or bucket.
+        for category in (("AUDIO",), ("TEXT",)):
             if cancelled and cancelled.is_set():
                 raise PublishError("ยกเลิกการเตรียมโครงสร้าง Google Drive")
             folder(category)
@@ -410,7 +396,7 @@ class OnlinePublisher:
                     path.write_text(json.dumps(document, ensure_ascii=False,
                                                separators=(",", ":")), encoding="utf-8")
                     _, metadata = self.drive.upload_file(
-                        folder(("DB",)), path, name, cancelled=cancelled)
+                        folder(("TEXT",)), path, name, cancelled=cancelled)
                     return metadata["id"]
                 if old_pointer and len(old_pointer.get("deltaFileIds", [])) < MAX_DELTAS:
                     delta_id = push_json("catalog-delta-" + generation + ".json", {
@@ -439,7 +425,7 @@ class OnlinePublisher:
                 pointer_path.write_text(json.dumps(next_pointer, ensure_ascii=False,
                                                    separators=(",", ":")), encoding="utf-8")
                 _, pointer_file = self.drive.upload_file(
-                    ensure_root(), pointer_path, "current.json",
+                    folder(("TEXT",)), pointer_path, "current.json",
                     replace_pointer=True, cancelled=cancelled)
             old_pointer = next_pointer
             revisions.clear()
@@ -505,11 +491,9 @@ class OnlinePublisher:
             source_format = "MP3" if sound.suffix.lower() == ".mp3" else "M4A"
             lyrics = upload(lyric, row["lyrics"]["path"], code=row["code"],
                             audio_format=source_format)
-            lrc_path = str(Path(row["lyrics"]["path"]).with_suffix(".lrc")).replace("\\", "/")
+            # The timed JSON is the only published text artifact. Local LRC
+            # remains on the PC for import/editing but is not duplicated in Drive.
             lrc_media = None
-            if (local_songs / lrc_path).is_file():
-                lrc_media = upload(_local_path(local_songs, lrc_path, "lyrics"), lrc_path,
-                                   code=row["code"], audio_format=source_format)
             vocals = None
             if row.get("vocals") and row["vocals"].get("path"):
                 src = _local_path(local_songs, row["vocals"]["path"], "audio")
@@ -531,8 +515,7 @@ class OnlinePublisher:
             # Files are uploaded and verified BEFORE publishing the pointer.
             # Android APK uses the same HTML5 video+audio player as WEB; MIDI
             # keeps both its original SMF and fallback pre-rendered M4A.
-            for field, prefix in (("video", "video"), ("midi", "midi"),
-                                  ("midiLyrics", "midi_lyrics"), ("midiCursor", "midi_cursor")):
+            for field, prefix in (("video", "video"), ("midi", "midi")):
                 optional = row.get(field)
                 if optional and optional.get("path"):
                     media_path = optional["path"]
