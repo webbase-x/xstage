@@ -1,0 +1,19 @@
+{
+  "id": "xstage-song-studio-web",
+  "name": "X-Stage Song Studio Web",
+  "short_name": "X-Stage Studio Web",
+  "description": "Private local browser studio for MIDI, KAR, NCN, SoundFonts and timed lyrics",
+  "start_url": "./web.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#071321",
+  "theme_color": "#071321",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}
