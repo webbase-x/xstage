@@ -114,6 +114,8 @@ assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job'
 for(const id of ['lyric-group-folder','lyric-group-reset','lyric-group-source-status']){
   assert.ok(html.includes('id="'+id+'"'), 'Bulk lyrics must have an independent folder selector: '+id);
 }
+assert.ok(html.includes('มีไฟล์ .lrc') && html.includes('ไม่ต้องมี current.json'),
+  'Editor must explain raw LRC folders do not need a StageWeb catalog');
 assert.ok(html.includes('data-pick="lyric_source"'),
   'The Windows lyrics editor must offer a native source folder picker');
 assert.ok(js.includes("'lyric-group-folder': 'lyric_source'") &&
