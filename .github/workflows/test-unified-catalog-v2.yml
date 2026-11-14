@@ -46,5 +46,20 @@ jobs:
           python scripts/test_unified_catalog_v2.py
           python scripts/test_v2_native_publish.py
           python scripts/test_songstudio_online_publish.py
+      - name: Validate Source ZIP includes all V2 private Drive modules
+        run: |
+          python scripts/package-song-studio-pc.py
+          python - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          zip_file=Path('downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip')
+          with ZipFile(zip_file) as bundle:
+              names=set(bundle.namelist())
+              for filename in ('online_publish.py','v2_native_publish.py',
+                               'unified_catalog_v2.py','google_drive.py'):
+                  found=[x for x in names if x.endswith('/'+filename)]
+                  assert len(found)==1, f'Missing or duplicate bundled {filename}'
+          print('PC source packaging includes all V2 modules')
+          PY
       - name: Check full Web and Android integration regression
         run: node scripts/regression.mjs
