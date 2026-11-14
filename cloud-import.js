@@ -284,6 +284,18 @@ async function loadCatalog(drive,root){
       fail('XStageWeb ยังไม่มี current.json หรือหลักฐานนำเข้าที่ปลอดภัย · ไม่เริ่มทับ');
     if(!marker&&lyricChildren.length)
       fail('พบข้อมูล LYRICS เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
+    if(!marker){
+      // Only a genuinely empty first library (or SoundFont-only AUDIO)
+      // can be initialized without a previously verified staging marker.
+      // Unindexed audio/video/MIDI must never be interpreted as empty.
+      const audioFolders=children.filter(x=>x.name==='AUDIO'&&x.mimeType===MIME_FOLDER);
+      if(audioFolders.length>1)fail('พบ AUDIO ซ้ำใน XStageWeb · หยุดตรวจคลังเดิม');
+      for(const folder of audioFolders){
+        const items=await drive.listChildren(folder.id);
+        if(items.some(x=>x.mimeType===MIME_FOLDER||!/\.sf[23]$/i.test(x.name||'')))
+          fail('พบไฟล์เพลงใน AUDIO แต่ไม่มี current.json · ไม่สร้างฐานใหม่ทับ');
+      }
+    }
     if(marker){
       const data=await drive.getJson(marker.id);
       if(data.format!=='xstage-songstudio-upload-staging-v1')
