@@ -84,6 +84,7 @@ class SkippedReportTests(unittest.TestCase):
         snapshot = editor.scan(self.root, None, bulk)
         self.assertEqual((snapshot["songs"], snapshot["skippedInvalid"]), (1, 5))
         repaired = self.write("S02.LYR")
+        expected_repaired = repaired.read_bytes()
         original_good = good.read_bytes()
         read_paths = []
         original_read = Path.read_bytes
@@ -111,7 +112,7 @@ class SkippedReportTests(unittest.TestCase):
         ids = bulk.list_groups(changed, "first", repeats_only=True)["rows"]
         self.assertTrue(any(x["count"] == 2 for x in ids))
         self.assertEqual(good.read_bytes(), original_good)
-        self.assertEqual(repaired.read_bytes(), self.write("S02.LYR").read_bytes())
+        self.assertEqual(repaired.read_bytes(), expected_repaired)
         csvrows = list(csv.reader(io.StringIO(editor.skipped_csv(changed)[3:].decode("utf-8"))))
         self.assertEqual(len(csvrows), 6)
         self.assertEqual(sum("อ่านได้หลังตรวจซ้ำ" in row[1] for row in csvrows[1:]), 1)
