@@ -321,9 +321,11 @@
     if(!phraseReady)return;
     try {
       const view=$('lyric-skipped-view').value;
+      const seq=phraseSeq;
       const args=new URLSearchParams({offset:String(phraseSkippedOffset),
         limit:'40',view});
       const data=await api('/api/lyric-groups-skipped?'+args.toString());
+      if(!phraseReady||seq!==phraseSeq||view!==$('lyric-skipped-view').value)return;
       if(phraseSkippedOffset>0&&phraseSkippedOffset>=data.total){
         phraseSkippedOffset=Math.max(0,Math.floor((data.total-1)/40)*40);
         return refreshSkippedLyrics();
@@ -2178,6 +2180,9 @@
               message(job.result?.message||'แทนที่ข้อความสำเร็จ',false);
             } else if (job.kind === 'lyric-groups-undo') {
               phraseReady=false;phraseRows=[];phraseOffset=0;
+              phraseSkippedTotal=0;phraseRecheckTotal=0;
+              $('lyric-skipped-panel').hidden=true;
+              $('lyric-skipped-panel').open=false;
               ++phraseSeq;phraseClearSelection();
               $('lyric-group-results').textContent=
                 'ย้อนคืนข้อมูลแล้ว · กดวิเคราะห์อีกครั้งเพื่อจัดกลุ่มตามข้อมูลเดิม';
