@@ -36,12 +36,10 @@ assert.throws(()=>api.song(local,{cloud:true}),/Google Drive/);
 const studioHtml=readFileSync(new URL('../studio/index.html',import.meta.url),'utf8');
 const studioJs=readFileSync(new URL('../studio/app.js',import.meta.url),'utf8');
 const studioEngine=readFileSync(new URL('../songstudio-pc/engine.py',import.meta.url),'utf8');
-for(const id of ['catalog-v2-dry-run','catalog-v2-confirm','catalog-v2-migration-status'])
-  assert.match(studioHtml,new RegExp('id="'+id+'"'),'Song Studio is missing '+id);
-assert.match(studioHtml,/id="catalog-v2-confirm"[^>]*disabled/);
-assert.match(studioJs,/await run\('migrate-catalog-v2',\{dryRun:true\}\)/);
-assert.match(studioJs,/confirmation:'MIGRATE_XSTAGEWEB_V2'/);
-assert.match(studioJs,/if\(!v2MigrationPreview\)return message/);
-assert.match(studioEngine,/elif action == "migrate-catalog-v2"/);
-assert.match(studioEngine,/dry_run=dry,confirm=approved,cancelled=CANCEL/);
+assert.match(studioHtml,/id="catalog-v2-setup"/);
+assert.match(studioHtml,/XStageWeb\/DB\/current\.json/);
+assert.match(studioJs,/await run\('initialize-cloud-v2'\)/);
+assert.match(studioEngine,/elif action == "initialize-cloud-v2"/);
+assert.doesNotMatch(studioJs,/migrate-catalog-v2|catalog-v2-dry-run|upload-create-library/);
+assert.match(studioEngine,/read_code_registry\(\)/);
 console.log('Unified Catalog V2 JavaScript contract: cloud, local, duplicates and path safety PASS');
