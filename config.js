@@ -4,6 +4,6 @@ window.XSTAGE_CONFIG = {
   // Required for Google Picker (shared-library onboarding). Restrict this key
   // to https://webbase-x.github.io/* and https://docs.google.com/*,
   // and to Google Picker API + Google Drive API.
-  googlePickerApiKey: ''
+  googlePickerApiKey: 'AIzaSyDbFTXZX8GuWMct5KhkviVg5t1Iff2nYoY'
 };
 window.XSTAGE_RELEASE = { version: '1.0.104', build: 1104 };
