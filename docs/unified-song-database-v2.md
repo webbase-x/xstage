@@ -1,123 +1,138 @@
-# X-Stage Unified Song Database V2
+# X-Stage Karaoke · Google Drive V2 Only
 
-**Status:** Development contract and tested migration path. Do not claim a live
-production cutover until the dependent Web/Android PRs have been reviewed,
-merged, and the private Google Drive integration has been tested on devices.
+## Current development contract
 
-## One logical contract, not one physical file
+The private Google Drive library is **XStageWeb only**. The old
+`StageWeb`, root-level `XStageWeb/current.json`, desktop backup tree
+`X-Stage Song Studio/songs`, and V1 delta/pointer readers are no longer
+part of the cloud workflow. The Google Drive user does **not** have to
+create folders manually.
 
-The semantic catalog is **Unified Song Catalog V2**, with
-`schemaVersion: 2` and `format: "xstage-unified-v2"`.
-The formal contract lives in `contracts/xstage-unified-v2.schema.json`.
-Python and JavaScript validators reject incomplete, duplicate and unsafe entries.
+The logical song contract is the same across products:
+`schemaVersion:2` and `format:"xstage-unified-v2"`,
+defined in `contracts/xstage-unified-v2.schema.json`.
 
-- **Windows PC:** keeps `data/songs.sqlite3`, FTS indexes, queue.json and
-  settings.json. It can export/import **local-path-only** Unified V2 JSON using
-  the offline tools menu. Neither SQL tables nor local song files are moved
-  to Google Drive. All import writes require an explicit confirmation and a
-  SQLite backup.
-- **Song Studio:** keeps `song-index.sqlite3` as its local source scan cache
-  and supports V1 → V2 catalog migration in a separate user-authorized
-  Google Drive job (`migrate-catalog-v2`, `dryRun: true` by default).
-  Native media publishing uses the same V2 fields.
-- **Web + Android TV:** load the *same* private Drive Catalog V2 through
-  `XStageWeb/DB/current.json`, with a device-local cache of catalog
-  **metadata only**. Google Drive OAuth, song downloads and device playback
-  remain independent of Windows PC.
+**Distinct storage locations:** Windows PC retains its local
+`songs.sqlite3` searchable catalog; Song Studio maintains local scanning
+data; Web and Android TV read the user's authenticated **private Drive**
+catalog. A local absolute path must never become a Google Drive URL or
+public media link. Google OAuth credentials are never included in the
+catalog or GitHub Pages.
 
-A V2 song record has `id`, `webSongId`, `code`, `title`, `artist`,
-`media`, and optionally `lyrics`. The `media` object may contain `m4a`,
-`mp3`, `midi` and `video`. `midi.type = "ncn"` requires both `lyr`
-and `cur` companions. `video.type` describes the original container.
-
-Each media reference has **one** storage locator:
-- Local PC: `localPath` (absolute path, never uploaded as a public catalog)
-- Private Drive: `fileId` (opaque Google Drive file ID, never a public URL)
-
-Source file fingerprints and size may be present as `sha256`,
-`md5Checksum`, `size`, `path`; no private OAuth token appears in either
-catalog.
-
-## Private Google Drive tree
+## Cloud folders
 
 ```text
 XStageWeb/
-  DB/
-    current.json                    # mutable validated pointer
-    catalog-base-v2-<gen>.json      # small complete catalog
-    catalogs/
-      catalog-v2-<bucket>-<part>-<gen>.json  # immutable, ≤2500 songs each
-    deltas/
-      catalog-delta-v2-<gen>.json    # immutable upserts, removes
   AUDIO/
-    MP3/Songs/...    MP3/Lyrics/...
-    M4A/Songs/...    M4A/Lyrics/...
+    MP3/Songs/{0-9,A-Z}/
+    MP3/Lyrics/{0-9,A-Z}/
+    M4A/Songs/{0-9,A-Z}/
+    M4A/Lyrics/{0-9,A-Z}/
   VIDEO/
-    AVI/... MPG/... VCD/... WMV/...
+    AVI/
+    MPG/
+    VCD/
+    WMV/
   MIDI/
-    NCN/Songs/... NCN/Lyrics/... NCN/Cursor/...
-    E-MK/...
+    NCN/Songs/{0-9,A-Z}/
+    NCN/Lyrics/{0-9,A-Z}/
+    NCN/Cursor/{0-9,A-Z}/
+    E-MK/{0-9,A-Z}/
+  DB/
+    current.json
+    catalog-base-v2-<generation>.json
+    catalogs/catalog-v2-<bucket>-<part>-<generation>.json
+    deltas/catalog-delta-v2-<generation>.json
 ```
 
-A small library's pointer has `catalogFileId`; a larger library has
-`catalogFiles: [{fileId,bucket,songCount}]`. Never mix both. Each shard
-contains no more than 2,500 song rows. Small changes append bounded
-`deltaFileIds`, with up to 32 deltas before compaction. The pointer updates
-**only after** every referenced immutable catalog and media upload has
-returned successfully. The player checks counts, unique IDs and media
-references before applying a new generation. It downloads at most three
-catalog shards concurrently. Songs and lyrics are downloaded separately
-when needed; they are not cached by the public service worker.
+A first-run **Song Studio** user can press **เตรียมและตรวจสอบคลัง
+XStageWeb V2** after Google Login. That creates the skeleton folders
+and a validated **zero-song** catalog if missing. Pressing the same
+button again reads the current V2 pointer without resetting it.
+Alternatively, simply upload a verified M4A/Lyrics song: the publisher
+creates the missing folders automatically.
 
-**Concurrency caveat:** a read/recheck of a Drive generation detects many
-stale writers, but is not a truly atomic compare-and-swap. Avoid concurrent
-publishers for the same library. A future production writer lock/transaction
-mechanism should be tested before multiuser editing is enabled.
+**Web/Android TV** now try to create the private `XStageWeb/DB` and
+the zero-song V2 pointer after the Google account is authenticated
+and no accessible library exists. Existing V2 libraries are read
+instead of overwritten. The Web implementation does not require
+a PC database to open a new, empty stage.
 
-## Safe migration sequence
+Folder creation is lazy for individual song-code subfolders on the
+Web and upload paths. This avoids creating hundreds of empty folders
+before the first song exists.
 
-1. Back up the **existing** `XStageWeb/current.json` and any reachable
-   immutable catalogs. Confirm that the user's Google account can read all
-   referenced media. Never infer that an unseen Drive folder is empty.
-2. In Song Studio with Google Login connected, request
-   `action: "migrate-catalog-v2", dryRun: true`. This reads V1 base + deltas,
-   checks all IDs, paths, count, and future V2 collisions. It does **not**
-   mutate any Google Drive file.
-3. Compare source song counts, code collisions and skipped/unsupported
-   formats. Do not continue when dry run detects a mismatch.
-4. After deliberate approval, request
-   `action: "migrate-catalog-v2", dryRun: false,
-   confirmation: "MIGRATE_XSTAGEWEB_V2"`. The writer only creates an
-   immutable V2 catalog and publishes `DB/current.json`.
-5. On Web/Android V2, sign in with the original Google account and verify
-   search counts, multiple media formats, sample playback, lyric timing,
-   queue/resume behavior and cache isolation.
-6. Keep the V1 root `XStageWeb/current.json` and original media until the
-   V2 system has been verified by the owner. Migration never auto-deletes
-   V1. A rollback is to use the older V1 reader; no files need be restored
-   if the V1 pointer was preserved.
+## Catalog structure and safe publishing
 
-**Do not feed Windows `songs.sqlite3` to Google Drive as a playable
-Catalog.** Use export/import V2 for structured metadata exchange.
-Offline Windows import only accepts `catalogScope:"local-offline"` with
-existing local source paths and explicit confirmation. `queue.json` and
-`settings.json` are outside this schema and are never overwritten.
+Each record contains `id`, `webSongId`, `code`, `title`,
+`artist`, `media` and optional `lyrics`. Media is keyed by
+`m4a`, `mp3`, `midi`, or `video` and refers to a private
+Google Drive `fileId`. NCN requires complete MID/LYR/CUR components.
 
-## Test matrix / evidence
+- Native MP3, M4A, AVI, MPG/VCD, WMV, NCN and E-MK files are uploaded
+  through the verified V2 original-media publisher. Codec capability
+  is checked at playback; a file's catalog presence is **not**
+  proof a device can decode it.
+- Locally produced M4A and timed JSON are published from Song Studio
+  directly to V2 with code collision and MD5 checks, without uploading
+  the entire local `songs.sqlite3` or lyrics workspace.
+- DB publishing is **last**: uploaded media and immutable catalog shards
+  must succeed before `DB/current.json` changes.
+- Single-catalog pointers are allowed for smaller libraries. For
+  larger libraries, `catalogFiles` references immutable shards of
+  up to 2,500 songs. Small updates add bounded deltas; at 32 deltas,
+  the publisher compacts to new immutable base data.
+- The Web reader downloads at most 3 catalog shards simultaneously,
+  validates IDs and song counts and reuses a private local metadata
+  cache. Actual audio and lyrics remain private and are loaded
+  separately when required.
 
-Automated tests cover Python local/cloud schema validation, JS WebView
-validation, path traversal, duplicate stable IDs, NCN companion requirements,
-V1 migration dry run, pointer rollback, full Web regression, Android APK
-build, Windows SQLite import/export/backup, 2501-song shard partitioning,
-incremental delta replay and failed precommit. See:
-- `scripts/test_unified_catalog_v2.py`
-- `scripts/unified-catalog-v2-test.mjs`
-- `windows-pc/source/tests/test_unified_catalog_v2.py`
-- `.github/workflows/test-unified-catalog-v2.yml`
-- `.github/workflows/test-windows-unified-db-v2.yml`
+A failed upload, cancelled job, conflicting song code, duplicate ID,
+missing media component or corrupt catalog must **not** publish a
+new active DB pointer. Previously published data stays available.
+Private Drive folders are never shared publicly as part of publishing.
 
-**Not proven by automated CI:** real user Google Drive permissions,
-multi-writer synchronization, codec compatibility for original AVI/WMV/VCD,
-all MIDI/SoundFont combinations, audio latency and lyric timing on actual
-TrueID/Android TV hardware, and performance against the user's full
-song archive. The code should remain in review until those tests pass.
+## Download / restore
+
+Song Studio downloads from the **V2 pointer only**.
+The `DB` option saves the referenced V2 base/shards/deltas plus
+`DB/current.json`. The `songs` option saves all referenced V2
+media/lyrics and DB metadata. The `zip` option assembles the
+same verified private snapshot. Every downloaded file must have a
+matching Google Drive MD5. Existing different local files are not
+overwritten. Download commands are **read-only** on Google Drive.
+
+If the account has no published V2 pointer, the download command
+reports that there is no library yet. It must not fall back to an
+unrelated old backup tree or create a new cloud folder in response.
+
+## Tests / remaining production validation
+
+Automated tests:
+- `scripts/test_songstudio_online_publish.py`: first-run creation,
+  MD5 duplicate/conflict, interrupted upload, private V2 download.
+- `scripts/test_v2_native_publish.py`: original file types and NCN
+  component integrity.
+- `scripts/test_unified_catalog_v2.py`: schema, shards/deltas,
+  zero-song pointer, integrity and generation checks.
+- `scripts/unified-catalog-v2-test.mjs`: browser catalog contract.
+- `scripts/xstage-v2-first-run-test.mjs`: simulate authenticated Web
+  Drive API create/re-open without touching actual user data.
+- Existing Web, Android and Song Studio regression/Build workflows.
+
+**Not yet validated by mocked CI:** real Google OAuth cross-client
+permissions between Song Studio and Web, first-time CORS upload of the
+Web zero-song catalog on a real account, playback of every MIDI and
+video container on real TV hardware, synchronization under multiple
+simultaneous writers, and a full user-sized private Drive library.
+A CI-passing development branch is not automatically a deployed update.
+
+The Desktop Google OAuth client and Web Google OAuth client must use
+correctly authorized scopes and apps. With `drive.file`, files that
+one OAuth app cannot see may require the user to authorize them
+with a Google Picker or choose an aligned Google Cloud app
+configuration. Do not silently assume lack of visibility proves
+an unrelated file has been deleted.
+
+No live Google Drive file deletion or real-account migration was
+performed while preparing this code.
