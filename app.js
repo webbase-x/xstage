@@ -522,6 +522,58 @@ function readActiveAuth(){
 function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
 const player = ui.player;
+const karaokeVideo = document.getElementById('karaoke-video');
+let videoObjectUrl = '';
+function resetSongVideo(){
+  if(!karaokeVideo)return;
+  karaokeVideo.pause();
+  karaokeVideo.hidden=true;
+  karaokeVideo.removeAttribute('src');
+  karaokeVideo.load();
+  if(videoObjectUrl){URL.revokeObjectURL(videoObjectUrl);videoObjectUrl='';}
+}
+function syncSongVideo(){
+  if(!karaokeVideo||karaokeVideo.hidden||!karaokeVideo.src)return;
+  karaokeVideo.playbackRate=player.playbackRate;
+  if(Number.isFinite(player.currentTime)&&
+      Math.abs((karaokeVideo.currentTime||0)-player.currentTime)>.45){
+    try{karaokeVideo.currentTime=player.currentTime;}catch{}
+  }
+  if(player.paused||player.ended){karaokeVideo.pause();}
+  else karaokeVideo.play().catch(()=>{
+    // Unsupported video or autoplay policy should never stop the audio.
+    // HTML5 audio+timed lyrics remain the playable fallback.
+  });
+}
+async function loadSongVideo(song,request,token){
+  if(!karaokeVideo||!getFileId(song?.video))return;
+  try{
+    const response=await privateFile(song.video.fileId,token);
+    const data=await response.blob();
+    if(request!==state.requestId||token!==state.token||state.current!==song)return;
+    if(data.size<1024)throw Error('วิดีโอว่างเปล่า');
+    videoObjectUrl=URL.createObjectURL(data.type==='video/mp4' ? data :
+      new Blob([data],{type:'video/mp4'}));
+    karaokeVideo.src=videoObjectUrl;
+    karaokeVideo.muted=true;
+    karaokeVideo.hidden=false;
+    karaokeVideo.load();
+    syncSongVideo();
+  }catch(error){
+    if(request!==state.requestId)return;
+    resetSongVideo();
+    console.warn('Video unavailable; using verified audio + timed lyrics:',error.message);
+  }
+}
+if(karaokeVideo){
+  karaokeVideo.addEventListener('loadedmetadata',syncSongVideo);
+  karaokeVideo.addEventListener('canplay',syncSongVideo);
+  karaokeVideo.addEventListener('error',()=>{
+    console.warn('Unsupported MP4 video: continue karaoke using audio and lyrics');
+    resetSongVideo();
+  });
+}
+
 const initialVolume=Math.max(0,Math.min(100,Number(initialUiPrefs.volume)));
 if(Number.isFinite(initialVolume)){
   ui.volume.value=String(initialVolume);
@@ -1257,6 +1309,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
   player.pause(); player.removeAttribute('src'); player.load();
+  resetSongVideo();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   state.objectUrl = ''; state.token = '';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
@@ -1926,6 +1979,8 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
     if (remember && state.current)state.history.push(state.current);
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
     state.objectUrl=url;state.current=song;state.lyrics=lyrics;
+    resetSongVideo();
+    if(getFileId(song.video))void loadSongVideo(song,request,token);
     syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
     const musicalKey=String(song.key||song.musicKey||song.originalKey||song.keySignature||'').trim();
@@ -2977,14 +3032,19 @@ player.addEventListener('timeupdate',()=>{
 });
 player.addEventListener('loadedmetadata',updateTransport);
 player.addEventListener('durationchange',updateTransport);
-player.addEventListener('play',()=>{state.userPaused=false;state.resumeAfterInterruption=false;updateTransport();});
+player.addEventListener('play',()=>{state.userPaused=false;state.resumeAfterInterruption=false;syncSongVideo();updateTransport();});
+player.addEventListener('timeupdate',syncSongVideo);
+player.addEventListener('seeked',syncSongVideo);
+player.addEventListener('ratechange',syncSongVideo);
 player.addEventListener('pause',()=>{
+  if(karaokeVideo)karaokeVideo.pause();
   if(state.current&&!state.loading&&!state.userPaused&&!state.userStopped&&!player.ended&&player.currentTime>0){
     state.resumeAfterInterruption=true;
   }
   updateTransport();
 });
 player.addEventListener('ended',()=>{
+  if(karaokeVideo)karaokeVideo.pause();
   if(player.loop)return;
   if(state.queue.length||state.medley)playNext();
   else clearIdleStage('จบเพลงแล้ว · คิวว่าง');
@@ -3006,7 +3066,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen();}
 });
 window.addEventListener('pagehide',savePlaybackResumeState);
-window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
+window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);setupNativeAndroidTvUi();setupAppUpdateWatcher();
 window.XStageSoftRefresh=async function(){
   if(state.current||player.src){
