@@ -1094,7 +1094,35 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
     }
     const pointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
-    if(pointers.length!==1)throw Error('ไม่พบ current.json ที่เผยแพร่สำเร็จในคลัง StageWeb/XStageWeb');
+    if(!pointers.length){
+      // A newly created XStageWeb may contain only empty category folders or
+      // a SoundFont uploaded first. It is not a broken catalog. Discard the
+      // previous session's visible songs, but NEVER delete any Drive data.
+      // A missing pointer can also mean drive.file lacks permission; avoid
+      // claiming definitively that the user's entire Drive is empty.
+      if(authId!==state.authId)return;
+      state.manifest=null;
+      state.catalogPointerId='';
+      state.catalogGeneration='';
+      state.songs=[];
+      state.shown=[];
+      state.queue=[];
+      state.selectedIndex=0;
+      state.catalogCache.clear();
+      releaseQueuePreload();
+      if(state.current || player.src)clearIdleStage('ยังไม่มีเพลงในคลังนี้');
+      renderSongs();
+      renderQueue();
+      setSearchAvailability(true);
+      ui.songTotal.textContent='0 เพลง';
+      ui.resultCount.textContent='ยังไม่มีเพลงพร้อมเล่น';
+      ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · ยังไม่มี DB เพลงที่เข้าถึงได้';
+      hideCatalogLoading();
+      setAndroidTvStageAccess(true,account.sub);
+      setStatus('เชื่อม Google Drive แล้ว · ยังไม่พบ current.json ที่เข้าถึงได้ · สร้าง DB/อัปโหลดเพลงผ่าน X-Stage Song Studio','success');
+      return;
+    }
+    if(pointers.length!==1)throw Error('พบ current.json หลายรายการ · ไม่เลือกฐานเพลงโดยคาดเดา');
     const pointer=await privateJson(pointers[0].id,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
     if(authId!==state.authId)return;
