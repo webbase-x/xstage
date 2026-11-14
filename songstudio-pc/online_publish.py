@@ -222,6 +222,38 @@ class OnlinePublisher:
                 "visible": True, "rootExists": bool(root),
                 "catalogExists": bool(active), "schemaVersion": 2}
 
+    def initialize_cloud_v2(self, *, cancelled=None):
+        """Create the V2-only skeleton and an empty verified DB once.
+
+        Safe to retry after a disconnect: if the pointer already exists,
+        verify and return it without clearing songs or changing generation.
+        """
+        from v2_native_publish import write_published_v2
+        root, db, active, songs = self._read_v2()
+        if active:
+            return {"created":False,"totalSongs":len(songs),
+                    "generation":active[1]["generation"],"schemaVersion":2}
+        if cancelled is not None and cancelled.is_set():
+            raise PublishError("ยกเลิกก่อนเตรียมคลัง Google Drive")
+        if not root:
+            root = self.drive.folder("root", ONLINE_ROOT)
+        if not db:
+            db = self.drive.folder(root, "DB")
+        for parts in MEDIA_ROOTS:
+            parent = root
+            for part in parts:
+                if cancelled is not None and cancelled.is_set():
+                    raise PublishError("ยกเลิกก่อนเผยแพร่ฐาน")
+                parent = self.drive.folder(parent, part)
+        def precommit():
+            current = [x for x in self.drive.list_children(db)
+                       if x.get("name") == "current.json" and x.get("mimeType") != FOLDER_MIME]
+            if current:
+                raise PublishError("มีฐาน V2 ใหม่ระหว่างเตรียมโฟลเดอร์ · กรุณาตรวจใหม่")
+        pointer=write_published_v2(self.drive,db,{},cancelled=cancelled,precommit=precommit)
+        return {"created":True,"totalSongs":0,
+                "generation":pointer["generation"],"schemaVersion":2}
+
     def publish(self, local_songs, selected_records, *, create_new_library=False,
                 cancelled=None, on_progress=None, on_batch=None, on_row=None,
                 batch_size=100):
