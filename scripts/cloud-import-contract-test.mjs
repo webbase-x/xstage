@@ -107,6 +107,24 @@ assert.equal(again.reused,true);
 assert.equal(putRequests,2,'MD5 duplicate must skip sending the same asset again');
 await assert.rejects(drive.upload(target,payload,'111-'+digest.slice(0,16)+'.mp3','audio/mpeg',
   'f'.repeat(32)),/MD5/);
+// A v4 pointer in legacy TEXT must stay readable, but its location must be
+// exposed so import never silently writes new v4 content into a mixed layout.
+const pointerDoc={schemaVersion:1,layoutVersion:4,generation:'g1',
+  catalogFileId:'base001',deltaFileIds:[],songCount:0};
+function catalogAt(folder){
+  const parent='folder0001',file='pointer001';
+  return {listChildren:async id=>id==='root'
+    ? [{name:folder,id:parent,mimeType:'application/vnd.google-apps.folder'}]
+    : id===parent?[{name:'current.json',id:file,mimeType:'application/json'}]:[],
+    getJson:async id=>id===file?pointerDoc:{schemaVersion:1,songs:[]}};
+}
+const modernCatalog=await loadCatalog(catalogAt('LYRICS'),'root');
+assert.equal(modernCatalog.pointerFolder,'LYRICS','v4 pointer must be located in LYRICS');
+const misplacedCatalog=await loadCatalog(catalogAt('TEXT'),'root');
+assert.equal(misplacedCatalog.pointerFolder,'TEXT','Legacy folder location must not be hidden');
+assert.ok(read('cloud-import.js').includes("pointer.layoutVersion!==4 || pointerFolder!=='LYRICS'"),
+  'Importer must refuse publishing v4 into a legacy pointer folder');
+
 assert.ok(!read('cloud-import.js').includes('localStorage.setItem('),
   'Never persist Drive bearer tokens or upload session URLs in localStorage');
 console.log('PASS: WEB upload DOM, Drive resumable chunks, MD5 dedup, catalog safety and auth isolation');
