@@ -68,7 +68,8 @@ class SelectedLyricFolderTests(unittest.TestCase):
         folder = self.home / "ต้นฉบับ"
         folder.mkdir()
         (folder / "song.mp3").write_bytes(b"data")
-        self.assertEqual(self.resolve(str(folder)), folder.resolve())
+        with self.assertRaisesRegex(ValueError, "Lyrics JSON|current.json"):
+            self.resolve(str(folder))
         self.assertFalse((folder / "StageWeb").exists())
         self.assertEqual((folder / "song.mp3").read_bytes(), b"data")
 
@@ -105,8 +106,10 @@ class SelectedLyricFolderTests(unittest.TestCase):
         self.assertIn('root = lyric_source_root()\n            groups = options.get("groups")', code)
         self.assertIn('LYRIC_TEXT_BACKUPS, lyric_source_root())', code)
         self.assertIn('previous_lyric_source != PREFS["lyric_source"]', code)
-        self.assertIn('LYRIC_TEXT.scan_lrc_folder(', code)
-        self.assertIn('LYRIC_TEXT.apply_many_lrc_folder(', code)
+        self.assertIn('LYRIC_TEXT.scan(', code)
+        self.assertIn('LYRIC_TEXT.apply_many(', code)
+        self.assertNotIn('LYRIC_NCN.', code)
+        self.assertIn('ไม่แก้ LYR/CUR/NCN ต้นฉบับ', code)
 
 
 if __name__ == "__main__":
