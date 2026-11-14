@@ -1,0 +1,98 @@
+"""Verify folder upload readiness and immediate online DB publication contract."""
+from __future__ import annotations
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+BASE = Path(__file__).resolve().parents[1] / "songstudio-pc"
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, BASE / (name + ".py"))
+    obj = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(obj)
+    return obj
+
+folder = load("folder_upload")
+export = load("song_export")
+online = load("online_publish")
+
+
+class PublisherStub:
+    def __init__(self):
+        self.published = []
+
+    def read_code_registry(self, *, allow_missing_root=False):
+        return {"visible": False, "songs": []}
+
+    def publish(self, root, rows, *, create_new_library=False, **kwargs):
+        assert create_new_library
+        assert (root / "current.json").is_file()
+        for row in rows:
+            assert online._valid_row(root, row)
+            assert (root / row["audio"]["path"]).is_file()
+            assert (root / row["lyrics"]["path"]).is_file()
+            assert (root / Path(row["lyrics"]["path"]).with_suffix(".lrc")).is_file()
+        self.published.extend(rows)
+        return {"newSongs": len(rows), "updatedSongs": 0,
+                "duplicates": 0, "conflicts": 0, "totalSongs": len(rows),
+                "published": True}
+
+
+class FolderUploadTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.audio = self.root / "A001.mp3"
+        self.audio.write_bytes(b"ID3" + b"x" * 2500)
+        self.lrc = self.root / "A001.lrc"
+        self.lrc.write_text("[00:05.00]ร้องเพลงบรรทัดแรก\n[00:12.50]บรรทัดสอง", encoding="utf-8")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_publish_ready_audio_and_lyrics_through_online_catalog(self):
+        publisher = PublisherStub()
+        result = folder.upload(object(), str(self.root), create_new_library=True,
+                               export=export, publisher=publisher, staging_root=self.root)
+        self.assertEqual(result["newSongs"], 1)
+        self.assertTrue(result["published"])
+        self.assertEqual(result["ready"], 1)
+        self.assertEqual(self.audio.read_bytes(), b"ID3" + b"x" * 2500)
+        self.assertFalse(list(self.root.glob("xstage-upload-*")))
+
+    def test_missing_lyrics_does_not_publish(self):
+        self.lrc.unlink()
+        self.assertEqual(folder.report(str(self.root))["ready"], 0)
+        with self.assertRaises(ValueError):
+            folder.upload(object(), str(self.root), create_new_library=True,
+                          export=export, publisher=PublisherStub(), staging_root=self.root)
+
+    def test_existing_folder_requires_complete_ncn_companions(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        (self.root / "001.mid").write_bytes(b"MThd" + b"\0"*50)
+        (self.root / "001.lyr").write_bytes(b"\x00"*90)
+        (self.root / "001.cur").write_bytes(b"\x00"*100)
+        scan = folder.scan(str(self.root))
+        self.assertEqual(scan["total"], 1)
+        self.assertEqual(scan["complete"][0]["kind"], "NCN")
+        with self.assertRaises(ValueError):
+            folder.upload(object(), str(self.root), create_new_library=True,
+                          export=export, publisher=PublisherStub(), staging_root=self.root)
+
+    def test_organized_audio_songs_lyrics_pair(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        song = self.root / "AUDIO" / "MP3" / "Songs" / "A" / "A001.mp3"
+        lyr = self.root / "AUDIO" / "MP3" / "Lyrics" / "A" / "A001.lrc"
+        song.parent.mkdir(parents=True)
+        lyr.parent.mkdir(parents=True)
+        song.write_bytes(b"ID3"+b"A"*2400)
+        lyr.write_text("[00:01.00]ทดสอบ", encoding="utf-8")
+        self.assertEqual(folder.report(str(self.root))["ready"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
