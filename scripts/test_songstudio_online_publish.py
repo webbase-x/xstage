@@ -103,6 +103,29 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(songs), pointer["songCount"])
         return songs
 
+    def test_completely_empty_google_drive_creates_first_xstageweb_and_db(self):
+        # Users migrating to the new system can begin with an EMPTY Drive.
+        # No legacy roots, pointers, catalog IDs or media exist.
+        self.drive.items.clear()
+        self.assertEqual(self.drive.list_children("root"), [])
+        with self.assertRaisesRegex(online.PublishError, "ไม่พบ XStageWeb"):
+            self.publisher.publish(self.root, [self.first])
+        self.assertEqual(self.drive.list_children("root"), [],
+                         "No new folder without explicit create permission")
+        published = self.publisher.publish(
+            self.root, [self.first], create_new_library=True)
+        self.assertTrue(published["published"])
+        self.assertEqual(published["newSongs"], 1)
+        self.assertEqual(self.pointer()[0]["songCount"], 1)
+        row = self.published()[self.first["webSongId"]]
+        self.assertIn("fileId", row["audio"])
+        self.assertIn("fileId", row["lyrics"])
+        again = self.publisher.publish(
+            self.root, [self.first], create_new_library=True)
+        self.assertEqual(again["duplicates"], 1)
+        self.assertEqual(again["newSongs"], 0)
+        self.assertEqual(self.pointer()[0]["songCount"], 1)
+
     def test_first_publish_matches_online_schema_and_uploads_real_private_files(self):
         result = self.publisher.publish(self.root, [self.first])
         self.assertTrue(result["published"])
