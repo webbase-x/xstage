@@ -4520,3 +4520,118 @@ body.xstage-ui-v2 .stage .stage-piano-key:focus-visible{
 body.xstage-native-tv .stage .stage-piano,
 body.xstage-native-tv .stage #toggle-piano,
 body.xstage-native-tv #mobile-piano-toggle{display:none!important}
+
+
+/* Audio diagnostics dock: readable on PC, tablet and mobile.
+   Unlike stage visuals, this is an explicit, scrollable control surface. */
+body.xstage-ui-v2 .stage .xstage-audio-tools{
+  position:absolute;z-index:105;
+  top:calc(var(--xs-top) + 6px);right:clamp(6px,1vw,14px);
+  width:min(680px,calc(100% - 12px));
+  height:auto;max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 12px);
+  display:flex;flex-direction:column;
+  color:#e9f2ff;background:#08182ef7;border:1px solid #4976b1;
+  border-radius:15px;box-shadow:0 16px 56px #000b;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  line-height:1.45;overflow:hidden;isolation:isolate;
+}
+body.xstage-ui-v2 .stage .xstage-audio-tools[hidden]{display:none!important}
+body.xstage-ui-v2 .stage .xstage-audio-head{
+  display:flex;align-items:center;gap:9px;justify-content:space-between;
+  padding:9px 12px;background:#0c3153;border-bottom:1px solid #4777a0;
+  font-size:clamp(.79rem,1vw,.98rem);
+}
+body.xstage-ui-v2 .stage .xstage-audio-head button{
+  border:1px solid #5c84af;background:#183c60;color:#fff;
+  min-height:30px;min-width:34px;border-radius:7px;cursor:pointer
+}
+body.xstage-ui-v2 .stage .xstage-audio-content{
+  overflow:auto;padding:10px;display:grid;gap:10px;
+  max-height:100%;min-height:0;scrollbar-width:thin
+}
+body.xstage-ui-v2 .stage .xstage-audio-unit{
+  min-width:0;border:1px solid #345877;border-radius:10px;
+  background:#0c2240;padding:10px;
+  font-size:clamp(.73rem,1.1vw,.87rem)
+}
+body.xstage-ui-v2 .stage .xstage-audio-unit p{margin:5px 0;line-height:1.55}
+body.xstage-ui-v2 .stage .xstage-audio-note{color:#a5bcd5;font-size:.72rem}
+body.xstage-ui-v2 .stage .xstage-audio-line{
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px;justify-content:space-between
+}
+body.xstage-ui-v2 .stage .xstage-audio-unit button,
+body.xstage-ui-v2 .stage .xstage-audio-unit select{
+  border:1px solid #5478a2;border-radius:7px;
+  background:#153e62;color:#f4f9ff;padding:6px 9px;
+  min-height:34px;max-width:100%;font-size:.81rem
+}
+body.xstage-ui-v2 .stage .xstage-audio-unit button{cursor:pointer}
+body.xstage-ui-v2 .stage .xstage-audio-unit button:hover{background:#23618e}
+body.xstage-ui-v2 .stage .xstage-audio-unit select#xstage-play-mode,
+body.xstage-ui-v2 .stage .xstage-audio-unit select#xstage-soundfont-select{
+  display:block;width:100%;margin-top:7px;min-height:39px
+}
+body.xstage-ui-v2 .stage .xstage-audio-unit [data-level="safe"]{
+  color:#86f7bb;border-left:3px solid #34c778;padding-left:7px
+}
+body.xstage-ui-v2 .stage .xstage-audio-unit [data-level="caution"]{
+  color:#ffe6a4;border-left:3px solid #edb34c;padding-left:7px
+}
+body.xstage-ui-v2 .stage .xstage-audio-unit [data-level="blocked"]{
+  color:#ffaeaf;border-left:3px solid #ee6470;padding-left:7px
+}
+body.xstage-ui-v2 .stage .xstage-font-file-list{
+  display:grid;gap:6px;max-height:220px;overflow-y:auto;
+  margin-top:7px;padding-right:3px
+}
+body.xstage-ui-v2 .stage .xstage-font-row{
+  display:flex;flex-direction:column;gap:2px;
+  padding:6px 8px;background:#081b36;border-radius:6px;
+  overflow-wrap:anywhere
+}
+body.xstage-ui-v2 .stage .xstage-font-row strong{font-size:.76rem}
+body.xstage-ui-v2 .stage .xstage-font-row span{font-size:.72rem}
+body.xstage-ui-v2 .stage .xstage-audio-unit summary{
+  cursor:pointer;font-weight:780;list-style:revert
+}
+body.xstage-ui-v2 .stage .xstage-midi-channels{
+  display:grid;gap:4px;margin:8px 0;max-height:255px;overflow:auto
+}
+body.xstage-ui-v2 .stage .xstage-channel{
+  display:grid;grid-template-columns:70px 63px 63px minmax(45px,1fr) 38px;
+  align-items:center;gap:4px;padding:4px 5px;border-radius:5px;
+  background:#081a34;font-size:.72rem
+}
+body.xstage-ui-v2 .stage .xstage-channel strong{white-space:nowrap}
+body.xstage-ui-v2 .stage .xstage-channel label{
+  display:inline-flex;align-items:center;gap:3px;white-space:nowrap;
+}
+body.xstage-ui-v2 .stage .xstage-channel input[type="checkbox"]{
+  accent-color:#56a8ff;width:15px;height:15px
+}
+body.xstage-ui-v2 .stage .xstage-channel input[type="range"]{
+  min-width:0;width:100%;accent-color:#55c3ee
+}
+body.xstage-ui-v2 .stage .xstage-channel output{text-align:right;font-size:.69rem}
+body.xstage-ui-v2 .stage .xstage-format-guide{
+  margin-top:7px;max-height:240px;overflow-y:auto;color:#d5e7f8
+}
+body.xstage-ui-v2 .stage .xstage-format-guide p{
+  padding:6px 4px;border-bottom:1px solid #24425f
+}
+@media(max-width:640px){
+  body.xstage-ui-v2 .stage .xstage-audio-tools{
+    width:calc(100% - 10px);left:5px;right:5px;
+    border-radius:9px;max-height:calc(100% - var(--xs-top) - var(--xs-bottom) - 8px)
+  }
+  body.xstage-ui-v2 .stage .xstage-audio-head{padding:6px 8px}
+  body.xstage-ui-v2 .stage .xstage-audio-content{padding:6px;gap:7px}
+  body.xstage-ui-v2 .stage .xstage-audio-unit{padding:7px}
+  body.xstage-ui-v2 .stage .xstage-channel{
+    grid-template-columns:62px 53px 53px minmax(32px,1fr) 36px;
+    gap:2px;font-size:.65rem;padding:4px 3px
+  }
+}
+body.xstage-native-tv .stage .xstage-audio-tools,
+body.xstage-native-tv .stage #toggle-audio-tools,
+body.xstage-native-tv #mobile-audio-tools-toggle{display:none!important}

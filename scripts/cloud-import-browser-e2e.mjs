@@ -213,6 +213,21 @@ try{
   assert.ok(textDoc&&JSON.parse(textDoc.data.toString('utf8')).lines.length===2,
     'Manually timed LRC must become real lyrics JSON');
   assert.ok([...records.values()].some(x=>x.name.endsWith('.sf2')));
+  // The V4 SoundFont written by the importer must be discoverable by the
+  // very same online player, with size/risk shown before any media download.
+  const v4Root=group('root').find(x=>x.name==='XStageWeb');
+  assert.ok(v4Root?.id,'One V4 root must exist');
+  await page.evaluate(async rootId=>{
+    await window.XStageBrowserMidi.refreshFonts({
+      token:'TEST_BEARER_FOR_E2E_1234567890123456',
+      rootId,sub:'SUB_MOCK_E2E',ownedByMe:true
+    });
+  },v4Root.id);
+  const fontChoices=await page.locator('#xstage-soundfont-select option').allTextContents();
+  assert.ok(fontChoices.some(x=>x.includes('General-')&&x.includes('.sf2')),'Web SF selector must read hashed immutable filename from V4 AUDIO');
+  const fontDetail=await page.locator('#xstage-font-file-list').textContent();
+  assert.ok(fontDetail.includes('General-')&&fontDetail.includes('.sf2')&&fontDetail.includes('RAM'),
+    'Web SF table must expose file size and forecast RAM before download');
   const firstCount=payloadUploads;
   // After first DB exists, reopen the importer from the visible stage menu.
   await page.click('#cloud-import-close');

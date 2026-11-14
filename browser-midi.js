@@ -369,14 +369,44 @@ function toWav(audio){
   }
   return new Blob([buf],{type:'audio/wav'});
 }
-async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
+function transformNotes(notes,{transpose=0,channels=null}={}){
+  if(!Number.isInteger(transpose)||transpose<-12||transpose>12)
+    fail('Transpose MIDI ต้องอยู่ระหว่าง -12 ถึง +12 ครึ่งเสียง');
+  if(channels!==null&&(!Array.isArray(channels)||channels.length!==16))
+    fail('Mixer MIDI ต้องกำหนดระดับเสียงครบ 16 แชนเนล');
+  const cfg=channels?channels.map(channel=>({
+    gain:Number(channel?.gain),mute:channel?.mute===true,solo:channel?.solo===true
+  })):null;
+  if(cfg?.some(x=>!Number.isFinite(x.gain)||x.gain<0||x.gain>1))
+    fail('ระดับเสียง MIDI ต้องอยู่ระหว่าง 0–100%');
+  const anySolo=!!cfg?.some(x=>x.solo);
+  const output=[];
+  for(const note of notes){
+    const setting=cfg?.[note.channel];
+    if(setting&&(setting.mute||(anySolo&&!setting.solo)||setting.gain<=0))continue;
+    const key=note.key+(note.channel===9?0:transpose);
+    if(key<0||key>127)continue; // Unplayable MIDI pitch; originals untouched.
+    output.push({...note,key,level:note.level*(setting?.gain??1)});
+  }
+  return output;
+}
+async function render(source,{fontBytes=null,signal=null,onStatus=null,
+  transpose=0,channels=null}={}){
   const check=()=>{if(signal?.aborted)fail('ยกเลิกการเตรียม MIDI แล้ว');};
-  check();const song=parseMidi(source),ctx=new OfflineAudioContext(2,Math.ceil((song.duration+.5)*RATE),RATE);
+  check();const song=parseMidi(source);
+  const activeNotes=transformNotes(song.notes,{transpose,channels});
+  if(song.notes.length>180000)fail('เพลง MIDI มีโน้ตมากเกินสำหรับเรนเดอร์ในเบราว์เซอร์ · ใช้ Song Studio PC แปลงเป็นเสียงก่อน');
+  const estimatedBytes=Math.ceil((song.duration+.5)*RATE*2*6+
+    (fontBytes?.byteLength||0)*3+activeNotes.length*256);
+  const memoryGB=scope.XStageAudioAdvisor?.profile?.ramGB;
+  if(Number.isFinite(memoryGB)&&estimatedBytes>memoryGB*1073741824*.42)
+    fail('ประมาณการหน่วยความจำ MIDI สูงเกินความเหมาะสมของเครื่อง · แนะนำเล่นไฟล์ M4A/MP3 หรือแปลงใน Song Studio PC');
+  const ctx=new OfflineAudioContext(2,Math.ceil((song.duration+.5)*RATE),RATE);
   const font=fontBytes?parseFont(fontBytes):null;
   let num=0,scheduled=0;
   const master=ctx.createGain();master.gain.value=font?.75:.24;master.connect(ctx.destination);
-  for(const note of song.notes){
-    if(num++%200===0){check();onStatus?.('เตรียม MIDI '+Math.floor(num*100/song.notes.length)+'%');
+  for(const note of activeNotes){
+    if(num++%200===0){check();onStatus?.('เตรียม MIDI '+Math.floor(num*100/Math.max(1,activeNotes.length))+'%');
       await new Promise(resolve=>setTimeout(resolve,0));}
     const start=Math.max(0,note.start),end=Math.max(start+.06,note.end);
     let regions=font?font.find(note.bank,note.program,note.key,note.velocity):[];
@@ -419,17 +449,29 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
       }
     }
   }
-  if(font&&!scheduled)fail('SoundFont นี้ไม่มี preset ที่ใช้กับ MIDI · กรุณาเลือกซาวด์ฟอนต์อื่น');
+  if(font&&activeNotes.length&&!scheduled)fail('SoundFont นี้ไม่มี preset ที่ใช้กับ MIDI · กรุณาเลือกซาวด์ฟอนต์อื่น');
   onStatus?.('กำลังสังเคราะห์เสียง MIDI…');
   const result=await ctx.startRendering();check();
   onStatus?.('กำลังเตรียมเสียงสำหรับเล่น…');
   // Return compact note timing from the same MIDI tempo clock as the WAV.
   // The stage piano only needs the visible C3-C7 notes, not the original file.
-  const notes=song.notes.filter(n=>n.key>=48&&n.key<=96)
+  const notes=activeNotes.filter(n=>n.key>=48&&n.key<=96)
     .map(n=>({start:n.start,end:n.end,key:n.key,channel:n.channel}));
   return {audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration,notes};
 }
 let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
+let fontFiles=[];
+function selectedFontInfo(){
+  const item=fontFiles.find(x=>x.id===selected);
+  if(!item)return null;
+  return {id:item.id,name:item.name,size:Number(item.size)};
+}
+function fontStatus(report,label=''){
+  const node=$('xstage-soundfont-status');if(!node)return;
+  node.dataset.level=report?.level||'caution';
+  node.textContent=label||report?.text||'ยังไม่ได้เลือก SoundFont';
+}
+
 async function listFolder(parent,token){
   const list=[];let page='';
   do{
@@ -460,54 +502,143 @@ async function refreshFonts(auth){
     try{
       const categories=await listFolder(rootId,auth.token);
       const audio=categories.find(x=>x.name==='AUDIO'&&x.mimeType==='application/vnd.google-apps.folder');
+      let files=[];
       if(audio){
-        const files=await listFolder(audio.id,auth.token);
-        for(const f of files.filter(x=>/\.sf[23]$/i.test(x.name)&&
-          x.mimeType!=='application/vnd.google-apps.folder'))
-          choices.push(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
+        files=(await listFolder(audio.id,auth.token)).filter(x=>/\.sf[23]$/i.test(x.name)&&
+          x.mimeType!=='application/vnd.google-apps.folder');
       }
       if(sequence!==fontRefreshSequence)return;
+      fontFiles=files.map(f=>({id:f.id,name:String(f.name),size:Number(f.size)}));
+      const advisor=scope.XStageAudioAdvisor;
+      for(const f of fontFiles){
+        const result=advisor?.assessFont(f.size,advisor.profile);
+        const level=result?.level==='safe'?'🟢':result?.level==='blocked'?'🔴':'🟡';
+        choices.push(new Option(level+' '+f.name+' ('+(advisor?.fmt(f.size)||Math.round(f.size/1048576)+' MB')+')',f.id));
+      }
+      scope.dispatchEvent?.(new CustomEvent('xstage:fonts-updated',{detail:{files:fontFiles}}));
       const storageKey='xstage-font-pref:'+sub+':'+rootId;
       let saved='';
       try{saved=localStorage.getItem(storageKey)||'';}catch{}
       select.replaceChildren(...choices);
       select.value=choices.some(x=>x.value===saved)?saved:'';
       selected=select.value;
+      const notify=()=>{
+        const meta=selectedFontInfo();
+        const advisor=scope.XStageAudioAdvisor;
+        const report=meta&&advisor?advisor.assessFont(meta.size,advisor.profile):null;
+        fontStatus(report,meta?
+          'ไฟล์ '+advisor.fmt(meta.size)+' · RAM ประมาณ '+advisor.fmt(report.estimatedRamBytes)+
+          ' · '+report.text:
+          'ใช้ MIDI พื้นฐาน · ไม่มีการดาวน์โหลด SoundFont');
+        scope.dispatchEvent?.(new CustomEvent('xstage:font-choice-change'));
+      };
+      const restored=selectedFontInfo();
+      if(restored&&scope.XStageAudioAdvisor?.assessFont(restored.size,scope.XStageAudioAdvisor.profile).level==='blocked'){
+        selected='';select.value='';fontCache=null;
+      }
+      notify();
       select.onchange=()=>{
-        selected=select.value;fontCache=null;
+        const choice=select.value;
+        const f=fontFiles.find(x=>x.id===choice);
+        const advisor=scope.XStageAudioAdvisor;
+        const report=f&&advisor?.assessFont(f.size,advisor.profile);
+        if(report?.level==='blocked'){
+          select.value=selected;
+          fontStatus(report,'🔴 ไม่อนุญาตโหลด '+f.name+' · '+report.text);
+          return;
+        }
+        if(report?.level==='caution'&&choice!==selected&&
+           !scope.confirm?.('SoundFont '+f.name+' อาจใช้หน่วยความจำสูง: '+report.text+
+            '\nไฟล์ '+advisor.fmt(f.size)+' · RAM ประมาณ '+advisor.fmt(report.estimatedRamBytes)+
+            '\nยืนยันเลือก SoundFont นี้หรือไม่?')){
+          select.value=selected;
+          notify();
+          return;
+        }
+        selected=choice;fontCache=null;
         try{localStorage.setItem(storageKey,selected);}catch{}
+        notify();
       };
     }catch(error){
       if(sequence!==fontRefreshSequence)return;
       select.replaceChildren(...choices);
       const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
       option.disabled=true;select.append(option);
-      selected='';fontCache=null;
+      selected='';fontCache=null;fontFiles=[];
+      fontStatus(null,'ตรวจรายการ SoundFont ไม่สำเร็จ: '+String(error.message).slice(0,95));
+      scope.dispatchEvent?.(new CustomEvent('xstage:fonts-updated',{detail:{files:[]}}));
     }
   })();
   fontRefreshPromise=pending;
   try{await pending;}
   finally{if(fontRefreshPromise===pending)fontRefreshPromise=null;}
 }
+async function boundedFontResponse(response,signal,onProgress=null){
+  const length=Number(response.headers.get('Content-Length')||0);
+  if(length>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
+  if(!response.body?.getReader){
+    const bytes=new Uint8Array(await response.arrayBuffer());
+    if(bytes.length>MAX_FONT)fail('SoundFont ใหญ่เกินขีดจำกัดเบราว์เซอร์');
+    return bytes;
+  }
+  const reader=response.body.getReader(),parts=[];let total=0,reported=0;
+  try{
+    for(;;){
+      if(signal?.aborted)fail('ยกเลิกการโหลด SoundFont');
+      const {done,value}=await reader.read();
+      if(done)break;
+      if(!value)continue;
+      total+=value.byteLength;
+      if(total>MAX_FONT)fail('SoundFont ที่ดาวน์โหลดใหญ่กว่า 256 MB · หยุดก่อนใช้ RAM เกิน');
+      parts.push(value);
+      if(onProgress&&total-reported>=2*1048576){
+        reported=total;onProgress(total,length||null);
+      }
+    }
+  }catch(error){
+    try{await reader.cancel();}catch{}
+    throw error;
+  }finally{try{reader.releaseLock();}catch{}}
+  const bytes=new Uint8Array(total);let offset=0;
+  for(const part of parts){bytes.set(part,offset);offset+=part.length;}
+  return bytes;
+}
 async function selectedFont(token,signal){
   if(fontRefreshPromise)await fontRefreshPromise;
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(!selected)return null;
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
-  const id=selected,sub=context.sub;
+  const id=selected,sub=context.sub,meta=selectedFontInfo(),advisor=scope.XStageAudioAdvisor;
+  if(!meta)fail('SoundFont ไม่อยู่ในรายการ XStageWeb/AUDIO ที่ตรวจสอบแล้ว');
+  const assessment=advisor?.assessFont(meta.size,advisor.profile);
+  if(assessment?.level==='blocked')fail('SoundFont ไม่เหมาะกับเครื่องนี้ · '+assessment.text);
   if(fontCache?.id===id&&fontCache?.sub===sub)return fontCache.bytes;
   const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
     {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
   if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
-  const len=Number(res.headers.get('Content-Length')||0);
-  if(len>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
-  const bytes=new Uint8Array(await res.arrayBuffer());
-  if(bytes.byteLength>MAX_FONT)fail('SoundFont ใหญ่เกินขอบเขตหน่วยความจำ');
+  const bytes=await boundedFontResponse(res,signal,(read,total)=>{
+    const report=advisor?.assessFont(meta.size,advisor.profile);
+    fontStatus(report,'กำลังดาวน์โหลด SoundFont '+(advisor?.fmt(read)||read+' bytes')+
+      (total?' / '+advisor.fmt(total):'')+' · '+(report?.text||''));
+  });
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(selected!==id||context?.token!==token||context?.sub!==sub)fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
-  parseFont(bytes);fontCache={id,sub,bytes};return bytes;
+  const verified=advisor?.assessFont(bytes.byteLength,advisor.profile);
+  if(verified?.level==='blocked')fail('SoundFont ที่ดาวน์โหลดใช้ RAM เกินขีดจำกัด · '+verified.text);
+  parseFont(bytes);
+  fontCache={id,sub,bytes};
+  if(advisor){
+    fontStatus(verified,'โหลด SoundFont สำเร็จ '+advisor.fmt(bytes.byteLength)+
+      ' · อยู่ใน RAM ชั่วคราว · '+verified.text);
+  }
+  return bytes;
 }
-scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,
-  reset(){fontRefreshSequence++;fontRefreshPromise=null;context=null;selected='';fontCache=null;const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
+scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,transformNotes,render,
+  refreshFonts,selectedFont,selectedFontInfo,
+  reset(){fontRefreshSequence++;fontRefreshPromise=null;context=null;selected='';fontCache=null;fontFiles=[];
+    const node=$('xstage-soundfont-select');
+    if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));
+    fontStatus(null,'ออกจากบัญชี · ยังไม่มี SoundFont');
+    scope.dispatchEvent?.(new CustomEvent('xstage:fonts-updated',{detail:{files:[]}}));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);

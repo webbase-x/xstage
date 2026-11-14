@@ -89,6 +89,7 @@
       </aside></div>
             <button id="toggle-keyboard" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="virtual-keyboard" aria-expanded="false" title="เปิดหรือซ่อนแป้นพิมพ์">⌨ <span>แป้นพิมพ์</span></button>
             <button id="toggle-piano" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="stage-piano" aria-expanded="false" title="เปิดหรือซ่อนเปียโนบนเวที">🎹 <span>เปียโน</span></button>
+            <button id="toggle-audio-tools" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="xstage-audio-tools" aria-expanded="false" title="ตรวจเครื่อง เลือกโหมดเล่น และ Mixer MIDI">🎚 <span>ระบบเสียง</span></button>
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
           </header>
@@ -106,11 +107,7 @@
             <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
             <button type="button" id="cloud-import-open" hidden>☁ นำเข้าเพลง / SoundFont</button>
-             <label class="xstage-font-control" for="xstage-soundfont-select"><span>ซาวด์ฟอนต์ MIDI</span>
-               <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
-                 <option value="">เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)</option>
-               </select>
-             </label>
+
             <button type="button" id="mobile-home-toggle" aria-label="หน้าแรก">หน้าแรก</button>
             <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
             <button type="button" id="mobile-stage-pop" aria-label="เปิดจอร้องแยก">เปิดจอร้องแยก</button>
@@ -137,6 +134,7 @@
             </details>
             <button type="button" id="mobile-keyboard-toggle">แป้นพิมพ์บนจอ</button>
             <button type="button" id="mobile-piano-toggle" aria-expanded="false" aria-controls="stage-piano">🎹 เปียโน MIDI บนเวที</button>
+            <button type="button" id="mobile-audio-tools-toggle" aria-expanded="false" aria-controls="xstage-audio-tools">🎚 ตรวจเครื่อง · โหมดเสียง · MIDI Mixer</button>
             <button type="button" id="toggle-remote" class="menu-direct" aria-controls="remote-pair-panel" aria-expanded="false">รีโมทมือถือ QR</button>
             <button type="button" id="remote-request-toggle" aria-controls="remote-request-panel" aria-expanded="false">เพลงจากมือถือ <span id="remote-request-count">0</span></button>
             <button type="button" id="mobile-update-version">ตรวจสอบ / อัปเดต X-Stage</button>
@@ -150,6 +148,58 @@
           <div class="stage-label"><span class="on-air-dot"></span><span>NOW PLAYING</span><span id="stage-code" class="stage-code">—</span></div>
           <div id="stage-idle" class="stage-idle"><span class="stage-idle-icon" aria-hidden="true">♪</span><strong>พร้อมร้องเพลง</strong><span>ค้นหาเพลงและกด Enter เพื่อเริ่มเล่น</span></div>
           <canvas id="lyrics" aria-label="เนื้อร้องคาราโอเกะแสดงแบบไฮไลต์ตามเวลา" width="1200" height="300"></canvas>
+          <section id="xstage-audio-tools" class="xstage-audio-tools" hidden aria-label="วิเคราะห์อุปกรณ์และเครื่องมือเสียง X-Stage">
+            <div class="xstage-audio-head"><strong>🎚 AUDIO STUDIO · ความพร้อมและประเภทเพลง</strong>
+              <button id="xstage-audio-close" type="button" aria-label="ปิดระบบเสียง">✕</button></div>
+            <div class="xstage-audio-content">
+              <div class="xstage-audio-unit">
+                <div class="xstage-audio-line"><strong>ความพร้อมอุปกรณ์</strong>
+                  <button type="button" id="xstage-profile-refresh">ตรวจซ้ำ</button></div>
+                <p id="xstage-device-profile" role="status">กำลังประเมินเครื่อง…</p>
+                <p class="xstage-audio-note">ข้อมูล RAM/CPU เป็นค่าที่เบราว์เซอร์เปิดเผย ไม่ใช่การวัด RAM ว่างจริง · พื้นที่หมายถึงโควตาเว็บไซต์ ไม่ใช่พื้นที่ว่างทั้งหมดของเครื่อง</p>
+              </div>
+              <div class="xstage-audio-unit">
+                <strong>จำนวนเพลงตามประเภทต้นฉบับ</strong>
+                <p id="xstage-format-counts">ยังไม่มีเพลง</p>
+                <p id="xstage-song-format">ยังไม่ได้เลือกเพลง</p>
+              </div>
+              <div class="xstage-audio-unit">
+                <label for="xstage-play-mode"><strong>เลือกวิธีเล่นก่อนเริ่มเพลง</strong></label>
+                <select id="xstage-play-mode">
+                  <option value="auto">อัตโนมัติ · แนะนำตามเครื่อง/ไฟล์</option>
+                  <option value="midi">MIDI พื้นฐาน · ไม่โหลด SoundFont</option>
+                  <option value="soundfont">MIDI + SoundFont ที่เลือก</option>
+                  <option value="audio">เสียงไฟล์ต้นฉบับ · M4A/MP3/ฯลฯ</option>
+                  <option value="video">วิดีโอพร้อมเสียง (เมื่อมีไฟล์ครบ)</option>
+                </select>
+                <p id="xstage-mode-advice" role="status">กำลังประเมิน…</p>
+                <button type="button" id="xstage-mode-apply">ใช้โหมดนี้กับเพลงปัจจุบัน</button>
+                <p class="xstage-audio-note">โหมดที่ไม่มีไฟล์ประกอบจะเลือกตัวเลือกที่เล่นได้แทน · การสลับโหมดอาจต้องเตรียมเพลงใหม่</p>
+              </div>
+              <div class="xstage-audio-unit">
+                <label class="xstage-font-control" for="xstage-soundfont-select"><strong>SoundFont บน XStageWeb/AUDIO</strong></label>
+                <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI"><option value="">เสียง MIDI พื้นฐาน (ไม่ใช้ SoundFont)</option></select>
+                <p id="xstage-soundfont-status" role="status" data-level="caution">เลือก SoundFont เพื่อประเมินพื้นที่และ RAM ก่อนโหลด</p>
+                <p class="xstage-audio-note">ดาวน์โหลด SoundFont เข้า RAM ชั่วคราวเมื่อเริ่ม MIDI · ไม่เก็บออฟไลน์ถาวร · ตัวเลข RAM เป็นค่าประมาณการ ไม่ใช่การวัดจริง</p>
+                <div id="xstage-font-file-list" class="xstage-font-file-list">ยังไม่มี SoundFont</div>
+              </div>
+              <details class="xstage-audio-unit" id="xstage-midi-settings">
+                <summary>🎹 MIDI · ปรับคีย์, Mute/Solo และเสียง 16 แชนเนล</summary>
+                <div class="xstage-audio-line">
+                  <label for="xstage-midi-transpose">Transpose</label>
+                  <select id="xstage-midi-transpose" aria-label="เปลี่ยนคีย์ MIDI เป็นจำนวนครึ่งเสียง"><option value="0">0 คีย์เดิม</option></select>
+                  <button type="button" id="xstage-midi-reset">คืนค่าเริ่มต้น</button>
+                </div>
+                <p class="xstage-audio-note">ปรับเฉพาะเสียง MIDI ระหว่างเล่น ไม่แก้ไฟล์ MID/KAR/NCN/CUR และไม่เลื่อนเวลาเนื้อร้อง · Ch 10 เป็นกลอง ไม่เปลี่ยนคีย์</p>
+                <div id="xstage-midi-channels" class="xstage-midi-channels" aria-label="MIDI Mixer 16 แชนเนล"></div>
+                <button type="button" id="xstage-midi-apply">ใช้ค่าคีย์และ Mixer กับเพลงปัจจุบัน</button>
+              </details>
+              <details class="xstage-audio-unit" id="xstage-audio-quality-guide">
+                <summary>รายละเอียดคุณภาพเสียงและฟังก์ชันแต่ละประเภท</summary>
+                <div id="xstage-format-guide" class="xstage-format-guide"></div>
+              </details>
+            </div>
+          </section>
           <section id="stage-piano" class="stage-piano" hidden aria-label="คีย์บอร์ดเปียโนบนเวที">
             <div class="stage-piano-head">
               <strong>🎹 X-STAGE PIANO</strong>
@@ -389,6 +439,7 @@
 <script src="config.js?v=1104"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
   <script src="cloud-import-core.js?v=1104" defer></script>
+  <script src="audio-capability.js?v=1104" defer></script>
   <script src="browser-midi.js?v=1104" defer></script>
   <script src="stage-piano.js?v=1104" defer></script>
   <script src="video-metadata-editor.js?v=1104" defer></script>

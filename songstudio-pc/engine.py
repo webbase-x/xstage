@@ -369,6 +369,129 @@ def font_list():
         fonts.append(str(DEFAULT_SOUNDFONT))
     return fonts
 
+def _physical_memory():
+    """Return installed/available physical RAM, or None when the OS withholds it."""
+    if os.name == "nt":
+        try:
+            import ctypes
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong),
+                            ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            status = MemoryStatus()
+            status.dwLength = ctypes.sizeof(status)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+                return int(status.ullTotalPhys), int(status.ullAvailPhys)
+        except (OSError, AttributeError, ValueError):
+            pass
+    try:
+        total = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+        available = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+        if total > 0 and available >= 0:
+            return int(total), int(available)
+    except (ValueError, OSError, AttributeError):
+        pass
+    return None, None
+
+
+def _nearest_existing_directory(value):
+    path = Path(value or DATA).expanduser()
+    while not path.exists() and path != path.parent:
+        path = path.parent
+    if not path.is_dir():
+        path = path.parent
+    return path
+
+
+def soundfont_pc_assessment(size_bytes, available_ram, free_disk):
+    """Conservative estimate; never treat a forecast as an actual benchmark."""
+    if type(size_bytes) is not int or size_bytes < 0:
+        return {"level": "caution", "reason": "ไม่ทราบขนาดไฟล์ SoundFont"}
+    ram_need = size_bytes * 3 + 256 * 1024 ** 2
+    notes = []
+    level = "safe"
+    if available_ram is None:
+        level = "caution"
+        notes.append("ไม่สามารถอ่าน RAM ว่างจากระบบได้")
+    elif ram_need > available_ram * .8:
+        level = "blocked"
+        notes.append("RAM ว่างไม่พอสำหรับการประมวลผลที่ประเมิน")
+    elif ram_need > available_ram * .45:
+        level = "caution"
+        notes.append("อาจใช้ RAM มาก โปรดปิดโปรแกรมอื่น")
+    if free_disk is not None and size_bytes * 1.2 > free_disk:
+        if level != "blocked":
+            level = "caution"
+        notes.append("พื้นที่ปลายทางอาจไม่พอหากดาวน์โหลดไฟล์นี้เพิ่ม")
+    return {"level": level, "downloadBytes": size_bytes,
+            "estimatedRamBytes": ram_need, "diskFreeBytes": free_disk,
+            "reason": " · ".join(notes) or "ทรัพยากรที่ประเมินอยู่ในระดับเหมาะสม"}
+
+
+def pc_audio_capabilities():
+    """Fast, read-only readiness for the existing private Song Studio workspace."""
+    total_ram, available_ram = _physical_memory()
+    try:
+        disk_dir = _nearest_existing_directory(PREFS.get("download"))
+        free_disk = shutil.disk_usage(disk_dir).free
+    except (OSError, ValueError):
+        free_disk = None
+    font = Path(PREFS.get("soundfont") or "").expanduser()
+    if not PREFS.get("soundfont") or not font.is_file() or font.is_symlink():
+        font_info = None
+    else:
+        try:
+            if font.suffix.lower() not in (".sf2", ".sf3"):
+                font_info = None
+            else:
+                size = font.stat().st_size
+                font_info = {"name": font.name, "sizeBytes": size,
+                             "cloudCompatible": size <= 256 * 1024 ** 2,
+                             "cloudMaximumBytes": 256 * 1024 ** 2,
+                             **soundfont_pc_assessment(size, available_ram, free_disk)}
+        except OSError:
+            font_info = None
+    with LOCK:
+        rows = list(FILES)
+    counts = {}
+    for row in rows:
+        if row.get("ncn"):
+            category = "NCN"
+        else:
+            suffix = Path(str(row.get("path") or "")).suffix.lower()
+            category = (suffix[1:].upper() if suffix else
+                        str(row.get("source_format") or "OTHER").upper())
+            if category in ("MP4", "WEBM", "AVI", "WMV", "MOV", "FLV",
+                            "MPEG", "MPG", "DAT", "VOB", "MKV"):
+                category = "VIDEO"
+            if category == "MID":
+                category = "MIDI"
+        counts[category] = counts.get(category, 0) + 1
+    cpu = os.cpu_count()
+    recommendations = []
+    if cpu is not None and cpu < 4:
+        recommendations.append("CPU คอร์น้อย · แนะนำเล่น M4A/MP3 มากกว่าเรนเดอร์ MIDI จำนวนมาก")
+    if available_ram is not None and available_ram < 1024 ** 3:
+        recommendations.append("RAM ว่างต่ำกว่า 1 GB · ใช้ MIDI พื้นฐานหรือไฟล์เสียง")
+    if font_info and font_info["level"] != "safe":
+        recommendations.append("ตรวจ SoundFont ก่อนทดลองฟังหรือดาวน์โหลด")
+    if not recommendations:
+        recommendations.append("เลือก MIDI+SoundFont ได้ตามคุณภาพเสียงที่ต้องการ โดยทดลองฟังก่อนสร้างจริง")
+    return {"cpuLogicalCores": cpu, "ramInstalledBytes": total_ram,
+            "ramAvailableBytes": available_ram, "downloadDiskFreeBytes": free_disk,
+            "soundfont": font_info, "songCounts": counts,
+            "totalSongs": len(rows), "recommendations": recommendations,
+            "disclaimer": "ข้อมูล RAM และพื้นที่มาจาก Windows/OS เครื่อง PC · "
+                          "คาดการณ์ SoundFont ไม่ใช่ค่าการใช้ RAM จริง "
+                          "และอัปโหลด Drive ไม่จำเป็นต้องดาวน์โหลดสำเนาใน PC"}
+
+
 LAST_SCAN_STATS = {}
 
 
@@ -2611,6 +2734,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module(), ncn=NCN))
             elif path == "/api/code-registry":
                 self._json(code_registry_preview())
+            elif path == "/api/audio-capabilities":
+                self._json(pc_audio_capabilities())
             elif path == "/api/environment":
                 google = GOOGLE.status()
                 self._json({"Python Runtime": True, "FFmpeg": bool(ffmpeg_binary()),

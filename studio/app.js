@@ -674,6 +674,7 @@
     setFields();
     if (response.google) setGoogle(response.google);
     if ('oauth' in patch) await refreshEnvironment();
+    if ('soundfont' in patch || 'download' in patch) void refreshAudioCapability();
     return response;
   }
   const fields = {'create-source': 'source', 'create-workspace': 'workspace',
@@ -1859,7 +1860,7 @@
         'อัปโหลด SoundFont ที่เลือกไปยัง XStageWeb/AUDIO (Layout V4)'+
         '\\nตรวจไฟล์และ MD5 ก่อนส่ง ไม่ทับ SoundFont เดิม'+
         (createNew?'\\nถ้ามองไม่เห็น XStageWeb ระบบจะสร้างใหม่ โปรดตรวจบัญชีและสิทธิ์ Google ก่อน':'')+
-        '\\n\\nหมายเหตุ: เว็บหลักยังไม่มี MIDI SoundFont Engine พร้อมเล่น',
+        '\\n\\nเว็บรองรับ SoundFont ตามขอบเขตที่เบราว์เซอร์ตรวจสอบได้ (ไม่เกิน 256 MB) และจะเตือนทรัพยากรก่อนดาวน์โหลด',
         'ยืนยันอัปโหลด SoundFont',
         {acceptLabel:'เริ่มอัปโหลด',cancelLabel:'ยกเลิก'});
       if (!agreed) return;
@@ -2124,7 +2125,10 @@
             pendingAiAlignment=null;
             $('ai-lyrics-align-review').textContent='ยกเลิกจัดเวลาแล้ว · คำร้องที่วางยังอยู่';
           }
-          if (['scan','build','upload','download'].includes(job.kind)) await refreshSongs();
+          if (['scan','build','upload','download'].includes(job.kind)){
+            await refreshSongs();
+            if(job.kind==='scan')void refreshAudioCapability();
+          }
           if (job.kind === 'build' && ['success','error'].includes(job.state) &&
               !promptedBuildUploadJobs.has(job.id)) {
             // Mark before awaiting the dialog: polling runs every 900 ms.
@@ -2142,6 +2146,40 @@
     } catch (error) {
       $('engine-state').textContent = 'การเชื่อมต่อ Local Engine หลุด · กำลังลองใหม่';
       $('job-title').textContent = 'กำลังเชื่อมต่อ Local Engine อีกครั้ง';
+    }
+  }
+  async function refreshAudioCapability() {
+    const machine=$('pc-audio-machine');
+    try {
+      const result=await api('/api/audio-capabilities');
+      const ram=result.ramInstalledBytes===null?'ไม่ทราบ':fmtSize(result.ramInstalledBytes);
+      const available=result.ramAvailableBytes===null?'ไม่ทราบ':fmtSize(result.ramAvailableBytes);
+      const space=result.downloadDiskFreeBytes===null?'ไม่ทราบ':fmtSize(result.downloadDiskFreeBytes);
+      machine.textContent='CPU '+(result.cpuLogicalCores||'ไม่ทราบ')+' logical cores · RAM ติดตั้ง '+ram+
+        ' · RAM ว่าง '+available+' · พื้นที่ปลายทางดาวน์โหลด '+space;
+      $('pc-audio-recommendations').textContent=(result.recommendations||[]).join(' · ')+
+        ' · ข้อมูลจาก PC เป็นการประเมินเบื้องต้น ไม่ใช่ผล Benchmark';
+      const entries=Object.entries(result.songCounts||{}).sort((a,b)=>b[1]-a[1]);
+      $('pc-audio-format-counts').textContent=entries.length
+        ?entries.map(([name,count])=>name+' '+fmtNum(count)).join(' · ')+' · รวม '+fmtNum(result.totalSongs)
+        :'ยังไม่มีเพลงที่สแกน';
+      const font=result.soundfont;
+      const label=font?('ไฟล์ '+font.name+' · ขนาดดาวน์โหลด '+fmtSize(font.downloadBytes)+
+        ' · RAM เพิ่มโดยประมาณ '+fmtSize(font.estimatedRamBytes)+
+        ' · พื้นที่ดาวน์โหลดคงเหลือ '+space+' · '+font.reason)
+        :'ยังไม่ได้เลือก SoundFont SF2/SF3 ที่มีอยู่ในเครื่อง';
+      for(const id of ['pc-create-soundfont-advice','pc-upload-soundfont-advice']){
+        const node=$(id);if(!node)continue;
+        const upload=id==='pc-upload-soundfont-advice';
+        const blocked=upload&&font?.cloudCompatible===false;
+        node.dataset.level=blocked?'blocked':font?.level||'caution';
+        node.textContent=label+(blocked?
+          ' · ห้ามอัปโหลด: XStageWeb Web/Android รองรับ SoundFont ไม่เกิน 256 MB':'');
+      }
+      return result;
+    } catch(error) {
+      machine.textContent='ประเมินเครื่องไม่ได้: '+error.message;
+      return null;
     }
   }
   async function refreshEnvironment() {
@@ -2245,6 +2283,7 @@
       await loadState({initialize:true}); await refreshSongs();
       await searchPreviewSongs();
       await refreshEnvironment();
+      await refreshAudioCapability();
       refreshTimer = window.setInterval(poll, 900);
       // Connected workspace and authenticated web view use the exact same UI.
       $('engine-state').textContent = 'เชื่อมต่อสำเร็จ · พร้อมประมวลผล';
@@ -2504,7 +2543,10 @@
   }
   // SoundFont and MIDI preset adjustments apply to the existing stream,
   // without creating another file or losing the current play position.
-  $('create-soundfont').addEventListener('change',()=>queueLiveControl(true));
+  $('create-soundfont').addEventListener('change',()=>{
+    queueLiveControl(true);
+    void saveInputs(['create-soundfont']).catch(error=>message(error.message));
+  });
   $('create-preset').addEventListener('change',()=>queueLiveControl(true));
   $('create-mode').addEventListener('change', () => {
     if (liveStreamId) $('create-preview-hint').textContent =
@@ -2565,7 +2607,11 @@
   $('upload-soundfont-button').addEventListener('click',()=>{void startSoundfontUpload();});
   $('upload-folder-button').addEventListener('click',()=>{void startFolderUpload();});
   for(const button of document.querySelectorAll('.download-action')) button.addEventListener('click',()=>{void startDownload(button.dataset.kind);});
-  $('refresh-environment').addEventListener('click',()=>{void refreshEnvironment();});
+  $('refresh-environment').addEventListener('click',()=>{void refreshEnvironment();void refreshAudioCapability();});
+  $('pc-audio-refresh')?.addEventListener('click',()=>{void refreshAudioCapability();});
+  $('upload-soundfont-path')?.addEventListener('change',()=>{
+    void saveInputs(['upload-soundfont-path']).catch(error=>message(error.message));
+  });
   $('open-web').addEventListener('click',async()=>{
     try {await post('/api/open-browser',{});message('เปิด Web Control ด้วย Local Engine ชุดเดียวกันแล้ว',false);}
     catch(e){message(e.message);}
