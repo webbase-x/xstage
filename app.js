@@ -548,12 +548,25 @@ function syncSongVideo(){
 async function loadSongVideo(song,request,token){
   if(!karaokeVideo||!getFileId(song?.video))return;
   try{
+    // A video-only karaoke song can use the same authenticated media Blob
+    // for its audio clock and muted video layer, without a second Drive download.
+    if(getFileId(song.video)===getFileId(song.audio)&&state.objectUrl){
+      karaokeVideo.src=state.objectUrl;
+      karaokeVideo.muted=true;
+      karaokeVideo.hidden=false;
+      karaokeVideo.load();
+      syncSongVideo();
+      return;
+    }
     const response=await privateFile(song.video.fileId,token);
     const data=await response.blob();
     if(request!==state.requestId||token!==state.token||state.current!==song)return;
     if(data.size<1024)throw Error('วิดีโอว่างเปล่า');
-    videoObjectUrl=URL.createObjectURL(data.type==='video/mp4' ? data :
-      new Blob([data],{type:'video/mp4'}));
+    const ext=String(song.video.path||'').toLowerCase();
+    const mime=data.type?.startsWith('video/')?data.type:
+      ext.endsWith('.webm')?'video/webm':'video/mp4';
+    videoObjectUrl=URL.createObjectURL(data.type===mime?data :
+      new Blob([data],{type:mime}));
     karaokeVideo.src=videoObjectUrl;
     karaokeVideo.muted=true;
     karaokeVideo.hidden=false;
