@@ -1,0 +1,33 @@
+name: X-Stage cloud folder import real Chromium E2E
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloud-import*.js"
+      - "cloud-import*.css"
+      - "index.html"
+      - "app.js"
+      - "scripts/cloud-import-browser-e2e.mjs"
+      - ".github/workflows/test-cloud-import-browser.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check standalone importer regressions
+        run: |
+          node scripts/cloud-import-test.mjs
+          node scripts/cloud-import-contract-test.mjs
+      - name: Prepare headless Chromium on CI only
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Test browser Google Drive private-folder workflow
+        run: node scripts/cloud-import-browser-e2e.mjs
