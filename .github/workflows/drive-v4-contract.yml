@@ -1,0 +1,38 @@
+name: XStageWeb v4 cross-platform contract
+on:
+  pull_request:
+    paths:
+      - 'songstudio-pc/online_publish.py'
+      - 'songstudio-pc/folder_upload.py'
+      - 'cloud-import.js'
+      - 'app.js'
+      - 'browser-midi.js'
+      - 'studio/**'
+      - 'scripts/cloud-import-contract-test.mjs'
+      - 'scripts/test_songstudio_drive_layout.py'
+      - 'scripts/test_songstudio_online_publish.py'
+      - '.github/workflows/drive-v4-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  drive-v4:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify shared browser/Android Drive import
+        run: node scripts/cloud-import-contract-test.mjs
+      - name: Verify private PC publisher and restore protocol
+        run: python -m unittest discover -s scripts -p "test_songstudio_online_publish.py" -v
+      - name: Verify two-folder layout and no-pointer safeguards
+        run: python -m unittest discover -s scripts -p "test_songstudio_drive_layout.py" -v
