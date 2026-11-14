@@ -632,6 +632,11 @@ class Importer {
             if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้าม MIDI ซ้ำ MD5: '+code);continue;}
             const candidates=byCode.get(code.toLowerCase())||[];
             const same=candidates.find(x=>String(x.midi?.md5Checksum||'').toLowerCase()===midiHash);
+            const existingMidi=rows.get('browser/midi/'+midiHash);
+            if(existingMidi&&!same){
+              this.stats.duplicates++;finished++;
+              show('ข้าม MIDI เนื้อไฟล์ซ้ำรหัสอื่น: '+code);continue;
+            }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;
               show('รหัส MIDI ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;}
             const type=item.kind==='NCN'?'NCN':item.kind==='KAR'?'KAR':'SMF';
@@ -727,6 +732,13 @@ class Importer {
             if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้ามเพลงซ้ำ MD5: '+code);continue;}
             const candidates=byCode.get(code.toLowerCase())||[];
             const same=candidates.find(x=>String(x.audio?.md5Checksum||'').toLowerCase()===audioHash);
+            // Same bytes with a different filename/code are a duplicate, not
+            // a fatal primary-key collision. Never overwrite another record.
+            const existingAudio=rows.get('browser/'+audioHash);
+            if(existingAudio&&!same){
+              this.stats.duplicates++;finished++;
+              show('ข้ามไฟล์เพลงซ้ำ MD5 แม้เปลี่ยนชื่อ/รหัส: '+code);continue;
+            }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
             const folder=core.bucket(code),prefix=[uploadKind==='MP4'||uploadKind==='WEBM'?'VIDEO':'AUDIO',uploadKind];
