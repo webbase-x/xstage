@@ -15,8 +15,8 @@ MAX_SONGS = 1_000_000
 MEDIA_KEYS = frozenset(("mp3", "m4a", "midi", "video"))
 VIDEO_TYPES = frozenset(("avi", "mpg", "vcd", "wmv", "mp4"))
 MIDI_TYPES = frozenset(("ncn", "emk"))
-SAFE_ID = re.compile(r"^[^\x00-\x1f/\\\\?#]{1,256}$")
-SONG_ID = re.compile(r"^[^\\x00-\\x1f?#]{1,256}$")  # V1 IDs can contain audio/0/00001
+SAFE_ID = re.compile(r"^[^\x00-\x1f/\\?#]{1,256}$")
+SONG_ID = re.compile(r"^[^\x00-\x1f?#]{1,256}$")  # V1 IDs can contain audio/0/00001
 DIGEST = re.compile(r"^[0-9a-fA-F]{64}$")
 MD5 = re.compile(r"^[0-9a-fA-F]{32}$")
 
