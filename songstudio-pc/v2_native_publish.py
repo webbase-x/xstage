@@ -186,7 +186,8 @@ class V2NativePublisher:
                 else:
                     media["midi"] = {"type":"ncn", **payload["song"],
                                      "lyr":payload["lyrics"], "cur":payload["cursor"]}
-            lyrics = upload(item["lyrics"], "M4A", "lyrics", item["code"]) if item["lyrics"] else None
+            lyric_format = "MP3" if "mp3" in item["media"] and "m4a" not in item["media"] else "M4A"
+            lyrics = upload(item["lyrics"], lyric_format, "lyrics", item["code"]) if item["lyrics"] else None
             # Derive verified timing from original CUR/LYR or embedded KAR events;
             # never guess lyric timing from MIDI notes. Publish lyrics JSON
             # together with the native track so the stage can stream it.
