@@ -1557,16 +1557,21 @@ def execute_job(action, options, started):
             is_catalog = (root / "current.json").is_file()
             is_ncn = not is_catalog and LYRIC_NCN.locate(root) is not None
             update("กำลังตรวจเนื้อร้องจากคลัง StageWeb" if is_catalog
-                   else "กำลังตรวจ MID / LYR / CUR ใน NCN โดยไม่แก้ไฟล์" if is_ncn
+                   else "กำลังอ่านเฉพาะ NCN/Lyrics/*.LYR · ไม่อ่าน MID/CUR" if is_ncn
                    else "กำลังค้นหาไฟล์ LRC ในโฟลเดอร์ต้นทาง · ไม่อ่านไฟล์เสียง")
             if is_catalog:
                 index = LYRIC_TEXT.scan(
                     root, _song_export_module(), cancelled=CANCEL,
                     on_progress=lambda detail, done: update(detail, done))
             elif is_ncn:
+                def lyric_progress(detail, done, total=None):
+                    if type(total) is int and total > 0:
+                        with LOCK:
+                            JOB["total"] = total
+                    update(detail, done)
                 index = LYRIC_NCN.scan(
                     root, NCN, LYRIC_TEXT, cancelled=CANCEL,
-                    on_progress=lambda detail, done: update(detail, done))
+                    on_progress=lyric_progress)
             else:
                 index = LYRIC_TEXT.scan_lrc_folder(
                     root, cancelled=CANCEL,
