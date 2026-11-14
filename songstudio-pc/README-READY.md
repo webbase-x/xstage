@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.33 Build 333
+# X-Stage Song Studio PC Ready v0.3.34 Build 334
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,14 +6,14 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Release metadata
 
-- Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.33 Build 333, packaging explicitly `portable_zip`).
+- Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.34 Build 334, packaging explicitly `portable_zip`).
 - Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.5 Build 205, not a ready installer).
 - Verify the published ZIP checksum with the matching GitHub Release `.zip.sha256` asset or the `sha256` field in `downloads/song-studio-latest.json` (after the release is published). Do not use hashes from older builds. This is **not** a signed EXE or MSI installer.
 - Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.33-build333.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.34-build334.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -187,53 +187,53 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.33-build333`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.34-build334`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
 
-## Google Drive library layout v2 (Build 333)
+## Google Drive library layout v4 — AUDIO + LYRICS
 
-New private Google Drive libraries use `XStageWeb/` and create the following
-category directories. Alphabet/digit subfolders (`0`–`9`, `A`–`Z`) are
-created **on demand** as songs are uploaded, avoiding hundreds of empty
-folders:
+All new owner-private music libraries use exactly two flat directories under
+`XStageWeb/`; there are no format, category, code or bucket subfolders:
 
 ```text
 XStageWeb/
   AUDIO/
-    MP3/Songs/{0-9,A-Z}/
-    MP3/Lyrics/{0-9,A-Z}/
-    M4A/Songs/{0-9,A-Z}/
-    M4A/Lyrics/{0-9,A-Z}/
-  VIDEO/{AVI,MPG,VCD,WMV}/
-  MIDI/
-    NCN/{Songs,Lyrics,Cursor}/{0-9,A-Z}/
-    EMK/{0-9,A-Z}/
-  DB/catalog-base-*.json
-  DB/catalog-delta-*.json
-  current.json
+    00001-<source SHA prefix>.mid
+    00002-<media hash>.m4a
+    Piano-<hash>.sf2
+    ...
+  LYRICS/
+    00001-<lyrics hash>.json
+    00002-<lyrics hash>.json
+    catalog-base-<generation>.json
+    catalog-delta-<generation>.json
+    current.json
+    ...
 ```
 
-The **current export pipeline publishes converted M4A audio and timed
-JSON/LRC only**. Video and NCN/EMK folders are present as future categories;
-they do not imply that direct VIDEO/MIDI cloud publishing has been enabled.
-Folder names are case-sensitive for Drive lookup.
+Song Studio keeps the source MIDI byte-identical in standard X-Stage export
+mode, and writes timed Lyrics JSON without changing source LYR/CUR.
+The user may optionally render to M4A without editing the original MIDI.
+A source .LYR/.CUR/.LRC may be imported locally to create verified JSON but
+is **not** uploaded to Google Drive.
 
-`current.json` stays in the root so the existing karaoke player can locate
-the private database; the immutable catalogs move to `DB/`. File IDs, MD5
-checks and the existing pointer-before-publish safety rules remain enforced.
-`StageWeb/` remains the local PC working directory. Existing remote
-`StageWeb/` libraries are reused by ID without moving, deleting, or
-renaming old media. An existing `StageWeb/` and `XStageWeb/` side by side
-will cause publishing to stop rather than silently merge separate libraries.
-Do not select "create new library" to work around missing OAuth access;
-first connect the original library via the same authorized Google OAuth app.
+`current.json` is published **last**, after the media and immutable catalog
+have passed checksum verification. The Web and Android TV read the same
+private catalog and fetch the media by Google Drive File ID. Existing
+layout-v1/v2 roots and layout-v3 `TEXT/` catalogs remain readable for backup
+and inspection, but a legacy library is not automatically migrated,
+overwritten or deleted; publishing in v4 requires verified migration.
+
+The local PC working library remains `StageWeb/` with its own local
+`audio/`, `lyrics/` and catalog journal structure. It must not be
+confused with the two-folder private **Google Drive** layout.
 
 ### Verification
 
 The Windows Ready CI runs `scripts/test_songstudio_drive_layout.py` and
 `scripts/test_songstudio_online_publish.py` before making its ZIP artifact.
-These cover code buckets, new private folders, online pointer/catalog layout,
+These cover the two flat folders, online pointer/catalog layout,
 download restoration, duplicate-root safety and interrupted uploads.
 
