@@ -239,15 +239,34 @@ jobs:
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
-            echo "main moved while Android TV build was running; refusing to publish a stale APK"
-            exit 1
-          fi
           git add "downloads/${APK_NAME}" "downloads/${APK_NAME}.sha256" downloads/android-tv-latest.json
           if git diff --cached --quiet; then
             echo "Published APK is unchanged"
             exit 0
           fi
           git commit -m "build(android-tv): publish browser-downloadable test APK"
-          git push origin HEAD:main
+          # Song Studio may publish a separate source ZIP during this build.
+          # Rebase the APK commit only if the remote changes do not affect Android
+          # sources, hosted UI, version, or previously published Android APK metadata.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if [ "$(git rev-parse origin/main)" != "$(git rev-parse HEAD^)" ]; then
+              if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+                echo "::error::main was rewritten; refusing to publish an unverifiable APK"
+                exit 1
+              fi
+              touched="$(git diff --name-only "$GITHUB_SHA" origin/main)"
+              if printf '%s\n' "$touched" | grep -Eq '^(android-tv/|version\.json$|config\.js$|app\.js$|index\.html$|remote\.html$|remote\.js$|style\.css$|xstage-ux\.css$|stage-controls\.js$|stage-ui\.js$|browser-midi\.js$|native-audio-meter\.js$|android-apk-download\.js$|\.github/workflows/build-android-tv\.yml$|downloads/android-tv-latest\.json$|downloads/X-Stage-Karaoke-Android-)'; then
+                echo "::error::Android or shared web sources changed while APK was building; rebuild from latest main"
+                exit 1
+              fi
+              git rebase origin/main
+            fi
+            if git push origin HEAD:main; then
+              echo "Published APK with verified source identity."
+              exit 0
+            fi
+            echo "main advanced during APK publish (attempt $attempt); rechecking source identity"
+          done
+          echo "::error::Could not publish the verified APK after retries"
+          exit 1
