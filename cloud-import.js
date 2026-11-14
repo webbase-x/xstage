@@ -29,10 +29,8 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function aborted(error){return error?.name==='AbortError'||String(error?.message||'').includes('หยุดงาน');}
 function encode(document){return new Blob([JSON.stringify(document)],{type:'application/json'});}
 function pathFor(code,kind,role,name){
-  const group=core.bucket(code);
-  return [kind==='sf2'||kind==='sf3'?'SOUNDFONT':'AUDIO',
-    kind==='sf2'||kind==='sf3'?kind.toUpperCase():kind.toUpperCase(),
-    ...(kind==='sf2'||kind==='sf3'?[]:[role,group]),name];
+  // Flat AUDIO for all media/SoundFonts, TEXT for Lyrics/catalogs.
+  return [kind==='json'?'TEXT':'AUDIO',name];
 }
 async function db(){
   if(!('indexedDB' in scope))return null;
@@ -265,15 +263,24 @@ class Drive {
 }
 async function loadCatalog(drive,root){
   const children=await drive.listChildren(root);
-  const pointers=children.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
+  const texts=children.filter(x=>x.name==='TEXT'&&x.mimeType===MIME_FOLDER);
+  if(texts.length>1)fail('พบโฟลเดอร์ TEXT ซ้ำบน Drive');
+  const textChildren=texts.length?await drive.listChildren(texts[0].id):[];
+  const modern=textChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
+  const old=children.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
+  if(modern.length&&old.length)fail('พบ current.json ทั้งใน TEXT และรากคลัง');
+  const pointers=modern.length?modern:old;
   if(pointers.length>1)fail('พบ current.json ซ้ำ · หยุดเพื่อไม่ให้ DB เสีย');
   if(!pointers.length){
-    const marker=children.find(x=>x.name==='.xstage-songstudio-staging.json');
-    const unknown=children.filter(x=>!['SOUNDFONT','AUDIO','VIDEO','MIDI','DB',
+    const marker=textChildren.find(x=>x.name==='.xstage-songstudio-staging.json')||
+      children.find(x=>x.name==='.xstage-songstudio-staging.json');
+    const unknown=children.filter(x=>!['SOUNDFONT','AUDIO','TEXT','VIDEO','MIDI','DB',
       '.xstage-songstudio-staging.json'].includes(x.name));
     if(unknown.length)fail('พบไฟล์ใน XStageWeb แต่ไม่มี current.json · ต้องตรวจคลังเดิมก่อน');
-    if(!marker&&children.some(x=>x.name!=='SOUNDFONT'))
+    if(!marker&&children.some(x=>!['AUDIO','TEXT','SOUNDFONT'].includes(x.name)))
       fail('XStageWeb ยังไม่มี current.json หรือหลักฐานนำเข้าที่ปลอดภัย · ไม่เริ่มทับ');
+    if(!marker&&textChildren.length)
+      fail('พบข้อมูล TEXT เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
     if(marker){
       const data=await drive.getJson(marker.id);
       if(data.format!=='xstage-songstudio-upload-staging-v1')
@@ -546,12 +553,15 @@ class Importer {
       }
       let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
       if(!pointerFile){
+        const textRoot=await drive.ensurePath(rootId,['TEXT']);
+        const textFiles=await drive.listChildren(textRoot);
         const rootFiles=await drive.listChildren(rootId);
-        if(!rootFiles.some(x=>x.name==='.xstage-songstudio-staging.json')){
+        if(!textFiles.some(x=>x.name==='.xstage-songstudio-staging.json')&&
+           !rootFiles.some(x=>x.name==='.xstage-songstudio-staging.json')){
           const marker=encode({format:'xstage-songstudio-upload-staging-v1',schemaVersion:1,
             note:'Private browser import; no playable catalog published yet'});
           const hash=await core.hashBlob(marker,()=>this.check());
-          await drive.upload(rootId,marker,'.xstage-songstudio-staging.json','application/json',hash);
+          await drive.upload(textRoot,marker,'.xstage-songstudio-staging.json','application/json',hash);
         }
       }
       const byPair=new Map(),byCode=new Map();
@@ -586,7 +596,7 @@ class Importer {
         const generation=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
           .map(x=>x.toString(16).padStart(2,'0')).join('');
         let catalogId,deltaIds;
-        const dbRoot=await drive.ensurePath(rootId,['DB']);
+        const dbRoot=await drive.ensurePath(rootId,['TEXT']);
         const pushJson=async(name,value)=>{
           const blob=encode(value),digest=await core.hashBlob(blob,()=>this.check());
           const item=await drive.upload(dbRoot,blob,name,'application/json',digest);
@@ -602,24 +612,28 @@ class Importer {
             {schemaVersion:1,songs:[...rows.values()]});
           deltaIds=[];
         }
-        const next={schemaVersion:1,layoutVersion:2,generation,catalogFileId:catalogId,
+        const next={schemaVersion:1,layoutVersion:3,generation,catalogFileId:catalogId,
           deltaFileIds:deltaIds,songCount:rows.size};
         // Verify the pointer generation again. Never blindly overwrite a PC
         // publish performed while the browser was uploading a long batch.
-        const pointers=(await drive.listChildren(rootId)).filter(x=>x.name==='current.json');
+        const currentRoot=pointer?.layoutVersion===3
+           ? await drive.ensurePath(rootId,['TEXT']) : rootId;
+         const pointers=(await drive.listChildren(currentRoot)).filter(x=>x.name==='current.json');
         if(pointerFile){
           const current=await drive.getJson(pointerFile.id);
           if(current.generation!==pointer.generation)
             fail('มีการอัปเดตฐานเพลงจากอีกอุปกรณ์ระหว่างงาน · หยุดเพื่อไม่เขียนทับ');
         }else{
-          const again=await drive.list("'"+driveId(rootId)+"' in parents and name='current.json' and trashed=false");
+          const textRoot=await drive.ensurePath(rootId,['TEXT']);
+           const again=await drive.list("'"+driveId(textRoot)+"' in parents and name='current.json' and trashed=false");
           if(again.length)fail('พบ current.json ใหม่จากอีกอุปกรณ์ · ยกเลิกเพื่อป้องกันฐานซ้ำ');
         }
         const blob=encode(next),hash=await core.hashBlob(blob,()=>this.check());
         if(pointerFile){
           await drive.updatePointer(pointerFile.id,blob,hash);
         }else{
-          const item=await drive.upload(rootId,blob,'current.json','application/json',hash);
+          const textRoot=await drive.ensurePath(rootId,['TEXT']);
+           const item=await drive.upload(textRoot,blob,'current.json','application/json',hash);
           pointerFile={id:item.id,name:'current.json'};
         }
         pointer=next;revisions=[];this.check();
@@ -671,32 +685,23 @@ class Importer {
             if(candidates.length&&!same){this.stats.conflicts++;finished++;
               show('รหัส MIDI ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;}
             const type=item.kind==='NCN'?'NCN':item.kind==='KAR'?'KAR':'SMF';
-            const prefix=['MIDI',type],folder=core.bucket(code),base=safeName(code);
+            const base=safeName(code);
             let media=same?.midi;
             if(!media){
               const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
-              media=await uploadMedia(midiFile,code,[...prefix,'Song',folder],name,
+              media=await uploadMedia(midiFile,code,['AUDIO'],name,
                 'audio/midi',midiHash,0,.75);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyrics=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,
+            const lyrics=await uploadMedia(json,code,['TEXT'],jname,
               'application/json',jsonHash,.75,.25);
-            let lyrMeta=same?.lyr,curMeta=same?.cur;
-            if(item.lyr&&item.cur){
-              const [lyrHash,curHash]=await Promise.all([
-                core.hashBlob(item.lyr.file,()=>this.check()),
-                core.hashBlob(item.cur.file,()=>this.check())
-              ]);
-              lyrMeta=await uploadMedia(item.lyr.file,code,[...prefix,'Lyrics',folder],
-                base+'-'+lyrHash.slice(0,16)+'.lyr','text/plain',lyrHash);
-              curMeta=await uploadMedia(item.cur.file,code,[...prefix,'Cursor',folder],
-                base+'-'+curHash.slice(0,16)+'.cur','application/octet-stream',curHash);
-            }
+            // NCN .LYR/.CUR are decoded locally; do not store the raw
+            // cursor or lyric source in the private Drive song library.
             const ident=same?.webSongId||('browser/midi/'+midiHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:type,midi:media,lyrics,
-              lyr:lyrMeta,cur:curMeta};
+              artist:doc.artist||'',sourceFormat:type,midi:media,lyrics};
+            delete record.lyr;delete record.cur;delete record.lrc;
             if(same){
               byPair.delete(String(same.midi?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase());
@@ -805,29 +810,24 @@ class Importer {
             }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
-            const folder=core.bucket(code),prefix=[uploadKind==='MP4'||uploadKind==='WEBM'?'VIDEO':'AUDIO',uploadKind];
+            const prefix=['AUDIO'];
             let media=same?.audio;
             if(!media){
               const name=base+'-'+audioHash.slice(0,16)+'.'+uploadKind.toLowerCase();
-              media=await uploadMedia(audioFile,code,[...prefix,'Songs',folder],name,
+              media=await uploadMedia(audioFile,code,prefix,name,
                 MEDIA_MIME[uploadKind]||'application/octet-stream',audioHash,0,.83);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyric=await uploadMedia(json,code,[...prefix,'Lyrics',folder],jname,'application/json',jsonHash,.83,.09);
-            let lrcInfo=videoMeta?.mode==='embedded'?null:same?.lrc;
-            if(raw!==null){
-              const rawBlob=new Blob([raw],{type:'text/plain'});
-              const lrcHash=await core.hashBlob(rawBlob,()=>this.check());
-              const lname=base+'-'+lrcHash.slice(0,16)+'.lrc';
-              lrcInfo=await uploadMedia(rawBlob,code,[...prefix,'Lyrics',folder],lname,'text/plain',lrcHash,.92,.08);
-            }
+            const lyric=await uploadMedia(json,code,['TEXT'],jname,'application/json',jsonHash,.83,.09);
+            // LRC is a local input/editing format; JSON is the only
+            // lyric artifact stored on Drive in layout v3.
             let videoMedia=same?.video;
             if(videoFile){
               if(videoFile===audioFile)videoMedia=media;
               else{
                 const vh=await core.hashBlob(videoFile,()=>this.check());
                 const ve=core.ext(videoFile.name).toUpperCase();
-                videoMedia=await uploadMedia(videoFile,code,['VIDEO',ve,'Song',folder],
+                videoMedia=await uploadMedia(videoFile,code,['AUDIO'],
                   base+'-'+vh.slice(0,16)+'.'+ve.toLowerCase(),
                   MEDIA_MIME[ve]||'application/octet-stream',vh);
               }
@@ -840,7 +840,7 @@ class Importer {
                 const originalName=base+'-'+sourceVideoMd5.slice(0,16)+
                   '.'+originalKind.toLowerCase();
                 originalVideoMedia=await uploadMedia(originalVideoFile,code,
-                  ['VIDEO','ORIGINAL',originalKind,'Songs',folder],
+                  ['AUDIO'],
                   originalName,core.videoMime(originalVideoFile.name)||
                   'application/octet-stream',sourceVideoMd5);
               }
@@ -850,13 +850,14 @@ class Importer {
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
               artist:doc.artist||'',sourceFormat:uploadKind,
               lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
-              audio:media,lyrics:lyric,lrc:lrcInfo,
+              audio:media,lyrics:lyric,
               ...(videoMedia?{video:videoMedia}:{}),
               ...(originalVideoMedia?{originalVideo:originalVideoMedia}:{}),
               ...(videoMeta?{album:videoMeta.album,composer:videoMeta.composer,
                 genre:videoMeta.genre,language:videoMeta.language,year:videoMeta.year}:{}),
               ...(sourceVideoMd5?{sourceVideoMd5,
                 originalVideoFormat:core.ext(originalVideoFile.name).toUpperCase()}:{})};
+            delete record.lrc;delete record.lyr;delete record.cur;
             if(same){
               const oldPair=String(same.audio?.md5Checksum||'').toLowerCase()+':'+
                 String(same.lyrics?.md5Checksum||'').toLowerCase();
