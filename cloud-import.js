@@ -773,7 +773,8 @@ class Importer {
             // Preserve the original linked MIDI/video/vocal media when only
             // a same-audio song's timed lyrics have changed.
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:uploadKind,audio:media,lyrics:lyric,lrc:lrcInfo,
+              artist:doc.artist||'',sourceFormat:uploadKind,lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
+              audio:media,lyrics:lyric,lrc:lrcInfo,
               ...(videoMedia?{video:videoMedia}:{}),
               ...(sourceVideoMd5?{sourceVideoMd5,originalVideoFormat:core.ext(video.file.name).toUpperCase()}:{})};
             if(same){
