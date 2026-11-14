@@ -711,7 +711,7 @@ async function createDriveV2Folder(parent,name,token){
     method:'POST',cache:'no-store',
     headers:{...requestHeaders(token),'Content-Type':'application/json'},
     body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parent]})
-  },'Google Drive · สร้างโฟลเดอร์ V2');
+  },'Google Drive · สร้างโฟลเดอร์ V2',0);
   if(!res.ok)throw driveError(res.status,'โฟลเดอร์ XStageWeb V2');
   const info=await res.json();
   if(!info?.id)throw Error('Google Drive ไม่คืนรหัสโฟลเดอร์ใหม่');
@@ -731,7 +731,7 @@ async function createDriveV2Json(parent,name,document,token){
       method:'POST',headers:{...requestHeaders(token),
         'Content-Type':'multipart/related; boundary='+boundary},
       body:blob,cache:'no-store'
-    },'Google Drive · เผยแพร่ฐาน V2');
+    },'Google Drive · เผยแพร่ฐาน V2',0);
   if(!response.ok)throw driveError(response.status,'ฐานเพลง V2');
   const info=await response.json();
   if(!info?.id||!info?.md5Checksum)throw Error('Google Drive ไม่ยืนยัน MD5 ของฐานเพลง');
