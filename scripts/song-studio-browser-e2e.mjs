@@ -452,8 +452,12 @@ try {
   assert.equal(await pc.locator('#ai-lyrics-import').isVisible(),true);
   await pc.click('#ai-lyrics-import');
   await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-selected')?.textContent.includes('เพลง AI นำเข้า'));
+  await pc.waitForFunction(()=>{
+    const start=document.querySelector('#ai-lyrics-start');
+    return !!start&&!start.disabled;
+  },null,{timeout:15000});
   assert.equal(await pc.locator('#ai-lyrics-start').isEnabled(),true,
-    'Independent imported file can use Whisper when a model is available');
+    'Independent imported file can use Whisper when the mock engine reports a ready model');
   assert.match(await pc.locator('#ai-lyrics-editor').inputValue(),/ท่อนแรก AI/);
   assert.equal(await pc.locator('#ai-lyrics-save').isEnabled(),true);
   const aiLive = pc.waitForRequest((req)=>{
