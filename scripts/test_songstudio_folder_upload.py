@@ -121,8 +121,8 @@ class FolderUploadTests(unittest.TestCase):
         second=folder.upload_soundfont(drive,str(font),create_new_library=True)
         self.assertTrue(first["uploaded"])
         self.assertTrue(second["skipped"])
-        self.assertEqual(first["path"].split("/")[:3], ["XStageWeb","SOUNDFONT","SF2"])
-        self.assertFalse(first["webMidiReady"])
+        self.assertEqual(first["path"].split("/")[:2], ["XStageWeb","AUDIO"])
+        self.assertTrue(first["webMidiReady"])
 
     def test_invalid_soundfont_is_rejected_without_upload(self):
         font = self.root / "fake.sf3"
