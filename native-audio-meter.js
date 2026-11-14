@@ -30,7 +30,7 @@
   label.setAttribute('aria-live','polite');
   stage.querySelector('.stage-hero')?.append(label);
   const LEVELS=28,SMOOTH=Array(LEVELS).fill(0);
-  let stream=null,context=null,source=null,analyser=null,silent=null;
+  let stream=null,context=null,source=null,analyser=null,silent=null,sampleData=null;
   let frame=0,lastFrame=0,retryTimer=0,tries=0,epoch=0;
   let status='';
   function statusText(next){
@@ -56,7 +56,7 @@
     try{silent?.disconnect();}catch{}
     for(const track of stream?.getTracks?.()||[])try{track.stop();}catch{}
     try{context?.close?.().catch(()=>{});}catch{}
-    stream=null;context=null;source=null;analyser=null;silent=null;
+    stream=null;context=null;source=null;analyser=null;silent=null;sampleData=null;
     tries=0;lastFrame=0;SMOOTH.fill(0);
     stage.style.setProperty('--xstage-viz-energy','0');
     stage.style.setProperty('--xstage-viz-bass','0');
@@ -83,11 +83,11 @@
     return [w,h];
   }
   function render(timestamp){
-    if(!analyser||!context){frame=0;return;}
+    if(!analyser||!context||player.paused||player.ended){frame=0;return;}
     frame=requestAnimationFrame(render);
     if(timestamp-lastFrame<40)return; // 25fps keeps Android TV GPUs responsive.
     lastFrame=timestamp;
-    const data=new Uint8Array(analyser.frequencyBinCount);
+    const data=sampleData;
     const playing=!player.paused&&!player.ended&&!player.muted&&player.volume>0;
     if(playing&&context.state==='running')analyser.getByteFrequencyData(data);
     const nyquist=(context.sampleRate||48000)/2;
@@ -136,6 +136,7 @@
   function start(){
     if(analyser){
       if(context?.state==='suspended')try{void context.resume().catch(()=>{});}catch{}
+      if(!frame&&!player.paused&&!player.ended)frame=requestAnimationFrame(render);
       return;
     }
     if(!player.src||player.paused||player.ended)return;
@@ -161,6 +162,7 @@
       fft.connect(mute);
       mute.connect(ctx.destination);
       stream=captured;context=ctx;source=src;analyser=fft;silent=mute;
+      sampleData=new Uint8Array(fft.frequencyBinCount);
       if(retryTimer){clearTimeout(retryTimer);retryTimer=0;}
       try{void ctx.resume().catch(()=>{});}catch{}
       if(!frame)frame=requestAnimationFrame(render);
@@ -177,7 +179,14 @@
   for(const name of ['play','playing','loadeddata','canplay']){
     player.addEventListener(name,start);
   }
-  player.addEventListener('pause',()=>statusText('paused'));
+  player.addEventListener('pause',()=>{
+    if(frame){cancelAnimationFrame(frame);frame=0;}
+    SMOOTH.fill(0);
+    stage.style.setProperty('--xstage-viz-energy','0');
+    stage.style.setProperty('--xstage-viz-bass','0');
+    for(const view of views)view.ctx.clearRect(0,0,view.canvas.width,view.canvas.height);
+    statusText('paused');
+  });
   player.addEventListener('ended',()=>{dispose();statusText('idle');});
   for(const name of ['pointerdown','keydown']){
     document.addEventListener(name,()=>{
