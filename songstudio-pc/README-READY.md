@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.26 Build 326
+# X-Stage Song Studio PC Ready v0.3.27 Build 327
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,14 +6,14 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Release metadata
 
-- Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.26 Build 326, packaging explicitly `portable_zip`).
+- Active PC Ready portable ZIP: `downloads/song-studio-latest.json` (v0.3.27 Build 327, packaging explicitly `portable_zip`).
 - Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.5 Build 205, not a ready installer).
 - The published PC Ready ZIP SHA-256 is `8f3f87e0e489dfd6cf80bb86f4d6156de9553cee0ecc6b9a96aa8e24e73232c3`, reported by the GitHub Release asset digest. The ZIP is **not** a signed EXE or MSI installer.
 - Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.26-build326.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.27-build327.zip** from the GitHub Releases page.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -183,12 +183,12 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 - Runtime package generator: `scripts/build_songstudio_ready.ps1`
 - GitHub workflow: `.github/workflows/build-songstudio-pc-ready.yml`
 - Source (without runtime binaries): `songstudio-pc/`
-- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.26-build326`
+- Distributed ZIP: GitHub Release `song-studio-pc-ready-v0.3.27-build327`
 - Third-party redistribution notes: `THIRD_PARTY_NOTICES.md`
 
 **If the SHA-256 integrity check fails**, the app does not run: download and extract a fresh verified ZIP. Do not download missing components separately.
 
-## Google Drive library layout v2 (Build 326)
+## Google Drive library layout v2 (Build 327)
 
 New private Google Drive libraries use `XStageWeb/` and create the following
 category directories. Alphabet/digit subfolders (`0`–`9`, `A`–`Z`) are
