@@ -84,35 +84,50 @@ function scan(files){
     if(seen.has(sig))continue;seen.add(sig);
     const extension=ext(file.name);
     if(FONTS.has(extension)){fonts.push({file,relative,kind:extension.toUpperCase()});continue;}
-    if(!AUDIO.has(extension)&&!MIDI.has(extension)&&!VIDEO.has(extension)&&!OTHER_AUDIO.has(extension)&&extension!=='lrc'&&extension!=='lyr'&&extension!=='cur'&&extension!=='json')continue;
+    if(!AUDIO.has(extension)&&!MIDI.has(extension)&&!VIDEO.has(extension)&&!OTHER_AUDIO.has(extension)&&
+       !['lrc','lyr','cur','json'].includes(extension))continue;
     const key=groupKey(relative);
     if(!groups.has(key))groups.set(key,[]);
     groups.get(key).push({file,relative,kind:extension});
   }
-  const songs=[];
+  const songs=[],midis=[];
   for(const [key,items] of groups){
     const sound=items.filter(x=>AUDIO.has(x.kind)),lrc=items.filter(x=>x.kind==='lrc');
-    const json=items.filter(x=>x.kind==='json');
-    const other=items.filter(x=>MIDI.has(x.kind)||VIDEO.has(x.kind)||OTHER_AUDIO.has(x.kind));
-    if(sound.length===1 && lrc.length<=1 && json.length<=1 &&
-       (lrc.length===1||json.length===1) && other.length===0){
-      if(sound[0].file.size<1024||(lrc.length&&lrc[0].file.size<8)||
-          (json.length&&json[0].file.size<8)){
+    const json=items.filter(x=>x.kind==='json'),midi=items.filter(x=>MIDI.has(x.kind));
+    const lyr=items.filter(x=>x.kind==='lyr'),cur=items.filter(x=>x.kind==='cur');
+    const extra=items.filter(x=>VIDEO.has(x.kind)||OTHER_AUDIO.has(x.kind));
+    if(sound.length===1&&midi.length===0&&extra.length===0&&lyr.length===0&&cur.length===0&&
+       lrc.length<=1&&json.length<=1&&(lrc.length===1||json.length===1)){
+      if(sound[0].file.size<1024||(lrc.length&&lrc[0].file.size<8)||(json.length&&json[0].file.size<8)){
         blocked.push({key,reason:'ไฟล์เสียงหรือเนื้อร้องมีขนาดไม่สมบูรณ์'});continue;
       }
       songs.push({key,code:sound[0].file.name.replace(/\.[^.]+$/,'').slice(0,140),
         audio:sound[0],lrc:lrc[0]||null,json:json[0]||null,
         kind:sound[0].kind.toUpperCase()});
-    }else if(sound.length||other.length){
-      const reason=other.length
-        ?'ชนิดสื่อนี้ต้องแปลงเป็น MP3/M4A พร้อม Lyrics JSON/LRC ผ่าน Song Studio PC ก่อน'
-        :'ต้องมีไฟล์ MP3/M4A และ Lyrics JSON หรือ LRC ชื่อเดียวกันอย่างละหนึ่งชุด';
+    }else if(midi.length===1&&sound.length===0&&extra.length===0&&
+        lrc.length<=1&&json.length<=1&&lyr.length<=1&&cur.length<=1){
+      const isNcn=/\/(?:ncn)\//i.test('/'+midi[0].relative.replace(/\\/g,'/'))||
+        lyr.length>0||cur.length>0;
+      if((isNcn&&(!lyr.length||!cur.length))||(lyr.length!==cur.length)){
+        blocked.push({key,reason:'ชุด NCN ต้องมี MID + LYR + CUR รหัสเดียวกันครบทั้งสามไฟล์'});continue;
+      }
+      if(midi[0].file.size<22||(lyr.length&&lyr[0].file.size<8)||
+          (cur.length&&cur[0].file.size<2)){
+        blocked.push({key,reason:'ชุด MIDI/NCN มีขนาดไฟล์ไม่สมบูรณ์'});continue;
+      }
+      midis.push({key,code:midi[0].file.name.replace(/\.[^.]+$/,'').slice(0,140),
+        midi:midi[0],lyr:lyr[0]||null,cur:cur[0]||null,lrc:lrc[0]||null,
+        json:json[0]||null,kind:lyr.length?'NCN':midi[0].kind.toUpperCase()});
+    }else if(sound.length||midi.length||extra.length){
+      const reason=extra.length?'สื่อชนิดนี้ต้องแปลงเป็นไฟล์เสียง/วิดีโอที่เบราว์เซอร์รองรับก่อน':
+        midi.length?'ไฟล์ MIDI ซ้ำ หรือชุดเพลงไม่สมบูรณ์':
+        'ต้องมีไฟล์ MP3/M4A และ Lyrics JSON หรือ LRC ชื่อเดียวกันอย่างละหนึ่งชุด';
       blocked.push({key,reason});
-    }else if(lrc.length||json.length){
-      blocked.push({key,reason:'มีเฉพาะ Lyrics แต่ไม่มีไฟล์เสียงคู่กัน'});
+    }else if(lrc.length||json.length||lyr.length||cur.length){
+      blocked.push({key,reason:'มีเฉพาะเนื้อร้อง แต่ไม่มีไฟล์เสียงหรือ MIDI คู่กัน'});
     }
   }
-  return {songs,fonts,blocked,files:seen.size};
+  return {songs,midis,fonts,blocked,files:seen.size};
 }
 async function validAudio(file){
   if(file.size<1024)return false;
