@@ -37,19 +37,16 @@ class OneClickEnvironment0946Tests(unittest.TestCase):
         exe=resolve_ffmpeg(Path('.'),{})
         self.assertTrue(Path(exe).is_file())
 
-    def test_ui_contains_no_modal_file_dialog_or_confirm(self):
+    def test_pc_ui_has_no_online_sync_entrypoints(self):
         import inspect
         from karaoke.ui import KaraokeApp
-        source=inspect.getsource(KaraokeApp.web_online_data)
-        self.assertNotIn('askopenfilename(',source)
-        self.assertNotIn('askyesno(',source)
-        self.assertNotIn('worker_combo',source)
-        self.assertIn('self.library.path, None',source)
-        # Website launch must be a deliberate click on the completed wizard,
-        # never automatic from the background worker.
-        from karaoke.online_wizard import setup_online_wizard
-        self.assertNotIn('self.open_karaoke_online()',source)
-        self.assertIn('app.open_karaoke_online()',inspect.getsource(setup_online_wizard))
+        from karaoke.classic import ClassicApp
+        from karaoke import context_menu
+        self.assertFalse(hasattr(KaraokeApp, 'web_online_data'))
+        self.assertFalse(hasattr(KaraokeApp, 'open_karaoke_online'))
+        self.assertNotIn('X-Stage Karaoke Online',inspect.getsource(KaraokeApp._build))
+        self.assertNotIn('X-Stage Karaoke Online',inspect.getsource(ClassicApp._build))
+        self.assertNotIn('X-Stage Karaoke Online',inspect.getsource(context_menu.populate_context_menu))
 
 
 @unittest.skipUnless(__import__('os').environ.get('XSTAGE_TEST_GUI') == '1',
