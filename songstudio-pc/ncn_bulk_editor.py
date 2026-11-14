@@ -607,8 +607,10 @@ def recheck_skipped(snapshot, bulk, *, cancelled=None, on_progress=None):
     original = list(snapshot.get("skippedRows") or [])
     if not original:
         raise ValueError("ไม่มีไฟล์ LYR ที่ถูกข้ามให้ตรวจซ้ำ")
-    remaining, review, recovered = [], [], []
-    change_reason = 0
+    remaining, recovered = [], []
+    # Keep earlier recovered entries visible if an operator verifies the
+    # still-skipped remainder again. Rechecks never rescan recovered files.
+    review_map = {row["file"]: row for row in snapshot.get("recheckRows") or []}
     total = len(original)
     if on_progress:
         on_progress(f"ตรวจซ้ำเฉพาะ LYR ที่ข้าม {total:,} ไฟล์ · ไม่แตะ MID/CUR", 0, total)
@@ -616,6 +618,8 @@ def recheck_skipped(snapshot, bulk, *, cancelled=None, on_progress=None):
         if cancelled is not None and cancelled.is_set():
             raise RuntimeError("ยกเลิกการตรวจซ้ำ · ผลวิเคราะห์เดิมไม่เปลี่ยน")
         relative = old["file"]
+        initial_category = old.get("originalCategory") or old.get("category", "")
+        initial_reason = old.get("originalReason") or old.get("reason", "")
         try:
             path = _safe_recheck_lyr(root, relative)
             raw = path.read_bytes()
@@ -624,26 +628,22 @@ def recheck_skipped(snapshot, bulk, *, cancelled=None, on_progress=None):
             code, reason = _skip_reason(exc)
             entry = {
                 "file": relative, "category": code,
-                "label": SKIP_LABELS[code], "reason": reason
+                "label": SKIP_LABELS[code], "reason": reason,
+                "originalCategory": initial_category,
+                "originalReason": initial_reason
             }
             remaining.append(entry)
-            review.append({
-                **entry, "status": "confirmed",
-                "originalCategory": old.get("category", ""),
-                "originalReason": old.get("reason", "")
-            })
-            if code != old.get("category") or reason != old.get("reason"):
-                change_reason += 1
+            review_map[relative] = {**entry, "status": "confirmed"}
         else:
             recovered.append((relative, parsed, bulk._sha(raw)))
-            review.append({
+            review_map[relative] = {
                 "file": relative, "category": "recovered",
                 "label": "อ่านเนื้อร้องได้หลังตรวจซ้ำ",
                 "reason": f"อ่านเนื้อร้องได้ {len(parsed['lines'])} บรรทัด",
                 "status": "recovered",
-                "originalCategory": old.get("category", ""),
-                "originalReason": old.get("reason", "")
-            })
+                "originalCategory": initial_category,
+                "originalReason": initial_reason
+            }
         if on_progress and (number % 20 == 0 or number == total):
             on_progress(
                 f"ตรวจซ้ำ LYR {number:,}/{total:,} · ยืนยันข้าม {len(remaining):,} "
@@ -679,9 +679,16 @@ def recheck_skipped(snapshot, bulk, *, cancelled=None, on_progress=None):
             })
             groups[gid]["count"] = len(groups[gid]["members"])
     counts = Counter(row["category"] for row in remaining)
+    review = list(review_map.values())
     summary = {
-        "total": total, "confirmed": len(remaining),
-        "recovered": len(recovered), "reasonChanged": change_reason
+        "total": len(review), "lastPass": total,
+        "confirmed": len(remaining),
+        "recovered": sum(row.get("status") == "recovered" for row in review),
+        "reasonChanged": sum(
+            row.get("status") == "confirmed" and (
+                row.get("category") != row.get("originalCategory") or
+                row.get("reason") != row.get("originalReason"))
+            for row in review)
     }
     return {
         **snapshot, "groups": groups, "searchable": searchable,
