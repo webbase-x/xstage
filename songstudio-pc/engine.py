@@ -1600,7 +1600,6 @@ def execute_job(action, options, started):
                 JOB["total"] = len(doc.get("songs", []))
             synced = native.V2NativePublisher(GOOGLE).publish(
                 manifest_path.parent, doc,
-                create_new_library=options.get("create_new_library") is True,
                 cancelled=CANCEL,
                 on_progress=lambda done,total:
                 update(f"อัปโหลดต้นฉบับ V2 {done:,}/{total:,} เพลง",done))
