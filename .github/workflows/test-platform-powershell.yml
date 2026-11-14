@@ -6,6 +6,7 @@ on:
       - "windows-pc/*.ps1"
       - "windows-pc/manifest.json"
       - "songstudio-pc/Start-Song-Studio.ps1"
+      - "songstudio-pc/Start-Song-Studio-Ready.ps1"
       - "scripts/build_songstudio_ready.ps1"
       - "downloads/song-studio*.json"
       - ".github/workflows/test-platform-powershell.yml"
@@ -14,6 +15,7 @@ on:
       - "windows-pc/*.ps1"
       - "windows-pc/manifest.json"
       - "songstudio-pc/Start-Song-Studio.ps1"
+      - "songstudio-pc/Start-Song-Studio-Ready.ps1"
       - "scripts/build_songstudio_ready.ps1"
       - "downloads/song-studio*.json"
       - ".github/workflows/test-platform-powershell.yml"
@@ -36,6 +38,7 @@ jobs:
             'windows-pc/Start-XStage-With-Updates.ps1',
             'windows-pc/Check-Update.ps1',
             'songstudio-pc/Start-Song-Studio.ps1',
+            'songstudio-pc/Start-Song-Studio-Ready.ps1',
             'scripts/build_songstudio_ready.ps1'
           )
           foreach ($path in $scripts) {
