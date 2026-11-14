@@ -12,6 +12,8 @@ from pathlib import Path, PurePosixPath
 
 from online_publish import cloud_media_path, PublishError, OnlinePublisher
 from ncn_lyrics import ncn_document, kar_document
+from unified_catalog_v2 import (CATALOG_FORMAT, CatalogValidationError,
+    validate_catalog, validate_pointer, migrate_v1_catalog)
 
 MAX_MANIFEST_SONGS = 1000000
 MAX_MEDIA_BYTES = 2 * 1024 * 1024 * 1024
@@ -109,6 +111,12 @@ class V2NativePublisher:
         if not isinstance(items, list) or not 0 < len(items) <= MAX_MANIFEST_SONGS:
             raise PublishError("Manifest V2 ไม่ถูกต้อง")
         songs = [_read_song(root_path, x) for x in items]
+        for song in songs:
+            kinds=set(song["media"])
+            if len(kinds.intersection({"avi","mpg","vcd","wmv"}))>1:
+                raise PublishError("เพลงหนึ่งรายการต้องระบุ VIDEO หลักได้เพียงประเภทเดียว")
+            if "ncn" in kinds and "emk" in kinds:
+                raise PublishError("เพลงหนึ่งรายการต้องระบุ MIDI ต้นฉบับหลักเพียงชนิดเดียว")
         if len({x["id"] for x in songs}) != len(songs):
             raise PublishError("พบ ID เพลงซ้ำในรายการอัปโหลด")
         if len({x["code"].casefold() for x in songs}) != len(songs):
@@ -131,12 +139,13 @@ class V2NativePublisher:
         previous, existing = None, {}
         if current:
             previous = self.reader._json(current[0]["id"])
-            if previous.get("schemaVersion") != 2:
-                raise PublishError("DB/current.json ไม่ใช่ Schema V2")
-            catalog = self.reader._json(previous["catalogFileId"])
-            if catalog.get("schemaVersion") != 2:
-                raise PublishError("ฐานเพลง V2 ไม่ถูกต้อง")
-            existing = {s["id"]: s for s in catalog.get("songs", [])}
+            try:
+                validate_pointer(previous)
+                catalog = self.reader._json(previous["catalogFileId"])
+                validate_catalog(catalog, cloud=True, expected_count=previous["songCount"])
+            except (CatalogValidationError, KeyError, TypeError) as exc:
+                raise PublishError("ฐาน V2 เดิมไม่สมบูรณ์ · หยุดก่อนเขียนทับ") from exc
+            existing = {s["id"]: s for s in catalog["songs"]}
         directory_cache = {}
         def folder(parts):
             parent = root
@@ -200,12 +209,28 @@ class V2NativePublisher:
                     tmp=Path(tmpdir)/(item["code"]+".json")
                     tmp.write_text(json.dumps(doc,ensure_ascii=False),encoding="utf-8")
                     lyrics=upload(tmp,native_type,"native-timed",item["code"])
-            result[item["id"]] = {
+            published = {
                 "id": item["id"], "webSongId": item["id"], "code": item["code"],
                 "title": item["title"], "artist": item["artist"],
                 "media": media, "lyrics": lyrics
             }
+            # Stable id is authoritative. Reject silent replacement of a
+            # different song with the same code or a stale reused ID.
+            by_code = {row["code"].casefold(): ident for ident,row in result.items()}
+            code_owner = by_code.get(item["code"].casefold())
+            if code_owner is not None and code_owner != item["id"]:
+                raise PublishError("รหัสเพลงชนกับฐานเดิม: " + item["code"])
+            existing_record = result.get(item["id"])
+            if existing_record and existing_record["code"].casefold()!=item["code"].casefold():
+                raise PublishError("ID เพลงเดิมมีรหัสไม่ตรงกัน: " + item["id"])
+            result[item["id"]] = published
             if on_progress: on_progress(index, len(songs))
+        # All files may have uploaded; still NEVER publish an invalid catalog.
+        try:
+            validate_catalog({"schemaVersion":2,"format":CATALOG_FORMAT,
+                              "songs":list(result.values())}, cloud=True)
+        except CatalogValidationError as exc:
+            raise PublishError("ตรวจฐาน V2 ก่อนเผยแพร่ไม่ผ่าน: "+str(exc)) from exc
         if current:
             fresh = self.reader._json(current[0]["id"])
             if fresh.get("generation") != previous.get("generation"):
@@ -214,12 +239,12 @@ class V2NativePublisher:
         with tempfile.TemporaryDirectory(prefix="xstage-db-v2-") as temp:
             target = Path(temp)
             catalog_file = target / "catalog.json"
-            catalog_file.write_text(json.dumps({"schemaVersion":2,"songs":list(result.values())},
+            catalog_file.write_text(json.dumps({"schemaVersion":2,"format":CATALOG_FORMAT,"songs":list(result.values())},
                                                ensure_ascii=False,separators=(",",":")),encoding="utf-8")
             _, catalog_meta = self.drive.upload_file(db,catalog_file,
                                      "catalog-base-v2-"+generation+".json",cancelled=cancelled)
             pointer_file = target / "current.json"
-            pointer_file.write_text(json.dumps({"schemaVersion":2,"generation":generation,
+            pointer_file.write_text(json.dumps({"schemaVersion":2,"format":CATALOG_FORMAT,"generation":generation,
                                 "catalogFileId":catalog_meta["id"],
                                 "songCount":len(result)},separators=(",",":")),encoding="utf-8")
             self.drive.upload_file(db,pointer_file,"current.json",replace_pointer=True,cancelled=cancelled)
