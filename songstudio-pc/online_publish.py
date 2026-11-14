@@ -23,6 +23,12 @@ import json
 import secrets
 import tempfile
 from pathlib import Path, PurePosixPath
+import sys
+# Engine and packaged launcher load this file by path; V2 companion modules
+# must resolve from the same trusted installation directory.
+_NATIVE_DIR = str(Path(__file__).resolve().parent)
+if _NATIVE_DIR not in sys.path:
+    sys.path.insert(0, _NATIVE_DIR)
 
 ONLINE_ROOT = "XStageWeb"
 FOLDER_MIME = "application/vnd.google-apps.folder"
