@@ -1,0 +1,48 @@
+name: Vendor offline MIDI SoundFont browser engine
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/vendor-midi-synth.yml"
+permissions:
+  contents: write
+concurrency:
+  group: xstage-vendor-midi
+  cancel-in-progress: false
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch pinned JSSynth and bundled SF3 FluidSynth runtime
+        run: |
+          set -euo pipefail
+          mkdir -p vendor/midi
+          tmp="$(mktemp -d)"
+          cd "$tmp"
+          npm pack js-synthesizer@1.13.0 --silent
+          tar -xzf js-synthesizer-1.13.0.tgz
+          test -s package/dist/js-synthesizer.js
+          test -s package/externals/libfluidsynth-2.4.6-with-libsndfile.js
+          cp package/dist/js-synthesizer.js "$GITHUB_WORKSPACE/vendor/midi/js-synthesizer.js"
+          cp package/externals/libfluidsynth-2.4.6-with-libsndfile.js "$GITHUB_WORKSPACE/vendor/midi/libfluidsynth.js"
+          if [ -f package/LICENSE ]; then cp package/LICENSE "$GITHUB_WORKSPACE/vendor/midi/LICENSE-js-synthesizer.txt"; fi
+          if [ -f package/externals/README.md ]; then cp package/externals/README.md "$GITHUB_WORKSPACE/vendor/midi/FLUIDSYNTH-LICENSE-NOTICES.md"; fi
+          cd "$GITHUB_WORKSPACE"
+          node -e "const fs=require('fs'); for(const p of ['vendor/midi/js-synthesizer.js','vendor/midi/libfluidsynth.js']){if(fs.statSync(p).size<50000)process.exit(1)}"
+      - name: Publish pinned offline runtime assets into the same repository
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/midi
+          if ! git diff --cached --quiet; then
+            git commit -m "Vendor pinned, self-hosted MIDI SoundFont synth runtime"
+            git push origin HEAD:main
+          fi
