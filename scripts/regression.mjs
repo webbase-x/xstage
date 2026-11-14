@@ -449,8 +449,11 @@ assert.equal(windowsSourceManifest.status,'SOURCE_ZIP_AVAILABLE_AWAITING_IMPORT_
   'Windows manifest must acknowledge uploaded source ZIP without claiming a finished build');
 const studioReady=JSON.parse(read('downloads/song-studio-latest.json'));
 const studioPreview=JSON.parse(read('downloads/song-studio-source-preview-latest.json'));
-assert.equal(studioReady.version,'0.3.25');
-assert.equal(studioReady.build,325);
+assert.match(studioReady.version,/^\\d+\\.\\d+\\.\\d+$/,'Song Studio PC Ready must declare a semantic version');
+assert.ok(Number.isInteger(studioReady.build)&&studioReady.build>=325,
+  'Song Studio PC Ready must not regress below verified build 325');
+assert.ok(studioReady.archive_file.includes('v'+studioReady.version+'-build'+studioReady.build),
+  'Song Studio release filename must match its own metadata, not a stale hard-coded release');
 assert.equal(studioReady.package_type,'portable_zip');
 assert.equal(studioReady.installer_available,false);
 assert.match(studioReady.sha256,/^[a-f0-9]{64}$/,'Ready ZIP must pin the GitHub Release digest');
