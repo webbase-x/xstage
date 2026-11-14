@@ -271,7 +271,7 @@ class OnlinePublishTests(unittest.TestCase):
         target = self.base / "not-started"
         with patch.object(roundtrip.drive, "_request",
                           side_effect=self._download_private_json):
-            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ไม่พบไฟล์ที่แอปเข้าถึงได้"):
+            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "LYRICS|current.json"):
                 self.drive.download_library(target, kind="songs")
         self.assertFalse(target.exists())
 
