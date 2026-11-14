@@ -401,6 +401,10 @@ async function loadLatestCachedCatalog(sub,rootId=''){
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
     if(![1,2].includes(catalog?.schemaVersion)||!Array.isArray(catalog.songs))return null;
+    if(catalog.schemaVersion===2){
+      if(!window.XStageCatalogV2)return null;
+      window.XStageCatalogV2.catalog(catalog,{cloud:true});
+    }
     return {
       catalog,
       generation:String(saved.generation||''),
@@ -428,7 +432,9 @@ async function loadCachedCatalog(ownerKey,pointer){
     if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
        JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
     const catalog=saved.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(![1,2].includes(catalog?.schemaVersion)||!Array.isArray(catalog.songs))return null;
+    if(catalog.schemaVersion===2)
+      window.XStageCatalogV2?.catalog(catalog,{cloud:true,expectedCount:pointer.songCount});
     if(Number.isSafeInteger(pointer.songCount)&&catalog.songs.length!==pointer.songCount)return null;
     return catalog;
   }catch{return null;}
@@ -656,7 +662,7 @@ function songAudioMedia(song){
 function matchesSongFormat(song){
   const selected=document.getElementById('song-format-filter')?.value||'auto';
   const format=songPlayFormat(song);
-  return playable(song)&&['m4a','mp3'].includes(format)&&
+  return playable(song)&&['m4a','mp3','midi'].includes(format)&&
     (selected==='auto'||format===selected);
 }
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
@@ -849,18 +855,13 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   if(![1,2].includes(pointer?.schemaVersion) || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
     throw Error('รูปแบบ current.json ไม่รองรับ');
   if(pointer.schemaVersion===2){
+    if(!window.XStageCatalogV2)
+      throw Error('ตัวตรวจสอบฐานเพลง V2 ไม่พร้อม · โหลดหน้าใหม่ก่อน');
+    window.XStageCatalogV2.pointer(pointer);
     const base=await privateJson(pointer.catalogFileId,token);
-    if(base?.schemaVersion!==2||!Array.isArray(base.songs)||
-       (Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount))
-      throw Error('ฐานเพลง XStageWeb/DB รุ่น 2 ไม่สมบูรณ์');
-    const ids=new Set();
-    for(const song of base.songs){
-      if(typeof song?.id!=='string'||!song.id||ids.has(song.id)||
-         typeof song.code!=='string'||!song.code||typeof song.media!=='object')
-        throw Error('รายการเพลงฐาน V2 ขัดแย้งหรือซ้ำ');
-      ids.add(song.id);
-    }
-    return {schemaVersion:2,generation:pointer.generation,songs:base.songs};
+    window.XStageCatalogV2.catalog(base,{cloud:true,expectedCount:pointer.songCount});
+    return {schemaVersion:2,format:'xstage-unified-v2',
+            generation:pointer.generation,songs:base.songs};
   }
   const deltaIds=pointer.deltaFileIds||[];
   if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
