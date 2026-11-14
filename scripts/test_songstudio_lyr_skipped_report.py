@@ -79,6 +79,18 @@ class SkippedReportTests(unittest.TestCase):
         for path, value in originals.items():
             self.assertEqual(path.read_bytes(), value)
 
+    def test_all_invalid_lyrics_still_produce_recoverable_report(self):
+        bad = self.write("ONLY.LYR", ["สั้น"])
+        snap = editor.scan(self.root, None, bulk)
+        self.assertEqual((snap["songs"], snap["skippedInvalid"]), (0, 1))
+        self.assertEqual(editor.skipped_page(snap)["total"], 1)
+        self.assertIn("ONLY.LYR", editor.skipped_csv(snap).decode("utf-8-sig"))
+        self.write("ONLY.LYR")
+        checked = editor.recheck_skipped(snap, bulk)
+        self.assertEqual((checked["songs"], checked["skippedInvalid"]), (1, 0))
+        self.assertEqual(checked["recheckSummary"]["recovered"], 1)
+        self.assertEqual(editor.skipped_page(checked, view="recovered")["total"], 1)
+
     def test_recheck_only_failed_files_recovers_changed_and_confirms_unfixed(self):
         good, short, corrupt, nul, big, unsafe = self.seed()
         snapshot = editor.scan(self.root, None, bulk)
