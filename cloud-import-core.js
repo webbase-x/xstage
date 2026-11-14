@@ -122,7 +122,30 @@ async function validFont(file){
   const extension=ext(file.name);
   if(!FONTS.has(extension)||file.size<256||file.size>2*1024*1024*1024)return false;
   const h=new Uint8Array(await file.slice(0,12).arrayBuffer());
-  return String.fromCharCode(...h.slice(0,4))==='RIFF'&&String.fromCharCode(...h.slice(8,12))==='sfbk';
+  if(h.length!==12||String.fromCharCode(...h.slice(0,4))!=='RIFF'||
+      String.fromCharCode(...h.slice(8,12))!=='sfbk')return false;
+  const riffSize=(h[4]|(h[5]<<8)|(h[6]<<16)|(h[7]<<24))>>>0;
+  const end=8+riffSize;
+  if(riffSize<12||end>file.size)return false;
+  // Validate RIFF boundaries and all three mandatory SF2/SF3 LIST sections.
+  // Read only 12 bytes per top-level chunk, never load a large sample bank
+  // into memory merely to check whether it is structurally complete.
+  let at=12,count=0;
+  const found=new Set();
+  while(at<end){
+    if(at+8>end||++count>4096)return false;
+    const head=new Uint8Array(await file.slice(at,Math.min(at+12,end)).arrayBuffer());
+    if(head.length<8)return false;
+    const kind=String.fromCharCode(...head.slice(0,4));
+    const length=(head[4]|(head[5]<<8)|(head[6]<<16)|(head[7]<<24))>>>0;
+    if(at+8+length>end)return false;
+    if(kind==='LIST'){
+      if(length<4||head.length<12)return false;
+      found.add(String.fromCharCode(...head.slice(8,12)));
+    }
+    at+=8+length+(length&1);
+  }
+  return at===end&&['INFO','sdta','pdta'].every(part=>found.has(part));
 }
 function lrcToJson(raw,code){
   const lines=[],value=String(raw||'').replace(/\r\n?/g,'\n');
