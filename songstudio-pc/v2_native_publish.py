@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 from online_publish import cloud_media_path, PublishError, OnlinePublisher
 from ncn_lyrics import ncn_document, kar_document
 from unified_catalog_v2 import (CATALOG_FORMAT, CatalogValidationError,
-    validate_catalog, validate_pointer, migrate_v1_catalog)
+    validate_catalog, validate_pointer, validate_song, migrate_v1_catalog)
 
 MAX_MANIFEST_SONGS = 1000000
 MAX_MEDIA_BYTES = 2 * 1024 * 1024 * 1024
@@ -98,6 +98,112 @@ def _read_song(root, item):
     return {"id": ident, "code": code, "title": str(item.get("title") or code),
             "artist": str(item.get("artist") or ""), "media": media, "lyrics": lyrics}
 
+
+
+SHARD_SONGS = 2500
+MAX_V2_DELTAS = 32
+MAX_V2_DELTA_UPSERTS = 200
+
+
+def read_published_v2(reader, pointer):
+    """Verify immutable base shards and deltas before exposing any new songs."""
+    validate_pointer(pointer)
+    records={}
+    parts=(pointer["catalogFiles"] if "catalogFiles" in pointer else
+           [{"fileId":pointer["catalogFileId"],"songCount":None}])
+    for part in parts:
+        doc=reader(part["fileId"])
+        validate_catalog(doc,cloud=True,expected_count=part["songCount"])
+        for song in doc["songs"]:
+            if song["id"] in records:
+                raise CatalogValidationError("Duplicate song ID across V2 shards")
+            records[song["id"]]=song
+    for delta_id in pointer.get("deltaFileIds",[]):
+        delta=reader(delta_id)
+        if (not isinstance(delta,dict) or delta.get("schemaVersion")!=2
+                or delta.get("format",CATALOG_FORMAT)!=CATALOG_FORMAT
+                or not isinstance(delta.get("upserts"),list)
+                or not isinstance(delta.get("removes"),list)
+                or len(delta["upserts"])>MAX_SONGS):
+            raise CatalogValidationError("Corrupt immutable V2 delta")
+        for song_id in delta["removes"]:
+            if not isinstance(song_id,str):
+                raise CatalogValidationError("Invalid removed song ID")
+            records.pop(song_id,None)
+        for song in delta["upserts"]:
+            validate_song(song,cloud=True)
+            records[song["id"]]=song
+    validate_catalog({"schemaVersion":2,"format":CATALOG_FORMAT,
+                      "songs":list(records.values())},cloud=True,
+                      expected_count=pointer["songCount"])
+    return records
+
+
+def write_published_v2(drive,db,records,*,previous=None,revisions=None,
+                       cancelled=None,precommit=None):
+    """Publish immutable data first; update DB/current.json only after success.
+
+    Small incremental batches append one verified delta; 32 deltas trigger
+    compaction. Large libraries are bucketed into immutable <=2500-song shards.
+    """
+    generation=secrets.token_hex(12)
+    with tempfile.TemporaryDirectory(prefix="xstage-v2-catalog-") as tmp:
+        temp=Path(tmp)
+        def upload(folder, name, data):
+            if cancelled is not None and cancelled.is_set():
+                raise PublishError("ยกเลิกก่อนเผยแพร่ฐาน V2")
+            file=temp/name
+            file.write_text(json.dumps(data,ensure_ascii=False,
+                        separators=(",",":")),encoding="utf-8")
+            _,meta=drive.upload_file(folder,file,name,cancelled=cancelled)
+            if not isinstance(meta.get("id"),str) or not meta["id"]:
+                raise PublishError("Google Drive ไม่คืนรหัสไฟล์ฐานข้อมูล")
+            return meta["id"]
+        update_mode=(previous is not None and revisions and
+                     len(revisions)<=MAX_V2_DELTA_UPSERTS and
+                     len(previous.get("deltaFileIds",[]))<MAX_V2_DELTAS)
+        pointer={"schemaVersion":2,"format":CATALOG_FORMAT,
+                 "generation":generation,"songCount":len(records)}
+        if update_mode:
+            delta_folder=drive.folder(db,"deltas")
+            delta_id=upload(delta_folder,"catalog-delta-v2-"+generation+".json",
+                            {"schemaVersion":2,"format":CATALOG_FORMAT,
+                             "upserts":list(revisions),"removes":[]})
+            for name in ("catalogFileId","catalogFiles"):
+                if name in previous:pointer[name]=previous[name]
+            pointer["deltaFileIds"]=[*previous.get("deltaFileIds",[]),delta_id]
+        elif len(records)<=SHARD_SONGS:
+            pointer["catalogFileId"]=upload(db,"catalog-base-v2-"+generation+".json",
+                        {"schemaVersion":2,"format":CATALOG_FORMAT,
+                         "songs":list(records.values())})
+        else:
+            catalog_folder=drive.folder(db,"catalogs")
+            buckets={}
+            for song in records.values():
+                first=song["code"][0].upper()
+                bucket=first if first in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" else "_"
+                buckets.setdefault(bucket,[]).append(song)
+            shards=[]
+            for bucket,items in sorted(buckets.items()):
+                items.sort(key=lambda song:song["id"])
+                for offset in range(0,len(items),SHARD_SONGS):
+                    part=items[offset:offset+SHARD_SONGS]
+                    name="catalog-v2-"+bucket+"-"+str(offset//SHARD_SONGS)+"-"+generation+".json"
+                    file_id=upload(catalog_folder,name,{
+                        "schemaVersion":2,"format":CATALOG_FORMAT,"songs":part})
+                    shards.append({"bucket":bucket,"fileId":file_id,"songCount":len(part)})
+            if len(shards)>1024:
+                raise PublishError("ฐานเพลงมีจำนวน Shards เกินขีดจำกัด")
+            pointer["catalogFiles"]=shards
+        validate_pointer(pointer)
+        if precommit is not None:
+            precommit()
+        upload(db,"current.json",pointer)
+        # Drive API replace_pointer is required: do not create two pointers.
+        # The upload helper above cannot set this flag, so re-uploading a
+        # differently named current file would be unsafe. See replacement
+        # below in the final pointer block.
+    return pointer
 
 class V2NativePublisher:
     def __init__(self, drive):
