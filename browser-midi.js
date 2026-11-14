@@ -59,7 +59,7 @@ function parseMidi(source){
     }
     cursor=end;
   }
-  events.sort((a,b)=>a.tick-b.tick||(a.kind==='tempo'?-1:0));
+  events.sort((a,b)=>a.tick-b.tick||Number(b.kind==='tempo')-Number(a.kind==='tempo'));
   let prev=0,tempo=500000,clock=0;
   const channels=Array.from({length:16},()=>({program:0,bank:0,volume:100,expression:127,notes:new Map(),sustain:false,held:[]}));
   const notes=[],lyricEvents=[];
@@ -264,7 +264,7 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
   const check=()=>{if(signal?.aborted)fail('ยกเลิกการเตรียม MIDI แล้ว');};
   check();const song=parseMidi(source),ctx=new OfflineAudioContext(2,Math.ceil((song.duration+.5)*RATE),RATE);
   const font=fontBytes?parseFont(fontBytes):null;
-  let num=0;
+  let num=0,scheduled=0;
   const master=ctx.createGain();master.gain.value=font?.75:.24;master.connect(ctx.destination);
   for(const note of song.notes){
     if(num++%200===0){check();onStatus?.('เตรียม MIDI '+Math.floor(num*100/song.notes.length)+'%');await Promise.resolve();}
@@ -273,6 +273,7 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
     if(font&&!regions.length)continue;
     if(!font)regions=[null];
     for(const g of regions){
+      scheduled++;
       const gain=ctx.createGain(),velocity=Math.pow(note.velocity/127,1.5),level=Math.max(0,Math.min(1,note.level));
       const attenuation=g?(g.get(48)||0):0;
       const amp=Math.max(.00001,velocity*level*Math.pow(10,-attenuation/200)*(.5/Math.max(1,regions.length)));
@@ -291,7 +292,8 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
         const fine=g.has(52)?(g.get(52)<<16>>16):0;
         src.playbackRate.value=Math.pow(2,(note.key-pitch+coarse+(fine+s.correct)/100)/12);
         const mode=g.get(54)||0;
-        if((mode&1)&&s.loopEnd>s.loopStart+8&&!(s.type&0x10)){
+        if((mode&1)&&s.loopStart>=s.start&&s.loopEnd<=s.end&&
+            s.loopEnd>s.loopStart+8&&!(s.type&0x10)){
           src.loop=true;src.loopStart=(s.loopStart-s.start)/s.rate;src.loopEnd=(s.loopEnd-s.start)/s.rate;
         }
         src.connect(gain);src.start(start);src.stop(Math.min(song.duration+.4,end+release+.03));
@@ -303,7 +305,7 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null}={}){
       }
     }
   }
-  if(font&&!num)fail('SoundFont ไม่มี preset ที่ใช้กับ MIDI นี้');
+  if(font&&!scheduled)fail('SoundFont นี้ไม่มี preset ที่ใช้กับ MIDI · กรุณาเลือกซาวด์ฟอนต์อื่น');
   onStatus?.('กำลังสังเคราะห์เสียง MIDI…');
   const result=await ctx.startRendering();check();
   onStatus?.('กำลังเตรียมเสียงสำหรับเล่น…');
