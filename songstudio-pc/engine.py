@@ -679,6 +679,30 @@ def ensure_midi_wav(path):
     run_process(params)
     return tmp
 
+def render_browser_video(source, target):
+    """Normalize mixed AVI/MPG/VCD/WMV/MOV/MKV sources to HTML5 MP4.
+
+    Never copy a codec-incompatible legacy file and call it playable. All
+    media remains private and the conversion runs locally in the bundled PC.
+    """
+    if not ffmpeg_binary():
+        raise RuntimeError("ไม่มี FFmpeg ที่รวมใน Song Studio PC Ready")
+    target = Path(target)
+    source = Path(source)
+    if target.suffix.lower() != ".mp4" or source.resolve() == target.resolve():
+        raise ValueError("ปลายทางวิดีโอออนไลน์ต้องเป็น MP4 ใหม่ ไม่ทับต้นฉบับ")
+    update("กำลังแปลงวิดีโอ " + source.name + " เป็น H.264/AAC MP4 สำหรับ WEB/APK")
+    run_process([
+        ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
+        "-movflags", "+faststart", str(target)
+    ])
+    if not target.is_file() or target.stat().st_size < 1000:
+        raise RuntimeError("วิดีโอที่แปลงยังไม่พร้อมเล่น: " + source.name)
+
+
 def convert(row, target, preview=False):
     path = Path(row["path"])
     midi = path.suffix.lower() in EXT_MIDI
@@ -1643,6 +1667,8 @@ def execute_job(action, options, started):
                 cancelled=CANCEL, export=_song_export_module(),
                 publisher=online_module.OnlinePublisher(GOOGLE),
                 staging_root=DATA, validator=online_module._valid_row,
+                renderer=lambda src, dest: convert({"path": str(src)}, dest),
+                video_renderer=render_browser_video, ncn=NCN,
                 progress=lambda done, total, name: update(
                     f"ตรวจและเผยแพร่ {done:,}/{total:,} · {name}", done))
         elif action == "upload":
@@ -2507,7 +2533,7 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     self._json({"events": HISTORY.list_events(HISTORY_FILE)})
             elif path == "/api/upload-folder/inspect":
-                self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module()))
+                self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module(), ncn=NCN))
             elif path == "/api/code-registry":
                 self._json(code_registry_preview())
             elif path == "/api/environment":
