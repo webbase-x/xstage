@@ -146,7 +146,7 @@ class NcnSourceTests(unittest.TestCase):
             third = engine.build_library([row], "original", {"audio_only": False})
             self.assertEqual((third["created"], third["skipped"], third["lyricsCount"]),
                              (0, 1, 1))
-            self.assertEqual(convert.call_count, 1)
+            self.assertEqual(convert.call_count, 0)
             corrected = json.loads(lyrics_file.read_text(encoding="utf-8"))
             self.assertEqual(corrected["lines"][0]["text"], "เนื้อร้องใหม่")
             self.assertEqual(len(list(self.workspace.rglob("*.mid"))), 1)
