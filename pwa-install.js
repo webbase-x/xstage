@@ -41,7 +41,8 @@
       const hash=String(meta?.sha256||'').trim();
       if(!/^X-Stage-Karaoke-Android(?:-TV)?-v[0-9A-Za-z._-]+-build[0-9]+\.apk$/.test(file)||
         !Number.isSafeInteger(build)||build<1||!/^\d+\.\d+\.\d+$/.test(version)||
-        file!==('X-Stage-Karaoke-Android-v'+version+'-build'+build+'.apk')||
+        !new Set(['X-Stage-Karaoke-Android-v'+version+'-build'+build+'.apk',
+          'X-Stage-Karaoke-Android-TV-v'+version+'-build'+build+'.apk']).has(file)||
         !/^[a-fA-F0-9]{64}$/.test(hash))throw Error('ข้อมูล APK ไม่ผ่านการตรวจสอบ');
       verifiedAndroidApk={url:new URL('./downloads/'+file,location.href).href,file,version,build};
       if(apkMenuLink){
