@@ -1079,8 +1079,15 @@ def lyric_source_root(selected=None):
         raise ValueError("ต้นทางข้อความหัว–ท้ายเพลงต้องเป็นโฟลเดอร์")
     root = (selected_path if (selected_path / "current.json").is_file()
             else selected_path / "StageWeb")
-    if not (root / "current.json").is_file():
+    pointer_file = root / "current.json"
+    if not pointer_file.is_file():
         raise ValueError("โฟลเดอร์นี้ไม่มีคลัง StageWeb/current.json กรุณาเลือก StageWeb หรือโฟลเดอร์ที่เก็บ StageWeb")
+    try:
+        pointer = json.loads(pointer_file.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("อ่าน current.json ของโฟลเดอร์ที่เลือกไม่สำเร็จ") from exc
+    if not isinstance(pointer, dict) or pointer.get("format") != "xstage-local-current" or pointer.get("schemaVersion") != 1:
+        raise ValueError("โฟลเดอร์ต้นทางไม่ใช่คลังเพลง X-Stage Song Studio ที่รองรับ")
     return root.resolve()
 
 
