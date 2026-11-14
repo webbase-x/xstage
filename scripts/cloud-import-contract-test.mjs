@@ -26,7 +26,28 @@ assert.equal((await loadCatalog({listChildren:async()=>[]},'root')).rows.size,0)
 await assert.rejects(loadCatalog({
   listChildren:async()=>[{name:'current.json',mimeType:'application/json',id:'fake1234'},
                         {name:'current.json',mimeType:'application/json',id:'fake5678'}]
+},'root'),/รุ่นเก่าไม่รองรับ/);
+await assert.rejects(loadCatalog({
+  listChildren:async id=>id==='root'
+    ?[{name:'LYRICS',mimeType:'application/vnd.google-apps.folder',id:'folder'}]
+    :[{name:'current.json',mimeType:'application/json',id:'a'},
+      {name:'current.json',mimeType:'application/json',id:'b'}]
 },'root'),/current.json ซ้ำ/);
+// A Drive root without current.json is NOT empty merely because it has
+// the two v4 folder names. Stranded audio must be rejected on both PC and Web.
+const noPointer = file => ({
+  listChildren:async id => id==='root'
+    ? [{name:'AUDIO',id:'audio-id',mimeType:'application/vnd.google-apps.folder'},
+       {name:'LYRICS',id:'lyrics-id',mimeType:'application/vnd.google-apps.folder'}]
+    : id==='audio-id' ? (file?[{name:file,id:'orphan',mimeType:'audio/mpeg'}]:[]) : []
+});
+for(const name of ['song.mp3','song.mid','movie.mp4']){
+  await assert.rejects(loadCatalog(noPointer(name),'root'),/current.json/,
+    'Web importer must not initialize over unindexed '+name);
+}
+assert.equal((await loadCatalog(noPointer('piano.sf2'),'root')).rows.size,0,
+  'SoundFont-only v4 library may be initialized safely');
+
 const uploaded=new Map(),children=new Map(),sessions=new Map();
 let serial=0,sessionNumber=0,putRequests=0;
 const id=()=>('item'+String(++serial).padStart(7,'0'));

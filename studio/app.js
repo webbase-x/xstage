@@ -1856,7 +1856,7 @@
       await saveInputs(['upload-soundfont-path']);
       const createNew=$('upload-allow-new').checked;
       const agreed=await confirmStudio(
-        'อัปโหลด SoundFont ที่เลือกไปยัง XStageWeb/SOUNDFONT ตามชนิด SF2/SF3'+
+        'อัปโหลด SoundFont ที่เลือกไปยัง XStageWeb/AUDIO (Layout V4)'+
         '\\nตรวจไฟล์และ MD5 ก่อนส่ง ไม่ทับ SoundFont เดิม'+
         (createNew?'\\nถ้ามองไม่เห็น XStageWeb ระบบจะสร้างใหม่ โปรดตรวจบัญชีและสิทธิ์ Google ก่อน':'')+
         '\\n\\nหมายเหตุ: เว็บหลักยังไม่มี MIDI SoundFont Engine พร้อมเล่น',
@@ -1903,7 +1903,7 @@
       '\\nตรวจ MD5 ก่อนส่งและไม่เขียนทับไฟล์เดิม'+
       (createNew?'\\n\\nหากไม่พบ XStageWeb ที่บัญชีนี้มองเห็น ระบบจะสร้างก่อนอัปโหลด'+
        '\\nคำเตือน: หากสิทธิ์ Google ไม่ครอบคลุมคลังเดิม อาจเกิดคลังซ้ำ':'')+
-      '\\n\\nMP3/M4A ที่ผ่านการตรวจจะอัปโหลดพร้อมอัปเดต DB/current.json ให้เล่นออนไลน์ได้ทันที · VIDEO/NCN ที่ยังไม่รองรับจะข้าม';
+      '\\n\\nไฟล์ที่ตรวจผ่านจะถูกแปลงและเผยแพร่เข้า XStageWeb/AUDIO และ LYRICS/current.json · ไฟล์ที่แปลงไม่ได้จะข้ามโดยไม่เผยแพร่รายการเพลงหลอก';
     if (!await confirmStudio(details,'ยืนยันตรวจครบและอัปโหลดเข้า XStageWeb',
       {acceptLabel:'ตรวจแล้ว · เริ่มอัปโหลด',cancelLabel:'ยกเลิก'})) return;
     await run('upload-folder',{create_new_library:createNew});

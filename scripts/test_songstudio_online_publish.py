@@ -182,46 +182,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
         self.assertEqual(db["files"], 2)
 
-    def test_raw_xstageweb_folder_without_pointer_downloads_songs_zip_db(self):
-        """User-managed AUDIO/MIDI/VIDEO/DB libraries need not have current.json."""
-        self.drive.items.clear()
-        root = self.drive.folder("root", "XStageWeb")
-        audio = self.drive.folder(self.drive.folder(
-            self.drive.folder(self.drive.folder(root, "AUDIO"), "MP3"), "Songs"), "A")
-        mid = self.drive.folder(self.drive.folder(
-            self.drive.folder(root, "MIDI"), "NCN"), "Cursor")
-        db = self.drive.folder(root, "DB")
-        sample = self.base / "sample.mp3"
-        sample.write_bytes(b"ID3" + b"Z" * 5000)
-        cursor = self.base / "sample.cur"
-        cursor.write_bytes(b"C" * 1200)
-        catalog = self.base / "catalog-data.json"
-        catalog.write_text('{"count":1}', encoding="utf-8")
-        self.drive.upload_file(audio, sample, "A001.mp3")
-        self.drive.upload_file(mid, cursor, "A001.CUR")
-        self.drive.upload_file(db, catalog, "library.json")
-        self.drive.locked = True
-        count = len(self.drive.items)
-        with patch.object(roundtrip.drive, "_request",
-                          side_effect=self._download_private_json):
-            songs = self.drive.download_library(self.base / "raw-songs", "songs")
-            database = self.drive.download_library(self.base / "raw-db", "db")
-            archive = self.drive.download_library(self.base / "raw-zip", "zip")
-        restored = Path(songs["path"])
-        self.assertEqual((restored / "AUDIO/MP3/Songs/A/A001.mp3").read_bytes(),
-                         sample.read_bytes())
-        self.assertEqual((restored / "MIDI/NCN/Cursor/A001.CUR").read_bytes(),
-                         cursor.read_bytes())
-        self.assertFalse((restored / "DB").exists())
-        self.assertEqual((Path(database["path"]) / "DB/library.json").read_bytes(),
-                         catalog.read_bytes())
-        self.assertFalse((Path(database["path"]) / "AUDIO").exists())
-        with zipfile.ZipFile(archive["path"]) as bundle:
-            self.assertIn("XStageWeb/AUDIO/MP3/Songs/A/A001.mp3", bundle.namelist())
-            self.assertIn("XStageWeb/DB/library.json", bundle.namelist())
-        self.assertEqual(len(self.drive.items), count)
-
-    def test_raw_xstageweb_db_without_database_gives_clear_error(self):
+    def test_unindexed_xstageweb_is_not_downloaded_as_legacy_backup(self):
         self.drive.items.clear()
         root = self.drive.folder("root", "XStageWeb")
         audio = self.drive.folder(root, "AUDIO")
@@ -229,38 +190,30 @@ class OnlinePublishTests(unittest.TestCase):
         song.write_bytes(b"A" * 2000)
         self.drive.upload_file(audio, song, "alone.m4a")
         self.drive.locked = True
-        with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ไม่พบไฟล์ DB"):
-            self.drive.download_library(self.base / "missing-db", "db")
+        before = len(self.drive.items)
+        with self.assertRaisesRegex(roundtrip.drive.GoogleError, "LYRICS|current.json"):
+            self.drive.download_library(self.base / "old", "songs")
+        self.assertFalse((self.base / "old").exists())
+        self.assertEqual(len(self.drive.items), before)
 
-    def test_raw_xstageweb_rejects_unsafe_names_without_writing(self):
-        self.drive.items.clear()
-        root = self.drive.folder("root", "XStageWeb")
-        source = self.base / "file.mp3"
-        source.write_bytes(b"A" * 2000)
-        self.drive.upload_file(root, source, "../unsafe.mp3")
-        self.drive.locked = True
-        with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ไม่ปลอดภัย"):
-            self.drive.download_library(self.base / "unsafe", "songs")
-        self.assertFalse((self.base / "unsafe").exists())
-
-    def test_first_catalog_after_soundfont_only_root_preserves_font(self):
+    def test_first_catalog_after_flat_soundfont_only_root_preserves_font(self):
         root = self.remote_root()
-        fonts = self.drive.folder(root, "SOUNDFONT")
-        sf2 = self.drive.folder(fonts, "SF2")
+        audio = self.drive.folder(root, "AUDIO")
         font = self.base / "default.sf2"
         font.write_bytes(b"RIFF" + b"\\0" * 4 + b"sfbk" + b"x" * 1200)
-        _, uploaded = self.drive.upload_file(sf2, font, "default.sf2")
+        _, uploaded = self.drive.upload_file(audio, font, "default.sf2")
         result = self.publisher.publish(self.root, [self.first])
         self.assertTrue(result["published"])
         self.assertIn(uploaded["id"], self.drive.items)
-        self.assertEqual(self.pointer()[0]["layoutVersion"],4)
+        self.assertEqual(self.pointer()[0]["layoutVersion"], 4)
 
-    def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
+    def test_v4_root_is_used_even_when_unrelated_folder_exists(self):
         self.drive.folder("root", "StageWeb")
-        before = len(self.drive.items)
-        with self.assertRaisesRegex(online.PublishError, "มากกว่าหนึ่ง"):
-            self.publisher.publish(self.root, [self.first], create_new_library=True)
-        self.assertEqual(len(self.drive.items), before)
+        result = self.publisher.publish(self.root, [self.first], create_new_library=True)
+        self.assertTrue(result["published"])
+        self.assertEqual(self.pointer()[0]["layoutVersion"], 4)
+        self.assertEqual(sum(1 for x in self.folder_files()
+                             if x["name"] == "XStageWeb"), 1)
 
     def _download_private_json(self, url, **kwargs):
         ident = urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1]
@@ -319,7 +272,7 @@ class OnlinePublishTests(unittest.TestCase):
         target = self.base / "not-started"
         with patch.object(roundtrip.drive, "_request",
                           side_effect=self._download_private_json):
-            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ไม่พบไฟล์ที่แอปเข้าถึงได้"):
+            with self.assertRaisesRegex(roundtrip.drive.GoogleError, "LYRICS|current.json"):
                 self.drive.download_library(target, kind="songs")
         self.assertFalse(target.exists())
 

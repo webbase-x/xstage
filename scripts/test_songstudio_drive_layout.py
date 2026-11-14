@@ -1,4 +1,4 @@
-"""Regression tests for private XStageWeb v4 AUDIO/LYRICS Drive layout and legacy safety."""
+"""Regression tests for strictly V4 XStageWeb AUDIO/LYRICS and legacy rejection."""
 from __future__ import annotations
 
 import importlib.util
@@ -15,7 +15,6 @@ SPEC.loader.exec_module(layout)
 class XStageWebLayoutTests(unittest.TestCase):
     def test_new_root_and_pointer_compatibility(self):
         self.assertEqual(layout.ONLINE_ROOT, "XStageWeb")
-        self.assertEqual(layout.LEGACY_ONLINE_ROOT, "StageWeb")
         self.assertEqual(layout.LAYOUT_VERSION, 4)
 
     def test_all_media_use_one_flat_audio_folder(self):
@@ -48,28 +47,44 @@ class XStageWebLayoutTests(unittest.TestCase):
                 with self.assertRaises(layout.PublishError):
                     layout.media_drive_path(name, code="123")
 
-    def test_existing_legacy_root_reused_without_new_root(self):
+    def test_only_v4_root_is_discovered(self):
         class Drive:
-            def __init__(self):
-                self.made = []
+            def __init__(self, roots):
+                self.roots = roots
             def list_children(self, parent):
-                return ([{"id": "old-123", "name": "StageWeb",
-                          "mimeType": layout.FOLDER_MIME}]
-                        if parent == "root" else [])
-            def folder(self, parent, name):
-                self.made.append(name)
-                raise AssertionError("Must not create a duplicate root")
-        drive = Drive()
-        self.assertEqual(layout.OnlinePublisher(drive)._existing_root(), "old-123")
-        self.assertFalse(drive.made)
+                return self.roots
+        old = [{"id": "old", "name": "StageWeb",
+                "mimeType": layout.FOLDER_MIME}]
+        self.assertIsNone(layout.OnlinePublisher(Drive(old))._existing_root())
+        modern = old + [{"id": "v4", "name": "XStageWeb",
+                         "mimeType": layout.FOLDER_MIME}]
+        self.assertEqual(layout.OnlinePublisher(Drive(modern))._existing_root(), "v4")
 
-    def test_two_visible_roots_stop_instead_of_merging(self):
+    def test_no_pointer_does_not_discard_unindexed_media(self):
+        class Drive:
+            def __init__(self, filename):
+                self.filename = filename
+            def list_children(self, parent):
+                if parent == "library":
+                    return [{"id": "a", "name": "AUDIO", "mimeType": layout.FOLDER_MIME},
+                            {"id": "l", "name": "LYRICS", "mimeType": layout.FOLDER_MIME}]
+                if parent == "a":
+                    return [{"id": "f", "name": self.filename, "mimeType": "audio/mpeg"}]
+                return []
+        for media in ("song.mp3", "song.mid", "movie.mp4"):
+            with self.subTest(media=media):
+                with self.assertRaisesRegex(layout.PublishError, "current.json"):
+                    layout.OnlinePublisher(Drive(media))._read_online("library")
+        result = layout.OnlinePublisher(Drive("piano.sf2"))._read_online("library")
+        self.assertIsNone(result[0])
+        self.assertEqual(result[1], {})
+
+    def test_duplicate_v4_roots_are_rejected(self):
         class Drive:
             def list_children(self, parent):
-                return [{"id": str(i), "name": name,
-                         "mimeType": layout.FOLDER_MIME}
-                        for i, name in enumerate(("StageWeb", "XStageWeb"))]
-        with self.assertRaises(layout.PublishError):
+                return [{"id": str(i), "name": "XStageWeb",
+                         "mimeType": layout.FOLDER_MIME} for i in range(2)]
+        with self.assertRaisesRegex(layout.PublishError, "ซ้ำ"):
             layout.OnlinePublisher(Drive())._existing_root()
 
 

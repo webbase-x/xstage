@@ -6,7 +6,7 @@ Drive layout v4 (only AUDIO and LYRICS; no nested buckets):
     XStageWeb/LYRICS/catalog-base-<generation>.json
     XStageWeb/LYRICS/catalog-delta-<generation>.json
     XStageWeb/LYRICS/current.json (published LAST, as an atomic pointer)
-Legacy v1/v2 catalogs are read for compatibility but never removed implicitly.
+Legacy v1/v2/v3 catalogs are rejected; user files are never deleted.
 
 Never publish a new pointer until media and immutable catalog are uploaded and
 MD5 checked. Existing online songs are merged; this is NOT a whole-library
@@ -21,7 +21,6 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 ONLINE_ROOT = "XStageWeb"
-LEGACY_ONLINE_ROOT = "StageWeb"
 STAGING_MARKER = ".xstage-songstudio-staging.json"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 MAX_CATALOG_BYTES = 128 * 1024 * 1024
@@ -31,8 +30,7 @@ MAX_DELTAS = 32
 class PublishError(RuntimeError):
     pass
 
-# Drive folder layout v2. The original local StageWeb paths are intentionally
-# unchanged: they are used by recovery journals and local catalogs.
+# Drive Layout V4. Local StageWeb staging paths are separate from Drive paths.
 LAYOUT_VERSION = 4
 BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -155,57 +153,56 @@ class OnlinePublisher:
         return result
 
     def _existing_root(self):
-        # Existing XStageWeb databases keep their original Google Drive ID.
-        # Never generate a second StageWeb tree when the legacy library is
-        # already visible; code and MD5 duplicate checks must cover both.
+        # Only XStageWeb is part of the V4 online protocol.
         found = [x for x in self.drive.list_children("root") if
-                 x.get("name") in (ONLINE_ROOT, LEGACY_ONLINE_ROOT) and
-                 x.get("mimeType") == FOLDER_MIME]
+                 x.get("name") == ONLINE_ROOT and x.get("mimeType") == FOLDER_MIME]
         if len(found) > 1:
-            raise PublishError(
-                "พบคลัง StageWeb และ XStageWeb มากกว่าหนึ่งรายการ · "
-                "หยุดก่อนอัปโหลดเพื่อไม่ให้แยกฐานเพลงซ้ำ "
-                "กรุณาตรวจเลือกคลังเดิมให้ชัดเจน")
+            raise PublishError("พบ XStageWeb ซ้ำ · หยุดก่อนอัปโหลด")
         return found[0]["id"] if found else None
 
     def _read_online(self, root):
         if not root:
             return None, {}, {}
         children = self.drive.list_children(root)
-        lyric_folders = [x for x in children if x.get("name") in ("LYRICS", "TEXT")
+        legacy = [x for x in children if x.get("name") in ("TEXT", "DB") or
+                  x.get("name") == "current.json"]
+        if legacy:
+            raise PublishError("คลัง Google Drive รุ่นเก่าไม่รองรับ · ใช้ XStageWeb/LYRICS/current.json Layout V4 เท่านั้น")
+        lyric_folders = [x for x in children if x.get("name") == "LYRICS"
                          and x.get("mimeType") == FOLDER_MIME]
-        if len([x for x in lyric_folders if x["name"] == "LYRICS"]) > 1 or len(
-                [x for x in lyric_folders if x["name"] == "TEXT"]) > 1:
-            raise PublishError("พบโฟลเดอร์ LYRICS/TEXT ซ้ำ · หยุดตรวจคลัง")
-        lyric_children = []
-        modern = []
-        for section in lyric_folders:
-            items = self.drive.list_children(section["id"])
-            lyric_children.extend(items)
-            modern.extend(x for x in items if x.get("name") == "current.json"
-                          and x.get("mimeType") != FOLDER_MIME)
-        legacy = [x for x in children if x.get("name") == "current.json"
-                  and x.get("mimeType") != FOLDER_MIME]
-        if modern and legacy:
-            raise PublishError("พบ current.json ที่รากและ LYRICS/TEXT พร้อมกัน · หยุดก่อนย้ายคลัง")
-        pointers = modern or legacy
+        if len(lyric_folders) > 1:
+            raise PublishError("พบ LYRICS ซ้ำใน XStageWeb")
+        lyric_children = (self.drive.list_children(lyric_folders[0]["id"])
+                          if lyric_folders else [])
+        pointers = [x for x in lyric_children if x.get("name") == "current.json"
+                    and x.get("mimeType") != FOLDER_MIME]
         if len(pointers) > 1:
-            raise PublishError("พบ XStageWeb/current.json ซ้ำบน Drive · หยุดเพื่อป้องกันฐานเสีย")
+            raise PublishError("พบ current.json ซ้ำใน XStageWeb")
         if not pointers:
             if children:
                 # A SoundFont-only library can be created by Song Studio before
                 # the user's first playable song. Preserve it and allow the
                 # first verified online DB to be published. Other unindexed
                 # media remain blocked to avoid reinitializing an old catalog.
-                if (all(x.get("name") in ("AUDIO", "LYRICS", "SOUNDFONT") and
+                # Root folder names alone are insufficient evidence that a
+                # library is empty: AUDIO may contain thousands of orphaned
+                # songs from a failed/foreign upload. Only verified SoundFonts
+                # are allowed before the first published catalog.
+                if (all(x.get("name") in ("AUDIO", "LYRICS") and
                         x.get("mimeType") == FOLDER_MIME for x in children)
-                        and len(children) <= 3
-                        and not lyric_children):
-                    return None, {}, {x["name"]: x for x in children}
+                        and len(children) <= 2 and not lyric_children):
+                    audio_folders = [x for x in children if x.get("name") == "AUDIO"]
+                    if len(audio_folders) <= 1:
+                        audio_items = (self.drive.list_children(audio_folders[0]["id"])
+                                       if audio_folders else [])
+                        if all(x.get("mimeType") != FOLDER_MIME and
+                               str(x.get("name") or "").lower().endswith((".sf2", ".sf3"))
+                               for x in audio_items):
+                            return None, {}, {x["name"]: x for x in children}
                 markers = [x for x in [*children, *lyric_children]
                            if x.get("name") == STAGING_MARKER
                            and x.get("mimeType") != FOLDER_MIME]
-                expected = {STAGING_MARKER, "songs", "audio", "lyrics", "AUDIO", "LYRICS", "VIDEO", "MIDI", "DB", "SOUNDFONT"}
+                expected = {STAGING_MARKER, "AUDIO", "LYRICS"}
                 if (len(markers) == 1 and all(x.get("name") in expected for x in children)
                         and self._json(markers[0]["id"]).get("format") ==
                         "xstage-songstudio-upload-staging-v1"):
@@ -219,6 +216,7 @@ class OnlinePublisher:
         pointer = self._json(pointer_file["id"])
         ids = pointer.get("deltaFileIds", [])
         if (pointer.get("schemaVersion") != 1
+                or pointer.get("layoutVersion") != LAYOUT_VERSION
                 or not isinstance(pointer.get("catalogFileId"), str)
                 or not pointer["catalogFileId"]
                 or not isinstance(ids, list) or len(ids) > MAX_DELTAS
@@ -261,7 +259,7 @@ class OnlinePublisher:
             if allow_missing_root:
                 return {"songs": [], "generation": "", "visible": False}
             raise PublishError(
-                "ไม่พบคลัง XStageWeb/StageWeb เดิมที่ Google OAuth ของ Song Studio เข้าถึงได้ "
+                "ไม่พบคลัง XStageWeb V4 ที่ Google OAuth ของ Song Studio เข้าถึงได้ "
                 "· ห้ามอ้างว่าไม่มีรหัสซ้ำจนกว่าจะเชื่อมต่อคลังเดิม")
         active, songs, _ = self._read_online(root)
         if active is None:
@@ -293,10 +291,10 @@ class OnlinePublisher:
         root = self._existing_root()
         # drive.file is app-scoped. If the existing Karaoke Online library was
         # created by a different OAuth application, it may be invisible here.
-        # Never silently make a second XStageWeb and strand the old songs.
+        # A missing visible root must never be interpreted as an empty accessible library.
         if root is None and not create_new_library:
             raise PublishError(
-                "ไม่พบ XStageWeb/StageWeb ที่บัญชี/แอปนี้เข้าถึงได้ · "
+                "ไม่พบ XStageWeb V4 ที่บัญชี/แอปนี้เข้าถึงได้ · "
                 "หากมีเพลงเดิม ห้ามสร้างคลังใหม่จนกว่าจะอนุญาตให้ Song Studio "
                 "เข้าถึงคลังเดิมผ่าน Google OAuth/Picker · "
                 "ถ้าเป็น Google Drive ว่างจริง ให้เลือก 'สร้างคลังใหม่' โดยชัดเจน")

@@ -397,23 +397,22 @@ def upload_soundfont(drive, path, *, create_new_library=False,
                      cancelled=None, progress=None):
     """Upload private SF2/SF3 without altering the playable songs catalog.
 
-    XStageWeb/AUDIO/ contains immutable SF2/SF3 alongside other media. Until the browser
-    MIDI engine implements loading these private Drive IDs, it is not a claim
-    that a SoundFont can be played in Karaoke Online.
+    XStageWeb/AUDIO/ contains immutable SF2/SF3 alongside other media.
+    Online and Android playback still depend on device and decoder support.
     """
     info = inspect_soundfont(path)
     roots = [item for item in drive.list_children("root")
-             if item.get("name") in ("XStageWeb", "StageWeb")
+             if item.get("name") == "XStageWeb"
              and item.get("mimeType") == FOLDER]
     if len(roots) > 1:
-        raise ValueError("พบ StageWeb/XStageWeb ซ้ำกัน · หยุดก่อนอัปโหลด SoundFont")
+        raise ValueError("พบ XStageWeb ซ้ำกัน · หยุดก่อนอัปโหลด SoundFont")
     if not roots and not create_new_library:
         raise ValueError("ไม่พบ XStageWeb ที่เข้าถึงได้ · ต้องยืนยันสร้างคลังใหม่")
     if cancelled and cancelled.is_set():
         raise ValueError("ยกเลิกการอัปโหลด SoundFont")
-    library_name = roots[0]["name"] if roots else "XStageWeb"
+    library_name = "XStageWeb"
     root = roots[0]["id"] if roots else drive.folder("root", library_name)
-    # Flat Drive v3: SoundFonts are playable media, under AUDIO.
+    # Flat Drive V4: SoundFonts live directly inside AUDIO.
     target = drive.folder(root, "AUDIO")
     source = Path(info["path"])
     fingerprint = digest(source)

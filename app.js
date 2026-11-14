@@ -416,7 +416,7 @@ async function loadLatestCachedCatalog(sub,rootId=''){
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(saved?.layoutVersion!==4||catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
     return {
       catalog,
       generation:String(saved.generation||''),
@@ -441,7 +441,7 @@ async function loadCachedCatalog(ownerKey,pointer){
   if(!ownerKey||!pointer?.generation)return null;
   try{
     const saved=await catalogStorage('get',ownerKey);
-    if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
+    if(saved?.layoutVersion!==4||pointer.layoutVersion!==4||saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
        JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
     const catalog=saved.catalog;
     if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
@@ -450,9 +450,9 @@ async function loadCachedCatalog(ownerKey,pointer){
   }catch{return null;}
 }
 async function saveCachedCatalog(ownerKey,pointer,catalog){
-  if(!ownerKey||!pointer?.generation||!Array.isArray(catalog?.songs))return;
+  if(!ownerKey||pointer?.layoutVersion!==4||!pointer?.generation||!Array.isArray(catalog?.songs))return;
   try{await catalogStorage('put',ownerKey,{
-    generation:String(pointer.generation),catalogFileId:pointer.catalogFileId,
+    layoutVersion:4,generation:String(pointer.generation),catalogFileId:pointer.catalogFileId,
     deltaFileIds:pointer.deltaFileIds||[],catalog
   });}catch(error){console.warn('X-Stage local catalog cache:',error?.message||error);}
 }
@@ -486,7 +486,6 @@ const initialUiPrefs=readUiPrefs();
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
 const ACTIVE_AUTH_KEY = 'xstage-google-token-v2';
 const PENDING_AUTH_KEY = 'xstage-google-pending-token-v1';
-const LEGACY_ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
 // Google Identity Services token callbacks can arrive after Safari refocuses.
 // Only Google callbacks, an explicit new attempt, or the full timeout can settle a flow.
@@ -497,7 +496,7 @@ function authRecordValid(current){
     Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS);
 }
 function clearActiveAuth(){
-  try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);sessionStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
+  try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);}catch{}
   try{localStorage.removeItem(ACTIVE_AUTH_KEY);}catch{}
 }
 function clearPendingAuth(){
@@ -532,7 +531,7 @@ function readActiveAuth(){
   try{stores.push(localStorage);}catch{}
   for(const store of stores){
     try{
-      const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||store.getItem(LEGACY_ACTIVE_AUTH_KEY)||'null');
+      const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||'null');
       if(authRecordValid(current))return current;
     }catch{}
   }
@@ -822,11 +821,32 @@ function driveError(status, subject) {
   return new Error(`อ่าน ${subject} ไม่สำเร็จ (HTTP ${status})`);
 }
 async function driveList(q, token) {
-  const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
-  const result = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params}`, {headers: requestHeaders(token),cache:'no-store'},'Google Drive');
-  if (!result.ok) throw driveError(result.status, 'รายการไฟล์');
-  const json = await result.json();
-  return Array.isArray(json.files) ? json.files : [];
+  // Google Drive files.list can return fewer than pageSize results and provide
+  // nextPageToken even for a page with no files. Never treat one page as a
+  // complete library: a partial listing could select the wrong Drive root.
+  const files = [];
+  const seenPageTokens = new Set();
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
+    if (pageToken) params.set('pageToken',pageToken);
+    const result = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params}`,
+      {headers: requestHeaders(token),cache:'no-store'},'Google Drive');
+    if (!result.ok) throw driveError(result.status, 'รายการไฟล์');
+    const json = await result.json();
+    if (!json || (json.files != null && !Array.isArray(json.files)) ||
+        (json.nextPageToken != null && typeof json.nextPageToken !== 'string'))
+      throw Error('Google Drive ส่งรายการไฟล์ที่มีโครงสร้างไม่ถูกต้อง');
+    files.push(...(json.files || []));
+    if (files.length > 300000)
+      throw Error('Google Drive มีไฟล์มากเกินขีดจำกัด 300,000 รายการต่อการค้นหา');
+    const next = json.nextPageToken || '';
+    if (next && seenPageTokens.has(next))
+      throw Error('Google Drive ส่งรหัสหน้าผลการค้นหาซ้ำ · หยุดเพื่อป้องกันการอ่านไม่ครบ');
+    if (next) seenPageTokens.add(next);
+    pageToken = next;
+  } while (pageToken);
+  return files;
 }
 async function privateFile(id, token, opts = {}) {
   const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
@@ -948,8 +968,8 @@ async function openSharedLibraryPicker(){
           ui.gateStatus.textContent='ไม่ได้รับรหัสโฟลเดอร์จาก Google Picker';
           return;
         }
-        if(name&&name!=='StageWeb'&&name!=='XStageWeb'){
-          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ StageWeb หรือ XStageWeb ที่เจ้าของแชร์ให้';
+        if(name&&name!=='XStageWeb'){
+          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ XStageWeb Layout V4 ที่เจ้าของแชร์ให้';
           return;
         }
         ui.gateStatus.textContent='อนุญาตคลังที่แชร์แล้ว · กำลังเปิดเพลง…';
@@ -978,7 +998,7 @@ $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
-  if(pointer?.schemaVersion!==1 || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
+  if(pointer?.schemaVersion!==1 || pointer.layoutVersion!==4 || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
     throw Error('รูปแบบ current.json ไม่รองรับ');
   const deltaIds=pointer.deltaFileIds||[];
   if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
@@ -1136,11 +1156,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   ui.resultCount.textContent='กำลังเปิดฐานเพลง';
   showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังตรวจฐานเพลงในเครื่อง…',6);
 
-  // Use the last selected library's verified cache first. Legacy account-only
-  // cache remains a migration fallback until the first root-specific save.
+  // Only V4 caches are usable. Earlier catalog snapshots are never replayed.
   const preferredRootId=readPreferredLibraryRoot(account.sub);
   let instant=await loadLatestCachedCatalog(account.sub,preferredRootId);
-  if(!instant&&!preferredRootId)instant=await loadLatestCachedCatalog(account.sub);
+  // Do not fall back to account-only legacy caches.
   if(authId!==state.authId)return;
   if(!applyInstantCatalog(instant)){
     showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง XStageWeb…',12);
@@ -1148,7 +1167,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   }
 
   try{
-    const roots=await driveList("(name='StageWeb' or name='XStageWeb') and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+    const roots=await driveList("name='XStageWeb' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
@@ -1202,18 +1221,14 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    // Drive v4: AUDIO + LYRICS. Read v3 TEXT and v1/v2 root catalogs
-    // for backward compatibility, never choose between ambiguous pointers.
-    const lyricDirs=await driveList(`'${root.id}' in parents and (name='LYRICS' or name='TEXT') and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
-    if(lyricDirs.filter(x=>x.name==='LYRICS').length>1||
-       lyricDirs.filter(x=>x.name==='TEXT').length>1)
-      throw Error('พบโฟลเดอร์ LYRICS/TEXT ซ้ำใน XStageWeb');
-    const lyricPointers=(await Promise.all(lyricDirs.map(dir=>
-      driveList(`'${dir.id}' in parents and name='current.json' and trashed=false`,token)))).flat();
-    const oldPointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
-    if(lyricPointers.length+oldPointers.length>1)
-      throw Error('พบ current.json หลายตำแหน่งในคลัง · ต้องตรวจฐานก่อนใช้งาน');
-    const pointers=lyricPointers.length?lyricPointers:oldPointers;
+    // Strict V4: the only catalog pointer is XStageWeb/LYRICS/current.json.
+    const children=await driveList(`'${root.id}' in parents and trashed=false`,token);
+    if(children.some(x=>['TEXT','DB'].includes(x.name)||x.name==='current.json'))
+      throw Error('คลัง Google Drive รุ่นเก่าไม่รองรับ · ต้องใช้ XStageWeb Layout V4');
+    const lyricDirs=children.filter(x=>x.name==='LYRICS'&&x.mimeType==='application/vnd.google-apps.folder');
+    if(lyricDirs.length>1)throw Error('พบ LYRICS ซ้ำใน XStageWeb');
+    const pointers=lyricDirs.length?
+      await driveList(`'${lyricDirs[0].id}' in parents and name='current.json' and trashed=false`,token):[];
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
     if(!pointers.length){
       // A newly created XStageWeb may contain only empty category folders or

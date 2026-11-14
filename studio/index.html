@@ -358,12 +358,12 @@
           <div class="section-top"><div><div class="eyebrow">PRIVATE GOOGLE DRIVE</div><h2>อัปโหลดเพลงที่สร้างเสร็จแล้ว</h2><p>เช็กไฟล์ต้นทางและ MD5 บน Drive ก่อนส่ง ลดการอัปโหลดซ้ำ</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageWeb ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
           <article class="panel">
-            <div class="section-heading"><div><h2>เลือกโฟลเดอร์ต้นฉบับสำหรับอัปโหลด</h2><p>ตรวจ MP3/M4A พร้อม LRC ที่มีเวลาจริง · สร้าง JSON และอัปเดต Catalog ให้เล่นออนไลน์ได้ · VIDEO/NCN แสดงรายการที่ยังไม่รองรับ</p></div></div>
+            <div class="section-heading"><div><h2>เลือกโฟลเดอร์ต้นฉบับสำหรับอัปโหลด</h2><p>ตรวจไฟล์เสียงพร้อม LRC, MIDI/KAR/NCN และวิดีโอตามความพร้อมของตัวแปลงใน PC · สร้าง Lyrics JSON และอัปเดต Catalog หลังตรวจไฟล์จริง · รายการที่ไม่สมบูรณ์จะข้ามพร้อมรายงาน</p></div></div>
             <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
             <div class="toolbar"><button id="upload-inspect" class="button ghost" type="button">⌕ ตรวจความพร้อมไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลด + สร้าง DB พร้อมเล่น</button></div>
             <div id="upload-folder-report" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจโฟลเดอร์ · ระบบจะไม่ส่งไฟล์ที่ไม่มีเนื้อร้อง/ไฟล์ประกอบตามประเภทเพลง</div>
             <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageWeb อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
-            <p class="hint">เพลง MP3/M4A ที่มี LRC ถูกต้อง จะอัปโหลดและอัปเดต LYRICS/current.json หลังตรวจ MD5 · เก็บไฟล์เสียงใน AUDIO และ Lyrics JSON ใน LYRICS · ไม่อัปโหลด LYR/CUR ต้นฉบับ</p>
+            <p class="hint">ไฟล์ที่ตรวจและแปลงสำเร็จจะบันทึกสื่อใน AUDIO และ Lyrics JSON ใน LYRICS · เผยแพร่ current.json หลังอัปโหลด ตรวจ MD5 และ Catalog สำเร็จเท่านั้น · ไม่แก้หรืออัปโหลด LYR/CUR ต้นฉบับ</p>
           </article>
           <article class="panel">
             <div class="section-heading"><div><h2>SoundFont สำหรับ MIDI (Google Drive ส่วนตัว)</h2><p>เลือก SoundFont .sf2/.sf3 เพื่อตรวจรูปแบบและ MD5 ก่อนอัปโหลดไปยัง XStageWeb/AUDIO</p></div></div>
@@ -378,15 +378,15 @@
               <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>XStageWeb/AUDIO/</code><small>ไฟล์เสียงทุกชนิดที่เล่นได้, MIDI ต้นฉบับแบบคัดลอก, M4A, ไฟล์วิดีโอ และ SoundFont SF2/SF3 ทั้งหมดในโฟลเดอร์เดียว</small></div>
               <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageWeb/LYRICS/</code><code>00001-...json</code><code>catalog-base-*.json · catalog-delta-*.json</code><code>current.json</code><small>Lyrics JSON เป็นมาตรฐานของ Web/TV/PC; ไม่อัปโหลด LYR, CUR หรือ LRC ต้นฉบับ</small></div>
             </div>
-            <p class="hint">ความปลอดภัย: คลังรุ่นเก่ายังอ่านและสำรองได้ แต่จะไม่ย้ายหรือลบโฟลเดอร์เก่าบน Drive อัตโนมัติ ตรวจสอบ/ย้ายข้อมูลก่อนเผยแพร่เป็น Layout V4</p>
+            <p class="hint">ความปลอดภัย: รองรับการอ่านและเผยแพร่เฉพาะ Layout V4 · ไม่อ่าน ไม่ย้าย และไม่ลบคลังรุ่นเก่าอัตโนมัติ</p>
           </article>
         </section>
 
         <section id="tab-download" class="tab">
-          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageWeb/LYRICS/current.json ที่เผยแพร่จริงบน Google Drive ส่วนตัว (รองรับคลังสำรอง PC รูปแบบเก่า) · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageWeb/LYRICS/current.json ที่เผยแพร่จริงบน Google Drive ส่วนตัว (รองรับเฉพาะ Layout V4) · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel"><div class="section-heading"><div><h2>ตำแหน่งเก็บไฟล์ดาวน์โหลด</h2><p>เลือกใหม่ได้ ระบบจำค่าไว้เปิดครั้งต่อไป</p></div></div><div class="path-row"><input id="download-destination" type="text" class="field" placeholder="เลือกโฟลเดอร์เก็บข้อมูล"><button type="button" class="button ghost" data-pick="download">เลือกที่เก็บ</button></div></article>
           <div class="download-grid">
-            <article class="panel download-card"><div class="download-symbol">♫</div><h3>โฟลเดอร์เพลง</h3><p>ดาวน์โหลดเพลง/เนื้อร้องจาก Catalog ถ้ามี หรืออ่านโฟลเดอร์ AUDIO, VIDEO และ MIDI จริงเมื่อไม่มี current.json · ไม่สร้างคลังใหม่</p><button class="button primary download-action" data-kind="songs" type="button">↓ ดาวน์โหลด SONG</button></article>
+            <article class="panel download-card"><div class="download-symbol">♫</div><h3>โฟลเดอร์เพลง</h3><p>ดาวน์โหลดเพลงและ Lyrics JSON จาก Catalog V4 ที่ตรวจสอบได้เท่านั้น · หากไม่มี current.json จะไม่อ่านไฟล์ลอยหรือสร้างคลังใหม่</p><button class="button primary download-action" data-kind="songs" type="button">↓ ดาวน์โหลด SONG</button></article>
             <article class="panel download-card"><div class="download-symbol">▤</div><h3>ฐานเพลง DB</h3><p>ดาวน์โหลด current.json และฐาน DB/catalog ที่มีจริง โดยไม่โหลดเพลง · หากไม่มี DB จะแจ้งข้อผิดพลาดชัดเจน</p><button class="button ghost download-action" data-kind="db" type="button">↓ ดาวน์โหลด DB</button></article>
             <article class="panel download-card"><div class="download-symbol">▦</div><h3>ชุดสำรอง ZIP</h3><p>สำรองเพลงและฐานที่อ่านได้เป็น ZIP · เมื่อไม่มี Catalog จะอ่านโฟลเดอร์จริงทั้งหมด · ตรวจ MD5</p><button class="button ghost download-action" data-kind="zip" type="button">↓ ดาวน์โหลด ZIP</button></article>
           </div>
