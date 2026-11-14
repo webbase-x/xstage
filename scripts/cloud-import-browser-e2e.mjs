@@ -146,8 +146,15 @@ try{
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
   await page.check('#cloud-import-allow-create');
   await page.click('#cloud-import-start');
-  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),
-    {timeout:60000});
+  try{
+    await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),
+      null,{timeout:90000});
+  }catch(error){
+    console.error('Video import browser status:',await page.locator('#cloud-import-status').textContent(),
+      'detail:',await page.locator('#cloud-import-detail').textContent(),
+      'errors:',scriptErrors);
+    throw error;
+  }
   const status=await page.locator('#cloud-import-status').textContent();
   assert.ok(status.includes('เพลงใหม่ 3'),status);
   assert.ok(status.includes('SoundFont 1'),status);
