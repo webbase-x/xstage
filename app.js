@@ -3013,6 +3013,7 @@ ui.logout.addEventListener('click',()=>{
     try{window.XStageAndroid.logoutGoogle?.();}catch{}
   }
   resetPrivate({revoke:true});
+  window.dispatchEvent(new Event('xstage:auth-cleared'));
   syncLoginGateState();
   setStatus('ออกจากระบบแล้ว · ข้อมูลเพลงส่วนตัวถูกล้างจากหน้าเว็บ');
 });
@@ -3107,6 +3108,20 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('pagehide',savePlaybackResumeState);
 window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();requestAnimationFrame(drawLyrics);setupNativeAndroidTvUi();setupAppUpdateWatcher();
+const xstageCloudImporter=window.XStageCloudImport?.init({
+  // The browser importer obtains only an in-memory short-lived token and the
+  // current verified account. No token, password or refresh token is stored.
+  session:()=>({token:state.token,sub:state.accountSub,
+    rootId:state.libraryRootId,owned:state.libraryRootOwnedByMe}),
+  refresh:async()=>{
+    if(!state.token||!state.accountSub)return;
+    // Reload the canonical XStageWeb current.json/catalog after publishing.
+    // Use a NEW auth request ID but never silently switch Google accounts.
+    const token=state.token,id=++state.authId;
+    await openDrive(token,id,state.tokenExpiresAt);
+  }
+});
+
 window.XStageSoftRefresh=async function(){
   if(state.current||player.src){
     savePlaybackResumeState();
