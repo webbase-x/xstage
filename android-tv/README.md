@@ -1,3 +1,18 @@
+## NCN MIDI/LYR/CUR on Android TV — v1.0.103 Build 1103
+
+The Android TV application loads the same hosted X-Stage Karaoke Online
+JavaScript as the desktop browser. The browser NCN import engine now decodes
+each LYR source byte as Windows-874, consumes the otherwise invisible CUR
+line-break cue, and converts NCN24 positions via the MIDI tempo map. It retains
+unused trailing 65535 CUR values, and never treats them as playable timestamps.
+Incomplete timed NCN files cannot be published as complete Karaoke songs.
+
+No Android MIDI native decoder changes are required: the APK continues to run
+the hosted browser MIDI renderer inside Android WebView with the same authenticated
+private Google Drive library. Existing imports need their Lyrics JSON regenerated
+by reimporting a matching MID/LYR/CUR source set. Hardware playback and Google
+authorization must be verified on the actual Android TV device.
+
 ## Android APK audio — direct speaker output + silent stage meter (v1.0.79)
 
 The **installed Android APK** (TV and tablet) deliberately uses the native
