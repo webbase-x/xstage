@@ -28,6 +28,7 @@
   </script>
   <link rel="stylesheet" href="style.css?v=1094">
   <link rel="stylesheet" href="xstage-ux.css?v=1094">
+  <link rel="stylesheet" href="cloud-import.css?v=1094">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -44,6 +45,7 @@
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
       <div class="account-tools">
         <span id="account" class="account-name" aria-label="บัญชี Google ปัจจุบัน" hidden></span>
+        <button id="cloud-import-open" class="button button-primary" type="button" hidden>☁ นำเข้าเพลง / SoundFont</button>
         <button id="desktop-update-version" class="button button-ghost" type="button">อัปเดต X-Stage</button>
         <button id="login" class="button button-google" type="button"><span class="google-g" aria-hidden="true">G</span> เชื่อมต่อ Google Drive</button>
         <button id="logout" class="button button-ghost" type="button" hidden>ออกจากระบบ</button>
@@ -289,6 +291,43 @@
     
     <footer class="bottom-bar"><span>© X-Stage Karaoke · Personal Google Drive Player</span><span id="connection"><span class="footer-dot"></span> Private & Secure</span><a href="privacy.html">ความเป็นส่วนตัว</a></footer>
   </div>
+  <dialog id="cloud-import-dialog" class="cloud-import-dialog" aria-labelledby="cloud-import-title">
+    <div class="cloud-import-panel">
+      <header class="cloud-import-header">
+        <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
+        <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
+      </header>
+      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ระบบตรวจความสมบูรณ์และ MD5 ก่อนส่งเข้า XStageWeb · ไม่ลบหรือแก้ไฟล์ต้นฉบับ</p>
+      <div class="cloud-import-actions">
+        <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
+        <button id="cloud-import-scan" type="button" disabled>ตรวจสอบอีกครั้ง</button>
+        <input id="cloud-import-input" type="file" webkitdirectory directory multiple hidden>
+      </div>
+      <div id="cloud-import-source" class="cloud-import-source">ยังไม่ได้เลือกโฟลเดอร์</div>
+      <div class="cloud-import-stats">
+        <div><b id="cloud-import-total">0</b><span>ไฟล์ที่พบ</span></div>
+        <div><b id="cloud-import-ready">0</b><span>เพลงพร้อมนำเข้า</span></div>
+        <div><b id="cloud-import-fonts">0</b><span>SoundFont</span></div>
+        <div><b id="cloud-import-blocked">0</b><span>ชุดที่ไม่พร้อม</span></div>
+      </div>
+      <div id="cloud-import-examples" class="cloud-import-examples" aria-live="polite"></div>
+      <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageWeb ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
+      <div class="cloud-import-progress">
+        <progress id="cloud-import-progress" value="0" max="100"></progress>
+        <span id="cloud-import-progress-label">0%</span>
+      </div>
+      <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
+      <p id="cloud-import-detail" class="cloud-import-detail">เพลง MP3/M4A ต้องมี LRC รหัสเดียวกันและมีเวลาเนื้อร้องจริง · SoundFont SF2/SF3 ต้องผ่านการตรวจ RIFF sfbk · ชนิดอื่นต้องแปลงด้วย Song Studio PC ก่อน</p>
+      <footer class="cloud-import-footer">
+        <button id="cloud-import-start" type="button" disabled>เริ่มตรวจซ้ำและอัปโหลด</button>
+        <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
+        <button id="cloud-import-resume" type="button" disabled>ทำต่อ</button>
+        <button id="cloud-import-cancel" type="button" disabled>ยกเลิก (เก็บจุดทำต่อ)</button>
+      </footer>
+      <small>ปิดแท็บหรือเครื่องระหว่างงานจะหยุดอัปโหลดเอง เมื่อเปิดใหม่ให้กดทำต่อหรือเลือกโฟลเดอร์เดิม · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
+    </div>
+  </dialog>
+
   <script>
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
@@ -296,6 +335,8 @@
 <script>window.XSTAGE_RELEASE={version:'1.0.94',build:1094};</script>
 <script src="config.js?v=1094"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
+  <script src="cloud-import-core.js?v=1094" defer></script>
+  <script src="cloud-import.js?v=1094" defer></script>
   <script src="app.js?v=1094" defer></script><script src="pc-extensions.js?v=1094" defer></script>
   <script src="native-audio-meter.js?v=1094" defer></script>
   <script src="stage-controls.js?v=1094" defer></script>
