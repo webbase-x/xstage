@@ -108,5 +108,40 @@ function pointer(doc){
     fail('ผลรวมจำนวนเพลงใน Shards ไม่ตรงกัน');
   return doc;
 }
-global.XStageCatalogV2=Object.freeze({schemaVersion:2,catalog,pointer,song,locator});
+function assemble(pointerDoc,parts,deltas=[]){
+  pointer(pointerDoc);
+  const shardRefs=pointerDoc.catalogFiles||[{fileId:pointerDoc.catalogFileId,songCount:null}];
+  if(!Array.isArray(parts)||parts.length!==shardRefs.length||
+     !Array.isArray(deltas)||deltas.length!==(pointerDoc.deltaFileIds||[]).length)
+    fail('Catalog shards / deltas missing or out of order');
+  const rows=new Map();
+  for(let i=0;i<parts.length;i++){
+    catalog(parts[i],{cloud:true,expectedCount:shardRefs[i].songCount??undefined});
+    for(const item of parts[i].songs){
+      if(rows.has(item.id))fail('ID เพลงซ้ำข้าม Catalog: '+item.id);
+      rows.set(item.id,item);
+    }
+  }
+  for(const delta of deltas){
+    if(!delta||delta.schemaVersion!==2||
+       delta.format!==undefined&&delta.format!=='xstage-unified-v2'||
+       !Array.isArray(delta.upserts)||!Array.isArray(delta.removes)||
+       delta.upserts.length>200||delta.removes.length>200)
+      fail('Delta V2 ไม่สมบูรณ์หรือเกินขีดจำกัด');
+    for(const id of delta.removes){songId(id);rows.delete(id);}
+    for(const item of delta.upserts){song(item,{cloud:true});rows.set(item.id,item);}
+  }
+  const merged={schemaVersion:2,format:'xstage-unified-v2',
+                generation:pointerDoc.generation,songs:[...rows.values()]};
+  catalog(merged,{cloud:true,expectedCount:pointerDoc.songCount});
+  const codes=new Map();
+  for(const item of merged.songs){
+    const code=item.code.toLocaleLowerCase('en-US');
+    if(codes.has(code)&&codes.get(code)!==item.id)
+      fail('รหัสเพลงซ้ำระหว่างรายการ '+item.code);
+    codes.set(code,item.id);
+  }
+  return merged;
+}
+global.XStageCatalogV2=Object.freeze({schemaVersion:2,catalog,pointer,song,locator,assemble});
 })(window);
