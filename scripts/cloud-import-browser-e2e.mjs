@@ -110,6 +110,11 @@ function soundfontFixture(){
 }
 fs.writeFileSync(path.join(dir,'X100.mp3'),Buffer.concat([Buffer.from('ID3'),Buffer.alloc(4096)]));
 fs.writeFileSync(path.join(dir,'X100.lrc'),'[ti:ทดสอบเว็บ]\n[ar:ศิลปินทดสอบ]\n[00:01.00]สวัสดี\n[00:04.00]ขอบคุณ\n');
+const m4a=Buffer.alloc(4096);m4a.write('ftyp',4,'ascii');
+fs.writeFileSync(path.join(dir,'J200.m4a'),m4a);
+fs.writeFileSync(path.join(dir,'J200.json'),JSON.stringify({
+  schemaVersion:1,songCode:'J200',lines:[{startTime:1,endTime:4,text:'Lyrics JSON พร้อมเวลา'}]
+}));
 fs.writeFileSync(path.join(dir,'General.sf2'),soundfontFixture());
 fs.writeFileSync(path.join(dir,'Unconverted.mid'),Buffer.from('MThd0000'));
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
@@ -133,7 +138,7 @@ try{
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='1');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='2');
   assert.equal(await page.locator('#cloud-import-fonts').textContent(),'1');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
   await page.check('#cloud-import-allow-create');
@@ -141,12 +146,12 @@ try{
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),
     {timeout:60000});
   const status=await page.locator('#cloud-import-status').textContent();
-  assert.ok(status.includes('เพลงใหม่ 1'),status);
+  assert.ok(status.includes('เพลงใหม่ 2'),status);
   assert.ok(status.includes('SoundFont 1'),status);
   assert.equal(rootCreated,1,'Only one private XStageWeb root should be created');
   assert.ok([...records.values()].some(x=>x.name==='current.json'),'Playable DB pointer must be created');
   const pointer=[...records.values()].find(x=>x.name==='current.json');
-  assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,1);
+  assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,2);
   assert.ok([...records.values()].some(x=>x.name.endsWith('.sf2')));
   const firstCount=payloadUploads;
   // After first DB exists, reopen the importer from the visible stage menu.
@@ -157,7 +162,7 @@ try{
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
-    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 1'),{timeout:60000});
+    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 2'),{timeout:60000});
   assert.equal(payloadUploads,firstCount,'Second upload should be 100% deduplicated by MD5');
   assert.deepEqual(scriptErrors,[], 'No browser JavaScript errors are allowed');
   console.log('PASS: Chromium folder selection, Google session, private Drive uploads, pointer/catalog and replay-safe MD5 dedup');
