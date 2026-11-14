@@ -248,6 +248,11 @@ class Importer {
     scope.addEventListener('pagehide',()=>this.stop('ปิดหน้าเว็บ · หยุดและจดจำจุดทำต่อ'));
     scope.addEventListener('xstage:auth-ready',()=>this.updateOpen());
     scope.addEventListener('xstage:auth-refreshed',()=>this.updateOpen());
+    scope.addEventListener('xstage:auth-cleared',()=>{
+      this.stop('ออกจาก Google · พักงานทันที');
+      this.selected=null;this.plan=null;this.folderHandle=null;this.selectedSub='';
+      this.updateOpen();this.refreshButtons();
+    });
     this.updateOpen();
   }
   session(){return this.options.session();}
@@ -326,6 +331,7 @@ class Importer {
   }
   async acceptFiles(files,handle){
     this.selected=files;this.folderHandle=handle;
+    this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
     this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+(handle?' (จำสิทธิ์โฟลเดอร์สำหรับทำต่อได้ถ้าเบราว์เซอร์อนุญาต)':' (เปิดใหม่ต้องเลือกโฟลเดอร์เดิมอีกครั้ง)');
     this.dom.total.textContent=this.plan.files.toLocaleString('th-TH');
@@ -384,6 +390,7 @@ class Importer {
     if(this.running||!this.plan)return;
     const auth=this.session();
     if(!auth?.token||!auth.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
+    if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
     this.account=auth.sub;
     this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
@@ -533,6 +540,9 @@ class Importer {
           }
         }catch(error){
           if(aborted(error)||this.stopRequested)throw error;
+          // Only corrupt/incomplete LOCAL files are skippable. Drive failures,
+          // auth changes and DB integrity errors must abort the whole job.
+          if(!/^(?:ไฟล์ |LRC |SF2\/SF3 |รูปแบบไฟล์)/.test(String(error.message||'')))throw error;
           this.stats.errors++;
           console.warn('Skipped invalid import item:',item.key||item.relative||item.code,error?.message||error);
           this.dom.detail.textContent='ข้าม '+(item.code||item.file?.name)+': '+error.message+
