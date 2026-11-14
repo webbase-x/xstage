@@ -341,6 +341,13 @@
             <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageWeb อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
             <p class="hint">เพลง MP3/M4A ที่มี LRC ถูกต้อง จะอัปโหลดและอัปเดต DB/current.json หลังตรวจ MD5 · เล่นจาก X-Stage Online ได้ตามระบบเดิม · VIDEO/NCN ที่ยังไม่มี Catalog รองรับจะข้าม ไม่อ้างว่าพร้อมเล่น</p>
           </article>
+          <article class="panel">
+            <div class="section-heading"><div><h2>SoundFont สำหรับ MIDI (Google Drive ส่วนตัว)</h2><p>เลือก SoundFont .sf2/.sf3 เพื่อตรวจรูปแบบและ MD5 ก่อนอัปโหลดไปยัง XStageWeb/SOUNDFONT/SF2 หรือ SF3</p></div></div>
+            <div class="path-row"><input id="upload-soundfont-path" type="text" class="field" placeholder="เลือกไฟล์ SoundFont .sf2 / .sf3"><button id="upload-soundfont-picker" type="button" class="button ghost">เลือก SoundFont</button></div>
+            <div class="toolbar"><button id="upload-soundfont-button" type="button" class="button primary">↑ อัปโหลด SoundFont ไป Drive</button></div>
+            <p class="hint">ใช้ตัวเลือกสร้าง XStageWeb ใหม่ร่วมกับเมนูอัปโหลดเพลงด้านบน · อัปโหลดแล้วเก็บเป็นไฟล์ส่วนตัวโดยไม่เขียนทับต้นฉบับหรือแก้ current.json · ระบบ SoundFont MIDI บนเว็บหลักยังไม่พร้อมเล่นโดยตรง</p>
+            <p id="upload-soundfont-status" class="hint" role="status" aria-live="polite">ยังไม่ได้อัปโหลด SoundFont</p>
+          </article>
           <article class="panel drive-layout-panel">
             <div class="section-heading"><div><h2>โครงสร้าง XStageWeb บน Google Drive</h2><p>แสดงตำแหน่งปลายทางก่อนอัปโหลด · สร้างโฟลเดอร์ย่อยตามไฟล์ที่มีจริง ไม่สร้างโฟลเดอร์ว่างจำนวนมาก</p></div><span class="chip info">LAYOUT V2</span></div>
             <div class="drive-layout-grid">
