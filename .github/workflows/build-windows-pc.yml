@@ -61,7 +61,7 @@ jobs:
                                'dist/XStageKaraoke/release-manifest.json')) {
               if (-not (Test-Path $file -PathType Leaf)) { throw "Build incomplete: $file" }
             }
-            & (Join-Path (Get-Command python).Source) tools/verify_release.py --verify --package dist/XStageKaraoke
+            & (Get-Command python).Source tools/verify_release.py --verify --package dist/XStageKaraoke
             if ($LASTEXITCODE -ne 0) { throw 'Release manifest integrity check failed.' }
           } finally { Pop-Location }
 
