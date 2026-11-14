@@ -211,7 +211,7 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
     import json
     import shutil
     import tempfile
-    if export is None or publisher is None or staging_root is None or validator is None:
+    if export is None or publisher is None or staging_root is None:
         raise ValueError("ต้องใช้ Online Publisher และตัวแปลง LRC ของ X-Stage")
     library = existing_local_catalog(folder, export)
     if library is not None:
@@ -219,6 +219,8 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             raise ValueError("ไม่พบเพลงพร้อมเล่นใน StageWeb Catalog ที่เลือก")
         # Validate each pair before publishing. Corrupt lyrics must be
         # reported as skipped; they must not invalidate all healthy songs.
+        if validator is None:
+            raise ValueError("ยังไม่ได้ตั้งค่าตัวตรวจเนื้อร้องของ X-Stage Online")
         verified = []
         for row in library["rows"]:
             try:
