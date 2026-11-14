@@ -404,7 +404,7 @@ def upload_soundfont(drive, path, *, create_new_library=False,
                      cancelled=None, progress=None):
     """Upload private SF2/SF3 without altering the playable songs catalog.
 
-    XStageWeb/SOUNDFONT/SF2|SF3/ is a storage convention. Until the browser
+    XStageWeb/AUDIO/ contains immutable SF2/SF3 alongside other media. Until the browser
     MIDI engine implements loading these private Drive IDs, it is not a claim
     that a SoundFont can be played in Karaoke Online.
     """
@@ -420,8 +420,8 @@ def upload_soundfont(drive, path, *, create_new_library=False,
         raise ValueError("ยกเลิกการอัปโหลด SoundFont")
     library_name = roots[0]["name"] if roots else "XStageWeb"
     root = roots[0]["id"] if roots else drive.folder("root", library_name)
-    section = drive.folder(root, "SOUNDFONT")
-    target = drive.folder(section, info["format"])
+    # Flat Drive v3: SoundFonts are playable media, under AUDIO.
+    target = drive.folder(root, "AUDIO")
     source = Path(info["path"])
     fingerprint = digest(source)
     # Immutably named artifacts: same name + same bytes is skipped, changed
@@ -429,14 +429,14 @@ def upload_soundfont(drive, path, *, create_new_library=False,
     stem = re.sub(r"[^\w .()-]", "_", source.stem, flags=re.UNICODE).strip(" .")[:100] or "SoundFont"
     filename = stem + "-" + fingerprint[:16] + source.suffix.lower()
     if progress:
-        progress("ตรวจ MD5 และอัปโหลด SoundFont ไปยัง XStageWeb/SOUNDFONT/" + info["format"])
+        progress("ตรวจ MD5 และอัปโหลด SoundFont ไปยัง XStageWeb/AUDIO)
     status, meta = drive.upload_file(target, source, filename, cancelled=cancelled)
     if str(meta.get("md5Checksum", "")).lower() != fingerprint:
         raise ValueError("Google Drive ไม่ยืนยัน MD5 SoundFont ให้ตรงกับไฟล์ต้นฉบับ")
     return {"uploaded": status == "created", "skipped": status == "skipped",
             "name": filename, "fileId": meta["id"], "md5": fingerprint,
-            "bytes": info["bytes"], "path": library_name + "/SOUNDFONT/" + info["format"] + "/" + filename,
-            "webMidiReady": False,
+            "bytes": info["bytes"], "path": library_name + "/AUDIO/" + filename,
+            "webMidiReady": True,
             "message": ("อัปโหลด SoundFont สำเร็จ" if status == "created"
                         else "พบ SoundFont เดิมที่ตรงกัน · ข้ามซ้ำ") +
-                       " · " + info["format"] + " · ยังไม่เปิด MIDI SoundFont Web Engine"}
+                       " · " + info["format"] + " · พร้อมให้เว็บตรวจสอบ SoundFont"}
