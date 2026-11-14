@@ -286,10 +286,12 @@ class OnlinePublisher:
         root, db, active, existing = self._read_v2()
         validate_unique_song_codes(existing)
         by_code = {str(x["code"]).casefold(): x for x in existing.values()}
-        by_pair = {}
+        by_pair, by_audio = {}, {}
         for x in existing.values():
             media = (x.get("media") or {}).get("m4a") or {}
             lyric = x.get("lyrics") or {}
+            if media.get("md5Checksum"):
+                by_audio[media["md5Checksum"].lower()] = x
             if media.get("md5Checksum") and lyric.get("md5Checksum"):
                 by_pair[(media["md5Checksum"].lower(), lyric["md5Checksum"].lower())] = x
         counts = {"newSongs": 0, "updatedSongs": 0, "duplicates": 0,
@@ -343,7 +345,7 @@ class OnlinePublisher:
             prior = result.get(sid) or by_code.get(code.casefold())
             # Same file contents already known to Drive under any code:
             # skip rather than create another catalog entry.
-            if (sound_md5, lyric_md5) in by_pair and not prior:
+            if sound_md5 in by_audio and not prior:
                 counts["duplicates"] += 1
                 if on_row: on_row(index, len(staged), not_ready)
                 continue
@@ -372,6 +374,7 @@ class OnlinePublisher:
             revisions.append(published)
             by_code[code.casefold()] = published
             by_pair[(sound_md5, lyric_md5)] = published
+            by_audio[sound_md5] = published
             counts["updatedSongs" if prior else "newSongs"] += 1
             if on_row: on_row(index, len(staged), not_ready)
             completed_bytes += sound.stat().st_size + lyric.stat().st_size
