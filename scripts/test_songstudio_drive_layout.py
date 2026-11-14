@@ -1,4 +1,4 @@
-"""Regression tests for private XStageWeb v4 AUDIO/LYRICS Drive layout and legacy safety."""
+"""Regression tests for strictly V4 XStageWeb AUDIO/LYRICS and legacy rejection."""
 from __future__ import annotations
 
 import importlib.util
@@ -15,7 +15,6 @@ SPEC.loader.exec_module(layout)
 class XStageWebLayoutTests(unittest.TestCase):
     def test_new_root_and_pointer_compatibility(self):
         self.assertEqual(layout.ONLINE_ROOT, "XStageWeb")
-        self.assertEqual(layout.LEGACY_ONLINE_ROOT, "StageWeb")
         self.assertEqual(layout.LAYOUT_VERSION, 4)
 
     def test_all_media_use_one_flat_audio_folder(self):
@@ -48,20 +47,15 @@ class XStageWebLayoutTests(unittest.TestCase):
                 with self.assertRaises(layout.PublishError):
                     layout.media_drive_path(name, code="123")
 
-    def test_existing_legacy_root_reused_without_new_root(self):
+    def test_legacy_root_is_rejected_without_creation(self):
         class Drive:
-            def __init__(self):
-                self.made = []
             def list_children(self, parent):
-                return ([{"id": "old-123", "name": "StageWeb",
-                          "mimeType": layout.FOLDER_MIME}]
-                        if parent == "root" else [])
-            def folder(self, parent, name):
-                self.made.append(name)
-                raise AssertionError("Must not create a duplicate root")
-        drive = Drive()
-        self.assertEqual(layout.OnlinePublisher(drive)._existing_root(), "old-123")
-        self.assertFalse(drive.made)
+                return [{"id": "old-123", "name": "StageWeb",
+                         "mimeType": layout.FOLDER_MIME}]
+            def folder(self, *args):
+                raise AssertionError("Old Drive layout must never create files")
+        with self.assertRaisesRegex(layout.PublishError, "StageWeb รุ่นเก่า"):
+            layout.OnlinePublisher(Drive())._existing_root()
 
     def test_no_pointer_does_not_discard_unindexed_media(self):
         class Drive:
@@ -88,7 +82,7 @@ class XStageWebLayoutTests(unittest.TestCase):
                 return [{"id": str(i), "name": name,
                          "mimeType": layout.FOLDER_MIME}
                         for i, name in enumerate(("StageWeb", "XStageWeb"))]
-        with self.assertRaises(layout.PublishError):
+        with self.assertRaisesRegex(layout.PublishError, "StageWeb รุ่นเก่า"):
             layout.OnlinePublisher(Drive())._existing_root()
 
 
