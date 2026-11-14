@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 from online_publish import cloud_media_path, PublishError, OnlinePublisher
 from ncn_lyrics import ncn_document, kar_document
 from unified_catalog_v2 import (CATALOG_FORMAT, CatalogValidationError,
-    validate_catalog, validate_pointer, validate_song, migrate_v1_catalog)
+    validate_catalog, validate_pointer, validate_song, migrate_v1_catalog, MAX_SONGS)
 
 MAX_MANIFEST_SONGS = 1000000
 MAX_MEDIA_BYTES = 2 * 1024 * 1024 * 1024
