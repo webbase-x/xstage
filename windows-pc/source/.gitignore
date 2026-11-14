@@ -1,0 +1,15 @@
+# Private Web Asset output and credentials (never commit)
+public/
+*.m4a
+*.sf2
+*.sfz
+client_secret_*.json
+google-oauth-client.json
+**/token.json
+.xstage-web-cache/
+.xstage-generator-state.json
+xstage-web-errors.log
+
+# Windows DPAPI encrypted Google Drive session (private, never release)
+*xstage-google-session.dpapi
+.xstage-session-*

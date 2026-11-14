@@ -1,0 +1,73 @@
+{
+  "version": "0.9.36",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "synthetic": true,
+  "songs": 1000,
+  "data_type": "synthetic WAV + LRC, different bundle sizes",
+  "trials": [
+    {
+      "name": "first_build",
+      "seconds": 0.651,
+      "songs_per_second": 1536.3,
+      "metrics": {
+        "unchanged": 0,
+        "added": 1000,
+        "updated": 0,
+        "failed": 0,
+        "duplicates": 0,
+        "digest_reused": 0,
+        "hashed": 0,
+        "copied": 0,
+        "staged_new_rows": 0,
+        "skipped_protected": 0,
+        "outside_kept": 0,
+        "outside_unavailable": 0,
+        "missing": 0,
+        "missing_changed": 0,
+        "recovered_keepers": 0,
+        "scanned": 1000,
+        "scanned_root": "/tmp/xstage-benchmark-0934-syv33ff1/Songs",
+        "visibility_changed": 0,
+        "catalog_committed": true,
+        "post_commit_errors": [],
+        "cache_writes": 1000,
+        "reports_reused": false,
+        "catalog": 1000,
+        "unsupported": 0,
+        "result_status": "success"
+      }
+    },
+    {
+      "name": "second_build",
+      "seconds": 0.239,
+      "songs_per_second": 4177.7,
+      "metrics": {
+        "unchanged": 1000,
+        "added": 0,
+        "updated": 0,
+        "failed": 0,
+        "duplicates": 0,
+        "digest_reused": 0,
+        "hashed": 0,
+        "copied": 0,
+        "staged_new_rows": 0,
+        "skipped_protected": 0,
+        "outside_kept": 0,
+        "outside_unavailable": 0,
+        "missing": 0,
+        "missing_changed": 0,
+        "recovered_keepers": 0,
+        "scanned": 1000,
+        "scanned_root": "/tmp/xstage-benchmark-0934-syv33ff1/Songs",
+        "visibility_changed": 0,
+        "catalog_committed": false,
+        "post_commit_errors": [],
+        "cache_writes": 0,
+        "reports_reused": true,
+        "catalog": 1000,
+        "unsupported": 0,
+        "result_status": "success"
+      }
+    }
+  ]
+}

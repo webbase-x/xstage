@@ -22,16 +22,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify Tk support needed by the Windows source test imports
+        run: python -c "import tkinter; print('Tkinter import available')"
       - name: Verify exact ZIP SHA-256 and safely extract
-        run: python3 scripts/import_windows_pc_v1076_source.py
+        run: python scripts/import_windows_pc_v1076_source.py
       - name: Apply validated FIX2 regression repairs to Windows source
-        run: python3 scripts/fix_windows_continuous_medley_regressions.py
+        run: python scripts/fix_windows_continuous_medley_regressions.py
       - name: Run Windows source syntax and core medley tests
         run: |
-          python3 -m compileall -q windows-pc/source/karaoke
+          python -m compileall -q windows-pc/source/karaoke
           cd windows-pc/source
-          python3 -m unittest discover -s tests -p 'test_continuous_medley.py' -q
-          python3 -m unittest discover -s tests -p 'test_random_medley.py' -q
+          python -m unittest discover -s tests -p 'test_continuous_medley.py' -q
+          python -m unittest discover -s tests -p 'test_random_medley.py' -q
       - name: Commit verified Windows source to same repository
         shell: bash
         run: |

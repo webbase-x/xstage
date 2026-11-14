@@ -6,8 +6,8 @@
   "source_archive": "downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip",
   "sha256": "bb9498deff94e8bf3debe48bcce32a9b5e6adb595c4c26783f8553128cdfe224",
   "source_files": 447,
-  "source_imported": false,
+  "source_imported": true,
   "windows_build_verified": false,
   "installer_published": false,
-  "status": "AWAITING_SOURCE_ZIP_UPLOAD"
+  "status": "SOURCE_IMPORTED_NOT_A_WINDOWS_RELEASE"
 }
