@@ -416,7 +416,7 @@ async function loadLatestCachedCatalog(sub,rootId=''){
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(saved?.layoutVersion!==4||catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
     return {
       catalog,
       generation:String(saved.generation||''),
@@ -441,7 +441,7 @@ async function loadCachedCatalog(ownerKey,pointer){
   if(!ownerKey||!pointer?.generation)return null;
   try{
     const saved=await catalogStorage('get',ownerKey);
-    if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
+    if(saved?.layoutVersion!==4||pointer.layoutVersion!==4||saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
        JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
     const catalog=saved.catalog;
     if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
@@ -450,9 +450,9 @@ async function loadCachedCatalog(ownerKey,pointer){
   }catch{return null;}
 }
 async function saveCachedCatalog(ownerKey,pointer,catalog){
-  if(!ownerKey||!pointer?.generation||!Array.isArray(catalog?.songs))return;
+  if(!ownerKey||pointer?.layoutVersion!==4||!pointer?.generation||!Array.isArray(catalog?.songs))return;
   try{await catalogStorage('put',ownerKey,{
-    generation:String(pointer.generation),catalogFileId:pointer.catalogFileId,
+    layoutVersion:4,generation:String(pointer.generation),catalogFileId:pointer.catalogFileId,
     deltaFileIds:pointer.deltaFileIds||[],catalog
   });}catch(error){console.warn('X-Stage local catalog cache:',error?.message||error);}
 }
@@ -1136,11 +1136,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   ui.resultCount.textContent='กำลังเปิดฐานเพลง';
   showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังตรวจฐานเพลงในเครื่อง…',6);
 
-  // Use the last selected library's verified cache first. Legacy account-only
-  // cache remains a migration fallback until the first root-specific save.
+  // Only V4 caches are usable. Earlier catalog snapshots are never replayed.
   const preferredRootId=readPreferredLibraryRoot(account.sub);
   let instant=await loadLatestCachedCatalog(account.sub,preferredRootId);
-  if(!instant&&!preferredRootId)instant=await loadLatestCachedCatalog(account.sub);
+  // Do not fall back to account-only legacy caches.
   if(authId!==state.authId)return;
   if(!applyInstantCatalog(instant)){
     showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง XStageWeb…',12);
