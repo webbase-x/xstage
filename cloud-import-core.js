@@ -4,11 +4,12 @@
  */
 (function(scope){
 'use strict';
-const AUDIO=new Set(['mp3','m4a']);
+const AUDIO=new Set(['mp3','m4a','wav','aac','flac','ogg','oga']);
+const BROWSER_VIDEO=new Set(['mp4','webm']);
 const FONTS=new Set(['sf2','sf3']);
 const MIDI=new Set(['mid','midi','kar']);
 const VIDEO=new Set(['mp4','avi','mpg','mpeg','dat','vob','wmv','mkv','mov','webm','flv']);
-const OTHER_AUDIO=new Set(['wav','aac','ogg','oga','flac','wma','aiff']);
+const OTHER_AUDIO=new Set(['wma','aiff','aif','opus']);
 const ROLES=new Set(['song','songs','lyric','lyrics','cursor','cursors']);
 const S=[7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
   5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
@@ -93,17 +94,20 @@ function scan(files){
   const songs=[],midis=[];
   for(const [key,items] of groups){
     const sound=items.filter(x=>AUDIO.has(x.kind)),lrc=items.filter(x=>x.kind==='lrc');
+    const video=items.filter(x=>BROWSER_VIDEO.has(x.kind));
     const json=items.filter(x=>x.kind==='json'),midi=items.filter(x=>MIDI.has(x.kind));
     const lyr=items.filter(x=>x.kind==='lyr'),cur=items.filter(x=>x.kind==='cur');
-    const extra=items.filter(x=>VIDEO.has(x.kind)||OTHER_AUDIO.has(x.kind));
-    if(sound.length===1&&midi.length===0&&extra.length===0&&lyr.length===0&&cur.length===0&&
+    const extra=items.filter(x=>(VIDEO.has(x.kind)&&!BROWSER_VIDEO.has(x.kind))||OTHER_AUDIO.has(x.kind));
+    if((sound.length===1||(!sound.length&&video.length===1))&&video.length<=1&&midi.length===0&&extra.length===0&&lyr.length===0&&cur.length===0&&
        lrc.length<=1&&json.length<=1&&(lrc.length===1||json.length===1)){
-      if(sound[0].file.size<1024||(lrc.length&&lrc[0].file.size<8)||(json.length&&json[0].file.size<8)){
+      const primary=sound[0]||video[0];
+      if(primary.file.size<1024||(video.length&&video[0].file.size<1024)||
+          (lrc.length&&lrc[0].file.size<8)||(json.length&&json[0].file.size<8)){
         blocked.push({key,reason:'ไฟล์เสียงหรือเนื้อร้องมีขนาดไม่สมบูรณ์'});continue;
       }
-      songs.push({key,code:sound[0].file.name.replace(/\.[^.]+$/,'').slice(0,140),
-        audio:sound[0],lrc:lrc[0]||null,json:json[0]||null,
-        kind:sound[0].kind.toUpperCase()});
+      songs.push({key,code:primary.file.name.replace(/\.[^.]+$/,'').slice(0,140),
+        audio:primary,video:video[0]||null,lrc:lrc[0]||null,json:json[0]||null,
+        kind:primary.kind.toUpperCase()});
     }else if(midi.length===1&&sound.length===0&&extra.length===0&&
         lrc.length<=1&&json.length<=1&&lyr.length<=1&&cur.length<=1){
       const isNcn=/\/(?:ncn)\//i.test('/'+midi[0].relative.replace(/\\/g,'/'))||
@@ -118,7 +122,7 @@ function scan(files){
       midis.push({key,code:midi[0].file.name.replace(/\.[^.]+$/,'').slice(0,140),
         midi:midi[0],lyr:lyr[0]||null,cur:cur[0]||null,lrc:lrc[0]||null,
         json:json[0]||null,kind:lyr.length?'NCN':midi[0].kind.toUpperCase()});
-    }else if(sound.length||midi.length||extra.length){
+    }else if(sound.length||video.length||midi.length||extra.length){
       const reason=extra.length?'สื่อชนิดนี้ต้องแปลงเป็นไฟล์เสียง/วิดีโอที่เบราว์เซอร์รองรับก่อน':
         midi.length?'ไฟล์ MIDI ซ้ำ หรือชุดเพลงไม่สมบูรณ์':
         'ต้องมีไฟล์ MP3/M4A และ Lyrics JSON หรือ LRC ชื่อเดียวกันอย่างละหนึ่งชุด';
@@ -131,10 +135,15 @@ function scan(files){
 }
 async function validAudio(file){
   if(file.size<1024)return false;
-  const b=new Uint8Array(await file.slice(0,32).arrayBuffer());
-  const type=ext(file.name);
-  if(type==='mp3')return b[0]===73&&b[1]===68&&b[2]===51 || b[0]===255&&(b[1]&224)===224;
-  if(type==='m4a')return b[4]===102&&b[5]===116&&b[6]===121&&b[7]===112;
+  const b=new Uint8Array(await file.slice(0,32).arrayBuffer()),type=ext(file.name);
+  const signature=(at,s)=>String.fromCharCode(...b.slice(at,at+s.length))===s;
+  if(type==='mp3')return signature(0,'ID3')||b[0]===255&&(b[1]&224)===224;
+  if(type==='m4a'||type==='mp4')return signature(4,'ftyp');
+  if(type==='wav')return signature(0,'RIFF')&&signature(8,'WAVE');
+  if(type==='flac')return signature(0,'fLaC');
+  if(type==='ogg'||type==='oga')return signature(0,'OggS');
+  if(type==='aac')return b[0]===255&&(b[1]===241||b[1]===249);
+  if(type==='webm')return b[0]===26&&b[1]===69&&b[2]===223&&b[3]===163;
   return false;
 }
 async function validFont(file){
