@@ -165,42 +165,6 @@ def validate_pointer(pointer):
     return pointer
 
 
-def migrate_v1_song(row):
-    """Convert a published V1 Drive song record WITHOUT mutating files/pointer."""
-    if not isinstance(row, dict):
-        raise CatalogValidationError("Invalid V1 song")
-    sid = row.get("webSongId") or row.get("id")
-    if not isinstance(sid, str) or not SONG_ID.fullmatch(sid):
-        raise CatalogValidationError("V1 missing stable song ID")
-    audio = row.get("audio")
-    if not isinstance(audio, dict) or not audio.get("fileId"):
-        raise CatalogValidationError("V1 missing audio Drive reference")
-    path = str(audio.get("path") or "")
-    suffix = PurePosixPath(path).suffix.lower()
-    if suffix not in (".m4a", ".mp3"):
-        raise CatalogValidationError("V1 audio extension cannot be inferred safely")
-    key = suffix[1:]
-    out = {
-        "id":sid, "webSongId":sid,
-        "code":str(row.get("code") or sid),
-        "title":str(row.get("title") or row.get("code") or sid),
-        "artist":str(row.get("artist") or ""),
-        "media":{key:{k:v for k,v in audio.items() if k in ("fileId","path","size","md5Checksum","sha256")}},
-        "lyrics":{k:v for k,v in row["lyrics"].items() if k in ("fileId","path","size","md5Checksum","sha256")}
-            if isinstance(row.get("lyrics"),dict) and row["lyrics"].get("fileId") else None
-    }
-    validate_song(out,cloud=True)
-    return out
-
-
-def migrate_v1_catalog(songs):
-    if not isinstance(songs,list) or len(songs)>MAX_SONGS:
-        raise CatalogValidationError("V1 song list invalid")
-    result={"schemaVersion":SCHEMA_VERSION,"format":CATALOG_FORMAT,
-            "songs":[migrate_v1_song(row) for row in songs]}
-    return validate_catalog(result,cloud=True)
-
-
 def export_local_song(song):
     """Create v2 media locators from a row in the PC's existing SQLite DB."""
     if not isinstance(song, dict):
