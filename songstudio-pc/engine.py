@@ -92,7 +92,8 @@ PREFS = {
     "source": str(HOME_MUSIC),
     "workspace": str(HOME_MUSIC / "X-Stage-Song-Studio"),
     "download": str(Path.home() / "Downloads"),
-    "soundfont": "", "midi_preset": "balanced", "mode": "original", "oauth": "",
+    "soundfont": "", "midi_preset": "balanced", "mode": "original",
+    "export_format": "xstage", "oauth": "",
     "upload_folder": "", "lyric_source": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
@@ -1199,7 +1200,7 @@ def build_library(rows, mode, options):
     5. Fsync each finished record, then atomically replace current.json once.
     """
     export = _song_export_module()
-    export_format = options.get("export_format", "xstage")
+    export_format = options.get("export_format", PREFS.get("export_format", "xstage"))
     if export_format not in ("xstage", "m4a"):
         raise ValueError("ประเภทส่งออกต้องเป็น MIDI/Audio + Lyrics JSON หรือ M4A + Lyrics JSON")
     root = export.songs_root(PREFS["workspace"])
@@ -1914,6 +1915,8 @@ def validate_build_request(data):
         raise ValueError("รหัสรายการเพลงไม่ถูกต้อง กรุณาสแกนและเลือกรายการใหม่")
     if not isinstance(data.get("audio_only", False), bool):
         raise ValueError("ประเภทคำสั่งสร้างเพลงไม่ถูกต้อง")
+    if data.get("export_format", PREFS.get("export_format", "xstage")) not in ("xstage", "m4a"):
+        raise ValueError("รูปแบบส่งออกไม่รองรับ · เลือก MIDI/Audio+JSON หรือ M4A+JSON")
     with LOCK:
         rows = [FILE_BY_ID.get(item) for item in ids]
     if any(row is None for row in rows):
