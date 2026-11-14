@@ -45,9 +45,13 @@ assert.equal(await core.validVideo(ascii('fake.mkv','NOPE')),false);
 assert.equal(await core.validVideo(ascii('fake.dat','RANDOM')),false);
 const videoScript=read('video-transcode.js');
 assert.doesNotThrow(()=>new Function(videoScript),'Video transcode script parses');
-assert.ok(videoScript.includes('requireAudio')&&videoScript.includes('0:a:0'),
+const workerScript=read('video-transcode-worker.js');
+assert.doesNotThrow(()=>new Function(workerScript),'Isolated worker script parses');
+assert.ok(videoScript.includes('new Worker(')&&!videoScript.includes('import(urls[0])'),
+  'Third-party codec code must not run in the OAuth-enabled main window');
+assert.ok(workerScript.includes('requireAudio')&&workerScript.includes('0:a:0'),
   'Video-only songs must preserve a real audio track');
-assert.ok(videoScript.includes('H.264')||videoScript.includes('libx264'));
+assert.ok(workerScript.includes('libx264'));
 assert.ok(videoScript.includes('192*1024*1024'),'Browser conversion must have a safe memory cap');
 const importer=read('cloud-import.js'),page=read('index.html'),app=read('app.js'),css=read('style.css');
 assert.ok(importer.includes('embeddedVideoLyrics(code)')&&
