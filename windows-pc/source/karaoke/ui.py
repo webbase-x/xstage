@@ -1317,6 +1317,90 @@ class KaraokeApp(tk.Tk):
         self.status_var.set(str(error).splitlines()[0])
         messagebox.showerror("X-Stage Karaoke", str(error), parent=self)
 
+    def export_unified_catalog_v2(self):
+        """Export local SQLite metadata in the portable V2 format, off the UI thread."""
+        if getattr(self,"_catalog_v2_busy",False):
+            return messagebox.showinfo("Unified DB V2","มีงานฐานเพลง V2 กำลังทำงาน",parent=self)
+        name=filedialog.asksaveasfilename(
+            parent=self,title="ส่งออก Unified Song Catalog V2",
+            defaultextension=".json",
+            initialfile="XStage-Local-Catalog-v2.json",
+            filetypes=[("X-Stage V2 JSON","*.json")])
+        if not name:return
+        self._catalog_v2_busy=True
+        self.status_var.set("กำลังส่งออก SQLite เป็น Unified Catalog V2…")
+        def worker():
+            from .catalog_v2_bridge import export_catalog
+            try:
+                result=export_catalog(self.library.path,name)
+            except (OSError,ValueError,RuntimeError) as error:
+                def failed():
+                    self._catalog_v2_busy=False
+                    self.show_error(error)
+                self.after(0,failed)
+                return
+            def finished():
+                self._catalog_v2_busy=False
+                self.status_var.set("ส่งออกฐาน V2 แล้ว "+str(result["exported"])+" เพลง")
+                messagebox.showinfo("ส่งออกฐานเพลงสำเร็จ",
+                    "ส่งออก "+str(result["exported"])+" เพลง · ข้ามไฟล์ที่ไม่ครบ "+
+                    str(result["skipped"])+" เพลง\\n"+result["path"],parent=self)
+            self.after(0,finished)
+        threading.Thread(target=worker,name="XStageV2Export",daemon=True).start()
+
+    def import_unified_catalog_v2(self):
+        """Preview and confirm local metadata import. No Drive sync involved."""
+        if getattr(self,"_catalog_v2_busy",False):
+            return messagebox.showinfo("Unified DB V2","มีงานฐานเพลง V2 กำลังทำงาน",parent=self)
+        if self.scanning or self.engine is not None:
+            return messagebox.showwarning("Unified DB V2",
+                "กรุณาหยุดเพลงและรอการจัดการคลังเพลงเดิมก่อน",parent=self)
+        path=filedialog.askopenfilename(
+            parent=self,title="เลือกฐานเพลง V2 ภายในเครื่อง",
+            filetypes=[("X-Stage V2 JSON","*.json")])
+        if not path:return
+        self._catalog_v2_busy=True
+        self.status_var.set("ตรวจฐานข้อมูล V2 ก่อนนำเข้า · ยังไม่เปลี่ยน SQLite")
+        def worker():
+            from .catalog_v2_bridge import import_catalog
+            try:
+                preview=import_catalog(self.library.path,path)
+            except (OSError,ValueError,RuntimeError) as error:
+                def failed():
+                    self._catalog_v2_busy=False
+                    self.show_error(error)
+                self.after(0,failed)
+                return
+            def confirm():
+                if not messagebox.askyesno("ยืนยันนำเข้าฐานเพลง V2",
+                    "ตรวจครบ "+str(preview["ready"])+" เพลง\\n"+
+                    "นำเข้าเฉพาะไฟล์ในเครื่อง ไม่แตะไฟล์เพลงเดิม\\n"+
+                    "ระบบจะสำรอง SQLite ก่อนเขียนข้อมูล ยืนยันหรือไม่?",parent=self):
+                    self._catalog_v2_busy=False
+                    self.status_var.set("ยกเลิกการนำเข้าฐาน V2 · SQLite ไม่เปลี่ยน")
+                    return
+                def apply():
+                    try:
+                        result=import_catalog(self.library.path,path,
+                                              confirmation="IMPORT_UNIFIED_V2")
+                    except (OSError,ValueError,RuntimeError) as error:
+                        def failed():
+                            self._catalog_v2_busy=False
+                            self.show_error(error)
+                        self.after(0,failed)
+                        return
+                    def finished():
+                        self._catalog_v2_busy=False
+                        self.refresh_library()
+                        self.status_var.set("นำเข้าข้อมูลเพลง V2 "+str(result["imported"])+" เพลง")
+                        messagebox.showinfo("นำเข้าฐาน V2 สำเร็จ",
+                            "บันทึก SQLite แล้ว "+str(result["imported"])+
+                            " เพลง\\nสำรองก่อนนำเข้า: "+result["backup"],parent=self)
+                    self.after(0,finished)
+                threading.Thread(target=apply,name="XStageV2Import",daemon=True).start()
+            self.after(0,confirm)
+        threading.Thread(target=worker,name="XStageV2Preview",daemon=True).start()
+
     def save_settings(self):
         self.settings.update(volume=self.volume_var.get(), auto_next=self.auto_var.get())
         self._settings_revision = write_json(self.settings_path, self.settings, expected_revision=getattr(self,'_settings_revision',JSON_UNSET))
