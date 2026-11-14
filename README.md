@@ -1,3 +1,10 @@
+## X-Stage Karaoke Online v1.0.103 (Build 1103) — NCN timing on Web and Android TV
+
+- The Web importer now reads .LYR using the original CP874 bytes, consumes one invisible CUR cue before each nonblank lyric line, and converts each CUR position from NCN24 units using actual MIDI tempo changes rather than dividing by 24 as seconds. Thai combining marks remain synchronized with the preceding displayed glyph.
+- Accepts valid trailing unused CUR values, including legacy 65535 sentinels and a final FF byte, without altering MID/LYR/CUR. Backward positions are displayed at the last known valid time; missing visible-character timing is never fabricated, and incomplete timed NCN songs are not published as complete catalog entries.
+- Web and Android TV use the same hosted player logic. After updating, import a source NCN set again to regenerate the stored Lyrics JSON of previously imported songs. Existing Google Drive files remain private, with MD5 de-duplication and conflict checks retained.
+- Tested with synthesized tempo-change / Thai CP874 / CUR sentinel fixtures and offline analysis of the user's supplied 00001 MID/LYR/CUR trio. Physical Android TV playback still requires verification on the target device.
+
 ## Video Karaoke — original media and song details
 
 - Source formats: AVI, MPG/MPEG, DAT (VCD MPEG-PS), VOB, MKV, MOV, WMV and FLV. The browser importer verifies media headers and **retains the exact original bytes** in the owner's private `XStageWeb/VIDEO/ORIGINAL/<FORMAT>/Songs/<bucket>/` folder. It also publishes a codec-compatible H.264/AAC MP4 as `song.video` (and `song.audio` for a video-only item) when conversion is needed. `song.originalVideo` points at the original file, and `sourceVideoMd5` records its hash.
