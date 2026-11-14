@@ -30,7 +30,6 @@ class ClassicApp(KaraokeApp):
         self.remote_requests = RequestBook()
         self.remote_invite = None
         self.snapshot_lock = threading.Lock()
-        self._cloud_backup_busy = False
         self.remote_state = {'title': '', 'queue': [], 'playing': False}
         self.search_revision = 0
         self.loop_mark = None
@@ -86,7 +85,6 @@ class ClassicApp(KaraokeApp):
         settings = tk.Menu(menu, tearoff=False)
         menu.add_cascade(label='ตั้งค่า', menu=settings)
         settings.add_command(label='จอร้องเพลง สี และพื้นหลัง…', command=self.stage_settings)
-        settings.add_command(label='X-Stage Karaoke Online…', command=self.web_online_data)
         settings.add_command(label='นโยบายความเป็นส่วนตัวของ X-Stage Karaoke', command=self.open_privacy_policy)
         settings.add_command(label='ความสามารถและข้อจำกัดรุ่นนี้', command=self.capabilities)
         menu.add_command(label='วิธีใช้', command=self.help)
@@ -575,16 +573,7 @@ class ClassicApp(KaraokeApp):
         except Exception as error:
             self.show_error(error)
 
-    def cloud_backup_data(self):
-        """Legacy alias: old Drive backup is retired; open Web Asset Sync."""
-        return self.web_online_data()
-
-    def cloud_restore_data(self):
-        raise RuntimeError('ยกเลิกฟังก์ชันกู้คืน Backup ผ่าน Google Drive แล้ว; การกู้คืนภายในเครื่องยังใช้งานได้')
-
     def restore_data(self):
-        if self._cloud_backup_busy:
-            return messagebox.showinfo('กู้คืนข้อมูล','กำลังสำรองข้อมูลขึ้น Google Drive อยู่ กรุณารอให้เสร็จก่อน',parent=self)
         if self.engine is not None or self.recorder or self.scanning or self.remote:
             return messagebox.showinfo('กู้คืนข้อมูล','ยกเลิกเพลง (F7) หยุดบันทึกเสียง หยุดรีโมท และรอการสร้างรายการให้เสร็จก่อน',parent=self)
         folder=filedialog.askdirectory(parent=self,title='เลือกโฟลเดอร์สำรอง X-Stage Karaoke')
