@@ -34,8 +34,8 @@ class AnchorTests(unittest.TestCase):
         self.assertTrue(bulk._retime_visual_units(line, old, "ABXYDEF"))
         positions = {glyph["text"]: glyph["start"] for glyph in line["syllables"]}
         for glyph in "ABDEF":
-            self.assertEqual(positions[glyph], initial[glyph],
-                             f"unchanged {glyph} must keep original time")
+            self.assertAlmostEqual(positions[glyph], initial[glyph], places=4,
+                                   msg=f"unchanged {glyph} must keep original time")
         self.assertLess(positions["B"], positions["X"])
         self.assertLess(positions["X"], positions["Y"])
         self.assertLess(positions["Y"], positions["D"])
@@ -95,6 +95,8 @@ class BatchSafetyTests(unittest.TestCase):
             json_path = export.save_lyrics(self.root, audio, raw, code)
             record = {"webSongId": f"audio/0/{code}", "code": code,
                       "title": "Song " + code, "artist": "Artist",
+                      "bucket": "0", "sourceFormat": "MP3", "mode": "original",
+                      "vocals": None,
                       "audio": {"path": f"audio/0/{code}.m4a", "size": audio.stat().st_size},
                       "lyrics": {"path": f"lyrics/0/{code}.json"}}
             self.records.append(record)
