@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 
 const root = process.cwd();
 const contentTypes = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8', '.svg':'image/svg+xml',
+  '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.svg':'image/svg+xml',
   '.webmanifest':'application/manifest+json' };
 const server = http.createServer(async (req, res) => {
   const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
