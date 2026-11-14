@@ -47,15 +47,18 @@ class XStageWebLayoutTests(unittest.TestCase):
                 with self.assertRaises(layout.PublishError):
                     layout.media_drive_path(name, code="123")
 
-    def test_legacy_root_is_rejected_without_creation(self):
+    def test_only_v4_root_is_discovered(self):
         class Drive:
+            def __init__(self, roots):
+                self.roots = roots
             def list_children(self, parent):
-                return [{"id": "old-123", "name": "StageWeb",
+                return self.roots
+        old = [{"id": "old", "name": "StageWeb",
+                "mimeType": layout.FOLDER_MIME}]
+        self.assertIsNone(layout.OnlinePublisher(Drive(old))._existing_root())
+        modern = old + [{"id": "v4", "name": "XStageWeb",
                          "mimeType": layout.FOLDER_MIME}]
-            def folder(self, *args):
-                raise AssertionError("Old Drive layout must never create files")
-        with self.assertRaisesRegex(layout.PublishError, "StageWeb รุ่นเก่า"):
-            layout.OnlinePublisher(Drive())._existing_root()
+        self.assertEqual(layout.OnlinePublisher(Drive(modern))._existing_root(), "v4")
 
     def test_no_pointer_does_not_discard_unindexed_media(self):
         class Drive:
@@ -76,13 +79,12 @@ class XStageWebLayoutTests(unittest.TestCase):
         self.assertIsNone(result[0])
         self.assertEqual(result[1], {})
 
-    def test_two_visible_roots_stop_instead_of_merging(self):
+    def test_duplicate_v4_roots_are_rejected(self):
         class Drive:
             def list_children(self, parent):
-                return [{"id": str(i), "name": name,
-                         "mimeType": layout.FOLDER_MIME}
-                        for i, name in enumerate(("StageWeb", "XStageWeb"))]
-        with self.assertRaisesRegex(layout.PublishError, "StageWeb รุ่นเก่า"):
+                return [{"id": str(i), "name": "XStageWeb",
+                         "mimeType": layout.FOLDER_MIME} for i in range(2)]
+        with self.assertRaisesRegex(layout.PublishError, "ซ้ำ"):
             layout.OnlinePublisher(Drive())._existing_root()
 
 
