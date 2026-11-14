@@ -2,15 +2,15 @@
   "name": "X-Stage Song Studio PC Ready",
   "platform": "windows-x64",
   "channel": "pc-ready",
-  "version": "0.3.27",
-  "build": 327,
+  "version": "0.3.28",
+  "build": 328,
   "available": true,
   "package_type": "portable_zip",
   "installer_available": false,
   "installer_file": null,
-  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.27-build327.zip",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.27-build327/X-Stage-Song-Studio-PC-Ready-v0.3.27-build327.zip",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.27-build327",
-  "sha256": "5aa43eec03fb202353d4ce30ca540f11d1be79c68d9e2e9ede8f4e3e91874d1f",
-  "notes": "Verified Windows 10/11 x64 portable ZIP. The bulk lyric head/tail editor offers X-Stage Karaoke, X-Stage Karaoke Online, X-Stage Song Studio or editable custom replacement text; change selection, preview, backup and undo safely. Extract ZIP and run Start-Song-Studio.cmd; bundled offline runtime."
+  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.28-build328.zip",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.28-build328/X-Stage-Song-Studio-PC-Ready-v0.3.28-build328.zip",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.28-build328",
+  "sha256": "6af11f678636529ba6639cea2b2710790d126c01016dbbd335f70aed243bc3dc",
+  "notes": "Verified Windows 10/11 x64 portable ZIP. Bulk head/tail lyrics editor accepts independent StageWeb libraries or raw folders with timed .lrc files (including subfolders), without StageWeb/current.json. It backs up and edits only LRC lyric text, preserves timestamps and MIDI/audio, supports branded/custom replacements and undo. Extract the ZIP and run Start-Song-Studio.cmd."
 }
