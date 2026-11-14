@@ -54,7 +54,9 @@ class NCNEditTests(unittest.TestCase):
         self.assertEqual(edit.locate(self.root/"Song"),self.root.resolve())
         self.assertEqual(edit.locate(self.root.parent),self.root.resolve())
         self.assertEqual(edit.locate(self.root.parent.parent),self.root.resolve())
-        self.assertIsNone(edit.locate(Path(self.tmp.name)))
+        unrelated=Path(self.tmp.name)/"OtherSources"
+        unrelated.mkdir()
+        self.assertIsNone(edit.locate(unrelated))
 
     def test_replacement_rebuilds_cur_without_changing_other_times_and_undo(self):
         first=self.song("00001")
