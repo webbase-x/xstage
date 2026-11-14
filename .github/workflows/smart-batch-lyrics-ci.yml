@@ -59,3 +59,27 @@ jobs:
           python-version: "3.13"
       - name: Disposable catalog of 10,000 songs, Smart Batch and one-step Undo
         run: python -u scripts/smart_batch_scale_smoke.py
+
+  windows-pc-smart-batch:
+    needs: python-and-ui
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Windows PC local Lyrics JSON and Undo regressions
+        shell: pwsh
+        run: |
+          python -m compileall -q songstudio-pc/lyric_text_groups.py songstudio-pc/engine.py
+          if ($LASTEXITCODE -ne 0) { throw "Python syntax check failed" }
+          python -m unittest discover -s scripts -p test_songstudio_lyric_text_groups.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Legacy batch/Undo regression failed" }
+          python -m unittest discover -s scripts -p test_songstudio_smart_batch.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Smart Batch validation/rollback regression failed" }
+      - name: Windows 10k-song disposable catalog and full-batch Undo
+        shell: pwsh
+        run: |
+          python -u scripts/smart_batch_scale_smoke.py
+          if ($LASTEXITCODE -ne 0) { throw "10,000-song Windows scale regression failed" }
