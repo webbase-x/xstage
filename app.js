@@ -1162,6 +1162,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       state.catalogGeneration='';
       state.manifest=null;
       state.songs=[];
+      window.dispatchEvent(new CustomEvent('xstage:catalog-updated',{detail:{songs:[]}}));
       state.shown=[];
       state.catalogCache.clear();
       state.queue=[];
@@ -1225,6 +1226,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       state.catalogPointerId='';
       state.catalogGeneration='';
       state.songs=[];
+      window.dispatchEvent(new CustomEvent('xstage:catalog-updated',{detail:{songs:[]}}));
       state.shown=[];
       state.queue=[];
       state.selectedIndex=0;
@@ -2166,6 +2168,7 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
   };
   if(mode.mode==='none'){setPlayStatus(mode.explanation);return;}
   const midiSettings=advisor?.getMidiSettings?.()||{transpose:0,channels:null};
+  const cachedLyrics=state.current===song&&state.lyrics?.schemaVersion===1?state.lyrics:null;
   const useMidi=mode.useMidi&&!!getFileId(song.midi);
   window.dispatchEvent(new CustomEvent('xstage:song-selected',{detail:{song}}));
   // Clear previous song's piano timeline before loading a new media source.
@@ -2206,7 +2209,8 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
       ? [prepared.blob,prepared.lyrics]
       : await boundedPlaybackTask(Promise.all([
           loadMedia(),
-          privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+          cachedLyrics?Promise.resolve(cachedLyrics):
+            privateJson(song.lyrics.fileId,token,{signal:controller.signal})
         ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป',controller);
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token){controller.abort();return;}
@@ -3259,6 +3263,10 @@ window.addEventListener('xstage:midi-settings-apply',()=>{
   if(!state.current||!getFileId(state.current.midi)){
     setPlayStatus('Mixer และ Transpose ใช้ได้เฉพาะเพลงที่มี MIDI');
     return;
+  }
+  const playbackMode=$('xstage-play-mode');
+  if(playbackMode&&!['midi','soundfont'].includes(playbackMode.value)){
+    playbackMode.value='midi'; // Mixer changes need to select a MIDI synth path.
   }
   replayCurrentWithAudioSettings();
 });
