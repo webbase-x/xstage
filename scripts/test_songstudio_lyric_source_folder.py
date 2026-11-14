@@ -32,6 +32,11 @@ class SelectedLyricFolderTests(unittest.TestCase):
             def songs_root(workspace):
                 return Path(workspace) / "StageWeb"
         self.context["_song_export_module"] = lambda: FakeExport()
+        class StubNativeNCN:
+            @staticmethod
+            def locate(folder):
+                return None
+        self.context["LYRIC_NCN"] = StubNativeNCN()
         exec(compile(ast.Module(body=[self.helper], type_ignores=[]),
                      str(ENGINE), "exec"), self.context)
         self.resolve = self.context["lyric_source_root"]
