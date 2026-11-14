@@ -401,6 +401,11 @@ def upload_soundfont(drive, path, *, create_new_library=False,
     Online and Android playback still depend on device and decoder support.
     """
     info = inspect_soundfont(path)
+    # Same hard cap as the hosted Web/Android SF2/SF3 reader.
+    # Local PC may use a larger bank, but publishing it would advertise
+    # an unusable online SoundFont to every other platform.
+    if info["bytes"] > 256 * 1024 * 1024:
+        raise ValueError("SoundFont เกิน 256 MB · ใช้บน PC ในเครื่องได้ แต่ไม่อัปโหลดเข้า XStageWeb/AUDIO เพราะ Web/Android ไม่รองรับ")
     roots = [item for item in drive.list_children("root")
              if item.get("name") == "XStageWeb"
              and item.get("mimeType") == FOLDER]
