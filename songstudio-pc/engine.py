@@ -2497,7 +2497,7 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     self._json({"events": HISTORY.list_events(HISTORY_FILE)})
             elif path == "/api/upload-folder/inspect":
-                self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", "")))
+                self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module()))
             elif path == "/api/code-registry":
                 self._json(code_registry_preview())
             elif path == "/api/environment":
