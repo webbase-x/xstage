@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 
 const root = process.cwd();
 const contentTypes = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8', '.svg':'image/svg+xml',
+  '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.svg':'image/svg+xml',
   '.webmanifest':'application/manifest+json' };
 const server = http.createServer(async (req, res) => {
   const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -466,6 +466,25 @@ try {
   assert.equal(await pc.locator('#ai-lyrics-import').isVisible(),true);
   await pc.click('#ai-lyrics-import');
   await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-selected')?.textContent.includes('เพลง AI นำเข้า'));
+  // Selecting an imported song sets the title synchronously, but the local
+  // engine's draft/model availability request completes asynchronously.
+  // Wait for the ready state, not just the label (avoids a loading race).
+  await pc.waitForFunction(()=>{
+    const status=document.querySelector('#ai-lyrics-engine-state')?.textContent||'';
+    const editor=document.querySelector('#ai-lyrics-editor')?.value||'';
+    const start=document.querySelector('#ai-lyrics-start');
+    return status.includes('Whisper AI พร้อมใช้งาน') &&
+      editor.includes('ท่อนแรก AI') && start && !start.disabled;
+  },null,{timeout:15000}).catch(async error=>{
+    const state=await pc.evaluate(()=>({
+      selected:document.querySelector('#ai-lyrics-selected')?.textContent,
+      engine:document.querySelector('#ai-lyrics-engine-state')?.textContent,
+      status:document.querySelector('#ai-lyrics-status')?.textContent,
+      startDisabled:document.querySelector('#ai-lyrics-start')?.disabled,
+      editor:document.querySelector('#ai-lyrics-editor')?.value,
+    }));
+    throw new Error('Independent AI import never reached a ready state: '+JSON.stringify(state)+'; '+error.message);
+  });
   assert.equal(await pc.locator('#ai-lyrics-start').isEnabled(),true,
     'Independent imported file can use Whisper when a model is available');
   assert.match(await pc.locator('#ai-lyrics-editor').inputValue(),/ท่อนแรก AI/);

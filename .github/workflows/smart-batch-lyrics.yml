@@ -1,0 +1,26 @@
+name: Smart Batch Lyrics safety tests
+on:
+  pull_request:
+    paths:
+      - 'tools/smart-batch-lyrics.mjs'
+      - 'studio/smart-lyrics-ai*.mjs'
+      - 'studio/index.html'
+      - 'scripts/smart-lyrics-ai.test.mjs'
+      - 'scripts/smart-batch-lyrics.test.mjs'
+      - '.github/workflows/smart-batch-lyrics.yml'
+  workflow_dispatch:
+jobs:
+  batch-lyrics:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check tools/smart-batch-lyrics.mjs
+      - run: node --check studio/smart-lyrics-ai-core.mjs
+      - run: node --check studio/smart-lyrics-ai.mjs
+      - run: node --test scripts/smart-batch-lyrics.test.mjs scripts/smart-lyrics-ai.test.mjs

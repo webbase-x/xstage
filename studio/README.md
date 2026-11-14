@@ -50,3 +50,7 @@ Never forward the local engine port publicly.
 - `index.html`, `app.js`, `style.css`: original PC Engine control UI
 - `entry.js`: route direct visitors to Web editor while preserving PC pairing
 - `scripts/song-studio-web-test.mjs`: smoke checks
+
+## Smart Batch AI spelling suggestions (PC Engine Control)
+
+In the existing **จัดการข้อความหัว–ท้ายเพลง** tab, select exactly one text group and click **AI ตรวจคำผิดในกลุ่มที่เลือก**. Uses an on-device browser LanguageModel when available, with a high-confidence suggestion copied to the existing replacement field. Review and confirm using the existing preview/backup/Undo workflow. Unavailable models are reported clearly, with manual correction still usable. NCN LYR/CUR automatic correction is explicitly out of scope. This does not add a new Windows installer or bypass the authenticated PC Local Engine.
