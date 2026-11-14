@@ -75,7 +75,6 @@ $map = @{
  'songstudio-pc/engine.py' = 'engine.py'
   'songstudio-pc/history_store.py' = 'history_store.py'
  'songstudio-pc/ncn_lyrics.py' = 'ncn_lyrics.py'
- 'songstudio-pc/ncn_bulk_editor.py' = 'ncn_bulk_editor.py'
  'songstudio-pc/song_index.py' = 'song_index.py'
  'songstudio-pc/ai_lyrics.py' = 'ai_lyrics.py'
  'songstudio-pc/lyric_alignment.py' = 'lyric_alignment.py'
