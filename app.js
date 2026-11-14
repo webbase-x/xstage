@@ -1000,7 +1000,7 @@ function applyInstantCatalog(instant){
   return true;
 }
 
-async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
+async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseExistingSession=!!expectedSub) {
   setStatus('กำลังยืนยันบัญชี Google…');
   const accountResult = await googleFetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'},'Google Account');
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
@@ -1011,7 +1011,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='') {
 
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
-  if (state.token && state.accountSub===account.sub && state.libraryRootId) {
+  if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId) {
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;
     rememberLogin(true);
@@ -1332,7 +1332,7 @@ function login({automatic=false} = {}) {
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
         savePendingAuth(result.access_token,expiresAt);
-        try { await openDrive(result.access_token,authId,expiresAt); }
+        try { await openDrive(result.access_token,authId,expiresAt,'',true); }
         catch (e) {
           if (authId === state.authId) {
             if(state.awaitingSharedLibrary){
