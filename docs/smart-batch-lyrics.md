@@ -42,3 +42,9 @@ node tools/smart-batch-lyrics.mjs --root="D:/Songs" --undo=RUN_ID
 - For very large libraries, run first against a COPY of a representative set and review the summary. No song data is bundled in the repository.
 
 Run: \`node --test scripts/smart-batch-lyrics.test.mjs\`.
+
+## On-device AI review in Song Studio PC
+
+The existing PC Web Control page `studio/?mode=pc` has an AI spelling suggestion button in its Smart Batch tab. Select **one existing text group**, then click **AI ตรวจคำผิดในกลุ่มที่เลือก**. When the browser exposes the experimental `LanguageModel.create()` API and its local model is available, it proposes corrected text. Only a response claiming high confidence that also passes strict text/number/punctuation checks is copied into the replacement field. The operator still must review the plan and explicitly confirm the existing Local Engine backup-and-replace operation; low-confidence proposals are not applied. Confidence is self-reported by the model, not a calibrated accuracy guarantee. Browser/OS compatibility must be tested; the button displays an honest unavailable message when unsupported. No third-party API key or cloud AI is used.
+
+**NCN LYR/CUR automatic correction is deliberately excluded from this project's scope.** The pre-existing manual or conversion-related NCN functions remain unchanged. This AI addition does not change those files, their timing, or the current Song Studio PC installer.
