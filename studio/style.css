@@ -319,6 +319,11 @@ button.preview-lyric-line{cursor:pointer}
 @media(max-width:740px){.google-login-help{flex-direction:column;align-items:stretch}.google-login-help button{width:100%}}
 
 /* Frequency-ranked, exact-position intro/outro lyric text editing */
+.lyric-source-label{display:block;font-weight:700;margin:12px 0 7px}
+.lyric-source-row{align-items:stretch}
+.lyric-source-row .field{flex:1 1 340px;min-width:180px}
+.lyric-source-row .button{white-space:nowrap}
+@media(max-width:700px){.lyric-source-row .field{flex-basis:100%}.lyric-source-row .button{flex:1}}
 .lyric-group-actions,.lyric-group-positions{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:12px 0}
 .lyric-group-positions>.button{flex:1;min-width:135px}
 .lyric-group-filter{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
