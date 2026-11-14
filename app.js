@@ -822,11 +822,32 @@ function driveError(status, subject) {
   return new Error(`อ่าน ${subject} ไม่สำเร็จ (HTTP ${status})`);
 }
 async function driveList(q, token) {
-  const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
-  const result = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params}`, {headers: requestHeaders(token),cache:'no-store'},'Google Drive');
-  if (!result.ok) throw driveError(result.status, 'รายการไฟล์');
-  const json = await result.json();
-  return Array.isArray(json.files) ? json.files : [];
+  // Google Drive files.list can return fewer than pageSize results and provide
+  // nextPageToken even for a page with no files. Never treat one page as a
+  // complete library: a partial listing could select the wrong Drive root.
+  const files = [];
+  const seenPageTokens = new Set();
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
+    if (pageToken) params.set('pageToken',pageToken);
+    const result = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params}`,
+      {headers: requestHeaders(token),cache:'no-store'},'Google Drive');
+    if (!result.ok) throw driveError(result.status, 'รายการไฟล์');
+    const json = await result.json();
+    if (!json || (json.files != null && !Array.isArray(json.files)) ||
+        (json.nextPageToken != null && typeof json.nextPageToken !== 'string'))
+      throw Error('Google Drive ส่งรายการไฟล์ที่มีโครงสร้างไม่ถูกต้อง');
+    files.push(...(json.files || []));
+    if (files.length > 300000)
+      throw Error('Google Drive มีไฟล์มากเกินขีดจำกัด 300,000 รายการต่อการค้นหา');
+    const next = json.nextPageToken || '';
+    if (next && seenPageTokens.has(next))
+      throw Error('Google Drive ส่งรหัสหน้าผลการค้นหาซ้ำ · หยุดเพื่อป้องกันการอ่านไม่ครบ');
+    if (next) seenPageTokens.add(next);
+    pageToken = next;
+  } while (pageToken);
+  return files;
 }
 async function privateFile(id, token, opts = {}) {
   const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
@@ -2780,7 +2801,7 @@ function androidTvAuthPanel(){
   panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-labelledby','android-tv-auth-title');
   panel.innerHTML='<div class="android-tv-auth-box">'+
-    '<img class="android-tv-auth-brand" src="assets/xstage-stage-logo.png?v=1104" width="2048" height="682" alt="X-Stage Karaoke Online">'+
+    '<img class="android-tv-auth-brand" src="assets/xstage-stage-logo.png?v=1105" width="2048" height="682" alt="X-Stage Karaoke Online">'+
     '<span class="android-tv-auth-kicker">X-STAGE ANDROID · <b id="android-tv-auth-version">กำลังอ่านรุ่น…</b></span>'+
     '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
     '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือหรืออุปกรณ์อื่น แล้วกรอกรหัสที่แสดง</p>'+
@@ -2842,7 +2863,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1104';
+    script.src='./assets/vendor/qrcode.min.js?v=1105';
     script.async=true;
     let done=false;
     const finish=error=>{
