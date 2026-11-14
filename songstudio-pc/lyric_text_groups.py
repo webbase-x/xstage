@@ -15,6 +15,8 @@ import tempfile
 import unicodedata
 import zipfile
 from collections import defaultdict
+from difflib import SequenceMatcher
+from math import isfinite
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -105,64 +107,95 @@ def _display_units(value):
 
 
 def _retime_visual_units(line, old_text, new_text):
-    """Remap only Lyrics JSON timed highlight cues; preserve line boundaries.
+    """Use verified original glyph timestamps as fixed anchors.
 
-    Equal visual lengths keep original per-glyph time positions. Different
-    lengths interpolate monotonically *inside the old timed line*, label the
-    mapping as estimated and preserve the start/end of that line. These are
-    display estimates, NOT claims of newly transcribed sung syllables.
+    For unequal lengths, align unchanged Unicode display units and interpolate
+    ONLY unmatched spans between their fixed timing anchors. The algorithm
+    never reads/modifies NCN source and never claims an inferred timestamp is
+    an observed sung syllable. Preserve the original line time boundaries.
     """
     units = _display_units(new_text)
     if not units:
         raise ValueError("ไม่มีอักษรที่จะจัดเวลาไฮไลต์")
     old_units = _display_units(old_text)
     original = line.get("syllables") or []
-    start = float(line.get("startTime", 0))
-    end = float(line.get("endTime", 0) or 0)
-    if original and not isinstance(original, list):
+    start = line.get("startTime")
+    end = line.get("endTime")
+    if (isinstance(start, bool) or isinstance(end, bool)
+            or not isinstance(start, (int, float))
+            or not isinstance(end, (int, float))
+            or not isfinite(start) or not isfinite(end)
+            or start < 0 or end <= start):
+        raise ValueError("Lyrics JSON ไม่มีช่วงเวลาบรรทัดที่ถูกต้อง · ข้ามเพื่อรักษาต้นฉบับ")
+    if not isinstance(original, list):
         raise ValueError("ข้อมูลไฮไลต์ Lyrics JSON เดิมไม่ถูกต้อง")
-    valid = (len(original) == len(old_units) and len(original)>0 and
-             all(isinstance(x, dict) and
-                 isinstance(x.get("start"), (int, float)) and
-                 not isinstance(x.get("start"), bool) for x in original))
-    source = [float(x["start"]) for x in original] if valid else []
-    if source:
-        if any(source[j] > source[j+1] for j in range(len(source)-1)):
-            raise ValueError("เวลาไฮไลต์เดิมย้อนหลัง · ไม่สร้างเวลาทดแทนอัตโนมัติ")
-        start = max(0, min(start, source[0]))
-        tail = float(original[-1].get("duration") or .04)
-        end = max(end, source[-1] + max(.03, tail))
-    if end <= start:
-        # With no reliable end time, do not invent an extended duration.
-        # Allow the original timestamp only; a human must set a full range
-        # before a new per-character highlighting scheme can be saved.
-        raise ValueError("Lyrics JSON ไม่มีเวลาสิ้นสุดของบรรทัด · ไม่สามารถสร้างเวลาไฮไลต์")
-    exact = bool(source) and len(old_units) == len(units)
-    if exact:
-        positions = list(source)
-    elif source and len(source)>1:
-        positions = []
-        for j in range(len(units)):
-            fractional = j*(len(source)-1)/max(1,len(units)-1)
-            left = int(fractional)
-            right = min(len(source)-1,left+1)
-            weight = fractional-left
-            positions.append(source[left]+(source[right]-source[left])*weight)
+    start, end = float(start), float(end)
+    valid = (
+        len(original) == len(old_units) and len(original) > 0
+        and all(isinstance(c, dict)
+                and c.get("text") == old_units[i]
+                and isinstance(c.get("start"), (int, float))
+                and not isinstance(c.get("start"), bool)
+                and isfinite(c["start"])
+                and start - 0.001 <= c["start"] <= end + 0.001
+                for i, c in enumerate(original))
+    )
+    source = [float(c["start"]) for c in original] if valid else []
+    if source and any(a > b for a, b in zip(source, source[1:])):
+        raise ValueError("เวลาไฮไลต์เดิมย้อนหลัง · ข้ามโดยไม่แก้เพลง")
+    if source and len(old_units) == len(units):
+        # Same number of visible characters: never move any timestamp.
+        positions = source[:]
+        method = "original-cue-positions"
+    elif source:
+        positions = [None] * len(units)
+        matcher = SequenceMatcher(a=old_units, b=units, autojunk=False)
+        for a, b, size in matcher.get_matching_blocks():
+            for delta in range(size):
+                positions[b + delta] = source[a + delta]
+        # Every matching glyph is now a fixed anchor. Only the inserted or
+        # substituted runs are assigned estimated positions.
+        pos = 0
+        while pos < len(positions):
+            if positions[pos] is not None:
+                pos += 1
+                continue
+            first = pos
+            while pos < len(positions) and positions[pos] is None:
+                pos += 1
+            left_index, right_index = first - 1, pos
+            left = positions[left_index] if left_index >= 0 else start
+            right = positions[right_index] if right_index < len(positions) else end
+            if right < left or (right == left and pos > first):
+                # No measured time interval to insert extra character cues.
+                # Never shift the existing anchors to hide the conflict.
+                raise ValueError("ช่วงเวลาระหว่างอักษรเดิมไม่พอสำหรับข้อความใหม่ · ข้ามเพลง")
+            count = pos - first
+            for index in range(first, pos):
+                fraction = (index - first + 1) / (count + (1 if right_index < len(positions) else 1))
+                positions[index] = left + (right - left) * fraction
+        method = "anchored-changed-spans"
     else:
-        positions = [start + (end-start)*j/max(1,len(units))
-                     for j in range(len(units))]
-    # Never allow the position to jump beyond the original line's end.
-    positions = [max(start, min(end, t)) for t in positions]
-    cues=[]
-    for j, text in enumerate(units):
-        at=positions[j]
-        finish=positions[j+1] if j+1<len(units) else end
-        cues.append({"text":text,"start":round(at,4),
-                     "duration":round(max(.001,finish-at),4)})
-    line["syllables"]=cues
-    line["timingEstimated"]=not exact
-    line["timingMethod"]="original-cues" if exact else "interpolated-original-line"
-    return not exact
+        # A source that has only line timestamps can produce an explicitly
+        # estimated display effect, never an allegedly verified CUR timing.
+        positions = [start + (end - start) * i / max(1, len(units))
+                     for i in range(len(units))]
+        method = "estimated-line-only"
+    if any(not isfinite(t) or t < start - .001 or t > end + .001
+           for t in positions):
+        raise ValueError("เวลาเนื้อร้องอยู่นอกช่วงเดิม · ข้ามเพลง")
+    if any(a > b for a, b in zip(positions, positions[1:])):
+        raise ValueError("เวลาไฮไลต์หลังแก้ย้อนหลัง · ข้ามเพลง")
+    cues = []
+    for i, glyph in enumerate(units):
+        at = positions[i]
+        following = positions[i + 1] if i + 1 < len(units) else end
+        cues.append({"text": glyph, "start": round(at, 4),
+                     "duration": round(max(0.0, following - at), 4)})
+    line["syllables"] = cues
+    line["timingEstimated"] = True  # Text was replaced, even if cue positions were reused.
+    line["timingMethod"] = method
+    return method != "original-cue-positions"
 
 
 def _replacement(document, raw, position, new_text):
