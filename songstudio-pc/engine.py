@@ -93,7 +93,7 @@ PREFS = {
     "workspace": str(HOME_MUSIC / "X-Stage-Song-Studio"),
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original", "oauth": "",
-    "upload_folder": ""
+    "upload_folder": "", "lyric_source": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
@@ -1060,6 +1060,30 @@ def _song_export_module():
     return module
 
 
+def lyric_source_root(selected=None):
+    """Resolve the bulk-lyrics source without moving or creating files.
+
+    The selected location is StageWeb or its parent workspace. A folder
+    containing raw original songs is never bulk-edited through this tool.
+    """
+    folder = PREFS.get("lyric_source", "") if selected is None else selected
+    if not isinstance(folder, str):
+        raise ValueError("โฟลเดอร์ต้นทางข้อความหัว–ท้ายเพลงไม่ถูกต้อง")
+    if not folder.strip():
+        return _song_export_module().songs_root(PREFS["workspace"])
+    try:
+        selected_path = Path(folder.strip()).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("ไม่พบโฟลเดอร์ต้นทางข้อความหัว–ท้ายเพลง กรุณาเลือกใหม่") from exc
+    if not selected_path.is_dir():
+        raise ValueError("ต้นทางข้อความหัว–ท้ายเพลงต้องเป็นโฟลเดอร์")
+    root = (selected_path if (selected_path / "current.json").is_file()
+            else selected_path / "StageWeb")
+    if not (root / "current.json").is_file():
+        raise ValueError("โฟลเดอร์นี้ไม่มีคลัง StageWeb/current.json กรุณาเลือก StageWeb หรือโฟลเดอร์ที่เก็บ StageWeb")
+    return root.resolve()
+
+
 def code_registry_snapshot(root, *, require_drive=False):
     """Read actual local + visible Google catalog before assigning song codes.
 
@@ -1507,7 +1531,7 @@ def execute_job(action, options, started):
                 raise ValueError("กรุณาเลือกเพลงก่อนสร้าง")
             result = build_library(rows, mode, options) if action == "build" else build_preview(rows, mode)
         elif action == "lyric-groups-scan":
-            root = _song_export_module().songs_root(PREFS["workspace"])
+            root = lyric_source_root()
             update("กำลังอ่านข้อความจากคลังเพลงที่สร้างแล้ว · ไม่อ่านไฟล์เสียง")
             index = LYRIC_TEXT.scan(
                 root, _song_export_module(), cancelled=CANCEL,
@@ -1528,7 +1552,7 @@ def execute_job(action, options, started):
                 index = LYRIC_TEXT_INDEX
             if index is None:
                 raise ValueError("กรุณากดวิเคราะห์ข้อความก่อนเริ่มแทนที่")
-            root = _song_export_module().songs_root(PREFS["workspace"])
+            root = lyric_source_root()
             groups = options.get("groups")
             if groups is None and options.get("group"):
                 groups = [options["group"]]
@@ -1549,7 +1573,7 @@ def execute_job(action, options, started):
             # Keep LYRIC_TEXT_INDEX: apply_many updates only changed members.
             # All unedited groups remain available for the next batch.
         elif action == "lyric-groups-undo":
-            root = _song_export_module().songs_root(PREFS["workspace"])
+            root = lyric_source_root()
             update("กำลังตรวจไฟล์หลังแก้ไขและย้อนคืนจากชุดสำรอง")
             result = LYRIC_TEXT.undo(LYRIC_TEXT_BACKUPS, root, options.get("backupId"))
             with LOCK:
@@ -1831,6 +1855,8 @@ def start_job(data):
             snapshot = LYRIC_TEXT_INDEX
         if snapshot is None:
             raise ValueError("ยังไม่ได้วิเคราะห์ข้อความหัว–ท้ายเพลง")
+        if snapshot["root"] != str(lyric_source_root()):
+            raise ValueError("โฟลเดอร์ต้นทางเปลี่ยนแล้ว กรุณาวิเคราะห์ใหม่")
         groups = data.get("groups")
         if groups is None and data.get("group"):
             groups = [data["group"]]
@@ -1844,7 +1870,7 @@ def start_job(data):
         validation = {"total": plan["changedSongs"], "changedLines": plan["changedLines"]}
     if action == "lyric-groups-undo":
         backup = LYRIC_TEXT.latest_backup(
-            LYRIC_TEXT_BACKUPS, _song_export_module().songs_root(PREFS["workspace"]))
+            LYRIC_TEXT_BACKUPS, lyric_source_root())
         if not backup or data.get("backupId") != backup["id"]:
             raise ValueError("ชุดย้อนคืนไม่ตรงกับการแก้ไขล่าสุด กรุณาตรวจรายการสำรอง")
         validation = {"total": backup["songs"]}
@@ -1935,14 +1961,14 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "upload_folder", "soundfont", "oauth", "vocal"):
+    if kind not in ("source", "workspace", "download", "upload_folder", "lyric_source", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
     picker = ROOT / "pick_path.ps1"
     if not picker.is_file():
         raise RuntimeError("ไม่พบ pick_path.ps1 กรุณาแตกไฟล์ ZIP รุ่นใหม่ให้ครบก่อน")
-    initial = str(PREFS.get("source", "") if kind == "vocal" else PREFS.get(kind) or "")
+    initial = str(PREFS.get("source", "") if kind == "vocal" else (PREFS.get("lyric_source") or PREFS["workspace"]) if kind == "lyric_source" else PREFS.get(kind) or "")
     args = [
         "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
         "-STA", "-File", str(picker), "-Kind", kind,
@@ -2581,7 +2607,7 @@ class Handler(BaseHTTPRequestHandler):
                     snapshot, query.get("group", [""])[0],
                     search=query.get("search", [""])[0]))
             elif path == "/api/lyric-groups-backup":
-                root = _song_export_module().songs_root(PREFS["workspace"])
+                root = lyric_source_root()
                 self._json({"latest": LYRIC_TEXT.latest_backup(LYRIC_TEXT_BACKUPS, root)})
             elif path == "/api/vocal-songs":
                 search = query.get("search", [""])[0]
@@ -2673,6 +2699,15 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/config":
                 previous_preferences = HISTORY.safe_preferences(PREFS)
                 previous_catalog_key = (PREFS["source"], PREFS["workspace"])
+                previous_lyric_source = PREFS["lyric_source"]
+                if "lyric_source" in payload:
+                    requested = payload["lyric_source"]
+                    if not isinstance(requested, str) or len(requested) > 2048:
+                        raise ValueError("ตำแหน่งคลังเนื้อร้องไม่ถูกต้อง")
+                    if requested.strip() != previous_lyric_source and JOB["state"] == "running":
+                        raise ValueError("มีงานกำลังดำเนินการอยู่ · เปลี่ยนโฟลเดอร์ต้นทางไม่ได้")
+                    if requested.strip():
+                        lyric_source_root(requested.strip())
                 for key, value in payload.items():
                     if key not in PREFS or not isinstance(value, str):
                         continue
@@ -2691,10 +2726,12 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     HISTORY.append(HISTORY_FILE, "settings", "preferences",
                                    previous_preferences, PREFS)
-                if previous_catalog_key != (PREFS["source"], PREFS["workspace"]):
+                if (previous_catalog_key != (PREFS["source"], PREFS["workspace"])
+                        or previous_lyric_source != PREFS["lyric_source"]):
                     with LOCK:
                         global LYRIC_TEXT_INDEX
                         LYRIC_TEXT_INDEX = None
+                if previous_catalog_key != (PREFS["source"], PREFS["workspace"]):
                     restore_song_catalog()
                 self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
                             "google": GOOGLE.status()})
@@ -2743,7 +2780,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
-                if kind not in ("source", "workspace", "download", "upload_folder", "soundfont", "oauth", "vocal"):
+                if kind not in ("source", "workspace", "download", "upload_folder", "lyric_source", "soundfont", "oauth", "vocal"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
             elif path == "/api/live-preview":
