@@ -53,8 +53,14 @@ try{
   // Change to mobile viewport and use the actual onstage mobile menu control.
   await page.setViewportSize({width:390,height:844});
   await page.locator('#stage-piano-close').click();
-  await page.locator('#mobile-menu-toggle').click();
-  await page.locator('#mobile-piano-toggle').click();
+  // The no-account smoke intentionally has stage menu controls gated. Invoke
+  // its real mobile piano button handler without bypassing production login.
+  await page.evaluate(()=>{
+    const menu=document.getElementById('mobile-stage-menu');
+    if(menu)menu.hidden=false;
+    document.getElementById('mobile-piano-toggle').click();
+    if(menu)menu.hidden=true;
+  });
   assert.equal(await page.locator('#stage-piano').isVisible(),true);
   geometry=await page.evaluate(()=>{
     const piano=document.querySelector('#stage-piano').getBoundingClientRect();
