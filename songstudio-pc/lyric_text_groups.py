@@ -423,6 +423,233 @@ def plan(snapshot, group_ids, *, search="", replacement=None):
     }
 
 
+
+def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
+                     *, search="", expected_count, cancelled=None,
+                     on_progress=None):
+    """Scale safe local JSON/LRC replacement to large collections.
+
+    Preflight EVERY selected song, skip only individual corrupt or changed
+    local lyric records, spool replacements to disk, archive ALL originals
+    before the first write, then commit atomically per file. An interruption
+    rolls the whole successful subset back from the single durable backup.
+    Source MID/LYR/CUR/media and Drive are never written.
+    """
+    import shutil
+
+    root = Path(root).expanduser().resolve()
+    if snapshot.get("root") != str(root):
+        raise ValueError("กลุ่มข้อความไม่ตรงคลังเพลง กรุณาวิเคราะห์ใหม่")
+    new_text = _new_text(new_text)
+    targets, chosen, unchanged = _targets(snapshot, group_ids, search, new_text)
+    expected_lines = sum(len(item["edits"]) for item in targets.values())
+    if type(expected_count) is not int or expected_count != expected_lines:
+        raise ValueError("จำนวนบรรทัดที่เลือกเปลี่ยน กรุณาตรวจรายการก่อนแก้ไข")
+    if not expected_lines:
+        raise ValueError("ไม่มีข้อความใหม่ที่จะเปลี่ยน")
+    pointer, _ = export._read_current(root)
+    if pointer.get("generation") != snapshot.get("generation"):
+        raise ValueError("ฐานเพลงเปลี่ยนหลังวิเคราะห์ · ต้องสแกนใหม่")
+
+    # This log intentionally contains only song IDs and bounded error messages,
+    # never OAuth tokens or audio, and stays on the local PC.
+    rejected = []
+    committed = []
+    spec_list = []
+    seen_paths = set()
+    operation = (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+                 + "-" + secrets.token_hex(4))
+    backup_root = Path(backup_root)
+    backup_root.mkdir(parents=True, exist_ok=True)
+    zip_path = backup_root / (operation + ".zip")
+    manifest_path = backup_root / (operation + ".json")
+    report_path = backup_root / (operation + ".skipped.json")
+    changed_lines = 0
+    estimated_lines = 0
+
+    with tempfile.TemporaryDirectory(prefix=".xstage-batch-stage-", dir=backup_root) as temp:
+        stage = Path(temp)
+        try:
+            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED,
+                                 compresslevel=3, allowZip64=True) as archive:
+                for number, item in enumerate(targets.values(), 1):
+                    if cancelled is not None and cancelled.is_set():
+                        raise RuntimeError("ยกเลิกระหว่างตรวจไฟล์ · ยังไม่แก้เพลง")
+                    song_id = item["songId"]
+                    try:
+                        parsed = _record_bytes(root, item["record"], export)
+                        if parsed is None:
+                            raise ValueError("ไม่มี Lyrics JSON อย่างน้อย 4 บรรทัด")
+                        path, lrc, doc, raw = parsed
+                        if path.stat().st_size > 8 * 1024 * 1024:
+                            raise ValueError("Lyrics JSON ใหญ่เกิน 8 MB")
+                        if lrc and lrc.stat().st_size > 2 * 1024 * 1024:
+                            raise ValueError("LRC ใหญ่เกิน 2 MB")
+                        query = _same(search).casefold()
+                        if query and query not in "\n".join(
+                                _same(line["text"]).casefold() for line in doc["lines"]):
+                            raise ValueError("คำค้นไม่ตรงกับเนื้อร้องล่าสุด")
+                        revised_doc, revised_lrc = doc, raw
+                        edits_here = []
+                        estimated_here = 0
+                        positions = set()
+                        for group, entry in item["edits"]:
+                            index = POSITIONS[group["position"]][0]
+                            slot = index % len(doc["lines"])
+                            if slot in positions:
+                                raise ValueError("เลือกตำแหน่งข้อความซ้ำในเพลง")
+                            positions.add(slot)
+                            if _same(revised_doc["lines"][index]["text"]) != group["text"]:
+                                raise ValueError("ข้อความเปลี่ยนหลังการสแกน")
+                            revised_doc, revised_lrc, estimated = _replacement(
+                                revised_doc, revised_lrc, group["position"], new_text)
+                            estimated_here += int(estimated)
+                            edits_here.append((group, entry))
+                        json_bytes = (json.dumps(revised_doc, ensure_ascii=False,
+                                                 separators=(",", ":")) + "\n").encode("utf-8")
+                        file_data = [(path, path.read_bytes(), json_bytes)]
+                        if lrc is not None:
+                            if revised_lrc is None:
+                                raise ValueError("ไม่สามารถปรับ LRC ให้ตรงกับ JSON")
+                            file_data.append((lrc, lrc.read_bytes(),
+                                              revised_lrc.encode("utf-8")))
+                        paths = [p.relative_to(root).as_posix() for p, _, _ in file_data]
+                        if any(p in seen_paths for p in paths):
+                            raise ValueError("ไฟล์ Lyrics ถูกอ้างซ้ำในคลัง · ไม่แก้ทับ")
+                    except (ValueError, OSError, TypeError, KeyError, IndexError,
+                            UnicodeError, OverflowError) as exc:
+                        rejected.append({"songId": str(song_id)[:180],
+                                         "code": str(item["record"].get("code", ""))[:100],
+                                         "reason": str(exc)[:400]})
+                        if on_progress and number % 250 == 0:
+                            on_progress(f"ตรวจ {number:,}/{len(targets):,} · ข้ามผิดปกติ {len(rejected):,}", number)
+                        continue
+
+                    # Operational write/disk failures are NOT skippable:
+                    # archive and stage must both be durable before commit.
+                    stage_files = []
+                    for path, original, revised in file_data:
+                        relative = path.relative_to(root).as_posix()
+                        archive.writestr(relative, original)
+                        name = str(len(spec_list)) + ".data"
+                        (stage / name).write_bytes(revised)
+                        before, after = _sha(original), _sha(revised)
+                        spec_list.append({"path": relative, "before": before,
+                                          "after": after})
+                        stage_files.append((path, name, before))
+                        seen_paths.add(relative)
+                    committed.append({"songId": song_id, "edits": edits_here,
+                                      "files": stage_files,
+                                      "jsonPath": path if lrc is None else file_data[0][0]})
+                    changed_lines += len(edits_here)
+                    estimated_lines += estimated_here
+                    if on_progress and number % 250 == 0:
+                        on_progress(f"เตรียม {number:,}/{len(targets):,} · พร้อม {len(committed):,} · ข้าม {len(rejected):,}", number)
+
+            if not committed:
+                zip_path.unlink(missing_ok=True)
+                return {"message": f"ไม่มีไฟล์ที่แก้ได้ · ข้ามผิดปกติ {len(rejected):,} เพลง",
+                        "changedSongs": 0, "changedLines": 0, "skippedInvalid": len(rejected),
+                        "skippedExamples": rejected[:20], "backupId": None,
+                        "estimatedLines": 0, "remainingGroups": snapshot["groupCount"]}
+
+            if shutil.disk_usage(backup_root).free < 32 * 1024 * 1024:
+                raise RuntimeError("พื้นที่เก็บข้อมูลเหลือน้อยก่อนบันทึก · ยังไม่แก้เพลง")
+            # A committed ZIP backup must survive a sudden power loss before
+            # its manifest permits any song writes.
+            with zip_path.open("rb") as stream:
+                os.fsync(stream.fileno())
+            if rejected:
+                _atomic_bytes(report_path, (json.dumps({
+                    "operation": operation, "attemptedSongs": len(targets),
+                    "skippedInvalid": len(rejected), "rows": rejected
+                }, ensure_ascii=False) + "\n").encode("utf-8"))
+            first = chosen[0][0] if len(chosen) == 1 else None
+            manifest = {
+                "version": 3, "id": operation, "state": "prepared",
+                "root": str(root), "position": first["position"] if first else "mixed",
+                "oldText": first["text"] if first else f"{len(chosen)} กลุ่มข้อความ",
+                "newText": new_text, "groups": list(group_ids), "search": _same(search),
+                "songs": len(committed), "lines": changed_lines,
+                "estimatedLines": estimated_lines,
+                "skippedInvalid": len(rejected), "files": spec_list,
+                "createdAt": datetime.now(timezone.utc).isoformat()
+            }
+            _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False)
+                                          + "\n").encode("utf-8"))
+            try:
+                for number, change in enumerate(committed, 1):
+                    if cancelled is not None and cancelled.is_set():
+                        raise RuntimeError("ยกเลิกระหว่างเขียน · คืนค่าไฟล์จากชุดสำรอง")
+                    for target, staged_name, before in change["files"]:
+                        if _sha(target.read_bytes()) != before:
+                            raise ValueError("ไฟล์เปลี่ยนระหว่างงาน · คืนค่าจากชุดสำรอง")
+                        _atomic_bytes(target, (stage / staged_name).read_bytes())
+                    if on_progress and number % 250 == 0:
+                        on_progress(f"บันทึก {number:,}/{len(committed):,} เพลง · สำรองพร้อม Undo", number)
+            except BaseException:
+                try:
+                    _restore_files(root, zip_path, spec_list, strict=False)
+                    manifest["state"] = "rolled-back"
+                except Exception:
+                    manifest["state"] = "recovery-required"
+                _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False)
+                                              + "\n").encode("utf-8"))
+                raise
+            manifest["state"] = "committed"
+            _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False)
+                                          + "\n").encode("utf-8"))
+        except BaseException:
+            # No manifest = no file was edited. Orphans are cleaned, but never
+            # discard backups after writes have begun or recovery is required.
+            if not manifest_path.exists():
+                zip_path.unlink(missing_ok=True)
+                report_path.unlink(missing_ok=True)
+            raise
+
+    # Patch the cached group index only AFTER the durable commit. Invalid
+    # files remain in their original groups for later diagnosis/re-scan.
+    changed_ids = {row["songId"] for row in committed}
+    for group, members in chosen:
+        affected = {item["songId"] for item in members if item["songId"] in changed_ids}
+        if not affected:
+            continue
+        was_repeated = group["count"] >= 2
+        group["members"][:] = [item for item in group["members"]
+                              if item["songId"] not in affected]
+        group["count"] = len(group["members"])
+        if was_repeated and group["count"]:
+            group["queuePending"] = True
+        if not group["members"]:
+            snapshot["groups"].pop(group["id"], None)
+    for change in committed:
+        updated = json.loads(change["jsonPath"].read_text(encoding="utf-8"))
+        song_id = change["songId"]
+        snapshot["searchable"][song_id] = "\n".join(
+            _same(line["text"]).casefold() for line in updated["lines"])
+        for previous, item in change["edits"]:
+            identity = _group_id(previous["position"], new_text)
+            group = snapshot["groups"].setdefault(identity, {
+                "id": identity, "position": previous["position"],
+                "label": POSITIONS[previous["position"]][1],
+                "text": new_text, "count": 0, "members": []})
+            new_item = dict(item)
+            new_item["text"] = new_text
+            group["members"].append(new_item)
+            group["count"] = len(group["members"])
+    snapshot["groupCount"] = len(snapshot["groups"])
+    return {
+        "message": (f"แก้เนื้อร้อง {changed_lines:,} บรรทัดใน {len(committed):,} เพลง "
+                    f"· ข้ามผิดปกติ {len(rejected):,} เพลง · สำรองพร้อมย้อนคืน"),
+        "changedSongs": len(committed), "changedLines": changed_lines,
+        "changedFiles": len(spec_list), "changedGroups": len(chosen),
+        "estimatedLines": estimated_lines, "skippedInvalid": len(rejected),
+        "skippedExamples": rejected[:20], "skippedReport": str(report_path) if rejected else "",
+        "backupId": operation, "remainingGroups": snapshot["groupCount"],
+        "alreadyCorrect": unchanged,
+    }
+
+
 def apply(root, export, snapshot, group_id, new_text, backup_root,
           *, expected_count, cancelled=None, on_progress=None):
     """Backward-compatible single-group edit using one atomic multi-group batch."""
