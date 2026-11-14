@@ -405,6 +405,17 @@ try {
   assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/3 กลุ่ม/);
   await pc.click('[data-lyric-position="first"]');
   await pc.waitForFunction(()=>document.querySelector('#lyric-group-results input[data-lyric-group="intro-verified-1234"]')?.checked);
+  // A preset immediately fills the editable replacement; typing a new
+  // string reverts the selector to "custom" without losing song selection.
+  await pc.selectOption('#lyric-group-replacement-mode','X-Stage Karaoke');
+  assert.equal(await pc.locator('#lyric-group-replacement').inputValue(),'X-Stage Karaoke');
+  await pc.locator('#lyric-group-replacement').fill('ข้อความของฉัน');
+  assert.equal(await pc.locator('#lyric-group-replacement-mode').inputValue(),'custom');
+  await pc.selectOption('#lyric-group-replacement-mode','X-Stage Karaoke Online');
+  assert.equal(await pc.locator('#lyric-group-replacement').inputValue(),'X-Stage Karaoke Online');
+  await pc.selectOption('#lyric-group-replacement-mode','custom');
+  assert.equal(await pc.locator('#lyric-group-replacement').inputValue(),'X-Stage Karaoke Online',
+    'Switching to manual entry must retain selected preset for editing');
   await pc.locator('#lyric-group-replacement').fill('[X-Stage Karaoke Online]');
   await pc.waitForFunction(()=>document.querySelector('#lyric-group-selection')?.textContent.includes('7 บรรทัด'));
   await pc.click('#lyric-group-apply');
