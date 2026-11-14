@@ -41,3 +41,20 @@
   border:1px solid rgba(90,193,214,.45);background:#092c43;color:#f2fcff;
   font:inherit;font-size:14px}
 .xstage-font-control select:focus-visible{outline:2px solid #58dfd6;outline-offset:2px}
+
+/* Video metadata and real-timed LRC review: compact and keyboard accessible. */
+.cloud-import-video-editor{margin:14px 0;padding:13px;border:1px solid #337d93;background:#0d2d43;border-radius:12px;display:grid;gap:10px}
+.cloud-import-video-editor[hidden]{display:none!important}
+.cloud-import-video-editor h3{font-size:1rem;margin:0;color:#83f6d5}
+.cloud-import-video-editor p{margin:0;font-size:.76rem;color:#b7d5e3;line-height:1.6}
+.cloud-import-video-choice{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:10px}
+.cloud-import-video-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.cloud-import-video-editor label{display:flex;flex-direction:column;gap:4px;color:#d6edf6;font-size:.78rem;min-width:0}
+.cloud-import-video-editor input,.cloud-import-video-editor select,.cloud-import-video-editor textarea{display:block;width:100%;min-width:0;padding:9px;border:1px solid #41809b;background:#091e2d;color:#fff;border-radius:8px;font:inherit;font-size:.85rem}
+.cloud-import-video-editor textarea{min-height:100px;resize:vertical;line-height:1.5;font-family:ui-monospace,Consolas,monospace}
+.cloud-import-video-editor :is(input,select,textarea):focus-visible{outline:2px solid #66f2d8;outline-offset:2px}
+.cloud-import-video-tools{display:flex;gap:8px;flex-wrap:wrap}
+.cloud-import-video-tools button{flex:1 1 155px}
+#cloud-import-video-preview{max-width:100%;width:100%;max-height:320px;object-fit:contain;background:#000;border-radius:8px}
+.cloud-import-video-hint{white-space:pre-wrap;color:#f9d798!important}
+@media(max-width:600px){.cloud-import-video-choice,.cloud-import-video-fields{grid-template-columns:1fr}}
