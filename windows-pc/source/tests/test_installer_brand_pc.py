@@ -30,7 +30,7 @@ class PcBrandingRegression(unittest.TestCase):
         self.assertIn('XStageKaraoke.exe', installer)
         self.assertIn('X-Stage Karaoke PC.lnk', installer)
         self.assertIn('Start-Karaoke.cmd', installer)
-        self.assertIn('D:\\\\newKaraoke\\\\Karaoke', installer)
+        self.assertIn('D:\\newKaraoke\\Karaoke', installer)
 
 if __name__ == '__main__':
     unittest.main()
