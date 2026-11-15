@@ -44,7 +44,7 @@
     'lyric-head-tail': ['จัดการข้อความหัว–ท้ายเพลง', 'ตรวจข้อความซ้ำ 4 ตำแหน่ง · แทนที่ทั้งกลุ่มและย้อนคืนได้'],
     upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
     'pc-export': ['นำเข้า X-Stage Karaoke PC', 'นำเข้า AUDIO + LYRICS พร้อมสร้าง/อัปเดต songs.sqlite3 ตาม Karaoke PC'],
-    'created-json': ['ไฟล์ที่สร้างแล้ว', 'ตรวจโครงสร้างและจัดรูปแบบ Lyrics JSON ในคลัง XStageSong โดยมีไฟล์สำรอง'],
+    'created-json': ['สร้าง .XSK · Pro', 'เลือกเพลง MIDI + Lyrics JSON ที่สร้างแล้ว · ข้าม MIDI ซ้ำ · ไม่ทับไฟล์เดิม'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
   };
@@ -245,7 +245,7 @@
       aiStopPlayback();
       if(aiMicRecorder?.state==='recording')aiStopMic();
     }
-    if (name === 'created-json') void refreshCreatedJson();
+    if (name === 'created-json') { void refreshCreatedJson(); void refreshProLicense(); }
     if (name === 'ai-lyrics') void aiRefreshSongList();
     if (name === 'settings') void refreshHistory();
     if (name === 'lyric-head-tail') {
@@ -519,13 +519,16 @@
     $('xsk-edit-options').hidden=$('xsk-edit-choice').value!=='yes';
     $('pro-license-status').textContent=proEnabled
       ? 'เปิดใช้ X-Stage Song Studio PC Pro แล้ว'
-      : 'รุ่นทั่วไป · ส่งออก XSK เท่านั้น';
+      : 'รุ่นทั่วไป · โปรดเปิดใช้ Pro ในเมนูตั้งค่า';
+    if($('xsk-pro-badge'))$('xsk-pro-badge').textContent=proEnabled?'PRO ACTIVATED':'LOCKED · PRO';
+    if($('created-xsk-build'))$('created-xsk-build').disabled=!proEnabled||busy;
   }
   async function refreshProLicense() {
     try {
       const license=await api('/api/license/status');
       proEnabled=!!license.pro;
       syncXskControls();
+      if($('created-xsk-build'))$('created-xsk-build').disabled=!proEnabled||busy||createdJsonSelected.size===0;
     } catch(e) {
       proEnabled=false;syncXskControls();
     }
@@ -533,6 +536,7 @@
   function setFields() {
     $('create-source').value = prefs.source || '';
     $('create-workspace').value = prefs.workspace || '';
+    $('xsk-destination').value = prefs.xsk_folder || prefs.workspace || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
       ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · ใช้ Lyrics JSON เท่านั้น'
@@ -783,7 +787,7 @@
       const field = ({source:'create-source',workspace:'create-workspace',soundfont:'create-soundfont',
           download:'download-destination',upload_folder:'upload-folder',
           pc_export_folder:'pc-export-folder',
-          lyric_source:'lyric-group-folder',oauth:'settings-oauth'})[kind];
+          lyric_source:'lyric-group-folder',xsk_folder:'xsk-destination',oauth:'settings-oauth'})[kind];
       const element = $(field);
       if (kind === 'soundfont' && ![...element.options].some(opt => opt.value === response.path)) {
         element.add(new Option(response.path.split(/[\\/]/).pop(), response.path));
@@ -2338,6 +2342,14 @@
       busy = job.state === 'running';
       setGoogle(response.google);
       renderJob(job);updateButtons();
+      if (job.kind === 'created-xsk') {
+        const report='XSK '+fmtNum(job.completed||0)+'/'+fmtNum(job.total||0)+
+          ' · สร้าง '+fmtNum(job.created||0)+' · ข้าม MIDI ซ้ำ '+fmtNum(job.skipped||0)+
+          ' · ผิดพลาด '+fmtNum(job.errors||0);
+        $('created-xsk-status').textContent=report+'\\n'+(job.detail||job.stage||'')+
+          (job.state==='success'?'\\n'+(job.result?.message||'เสร็จสิ้น'):'');
+        if(!busy && job.state==='success' && lastJobState==='running')void refreshCreatedJson();
+      }
       if (job.kind === 'pc-export' && job.state === 'running')
         $('pc-export-status').textContent = job.stage || 'กำลังคัดลอกไฟล์เข้า XStageSong';
       if (job.kind === 'ai-export' && job.state === 'running')
@@ -2603,6 +2615,7 @@
     $('created-json-prev').disabled = value || createdJsonOffset <= 0;
     $('created-json-next').disabled = value || createdJsonOffset + createdJsonLimit >= createdJsonTotal;
     $('created-json-undo').disabled = value || !createdJsonLastBackup;
+    $('created-xsk-build').disabled = value || busy || !proEnabled || createdJsonSelected.size===0;
   }
   function createdJsonRender() {
     const tbody = $('created-json-rows');
@@ -2637,6 +2650,7 @@
     $('created-json-prev').disabled=createdJsonBusy||createdJsonOffset<=0;
     $('created-json-next').disabled=createdJsonBusy||createdJsonOffset+createdJsonLimit>=createdJsonTotal;
     $('created-json-summary').textContent='เลือกแล้ว '+createdJsonSelected.size+' ไฟล์ · พบในคลัง '+createdJsonTotal+' ไฟล์';
+    $('created-xsk-build').disabled=createdJsonBusy||busy||!proEnabled||createdJsonSelected.size===0;
   }
   async function refreshCreatedJson() {
     if (createdJsonBusy) return;
@@ -2687,6 +2701,31 @@
     finally{createdJsonBusyState(false);}
     void refreshCreatedJson();
   }
+  async function buildCreatedXsk() {
+    if (busy || createdJsonBusy) return message('มีงานอื่นกำลังทำงานอยู่');
+    if (!proEnabled) {
+      tab('settings');
+      return message('กรุณาเปิดใช้ X-Stage Song Studio PC Pro ด้วย License Key ในเมนูตั้งค่า');
+    }
+    const paths=[...createdJsonSelected];
+    if (!paths.length || paths.length>100) return message('กรุณาเลือกเพลงจากหน้านี้ 1–100 รายการ');
+    const folder=$('xsk-destination').value.trim();
+    if (!folder)return message('กรุณาเลือกโฟลเดอร์ปลายทาง XSK');
+    if (!await confirmStudio(
+      'สร้าง XSK จาก '+paths.length+' รายการ?\\nตรวจ MIDI ซ้ำด้วย SHA-256 และไม่เขียนทับ XSK หรือ Lyrics JSON เดิม',
+      'ยืนยันสร้าง .XSK Pro'))return;
+    try {
+      await config({xsk_folder:folder});
+      $('created-xsk-status').textContent='กำลังส่งงาน XSK '+paths.length+' เพลงไปยัง PC Engine…';
+      const started=await run('created-xsk',{paths});
+      if(!started)$('created-xsk-status').textContent='เริ่มงาน XSK ไม่สำเร็จ · ตรวจข้อความแจ้งเตือน';
+    }catch(error){$('created-xsk-status').textContent='เกิดข้อผิดพลาด: '+error.message;message(error.message);}
+  }
+  $('created-xsk-build').addEventListener('click',()=>{void buildCreatedXsk();});
+  $('xsk-destination').addEventListener('change',()=>{
+    const folder=$('xsk-destination').value.trim();
+    if(folder)void config({xsk_folder:folder}).catch(error=>message(error.message));
+  });
   $('created-json-refresh').addEventListener('click',()=>{void refreshCreatedJson();});
   $('created-json-search').addEventListener('change',()=>{createdJsonOffset=0;void refreshCreatedJson();});
   $('created-json-prev').addEventListener('click',()=>{createdJsonOffset=Math.max(0,createdJsonOffset-createdJsonLimit);void refreshCreatedJson();});
