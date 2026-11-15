@@ -80,6 +80,35 @@ class PCExportTests(unittest.TestCase):
         self.assertEqual(old.read_text(encoding="utf-8"),
                          '{"schemaVersion":1,"format":"foreign"}')
 
+    def test_karaoke_pc_catalog_and_lyrics_json_roundtrip(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "windows-pc" / "source"))
+        from karaoke.pc_stageweb import catalog_rows, source_lyrics, import_library
+        pc_export.publish(self.source, str(self.destination), export)
+        directory = self.destination / "XStageWeb"
+        base, rows = catalog_rows(str(self.destination))
+        self.assertEqual(base, directory)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["title"], "เพลงทดสอบ")
+        self.assertEqual(rows[0]["artist"], "ศิลปินทดสอบ")
+        self.assertEqual(rows[0]["code"], "00001")
+        self.assertEqual(rows[0]["format"], "M4A")
+        lyrics = source_lyrics(rows[0]["path"])
+        self.assertEqual(lyrics.lines[0].text, "สวัสดี")
+        self.assertEqual(lyrics.lines[0].start, 1.5)
+        self.assertEqual(lyrics.lines[0].words,
+                         [(1.5, "สวัส"), (2.0, "ดี")])
+        class FakeLibrary:
+            def __init__(self):
+                self.records = []
+            def upsert_catalog(self, records, preserve_playable=False):
+                self.records.extend(records)
+                return len(records)
+        lib = FakeLibrary()
+        count, errors, warnings = import_library(lib, str(directory))
+        self.assertEqual((count, errors, warnings), (1, 0, []))
+        self.assertEqual(lib.records[0]["path"], rows[0]["path"])
+
     def test_content_mismatch_never_overwrites_original(self):
         pc_export.publish(self.source, str(self.destination), export)
         target = self.destination / "XStageWeb" / "AUDIO" / "0" / "00001.m4a"
