@@ -71,7 +71,7 @@ jobs:
           cat > /tmp/notes.md <<'NOTES'
           X-Stage Song Studio PC Core Preview v0.3.16 Build 316 (Windows x64).
 
-          NEW: Check song codes against both the prior PC catalog and private XStageWeb
+          NEW: Check song codes against both the prior PC catalog and private XStageSong
           Google Drive catalog before building new audio or publishing. If the same code
           identifies DIFFERENT audio, the PC catalog gets a safe unused numeric gap or
           the next available code; remote songs are never rewritten. Existing M4A is
@@ -86,7 +86,7 @@ jobs:
           default Google Desktop OAuth client; import your own Desktop OAuth JSON
           once under Advanced Settings. Logging into Karaoke Online does not log
           the Song Studio PC in. The actual account's live Drive behavior was not
-          end-to-end tested. Never create a duplicate XStageWeb library because
+          end-to-end tested. Never create a duplicate XStageSong library because
           one is invisible to your OAuth client.
 
           Extract entire ZIP then run Start-Song-Studio.cmd.
