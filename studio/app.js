@@ -2635,6 +2635,7 @@
         if(cb.checked)createdJsonSelected.add(item.path);
         else createdJsonSelected.delete(item.path);
         $('created-json-summary').textContent='เลือกแล้ว '+createdJsonSelected.size+' ไฟล์ · จากทั้งหมด '+createdJsonTotal+' ไฟล์';
+        $('created-xsk-build').disabled=createdJsonBusy||busy||!proEnabled||createdJsonSelected.size===0;
       });
       selectCell.append(cb);
       const title=document.createElement('td');
