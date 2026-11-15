@@ -39,6 +39,7 @@ on:
       - "studio/style.css"
       - "studio/pro-design.css"
       - "scripts/test_songstudio_created_xsk.py"
+      - "scripts/test_songstudio_json_pro.py"
       - "studio/entry.js"
       - ".github/workflows/build-songstudio-pc-ready.yml"
   workflow_dispatch:
@@ -121,6 +122,9 @@ jobs:
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
           if ($LASTEXITCODE -ne 0) { throw "Song Studio PC engine regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Pro XSK regressions failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_json_pro.py -v
+          if ($LASTEXITCODE -ne 0) { throw "JSON Pro original, transcode, resume regression failed" }
           if ($LASTEXITCODE -ne 0) { throw "Pro XSK export safety and collision regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_pc_updates.py -v
           if ($LASTEXITCODE -ne 0) { throw "PC Ready update verification and SHA regression failed" }
