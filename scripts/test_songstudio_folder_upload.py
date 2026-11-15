@@ -150,6 +150,50 @@ class FolderUploadTests(unittest.TestCase):
             folder.upload(object(), str(self.root), create_new_library=True,
                           export=export, publisher=PublisherStub(), staging_root=self.root)
 
+    def test_flat_audio_lyrics_json_directories_publish(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        media = self.root / "AUDIO" / "00001.mp3"
+        lyric = self.root / "LYRICS" / "00001.json"
+        media.parent.mkdir()
+        lyric.parent.mkdir()
+        media.write_bytes(b"ID3" + b"x" * 2500)
+        document = export.lrc_to_json("[00:05.00]ทดสอบเนื้อร้อง JSON", "00001")
+        lyric.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(folder.report(str(self.root))["ready"], 1)
+        publisher = PublisherStub()
+        result = folder.upload(object(), str(self.root), create_new_library=True,
+                               export=export, publisher=publisher, staging_root=self.root)
+        self.assertEqual(result["newSongs"], 1)
+        self.assertEqual(media.read_bytes(), b"ID3" + b"x" * 2500)
+
+    def test_midi_json_pair_in_nested_folders(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        media = self.root / "Archive" / "AUDIO" / "00010.mid"
+        lyric = self.root / "Archive" / "LYRICS" / "00010.json"
+        media.parent.mkdir(parents=True)
+        lyric.parent.mkdir(parents=True)
+        media.write_bytes(b"MThd" + b"m" * 50)
+        document = export.lrc_to_json("[00:03.00]ทดสอบ MIDI", "00010")
+        lyric.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(folder.report(str(self.root))["ready"], 1)
+        publisher = PublisherStub()
+        result = folder.upload(object(), str(self.root), create_new_library=True,
+                               export=export, publisher=publisher, staging_root=self.root)
+        self.assertEqual(result["newSongs"], 1)
+
+    def test_invalid_json_is_not_accepted_as_lyrics(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        media = self.root / "A001.mp3"
+        lyric = self.root / "A001.json"
+        media.write_bytes(b"ID3" + b"x" * 2500)
+        lyric.write_text('{"schemaVersion":1,"lines":[]}', encoding="utf-8")
+        report = folder.report(str(self.root))
+        self.assertEqual(report["ready"], 0)
+        self.assertGreater(report["incomplete"], 0)
+
     def test_nested_folders_are_scanned_and_pairs_found(self):
         self.audio.unlink()
         self.lrc.unlink()
