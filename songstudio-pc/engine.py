@@ -2430,7 +2430,8 @@ def ai_lyrics_draft(song_id):
              (discovered["title"] if str(row.get("title") or "") == source.stem else
               str(row.get("title") or "")) or source.stem)
     artist = (str(note.get("artist") or "").strip() or
-              str(row.get("artist") or "").strip() or discovered["artist"])
+              str(row.get("artist") or "").strip() or
+              str(discovered["artist"] or "").strip() or "X-Stage Song Studio")
     draft = AI_LYRICS.load_draft(DATA, source)
     ready, reason = AI_LYRICS.readiness(RUNTIME)
     if ready and not ffmpeg_binary():
