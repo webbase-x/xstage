@@ -45,7 +45,7 @@ async function routeDrive(route){
     const parent=q.match(/'([^']+)' in parents/)?.[1]||'root';
     let items=group(parent);
     if(q.includes("name='current.json'"))items=items.filter(x=>x.name==='current.json');
-    if(q.includes("name='StageWeb' or name='XStageWeb'"))items=items.filter(x=>['StageWeb','XStageWeb'].includes(x.name));
+    if(q.includes("name='XStageSong'"))items=items.filter(x=>x.name==='XStageSong');
     return send(200,{files:items});
   }
   if(url.pathname==='/drive/v3/files'&&method==='POST'){
@@ -181,7 +181,7 @@ try{
   const status=await page.locator('#cloud-import-status').textContent();
   assert.ok(status.includes('เพลงใหม่ 4'),status);
   assert.ok(status.includes('SoundFont 1'),status);
-  assert.equal(rootCreated,1,'Only one private XStageWeb root should be created');
+  assert.equal(rootCreated,1,'Only one private XStageSong root should be created');
   assert.ok([...records.values()].some(x=>x.name==='current.json'),'Playable DB pointer must be created');
   const pointer=[...records.values()].find(x=>x.name==='current.json');
   assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,4);
