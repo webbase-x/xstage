@@ -122,7 +122,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 raise ValueError("ชื่อเพลงต้นทางไม่สามารถใช้เป็นรหัสได้")
             # The file name is a stable content identity, avoiding collisions
             # between equal song codes in different source subfolders.
-            slug = source_hash[:24]
+            slug = source_hash[:24] + ("-raw" if output_format == "original" else "-" + output_format)
             bucket = export.source_bucket(media.name)
             relative_audio = "audio/" + bucket + "/" + slug + (
                 media.suffix.lower() if output_format == "original"
