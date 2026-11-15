@@ -125,13 +125,18 @@ assert.ok(js.includes("$('lyric-group-replacement-mode').addEventListener('chang
 assert.ok(css.includes('.lyric-group-edit .lyric-replacement-mode'),
   'Preset menu must fit inside the lyric editor');
 assert.ok(js.includes("run('lyric-groups-scan'"),'Missing grouped text scan job');
-assert.ok(html.includes('id="create-export-format"') &&
-  html.includes('<option value="xstage" selected>') &&
-  html.includes('<option value="m4a">'),
-  'Song Studio must default to original MIDI + timed JSON with optional M4A');
-assert.ok(js.includes("export_format:audioOnly?'m4a'") &&
-  js.includes("'create-export-format': 'export_format'"),
-  'Export selection must reach the engine and persist');
+assert.ok(html.includes('id="create-output-kind"') &&
+  html.includes('<option value="xsk">') &&
+  html.includes('<option value="xstage">') &&
+  html.includes('<option value="m4a">') &&
+  html.includes('id="xsk-edit-choice"') &&
+  html.includes('id="pro-license-key"'),
+  'Default XSK export, Pro-only legacy choices and source-step head/tail option required');
+assert.ok(js.includes("export_format:exportFormat") &&
+  js.includes("head_find:$('xsk-head-find').value") &&
+  js.includes("/api/license/status") &&
+  js.includes("/api/license/activate"),
+  'Build settings must reach Engine and verify signed Pro entitlement');
 for(const id of ['lyric-group-folder','lyric-group-reset','lyric-group-source-status']){
   assert.ok(html.includes('id="'+id+'"'), 'JSON lyrics editor folder selector missing: '+id);
 }
