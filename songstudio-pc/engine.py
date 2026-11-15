@@ -2902,6 +2902,8 @@ class Handler(BaseHTTPRequestHandler):
                     PREFS.get("pc_export_folder", ""), _song_export_module()))
             elif path == "/api/upload-folder/inspect":
                 self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module(), ncn=NCN))
+            elif path == "/api/license/status":
+                self._json({"pro": _module("pro_license.py", "xstage_pro_license").enabled(DATA)})
             elif path == "/api/code-registry":
                 self._json(code_registry_preview())
             elif path == "/api/environment":
@@ -3061,7 +3063,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("คำสั่งไม่ถูกต้อง")
             path = urllib.parse.urlsplit(self.path).path
-            if path == "/api/config":
+            if path == "/api/license/activate":
+                license_module = _module("pro_license.py", "xstage_pro_license")
+                license_module.activate(DATA, payload.get("key", ""))
+                self._json({"pro": True})
+            elif path == "/api/config":
                 previous_preferences = HISTORY.safe_preferences(PREFS)
                 previous_catalog_key = (PREFS["source"], PREFS["workspace"])
                 previous_lyric_source = PREFS["lyric_source"]
@@ -3073,6 +3079,9 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("มีงานกำลังดำเนินการอยู่ · เปลี่ยนโฟลเดอร์ต้นทางไม่ได้")
                     if requested.strip():
                         lyric_source_root(requested.strip())
+                if ("export_format" in payload and payload["export_format"] != "xsk"
+                        and not _module("pro_license.py", "xstage_pro_license").enabled(DATA)):
+                    raise ValueError("ต้องเปิดใช้ License Key Pro ก่อนเลือกส่งออกแบบเดิม")
                 if "code_style" in payload and payload["code_style"] not in ("source", "numeric", "letters", "alphanumeric"):
                     raise ValueError("รูปแบบรหัสเพลงไม่ถูกต้อง")
                 if "code_length" in payload:
