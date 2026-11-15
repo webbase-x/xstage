@@ -83,7 +83,7 @@ class LyricsCanvas(tk.Canvas):
             self.create_text(left, middle, text=prefix, fill=TEAL, font=font, anchor="w")
         self.create_text(width / 2, middle + 65, text=upcoming, fill=MUTED,
                          font=("Leelawadee UI", 17), width=max(30, width - 60), justify="center")
-        self.create_text(width - 20, height - 20, text="X-STAGE KARAOKE", anchor="se", fill="#30415d",
+        self.create_text(width - 20, height - 20, text="X-STAGE KARAOKE PC", anchor="se", fill="#30415d",
                          font=("Segoe UI", 10, "bold"))
 
 

@@ -20,6 +20,7 @@ class PcBrandingRegression(unittest.TestCase):
             self.assertIsNone(re.search(r'X-Stage Karaoke(?! PC| Online)', source), name)
         installer = (REPO / 'windows-pc/installer/XStageKaraoke.iss').read_text(encoding='utf-8')
         self.assertIn('AppName=X-Stage Karaoke PC', installer)
+        self.assertIn('X-STAGE KARAOKE PC', (ROOT / 'karaoke/remote_page.py').read_text(encoding='utf-8'))
         self.assertIn('OutputBaseFilename=X-Stage-Karaoke-PC-Windows-', installer)
         updater = (REPO / 'windows-pc/Check-Update.ps1').read_text(encoding='utf-8-sig')
         self.assertIn('X-Stage-Karaoke-PC-Windows-v', updater)
