@@ -1414,7 +1414,7 @@ def build_library(rows, mode, options):
     5. Fsync each finished record, then atomically replace current.json once.
     """
     export = _song_export_module()
-    export_format = options.get("export_format", PREFS.get("export_format", "xstage"))
+    export_format = options.get("export_format", "xstage")
     if export_format not in ("xstage", "m4a"):
         raise ValueError("ประเภทส่งออกต้องเป็น MIDI/Audio + Lyrics JSON หรือ M4A + Lyrics JSON")
     root = export.songs_root(PREFS["workspace"])
