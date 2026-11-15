@@ -1,4 +1,4 @@
-"""Regression tests for private XStageWeb v4 AUDIO/LYRICS Drive layout and legacy safety."""
+"""Regression tests for private XStageSong v4 AUDIO/LYRICS Drive layout and legacy safety."""
 from __future__ import annotations
 
 import importlib.util
@@ -12,10 +12,9 @@ layout = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(layout)
 
 
-class XStageWebLayoutTests(unittest.TestCase):
+class XStageSongLayoutTests(unittest.TestCase):
     def test_new_root_and_pointer_compatibility(self):
-        self.assertEqual(layout.ONLINE_ROOT, "XStageWeb")
-        self.assertEqual(layout.LEGACY_ONLINE_ROOT, "StageWeb")
+        self.assertEqual(layout.ONLINE_ROOT, "XStageSong")
         self.assertEqual(layout.LAYOUT_VERSION, 4)
 
     def test_all_media_use_one_flat_audio_folder(self):
@@ -48,27 +47,26 @@ class XStageWebLayoutTests(unittest.TestCase):
                 with self.assertRaises(layout.PublishError):
                     layout.media_drive_path(name, code="123")
 
-    def test_existing_legacy_root_reused_without_new_root(self):
+    def test_existing_canonical_root_reused_without_new_root(self):
         class Drive:
             def __init__(self):
                 self.made = []
             def list_children(self, parent):
-                return ([{"id": "old-123", "name": "StageWeb",
+                return ([{"id": "existing-123", "name": "XStageSong",
                           "mimeType": layout.FOLDER_MIME}]
                         if parent == "root" else [])
             def folder(self, parent, name):
                 self.made.append(name)
                 raise AssertionError("Must not create a duplicate root")
         drive = Drive()
-        self.assertEqual(layout.OnlinePublisher(drive)._existing_root(), "old-123")
+        self.assertEqual(layout.OnlinePublisher(drive)._existing_root(), "existing-123")
         self.assertFalse(drive.made)
 
-    def test_two_visible_roots_stop_instead_of_merging(self):
+    def test_two_visible_canonical_roots_stop_instead_of_merging(self):
         class Drive:
             def list_children(self, parent):
-                return [{"id": str(i), "name": name,
-                         "mimeType": layout.FOLDER_MIME}
-                        for i, name in enumerate(("StageWeb", "XStageWeb"))]
+                return [{"id": str(i), "name": "XStageSong",
+                         "mimeType": layout.FOLDER_MIME} for i in range(2)]
         with self.assertRaises(layout.PublishError):
             layout.OnlinePublisher(Drive())._existing_root()
 
