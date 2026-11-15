@@ -245,9 +245,11 @@ class IndependentAIImportTests(unittest.TestCase):
 
     def test_ai_draft_not_auto_published_and_review_required(self):
         song = engine.import_ai_audio(str(self.one))["song"]
-        with patch.object(engine.AI_LYRICS, "load_draft", return_value=None):
-            with self.assertRaisesRegex(ValueError, "ยังไม่มีฉบับร่าง"):
-                engine.approve_ai_lyrics(song["id"], "[00:01.00]เนื้อร้อง")
+        # User-reviewed source LRC can be saved without running Whisper.
+        with patch.object(engine.AI_LYRICS, "load_draft", return_value=None), \
+             patch.object(engine, "NOTES_FILE", self.root / "song-metadata.json"):
+            approved=engine.approve_ai_lyrics(song["id"], "[00:01.00]เนื้อร้อง")
+        self.assertTrue(approved["ok"])
         draft = {"source": "AI_DRAFT_UNVERIFIED",
                  "rawLrc": "[00:01.00]ร่างเนื้อร้อง", "lines": [
                      {"startTime":1.0,"endTime":3.0,"text":"ร่างเนื้อร้อง"}]}
@@ -262,6 +264,57 @@ class IndependentAIImportTests(unittest.TestCase):
             self.assertTrue(response["ok"])
             self.assertEqual(response["lines"], 2)
             self.assertIn("[00:03.15]", engine.NOTES[song["path"]]["lyrics"])
+
+
+    def test_selecting_audio_prefills_title_artist_and_timed_sidecar(self):
+        source_before=self.one.read_bytes()
+        self.one.with_suffix(".lrc").write_text(
+            "[ti:ชื่อเพลงในไฟล์]\\n[ar:ผู้ร้องในไฟล์]\\n[00:01.00]คำร้องเดิม\\n"
+            "[00:03.25]ท่อนสอง", encoding="utf-8")
+        with patch.object(engine, "ffmpeg_binary", return_value=None):
+            row=engine.import_ai_audio(str(self.one))["song"]
+            self.assertEqual(row["title"], "ชื่อเพลงในไฟล์")
+            self.assertEqual(row["artist"], "ผู้ร้องในไฟล์")
+            with patch.object(engine.AI_LYRICS, "load_draft", return_value=None):
+                data=engine.ai_lyrics_draft(row["id"])
+        self.assertEqual(data["title"], "ชื่อเพลงในไฟล์")
+        self.assertEqual(data["artist"], "ผู้ร้องในไฟล์")
+        self.assertIn("[00:03.25]ท่อนสอง", data["sourceLrc"])
+        self.assertEqual(data["sourcePlainLyrics"], "")
+        self.assertEqual(self.one.read_bytes(), source_before)
+
+        with patch.object(engine, "NOTES_FILE", self.root / "song-metadata.json"):
+            saved=engine.save_ai_source_details(
+                row["id"], "ชื่อแก้แล้ว", "นักร้องแก้แล้ว", "คำร้องที่ผู้ใช้แก้")
+        self.assertTrue(saved["ok"])
+        self.assertEqual(self.one.read_bytes(), source_before)
+        self.assertEqual(engine.AI_IMPORTED[row["id"]]["title"], "ชื่อแก้แล้ว")
+        self.assertEqual(engine.NOTES[row["path"]]["plain_lyrics"], "คำร้องที่ผู้ใช้แก้")
+        with patch.object(engine.AI_LYRICS, "load_draft", return_value=None):
+            data=engine.ai_lyrics_draft(row["id"])
+        self.assertEqual(data["title"], "ชื่อแก้แล้ว")
+        self.assertEqual(data["artist"], "นักร้องแก้แล้ว")
+        self.assertEqual(data["savedPlainLyrics"], "คำร้องที่ผู้ใช้แก้")
+
+    def test_embedded_audio_tags_supply_plain_lyrics_without_false_timestamps(self):
+        from types import SimpleNamespace
+        probe=self.root/"ffprobe"
+        probe.write_text("fake", encoding="utf-8")
+        meta={"format":{"tags":{
+            "title":"ชื่อเพลงจากแท็ก", "artist":"ผู้ร้องจากแท็ก",
+            "lyrics":"เนื้อร้องบรรทัดแรก\\nเนื้อร้องบรรทัดสอง"}}}
+        response=SimpleNamespace(returncode=0, stdout=json.dumps(
+            meta,ensure_ascii=False).encode("utf-8"))
+        with patch.object(engine,"ffmpeg_binary",return_value=str(self.root/"ffmpeg")), \
+             patch.object(engine.subprocess,"run",return_value=response):
+            row=engine.import_ai_audio(str(self.one))["song"]
+            with patch.object(engine.AI_LYRICS, "load_draft", return_value=None):
+                data=engine.ai_lyrics_draft(row["id"])
+        self.assertEqual(row["title"], "ชื่อเพลงจากแท็ก")
+        self.assertEqual(row["artist"], "ผู้ร้องจากแท็ก")
+        self.assertEqual(data["sourcePlainLyrics"], "เนื้อร้องบรรทัดแรก\\nเนื้อร้องบรรทัดสอง")
+        self.assertEqual(data["sourceLrc"], "")
+        self.assertEqual(data["lyricsSource"], "แท็กเนื้อร้องในไฟล์เสียง")
 
 
 if __name__ == "__main__":
