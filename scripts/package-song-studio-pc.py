@@ -20,6 +20,7 @@ FILES = {
     "songstudio-pc/online_publish.py": "online_publish.py",
     "songstudio-pc/code_registry.py": "code_registry.py",
     "songstudio-pc/created_json_manager.py": "created_json_manager.py",
+    "songstudio-pc/created_xsk_export.py": "created_xsk_export.py",
     "songstudio-pc/import_preview.py": "import_preview.py",
 "songstudio-pc/xsk_package.py": "xsk_package.py",
     "songstudio-pc/xsk_keys.py": "xsk_keys.py",
@@ -37,6 +38,7 @@ FILES = {
     "studio/index.html": "studio/index.html",
     "studio/app.js": "studio/app.js",
     "studio/style.css": "studio/style.css",
+    "studio/pro-design.css": "studio/pro-design.css",
     "studio/entry.js": "studio/entry.js",
 }
 
