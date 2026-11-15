@@ -490,6 +490,8 @@
     $('create-preset').value = prefs.midi_preset || 'balanced';
     $('create-mode').value = prefs.mode || 'original';
     $('create-export-format').value = prefs.export_format || 'xstage';
+    $('create-code-style').value = prefs.code_style || 'source';
+    $('create-code-length').value = prefs.code_length || '6';
   }
   function soundfontOptions(items) {
     const chooser = $('create-soundfont'); const current = prefs.soundfont || '';
@@ -686,6 +688,7 @@
   const fields = {'create-source': 'source', 'create-workspace': 'workspace',
                   'create-soundfont': 'soundfont', 'create-preset': 'midi_preset',
                   'create-mode': 'mode', 'create-export-format': 'export_format',
+                  'create-code-style': 'code_style', 'create-code-length': 'code_length',
                   'download-destination': 'download',
                   'upload-folder': 'upload_folder',
                   'pc-export-folder': 'pc_export_folder',
@@ -1889,7 +1892,7 @@
       buildFeedback('starting', 'กำลังตรวจสอบไฟล์ต้นฉบับและพื้นที่ว่าง…',
         'ยังไม่เริ่มสร้างไฟล์ · ตรวจสอบรายการที่เลือกอยู่');
       await saveInputs(['create-source','create-soundfont','create-preset',
-         'create-mode','create-export-format']);
+         'create-mode','create-export-format','create-code-style','create-code-length']);
       const ids = selectedIDs();
       const estimate = await post('/api/estimate', {ids});
       if (!estimate.songs) throw new Error('ไม่พบเพลงที่เลือกในฐานข้อมูล กรุณาสแกนโฟลเดอร์ใหม่และเลือกเพลงอีกครั้ง');
