@@ -218,17 +218,21 @@ def existing_local_catalog(folder, export):
 def report(folder, export=None, ncn=None):
     library = existing_local_catalog(folder, export)
     if library is not None:
-        return {"folder": str(library["root"]), "fileCount": library["pointerCount"],
+        kinds = {}
+        for row in library["rows"]:
+            kind = Path((row.get("audio") or {}).get("path") or "").suffix.lstrip(".").upper()
+            kinds[kind or "UNKNOWN"] = kinds.get(kind or "UNKNOWN", 0) + 1
+        return {"folder": str(library["root"]), "fileCount": len(_indexed(library["root"])),
                 "ready": len(library["rows"]), "incomplete": library["incomplete"],
                 "unsupported": 0, "examples": [],
-                "kinds": {"M4A": len(library["rows"])}, "source": "XStageSong catalog"}
+                "kinds": kinds, "source": "XStageSong catalog"}
     result = scan(folder, ncn=ncn)
     return {"folder": result["folder"], "fileCount": result["fileCount"],
             "ready": result["total"], "incomplete": len(result["incomplete"]),
             "unsupported": len(result["unsupported"]),
             "examples": result["incomplete"][:12],
             "kinds": {kind: sum(row["kind"] == kind for row in result["complete"])
-                      for kind in ("MP3", "M4A", "AVI", "MPG", "VCD", "WMV", "NCN")}}
+                      for kind in sorted({row["kind"] for row in result["complete"]})}}
 
 
 def upload(drive, folder, *, create_new_library=False, cancelled=None,
