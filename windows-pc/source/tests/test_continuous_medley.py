@@ -10,7 +10,7 @@ class WindowsUpdateParityTests(unittest.TestCase):
     def test_build_only_updates_require_newer_build(self):
         from karaoke.program_updates import validate_manifest
         sample={'available':True,'version':'1.0.76','build':1077,
-                'installer_file':'X-Stage-Karaoke-Windows-v1.0.76-build1077.exe',
+                'installer_file':'X-Stage-Karaoke-PC-Windows-v1.0.76-build1077.exe',
                 'sha256':'a'*64}
         self.assertIsNotNone(validate_manifest(sample,'1.0.76',1076))
         self.assertIsNone(validate_manifest(sample,'1.0.76',1077))
