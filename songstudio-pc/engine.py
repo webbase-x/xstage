@@ -2801,6 +2801,14 @@ class Handler(BaseHTTPRequestHandler):
                     "AI lyrics transcription": AI_LYRICS.available(RUNTIME)})
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
+            elif path == "/api/created-json":
+                module = _module("created_json_manager.py", "xstage_created_json_manager")
+                self._json(module.list_created(
+                    _song_export_module().songs_root(PREFS["workspace"]),
+                    _song_export_module(),
+                    search=query.get("search", [""])[0],
+                    offset=max(0, int(query.get("offset", ["0"])[0])),
+                    limit=max(1, min(200, int(query.get("limit", ["50"])[0])))))
             elif path == "/api/songs":
                 rows = visible_files(query.get("search", [""])[0])
                 if query.get("audio_only", ["0"])[0] == "1":
@@ -2998,6 +3006,24 @@ class Handler(BaseHTTPRequestHandler):
                     restore_song_catalog()
                 self._json({"ok": True, "preferences": dict(PREFS),
                             "message": "คืนค่าจากประวัติและบันทึกอัตโนมัติแล้ว"})
+            elif path == "/api/created-json/format":
+                with LOCK:
+                    if JOB["state"] == "running":
+                        raise ValueError("มีงานอื่นกำลังดำเนินการ · ไม่จัดรูปแบบ JSON ระหว่างสร้างเพลง")
+                module = _module("created_json_manager.py", "xstage_created_json_manager")
+                self._json(module.format_created(
+                    _song_export_module().songs_root(PREFS["workspace"]),
+                    _song_export_module(), payload.get("paths"),
+                    dry_run=payload.get("dryRun") is not False))
+            elif path == "/api/created-json/restore":
+                with LOCK:
+                    if JOB["state"] == "running":
+                        raise ValueError("ไม่ย้อนคืนระหว่างมีงานกำลังสร้างเพลง")
+                module = _module("created_json_manager.py", "xstage_created_json_manager")
+                self._json(module.restore_created(
+                    _song_export_module().songs_root(PREFS["workspace"]),
+                    _song_export_module(), payload.get("path"),
+                    payload.get("backup"), payload.get("sha256")))
             elif path == "/api/lyric-groups-plan":
                 with LOCK:
                     snapshot = LYRIC_TEXT_INDEX
