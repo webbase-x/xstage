@@ -1,0 +1,40 @@
+name: XStageSong storage cross-platform audit
+on:
+  push:
+    paths:
+      - 'app.js'
+      - 'cloud-import.js'
+      - 'index.html'
+      - 'version.json'
+      - 'package.json'
+      - 'studio/**'
+      - 'songstudio-pc/**'
+      - 'windows-pc/source/karaoke/**'
+      - 'android-tv/app/src/main/java/**'
+      - 'scripts/check_xstagesong_storage.py'
+      - '.github/workflows/check-xstagesong-storage.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  storage-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check all active folder names and versioned Web assets
+        run: python3 scripts/check_xstagesong_storage.py
+      - name: Python syntax and the local/online/PC library integration tests
+        run: |
+          python3 -m compileall -q songstudio-pc windows-pc/source/karaoke
+          PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_pc.py' -q
+          PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_pc_export.py' -q
+          PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_drive_layout.py' -q
+          PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_online_publish.py' -q
+          PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_folder_upload.py' -q
+      - name: JavaScript root discovery and import contracts
+        run: |
+          node --check app.js
+          node --check cloud-import.js
+          node --check studio/app.js
+          node scripts/drive-list-pagination-test.mjs
+          node scripts/cloud-import-contract-test.mjs
