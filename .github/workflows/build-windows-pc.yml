@@ -17,6 +17,12 @@ on:
 permissions:
   contents: read
 
+# Only the newest source is useful for the installer candidate. Stop obsolete
+# runs rather than doing the complete Windows regression 10+ times on push.
+concurrency:
+  group: xstage-windows-pc-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   inspect-windows-source:
     runs-on: ubuntu-latest
