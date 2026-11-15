@@ -524,6 +524,13 @@
     if($('xsk-pro-badge'))$('xsk-pro-badge').textContent=proEnabled?'PRO ACTIVATED':'LOCKED · PRO';
     if($('created-xsk-build'))$('created-xsk-build').disabled=!proEnabled||busy;
     $('json-pro-start').disabled=!proEnabled||busy;
+    $('xsk-stream-build').disabled=busy;
+    const directXsk=choice.value==='xsk';
+    $('tab-create').classList.toggle('xsk-auto-mode',directXsk);
+    if(directXsk && createStep!==1){
+      createStep=1;
+      updateCreateWizard();
+    }
   }
   async function refreshProLicense() {
     try {
@@ -540,6 +547,8 @@
     $('create-workspace').value = prefs.workspace || '';
     $('xsk-destination').value = prefs.xsk_folder || prefs.workspace || '';
     $('xsk-build-folder').value = prefs.xsk_folder || '';
+    $('xsk-stream-code-style').value = prefs.code_style || 'source';
+    $('xsk-stream-code-length').value = prefs.code_length || '6';
     $('json-pro-source').value = prefs.json_source || '';
     $('json-pro-destination').value = prefs.json_destination || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
@@ -768,6 +777,8 @@
                   'upload-folder': 'upload_folder',
                   'pc-export-folder': 'pc_export_folder',
                   'xsk-build-folder': 'xsk_folder',
+                  'xsk-stream-code-style': 'code_style',
+                  'xsk-stream-code-length': 'code_length',
                   'json-pro-source': 'json_source',
                   'json-pro-destination': 'json_destination',
                   'lyric-group-folder': 'lyric_source',
@@ -1967,6 +1978,41 @@
     }
   }
   const selectedIDs = () => [...selected];
+  async function startStreamingXsk() {
+    if(busy)return message('มีงานอื่นกำลังทำอยู่ · หยุดหรือรอให้เสร็จก่อน');
+    try{
+      await saveInputs(['create-source','xsk-build-folder',
+                        'xsk-stream-code-style','xsk-stream-code-length']);
+      const source=(prefs.source||'').trim();
+      const destination=(prefs.xsk_folder||prefs.workspace||'').trim();
+      const count=Number($('xsk-stream-code-length').value);
+      if(!source||!destination)throw new Error('กรุณาเลือกต้นทางและปลายทาง');
+      if(!Number.isInteger(count)||count<1||count>12)
+        throw new Error('จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12');
+      const approved=await confirmStudio(
+        'สร้าง .XSK จาก MIDI/MID/KAR ทุกเพลงที่มีเนื้อร้องพร้อมเวลาในโฟลเดอร์ย่อยทั้งหมด'+
+        '\\nต้นทาง: '+source+'\\nปลายทาง: '+destination+
+        '\\nรหัส: '+$('xsk-stream-code-style').selectedOptions[0].textContent+
+        ' · '+count+' หลัก'+
+        '\\n\\nเริ่มสร้างทันทีจากชุดแรก (32 เพลง) และสแกนชุดถัดไปพร้อมกัน'+
+        '\\nตรวจ SHA-256 ข้ามซ้ำ · ไม่เขียนทับต้นฉบับหรือ XSK เดิม'+
+        '\\nยังไม่ทราบจำนวนเพลงทั้งหมดจนกว่าจะสแกนเสร็จ',
+        'ยืนยันสแกนและสร้าง .XSK อัตโนมัติ');
+      if(!approved)return;
+      $('xsk-stream-status').textContent='กำลังส่งงานสแกนและสร้าง .XSK แบบต่อเนื่อง…';
+      const started=await run('xsk-stream',{
+        source,xsk_folder:destination,
+        code_style:$('xsk-stream-code-style').value,
+        code_length:String(count)
+      });
+      if(started)$('xsk-stream-status').textContent=
+        'PC Engine รับงานแล้ว · จัดคิวครั้งละ 32 เพลง · ตรวจความคืบหน้าที่แผงงานด้านล่าง';
+    }catch(error){
+      $('xsk-stream-status').textContent='เริ่มงานไม่สำเร็จ: '+error.message;
+      message(error.message);
+    }
+  }
+
   async function startBuild(audioOnly) {
     if (busy) return message('มีงานกำลังดำเนินการอยู่ กรุณารอให้จบก่อน');
     if (!selected.size) {
@@ -2849,6 +2895,7 @@
     try{await saveInputs(['create-source']);await run('scan',{full:true});}catch(e){message(e.message);}
   });
   $('create-build-show-log').addEventListener('click',showBuildLog);
+  $('xsk-stream-build').addEventListener('click',()=>{void startStreamingXsk();});
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
