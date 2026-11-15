@@ -1,6 +1,6 @@
 """Preflight private songs, then publish verified playable files and online DB.
 
-Existing StageWeb catalogs retain their original publishing logic. New MP3/M4A
+Existing XStageSong catalogs retain their original publishing logic. New MP3/M4A
 and timed LRC pairs are staged for the same verified online publisher.
 Unsupported VIDEO/NCN never appear as falsely playable catalog rows.
 """
@@ -181,13 +181,13 @@ def scan(folder, ncn=None):
 
 
 def existing_local_catalog(folder, export):
-    """Detect a complete locally generated Song Studio StageWeb library."""
+    """Detect a complete locally generated Song Studio XStageSong library."""
     if export is None:
         return None
     chosen = _safe_root(folder)
     candidates = [chosen]
-    if chosen.name.casefold() != "stageweb":
-        candidates.append(chosen / "StageWeb")
+    if chosen.name.casefold() != "xstagesong":
+        candidates.append(chosen / "XStageSong")
     for root in candidates:
         if not (root / "current.json").is_file():
             continue
@@ -205,7 +205,7 @@ def report(folder, export=None, ncn=None):
         return {"folder": str(library["root"]), "fileCount": library["pointerCount"],
                 "ready": len(library["rows"]), "incomplete": library["incomplete"],
                 "unsupported": 0, "examples": [],
-                "kinds": {"M4A": len(library["rows"])}, "source": "StageWeb catalog"}
+                "kinds": {"M4A": len(library["rows"])}, "source": "XStageSong catalog"}
     result = scan(folder, ncn=ncn)
     return {"folder": result["folder"], "fileCount": result["fileCount"],
             "ready": result["total"], "incomplete": len(result["incomplete"]),
@@ -232,7 +232,7 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
     library = existing_local_catalog(folder, export)
     if library is not None:
         if not library["rows"]:
-            raise ValueError("ไม่พบเพลงพร้อมเล่นใน StageWeb Catalog ที่เลือก")
+            raise ValueError("ไม่พบเพลงพร้อมเล่นใน XStageSong Catalog ที่เลือก")
         # Validate each pair before publishing. Corrupt lyrics must be
         # reported as skipped; they must not invalidate all healthy songs.
         if validator is None:
@@ -270,7 +270,7 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
     # Check the live catalogue before creating local files or modifying Drive.
     preview = publisher.read_code_registry(allow_missing_root=create_new_library)
     if not preview.get("visible") and not create_new_library:
-        raise ValueError("ไม่พบ XStageWeb ที่มองเห็นได้ · ต้องยืนยันสร้างคลังใหม่")
+        raise ValueError("ไม่พบ XStageSong ที่มองเห็นได้ · ต้องยืนยันสร้างคลังใหม่")
     staging_root = Path(staging_root).expanduser()
     staging_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="xstage-upload-", dir=staging_root) as scratch:
@@ -397,21 +397,21 @@ def upload_soundfont(drive, path, *, create_new_library=False,
                      cancelled=None, progress=None):
     """Upload private SF2/SF3 without altering the playable songs catalog.
 
-    XStageWeb/AUDIO/ contains immutable SF2/SF3 alongside other media. Until the browser
+    XStageSong/AUDIO/ contains immutable SF2/SF3 alongside other media. Until the browser
     MIDI engine implements loading these private Drive IDs, it is not a claim
     that a SoundFont can be played in Karaoke Online.
     """
     info = inspect_soundfont(path)
     roots = [item for item in drive.list_children("root")
-             if item.get("name") in ("XStageWeb", "StageWeb")
+             if item.get("name") == "XStageSong"
              and item.get("mimeType") == FOLDER]
     if len(roots) > 1:
-        raise ValueError("พบ StageWeb/XStageWeb ซ้ำกัน · หยุดก่อนอัปโหลด SoundFont")
+        raise ValueError("พบ XStageSong มากกว่าหนึ่งโฟลเดอร์ · หยุดก่อนอัปโหลด SoundFont")
     if not roots and not create_new_library:
-        raise ValueError("ไม่พบ XStageWeb ที่เข้าถึงได้ · ต้องยืนยันสร้างคลังใหม่")
+        raise ValueError("ไม่พบ XStageSong ที่เข้าถึงได้ · ต้องยืนยันสร้างคลังใหม่")
     if cancelled and cancelled.is_set():
         raise ValueError("ยกเลิกการอัปโหลด SoundFont")
-    library_name = roots[0]["name"] if roots else "XStageWeb"
+    library_name = roots[0]["name"] if roots else "XStageSong"
     root = roots[0]["id"] if roots else drive.folder("root", library_name)
     # Flat Drive v3: SoundFonts are playable media, under AUDIO.
     target = drive.folder(root, "AUDIO")
@@ -422,7 +422,7 @@ def upload_soundfont(drive, path, *, create_new_library=False,
     stem = re.sub(r"[^\w .()-]", "_", source.stem, flags=re.UNICODE).strip(" .")[:100] or "SoundFont"
     filename = stem + "-" + fingerprint[:16] + source.suffix.lower()
     if progress:
-        progress("ตรวจ MD5 และอัปโหลด SoundFont ไปยัง XStageWeb/AUDIO")
+        progress("ตรวจ MD5 และอัปโหลด SoundFont ไปยัง XStageSong/AUDIO")
     status, meta = drive.upload_file(target, source, filename, cancelled=cancelled)
     if str(meta.get("md5Checksum", "")).lower() != fingerprint:
         raise ValueError("Google Drive ไม่ยืนยัน MD5 SoundFont ให้ตรงกับไฟล์ต้นฉบับ")
