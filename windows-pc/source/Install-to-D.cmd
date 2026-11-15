@@ -4,8 +4,8 @@ if exist "%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe" set "PS=
 "%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Install-Logged.ps1"
 set "INSTALL_RESULT=%ERRORLEVEL%"
 if "%INSTALL_RESULT%"=="20" (
-    echo Installation paused: X-Stage Karaoke or an application file is still in use.
-    echo Close X-Stage Karaoke, then run this installer again.
+    echo Installation paused: X-Stage Karaoke PC or an application file is still in use.
+    echo Close X-Stage Karaoke PC, then run this installer again.
 ) else if not "%INSTALL_RESULT%"=="0" (
     echo Installation was not completed. Read the specific error above.
 ) else (

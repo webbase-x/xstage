@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 echo ============================================================
-echo X-Stage Karaoke v0.9.38 - Windows source regression tests
+echo X-Stage Karaoke PC v0.9.38 - Windows source regression tests
  echo This does not install the app or touch D:\newKaraoke.
 echo All test media and catalogs are temporary fixtures.
 echo ============================================================

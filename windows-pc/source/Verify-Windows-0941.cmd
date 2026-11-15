@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 echo ============================================================
-echo X-Stage Karaoke v0.9.41 - Windows regression gate
+echo X-Stage Karaoke PC v0.9.41 - Windows regression gate
  echo No installation, song deletion, or automatic shutdown.
 echo All test songs and databases are temporary fixtures.
 echo ============================================================

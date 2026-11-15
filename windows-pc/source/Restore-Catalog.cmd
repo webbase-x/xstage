@@ -2,7 +2,7 @@
 setlocal
 chcp 65001 >nul
 cd /d "%~dp0"
-echo Close X-Stage Karaoke before restoring a catalog backup.
+echo Close X-Stage Karaoke PC before restoring a catalog backup.
 where py >nul 2>nul
 if errorlevel 1 (
   echo Python launcher is not installed. Use CPython 3.13 from the Windows build guide.
