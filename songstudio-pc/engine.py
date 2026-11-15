@@ -481,6 +481,24 @@ def font_list():
     return fonts
 
 LAST_SCAN_STATS = {}
+SCAN_CHANGE_FILE = DATA / "last-scan-changes.json"
+SCAN_CHANGE_IDS = set()
+
+
+def restore_scan_changes():
+    """Restore only the delta belonging to the current source/workspace."""
+    stored = load_json(SCAN_CHANGE_FILE, {})
+    if not isinstance(stored, dict) or (
+        stored.get("source") != PREFS["source"] or
+        stored.get("workspace") != PREFS["workspace"]):
+        ids = set()
+    else:
+        ids = {n for n in stored.get("ids", [])
+               if type(n) is int and n > 0}
+    with LOCK:
+        SCAN_CHANGE_IDS.clear()
+        SCAN_CHANGE_IDS.update(ids)
+    return len(ids)
 
 
 def restore_song_catalog():
@@ -517,8 +535,16 @@ def scan_source(full=False):
         FILE_BY_ID.update((row["id"], row) for row in rows)
         FILE_BY_ID.update(AI_IMPORTED)
         LAST_SCAN_STATS = stats
+        SCAN_CHANGE_IDS.clear()
+        SCAN_CHANGE_IDS.update(stats.get("addedIds", []))
+        SCAN_CHANGE_IDS.update(stats.get("changedIds", []))
         JOB["total"] = len(rows)
         JOB["completed"] = len(rows)
+    # Persist after the successful SQLite snapshot; do not overwrite a known
+    # good delta when enumeration was interrupted or failed.
+    save_json(SCAN_CHANGE_FILE, {
+        "source": PREFS["source"], "workspace": PREFS["workspace"],
+        "ids": sorted(SCAN_CHANGE_IDS)})
     return len(rows)
 
 
@@ -589,9 +615,14 @@ def remove_vocal_source(song_id):
     return {"ok": True, "message": "นำเพลงออกจากรายการ AI แล้ว · ไม่ลบไฟล์ต้นฉบับหรือร่างเนื้อร้อง"}
 
 
-def visible_files(search=""):
+def visible_files(search="", view="all"):
+    if view not in ("all", "changes"):
+        raise ValueError("ตัวกรองรายการเพลงไม่ถูกต้อง")
     with LOCK:
         rows = list(FILES)
+        if view == "changes":
+            pending = set(SCAN_CHANGE_IDS)
+            rows = [row for row in rows if row["id"] in pending]
     query = search.casefold()
     if query:
         rows = [row for row in rows if query in
@@ -2950,7 +2981,8 @@ class Handler(BaseHTTPRequestHandler):
                         offset=max(0, int(query.get("offset", ["0"])[0])),
                         limit=max(1, min(100, int(query.get("limit", ["50"])[0])))))
             elif path == "/api/songs/ids":
-                self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
+                self._json({"ids": [x["id"] for x in visible_files(
+                    query.get("search", [""])[0], query.get("view", ["all"])[0])]})
             elif path == "/api/created-json":
                 module = _module("created_json_manager.py", "xstage_created_json_manager")
                 self._json(module.list_created(
@@ -2960,7 +2992,8 @@ class Handler(BaseHTTPRequestHandler):
                     offset=max(0, int(query.get("offset", ["0"])[0])),
                     limit=max(1, min(200, int(query.get("limit", ["50"])[0])))))
             elif path == "/api/songs":
-                rows = visible_files(query.get("search", [""])[0])
+                rows = visible_files(query.get("search", [""])[0],
+                                     query.get("view", ["all"])[0])
                 if query.get("audio_only", ["0"])[0] == "1":
                     rows = [row for row in rows if
                             Path(row["path"]).suffix.lower() in EXT_AUDIO]
@@ -3393,6 +3426,7 @@ def main():
     global PORT
     try:
         count = restore_song_catalog()
+        restore_scan_changes()
         if count:
             JOB["detail"] = f"โหลดดัชนีเพลงเดิมแล้ว {count:,} เพลง · กดสแกนด่วนเพื่ออัปเดต"
     except (OSError, ValueError) as exc:
