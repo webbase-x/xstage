@@ -83,7 +83,7 @@ class PCExportTests(unittest.TestCase):
     def test_karaoke_pc_catalog_and_lyrics_json_roundtrip(self):
         import sys
         sys.path.insert(0, str(ROOT / "windows-pc" / "source"))
-        from karaoke.pc_stageweb import catalog_rows, source_lyrics, import_library
+        from karaoke.pc_xstagesong import catalog_rows, source_lyrics, import_library
         pc_export.publish(self.source, str(self.destination), export)
         directory = self.destination / "XStageSong"
         base, rows = catalog_rows(str(self.destination))
