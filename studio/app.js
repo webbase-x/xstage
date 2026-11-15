@@ -796,6 +796,7 @@
       try { await config({[kind]: response.path}); }
       catch(error) { element.value = prefs[kind] || ''; throw error; }
       message('เลือกและบันทึกตำแหน่งใหม่เรียบร้อยแล้ว', false);
+      if (kind === 'upload_folder') void inspectUploadFolder();
     } finally {
       if (button) {
         button.textContent = oldLabel;
@@ -2181,6 +2182,7 @@
       const examples=(result.examples||[]).slice(0,5)
         .map(x=>x.name+': '+x.reason);
       $('upload-folder-report').textContent=
+        'ตรวจโฟลเดอร์หลักและโฟลเดอร์ย่อยทั้งหมด · '+
         'ตรวจ '+fmtNum(result.fileCount)+' ไฟล์ · ชุดสมบูรณ์ '+
         fmtNum(result.ready)+' · ไม่ครบ '+fmtNum(result.incomplete)+
         ' · ไม่รองรับ '+fmtNum(result.unsupported)+
@@ -3162,6 +3164,7 @@
     }
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
+  $('upload-folder').addEventListener('change',()=>{void inspectUploadFolder();});
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
   $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
   $('pc-export-start').addEventListener('click',()=>{void startPCExport();});
