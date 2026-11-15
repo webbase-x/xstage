@@ -53,15 +53,15 @@ class PcSourceTests(unittest.TestCase):
         old_database=old/old_pointer["catalogFiles"][0]["path"]
         original=old_database.read_bytes()
         new=export.songs_root(self.dest)
-        self.assertEqual(new,self.dest/"StageWeb")
+        self.assertEqual(new,self.dest/"XStageSong")
         self.assertFalse(old.exists())
         self.assertEqual((new/old_database.name).read_bytes(),original)
         self.assertEqual(export._read_current(new)[0]["songCount"],1)
         self.assertEqual(export.existing_records(new)[0]["code"],"00001")
         self.assertEqual((new/"audio"/"0"/"00001.m4a").read_bytes(),b"A"*5200)
         self.assertFalse((new/"catalogs").exists())
-        # A second song updates the same StageWeb root; published DB files
-        # stay directly under StageWeb alongside current.json.
+        # A second song updates the same XStageSong root; published DB files
+        # stay directly under XStageSong alongside current.json.
         (new/"audio"/"0"/"00002.m4a").write_bytes(b"B"*5200)
         (new/"lyrics"/"0"/"00002.json").write_text(
             (new/"lyrics"/"0"/"00001.json").read_text(encoding="utf-8"),
@@ -76,7 +76,7 @@ class PcSourceTests(unittest.TestCase):
 
     def test_catalog_media_path_traversal_rejected_before_database_publish(self):
         export=engine._song_export_module()
-        stage=self.dest/"StageWeb"
+        stage=self.dest/"XStageSong"
         (stage/"audio"/"0").mkdir(parents=True)
         valid=stage/"audio"/"0"/"song.m4a"
         valid.write_bytes(b"M"*5200)
@@ -110,12 +110,12 @@ class PcSourceTests(unittest.TestCase):
     def test_stageweb_and_legacy_songs_conflict_fails_without_changes(self):
         export=engine._song_export_module()
         legacy=self.dest/"songs"
-        stage=self.dest/"StageWeb"
+        stage=self.dest/"XStageSong"
         legacy.mkdir()
         stage.mkdir()
         (legacy/"current.json").write_bytes(b"legacy-pointer")
         (stage/"current.json").write_bytes(b"existing-stage-pointer")
-        with self.assertRaisesRegex(RuntimeError,"พบคลัง songs"):
+        with self.assertRaisesRegex(RuntimeError,"พบคลังเพลงในเครื่อง"):
             export.songs_root(self.dest)
         self.assertEqual((legacy/"current.json").read_bytes(),b"legacy-pointer")
         self.assertEqual((stage/"current.json").read_bytes(),b"existing-stage-pointer")
@@ -183,7 +183,7 @@ class PcSourceTests(unittest.TestCase):
             done = finish()
             self.assertEqual(done["state"], "success", done.get("detail"))
             self.assertEqual((done["created"], done["m4aCount"]), (1, 1))
-            audio = self.dest / "StageWeb/audio/0/004210.m4a"
+            audio = self.dest / "XStageSong/audio/0/004210.m4a"
             self.assertEqual(audio.read_bytes(), original.read_bytes())
             status, second = request("/api/jobs", {"action":"build",
                                    "ids":[1], "audio_only":False})
@@ -192,8 +192,8 @@ class PcSourceTests(unittest.TestCase):
             done = finish()
             self.assertEqual(done["state"], "success", done.get("detail"))
             self.assertEqual((done["created"], done["skipped"], done["lyricsCount"]), (0, 1, 1))
-            self.assertTrue((self.dest / "StageWeb/lyrics/0/004210.json").is_file())
-            self.assertEqual(len(list((self.dest / "StageWeb/audio").rglob("*.m4a"))), 1)
+            self.assertTrue((self.dest / "XStageSong/lyrics/0/004210.json").is_file())
+            self.assertEqual(len(list((self.dest / "XStageSong/audio").rglob("*.m4a"))), 1)
         finally:
             server.shutdown()
             server.server_close()
@@ -244,7 +244,7 @@ class PcSourceTests(unittest.TestCase):
         engine.FILE_BY_ID[1] = row
         with self.assertRaisesRegex(ValueError, "NCN ทั้งหมด"):
             engine.validate_build_request({"ids": [1], "audio_only": False})
-        self.assertFalse((self.dest / "StageWeb").exists())
+        self.assertFalse((self.dest / "XStageSong").exists())
 
     def test_supported_format_preflight_counts_and_rejects_missing(self):
         source = self.source / "test.m4a"
@@ -263,7 +263,7 @@ class PcSourceTests(unittest.TestCase):
                     "code": "001234", "kind": "M4A"}
         engine.CANCEL.clear()
         first = engine.build_library([original], "original", {"audio_only": False})
-        root = self.dest / "StageWeb"
+        root = self.dest / "XStageSong"
         self.assertEqual(first["created"], 1)
         self.assertEqual(first["skipped"], 0)
         self.assertTrue((root / "audio/0/001234.m4a").is_file())
@@ -306,10 +306,10 @@ class PcSourceTests(unittest.TestCase):
         engine.CANCEL.clear()
         result = engine.build_library(originals, "original", {"audio_only": False})
         self.assertEqual(result["created"], 2)
-        audio_dir = self.dest / "StageWeb" / "audio" / "0"
+        audio_dir = self.dest / "XStageSong" / "audio" / "0"
         self.assertEqual(sorted(file.name for file in audio_dir.glob("*.m4a")),
                          ["001234.m4a", "001235.m4a"])
-        records = engine._song_export_module().existing_records(self.dest / "StageWeb")
+        records = engine._song_export_module().existing_records(self.dest / "XStageSong")
         self.assertEqual({r["code"] for r in records}, {"001234", "001235"})
         self.assertEqual({r["originalCode"] for r in records}, {"001234"})
         repeat = engine.build_library(originals, "original", {"audio_only": False})
@@ -328,7 +328,7 @@ class PcSourceTests(unittest.TestCase):
                 "original", {"audio_only": False})
         # Unverified legacy output must not be counted as a successful skip.
         self.assertEqual(legacy.read_bytes(), b"OLD" * 4096)
-        self.assertFalse((self.dest / "StageWeb" / "audio" / "0" / "007007.m4a").exists())
+        self.assertFalse((self.dest / "XStageSong" / "audio" / "0" / "007007.m4a").exists())
 
     def test_scan_ignores_previous_song_studio_output_inside_source_tree(self):
         # Source can be the workspace's parent; generated audio must not be
@@ -337,7 +337,7 @@ class PcSourceTests(unittest.TestCase):
         audio = self.dir / "originals" / "000001.m4a"
         audio.parent.mkdir(parents=True)
         audio.write_bytes(b"F" * 4096)
-        generated = self.dest / "StageWeb" / "audio" / "0" / "000001.m4a"
+        generated = self.dest / "XStageSong" / "audio" / "0" / "000001.m4a"
         generated.parent.mkdir(parents=True)
         generated.write_bytes(audio.read_bytes())
         self.assertEqual(engine.scan_source(), 1)
@@ -353,7 +353,7 @@ class PcSourceTests(unittest.TestCase):
         export_spec.loader.exec_module(export)
         audio = self.source / "000777.m4a"
         audio.write_bytes(b"Q" * 4096)
-        root = self.dest / "StageWeb"
+        root = self.dest / "XStageSong"
         target = root / "audio/0/000777.m4a"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(audio.read_bytes())
@@ -376,7 +376,7 @@ class PcSourceTests(unittest.TestCase):
     def test_preexisting_unindexed_file_is_not_duplicated(self):
         original = self.source / "000888.m4a"
         original.write_bytes(b"D" * 4096)
-        target = self.dest / "StageWeb" / "audio" / "0" / original.name
+        target = self.dest / "XStageSong" / "audio" / "0" / original.name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"OLD" * 4096)
         with self.assertRaisesRegex(RuntimeError, "ERR 1"):
@@ -394,15 +394,15 @@ class PcSourceTests(unittest.TestCase):
         engine.CANCEL.clear()
         first = engine.build_library([row], "original", {"audio_only": True})
         self.assertEqual((first["created"], first["lyricsCount"]), (1, 0))
-        audio = self.dest / "StageWeb/audio/0/021999.m4a"
+        audio = self.dest / "XStageSong/audio/0/021999.m4a"
         old_data = audio.read_bytes()
         second = engine.build_library([row], "original", {"audio_only": False})
         self.assertEqual((second["created"], second["skipped"], second["lyricsCount"]), (0, 1, 1))
         self.assertEqual(audio.read_bytes(), old_data)
-        self.assertTrue((self.dest / "StageWeb/lyrics/0/021999.json").is_file())
+        self.assertTrue((self.dest / "XStageSong/lyrics/0/021999.json").is_file())
         third = engine.build_library([row], "original", {"audio_only": False})
         self.assertEqual((third["created"], third["skipped"], third["lyricsCount"]), (0, 1, 0))
-        self.assertEqual(len(list((self.dest / "StageWeb/audio").rglob("*.m4a"))), 1)
+        self.assertEqual(len(list((self.dest / "XStageSong/audio").rglob("*.m4a"))), 1)
 
     def test_live_controls_update_gains_soundfont_and_midi_preset(self):
         spec = importlib.util.spec_from_file_location("songstudio_live_test",
