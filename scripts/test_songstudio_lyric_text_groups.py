@@ -211,30 +211,38 @@ class LyricHeadTailTests(unittest.TestCase):
         self.assertEqual(snap["skippedInvalid"],1)
         self.assertEqual(bulk.list_groups(snap,"first")["rows"][0]["count"],2)
 
-    def test_search_matches_middle_lyrics_and_limits_edits_to_matched_songs(self):
+    def test_ordered_exact_search_replaces_entire_matching_line_only(self):
         snap=self.snapshot()
-        # Not present in the grouped intro text, only in song 001's body.
-        found=bulk.list_groups(snap,"first",search="เนื้อร้องหนึ่ง")
-        self.assertEqual(found["rows"][0]["text"],"[X-Stage Karaoke]")
-        self.assertEqual(found["rows"][0]["count"],1)
-        self.assertEqual(found["rows"][0]["libraryCount"],3)
-        ident=found["rows"][0]["id"]
-        self.assertEqual(bulk.preview(snap,ident,search="เนื้อร้องหนึ่ง")["count"],1)
-        plan=bulk.plan(snap,[ident],search="เนื้อร้องหนึ่ง",replacement="ใหม่เฉพาะเพลง 001")
-        self.assertEqual(plan["changedSongs"],1)
+        # A phrase in another line must NEVER select the introductory group.
+        self.assertEqual(bulk.list_groups(snap, "first",
+                         search="เนื้อร้องหนึ่ง")["rows"], [])
+        self.assertFalse(bulk._ordered_line_match("รักมาก เธอ", "รัก เธอ"))
+        self.assertTrue(bulk._ordered_line_match("รัก   เธอ คนดี", "รัก เธอ"))
+        self.assertTrue(bulk._ordered_line_match("รักเธอมาก", "รักเธอ"))
+        self.assertFalse(bulk._ordered_line_match("เธอ รัก", "รัก เธอ"))
+        self.assertFalse(bulk._ordered_line_match("รัก\\nเธอ", "รัก เธอ"))
+        self.assertFalse(bulk._ordered_line_match("รัก เธอ", "เธอ รัก"))
+        self.assertFalse(bulk._ordered_line_match("รัก (เธอ)", "รัก [เธอ]"))
+        self.assertTrue(bulk._ordered_line_match("รัก (เธอ)", "รัก (เธอ)"))
+        first=bulk.list_groups(snap, "first", search="คำเกริ่นอื่น",
+                               repeats_only=False)
+        self.assertEqual(len(first["rows"]),1)
+        self.assertEqual(first["rows"][0]["text"],"คำเกริ่นอื่น")
+        self.assertEqual(first["rows"][0]["count"],1)
+        ident=first["rows"][0]["id"]
+        self.assertEqual(bulk.preview(snap,ident,search="คำเกริ่นอื่น")["count"],1)
+        before1=(self.root/"lyrics"/"0"/"001.json").read_bytes()
+        plan=bulk.plan(snap,[ident],search="คำเกริ่นอื่น",
+                       replacement="เปลี่ยนทั้งบรรทัดแล้ว")
         self.assertEqual(plan["changedLines"],1)
-        before2=(self.root/"lyrics"/"0"/"002.json").read_bytes()
-        result=bulk.apply_many(self.root,export,snap,[ident],"ใหม่เฉพาะเพลง 001",
-                               self.backups,search="เนื้อร้องหนึ่ง",expected_count=1)
+        result=bulk.apply_many(self.root,export,snap,[ident],
+                               "เปลี่ยนทั้งบรรทัดแล้ว",self.backups,
+                               search="คำเกริ่นอื่น",expected_count=1)
         self.assertEqual(result["changedSongs"],1)
-        self.assertEqual((self.root/"lyrics"/"0"/"002.json").read_bytes(),before2)
-        doc=json.loads((self.root/"lyrics"/"0"/"001.json").read_text(encoding="utf-8"))
-        self.assertEqual(doc["lines"][0]["text"],"ใหม่เฉพาะเพลง 001")
-        self.assertEqual(doc["lines"][2]["text"],"เนื้อร้องหนึ่ง")
-        # The remaining two-song group remains visible and ready for editing.
-        waiting=bulk.list_groups(snap,"first")
-        self.assertEqual(waiting["rows"][0]["count"],2)
-        self.assertIn("[X-Stage Karaoke]",[item["text"] for item in waiting["rows"]])
+        self.assertEqual((self.root/"lyrics"/"0"/"001.json").read_bytes(),before1)
+        doc=json.loads((self.root/"lyrics"/"0"/"004.json").read_text(encoding="utf-8"))
+        self.assertEqual(doc["lines"][0]["text"],"เปลี่ยนทั้งบรรทัดแล้ว")
+        self.assertEqual(doc["lines"][1]["text"],"อีกข้อความ")
         self.assertEqual(bulk.undo(self.backups,self.root,result["backupId"])["restoredSongs"],1)
 
     def test_multiple_selected_groups_share_one_replacement_and_one_backup(self):
@@ -285,22 +293,22 @@ class LyricHeadTailTests(unittest.TestCase):
         bulk.undo(self.backups,self.root,result["backupId"])
         self.assertEqual((self.root/"lyrics"/"0"/"001.json").read_bytes(),original)
 
-    def test_singleton_remainder_stays_visible_in_repeated_only_queue(self):
+    def test_search_must_match_the_line_being_edited(self):
         snap=self.snapshot()
         group=bulk.list_groups(snap,"second")["rows"][0]
-        # This second-line group has two songs. Editing only song 001 leaves
-        # song 002 as a one-item pending queue, even with repeats-only checked.
-        matches=bulk.list_groups(snap,"second",search="เนื้อร้องหนึ่ง")
-        self.assertEqual(matches["rows"][0]["count"],1)
+        # Song 001 contains this phrase in its BODY, not its second line.
+        self.assertEqual(bulk.list_groups(snap,"second",
+                         search="เนื้อร้องหนึ่ง")["rows"],[])
+        with self.assertRaisesRegex(ValueError,"ไม่ตรงกับคำค้นหา"):
+            bulk.plan(snap,[group["id"]],search="เนื้อร้องหนึ่ง",
+                      replacement="ห้ามแก้")
+        self.assertEqual(bulk.list_groups(snap,"second",
+                         search="ผู้ผลิตรายการ")["rows"][0]["count"],2)
         result=bulk.apply_many(self.root,export,snap,[group["id"]],
                                "ผลิตรายการใหม่",self.backups,
-                               search="เนื้อร้องหนึ่ง",expected_count=1)
-        pending=bulk.list_groups(snap,"second")
-        original_group=next(item for item in pending["rows"]
-                            if item["id"]==group["id"])
-        self.assertEqual(original_group["count"],1)
-        self.assertEqual(original_group["libraryCount"],1)
-        bulk.undo(self.backups,self.root,result["backupId"])
+                               search="ผู้ผลิตรายการ",expected_count=2)
+        self.assertEqual(result["changedLines"],2)
+        self.assertEqual(bulk.undo(self.backups,self.root,result["backupId"])["restoredSongs"],2)
 
     def test_confirmation_count_uses_lines_not_distinct_songs(self):
         snap=self.snapshot()
