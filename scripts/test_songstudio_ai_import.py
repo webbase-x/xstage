@@ -90,7 +90,7 @@ class IndependentAIImportTests(unittest.TestCase):
         target=Path(done["path"])
         self.assertTrue(target.is_file())
         self.assertEqual(target.suffix,".m4a")
-        self.assertEqual(target.parent.parent.parent.name,"StageWeb")
+        self.assertEqual(target.parent.parent.parent.name,"XStageSong")
         self.assertEqual(target.parent.parent.name,"audio")
         self.assertEqual(target.read_bytes(),b"fLaC"+b"A"*5000)
         self.assertEqual(done["song"]["id"],engine.AI_IMPORTED[done["song"]["id"]]["id"])
