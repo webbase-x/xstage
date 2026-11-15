@@ -719,6 +719,24 @@ def lyrics_package(row):
             raise ValueError("เนื้อร้องที่แก้ไขไม่มี timestamp LRC ที่ถูกต้อง")
         return note, doc, hashlib.sha256(note.encode("utf-8")).hexdigest()
     source = Path(row["path"])
+    # A same-stem Lyrics JSON is the direct, lossless companion to MID/MIDI.
+    # Do not fall back to embedded KAR text when a supplied JSON is malformed.
+    if source.suffix.lower() in EXT_MIDI:
+        companion = source.with_suffix(".json")
+        if companion.is_file():
+            if companion.is_symlink() or companion.stat().st_size > 8 * 1024 * 1024:
+                raise ValueError("Lyrics JSON ไม่ปลอดภัยหรือใหญ่เกินกำหนด")
+            raw_json = companion.read_bytes()
+            try:
+                doc = json.loads(raw_json.decode("utf-8-sig"))
+            except (UnicodeError, ValueError) as exc:
+                raise ValueError("ไฟล์ Lyrics JSON คู่กับ MIDI อ่านไม่ได้: " + companion.name) from exc
+            if not isinstance(doc, dict) or not isinstance(doc.get("lines"), list) or not doc["lines"]:
+                raise ValueError("Lyrics JSON คู่กับ MIDI ไม่มีบรรทัดเนื้อร้องพร้อมเวลา")
+            # The output songCode will be assigned only after checking existing XSKs.
+            doc = dict(doc)
+            doc["songCode"] = code
+            return str(doc.get("rawLrc") or ""), doc, hashlib.sha256(raw_json).hexdigest()
     trio = row.get("ncn") or NCN.resolve_companions(source)
     if trio:
         doc = NCN.ncn_document(trio)
