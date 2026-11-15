@@ -21,7 +21,7 @@ AUDIO = {".mp3": "MP3", ".m4a": "M4A", ".wav": "WAV",
          ".ogg": "OGG", ".oga": "OGG"}
 MIDI = {".mid", ".midi", ".kar"}
 LYRIC = {".lrc", ".json"}
-SCAN_LIMIT = 250000
+SCAN_LIMIT = 1000000
 
 
 def digest(path):
@@ -59,7 +59,7 @@ def _indexed(root):
                 continue
             files.append(path)
             if len(files) > SCAN_LIMIT:
-                raise ValueError("พบไฟล์เกินขีดจำกัดการสแกน 250,000 ไฟล์")
+                raise ValueError("พบไฟล์เกินขีดจำกัดความปลอดภัยในการสแกน 1,000,000 ไฟล์")
     return files
 
 
