@@ -297,7 +297,7 @@ class ClassicApp(KaraokeApp):
             return import_library(self.library, str(root), cancelled=self.cancel_scan)
 
         self.start_index_job(job, on_done=lambda result:
-            self.messages.put(('pc_stageweb_connected', (str(root), result))))
+            self.messages.put(('pc_xstagesong_connected', (str(root), result))))
 
     def connect_catalog(self):
         if self.scanning:
@@ -352,7 +352,7 @@ class ClassicApp(KaraokeApp):
                     self.search_results_ready()
                 elif kind == 'search_error':
                     self.status_var.set(data)
-                elif kind == 'pc_stageweb_connected':
+                elif kind == 'pc_xstagesong_connected':
                     selected, outcome = data
                     if not self.cancel_scan.is_set() and not outcome[2]:
                         self.settings['xstagesong_pc_folder'] = selected
