@@ -20,7 +20,7 @@ from pathlib import Path
 from .google_drive_sync import API, FOLDER_MIME
 from .web_assets import BatchRenderer, file_hash, local_candidates
 
-ROOT_NAME = 'XStageWeb'
+ROOT_NAME = 'XStageSong'
 SCHEMA = 1
 
 
@@ -376,16 +376,16 @@ def sync_web_assets(drive, db_path, song_roots, native, settings, soundfont,
     # Name-filtered Drive query avoids listing unrelated personal files.  The
     # preflight must emit *real* checkpoints because each remote call can take
     # many seconds on a congested connection. Do not report fake percentages.
-    emit('กำลังค้นหาโฟลเดอร์ XStageWeb บน Google Drive…')
+    emit('กำลังค้นหาโฟลเดอร์ XStageSong บน Google Drive…')
     roots = [x for x in drive.children('root', ROOT_NAME)
              if x.get('name', ROOT_NAME) == ROOT_NAME and x.get('mimeType') == FOLDER_MIME]
     check()
     if len(roots) > 1:
-        raise ValueError('มี XStageWeb หลายโฟลเดอร์ กรุณาจัดการก่อนซิงก์')
+        raise ValueError('มี XStageSong หลายโฟลเดอร์ กรุณาจัดการก่อนซิงก์')
     if not roots:
-        emit('ไม่พบโฟลเดอร์ XStageWeb เดิม • กำลังสร้างโฟลเดอร์สำหรับเพลงเว็บ…')
+        emit('ไม่พบโฟลเดอร์ XStageSong เดิม • กำลังสร้างโฟลเดอร์สำหรับเพลงเว็บ…')
     root = roots[0]['id'] if roots else _folder(drive, 'root', ROOT_NAME)
-    emit('พบโฟลเดอร์ XStageWeb • กำลังอ่านดัชนีเพลงบน Google Drive…')
+    emit('พบโฟลเดอร์ XStageSong • กำลังอ่านดัชนีเพลงบน Google Drive…')
     current_file, current, previous = _load_current(drive, root)
     check()
     emit(f'อ่านดัชนี Drive แล้ว {len(previous["songs"]):,} เพลง • กำลังตรวจไฟล์ต้นทางในเครื่อง…')
