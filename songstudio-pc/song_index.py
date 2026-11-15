@@ -4,7 +4,7 @@ The catalog lives only in the user's private local AppData. Scans never alter
 original media. A successful scan atomically publishes a complete snapshot.
 Interrupted scans save inspected entries as a checkpoint; an earlier complete
 snapshot remains usable. Re-scan still enumerates directory entries to detect
-deletions and in-place edits, but unchanged media/NCN metadata is reused.
+deletions and in-place edits, but unchanged media and timed lyrics metadata is reused.
 """
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ import sqlite3
 import time
 from pathlib import Path
 
-SCHEMA = 1
+SCHEMA = 2
 SUPPORTED = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma",
-             ".flac", ".ogg", ".oga", ".mid", ".midi", ".kar", ".ncn"}
-COMPANIONS = {".lyr", ".cur"}
+             ".flac", ".ogg", ".oga", ".mid", ".midi", ".kar"}
+COMPANIONS = {".lrc", ".json"}
 
 
 def _scope(source, workspace):
@@ -106,7 +106,7 @@ def _save_checkpoint(db_path, scope, records):
 
 def scan(source, workspace, db_path, notes, ncn, *, full=False,
          cancelled=None, on_progress=None):
-    """Incremental enumeration + NCN binding, then atomic catalog publication.
+    """Incremental enumeration + two-file song/lyrics binding, then atomic catalog publication.
 
     On cancellation keep the previous committed catalog and checkpoint the
     completed file enumeration; next scan reuses unchanged checkpoint rows.
@@ -142,6 +142,13 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
     failed_dirs = []
     component_index = {}
     component_stamps = {}
+
+    def pair_key(path):
+        """Match Song/ and Lyrics/ at the same collection/bucket by stem."""
+        relative = Path(path).relative_to(origin)
+        parents = tuple(part.casefold() for part in relative.parts[:-1]
+                        if part.casefold() not in ("song", "songs", "lyric", "lyrics"))
+        return parents, relative.stem.casefold()
 
     def status(force=False):
         nonlocal last_status
@@ -191,7 +198,7 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
                 path = entry.path
                 scanned += 1
                 if extension in COMPANIONS:
-                    ncn.index_component(Path(path), component_index)
+                    component_index.setdefault(pair_key(path), []).append(path)
                     component_stamps[path] = (info.st_size, info.st_mtime_ns)
                     status()
                     continue
@@ -239,84 +246,44 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
             next_id += 1
 
     songs = list(records.values())
-    # If users select only NCN/Song, Lyrics and Cursor are siblings outside
-    # the scanned tree. Resolve those from disk (once per bucket via cache).
-    # A full NCN tree uses the in-memory companion index with zero fallback
-    # folder searches; clearing the fallback cache prevents stale deletions.
-    ncn._file_names.cache_clear()
-    ncn._ncn_root.cache_clear()
+    # No NCN legacy lookup: new source rows pair only a song with ONE LRC
+    # or Lyrics JSON, selected within the scanned source tree.
     for number, (_, _, row) in enumerate(songs, 1):
         if is_cancelled():
             _save_checkpoint(db_path, scope, records)
             raise RuntimeError("หยุดสแกนแล้ว · เก็บจุดตรวจล่าสุดไว้")
+        for old in ("ncn", "components", "_ncn_stamp", "component_error"):
+            row.pop(old, None)
         original = Path(row["path"])
-        if original.suffix.lower() not in (".mid", ".midi"):
-            continue
-        # During scans use ONLY the already enumerated companion index.
-        # The old fallback scanned the same Lyrics/Cursor folders for each MIDI.
-        description = ncn.describe(original)
-        if description is None or description[1] != "song":
-            trio = None
+        matches = component_index.get(pair_key(original), [])
+        previous_path = row.get("lyrics_file")
+        previous_stamp = row.get("_lyrics_stamp")
+        if len(matches) == 1:
+            file = matches[0]
+            stamp = list(component_stamps[file])
+            row["lyrics_file"] = file
+            row["_lyrics_stamp"] = stamp
+            row["lyrics_format"] = Path(file).suffix.lower()[1:].upper()
+            if original.suffix.lower() in (".mid", ".midi", ".kar"):
+                row["source_format"] = ("KAR" if original.suffix.lower() == ".kar" else "SMF")
+                row["status"] = "ready"
         else:
-            ncn_root = description[0]
-            whole_ncn_tree = origin == ncn_root or origin in ncn_root.parents
-            trio = ncn.resolve_companions(
-                original, component_index, indexed_only=whole_ncn_tree)
-        if trio is None:
-            row.pop("ncn", None)
-            row.pop("components", None)
-            row.pop("_ncn_stamp", None)
-            continue
-        def companion_stamp(name):
-            if not name:
-                return []
-            if name in component_stamps:
-                return list(component_stamps[name])
-            # Source selection may include only NCN/Song. Check sibling
-            # Lyrics/Cursor timestamps to invalidate just affected songs.
-            try:
-                info = Path(name).stat()
-                return [info.st_size, info.st_mtime_ns]
-            except OSError:
-                return []
-        stamp = {
-            "lyrics": companion_stamp(trio["lyrics"]),
-            "cursor": companion_stamp(trio["cursor"]),
-            "paths": [trio["lyrics"], trio["cursor"]],
-        }
-        prior_stamp = row.get("_ncn_stamp")
-        if prior_stamp == stamp and row.get("source_format") == "NCN":
-            continue
-        # Changed .LYR/.CUR files are changes to their linked song even
-        # when the MIDI itself has the same timestamp/size as last scan.
-        if (row["path"] in previous
-                and records[row["path"]][:2] == previous[row["path"]][:2]
-                and prior_stamp != stamp):
+            row.pop("lyrics_file", None)
+            row.pop("_lyrics_stamp", None)
+            row.pop("lyrics_format", None)
+            if original.suffix.lower() in (".mid", ".midi", ".kar"):
+                row["status"] = "ambiguous-lyrics" if matches else "missing-lyrics"
+        if (row["path"] in previous and
+                (previous_path != row.get("lyrics_file") or
+                 previous_stamp != row.get("_lyrics_stamp"))):
             changed += 1
-        note = notes.get(row["path"], {})
-        row.update(ncn=trio, source_format="NCN",
-                   components={"song": trio["midi"], "lyrics": trio["lyrics"],
-                               "cursor": trio["cursor"]},
-                   _ncn_stamp=stamp)
-        row.pop("component_error", None)
-        row["status"] = "ready" if not trio["missing"] else "missing-companion"
-        if trio["lyrics"]:
-            try:
-                meta = ncn.lyric_metadata(Path(trio["lyrics"]))
-                row["title"] = (note.get("title") or meta["title"] or original.stem)
-                row["artist"] = note.get("artist") or meta["artist"]
-            except (OSError, ValueError) as exc:
-                row["status"] = "lyrics-error"
-                row["component_error"] = str(exc)
-        if trio["missing"]:
-            row["component_error"] = "NCN ขาด " + ", ".join(trio["missing"])
         if on_progress and number % 1000 == 0:
-            on_progress(f"จับคู่ MIDI/NCN {number:,}/{len(songs):,} เพลง", scanned)
+            on_progress(f"ตรวจคู่เพลง+LRC/JSON {number:,}/{len(songs):,} เพลง", scanned)
 
     rows = [record[2] for record in songs]
     rows.sort(key=lambda x: x["id"])
     removed = len(set(previous) - set(records))
-    # Snapshot swaps only when directory enumeration and NCN bindings finish.
+    # Snapshot swaps only after scanning and timed-lyrics pair checks finish.
     # The disk database, not the UI thread, is the long-lived source of truth.
     if on_progress:
         on_progress(f"กำลังบันทึกดัชนีเพลง {len(rows):,} รายการในเครื่อง", scanned)
