@@ -480,7 +480,7 @@ assert.ok(noRootBranch.includes('state.songs=[]') &&
           !noRootBranch.includes('if(instant){'),
           'Empty Drive should show a clean catalog and actionable first-upload instructions');
 
-// Newly created XStageWeb may be empty or contain SOUNDFONT first. The
+// Newly created XStageSong may be empty or contain SOUNDFONT first. The
 // player should stay usable with 0 entries, not throw a missing DB error.
 const missingPointerBranch=app.split('if(!pointers.length){')[1]?.split("if(pointers.length!==1)throw")[0]||'';
 assert.ok(missingPointerBranch.includes('state.songs=[]') &&
@@ -489,7 +489,7 @@ assert.ok(missingPointerBranch.includes('state.songs=[]') &&
           missingPointerBranch.includes("ui.songTotal.textContent='0 เพลง'") &&
           missingPointerBranch.includes('setAndroidTvStageAccess(true,account.sub)') &&
           missingPointerBranch.includes('X-Stage Song Studio'),
-          'Empty or SoundFont-first XStageWeb must show a clean 0-song stage');
+          'Empty or SoundFont-first XStageSong must show a clean 0-song stage');
 assert.ok(app.includes("พบ current.json หลายรายการ · ไม่เลือกฐานเพลงโดยคาดเดา"),
           'Duplicate current pointers must remain an explicit integrity error');
 
