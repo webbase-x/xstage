@@ -1797,7 +1797,8 @@ def execute_job(action, options, started):
                 rows = [dict(FILE_BY_ID[i]) for i in ids if type(i) is int and i in FILE_BY_ID]
             if not rows:
                 raise ValueError("กรุณาเลือกเพลงก่อนสร้าง")
-            result = (build_xsk(rows, mode, options) if _xsk_format(options) == "xsk"\n                      else build_library(rows, mode, options)) if action == "build" else build_preview(rows, mode)
+            result = (build_xsk(rows, mode, options) if _xsk_format(options) == "xsk"
+                      else build_library(rows, mode, options)) if action == "build" else build_preview(rows, mode)
         elif action == "lyric-groups-scan":
             root = lyric_source_root()
             if not (root / "current.json").is_file():
