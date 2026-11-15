@@ -1,4 +1,4 @@
-"""Regression checks: edit LRC from any selected folder without StageWeb."""
+"""Regression checks: edit LRC from any selected folder without XStageSong."""
 import importlib.util
 import tempfile
 import unittest
