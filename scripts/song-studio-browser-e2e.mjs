@@ -174,17 +174,17 @@ try {
     'Rendered M4A mode must not falsely claim unneeded NCN source sidecar');
   console.log('PASS: Browser SF2 MIDI converted to genuine M4A + real-time Lyrics JSON');
 
-  // Conflict protection: equal-size replacement with different CUR bytes is
-  // NOT a verified duplicate. Never overwrite the NCN timing in the catalog.
+  // Conflict protection: a 2-file song may have ONE timed lyric companion.
+  // A second LRC in addition to JSON is ambiguous and blocks export.
   await midiPage.setInputFiles('#file-input',[{
-    name:'NCN001.cur',mimeType:'application/octet-stream',
-    buffer:Buffer.from([0,0,0,0,48,0])
+    name:'NCN001.lrc',mimeType:'text/plain',
+    buffer:Buffer.from('[00:00.00]คนละเนื้อร้อง\\n[00:00.50]ไม่ตรงกัน')
   }]);
   await midiPage.waitForFunction(()=>document.querySelector('#catalog-note')
     .textContent.includes('ต้องตรวจสอบ 1'));
   assert.equal(await midiPage.locator('#build').isEnabled(),false,
-    'Duplicate CUR with different bytes must disable unsafe NCN export');
-  console.log('PASS: Browser rejects equal-size conflicting NCN cursor files');
+    'Duplicate LRC+JSON must block ambiguous two-file export');
+  console.log('PASS: browser rejects duplicate LRC/JSON lyric companions');
   await midiPage.close();
 
   // Mobile layout must remain usable without a page-wide horizontal overflow.
