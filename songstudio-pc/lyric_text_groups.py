@@ -362,9 +362,60 @@ def _searched_members(snapshot, group, search=""):
     return list(group["members"])
 
 
+def _ensure_all_line_groups(snapshot, search):
+    """Build a bounded temporary index ONLY for lines matching a specific phrase.
+
+    The full catalog is never duplicated into all-line groups. A broad query
+    is rejected with an actionable message before it can exhaust memory.
+    """
+    query = _same(search)
+    _ordered_line_match("", query)  # Also checks the 200-character limit.
+    if snapshot.get("allCacheQuery") == query:
+        return
+    for group_id, group in list(snapshot["groups"].items()):
+        if group["position"] == "all":
+            del snapshot["groups"][group_id]
+    snapshot["allCacheQuery"] = None
+    if not query:
+        snapshot["allCacheQuery"] = query
+        return
+    gathered = {}
+    matched = 0
+    for song_id, transcript in snapshot["searchable"].items():
+        record = snapshot["recordsBySong"].get(song_id)
+        if record is None:
+            continue
+        for index, line in enumerate(transcript.split("\n")):
+            if not line or not _ordered_line_match(line, query):
+                continue
+            matched += 1
+            if matched > 30000:
+                # Do not publish an incomplete set of results.
+                raise ValueError("ผลค้นหามากกว่า 30,000 บรรทัด กรุณาระบุวลีที่ยาวขึ้น")
+            text = _same(line)
+            identity = _group_id("all", text)
+            group = gathered.setdefault(identity, {
+                "id": identity, "position": "all",
+                "label": "ทุกบรรทัด", "text": text,
+                "count": 0, "members": []
+            })
+            group["members"].append({
+                "songId": song_id, "code": str(record.get("code") or ""),
+                "title": str(record.get("title") or ""),
+                "artist": str(record.get("artist") or ""),
+                "text": text, "record": record, "lineIndex": index
+            })
+            group["count"] += 1
+    snapshot["groups"].update(gathered)
+    snapshot["allCacheQuery"] = query
+    snapshot["groupCount"] = len(snapshot["groups"])
+
+
 def list_groups(snapshot, position, *, search="", offset=0, limit=40, repeats_only=True):
     if position not in POSITIONS:
         raise ValueError("ตำแหน่งบรรทัดไม่ถูกต้อง")
+    if position == "all":
+        _ensure_all_line_groups(snapshot, search)
     groups = []
     for group in snapshot["groups"].values():
         if group["position"] != position:
@@ -833,10 +884,11 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
     # Patch only the edited members of the in-memory search/group index. This
     # preserves all other rows, counts and pagination in the operator's queue.
     for group, members in chosen:
-        removed = {item["songId"] for item in members}
+        removed = {(item["songId"], item.get("lineIndex")) for item in members}
         was_repeated = group["count"] >= 2
         group["members"][:] = [
-            item for item in group["members"] if item["songId"] not in removed]
+            item for item in group["members"]
+            if (item["songId"], item.get("lineIndex")) not in removed]
         group["count"] = len(group["members"])
         # If a searched batch edited only some songs of a repeated group,
         # the one-song remainder must stay visible in the work queue.
@@ -847,7 +899,7 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
     for item in changes:
         doc = item["updated"]
         snapshot["searchable"][item["songId"]] = "\n".join(
-            _same(line["text"]).casefold() for line in doc["lines"])
+            _same(line["text"]) for line in doc["lines"])
         for old_group, old_item in item["edits"]:
             position = old_group["position"]
             identity = _group_id(position, new_text)
