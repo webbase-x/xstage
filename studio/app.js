@@ -44,6 +44,7 @@
     'lyric-head-tail': ['จัดการข้อความหัว–ท้ายเพลง', 'ตรวจข้อความซ้ำ 4 ตำแหน่ง · แทนที่ทั้งกลุ่มและย้อนคืนได้'],
     upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
     'pc-export': ['นำเข้า X-Stage Karaoke PC', 'นำเข้า AUDIO + LYRICS พร้อมสร้าง/อัปเดต songs.sqlite3 ตาม Karaoke PC'],
+    'created-json': ['ไฟล์ที่สร้างแล้ว', 'ตรวจโครงสร้างและจัดรูปแบบ Lyrics JSON ในคลัง XStageSong โดยมีไฟล์สำรอง'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
   };
@@ -240,6 +241,7 @@
       aiStopPlayback();
       if(aiMicRecorder?.state==='recording')aiStopMic();
     }
+    if (name === 'created-json') void refreshCreatedJson();
     if (name === 'ai-lyrics') void aiRefreshSongList();
     if (name === 'settings') void refreshHistory();
     if (name === 'lyric-head-tail') {
@@ -2362,6 +2364,115 @@
       message('บันทึกข้อมูลเพลงและเนื้อร้องแล้ว',false);
     }catch(error){message(error.message);}
   }
+  // Created-file JSON management is deliberately limited to catalog-backed lyrics.
+  // Never interpolate untrusted filenames or lyrics into HTML.
+  let createdJsonItems = [], createdJsonSelected = new Set(), createdJsonOffset = 0;
+  let createdJsonTotal = 0, createdJsonLastBackup = null, createdJsonBusy = false;
+  const createdJsonLimit = 50;
+  function createdJsonBusyState(value) {
+    createdJsonBusy = value;
+    for (const id of ['created-json-refresh','created-json-preview','created-json-apply',
+                      'created-json-select','created-json-clear','created-json-prev','created-json-next']) {
+      $(id).disabled = value;
+    }
+    $('created-json-undo').disabled = value || !createdJsonLastBackup;
+  }
+  function createdJsonRender() {
+    const tbody = $('created-json-rows');
+    tbody.replaceChildren();
+    if (!createdJsonItems.length) {
+      const tr=document.createElement('tr'),td=document.createElement('td');
+      td.colSpan=4;td.className='empty-row';td.textContent='ไม่พบไฟล์ Lyrics JSON ในคลังที่สร้างแล้ว';
+      tr.append(td);tbody.append(tr);
+    }
+    for (const item of createdJsonItems) {
+      const tr=document.createElement('tr');
+      const selectCell=document.createElement('td');
+      const cb=document.createElement('input');
+      cb.type='checkbox';cb.checked=createdJsonSelected.has(item.path);
+      cb.disabled=createdJsonBusy;cb.setAttribute('aria-label','เลือก '+item.path);
+      cb.addEventListener('change',()=>{
+        if(cb.checked)createdJsonSelected.add(item.path);
+        else createdJsonSelected.delete(item.path);
+        $('created-json-summary').textContent='เลือกแล้ว '+createdJsonSelected.size+' ไฟล์ · จากทั้งหมด '+createdJsonTotal+' ไฟล์';
+      });
+      selectCell.append(cb);
+      const title=document.createElement('td');
+      const strong=document.createElement('strong');strong.textContent=(item.code||'—')+' · '+(item.title||'ไม่มีชื่อ');
+      const artist=document.createElement('div');artist.className='hint';artist.textContent=item.artist||'';
+      title.append(strong,artist);
+      const path=document.createElement('td');path.textContent=item.path;
+      const status=document.createElement('td');status.textContent=item.status;
+      tr.append(selectCell,title,path,status);tbody.append(tr);
+    }
+    const first=createdJsonTotal?createdJsonOffset+1:0;
+    $('created-json-page').textContent=first+'–'+(createdJsonOffset+createdJsonItems.length)+' / '+createdJsonTotal;
+    $('created-json-prev').disabled=createdJsonBusy||createdJsonOffset<=0;
+    $('created-json-next').disabled=createdJsonBusy||createdJsonOffset+createdJsonLimit>=createdJsonTotal;
+    $('created-json-summary').textContent='เลือกแล้ว '+createdJsonSelected.size+' ไฟล์ · พบในคลัง '+createdJsonTotal+' ไฟล์';
+  }
+  async function refreshCreatedJson() {
+    if (createdJsonBusy) return;
+    createdJsonBusyState(true);
+    try {
+      const query=new URLSearchParams({search:$('created-json-search').value.trim(),
+          offset:String(createdJsonOffset),limit:String(createdJsonLimit)});
+      const result=await api('/api/created-json?'+query.toString());
+      createdJsonTotal=result.total||0;createdJsonItems=result.rows||[];
+      createdJsonSelected.clear();
+      createdJsonRender();
+    }catch(e){$('created-json-result').textContent='โหลดไฟล์ไม่สำเร็จ: '+e.message;}
+    finally{createdJsonBusyState(false);}
+  }
+  async function createdJsonAction(dryRun) {
+    if (createdJsonBusy||busy) return message('มีงานกำลังทำงานอยู่ กรุณารอให้เสร็จก่อน');
+    const paths=[...createdJsonSelected];
+    if (!paths.length) return message('กรุณาเลือกไฟล์ JSON ก่อน');
+    if(paths.length>100)return message('เลือกได้ไม่เกิน 100 ไฟล์ต่อครั้ง');
+    if(!dryRun){
+      const yes=await confirmStudio('จัดรูปแบบ '+paths.length+' ไฟล์? ระบบสำรอง JSON ก่อนแก้ และไม่เปลี่ยนเนื้อร้องหรือเวลา','จัดรูปแบบ JSON');
+      if(!yes)return;
+    }
+    createdJsonBusyState(true);
+    try{
+      const result=await post('/api/created-json/format',{paths,dryRun});
+      const lines=result.results.map(x=>x.path+' : '+x.status+(x.reason?' · '+x.reason:''));
+      $('created-json-result').textContent=(dryRun?'ผลตรวจสอบ (ยังไม่แก้ไฟล์)':'ผลจัดรูปแบบ')+
+        ' · รายการที่จัดได้ '+result.formatted+' · ข้าม '+result.skipped+'\n'+lines.join('\n');
+      if(!dryRun){
+        const done=result.results.filter(x=>x.status==='formatted'&&x.backup&&x.sha256);
+        createdJsonLastBackup=done.length===1?{path:done[0].path,backup:done[0].backup,sha256:done[0].sha256}:null;
+        if(done.length>1)$('created-json-result').textContent+='\nสำรองแต่ละไฟล์ไว้ข้างไฟล์ต้นทาง · การย้อนคืนอัตโนมัติจากหน้านี้รองรับครั้งละหนึ่งไฟล์';
+      }
+    }catch(e){$('created-json-result').textContent='ไม่สำเร็จ: '+e.message;}
+    finally{createdJsonBusyState(false);}
+    if(!dryRun)void refreshCreatedJson();
+  }
+  async function undoCreatedJson() {
+    if(!createdJsonLastBackup||createdJsonBusy||busy)return;
+    if(!await confirmStudio('ย้อนคืน JSON จากสำรอง '+createdJsonLastBackup.backup+' ใช่หรือไม่?','ย้อนคืน JSON'))return;
+    createdJsonBusyState(true);
+    try {
+      const result=await post('/api/created-json/restore',createdJsonLastBackup);
+      createdJsonLastBackup=null;
+      $('created-json-result').textContent=result.message||'ย้อนคืนสำเร็จ';
+    }catch(e){$('created-json-result').textContent='ย้อนคืนไม่สำเร็จ: '+e.message;}
+    finally{createdJsonBusyState(false);}
+    void refreshCreatedJson();
+  }
+  $('created-json-refresh').addEventListener('click',()=>{void refreshCreatedJson();});
+  $('created-json-search').addEventListener('change',()=>{createdJsonOffset=0;void refreshCreatedJson();});
+  $('created-json-prev').addEventListener('click',()=>{createdJsonOffset=Math.max(0,createdJsonOffset-createdJsonLimit);void refreshCreatedJson();});
+  $('created-json-next').addEventListener('click',()=>{createdJsonOffset+=createdJsonLimit;void refreshCreatedJson();});
+  $('created-json-select').addEventListener('click',()=>{
+    for(const item of createdJsonItems)createdJsonSelected.add(item.path);
+    createdJsonRender();
+  });
+  $('created-json-clear').addEventListener('click',()=>{createdJsonSelected.clear();createdJsonRender();});
+  $('created-json-preview').addEventListener('click',()=>{void createdJsonAction(true);});
+  $('created-json-apply').addEventListener('click',()=>{void createdJsonAction(false);});
+  $('created-json-undo').addEventListener('click',()=>{void undoCreatedJson();});
+
   async function initialize() {
     if (!token || !engineBase) {
       connectionGate();
