@@ -11,6 +11,8 @@ FILES = {
     "songstudio-pc/Start-Song-Studio.cmd": "Start-Song-Studio.cmd",
     "songstudio-pc/Start-Song-Studio.ps1": "Start-Song-Studio.ps1",
     "songstudio-pc/engine.py": "engine.py",
+    "songstudio-pc/history_store.py": "history_store.py",
+    "songstudio-pc/folder_upload.py": "folder_upload.py",
     "songstudio-pc/ncn_lyrics.py": "ncn_lyrics.py",
     "songstudio-pc/song_index.py": "song_index.py",
     "songstudio-pc/ai_lyrics.py": "ai_lyrics.py",
