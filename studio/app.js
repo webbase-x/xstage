@@ -2609,7 +2609,7 @@
   function createdJsonBusyState(value) {
     createdJsonBusy = value;
     for (const id of ['created-json-refresh','created-json-preview','created-json-apply',
-                      'created-json-select','created-json-clear','created-json-prev','created-json-next']) {
+                      'created-json-select','created-json-select-all','created-json-clear','created-json-clear-page','created-json-prev','created-json-next']) {
       $(id).disabled = value;
     }
     $('created-json-prev').disabled = value || createdJsonOffset <= 0;
@@ -2650,7 +2650,7 @@
     $('created-json-page').textContent=first+'–'+(createdJsonOffset+createdJsonItems.length)+' / '+createdJsonTotal;
     $('created-json-prev').disabled=createdJsonBusy||createdJsonOffset<=0;
     $('created-json-next').disabled=createdJsonBusy||createdJsonOffset+createdJsonLimit>=createdJsonTotal;
-    $('created-json-summary').textContent='เลือกแล้ว '+createdJsonSelected.size+' ไฟล์ · พบในคลัง '+createdJsonTotal+' ไฟล์';
+    $('created-json-summary').textContent='เลือกแล้ว '+createdJsonSelected.size+' ไฟล์ · พบในผลค้นหา '+createdJsonTotal+' ไฟล์ · คงรายการที่เลือกเมื่อเปลี่ยนหน้า';
     $('created-xsk-build').disabled=createdJsonBusy||busy||!proEnabled||createdJsonSelected.size===0;
   }
   async function refreshCreatedJson() {
@@ -2661,7 +2661,6 @@
           offset:String(createdJsonOffset),limit:String(createdJsonLimit)});
       const result=await api('/api/created-json?'+query.toString());
       createdJsonTotal=result.total||0;createdJsonItems=result.rows||[];
-      createdJsonSelected.clear();
       createdJsonRender();
     }catch(e){$('created-json-result').textContent='โหลดไฟล์ไม่สำเร็จ: '+e.message;}
     finally{createdJsonBusyState(false);}
@@ -2709,7 +2708,7 @@
       return message('กรุณาเปิดใช้ X-Stage Song Studio PC Pro ด้วย License Key ในเมนูตั้งค่า');
     }
     const paths=[...createdJsonSelected];
-    if (!paths.length || paths.length>100) return message('กรุณาเลือกเพลงจากหน้านี้ 1–100 รายการ');
+    if (!paths.length) return message('กรุณาเลือกเพลงอย่างน้อยหนึ่งรายการ');
     const folder=$('xsk-destination').value.trim();
     if (!folder)return message('กรุณาเลือกโฟลเดอร์ปลายทาง XSK');
     if (!await confirmStudio(
@@ -2734,6 +2733,22 @@
   $('created-json-select').addEventListener('click',()=>{
     for(const item of createdJsonItems)createdJsonSelected.add(item.path);
     createdJsonRender();
+  });
+  $('created-json-clear-page').addEventListener('click',()=>{
+    for(const item of createdJsonItems)createdJsonSelected.delete(item.path);
+    createdJsonRender();
+  });
+  $('created-json-select-all').addEventListener('click',async()=>{
+    if(createdJsonBusy || busy)return;
+    createdJsonBusyState(true);
+    try{
+      const search=$('created-json-search').value.trim();
+      const result=await api('/api/created-json/paths?'+new URLSearchParams({search}).toString());
+      for(const path of (result.paths||[]))createdJsonSelected.add(path);
+      createdJsonRender();
+      $('created-xsk-status').textContent='เลือกเพลงจากผลค้นหาทั้งหมดแล้ว '+(result.paths||[]).length+' รายการ';
+    }catch(error){message('เลือกทั้งหมดไม่สำเร็จ: '+error.message);}
+    finally{createdJsonBusyState(false);}
   });
   $('created-json-clear').addEventListener('click',()=>{createdJsonSelected.clear();createdJsonRender();});
   $('created-json-preview').addEventListener('click',()=>{void createdJsonAction(true);});
