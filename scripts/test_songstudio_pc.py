@@ -71,7 +71,6 @@ class PcSourceTests(unittest.TestCase):
 
         first = make_pair("00002", b"A" * 40)
         repeated = make_pair("00009", b"A" * 40)
-        different = make_pair("00002", b"B" * 40)
         root = self.dest / "XStageSong" / "MIDI" / "XSK"
         with patch.object(engine, "_module", side_effect=modules):
             first_result = engine.build_xsk([first], "original", {})
@@ -80,6 +79,7 @@ class PcSourceTests(unittest.TestCase):
             second_result = engine.build_xsk([repeated], "original", {})
             self.assertEqual(second_result["skipped"], 1)
             self.assertFalse((root / "0" / "00009.xsk").exists())
+            different = make_pair("00002", b"B" * 40)
             third_result = engine.build_xsk([different], "original", {})
             self.assertEqual(third_result["created"], 1)
             self.assertTrue((root / "0" / "00001.xsk").is_file())
