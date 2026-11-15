@@ -150,6 +150,38 @@ class FolderUploadTests(unittest.TestCase):
             folder.upload(object(), str(self.root), create_new_library=True,
                           export=export, publisher=PublisherStub(), staging_root=self.root)
 
+    def test_nested_folders_are_scanned_and_pairs_found(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        first = self.root / "Archive" / "2026" / "Region A"
+        second = self.root / "Archive" / "2026" / "Region B"
+        first.mkdir(parents=True)
+        second.mkdir(parents=True)
+        for parent, code in ((first, "A001"), (second, "B002")):
+            (parent / (code + ".mp3")).write_bytes(b"ID3" + b"x" * 2500)
+            (parent / (code + ".lrc")).write_text(
+                "[00:05.00]ทดสอบเพลงในโฟลเดอร์ย่อย", encoding="utf-8")
+        report = folder.report(str(self.root))
+        self.assertEqual(report["fileCount"], 4)
+        self.assertEqual(report["ready"], 2)
+        publisher = PublisherStub()
+        result = folder.upload(object(), str(self.root), create_new_library=True,
+                               export=export, publisher=publisher, staging_root=self.root)
+        self.assertEqual(result["newSongs"], 2)
+
+    def test_nested_folder_does_not_pair_with_other_directory(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        first = self.root / "Album A"
+        second = self.root / "Album B"
+        first.mkdir()
+        second.mkdir()
+        (first / "A001.mp3").write_bytes(b"ID3" + b"x" * 2500)
+        (second / "A001.lrc").write_text("[00:01.00]ทดสอบ", encoding="utf-8")
+        result = folder.report(str(self.root))
+        self.assertEqual(result["ready"], 0)
+        self.assertGreater(result["incomplete"], 0)
+
     def test_organized_audio_songs_lyrics_pair(self):
         self.audio.unlink()
         self.lrc.unlink()
