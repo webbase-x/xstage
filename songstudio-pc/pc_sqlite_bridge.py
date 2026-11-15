@@ -22,12 +22,25 @@ def database_location(destination):
         install = library.parent.parent
         app = install / "App"
         if (app / "XStageKaraoke.exe").is_file():
-            # Start-XStage-Silent.vbs passes --data-dir <install>/Data.
+            # The installed launcher uses <install>/Data; running the EXE
+            # directly may instead use App/data. Prefer an existing DB and
+            # reject ambiguous multiple live databases rather than guessing.
+            primary = install / "Data" / "songs.sqlite3"
+            direct = app / "data" / "songs.sqlite3"
+            found = [p for p in (primary, direct) if p.is_file()]
+            if len(found) > 1:
+                if not os.path.samefile(found[0], found[1]):
+                    raise ValueError(
+                        "พบฐาน Karaoke PC มากกว่าหนึ่งตำแหน่ง (Data และ App/data) "
+                        "กรุณาระบุฐานที่ใช้งานจริงก่อนนำเข้า")
+                return found[0], True
+            if found:
+                return found[0], True
             if (install / "Data").is_dir() or (install / "Start-XStage-Silent.vbs").is_file():
-                return install / "Data" / "songs.sqlite3", True
+                return primary, True
             if (app / "data").is_dir():
-                return app / "data" / "songs.sqlite3", True
-            return install / "Data" / "songs.sqlite3", True
+                return direct, True
+            return primary, True
         if (install / "XStageKaraoke.exe").is_file():
             return install / "data" / "songs.sqlite3", True
     return library / "DB" / "songs.sqlite3", False
