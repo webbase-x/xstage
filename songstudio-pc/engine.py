@@ -3066,7 +3066,8 @@ class Handler(BaseHTTPRequestHandler):
                     _song_export_module(),
                     search=query.get("search", [""])[0],
                     offset=max(0, int(query.get("offset", ["0"])[0])),
-                    limit=max(1, min(200, int(query.get("limit", ["50"])[0])))))
+                    limit=max(1, min(200, int(query.get("limit", ["50"])[0]))),
+                    midi_only=True))
             elif path == "/api/songs":
                 rows = visible_files(query.get("search", [""])[0],
                                      query.get("view", ["all"])[0])
