@@ -157,6 +157,16 @@
               <div><span>ประเภทเสียง</span><strong id="review-mode">—</strong></div>
             </div>
             <div class="sound-settings">
+              <label for="create-code-style">รูปแบบรหัสชื่อไฟล์เพลงที่สร้างใหม่</label>
+              <select id="create-code-style" class="field">
+                <option value="source">ใช้รหัสไฟล์ต้นฉบับ (เดิม)</option>
+                <option value="numeric">ตัวเลขเท่านั้น · 0–9</option>
+                <option value="letters">ตัวอักษรภาษาอังกฤษเท่านั้น · A–Z</option>
+                <option value="alphanumeric">ตัวเลขและตัวอักษรภาษาอังกฤษ · 0–9, A–Z</option>
+              </select>
+              <label for="create-code-length">จำนวนหลักรหัสเพลง (1–12)</label>
+              <input id="create-code-length" class="field" type="number" min="1" max="12" step="1" value="6">
+              <p class="hint">มีผลเฉพาะเพลงที่สร้างใหม่ ไม่เปลี่ยนชื่อไฟล์ที่สร้างแล้ว · ตรวจรหัสซ้ำกับคลังเดิมและ Google Drive ตามเงื่อนไขที่เชื่อมต่อได้ · เนื้อร้อง JSON ใช้ songCode เดียวกับเพลง</p>
               <label for="create-export-format">รูปแบบส่งออก (ใช้ Lyrics JSON เป็นมาตรฐาน)</label>
               <select id="create-export-format" class="field">
                 <option value="xstage" selected>มาตรฐาน X-Stage · MIDI คัดลอกเดิมทุกไบต์ + Lyrics JSON</option>
