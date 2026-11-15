@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 echo ============================================================
-echo X-Stage Karaoke v0.9.45 - Windows regression gate
+echo X-Stage Karaoke PC v0.9.45 - Windows regression gate
 echo Only tests synthetic fixtures; no Drive authentication or song deletion.
 echo ============================================================
 if exist ".build-venv\Scripts\python.exe" (
