@@ -343,7 +343,8 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             media = next((p for p, _ in row["files"]
                           if p.suffix.lower() in AUDIO or p.suffix.lower() in VIDEO
                           or p.suffix.lower() in MIDI), None)
-            lyric = next((p for p, _ in row["files"] if p.suffix.lower() == ".lrc"), None)
+            lyric = next((p for p, _ in row["files"]
+                          if p.suffix.lower() in (".lrc", ".json")), None)
             if media is None:
                 continue
             source_id = digest(media)
@@ -361,7 +362,20 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                      else ".m4a"))
             lyrics_file = stage / "lyrics" / (source_id[:16] + ".json")
             lrc_file = lyrics_file.with_suffix(".lrc")
-            if is_midi:
+            if lyric is not None and lyric.suffix.lower() == ".json":
+                if not _timed_json(lyric):
+                    continue
+                document = json.loads(lyric.read_text(encoding="utf-8-sig"))
+                # Stage a sidecar only for backward-compatible local preflight.
+                # Lyrics JSON itself remains the authoritative timing.
+                lines = []
+                for entry in document["lines"]:
+                    start = float(entry["startTime"])
+                    minute = int(start // 60)
+                    second = start - minute * 60
+                    lines.append(f"[{minute:02d}:{second:05.2f}]{entry['text']}")
+                raw_lrc = ("\\n".join(lines) + "\\n").encode("utf-8")
+            elif is_midi:
                 if ncn is None:
                     raise ValueError("ไม่มีตัวอ่านเนื้อร้อง NCN/MIDI ในแพ็กเกจ")
                 companions = {p.suffix.lower(): p for p, _ in row["files"]}
@@ -382,7 +396,7 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             if file.suffix.lower() == source_kind:
                 shutil.copyfile(media, file)
                 if digest(file) != source_id:
-                    raise ValueError("SHA-256 ไฟล์ที่คัดลอกไม่ตรงต้นฉบับ: " + media.name)
+                    raise ValueError("MD5 ไฟล์ที่คัดลอกไม่ตรงต้นฉบับ: " + media.name)
             elif renderer is not None:
                 renderer(media, file)
             else:
