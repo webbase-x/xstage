@@ -339,6 +339,26 @@ async function loadCatalog(drive,root){
   if(pointer.songCount!==rows.size)fail('จำนวนเพลงบน Drive ไม่ตรงกับ Catalog');
   return {pointerFile:pointers[0],pointer,rows};
 }
+function diagnosticCsv(plan){
+  const cell=v=>{
+    let text=String(v??'').replace(/[\r\n]+/g,' ').trim();
+    if(/^[=+@-]/.test(text))text="'"+text;
+    return '"'+text.replace(/"/g,'""')+'"';
+  };
+  const rows=[['สถานะ','ไฟล์หรือรหัสเพลง','สาเหตุ','คำแนะนำ']];
+  for(const item of plan?.blocked||[]){
+    const reason=String(item.reason||'ชุดไฟล์ไม่สมบูรณ์');
+    const fix=/LRC\/JSON/.test(reason)?
+      'ใช้ Song Studio PC สร้าง LRC/JSON ที่มีเวลาและชื่อเดียวกับไฟล์เสียง':
+      /NCN|MID.*LYR.*CUR/.test(reason)?
+        'ตรวจ MID+LYR+CUR ให้ครบและมีรหัสเดียวกัน':
+        'ตรวจไฟล์ต้นฉบับและสาเหตุในรายงาน';
+    rows.push(['ไม่พร้อม',item.key,reason,fix]);
+  }
+  for(const item of plan?.ignored||[])
+    rows.push(['ไม่รองรับ',item.key,item.reason,'ตรวจประเภทไฟล์แล้วเตรียมด้วย Song Studio PC']);
+  return '\uFEFF'+rows.map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n';
+}
 class Importer {
   constructor(options){
     this.options=options;this.selected=null;this.plan=null;this.running=false;this.paused=false;this.stopRequested=false;
@@ -346,7 +366,8 @@ class Importer {
     this.dom={};
     for(const key of ['open','dialog','close','pick','input','scan','start','pause','resume','cancel',
       'allow-create','source','total','ready','fonts','blocked','examples','progress','progress-label',
-      'status','detail'])this.dom[key]=$('cloud-import-'+key);
+      'status','detail','report'])this.dom[key]=$('cloud-import-'+key);
+    this.dom.diagnosticSummary=$('cloud-import-diagnostic-summary');
     this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
     this.dom.open?.addEventListener('click',()=>this.open());
     this.dom.gateOpen=$('cloud-import-open-gate');
@@ -355,6 +376,7 @@ class Importer {
     this.dom.dialog?.addEventListener('cancel',event=>{event.preventDefault();this.close();});
     this.dom.pick?.addEventListener('click',()=>this.choose());
     this.dom.scan?.addEventListener('click',()=>this.inspect());
+    this.dom.report?.addEventListener('click',()=>this.downloadReport());
     this.dom.start?.addEventListener('click',()=>this.start());
     this.dom.pause?.addEventListener('click',()=>this.stop('พักงาน'));
     this.dom.cancel?.addEventListener('click',()=>this.stop('ยกเลิกงาน · เก็บรายการที่ทำเสร็จไว้บน Drive'));
@@ -383,6 +405,20 @@ class Importer {
     this.updateOpen();
   }
   session(){return this.options.session();}
+  actionableCount(){
+    if(!this.plan)return 0;
+    return this.plan.songs.filter(x=>!x.video).length+
+      (this.videoEditor?.eligibleCount()||0)+this.plan.midis.length+this.plan.fonts.length;
+  }
+  downloadReport(){
+    if(!this.plan)return;
+    const url=URL.createObjectURL(new Blob([diagnosticCsv(this.plan)],{type:'text/csv;charset=utf-8'}));
+    const link=document.createElement('a');
+    link.href=url;link.download='xstage-import-diagnostics.csv';
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    this.status('ส่งรายงาน CSV ให้เบราว์เซอร์แล้ว · ไม่มีการอัปโหลดเพลง');
+  }
   updateOpen(){
     if(!this.dom.open)return;
     const auth=this.session();
@@ -406,8 +442,21 @@ class Importer {
     this.dom.blocked.textContent=(this.plan.blocked.length+pending).toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,6).map(x=>x.key+' · '+x.reason);
     if(pending)samples.push('วิดีโอ '+pending+' รายการรอตรวจชื่อเพลง/นักร้องและยืนยันรูปแบบเนื้อร้อง');
+    const ignored=this.plan.ignored||[];
+    if(ignored.length)samples.push('ไฟล์ที่ไม่รองรับ '+ignored.length+
+      ' ไฟล์ เช่น '+ignored.slice(0,2).map(x=>x.key).join(', '));
     this.dom.examples.textContent=samples.join('\n')+
       (this.plan.blocked.length>6?'\nและอีก '+(this.plan.blocked.length-6)+' ชุด':'');
+    const readyToImport=this.actionableCount();
+    if(this.dom.diagnosticSummary){
+      this.dom.diagnosticSummary.dataset.state=readyToImport?'ready':'warning';
+      this.dom.diagnosticSummary.textContent=readyToImport?
+        'พร้อมนำเข้า '+readyToImport+' รายการ · ไม่พร้อม '+this.plan.blocked.length+
+          ' ชุด'+(ignored.length?' · ไม่รองรับ '+ignored.length+' ไฟล์':''):
+        'ยังไม่มีเพลงพร้อมนำเข้า · '+this.plan.blocked.length+' ชุดไม่ครบ'+
+          (ignored.length?' · อีก '+ignored.length+' ไฟล์ไม่รองรับ':'')+
+          ' · ใช้ Song Studio PC สร้างและตรวจ LRC/JSON พร้อมเวลา แล้วเลือกโฟลเดอร์อีกครั้ง';
+    }
     this.refreshButtons();
   }
   refreshButtons(){
@@ -415,6 +464,8 @@ class Importer {
     const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
     const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+this.plan.fonts.length)>0;
     this.dom.start.disabled=this.running||this.lockPending||!selected;
+    if(this.dom.report)this.dom.report.disabled=this.running||!this.plan||
+      !(this.plan.blocked.length+(this.plan.ignored?.length||0));
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
     this.dom.resume.disabled=this.running||this.lockPending||(!selected&&!this.saved);
@@ -489,11 +540,11 @@ class Importer {
     this.dom.ready.textContent=(this.plan.songs.length+this.plan.midis.length).toLocaleString('th-TH');
     this.dom.fonts.textContent=this.plan.fonts.length.toLocaleString('th-TH');
     this.dom.blocked.textContent=this.plan.blocked.length.toLocaleString('th-TH');
-    const samples=this.plan.blocked.slice(0,7).map(x=>x.key+' · '+x.reason);
-    this.dom.examples.textContent=samples.join('\n')+(this.plan.blocked.length>7?'\nและอีก '+(this.plan.blocked.length-7)+' ชุด':'');
     this.updateVideoStats();
     this.progress(0,1);
-    this.status('ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์');
+    this.status(this.actionableCount()?
+      'สแกนเสร็จ · กดเริ่มตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการครบ':
+      'สแกนเสร็จ แต่ยังไม่มีเพลงพร้อมนำเข้า · ไม่ได้อัปโหลดอะไร · ดาวน์โหลดรายงาน CSV เพื่อแก้ไฟล์ที่ขาด');
     await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length});
     this.refreshButtons();
   }
@@ -561,6 +612,12 @@ class Importer {
     const auth=this.session();
     if(!auth?.token||!auth.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
     if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
+    // Even a resumed job must not create an empty private Drive library.
+    if(!this.actionableCount()){
+      this.progress(0,1);
+      this.status('ไม่มีเพลงหรือ SoundFont พร้อมนำเข้า · ไม่สร้าง XStageWeb ใหม่ · เตรียมไฟล์ LRC/JSON พร้อมเวลาก่อน');
+      this.refreshButtons();return;
+    }
     this.account=auth.sub;
     this.videoEditor?.releasePreview();
     this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
@@ -922,9 +979,13 @@ class Importer {
       await publish();
       await checkpoint(this.account,null);this.saved=null;
       this.progress(1,1);
-      this.status('เสร็จสิ้น · เพลงใหม่ '+this.stats.newSongs+' · แก้เนื้อร้อง '+this.stats.updated+
+      const changed=this.stats.newSongs+this.stats.updated+this.stats.fonts;
+      this.status((changed?'เสร็จสิ้นการนำเข้า':'ตรวจครบแล้ว · ไม่มีไฟล์ใหม่ที่อัปโหลด')+
+        ' · เพลงใหม่ '+this.stats.newSongs+' · แก้เนื้อร้อง '+this.stats.updated+
         ' · ข้ามซ้ำ '+this.stats.duplicates+' · รหัสชน '+this.stats.conflicts+
-        ' · SoundFont '+this.stats.fonts+' · ข้ามผิดพลาด '+this.stats.errors);
+        ' · SoundFont '+this.stats.fonts+' · ข้ามผิดพลาด '+this.stats.errors+
+        (this.plan.blocked.length?' · ไม่พร้อม '+this.plan.blocked.length+' ชุด (ไม่ส่ง)':'')+
+        ' · 100% คือจบการประมวลผล ไม่ใช่อัปโหลดครบทุกไฟล์');
       try{await this.options.refresh();}catch(error){console.warn('Catalog refresh deferred:',error?.message||error);}
     }catch(error){
       this.status(aborted(error)||this.stopRequested?
@@ -937,5 +998,5 @@ class Importer {
     }
   }
 }
-scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog};
+scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,diagnosticCsv};
 })(window);
