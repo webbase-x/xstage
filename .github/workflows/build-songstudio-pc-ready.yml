@@ -368,6 +368,11 @@ jobs:
           } else {
             git commit -m "Update verified Song Studio PC Ready latest metadata to Build 336 [skip ci]"
             if ($LASTEXITCODE -ne 0) { throw "Cannot commit latest metadata" }
+            # The offline build generates/changes files in this CI checkout.
+            # They are already packaged and uploaded, and must not block
+            # rebasing the single verified metadata commit onto newer main.
+            git reset --hard HEAD
+            if ($LASTEXITCODE -ne 0) { throw "Cannot clean generated files before metadata rebase" }
             # The long Windows build may finish after another contributor
             # advances main. Rebase the metadata-only commit without forcing.
             $published = $false
