@@ -68,11 +68,12 @@ jobs:
         shell: powershell
         run: |
           $builder = Get-Content -LiteralPath "scripts/build_songstudio_ready.ps1" -Raw -Encoding UTF8
-          if ($builder -notmatch "(?m)^\x24Version\s*=\s*'v(\d+\.\d+\.\d+)-build(\d+)'\s*$") {
+          $versionMatch = [regex]::Match($builder, "(?m)^\x24Version\s*=\s*'v(\d+\.\d+\.\d+)-build(\d+)'\s*$")
+          if (!$versionMatch.Success) {
             throw "Cannot determine the exact version from Ready packaging script"
           }
-          $version = $Matches[1]
-          $build = [int]$Matches[2]
+          $version = $versionMatch.Groups[1].Value
+          $build = [int]$versionMatch.Groups[2].Value
           $suffix = "v$version-build$build"
           "SONGSTUDIO_READY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "SONGSTUDIO_READY_BUILD=$build" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
