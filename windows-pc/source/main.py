@@ -49,7 +49,7 @@ def main():
         import tkinter as tk
         from tkinter import messagebox
         root = tk.Tk(); root.withdraw()
-        messagebox.showerror('X-Stage Karaoke', str(error), parent=root)
+        messagebox.showerror('X-Stage Karaoke PC', str(error), parent=root)
         root.destroy()
         return
     from karaoke.startup_hygiene import quarantine_stale
