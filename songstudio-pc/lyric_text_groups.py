@@ -30,6 +30,7 @@ TIMED = re.compile(r"^(\s*\[(?:\d{1,3}):(?:[0-5]\d)(?:[.:]\d{1,3})?\])(.*?)(\r?\
 ENHANCED = re.compile(r"<\d{1,3}:[0-5]\d(?:[.:]\d{1,3})?>")
 MAX_TEXT = 400
 MAX_ROWS = 400000
+MAX_SELECTED_GROUPS = 1000
 
 
 def _same(text):
@@ -397,10 +398,10 @@ def _new_text(value):
 
 
 def _targets(snapshot, group_ids, search="", replacement=None):
-    if (not isinstance(group_ids, list) or not 1 <= len(group_ids) <= 200 or
+    if (not isinstance(group_ids, list) or not 1 <= len(group_ids) <= MAX_SELECTED_GROUPS or
             any(not isinstance(x, str) for x in group_ids) or
             len(set(group_ids)) != len(group_ids)):
-        raise ValueError("กรุณาเลือกกลุ่มข้อความไม่ซ้ำกัน 1–200 กลุ่ม")
+        raise ValueError("กรุณาเลือกกลุ่มข้อความไม่ซ้ำกัน 1–1,000 กลุ่ม")
     new = _new_text(replacement) if replacement is not None else None
     targets = {}
     chosen = []
@@ -437,7 +438,8 @@ def plan(snapshot, group_ids, *, search="", replacement=None):
             "count": len(members),
             "examples": [{"code": row["code"], "title": row["title"]}
                          for row in members[:3]],
-        } for group, members in chosen],
+        } for group, members in chosen[:20]],
+        "selectedPreviewLimit": 20,
         "search": _same(search),
     }
 
