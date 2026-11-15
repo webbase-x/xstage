@@ -2401,8 +2401,6 @@ def start_job(data):
             raise ValueError("จำนวนหลักรหัสไฟล์ต้องเป็นตัวเลข") from exc
         if not 1 <= digits <= 12:
             raise ValueError("จำนวนหลักรหัสไฟล์ต้องอยู่ระหว่าง 1–12")
-        if PREFS.get("mode") != "original":
-            raise ValueError("MIDI to .XSK ต้องใช้โหมดต้นฉบับ (ไม่แยกเสียง)")
         validation = {"total": 0}
     if action == "json-pro-export":
         if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
