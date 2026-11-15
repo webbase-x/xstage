@@ -701,7 +701,7 @@
   }
   async function refreshSongs() {
     const view=$('catalog-view').value;
-    const data = await api('/api/songs?limit=' + pageSize + '&offset=' + (page * pageSize) + '&search=' + encodeURIComponent(search) + '&view=' + encodeURIComponent(view));
+    const data = await api('/api/songs?limit=' + pageSize + '&offset=' + (page * pageSize) + '&search=' + encodeURIComponent(search) + '&view=' + encodeURIComponent(view) + '&midi_only=' + ($('create-output-kind').value==='xsk'?'1':'0'));
     songs = data.rows || []; total = data.total || 0;
     const rows = $('song-rows'); rows.replaceChildren();
     if (!songs.length) rows.innerHTML = '<tr><td colspan="5" class="empty-row">' +
@@ -2815,7 +2815,8 @@
   $('select-all').addEventListener('click',async()=>{
     try {
       const result = await api('/api/songs/ids?search='+encodeURIComponent(search)+
-        '&view='+encodeURIComponent($('catalog-view').value));
+        '&view='+encodeURIComponent($('catalog-view').value)+
+        '&midi_only='+($('create-output-kind').value==='xsk'?'1':'0'));
       if (result.ids.length > 1000 && !await confirmStudio(`พบ ${fmtNum(result.ids.length)} เพลงที่ตรงเงื่อนไข ต้องการเลือกทั้งหมดจริงหรือไม่?`, 'เลือกรายการทั้งหมด')) return;
       for (const id of result.ids) selected.add(id);
       await refreshSongs();
@@ -3285,7 +3286,10 @@
   });
   $('create-output-kind').addEventListener('change',()=>{
     syncXskControls();
-    void config({export_format:$('create-output-kind').value}).catch(e=>message(e.message));
+    selected.clear();
+    page=0;
+    void config({export_format:$('create-output-kind').value})
+      .then(()=>refreshSongs()).catch(e=>message(e.message));
   });
   $('xsk-edit-choice').addEventListener('change',syncXskControls);
   $('pro-license-activate').addEventListener('click',async()=>{
