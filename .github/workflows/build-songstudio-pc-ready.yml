@@ -99,8 +99,9 @@ jobs:
         shell: powershell
         run: |
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Song Studio PC engine regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_pc_export.py -v
-          if ($LASTEXITCODE -ne 0) { throw "Duplicate and resume regression tests failed" }
+          if ($LASTEXITCODE -ne 0) { throw "Karaoke PC native SQLite integration and export regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_download.py -v
           if ($LASTEXITCODE -ne 0) { throw "Google Drive download read-only regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_build_outcomes.py -v
