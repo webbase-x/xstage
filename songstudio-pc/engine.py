@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.39" if READY_BUNDLE else "0.2.5-Source-Preview"
-STATUS_BUILD = "339" if READY_BUNDLE else "205-SRC"
+STATUS_VERSION = "0.3.40" if READY_BUNDLE else "0.2.5-Source-Preview"
+STATUS_BUILD = "340" if READY_BUNDLE else "205-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -119,7 +119,7 @@ PREFS = {
     "workspace": default_song_workspace(),
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
-    "export_format": "xstage", "code_style": "source", "code_length": "6", "oauth": "",
+    "export_format": "xsk", "code_style": "source", "code_length": "6", "oauth": "",
     "upload_folder": "", "lyric_source": "", "pc_export_folder": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
@@ -1297,6 +1297,113 @@ def _source_digest(row, export):
     return digest.hexdigest()
 
 
+
+def _xsk_format(options):
+    return options.get("export_format", PREFS.get("export_format", "xsk"))
+
+
+def _xsk_apply_head_tail(document, options):
+    """Only adjust the draft document, never original MIDI, LYR or CUR."""
+    if options.get("edit_head_tail") != "yes":
+        return document
+    import copy
+    modified = copy.deepcopy(document)
+    lines = modified.get("lines") or []
+    for position, prefix in ((0, "head"), (-1, "tail")):
+        before = str(options.get(prefix + "_find") or "")
+        after = str(options.get(prefix + "_replace") or "")
+        if not before:
+            continue
+        if not lines or not isinstance(lines[position], dict):
+            raise ValueError("ไม่สามารถค้นหาบรรทัดหัว–ท้ายเพลง")
+        line = lines[position]
+        if line.get("text") != before:
+            raise ValueError("ข้อความ" + prefix + "ไม่ตรงกับตัวอย่าง · ไม่เปลี่ยนเพลง")
+        if line.get("syllables") and after != before:
+            raise ValueError("มีเวลาปาดระดับอักษร · การเปลี่ยนข้อความนี้ต้องตรวจด้วยตนเอง")
+        line["text"] = after
+    return modified
+
+
+def build_xsk(rows, mode, options):
+    """Seal each verified MIDI + timed lyric document without publishing raw assets."""
+    if mode != "original" or options.get("audio_only"):
+        raise ValueError("XSK ต้องเป็นเพลง MIDI/KAR ต้นฉบับ ไม่ใช่โหมดแยกเสียง")
+    package = _module("xsk_package.py", "xstage_xsk_package")
+    keys = _module("xsk_keys.py", "xstage_xsk_keys")
+    key = keys.get_key(DATA)
+    export = _song_export_module()
+    root = export.songs_root(PREFS["workspace"])
+    codes = _module("code_registry.py", "xstage_xsk_codes")
+    records = export.existing_records(root)
+    allocator = codes.CodeAllocator(
+        records, [], root,
+        code_style=PREFS.get("code_style", "source"),
+        code_length=int(PREFS.get("code_length", "6")))
+    created = skipped = errors = 0
+    issues = []
+    with LOCK:
+        JOB["total"] = len(rows)
+    for index, original in enumerate(rows, 1):
+        if CANCEL.is_set():
+            raise RuntimeError("ยกเลิกงานสร้าง XSK · เก็บเพลงที่สำเร็จแล้ว")
+        row = dict(original)
+        source = Path(row["path"])
+        try:
+            if source.suffix.lower() not in EXT_MIDI:
+                raise ValueError("XSK รองรับเฉพาะ MIDI/KAR ที่มีเวลาคำร้องถูกต้อง")
+            if not source.is_file() or source.is_symlink():
+                raise ValueError("ไฟล์ MIDI ต้นฉบับไม่พร้อมใช้งาน")
+            preferred = str(row.get("code") or source.stem)
+            # Existing same-name packages are verified before any allocation,
+            # preventing duplicate files on repeated runs.
+            candidate = package.destination(root, preferred)
+            if candidate.is_file() and not candidate.is_symlink():
+                existing = package.open_package(candidate, key)
+                if existing.get("audio", {}).get("sha256") == package._hash_source(source):
+                    skipped += 1
+                    log("XSK ข้ามเพลงเดิมที่ตรวจ SHA-256 ผ่าน: " + preferred)
+                    continue
+                raise ValueError("รหัส XSK ซ้ำแต่ต้นฉบับแตกต่างกัน: " + preferred)
+            code = allocator.assign_new(preferred)
+            output = package.destination(root, code)
+            if output.is_file():
+                old = package.open_package(output, key)
+                if old.get("audio", {}).get("sha256") == package._hash_source(source):
+                    skipped += 1
+                    continue
+                raise ValueError("รหัส XSK ซ้ำ: " + code)
+            row["code"] = code
+            _lrc, doc, _fingerprint = lyrics_package(row)
+            if not doc or not doc.get("lines"):
+                raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
+            doc = _xsk_apply_head_tail(doc, options)
+            title = row.get("title") or source.stem
+            artist = row.get("artist") or "X-Stage Song Studio"
+            update(f"เข้ารหัส XSK {index}/{len(rows)}: {title}")
+            package.seal(source, doc, code, title, artist, key, target=output)
+            created += 1
+            log("XSK สร้างและตรวจ AES-GCM / SHA-256 ผ่าน: " + code)
+        except Exception as exc:
+            errors += 1
+            reason = source.name + ": " + str(exc)
+            issues.append(reason)
+            log("ERR " + reason)
+        finally:
+            with LOCK:
+                JOB.update(created=created, skipped=skipped, errors=errors,
+                           m4aCount=0, lyricsCount=created)
+            update(f"XSK {index}/{len(rows)} · ใหม่ {created} · ซ้ำ {skipped} · ERR {errors}", index)
+    result = {"created": created, "skipped": skipped, "errors": errors,
+              "m4aCount": 0, "lyricsCount": created,
+              "output": str(root / "MIDI" / "XSK"),
+              "issues": issues[-50:],
+              "message": f"สร้าง XSK {created} เพลง · ข้าม {skipped} · ผิดพลาด {errors}"}
+    if not created and not skipped:
+        raise ValueError("ไม่มีเพลงที่สร้างสำเร็จ · " + "; ".join(issues[:3]))
+    return result
+
+
 def build_library(rows, mode, options):
     """Idempotent across independent sessions; checkpoint before next song.
 
@@ -1690,7 +1797,7 @@ def execute_job(action, options, started):
                 rows = [dict(FILE_BY_ID[i]) for i in ids if type(i) is int and i in FILE_BY_ID]
             if not rows:
                 raise ValueError("กรุณาเลือกเพลงก่อนสร้าง")
-            result = build_library(rows, mode, options) if action == "build" else build_preview(rows, mode)
+            result = (build_xsk(rows, mode, options) if _xsk_format(options) == "xsk"\n                      else build_library(rows, mode, options)) if action == "build" else build_preview(rows, mode)
         elif action == "lyric-groups-scan":
             root = lyric_source_root()
             if not (root / "current.json").is_file():
@@ -1974,8 +2081,8 @@ def validate_build_request(data):
         raise ValueError("รหัสรายการเพลงไม่ถูกต้อง กรุณาสแกนและเลือกรายการใหม่")
     if not isinstance(data.get("audio_only", False), bool):
         raise ValueError("ประเภทคำสั่งสร้างเพลงไม่ถูกต้อง")
-    if data.get("export_format", PREFS.get("export_format", "xstage")) not in ("xstage", "m4a"):
-        raise ValueError("รูปแบบส่งออกไม่รองรับ · เลือก MIDI/Audio+JSON หรือ M4A+JSON")
+    export_format = data.get("export_format", PREFS.get("export_format", "xsk"))\n    if export_format not in ("xsk", "xstage", "m4a"):
+        raise ValueError("รูปแบบส่งออกไม่รองรับ")\n    if (export_format != "xsk" or data.get("audio_only")) and not _module("pro_license.py", "xstage_pro_license").enabled(DATA):\n        raise ValueError("รูปแบบส่งออกนี้ต้องใช้สิทธิ์ X-Stage Song Studio PC Pro")\n    if data.get("edit_head_tail", "no") not in ("no", "yes"):\n        raise ValueError("ตัวเลือกแก้หัว–ท้ายไม่ถูกต้อง")\n    if data.get("edit_head_tail") == "yes":\n        if not any(data.get(k) for k in ("head_find", "tail_find")):\n            raise ValueError("เลือกแก้หัว–ท้ายแล้ว กรุณาระบุข้อความต้นทาง")\n        for k in ("head_find", "tail_find", "head_replace", "tail_replace"):\n            if not isinstance(data.get(k, ""), str) or len(data.get(k, "")) > 500:\n                raise ValueError("ข้อความหัว–ท้ายไม่ถูกต้อง")
     with LOCK:
         rows = [FILE_BY_ID.get(item) for item in ids]
     if any(row is None for row in rows):
@@ -1984,7 +2091,7 @@ def validate_build_request(data):
     formats = Counter(Path(row["path"]).suffix.lower() for row in rows)
     unsupported_count = sum(count for ext, count in formats.items() if ext in EXT_UNSUPPORTED)
     supported_count = len(rows) - unsupported_count
-    if supported_count == 0:
+    if export_format == "xsk":\n        supported_count = sum(1 for row in rows if Path(row["path"]).suffix.lower() in EXT_MIDI)\n        unsupported_count = len(rows) - supported_count\n    if supported_count == 0:
         raise ValueError(
             f"ไม่สามารถเริ่มสร้าง: เลือก {len(rows):,} เพลง แต่เป็น NCN ทั้งหมด "
             "ซึ่ง Song Studio PC Engine รุ่นนี้ยังแปลง NCN ไม่ได้ · "
@@ -1995,9 +2102,9 @@ def validate_build_request(data):
         raise ValueError("ประเภทเสียงที่เลือกไม่ถูกต้อง")
     if mode == "instrumental" and not ai_available():
         raise ValueError("AI Separation ไม่พร้อม: โมเดลหรือไลบรารีไม่ครบในแพ็กเกจ")
-    if any(Path(row["path"]).suffix.lower() != ".m4a" for row in rows) and not ffmpeg_binary():
+    if export_format != "xsk" and any(Path(row["path"]).suffix.lower() != ".m4a" for row in rows) and not ffmpeg_binary():
         raise ValueError("ไม่พบ FFmpeg ในแพ็กเกจ จึงยังสร้างเพลงจากรูปแบบนี้ไม่ได้")
-    if any(Path(row["path"]).suffix.lower() in EXT_MIDI for row in rows) and not sf_available():
+    if export_format != "xsk" and any(Path(row["path"]).suffix.lower() in EXT_MIDI for row in rows) and not sf_available():
         raise ValueError("ยังไม่ได้เลือก SoundFont ที่ใช้งานได้สำหรับเพลง MIDI/KAR")
     for row in rows[:5]:
         if not Path(row["path"]).is_file():
