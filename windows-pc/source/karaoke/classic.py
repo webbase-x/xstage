@@ -279,7 +279,7 @@ class ClassicApp(KaraokeApp):
         """Choose the local XStageSong folder explicitly, never auto-scan drives."""
         if self.scanning:
             return self.status_var.set('กำลังสร้างดัชนีเพลง กรุณารอให้งานเดิมเสร็จ')
-        from .pc_stageweb import library_root, import_library
+        from .pc_xstagesong import library_root, import_library
         previous = self.settings.get('xstagesong_pc_folder', '')
         initial = previous if previous and Path(previous).is_dir() else str(self.home)
         selected = filedialog.askdirectory(
