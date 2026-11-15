@@ -1355,31 +1355,37 @@ def build_xsk(rows, mode, options):
             if not source.is_file() or source.is_symlink():
                 raise ValueError("ไฟล์ MIDI ต้นฉบับไม่พร้อมใช้งาน")
             preferred = str(row.get("code") or source.stem)
-            # Existing same-name packages are verified before any allocation,
-            # preventing duplicate files on repeated runs.
-            candidate = package.destination(root, preferred)
-            if candidate.is_file() and not candidate.is_symlink():
-                existing = package.open_package(candidate, key)
-                if existing.get("audio", {}).get("sha256") == package._hash_source(source):
-                    skipped += 1
-                    log("XSK ข้ามเพลงเดิมที่ตรวจ SHA-256 ผ่าน: " + preferred)
-                    continue
-                raise ValueError("รหัส XSK ซ้ำแต่ต้นฉบับแตกต่างกัน: " + preferred)
-            code = allocator.assign_new(preferred)
-            output = package.destination(root, code)
-            if output.is_file():
-                old = package.open_package(output, key)
-                if old.get("audio", {}).get("sha256") == package._hash_source(source):
-                    skipped += 1
-                    continue
-                raise ValueError("รหัส XSK ซ้ำ: " + code)
-            row["code"] = code
+            row["code"] = preferred
             _lrc, doc, _fingerprint = lyrics_package(row)
             if not doc or not doc.get("lines"):
                 raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
             doc = _xsk_apply_head_tail(doc, options)
             title = row.get("title") or source.stem
             artist = row.get("artist") or "X-Stage Song Studio"
+            # Existing same-name packages are verified before any allocation,
+            # preventing duplicate files on repeated runs.
+            candidate = package.destination(root, preferred)
+            if candidate.is_file() and not candidate.is_symlink():
+                existing = package.open_package(candidate, key)
+                if (existing.get("audio", {}).get("sha256") == package._hash_source(source)
+                    and existing.get("lines") == doc["lines"] and existing.get("title") == title
+                    and existing.get("artist") == artist):
+                    skipped += 1
+                    log("XSK ข้ามเพลงเดิมที่ตรวจ SHA-256 ผ่าน: " + preferred)
+                    continue
+                raise ValueError("XSK เดิมมีข้อมูลต่างจากงานใหม่ · ไม่เขียนทับอัตโนมัติ: " + preferred)
+            code = allocator.assign_new(preferred)
+            output = package.destination(root, code)
+            if output.is_file():
+                old = package.open_package(output, key)
+                if (old.get("audio", {}).get("sha256") == package._hash_source(source)
+                    and old.get("lines") == doc["lines"] and old.get("title") == title
+                    and old.get("artist") == artist):
+                    skipped += 1
+                    continue
+                raise ValueError("รหัส XSK ซ้ำ: " + code)
+            row["code"] = code
+            doc["songCode"] = code
             update(f"เข้ารหัส XSK {index}/{len(rows)}: {title}")
             package.seal(source, doc, code, title, artist, key, target=output)
             created += 1
