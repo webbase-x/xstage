@@ -40,7 +40,7 @@ class Ui095Tests(unittest.TestCase):
         root=Path(__file__).parents[1]/'web'
         app=(root/'app.js').read_text(encoding='utf-8')
         html=(root/'index.html').read_text(encoding='utf-8')
-        self.assertIn('XStageWeb', app)
+        self.assertIn('XStageSong', app)
         self.assertIn('drive.file', app)
         self.assertIn('current.json', app)
         self.assertIn('catalogFileId', app)
