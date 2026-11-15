@@ -746,14 +746,14 @@ def _matching_lrc(source: Path) -> Path | None:
     return None
 
 
-def lyrics_package(row):
+def lyrics_package(row, *, export=None):
     """Return (LRC, accurately timed JSON, source fingerprint) or no lyrics.
 
     Never invent timings. The metadata editor's saved timed LRC has priority.
     NCN requires .MID + .LYR + .CUR with the SAME code and mirrored folder.
     KAR text events are decoded from the MIDI itself.
     """
-    export = _song_export_module()
+    export = export if export is not None else _song_export_module()
     code = str(row.get("code") or Path(row["path"]).stem)
     note = NOTES.get(row["path"], {}).get("lyrics", "")
     if note:
@@ -1454,7 +1454,19 @@ def _xsk_apply_head_tail(document, options):
     return modified
 
 
-def build_xsk(rows, mode, options):
+def _xsk_stream_scan_status(data, complete, backlog):
+    """Discovered MIDI count is dynamic until the source walk finishes."""
+    with LOCK:
+        JOB["scannedFiles"] = data["files"]
+        JOB["discovered"] = data["found"]
+        JOB["queuedBatches"] = backlog
+        JOB["scanDone"] = bool(complete)
+        if complete:
+            JOB["total"] = data["found"]
+        JOB["updated"] = time.monotonic()
+
+
+def build_xsk(rows, mode, options, *, progressive=False):
     """Seal each verified MIDI + timed lyric document without publishing raw assets."""
     if mode != "original" or options.get("audio_only"):
         raise ValueError("XSK ต้องเป็นเพลง MIDI/KAR ต้นฉบับ ไม่ใช่โหมดแยกเสียง")
@@ -1462,13 +1474,13 @@ def build_xsk(rows, mode, options):
     keys = _module("xsk_keys.py", "xstage_xsk_keys")
     key = keys.get_key(DATA)
     export = _song_export_module()
-    root = export.songs_root(PREFS.get("xsk_folder") or PREFS["workspace"])
+    root = export.songs_root(options.get("xsk_folder") or PREFS.get("xsk_folder") or PREFS["workspace"])
     codes = _module("code_registry.py", "xstage_xsk_codes")
     records = export.existing_records(root)
     allocator = codes.CodeAllocator(
         records, [], root,
-        code_style=PREFS.get("code_style", "source"),
-        code_length=int(PREFS.get("code_length", "6")))
+        code_style=options.get("code_style", PREFS.get("code_style", "source")),
+        code_length=int(options.get("code_length", PREFS.get("code_length", "6"))))
     # An XSK is an encrypted package, not an ordinary published audio record.
     # Index its authenticated MIDI digests and occupied codes once before
     # assigning any new ID. Never infer uniqueness from filenames alone.
@@ -1499,7 +1511,7 @@ def build_xsk(rows, mode, options):
     created = skipped = errors = 0
     issues = []
     with LOCK:
-        JOB["total"] = len(rows)
+        JOB["total"] = 0 if progressive else len(rows)
     for index, original in enumerate(rows, 1):
         if CANCEL.is_set():
             raise RuntimeError("ยกเลิกงานสร้าง XSK · เก็บเพลงที่สำเร็จแล้ว")
@@ -1512,7 +1524,7 @@ def build_xsk(rows, mode, options):
                 raise ValueError("ไฟล์ MIDI ต้นฉบับไม่พร้อมใช้งาน")
             preferred = str(row.get("code") or source.stem)
             row["code"] = preferred
-            _lrc, doc, _fingerprint = lyrics_package(row)
+            _lrc, doc, _fingerprint = lyrics_package(row, export=export)
             if not doc or not doc.get("lines"):
                 raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
             doc = _xsk_apply_head_tail(doc, options)
@@ -1533,7 +1545,8 @@ def build_xsk(rows, mode, options):
                 raise FileExistsError("รหัส XSK ปลายทางมีอยู่แล้ว · ไม่เขียนทับ: " + code)
             row["code"] = code
             doc["songCode"] = code
-            update(f"เข้ารหัส XSK {index}/{len(rows)}: {title}")
+            update(f"เข้ารหัส XSK รายการ {index:,}" +
+                   (f"/{len(rows):,}" if not progressive else "") + f": {title}")
             package.seal(source, doc, code, title, artist, key, target=output)
             existing_midi.add(source_digest)
             created += 1
@@ -1547,7 +1560,8 @@ def build_xsk(rows, mode, options):
             with LOCK:
                 JOB.update(created=created, skipped=skipped, errors=errors,
                            m4aCount=0, lyricsCount=created)
-            update(f"XSK {index}/{len(rows)} · ใหม่ {created} · ซ้ำ {skipped} · ERR {errors}", index)
+            update((f"XSK {index:,}" + (f"/{len(rows):,}" if not progressive else "") +
+                    f" · ใหม่ {created:,} · ซ้ำ {skipped:,} · ERR {errors:,}"), index)
     result = {"created": created, "skipped": skipped, "errors": errors,
               "m4aCount": 0, "lyricsCount": created,
               "output": str(root / "MIDI" / "XSK"),
@@ -1984,6 +1998,21 @@ def execute_job(action, options, started):
                 _module("code_registry.py", "xstage_xsk_codes"),
                 _module("xsk_keys.py", "xstage_xsk_keys").get_key(DATA),
                 destination_root=output_root, cancelled=CANCEL, progress=_created_progress)
+        elif action == "xsk-stream":
+            options = dict(options)
+            options["source"] = str(options.get("source") or PREFS["source"])
+            options["xsk_folder"] = str(options.get("xsk_folder") or PREFS.get("xsk_folder") or PREFS["workspace"])
+            options["code_style"] = str(options.get("code_style") or PREFS["code_style"])
+            options["code_length"] = str(options.get("code_length") or PREFS["code_length"])
+            root = _song_export_module().songs_root(options["xsk_folder"])
+            scanner = _module("xsk_stream.py", "xstage_xsk_stream")
+            with scanner.source_batches(
+                    options["source"], root, cancelled=CANCEL,
+                    batch_size=32, max_batches=4,
+                    on_scan=lambda data, done, backlog: _xsk_stream_scan_status(
+                        data, done, backlog)) as incoming:
+                result = build_xsk(incoming, "original", {
+                    **options, "audio_only": False}, progressive=True)
         elif action in ("build", "preview"):
             mode = PREFS.get("mode", "original")
             if mode not in ("original", "instrumental"):
@@ -2355,6 +2384,26 @@ def start_job(data):
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
     validation = validate_build_request(data) if action == "build" else {}
+    if action == "xsk-stream":
+        source = str(data.get("source") or PREFS.get("source") or "")
+        target = str(data.get("xsk_folder") or PREFS.get("xsk_folder")
+                     or PREFS.get("workspace") or "")
+        if not source or not Path(source).expanduser().is_dir():
+            raise ValueError("กรุณาเลือกโฟลเดอร์ MIDI ต้นทางที่เข้าถึงได้")
+        if not target:
+            raise ValueError("กรุณาเลือกปลายทางสำหรับสร้าง .XSK")
+        if data.get("code_style", PREFS.get("code_style")) not in (
+                "source", "numeric", "letters", "alphanumeric"):
+            raise ValueError("ชนิดรหัสเพลงไม่ถูกต้อง")
+        try:
+            digits = int(data.get("code_length", PREFS.get("code_length", "6")))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("จำนวนหลักรหัสไฟล์ต้องเป็นตัวเลข") from exc
+        if not 1 <= digits <= 12:
+            raise ValueError("จำนวนหลักรหัสไฟล์ต้องอยู่ระหว่าง 1–12")
+        if PREFS.get("mode") != "original":
+            raise ValueError("MIDI to .XSK ต้องใช้โหมดต้นฉบับ (ไม่แยกเสียง)")
+        validation = {"total": 0}
     if action == "json-pro-export":
         if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
             raise ValueError("ส่งออก Lyrics JSON ต้องเปิดใช้ License Pro")
@@ -2467,7 +2516,8 @@ def start_job(data):
         JOB = {
             "id": secrets.token_hex(8), "kind": action, "state": "running",
             "stage": "PC Engine รับคำสั่งแล้ว",
-            "detail": ("รอเริ่มสร้าง " + str(validation["total"]) + " เพลง" if validation
+            "detail": ("กำลังเริ่มสแกน MIDI และสร้าง XSK คู่ขนานกัน" if action == "xsk-stream"
+                       else "รอเริ่มสร้าง " + str(validation["total"]) + " เพลง" if validation
                        else "กำลังเริ่มต้น"),
             "completed": 0, "total": validation.get("total", 0),
             "elapsed": 0, "eta": None,
