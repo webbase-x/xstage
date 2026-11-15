@@ -1,4 +1,4 @@
-"""Connect user-selected offline XStageWeb/AUDIO + LYRICS to Karaoke PC.
+"""Connect user-selected offline XStageSong/AUDIO + LYRICS to Karaoke PC.
 
 Reads the Song Studio export catalog without converting MIDI, rewriting media,
 or contacting Google Drive. The existing Karaoke SQLite index remains the
@@ -22,17 +22,17 @@ def library_root(selected):
         path = path.parent
     elif path.name.casefold() == "lyrics":
         path = path.parent
-    if path.name.casefold() != "xstageweb":
-        path = path / "XStageWeb"
+    if path.name.casefold() != "xstagesong":
+        path = path / "XStageSong"
     if not (path / "AUDIO").is_dir() or not (path / "LYRICS").is_dir():
-        raise ValueError("ไม่พบโฟลเดอร์ XStageWeb/AUDIO และ XStageWeb/LYRICS ที่เลือก")
+        raise ValueError("ไม่พบโฟลเดอร์ XStageSong/AUDIO และ XStageSong/LYRICS ที่เลือก")
     return path
 
 
 def _inside(root, relative, prefix):
     if (not isinstance(relative, str) or not relative.startswith(prefix + "/")
             or "\\" in relative or ":" in relative or "\0" in relative):
-        raise ValueError("พาธข้อมูลคลัง XStageWeb ไม่ถูกต้อง")
+        raise ValueError("พาธข้อมูลคลัง XStageSong ไม่ถูกต้อง")
     parts = relative.split("/")
     if len(parts) < 3 or any(part in ("", ".", "..") for part in parts):
         raise ValueError("พบพาธไม่ปลอดภัยใน Catalog")
@@ -46,7 +46,7 @@ def catalog_rows(selected, *, cancelled=None):
     root = library_root(selected)
     file = root / "LYRICS" / "current.json"
     if not file.is_file():
-        raise ValueError("ไม่พบ XStageWeb/LYRICS/current.json กรุณานำเข้าจาก Song Studio ก่อน")
+        raise ValueError("ไม่พบ XStageSong/LYRICS/current.json กรุณานำเข้าจาก Song Studio ก่อน")
     pointer = json.loads(file.read_text(encoding="utf-8-sig"))
     if pointer.get("format") != FORMAT or pointer.get("schemaVersion") != 1:
         raise ValueError("ฐานนี้ไม่ใช่ Catalog สำหรับ Karaoke PC (ไม่ใช่ Drive File-ID Catalog)")
@@ -54,7 +54,7 @@ def catalog_rows(selected, *, cancelled=None):
     rows = []
     for meta in pointer.get("catalogFiles") or []:
         if cancelled and cancelled.is_set():
-            raise RuntimeError("ยกเลิกการนำเข้า XStageWeb แล้ว")
+            raise RuntimeError("ยกเลิกการนำเข้า XStageSong แล้ว")
         name = str(meta.get("path") or "")
         if not name.startswith("catalog-pc-") or not name.endswith(".json") or "/" in name or "\\" in name:
             raise ValueError("ชื่อไฟล์ Catalog ไม่ปลอดภัย")
@@ -66,7 +66,7 @@ def catalog_rows(selected, *, cancelled=None):
             raise ValueError("จำนวนเพลงใน Catalog ไม่ตรงกับฐานข้อมูล")
         for source in songs:
             if cancelled and cancelled.is_set():
-                raise RuntimeError("ยกเลิกการนำเข้า XStageWeb แล้ว")
+                raise RuntimeError("ยกเลิกการนำเข้า XStageSong แล้ว")
             path = _inside(root, (source.get("audio") or {}).get("path"), "AUDIO")
             if not path.is_file() or path.suffix.casefold() not in MEDIA:
                 raise ValueError("ไม่พบไฟล์เพลงที่ Catalog อ้างถึง: " + str(path))
@@ -90,7 +90,7 @@ def catalog_rows(selected, *, cancelled=None):
                          "kind": "MIDI" if ext in {".mid", ".midi", ".kar"} else
                                  "VIDEO" if ext in {".mp4", ".avi", ".mov", ".mkv"} else "AUDIO",
                          "format": ext[1:].upper(), "playable": 1,
-                         "first_lyric": first, "source_catalog": "XStageWeb PC"})
+                         "first_lyric": first, "source_catalog": "XStageSong PC"})
     if len(rows) != pointer.get("songCount"):
         raise ValueError("จำนวนเพลงใน current.json ไม่ตรงกับ Catalog")
     return root, rows
@@ -110,7 +110,7 @@ def source_lyrics(media_path):
     path = Path(media_path)
     try:
         audio = next(p for p in path.parents if p.name.casefold() == "audio"
-                     and p.parent.name.casefold() == "xstageweb")
+                     and p.parent.name.casefold() == "xstagesong")
     except StopIteration:
         return None
     root = audio.parent
