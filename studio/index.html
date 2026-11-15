@@ -72,7 +72,7 @@
             <div class="path-row"><input id="create-source" class="field" type="text" placeholder="เลือกโฟลเดอร์เพลงจากเครื่อง PC" autocomplete="off"><button class="button ghost" type="button" data-pick="source">เลือกโฟลเดอร์</button></div>
             <label for="create-workspace">พื้นที่เก็บเพลงที่สร้าง (XStageSong)</label>
             <div class="path-row"><input id="create-workspace" class="field" type="text" autocomplete="off"><button class="button ghost" type="button" data-pick="workspace">เลือกโฟลเดอร์</button></div>
-            <p class="hint">ค่าเริ่มต้น: หากพบ X-Stage Karaoke PC จะเก็บที่ Songs/XStageSong ภายในโฟลเดอร์ติดตั้ง มิฉะนั้นใช้ Music/XStageSong · เปลี่ยนตำแหน่งได้และระบบจะจำไว้ · ภายในคลังแยก audio, lyrics และ catalogs อัตโนมัติ</p>
+            <p class="hint">ค่าเริ่มต้น: หากพบ X-Stage Karaoke PC จะเก็บที่ Songs/XStageSong ภายในโฟลเดอร์ติดตั้ง มิฉะนั้นใช้ Music/XStageSong · เปลี่ยนตำแหน่งได้และระบบจะจำไว้ · ไฟล์ XSK จะถูกจัดเก็บตามหมวดรหัสเพลงอัตโนมัติ</p>
             <article class="sound-settings" aria-label="ตั้งค่าการสร้าง XSK">
               <label for="create-output-kind">รูปแบบเพลงที่สร้าง</label>
               <select id="create-output-kind" class="field">
@@ -196,13 +196,15 @@
               </select>
               <label for="create-code-length">จำนวนหลักรหัสเพลง (1–12)</label>
               <input id="create-code-length" class="field" type="number" min="1" max="12" step="1" value="6">
-              <p class="hint">มีผลเฉพาะเพลงที่สร้างใหม่ ไม่เปลี่ยนชื่อไฟล์ที่สร้างแล้ว · ตรวจรหัสซ้ำกับคลังเดิมและ Google Drive ตามเงื่อนไขที่เชื่อมต่อได้ · เนื้อร้อง JSON ใช้ songCode เดียวกับเพลง</p>
+              <p class="hint">มีผลเฉพาะเพลงที่สร้างใหม่ ไม่เปลี่ยนชื่อไฟล์ที่สร้างแล้ว · ตรวจรหัสซ้ำกับคลังเดิมและ Google Drive ตามเงื่อนไขที่เชื่อมต่อได้</p>
+              <div id="pro-legacy-format" hidden>
               <label for="create-export-format">รูปแบบส่งออกเดิม (สำหรับ Pro)</label>
               <select id="create-export-format" class="field" disabled>
                 <option value="xstage">มาตรฐาน X-Stage · MIDI คัดลอกเดิมทุกไบต์ + Lyrics JSON</option>
                 <option value="m4a">แปลงเป็น M4A + Lyrics JSON · MIDI ต้นฉบับไม่เปลี่ยน</option>
               </select>
               <p class="hint">มาตรฐาน: MIDI/KAR คัดลอกพร้อมตรวจ SHA-256 ไม่แก้โน้ตหรือเวลา · MP3/WAV และเสียงอื่นใช้การแปลง M4A ตามเครื่องมือเดิม · รูปแบบ NCN ใช้เป็นต้นทางเท่านั้น ไม่สร้างหรือแก้ MID/LYR/CUR</p>
+              </div>
             </div>
             <div class="builder-actions"><button id="build-audio-button" class="button ghost" type="button" hidden>สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">▶ สร้างเพลง XSK</button></div>
             <div id="create-build-feedback" class="create-build-feedback" data-state="idle" role="status" aria-live="polite">
