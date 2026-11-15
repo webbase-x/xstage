@@ -1,4 +1,4 @@
-"""SQLite Smart Scan regression tests: real files, NCN, stop/resume, no media writes."""
+"""SQLite Smart Scan: real media+timed lyrics pairs, stop/resume, no source writes."""
 from __future__ import annotations
 
 import importlib.util
@@ -85,51 +85,48 @@ class SongSmartScanTests(unittest.TestCase):
         self.assertEqual(index.restore(other, self.output, self.db, self.notes), [])
         self.assertEqual(index.restore(self.source, other, self.db, self.notes), [])
 
-    def test_ncn_reuses_unchanged_lyric_and_rereads_when_modified(self):
-        base = self.source / "NCN"
-        song = base / "Song" / "0" / "0001.MID"
-        lyric = base / "Lyrics" / "0" / "0001.LYR"
-        cursor = base / "Cursor" / "0" / "0001.CUR"
-        for file in (song, lyric, cursor):
-            file.parent.mkdir(parents=True, exist_ok=True)
-        song.write_bytes(b"MThd" + b"\0" * 40)
-        lyric.write_bytes("ชื่อแรก\nผู้ร้อง\nC\n\nเนื้อเพลง\n".encode("cp874"))
-        cursor.write_bytes(b"\0\x00\x12\x00")
-        rows, _ = self.run_scan()
-        row = next(r for r in rows if r["path"] == str(song))
-        self.assertEqual(row["title"], "ชื่อแรก")
-        self.assertEqual(row["source_format"], "NCN")
-        self.assertEqual(row["status"], "ready")
-        with patch.object(ncn, "lyric_metadata", side_effect=AssertionError("reread")):
-            rows, stats = self.run_scan()
-        self.assertEqual(stats["changed"], 0)
-        lyric.write_bytes("ชื่อใหม่กว่านี้\nผู้ร้องใหม่\nC\n\nเนื้อเพลง\n".encode("cp874"))
-        rows, stats = self.run_scan()
-        row = next(r for r in rows if r["path"] == str(song))
-        self.assertEqual(row["title"], "ชื่อใหม่กว่านี้")
-        self.assertEqual(row["artist"], "ผู้ร้องใหม่")
-        cursor.unlink()
-        rows, _ = self.run_scan()
-        row = next(r for r in rows if r["path"] == str(song))
-        self.assertEqual(row["status"], "missing-companion")
+    def test_timed_lyric_pair_reuses_and_detects_change(self):
+        base=self.source / "MIDI"
+        song=base / "Songs" / "0" / "0001.MID"
+        lyric=base / "Lyrics" / "0" / "0001.lrc"
+        song.parent.mkdir(parents=True)
+        lyric.parent.mkdir(parents=True)
+        song.write_bytes(b"MThd"+b"\0"*40)
+        lyric.write_text("[00:01.00]ท่อนแรก",encoding="utf-8")
+        rows,_=self.run_scan()
+        row=next(item for item in rows if item["path"]==str(song))
+        self.assertEqual(row["status"],"ready")
+        self.assertEqual(row["lyrics_file"],str(lyric))
+        self.assertEqual(row["source_format"],"SMF")
+        rows,stats=self.run_scan()
+        self.assertEqual(stats["changed"],0)
+        lyric.write_text("[00:01.00]ท่อนแรกที่แก้ไขให้ยาว",encoding="utf-8")
+        rows,stats=self.run_scan()
+        self.assertGreaterEqual(stats["changed"],1)
+        lyric.unlink()
+        rows,_=self.run_scan()
+        row=next(item for item in rows if item["path"]==str(song))
+        self.assertEqual(row["status"],"missing-lyrics")
+        self.assertNotIn("ncn",row)
 
-    def test_scanning_only_ncn_song_finds_lyrics_siblings(self):
-        base = self.source / "NCN"
-        song = base / "Song" / "0" / "0001.MID"
-        lyric = base / "Lyrics" / "0" / "0001.LYR"
-        cursor = base / "Cursor" / "0" / "0001.CUR"
-        for file in (song, lyric, cursor):
-            file.parent.mkdir(parents=True, exist_ok=True)
-        song.write_bytes(b"MThd" + b"\0" * 40)
-        lyric.write_bytes("ชื่อเพลง\nผู้ร้อง\nC\n\nเนื้อเพลง\n".encode("cp874"))
-        cursor.write_bytes(b"\0\x00")
-        self.source = base / "Song"
-        rows, _ = self.run_scan()
-        self.assertEqual(rows[0]["title"], "ชื่อเพลง")
-        self.assertEqual(rows[0]["ncn"]["cursor"], str(cursor))
-        cursor.unlink()
-        rows, _ = self.run_scan()
-        self.assertEqual(rows[0]["status"], "missing-companion")
+    def test_selected_song_folder_does_not_guess_unscanned_lyrics(self):
+        base=self.source / "NCN"
+        song=base / "Song" / "0" / "0001.MID"
+        lyric=base / "Lyrics" / "0" / "0001.json"
+        song.parent.mkdir(parents=True)
+        lyric.parent.mkdir(parents=True)
+        song.write_bytes(b"MThd"+b"\0"*40)
+        lyric.write_text('{"schemaVersion":1,"songCode":"0001","lines":[{"startTime":1,"text":"ทดสอบ"}]}',
+                         encoding="utf-8")
+        self.source=base / "Song"
+        rows,_=self.run_scan()
+        self.assertEqual(rows[0]["status"],"missing-lyrics")
+        self.assertNotIn("lyrics_file",rows[0])
+        self.source=base
+        rows,_=self.run_scan()
+        row=next(item for item in rows if item["path"]==str(song))
+        self.assertEqual(row["status"],"ready")
+        self.assertEqual(row["lyrics_file"],str(lyric))
 
     def test_cancel_preserves_last_complete_index_and_resume_reuses_checkpoint(self):
         before, _ = self.run_scan()
