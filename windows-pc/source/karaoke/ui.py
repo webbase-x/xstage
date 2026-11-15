@@ -1606,7 +1606,15 @@ class KaraokeApp(tk.Tk):
             else:
                 from .pcm_player import PcmPlayer,available
                 use_pcm=not video and path.suffix.lower() in ('.wav','.mp3') and available(self.home/'native'/'x64')
-                new_engine = prepared[0] if prepared else PcmPlayer(self.home/'native'/'x64') if use_pcm else WavePlayer() if path.suffix.lower() == ".wav" else MediaPlayer()
+                from .studio_audio import FALLBACK_EXT, SongStudioAudioPlayer
+                studio_format = not video and path.suffix.lower() in FALLBACK_EXT
+                new_engine = (prepared[0] if prepared else
+                              PcmPlayer(self.home/'native'/'x64') if use_pcm else
+                              WavePlayer() if path.suffix.lower() == ".wav" else
+                              SongStudioAudioPlayer() if studio_format else MediaPlayer())
+                if studio_format and not prepared:
+                    self.status_var.set('กำลังเตรียมเสียงจาก Song Studio · กำลังตรวจตัวถอดรหัส Windows/FFmpeg')
+                    self.update_idletasks()
                 if video:
                     self.show_main_media(True)
                     self.update_idletasks()
