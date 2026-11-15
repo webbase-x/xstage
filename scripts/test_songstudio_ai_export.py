@@ -68,6 +68,38 @@ class AIExportTests(unittest.TestCase):
         self.assertEqual(correct.read_bytes(), b"A" * 5000)
         self.assertEqual(list(self.target.glob("*.lrc")), [])
 
+    def test_source_original_copy_keeps_bytes_and_avoids_overwrite(self):
+        first = engine.export_ai_lyrics_files(-1, include_source=True,
+                                              source_format="original")
+        second = engine.export_ai_lyrics_files(-1, include_source=True,
+                                               source_format="original")
+        self.assertEqual(first["count"], 1)
+        self.assertEqual(second["count"], 1)
+        self.assertNotEqual(first["files"], second["files"])
+        self.assertEqual(Path(first["files"][0]).read_bytes(), self.source.read_bytes())
+        self.assertEqual(Path(second["files"][0]).read_bytes(), self.source.read_bytes())
+
+    def test_source_mp3_conversion_is_real_and_keeps_original(self):
+        before = self.source.read_bytes()
+        def fake_run_process(args):
+            self.assertIn("-c:a", args)
+            self.assertIn("libmp3lame", args)
+            Path(args[-1]).write_bytes(b"MP3" + b"M" * 2200)
+        with patch.object(engine, "run_process", side_effect=fake_run_process):
+            result = engine.export_ai_lyrics_files(-1, include_source=True,
+                                                    source_format="mp3")
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(Path(result["files"][0]).suffix, ".mp3")
+        self.assertEqual(self.source.read_bytes(), before)
+        self.assertNotEqual(Path(result["files"][0]).read_bytes(), before)
+        self.assertFalse(list(self.target.glob(".*.mp3")))
+
+    def test_invalid_source_format_cannot_publish(self):
+        with self.assertRaisesRegex(ValueError, "รูปแบบไฟล์เสียง"):
+            engine.export_ai_lyrics_files(-1, include_source=True,
+                                           source_format="exe")
+        self.assertFalse(list(self.target.iterdir()))
+
     def test_requires_selection(self):
         with self.assertRaises(ValueError):
             engine.export_ai_lyrics_files(-1)
