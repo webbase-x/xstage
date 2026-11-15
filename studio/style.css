@@ -380,7 +380,7 @@ button.preview-lyric-line{cursor:pointer}
 #ai-mic-status{line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:620px){.ai-microphone-buttons .button{flex:1 1 45%}.ai-microphone-preview audio{width:100%;flex-basis:100%}}
 
-/* XStageWeb v2: legible file taxonomy on wide PC and compact mobile screens. */
+/* XStageSong v2: legible file taxonomy on wide PC and compact mobile screens. */
 .drive-layout-panel{margin-bottom:18px}
 .drive-layout-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .drive-layout-section{display:flex;flex-direction:column;gap:6px;border:1px solid #31586b;border-radius:12px;padding:14px;background:#0a2335;min-width:0}
