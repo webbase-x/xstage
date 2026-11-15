@@ -1,3 +1,7 @@
+## Next Source Preview Build 206
+
+This preview adds a separate MIDI-to-XSK destination, Lyrics AI file metadata/lyrics reread, source audio copy/transcoding, Pro Lyrics JSON export, and additional regression gates. It is not a Windows PC Ready bundle or a verified installer. Check GitHub Actions and the release assets before downloading.
+
 # X-Stage Song Studio — Windows PC Source Launcher (Preview)
 
 This is a **new, independently reconstructed PC source launcher** prepared from the existing X-Stage Song Studio Web Control UI. It is **not** the missing, original and fully verified X-Stage Song Studio v0.2.5 Build 205 engine or an installer (.exe).
@@ -48,6 +52,6 @@ X-Stage-Song-Studio-PC-Source-Preview/
 
 Setup creates `.runtime/` and `data/` adjacent to these files.
 
-**Download path in repository:** `downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip`
+**Download path in repository:** `downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.6-Build206-Preview.zip`
 
 > The release string in the ZIP filename denotes the requested *target* PC interface/build lineage, not proof that the original Build 205's full source has been recovered.
