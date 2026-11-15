@@ -23,15 +23,28 @@ const result=core.scan([
   {file:fake('A100.lrc',80),relative:'AUDIO/MP3/Lyrics/A/A100.lrc'},
   {file:fake('B200.m4a'),relative:'B200.m4a'},
   {file:fake('C300.mid'),relative:'MIDI/NCN/Song/C300.mid'},
-  {file:fake('C300.lyr',200),relative:'MIDI/NCN/Lyrics/C300.lyr'},
-  {file:fake('C300.cur',200),relative:'MIDI/NCN/Cursor/C300.cur'},
+  {file:fake('C300.lrc',200),relative:'MIDI/NCN/Lyrics/C300.lrc'},
+  {file:fake('D400.mid'),relative:'MIDI/NCN/Song/D400.mid'},
+  {file:fake('D400.lyr',200),relative:'MIDI/NCN/Lyrics/D400.lyr'},
+  {file:fake('D400.cur',200),relative:'MIDI/NCN/Cursor/D400.cur'},
+  {file:fake('E500.mid'),relative:'MIDI/NCN/Song/E500.mid'},
+  {file:fake('F600.mp3'),relative:'F600.mp3'},
+  {file:fake('F600.lrc',50),relative:'F600.lrc'},
+  {file:fake('F600.json',50),relative:'F600.json'},
   {file:fake('SF-General.sf2',1024),relative:'SOUNDFONT/SF2/SF-General.sf2'}
 ]);
 assert.equal(result.songs.length,1,'MP3 plus timed LRC remains playable');
-assert.equal(result.midis.length,1,'Complete NCN MIDI+LYR+CUR must be importable');
-assert.equal(result.midis[0].kind,'NCN');
+assert.equal(result.midis.length,1,'MIDI plus one timed LRC must be ready');
+assert.equal(result.midis[0].kind,'MID');
+assert.equal(result.midis[0].lrc.file.name,'C300.lrc');
 assert.equal(result.fonts.length,1);
-assert.ok(!result.blocked.some(x=>x.key.includes('C300')),'Complete NCN must not be blocked');
+assert.ok(!result.blocked.some(x=>x.key.includes('C300')),'Two-file MIDI must be ready');
+assert.ok(result.blocked.some(x=>x.key.includes('D400')&&x.reason.includes('ยกเลิก')),
+  'Legacy MIDI+LYR+CUR is rejected with migration instruction');
+assert.ok(result.blocked.some(x=>x.key.includes('E500')&&x.reason.includes('LRC')),
+  'Bare MIDI must not publish placeholder lyrics');
+assert.ok(result.blocked.some(x=>x.key.includes('F600')&&x.reason.includes('ซ้ำ')),
+  'LRC+JSON double companion must be blocked');
 assert.ok(result.blocked.some(x=>x.reason.includes('ไฟล์เสียงต้องมี LRC/JSON')));
 assert.equal(core.groupKey('AUDIO/MP3/Songs/A/A100.mp3'),core.groupKey('AUDIO/MP3/Lyrics/A/A100.lrc'));
 const media=core.scan([
