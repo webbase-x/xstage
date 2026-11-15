@@ -340,12 +340,12 @@ def _ordered_line_match(line, search):
     """
     if not isinstance(search, str) or len(search) > 200:
         raise ValueError("คำค้นหาเนื้อร้องยาวเกิน 200 ตัวอักษร")
-    if not isinstance(line, str) or "\\n" in line or "\\r" in line:
+    if not isinstance(line, str) or "\n" in line or "\r" in line:
         return False
     terms = _same(search).casefold().split()
     if not terms:
         return True
-    pattern = r"\\s+".join(re.escape(term) for term in terms)
+    pattern = r"\s+".join(re.escape(term) for term in terms)
     return re.search(pattern, _same(line).casefold()) is not None
 
 
