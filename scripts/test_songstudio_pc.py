@@ -45,6 +45,32 @@ class PcSourceTests(unittest.TestCase):
         self.pro_patch.stop()
         self.tmp.cleanup()
 
+
+    def test_incremental_catalog_view_remembers_new_items_by_source(self):
+        first = {"id": 11, "path": str(self.source / "old.mp3"),
+                 "title": "เดิม", "artist": "", "code": "OLD11", "status": "ready"}
+        newer = {"id": 12, "path": str(self.source / "new.mp3"),
+                 "title": "ใหม่", "artist": "", "code": "NEW12", "status": "ready"}
+        engine.FILES[:] = [first, newer]
+        engine.SCAN_CHANGE_IDS.clear()
+        engine.SCAN_CHANGE_IDS.add(12)
+        self.assertEqual([r["id"] for r in engine.visible_files(view="changes")], [12])
+        self.assertEqual(len(engine.visible_files(view="all")), 2)
+        with self.assertRaisesRegex(ValueError, "ตัวกรอง"):
+            engine.visible_files(view="unknown")
+        store = self.dir / "last-scan-changes.json"
+        with patch.object(engine, "SCAN_CHANGE_FILE", store):
+            engine.save_json(store, {
+                "source": engine.PREFS["source"],
+                "workspace": engine.PREFS["workspace"], "ids": [12]})
+            engine.SCAN_CHANGE_IDS.clear()
+            self.assertEqual(engine.restore_scan_changes(), 1)
+            self.assertEqual([r["id"] for r in engine.visible_files(view="changes")], [12])
+            engine.PREFS["source"] = str(self.dir / "different-source")
+            self.assertEqual(engine.restore_scan_changes(), 0)
+            self.assertEqual(engine.visible_files(view="changes"), [])
+        engine.SCAN_CHANGE_IDS.clear()
+
     def test_stageweb_flat_catalog_and_legacy_atomic_directory_migration(self):
         export=engine._song_export_module()
         old=self.dest/"songs"
