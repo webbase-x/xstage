@@ -29,7 +29,7 @@ def source_batches(source, destination, *, cancelled, on_scan=None,
     if destination.is_symlink():
         raise ValueError("ไม่อนุญาตโฟลเดอร์ปลายทางแบบ Symbolic Link")
     source_real, destination_real = source.resolve(), destination.resolve()
-    if source_real == destination_real or source_real in destination_real.parents:
+    if source_real == destination_real or destination_real in source_real.parents:
         raise ValueError("ปลายทาง XSK ต้องไม่เป็นโฟลเดอร์หลักหรือโฟลเดอร์แม่ของ MIDI")
     output = destination_real / "MIDI" / "XSK"
     inbox = queue.Queue(maxsize=max_batches)
