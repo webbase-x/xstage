@@ -202,7 +202,7 @@
           </article>
           <article class="panel ai-microphone-panel">
             <div class="section-heading"><div><h3>บันทึกเสียงร้องใหม่ผ่านไมโครโฟน</h3>
-              <p>อัดเสียงร้องสด → ฟังตรวจ → บันทึก AAC/M4A เข้า StageWeb/audio → นำเข้า AI อัตโนมัติ · ไม่ส่งเสียงออกจากเครื่อง</p></div>
+              <p>อัดเสียงร้องสด → ฟังตรวจ → บันทึก AAC/M4A เข้า XStageSong/audio → นำเข้า AI อัตโนมัติ · ไม่ส่งเสียงออกจากเครื่อง</p></div>
               <span class="chip">PRIVATE RECORDING</span></div>
             <div class="ai-microphone-buttons">
               <button id="ai-mic-start" class="button primary" type="button">● เริ่มอัดเสียง</button>
@@ -235,7 +235,7 @@
               <div class="ai-vocal-stem-tools">
                 <button id="ai-lyrics-separate" class="button ghost" type="button" disabled>♫ แยกเสียงร้อง + ดนตรี เป็น M4A 2 ไฟล์</button>
                 <label class="ai-vocal-stem-check"><input id="ai-lyrics-use-vocals" type="checkbox" disabled> ใช้เสียงร้องแยกสำหรับ Whisper AI</label>
-                <span id="ai-lyrics-vocals-status" class="hint" role="status" aria-live="polite">ยังไม่มีไฟล์เสียงแยก · บันทึกเสียงร้องและดนตรีเป็น M4A แยกกันใน StageWeb/audio</span>
+                <span id="ai-lyrics-vocals-status" class="hint" role="status" aria-live="polite">ยังไม่มีไฟล์เสียงแยก · บันทึกเสียงร้องและดนตรีเป็น M4A แยกกันใน XStageSong/audio</span>
               </div>
               <button id="ai-lyrics-start" class="button primary" type="button" disabled>✦ ให้ AI ถอดเสียงร้องและจัดเวลา</button>
               <span id="ai-lyrics-status" class="ai-lyrics-status" role="status" aria-live="polite">รอนำเข้าเพลงใหม่หรือเลือกเพลงที่เคยนำเข้า</span>
@@ -300,11 +300,11 @@
               <p>ใช้คลัง Lyrics JSON ที่สร้างแล้วเป็นหลัก · ไม่แก้ NCN ต้นฉบับทุกกรณี</p></div></div>
             <label for="lyric-group-folder" class="lyric-source-label">โฟลเดอร์ต้นทางสำหรับข้อความหัว–ท้ายเพลง</label>
             <div class="path-row lyric-source-row">
-              <input id="lyric-group-folder" type="text" class="field" placeholder="ค่าเริ่มต้น: คลัง StageWeb ในโฟลเดอร์งานหลัก" autocomplete="off" spellcheck="false">
+              <input id="lyric-group-folder" type="text" class="field" placeholder="ค่าเริ่มต้น: คลัง XStageSong ในโฟลเดอร์งานหลัก" autocomplete="off" spellcheck="false">
               <button type="button" class="button ghost" data-pick="lyric_source">เลือกโฟลเดอร์</button>
               <button id="lyric-group-reset" type="button" class="button ghost">ใช้คลังหลัก</button>
             </div>
-            <p id="lyric-group-source-status" class="hint" role="status" aria-live="polite">เลือกคลัง StageWeb ที่สร้าง Lyrics JSON แล้วเพื่อแก้ข้อความ โดยไม่แก้ไฟล์ MID/LYR/CUR</p>
+            <p id="lyric-group-source-status" class="hint" role="status" aria-live="polite">เลือกคลัง XStageSong ที่สร้าง Lyrics JSON แล้วเพื่อแก้ข้อความ โดยไม่แก้ไฟล์ MID/LYR/CUR</p>
             <div class="lyric-group-actions">
               <button id="lyric-group-scan" class="button primary" type="button">⌕ วิเคราะห์ข้อความหัว–ท้ายเพลง</button>
               <button id="lyric-group-undo" class="button ghost" type="button" disabled>↶ ย้อนคืนการแก้ไขชุดล่าสุด</button>
@@ -365,37 +365,37 @@
 
         <section id="tab-upload" class="tab">
           <div class="section-top"><div><div class="eyebrow">PRIVATE GOOGLE DRIVE</div><h2>นำเข้า X-Stage Karaoke Online</h2><p>เช็กไฟล์ต้นทางและ MD5 บน Drive ก่อนส่ง ลดการอัปโหลดซ้ำ</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
-          <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageWeb ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
+          <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageSong ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
           <article class="panel">
             <div class="section-heading"><div><h2>เลือกโฟลเดอร์ต้นฉบับสำหรับอัปโหลด</h2><p>ตรวจ MP3/M4A พร้อม LRC ที่มีเวลาจริง · สร้าง JSON และอัปเดต Catalog ให้เล่นออนไลน์ได้ · VIDEO/NCN แสดงรายการที่ยังไม่รองรับ</p></div></div>
             <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
             <div class="toolbar"><button id="upload-inspect" class="button ghost" type="button">⌕ ตรวจความพร้อมไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลด + สร้าง DB พร้อมเล่น</button></div>
             <div id="upload-folder-report" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจโฟลเดอร์ · ระบบจะไม่ส่งไฟล์ที่ไม่มีเนื้อร้อง/ไฟล์ประกอบตามประเภทเพลง</div>
-            <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageWeb อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
+            <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageSong อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
             <p class="hint">เพลง MP3/M4A ที่มี LRC ถูกต้อง จะอัปโหลดและอัปเดต LYRICS/current.json หลังตรวจ MD5 · เก็บไฟล์เสียงใน AUDIO และ Lyrics JSON ใน LYRICS · ไม่อัปโหลด LYR/CUR ต้นฉบับ</p>
           </article>
           <article class="panel">
-            <div class="section-heading"><div><h2>SoundFont สำหรับ MIDI (Google Drive ส่วนตัว)</h2><p>เลือก SoundFont .sf2/.sf3 เพื่อตรวจรูปแบบและ MD5 ก่อนอัปโหลดไปยัง XStageWeb/AUDIO</p></div></div>
+            <div class="section-heading"><div><h2>SoundFont สำหรับ MIDI (Google Drive ส่วนตัว)</h2><p>เลือก SoundFont .sf2/.sf3 เพื่อตรวจรูปแบบและ MD5 ก่อนอัปโหลดไปยัง XStageSong/AUDIO</p></div></div>
             <div class="path-row"><input id="upload-soundfont-path" type="text" class="field" placeholder="เลือกไฟล์ SoundFont .sf2 / .sf3"><button id="upload-soundfont-picker" type="button" class="button ghost">เลือก SoundFont</button></div>
             <div class="toolbar"><button id="upload-soundfont-button" type="button" class="button primary">↑ อัปโหลด SoundFont ไป Drive</button></div>
-            <p class="hint">ใช้ตัวเลือกสร้าง XStageWeb ใหม่ร่วมกับเมนูอัปโหลดเพลงด้านบน · อัปโหลดแล้วเก็บเป็นไฟล์ส่วนตัวโดยไม่เขียนทับต้นฉบับหรือแก้ current.json · สามารถเลือก SoundFont ได้จากเมนูเสียง MIDI บนเว็บและ Android TV ที่รองรับ</p>
+            <p class="hint">ใช้ตัวเลือกสร้าง XStageSong ใหม่ร่วมกับเมนูอัปโหลดเพลงด้านบน · อัปโหลดแล้วเก็บเป็นไฟล์ส่วนตัวโดยไม่เขียนทับต้นฉบับหรือแก้ current.json · สามารถเลือก SoundFont ได้จากเมนูเสียง MIDI บนเว็บและ Android TV ที่รองรับ</p>
             <p id="upload-soundfont-status" class="hint" role="status" aria-live="polite">ยังไม่ได้อัปโหลด SoundFont</p>
           </article>
           <article class="panel drive-layout-panel">
-            <div class="section-heading"><div><h2>โครงสร้าง XStageWeb บน Google Drive</h2><p>ใช้เพียง 2 โฟลเดอร์หลักเท่านั้น และไม่แก้ไขไฟล์ MID ต้นฉบับ</p></div><span class="chip info">LAYOUT V4</span></div>
+            <div class="section-heading"><div><h2>โครงสร้าง XStageSong บน Google Drive</h2><p>ใช้เพียง 2 โฟลเดอร์หลักเท่านั้น และไม่แก้ไขไฟล์ MID ต้นฉบับ</p></div><span class="chip info">LAYOUT V4</span></div>
             <div class="drive-layout-grid">
-              <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>XStageWeb/AUDIO/</code><small>ไฟล์เสียงทุกชนิดที่เล่นได้, MIDI ต้นฉบับแบบคัดลอก, M4A, ไฟล์วิดีโอ และ SoundFont SF2/SF3 ทั้งหมดในโฟลเดอร์เดียว</small></div>
-              <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageWeb/LYRICS/</code><code>00001-...json</code><code>catalog-base-*.json · catalog-delta-*.json</code><code>current.json</code><small>Lyrics JSON เป็นมาตรฐานของ Web/TV/PC; ไม่อัปโหลด LYR, CUR หรือ LRC ต้นฉบับ</small></div>
+              <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>XStageSong/AUDIO/</code><small>ไฟล์เสียงทุกชนิดที่เล่นได้, MIDI ต้นฉบับแบบคัดลอก, M4A, ไฟล์วิดีโอ และ SoundFont SF2/SF3 ทั้งหมดในโฟลเดอร์เดียว</small></div>
+              <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageSong/LYRICS/</code><code>00001-...json</code><code>catalog-base-*.json · catalog-delta-*.json</code><code>current.json</code><small>Lyrics JSON เป็นมาตรฐานของ Web/TV/PC; ไม่อัปโหลด LYR, CUR หรือ LRC ต้นฉบับ</small></div>
             </div>
             <p class="hint">ความปลอดภัย: คลังรุ่นเก่ายังอ่านและสำรองได้ แต่จะไม่ย้ายหรือลบโฟลเดอร์เก่าบน Drive อัตโนมัติ ตรวจสอบ/ย้ายข้อมูลก่อนเผยแพร่เป็น Layout V4</p>
           </article>
         </section>
 
         <section id="tab-pc-export" class="tab">
-          <div class="section-top"><div><div class="eyebrow">KARAOKE PC · LOCAL LIBRARY</div><h2>นำเข้า X-Stage Karaoke PC</h2><p>คัดลอกเพลงที่สร้างสำเร็จจาก StageWeb ลงในโฟลเดอร์ XStageWeb บนเครื่อง · ไม่ต้อง Google Login · เลือกตำแหน่งเอง</p></div><span class="chip info">OFFLINE</span></div>
+          <div class="section-top"><div><div class="eyebrow">KARAOKE PC · LOCAL LIBRARY</div><h2>นำเข้า X-Stage Karaoke PC</h2><p>คัดลอกเพลงที่สร้างสำเร็จจาก XStageSong ลงในโฟลเดอร์ XStageSong บนเครื่อง · ไม่ต้อง Google Login · เลือกตำแหน่งเอง</p></div><span class="chip info">OFFLINE</span></div>
           <article class="panel">
-            <div class="section-heading"><div><h2>เลือกตำแหน่งเก็บคลังเพลง PC</h2><p>เลือกไดรฟ์หรือโฟลเดอร์ปลายทาง แล้วระบบสร้าง XStageWeb/AUDIO และ XStageWeb/LYRICS โดยอัตโนมัติ (ถ้าเลือก XStageWeb อยู่แล้วจะไม่ซ้อนโฟลเดอร์)</p></div></div>
-            <div class="path-row"><input id="pc-export-folder" type="text" class="field" autocomplete="off" placeholder="เช่น D:\\Karaoke หรือ D:\\Karaoke\\XStageWeb"><button class="button ghost" type="button" data-pick="pc_export_folder">เลือกตำแหน่ง</button></div>
+            <div class="section-heading"><div><h2>เลือกตำแหน่งเก็บคลังเพลง PC</h2><p>เลือกไดรฟ์หรือโฟลเดอร์ปลายทาง แล้วระบบสร้าง XStageSong/AUDIO และ XStageSong/LYRICS โดยอัตโนมัติ (ถ้าเลือก XStageSong อยู่แล้วจะไม่ซ้อนโฟลเดอร์)</p></div></div>
+            <div class="path-row"><input id="pc-export-folder" type="text" class="field" autocomplete="off" placeholder="เช่น D:\\Karaoke หรือ D:\\Karaoke\\XStageSong"><button class="button ghost" type="button" data-pick="pc_export_folder">เลือกตำแหน่ง</button></div>
             <div class="toolbar"><button id="pc-export-inspect" class="button ghost" type="button">⌕ ตรวจคลังเพลงและพื้นที่</button><button id="pc-export-start" class="button primary" type="button">▣ นำเข้า X-Stage Karaoke PC</button></div>
             <p id="pc-export-report" class="hint" role="status" aria-live="polite">เลือกโฟลเดอร์ปลายทางก่อน · ระบบตรวจฐานเพลงและพื้นที่โดยไม่แก้ไฟล์ต้นฉบับ</p>
             <p id="pc-export-status" class="hint" role="status" aria-live="polite">ตรวจชื่อไฟล์ซ้ำก่อนคัดลอก · ใช้ SHA-256 ตรวจความสมบูรณ์ · ถ้าชื่อซ้ำแต่เนื้อหาต่างกันจะหยุดเพื่อให้ตรวจสอบ ไม่เขียนทับเอง · ฐาน current.json อัปเดตเมื่อคัดลอกสำเร็จเท่านั้น</p>
@@ -403,21 +403,21 @@
           <article class="panel">
             <div class="section-heading"><div><h2>โครงสร้างไฟล์แบบเดียวกับ Google Drive</h2><p>ใช้สองโฟลเดอร์หลักสำหรับเพลงและคำร้อง โดยฐาน Karaoke PC เป็นฐานพาธในเครื่อง ไม่ใช้ Google Drive File ID</p></div></div>
             <div class="drive-layout-grid">
-              <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>XStageWeb/AUDIO/</code><small>ไฟล์เสียงและ MIDI/KAR ที่ Song Studio เผยแพร่แล้ว</small></div>
-              <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageWeb/LYRICS/</code><code>current.json · catalog-pc-*.json</code><small>Lyrics JSON / LRC พร้อมฐานข้อมูลเพลงของ Karaoke PC</small></div>
+              <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>XStageSong/AUDIO/</code><small>ไฟล์เสียงและ MIDI/KAR ที่ Song Studio เผยแพร่แล้ว</small></div>
+              <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageSong/LYRICS/</code><code>current.json · catalog-pc-*.json</code><small>Lyrics JSON / LRC พร้อมฐานข้อมูลเพลงของ Karaoke PC</small></div>
             </div>
           </article>
         </section>
 
         <section id="tab-download" class="tab">
-          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageWeb/LYRICS/current.json ที่เผยแพร่จริงบน Google Drive ส่วนตัว (รองรับคลังสำรอง PC รูปแบบเก่า) · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageSong/LYRICS/current.json ที่เผยแพร่จริงบน Google Drive ส่วนตัว (รองรับคลังสำรอง PC รูปแบบเก่า) · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel"><div class="section-heading"><div><h2>ตำแหน่งเก็บไฟล์ดาวน์โหลด</h2><p>เลือกใหม่ได้ ระบบจำค่าไว้เปิดครั้งต่อไป</p></div></div><div class="path-row"><input id="download-destination" type="text" class="field" placeholder="เลือกโฟลเดอร์เก็บข้อมูล"><button type="button" class="button ghost" data-pick="download">เลือกที่เก็บ</button></div></article>
           <div class="download-grid">
             <article class="panel download-card"><div class="download-symbol">♫</div><h3>โฟลเดอร์เพลง</h3><p>ดาวน์โหลดเพลง/เนื้อร้องจาก Catalog ถ้ามี หรืออ่านโฟลเดอร์ AUDIO, VIDEO และ MIDI จริงเมื่อไม่มี current.json · ไม่สร้างคลังใหม่</p><button class="button primary download-action" data-kind="songs" type="button">↓ ดาวน์โหลด SONG</button></article>
             <article class="panel download-card"><div class="download-symbol">▤</div><h3>ฐานเพลง DB</h3><p>ดาวน์โหลด current.json และฐาน DB/catalog ที่มีจริง โดยไม่โหลดเพลง · หากไม่มี DB จะแจ้งข้อผิดพลาดชัดเจน</p><button class="button ghost download-action" data-kind="db" type="button">↓ ดาวน์โหลด DB</button></article>
             <article class="panel download-card"><div class="download-symbol">▦</div><h3>ชุดสำรอง ZIP</h3><p>สำรองเพลงและฐานที่อ่านได้เป็น ZIP · เมื่อไม่มี Catalog จะอ่านโฟลเดอร์จริงทั้งหมด · ตรวจ MD5</p><button class="button ghost download-action" data-kind="zip" type="button">↓ ดาวน์โหลด ZIP</button></article>
           </div>
-          <p class="hint">ผลดาวน์โหลดคลังออนไลน์จะเก็บในโฟลเดอร์ XStageWeb แยกจากคลังสร้างเพลงในเครื่อง ไม่เขียนทับฐานเพลง PC เดิม และไม่อัปโหลดหรือเปิดสิทธิ์สาธารณะโดยอัตโนมัติ · หาก XStageWeb มองไม่เห็น กรุณาตรวจบัญชี Google และ OAuth Client เดิมที่ใช้เผยแพร่ ห้ามเลือกสร้างคลังใหม่เพื่อแก้ปัญหาการดาวน์โหลด</p>
+          <p class="hint">ผลดาวน์โหลดคลังออนไลน์จะเก็บในโฟลเดอร์ XStageSong แยกจากคลังสร้างเพลงในเครื่อง ไม่เขียนทับฐานเพลง PC เดิม และไม่อัปโหลดหรือเปิดสิทธิ์สาธารณะโดยอัตโนมัติ · หาก XStageSong มองไม่เห็น กรุณาตรวจบัญชี Google และ OAuth Client เดิมที่ใช้เผยแพร่ ห้ามเลือกสร้างคลังใหม่เพื่อแก้ปัญหาการดาวน์โหลด</p>
         </section>
 
         <section id="tab-settings" class="tab">
