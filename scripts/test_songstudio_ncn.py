@@ -1,7 +1,7 @@
-"""Regression tests for real Nick Karaoke NCN mirrored folder sources.
+"""Regression: two-file song+lyrics import and historical NCN read-only parser.
 
-A single logical song is Song/ID.MID + Lyrics/ID.LYR + Cursor/ID.CUR.
-All components must be matched by code AND bucket, never filename alone.
+New import uses one MIDI/KAR plus timed LRC/JSON. Legacy LYR/CUR is never
+looked up to validate or publish new songs, but direct parser fixtures stay.
 """
 from __future__ import annotations
 
@@ -76,95 +76,60 @@ class NcnSourceTests(unittest.TestCase):
             cpath.write_bytes(struct.pack("<"+"H"*len(values), *values) + b"\xff")
         return mid, lpath, cpath
 
-    def test_ncns_with_mirrored_cursor_lyrics_song_resolve_one_song(self):
+    def test_legacy_ncn_trio_not_used_as_new_song_lyrics(self):
         mid, lyr, cur = self.make_ncn()
         self.assertEqual(engine.scan_source(), 1)
         row = engine.FILES[0]
-        self.assertEqual(row["code"], "00001")
-        self.assertEqual(row["title"], "ชื่อเพลงทดสอบ")
-        self.assertEqual(row["artist"], "นักร้องทดสอบ")
-        self.assertEqual(row["source_format"], "NCN")
-        self.assertEqual(row["status"], "ready")
-        self.assertEqual(Path(row["ncn"]["lyrics"]), lyr)
-        self.assertEqual(Path(row["ncn"]["cursor"]), cur)
-        lrc, document, fingerprint = engine.lyrics_package(row)
-        self.assertIn("สวัสดี", lrc)
-        self.assertEqual(document["sourceFormat"], "NCN")
-        self.assertEqual(document["metadata"]["artist"], "นักร้องทดสอบ")
-        self.assertEqual(document["lines"][0]["text"], "สวัสดี")
-        self.assertEqual(len(document["lines"][0]["characters"]), 4)
-        self.assertAlmostEqual(document["lines"][0]["characters"][1]["startTime"], .25)
-        self.assertTrue(fingerprint)
+        self.assertNotIn("ncn", row)
+        self.assertEqual(row["status"], "missing-lyrics")
+        _, document, _ = engine.lyrics_package(row)
+        self.assertIsNone(document)
+        self.assertTrue(lyr.is_file() and cur.is_file(), "legacy sources stay untouched")
 
-    def test_scan_when_user_selects_song_folder_only_finds_sibling_lyrics(self):
-        mid, lyr, cur = self.make_ncn("A001", "A")
-        engine.PREFS["source"] = str(self.ncn / "Song")
-        self.assertEqual(engine.scan_source(), 1)
-        row = engine.FILES[0]
-        self.assertEqual(row["title"], "ชื่อเพลงทดสอบ")
-        self.assertEqual(row["source_format"], "NCN")
-        self.assertEqual(row["ncn"]["lyrics"], str(lyr))
-        self.assertEqual(row["ncn"]["cursor"], str(cur))
+    def test_two_file_midi_and_lrc_retain_source_bytes(self):
+        mid, lyr, cur = self.make_ncn("00011", "0")
+        lrc = mid.with_suffix(".lrc")
+        lrc.write_text("[00:01.00]เพลงสองไฟล์\n[00:02.00]บรรทัดที่สอง",encoding="utf-8")
+        engine.scan_source()
+        row = next(x for x in engine.FILES if x["code"] == "00011")
+        self.assertEqual(row["lyrics_file"], str(lrc))
+        self.assertEqual(row["source_format"], "SMF")
+        lrc_text, doc, checksum = engine.lyrics_package(row)
+        self.assertEqual(doc["lines"][0]["text"], "เพลงสองไฟล์")
+        self.assertTrue(checksum)
+        source_before = mid.read_bytes()
+        with patch.object(engine, "convert", side_effect=lambda _row, output, preview=False:
+                          Path(output).write_bytes(b"M4A-TEST-DATA"*500)):
+            result = engine.build_library([row], "original", {"audio_only": False})
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["lyricsCount"], 1)
+        self.assertEqual(mid.read_bytes(), source_before)
 
-    def test_missing_ncn_cursor_is_reported_not_saved_as_fake_lyrics(self):
-        self.make_ncn(with_cursor=False)
-        self.assertEqual(engine.scan_source(), 1)
-        row = engine.FILES[0]
-        self.assertEqual(row["status"], "missing-companion")
-        with self.assertRaisesRegex(ValueError, "NCN ไม่ครบ"):
+    def test_two_file_json_is_valid_timed_source(self):
+        mid, _, _ = self.make_ncn("00012", "0")
+        js = mid.with_suffix(".json")
+        js.write_text(json.dumps({
+            "schemaVersion":1,"songCode":"00012",
+            "lines":[{"startTime":1.5,"endTime":3.0,"text":"เนื้อร้องพร้อมเวลา"}]
+        },ensure_ascii=False),encoding="utf-8")
+        engine.scan_source()
+        row = next(x for x in engine.FILES if x["code"] == "00012")
+        self.assertEqual(row["lyrics_file"],str(js))
+        _, doc, _ = engine.lyrics_package(row)
+        self.assertEqual(doc["lines"][0]["startTime"],1.5)
+        self.assertEqual(doc["lines"][0]["text"],"เนื้อร้องพร้อมเวลา")
+
+    def test_matching_lyrics_requires_unique_companion(self):
+        mid, _, _ = self.make_ncn("00013", "0")
+        mid.with_suffix(".lrc").write_text("[00:01.00]ทดสอบ",encoding="utf-8")
+        mid.with_suffix(".json").write_text(json.dumps({
+            "schemaVersion":1,"songCode":"00013","lines":[{"startTime":1,"text":"ซ้ำ"}]
+        },ensure_ascii=False),encoding="utf-8")
+        engine.scan_source()
+        row=next(x for x in engine.FILES if x["code"]=="00013")
+        self.assertEqual(row["status"],"ambiguous-lyrics")
+        with self.assertRaisesRegex(ValueError,"LRC และ JSON"):
             engine.lyrics_package(row)
-        with self.assertRaisesRegex(RuntimeError, "ไม่ครบ"):
-            engine.build_library([row], "original", {"audio_only": False})
-        self.assertEqual(list(self.workspace.rglob("*.m4a")), [])
-        self.assertEqual(list(self.workspace.rglob("*.json")), [])
-
-    def test_create_ncn_byte_identical_midi_and_timed_lyrics_then_repair_without_reencoding(self):
-        mid, lyr, cur = self.make_ncn()
-        engine.scan_source()
-        row = engine.FILES[0]
-        def dummy_convert(_, target, preview=False):
-            Path(target).write_bytes(b"A" * 5000)
-        with patch.object(engine, "convert", side_effect=dummy_convert) as convert:
-            first = engine.build_library([row], "original", {"audio_only": False})
-            self.assertEqual(first["created"], 1)
-            self.assertEqual(first["lyricsCount"], 1)
-            audio = self.workspace / "StageWeb" / "audio" / "0" / "00001.mid"
-            lyrics_file = self.workspace / "StageWeb" / "lyrics" / "0" / "00001.json"
-            self.assertEqual(audio.read_bytes(), mid.read_bytes())
-            self.assertTrue(lyrics_file.is_file())
-            saved = json.loads(lyrics_file.read_text(encoding="utf-8"))
-            self.assertEqual(saved["sourceFormat"], "NCN")
-            self.assertEqual(saved["lines"][0]["text"], "สวัสดี")
-            second = engine.build_library([row], "original", {"audio_only": False})
-            self.assertEqual((second["created"], second["skipped"], second["lyricsCount"]),
-                             (0, 1, 0))
-            self.assertEqual(convert.call_count, 0)
-            # Preserve original MIDI, and repair newly updated LYR on rerun.
-            lyr.write_bytes("ชื่อเพลงทดสอบ\nนักร้องทดสอบ\nC\n\nเนื้อร้องใหม่\n".encode("cp874"))
-            cur.write_bytes(struct.pack("<"+"H"* (len("เนื้อร้องใหม่")+1),
-                                        *range(len("เนื้อร้องใหม่")+1)))
-            third = engine.build_library([row], "original", {"audio_only": False})
-            self.assertEqual((third["created"], third["skipped"], third["lyricsCount"]),
-                             (0, 1, 1))
-            self.assertEqual(convert.call_count, 0)
-            corrected = json.loads(lyrics_file.read_text(encoding="utf-8"))
-            self.assertEqual(corrected["lines"][0]["text"], "เนื้อร้องใหม่")
-            self.assertEqual(len(list(self.workspace.rglob("*.mid"))), 1)
-            self.assertTrue(list(lyrics_file.parent.glob("00001.json.before-repair-*.bak")))
-
-    def test_same_midi_different_ncn_lyrics_are_different_songs(self):
-        self.make_ncn("00001", "0", lyric="คนละเพลง")
-        self.make_ncn("10001", "1", lyric="อีกหนึ่งเพลง")
-        engine.scan_source()
-        rows = engine.FILES
-        self.assertEqual(len(rows), 2)
-        self.assertNotEqual(engine._source_digest(rows[0], engine._song_export_module()),
-                            engine._source_digest(rows[1], engine._song_export_module()))
-        with patch.object(engine, "convert", side_effect=lambda row, target, preview=False:
-                          Path(target).write_bytes(b"A" * 5000)):
-            result = engine.build_library(rows, "original", {"audio_only": False})
-        self.assertEqual(result["created"], 2)
-        self.assertEqual(len(list(self.workspace.rglob("*.mid"))), 2)
 
     def test_kar_embedded_lyrics_ignore_title_metadata(self):
         title = "เพลงตัวอย่าง".encode("cp874")
@@ -195,41 +160,32 @@ class NcnSourceTests(unittest.TestCase):
 
 
 
-    def test_component_inspection_and_real_karaoke_characters(self):
+    def test_preview_inspects_only_timed_lrc_json_not_legacy_cursor(self):
         mid, lyr, cur = self.make_ncn("A123", "A")
+        lrc = mid.with_suffix(".lrc")
+        lrc.write_text("[00:01.00]สวัสดี\n[00:02.00]ท่อนสอง",encoding="utf-8")
         engine.scan_source()
-        song_id = engine.FILES[0]["id"]
-        report = engine.preview_source_report(song_id)
+        song_id=next(x for x in engine.FILES if x["code"]=="A123")["id"]
+        report=engine.preview_source_report(song_id)
         self.assertTrue(report["timedLyricsReady"])
         self.assertTrue(report["complete"])
-        self.assertEqual(len([x for x in report["components"]
-                              if x["found"] and x["required"]]), 2)
-        selections = {x["value"] for x in report["options"]}
-        self.assertIn("midi:" + str(song_id), selections)
-        self.assertIn("inspect:lyr", selections)
-        self.assertIn("inspect:cur", selections)
-        lyric_check = engine.preview_inspect(song_id, "inspect:lyr")
-        cursor_check = engine.preview_inspect(song_id, "inspect:cur")
-        self.assertIn("สวัสดี", lyric_check["text"])
-        self.assertIn("ตำแหน่ง", cursor_check["message"])
-        preview = engine.preview_lyrics(song_id)
-        self.assertEqual(preview["status"], "found")
-        self.assertEqual(preview["source"], "NCN")
-        self.assertEqual(preview["lines"][0]["text"], "สวัสดี")
-        self.assertEqual(len(preview["lines"][0]["characters"]), 4)
-        self.assertAlmostEqual(preview["lines"][0]["characters"][1]["startTime"], .25)
+        self.assertIn("inspect:lrc",{x["value"] for x in report["options"]})
+        self.assertNotIn("inspect:lyr",{x["value"] for x in report["options"]})
+        self.assertNotIn("inspect:cur",{x["value"] for x in report["options"]})
+        self.assertIn("สวัสดี",engine.preview_inspect(song_id,"inspect:lrc")["text"])
+        with self.assertRaisesRegex(ValueError,"ยกเลิก"):
+            engine.preview_inspect(song_id,"inspect:cur")
+        self.assertTrue(lyr.is_file() and cur.is_file())
 
-    def test_incomplete_ncn_picker_reports_missing_cursor(self):
+    def test_missing_lyrics_prevents_false_complete_preview(self):
         self.make_ncn("B222", "B", with_cursor=False)
         engine.scan_source()
-        song_id = engine.FILES[0]["id"]
-        report = engine.preview_source_report(song_id)
+        row=next(x for x in engine.FILES if x["code"]=="B222")
+        report=engine.preview_source_report(row["id"])
         self.assertFalse(report["complete"])
         self.assertFalse(report["timedLyricsReady"])
-        self.assertTrue(any(x["type"] == "Cursor · CUR" and not x["found"]
+        self.assertTrue(any(x["required"] and not x["found"]
                             for x in report["components"]))
-        self.assertNotIn("inspect:cur", {x["value"] for x in report["options"]})
-
 
     def test_karaoke_pc_ncn_cp874_crlf_and_untimed_footer(self):
         """Karaoke PC removes an untimed vendor credit, not real song words."""
@@ -294,24 +250,27 @@ class NcnSourceTests(unittest.TestCase):
         self.assertAlmostEqual(doc["lines"][2]["startTime"], 1.5)
         self.assertEqual(doc["lines"][0]["characters"][0]["text"], "หนึ่ง")
 
-    def test_karaoke_pc_byte_identical_mid_plus_real_lyrics_json(self):
-        """Existing publishing engine saves both outputs under ONE song code."""
+    def test_two_file_mid_and_json_build_matches_single_code(self):
         mid, lyr, cur = self.make_ncn("00046", "0", lyric="เพลงทดสอบ")
+        companion=mid.with_suffix(".json")
+        companion.write_text(json.dumps({
+            "schemaVersion":1,"songCode":"00046",
+            "lines":[{"startTime":0.5,"endTime":2,"text":"เพลงทดสอบ"}]
+        },ensure_ascii=False),encoding="utf-8")
         engine.scan_source()
-        row = next(x for x in engine.FILES if x["code"] == "00046")
-        with patch.object(engine, "convert", side_effect=lambda _row, output, preview=False:
-                          Path(output).write_bytes(b"M4A-TEST-DATA" * 500)):
-            completed = engine.build_library([row], "original", {"audio_only": False})
-        self.assertEqual((completed["created"], completed["lyricsCount"],
-                          completed["errors"]), (1, 1, 0), completed)
-        root = self.workspace / "StageWeb"
-        audio = root / "audio" / "0" / "00046.mid"
-        lrc = root / "lyrics" / "0" / "00046.lrc"
-        timed = root / "lyrics" / "0" / "00046.json"
+        row=next(x for x in engine.FILES if x["code"]=="00046")
+        with patch.object(engine,"convert",side_effect=lambda _row,output,preview=False:
+                          Path(output).write_bytes(b"M4A-TEST-DATA"*500)):
+            completed=engine.build_library([row],"original",{"audio_only":False})
+        self.assertEqual((completed["created"],completed["lyricsCount"],completed["errors"]),
+                         (1,1,0),completed)
+        root=self.workspace/"StageWeb"
+        audio=root/"audio"/"0"/"00046.mid"
+        timed=root/"lyrics"/"0"/"00046.json"
         self.assertEqual(audio.read_bytes(),mid.read_bytes())
-        self.assertIn("เพลงทดสอบ", lrc.read_text(encoding="utf-8"))
-        self.assertEqual(json.loads(timed.read_text(encoding="utf-8"))["sourceFormat"], "NCN")
-        self.assertTrue((root / "current.json").is_file())
+        self.assertEqual(json.loads(timed.read_text(encoding="utf-8"))["lines"][0]["text"],
+                         "เพลงทดสอบ")
+        self.assertTrue((root/"current.json").is_file())
 
 
 if __name__ == "__main__":
