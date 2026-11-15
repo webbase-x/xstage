@@ -28,6 +28,9 @@ for path in files:
         if (path.relative_to(ROOT).as_posix() == "songstudio-pc/song_export.py"
                 and ("StageWeb" in line) and "XStageWeb" not in line):
             continue
+        if (path.relative_to(ROOT).as_posix() == "songstudio-pc/song_index.py"
+                and 'work / "StageWeb"' in line):
+            continue  # Exclude old authoring output from the input scanner.
         failures.append(f"{path.relative_to(ROOT)}:{index}: old storage root")
 
 publisher = (ROOT / "songstudio-pc/online_publish.py").read_text(encoding="utf-8")
