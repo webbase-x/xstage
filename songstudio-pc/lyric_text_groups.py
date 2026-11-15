@@ -330,15 +330,29 @@ def scan(root, export, *, cancelled=None, on_progress=None):
     }
 
 
-def _searched_members(snapshot, group, search=""):
-    query = _same(search).casefold()
-    if len(query) > 200:
+def _ordered_line_match(line, search):
+    """A literal ordered phrase must occur within the SAME lyric line.
+
+    Whitespace between query words is flexible (spaces/tabs), but words may
+    not be reversed, interleaved with unrelated words, or split over lines.
+    Thai text without spaces works as a literal substring. No regex input
+    from the user is ever evaluated as a pattern.
+    """
+    if not isinstance(search, str) or len(search) > 200:
         raise ValueError("คำค้นหาเนื้อร้องยาวเกิน 200 ตัวอักษร")
-    if not query:
-        return list(group["members"])
-    searchable = snapshot.get("searchable", {})
-    return [item for item in group["members"]
-            if query in searchable.get(item["songId"], "")]
+    if not isinstance(line, str) or "\\n" in line or "\\r" in line:
+        return False
+    terms = _same(search).casefold().split()
+    if not terms:
+        return True
+    pattern = r"\\s+".join(re.escape(term) for term in terms)
+    return re.search(pattern, _same(line).casefold()) is not None
+
+
+def _searched_members(snapshot, group, search=""):
+    if not _ordered_line_match(group["text"], search):
+        return []
+    return list(group["members"])
 
 
 def list_groups(snapshot, position, *, search="", offset=0, limit=40, repeats_only=True):
@@ -506,10 +520,7 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
                             raise ValueError("Lyrics JSON ใหญ่เกิน 8 MB")
                         if lrc and lrc.stat().st_size > 2 * 1024 * 1024:
                             raise ValueError("LRC ใหญ่เกิน 2 MB")
-                        query = _same(search).casefold()
-                        if query and query not in "\n".join(
-                                _same(line["text"]).casefold() for line in doc["lines"]):
-                            raise ValueError("คำค้นไม่ตรงกับเนื้อร้องล่าสุด")
+                        # Each edited line is validated independently below.
                         revised_doc, revised_lrc = doc, raw
                         edits_here = []
                         estimated_here = 0
@@ -522,6 +533,8 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
                             positions.add(slot)
                             if _same(revised_doc["lines"][index]["text"]) != group["text"]:
                                 raise ValueError("ข้อความเปลี่ยนหลังการสแกน")
+                            if not _ordered_line_match(revised_doc["lines"][index]["text"], search):
+                                raise ValueError("คำค้นไม่ตรงลำดับในบรรทัดที่จะเปลี่ยน")
                             revised_doc, revised_lrc, estimated = _replacement(
                                 revised_doc, revised_lrc, group["position"], new_text)
                             estimated_here += int(estimated)
@@ -722,10 +735,7 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
         path, lrc, doc, raw = parsed
         # A cached search predicate is only advisory; re-check the complete
         # current lyric body before committing a filtered batch.
-        query = _same(search).casefold()
-        if query and query not in "\n".join(
-                _same(line["text"]).casefold() for line in doc["lines"]):
-            raise ValueError("เนื้อร้องเปลี่ยนหลังค้นหา กรุณาตรวจรายการใหม่ก่อนแทนที่")
+        # Exact ordered search is checked on each selected line below.
         revised_doc, revised_lrc = doc, raw
         lost_tokens = 0
         chosen_positions = set()
@@ -736,6 +746,8 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
             chosen_positions.add(index % len(doc["lines"]))
             if _same(doc["lines"][index]["text"]) != group["text"]:
                 raise ValueError("ข้อความในเพลงมีการแก้ไขภายหลัง กรุณาวิเคราะห์ใหม่: " + item["code"])
+            if not _ordered_line_match(doc["lines"][index]["text"], search):
+                raise ValueError("คำค้นไม่ตรงลำดับในบรรทัดที่จะเปลี่ยน")
             revised_doc, revised_lrc, removed = _replacement(
                 revised_doc, revised_lrc, group["position"], new_text)
             lost_tokens += bool(removed)
