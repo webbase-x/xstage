@@ -1343,6 +1343,7 @@
     const hasSong = Number.isInteger(aiSongId);
     const valid = aiParseLrc().valid;
     $('ai-lyrics-start').disabled = busy || !hasSong || !aiEngineReady;
+    $('ai-lyrics-read-source').disabled = busy || !hasSong;
     $('ai-lyrics-separate').disabled = busy || !hasSong || !aiSeparationAvailable;
     $('ai-lyrics-use-vocals').disabled = busy || !hasSong || !aiSeparatedPath;
     const micRecording=aiMicRecorder?.state==='recording';
@@ -1361,7 +1362,7 @@
     $('ai-lyrics-save-details').disabled = busy || !hasSong ||
       !$('ai-lyrics-title').value.trim();
     $('ai-export-button').disabled = busy || !hasSong ||
-      (!$('ai-export-lyrics').checked && !$('ai-export-instrumental').checked);
+      (!$('ai-export-lyrics').checked && !$('ai-export-instrumental').checked && !$('ai-export-source').checked);
     $('ai-lyrics-paste').disabled = !hasSong;
     $('ai-lyrics-align').disabled = busy || !hasSong ||
       !(aiEngineReady || aiDraftReady) || !$('ai-lyrics-paste').value.trim();
@@ -1796,13 +1797,16 @@
     const id=aiSongId;
     const lyrics=$('ai-export-lyrics').checked;
     const instrumental=$('ai-export-instrumental').checked;
-    if (!lyrics && !instrumental)
-      return message('เลือกเนื้อเพลงหรือเพลงตัดเสียงร้องอย่างน้อยหนึ่งรายการ');
+    const source=$('ai-export-source').checked;
+    const source_format=$('ai-export-format').value;
+    if (!lyrics && !instrumental && !source)
+      return message('กรุณาเลือกเนื้อร้อง เพลงตัดเสียงร้อง หรือไฟล์ต้นฉบับอย่างน้อยหนึ่งรายการ');
     // Persist destination exactly as the existing Download settings do.
     try { await saveInputs(['download-destination']); }
     catch(error) { return message('บันทึกโฟลเดอร์ส่งออกไม่ได้: '+error.message); }
     const label=[lyrics?'LRC เนื้อร้องที่ตรวจแล้ว':null,
-                 instrumental?'M4A เพลงตัดเสียงร้อง':null].filter(Boolean).join(' + ');
+                 instrumental?'M4A เพลงตัดเสียงร้อง':null,
+                 source?'เพลงต้นฉบับ ('+(source_format==='original'?'คัดลอก':source_format)+')':null].filter(Boolean).join(' + ');
     const yes=await confirmStudio(
       'ส่งออก '+label+' ไปที่\\n'+(prefs.download||'ยังไม่ได้ตั้งค่า')+
       '\\n\\nถ้า M4A ยังไม่มี ระบบจะแยกเสียงก่อน · ไม่แก้เพลงต้นฉบับและไม่เขียนทับไฟล์เดิม',
@@ -1810,7 +1814,7 @@
       {acceptLabel:'เริ่มส่งออก',cancelLabel:'ยกเลิก'});
     if (!yes || busy || aiSongId!==id) return;
     $('ai-export-status').textContent='กำลังส่งออก '+label+' · ติดตามสถานะที่แผงงาน';
-    await run('ai-export',{id,lyrics,instrumental});
+    await run('ai-export',{id,lyrics,instrumental,source,source_format});
   }
 
   async function aiStartTranscription() {
@@ -3016,6 +3020,17 @@
   $('ai-lyrics-next').addEventListener('click',()=>{
     if(aiOffset+30<aiTotal){aiOffset+=30;void aiRefreshSongList();}
   });
+  $('ai-lyrics-read-source').addEventListener('click',async()=>{
+    if(!Number.isInteger(aiSongId) || busy)return;
+    if(aiDetailsDirty || $('ai-lyrics-editor').value.trim()){
+      const yes=await confirmStudio('อ่านแท็กและเนื้อร้องจากไฟล์เดิมอีกครั้ง? ข้อมูลในช่องที่ยังไม่ได้บันทึกอาจถูกแทนที่ แต่ไฟล์ต้นฉบับไม่เปลี่ยน','ดึงข้อมูลจากไฟล์');
+      if(!yes)return;
+    }
+    const row=aiSongs.find(x=>x.id===aiSongId) ||
+      {id:aiSongId,title:$('ai-lyrics-title').value,artist:$('ai-lyrics-artist').value,
+       code:$('ai-lyrics-title').value};
+    await aiChooseSong(row);
+  });
   $('ai-lyrics-start').addEventListener('click',()=>{void aiStartTranscription();});
   $('ai-lyrics-align').addEventListener('click',()=>{void aiAlignPastedLyrics();});
   $('ai-lyrics-paste').addEventListener('input',()=>{
@@ -3048,7 +3063,7 @@
   $('ai-lyrics-insert-time').addEventListener('click',aiInsertTimestamp);
   $('ai-lyrics-download').addEventListener('click',aiDownloadLrc);
   $('ai-export-button').addEventListener('click',()=>{void aiExportSelected();});
-  for(const id of ['ai-export-lyrics','ai-export-instrumental'])
+  for(const id of ['ai-export-lyrics','ai-export-instrumental','ai-export-source','ai-export-format'])
     $(id).addEventListener('change',aiUpdateButtons);
   $('ai-export-choose-folder').addEventListener('click',()=>{
     void pick('download').then(()=>{
