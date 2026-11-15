@@ -24,7 +24,7 @@ def _bytes_or_none(value):
 
 
 def read_drive_quota(drive):
-    """Get the owner's current total-account usage, not only XStageWeb files."""
+    """Get the owner's current total-account usage, not only XStageSong files."""
     data = drive.json(ABOUT_QUOTA_URL)
     quota = data.get('storageQuota') if isinstance(data, dict) else None
     if not isinstance(quota, dict):
