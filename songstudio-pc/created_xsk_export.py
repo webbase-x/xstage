@@ -13,8 +13,8 @@ from pathlib import Path
 def export_selected(root, selected, export, created_json, package, codes, key,
                     *, destination_root=None, cancelled=None, progress=None):
     root = Path(root)
-    if not isinstance(selected, list) or not 1 <= len(selected) <= 100:
-        raise ValueError("เลือก Lyrics JSON ครั้งละ 1–100 รายการ")
+    if not isinstance(selected, list) or not selected:
+        raise ValueError("กรุณาเลือก Lyrics JSON อย่างน้อยหนึ่งรายการ")
     if any(not isinstance(item, str) for item in selected) or len(set(selected)) != len(selected):
         raise ValueError("รายการ Lyrics JSON ไม่ถูกต้องหรือซ้ำ")
     entries = created_json._records(root, export)
