@@ -85,8 +85,8 @@ jobs:
       - name: Prepare app icon renderer (build runner only)
         shell: powershell
         run: |
-          python -m pip install --disable-pip-version-check pillow==11.3.0
-          if ($LASTEXITCODE -ne 0) { throw "Build-only Pillow package failed" }
+          python -m pip install --disable-pip-version-check pillow==11.3.0 cryptography==46.0.3
+          if ($LASTEXITCODE -ne 0) { throw "Build-only Pillow/Cryptography packages failed" }
       - name: Preflight source syntax and PC/Web UI
         shell: powershell
         run: |
