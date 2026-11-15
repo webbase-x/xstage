@@ -43,6 +43,9 @@ class ClassicApp(KaraokeApp):
         self.geometry(f'{min(1440, self.winfo_screenwidth()-60)}x{min(900, self.winfo_screenheight()-90)}')
         if auto_catalog and self.settings.get('auto_catalog', False):
             self.after(600, self.auto_connect_catalog)
+        # Only observe a library selected by the operator on an earlier run.
+        self._pc_last_attempt = None
+        self.after(8000, self._watch_songstudio_pc_catalog)
 
     def _setup_style(self):
         super()._setup_style()
@@ -275,11 +278,39 @@ class ClassicApp(KaraokeApp):
         if dbf.is_file() and self.settings.get('catalog_stamp') != str(dbf.stat().st_mtime_ns):
             self.start_catalog(root)
 
+    def _start_songstudio_pc_import(self, root):
+        from .pc_xstagesong import import_library
+        self.start_index_job(
+            lambda: import_library(self.library, str(root), cancelled=self.cancel_scan),
+            on_done=lambda result: self.messages.put(
+                ('pc_xstagesong_connected', (str(root), result))))
+
+    def _watch_songstudio_pc_catalog(self):
+        """Refresh local catalog on new Song Studio export; never choose drives."""
+        if self.closing:
+            return
+        try:
+            saved = str(self.settings.get('xstagesong_pc_folder') or '')
+            if saved:
+                pointer = Path(saved) / 'LYRICS' / 'current.json'
+                if pointer.is_file():
+                    stamp = pointer.stat()
+                    snapshot = (str(pointer.parent.parent),
+                                stamp.st_mtime_ns, stamp.st_size)
+                    if not self.scanning and snapshot != self._pc_last_attempt:
+                        self._pc_last_attempt = snapshot
+                        self._start_songstudio_pc_import(pointer.parent.parent)
+        except (OSError, ValueError, RuntimeError) as error:
+            logging.warning('XStageSong PC catalog watcher: %s', error)
+        finally:
+            if not self.closing:
+                self.after(12000, self._watch_songstudio_pc_catalog)
+
     def connect_songstudio_pc_library(self):
-        """Choose the local XStageSong folder explicitly, never auto-scan drives."""
+        """Select the local XStageSong folder manually and remember it."""
         if self.scanning:
             return self.status_var.set('กำลังสร้างดัชนีเพลง กรุณารอให้งานเดิมเสร็จ')
-        from .pc_xstagesong import library_root, import_library
+        from .pc_xstagesong import library_root
         previous = self.settings.get('xstagesong_pc_folder', '')
         initial = previous if previous and Path(previous).is_dir() else str(self.home)
         selected = filedialog.askdirectory(
@@ -292,12 +323,7 @@ class ClassicApp(KaraokeApp):
         except (ValueError, OSError) as error:
             messagebox.showerror('XStageSong ไม่ถูกต้อง', str(error), parent=self)
             return
-
-        def job():
-            return import_library(self.library, str(root), cancelled=self.cancel_scan)
-
-        self.start_index_job(job, on_done=lambda result:
-            self.messages.put(('pc_xstagesong_connected', (str(root), result))))
+        self._start_songstudio_pc_import(root)
 
     def connect_catalog(self):
         if self.scanning:
@@ -356,6 +382,13 @@ class ClassicApp(KaraokeApp):
                     selected, outcome = data
                     if not self.cancel_scan.is_set() and not outcome[2]:
                         self.settings['xstagesong_pc_folder'] = selected
+                        try:
+                            pointer = Path(selected) / 'LYRICS' / 'current.json'
+                            stamp = pointer.stat()
+                            self._pc_last_attempt = (str(Path(selected)),
+                                                     stamp.st_mtime_ns, stamp.st_size)
+                        except OSError:
+                            self._pc_last_attempt = None
                         self.save_settings()
                         self.refresh_library()
                         self.status_var.set(
