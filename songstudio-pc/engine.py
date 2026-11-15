@@ -2986,6 +2986,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(LYRIC_TEXT.list_groups(snapshot, position,
                     search=query.get("search", [""])[0], offset=offset,
                     limit=limit, repeats_only=only_repeats))
+            elif path == "/api/lyric-groups/ids":
+                with LOCK:
+                    snapshot = LYRIC_TEXT_INDEX
+                if snapshot is None:
+                    raise ValueError("ยังไม่มีผลวิเคราะห์กลุ่มข้อความ")
+                position = query.get("position", ["first"])[0]
+                only_repeats = query.get("repeats", ["1"])[0] != "0"
+                matches = LYRIC_TEXT.list_groups(
+                    snapshot, position,
+                    search=query.get("search", [""])[0],
+                    offset=0, limit=1000, repeats_only=only_repeats)
+                self._json({"ids": [row["id"] for row in matches["rows"]],
+                            "total": matches["total"], "limit": 1000})
             elif path == "/api/lyric-groups-preview":
                 with LOCK:
                     snapshot = LYRIC_TEXT_INDEX
