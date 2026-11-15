@@ -237,6 +237,7 @@
     $('page-subtitle').textContent = tabNames[name][1];
     document.title = `${tabNames[name][0]} · X-Stage Song Studio`;
     if (activeTab !== 'create') stopLivePreview();
+    stopImportPreviews(name==='upload'?'online':name==='pc-export'?'pc':'');
     if (activeTab !== 'ai-lyrics') {
       aiStopPlayback();
       if(aiMicRecorder?.state==='recording')aiStopMic();
@@ -1955,6 +1956,147 @@
       await run('upload-soundfont',{create_new_library:createNew});
     } catch(error){$('upload-soundfont-status').textContent=error.message;message(error.message);}
   }
+  // Both import menus have isolated, read-only preview players.
+  const importPreviews = new Map();
+  for (const kind of ['online', 'pc']) {
+    const state = {kind, offset:0, total:0, rows:[], session:'', lines:[], serial:0, loaded:false};
+    importPreviews.set(kind, state);
+    const audio = $(kind+'-preview-audio');
+    const selected = $(kind+'-preview-select');
+    const setStatus = value => {$(kind+'-preview-status').textContent=value;};
+    function stop() {
+      state.serial++;
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      if (state.session) {
+        const previous=state.session;state.session='';
+        void post('/api/live-stop',{stream_id:previous}).catch(()=>{});
+      }
+      $(kind+'-preview-stop').disabled=true;
+    }
+    state.stop=stop;
+    function drawLyrics(time=0) {
+      const node=$(kind+'-preview-lyrics');
+      for(const line of node.querySelectorAll('[data-preview-time]')) {
+        const from=Number(line.dataset.previewTime),end=Number(line.dataset.previewEnd);
+        const active=time>=from&&time<end;
+        line.classList.toggle('active',active);
+        line.style.fontWeight=active?'700':'400';
+        line.style.opacity=active?'1':'.75';
+        if(active && node.dataset.active!==line.dataset.previewTime){
+          node.dataset.active=line.dataset.previewTime;
+          line.scrollIntoView({block:'nearest'});
+        }
+      }
+    }
+    function showLyrics(lines) {
+      state.lines=lines;
+      const node=$(kind+'-preview-lyrics');node.replaceChildren();node.dataset.active='';
+      if(!lines.length){
+        const p=document.createElement('p');p.className='hint';
+        p.textContent='ไม่มีเนื้อร้องพร้อมเวลาที่แสดงได้';node.append(p);return;
+      }
+      for(const line of lines){
+        const p=document.createElement('div');
+        p.textContent=line.text;
+        p.dataset.previewTime=String(line.startTime);
+        p.dataset.previewEnd=String(line.endTime);
+        p.style.padding='4px 6px';
+        node.append(p);
+      }
+      drawLyrics(audio.currentTime);
+    }
+    async function load(reset=false) {
+      stop();
+      const ticket=++state.serial;
+      if(reset)state.offset=0;
+      const qs=new URLSearchParams({kind,search:$(kind+'-preview-search').value.trim(),
+                    offset:String(state.offset),limit:'50'});
+      try {
+        const data=await api('/api/import-preview/list?'+qs);
+        if(ticket!==state.serial)return;
+        state.total=data.total||0;state.rows=data.rows||[];
+        state.loaded=!data.needsScan;
+        selected.replaceChildren();
+        selected.add(new Option('เลือกเพลงเพื่อทดลองฟัง',''));
+        for(const item of state.rows){
+          selected.add(new Option((item.code||'')+' · '+(item.title||'')+' ['+item.kind+']',String(item.id)));
+        }
+        const first=state.total?state.offset+1:0;
+        $(kind+'-preview-page').textContent=first+'–'+(state.offset+state.rows.length)+' / '+state.total;
+        $(kind+'-preview-prev').disabled=state.offset===0;
+        $(kind+'-preview-next').disabled=state.offset+50>=state.total;
+        $(kind+'-preview-play').disabled=true;
+        showLyrics([]);
+        setStatus(data.needsScan?'เลือกโฟลเดอร์แล้วกดโหลดรายการเพลงสำหรับพรีวิว':
+          'พบ '+state.total+' เพลงที่มีไฟล์เสียง · เลือกเพลงเพื่อฟังได้');
+      }catch(error){setStatus('อ่านรายการเพลงไม่สำเร็จ: '+error.message);}
+    }
+    async function scan() {
+      stop();setStatus('กำลังตรวจต้นทางและจัดรายการเพลงสำหรับพรีวิว…');
+      $(kind+'-preview-scan').disabled=true;
+      const current=++state.serial;
+      try{
+        await saveInputs([kind==='online'?'upload-folder':'create-workspace']);
+        const result=await post('/api/import-preview/scan',{kind});
+        if(current!==state.serial)return;
+        state.offset=0;state.loaded=true;
+        setStatus('ตรวจพบ '+result.total+' เพลงพร้อมพรีวิว');
+        await load(true);
+      }catch(error){setStatus('สแกนไม่สำเร็จ: '+error.message);}
+      finally{$(kind+'-preview-scan').disabled=false;}
+    }
+    async function choose() {
+      stop();
+      const id=Number(selected.value);
+      const row=state.rows.find(x=>x.id===id);
+      $(kind+'-preview-play').disabled=!selected.value||!row;
+      showLyrics([]);
+      if(!row)return;
+      setStatus(row.title+' · '+row.kind+' · '+row.status);
+      const ticket=++state.serial;
+      try{
+        const details=await post('/api/import-preview/lyrics',{kind,id});
+        if(ticket!==state.serial)return;
+        showLyrics(details.lines||[]);
+        setStatus(row.title+' · '+row.kind+' · '+details.status);
+      }catch(error){if(ticket===state.serial)setStatus('อ่านเนื้อร้องไม่ได้: '+error.message);}
+    }
+    async function play() {
+      const row=state.rows.find(x=>String(x.id)===selected.value);
+      if(!row)return;
+      stop();
+      const ticket=++state.serial;
+      setStatus('กำลังเปิดเสียงทดลองเล่น '+row.title+'…');
+      try{
+        const result=await post('/api/import-preview/play',{kind,id:row.id});
+        if(ticket!==state.serial)return;
+        state.session=result.session;
+        audio.src=engineAddress('/api/live-stream?ticket='+encodeURIComponent(result.ticket));
+        $(kind+'-preview-stop').disabled=false;
+        await audio.play();
+        setStatus('กำลังทดลองเล่น '+row.title+' · '+result.format+' (ไม่อัปโหลดไฟล์)');
+      }catch(error){
+        if(ticket===state.serial)setStatus('ทดลองเล่นไม่สำเร็จ: '+error.message);
+      }
+    }
+    $(kind+'-preview-scan').addEventListener('click',()=>{void scan();});
+    $(kind+'-preview-search').addEventListener('change',()=>{void load(true);});
+    $(kind+'-preview-prev').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-50);void load();});
+    $(kind+'-preview-next').addEventListener('click',()=>{state.offset+=50;void load();});
+    selected.addEventListener('change',()=>{void choose();});
+    $(kind+'-preview-play').addEventListener('click',()=>{void play();});
+    $(kind+'-preview-stop').addEventListener('click',stop);
+    audio.addEventListener('timeupdate',()=>drawLyrics(audio.currentTime));
+    audio.addEventListener('ended',()=>{ $(kind+'-preview-stop').disabled=true; });
+    audio.addEventListener('error',()=>{if(audio.currentSrc)setStatus('ตัวเล่นเสียงไม่รองรับไฟล์หรือสตรีมหยุดก่อนจบ');});
+    state.load=load;
+  }
+  function stopImportPreviews(except='') {
+    for(const [kind, state] of importPreviews)if(kind!==except)state.stop();
+  }
+
   async function inspectUploadFolder() {
     try {
       await saveInputs(['upload-folder']);
