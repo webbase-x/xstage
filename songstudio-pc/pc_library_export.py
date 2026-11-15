@@ -209,14 +209,15 @@ def inspect(source_root, selected_destination, export):
     records = _source(source, export)
     existing = _existing(target)
     files, _replacements, missing, bytes_to_copy, versioned = _plan_files(source, target)
+    db_path, installed = _sqlite_bridge().database_location(target)
     return {"source": str(source), "destination": str(target),
             "songs": len(records), "existingSongs": len(existing),
             "files": len(files), "newFiles": missing,
             "updatedLyrics": versioned,
             "bytesToCopy": bytes_to_copy,
-            "database": str(_sqlite_bridge().database_location(target)[0]),
-            "databaseAction": "update" if _sqlite_bridge().database_location(target)[0].is_file() else "create",
-            "databaseInstalled": _sqlite_bridge().database_location(target)[1]}
+            "database": str(db_path),
+            "databaseAction": "update" if db_path.is_file() else "create",
+            "databaseInstalled": installed}
 
 
 def _atomic_copy(source_file, target_file):
