@@ -108,6 +108,77 @@ AI_RECORDING_INBOX = DATA / "ai-recording-inbox"
 AI_RECORDINGS_PENDING = {}
 MAX_AI_RECORDING_BYTES = 64 * 1024 * 1024
 MAX_AI_RECORDING_SECONDS = 20 * 60
+
+def _source_audio_details(source):
+    """Read metadata and existing lyrics on demand; never modify the audio.
+
+    Embedded title/performer/lyrics come from FFprobe when available. A
+    same-stem companion LRC takes precedence for timed lyrics. Plain lyrics
+    stay plain: guessing timestamps would corrupt karaoke synchronization.
+    """
+    source = Path(source)
+    result = {"title": "", "artist": "", "timedLrc": "",
+              "plainLyrics": "", "lyricsSource": "", "metadataSource": ""}
+    ffmpeg = ffmpeg_binary()
+    probe = (Path(ffmpeg).with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
+             if ffmpeg else None)
+    if not probe or not probe.is_file():
+        found = shutil.which("ffprobe")
+        probe = Path(found) if found else None
+    if probe:
+        try:
+            proc = subprocess.run(
+                [str(probe), "-v", "error", "-show_entries",
+                 "format_tags:stream_tags", "-of", "json", str(source)],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL, timeout=12,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+            if proc.returncode == 0 and len(proc.stdout) <= 500000:
+                document = json.loads(proc.stdout.decode("utf-8", errors="replace"))
+                tags = {}
+                groups = [document.get("format") or {}, *(document.get("streams") or [])]
+                for group in groups:
+                    for key, value in (group.get("tags") or {}).items():
+                        normalized = str(key).casefold().replace(" ", "").replace("_", "")
+                        if isinstance(value, str) and value.strip():
+                            tags.setdefault(normalized, value.strip())
+                def tagged(*keys):
+                    return next((tags[key] for key in keys if tags.get(key)), "")
+                result["title"] = tagged("title", "tit2", "©nam")[:180]
+                result["artist"] = tagged("artist", "albumartist", "performer",
+                                          "tpe1", "©art")[:180]
+                embedded = tagged("lyrics", "unsyncedlyrics", "unsynchronisedlyrics",
+                                  "unsynchronizedlyrics", "©lyr", "uslt",
+                                  "syncedlyrics", "sylt")[:100000]
+                if result["title"] or result["artist"]:
+                    result["metadataSource"] = "แท็กภายในไฟล์เสียง"
+                if embedded:
+                    if _song_export_module().lrc_to_json(
+                            embedded, source.stem).get("lines"):
+                        result["timedLrc"] = embedded
+                    else:
+                        result["plainLyrics"] = embedded
+                    result["lyricsSource"] = "แท็กเนื้อร้องในไฟล์เสียง"
+        except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+            pass  # Metadata is optional; retaining original audio is mandatory.
+    companion = _matching_lrc(source)
+    if companion and companion.is_file() and not companion.is_symlink():
+        try:
+            if companion.stat().st_size <= 250000:
+                content = NCN._decode_text(companion.read_bytes()).lstrip("\ufeff").strip()
+                if content:
+                    if _song_export_module().lrc_to_json(
+                            content, source.stem).get("lines"):
+                        result["timedLrc"] = content
+                        result["plainLyrics"] = ""
+                    elif not result["timedLrc"]:
+                        result["plainLyrics"] = content
+                    result["lyricsSource"] = "ไฟล์ LRC คู่กับเพลง"
+        except (OSError, ValueError, TypeError):
+            pass
+    return result
+
+
 def restore_ai_imports():
     raw = load_json(AI_IMPORTS_FILE, [])
     if not isinstance(raw, list):
@@ -144,6 +215,7 @@ def import_ai_audio(source_path):
     if path.stat().st_size < 1000:
         raise ValueError("ไฟล์เสียงมีขนาดเล็กผิดปกติหรือไม่มีข้อมูล")
     resolved = str(path.resolve())
+    discovered = _source_audio_details(path)
     with LOCK:
         existing = next((row for row in AI_IMPORTED.values()
                          if row["path"].casefold() == resolved.casefold()), None)
@@ -152,7 +224,8 @@ def import_ai_audio(source_path):
                     "message": "ไฟล์นี้มีอยู่แล้วในเมนูสร้างเนื้อร้อง AI"}
         song_id = min([0, *AI_IMPORTED.keys()]) - 1
         row = {"id": song_id, "path": resolved, "code": path.stem,
-               "title": path.stem, "artist": "", "kind": path.suffix[1:].upper(),
+               "title": discovered["title"] or path.stem,
+               "artist": discovered["artist"], "kind": path.suffix[1:].upper(),
                "size": path.stat().st_size, "status": "ai-import",
                "source_format": "AI_IMPORT"}
         AI_IMPORTED[song_id] = row
@@ -2291,25 +2364,72 @@ def available_vocal_sources(search="", offset=0, limit=40):
 
 
 def ai_lyrics_draft(song_id):
-    """AI draft stays in private AppData until the owner explicitly approves."""
+    """Return saved edits and original metadata before any AI transcription."""
     with LOCK:
         row = dict(FILE_BY_ID.get(song_id) or {}) if type(song_id) is int else {}
+        note = dict(NOTES.get(row.get("path", ""), {}))
     if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
         raise ValueError("ต้องเลือกเพลงที่เป็นไฟล์เสียงสำหรับถอดคำร้อง")
-    draft = AI_LYRICS.load_draft(DATA, Path(row["path"]))
+    source = Path(row["path"])
+    discovered = _source_audio_details(source)
+    title = (str(note.get("title") or "").strip() or
+             (discovered["title"] if str(row.get("title") or "") == source.stem else
+              str(row.get("title") or "")) or source.stem)
+    artist = (str(note.get("artist") or "").strip() or
+              str(row.get("artist") or "").strip() or discovered["artist"])
+    draft = AI_LYRICS.load_draft(DATA, source)
     ready, reason = AI_LYRICS.readiness(RUNTIME)
     if ready and not ffmpeg_binary():
         ready, reason = False, "ไม่พบ FFmpeg ในแพ็กเกจ PC Ready"
     vocals = saved_ai_vocals(row)
     return {
-        "id": song_id, **preview_song_identity(row),
+        "id": song_id, "title": title, "artist": artist, "code": row["code"],
+        "metadataSource": discovered["metadataSource"],
+        "lyricsSource": discovered["lyricsSource"],
+        "sourceLrc": discovered["timedLrc"],
+        "sourcePlainLyrics": discovered["plainLyrics"],
+        "savedPlainLyrics": str(note.get("plain_lyrics") or ""),
+        "hasSavedPlainLyrics": "plain_lyrics" in note,
         "available": ready, "aiProblem": reason,
         "separationAvailable": ai_available() and bool(ffmpeg_binary()),
         "separatedVocals": str(vocals) if vocals else None,
         "hasDraft": bool(draft), "draft": draft,
         "approvedLrc": AI_LYRICS.replace_music_interlude_label(
-            NOTES.get(row["path"], {}).get("lyrics", ""))
+            str(note.get("lyrics") or ""))
     }
+
+
+def save_ai_source_details(song_id, title, artist, plain_lyrics):
+    """Save user corrections separately from the immutable source audio."""
+    if (type(song_id) is not int or not isinstance(title, str) or
+            not isinstance(artist, str) or not isinstance(plain_lyrics, str)):
+        raise ValueError("ข้อมูลชื่อเพลง ศิลปิน หรือเนื้อร้องไม่ถูกต้อง")
+    title, artist = title.strip(), artist.strip()
+    if not title or len(title) > 180 or len(artist) > 180 or len(plain_lyrics) > 100000:
+        raise ValueError("กรุณาระบุชื่อเพลง และจำกัดความยาวข้อมูลให้อยู่ในเกณฑ์")
+    with LOCK:
+        row = AI_IMPORTED.get(song_id)
+        if not row:
+            raise ValueError("ไม่พบเพลงที่นำเข้าในหน้า AI")
+        path = row["path"]
+        old_note = dict(NOTES.get(path, {}))
+        old_row = dict(row)
+        NOTES[path] = {**old_note, "title": title, "artist": artist,
+                       "plain_lyrics": plain_lyrics}
+        row.update(title=title, artist=artist)
+        try:
+            save_json(NOTES_FILE, NOTES)
+            save_json(AI_IMPORTS_FILE,
+                      [{"id": item["id"], "path": item["path"],
+                        "title": item["title"], "artist": item["artist"]}
+                       for item in AI_IMPORTED.values()])
+        except Exception:
+            NOTES[path] = old_note
+            row.update(old_row)
+            raise
+    return {"ok": True, "title": title, "artist": artist,
+            "message": "บันทึกชื่อเพลง ศิลปิน และเนื้อร้องที่ไม่มีเวลาในข้อมูลส่วนตัวแล้ว"}
+
 
 
 def approve_ai_lyrics(song_id, lrc_text):
@@ -2324,8 +2444,7 @@ def approve_ai_lyrics(song_id, lrc_text):
         row = dict(FILE_BY_ID.get(song_id) or {})
     if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
         raise ValueError("ต้องเลือกเพลงเสียงร้องที่อยู่ในรายการสแกน")
-    if not AI_LYRICS.load_draft(DATA, Path(row["path"])):
-        raise ValueError("ยังไม่มีฉบับร่าง AI สำหรับเพลงนี้ กรุณาให้ AI ถอดเสียงก่อน")
+    # Source LRC and manually timed lyrics can be reviewed without running AI.
     # lrc_to_json ignores invalid lines; reject invalid non-metadata content
     # instead of silently publishing a partial transcription.
     import re
@@ -2901,6 +3020,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(remove_vocal_source(payload.get("id")))
             elif path == "/api/ai-lyrics-approve":
                 self._json(approve_ai_lyrics(payload.get("id"), payload.get("lrc")))
+            elif path == "/api/ai-lyrics-details":
+                self._json(save_ai_source_details(
+                    payload.get("id"), payload.get("title"),
+                    payload.get("artist"), payload.get("plainLyrics")))
             elif path == "/api/google-login-focus":
                 # Reopen the exact in-progress Google OAuth URL. The browser
                 # never receives the OAuth URL or the refresh token via our API.
