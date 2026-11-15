@@ -39,7 +39,7 @@ def playback_lyrics(settings, path, lyrics, stored_path):
     if sidecar:
         lyrics = sidecar
     else:
-        from .pc_stageweb import source_lyrics
+        from .pc_xstagesong import source_lyrics
         studio_lyrics = source_lyrics(path)
         if studio_lyrics is not None:
             lyrics = studio_lyrics
