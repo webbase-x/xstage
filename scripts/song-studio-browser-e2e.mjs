@@ -620,8 +620,15 @@ try {
   assert.equal(await pc.locator('#ai-lyrics-import').isVisible(),true);
   await pc.click('#ai-lyrics-import');
   await pc.waitForFunction(()=>document.querySelector('#ai-lyrics-selected')?.textContent.includes('เพลง AI นำเข้า'));
+  // Song name is rendered before the asynchronous draft/model response.
+  // Assert the real Whisper readiness and lyric hydration, not a loading state.
+  await pc.waitForFunction(()=>
+    document.querySelector('#ai-lyrics-engine-state')?.textContent.includes('Whisper AI พร้อมใช้งาน') &&
+    document.querySelector('#ai-lyrics-editor')?.value.includes('ท่อนแรก AI') &&
+    document.querySelector('#ai-lyrics-start')?.disabled===false,
+    null,{timeout:10000});
   assert.equal(await pc.locator('#ai-lyrics-start').isEnabled(),true,
-    'Independent imported file can use Whisper when a model is available');
+    'Whisper must enable after successful AI draft readiness response');
   assert.match(await pc.locator('#ai-lyrics-editor').inputValue(),/ท่อนแรก AI/);
   assert.equal(await pc.locator('#ai-lyrics-save').isEnabled(),true);
   const aiLive = pc.waitForRequest((req)=>{
