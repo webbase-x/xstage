@@ -517,7 +517,9 @@
     $('settings-oauth').value = prefs.oauth || '';
     $('create-preset').value = prefs.midi_preset || 'balanced';
     $('create-mode').value = prefs.mode || 'original';
-    $('create-output-kind').value = proEnabled && ['xstage','m4a'].includes(prefs.export_format)\n      ? prefs.export_format : 'xsk';\n    syncXskControls();
+    $('create-output-kind').value = proEnabled && ['xstage','m4a'].includes(prefs.export_format)
+      ? prefs.export_format : 'xsk';
+    syncXskControls();
     $('create-code-style').value = prefs.code_style || 'source';
     $('create-code-length').value = prefs.code_length || '6';
   }
@@ -613,7 +615,8 @@
       'settings-logout','google-login-header','update-button','verify-code-registry'];
     for (const name of buttons) $(name).disabled = busy;
     $('build-button').disabled = busy || selected.size === 0;
-    $('build-audio-button').disabled = busy || selected.size === 0 || !proEnabled;\n    syncXskControls();
+    $('build-audio-button').disabled = busy || selected.size === 0 || !proEnabled;
+    syncXskControls();
     $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     $('edit-button').disabled = busy || selected.size !== 1;
 
@@ -1895,7 +1898,8 @@
         buildFeedback('running', 'PC Engine รับคำสั่งสร้างเพลงแล้ว',
           'เลขงาน ' + response.id + ' · ' + fmtNum(response.total ?? options.ids?.length ?? 0) +
           ' เพลง · ' + (options.audio_only ? 'สร้าง M4A อย่างเดียว' :
-             options.export_format==='xsk' ? 'สร้าง XSK เข้ารหัส' :\n             options.export_format==='xstage' ? 'ส่งออกแบบเดิม' :
+             options.export_format==='xsk' ? 'สร้าง XSK เข้ารหัส' :
+             options.export_format==='xstage' ? 'ส่งออกแบบเดิม' :
              'สร้าง M4A + Lyrics JSON') +
           ' · กำลังติดตามสถานะ');
         message('รับคำสั่งสร้างเพลงแล้ว · ตรวจสถานะได้ในขั้นตอนที่ 4', false);
@@ -1919,14 +1923,18 @@
     try {
       buildFeedback('starting', 'กำลังตรวจสอบไฟล์ต้นฉบับและพื้นที่ว่าง…',
         'ยังไม่เริ่มสร้างไฟล์ · ตรวจสอบรายการที่เลือกอยู่');
-      const chosenOutput=$('create-output-kind').value;\n      await saveInputs(['create-source','create-soundfont','create-preset',\n         'create-mode','create-code-style','create-code-length']);\n      await config({export_format:chosenOutput});
+      const chosenOutput=$('create-output-kind').value;
+      await saveInputs(['create-source','create-soundfont','create-preset',
+         'create-mode','create-code-style','create-code-length']);
+      await config({export_format:chosenOutput});
       const ids = selectedIDs();
       const estimate = await post('/api/estimate', {ids});
       if (!estimate.songs) throw new Error('ไม่พบเพลงที่เลือกในฐานข้อมูล กรุณาสแกนโฟลเดอร์ใหม่และเลือกเพลงอีกครั้ง');
       if (!estimate.enoughDisk) throw new Error('พื้นที่ว่างไม่เพียงพอ กรุณาเปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง');
       const formats = Object.entries(estimate.formats || {}).sort((a,b)=>b[1]-a[1])
         .map(([extension,count]) => (extension || 'ไม่มีนามสกุล').toUpperCase() + ' ' + fmtNum(count)).join(' · ');
-      if ($('create-output-kind').value==='xsk' && ![...selectedIDs()].some(id=>true)) throw new Error('ยังไม่ได้เลือกเพลง');\n      if (estimate.unsupported >= estimate.songs) throw new Error(
+      if ($('create-output-kind').value==='xsk' && ![...selectedIDs()].some(id=>true)) throw new Error('ยังไม่ได้เลือกเพลง');
+      if (estimate.unsupported >= estimate.songs) throw new Error(
         'เพลงที่เลือกทั้งหมดเป็น NCN ซึ่ง PC Engine รุ่นนี้ยังแปลงไม่ได้ · กรุณาเลือกเพลงรูปแบบที่รองรับ');
       const warning = (formats ? '\nประเภทไฟล์: ' + formats : '') +
         (estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ โปรแกรมจะสร้างทีละเพลง ไม่คัดลอกต้นฉบับทั้งหมด' : '') +
@@ -1935,7 +1943,8 @@
       const exportFormat=audioOnly?'m4a':$('create-output-kind').value;
       const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
         'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' :
-          exportFormat==='xsk' ? 'สร้าง XSK ที่เข้ารหัส' :\n          exportFormat==='xstage' ? 'ส่งออกเพลงแบบเดิม' :
+          exportFormat==='xsk' ? 'สร้าง XSK ที่เข้ารหัส' :
+          exportFormat==='xstage' ? 'ส่งออกเพลงแบบเดิม' :
           'แปลง M4A + Lyrics JSON') +
         '\nไฟล์ที่สร้างแล้วจะถูกตรวจซ้ำและข้ามโดยไม่สร้างใหม่' + warning;
       buildFeedback('starting', 'ตรวจสอบพร้อม · รอผู้ใช้ยืนยันสร้างเพลง',
