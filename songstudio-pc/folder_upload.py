@@ -45,15 +45,19 @@ def _safe_root(folder):
 
 
 def _indexed(root):
+    """Walk all nested folders without following symbolic links or hidden loops."""
     files = []
-    for path in root.rglob("*"):
-        if path.is_symlink():
-            continue
-        if not path.is_file():
-            continue
-        files.append(path)
-        if len(files) > SCAN_LIMIT:
-            raise ValueError("พบไฟล์เกินขีดจำกัดการสแกน 250,000 ไฟล์")
+    import os
+    for base, dirs, names in os.walk(root, topdown=True, followlinks=False):
+        dirs[:] = sorted(name for name in dirs
+                         if not (Path(base) / name).is_symlink())
+        for name in sorted(names):
+            path = Path(base) / name
+            if path.is_symlink() or not path.is_file():
+                continue
+            files.append(path)
+            if len(files) > SCAN_LIMIT:
+                raise ValueError("พบไฟล์เกินขีดจำกัดการสแกน 250,000 ไฟล์")
     return files
 
 
@@ -188,6 +192,17 @@ def existing_local_catalog(folder, export):
     candidates = [chosen]
     if chosen.name.casefold() != "xstagesong":
         candidates.append(chosen / "XStageSong")
+        # A selected parent can contain a library one or more levels down.
+        # Discover unambiguously: never silently publish a random sibling DB.
+        nested = sorted({p.parent for p in chosen.rglob("current.json")
+                         if p.is_file() and not p.is_symlink()
+                         and not any(parent.is_symlink() for parent in p.relative_to(chosen).parents
+                                     if parent != Path("."))})
+        candidates.extend(p for p in nested if p not in candidates
+                          and p.name.casefold() == "xstagesong")
+        nested_eligible = [p for p in candidates if (p / "current.json").is_file()]
+        if len(nested_eligible) > 1:
+            raise ValueError("พบคลัง XStageSong หลายแห่งในโฟลเดอร์ย่อย กรุณาเลือกคลังที่ต้องการโดยตรง")
     for root in candidates:
         if not (root / "current.json").is_file():
             continue
