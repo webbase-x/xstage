@@ -161,7 +161,13 @@ def _atomic_copy(source_file, target_file):
             os.fsync(output.fileno())
         if (_hash(temp) != _hash(source_file)):
             raise OSError("ตรวจ SHA-256 ของไฟล์ที่คัดลอกไม่ผ่าน: " + source_file.name)
-        os.link(temp, target_file)
+        # Windows FAT/exFAT removable drives do not support hard links.
+        # Windows rename is no-replace; POSIX link is no-replace. Both commit
+        # only after the temporary file's SHA-256 has been verified.
+        if os.name == "nt":
+            os.rename(temp, target_file)
+        else:
+            os.link(temp, target_file)
         return True
     finally:
         temp.unlink(missing_ok=True)
