@@ -1,7 +1,7 @@
-"""Offline XStageWeb/AUDIO + LYRICS export for Karaoke PC.
+"""Offline XStageSong/AUDIO + LYRICS export for Karaoke PC.
 
-Source: Song Studio StageWeb (audio/, lyrics/, current.json).
-Destination: user-selected parent/XStageWeb, or XStageWeb itself.
+Source: Song Studio XStageSong (audio/, lyrics/, current.json).
+Destination: user-selected parent/XStageSong, or XStageSong itself.
 Neither Drive credentials nor a Windows installer are required.
 """
 from __future__ import annotations
@@ -26,9 +26,9 @@ ALLOWED_LYRICS = {".json", ".lrc"}
 
 def destination_root(selected):
     if not isinstance(selected, str) or not selected.strip():
-        raise ValueError("กรุณาเลือกตำแหน่งเก็บคลัง XStageWeb สำหรับ Karaoke PC")
+        raise ValueError("กรุณาเลือกตำแหน่งเก็บคลัง XStageSong สำหรับ Karaoke PC")
     chosen = Path(selected.strip()).expanduser().resolve()
-    return chosen if chosen.name.casefold() == "xstageweb" else chosen / "XStageWeb"
+    return chosen if chosen.name.casefold() == "xstagesong" else chosen / "XStageSong"
 
 
 def _safe_rel(value, prefix):
@@ -72,7 +72,7 @@ def _files(source):
 def _source(source, export):
     pointer, buckets = export._read_current(source)
     if not pointer:
-        raise ValueError("ไม่พบ StageWeb/current.json กรุณาสร้างเพลงก่อนส่งออกไป Karaoke PC")
+        raise ValueError("ไม่พบ XStageSong/current.json กรุณาสร้างเพลงก่อนส่งออกไป Karaoke PC")
     records = []
     for group in buckets.values():
         records.extend(group.get("songs") or [])
@@ -127,7 +127,7 @@ def inspect(source_root, selected_destination, export):
     source = Path(source_root).expanduser().resolve()
     target = destination_root(selected_destination)
     if target == source or target.is_relative_to(source) or source.is_relative_to(target):
-        raise ValueError("ตำแหน่งปลายทางต้องแยกจาก StageWeb ที่ใช้สร้างเพลง")
+        raise ValueError("ตำแหน่งปลายทางต้องแยกจาก XStageSong ที่ใช้สร้างเพลง")
     records = _source(source, export)
     existing = _existing(target)
     files = list(_files(source))
