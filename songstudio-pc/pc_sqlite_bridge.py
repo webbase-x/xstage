@@ -5,6 +5,7 @@ Import is additive: never replace a live DB, favorites, queue, or manual edits.
 """
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime, timezone
 import importlib.util
 import json
@@ -137,7 +138,7 @@ def sync(destination, records):
     if db_path.exists() and not existed:
         raise ValueError("ปลายทางฐานเพลงไม่ใช่ไฟล์ SQLite")
     if existed:
-        with sqlite3.connect(db_path, timeout=10) as original:
+        with closing(sqlite3.connect(db_path, timeout=10)) as original:
             if original.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
                 raise ValueError("ฐาน Karaoke PC เดิมไม่สมบูรณ์")
             has_songs = original.execute(
@@ -152,7 +153,7 @@ def sync(destination, records):
             )
             temp = backup.with_suffix(".tmp")
             try:
-                with sqlite3.connect(temp) as copy:
+                with closing(sqlite3.connect(temp)) as copy:
                     original.backup(copy, pages=256, sleep=0.1)
                     if copy.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
                         raise ValueError("ตรวจฐานสำรอง Karaoke PC ไม่ผ่าน")
@@ -161,7 +162,7 @@ def sync(destination, records):
                 temp.unlink(missing_ok=True)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     native_song_library()(db_path).upsert_catalog(rows, preserve_playable=True)
-    with sqlite3.connect(db_path, timeout=10) as verified:
+    with closing(sqlite3.connect(db_path, timeout=10)) as verified:
         if verified.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
             raise ValueError("ฐาน Karaoke PC หลังอัปเดตไม่ผ่านการตรวจสอบ")
     return {"database": str(db_path), "databaseAction": "updated" if existed else "created",
