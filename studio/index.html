@@ -60,7 +60,7 @@
               <div><div class="eyebrow">MIDI TO .XSK · STEP BY STEP</div><h2>MIDI to .XSK</h2><p>เลือกโฟลเดอร์ MIDI/KAR → เลือกเพลง → ตรวจเสียงและคำร้อง → กำหนดรหัส 1–12 หลัก → สร้าง .XSK · ไม่สร้างเพลงซ้ำ</p></div>
               <span id="create-step-progress" class="chip info" aria-live="polite">ขั้นตอนที่ 1 จาก 4</span>
             </div>
-            <nav class="create-steps" aria-label="เลือกขั้นตอนการสร้างเพลง">
+            <nav class="create-steps" id="create-step-navigation" aria-label="เลือกขั้นตอนการสร้างเพลง">
               <button class="create-step-link active" type="button" data-create-target="1" aria-current="step" aria-controls="create-stage-1"><span class="create-step-number">1</span><span>ต้นฉบับ<small>เลือกโฟลเดอร์และสแกน</small></span></button>
               <button class="create-step-link" type="button" data-create-target="2" aria-controls="create-stage-2"><span class="create-step-number">2</span><span>เลือกเพลง<small>ค้นหาและเลือกรายการ</small></span></button>
               <button class="create-step-link" type="button" data-create-target="3" aria-controls="create-stage-3"><span class="create-step-number">3</span><span>SoundFont + ทดลองฟัง<small>ตรวจคุณภาพเสียง</small></span></button>
@@ -78,6 +78,16 @@
             <label for="xsk-build-folder">ปลายทางสำหรับไฟล์ .XSK (แยกจากโฟลเดอร์ต้นทาง)</label>
             <div class="path-row"><input id="xsk-build-folder" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="ใช้คลัง XStageSong เดิมถ้าเว้นว่าง"><button class="button ghost" type="button" data-pick="xsk_folder">เลือกปลายทาง</button></div>
             <p class="hint">รูปแบบเดิม: XStageSong/MIDI/XSK/{หมวดรหัส}/{รหัส}.xsk · คัดลอก MIDI/KAR ต้นฉบับโดยไม่แก้ไฟล์ · ตรวจ SHA-256 ก่อนสร้างและตรวจความซ้ำปลายทาง</p>
+            <div class="xsk-auto-builder" id="xsk-auto-builder">
+              <div class="section-heading"><div><h3>สแกนและสร้าง .XSK อัตโนมัติ</h3><p>ไม่ต้องสแกนคลังให้จบหรือเลือกเพลง · เริ่มสร้างจากชุดแรกขณะสแกนชุดต่อไป · ทำครั้งละ 32 เพลง โดยคิวรอสูงสุด 4 ชุด</p></div></div>
+              <div class="form-2">
+                <div><label for="xsk-stream-code-style">รูปแบบรหัสชื่อไฟล์</label><select id="xsk-stream-code-style" class="field"><option value="source">ใช้รหัสต้นฉบับเมื่อไม่ซ้ำ</option><option value="numeric">ตัวเลขเท่านั้น</option><option value="letters">ตัวอักษร A–Z</option><option value="alphanumeric">ตัวเลขและตัวอักษร A–Z</option></select></div>
+                <div><label for="xsk-stream-code-length">จำนวนหลักรหัส (1–12)</label><input id="xsk-stream-code-length" class="field" type="number" min="1" max="12" step="1" value="6"></div>
+              </div>
+              <p class="hint">ตรวจทุกโฟลเดอร์ย่อยและเลือก MIDI/MID/KAR ที่มีเนื้อร้องพร้อมเวลาตามกฎเดิมอัตโนมัติ · ไม่มีเวลาเนื้อร้องหรือพบไฟล์ผิดปกติจะข้ามและบันทึกเหตุผล · ไม่เขียนทับต้นฉบับหรือ .XSK เดิม</p>
+              <div class="toolbar"><button id="xsk-stream-build" class="button primary large" type="button">▶ เริ่มสแกน + สร้าง .XSK ทุกเพลงที่ผ่านเงื่อนไข</button></div>
+              <p id="xsk-stream-status" class="hint" role="status" aria-live="polite">พร้อมเริ่มงาน · ยังไม่ต้องกดสแกนด่วนหรือเลือกเพลงก่อน</p>
+            </div>
             <article class="sound-settings" aria-label="ตั้งค่าการสร้าง XSK">
               <label for="create-output-kind">รูปแบบเพลงที่สร้าง</label>
               <select id="create-output-kind" class="field">
@@ -103,7 +113,7 @@
                 <p class="hint">ไม่เปลี่ยนไฟล์ต้นฉบับ · หากมีเวลาปาดระดับอักษรที่ไม่สามารถแก้อย่างปลอดภัย ระบบจะข้ามเพลงนั้นพร้อมแจ้งเหตุผล</p>
               </div>
             </article>
-            <div class="toolbar"><button id="scan-button" class="button primary" type="button">⌕ สแกนด่วน (เฉพาะที่เปลี่ยน)</button><button id="reconcile-button" class="button ghost" type="button" title="ใช้ดัชนีเพลงเดิมและตรวจหาไฟล์ที่เพิ่ม เปลี่ยน หรือลบ">รีเฟรชรายการ</button><button id="scan-full-button" class="button ghost" type="button" title="อ่านข้อมูลเพลงทุกไฟล์ใหม่ทั้งหมดโดยไม่ลบไฟล์ต้นฉบับ">สแกนเต็ม</button></div>
+            <div class="toolbar" id="legacy-source-scan-tools"><button id="scan-button" class="button primary" type="button">⌕ สแกนด่วน (เฉพาะที่เปลี่ยน)</button><button id="reconcile-button" class="button ghost" type="button" title="ใช้ดัชนีเพลงเดิมและตรวจหาไฟล์ที่เพิ่ม เปลี่ยน หรือลบ">รีเฟรชรายการ</button><button id="scan-full-button" class="button ghost" type="button" title="อ่านข้อมูลเพลงทุกไฟล์ใหม่ทั้งหมดโดยไม่ลบไฟล์ต้นฉบับ">สแกนเต็ม</button></div>
             <div class="toolbar"><button id="verify-code-registry" class="button ghost" type="button">▦ ตรวจรหัสคลัง PC + Google Drive</button></div>
             <div id="code-registry-state" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจรหัสสองแหล่ง · ระบบจะตรวจซ้ำก่อนสร้างและก่อนอัปโหลดโดยอัตโนมัติ</div>
             <div class="hint">เปิดครั้งต่อไปใช้ดัชนี SQLite เดิมได้ทันที · สแกนด่วนเพื่อตรวจเพลงเพิ่ม/เปลี่ยน/ลบ · สแกนเต็มเมื่อต้องการตรวจใหม่ทั้งหมด · หยุดงานแล้วสแกนอีกครั้งเพื่อใช้จุดตรวจเดิมต่อ · ไม่ย้ายหรือลบไฟล์ต้นฉบับ</div>
