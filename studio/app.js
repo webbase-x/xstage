@@ -1539,15 +1539,43 @@
     aiAudio.pause();aiAudio.removeAttribute('src');aiAudio.load();
     if(stream)void post('/api/live-stop',{stream_id:stream}).catch(()=>{});
     aiActiveIndex=-2;
+    aiClockLast=-1;aiClockStalledAt=0;aiCoverageWarned=false;
   }
+  let aiClockLast=-1,aiClockStalledAt=0,aiCoverageWarned=false;
   function aiRenderTime() {
     const panel=$('ai-lyrics-karaoke');
     if(!aiTimed.length)return;
-    const t=Number(aiAudio.currentTime)||0;
-    let current=-1;
-    for(let i=0;i<aiTimed.length;i++){
-      if(aiTimed[i].startTime>t)break;
-      current=i;
+    const t=Number(aiAudio.currentTime);
+    if(!Number.isFinite(t)||t<0)return;
+    // Follow the decoded audio clock. Never advance lyrics using wall time.
+    // If the media stream stalls, surface the real problem instead of showing
+    // a frozen lyric line without an explanation.
+    const now=performance.now();
+    if(Math.abs(t-aiClockLast)>.025){
+      aiClockLast=t;aiClockStalledAt=now;
+    }else if(!aiAudio.paused&&!aiAudio.seeking&&!aiAudio.ended&&
+             aiAudio.readyState>=HTMLMediaElement.HAVE_CURRENT_DATA&&
+             aiClockStalledAt&&now-aiClockStalledAt>3500){
+      $('ai-lyrics-status').textContent=
+        'เสียงทดลองฟังหยุดเดินที่ '+Math.floor(t/60)+':'+
+        String(Math.floor(t%60)).padStart(2,'0')+
+        ' · เป็นปัญหาสตรีมเสียง ไม่ใช่เวลา LRC · กดหยุดแล้วเล่นใหม่';
+      aiClockStalledAt=now;
+    }
+    const finalTime=Number(aiTimed[aiTimed.length-1].startTime);
+    if(!aiCoverageWarned&&!aiAudio.paused&&!aiAudio.ended&&
+       Number.isFinite(finalTime)&&t>finalTime+6){
+      aiCoverageWarned=true;
+      $('ai-lyrics-status').textContent=
+        'เสียงยังเล่น แต่เนื้อร้อง LRC สิ้นสุดที่ '+Math.floor(finalTime/60)+':'+
+        String(Math.floor(finalTime%60)).padStart(2,'0')+
+        ' · ตรวจว่าคำร้องหลังเวลานี้หายไปหรือยังไม่ได้จัดเวลา';
+    }
+    let lo=0,hi=aiTimed.length-1,current=-1;
+    while(lo<=hi){
+      const mid=(lo+hi)>>>1;
+      if(aiTimed[mid].startTime<=t){current=mid;lo=mid+1;}
+      else hi=mid-1;
     }
     if(aiActiveIndex!==current){
       aiActiveIndex=current;panel.replaceChildren();
@@ -1582,7 +1610,7 @@
   }
   function aiValidateEditor() {
     const check=aiParseLrc();
-    aiTimed=check.lines;aiActiveIndex=-2;
+    aiTimed=check.lines;aiActiveIndex=-2;aiCoverageWarned=false;
     if(check.lines.length)aiRenderTime();
     else $('ai-lyrics-karaoke').textContent='ยังไม่มีเนื้อร้องที่มีเวลาให้ทดลอง';
     $('ai-lyrics-validation').textContent=check.valid ?
@@ -2521,6 +2549,19 @@
   $('ai-lyrics-editor').addEventListener('input',aiValidateEditor);
   $('ai-lyrics-audio').addEventListener('timeupdate',aiRenderTime);
   $('ai-lyrics-audio').addEventListener('play',aiStartKaraokeAnimation);
+  $('ai-lyrics-audio').addEventListener('playing',aiStartKaraokeAnimation);
+  $('ai-lyrics-audio').addEventListener('waiting',()=>{
+    $('ai-lyrics-status').textContent='กำลังรอข้อมูลเสียงเพิ่มเติมจาก Local Engine · ตรวจการเชื่อมต่อสตรีม';
+  });
+  $('ai-lyrics-audio').addEventListener('error',()=>{
+    const code=aiAudio.error?.code||'unknown';
+    $('ai-lyrics-status').textContent='สตรีมทดลองฟังมีข้อผิดพลาด ('+code+
+      ') · กดหยุดแล้วเริ่มทดลองฟังอีกครั้ง';
+    aiStopKaraokeAnimation();
+  });
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&!aiAudio.paused)aiStartKaraokeAnimation();
+  });
   $('ai-lyrics-audio').addEventListener('pause',aiStopKaraokeAnimation);
   $('ai-lyrics-audio').addEventListener('ended',()=>{
     aiStopKaraokeAnimation();aiRenderTime();
