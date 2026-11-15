@@ -326,5 +326,25 @@ class LyricHeadTailTests(unittest.TestCase):
         self.assertFalse(list(self.backups.glob("*.zip"))) if self.backups.exists() else None
 
 
+    def test_lyric_group_limit_1000_and_small_preview(self):
+        sample = self.snapshot()
+        template = next(iter(sample["groups"].values()))
+        sample["groups"] = {}
+        ids = []
+        for index in range(1001):
+            group_id = "g" + str(index).zfill(5)
+            group = {**template, "id": group_id, "text": "หัวเพลง-" + str(index),
+                     "members": [template["members"][0]]}
+            sample["groups"][group_id] = group
+            ids.append(group_id)
+        self.assertEqual(bulk.MAX_SELECTED_GROUPS, 1000)
+        result = bulk.plan(sample, ids[:1000])
+        self.assertEqual(result["chosenGroups"], 1000)
+        self.assertEqual(len(result["selected"]), 20)
+        self.assertEqual(result["selectedPreviewLimit"], 20)
+        with self.assertRaisesRegex(ValueError, "1–1,000"):
+            bulk.plan(sample, ids)
+
+
 if __name__=="__main__":
     unittest.main()
