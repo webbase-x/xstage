@@ -48,7 +48,7 @@ function Get-InstalledPlayerProcesses {
 function Show-BusyInstructions([string]$FilePath) {
     Write-Host ''
     Write-Host ('File is in use: ' + $FilePath) -ForegroundColor Yellow
-    Write-Host 'Close all X-Stage Karaoke windows, including the singer display.'
+    Write-Host 'Close all X-Stage Karaoke PC windows, including the singer display.'
     Write-Host 'If it cannot close, press Ctrl+Shift+Esc, find XStageKaraoke.exe, and end that task.'
     Write-Host 'Then run Install-to-D.cmd again. Existing Data and song files are preserved.'
 }
@@ -68,7 +68,7 @@ if ($running.Count -gt 0 -and -not $CloseRunning) {
     exit 20
 }
 if ($running.Count -gt 0) {
-    Write-Host 'Closing the installed X-Stage Karaoke normally so it can save settings and queue...'
+    Write-Host 'Closing the installed X-Stage Karaoke PC normally so it can save settings and queue...'
     $deadline = [DateTime]::UtcNow.AddSeconds($CloseTimeoutSeconds)
     while ($running.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline) {
         foreach ($player in $running) {
@@ -151,7 +151,7 @@ python "%~dp0Source\main.py" --data-dir "%~dp0Data"
 if errorlevel 1 pause
 '@
 [IO.File]::WriteAllText((Join-Path $target 'Start-Karaoke.cmd'), $launcher, [Text.Encoding]::ASCII)
-[IO.File]::WriteAllText((Join-Path $target 'X-Stage Karaoke.cmd'), $launcher, [Text.Encoding]::ASCII)
+[IO.File]::WriteAllText((Join-Path $target 'X-Stage Karaoke PC.cmd'), $launcher, [Text.Encoding]::ASCII)
 # Also provide a console-free launcher for Windows users; the legacy CMD
 # scripts remain available only for installation and troubleshooting.
 $quietLauncher = Join-Path $source 'Start-XStage-Silent.vbs'
@@ -168,12 +168,12 @@ pause
 # A .cmd file cannot carry a custom Explorer icon; provide a real shortcut.
 try {
     $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut((Join-Path $target 'X-Stage Karaoke.lnk'))
+    $shortcut = $shell.CreateShortcut((Join-Path $target 'X-Stage Karaoke PC.lnk'))
     $shortcut.TargetPath = Join-Path $app 'XStageKaraoke.exe'
     $shortcut.Arguments = '--data-dir "' + (Join-Path $target 'Data') + '"'
     $shortcut.WorkingDirectory = $target
     $shortcut.IconLocation = (Join-Path $app 'assets\xstage.ico') + ',0'
-    $shortcut.Description = 'X-Stage Karaoke'
+    $shortcut.Description = 'X-Stage Karaoke PC'
     $shortcut.Save()
 } catch {
     Write-Warning ('Cannot create logo shortcut. Use Start-Karaoke.cmd: ' + $_.Exception.Message)
@@ -186,4 +186,4 @@ try {
 }
 Write-Host ('Installed: ' + $target)
 if ($RunSetup) { Start-Process -FilePath $program -WorkingDirectory $target -ArgumentList @('--setup','--data-dir',('"'+(Join-Path $target 'Data')+'"')) }
-Write-Host 'Open X-Stage Karaoke.lnk. First run imports the existing catalog in the background.'
+Write-Host 'Open X-Stage Karaoke PC.lnk. First run imports the existing catalog in the background.'

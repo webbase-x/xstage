@@ -57,13 +57,13 @@ def build(project):
         run([str(ready/'XStageKaraoke.exe'),'--self-test','--data-dir',str(check)],ready,timeout=45)
         packaged=json.loads((check/'self-test.json').read_text(encoding='utf-8'))
         assert packaged['ok'],packaged
-        assert packaged['app_name']=='X-Stage Karaoke'
+        assert packaged['app_name']=='X-Stage Karaoke PC'
         assert packaged['version']==version
         exe_path=str(ready/'XStageKaraoke.exe').replace("'","''")
         properties=json.loads(run(['powershell','-NoProfile','-Command',
             "(Get-Item -LiteralPath '"+exe_path+"').VersionInfo | Select-Object ProductName,FileDescription,FileVersion | ConvertTo-Json -Compress"],ready).stdout)
-        assert properties['ProductName']=='X-Stage Karaoke',properties
-        assert properties['FileDescription']=='X-Stage Karaoke',properties
+        assert properties['ProductName']=='X-Stage Karaoke PC',properties
+        assert properties['FileDescription']=='X-Stage Karaoke PC',properties
         installed=root/'Installed'
         (installed/'Data').mkdir(parents=True)
         sentinel=installed/'Data'/'keep-this.json'
@@ -73,11 +73,11 @@ def build(project):
         assert (installed/'App'/'XStageKaraoke.exe').is_file()
         assert (installed/'Source'/'main.py').is_file()
         assert (installed/'Start-Karaoke.cmd').is_file()
-        assert (installed/'X-Stage Karaoke.cmd').is_file()
+        assert (installed/'X-Stage Karaoke PC.cmd').is_file()
         installer_live=json.loads(run([sys.executable,'-B','tools/verify_installer.py',str(ready)],source,timeout=150).stdout)
         legacy=json.loads((source/'LEGACY_TEST_RESULTS.json').read_text(encoding='utf-8')) if (source/'LEGACY_TEST_RESULTS.json').is_file() else {}
         test_count=re.search(r'Ran (\d+) tests?',unit.stderr).group(1)
-        report={'app_name':'X-Stage Karaoke','version':version,'executable_properties':properties,'unit_tests':test_count+' passed','source_gui':gui_result,'workspace_gui':workspace,'packaged_self_test':packaged,
+        report={'app_name':'X-Stage Karaoke PC','version':version,'executable_properties':properties,'unit_tests':test_count+' passed','source_gui':gui_result,'workspace_gui':workspace,'packaged_self_test':packaged,
             'installer_test':'passed in temporary destination; preserved existing Data sentinel',
             'installer_revision':2, 'installer_live_test':installer_live,
             'actual_D_install':'blocked by workspace access permissions',
@@ -89,7 +89,7 @@ def build(project):
             'catalog_rows':legacy.get('count'),'ncn_midi_read':legacy.get('ncn_midi_read'),
             'ncn_lyric_read':len(legacy.get('samples',[])),'emk_midi_read':legacy.get('emk_midi_read'),
             'emk_lyric_read':legacy.get('emk_lyrics_read'),'search_samples':legacy.get('search')}
-        text='# ผลทดสอบ X-Stage Karaoke '+version+'\n\n'+json.dumps(report,ensure_ascii=False,indent=2)+'\n\nการอ่านตัวอย่างไม่ใช่การรับรองเพลงทุกไฟล์หรือความตรงเนื้อร้องจากการฟังเทียบ\n'
+        text='# ผลทดสอบ X-Stage Karaoke PC '+version+'\n\n'+json.dumps(report,ensure_ascii=False,indent=2)+'\n\nการอ่านตัวอย่างไม่ใช่การรับรองเพลงทุกไฟล์หรือความตรงเนื้อร้องจากการฟังเทียบ\n'
         (ready/'TEST_RESULTS.md').write_text(text,encoding='utf-8')
         (ready/'RELEASE_TEST_RESULTS.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
         output=io.BytesIO()

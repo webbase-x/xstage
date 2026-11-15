@@ -1,4 +1,4 @@
-name: X-Stage Windows PC installer candidate (v1.0.76)
+name: X-Stage Karaoke PC installer candidate (v1.0.76)
 
 on:
   workflow_dispatch:
@@ -106,11 +106,11 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup ISCC.exe not found.' }
           & $compiler 'windows-pc/installer/XStageKaraoke.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed: $LASTEXITCODE" }
-          $setup = 'windows-pc/installer/output/X-Stage-Karaoke-Windows-v1.0.76-build1076.exe'
+          $setup = 'windows-pc/installer/output/X-Stage-Karaoke-PC-Windows-v1.0.76-build1076.exe'
           if (-not (Test-Path $setup -PathType Leaf)) { throw 'Installer EXE was not produced.' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer EXE is unexpectedly small.' }
           $hash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  X-Stage-Karaoke-Windows-v1.0.76-build1076.exe" |
+          "$hash  X-Stage-Karaoke-PC-Windows-v1.0.76-build1076.exe" |
             Set-Content -Encoding ascii "$setup.sha256"
           Get-Item $setup | Select-Object FullName, Length
           Write-Host "Installer SHA256: $hash"
@@ -119,7 +119,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Karaoke-Windows-v1.0.76-build1076-CANDIDATE
+          name: X-Stage-Karaoke-PC-Windows-v1.0.76-build1076-CANDIDATE
           if-no-files-found: error
           retention-days: 30
           path: |

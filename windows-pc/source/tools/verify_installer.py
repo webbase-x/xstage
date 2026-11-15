@@ -94,12 +94,12 @@ def verify(package):
                     raise AssertionError('Test players did not show a window')
                 time.sleep(.15)
             output = invoke(package, target, expected=20)
-            assert 'Close all X-Stage Karaoke windows' in output
+            assert 'Close all X-Stage Karaoke PC windows' in output
             assert processes[0].poll() is None, 'Default installer closed a process without -CloseRunning'
             report['checks'].append('Running target is detected; direct PowerShell invocation stops before copying')
             output = invoke(package, target, close=True)
             processes[0].wait(timeout=10)
-            assert 'Closing the installed X-Stage Karaoke normally' in output
+            assert 'Closing the installed X-Stage Karaoke PC normally' in output
             saved = json.loads((target/'Data'/'settings.json').read_text(encoding='utf-8'))
             assert 'auto_next' in saved and 'volume' in saved, 'Normal shutdown did not save application settings'
             assert processes[1].poll() is None, 'A player in a different installation was closed'
