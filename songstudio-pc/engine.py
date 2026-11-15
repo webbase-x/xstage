@@ -960,7 +960,7 @@ def separate_ai(row, target, preview=False, *, vocals_only=False):
 
 
 def ai_vocals_target(row):
-    """Deterministic private StageWeb/audio M4A for an imported source.
+    """Deterministic private XStageSong/audio M4A for an imported source.
 
     The filename includes a fingerprint of original path/size/mtime so a
     changed source cannot silently reuse its predecessor's AI vocal file.
@@ -1149,7 +1149,7 @@ def _song_export_module():
 
 
 def lyric_source_root(selected=None):
-    """Resolve StageWeb catalogs or an arbitrary folder with timed LRC.
+    """Resolve XStageSong catalogs or an arbitrary folder with timed LRC.
 
     Original audio/MIDI is never edited. Folder mode updates only validated
     .lrc files after explicit confirmation and a full recoverable backup.
@@ -1165,12 +1165,12 @@ def lyric_source_root(selected=None):
         raise ValueError("ไม่พบโฟลเดอร์ต้นทางข้อความหัว–ท้ายเพลง กรุณาเลือกใหม่") from exc
     if not selected_path.is_dir():
         raise ValueError("ต้นทางข้อความหัว–ท้ายเพลงต้องเป็นโฟลเดอร์")
-    # Also recognize users choosing StageWeb/lyrics instead of StageWeb.
+    # Also recognize users choosing XStageSong/lyrics instead of XStageSong.
     if (selected_path.name.casefold() == "lyrics" and
             (selected_path.parent / "current.json").is_file()):
         selected_path = selected_path.parent
     root = (selected_path if (selected_path / "current.json").is_file()
-            else selected_path / "StageWeb" if (selected_path / "StageWeb" / "current.json").is_file()
+            else selected_path / "XStageSong" if (selected_path / "XStageSong" / "current.json").is_file()
             else selected_path)
     pointer_file = root / "current.json"
     if pointer_file.is_file():
@@ -1181,10 +1181,10 @@ def lyric_source_root(selected=None):
         if (not isinstance(pointer, dict) or
                 pointer.get("format") != "xstage-local-current" or
                 pointer.get("schemaVersion") != 1):
-            raise ValueError("โฟลเดอร์ต้นทางไม่ใช่คลัง StageWeb ที่รองรับ")
+            raise ValueError("โฟลเดอร์ต้นทางไม่ใช่คลัง XStageSong ที่รองรับ")
     # Raw NCN/LRC folders are no longer editable. Only catalogued JSON may be modified.
     if not pointer_file.is_file():
-        raise ValueError("กรุณาเลือกคลัง StageWeb ที่มี current.json และ Lyrics JSON")
+        raise ValueError("กรุณาเลือกคลัง XStageSong ที่มี current.json และ Lyrics JSON")
     return root.resolve()
 
 
@@ -1463,7 +1463,7 @@ def build_library(rows, mode, options):
                         " · ไม่สร้างซ้ำหรือเขียนทับ · กรุณาตรวจสอบ/นำเข้าคลังเดิมก่อน")
                 # Reserve the code against BOTH catalogs before media creation.
                 # If Drive was offline, keep this local reservation provisional;
-                # the upload stage will verify/reassign against live XStageWeb.
+                # the upload stage will verify/reassign against live XStageSong.
                 original_code = str(row.get("code") or source.stem)
                 assigned_code = allocator.assign_new(original_code)
                 row["code"] = assigned_code
@@ -1814,12 +1814,12 @@ def execute_job(action, options, started):
         elif action == "pc-export":
             module = _module("pc_library_export.py", "xstage_pc_export")
             local_source = _song_export_module().songs_root(PREFS["workspace"])
-            update("กำลังตรวจ XStageWeb ต้นทางและพื้นที่เก็บปลายทาง")
+            update("กำลังตรวจ XStageSong ต้นทางและพื้นที่เก็บปลายทาง")
             result = module.publish(
                 local_source, PREFS.get("pc_export_folder", ""),
                 _song_export_module(), cancelled=CANCEL,
                 progress=lambda done, total, name: update(
-                    f"คัดลอกไฟล์เข้า XStageWeb {done:,}/{total:,} · {name}", done))
+                    f"คัดลอกไฟล์เข้า XStageSong {done:,}/{total:,} · {name}", done))
             update(result["message"], result["files"])
         elif action == "upload-folder":
             root = PREFS.get("upload_folder", "").strip()
@@ -1842,7 +1842,7 @@ def execute_job(action, options, started):
             root = export.songs_root(PREFS["workspace"])
             pointer, _ = export._read_current(root)
             if not pointer:
-                raise ValueError("ไม่พบ StageWeb/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
+                raise ValueError("ไม่พบ XStageSong/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
             records = [x for x in export.existing_records(root)
                        if export.record_is_complete(root, x)]
             if len(records) != pointer.get("songCount"):
@@ -1870,7 +1870,7 @@ def execute_job(action, options, started):
                 f"· ปรับรหัส PC {remapped:,}")
             with LOCK:
                 JOB["total"] = len(records)
-            update("ตรวจเพลงซ้ำจาก XStageWeb เดิมก่อนอัปโหลด · ไม่ลบเพลงเดิม")
+            update("ตรวจเพลงซ้ำจาก XStageSong เดิมก่อนอัปโหลด · ไม่ลบเพลงเดิม")
             synced = online.OnlinePublisher(GOOGLE).publish(
                 root, records,
                 create_new_library=(options.get("create_new_library") is True),
@@ -1878,14 +1878,14 @@ def execute_job(action, options, started):
                 on_progress=lambda sent, total:
                 update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"),
                 on_batch=lambda batch, total, created, revised:
-                update(f"เผยแพร่ฐาน StageWeb ชุดที่ {batch} แล้ว · "
+                update(f"เผยแพร่ฐาน XStageSong ชุดที่ {batch} แล้ว · "
                        f"พร้อมเล่น {total:,} เพลง · เพิ่ม {created:,} · แก้ Lyrics {revised:,}"),
                 on_row=lambda done, total, skipped:
                 update(f"ตรวจและอัปโหลด {done + skipped:,}/{total + skipped:,} เพลง "
                        "· รวมเพลงที่ข้ามซ้ำโดยตรวจ MD5 แล้ว", done + skipped))
             result = {
                 "message": (
-                    f"ซิงค์ XStageWeb สำเร็จ · เพลงใหม่ {synced['newSongs']} · "
+                    f"ซิงค์ XStageSong สำเร็จ · เพลงใหม่ {synced['newSongs']} · "
                     f"ปรับปรุงเนื้อร้อง {synced['updatedSongs']} · "
                     f"ข้ามซ้ำ {synced['duplicates']} · "
                     f"รอตรวจรหัสซ้ำ {synced['conflicts']} · "
