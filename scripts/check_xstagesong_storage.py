@@ -46,7 +46,13 @@ browser = (ROOT / "app.js").read_text(encoding="utf-8")
 importer = (ROOT / "cloud-import.js").read_text(encoding="utf-8")
 if 'ONLINE_ROOT = "XStageSong"' not in publisher:
     failures.append("Song Studio cloud publisher does not use XStageSong")
-if 'return chosen if chosen.name.casefold() == "xstagesong" else chosen / "XStageSong"' not in pc_export:
+# Song Studio supports direct library folders, Songs/, and installed Karaoke PC
+# roots. Check the actual branches instead of an obsolete one-line return.
+if not all(fragment in pc_export for fragment in (
+        'chosen.name.casefold() == "xstagesong"',
+        'chosen.name.casefold() == "songs"',
+        'return chosen / "Songs" / "XStageSong"',
+        'return chosen / "XStageSong"')):
     failures.append("Song Studio PC destination is not XStageSong")
 if 'path = path / "XStageSong"' not in pc_reader:
     failures.append("Karaoke PC reader is not XStageSong")
