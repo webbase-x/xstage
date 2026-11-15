@@ -82,7 +82,7 @@ class PcSourceTests(unittest.TestCase):
             different = make_pair("00002", b"B" * 40)
             third_result = engine.build_xsk([different], "original", {})
             self.assertEqual(third_result["created"], 1)
-            self.assertTrue((root / "0" / "00001.xsk").is_file())
+            self.assertTrue((root / "0" / "00003.xsk").is_file())
             self.assertTrue((root / "0" / "00002.xsk").is_file())
             # Corrupt JSON must not trigger a fallback to embedded MIDI lyrics.
             (self.source / "00002.json").write_text("{broken", encoding="utf-8")
