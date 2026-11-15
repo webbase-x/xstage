@@ -20,6 +20,7 @@ FILES = {
     "songstudio-pc/online_publish.py": "online_publish.py",
     "songstudio-pc/code_registry.py": "code_registry.py",
     "songstudio-pc/song_export.py": "song_export.py",
+    "songstudio-pc/pc_library_export.py": "pc_library_export.py",
     "songstudio-pc/live_preview.py": "live_preview.py",
     "songstudio-pc/ai_separate.py": "ai_separate.py",
     "songstudio-pc/ai-model.lock.json": "ai-model.lock.json",
