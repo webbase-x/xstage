@@ -50,7 +50,10 @@ def _indexed(root):
     """Walk all nested folders without following symbolic links or hidden loops."""
     files = []
     import os
-    for base, dirs, names in os.walk(root, topdown=True, followlinks=False):
+    def scan_error(exc):
+        raise OSError("อ่านโฟลเดอร์ย่อยไม่สำเร็จ: " + str(exc)) from exc
+    for base, dirs, names in os.walk(root, topdown=True, followlinks=False,
+                                     onerror=scan_error):
         dirs[:] = sorted(name for name in dirs
                          if not (Path(base) / name).is_symlink())
         for name in sorted(names):
