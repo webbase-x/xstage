@@ -1091,8 +1091,10 @@ def scan_lrc_folder(root, *, cancelled=None, on_progress=None):
             seen.add(song_id)
             included += 1
             record = {"path": relative, "digest": _sha(original)}
-            searchable[song_id] = "\n".join(line.casefold() for line in texts)
+            searchable[song_id] = "\n".join(_same(line) for line in texts)
             for pos, (index, _) in POSITIONS.items():
+                if pos == "all":
+                    continue  # Index all-line matches lazily by explicit search.
                 phrase = texts[index]
                 if not phrase:
                     continue
@@ -1122,7 +1124,10 @@ def scan_lrc_folder(root, *, cancelled=None, on_progress=None):
             }
     return {
         "root": str(root), "mode": "lrc-folder", "generation": None,
-        "groups": groups, "searchable": searchable, "songs": included,
+        "groups": groups, "searchable": searchable,
+        "recordsBySong": {item["songId"]: item["record"]
+                          for group in groups.values() for item in group["members"]},
+        "allCacheQuery": None, "songs": included,
         "inspected": inspected, "skippedInvalid": skipped,
         "withoutLyrics": 0, "groupCount": len(groups)
     }
@@ -1153,17 +1158,17 @@ def apply_many_lrc_folder(root, snapshot, group_ids, new_text, backup_root,
         if _sha(original) != record["digest"]:
             raise ValueError("ไฟล์ LRC เปลี่ยนจากตอนวิเคราะห์ กรุณาสแกนใหม่: " + path.name)
         chunks, timed, texts, codec, bom = _parse_raw_lrc(original)
-        query = _same(search).casefold()
-        if query and query not in "\n".join(line.casefold() for line in texts):
-            raise ValueError("เนื้อร้องเปลี่ยนภายหลัง กรุณาวิเคราะห์ใหม่")
+        # The exact ordered phrase is revalidated on EACH selected line.
         positions = set()
         for group, item in target["edits"]:
-            index = POSITIONS[group["position"]][0] % len(timed)
+            index = item.get("lineIndex", POSITIONS[group["position"]][0]) % len(timed)
             if index in positions:
                 raise ValueError("ตำแหน่งข้อความซ้ำในไฟล์เดียวกัน")
             positions.add(index)
             if texts[index] != group["text"]:
                 raise ValueError("ข้อความใน LRC เปลี่ยนหลังวิเคราะห์: " + path.name)
+            if not _ordered_line_match(texts[index], search):
+                raise ValueError("คำค้นไม่ตรงลำดับในบรรทัดที่จะแก้: " + path.name)
             line_index, match = timed[index]
             # Only replace words. Timestamp, metadata, line endings remain.
             chunks[line_index] = match.group(1) + new_text + match.group(3)
@@ -1229,9 +1234,11 @@ def apply_many_lrc_folder(root, snapshot, group_ids, new_text, backup_root,
     manifest["state"] = "committed"
     _atomic_bytes(manifest_path, (json.dumps(manifest, ensure_ascii=False) + "\n").encode("utf-8"))
     for group, members in chosen:
-        removed = {item["songId"] for item in members}
+        removed = {(item["songId"], item.get("lineIndex")) for item in members}
         was_repeated = group["count"] >= 2
-        group["members"][:] = [m for m in group["members"] if m["songId"] not in removed]
+        group["members"][:] = [
+            m for m in group["members"]
+            if (m["songId"], m.get("lineIndex")) not in removed]
         group["count"] = len(group["members"])
         if was_repeated and group["count"] > 0:
             group["queuePending"] = True
@@ -1239,7 +1246,7 @@ def apply_many_lrc_folder(root, snapshot, group_ids, new_text, backup_root,
             snapshot["groups"].pop(group["id"], None)
     for item in changes:
         item["record"]["digest"] = _sha(item["after"])
-        snapshot["searchable"][item["songId"]] = "\n".join(line.casefold() for line in item["texts"])
+        snapshot["searchable"][item["songId"]] = "\n".join(_same(line) for line in item["texts"])
         for old_group, old_item in item["edits"]:
             position = old_group["position"]
             ident = _group_id(position, new_text)
