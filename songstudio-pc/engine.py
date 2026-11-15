@@ -643,12 +643,31 @@ def _matching_lrc(source: Path) -> Path | None:
     return None
 
 
-def lyrics_package(row):
-    """Return (LRC, accurately timed JSON, source fingerprint) or no lyrics.
+def _matching_lyrics(source: Path) -> Path | None:
+    """Require exactly ONE timed .LRC or Lyrics .JSON with the same song code."""
+    found = []
+    for suffix in (".lrc", ".json"):
+        candidate = source.with_suffix(suffix)
+        if candidate.is_file():
+            found.append(candidate)
+    # A selected file may use uppercase suffix on Windows/Unix.
+    if len(found) < 2:
+        try:
+            found = [file for file in source.parent.iterdir()
+                     if file.is_file() and file.stem.casefold() == source.stem.casefold()
+                     and file.suffix.casefold() in (".lrc", ".json")]
+        except OSError:
+            pass
+    if len(found) > 1:
+        raise ValueError("พบทั้ง LRC และ JSON · เลือกเนื้อร้อง 1 ไฟล์ต่อเพลง")
+    return found[0] if found else None
 
-    Never invent timings. The metadata editor's saved timed LRC has priority.
-    NCN requires .MID + .LYR + .CUR with the SAME code and mirrored folder.
-    KAR text events are decoded from the MIDI itself.
+
+def lyrics_package(row):
+    """Return LRC, timed Lyrics JSON, checksum using ONLY the two-file rule.
+
+    The user's reviewed editor LRC may create the second output file. New
+    imports never resolve or require historic NCN .LYR/.CUR data.
     """
     export = _song_export_module()
     code = str(row.get("code") or Path(row["path"]).stem)
@@ -659,37 +678,28 @@ def lyrics_package(row):
             raise ValueError("เนื้อร้องที่แก้ไขไม่มี timestamp LRC ที่ถูกต้อง")
         return note, doc, hashlib.sha256(note.encode("utf-8")).hexdigest()
     source = Path(row["path"])
-    trio = row.get("ncn") or NCN.resolve_companions(source)
-    if trio:
-        doc = NCN.ncn_document(trio)
-        doc["songCode"] = code
-        files = [Path(trio[k]) for k in ("midi", "lyrics", "cursor")]
-        fingerprint = hashlib.sha256()
-        for item in files:
-            # Metadata changes are enough to detect an updated NCN trio at
-            # scale without rehashing hundreds of megabytes on every run.
-            stat = item.stat()
-            fingerprint.update((str(item.resolve()).casefold() + ":" +
-                                str(stat.st_size) + ":" + str(stat.st_mtime_ns)).encode("utf-8"))
-        return doc["rawLrc"], doc, fingerprint.hexdigest()
-    lrc = _matching_lrc(source)
-    if lrc is not None:
-        data = lrc.read_bytes()
-        text = NCN._decode_text(data)
-        doc = export.lrc_to_json(text, code)
-        if not doc["lines"]:
-            raise ValueError("ไฟล์ LRC มีข้อความ แต่ไม่มี timestamp ที่ถูกต้อง: " + lrc.name)
-        return text, doc, hashlib.sha256(data).hexdigest()
-    if source.suffix.lower() in EXT_MIDI:
-        try:
-            doc = NCN.kar_document(source, code)
-            stat = source.stat()
-            fingerprint = hashlib.sha256(
-                (str(stat.st_size) + ":" + str(stat.st_mtime_ns)).encode()).hexdigest()
-            return doc["rawLrc"], doc, fingerprint
-        except ValueError:
-            if source.suffix.lower() == ".kar":
-                raise
+    paired = row.get("lyrics_file")
+    lyric = Path(paired) if paired else _matching_lyrics(source)
+    if lyric is not None:
+        if not lyric.is_file() or lyric.stem.casefold() != source.stem.casefold():
+            raise ValueError("ไฟล์เนื้อร้องไม่ตรงรหัสเพลงหรือไม่มีอยู่แล้ว")
+        if lyric.suffix.casefold() == ".json":
+            doc = FOLDER_UPLOAD._timed_json(lyric, code)
+            if doc is None:
+                raise ValueError("Lyrics JSON ไม่ผ่านการตรวจเวลาจริงหรือรหัสเพลง")
+            lrc = str(doc.get("rawLrc") or "")
+            if not lrc:
+                # All starts below come from the verified supplied JSON.
+                lrc = NCN.to_lrc(doc["lines"])
+        elif lyric.suffix.casefold() == ".lrc":
+            data = lyric.read_bytes()
+            lrc = NCN._decode_text(data)
+            doc = export.lrc_to_json(lrc, code)
+            if not doc["lines"]:
+                raise ValueError("LRC ไม่มีข้อความพร้อมเวลาจริง: " + lyric.name)
+        else:
+            raise ValueError("รองรับเนื้อร้อง LRC หรือ Lyrics JSON เท่านั้น")
+        return lrc, doc, hashlib.sha256(lyric.read_bytes()).hexdigest()
     return "", None, ""
 
 
@@ -716,13 +726,8 @@ def preview_song_identity(row):
     artist = str(row.get("artist") or "").strip()
     overrides = NOTES.get(str(source), {})
     discovered = {}
-    trio = row.get("ncn") or NCN.resolve_companions(source)
-    if trio and trio.get("lyrics"):
-        try:
-            discovered = NCN.lyric_metadata(Path(trio["lyrics"]))
-        except (OSError, ValueError):
-            pass
-    elif source.suffix.lower() in EXT_MIDI:
+    if source.suffix.lower() in EXT_MIDI:
+        # MIDI metadata events are still useful; they are not lyrics timing.
         try:
             _, _, events = NCN.midi_events(source)
             titles = [text[2:].strip() for _, _, _, tag, text in events
@@ -1250,24 +1255,15 @@ def code_registry_preview():
 
 
 def _source_digest(row, export):
-    """Deduplicate complete NCN *song packages*, not just MIDI bytes.
-
-    Two different NCN songs may share an identical MIDI arrangement but
-    have different .LYR/.CUR and must not share their lyrics record.
-    """
+    """Hash media+one lyrics source; never include old NCN .LYR/.CUR."""
     source = Path(row["path"])
-    trio = row.get("ncn") or NCN.resolve_companions(source)
-    if not trio:
+    lyric = Path(row["lyrics_file"]) if row.get("lyrics_file") else _matching_lyrics(source)
+    if lyric is None:
         return export.source_sha256(source)
     digest = hashlib.sha256()
-    digest.update(b"NCN-FULL-SOURCE-V1\\0")
-    for component in ("midi", "lyrics", "cursor"):
-        file = trio.get(component)
-        if file:
-            digest.update(component.encode())
-            digest.update(export.source_sha256(file).encode("ascii"))
-        else:
-            digest.update((component + "=MISSING").encode())
+    digest.update(b"XSTAGE-SONG-LYRICS-PAIR-V1\0")
+    digest.update(export.source_sha256(source).encode("ascii"))
+    digest.update(export.source_sha256(lyric).encode("ascii"))
     return digest.hexdigest()
 
 
@@ -1477,8 +1473,8 @@ def build_library(rows, mode, options):
                         "พื้นที่ดิสก์เหลือน้อยกว่า 128 MB หยุดสร้างเพลงนี้"
                         " · เปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง"
                     )
-                # Resolve the entire NCN trio before costly MIDI synthesis.
-                # A missing .LYR/.CUR must never produce a wrong timed JSON.
+                # Require a reviewed LRC/JSON sidecar, never the old
+                # three-file NCN cursor source.
                 lyric_info = ("", None, "")
                 if not options.get("audio_only", False):
                     lyric_info = lyrics_package(row)
@@ -1522,7 +1518,7 @@ def build_library(rows, mode, options):
                         # Audio was genuinely created, but lyrics could NOT be
                         # extracted. Report ERR instead of claiming fake JSON.
                         errors += 1
-                        reason = source.name + ": ไม่พบเนื้อร้องที่มีเวลาจริง (.LRC, NCN, KAR)"
+                        reason = source.name + ": ไม่พบเนื้อร้องที่มีเวลาจริง (.LRC หรือ Lyrics JSON)"
                         details.append(reason)
                         log("ERR Lyrics " + reason)
                 record = export.make_record(root, row, target, lyric_file, vocal_target, mode)
@@ -2155,13 +2151,13 @@ def _preview_lyrics_row(row):
         lrc, doc, fingerprint = lyrics_package(row)
         if doc and doc.get("lines"):
             status = str(doc.get("sourceFormat") or
-                         ("NCN" if row.get("ncn") else "LRC")).upper()
+                         ("JSON" if str(row.get("lyrics_file", "")).lower().endswith(".json") else "LRC")).upper()
             timed = [{
                 "startTime": float(item["startTime"]),
                 "endTime": float(item.get("endTime", item["startTime"] + 3)),
                 "text": str(item["text"]),
-                # True NCN cursor and KAR event positions; no fabricated
-                # per-letter animation for ordinary line-timed LRC.
+                # Preserve true syllable cue positions only when stored in
+                # timed JSON; never invent per-letter animation.
                 "characters": [
                     {"text": str(ch["text"]), "startTime": float(ch["startTime"])}
                     for ch in (item.get("characters") or [
@@ -2176,7 +2172,7 @@ def _preview_lyrics_row(row):
                 warnings = list(meta.get("timingWarnings") or [])[:5]
                 partial = meta.get("timingComplete") is False
                 notice = (f"พบเนื้อร้องจากต้นฉบับ {status} {len(timed)} บรรทัด" +
-                          (" · ⚠ เวลาเนื้อร้องบางส่วนไม่ครบ กรุณาตรวจต้นฉบับ LYR/CUR" if partial
+                          (" · ⚠ เวลาเนื้อร้องบางส่วนไม่ครบ กรุณาตรวจ LRC/JSON" if partial
                            else ""))
                 return {
                     "status": "found", "source": status,
