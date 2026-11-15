@@ -7,6 +7,8 @@ on:
       - "studio/index.html"
       - "studio/app.js"
       - "studio/style.css"
+      - "studio/pro-design.css"
+      - "scripts/test_songstudio_created_xsk.py"
       - "studio/entry.js"
       - "scripts/package-song-studio-pc.py"
       - "scripts/test_songstudio_import_preview.py"
@@ -50,9 +52,10 @@ jobs:
         run: python -m pip install cryptography==46.0.3
       - name: Validate source and local API
         run: |
-          python -m py_compile songstudio-pc/engine.py songstudio-pc/code_registry.py songstudio-pc/created_json_manager.py songstudio-pc/import_preview.py songstudio-pc/xsk_package.py songstudio-pc/xsk_keys.py songstudio-pc/pro_license.py songstudio-pc/song_index.py scripts/package-song-studio-pc.py
+          python -m py_compile songstudio-pc/engine.py songstudio-pc/code_registry.py songstudio-pc/created_json_manager.py songstudio-pc/created_xsk_export.py songstudio-pc/import_preview.py songstudio-pc/xsk_package.py songstudio-pc/xsk_keys.py songstudio-pc/pro_license.py songstudio-pc/song_index.py scripts/package-song-studio-pc.py
           node --check studio/app.js
           python -m unittest discover -s scripts -p test_songstudio_xsk.py -v
+          python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
           python -m unittest discover -s scripts -p test_songstudio_import_preview.py -v
           python -m unittest discover -s scripts -p test_songstudio_created_json.py -v
           python -m unittest discover -s scripts -p test_songstudio_pc.py -v
