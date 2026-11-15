@@ -98,6 +98,16 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $Root 'studio/index.html'))) {
         throw 'Missing studio UI; extract full source archive first.'
     }
+    # Fail visibly before pythonw.exe hides the Python traceback.
+    # Importing the engine does not launch the HTTP server or open a browser.
+    Status 'Checking all Song Studio engine imports before startup...'
+    $Preflight = (& $Python -c "import sys;sys.path.insert(0,sys.argv[1]);import engine;print('ENGINE_IMPORT_OK')" $Root 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0 -or $Preflight -notmatch 'ENGINE_IMPORT_OK') {
+        Add-Content -LiteralPath $LogFile -Encoding UTF8 -Value $Preflight
+        Write-Host $Preflight -ForegroundColor Red
+        throw 'Engine import failed; see Python traceback above and setup.log. Do not download dependencies again.'
+    }
+    Status 'Engine imports verified.'
     $Executable = if (Test-Path -LiteralPath $PythonW) { $PythonW } else { $Python }
     $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
     $ProcessInfo.FileName = $Executable
