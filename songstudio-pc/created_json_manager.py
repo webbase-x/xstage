@@ -129,6 +129,21 @@ def list_created(root, export, *, search="", offset=0, limit=100, midi_only=Fals
     return {"total": len(matched), "rows": result}
 
 
+def list_created_paths(root, export, *, search="", midi_only=True):
+    """Return catalog-backed path identities without reading every Lyrics JSON file."""
+    rows = _records(root, export)
+    needle = str(search).casefold().strip()
+    matches = []
+    for key, (_, record) in rows.items():
+        if midi_only and Path((record.get("audio") or {}).get("path") or "").suffix.casefold() not in (".mid", ".midi", ".kar"):
+            continue
+        fields = (key, str(record.get("code") or ""), str(record.get("title") or ""),
+                  str(record.get("artist") or ""))
+        if not needle or any(needle in value.casefold() for value in fields):
+            matches.append(key)
+    return {"paths": sorted(matches), "total": len(matches)}
+
+
 def format_created(root, export, paths, *, dry_run=True):
     if not isinstance(paths, list) or not 1 <= len(paths) <= 100 or not all(isinstance(x, str) for x in paths):
         raise ValueError("เลือกไฟล์ Lyrics JSON ครั้งละ 1–100 รายการ")
