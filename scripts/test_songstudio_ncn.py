@@ -128,8 +128,8 @@ class NcnSourceTests(unittest.TestCase):
             first = engine.build_library([row], "original", {"audio_only": False})
             self.assertEqual(first["created"], 1)
             self.assertEqual(first["lyricsCount"], 1)
-            audio = self.workspace / "StageWeb" / "audio" / "0" / "00001.mid"
-            lyrics_file = self.workspace / "StageWeb" / "lyrics" / "0" / "00001.json"
+            audio = self.workspace / "XStageSong" / "audio" / "0" / "00001.mid"
+            lyrics_file = self.workspace / "XStageSong" / "lyrics" / "0" / "00001.json"
             self.assertEqual(audio.read_bytes(), mid.read_bytes())
             self.assertTrue(lyrics_file.is_file())
             saved = json.loads(lyrics_file.read_text(encoding="utf-8"))
@@ -184,7 +184,7 @@ class NcnSourceTests(unittest.TestCase):
 
     def test_invalid_empty_lyrics_document_is_not_published(self):
         export = engine._song_export_module()
-        root = self.workspace / "StageWeb"
+        root = self.workspace / "XStageSong"
         output = root / "audio" / "0" / "00001.m4a"
         output.parent.mkdir(parents=True)
         output.write_bytes(b"M" * 4096)
@@ -304,7 +304,7 @@ class NcnSourceTests(unittest.TestCase):
             completed = engine.build_library([row], "original", {"audio_only": False})
         self.assertEqual((completed["created"], completed["lyricsCount"],
                           completed["errors"]), (1, 1, 0), completed)
-        root = self.workspace / "StageWeb"
+        root = self.workspace / "XStageSong"
         audio = root / "audio" / "0" / "00046.mid"
         lrc = root / "lyrics" / "0" / "00046.lrc"
         timed = root / "lyrics" / "0" / "00046.json"
