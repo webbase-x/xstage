@@ -196,8 +196,9 @@ def existing_local_catalog(folder, export):
         # Discover unambiguously: never silently publish a random sibling DB.
         nested = sorted({p.parent for p in chosen.rglob("current.json")
                          if p.is_file() and not p.is_symlink()
-                         and not any(parent.is_symlink() for parent in p.relative_to(chosen).parents
-                                     if parent != Path("."))})
+                         and not any(candidate.is_symlink()
+                                     for candidate in (p, *p.parents)
+                                     if candidate != chosen and chosen in candidate.parents)})
         candidates.extend(p for p in nested if p not in candidates
                           and p.name.casefold() == "xstagesong")
         nested_eligible = [p for p in candidates if (p / "current.json").is_file()]
