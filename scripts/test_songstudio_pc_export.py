@@ -54,7 +54,7 @@ class PCExportTests(unittest.TestCase):
 
     def test_copy_both_folders_and_reuse_without_overwriting(self):
         inspected = pc_export.inspect(self.source, str(self.destination), export)
-        self.assertEqual(inspected["destination"], str(self.destination / "XStageWeb"))
+        self.assertEqual(Path(inspected["destination"]).resolve(), (self.destination / "XStageWeb").resolve())
         self.assertEqual(inspected["songs"], 1)
         self.assertEqual(inspected["newFiles"], 3)
         created = pc_export.publish(self.source, str(self.destination), export)
@@ -71,7 +71,7 @@ class PCExportTests(unittest.TestCase):
 
     def test_destination_name_exact_and_foreign_catalog_not_overwritten(self):
         library = self.root / "Other" / "XStageWeb"
-        self.assertEqual(pc_export.destination_root(str(library)), library)
+        self.assertEqual(pc_export.destination_root(str(library)), library.resolve())
         (library / "LYRICS").mkdir(parents=True)
         old = library / "LYRICS" / "current.json"
         old.write_text('{"schemaVersion":1,"format":"foreign"}', encoding="utf-8")
@@ -87,7 +87,7 @@ class PCExportTests(unittest.TestCase):
         pc_export.publish(self.source, str(self.destination), export)
         directory = self.destination / "XStageWeb"
         base, rows = catalog_rows(str(self.destination))
-        self.assertEqual(base, directory)
+        self.assertEqual(base, directory.resolve())
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["title"], "เพลงทดสอบ")
         self.assertEqual(rows[0]["artist"], "ศิลปินทดสอบ")
