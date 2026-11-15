@@ -39,9 +39,10 @@
   }
 
   const tabNames = {
-    create: ['สร้างเพลงใหม่', 'เตรียมต้นฉบับให้ครบในเครื่องก่อนเริ่มสร้าง M4A'],
-    'ai-lyrics': ['สร้างเนื้อร้อง AI', 'นำเข้าเพลงใหม่ ถอดเสียงร้อง จัดเวลา และทดลองฟัง LRC'],
-    'lyric-head-tail': ['จัดการข้อความหัว–ท้ายเพลง', 'ตรวจข้อความซ้ำ 4 ตำแหน่ง · แทนที่ทั้งกลุ่มและย้อนคืนได้'],
+    create: ['MIDI to .XSK', 'เลือกต้นทาง ปลายทาง จำนวนหลักรหัสและสร้างโดยตรวจเพลงซ้ำ'],
+    'ai-lyrics': ['Lyrics AI', 'นำเข้าเสียง/วิดีโอ · อ่านคำร้องจากไฟล์หรือสร้างด้วย AI · แก้เวลา · พรีวิว'],
+    'json-pro': ['Lyrics JSON · Pro', 'ส่งออกเสียงต้นฉบับหรือแปลงพร้อม Lyrics JSON และ Catalog'],
+    'lyric-head-tail': ['แก้ไข Lyrics JSON', '2 บรรทัดแรกและท้าย · จัดกลุ่ม · แทนที่ · ย้อนคืน'],
     upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
     'pc-export': ['นำเข้า X-Stage Karaoke PC', 'นำเข้า AUDIO + LYRICS พร้อมสร้าง/อัปเดต songs.sqlite3 ตาม Karaoke PC'],
     'created-json': ['สร้าง .XSK · Pro', 'เลือกเพลง MIDI + Lyrics JSON ที่สร้างแล้ว · ข้าม MIDI ซ้ำ · ไม่ทับไฟล์เดิม'],
@@ -522,6 +523,7 @@
       : 'รุ่นทั่วไป · โปรดเปิดใช้ Pro ในเมนูตั้งค่า';
     if($('xsk-pro-badge'))$('xsk-pro-badge').textContent=proEnabled?'PRO ACTIVATED':'LOCKED · PRO';
     if($('created-xsk-build'))$('created-xsk-build').disabled=!proEnabled||busy;
+    $('json-pro-start').disabled=!proEnabled||busy;
   }
   async function refreshProLicense() {
     try {
@@ -537,6 +539,9 @@
     $('create-source').value = prefs.source || '';
     $('create-workspace').value = prefs.workspace || '';
     $('xsk-destination').value = prefs.xsk_folder || prefs.workspace || '';
+    $('xsk-build-folder').value = prefs.xsk_folder || prefs.workspace || '';
+    $('json-pro-source').value = prefs.json_source || '';
+    $('json-pro-destination').value = prefs.json_destination || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
       ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · ใช้ Lyrics JSON เท่านั้น'
@@ -639,6 +644,8 @@
     $('selected-count').textContent = `เลือกแล้ว ${fmtNum(selected.size)} เพลง`;
     $('upload-inspect').disabled = busy;
     $('pc-export-inspect').disabled = busy;
+    $('json-pro-inspect').disabled=busy;
+    $('json-pro-start').disabled=busy||!proEnabled;
     $('pc-export-start').disabled = busy;
     $('upload-soundfont-button').disabled = busy || !googleConnected;
     $('upload-soundfont-picker').disabled = busy;
@@ -760,6 +767,9 @@
                   'download-destination': 'download',
                   'upload-folder': 'upload_folder',
                   'pc-export-folder': 'pc_export_folder',
+                  'xsk-build-folder': 'xsk_folder',
+                  'json-pro-source': 'json_source',
+                  'json-pro-destination': 'json_destination',
                   'lyric-group-folder': 'lyric_source',
                   'upload-soundfont-path': 'soundfont',
                   'settings-oauth': 'oauth'};
@@ -768,8 +778,8 @@
     for (const id of keys) payload[fields[id]] = $(id).value.trim();
     await config(payload);
   }
-  async function pick(kind) {
-    const button = [...document.querySelectorAll('[data-pick]')].find(el => el.dataset.pick === kind);
+  async function pick(kind, trigger=null) {
+    const button = trigger || [...document.querySelectorAll('[data-pick]')].find(el => el.dataset.pick === kind);
     if (busy || button?.disabled) return;
     const oldLabel = button?.textContent || '';
     if (button) {
@@ -787,7 +797,8 @@
       const field = ({source:'create-source',workspace:'create-workspace',soundfont:'create-soundfont',
           download:'download-destination',upload_folder:'upload-folder',
           pc_export_folder:'pc-export-folder',
-          lyric_source:'lyric-group-folder',xsk_folder:'xsk-destination',oauth:'settings-oauth'})[kind];
+          lyric_source:'lyric-group-folder',xsk_folder:button?.closest('#tab-create')?'xsk-build-folder':'xsk-destination',
+          json_source:'json-pro-source',json_destination:'json-pro-destination',oauth:'settings-oauth'})[kind];
       const element = $(field);
       if (kind === 'soundfont' && ![...element.options].some(opt => opt.value === response.path)) {
         element.add(new Option(response.path.split(/[\\/]/).pop(), response.path));
@@ -2815,7 +2826,7 @@
   for(const [id] of Object.entries(fields)) $(id).addEventListener('change',async()=>{
     try {await saveInputs([id]);} catch(error){message(error.message);}
   });
-  for (const el of document.querySelectorAll('[data-pick]')) el.addEventListener('click',()=>pick(el.dataset.pick).catch(e=>message(e.message)));
+  for (const el of document.querySelectorAll('[data-pick]')) el.addEventListener('click',()=>pick(el.dataset.pick,el).catch(e=>message(e.message)));
   $('verify-code-registry').addEventListener('click',()=>{void verifyCodeRegistry();});
   $('catalog-view').addEventListener('change',async()=>{
     page=0;
@@ -3168,6 +3179,40 @@
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-folder').addEventListener('change',()=>{void inspectUploadFolder();});
+
+  async function inspectJsonPro() {
+    const label=$('json-pro-report');
+    label.textContent='กำลังตรวจรายการเพลงและ Lyrics JSON ในโฟลเดอร์ย่อยทั้งหมด…';
+    try{
+      await saveInputs(['json-pro-source','json-pro-destination']);
+      const report=await api('/api/json-pro/inspect');
+      label.textContent='ตรวจ '+fmtNum(report.fileCount)+' ไฟล์ · พร้อมแปลง '+fmtNum(report.ready)+
+        ' · เนื้อร้องไม่ครบ '+fmtNum(report.incomplete)+' · ไม่รองรับ '+fmtNum(report.unsupported)+
+        '\\nต้นทาง: '+report.folder+'\\nปลายทาง: '+(prefs.json_destination||'ยังไม่ได้เลือก')+
+        (report.examples?.length?'\\nข้าม: '+report.examples.slice(0,5).map(x=>x.name+' '+x.reason).join(' | '):'');
+      return report;
+    }catch(error){
+      label.textContent='ตรวจไม่สำเร็จ: '+error.message;
+      message(error.message);
+      return null;
+    }
+  }
+  async function startJsonPro() {
+    if(busy || !proEnabled)return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และไม่มีงานอื่นกำลังดำเนินการ');
+    const report=await inspectJsonPro();
+    if(!report||!report.ready)return message('ไม่มีชุดเพลงที่ตรวจผ่านพร้อม Lyrics JSON');
+    const format=$('json-pro-format').value;
+    const yes=await confirmStudio('ส่งออก '+fmtNum(report.ready)+' เพลงจาก '+report.folder+
+      '\\nไปที่ '+prefs.json_destination+'\\nรูปแบบ: '+format+
+      '\\nตรวจ SHA-256 กันซ้ำ ไม่แก้ไฟล์ต้นฉบับ และไม่เขียนทับไฟล์เดิม',
+      'ยืนยันส่งออก Lyrics JSON Pro');
+    if(!yes)return;
+    $('json-pro-report').textContent='กำลังเริ่มส่งออก '+fmtNum(report.ready)+' เพลง · ดูความคืบหน้าที่แผงงาน';
+    await run('json-pro-export',{format});
+  }
+  $('json-pro-inspect').addEventListener('click',()=>{void inspectJsonPro();});
+  $('json-pro-start').addEventListener('click',()=>{void startJsonPro();});
+  $('json-pro-source').addEventListener('change',()=>{void inspectJsonPro();});
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
   $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
   $('pc-export-start').addEventListener('click',()=>{void startPCExport();});
