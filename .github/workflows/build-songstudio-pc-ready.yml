@@ -28,6 +28,7 @@ on:
       - "scripts/test_songstudio_ncn.py"
       - "scripts/test_songstudio_drive_download.py"
       - "scripts/test_songstudio_pc.py"
+      - "scripts/test_songstudio_pc_export.py"
       - "scripts/test_songstudio_drive_layout.py"
       - "studio/index.html"
       - "studio/app-icon.svg"
@@ -98,6 +99,7 @@ jobs:
         shell: powershell
         run: |
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
+          & python -m unittest discover -s scripts -p test_songstudio_pc_export.py -v
           if ($LASTEXITCODE -ne 0) { throw "Duplicate and resume regression tests failed" }
           & python -m unittest discover -s scripts -p test_songstudio_drive_download.py -v
           if ($LASTEXITCODE -ne 0) { throw "Google Drive download read-only regressions failed" }
