@@ -102,19 +102,43 @@ class RawLrcFolderTests(unittest.TestCase):
         self.assertEqual(two.read_bytes(), before2)
         self.assertFalse(self.backups.exists())
 
-    def test_search_limits_edits_to_matching_lyrics_and_preserves_other_songs(self):
-        one, _ = self.song("a.lrc", ["หัวเพลงเดิม", "ท่อนแรก", "เนื้อหาเฉพาะนี้", "จบ"])
-        two, before = self.song("b.lrc", ["หัวเพลงเดิม", "ท่อนแรก", "อื่น", "จบ"])
+    def test_search_requires_ordered_phrase_in_edited_line_and_preserves_other_songs(self):
+        one, original_one = self.song("a.lrc",
+            ["หัวเพลงเดิม", "ท่อนแรก", "เนื้อหาเฉพาะนี้", "จบ"])
+        two, original_two = self.song("b.lrc",
+            ["หัวเพลงเดิม", "ท่อนแรก", "อื่น", "จบ"])
         snap = bulk.scan_lrc_folder(self.root)
         group_id = bulk.list_groups(snap, "first")["rows"][0]["id"]
-        p = bulk.plan(snap, [group_id], search="เฉพาะนี้", replacement="X-Stage Karaoke")
-        self.assertEqual(p["changedSongs"], 1)
-        bulk.apply_many_lrc_folder(self.root, snap, [group_id], "X-Stage Karaoke",
-                                   self.backups, search="เฉพาะนี้", expected_count=1)
-        self.assertIn("X-Stage Karaoke", one.read_text(encoding="utf-8"))
-        self.assertEqual(two.read_bytes(), before)
-        remaining = bulk.list_groups(snap, "first", repeats_only=True)["rows"]
-        self.assertTrue(any(g["text"] == "หัวเพลงเดิม" for g in remaining))
+        # The old behavior changed the FIRST line because text happened to
+        # match in the MIDDLE; this is intentionally forbidden.
+        self.assertFalse(bulk.list_groups(snap, "first", search="เฉพาะนี้")["rows"])
+        with self.assertRaisesRegex(ValueError, "ไม่ตรงกับคำค้นหา"):
+            bulk.plan(snap, [group_id], search="เฉพาะนี้",
+                      replacement="X-Stage Karaoke")
+        self.assertEqual(one.read_bytes(), original_one)
+        self.assertEqual(two.read_bytes(), original_two)
+        self.assertFalse(self.backups.exists())
+
+        middle = bulk.list_groups(snap, "all", search="เฉพาะนี้",
+                                  repeats_only=False)
+        self.assertEqual(middle["total"], 1)
+        self.assertEqual(middle["rows"][0]["text"], "เนื้อหาเฉพาะนี้")
+        middle_id = middle["rows"][0]["id"]
+        plan = bulk.plan(snap, [middle_id], search="เฉพาะนี้",
+                         replacement="X-Stage Karaoke")
+        self.assertEqual((plan["changedSongs"], plan["changedLines"]), (1, 1))
+        result = bulk.apply_many_lrc_folder(
+            self.root, snap, [middle_id], "X-Stage Karaoke",
+            self.backups, search="เฉพาะนี้", expected_count=1)
+        self.assertEqual(result["changedSongs"], 1)
+        self.assertEqual(two.read_bytes(), original_two)
+        self.assertIn("[00:03.00]X-Stage Karaoke",
+                      one.read_text(encoding="utf-8"))
+        self.assertIn("[00:01.00]หัวเพลงเดิม",
+                      one.read_text(encoding="utf-8"))
+        bulk.undo(self.backups, self.root, result["backupId"])
+        self.assertEqual(one.read_bytes(), original_one)
+        self.assertEqual(two.read_bytes(), original_two)
 
     def test_legacy_thai_encoding_is_preserved_and_unencodable_text_is_refused(self):
         path, before = self.song("win874.lrc", encoding="cp874")
