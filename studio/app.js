@@ -2186,7 +2186,7 @@
         (result.source === 'XStageSong catalog'
           ? 'โหมดคลัง XStageSong · ตรวจไฟล์ตาม Catalog ที่เผยแพร่แล้ว · '
           : 'ตรวจโฟลเดอร์หลักและโฟลเดอร์ย่อยทั้งหมด · ')+
-        'ตรวจ '+fmtNum(result.fileCount)+' ไฟล์ · ชุดสมบูรณ์ '+
+        'ตรวจ '+fmtNum(result.fileCount)+' ไฟล์ ใน '+fmtNum(result.folderCount||0)+' โฟลเดอร์ · ชุดสมบูรณ์ '+
         fmtNum(result.ready)+' · ไม่ครบ '+fmtNum(result.incomplete)+
         ' · ไม่รองรับ '+fmtNum(result.unsupported)+
         (breakdown?'\\n'+breakdown:'')+
