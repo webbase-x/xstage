@@ -25,7 +25,8 @@
         <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>สร้างเพลงใหม่<small>4 ขั้นตอน · สแกน · เลือก · ฟัง · สร้าง</small></span></button>
         <button class="nav-button" data-tab="ai-lyrics"><span class="nav-glyph" aria-hidden="true">✦</span><span>สร้างเนื้อร้อง AI<small>เสียงร้อง · ถอดคำ · ตั้งเวลา · ทดลองฟัง</small></span></button>
         <button class="nav-button" data-tab="lyric-head-tail"><span class="nav-glyph" aria-hidden="true">⇄</span><span>จัดการข้อความหัว–ท้ายเพลง<small>จัดกลุ่มข้อความซ้ำ · แทนที่ · ย้อนคืน</small></span></button>
-        <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>อัปโหลด<small>Google Drive · ไม่ส่งซ้ำ</small></span></button>
+        <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>นำเข้า X-Stage Karaoke Online<small>Google Drive · คลังส่วนตัว</small></span></button>
+        <button class="nav-button" data-tab="pc-export"><span class="nav-glyph" aria-hidden="true">▣</span><span>นำเข้า X-Stage Karaoke PC<small>คัดลอกไฟล์ AUDIO + LYRICS</small></span></button>
         <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
         <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
       </nav>
@@ -363,7 +364,7 @@
         </section>
 
         <section id="tab-upload" class="tab">
-          <div class="section-top"><div><div class="eyebrow">PRIVATE GOOGLE DRIVE</div><h2>อัปโหลดเพลงที่สร้างเสร็จแล้ว</h2><p>เช็กไฟล์ต้นทางและ MD5 บน Drive ก่อนส่ง ลดการอัปโหลดซ้ำ</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <div class="section-top"><div><div class="eyebrow">PRIVATE GOOGLE DRIVE</div><h2>นำเข้า X-Stage Karaoke Online</h2><p>เช็กไฟล์ต้นทางและ MD5 บน Drive ก่อนส่ง ลดการอัปโหลดซ้ำ</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageWeb ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
           <article class="panel">
             <div class="section-heading"><div><h2>เลือกโฟลเดอร์ต้นฉบับสำหรับอัปโหลด</h2><p>ตรวจ MP3/M4A พร้อม LRC ที่มีเวลาจริง · สร้าง JSON และอัปเดต Catalog ให้เล่นออนไลน์ได้ · VIDEO/NCN แสดงรายการที่ยังไม่รองรับ</p></div></div>
@@ -387,6 +388,24 @@
               <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageWeb/LYRICS/</code><code>00001-...json</code><code>catalog-base-*.json · catalog-delta-*.json</code><code>current.json</code><small>Lyrics JSON เป็นมาตรฐานของ Web/TV/PC; ไม่อัปโหลด LYR, CUR หรือ LRC ต้นฉบับ</small></div>
             </div>
             <p class="hint">ความปลอดภัย: คลังรุ่นเก่ายังอ่านและสำรองได้ แต่จะไม่ย้ายหรือลบโฟลเดอร์เก่าบน Drive อัตโนมัติ ตรวจสอบ/ย้ายข้อมูลก่อนเผยแพร่เป็น Layout V4</p>
+          </article>
+        </section>
+
+        <section id="tab-pc-export" class="tab">
+          <div class="section-top"><div><div class="eyebrow">KARAOKE PC · LOCAL LIBRARY</div><h2>นำเข้า X-Stage Karaoke PC</h2><p>คัดลอกเพลงที่สร้างสำเร็จจาก StageWeb ลงในโฟลเดอร์ XStageWeb บนเครื่อง · ไม่ต้อง Google Login · เลือกตำแหน่งเอง</p></div><span class="chip info">OFFLINE</span></div>
+          <article class="panel">
+            <div class="section-heading"><div><h2>เลือกตำแหน่งเก็บคลังเพลง PC</h2><p>เลือกไดรฟ์หรือโฟลเดอร์ปลายทาง แล้วระบบสร้าง XStageWeb/AUDIO และ XStageWeb/LYRICS โดยอัตโนมัติ (ถ้าเลือก XStageWeb อยู่แล้วจะไม่ซ้อนโฟลเดอร์)</p></div></div>
+            <div class="path-row"><input id="pc-export-folder" type="text" class="field" autocomplete="off" placeholder="เช่น D:\\Karaoke หรือ D:\\Karaoke\\XStageWeb"><button class="button ghost" type="button" data-pick="pc_export_folder">เลือกตำแหน่ง</button></div>
+            <div class="toolbar"><button id="pc-export-inspect" class="button ghost" type="button">⌕ ตรวจคลังเพลงและพื้นที่</button><button id="pc-export-start" class="button primary" type="button">▣ นำเข้า X-Stage Karaoke PC</button></div>
+            <p id="pc-export-report" class="hint" role="status" aria-live="polite">เลือกโฟลเดอร์ปลายทางก่อน · ระบบตรวจฐานเพลงและพื้นที่โดยไม่แก้ไฟล์ต้นฉบับ</p>
+            <p id="pc-export-status" class="hint" role="status" aria-live="polite">ตรวจชื่อไฟล์ซ้ำก่อนคัดลอก · ใช้ SHA-256 ตรวจความสมบูรณ์ · ถ้าชื่อซ้ำแต่เนื้อหาต่างกันจะหยุดเพื่อให้ตรวจสอบ ไม่เขียนทับเอง · ฐาน current.json อัปเดตเมื่อคัดลอกสำเร็จเท่านั้น</p>
+          </article>
+          <article class="panel">
+            <div class="section-heading"><div><h2>โครงสร้างไฟล์แบบเดียวกับ Google Drive</h2><p>ใช้สองโฟลเดอร์หลักสำหรับเพลงและคำร้อง โดยฐาน Karaoke PC เป็นฐานพาธในเครื่อง ไม่ใช้ Google Drive File ID</p></div></div>
+            <div class="drive-layout-grid">
+              <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>XStageWeb/AUDIO/</code><small>ไฟล์เสียงและ MIDI/KAR ที่ Song Studio เผยแพร่แล้ว</small></div>
+              <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageWeb/LYRICS/</code><code>current.json · catalog-pc-*.json</code><small>Lyrics JSON / LRC พร้อมฐานข้อมูลเพลงของ Karaoke PC</small></div>
+            </div>
           </article>
         </section>
 
