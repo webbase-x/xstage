@@ -2376,6 +2376,19 @@
       }
     }
     $('job-timing').textContent = fmtTime(job.elapsed || 0);
+    if(job.kind==='xsk-stream'){
+      const discovered=Number(job.discovered||0),scanned=Number(job.scannedFiles||0);
+      const processed=Number(job.completed||0);
+      const details='ตรวจไฟล์ '+fmtNum(scanned)+' · พบ MIDI '+fmtNum(discovered)+
+        ' · ประมวลผล '+fmtNum(processed)+' · สร้าง '+fmtNum(job.created||0)+
+        ' · ข้ามซ้ำ '+fmtNum(job.skipped||0)+' · ERR '+fmtNum(job.errors||0);
+      $('xsk-stream-status').textContent=details+
+        (job.scanDone?'\\nสแกนจบแล้ว · กำลังทำรายการที่อยู่ในคิวให้ครบ':
+           '\\nกำลังสแกนต่อพร้อมสร้างเพลง · รอคิว '+fmtNum(job.queuedBatches||0)+' ชุด')+
+        (state==='error'?'\\n'+(job.detail||'เกิดข้อผิดพลาด · ตรวจ Log'):'')+
+        (state==='success'?'\\n'+(job.result?.message||'เสร็จสิ้น'):'');
+      $('job-detail').textContent=details;
+    }
     $('job-skip-count').textContent = job.kind === 'scan'
       ? (state === 'success'
           ? 'สแกนพบ ' + fmtNum(Number(job.result?.songs ?? job.result?.count ?? job.completed ?? 0)) + ' เพลง · ยังไม่ได้สร้าง M4A/Lyrics'
@@ -2384,12 +2397,16 @@
         ' · ERR ' + fmtNum(Number(job.errors || 0)) +
         ' · M4A ' + fmtNum(Number(job.m4aCount || 0)) +
         ' · Lyrics ' + fmtNum(Number(job.lyricsCount || 0));
-    const fraction = Number(job.total)>0 ? Number(job.completed) / Number(job.total) :
+    const fraction = (job.kind==='xsk-stream' && isRunning && !job.scanDone) ? null :
+      Number(job.total)>0 ? Number(job.completed) / Number(job.total) :
       Number(job.bytesTotal)>0 ? Number(job.bytesDone)/Number(job.bytesTotal) : null;
     const fill = $('progress-fill');
     fill.classList.toggle('indeterminate', isRunning && fraction === null);
     fill.style.width = fraction !== null ? Math.max(0,Math.min(100,100*fraction)).toFixed(1)+'%' : (isRunning?'33%':'0%');
-    $('job-fraction').textContent = Number(job.total)>0 ? `${fmtNum(job.completed)} / ${fmtNum(job.total)} รายการ · ${Math.round(fraction*100)}%`:
+    $('job-fraction').textContent =
+      (job.kind==='xsk-stream' && isRunning && !job.scanDone)
+        ? 'พบ MIDI '+fmtNum(job.discovered||0)+' เพลง · ทำแล้ว '+fmtNum(job.completed||0)+' · ยังไม่ทราบจำนวนรวม'
+        : Number(job.total)>0 ? `${fmtNum(job.completed)} / ${fmtNum(job.total)} รายการ · ${Math.round(fraction*100)}%` :
       Number(job.bytesTotal)>0?`${fmtSize(job.bytesDone)} / ${fmtSize(job.bytesTotal)} · ${Math.round(fraction*100)}%`:
       isRunning && job.kind === 'scan'
         ? 'ตรวจรายการแล้ว ' + fmtNum(job.completed || 0) + ' ไฟล์ · กำลังตรวจการเปลี่ยนแปลง'
