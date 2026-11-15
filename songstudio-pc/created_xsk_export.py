@@ -11,15 +11,19 @@ from pathlib import Path
 
 
 def export_selected(root, selected, export, created_json, package, codes, key,
-                    *, cancelled=None, progress=None):
+                    *, destination_root=None, cancelled=None, progress=None):
     root = Path(root)
     if not isinstance(selected, list) or not 1 <= len(selected) <= 100:
         raise ValueError("เลือก Lyrics JSON ครั้งละ 1–100 รายการ")
     if any(not isinstance(item, str) for item in selected) or len(set(selected)) != len(selected):
         raise ValueError("รายการ Lyrics JSON ไม่ถูกต้องหรือซ้ำ")
     entries = created_json._records(root, export)
+    # Output selection is independent of the catalog source folder.
+    output_root = Path(destination_root).expanduser() if destination_root else root
+    if output_root.is_symlink():
+        raise ValueError("โฟลเดอร์ปลายทาง XSK ต้องไม่เป็น Symbolic Link")
     # No file may be published unless all existing XSKs can be authenticated.
-    xsk_root = root / "MIDI" / "XSK"
+    xsk_root = package.destination(output_root, "CHECK").parent.parent
     reserved = set()
     midi_hashes = set()
     if xsk_root.is_dir():
@@ -72,7 +76,7 @@ def export_selected(root, selected, export, created_json, package, codes, key,
                 continue
             preferred = str(record.get("code") or source.stem)
             code = allocator.assign_new(preferred)
-            target = package.destination(root, code)
+            target = package.destination(output_root, code)
             if target.exists() or target.is_symlink():
                 raise FileExistsError("XSK มีรหัสนี้อยู่แล้ว · ไม่เขียนทับ: " + code)
             title = str(record.get("title") or document.get("title") or code)
