@@ -145,7 +145,13 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             try:
                 if output_format == "original":
                     with media.open("rb") as reader, temp_audio.open("xb") as writer:
-                        shutil.copyfileobj(reader, writer, length=1024 * 1024)
+                        while True:
+                            if cancelled is not None and cancelled.is_set():
+                                raise RuntimeError("ยกเลิกการคัดลอกไฟล์ต้นฉบับ")
+                            block = reader.read(1024 * 1024)
+                            if not block:
+                                break
+                            writer.write(block)
                         writer.flush()
                         os.fsync(writer.fileno())
                     if _fingerprint(temp_audio) != source_hash:
@@ -192,6 +198,9 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         export.clear_published_journal(root)
     if not entries:
         raise ValueError("ไม่พบเพลงที่มีเนื้อร้องพร้อมเวลาในต้นทาง")
+    if not created and not skipped and errors:
+        raise ValueError("ไม่มีไฟล์ที่ส่งออกสำเร็จ: " +
+                         "; ".join(item["reason"] for item in issues[:3]))
     return {"created": created, "skipped": skipped, "errors": errors,
             "incomplete": len(inspection["incomplete"]),
             "unsupported": len(inspection["unsupported"]),
