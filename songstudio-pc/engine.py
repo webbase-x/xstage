@@ -3512,7 +3512,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("รายการเพลงไม่ถูกต้อง")
                 matches = [FILE_BY_ID[i] for i in ids if isinstance(i, int) and i in FILE_BY_ID]
                 size = sum(r["size"] for r in matches)
-                workspace = Path(PREFS["workspace"]).expanduser()
+                active_output = (PREFS.get("xsk_folder") or PREFS["workspace"]) if PREFS.get("export_format") == "xsk" else PREFS["workspace"]
+                workspace = Path(active_output).expanduser()
                 workspace.mkdir(parents=True, exist_ok=True)
                 free = shutil.disk_usage(workspace).free
                 # Previous estimate incorrectly required 3x ALL input bytes.
