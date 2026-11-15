@@ -2085,8 +2085,16 @@ def execute_job(action, options, started):
                 on_status=update, on_item=downloaded_item)
             result["message"] = f"ดาวน์โหลด {result['files']} ไฟล์เสร็จแล้ว · {result['path']}"
         elif action == "check-update":
-            result = {"message": "ยังไม่มีตัวอัปเดตอัตโนมัติ กรุณาตรวจสอบรุ่น PC Ready ที่ GitHub Releases"}
-            update("ตรวจเวอร์ชันเสร็จแล้ว", 1)
+            result = _module("pc_ready_updates.py", "xstage_pc_ready_updates").check(
+                STATUS_VERSION, STATUS_BUILD)
+            update("ตรวจรุ่นล่าสุดจาก GitHub Releases เสร็จแล้ว", 1)
+        elif action == "download-update":
+            updater = _module("pc_ready_updates.py", "xstage_pc_ready_updates")
+            result = updater.download(
+                DATA / "verified-updates", STATUS_VERSION, STATUS_BUILD,
+                cancelled=CANCEL, on_progress=lambda done, total: (
+                    update(f"ดาวน์โหลด ZIP รุ่นใหม่ {done:,}/{total:,} ไบต์", done)))
+            update("ดาวน์โหลด ZIP และตรวจ SHA-256 สำเร็จ", 1)
         else:
             raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
@@ -2230,6 +2238,8 @@ def start_job(data):
                 str(info.get("error") or "ไม่พบ Google Desktop OAuth Client JSON") +
                 " · เปิดตั้งค่า > ตัวเลือกขั้นสูง > เลือก Google Desktop OAuth Client JSON "
                 "แล้วลอง Google Login ใหม่")
+    if action == "download-update" and not READY_BUNDLE:
+        raise ValueError("อัปเดตได้เฉพาะ Song Studio PC Ready ไม่ใช่ Source Preview")
     if action == "ai-recording-save":
         recording_id = data.get("recordingId")
         if not isinstance(recording_id, str) or len(recording_id) > 128:
