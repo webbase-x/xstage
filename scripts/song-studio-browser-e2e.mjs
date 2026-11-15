@@ -497,6 +497,10 @@ try {
   // General users cannot export raw M4A; its control must remain hidden.
   assert.equal(await pc.locator('#build-audio-button').isVisible(), false);
   assert.equal(await pc.locator('#create-output-kind').inputValue(), 'xsk');
+  // Go back to the source stage where Pro activation is available;
+  // the wizard must preserve selected tracks across navigation.
+  for(let step=0;step<3;step++)await pc.click('#create-step-previous');
+  assert.equal(await pc.locator('#create-stage-1').isVisible(),true);
   // Simulate a successfully verified owner Pro license and prove the legacy
   // choice becomes visible before exercising the existing audio-only action.
   await pc.locator('details:has(#pro-license-key) summary').click();
@@ -504,6 +508,8 @@ try {
   await pc.click('#pro-license-activate');
   await pc.waitForFunction(()=>document.getElementById('pro-license-status')?.textContent.includes('Pro แล้ว'));
   await pc.locator('#create-output-kind').selectOption('m4a');
+  for(let step=0;step<3;step++)await pc.click('#create-step-next');
+  assert.equal(await pc.locator('#create-stage-4').isVisible(),true);
   await pc.locator('#build-audio-button').waitFor({state:'visible'});
   assert.equal(await pc.locator('#build-audio-button').isEnabled(), true);
   await pc.click('#build-audio-button');
