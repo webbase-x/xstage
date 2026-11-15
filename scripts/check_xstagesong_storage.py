@@ -35,7 +35,7 @@ for path in files:
 
 publisher = (ROOT / "songstudio-pc/online_publish.py").read_text(encoding="utf-8")
 pc_export = (ROOT / "songstudio-pc/pc_library_export.py").read_text(encoding="utf-8")
-pc_reader = (ROOT / "windows-pc/source/karaoke/pc_stageweb.py").read_text(encoding="utf-8")
+pc_reader = (ROOT / "windows-pc/source/karaoke/pc_xstagesong.py").read_text(encoding="utf-8")
 browser = (ROOT / "app.js").read_text(encoding="utf-8")
 importer = (ROOT / "cloud-import.js").read_text(encoding="utf-8")
 if 'ONLINE_ROOT = "XStageSong"' not in publisher:
