@@ -53,13 +53,13 @@ class SongStudioAudioTests(unittest.TestCase):
         output = self.root / "cache"
         def render(command, **kwargs):
             self.assertIn("-map", command)
-            self.assertEqual(command[-2], "-f")
+            self.assertEqual(command[-2], "wav")
             target = Path(command[-1])
             with wave.open(str(target), "wb") as wav:
                 wav.setnchannels(2)
                 wav.setsampwidth(2)
                 wav.setframerate(44100)
-                wav.writeframes(b"\\0\\0" * 1024)
+                wav.writeframes(b"\x00\x00" * 2048)
             return subprocess.CompletedProcess(command, 0, b"", b"")
         with patch.object(studio_audio, "_cache_folder", return_value=output), \
              patch.object(studio_audio, "_ffmpeg_binary", return_value="bundled-ffmpeg.exe"), \
