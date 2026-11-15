@@ -1,7 +1,7 @@
 """Fast, crash-safe local song publishing for X-Stage Song Studio PC.
 
 Works entirely on the user's PC. Immutable per-digit JSON catalogs are switched
-through StageWeb/current.json only when all required media for a batch exists.
+through XStageSong/current.json only when all required media for a batch exists.
 This is a *local path index*. It does not fabricate Google Drive file IDs;
 Drive publication must upload files and then publish a Drive-specific pointer.
 """
@@ -62,40 +62,48 @@ def safe_filename(value: str) -> str:
 
 
 def songs_root(workspace: str | Path) -> Path:
-    """Use StageWeb/ as the only active local library; preserve old data.
+    """Return the canonical local XStageSong workspace safely.
 
-    A legacy workspace/songs tree is renamed atomically on the SAME volume
-    only when StageWeb does not already exist. Never copy gigabytes, silently
-    overwrite another library, or create a second local catalog. The old
-    catalogs/ subdirectory remains readable, while new immutable catalogs
-    are published directly under StageWeb/.
+    Preserve old local Song Studio output if the user still has it. A local
+    StageWeb/songs directory is moved only when XStageSong does not exist and
+    exactly one old populated workspace is present. Never merge or overwrite.
+    This does NOT browse, create, or migrate a Google Drive folder.
     """
     selected = Path(workspace).expanduser()
-    if selected.name.casefold() == "stageweb":
-        target = selected
-        legacy = selected.parent / "songs"
-    elif selected.name.casefold() == "songs":
-        target = selected.parent / "StageWeb"
-        legacy = selected
+    if selected.name.casefold() == "xstagesong":
+        target, parent = selected, selected.parent
+    elif selected.name.casefold() in ("stageweb", "songs"):
+        parent = selected.parent
+        target = parent / "XStageSong"
     else:
-        target = selected / "StageWeb"
-        legacy = selected / "songs"
-    if legacy.is_dir():
-        if target.exists():
-            old_has_data = ((legacy / "current.json").is_file() or
-                            (legacy / JOURNAL_NAME).is_file() or
-                            any((legacy / d).is_dir() and
-                                any((legacy / d).iterdir())
-                                for d in ("audio", "lyrics", "catalogs")))
-            if old_has_data:
-                raise RuntimeError(
-                    "พบคลัง songs แบบเก่าและ StageWeb พร้อมกัน · "
-                    "โปรแกรมไม่รวมสองฐานหรือทับไฟล์อัตโนมัติ "
-                    "กรุณาสำรองแล้วตรวจเลือกคลังเดิมก่อน")
-        else:
-            # Parent is the same: Path.rename performs an atomic directory
-            # move, retaining all catalog records and media without re-encoding.
-            legacy.rename(target)
+        parent = selected
+        target = parent / "XStageSong"
+
+    old = [parent / "StageWeb", parent / "songs"]
+    populated = []
+    for candidate in old:
+        if not candidate.is_dir() or candidate.is_symlink():
+            continue
+        if ((candidate / "current.json").is_file()
+                or (candidate / JOURNAL_NAME).is_file()
+                or any((candidate / folder).is_dir()
+                       and any((candidate / folder).iterdir())
+                       for folder in ("audio", "lyrics", "catalogs"))):
+            populated.append(candidate)
+    if populated:
+        if len(populated) != 1 or target.exists():
+            raise RuntimeError(
+                "พบคลังเพลงในเครื่องมากกว่าหนึ่งตำแหน่ง · ไม่รวมฐานและ"
+                "ไม่เขียนทับอัตโนมัติ กรุณาสำรองและตรวจเลือกคลังก่อน")
+        populated[0].rename(target)
+
+    # The PC-ready export uses uppercase AUDIO/LYRICS and a different
+    # current.json format. Do not accidentally treat it as an authoring DB.
+    if ((target / "AUDIO").is_dir() and (target / "LYRICS").is_dir()
+            and not (target / "audio").is_dir()):
+        raise RuntimeError(
+            "โฟลเดอร์นี้เป็นคลังสำหรับ Karaoke PC · กรุณาเลือกพื้นที่สร้างเพลง"
+            "ของ Song Studio แยกต่างหาก")
     return target
 
 
