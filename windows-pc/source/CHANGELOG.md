@@ -24,7 +24,7 @@
 
 - เมนูคลิกขวา X-Stage Karaoke Online เปิด Web Asset Sync (ไม่เรียก Google Drive Backup เดิม)
 - ใช้ฐานเพลงที่ค้นหาได้ แปลง NCN/MIDI เป็น AAC-LC M4A และ Lyrics JSON แล้วอัปโหลดทีละเพลง
-- ตรวจ Catalog เดิมใน XStageWeb; ใช้ไฟล์เดิมเมื่อ Hash ตรง; ซิงก์ต่อได้; ส่ง Catalog รุ่นใหม่แล้วอัปเดต current.json เป็นขั้นสุดท้าย
+- ตรวจ Catalog เดิมใน XStageSong; ใช้ไฟล์เดิมเมื่อ Hash ตรง; ซิงก์ต่อได้; ส่ง Catalog รุ่นใหม่แล้วอัปเดต current.json เป็นขั้นสุดท้าย
 - Worker หลาย Process แยก SoundFont Handle ต่อ Process, MIDI Stream ใหม่ต่อเพลง
 - ฝั่งเว็บใช้ OAuth drive.file และ Drive File IDs ของบัญชี Google ปัจจุบันบน GitHub Pages
 - ไม่ลบเพลงต้นฉบับหรือไฟล์สำรองเก่าบน Drive; ไม่ส่ง SQLite/Queue/Settings ไป Drive
