@@ -65,11 +65,11 @@ jobs:
           fi
           cat > /tmp/release-notes.md <<'NOTES'
           ### X-Stage Song Studio PC v0.3.14 Build 314 — Core Preview
-          This Windows x64 portable ZIP was verified by the original CI build (GitHub Actions run 43334462504): bundled FFmpeg, FluidSynth, SoundFont, offline Whisper and ONNX resources, MIDI/KAR/NCN lyrics extraction, real MIDI to 48 kHz AAC/M4A conversion, web karaoke lyrics JSON, and an incremental XStageWeb publisher with Drive File IDs. Includes matching SHA-256 checksum.
+          This Windows x64 portable ZIP was verified by the original CI build (GitHub Actions run 43334462504): bundled FFmpeg, FluidSynth, SoundFont, offline Whisper and ONNX resources, MIDI/KAR/NCN lyrics extraction, real MIDI to 48 kHz AAC/M4A conversion, web karaoke lyrics JSON, and an incremental XStageSong publisher with Drive File IDs. Includes matching SHA-256 checksum.
 
           **Extract the ZIP completely, then run Start-Song-Studio.cmd.**
 
-          **Important limitation:** This ZIP does NOT include a preconfigured Google Desktop OAuth client ID and matching secret, and real end-to-end upload to the owner's Google Drive was NOT tested. Import your own Google Desktop OAuth Client JSON under Advanced Settings before Google Login. Existing libraries created by another OAuth application may be inaccessible with drive.file; never create a new XStageWeb library when an existing one should be reused. The download SONG/DB/ZIP menu still uses the older Song Studio backup layout and is not a complete XStageWeb restore workflow.
+          **Important limitation:** This ZIP does NOT include a preconfigured Google Desktop OAuth client ID and matching secret, and real end-to-end upload to the owner's Google Drive was NOT tested. Import your own Google Desktop OAuth Client JSON under Advanced Settings before Google Login. Existing libraries created by another OAuth application may be inaccessible with drive.file; never create a new XStageSong library when an existing one should be reused. The download SONG/DB/ZIP menu still uses the older Song Studio backup layout and is not a complete XStageSong restore workflow.
 
           This is a **Core Preview**, not the full-featured release. No user Google tokens or private music are included.
           NOTES
