@@ -1,6 +1,6 @@
 """Two-source, non-destructive song-code reconciliation for X-Stage Song Studio.
 
-Remote XStageWeb codes take precedence when they identify DIFFERENT audio.
+Remote XStageSong codes take precedence when they identify DIFFERENT audio.
 No existing audio file is ever overwritten/renamed: immutable local catalogs
 receive an updated code + new generated lyrics JSON referencing the same audio.
 The source's filename and original code are preserved for traceability.
