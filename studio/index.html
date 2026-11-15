@@ -115,7 +115,7 @@
                 <div class="preview-file-selector">
                   <label for="preview-file-type">เลือกประเภทไฟล์ที่ค้นพบเพื่อทดสอบ</label>
                   <select id="preview-file-type" class="field" disabled><option value="">กรุณาเลือกเพลงก่อน</option></select>
-                  <small>เลือกไฟล์เสียงหรือ MIDI/KAR เพื่อฟัง · เลือก LRC/LYR/CUR เพื่อตรวจเนื้อร้องและเวลา</small>
+                  <small>เลือกไฟล์เสียงหรือ MIDI/KAR เพื่อฟัง · เลือก LRC/JSON ที่มีเวลาจริงเพื่อตรวจเนื้อร้อง</small>
                   <div id="preview-file-evidence" class="preview-file-evidence" aria-live="polite">ยังไม่ได้ตรวจองค์ประกอบของเพลง</div>
                   <div id="preview-file-inspection" class="preview-file-inspection" hidden aria-live="polite"></div>
                 </div>
@@ -130,7 +130,7 @@
                 <div class="preview-row"><div class="preview-description"><strong id="preview-label">เครื่องเล่นคาราโอเกะทดลองฟัง</strong><small>เล่นเสียงสตรีมจากเพลงต้นฉบับ · ไม่สร้าง WAV, M4A หรือ MP3 ใหม่</small></div><audio id="preview-audio" controls preload="none" aria-label="เสียงคาราโอเกะและ SoundFont ทดลองฟังสด"></audio></div>
                 <section class="preview-lyrics-panel" aria-label="ตรวจสอบเนื้อร้องก่อนสร้างเพลง">
                   <div class="preview-lyrics-heading"><strong>เนื้อร้องระหว่างทดลองฟัง</strong><span id="preview-lyrics-source" class="preview-lyrics-source">ยังไม่ได้เลือกเพลง</span></div>
-                  <p id="preview-lyrics-status" class="preview-lyrics-status" role="status" aria-live="polite">เลือกเพลงแล้วระบบจะตรวจ LRC, KAR และชุด NCN (Song / Lyrics / Cursor)</p>
+                  <p id="preview-lyrics-status" class="preview-lyrics-status" role="status" aria-live="polite">เลือกเพลงแล้วระบบจะตรวจ LRC หรือ Lyrics JSON ที่จับคู่กับเพลง</p>
                   <div id="preview-lyrics-lines" class="preview-lyrics-lines" aria-label="เนื้อร้องที่ไฮไลต์ตามเวลาเพลง" aria-live="off"><div class="preview-lyrics-empty">♫ เลือกเพลงเพื่อดูเนื้อร้อง</div></div>
                   <div class="preview-lyrics-ai" id="preview-lyrics-ai-tools" hidden>
                     <label for="preview-ai-language">ภาษาสำหรับ AI</label>
@@ -138,7 +138,7 @@
                     <button type="button" id="preview-ai-transcribe" class="button ghost" disabled>✦ AI ถอดเสียงร้องเป็นร่างเนื้อร้อง</button>
                     <button type="button" id="preview-ai-review" class="button primary" hidden>ตรวจและบันทึกร่าง AI</button>
                   </div>
-                  <div class="preview-lyrics-warning" id="preview-lyrics-warning">AI ถอดเสียงได้เฉพาะไฟล์ที่มีเสียงคนร้อง · ผล AI ต้องตรวจแก้ก่อนนำไปใช้จริง · ไฟล์ MIDI/NCN ที่ไม่มีคำร้องไม่สามารถสร้างคำร้องแท้จากเสียงดนตรีได้</div>
+                  <div class="preview-lyrics-warning" id="preview-lyrics-warning">AI ถอดเสียงได้เฉพาะไฟล์ที่มีเสียงคนร้อง · ผล AI ต้องตรวจแก้ก่อนนำไปใช้จริง · ไฟล์ MIDI/KAR ที่ไม่มีคำร้องไม่สามารถสร้างคำร้องแท้จากเสียงดนตรีได้</div>
                 </section>
                 <div class="hint">เลื่อนระดับเสียงดนตรีและ SoundFont หรือเปลี่ยน SF2/SF3/โทน MIDI ขณะฟังได้โดยไม่เริ่มเพลงใหม่ · เพลง MIDI ล้วนจะมีเสียงต้นฉบับจาก SoundFont มาตรฐานแยกไว้ แม้ปิดเสียง SoundFont ที่เลือก · โหมด AI Separation ทำงานตอนสร้างเพลงเท่านั้น</div>
               </div>
@@ -159,7 +159,7 @@
                 <option value="xstage" selected>มาตรฐาน X-Stage · MIDI คัดลอกเดิมทุกไบต์ + Lyrics JSON</option>
                 <option value="m4a">แปลงเป็น M4A + Lyrics JSON · MIDI ต้นฉบับไม่เปลี่ยน</option>
               </select>
-              <p class="hint">มาตรฐาน: MIDI/KAR คัดลอกพร้อมตรวจ SHA-256 ไม่แก้โน้ตหรือเวลา · MP3/WAV และเสียงอื่นใช้การแปลง M4A ตามเครื่องมือเดิม · รูปแบบ NCN ใช้เป็นต้นทางเท่านั้น ไม่สร้างหรือแก้ MID/LYR/CUR</p>
+              <p class="hint">มาตรฐาน: MIDI/KAR คัดลอกพร้อมตรวจ SHA-256 ไม่แก้โน้ตหรือเวลา · MP3/WAV และเสียงอื่นใช้การแปลง M4A ตามเครื่องมือเดิม · ยกเลิกชุด NCN 3 ไฟล์แบบเก่า · ใช้ MIDI/KAR + LRC/JSON เท่านั้น ไม่สร้างหรือแก้ MID/LYR/CUR</p>
             </div>
             <div class="builder-actions"><button id="build-audio-button" class="button ghost" type="button">สร้าง M4A อย่างเดียว</button><button id="build-button" class="button primary large" type="button">▶ สร้างไฟล์เพลง + Lyrics JSON</button></div>
             <div id="create-build-feedback" class="create-build-feedback" data-state="idle" role="status" aria-live="polite">
@@ -367,7 +367,7 @@
           <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageWeb ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
           <article class="panel">
             <div class="section-heading"><div><h2>เลือกโฟลเดอร์ต้นฉบับสำหรับอัปโหลด</h2><p>ตรวจ MP3/M4A พร้อม LRC ที่มีเวลาจริง · สร้าง JSON และอัปเดต Catalog ให้เล่นออนไลน์ได้ · VIDEO/NCN แสดงรายการที่ยังไม่รองรับ</p></div></div>
-            <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
+            <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง + เนื้อร้อง MP3/M4A/MIDI + LRC/JSON"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
             <div class="toolbar"><button id="upload-inspect" class="button ghost" type="button">⌕ ตรวจความพร้อมไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลด + สร้าง DB พร้อมเล่น</button></div>
             <div id="upload-folder-report" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจโฟลเดอร์ · ระบบจะไม่ส่งไฟล์ที่ไม่มีเนื้อร้อง/ไฟล์ประกอบตามประเภทเพลง</div>
             <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageWeb อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
