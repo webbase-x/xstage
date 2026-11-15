@@ -88,9 +88,8 @@ class CreatedXskTests(unittest.TestCase):
         code = self.song("00004", b"A")
         file = self.records[code][0]
         file.write_text("{bad", encoding="utf-8")
-        result = self.build([code])
-        self.assertEqual(result["errors"], 1)
-        self.assertEqual(result["created"], 0)
+        with self.assertRaisesRegex(ValueError, "ไม่พบเพลงที่สร้าง XSK สำเร็จ"):
+            self.build([code])
         self.assertEqual(file.read_text(encoding="utf-8"), "{bad")
 
     def test_independent_output_destination(self):
