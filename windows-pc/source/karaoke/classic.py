@@ -67,7 +67,7 @@ class ClassicApp(KaraokeApp):
         menu.add_cascade(label='เพลง', menu=songs)
         songs.add_command(label='เชื่อมคลังเพลงรุ่นเก่า…', command=self.connect_catalog)
         songs.add_command(label='เพิ่มโฟลเดอร์เพลง…', command=self.add_folder)
-        songs.add_command(label='เชื่อมคลัง XStageWeb จาก Song Studio…',
+        songs.add_command(label='เชื่อมคลัง XStageSong จาก Song Studio…',
                           command=self.connect_songstudio_pc_library)
         songs.add_command(label='เพิ่มไฟล์เพลง…', command=self.add_files)
         songs.add_separator()
@@ -276,21 +276,21 @@ class ClassicApp(KaraokeApp):
             self.start_catalog(root)
 
     def connect_songstudio_pc_library(self):
-        """Choose the local XStageWeb folder explicitly, never auto-scan drives."""
+        """Choose the local XStageSong folder explicitly, never auto-scan drives."""
         if self.scanning:
             return self.status_var.set('กำลังสร้างดัชนีเพลง กรุณารอให้งานเดิมเสร็จ')
         from .pc_stageweb import library_root, import_library
-        previous = self.settings.get('xstageweb_pc_folder', '')
+        previous = self.settings.get('xstagesong_pc_folder', '')
         initial = previous if previous and Path(previous).is_dir() else str(self.home)
         selected = filedialog.askdirectory(
             parent=self, mustexist=True, initialdir=initial,
-            title='เลือกคลัง XStageWeb ที่ส่งออกจาก X-Stage Song Studio')
+            title='เลือกคลัง XStageSong ที่ส่งออกจาก X-Stage Song Studio')
         if not selected:
             return
         try:
             root = library_root(selected)
         except (ValueError, OSError) as error:
-            messagebox.showerror('XStageWeb ไม่ถูกต้อง', str(error), parent=self)
+            messagebox.showerror('XStageSong ไม่ถูกต้อง', str(error), parent=self)
             return
 
         def job():
@@ -355,11 +355,11 @@ class ClassicApp(KaraokeApp):
                 elif kind == 'pc_stageweb_connected':
                     selected, outcome = data
                     if not self.cancel_scan.is_set() and not outcome[2]:
-                        self.settings['xstageweb_pc_folder'] = selected
+                        self.settings['xstagesong_pc_folder'] = selected
                         self.save_settings()
                         self.refresh_library()
                         self.status_var.set(
-                            f'เชื่อม XStageWeb สำเร็จ {outcome[0]:,} เพลง · '
+                            f'เชื่อม XStageSong สำเร็จ {outcome[0]:,} เพลง · '
                             'จำตำแหน่งคลังที่เลือกแล้ว')
                 elif kind == 'catalog_location_saved':
                     from .lister import register_catalog_location
