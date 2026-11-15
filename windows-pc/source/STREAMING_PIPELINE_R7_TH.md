@@ -35,7 +35,7 @@
 - Snapshot `database-*.json`: `schemaVersion:1`, `songs:[]` เหมือนเดิม
 - Delta `delta-*.json`: `schemaVersion:1`, `upserts:[]`, `removes:[]` โดยไม่มีเพลงที่ไม่ผ่านการตรวจสอบ
 - รุ่นเว็บเก่าที่อ่านเพียง `catalogFileId` จะเห็นเฉพาะ Snapshot หลัก **ไม่เห็น Delta**; ต้องใช้เว็บรุ่น 0965 ขึ้นไปเพื่ออัปเดตเพลงระหว่างซิงค์
-- ห้ามซิงค์ไปยังโฟลเดอร์ XStageWeb เดียวกันจาก Windows หลายเครื่องพร้อมกัน เพราะ Google Drive `files.update` ไม่ใช่คำสั่ง Compare-and-Swap แบบธุรกรรมเต็มรูปแบบ
+- ห้ามซิงค์ไปยังโฟลเดอร์ XStageSong เดียวกันจาก Windows หลายเครื่องพร้อมกัน เพราะ Google Drive `files.update` ไม่ใช่คำสั่ง Compare-and-Swap แบบธุรกรรมเต็มรูปแบบ
 
 ## ติดตั้ง / ทดสอบ
 
