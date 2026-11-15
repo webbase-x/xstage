@@ -3388,7 +3388,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
-                if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "soundfont", "oauth", "vocal"):
+                if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "soundfont", "oauth", "vocal"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
             elif path == "/api/live-preview":
