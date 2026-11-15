@@ -1,5 +1,6 @@
 """Windows PC must remain independent of the X-Stage Karaoke Online service."""
 from pathlib import Path
+import ast
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +24,25 @@ class OfflineOnlyPCRegression(unittest.TestCase):
         self.assertNotIn("'google-oauth-client.json.example'", build)
         self.assertNotIn("'Convert-Web-Assets.cmd'", build)
         self.assertNotIn("'web'", build)
+
+    def test_no_remaining_runtime_import_of_retired_cloud_modules(self):
+        removed = {
+            'cloud_sync', 'drive_storage', 'google_account_ui',
+            'google_drive_sync', 'google_session', 'online_eta',
+            'online_preflight', 'online_sync_feedback', 'online_wizard',
+            'visible_sync', 'web_assets', 'web_drive', 'web_environment',
+            'web_resume', 'offline_generator',
+        }
+        for path in (ROOT / 'karaoke').glob('*.py'):
+            tree = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    self.assertNotIn(node.module.rsplit('.', 1)[-1], removed,
+                                     f'{path.name}:{node.lineno}')
+                if isinstance(node, ast.Import):
+                    for name in node.names:
+                        self.assertNotIn(name.name.rsplit('.', 1)[-1], removed,
+                                         f'{path.name}:{node.lineno}')
 
 if __name__ == '__main__':
     unittest.main()
