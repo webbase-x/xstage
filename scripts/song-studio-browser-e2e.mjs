@@ -720,7 +720,22 @@ try {
   assert.deepEqual(pcErrors,[], 'AI import/remove must not cause browser errors');
   // Cloud UI smoke uses mocked API only; network/account integration is
   // independently covered by the Drive round-trip Python tests.
+  // Eight menu entries exceed a laptop-height sidebar. Verify the menu
+  // scrolls inside its sticky panel and the bottom Settings item is clickable.
+  const sidebarLayout=await pc.evaluate(()=>{
+    const nav=document.getElementById('main-navigation');
+    const side=document.querySelector('.sidebar');
+    const styles=getComputedStyle(nav);
+    return {scrollHeight:nav.scrollHeight,clientHeight:nav.clientHeight,
+      overflowY:styles.overflowY,sidebarHeight:side.getBoundingClientRect().height};
+  });
+  assert.match(sidebarLayout.overflowY,/auto|scroll/,
+    'Desktop sidebar menu must scroll, not clip Settings below the viewport');
+  assert.ok(sidebarLayout.scrollHeight>sidebarLayout.clientHeight,
+    'Desktop short viewport should exercise a genuinely overflowing navigation');
   await pc.click('.nav-button[data-tab="settings"]');
+  assert.equal(await pc.locator('#tab-settings').isVisible(),true,
+    'Settings must be reachable through the real nav on short desktop screens');
   await pc.click('#settings-login');
   await pc.waitForFunction(()=>document.querySelector('#google-badge')?.textContent.includes('test@example.invalid'));
   assert.match(await pc.locator('#google-login-state').innerText(), /test@example.invalid/,
