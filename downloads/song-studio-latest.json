@@ -2,15 +2,15 @@
   "name": "X-Stage Song Studio PC Ready",
   "platform": "windows-x64",
   "channel": "pc-ready",
-  "version": "0.3.36",
-  "build": 336,
+  "version": "0.3.37",
+  "build": 337,
   "available": true,
   "package_type": "portable_zip",
   "installer_available": false,
   "installer_file": null,
-  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.36-build336.zip",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.36-build336/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336.zip",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.36-build336",
-  "sha256": "4d261bff4879dc97ba7195205c76c4a0f2d4069e63bb2dff43e57aefb933e6d9",
-  "notes": "Song Studio PC Ready v0.3.36 Build 336: XStageSong local/Drive folder naming, separate Online and Karaoke PC import menus, SHA-256-verified copy and revised Lyrics JSON, offline audio/MIDI/AI runtime included; Windows CI verified and GitHub Release asset digest confirmed."
+  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.37-build337.zip",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.37-build337/X-Stage-Song-Studio-PC-Ready-v0.3.37-build337.zip",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.37-build337",
+  "sha256": "a3fa756b056602f75ffe55152b8ef80e89ae6256d9320df900d58bbe26d4e102",
+  "notes": "Smart Batch Lyrics Correction: anchored timing, skipped-song audit, ZIP backup and Undo. Tested with 10,000 synthetic songs. Windows portable ZIP; extract completely and run Start-Song-Studio.cmd."
 }
