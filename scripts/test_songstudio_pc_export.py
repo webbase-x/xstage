@@ -1,4 +1,4 @@
-"""Integration smoke for Song Studio -> offline XStageWeb -> Karaoke PC."""
+"""Integration smoke for Song Studio -> offline XStageSong -> Karaoke PC."""
 from __future__ import annotations
 
 import importlib.util
@@ -25,7 +25,7 @@ class PCExportTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.source = self.root / "SongStudio" / "StageWeb"
+        self.source = self.root / "SongStudio" / "XStageSong"
         self.destination = self.root / "Karaoke"
         source_audio = self.source / "audio" / "0" / "00001.m4a"
         source_lyrics = self.source / "lyrics" / "0" / "00001.json"
@@ -54,12 +54,12 @@ class PCExportTests(unittest.TestCase):
 
     def test_copy_both_folders_and_reuse_without_overwriting(self):
         inspected = pc_export.inspect(self.source, str(self.destination), export)
-        self.assertEqual(Path(inspected["destination"]).resolve(), (self.destination / "XStageWeb").resolve())
+        self.assertEqual(Path(inspected["destination"]).resolve(), (self.destination / "XStageSong").resolve())
         self.assertEqual(inspected["songs"], 1)
         self.assertEqual(inspected["newFiles"], 3)
         created = pc_export.publish(self.source, str(self.destination), export)
         self.assertEqual(created["copied"], 3)
-        library = self.destination / "XStageWeb"
+        library = self.destination / "XStageSong"
         self.assertTrue((library / "AUDIO" / "0" / "00001.m4a").is_file())
         self.assertTrue((library / "LYRICS" / "0" / "00001.lrc").is_file())
         self.assertTrue((library / "LYRICS" / "current.json").is_file())
@@ -70,7 +70,7 @@ class PCExportTests(unittest.TestCase):
         self.assertEqual(again["songCount"], 1)
 
     def test_destination_name_exact_and_foreign_catalog_not_overwritten(self):
-        library = self.root / "Other" / "XStageWeb"
+        library = self.root / "Other" / "XStageSong"
         self.assertEqual(pc_export.destination_root(str(library)), library.resolve())
         (library / "LYRICS").mkdir(parents=True)
         old = library / "LYRICS" / "current.json"
@@ -85,7 +85,7 @@ class PCExportTests(unittest.TestCase):
         sys.path.insert(0, str(ROOT / "windows-pc" / "source"))
         from karaoke.pc_stageweb import catalog_rows, source_lyrics, import_library
         pc_export.publish(self.source, str(self.destination), export)
-        directory = self.destination / "XStageWeb"
+        directory = self.destination / "XStageSong"
         base, rows = catalog_rows(str(self.destination))
         self.assertEqual(base, directory.resolve())
         self.assertEqual(len(rows), 1)
@@ -111,7 +111,7 @@ class PCExportTests(unittest.TestCase):
 
     def test_content_mismatch_never_overwrites_original(self):
         pc_export.publish(self.source, str(self.destination), export)
-        target = self.destination / "XStageWeb" / "AUDIO" / "0" / "00001.m4a"
+        target = self.destination / "XStageSong" / "AUDIO" / "0" / "00001.m4a"
         target.write_bytes(b"different content" * 500)
         before = target.read_bytes()
         with self.assertRaises(FileExistsError):
@@ -120,7 +120,7 @@ class PCExportTests(unittest.TestCase):
 
     def test_cancellation_retains_old_pointer(self):
         pc_export.publish(self.source, str(self.destination), export)
-        target = self.destination / "XStageWeb" / "LYRICS" / "current.json"
+        target = self.destination / "XStageSong" / "LYRICS" / "current.json"
         old_pointer = target.read_bytes()
         import threading
         stop = threading.Event()
