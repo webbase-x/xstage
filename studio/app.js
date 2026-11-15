@@ -2748,7 +2748,7 @@
       createdJsonRender();
       $('created-xsk-status').textContent='เลือกเพลงจากผลค้นหาทั้งหมดแล้ว '+(result.paths||[]).length+' รายการ';
     }catch(error){message('เลือกทั้งหมดไม่สำเร็จ: '+error.message);}
-    finally{createdJsonBusyState(false);}
+    finally{createdJsonBusyState(false);createdJsonRender();}
   });
   $('created-json-clear').addEventListener('click',()=>{createdJsonSelected.clear();createdJsonRender();});
   $('created-json-preview').addEventListener('click',()=>{void createdJsonAction(true);});
