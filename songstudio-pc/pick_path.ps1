@@ -33,7 +33,7 @@ try {
         $dialog.Description = @{
             source = 'เลือกโฟลเดอร์เพลงต้นฉบับ'
             upload_folder = 'เลือกโฟลเดอร์เพลงที่จะตรวจและอัปโหลด'
-            pc_export_folder = 'เลือกตำแหน่งจัดเก็บ XStageWeb สำหรับ Karaoke PC'
+            pc_export_folder = 'เลือกตำแหน่งจัดเก็บ XStageSong สำหรับ Karaoke PC'
             lyric_source = 'เลือกคลัง StageWeb สำหรับจัดการข้อความหัว–ท้ายเพลง'
             workspace = 'เลือกโฟลเดอร์เก็บเพลงที่สร้าง'
             download = 'เลือกโฟลเดอร์ดาวน์โหลด'
