@@ -369,7 +369,10 @@ def _ensure_all_line_groups(snapshot, search):
     is rejected with an actionable message before it can exhaust memory.
     """
     query = _same(search)
-    _ordered_line_match("", query)  # Also checks the 200-character limit.
+    if len(query) > 200:
+        raise ValueError("คำค้นหาเนื้อร้องยาวเกิน 200 ตัวอักษร")
+    terms = query.casefold().split()
+    compiled = re.compile(r"\s+".join(re.escape(term) for term in terms)) if terms else None
     if snapshot.get("allCacheQuery") == query:
         return
     for group_id, group in list(snapshot["groups"].items()):
@@ -386,7 +389,8 @@ def _ensure_all_line_groups(snapshot, search):
         if record is None:
             continue
         for index, line in enumerate(transcript.split("\n")):
-            if not line or not _ordered_line_match(line, query):
+            if not line or (compiled is not None and
+                            compiled.search(_same(line).casefold()) is None):
                 continue
             matched += 1
             if matched > 30000:
