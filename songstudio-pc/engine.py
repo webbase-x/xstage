@@ -119,7 +119,7 @@ PREFS = {
     "workspace": default_song_workspace(),
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
-    "export_format": "xsk", "code_style": "source", "code_length": "6", "oauth": "",
+    "export_format": "xsk", "catalog_view": "changes", "code_style": "source", "code_length": "6", "oauth": "",
     "upload_folder": "", "lyric_source": "", "pc_export_folder": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
@@ -3149,6 +3149,8 @@ class Handler(BaseHTTPRequestHandler):
                 if ("export_format" in payload and payload["export_format"] != "xsk"
                         and not _module("pro_license.py", "xstage_pro_license").enabled(DATA)):
                     raise ValueError("ต้องเปิดใช้ License Key Pro ก่อนเลือกส่งออกแบบเดิม")
+                if "catalog_view" in payload and payload["catalog_view"] not in ("changes", "all"):
+                    raise ValueError("ตัวกรองรายการเพลงไม่ถูกต้อง")
                 if "code_style" in payload and payload["code_style"] not in ("source", "numeric", "letters", "alphanumeric"):
                     raise ValueError("รูปแบบรหัสเพลงไม่ถูกต้อง")
                 if "code_length" in payload:
@@ -3433,6 +3435,13 @@ def main():
         JOB["detail"] = "ไม่สามารถโหลดดัชนีเดิม: " + str(exc)
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
         PORT = server.server_port
+        if count and Path(PREFS["source"]).is_dir():
+            # Startup uses the persisted catalog immediately, then checks
+            # metadata changes in a background job. Never block the window.
+            try:
+                start_job({"action": "scan", "full": False})
+            except ValueError:
+                pass
         url = f"http://127.0.0.1:{PORT}/#auth={TOKEN}"
         # Open a standalone application window when Edge is installed;
         # fall back to the system's default browser otherwise.
