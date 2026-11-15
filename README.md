@@ -21,7 +21,7 @@
 
 ### Previous v1.0.104 — two-folder Google Drive
 
-- New private `XStageWeb/` libraries use exactly **AUDIO/** and **LYRICS/** as flat Drive directories (no format, code, or category subfolders).
+- New private `XStageSong/` libraries use exactly **AUDIO/** and **LYRICS/** as flat Drive directories (no format, code, or category subfolders).
 - `AUDIO/`: immutable original MIDI, user-selected rendered M4A, browser-playable audio/video, and SF2/SF3 SoundFonts. The source MIDI is copied without modification; M4A creation is a distinct optional output.
 - `LYRICS/`: validated per-song Lyrics JSON, immutable `catalog-base-*.json` and `catalog-delta-*.json`, with `current.json` published only after checksum verification.
 - Importing local NCN `MID + LYR + CUR` generates the Lyrics JSON; only MIDI and JSON are uploaded. Original `.lyr`, `.cur`, and `.lrc` remain local, and the NCN source editor is removed from Song Studio PC.
@@ -37,7 +37,7 @@
 
 ## Video Karaoke — original media and song details
 
-- Source formats: AVI, MPG/MPEG, DAT (VCD MPEG-PS), VOB, MKV, MOV, WMV and FLV. The browser importer verifies media headers and **retains the exact original bytes** in the owner's private `XStageWeb/VIDEO/ORIGINAL/<FORMAT>/Songs/<bucket>/` folder. It also publishes a codec-compatible H.264/AAC MP4 as `song.video` (and `song.audio` for a video-only item) when conversion is needed. `song.originalVideo` points at the original file, and `sourceVideoMd5` records its hash.
+- Source formats: AVI, MPG/MPEG, DAT (VCD MPEG-PS), VOB, MKV, MOV, WMV and FLV. The browser importer verifies media headers and **retains the exact original bytes** in the owner's private `XStageSong/VIDEO/ORIGINAL/<FORMAT>/Songs/<bucket>/` folder. It also publishes a codec-compatible H.264/AAC MP4 as `song.video` (and `song.audio` for a video-only item) when conversion is needed. `song.originalVideo` points at the original file, and `sourceVideoMd5` records its hash.
 - Original file playback depends on the browser and codecs. When `HTMLVideoElement.canPlayType()` reports support, the stage offers the original picture; it automatically switches back to the compatible MP4 if the original cannot decode. For formats a browser cannot decode, preserving the source **does not claim direct playback**: the compatible MP4 is played. Karaoke sound remains on the synchronized primary audio clock.
 - Each selected video requires the owner to review its **song code, song title and artist** before upload. Optional metadata: album, composer, genre, language and year. Use the importer video editor to select each video and save. Unreviewed videos stay pending without being silently published as Karaoke songs.
 - The video editor asks whether subtitles/lyrics are already burned into the picture. For videos **without** embedded subtitles, use a same-named timed LRC/JSON file or write a real timed LRC manually. The preview supports playback in browser-compatible formats and insertion of the current timestamp into LRC; entering the lyric text is still required. It **does not auto-transcribe** video audio or invent timing.
@@ -65,7 +65,7 @@
 
 หน้าเว็บ GitHub Pages นี้ไม่มีเพลงหรือฐานข้อมูลส่วนตัวอยู่ใน repository
 
-1. ผู้ใช้ใช้ X-Stage Karaoke Windows v0.9.44 เพื่อสร้าง M4A/JSON และซิงก์ไปยังโฟลเดอร์ **XStageWeb** ใน Google Drive ของตน
+1. ผู้ใช้ใช้ X-Stage Karaoke Windows v0.9.44 เพื่อสร้าง M4A/JSON และซิงก์ไปยังโฟลเดอร์ **XStageSong** ใน Google Drive ของตน
 2. Windows อัปโหลดไฟล์เสียง/เนื้อร้องเป็นรายเพลง จากนั้นเผยแพร่ catalogs/database-*.json และอัปเดต current.json เป็นขั้นตอนสุดท้าย
 3. เว็บใช้ Google Identity Services และ scope drive.file เพื่ออ่านเฉพาะคลังที่บัญชีเข้าถึงได้ ไม่ใช้ web-manifest.json หรือ Backup SQLite เดิม
 4. Web Client ID เป็นข้อมูลสาธารณะ แต่ห้ามอัปโหลด Desktop Client Secret, tokens, เพลง, lyrics หรือ catalog ของผู้ใช้
@@ -195,7 +195,7 @@
 ## X-Stage Karaoke Online v1.0.96 — browser media/MIDI/SoundFont
 
 * **ติดตั้งเพิ่มเติม:** ไม่ต้องดาวน์โหลดโปรแกรม, runtime, executable หรือไลบรารีจาก CDN เพื่อเล่น MIDI; โค้ด `browser-midi.js` ส่งจาก origin เดียวกับ X-Stage บน GitHub Pages และใช้ Web Audio API ของเบราว์เซอร์
-* **คลังส่วนตัว:** ไฟล์เพลง/เสียง/เนื้อร้อง/SoundFont เก็บใน Google Drive ของเจ้าของบัญชี ค้นหาโฟลเดอร์ `XStageWeb/SOUNDFONT/SF2` และ `SF3` เพื่อแสดงตัวเลือก SoundFont ไม่เก็บ token หรือเสียงลง GitHub
+* **คลังส่วนตัว:** ไฟล์เพลง/เสียง/เนื้อร้อง/SoundFont เก็บใน Google Drive ของเจ้าของบัญชี ค้นหาโฟลเดอร์ `XStageSong/SOUNDFONT/SF2` และ `SF3` เพื่อแสดงตัวเลือก SoundFont ไม่เก็บ token หรือเสียงลง GitHub
 * **MIDI/KAR:** นำเข้าไฟล์ Standard MIDI `.mid`/`.midi`, Karaoke MIDI `.kar` ได้ โดยตรวจ track และสร้าง Lyrics JSON จากข้อความ KAR หรือระบุว่าเป็นเพลงบรรเลง; เล่นผ่าน Web Audio OfflineAudioContext เพื่อให้คิว/เล่นต่อ/เลื่อนเวลาใช้ตัวควบคุมเสียงเดิมได้
 * **NCN:** รับชุดชื่อรหัสเดียวกัน `.mid + .lyr + .cur` (แยก Song/Lyrics/Cursor ได้) และเก็บต้นฉบับทั้งสามใน `MIDI/NCN` พร้อมสร้าง Lyrics JSON สำหรับเวที ต้องมีครบสามไฟล์จึงนำเข้าเป็น NCN
 * **SoundFont:** รองรับ RIFF SF2 และ SF3 ที่มีข้อมูลครบ เลือกจากเมนูเวทีภายหลัง Google Login; SF2 สังเคราะห์เสียงด้วย sample bank, SF3 ใช้ native Ogg decoder ของเบราว์เซอร์และอาจใช้ไม่ได้ในบางรุ่น/อุปกรณ์ ถ้าไม่ได้เลือก SoundFont ใช้ oscillator พื้นฐานที่ฝังมากับเว็บ; ไม่แอบใช้เสียงพื้นฐานแทน SF3 ที่ถอดรหัสไม่สำเร็จ
