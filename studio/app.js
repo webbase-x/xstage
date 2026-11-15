@@ -1629,10 +1629,10 @@
     const seq=++aiDraftSeq;
     aiDraftReady=false;aiEngineReady=false;aiDetailsDirty=false;
     $('ai-lyrics-title').value=row.title||row.code||'';
-    $('ai-lyrics-artist').value=row.artist||'';
+    $('ai-lyrics-artist').value=String(row.artist||'').trim()||'X-Stage Song Studio';
     $('ai-lyrics-source-status').textContent='กำลังอ่านชื่อเพลง ผู้ร้อง และเนื้อร้องจากไฟล์ต้นฉบับ…';
     $('ai-lyrics-selected').textContent=(row.title||row.code)+
-      ' · '+(row.artist||'ไม่ระบุศิลปิน')+' · '+(row.kind||'');
+      ' · '+(String(row.artist||'').trim()||'X-Stage Song Studio')+' · '+(row.kind||'');
     $('ai-lyrics-editor').value='';
     $('ai-lyrics-paste').value=aiPastedLyrics.get(row.id)||'';
     $('ai-lyrics-align-review').textContent='วางเนื้อเพลงถูกต้องแล้วกด AI จัดเวลา · ผลเป็นเวลาโดยประมาณ ต้องฟังตรวจ';
@@ -1657,7 +1657,7 @@
         'HTDemucs ไม่พร้อม · ตรวจแพ็กเกจ PC Ready และโมเดล AI';
       if(!aiDetailsDirty){
         $('ai-lyrics-title').value=data.title||row.title||row.code||'';
-        $('ai-lyrics-artist').value=data.artist||'';
+        $('ai-lyrics-artist').value=String(data.artist||'').trim()||'X-Stage Song Studio';
       }
       const originalTimed=String(data.sourceLrc||'');
       const originalPlain=String(data.hasSavedPlainLyrics?
@@ -1690,7 +1690,7 @@
     if(!Number.isInteger(aiSongId)||busy)return;
     const id=aiSongId;
     const title=$('ai-lyrics-title').value.trim();
-    const artist=$('ai-lyrics-artist').value.trim();
+    const artist=$('ai-lyrics-artist').value.trim()||'X-Stage Song Studio';
     const plainLyrics=$('ai-lyrics-paste').value;
     if(!title)return message('กรุณาระบุชื่อเพลงก่อนบันทึก');
     try{
