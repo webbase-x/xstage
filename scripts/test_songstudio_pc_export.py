@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -163,6 +164,81 @@ class PCExportTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "ยกเลิก"):
             pc_export.publish(self.source, str(self.destination), export, cancelled=stop)
         self.assertEqual(target.read_bytes(), old_pointer)
+
+
+    def test_native_karaoke_sqlite_created_and_preserves_manual_edits(self):
+        done = pc_export.publish(self.source, str(self.destination), export)
+        db = Path(done["database"])
+        self.assertTrue(db.is_file())
+        self.assertEqual(done["databaseAction"], "created")
+        with sqlite3.connect(db) as connection:
+            row = connection.execute(
+                "SELECT code,title,artist,first_lyric,source_catalog FROM songs"
+            ).fetchone()
+            self.assertEqual(row[:3], ("00001", "เพลงทดสอบ", "ศิลปินทดสอบ"))
+            self.assertIn("สวัสดี", row[3])
+            self.assertEqual(row[4], "XStageSong PC")
+            connection.execute(
+                "UPDATE songs SET favorite=1,user_edited=1,title=?,artist=?",
+                ("ชื่อที่แก้ใน Karaoke", "ศิลปินที่ผู้ใช้แก้")
+            )
+        again = pc_export.publish(self.source, str(self.destination), export)
+        self.assertEqual(again["databaseAction"], "updated")
+        self.assertTrue(list(db.parent.glob("songs-before-songstudio-*.sqlite3")))
+        with sqlite3.connect(db) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*),favorite,user_edited,title,artist FROM songs"
+            ).fetchone()
+            self.assertEqual(row, (1, 1, 1, "ชื่อที่แก้ใน Karaoke", "ศิลปินที่ผู้ใช้แก้"))
+            self.assertEqual(connection.execute("PRAGMA quick_check(1)").fetchone()[0], "ok")
+
+    def test_existing_foreign_database_is_not_modified(self):
+        target = self.destination / "XStageSong" / "DB"
+        target.mkdir(parents=True)
+        db = target / "songs.sqlite3"
+        with sqlite3.connect(db) as connection:
+            connection.execute("CREATE TABLE foreign_data (keep TEXT)")
+            connection.execute("INSERT INTO foreign_data VALUES ('safe')")
+        with self.assertRaisesRegex(ValueError, "ไม่ใช่ฐานเพลง Karaoke PC"):
+            pc_export.publish(self.source, str(self.destination), export)
+        with sqlite3.connect(db) as connection:
+            self.assertEqual(connection.execute("SELECT keep FROM foreign_data").fetchone()[0], "safe")
+
+    def test_shared_xstagesong_root_snapshots_lyrics_without_replacing(self):
+        first = pc_export.publish(self.source, str(self.source), export)
+        self.assertEqual(first["destination"], str(self.source.resolve()))
+        self.assertEqual(first["databaseAction"], "created")
+        pc_pointer = self.source / "LYRICS" / "current.json"
+        self.assertTrue(pc_pointer.is_file())
+        catalog = next((self.source / "LYRICS").glob("catalog-pc-*.json"))
+        first_row = json.loads(catalog.read_text(encoding="utf-8"))["songs"][0]
+        first_lyrics = self.source / first_row["lyrics"]["path"]
+        self.assertIn("-pc-snapshot-", first_lyrics.name)
+        before = first_lyrics.read_bytes()
+        # Simulate a correction to the authoring JSON, not the immutable PC copy.
+        editable = self.source / "lyrics" / "0" / "00001.json"
+        doc = json.loads(editable.read_text(encoding="utf-8"))
+        doc["lines"][0]["text"] = "แก้ไขคำร้อง"
+        editable.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        second = pc_export.publish(self.source, str(self.source), export)
+        self.assertEqual(first_lyrics.read_bytes(), before)
+        self.assertEqual(second["databaseAction"], "updated")
+        self.assertTrue((self.source / "DB" / "songs.sqlite3").is_file())
+
+    def test_detect_installed_pc_and_use_its_real_data_sqlite(self):
+        install = self.root / "InstalledKaraoke"
+        (install / "App").mkdir(parents=True)
+        (install / "App" / "XStageKaraoke.exe").write_bytes(b"real executable marker")
+        (install / "Data").mkdir()
+        inspected = pc_export.inspect(self.source, str(install), export)
+        self.assertEqual(Path(inspected["destination"]), install / "Songs" / "XStageSong")
+        self.assertEqual(Path(inspected["database"]), install / "Data" / "songs.sqlite3")
+        self.assertTrue(inspected["databaseInstalled"])
+        saved = pc_export.publish(self.source, str(install), export)
+        self.assertTrue(Path(saved["database"]).is_file())
+        self.assertEqual(saved["indexedSongs"], 1)
+        updated = pc_export.publish(self.source, str(install / "Songs"), export)
+        self.assertEqual(updated["databaseAction"], "updated")
 
 
 if __name__ == "__main__":
