@@ -2173,6 +2173,7 @@
   }
 
   async function inspectUploadFolder() {
+    $('upload-folder-report').textContent='กำลังตรวจไฟล์ในโฟลเดอร์ที่เลือกและโฟลเดอร์ย่อยทั้งหมด…';
     try {
       await saveInputs(['upload-folder']);
       const result=await api('/api/upload-folder/inspect');
@@ -2249,7 +2250,7 @@
       '\\nตรวจ MD5 ก่อนส่งและไม่เขียนทับไฟล์เดิม'+
       (createNew?'\\n\\nหากไม่พบ XStageSong ที่บัญชีนี้มองเห็น ระบบจะสร้างก่อนอัปโหลด'+
        '\\nคำเตือน: หากสิทธิ์ Google ไม่ครอบคลุมคลังเดิม อาจเกิดคลังซ้ำ':'')+
-      '\\n\\nMP3/M4A ที่ผ่านการตรวจจะอัปโหลดพร้อมอัปเดต DB/current.json ให้เล่นออนไลน์ได้ทันที · VIDEO/NCN ที่ยังไม่รองรับจะข้าม';
+      '\\n\\nเผยแพร่เฉพาะเพลงที่ตรวจและแปลงเนื้อร้องพร้อมเวลาได้สำเร็จ พร้อมอัปเดต DB/current.json · ไฟล์ผิดปกติหรือยังไม่รองรับจะข้าม';
     if (!await confirmStudio(details,'ยืนยันตรวจครบและอัปโหลดเข้า XStageSong',
       {acceptLabel:'ตรวจแล้ว · เริ่มอัปโหลด',cancelLabel:'ยกเลิก'})) return;
     await run('upload-folder',{create_new_library:createNew});
