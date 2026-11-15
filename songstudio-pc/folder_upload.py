@@ -130,7 +130,10 @@ def scan(folder, ncn=None):
         parent = path.relative_to(root).parts[:-1]
         lowered = [part.casefold() for part in parent]
         role = next((i for i, part in enumerate(lowered)
-                     if part in ("songs", "lyrics", "cursor", "audio")), None)
+                     if part in ("songs", "lyrics", "cursor") and i > 0), None)
+        if role is None:
+            role = next((i for i, part in enumerate(lowered)
+                         if part in ("audio", "lyrics")), None)
         if role is None:
             key = (tuple(lowered), path.stem.casefold())
         else:
