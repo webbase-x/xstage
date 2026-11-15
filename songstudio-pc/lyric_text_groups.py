@@ -25,6 +25,7 @@ POSITIONS = {
     "second": (1, "บรรทัดที่ 2"),
     "penultimate": (-2, "บรรทัดรองสุดท้าย"),
     "last": (-1, "บรรทัดสุดท้าย"),
+    "all": (0, "ทุกบรรทัด (ค้นหาวลี)"),
 }
 TIMED = re.compile(r"^(\s*\[(?:\d{1,3}):(?:[0-5]\d)(?:[.:]\d{1,3})?\])(.*?)(\r?\n?)$")
 ENHANCED = re.compile(r"<\d{1,3}:[0-5]\d(?:[.:]\d{1,3})?>")
@@ -218,9 +219,9 @@ def _retime_visual_units(line, old_text, new_text):
     return method != "original-cue-positions"
 
 
-def _replacement(document, raw, position, new_text):
+def _replacement(document, raw, position, new_text, *, line_index=None):
     lines = document["lines"]
-    index = POSITIONS[position][0]
+    index = POSITIONS[position][0] if line_index is None else line_index
     changed = json.loads(json.dumps(document, ensure_ascii=False))
     changed_line = changed["lines"][index]
     old_text = changed_line["text"]
@@ -300,8 +301,10 @@ def scan(root, export, *, cancelled=None, on_progress=None):
         # Cache a normalized, case-insensitive searchable transcript once
         # per song rather than reopening 90k JSON documents per text query.
         searchable[song_id] = "\n".join(
-            _same(line["text"]).casefold() for line in doc["lines"])
+            _same(line["text"]) for line in doc["lines"])
         for pos, (index, _) in POSITIONS.items():
+            if pos == "all":
+                continue  # Lazily index all lines only for a specific search.
             text = _same(doc["lines"][index]["text"])
             if not text:
                 continue
@@ -324,7 +327,11 @@ def scan(root, export, *, cancelled=None, on_progress=None):
             }
     return {
         "root": str(root), "generation": pointer.get("generation"),
-        "groups": group_lookup, "searchable": searchable, "songs": included,
+        "groups": group_lookup, "searchable": searchable,
+        "recordsBySong": {item["songId"]: item["record"]
+                         for group in group_lookup.values()
+                         for item in group["members"]},
+        "allCacheQuery": None, "songs": included,
         "skippedInvalid": excluded, "withoutLyrics": missing,
         "inspected": len(entries), "groupCount": len(group_lookup),
     }
@@ -526,7 +533,7 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
                         estimated_here = 0
                         positions = set()
                         for group, entry in item["edits"]:
-                            index = POSITIONS[group["position"]][0]
+                            index = entry.get("lineIndex", POSITIONS[group["position"]][0])
                             slot = index % len(doc["lines"])
                             if slot in positions:
                                 raise ValueError("เลือกตำแหน่งข้อความซ้ำในเพลง")
@@ -536,7 +543,8 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
                             if not _ordered_line_match(revised_doc["lines"][index]["text"], search):
                                 raise ValueError("คำค้นไม่ตรงลำดับในบรรทัดที่จะเปลี่ยน")
                             revised_doc, revised_lrc, estimated = _replacement(
-                                revised_doc, revised_lrc, group["position"], new_text)
+                                revised_doc, revised_lrc, group["position"], new_text,
+                                line_index=entry.get("lineIndex"))
                             estimated_here += int(estimated)
                             edits_here.append((group, entry))
                         json_bytes = (json.dumps(revised_doc, ensure_ascii=False,
@@ -653,12 +661,13 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
     # files remain in their original groups for later diagnosis/re-scan.
     changed_ids = {row["songId"] for row in committed}
     for group, members in chosen:
-        affected = {item["songId"] for item in members if item["songId"] in changed_ids}
+        affected = {(item["songId"], item.get("lineIndex"))
+                    for item in members if item["songId"] in changed_ids}
         if not affected:
             continue
         was_repeated = group["count"] >= 2
         group["members"][:] = [item for item in group["members"]
-                              if item["songId"] not in affected]
+                              if (item["songId"], item.get("lineIndex")) not in affected]
         group["count"] = len(group["members"])
         if was_repeated and group["count"]:
             group["queuePending"] = True
@@ -668,7 +677,7 @@ def apply_many_smart(root, export, snapshot, group_ids, new_text, backup_root,
         updated = json.loads(change["jsonPath"].read_text(encoding="utf-8"))
         song_id = change["songId"]
         snapshot["searchable"][song_id] = "\n".join(
-            _same(line["text"]).casefold() for line in updated["lines"])
+            _same(line["text"]) for line in updated["lines"])
         for previous, item in change["edits"]:
             identity = _group_id(previous["position"], new_text)
             group = snapshot["groups"].setdefault(identity, {
@@ -740,7 +749,7 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
         lost_tokens = 0
         chosen_positions = set()
         for group, item in target["edits"]:
-            index = POSITIONS[group["position"]][0]
+            index = item.get("lineIndex", POSITIONS[group["position"]][0])
             if index % len(doc["lines"]) in chosen_positions:
                 raise ValueError("พบตำแหน่งที่ถูกเลือกซ้ำในเพลงเดียวกัน")
             chosen_positions.add(index % len(doc["lines"]))
@@ -749,7 +758,8 @@ def apply_many(root, export, snapshot, group_ids, new_text, backup_root,
             if not _ordered_line_match(doc["lines"][index]["text"], search):
                 raise ValueError("คำค้นไม่ตรงลำดับในบรรทัดที่จะเปลี่ยน")
             revised_doc, revised_lrc, removed = _replacement(
-                revised_doc, revised_lrc, group["position"], new_text)
+                revised_doc, revised_lrc, group["position"], new_text,
+                line_index=item.get("lineIndex"))
             lost_tokens += bool(removed)
 
         original_json = path.read_bytes()
