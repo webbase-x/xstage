@@ -383,6 +383,23 @@
             <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
             <div class="toolbar"><button id="upload-inspect" class="button ghost" type="button">⌕ ตรวจความพร้อมไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลด + สร้าง DB พร้อมเล่น</button></div>
             <div id="upload-folder-report" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจโฟลเดอร์ · ระบบจะไม่ส่งไฟล์ที่ไม่มีเนื้อร้อง/ไฟล์ประกอบตามประเภทเพลง</div>
+          <article class="panel import-preview-panel" aria-label="ทดลองเล่นเพลงก่อนนำเข้า">
+            <div class="section-heading"><div><h2>♫ พรีวิวทดลองเล่นเพลงก่อนนำเข้า</h2><p>เลือกเพลงจากไฟล์ต้นทาง ฟังเพลงและดูเนื้อร้องพร้อมเวลาในหน้านี้ · ไม่คัดลอกหรืออัปโหลดจากการทดลองเล่น</p></div><span class="chip info">READ ONLY</span></div>
+            <div class="toolbar">
+              <input id="online-preview-search" class="field" type="search" placeholder="ค้นชื่อเพลงหรือรหัสเพลง" autocomplete="off" aria-label="ค้นเพลงพรีวิว">
+              <button id="online-preview-scan" class="button ghost" type="button">⌕ โหลดรายการเพลงสำหรับพรีวิว</button>
+            </div>
+            <div class="path-row">
+              <select id="online-preview-select" class="field" aria-label="เลือกเพลงสำหรับพรีวิว"><option value="">ยังไม่มีรายการเพลง · กดโหลดรายการ</option></select>
+              <button id="online-preview-play" class="button primary" type="button" disabled>▶ ทดลองเล่น</button>
+              <button id="online-preview-stop" class="button ghost" type="button" disabled>■ หยุด</button>
+            </div>
+            <div class="toolbar"><button id="online-preview-prev" class="button ghost" type="button" disabled>‹ ก่อนหน้า</button><span id="online-preview-page" class="hint">—</span><button id="online-preview-next" class="button ghost" type="button" disabled>ถัดไป ›</button></div>
+            <p id="online-preview-status" class="hint" role="status" aria-live="polite">ยังไม่ได้อ่านรายการเพลงจากคลังต้นทาง</p>
+            <audio id="online-preview-audio" controls preload="none" style="width:100%" aria-label="ทดลองฟังเพลงก่อนนำเข้า"></audio>
+            <div id="online-preview-lyrics" class="preview-lyrics-lines" role="region" aria-label="เนื้อร้องขณะทดลองฟัง" style="max-height:240px;overflow:auto"><p class="hint">เลือกเพลงเพื่อแสดงเนื้อร้องพร้อมเวลา</p></div>
+            <p class="hint">ไฟล์ MIDI/KAR ใช้ SoundFont ที่ตั้งไว้ในหน้าสร้างเพลง · เพลงที่ไม่มีเนื้อร้องพร้อมเวลาจะแสดงเหตุผลชัดเจน · พรีวิวไม่แก้เพลงหรือฐานข้อมูล</p>
+          </article>
             <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageSong อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
             <p class="hint">เพลง MP3/M4A ที่มี LRC ถูกต้อง จะอัปโหลดและอัปเดต LYRICS/current.json หลังตรวจ MD5 · เก็บไฟล์เสียงใน AUDIO และ Lyrics JSON ใน LYRICS · ไม่อัปโหลด LYR/CUR ต้นฉบับ</p>
           </article>
@@ -411,6 +428,23 @@
             <div class="toolbar"><button id="pc-export-inspect" class="button ghost" type="button">⌕ ตรวจคลังเพลงและพื้นที่</button><button id="pc-export-start" class="button primary" type="button">▣ นำเข้า X-Stage Karaoke PC</button></div>
             <p id="pc-export-report" class="hint" role="status" aria-live="polite">เลือกตำแหน่งปลายทาง · ระบบจะตรวจไฟล์ ฐานข้อมูล SQLite และพื้นที่โดยไม่เปลี่ยนข้อมูล</p>
             <p id="pc-export-status" class="hint" role="status" aria-live="polite">ตรวจชื่อไฟล์ซ้ำก่อนคัดลอก · ใช้ SHA-256 ตรวจความสมบูรณ์ · ถ้าชื่อซ้ำแต่เนื้อหาต่างกันจะหยุดเพื่อให้ตรวจสอบ ไม่เขียนทับเอง · บันทึก current.json หลังคัดลอกสำเร็จ และสร้าง/อัปเดต SQLite ของ Karaoke PC แบบมีการสำรองฐานเดิม</p>
+          </article>
+          <article class="panel import-preview-panel" aria-label="ทดลองเล่นเพลงก่อนนำเข้า">
+            <div class="section-heading"><div><h2>♫ พรีวิวทดลองเล่นเพลงก่อนนำเข้า</h2><p>เลือกเพลงจากไฟล์ต้นทาง ฟังเพลงและดูเนื้อร้องพร้อมเวลาในหน้านี้ · ไม่คัดลอกหรืออัปโหลดจากการทดลองเล่น</p></div><span class="chip info">READ ONLY</span></div>
+            <div class="toolbar">
+              <input id="pc-preview-search" class="field" type="search" placeholder="ค้นชื่อเพลงหรือรหัสเพลง" autocomplete="off" aria-label="ค้นเพลงพรีวิว">
+              <button id="pc-preview-scan" class="button ghost" type="button">⌕ โหลดรายการเพลงสำหรับพรีวิว</button>
+            </div>
+            <div class="path-row">
+              <select id="pc-preview-select" class="field" aria-label="เลือกเพลงสำหรับพรีวิว"><option value="">ยังไม่มีรายการเพลง · กดโหลดรายการ</option></select>
+              <button id="pc-preview-play" class="button primary" type="button" disabled>▶ ทดลองเล่น</button>
+              <button id="pc-preview-stop" class="button ghost" type="button" disabled>■ หยุด</button>
+            </div>
+            <div class="toolbar"><button id="pc-preview-prev" class="button ghost" type="button" disabled>‹ ก่อนหน้า</button><span id="pc-preview-page" class="hint">—</span><button id="pc-preview-next" class="button ghost" type="button" disabled>ถัดไป ›</button></div>
+            <p id="pc-preview-status" class="hint" role="status" aria-live="polite">ยังไม่ได้อ่านรายการเพลงจากคลังต้นทาง</p>
+            <audio id="pc-preview-audio" controls preload="none" style="width:100%" aria-label="ทดลองฟังเพลงก่อนนำเข้า"></audio>
+            <div id="pc-preview-lyrics" class="preview-lyrics-lines" role="region" aria-label="เนื้อร้องขณะทดลองฟัง" style="max-height:240px;overflow:auto"><p class="hint">เลือกเพลงเพื่อแสดงเนื้อร้องพร้อมเวลา</p></div>
+            <p class="hint">ไฟล์ MIDI/KAR ใช้ SoundFont ที่ตั้งไว้ในหน้าสร้างเพลง · เพลงที่ไม่มีเนื้อร้องพร้อมเวลาจะแสดงเหตุผลชัดเจน · พรีวิวไม่แก้เพลงหรือฐานข้อมูล</p>
           </article>
           <article class="panel">
             <div class="section-heading"><div><h2>โครงสร้างไฟล์แบบเดียวกับ Google Drive</h2><p>ใช้สองโฟลเดอร์หลักสำหรับเพลงและคำร้อง โดยฐาน Karaoke PC เป็นฐานพาธในเครื่อง ไม่ใช้ Google Drive File ID</p></div></div>
