@@ -1374,6 +1374,33 @@ def build_xsk(rows, mode, options):
         records, [], root,
         code_style=PREFS.get("code_style", "source"),
         code_length=int(PREFS.get("code_length", "6")))
+    # An XSK is an encrypted package, not an ordinary published audio record.
+    # Index its authenticated MIDI digests and occupied codes once before
+    # assigning any new ID. Never infer uniqueness from filenames alone.
+    existing_midi = set()
+    xsk_root = root / "MIDI" / "XSK"
+    if xsk_root.is_dir():
+        for existing_path in xsk_root.rglob("*.xsk"):
+            if not existing_path.is_file() or existing_path.is_symlink():
+                raise ValueError("พบ XSK ที่ตรวจสอบไม่ได้: " + str(existing_path))
+            try:
+                existing_doc = package.open_package(existing_path, key)
+                digest = existing_doc["audio"]["sha256"]
+                used_code = existing_doc["songCode"]
+                if not isinstance(digest, str) or len(digest) != 64:
+                    raise ValueError("SHA-256 ของ XSK ไม่ถูกต้อง")
+                if not isinstance(used_code, str) or not package.CODE_RE.fullmatch(used_code):
+                    raise ValueError("รหัสเพลง XSK ไม่ถูกต้อง")
+            except Exception as exc:
+                raise ValueError(
+                    "ไม่สามารถตรวจความซ้ำของ XSK เดิมได้ จึงไม่สร้างเพลงใหม่: "
+                    + str(existing_path) + " (" + str(exc) + ")") from exc
+            existing_midi.add(digest)
+            allocator.used.add(used_code.casefold())
+            allocator._track_numeric(used_code)
+            # Reserve the filename as well, even if old metadata differs.
+            allocator.used.add(existing_path.stem.casefold())
+            allocator._track_numeric(existing_path.stem)
     created = skipped = errors = 0
     issues = []
     with LOCK:
@@ -1396,32 +1423,24 @@ def build_xsk(rows, mode, options):
             doc = _xsk_apply_head_tail(doc, options)
             title = row.get("title") or source.stem
             artist = row.get("artist") or "X-Stage Song Studio"
-            # Existing same-name packages are verified before any allocation,
-            # preventing duplicate files on repeated runs.
-            candidate = package.destination(root, preferred)
-            if candidate.is_file() and not candidate.is_symlink():
-                existing = package.open_package(candidate, key)
-                if (existing.get("audio", {}).get("sha256") == package._hash_source(source)
-                    and existing.get("lines") == doc["lines"] and existing.get("title") == title
-                    and existing.get("artist") == artist):
-                    skipped += 1
-                    log("XSK ข้ามเพลงเดิมที่ตรวจ SHA-256 ผ่าน: " + preferred)
-                    continue
-                raise ValueError("XSK เดิมมีข้อมูลต่างจากงานใหม่ · ไม่เขียนทับอัตโนมัติ: " + preferred)
+            # Identical MIDI means the song is already in the target,
+            # regardless of filename, lyrics or metadata.
+            source_digest = package._hash_source(source)
+            if source_digest in existing_midi:
+                skipped += 1
+                log("XSK ข้าม MIDI ซ้ำ (SHA-256): " + source.name)
+                continue
+            # CodeAllocator fills numeric gaps before appending after the
+            # highest occupied code. The target file is still checked by seal.
             code = allocator.assign_new(preferred)
             output = package.destination(root, code)
-            if output.is_file():
-                old = package.open_package(output, key)
-                if (old.get("audio", {}).get("sha256") == package._hash_source(source)
-                    and old.get("lines") == doc["lines"] and old.get("title") == title
-                    and old.get("artist") == artist):
-                    skipped += 1
-                    continue
-                raise ValueError("รหัส XSK ซ้ำ: " + code)
+            if output.exists() or output.is_symlink():
+                raise FileExistsError("รหัส XSK ปลายทางมีอยู่แล้ว · ไม่เขียนทับ: " + code)
             row["code"] = code
             doc["songCode"] = code
             update(f"เข้ารหัส XSK {index}/{len(rows)}: {title}")
             package.seal(source, doc, code, title, artist, key, target=output)
+            existing_midi.add(source_digest)
             created += 1
             log("XSK สร้างและตรวจ AES-GCM / SHA-256 ผ่าน: " + code)
         except Exception as exc:
