@@ -64,7 +64,7 @@ class Drive {
     this.assertLive();
     if(!response.ok){
       if(response.status===401)fail('Google Login หมดอายุ กรุณาล็อกอินใหม่แล้วกดทำต่อ');
-      if(response.status===403)fail('ไม่มีสิทธิ์เขียน/อ่าน XStageWeb ใน Google Drive นี้ · ตรวจบัญชีและ drive.file');
+      if(response.status===403)fail('ไม่มีสิทธิ์เขียน/อ่าน XStageSong ใน Google Drive นี้ · ตรวจบัญชีและ drive.file');
       if(response.status===429||response.status>=500)fail('Google Drive ให้ลองใหม่ภายหลัง (HTTP '+response.status+')');
       fail('Google Drive ไม่สำเร็จ (HTTP '+response.status+')');
     }
@@ -307,9 +307,9 @@ async function loadCatalog(drive,root){
       children.find(x=>x.name==='.xstage-songstudio-staging.json');
     const unknown=children.filter(x=>!['SOUNDFONT','AUDIO','LYRICS','TEXT','VIDEO','MIDI','DB',
       '.xstage-songstudio-staging.json'].includes(x.name));
-    if(unknown.length)fail('พบไฟล์ใน XStageWeb แต่ไม่มี current.json · ต้องตรวจคลังเดิมก่อน');
+    if(unknown.length)fail('พบไฟล์ใน XStageSong แต่ไม่มี current.json · ต้องตรวจคลังเดิมก่อน');
     if(!marker&&children.some(x=>!['AUDIO','LYRICS','SOUNDFONT'].includes(x.name)))
-      fail('XStageWeb ยังไม่มี current.json หรือหลักฐานนำเข้าที่ปลอดภัย · ไม่เริ่มทับ');
+      fail('XStageSong ยังไม่มี current.json หรือหลักฐานนำเข้าที่ปลอดภัย · ไม่เริ่มทับ');
     if(!marker&&lyricChildren.length)
       fail('พบข้อมูล LYRICS เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
     if(marker){
@@ -326,7 +326,7 @@ async function loadCatalog(drive,root){
     fail('current.json ไม่ตรงสัญญาฐานเพลง X-Stage Online');
   const base=await drive.getJson(pointer.catalogFileId);
   if(base.schemaVersion!==1||!Array.isArray(base.songs))
-    fail('Catalog หลักของ XStageWeb ไม่ถูกต้อง');
+    fail('Catalog หลักของ XStageSong ไม่ถูกต้อง');
   const rows=new Map();
   for(const x of base.songs){if(!x||typeof x.webSongId!=='string')fail('เพลงใน Catalog หลักไม่ถูกต้อง');rows.set(x.webSongId,x);}
   for(const fileId of pointer.deltaFileIds){
@@ -569,18 +569,18 @@ class Importer {
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
     drive.signal=()=>this.controller.signal;
     try{
-      this.status('กำลังตรวจคลัง XStageWeb และ current.json บน Google Drive…');
-      const rootQuery="'root' in parents and (name='XStageWeb' or name='StageWeb') and mimeType='"+MIME_FOLDER+"' and trashed=false";
+      this.status('กำลังตรวจคลัง XStageSong และ current.json บน Google Drive…');
+      const rootQuery="'root' in parents and name='XStageSong' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
-      if(roots.length>1)fail('พบ StageWeb และ XStageWeb หลายโฟลเดอร์ · หยุดป้องกันฐานแยก');
+      if(roots.length>1)fail('พบ XStageSong มากกว่าหนึ่งโฟลเดอร์ · หยุดป้องกันฐานแยก');
       let rootId;
       if(roots.length){
         if(roots[0].ownedByMe===false)fail('ไม่สามารถนำเข้าไปยังโฟลเดอร์ที่ไม่ได้เป็นเจ้าของโดยไม่ได้อนุญาต');
         rootId=roots[0].id;
       }else{
         if(!this.dom['allow-create'].checked)
-          fail('ไม่พบ XStageWeb ที่บัญชีนี้เข้าถึงได้ · ให้ยืนยันการสร้างคลังใหม่ก่อน (หากมีคลังเดิมที่มองไม่เห็นอย่าเพิ่งสร้าง)');
-        rootId=await drive.folder('root','XStageWeb');
+          fail('ไม่พบ XStageSong ที่บัญชีนี้เข้าถึงได้ · ให้ยืนยันการสร้างคลังใหม่ก่อน (หากมีคลังเดิมที่มองไม่เห็นอย่าเพิ่งสร้าง)');
+        rootId=await drive.folder('root','XStageSong');
       }
       let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
       if(pointer && pointer.layoutVersion!==4)
