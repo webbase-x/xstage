@@ -1,5 +1,5 @@
 'use strict';
-// X-Stage Web v0.9.44: each Google account reads only its private XStageWeb.
+// X-Stage Web v0.9.44: each Google account reads only its private XStageSong.
 const config = window.XSTAGE_CONFIG || {};
 const el = id => document.getElementById(id);
 let token = '', identity = '', songs = [], queue = [], history = [], current = null;
@@ -7,7 +7,7 @@ let audioUrl = '', generation = 0, lyricsData = null, fetchController = null;
 const player = el('player');
 const canvas = el('lyrics');
 const ctx = canvas ? canvas.getContext('2d') : null;
-const rootName = 'XStageWeb';
+const rootName = 'XStageSong';
 function message(msg) { el('status').textContent = msg; }
 function reset() {
   ++generation;
@@ -76,7 +76,7 @@ async function media(id, signal) {
 async function loadLibrary(startGeneration) {
   message('กำลังอ่านคลังส่วนตัวจาก Google Drive…');
   const root=unique((await apiList('root',rootName)).filter(x=>x.mimeType==='application/vnd.google-apps.folder'),rootName);
-  if(!root)throw Error('ยังไม่มี XStageWeb ใน Google Drive กรุณาซิงก์จาก X-Stage Windows ก่อน');
+  if(!root)throw Error('ยังไม่มี XStageSong ใน Google Drive กรุณาซิงก์จาก X-Stage Windows ก่อน');
   const pointer=unique(await apiList(root.id,'current.json'),'current.json');
   if(!pointer)throw Error('ยังไม่มีฐานเพลงที่เผยแพร่สำเร็จ กรุณาซิงก์จาก Windows ก่อน');
   const pointerData=await (await media(pointer.id)).json();
