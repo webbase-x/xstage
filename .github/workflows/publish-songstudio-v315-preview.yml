@@ -74,9 +74,9 @@ jobs:
 
           FIX: Clicking Google Login now opens the system browser and tries to raise the real Google Accounts consent window to the foreground. During the 3-minute approval window, the PC and Web Control show a visible prompt and a "เปิด Google Login อีกครั้ง" retry button that re-opens the SAME pending OAuth request. The Google client and signed-in states update after consent; missing Desktop OAuth fails immediately with an actionable explanation.
 
-          This ZIP bundles the existing verified audio pipeline (FFmpeg, FluidSynth/SoundFont, MIDI/KAR/NCN to M4A plus timed JSON/LRC), offline AI components, and incremental Google Drive XStageWeb catalog publishing. Extract the complete ZIP first, then open Start-Song-Studio.cmd.
+          This ZIP bundles the existing verified audio pipeline (FFmpeg, FluidSynth/SoundFont, MIDI/KAR/NCN to M4A plus timed JSON/LRC), offline AI components, and incremental Google Drive XStageSong catalog publishing. Extract the complete ZIP first, then open Start-Song-Studio.cmd.
 
-          LIMITATION: The developer's default Desktop OAuth client is NOT bundled. In Settings > Advanced, select your own valid Google Desktop OAuth Client JSON once, then Google Login in the PC app. Logging into X-Stage Karaoke Online separately does not sign in the Song Studio PC app. End-to-end sign-in/upload for the actual owner's Google account has not been tested. Never create another XStageWeb library to sidestep a missing Drive OAuth scope.
+          LIMITATION: The developer's default Desktop OAuth client is NOT bundled. In Settings > Advanced, select your own valid Google Desktop OAuth Client JSON once, then Google Login in the PC app. Logging into X-Stage Karaoke Online separately does not sign in the Song Studio PC app. End-to-end sign-in/upload for the actual owner's Google account has not been tested. Never create another XStageSong library to sidestep a missing Drive OAuth scope.
 
           Original core CI plus current Windows bundling, SHA256 and ZIP checks passed; this is deliberately labeled Core Preview, NOT all-functions-ready.
           NOTES
