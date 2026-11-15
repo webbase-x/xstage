@@ -166,3 +166,27 @@ body {
   #tab-created-json .xsk-pro-actions{display:grid;grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;scroll-behavior:auto!important}}
+
+
+/* Automatic, bounded MIDI -> .XSK pipeline; legacy song picker remains available
+   only for the separate Pro media-export modes. */
+#tab-create.xsk-auto-mode #create-step-navigation,
+#tab-create.xsk-auto-mode #create-stage-2,
+#tab-create.xsk-auto-mode #create-stage-3,
+#tab-create.xsk-auto-mode #create-stage-4,
+#tab-create.xsk-auto-mode .create-step-footer,
+#tab-create.xsk-auto-mode #legacy-source-scan-tools,
+#tab-create.xsk-auto-mode #verify-code-registry,
+#tab-create.xsk-auto-mode #code-registry-state {
+  display: none !important;
+}
+#tab-create.xsk-auto-mode #create-stage-1 { display: block !important; }
+#tab-create:not(.xsk-auto-mode) #xsk-auto-builder { display: none !important; }
+#xsk-auto-builder {
+  margin-top: 1.1rem;
+  padding: 1.1rem;
+  border: 1px solid var(--line, rgba(255,255,255,.16));
+  border-radius: 14px;
+  background: rgba(23, 38, 57, .42);
+}
+#xsk-stream-status { white-space: pre-line; }
