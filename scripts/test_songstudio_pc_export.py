@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -171,7 +172,7 @@ class PCExportTests(unittest.TestCase):
         db = Path(done["database"])
         self.assertTrue(db.is_file())
         self.assertEqual(done["databaseAction"], "created")
-        with sqlite3.connect(db) as connection:
+        with closing(sqlite3.connect(db)) as connection, connection:
             row = connection.execute(
                 "SELECT code,title,artist,first_lyric,source_catalog FROM songs"
             ).fetchone()
@@ -185,7 +186,7 @@ class PCExportTests(unittest.TestCase):
         again = pc_export.publish(self.source, str(self.destination), export)
         self.assertEqual(again["databaseAction"], "updated")
         self.assertTrue(list(db.parent.glob("songs-before-songstudio-*.sqlite3")))
-        with sqlite3.connect(db) as connection:
+        with closing(sqlite3.connect(db)) as connection, connection:
             row = connection.execute(
                 "SELECT COUNT(*),favorite,user_edited,title,artist FROM songs"
             ).fetchone()
@@ -196,12 +197,12 @@ class PCExportTests(unittest.TestCase):
         target = self.destination / "XStageSong" / "DB"
         target.mkdir(parents=True)
         db = target / "songs.sqlite3"
-        with sqlite3.connect(db) as connection:
+        with closing(sqlite3.connect(db)) as connection, connection:
             connection.execute("CREATE TABLE foreign_data (keep TEXT)")
             connection.execute("INSERT INTO foreign_data VALUES ('safe')")
         with self.assertRaisesRegex(ValueError, "ไม่ใช่ฐานเพลง Karaoke PC"):
             pc_export.publish(self.source, str(self.destination), export)
-        with sqlite3.connect(db) as connection:
+        with closing(sqlite3.connect(db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT keep FROM foreign_data").fetchone()[0], "safe")
 
     def test_shared_xstagesong_root_snapshots_lyrics_without_replacing(self):
