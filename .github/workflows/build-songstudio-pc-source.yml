@@ -9,6 +9,7 @@ on:
       - "studio/style.css"
       - "studio/entry.js"
       - "scripts/package-song-studio-pc.py"
+      - "scripts/test_songstudio_import_preview.py"
       - "scripts/test_songstudio_created_json.py"
       - "scripts/test_songstudio_pc.py"
       - "scripts/test_songstudio_pc_export.py"
@@ -46,8 +47,9 @@ jobs:
           python-version: "3.13"
       - name: Validate source and local API
         run: |
-          python -m py_compile songstudio-pc/engine.py songstudio-pc/code_registry.py songstudio-pc/created_json_manager.py songstudio-pc/song_index.py scripts/package-song-studio-pc.py
+          python -m py_compile songstudio-pc/engine.py songstudio-pc/code_registry.py songstudio-pc/created_json_manager.py songstudio-pc/import_preview.py songstudio-pc/song_index.py scripts/package-song-studio-pc.py
           node --check studio/app.js
+          python -m unittest discover -s scripts -p test_songstudio_import_preview.py -v
           python -m unittest discover -s scripts -p test_songstudio_created_json.py -v
           python -m unittest discover -s scripts -p test_songstudio_pc.py -v
           python -m unittest discover -s scripts -p test_songstudio_pc_export.py -v
