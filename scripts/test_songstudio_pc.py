@@ -27,11 +27,22 @@ class PcSourceTests(unittest.TestCase):
         self.dest.mkdir()
         engine.PREFS["source"] = str(self.source)
         engine.PREFS["workspace"] = str(self.dest)
+        # Existing tests explicitly cover Pro-compatible legacy output.
+        # Production validation still requires a verified signed license.
+        engine.PREFS["export_format"] = "xstage"
+        real_module = engine._module
+        def testing_module(filename, name):
+            if filename == "pro_license.py":
+                return SimpleNamespace(enabled=lambda *_: True)
+            return real_module(filename, name)
+        self.pro_patch = patch.object(engine, "_module", side_effect=testing_module)
+        self.pro_patch.start()
         engine.FILES.clear()
         engine.FILE_BY_ID.clear()
         engine.NOTES.clear()
 
     def tearDown(self):
+        self.pro_patch.stop()
         self.tmp.cleanup()
 
     def test_stageweb_flat_catalog_and_legacy_atomic_directory_migration(self):
