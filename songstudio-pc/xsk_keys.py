@@ -26,6 +26,18 @@ def _dpapi(data, decrypt=False):
         raise RuntimeError("กุญแจสำหรับ XSK รองรับ Windows DPAPI เท่านั้น")
     crypt = ctypes.windll.crypt32
     kernel = ctypes.windll.kernel32
+    crypt.CryptProtectData.argtypes = [
+        ctypes.POINTER(DATA_BLOB), wintypes.LPCWSTR, ctypes.POINTER(DATA_BLOB),
+        ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD,
+        ctypes.POINTER(DATA_BLOB)]
+    crypt.CryptProtectData.restype = wintypes.BOOL
+    crypt.CryptUnprotectData.argtypes = [
+        ctypes.POINTER(DATA_BLOB), ctypes.c_void_p, ctypes.POINTER(DATA_BLOB),
+        ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD,
+        ctypes.POINTER(DATA_BLOB)]
+    crypt.CryptUnprotectData.restype = wintypes.BOOL
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
     src, backing = _blob(data)
     result = DATA_BLOB()
     fn = crypt.CryptUnprotectData if decrypt else crypt.CryptProtectData
