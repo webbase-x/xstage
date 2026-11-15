@@ -46,6 +46,50 @@ class PcSourceTests(unittest.TestCase):
         self.tmp.cleanup()
 
 
+    def test_xsk_mid_json_pairing_deduplicates_midi_and_reuses_code_gap(self):
+        """MIDI bytes, not filenames or lyric metadata, determine duplicates."""
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: F401
+        original_module = engine._module
+        test_key = bytes(range(32))
+
+        def modules(filename, name):
+            if filename == "xsk_keys.py":
+                return SimpleNamespace(get_key=lambda *_: test_key)
+            return original_module(filename, name)
+
+        def make_pair(code, content):
+            midi = self.source / (code + ".mid")
+            midi.write_bytes(b"MThd" + content.ljust(40, b"0"))
+            lyric = self.source / (code + ".json")
+            lyric.write_text(json.dumps({
+                "songCode": code, "title": "เพลงทดสอบ", "artist": "ทดสอบ",
+                "lines": [{"text": "ทดสอบคำร้อง",
+                           "startTime": 1.0, "endTime": 2.0}],
+            }, ensure_ascii=False), encoding="utf-8")
+            return {"path": str(midi), "code": code,
+                    "title": "เพลงทดสอบ", "artist": "ทดสอบ"}
+
+        first = make_pair("00002", b"A" * 40)
+        repeated = make_pair("00009", b"A" * 40)
+        different = make_pair("00002", b"B" * 40)
+        root = self.dest / "XStageSong" / "MIDI" / "XSK"
+        with patch.object(engine, "_module", side_effect=modules):
+            first_result = engine.build_xsk([first], "original", {})
+            self.assertEqual(first_result["created"], 1)
+            self.assertTrue((root / "0" / "00002.xsk").is_file())
+            second_result = engine.build_xsk([repeated], "original", {})
+            self.assertEqual(second_result["skipped"], 1)
+            self.assertFalse((root / "0" / "00009.xsk").exists())
+            third_result = engine.build_xsk([different], "original", {})
+            self.assertEqual(third_result["created"], 1)
+            self.assertTrue((root / "0" / "00001.xsk").is_file())
+            self.assertTrue((root / "0" / "00002.xsk").is_file())
+            # Corrupt JSON must not trigger a fallback to embedded MIDI lyrics.
+            (self.source / "00002.json").write_text("{broken", encoding="utf-8")
+            failed = engine.build_xsk([different], "original", {})
+            self.assertEqual(failed["errors"], 1)
+            self.assertEqual(failed["created"], 0)
+
     def test_incremental_catalog_view_remembers_new_items_by_source(self):
         first = {"id": 11, "path": str(self.source / "old.mp3"),
                  "title": "เดิม", "artist": "", "code": "OLD11", "status": "ready"}
