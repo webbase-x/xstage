@@ -1,4 +1,4 @@
-# X-Stage Karaoke Windows PC — unified v1.0.76 (pending build)
+# X-Stage Karaoke PC — unified v1.0.76 (pending build)
 
 The Web app, Android TV/tablet source and Windows PC source now use **v1.0.76 / build 1076** as a shared release label, but each platform has independent installation artifacts. A version label alone is **not** proof that a Windows installer is published.
 
@@ -15,7 +15,7 @@ The source ZIP `X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip` in
 
 ---
 
-# X-Stage Karaoke — Windows PC (source import)
+# X-Stage Karaoke PC — Windows PC (source import)
 
 The Windows PC application is **separate** from the Android TV/tablet APK and the GitHub Pages web app. Keep all three in this existing repository `webbase-x/xstage`.
 

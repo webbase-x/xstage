@@ -1,4 +1,4 @@
-# X-Stage Karaoke v0.5.1 — ระบบเสียง SoundFont
+# X-Stage Karaoke PC v0.5.1 — ระบบเสียง SoundFont
 
 สถานะ: โค้ดพร้อมสำหรับทดสอบบน Windows; ชุด Source Preview ไม่มี EXE รุ่นใหม่และไม่มี SoundFont เชิงพาณิชย์
 
