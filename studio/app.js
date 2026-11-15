@@ -322,7 +322,16 @@
   async function refreshPhraseGroups(){
     if(!phraseReady)return;
     const seq=++phraseSeq;
-    $('lyric-group-results').textContent='กำลังจัดอันดับข้อความที่ใช้ซ้ำ…';
+    const phraseSearch=$('lyric-group-search').value.trim();
+    if(phrasePosition==='all'&&!phraseSearch){
+      phraseRows=[];
+      $('lyric-group-results').textContent='โหมดทุกบรรทัด: กรุณาพิมพ์วลีค้นหาเพื่อระบุบรรทัดที่จะแก้';
+      $('lyric-group-page-count').dataset.total='0';
+      $('lyric-group-page-count').textContent='ระบุวลีค้นหาก่อน';
+      phraseUpdateButtons();
+      return;
+    }
+    $('lyric-group-results').textContent='กำลังค้นหาวลีตามลำดับคำในบรรทัด…';
     const params=new URLSearchParams({
       position:phrasePosition,offset:String(phraseOffset),limit:'40',
       repeats:$('lyric-group-repeats').checked?'1':'0',
@@ -349,7 +358,8 @@
         const txt=document.createElement('span');txt.className='lyric-group-row-text';
         txt.textContent=group.text;
         const number=document.createElement('span');number.className='lyric-group-row-count';
-        number.textContent=fmtNum(group.count)+' เพลง'+
+        const unit=phrasePosition==='all'?' บรรทัด':' เพลง';
+        number.textContent=fmtNum(group.count)+unit+
           (group.libraryCount!==group.count?' / ทั้งกลุ่ม '+fmtNum(group.libraryCount):'');
         label.append(input,txt,number);panel.append(label);
       }
@@ -2762,9 +2772,15 @@
   for(const btn of document.querySelectorAll('[data-lyric-position]')){
     btn.addEventListener('click',()=>{
       if(busy)return;
-      phrasePosition=btn.dataset.lyricPosition;
+      const nextPosition=btn.dataset.lyricPosition;
+      if(nextPosition==="all" || phrasePosition==="all"){
+        // All-line groups are generated for the active exact phrase.
+        // Never retain stale checked groups after changing this mode.
+        phraseClearSelection();
+      }
+      phrasePosition=nextPosition;
+      if(phrasePosition==="all")$('lyric-group-repeats').checked=false;
       phraseOffset=0;
-      // Keep checked groups from the other line positions.
       if(phraseReady)void refreshPhraseGroups();
     });
   }
