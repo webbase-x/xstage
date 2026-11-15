@@ -61,7 +61,7 @@ class LegacyRecoveryR8Tests(unittest.TestCase):
         self.assertEqual(ProofRenderer.builds,before,'no repeat conversion for verified local proof')
         self.assertEqual(result['reused'],1)
         self.assertEqual([x for x in self.drive.uploads[len(previous_uploads):] if x.endswith('.m4a')],[])
-        root=self.drive.children('root','XStageWeb')[0]['id']
+        root=self.drive.children('root','XStageSong')[0]['id']
         pointer=self.drive.children(root,'current.json')[0]
         document=json.loads(self.drive.download(pointer['id']))
         catalog=json.loads(self.drive.download(document['catalogFileId']))
@@ -85,7 +85,7 @@ class LegacyRecoveryR8Tests(unittest.TestCase):
         self.assertEqual(result['uploaded_files'],0)
     def test_existing_legacy_database_is_upgraded_without_media_upload(self):
         original=self.sync()
-        root=self.drive.children('root','XStageWeb')[0]['id']
+        root=self.drive.children('root','XStageSong')[0]['id']
         old_pointer=self.drive.children(root,'current.json')[0]
         manifest=json.loads(self.drive.download(old_pointer['id']))
         old_database=self.drive.download(manifest['catalogFileId'])
