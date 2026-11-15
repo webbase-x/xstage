@@ -29,6 +29,9 @@ assert str(manifest["build"]) == str(engine.STATUS_BUILD), (
     "Ready manifest build does not match the bundled PC Engine")
 print("PASS: Ready ZIP manifest matches PC Engine version and build")
 assert (root / "online_publish.py").is_file(), "XStageSong online publisher missing from Ready ZIP"
+assert (root / "pc_sqlite_bridge.py").is_file(), "Native Karaoke PC SQLite export bridge missing"
+assert (root / "karaoke_library.py").is_file(), "Native Karaoke PC SongLibrary schema missing"
+
 assert (root / "code_registry.py").is_file(), "Two-source song-code registry missing from Ready ZIP"
 print("PASS: XStageSong Drive File-ID incremental publisher bundled")
 
