@@ -287,6 +287,9 @@ class PcSourceTests(unittest.TestCase):
         moved.mkdir()
         copied = moved / "998877.m4a"
         copied.write_bytes(audio.read_bytes())
+        # Dedup identity now includes the song's verified timed lyric companion.
+        copied.with_suffix(".lrc").write_bytes(
+            (self.source / "001234.lrc").read_bytes())
         renamed = {**original, "path": str(copied), "code": "998877"}
         third = engine.build_library([renamed], "original", {"audio_only": False})
         self.assertEqual((third["created"], third["skipped"]), (0, 1))
