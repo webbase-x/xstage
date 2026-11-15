@@ -1,3 +1,9 @@
+## New two-file song/lyrics import contract (supersedes older NCN import notes)
+
+Web, Android TV and Song Studio use **one song/media file + exactly one verified timed LRC or Lyrics JSON** matching the song code. Examples: `00001.mid + 00001.json` or `00001.mp3 + 00001.lrc`. The old `MID + LYR + CUR` three-file NCN upload is **discontinued**. Source files and already-published Drive catalog generations are not deleted or rewritten. A reviewed karaoke video containing lyrics in the picture remains a separate supported case.
+
+Older release notes below document past behavior; they are not current import instructions.
+
 ## X-Stage Karaoke Online v1.0.108 (Build 1108) — browser MIDI/NCN SoundFont and Song Studio Web PC-style workflow
 
 - Song Studio Web now uses the shared, tested MIDI/NCN parser, locally selected SF2/SF3 SoundFont preview, 16-channel mixer and resource preflight with PC-style four-step layout; can export unchanged NCN source and real Lyrics JSON or optional FFmpeg M4A.
