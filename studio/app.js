@@ -55,6 +55,7 @@
   let lastJobId = '', lastJobState = 'idle', refreshTimer = 0;
   // A finished build offers uploading once per job, never automatically.
   const promptedBuildUploadJobs = new Set();
+  let proEnabled = false;
   let busy = false, editingId = null, notificationTimer = null;
   let createStep = 1;
   const createStepLabels = [
@@ -475,6 +476,32 @@
       {acceptLabel:'ตรวจและย้อนคืน',cancelLabel:'ยกเลิก'});
     if(approved&&!busy)await run('lyric-groups-undo',{backupId:backup.id});
   }
+  function syncXskControls() {
+    const choice=$('create-output-kind');
+    if (!proEnabled && choice.value!=='xsk') choice.value='xsk';
+    for (const option of choice.options) option.disabled=!proEnabled&&option.value!=='xsk';
+    const legacy=proEnabled&&choice.value!=='xsk';
+    $('create-export-format').disabled=!legacy||busy;
+    $('create-export-format').value=legacy?choice.value:'xstage';
+    $('build-audio-button').hidden=!legacy;
+    $('build-button').textContent=legacy?'▶ สร้างไฟล์เพลง':'▶ สร้างเพลง XSK';
+    $('xsk-output-hint').textContent=legacy
+      ? 'โหมด Pro · ส่งออกแบบเดิมตามโครงสร้าง XStageSong'
+      : 'จัดเก็บ XSK ใน XStageSong/MIDI/XSK/ ตามอักขระแรกของรหัสเพลง';
+    $('xsk-edit-options').hidden=$('xsk-edit-choice').value!=='yes';
+    $('pro-license-status').textContent=proEnabled
+      ? 'เปิดใช้ X-Stage Song Studio PC Pro แล้ว'
+      : 'รุ่นทั่วไป · ส่งออก XSK เท่านั้น';
+  }
+  async function refreshProLicense() {
+    try {
+      const license=await api('/api/license/status');
+      proEnabled=!!license.pro;
+      syncXskControls();
+    } catch(e) {
+      proEnabled=false;syncXskControls();
+    }
+  }
   function setFields() {
     $('create-source').value = prefs.source || '';
     $('create-workspace').value = prefs.workspace || '';
@@ -490,7 +517,7 @@
     $('settings-oauth').value = prefs.oauth || '';
     $('create-preset').value = prefs.midi_preset || 'balanced';
     $('create-mode').value = prefs.mode || 'original';
-    $('create-export-format').value = prefs.export_format || 'xstage';
+    $('create-output-kind').value = proEnabled && ['xstage','m4a'].includes(prefs.export_format)\n      ? prefs.export_format : 'xsk';\n    syncXskControls();
     $('create-code-style').value = prefs.code_style || 'source';
     $('create-code-length').value = prefs.code_length || '6';
   }
@@ -586,7 +613,7 @@
       'settings-logout','google-login-header','update-button','verify-code-registry'];
     for (const name of buttons) $(name).disabled = busy;
     $('build-button').disabled = busy || selected.size === 0;
-    $('build-audio-button').disabled = busy || selected.size === 0;
+    $('build-audio-button').disabled = busy || selected.size === 0 || !proEnabled;\n    syncXskControls();
     $('preview-button').disabled = busy || livePreviewPending || (!previewSongId && selected.size !== 1);
     $('edit-button').disabled = busy || selected.size !== 1;
 
@@ -1868,7 +1895,7 @@
         buildFeedback('running', 'PC Engine รับคำสั่งสร้างเพลงแล้ว',
           'เลขงาน ' + response.id + ' · ' + fmtNum(response.total ?? options.ids?.length ?? 0) +
           ' เพลง · ' + (options.audio_only ? 'สร้าง M4A อย่างเดียว' :
-             options.export_format==='xstage' ? 'คัดลอก MIDI + Lyrics JSON' :
+             options.export_format==='xsk' ? 'สร้าง XSK เข้ารหัส' :\n             options.export_format==='xstage' ? 'ส่งออกแบบเดิม' :
              'สร้าง M4A + Lyrics JSON') +
           ' · กำลังติดตามสถานะ');
         message('รับคำสั่งสร้างเพลงแล้ว · ตรวจสถานะได้ในขั้นตอนที่ 4', false);
@@ -1892,24 +1919,23 @@
     try {
       buildFeedback('starting', 'กำลังตรวจสอบไฟล์ต้นฉบับและพื้นที่ว่าง…',
         'ยังไม่เริ่มสร้างไฟล์ · ตรวจสอบรายการที่เลือกอยู่');
-      await saveInputs(['create-source','create-soundfont','create-preset',
-         'create-mode','create-export-format','create-code-style','create-code-length']);
+      const chosenOutput=$('create-output-kind').value;\n      await saveInputs(['create-source','create-soundfont','create-preset',\n         'create-mode','create-code-style','create-code-length']);\n      await config({export_format:chosenOutput});
       const ids = selectedIDs();
       const estimate = await post('/api/estimate', {ids});
       if (!estimate.songs) throw new Error('ไม่พบเพลงที่เลือกในฐานข้อมูล กรุณาสแกนโฟลเดอร์ใหม่และเลือกเพลงอีกครั้ง');
       if (!estimate.enoughDisk) throw new Error('พื้นที่ว่างไม่เพียงพอ กรุณาเปลี่ยนโฟลเดอร์บันทึกหรือเพิ่มพื้นที่ว่าง');
       const formats = Object.entries(estimate.formats || {}).sort((a,b)=>b[1]-a[1])
         .map(([extension,count]) => (extension || 'ไม่มีนามสกุล').toUpperCase() + ' ' + fmtNum(count)).join(' · ');
-      if (estimate.unsupported >= estimate.songs) throw new Error(
+      if ($('create-output-kind').value==='xsk' && ![...selectedIDs()].some(id=>true)) throw new Error('ยังไม่ได้เลือกเพลง');\n      if (estimate.unsupported >= estimate.songs) throw new Error(
         'เพลงที่เลือกทั้งหมดเป็น NCN ซึ่ง PC Engine รุ่นนี้ยังแปลงไม่ได้ · กรุณาเลือกเพลงรูปแบบที่รองรับ');
       const warning = (formats ? '\nประเภทไฟล์: ' + formats : '') +
         (estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ โปรแกรมจะสร้างทีละเพลง ไม่คัดลอกต้นฉบับทั้งหมด' : '') +
         (estimate.spaceWarning ? '\n⚠ พื้นที่ว่างอาจไม่พอสำหรับสร้างทุกเพลง หากเต็มจะหยุดรายการที่เหลือและเก็บเพลงที่สำเร็จไว้' : '') +
         (estimate.unsupported ? '\n⚠ มี ' + fmtNum(estimate.unsupported) + ' ไฟล์ NCN ซึ่งยังไม่รองรับ และจะแจ้ง ERR รายเพลง' : '');
-      const exportFormat=audioOnly?'m4a':$('create-export-format').value;
+      const exportFormat=audioOnly?'m4a':$('create-output-kind').value;
       const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
         'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' :
-          exportFormat==='xstage' ? 'คัดลอก MIDI + Lyrics JSON (ไฟล์เสียงอื่นเป็น M4A)' :
+          exportFormat==='xsk' ? 'สร้าง XSK ที่เข้ารหัส' :\n          exportFormat==='xstage' ? 'ส่งออกเพลงแบบเดิม' :
           'แปลง M4A + Lyrics JSON') +
         '\nไฟล์ที่สร้างแล้วจะถูกตรวจซ้ำและข้ามโดยไม่สร้างใหม่' + warning;
       buildFeedback('starting', 'ตรวจสอบพร้อม · รอผู้ใช้ยืนยันสร้างเพลง',
@@ -1922,7 +1948,9 @@
       buildFeedback('starting', 'ยืนยันแล้ว · กำลังส่งงานให้ PC Engine…',
         'กำลังส่งรายการ ' + fmtNum(ids.length) + ' เพลง · รอเลขงานจาก Engine');
       await run('build', {ids, audio_only:audioOnly,
-         export_format:audioOnly?'m4a':$('create-export-format').value});
+         export_format:exportFormat, edit_head_tail:$('xsk-edit-choice').value,
+         head_find:$('xsk-head-find').value,head_replace:$('xsk-head-replace').value,
+         tail_find:$('xsk-tail-find').value,tail_replace:$('xsk-tail-replace').value});
     } catch (error) {
       buildFeedback('error', 'เริ่มสร้างเพลงไม่ได้', error.message);
       message(error.message);
@@ -2986,6 +3014,21 @@
     $('toggle-log').setAttribute('aria-expanded',String(!log.hidden));
     $('toggle-log').textContent=log.hidden?'รายละเอียด ▾':'ซ่อนรายละเอียด ▴';
   });
+  $('create-output-kind').addEventListener('change',()=>{
+    syncXskControls();
+    void config({export_format:$('create-output-kind').value}).catch(e=>message(e.message));
+  });
+  $('xsk-edit-choice').addEventListener('change',syncXskControls);
+  $('pro-license-activate').addEventListener('click',async()=>{
+    const entered=$('pro-license-key').value.trim();
+    if(!entered)return message('กรุณากรอก License Key Pro');
+    try{
+      await post('/api/license/activate',{key:entered});
+      $('pro-license-key').value='';
+      await refreshProLicense();
+      message('เปิดใช้ X-Stage Song Studio PC Pro สำเร็จ',false);
+    }catch(error){message('เปิดใช้ Pro ไม่สำเร็จ: '+error.message);}
+  });
   updateCreateWizard();
-  void initialize();
+  void initialize().then(()=>refreshProLicense());
 })();
