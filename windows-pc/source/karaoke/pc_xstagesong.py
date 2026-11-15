@@ -5,6 +5,7 @@ or contacting Google Drive. The existing Karaoke SQLite index remains the
 single source of search/queue records.
 """
 from __future__ import annotations
+from functools import lru_cache
 import json
 from pathlib import Path
 from .lyrics import Lyrics, LyricLine
@@ -105,6 +106,29 @@ def import_library(library, selected, *, cancelled=None):
     return count, 0, []
 
 
+@lru_cache(maxsize=8)
+def _lyrics_by_media(pointer_name, modified_ns, byte_count):
+    """Cache catalog-backed lyrics paths; timing corrections may use rev files."""
+    pointer = Path(pointer_name)
+    data = json.loads(pointer.read_text(encoding="utf-8-sig"))
+    if data.get("format") != FORMAT or data.get("schemaVersion") != 1:
+        raise ValueError("ฐานเนื้อร้อง Karaoke PC ไม่ถูกต้อง")
+    mapping = {}
+    for info in data.get("catalogFiles") or []:
+        name = str(info.get("path") or "")
+        if not name.startswith("catalog-pc-") or not name.endswith(".json") or "/" in name or "\\" in name:
+            raise ValueError("ไฟล์ Catalog เนื้อร้องไม่ปลอดภัย")
+        doc = json.loads((pointer.parent / name).read_text(encoding="utf-8-sig"))
+        if doc.get("format") != CATALOG or doc.get("schemaVersion") != 1:
+            raise ValueError("รูปแบบ Catalog เนื้อร้องไม่ถูกต้อง")
+        for row in doc.get("songs") or []:
+            audio = (row.get("audio") or {}).get("path")
+            lyrics = (row.get("lyrics") or {}).get("path")
+            if audio and lyrics:
+                mapping[audio.casefold()] = lyrics
+    return mapping
+
+
 def source_lyrics(media_path):
     """Prefer actual timed JSON. Never fabricate per-character timestamps."""
     path = Path(media_path)
@@ -118,7 +142,14 @@ def source_lyrics(media_path):
         relative = path.relative_to(audio)
     except ValueError:
         return None
-    candidate = root / "LYRICS" / relative.with_suffix(".json")
+    pointer = root / "LYRICS" / "current.json"
+    selected = None
+    if pointer.is_file():
+        stamp = pointer.stat()
+        index = _lyrics_by_media(str(pointer), stamp.st_mtime_ns, stamp.st_size)
+        selected = index.get(path.relative_to(root).as_posix().casefold())
+    candidate = (_inside(root, selected, "LYRICS") if selected else
+                 root / "LYRICS" / relative.with_suffix(".json"))
     if not candidate.is_file() or candidate.is_symlink():
         return None
     doc = json.loads(candidate.read_text(encoding="utf-8-sig"))
