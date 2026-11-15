@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.44-build344'
+$Version = 'v0.3.45-build345'
 if ($Version -match '^v(\d+\.\d+\.\d+)-build(\d+)$') {
     $AppVersion = $Matches[1]
     $AppBuild = [int]$Matches[2]
@@ -84,6 +84,7 @@ $map = @{
  'songstudio-pc/folder_upload.py' = 'folder_upload.py'
  'songstudio-pc/code_registry.py' = 'code_registry.py'
  'songstudio-pc/created_json_manager.py' = 'created_json_manager.py'
+  'songstudio-pc/created_xsk_export.py' = 'created_xsk_export.py'
  'songstudio-pc/import_preview.py' = 'import_preview.py'
  'songstudio-pc/xsk_package.py' = 'xsk_package.py'
  'songstudio-pc/xsk_keys.py' = 'xsk_keys.py'
@@ -105,6 +106,7 @@ $map = @{
  'studio/index.html' = 'studio/index.html'
  'studio/app.js' = 'studio/app.js'
  'studio/style.css' = 'studio/style.css'
+  'studio/pro-design.css' = 'studio/pro-design.css'
  'studio/entry.js' = 'studio/entry.js'
 }
 foreach ($item in $map.GetEnumerator()) { CopyFromRepo $item.Key $item.Value }
