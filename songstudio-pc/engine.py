@@ -2082,8 +2082,19 @@ def validate_build_request(data):
         raise ValueError("รหัสรายการเพลงไม่ถูกต้อง กรุณาสแกนและเลือกรายการใหม่")
     if not isinstance(data.get("audio_only", False), bool):
         raise ValueError("ประเภทคำสั่งสร้างเพลงไม่ถูกต้อง")
-    export_format = data.get("export_format", PREFS.get("export_format", "xsk"))\n    if export_format not in ("xsk", "xstage", "m4a"):
-        raise ValueError("รูปแบบส่งออกไม่รองรับ")\n    if (export_format != "xsk" or data.get("audio_only")) and not _module("pro_license.py", "xstage_pro_license").enabled(DATA):\n        raise ValueError("รูปแบบส่งออกนี้ต้องใช้สิทธิ์ X-Stage Song Studio PC Pro")\n    if data.get("edit_head_tail", "no") not in ("no", "yes"):\n        raise ValueError("ตัวเลือกแก้หัว–ท้ายไม่ถูกต้อง")\n    if data.get("edit_head_tail") == "yes":\n        if not any(data.get(k) for k in ("head_find", "tail_find")):\n            raise ValueError("เลือกแก้หัว–ท้ายแล้ว กรุณาระบุข้อความต้นทาง")\n        for k in ("head_find", "tail_find", "head_replace", "tail_replace"):\n            if not isinstance(data.get(k, ""), str) or len(data.get(k, "")) > 500:\n                raise ValueError("ข้อความหัว–ท้ายไม่ถูกต้อง")
+    export_format = data.get("export_format", PREFS.get("export_format", "xsk"))
+    if export_format not in ("xsk", "xstage", "m4a"):
+        raise ValueError("รูปแบบส่งออกไม่รองรับ")
+    if (export_format != "xsk" or data.get("audio_only")) and not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
+        raise ValueError("รูปแบบส่งออกนี้ต้องใช้สิทธิ์ X-Stage Song Studio PC Pro")
+    if data.get("edit_head_tail", "no") not in ("no", "yes"):
+        raise ValueError("ตัวเลือกแก้หัว–ท้ายไม่ถูกต้อง")
+    if data.get("edit_head_tail") == "yes":
+        if not any(data.get(k) for k in ("head_find", "tail_find")):
+            raise ValueError("เลือกแก้หัว–ท้ายแล้ว กรุณาระบุข้อความต้นทาง")
+        for k in ("head_find", "tail_find", "head_replace", "tail_replace"):
+            if not isinstance(data.get(k, ""), str) or len(data.get(k, "")) > 500:
+                raise ValueError("ข้อความหัว–ท้ายไม่ถูกต้อง")
     with LOCK:
         rows = [FILE_BY_ID.get(item) for item in ids]
     if any(row is None for row in rows):
@@ -2092,7 +2103,10 @@ def validate_build_request(data):
     formats = Counter(Path(row["path"]).suffix.lower() for row in rows)
     unsupported_count = sum(count for ext, count in formats.items() if ext in EXT_UNSUPPORTED)
     supported_count = len(rows) - unsupported_count
-    if export_format == "xsk":\n        supported_count = sum(1 for row in rows if Path(row["path"]).suffix.lower() in EXT_MIDI)\n        unsupported_count = len(rows) - supported_count\n    if supported_count == 0:
+    if export_format == "xsk":
+        supported_count = sum(1 for row in rows if Path(row["path"]).suffix.lower() in EXT_MIDI)
+        unsupported_count = len(rows) - supported_count
+    if supported_count == 0:
         raise ValueError(
             f"ไม่สามารถเริ่มสร้าง: เลือก {len(rows):,} เพลง แต่เป็น NCN ทั้งหมด "
             "ซึ่ง Song Studio PC Engine รุ่นนี้ยังแปลง NCN ไม่ได้ · "
