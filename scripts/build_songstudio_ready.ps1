@@ -249,14 +249,14 @@ if ((Get-Item $ModelFile).Length -lt 100MB) { throw 'AI ONNX file unexpectedly s
 CheckSHA $ModelFile $ModelHash
 Step 'Bundling pinned NumPy + ONNX Runtime CPU wheels on Windows build runner'
 # actions/setup-python supplies Python 3.13 plus pip on GitHub Windows runner.
-& python -m pip install --disable-pip-version-check --no-compile --only-binary=:all: --target $AiSite "numpy==2.2.6" "onnxruntime==1.23.2"
+& python -m pip install --disable-pip-version-check --no-compile --only-binary=:all: --target $AiSite "numpy==2.2.6" "onnxruntime==1.23.2" "cryptography==46.0.3"
 if ($LASTEXITCODE -ne 0) { throw 'Failed to install pinned Windows AI wheels in the bundle' }
 $Pth = Join-Path $PyDir 'python313._pth'
 if (!(Test-Path -LiteralPath $Pth)) { throw 'Embedded Python path configuration missing' }
 # Python's embeddable distribution ignores global site-packages and the system
 # registry. The bundled AI dependencies live only within this ZIP.
 Add-Content -LiteralPath $Pth -Value '..\ai-site' -Encoding ASCII
-& $py -c "import numpy,onnxruntime; print('OFFLINE_AI_READY',numpy.__version__,onnxruntime.__version__)"
+& $py -c "import numpy,onnxruntime,cryptography; print('OFFLINE_AI_READY',numpy.__version__,onnxruntime.__version__)"
 if ($LASTEXITCODE -ne 0) { throw 'Bundled Python cannot import local ONNX Runtime/NumPy' }
 Step 'All AI libraries and model included, no downloads required by user'
 
