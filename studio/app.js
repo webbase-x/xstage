@@ -84,6 +84,7 @@
   // Keep the owner's pasted words independent from Whisper's guessed text.
   const aiPastedLyrics = new Map();
   let pendingAiAlignment = null;
+  let aiDetailsDirty = false;
 
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
@@ -1233,7 +1234,7 @@
     let last = -1;
     for (const [index,raw] of $('ai-lyrics-editor').value.split(/\r?\n/).entries()) {
       const line = raw.trim();
-      if (!line || /^\[(ti|ar|al|by|offset):/i.test(line)) continue;
+      if (!line || /^\[[a-z][a-z0-9_-]{1,30}:[^\]]*\]$/i.test(line)) continue;
       const match = /^\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\](.+)$/.exec(line);
       if (!match || Number(match[2]) >= 60 || !match[4].trim()) {
         errors.push('บรรทัด ' + (index+1) + ' ไม่ใช่รูปแบบ LRC ที่ถูกต้อง');
@@ -1263,7 +1264,11 @@
     $('ai-lyrics-editor').disabled = !hasSong;
     $('ai-lyrics-insert-time').disabled = !hasSong || !aiAudio.src;
     $('ai-lyrics-download').disabled = !hasSong || !valid;
-    $('ai-lyrics-save').disabled = busy || !hasSong || !valid || !aiDraftReady;
+    $('ai-lyrics-save').disabled = busy || !hasSong || !valid;
+    for (const id of ['ai-lyrics-title','ai-lyrics-artist'])
+      $(id).disabled = !hasSong;
+    $('ai-lyrics-save-details').disabled = busy || !hasSong ||
+      !$('ai-lyrics-title').value.trim();
     $('ai-export-button').disabled = busy || !hasSong ||
       (!$('ai-export-lyrics').checked && !$('ai-export-instrumental').checked);
     $('ai-lyrics-paste').disabled = !hasSong;
@@ -1501,6 +1506,10 @@
         aiPastedLyrics.delete(song.id);
         if(pendingAiAlignment?.id===song.id)pendingAiAlignment=null;
         $('ai-lyrics-selected').textContent='ยังไม่ได้เลือกเพลง';
+        $('ai-lyrics-title').value='';
+        $('ai-lyrics-artist').value='';
+        $('ai-lyrics-source-status').textContent='นำเพลงออกจากรายการแล้ว';
+        aiDetailsDirty=false;
         $('ai-lyrics-editor').value='';
         $('ai-lyrics-paste').value='';
         $('ai-lyrics-align-review').textContent='นำเพลงออกจากรายการแล้ว';
@@ -1584,7 +1593,10 @@
     $('ai-lyrics-use-vocals').checked=false;
     $('ai-lyrics-vocals-status').textContent='กำลังตรวจไฟล์เสียงร้องที่แยกไว้…';
     const seq=++aiDraftSeq;
-    aiDraftReady=false;aiEngineReady=false;
+    aiDraftReady=false;aiEngineReady=false;aiDetailsDirty=false;
+    $('ai-lyrics-title').value=row.title||row.code||'';
+    $('ai-lyrics-artist').value=row.artist||'';
+    $('ai-lyrics-source-status').textContent='กำลังอ่านชื่อเพลง ผู้ร้อง และเนื้อร้องจากไฟล์ต้นฉบับ…';
     $('ai-lyrics-selected').textContent=(row.title||row.code)+
       ' · '+(row.artist||'ไม่ระบุศิลปิน')+' · '+(row.kind||'');
     $('ai-lyrics-editor').value='';
@@ -1609,19 +1621,56 @@
         aiSeparationAvailable?
         'ยังไม่มีเสียงแยก · กดสร้าง M4A เสียงร้องและดนตรีโดยไม่แก้ต้นฉบับ':
         'HTDemucs ไม่พร้อม · ตรวจแพ็กเกจ PC Ready และโมเดล AI';
-      $('ai-lyrics-editor').value=String(data.approvedLrc||data.draft?.rawLrc||'');
+      if(!aiDetailsDirty){
+        $('ai-lyrics-title').value=data.title||row.title||row.code||'';
+        $('ai-lyrics-artist').value=data.artist||'';
+      }
+      const originalTimed=String(data.sourceLrc||'');
+      const originalPlain=String(data.hasSavedPlainLyrics?
+        data.savedPlainLyrics:(data.sourcePlainLyrics||''));
+      $('ai-lyrics-editor').value=String(data.approvedLrc||originalTimed||data.draft?.rawLrc||'');
+      if(!aiPastedLyrics.has(row.id))$('ai-lyrics-paste').value=originalPlain;
+      const info=[];
+      info.push(data.metadataSource||'ไม่พบชื่อผู้ร้องในแท็ก · แก้ไขเองได้');
+      info.push(data.approvedLrc?'ใช้ LRC ที่บันทึกไว้แล้ว':
+        originalTimed?(data.lyricsSource||'พบคำร้องพร้อมเวลา'):
+        originalPlain?(data.lyricsSource||'พบคำร้องที่ไม่มีเวลา'):
+        data.hasDraft?'พบร่าง AI':'ไม่พบเนื้อร้องในต้นฉบับ · พิมพ์หรือใช้ AI ได้');
+      $('ai-lyrics-source-status').textContent=info.join(' · ');
       $('ai-lyrics-engine-state').textContent=aiEngineReady ?
         'Whisper AI พร้อมใช้งาน' : 'Whisper AI ไม่พร้อม';
       $('ai-lyrics-status').textContent=!aiEngineReady ?
         'AI ยังถอดคำร้องไม่ได้: '+(data.aiProblem||'กรุณาติดตั้ง PC Ready รุ่นเต็มให้ครบ'):
         data.approvedLrc ?
-        '✓ พบเนื้อร้องที่เคยตรวจบันทึกแล้ว · สามารถทดลองฟังอีกครั้ง':
+        '✓ พบเนื้อร้อง LRC ที่เคยบันทึกแล้ว · แก้ไขและทดลองฟังได้':
+        originalTimed ? '✓ อ่านเนื้อร้อง LRC ต้นฉบับพร้อมเวลาแล้ว · แก้ไขได้ทันที':
+        originalPlain ? '✓ อ่านเนื้อร้องต้นฉบับไม่มีเวลาแล้ว · แก้ไขและบันทึกได้':
         data.hasDraft ? 'พบร่างคำร้อง AI · โปรดฟังตรวจคำและเวลา':
-        'ยังไม่มีร่าง AI · ถ้าเพลงมีเสียงร้องให้กดถอดคำร้อง';
+        'ไม่พบเนื้อร้องต้นฉบับ · สามารถพิมพ์เองหรือให้ AI ถอดเสียง';
       aiValidateEditor();
     }catch(error){
-      if(seq===aiDraftSeq)$('ai-lyrics-status').textContent='อ่านร่างไม่สำเร็จ: '+error.message;
+      if(seq===aiDraftSeq)$('ai-lyrics-status').textContent='อ่านข้อมูลเพลงไม่สำเร็จ: '+error.message;
     }
+  }
+  async function aiSaveSourceDetails(){
+    if(!Number.isInteger(aiSongId)||busy)return;
+    const id=aiSongId;
+    const title=$('ai-lyrics-title').value.trim();
+    const artist=$('ai-lyrics-artist').value.trim();
+    const plainLyrics=$('ai-lyrics-paste').value;
+    if(!title)return message('กรุณาระบุชื่อเพลงก่อนบันทึก');
+    try{
+      const result=await post('/api/ai-lyrics-details',{id,title,artist,plainLyrics});
+      if(id!==aiSongId)return;
+      aiDetailsDirty=false;
+      aiPastedLyrics.delete(id);
+      const row=aiSongs.find(item=>item.id===id);
+      if(row){row.title=title;row.artist=artist;}
+      $('ai-lyrics-selected').textContent=title+' · '+(artist||'ไม่ระบุศิลปิน');
+      $('ai-lyrics-source-status').textContent='✓ บันทึกการแก้ไขลงฐานข้อมูลส่วนตัวแล้ว · ไฟล์ต้นฉบับไม่เปลี่ยน';
+      await aiRefreshSongList();
+      message(result.message||'บันทึกข้อมูลเพลงแล้ว',false);
+    }catch(error){message('บันทึกข้อมูลเพลงไม่สำเร็จ: '+error.message);}
   }
   async function aiExportSelected() {
     if (!Number.isInteger(aiSongId) || busy) return;
@@ -1731,8 +1780,8 @@
     setTimeout(()=>URL.revokeObjectURL(url),5000);
   }
   async function aiApproveLrc() {
-    if(!aiParseLrc().valid||!aiDraftReady)
-      return message('ต้องมีร่าง AI และรูปแบบ LRC ที่ถูกต้องก่อนบันทึก');
+    if(!aiParseLrc().valid)
+      return message('ต้องมีเนื้อร้อง LRC ที่มีเวลาถูกต้องก่อนบันทึก');
     if(!await confirmStudio(
       'ตรวจคำร้องและเวลาเทียบกับเสียงจริงแล้วใช่หรือไม่?\n'+
       'ยืนยันบันทึกลงข้อมูลเพลงส่วนตัว (ไม่แก้ไฟล์เสียงต้นฉบับ)',
@@ -2376,6 +2425,9 @@
   });
   $('lyric-group-apply').addEventListener('click',()=>{void phraseApply();});
   $('ai-lyrics-import').addEventListener('click',()=>{void aiImportAudio();});
+  for(const id of ['ai-lyrics-title','ai-lyrics-artist'])
+    $(id).addEventListener('input',()=>{aiDetailsDirty=true;aiUpdateButtons();});
+  $('ai-lyrics-save-details').addEventListener('click',()=>{void aiSaveSourceDetails();});
   $('ai-lyrics-separate').addEventListener('click',()=>{void aiSeparateVocals();});
   $('ai-lyrics-use-vocals').addEventListener('change',()=>{
     aiStopPlayback();
