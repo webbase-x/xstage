@@ -15,7 +15,8 @@
   const fonts = new Map();
   const midiCore = window.XStageStudioMidiCore;
   const midiRuntime = window.XStageBrowserMidi;
-  if (!midiCore || !midiRuntime) throw Error('Song Studio Web: MIDI/NCN modules are missing');
+  const id3Reader = window.XStageStudioId3;
+  if (!midiCore || !midiRuntime || !id3Reader) throw Error('Song Studio Web: MIDI/NCN/ID3 modules are missing');
   const encoder = new TextEncoder();
   const state = { active: null, previewURL: '', dest: null, ffmpeg: null, busy: false,
                   cancelled: false, currentIndex: 0, total: 0, currentFraction: 0,
@@ -211,8 +212,8 @@
       tdType.appendChild(sourcePicker);
     }
     const tdLyric = document.createElement('td');
-    tdLyric.textContent = e.conflicts?.size?'ชื่อชน':e.lyricsText||e.lrc?'มี LRC':
-      e.lyr&&e.cur?'มี NCN CUR':e.midi?'MIDI/KAR':'—';
+    tdLyric.textContent = e.conflicts?.size?'ชื่อชน':e.lrc||parseLrc(e.lyricsText||'').length?'มี LRC':
+      e.embeddedLyrics?'MP3 ID3 · ยังไม่มีเวลา':e.lyr&&e.cur?'มี NCN CUR':e.midi?'MIDI/KAR':'—';
     const tdSize = document.createElement('td');
     tdSize.textContent = readableBytes(e.audio?.size || e.midi?.size || 0);
     tr.append(tdSelect, tdTitle, tdType, tdLyric, tdSize);
@@ -271,6 +272,7 @@
       if (!entries.has(id)) entries.set(id, {
         id, name: stem, path, audio: null, midi: null, lrc: null, lyr:null, cur:null,
         lyricsText: null, editedLyrics:false, midiInfo:null, conflicts:new Set(),
+        id3Scanned:false,embeddedLyrics:'',id3Metadata:null,
         parts: new Map(), audioFiles: new Map(), midiFiles:new Map(),useMidi:false
       });
       const song = entries.get(id);
@@ -367,7 +369,22 @@
   }
   async function lyricsFor(song) {
     if (song.lyricsText !== null) return song.lyricsText;
-    song.lyricsText = song.lrc ? await song.lrc.text() : '';
+    if (song.lrc) {
+      song.lyricsText=await song.lrc.text();
+      return song.lyricsText;
+    }
+    if (song.audio && extOf(song.audio.name)==='mp3' && !song.id3Scanned) {
+      song.id3Scanned=true;
+      try {
+        const id3=await id3Reader.read(song.audio);
+        song.id3Metadata={title:id3.title,artist:id3.artist,tagVersion:id3.tagVersion};
+        song.embeddedLyrics=id3.lyrics||'';
+      } catch(error) {
+        song.id3Metadata={error:String(error.message||error)};
+        song.embeddedLyrics='';
+      }
+    }
+    song.lyricsText=song.embeddedLyrics||'';
     return song.lyricsText;
   }
   async function activate(id) {
@@ -430,7 +447,16 @@
       const text=await lyricsFor(song);
       if(state.activation!==activation)return;
       $('lyrics-text').value=text;
-      $('active-lyric').textContent='เนื้อร้องจะแสดงตามเวลาใน LRC';
+      const timed=parseLrc(text).length>0;
+      const id3=song.id3Metadata;
+      if(id3?.artist) $('active-kind').textContent+=' · ผู้ร้องในแท็ก MP3: '+id3.artist;
+      $('active-lyric').textContent = song.embeddedLyrics && !timed
+        ? 'พบเนื้อร้อง MP3 ID3 USLT · ยังไม่มีเวลา · ฟังแล้วเพิ่มเวลา LRC ก่อนสร้างคาราโอเกะ'
+        : timed?'พบเนื้อร้องพร้อมเวลา LRC · ทดลองฟังเพื่อแก้ให้ตรงเสียง'
+          : 'ไม่มีเนื้อร้องพร้อมเวลา · เพิ่ม LRC หรือเนื้อเพลงเพื่อจัดเวลา';
+      $('download-lyrics').textContent=timed?'ดาวน์โหลด LRC':'ดาวน์โหลด TXT (ยังไม่มีเวลา)';
+      $('download-lyrics').disabled=!text.trim();
+      if(id3?.error)notice('อ่าน ID3 ไม่สำเร็จ: '+id3.error+' · ยังทดลองฟัง MP3 ได้','error');
     }
   }
   function stamp(time) {
@@ -752,8 +778,12 @@
     if (lyrics.trim() && parseLrc(lyrics).length) assets.push({
       name: name + '.lrc', blob: new Blob([lyrics.replace(/\r?\n/g, '\r\n')], {type: 'text/plain;charset=utf-8'})
     });
-    else if (lyrics.trim())
-      log(song.name + ': ข้าม LRC เพราะไม่มีบรรทัดเนื้อร้องพร้อมเวลาที่ถูกต้อง', true);
+    else if (lyrics.trim()) {
+      // Preserve source text without inventing karaoke timestamps.
+      assets.push({name:name+'.txt',blob:new Blob([lyrics.replace(/\r?\n/g,'\r\n')],
+        {type:'text/plain;charset=utf-8'})});
+      log(song.name+': ยังไม่มีเวลาเนื้อร้องจริง · ส่งออก TXT แทน LRC (ไม่สร้างเวลาเทียม)',true);
+    }
     return assets;
   }
   async function reserveSongAssetNames(songName, assets, usedNames, exists) {
@@ -1004,24 +1034,35 @@
     el.focus(); el.setSelectionRange(index + tag.length, index + tag.length);
     entries.get(state.active).lyricsText = el.value;
     entries.get(state.active).editedLyrics=true;invalidateArchive();
+    $('download-lyrics').textContent='ดาวน์โหลด LRC';
+    $('download-lyrics').disabled=false;
   });
   $('lyrics-text').addEventListener('input',()=>{
     if(state.active){
       const song=entries.get(state.active);
       song.lyricsText=$('lyrics-text').value;song.editedLyrics=true;
       invalidateArchive();
+      $('download-lyrics').textContent=parseLrc(song.lyricsText).length
+        ?'ดาวน์โหลด LRC':'ดาวน์โหลด TXT (ยังไม่มีเวลา)';
+      $('download-lyrics').disabled=!song.lyricsText.trim();
     }
   });
   $('save-lyrics').addEventListener('click', () => {
     if (!state.active) return;
     entries.get(state.active).lyricsText = $('lyrics-text').value;
     invalidateArchive();
-    renderTable(); notice('บันทึกเนื้อร้องไว้ในหน้านี้แล้ว · กดสร้างเพลงหรือดาวน์โหลด LRC เพื่อเก็บในเครื่อง', 'good');
+    const timed=parseLrc($('lyrics-text').value).length>0;
+    $('download-lyrics').textContent=timed?'ดาวน์โหลด LRC':'ดาวน์โหลด TXT (ยังไม่มีเวลา)';
+    renderTable();notice(timed?
+      'บันทึกเนื้อร้องพร้อมเวลาแล้ว · ยังต้องตรวจความตรงกับเสียงจริง':
+      'บันทึกเนื้อร้องแบบไม่มีเวลา · ส่งออก TXT จนกว่าจะใส่เวลา LRC','good');
   });
   $('download-lyrics').addEventListener('click', () => {
     const song = entries.get(state.active);
     if (!song) return;
-    download(new Blob([$('lyrics-text').value], {type:'text/plain;charset=utf-8'}), safeName(song.name) + '.lrc');
+    const timed=parseLrc($('lyrics-text').value).length>0;
+    download(new Blob([$('lyrics-text').value], {type:'text/plain;charset=utf-8'}),
+      safeName(song.name)+(timed?'.lrc':'.txt'));
   });
   $('load-engine').addEventListener('click', async () => {
     if (state.busy) return;
