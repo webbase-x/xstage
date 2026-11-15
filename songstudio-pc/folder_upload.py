@@ -236,11 +236,10 @@ def report(folder, export=None, ncn=None):
 def upload(drive, folder, *, create_new_library=False, cancelled=None,
            progress=None, export=None, publisher=None, staging_root=None, validator=None,
            renderer=None, ncn=None, video_renderer=None):
-    """Publish supported ready audio+lyrics sets through the SAME online DB.
+    """Publish verified song+timed LRC/JSON pairs to the same private Drive DB.
 
-    The existing Karaoke Online schema supports audio+timed JSON. Do not put
-    unsupported VIDEO/NCN into the catalog and falsely claim playability.
-    Original source files are never modified.
+    Never accept the obsolete NCN .LYR/.CUR triple; preserve original song
+    bytes, media IDs and the owner's source files.
     """
     import json
     import shutil
@@ -303,12 +302,14 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             media = next((p for p, _ in row["files"]
                           if p.suffix.lower() in AUDIO or p.suffix.lower() in VIDEO
                           or p.suffix.lower() in MIDI), None)
-            lyric = next((p for p, _ in row["files"] if p.suffix.lower() == ".lrc"), None)
+            lyric = next((p for p, _ in row["files"] if p.suffix.lower() in (".lrc", ".json")), None)
             if media is None:
                 continue
-            source_id = digest(media)
-            if source_id in seen:
-                continue
+            # The same MIDI accompaniment can belong to different songs:
+            # deduplicate complete media+timed-lyrics PAIRS, not audio alone.
+            lyric_hash = digest(lyric) if lyric is not None else ""
+            source_id = hashlib.sha256((digest(media)+":"+lyric_hash).encode("ascii")).hexdigest()
+            if source_id in seen:continue
             seen.add(source_id)
             code = row["name"].strip()
             if not code or len(code) > 140:
@@ -321,20 +322,22 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                      else ".m4a"))
             lyrics_file = stage / "lyrics" / (source_id[:16] + ".json")
             lrc_file = lyrics_file.with_suffix(".lrc")
-            if is_midi:
-                if ncn is None:
-                    raise ValueError("ไม่มีตัวอ่านเนื้อร้อง NCN/MIDI ในแพ็กเกจ")
-                companions = {p.suffix.lower(): p for p, _ in row["files"]}
-                if ".lyr" in companions and ".cur" in companions:
-                    pair = {"midi": str(media), "lyrics": str(companions[".lyr"]),
-                            "cursor": str(companions[".cur"]), "code": code, "missing": []}
-                    document = ncn.ncn_document(pair)
-                else:
-                    document = ncn.kar_document(media, code)
-                raw_lrc = ncn.to_lrc(document["lines"]).encode("utf-8")
+            if lyric is None:
+                raise ValueError("ไม่มีเนื้อร้อง LRC/JSON คู่กับไฟล์เพลง")
+            if lyric.suffix.lower() == ".json":
+                document = _timed_json(lyric, code)
+                if document is None:
+                    raise ValueError("Lyrics JSON ยังไม่มีเวลาที่ตรวจแล้วหรือรหัสเพลงไม่ตรง")
+                # Staging .lrc is NOT uploaded; timestamps come only from
+                # validated JSON. No synthetic timing/extra online file.
+                cues = []
+                for line in document["lines"]:
+                    when = round(float(line["startTime"]) * 100)
+                    stamp = "[%02d:%02d.%02d]" % (
+                        when // 6000, when // 100 % 60, when % 100)
+                    cues.append(stamp + line["text"])
+                raw_lrc = ("\n".join(cues) + "\n").encode("utf-8")
             else:
-                if lyric is None:
-                    continue
                 raw_lrc = lyric.read_bytes()
                 document = export.lrc_to_json(lyric.read_text(encoding="utf-8-sig"), code)
             if not document.get("lines"):
@@ -356,12 +359,11 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             record = {
                 "webSongId": "import/" + source_id,
                 "code": code, "title": row["name"], "artist": "",
-                "sourceFormat": row["kind"],
+                "sourceFormat": ("SMF" if row["kind"] == "MIDI" else row["kind"]),
                 "audio": {"path": "audio/" + file.name},
                 "lyrics": {"path": "lyrics/" + lyrics_file.name}}
-            # NCN sources (LYR/CUR) remain on the local computer only.
-            # For Web/TV only the unmodified MIDI and timed Lyrics JSON
-            # are published; no extra source-type folders or companion files.
+            # Drive V4 publishes only the original song and verified Lyrics JSON.
+            # A temporary LRC is never included in the remote media catalog.
             if is_video and video_renderer is not None:
                 (stage / "video").mkdir(exist_ok=True)
                 video = stage / "video" / (source_id[:16] + ".mp4")
