@@ -135,7 +135,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 raise FileExistsError("มีชื่อไฟล์ผลลัพธ์อยู่แล้วแต่ยังไม่อยู่ใน Catalog")
             final_audio.parent.mkdir(parents=True, exist_ok=True)
             final_lyrics.parent.mkdir(parents=True, exist_ok=True)
-            temp_audio = final_audio.with_name(final_audio.name + ".partial")
+            temp_audio = final_audio.with_name("." + final_audio.stem + ".partial" + final_audio.suffix)
             temp_lyrics = final_lyrics.with_name(final_lyrics.name + ".partial")
             try:
                 if output_format == "original":
