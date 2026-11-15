@@ -44,8 +44,10 @@ def export_selected(root, selected, export, created_json, package, codes, key,
                 raise ValueError("ตรวจ XSK เดิมไม่ได้ หยุดเพื่อรักษาข้อมูล: " + file.name) from exc
             reserved.add(code)
             midi_hashes.add(digest)
+    # Existing catalog codes are SOURCE identities, not occupied XSK filenames.
+    # Reserve only verified XSK outputs so the first export preserves its code.
     allocator = codes.CodeAllocator(
-        export.existing_records(root), [], root, code_style="source", code_length=6)
+        [], [], root, code_style="source", code_length=6)
     for code in reserved:
         allocator.used.add(code.casefold())
         allocator._track_numeric(code)
