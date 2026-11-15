@@ -1,4 +1,4 @@
-"""Safeguards for selecting StageWeb or an independent LRC lyrics folder."""
+"""Safeguards for selecting XStageSong or an independent LRC lyrics folder."""
 import ast
 import json
 import tempfile
@@ -30,7 +30,7 @@ class SelectedLyricFolderTests(unittest.TestCase):
         class FakeExport:
             @staticmethod
             def songs_root(workspace):
-                return Path(workspace) / "StageWeb"
+                return Path(workspace) / "XStageSong"
         self.context["_song_export_module"] = lambda: FakeExport()
         class StubNativeNCN:
             @staticmethod
@@ -52,13 +52,13 @@ class SelectedLyricFolderTests(unittest.TestCase):
         return path
 
     def test_default_keeps_primary_workspace(self):
-        expected = self.workspace / "StageWeb"
+        expected = self.workspace / "XStageSong"
         self.assertEqual(self.resolve(), expected)
         self.assertFalse(expected.exists(), "Resolving default must not create a library")
 
     def test_choose_stageweb_or_parent_with_thai_path(self):
         parent = self.home / "เพลงสำรอง"
-        library = self.catalog(parent / "StageWeb")
+        library = self.catalog(parent / "XStageSong")
         expected = library.resolve()
         self.assertEqual(self.resolve(str(library)), expected)
         self.assertEqual(self.resolve(str(parent)), expected)
@@ -70,11 +70,11 @@ class SelectedLyricFolderTests(unittest.TestCase):
         (folder / "song.mp3").write_bytes(b"data")
         with self.assertRaisesRegex(ValueError, "Lyrics JSON|current.json"):
             self.resolve(str(folder))
-        self.assertFalse((folder / "StageWeb").exists())
+        self.assertFalse((folder / "XStageSong").exists())
         self.assertEqual((folder / "song.mp3").read_bytes(), b"data")
 
     def test_choose_stageweb_lyrics_subfolder(self):
-        library = self.catalog(self.home / "SongStudio" / "StageWeb")
+        library = self.catalog(self.home / "SongStudio" / "XStageSong")
         lyrics = library / "lyrics"
         lyrics.mkdir()
         self.assertEqual(self.resolve(str(lyrics)), library.resolve())
