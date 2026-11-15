@@ -3176,8 +3176,12 @@ class Handler(BaseHTTPRequestHandler):
                         offset=max(0, int(query.get("offset", ["0"])[0])),
                         limit=max(1, min(100, int(query.get("limit", ["50"])[0])))))
             elif path == "/api/songs/ids":
-                self._json({"ids": [x["id"] for x in visible_files(
-                    query.get("search", [""])[0], query.get("view", ["all"])[0])]})
+                found = visible_files(query.get("search", [""])[0],
+                                      query.get("view", ["all"])[0])
+                if query.get("midi_only", ["0"])[0] == "1":
+                    found = [row for row in found
+                             if Path(row["path"]).suffix.lower() in EXT_MIDI]
+                self._json({"ids": [row["id"] for row in found]})
             elif path == "/api/created-json/paths":
                 module = _module("created_json_manager.py", "xstage_created_json_manager")
                 self._json(module.list_created_paths(
@@ -3199,6 +3203,9 @@ class Handler(BaseHTTPRequestHandler):
                 if query.get("audio_only", ["0"])[0] == "1":
                     rows = [row for row in rows if
                             Path(row["path"]).suffix.lower() in EXT_AUDIO]
+                if query.get("midi_only", ["0"])[0] == "1":
+                    rows = [row for row in rows if
+                            Path(row["path"]).suffix.lower() in EXT_MIDI]
                 limit = max(1, min(500, int(query.get("limit", ["100"])[0])))
                 offset = max(0, int(query.get("offset", ["0"])[0]))
                 page_rows = rows[offset:offset + limit]
