@@ -104,7 +104,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(songs), pointer["songCount"])
         return songs
 
-    def test_completely_empty_google_drive_creates_first_xstageweb_and_db(self):
+    def test_completely_empty_google_drive_creates_first_xstagesong_and_db(self):
         # Users migrating to the new system can begin with an EMPTY Drive.
         # No legacy roots, pointers, catalog IDs or media exist.
         self.drive.items.clear()
@@ -150,7 +150,7 @@ class OnlinePublishTests(unittest.TestCase):
         names = {x["name"] for x in self.folder_files(self.remote_root())}
         self.assertTrue(names == {"AUDIO", "LYRICS"})
 
-    def test_new_drive_publishes_requested_xstageweb_taxonomy(self):
+    def test_new_drive_publishes_requested_xstagesong_taxonomy(self):
         # Explicit consent only. A genuinely empty Drive gets XStageSong.
         self.drive.items.clear()
         result = self.publisher.publish(
@@ -182,7 +182,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
         self.assertEqual(db["files"], 2)
 
-    def test_raw_xstageweb_folder_without_pointer_downloads_songs_zip_db(self):
+    def test_raw_xstagesong_folder_without_pointer_downloads_songs_zip_db(self):
         """User-managed AUDIO/MIDI/VIDEO/DB libraries need not have current.json."""
         self.drive.items.clear()
         root = self.drive.folder("root", "XStageSong")
@@ -221,7 +221,7 @@ class OnlinePublishTests(unittest.TestCase):
             self.assertIn("XStageSong/DB/library.json", bundle.namelist())
         self.assertEqual(len(self.drive.items), count)
 
-    def test_raw_xstageweb_db_without_database_gives_clear_error(self):
+    def test_raw_xstagesong_db_without_database_gives_clear_error(self):
         self.drive.items.clear()
         root = self.drive.folder("root", "XStageSong")
         audio = self.drive.folder(root, "AUDIO")
@@ -232,7 +232,7 @@ class OnlinePublishTests(unittest.TestCase):
         with self.assertRaisesRegex(roundtrip.drive.GoogleError, "ไม่พบไฟล์ DB"):
             self.drive.download_library(self.base / "missing-db", "db")
 
-    def test_raw_xstageweb_rejects_unsafe_names_without_writing(self):
+    def test_raw_xstagesong_rejects_unsafe_names_without_writing(self):
         self.drive.items.clear()
         root = self.drive.folder("root", "XStageSong")
         source = self.base / "file.mp3"
@@ -270,7 +270,7 @@ class OnlinePublishTests(unittest.TestCase):
         ident = urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1]
         return io.BytesIO(self.drive.items[ident]["body"])
 
-    def test_download_published_xstageweb_from_real_online_schema(self):
+    def test_download_published_xstagesong_from_real_online_schema(self):
         self.publisher.publish(self.root, [self.first])
         # An old empty PC backup tree should not shadow a valid online
         # library. Download never creates folders or changes Drive media.
