@@ -241,6 +241,21 @@ jobs:
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
           if ($LASTEXITCODE -ne 0) { throw "Ready runtime conversion tests FAILED" }
+      - name: Verify complete offline launch without installation or downloads
+        shell: powershell
+        run: |
+          $base = "dist/$env:SONGSTUDIO_READY_DIR"
+          $launcher = Join-Path $base "Start-Song-Studio-Ready.ps1"
+          if (!(Test-Path $launcher)) { throw "Missing bundled offline launcher" }
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $launcher -NoLaunch
+          if ($LASTEXITCODE -ne 0) { throw "Offline Ready launcher self-test FAILED" }
+          $cmd = Get-Content (Join-Path $base "Start-Song-Studio.cmd") -Raw
+          if ($cmd -match '(?i)Invoke-WebRequest|curl(?:\.exe)?|pip(?:\.exe)?|winget|Start-Song-Studio\.ps1') {
+            throw "Ready launcher contains a dependency installer or source-only startup path"
+          }
+          $manifest = Get-Content (Join-Path $base ".engine-ready-manifest.json") -Raw | ConvertFrom-Json
+          if ($manifest.bundle_type -ne "ready-offline") { throw "Not a complete Ready bundle" }
+          Write-Host "PASS: bundled Windows runtime starts offline in NoLaunch mode with no dependency installer"
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
