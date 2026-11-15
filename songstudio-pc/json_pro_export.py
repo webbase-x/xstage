@@ -36,8 +36,9 @@ def _document(row, code, export, ncn):
         # Same validator used by Online source preflight; no manufactured cue times.
         from math import isfinite
         lines = doc.get("lines") if isinstance(doc, dict) else None
-        if not isinstance(lines, list) or not lines:
-            raise ValueError("Lyrics JSON ไม่มีบรรทัดพร้อมเวลา")
+        if (not isinstance(doc, dict) or doc.get("schemaVersion") != 1
+                or not isinstance(lines, list) or not lines):
+            raise ValueError("Lyrics JSON ไม่มี schemaVersion 1 และบรรทัดพร้อมเวลา")
         last = -1
         for line in lines:
             value = line.get("startTime") if isinstance(line, dict) else None
