@@ -52,9 +52,9 @@ class PreflightFeedbackTests(unittest.TestCase):
                 progress=lambda message, done=0, total=0: notices.append((message, done, total))
             )
             self.assertEqual(result['total'], 1)
-            self.assertIn(('root','XStageWeb'), drive.lookups)
+            self.assertIn(('root','XStageSong'), drive.lookups)
             messages = [m for m,_,_ in notices]
-            self.assertTrue(any('กำลังค้นหาโฟลเดอร์ XStageWeb' in m for m in messages))
+            self.assertTrue(any('กำลังค้นหาโฟลเดอร์ XStageSong' in m for m in messages))
             self.assertTrue(any('กำลังอ่านดัชนีเพลง' in m for m in messages))
             self.assertTrue(any('กำลังตรวจไฟล์ต้นทาง' in m for m in messages))
             self.assertTrue(any('เพลงที่เข้าข่ายซิงก์ 1 เพลง' in m for m in messages))
@@ -81,7 +81,7 @@ class PreflightFeedbackTests(unittest.TestCase):
                                 renderer_factory=StubRenderer,
                                 progress=lambda m,*_:progress.append(m))
             self.assertTrue(midi.is_file())
-            self.assertIn('กำลังค้นหาโฟลเดอร์ XStageWeb บน Google Drive…',progress)
+            self.assertIn('กำลังค้นหาโฟลเดอร์ XStageSong บน Google Drive…',progress)
             self.assertFalse(d.uploads)
 
 
