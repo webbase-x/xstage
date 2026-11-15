@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="./web.css?v=1108">
   <script src="../browser-midi.js?v=1108" defer></script>
   <script src="./web-midi-core.js?v=1108" defer></script>
+  <script src="./web-id3.js?v=1108" defer></script>
   <script src="./web.js?v=1108" defer></script>
 </head>
 <body>
@@ -99,10 +100,10 @@
           <span class="footnote">MIDI/KAR/NCN ทดลองฟังได้หลังสังเคราะห์ด้วย SoundFont ที่เลือก · NCN ใช้ CUR/tempo จริง ไม่เดาเวลา · แก้ LRC ไม่เขียนทับ MIDI/LYR/CUR</span>
         </div>
         <div class="editor-card">
-          <label for="lyrics-text">เนื้อร้องรูปแบบ LRC</label>
+          <label for="lyrics-text">เนื้อร้อง LRC พร้อมเวลา หรือ ID3 USLT (ยังไม่มีเวลา)</label>
           <textarea id="lyrics-text" rows="10" placeholder="[00:12.50]บรรทัดแรกของเพลง&#10;[00:18.00]บรรทัดถัดไป" disabled spellcheck="false"></textarea>
           <div class="action-row"><button id="save-lyrics" class="btn secondary" type="button" disabled>บันทึกเนื้อร้องในหน้านี้</button><button id="download-lyrics" class="btn text" type="button" disabled>ดาวน์โหลด LRC</button></div>
-          <small class="footnote">บันทึก LRC ในหน้านี้ไม่เปลี่ยน MIDI/LYR/CUR เดิม · เมื่อตรวจแก้ LRC จะใช้เวลาระดับบรรทัด ส่วน NCN JSON ที่ยังไม่แก้ใช้ CUR รายอักษรจริง</small>
+          <small class="footnote">MP3 ที่มี ID3 USLT จะแสดงเนื้อร้องเดิมโดยไม่เดาเวลา หากยังไม่มีเวลาให้ส่งออก TXT · บันทึก LRC ในหน้านี้ไม่เปลี่ยน MIDI/LYR/CUR เดิม · เมื่อตรวจแก้ LRC จะใช้เวลาระดับบรรทัด ส่วน NCN JSON ที่ยังไม่แก้ใช้ CUR รายอักษรจริง</small>
         </div>
       </div>
     </section>
