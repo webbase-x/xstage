@@ -183,7 +183,7 @@ class CodeAllocator:
         preferred = str(preferred or "").strip().upper()
         # Preserve source code only when it follows the selected length/charset
         # and does not collide with a local or remote catalog.
-        if len(preferred) == self.code_length and preferred not in self.used:
+        if len(preferred) == self.code_length and preferred.casefold() not in self.used:
             valid = (preferred.isascii() and (
                 preferred.isdigit() if self.code_style == "numeric"
                 else preferred.isalpha() if self.code_style == "letters"
@@ -192,7 +192,9 @@ class CodeAllocator:
                 self.used.add(preferred.casefold())
                 self._track_numeric(preferred)
                 return preferred
-        while self.config_next < 10 ** self.code_length if self.code_style == "numeric" else self.config_next < (26 if self.code_style == "letters" else 36) ** self.code_length:
+        radix = 10 if self.code_style == "numeric" else 26 if self.code_style == "letters" else 36
+        capacity = radix ** self.code_length
+        while self.config_next < capacity:
             code = self._configured_code(self.config_next)
             self.config_next += 1
             if code.casefold() not in self.used:
