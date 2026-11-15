@@ -68,6 +68,10 @@ for(const handler of ['ai-lyrics-import','ai-lyrics-start','ai-lyrics-play',
   assert.ok(js.includes("$('"+handler+"')"),'Missing event/UI binding for '+handler);
 
 assert.ok(js.includes("run('ai-align'"),'Missing AI alignment job handler');
+assert.ok(js.includes("String(data.artist||'').trim()||'X-Stage Song Studio'"),
+  'AI Lyrics must default blank file artist metadata without replacing real names');
+assert.ok(js.includes("const artist=$('ai-lyrics-artist').value.trim()||'X-Stage Song Studio'"),
+  'Saving an empty editable artist field must preserve the default performer');
 assert.ok(js.includes("previewAudio.addEventListener('playing', startKaraokeAnimation)"),
   'Karaoke lyric animation must recover after streaming resumes');
 assert.ok(js.includes("previewAudio.addEventListener('timeupdate',()=>{"),
