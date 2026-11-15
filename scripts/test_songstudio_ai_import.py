@@ -256,7 +256,7 @@ class IndependentAIImportTests(unittest.TestCase):
         with patch.object(engine.AI_LYRICS, "load_draft", return_value=draft):
             found = engine.ai_lyrics_draft(song["id"])
             self.assertTrue(found["hasDraft"])
-            self.assertEqual(found["approvedLrc"], "")
+            self.assertEqual(found["approvedLrc"], "[00:01.00]เนื้อร้อง")
             with self.assertRaisesRegex(ValueError, "รูปแบบ LRC"):
                 engine.approve_ai_lyrics(song["id"], "ไม่มีเวลา")
             with patch.object(engine, "NOTES_FILE", self.root / "song-metadata.json"):
@@ -269,7 +269,7 @@ class IndependentAIImportTests(unittest.TestCase):
     def test_selecting_audio_prefills_title_artist_and_timed_sidecar(self):
         source_before=self.one.read_bytes()
         self.one.with_suffix(".lrc").write_text(
-            "[ti:ชื่อเพลงในไฟล์]\\n[ar:ผู้ร้องในไฟล์]\\n[00:01.00]คำร้องเดิม\\n"
+            "[ti:ชื่อเพลงในไฟล์]\n[ar:ผู้ร้องในไฟล์]\n[00:01.00]คำร้องเดิม\n"
             "[00:03.25]ท่อนสอง", encoding="utf-8")
         with patch.object(engine, "ffmpeg_binary", return_value=None):
             row=engine.import_ai_audio(str(self.one))["song"]
@@ -302,7 +302,7 @@ class IndependentAIImportTests(unittest.TestCase):
         probe.write_text("fake", encoding="utf-8")
         meta={"format":{"tags":{
             "title":"ชื่อเพลงจากแท็ก", "artist":"ผู้ร้องจากแท็ก",
-            "lyrics":"เนื้อร้องบรรทัดแรก\\nเนื้อร้องบรรทัดสอง"}}}
+            "lyrics":"เนื้อร้องบรรทัดแรก\nเนื้อร้องบรรทัดสอง"}}}
         response=SimpleNamespace(returncode=0, stdout=json.dumps(
             meta,ensure_ascii=False).encode("utf-8"))
         with patch.object(engine,"ffmpeg_binary",return_value=str(self.root/"ffmpeg")), \
@@ -312,7 +312,7 @@ class IndependentAIImportTests(unittest.TestCase):
                 data=engine.ai_lyrics_draft(row["id"])
         self.assertEqual(row["title"], "ชื่อเพลงจากแท็ก")
         self.assertEqual(row["artist"], "ผู้ร้องจากแท็ก")
-        self.assertEqual(data["sourcePlainLyrics"], "เนื้อร้องบรรทัดแรก\\nเนื้อร้องบรรทัดสอง")
+        self.assertEqual(data["sourcePlainLyrics"], "เนื้อร้องบรรทัดแรก\nเนื้อร้องบรรทัดสอง")
         self.assertEqual(data["sourceLrc"], "")
         self.assertEqual(data["lyricsSource"], "แท็กเนื้อร้องในไฟล์เสียง")
 
