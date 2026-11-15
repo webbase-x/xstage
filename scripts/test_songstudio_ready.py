@@ -28,9 +28,9 @@ assert manifest["version"] == engine.STATUS_VERSION, (
 assert str(manifest["build"]) == str(engine.STATUS_BUILD), (
     "Ready manifest build does not match the bundled PC Engine")
 print("PASS: Ready ZIP manifest matches PC Engine version and build")
-assert (root / "online_publish.py").is_file(), "XStageWeb online publisher missing from Ready ZIP"
+assert (root / "online_publish.py").is_file(), "XStageSong online publisher missing from Ready ZIP"
 assert (root / "code_registry.py").is_file(), "Two-source song-code registry missing from Ready ZIP"
-print("PASS: XStageWeb Drive File-ID incremental publisher bundled")
+print("PASS: XStageSong Drive File-ID incremental publisher bundled")
 
 assert engine.ffmpeg_binary() is not None, "FFmpeg is missing"
 assert engine.fluidsynth_binary() is not None, "FluidSynth is missing"
@@ -237,7 +237,7 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
                   "code": "102030", "artist": "Test"}
     audio_only = engine.build_library([source_row], "original", {"audio_only": True})
     assert (audio_only["created"], audio_only["lyricsCount"]) == (1, 0)
-    destination = temp / "production" / "StageWeb"
+    destination = temp / "production" / "XStageSong"
     audio_files = list((destination / "audio").rglob("*.m4a"))
     assert len(audio_files) == 1
     # A source WAV has no built-in words. Supply REAL timed LRC before
@@ -313,7 +313,7 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
         assert first_http["result"]["created"] == 1 and first_http["result"]["m4aCount"] == 1
         second_http = do_real_pc_build(False)
         assert second_http["result"]["created"] == 0 and second_http["result"]["lyricsCount"] == 1
-        output_dir = temp / "browser_pc_real_jobs" / "StageWeb"
+        output_dir = temp / "browser_pc_real_jobs" / "XStageSong"
         assert len(list((output_dir / "audio").rglob("*.m4a"))) == 1
         assert len(list((output_dir / "lyrics").rglob("*.json"))) == 1
         assert (output_dir / "current.json").is_file()
@@ -358,7 +358,7 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
                 final=Path(result["path"])
                 assert final.is_file() and final.suffix==".m4a"
                 assert final.is_relative_to(
-                    temp/"browser_pc_real_jobs"/"StageWeb"/"audio")
+                    temp/"browser_pc_real_jobs"/"XStageSong"/"audio")
                 assert result["song"]["id"] in engine.AI_IMPORTED
                 assert len(list((output_dir/"audio").rglob("*.m4a")))==2
                 subprocess.run([engine.ffmpeg_binary(),"-hide_banner",
