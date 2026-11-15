@@ -2378,6 +2378,8 @@
                       'created-json-select','created-json-clear','created-json-prev','created-json-next']) {
       $(id).disabled = value;
     }
+    $('created-json-prev').disabled = value || createdJsonOffset <= 0;
+    $('created-json-next').disabled = value || createdJsonOffset + createdJsonLimit >= createdJsonTotal;
     $('created-json-undo').disabled = value || !createdJsonLastBackup;
   }
   function createdJsonRender() {
