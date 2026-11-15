@@ -91,7 +91,7 @@ def _records(root, export):
     return result
 
 
-def list_created(root, export, *, search="", offset=0, limit=100):
+def list_created(root, export, *, search="", offset=0, limit=100, midi_only=False):
     """Paginate catalog metadata first; inspect ONLY the displayed JSON page.
 
     A workspace can contain 100,000 songs; opening all JSON documents for
@@ -101,6 +101,8 @@ def list_created(root, export, *, search="", offset=0, limit=100):
     needle = str(search).casefold().strip()
     matched = []
     for key, (path, record) in rows.items():
+        if midi_only and Path((record.get("audio") or {}).get("path") or "").suffix.casefold() not in (".mid", ".midi", ".kar"):
+            continue
         code = str(record.get("code") or "")
         title = str(record.get("title") or "")
         artist = str(record.get("artist") or "")
