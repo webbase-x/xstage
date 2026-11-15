@@ -917,7 +917,7 @@ def undo(backup_root, root, operation):
             "restoredSongs": data["songs"], "backupId": operation}
 
 
-# Raw-folder mode: edit timed .lrc lyric text in place (without requiring StageWeb).
+# Raw-folder mode: edit timed .lrc lyric text in place (without requiring XStageSong).
 # Never touch MIDI/audio files. The existing grouping, planning, backup and
 # undo contracts also apply to this folder mode.
 def _decode_lrc_bytes(payload):
@@ -1026,7 +1026,7 @@ def scan_lrc_folder(root, *, cancelled=None, on_progress=None):
                 on_progress(f"อ่าน LRC {inspected:,} ไฟล์ · ตรวจใช้ได้ {included:,}", inspected)
     if not inspected:
         raise ValueError(
-            "โฟลเดอร์นี้ไม่พบไฟล์ .lrc · เลือกโฟลเดอร์เพลงที่มี LRC หรือคลัง StageWeb "
+            "โฟลเดอร์นี้ไม่พบไฟล์ .lrc · เลือกโฟลเดอร์เพลงที่มี LRC หรือคลัง XStageSong "
             "· ไฟล์ MIDI/KAR/NCN ที่ไม่มี LRC ยังไม่รองรับการแทนที่ข้อความโดยตรง")
     if not included:
         raise ValueError(
