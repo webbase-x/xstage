@@ -72,6 +72,8 @@ PREVIEWS = {}
 LIVE_TICKETS = {}
 LIVE_SESSIONS = {}
 LIVE_LIMIT = threading.BoundedSemaphore(2)
+IMPORT_PREVIEW = {"kind": "", "folder": "", "items": []}
+
 PREVIEW_FOLDER = Path(tempfile.mkdtemp(prefix="xstage-song-preview-"))
 ALLOWED_ORIGIN = "https://webbase-x.github.io"
 
@@ -2804,6 +2806,19 @@ class Handler(BaseHTTPRequestHandler):
                     "Google Drive signed in": google["connected"],
                     "AI separation": ai_available(),
                     "AI lyrics transcription": AI_LYRICS.available(RUNTIME)})
+            elif path == "/api/import-preview/list":
+                kind = query.get("kind", [""])[0]
+                with LOCK:
+                    snapshot = dict(IMPORT_PREVIEW)
+                selected_folder = PREFS.get("upload_folder", "") if kind == "online" else PREFS.get("workspace", "")
+                if kind != snapshot["kind"] or selected_folder != snapshot["folder"]:
+                    self._json({"total": 0, "rows": [], "needsScan": True})
+                else:
+                    module = _module("import_preview.py", "xstage_import_preview")
+                    self._json(module.page(
+                        snapshot["items"], search=query.get("search", [""])[0],
+                        offset=max(0, int(query.get("offset", ["0"])[0])),
+                        limit=max(1, min(100, int(query.get("limit", ["50"])[0])))))
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(query.get("search", [""])[0])]})
             elif path == "/api/created-json":
@@ -3038,6 +3053,64 @@ class Handler(BaseHTTPRequestHandler):
                     _song_export_module().songs_root(PREFS["workspace"]),
                     _song_export_module(), payload.get("path"),
                     payload.get("backup"), payload.get("sha256")))
+            elif path == "/api/import-preview/scan":
+                if JOB["state"] == "running":
+                    raise ValueError("ไม่สามารถสแกนพรีวิวขณะกำลังนำเข้าหรือสร้างเพลง")
+                kind = payload.get("kind")
+                if kind not in ("online", "pc"):
+                    raise ValueError("เมนูพรีวิวไม่ถูกต้อง")
+                folder = PREFS.get("upload_folder", "") if kind == "online" else PREFS.get("workspace", "")
+                module = _module("import_preview.py", "xstage_import_preview")
+                items = module.scan(kind, folder, PREFS["workspace"],
+                                    _song_export_module(), FOLDER_UPLOAD, NCN)
+                with LOCK:
+                    IMPORT_PREVIEW.update(kind=kind, folder=folder, items=items)
+                self._json(module.page(items))
+            elif path == "/api/import-preview/lyrics":
+                kind, selected = payload.get("kind"), payload.get("id")
+                with LOCK:
+                    snapshot = dict(IMPORT_PREVIEW)
+                folder = PREFS.get("upload_folder", "") if kind == "online" else PREFS.get("workspace", "")
+                if (kind != snapshot["kind"] or folder != snapshot["folder"]
+                        or type(selected) is not int or not 0 <= selected < len(snapshot["items"])):
+                    raise ValueError("รายการพรีวิวหมดอายุ กรุณาสแกนใหม่")
+                module = _module("import_preview.py", "xstage_import_preview")
+                self._json(module.lyrics(snapshot["items"][selected], _song_export_module(), NCN))
+            elif path == "/api/import-preview/play":
+                kind, selected = payload.get("kind"), payload.get("id")
+                with LOCK:
+                    snapshot = dict(IMPORT_PREVIEW)
+                folder = PREFS.get("upload_folder", "") if kind == "online" else PREFS.get("workspace", "")
+                if (kind != snapshot["kind"] or folder != snapshot["folder"]
+                        or type(selected) is not int or not 0 <= selected < len(snapshot["items"])):
+                    raise ValueError("รายการพรีวิวหมดอายุ กรุณาสแกนใหม่")
+                if JOB["state"] == "running":
+                    raise ValueError("มีงานกำลังประมวลผล กรุณาทดลองฟังเมื่อเสร็จ")
+                item = snapshot["items"][selected]
+                source = item["audio"]
+                if not source.is_file() or source.is_symlink():
+                    raise ValueError("ไฟล์เสียงต้นฉบับไม่พร้อมใช้งาน")
+                midi = source.suffix.lower() in EXT_MIDI
+                if not midi and not ffmpeg_binary():
+                    raise ValueError("FFmpeg ไม่พร้อมสำหรับทดลองฟังไฟล์เสียง")
+                soundfont = PREFS.get("soundfont") or str(DEFAULT_SOUNDFONT)
+                if midi and (not Path(soundfont).is_file() or not ffmpeg_binary()):
+                    raise ValueError("ทดลองฟัง MIDI ต้องมี SoundFont และ FFmpeg")
+                live = _module("live_preview.py", "xstage_import_live")
+                session = secrets.token_urlsafe(20)
+                ticket = secrets.token_urlsafe(32)
+                now = time.monotonic()
+                controls = live.LiveControls(.85, .8, soundfont if midi else None)
+                with LOCK:
+                    LIVE_SESSIONS[session] = {"started": False, "controls": controls,
+                                              "expires": now + 120}
+                    LIVE_TICKETS[ticket] = {
+                        "expires": now + 90, "session": session,
+                        "audio": None if midi else source,
+                        "midi": source if midi else None,
+                        "soundfont": soundfont if midi else None}
+                self._json({"ticket": ticket, "session": session,
+                            "format": source.suffix.lstrip(".").upper()})
             elif path == "/api/lyric-groups-plan":
                 with LOCK:
                     snapshot = LYRIC_TEXT_INDEX
