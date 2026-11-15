@@ -82,7 +82,9 @@
   let aiMicSaving=false,aiMicPending=false;
   let phraseReady=false,phrasePosition='first',phraseOffset=0,phraseRows=[];
   let phraseSeq=0,phraseSearchTimer=0,phraseBackup=null;
+  const MAX_SELECTED_LYRIC_GROUPS=1000;
   const phraseSelected=new Map();
+  let phraseSelectionTimer=0;
   let phrasePlan=null,phraseSelectionSeq=0;
   // Keep the owner's pasted words independent from Whisper's guessed text.
   const aiPastedLyrics = new Map();
@@ -270,7 +272,7 @@
     $('lyric-group-select-page').disabled=!allow||phraseRows.length===0;
     $('lyric-group-clear').disabled=busy||phraseSelected.size===0;
     $('lyric-group-selected-count').textContent=
-      'เลือก '+fmtNum(phraseSelected.size)+' กลุ่ม';
+      'เลือก '+fmtNum(phraseSelected.size)+' / '+fmtNum(MAX_SELECTED_LYRIC_GROUPS)+' กลุ่ม';
     const total=Number($('lyric-group-page-count').dataset.total||0);
     $('lyric-group-prev').disabled=!allow||phraseOffset===0;
     $('lyric-group-next').disabled=!allow||phraseOffset+40>=total;
@@ -288,6 +290,7 @@
     phraseSelected.clear();
     phrasePlan=null;
     ++phraseSelectionSeq;
+    clearTimeout(phraseSelectionTimer);
     $('lyric-group-selection').textContent='ยังไม่ได้เลือกกลุ่มข้อความ';
     $('lyric-group-examples').replaceChildren();
     // Keep the replacement text so the operator can reuse the same intro
@@ -402,9 +405,9 @@
           fmtNum(group.count)+' เพลง'+(examples?' · ตัวอย่าง '+examples:'');
         panel.append(summary);
       }
-      if(data.length>20){
+      if(phraseSelected.size>data.length){
         const more=document.createElement('div');more.className='lyric-group-example';
-        more.textContent='และอีก '+fmtNum(data.length-20)+' กลุ่มที่เลือก';
+        more.textContent='และอีก '+fmtNum(phraseSelected.size-data.length)+' กลุ่มที่เลือก';
         panel.append(more);
       }
       $('lyric-group-preview-status').textContent=
@@ -418,17 +421,30 @@
     }
     phraseUpdateButtons();
   }
+  function schedulePhraseSelectionPreview(){
+    clearTimeout(phraseSelectionTimer);
+    // Invalidate a slow earlier response immediately; plan once after
+    // a burst of checkbox clicks to keep large catalogs responsive.
+    ++phraseSelectionSeq;
+    phraseSelectionTimer=setTimeout(()=>{void phraseRefreshSelection();},350);
+  }
   function phraseToggleGroup(id,selected){
     const row=phraseRows.find(x=>x.id===id);
     if(!row||busy)return;
-    if(selected)phraseSelected.set(row.id,row);
-    else phraseSelected.delete(id);
+    if(selected){
+      if(!phraseSelected.has(row.id)&&phraseSelected.size>=MAX_SELECTED_LYRIC_GROUPS){
+        const checkbox=[...$('lyric-group-results').querySelectorAll('input[data-lyric-group]')].find(x=>x.dataset.lyricGroup===id);
+        if(checkbox)checkbox.checked=false;
+        return message('เลือกได้สูงสุด '+fmtNum(MAX_SELECTED_LYRIC_GROUPS)+' กลุ่มต่องาน · กดแทนที่เพื่อบันทึกชุดนี้ แล้วเลือกกลุ่มที่เหลือต่อ');
+      }
+      phraseSelected.set(row.id,row);
+    }else phraseSelected.delete(id);
     for(const label of $('lyric-group-results').querySelectorAll('.lyric-group-row')){
       const input=label.querySelector('[data-lyric-group]');
       if(input)label.classList.toggle('active',phraseSelected.has(input.dataset.lyricGroup));
     }
     phraseUpdateButtons();
-    void phraseRefreshSelection();
+    schedulePhraseSelectionPreview();
   }
   async function phraseApply(){
     if(busy||!phraseReady||phraseSelected.size===0)return;
@@ -2768,10 +2784,18 @@
   });
   $('lyric-group-select-page').addEventListener('click',()=>{
     if(busy||!phraseReady)return;
-    for(const row of phraseRows)phraseSelected.set(row.id,row);
+    const slots=Math.max(0,MAX_SELECTED_LYRIC_GROUPS-phraseSelected.size);
+    let added=0;
+    for(const row of phraseRows){
+      if(phraseSelected.has(row.id))continue;
+      if(added>=slots)break;
+      phraseSelected.set(row.id,row);added++;
+    }
     for(const check of $('lyric-group-results').querySelectorAll('input[data-lyric-group]'))
-      check.checked=true;
-    phraseUpdateButtons();void phraseRefreshSelection();
+      check.checked=phraseSelected.has(check.dataset.lyricGroup);
+    if(phraseRows.some(row=>!phraseSelected.has(row.id)))
+      message('เลือกครบ '+fmtNum(MAX_SELECTED_LYRIC_GROUPS)+' กลุ่มแล้ว · บันทึกชุดที่เลือกก่อนแล้วจึงเลือกที่เหลือ');
+    phraseUpdateButtons();schedulePhraseSelectionPreview();
   });
   $('lyric-group-clear').addEventListener('click',phraseClearSelection);
   $('lyric-group-prev').addEventListener('click',()=>{
