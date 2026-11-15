@@ -51,3 +51,21 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Convert local WAV to M4A inside Chromium
         run: node scripts/song-studio-browser-e2e.mjs
+
+  pc-two-file-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile Song Studio PC engine
+        run: python -m compileall -q songstudio-pc
+      - name: Run Windows-engine-independent two-file import and preview tests
+        run: |
+          python -m unittest discover -s scripts -p test_songstudio_folder_upload.py -v
+          python -m unittest discover -s scripts -p test_songstudio_smart_scan.py -v
+          python -m unittest discover -s scripts -p test_songstudio_ncn.py -v
+          python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
+          python -m unittest discover -s scripts -p test_songstudio_pc.py -v
