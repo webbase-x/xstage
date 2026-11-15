@@ -2785,11 +2785,19 @@
     });
   }
   $('lyric-group-search').addEventListener('input',()=>{
+    // Invalidate selections and previous search results IMMEDIATELY.
+    // Delaying this reset until the debounce fired could silently clear
+    // checkboxes the user had just selected from a stale result page.
     clearTimeout(phraseSearchTimer);
-    phraseSearchTimer=setTimeout(()=>{
-      phraseOffset=0;phraseClearSelection();
-      void refreshPhraseGroups();
-    },220);
+    ++phraseSeq;
+    phraseOffset=0;
+    phraseRows=[];
+    phraseClearSelection();
+    $('lyric-group-results').textContent='กำลังค้นหาวลีตามลำดับคำในบรรทัด…';
+    $('lyric-group-page-count').dataset.total='0';
+    $('lyric-group-page-count').textContent='กำลังค้นหา';
+    phraseUpdateButtons();
+    phraseSearchTimer=setTimeout(()=>{void refreshPhraseGroups();},220);
   });
   $('lyric-group-repeats').addEventListener('change',()=>{
     phraseOffset=0;phraseClearSelection();
