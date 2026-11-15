@@ -92,27 +92,38 @@ def _records(root, export):
 
 
 def list_created(root, export, *, search="", offset=0, limit=100):
+    """Paginate catalog metadata first; inspect ONLY the displayed JSON page.
+
+    A workspace can contain 100,000 songs; opening all JSON documents for
+    every search/page would make the interface appear frozen.
+    """
     rows = _records(root, export)
     needle = str(search).casefold().strip()
-    result = []
-    for key, (path, record) in sorted(rows.items()):
+    matched = []
+    for key, (path, record) in rows.items():
         code = str(record.get("code") or "")
         title = str(record.get("title") or "")
         artist = str(record.get("artist") or "")
         if needle and not any(needle in x.casefold() for x in (key, code, title, artist)):
             continue
-        status = "valid"
+        matched.append((key, path, code, title, artist))
+    matched.sort(key=lambda item: item[0])
+    first = max(0, offset)
+    page = matched[first:first + max(1, min(limit, 200))]
+    result = []
+    for key, path, code, title, artist in page:
         try:
             if path.stat().st_size > 5_000_000:
                 raise ValueError("ไฟล์ JSON ใหญ่ผิดปกติ")
-            doc = json.loads(path.read_text(encoding="utf-8-sig"))
+            original = path.read_bytes()
+            doc = json.loads(original.decode("utf-8-sig"))
             _validate(doc, code or None)
-            status = "needs-format" if path.read_bytes() != _canonical(doc).encode("utf-8") else "formatted"
+            status = "needs-format" if original != _canonical(doc).encode("utf-8") else "formatted"
         except (OSError, ValueError, TypeError, UnicodeError) as exc:
             status = "error: " + str(exc)[:160]
         result.append({"path": key, "code": code, "title": title,
                        "artist": artist, "status": status})
-    return {"total": len(result), "rows": result[max(0, offset):max(0, offset)+max(1, min(limit, 200))]}
+    return {"total": len(matched), "rows": result}
 
 
 def format_created(root, export, paths, *, dry_run=True):
