@@ -481,6 +481,7 @@
     if (!proEnabled && choice.value!=='xsk') choice.value='xsk';
     for (const option of choice.options) option.disabled=!proEnabled&&option.value!=='xsk';
     const legacy=proEnabled&&choice.value!=='xsk';
+    $('pro-legacy-format').hidden=!proEnabled;
     $('create-export-format').disabled=!legacy||busy;
     $('create-export-format').value=legacy?choice.value:'xstage';
     $('build-audio-button').hidden=!legacy;
