@@ -3250,6 +3250,19 @@ class Handler(BaseHTTPRequestHandler):
                 offset = max(0, int(query.get("offset", ["0"])[0]))
                 limit = max(1, min(60, int(query.get("limit", ["30"])[0])))
                 self._json(available_vocal_sources(search, offset, limit))
+            elif path == "/api/ai-lyrics-source":
+                try:
+                    song_id = int(query.get("id", [""])[0])
+                except ValueError as exc:
+                    raise ValueError("กรุณาเลือกเพลงเสียงร้อง") from exc
+                with LOCK:
+                    selected = dict(AI_IMPORTED.get(song_id) or {})
+                if not selected:
+                    raise ValueError("ไม่พบไฟล์ที่นำเข้าในเมนู Lyrics AI")
+                source = Path(selected["path"])
+                if not source.is_file() or source.is_symlink() or source.suffix.lower() not in EXT_AUDIO:
+                    raise ValueError("ไฟล์ต้นฉบับถูกย้าย หรือไม่รองรับการอ่าน")
+                self._json(_source_audio_details(source))
             elif path == "/api/ai-lyrics-draft":
                 try:
                     song_id = int(query.get("id", [""])[0])
