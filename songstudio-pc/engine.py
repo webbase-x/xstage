@@ -216,6 +216,46 @@ def _source_audio_details(source):
                     result["lyricsSource"] = "ไฟล์ LRC คู่กับเพลง"
         except (OSError, ValueError, TypeError):
             pass
+    # Use an explicit paired Lyrics JSON only when there is no usable LRC.
+    # Line start times are real; never invent character-level karaoke timing.
+    companion_json = source.with_suffix(".json")
+    if (not result["timedLrc"] and companion_json.is_file()
+            and not companion_json.is_symlink()):
+        try:
+            if companion_json.stat().st_size <= 5_000_000:
+                document = json.loads(companion_json.read_text(encoding="utf-8-sig"))
+                lines = document.get("lines") if isinstance(document, dict) else None
+                if document.get("schemaVersion") == 1 and isinstance(lines, list) and lines:
+                    import math
+                    timestamped = []
+                    last = -1
+                    for row in lines:
+                        when = row.get("startTime") if isinstance(row, dict) else None
+                        if (not isinstance(when, (int, float)) or isinstance(when, bool)
+                                or not math.isfinite(when) or when < last or when < 0
+                                or when >= 86400 or not isinstance(row.get("text"), str)
+                                or not row["text"].strip()):
+                            timestamped = []
+                            break
+                        last = when
+                        minutes = int(when // 60)
+                        timestamped.append(f"[{minutes:02d}:{when%60:05.2f}]{row['text']}")
+                    if timestamped:
+                        original_lrc = document.get("rawLrc")
+                        if isinstance(original_lrc, str) and original_lrc.strip():
+                            result["timedLrc"] = original_lrc
+                        else:
+                            result["timedLrc"] = "\\n".join(timestamped)
+                        metadata = document.get("metadata") or {}
+                        if isinstance(metadata, dict):
+                            if not result["title"]:
+                                result["title"] = str(metadata.get("title") or "")[:180]
+                            if not result["artist"]:
+                                result["artist"] = str(metadata.get("artist") or "")[:180]
+                        result["plainLyrics"] = ""
+                        result["lyricsSource"] = "Lyrics JSON คู่กับเพลง (เวลาแต่ละบรรทัด)"
+        except (OSError, UnicodeError, ValueError, TypeError, AttributeError):
+            pass
     return result
 
 
