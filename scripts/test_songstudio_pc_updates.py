@@ -40,7 +40,8 @@ class UpdateTests(unittest.TestCase):
     def test_metadata_and_version(self):
         good=metadata()
         with patch.object(updates.urllib.request, "urlopen",
-                          return_value=Response(json.dumps(good).encode())):
+                          side_effect=lambda *_args, **_kwargs:
+                              Response(json.dumps(good).encode())):
             self.assertTrue(updates.check("0.3.42", "342")["update"])
             self.assertFalse(updates.check("0.3.43", "343")["update"])
         for edit in ({"download_url":"https://attacker.invalid/zip"},
