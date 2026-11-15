@@ -38,12 +38,12 @@ assert.equal(result.midis.length,1,'MIDI plus one timed LRC must be ready');
 assert.equal(result.midis[0].kind,'MID');
 assert.equal(result.midis[0].lrc.file.name,'C300.lrc');
 assert.equal(result.fonts.length,1);
-assert.ok(!result.blocked.some(x=>x.key.includes('C300')),'Two-file MIDI must be ready');
-assert.ok(result.blocked.some(x=>x.key.includes('D400')&&x.reason.includes('ยกเลิก')),
+assert.ok(!result.blocked.some(x=>x.key.toUpperCase().includes('C300')),'Two-file MIDI must be ready');
+assert.ok(result.blocked.some(x=>x.key.toUpperCase().includes('D400')&&x.reason.includes('ยกเลิก')),
   'Legacy MIDI+LYR+CUR is rejected with migration instruction');
-assert.ok(result.blocked.some(x=>x.key.includes('E500')&&x.reason.includes('LRC')),
+assert.ok(result.blocked.some(x=>x.key.toUpperCase().includes('E500')&&x.reason.includes('LRC')),
   'Bare MIDI must not publish placeholder lyrics');
-assert.ok(result.blocked.some(x=>x.key.includes('F600')&&x.reason.includes('ซ้ำ')),
+assert.ok(result.blocked.some(x=>x.key.toUpperCase().includes('F600')&&x.reason.includes('ซ้ำ')),
   'LRC+JSON double companion must be blocked');
 assert.ok(result.blocked.some(x=>x.reason.includes('ไฟล์เสียงต้องมี LRC/JSON')));
 assert.equal(core.groupKey('AUDIO/MP3/Songs/A/A100.mp3'),core.groupKey('AUDIO/MP3/Lyrics/A/A100.lrc'));
