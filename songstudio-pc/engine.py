@@ -3299,7 +3299,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path in ("/", "/index.html"):
             path = "/index.html"
-        if path not in ("/index.html", "/app.js", "/style.css", "/entry.js", "/app-icon.svg", "/app-icon-512.png", "/app-icon.ico", "/site.webmanifest"):
+        if path not in ("/index.html", "/app.js", "/style.css", "/pro-design.css", "/entry.js", "/app-icon.svg", "/app-icon-512.png", "/app-icon.ico", "/site.webmanifest"):
             self._response(404, b"Not found", "text/plain")
             return
         target = UI_ROOT / path[1:]
