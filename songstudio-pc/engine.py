@@ -3188,6 +3188,7 @@ class Handler(BaseHTTPRequestHandler):
                         LYRIC_TEXT_INDEX = None
                 if previous_catalog_key != (PREFS["source"], PREFS["workspace"]):
                     restore_song_catalog()
+                    restore_scan_changes()
                 self._json({"preferences": dict(PREFS), "soundfonts": font_list(),
                             "google": GOOGLE.status()})
             elif path == "/api/history/restore":
@@ -3221,6 +3222,7 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("ประวัติไม่รองรับการคืนค่า")
                 if needs_scan:
                     restore_song_catalog()
+                    restore_scan_changes()
                 self._json({"ok": True, "preferences": dict(PREFS),
                             "message": "คืนค่าจากประวัติและบันทึกอัตโนมัติแล้ว"})
             elif path == "/api/created-json/format":
