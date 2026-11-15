@@ -9,9 +9,9 @@ on:
       - 'package.json'
       - 'studio/**'
       - 'songstudio-pc/**'
-      - 'windows-pc/source/karaoke/**'
+      - 'windows-pc/source/**'
       - 'android-tv/app/src/main/java/**'
-      - 'scripts/check_xstagesong_storage.py'
+      - 'scripts/**'
       - '.github/workflows/check-xstagesong-storage.yml'
   workflow_dispatch:
 permissions:
