@@ -216,7 +216,7 @@ class StageCanvas(LyricsCanvas):
             image.paste(self._logo_cache[1], (24, 16))
         brand_x = 24 + logo_size + 12
         draw_text(image, (brand_x, 23), 'X-STAGE', brand, '#f0f5ff', stroke_width=1)
-        draw_text(image, (brand_x, 50), f'KARAOKE  v{__version__}', small, '#9facce')
+        draw_text(image, (brand_x, 50), f'KARAOKE PC  v{__version__}', small, '#9facce')
         song_title_font, song_info_font = cached_font(20), cached_font(16)
         info_width = max(80, width-390)
         draw_text(image, (24, 87), self.fit_text(data.get('song_title') or title, song_title_font, info_width), song_title_font, '#f0f5ff', stroke_width=1)
