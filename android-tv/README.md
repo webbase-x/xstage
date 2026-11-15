@@ -1,3 +1,9 @@
+## Current Android TV import contract: two files per song
+
+The shared hosted Web/Android importer now accepts one song file and one timed LRC or Lyrics JSON of matching code. The old NCN MID/LYR/CUR trio is no longer accepted as a **new import**. Previously published MIDI+Lyrics JSON songs remain readable. Karaoke videos with lyrics burned into the picture retain their separately reviewed embedded-video path.
+
+---
+
 ## NCN MIDI/LYR/CUR on Android TV — v1.0.103 Build 1103
 
 The Android TV application loads the same hosted X-Stage Karaoke Online
