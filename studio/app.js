@@ -2183,7 +2183,9 @@
       const examples=(result.examples||[]).slice(0,5)
         .map(x=>x.name+': '+x.reason);
       $('upload-folder-report').textContent=
-        'ตรวจโฟลเดอร์หลักและโฟลเดอร์ย่อยทั้งหมด · '+
+        (result.source === 'XStageSong catalog'
+          ? 'โหมดคลัง XStageSong · ตรวจไฟล์ตาม Catalog ที่เผยแพร่แล้ว · '
+          : 'ตรวจโฟลเดอร์หลักและโฟลเดอร์ย่อยทั้งหมด · ')+
         'ตรวจ '+fmtNum(result.fileCount)+' ไฟล์ · ชุดสมบูรณ์ '+
         fmtNum(result.ready)+' · ไม่ครบ '+fmtNum(result.incomplete)+
         ' · ไม่รองรับ '+fmtNum(result.unsupported)+
