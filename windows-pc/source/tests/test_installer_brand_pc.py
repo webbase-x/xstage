@@ -18,12 +18,17 @@ class PcBrandingRegression(unittest.TestCase):
         for name in ('ui.py', 'classic.py', 'performer.py', 'remote_page.py'):
             source = (ROOT / 'karaoke' / name).read_text(encoding='utf-8')
             self.assertIsNone(re.search(r'X-Stage Karaoke(?! PC| Online)', source), name)
-        installer = (REPO / 'windows-pc/installer/XStageKaraoke.iss').read_text(encoding='utf-8')
-        self.assertIn('AppName=X-Stage Karaoke PC', installer)
         self.assertIn('X-STAGE KARAOKE PC', (ROOT / 'karaoke/remote_page.py').read_text(encoding='utf-8'))
-        self.assertIn('OutputBaseFilename=X-Stage-Karaoke-PC-Windows-', installer)
-        updater = (REPO / 'windows-pc/Check-Update.ps1').read_text(encoding='utf-8-sig')
-        self.assertIn('X-Stage-Karaoke-PC-Windows-v', updater)
+        # Source-only distributions do not include the repository's Inno wrapper.
+        installer_path = REPO / 'windows-pc/installer/XStageKaraoke.iss'
+        if installer_path.is_file():
+            installer = installer_path.read_text(encoding='utf-8')
+            self.assertIn('AppName=X-Stage Karaoke PC', installer)
+            self.assertIn('OutputBaseFilename=X-Stage-Karaoke-PC-Windows-', installer)
+        updater_path = REPO / 'windows-pc/Check-Update.ps1'
+        if updater_path.is_file():
+            updater = updater_path.read_text(encoding='utf-8-sig')
+            self.assertIn('X-Stage-Karaoke-PC-Windows-v', updater)
         self.assertIn('X-Stage-Karaoke-PC-Windows-v', (ROOT / 'karaoke/program_updates.py').read_text(encoding='utf-8'))
 
     def test_keep_legacy_binary_and_data_paths_for_existing_installations(self):
