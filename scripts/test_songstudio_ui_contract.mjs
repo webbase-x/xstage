@@ -88,10 +88,11 @@ assert.ok(js.includes("aiClockStalledAt") && js.includes("aiCoverageWarned"),
 assert.ok(js.includes("const mid=(lo+hi)>>>1;"),
   'AI Lyrics long LRC playback should locate the current line efficiently');
 for (const id of ['ai-export-button','ai-export-lyrics','ai-export-instrumental',
+                 'ai-export-source','ai-export-format','ai-lyrics-read-source',
                  'ai-export-choose-folder','ai-export-folder']) {
   assert.ok(html.includes('id="'+id+'"'), 'Missing selectable AI export UI: '+id);
 }
-assert.ok(js.includes("run('ai-export',{id,lyrics,instrumental})"),
+assert.ok(js.includes("run('ai-export',{id,lyrics,instrumental,source,source_format})"),
   'AI export selections must reach the authenticated local engine');
 assert.ok(js.includes("saveInputs(['download-destination'])"),
   'AI export must persist the selected destination');
@@ -215,4 +216,16 @@ assert.equal(studioCueWindows([
   'Studio should use smooth whole-line LRC approximation when no usable character times exist');
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
+for (const id of ['json-pro-source','json-pro-destination','json-pro-format',
+                 'json-pro-inspect','json-pro-start','json-pro-report',
+                 'xsk-build-folder']) {
+  assert.ok(html.includes('id="'+id+'"'), 'Missing next-release workflow field: '+id);
+}
+assert.ok(html.includes('data-tab="json-pro"') && html.includes('id="tab-json-pro"'),
+  'Lyrics JSON Pro needs a separate navigation tab and workspace');
+assert.ok(js.includes("run('json-pro-export',{format})") &&
+          js.includes("/api/json-pro/inspect"),
+  'Lyrics JSON Pro must reach the existing local PC Engine');
+assert.ok(js.includes("/api/ai-lyrics-source?id="),
+  'Explicit read-from-file control must fetch the real source metadata');
 console.log('PASS: PC/Web Control UI syntax, bulk multi-select, lyric-body search, AI and Drive controls.');
