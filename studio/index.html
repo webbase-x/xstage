@@ -27,6 +27,7 @@
         <button class="nav-button" data-tab="lyric-head-tail"><span class="nav-glyph" aria-hidden="true">⇄</span><span>จัดการข้อความหัว–ท้ายเพลง<small>จัดกลุ่มข้อความซ้ำ · แทนที่ · ย้อนคืน</small></span></button>
         <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>นำเข้า X-Stage Karaoke Online<small>Google Drive · คลังส่วนตัว</small></span></button>
         <button class="nav-button" data-tab="pc-export"><span class="nav-glyph" aria-hidden="true">▣</span><span>นำเข้า X-Stage Karaoke PC<small>AUDIO + LYRICS + SQLite DB</small></span></button>
+        <button class="nav-button" data-tab="created-json"><span class="nav-glyph" aria-hidden="true">▤</span><span>ไฟล์ที่สร้างแล้ว<small>ตรวจ Lyrics JSON · จัดรูปแบบ · ย้อนคืน</small></span></button>
         <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
         <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
       </nav>
@@ -410,6 +411,23 @@
           </article>
         </section>
 
+        <section id="tab-created-json" class="tab">
+          <div class="section-top"><div><div class="eyebrow">CREATED FILES · XSTAGESONG</div><h2>ไฟล์ที่สร้างแล้ว · จัดระเบียบ Lyrics JSON</h2><p>ตรวจเฉพาะไฟล์ .json ที่อยู่ใน Catalog ที่สร้างสำเร็จ · จัดเรียงคีย์และเยื้องบรรทัดตามรูปแบบมาตรฐาน โดยไม่เปลี่ยนรหัสเพลง ข้อความ หรือเวลา</p></div><span class="chip info">LOCAL · SAFE BACKUP</span></div>
+          <article class="panel">
+            <div class="catalog-actions">
+              <div class="searchbox"><span aria-hidden="true">⌕</span><input id="created-json-search" type="search" placeholder="ค้นรหัสเพลง ชื่อเพลง ศิลปิน หรือไฟล์ JSON" autocomplete="off"></div>
+              <button id="created-json-refresh" type="button" class="button ghost">⌕ ตรวจไฟล์อีกครั้ง</button>
+              <button id="created-json-select" type="button" class="button ghost">เลือกหน้านี้</button>
+              <button id="created-json-clear" type="button" class="button ghost">ยกเลิกทั้งหมด</button>
+            </div>
+            <p id="created-json-summary" class="hint" role="status" aria-live="polite">เปิดเมนูนี้เพื่ออ่านไฟล์เนื้อร้องจาก XStageSong ที่สร้างไปแล้ว</p>
+            <div class="table-scroll" role="region" aria-label="ไฟล์ Lyrics JSON ที่สร้างแล้ว" tabindex="0"><table class="song-table"><thead><tr><th>เลือก</th><th>รหัสเพลง · ชื่อเพลง</th><th>ไฟล์</th><th>ผลตรวจ</th></tr></thead><tbody id="created-json-rows"><tr><td colspan="4" class="empty-row">ยังไม่ได้โหลดรายการ</td></tr></tbody></table></div>
+            <div class="toolbar"><button id="created-json-prev" type="button" class="button ghost">‹ ก่อนหน้า</button><span id="created-json-page" class="hint">—</span><button id="created-json-next" type="button" class="button ghost">ถัดไป ›</button></div>
+            <div class="toolbar"><button id="created-json-preview" type="button" class="button ghost">ตรวจสอบก่อนจัดรูปแบบ</button><button id="created-json-apply" type="button" class="button primary">จัดรูปแบบ JSON ที่เลือก</button><button id="created-json-undo" type="button" class="button ghost" disabled>↶ ย้อนคืนชุดล่าสุด</button></div>
+            <p class="hint">เลือกครั้งละไม่เกิน 100 ไฟล์ · เก็บไฟล์ .bak ก่อนเปลี่ยน · ไม่แก้ไขเสียง/รหัสเพลง/เวลา · หาก JSON ไม่ถูกต้องจะข้ามและรายงานสาเหตุ ไม่ซ่อมเวลาโดยการเดา</p>
+            <pre id="created-json-result" class="hint" style="white-space:pre-wrap;overflow-wrap:anywhere" role="status" aria-live="polite">ยังไม่มีผลการจัดรูปแบบ</pre>
+          </article>
+        </section>
         <section id="tab-download" class="tab">
           <div class="section-top"><div><div class="eyebrow">RESTORE & BACKUP</div><h2>ดาวน์โหลดคลังเพลง</h2><p>อ่านคลัง XStageSong/LYRICS/current.json ที่เผยแพร่จริงบน Google Drive ส่วนตัว (รองรับคลังสำรอง PC รูปแบบเก่า) · ตรวจ MD5 และไม่เขียนทับไฟล์ที่ต่างกัน</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
           <article class="panel"><div class="section-heading"><div><h2>ตำแหน่งเก็บไฟล์ดาวน์โหลด</h2><p>เลือกใหม่ได้ ระบบจำค่าไว้เปิดครั้งต่อไป</p></div></div><div class="path-row"><input id="download-destination" type="text" class="field" placeholder="เลือกโฟลเดอร์เก็บข้อมูล"><button type="button" class="button ghost" data-pick="download">เลือกที่เก็บ</button></div></article>
