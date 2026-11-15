@@ -43,7 +43,7 @@
     'ai-lyrics': ['สร้างเนื้อร้อง AI', 'นำเข้าเพลงใหม่ ถอดเสียงร้อง จัดเวลา และทดลองฟัง LRC'],
     'lyric-head-tail': ['จัดการข้อความหัว–ท้ายเพลง', 'ตรวจข้อความซ้ำ 4 ตำแหน่ง · แทนที่ทั้งกลุ่มและย้อนคืนได้'],
     upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
-    'pc-export': ['นำเข้า X-Stage Karaoke PC', 'คัดลอกเพลงและเนื้อร้องไป XStageWeb/AUDIO + LYRICS ในเครื่อง'],
+    'pc-export': ['นำเข้า X-Stage Karaoke PC', 'คัดลอกเพลงและเนื้อร้องไป XStageSong/AUDIO + LYRICS ในเครื่อง'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
   };
@@ -478,7 +478,7 @@
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
       ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · ใช้ Lyrics JSON เท่านั้น'
-      : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · StageWeb';
+      : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · XStageSong';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
     $('pc-export-folder').value = prefs.pc_export_folder || '';
@@ -600,7 +600,7 @@
     button.disabled = true;
     const priorLabel = button.textContent;
     button.textContent = 'กำลังเทียบรหัสทั้งสองคลัง…';
-    indicator.textContent = 'กำลังอ่าน Catalog ในเครื่องและ XStageWeb บน Google Drive · ยังไม่เปลี่ยนรหัสหรือไฟล์ใด ๆ';
+    indicator.textContent = 'กำลังอ่าน Catalog ในเครื่องและ XStageSong บน Google Drive · ยังไม่เปลี่ยนรหัสหรือไฟล์ใด ๆ';
     try {
       await saveInputs(['create-workspace']);
       const report = await api('/api/code-registry');
@@ -1342,7 +1342,7 @@
       return message('กรุณาเลือกไฟล์เสียงร้องและตรวจว่า HTDemucs พร้อม');
     const id=aiSongId;
     const approved=await confirmStudio(
-      'แยกเสียงร้องและดนตรีแบบออฟไลน์ด้วย HTDemucs แล้วบันทึก M4A แยก 2 ไฟล์ใน StageWeb/audio\n'+
+      'แยกเสียงร้องและดนตรีแบบออฟไลน์ด้วย HTDemucs แล้วบันทึก M4A แยก 2 ไฟล์ใน XStageSong/audio\n'+
       'เสียงเพลงต้นฉบับไม่เปลี่ยนและไม่อัปโหลด Google Drive\n'+
       'การแยกเสียงร้องอาจมีเสียงดนตรีหลงเหลือ ต้องทดลองฟังตรวจสอบ',
       'ยืนยันแยกเสียงร้องและดนตรีเป็น M4A',
@@ -1444,7 +1444,7 @@
     const blob=aiMicBlob;
     const approved=await confirmStudio(
       'นำเสียงร้องที่อัดผ่านไมโครโฟนมาแปลงเป็น AAC/M4A ภายในคอมพิวเตอร์\n'+
-      'จัดเก็บใน StageWeb/audio และเพิ่มเข้าเมนูสร้างเนื้อร้อง AI\n'+
+      'จัดเก็บใน XStageSong/audio และเพิ่มเข้าเมนูสร้างเนื้อร้อง AI\n'+
       'ไม่มีการอัปโหลด Google Drive และยังไม่เผยแพร่ในคลังเพลงออนไลน์',
       'ยืนยันบันทึกเสียงร้องใหม่',
       {acceptLabel:'บันทึกเสียง M4A',cancelLabel:'ยกเลิก'});
@@ -1911,9 +1911,9 @@
       await saveInputs(['upload-soundfont-path']);
       const createNew=$('upload-allow-new').checked;
       const agreed=await confirmStudio(
-        'อัปโหลด SoundFont ที่เลือกไปยัง XStageWeb/SOUNDFONT ตามชนิด SF2/SF3'+
+        'อัปโหลด SoundFont ที่เลือกไปยัง XStageSong/SOUNDFONT ตามชนิด SF2/SF3'+
         '\\nตรวจไฟล์และ MD5 ก่อนส่ง ไม่ทับ SoundFont เดิม'+
-        (createNew?'\\nถ้ามองไม่เห็น XStageWeb ระบบจะสร้างใหม่ โปรดตรวจบัญชีและสิทธิ์ Google ก่อน':'')+
+        (createNew?'\\nถ้ามองไม่เห็น XStageSong ระบบจะสร้างใหม่ โปรดตรวจบัญชีและสิทธิ์ Google ก่อน':'')+
         '\\n\\nหมายเหตุ: เว็บหลักยังไม่มี MIDI SoundFont Engine พร้อมเล่น',
         'ยืนยันอัปโหลด SoundFont',
         {acceptLabel:'เริ่มอัปโหลด',cancelLabel:'ยกเลิก'});
@@ -1963,7 +1963,7 @@
   async function startPCExport(){
     if(busy)return;
     const report=await inspectPCExport();
-    if(!report || !report.songs)return message('ยังไม่มีเพลงที่สร้างสำเร็จใน StageWeb');
+    if(!report || !report.songs)return message('ยังไม่มีเพลงที่สร้างสำเร็จใน XStageSong');
     const approved=await confirmStudio(
       'คัดลอกเพลง '+fmtNum(report.songs)+' รายการ จาก Song Studio ไปยัง\\n'+
       report.destination+'\\nจำนวนไฟล์ '+fmtNum(report.files)+
@@ -1989,10 +1989,10 @@
       ' · ข้ามไฟล์ไม่ครบ '+fmtNum(report.incomplete)+
       ' · ไม่รองรับ '+fmtNum(report.unsupported)+
       '\\nตรวจ MD5 ก่อนส่งและไม่เขียนทับไฟล์เดิม'+
-      (createNew?'\\n\\nหากไม่พบ XStageWeb ที่บัญชีนี้มองเห็น ระบบจะสร้างก่อนอัปโหลด'+
+      (createNew?'\\n\\nหากไม่พบ XStageSong ที่บัญชีนี้มองเห็น ระบบจะสร้างก่อนอัปโหลด'+
        '\\nคำเตือน: หากสิทธิ์ Google ไม่ครอบคลุมคลังเดิม อาจเกิดคลังซ้ำ':'')+
       '\\n\\nMP3/M4A ที่ผ่านการตรวจจะอัปโหลดพร้อมอัปเดต DB/current.json ให้เล่นออนไลน์ได้ทันที · VIDEO/NCN ที่ยังไม่รองรับจะข้าม';
-    if (!await confirmStudio(details,'ยืนยันตรวจครบและอัปโหลดเข้า XStageWeb',
+    if (!await confirmStudio(details,'ยืนยันตรวจครบและอัปโหลดเข้า XStageSong',
       {acceptLabel:'ตรวจแล้ว · เริ่มอัปโหลด',cancelLabel:'ยกเลิก'})) return;
     await run('upload-folder',{create_new_library:createNew});
   }
@@ -2000,7 +2000,7 @@
   async function offerUploadAfterBuild(job) {
     if (job.kind !== 'build' || job.state !== 'success') return;
     if (Number(job.result?.created||0) <= 0) return;
-    message('สร้างเพลงเสร็จแล้ว · หากต้องการส่งไฟล์ไป XStageWeb ให้เปิดเมนูอัปโหลด เลือกโฟลเดอร์ และตรวจความพร้อมก่อน',false);
+    message('สร้างเพลงเสร็จแล้ว · หากต้องการส่งไฟล์ไป XStageSong ให้เปิดเมนูอัปโหลด เลือกโฟลเดอร์ และตรวจความพร้อมก่อน',false);
   }
   async function startDownload(kind) {
     if (!googleConnected) return message('ต้อง Google Login ก่อนดาวน์โหลด');
@@ -2087,7 +2087,7 @@
       setGoogle(response.google);
       renderJob(job);updateButtons();
       if (job.kind === 'pc-export' && job.state === 'running')
-        $('pc-export-status').textContent = job.stage || 'กำลังคัดลอกไฟล์เข้า XStageWeb';
+        $('pc-export-status').textContent = job.stage || 'กำลังคัดลอกไฟล์เข้า XStageSong';
       if (job.kind === 'ai-export' && job.state === 'running')
         $('ai-export-status').textContent = job.stage || job.detail || 'กำลังส่งออกไฟล์ที่เลือก';
       if (['ai-lyrics','ai-align','ai-separate-vocals'].includes(job.kind) && job.state === 'running' && aiSongId !== null)
@@ -2407,7 +2407,7 @@
     if(busy)return;
     try{
       await config({lyric_source:''});
-      message('กลับไปใช้คลัง StageWeb ของโฟลเดอร์งานหลักแล้ว',false);
+      message('กลับไปใช้คลัง XStageSong ของโฟลเดอร์งานหลักแล้ว',false);
     }catch(error){message(error.message);}
   });
   $('lyric-group-undo').addEventListener('click',()=>{void phraseUndo();});
