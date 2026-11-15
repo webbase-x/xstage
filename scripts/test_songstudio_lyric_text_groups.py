@@ -245,6 +245,47 @@ class LyricHeadTailTests(unittest.TestCase):
         self.assertEqual(doc["lines"][1]["text"],"อีกข้อความ")
         self.assertEqual(bulk.undo(self.backups,self.root,result["backupId"])["restoredSongs"],1)
 
+    def test_every_line_search_edits_only_matching_middle_line(self):
+        snap=self.snapshot()
+        # Middle lyrics are accessible in the new all-lines tab; words in
+        # different lines or the reverse order do not match.
+        self.assertEqual(bulk.list_groups(
+            snap, "all", search="เนื้อร้องหนึ่ง เนื้อร้องสอง",
+            repeats_only=False)["rows"], [])
+        found=bulk.list_groups(snap, "all", search="เนื้อร้องหนึ่ง",
+                               repeats_only=False)
+        self.assertEqual(found["total"],1)
+        self.assertEqual(found["rows"][0]["text"],"เนื้อร้องหนึ่ง")
+        gid=found["rows"][0]["id"]
+        self.assertEqual(bulk.preview(snap,gid,search="เนื้อร้องหนึ่ง")["count"],1)
+        plan=bulk.plan(snap,[gid],search="เนื้อร้องหนึ่ง",
+                       replacement="แก้เนื้อร้องเต็มบรรทัด")
+        self.assertEqual((plan["changedSongs"],plan["changedLines"]),(1,1))
+        before=(self.root/"lyrics"/"0"/"001.json").read_bytes()
+        result=bulk.apply_many_smart(
+            self.root,export,snap,[gid],"แก้เนื้อร้องเต็มบรรทัด",
+            self.backups,search="เนื้อร้องหนึ่ง",expected_count=1)
+        self.assertEqual(result["changedSongs"],1)
+        data=json.loads((self.root/"lyrics"/"0"/"001.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["lines"][2]["text"],"แก้เนื้อร้องเต็มบรรทัด")
+        self.assertEqual(data["lines"][0]["text"],"[X-Stage Karaoke]")
+        self.assertEqual(data["lines"][1]["text"],"ผู้ผลิตรายการ")
+        self.assertEqual(data["lines"][3]["text"],"เนื้อร้องสอง")
+        self.assertEqual([row["startTime"] for row in data["lines"]],
+                         self.starts["001"])
+        self.assertEqual(bulk.list_groups(snap,"all",search="เนื้อร้องหนึ่ง",
+                         repeats_only=False)["rows"],[])
+        self.assertEqual(bulk.undo(self.backups,self.root,result["backupId"])["restoredSongs"],1)
+        self.assertEqual((self.root/"lyrics"/"0"/"001.json").read_bytes(),before)
+
+    def test_all_line_search_requires_query_and_rejects_overlong_phrase(self):
+        snap=self.snapshot()
+        self.assertEqual(bulk.list_groups(snap,"all",search="")["total"],0)
+        with self.assertRaisesRegex(ValueError,"200"):
+            bulk.list_groups(snap,"all",search="a"*201)
+        self.assertTrue(bulk._ordered_line_match("รัก   เธอ", "รัก เธอ"))
+        self.assertFalse(bulk._ordered_line_match("รักตรงนี้ แล้ว เธอ", "รัก เธอ"))
+
     def test_multiple_selected_groups_share_one_replacement_and_one_backup(self):
         snap=self.snapshot()
         first=bulk.list_groups(snap,"first",repeats_only=False)["rows"]
