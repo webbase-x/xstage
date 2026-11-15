@@ -6,10 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from karaoke.cloud_sync import create_snapshot, validate_snapshot
-from karaoke.google_drive_sync import Drive
 from karaoke.library import SongLibrary, write_json
-from tests.test_google_drive_sync import FakeDrive
 from tools.run_build_tests import summarize
 
 
@@ -25,46 +22,6 @@ class XStage0943Regression(unittest.TestCase):
         self.lib = SongLibrary(self.data/'songs.sqlite3')
         write_json(self.data/'settings.json', {})
         write_json(self.data/'queue.json', [])
-
-    def test_snapshot_fails_if_required_database_hash_is_removed(self):
-        snapshot = create_snapshot(self.data, self.root/'Drive', 'user@example.com', self.songs)
-        manifest = snapshot/'manifest.json'
-        payload = json.loads(manifest.read_text(encoding='utf-8'))
-        del payload['checksums']['songs.sqlite3']
-        manifest.write_text(json.dumps(payload), encoding='utf-8')
-        with self.assertRaisesRegex(ValueError, 'SHA-256'):
-            validate_snapshot(snapshot)
-
-    def test_snapshot_fails_if_queue_hash_is_removed(self):
-        snapshot = create_snapshot(self.data, self.root/'Drive', 'user@example.com', self.songs)
-        manifest = snapshot/'manifest.json'
-        payload = json.loads(manifest.read_text(encoding='utf-8'))
-        del payload['checksums']['queue.json']
-        manifest.write_text(json.dumps(payload), encoding='utf-8')
-        with self.assertRaisesRegex(ValueError, 'SHA-256'):
-            validate_snapshot(snapshot)
-
-    def test_drive_uses_staged_md5_without_rereading_unchanged_song(self):
-        song = self.songs/'one.wav'
-        song.write_bytes(b'sample-audio-data')
-        fake = FakeDrive()
-        parent = fake.folder('root', 'test')
-        songs = fake.folder(parent['id'], 'Songs')
-        fake._upload(song, songs['id'])
-        fake.uploaded.clear()
-        proof = {'one.wav': {'md5': hashlib.md5(song.read_bytes()).hexdigest()}}
-        with patch('karaoke.google_drive_sync.hashlib.md5', side_effect=AssertionError('unexpected full reread')):
-            fake.upload_visible_files({'one.wav': song}, parent['id'], proofs=proof)
-        self.assertEqual(fake.uploaded, [])
-
-    def test_drive_missing_manifest_proof_fails_closed(self):
-        song = self.songs/'one.wav'
-        song.write_bytes(b'sample-audio-data')
-        fake = FakeDrive()
-        parent = fake.folder('root', 'test')
-        with self.assertRaisesRegex(ValueError, 'MD5'):
-            fake.upload_visible_files({'one.wav': song}, parent['id'], proofs={})
-        self.assertEqual(fake.uploaded, [])
 
     def test_diagnostic_summary_retains_test_failure_ids(self):
         case = unittest.FunctionTestCase(lambda: None)

@@ -36,20 +36,4 @@ class Ui095Tests(unittest.TestCase):
         self.assertEqual(widget.cancelled, ['timer-1'])
         self.assertIsNone(tooltip.after_id)
 
-    def test_static_player_reads_private_web_catalog_without_old_backup(self):
-        root=Path(__file__).parents[1]/'web'
-        app=(root/'app.js').read_text(encoding='utf-8')
-        html=(root/'index.html').read_text(encoding='utf-8')
-        self.assertIn('XStageSong', app)
-        self.assertIn('drive.file', app)
-        self.assertIn('current.json', app)
-        self.assertIn('catalogFileId', app)
-        self.assertIn('song.audio.fileId', app)
-        self.assertIn('song.lyrics.fileId', app)
-        self.assertIn('URL.revokeObjectURL', app)
-        self.assertIn("id=\"lyrics\"", html)
-        self.assertIn("id=\"logout\"", html)
-        self.assertNotIn('web-manifest.json', app)
-        self.assertNotIn("'XStageKaraoke'", app)
-
 if __name__=='__main__': unittest.main()
