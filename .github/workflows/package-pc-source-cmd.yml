@@ -1,0 +1,59 @@
+name: Package X-Stage Karaoke PC source ZIP for CMD testing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'windows-pc/source/Run-X-Stage-Karaoke-PC.cmd'
+      - 'windows-pc/source/Test-X-Stage-Karaoke-PC.cmd'
+      - 'windows-pc/source/README-CMD-SOURCE-PC.md'
+      - '.github/workflows/package-pc-source-cmd.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source entrypoint and CMD files
+        shell: bash
+        run: |
+          test -f windows-pc/source/main.py
+          test -f windows-pc/source/requirements.txt
+          test -f windows-pc/source/Run-X-Stage-Karaoke-PC.cmd
+          test -f windows-pc/source/Test-X-Stage-Karaoke-PC.cmd
+          python3 -m compileall -q windows-pc/source/karaoke windows-pc/source/main.py
+      - name: Create source ZIP and SHA256
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, zipfile
+          root=Path('windows-pc/source')
+          output=Path('pc-source-artifacts')
+          output.mkdir(exist_ok=True)
+          name='X-Stage-Karaoke-PC-v1.0.76-build1076-Windows-CMD-Source.zip'
+          archive=output/name
+          excluded={'.git','.venv','__pycache__','dist','build','.local-test-data','data'}
+          with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as result:
+              for path in sorted(root.rglob('*')):
+                  rel=path.relative_to(root)
+                  if not path.is_file() or any(part in excluded for part in rel.parts):
+                      continue
+                  if path.suffix in {'.pyc','.pyo'}:
+                      continue
+                  result.write(path,Path('X-Stage-Karaoke-PC-Source')/rel)
+          digest=hashlib.sha256(archive.read_bytes()).hexdigest()
+          (output/(name+'.sha256')).write_text(f'{digest}  {name}\n',encoding='ascii')
+          print(f'Source ZIP: {archive} ({archive.stat().st_size} bytes); SHA256={digest}')
+          PY
+      - name: Upload source ZIP for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Karaoke-PC-v1.0.76-build1076-Windows-CMD-Source
+          path: pc-source-artifacts/*
+          if-no-files-found: error
+          retention-days: 30
