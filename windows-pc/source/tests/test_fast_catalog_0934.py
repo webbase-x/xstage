@@ -166,7 +166,7 @@ class FastCatalog0934Tests(unittest.TestCase):
     def test_shutdown_eligibility_rejects_bad_result_and_background_jobs(self):
         self.add_song('a')
         success=self.run_build()
-        app=SimpleNamespace(scanning=False,_cloud_backup_busy=False,_cleanup_busy=False,engine=None,
+        app=SimpleNamespace(scanning=False,_cleanup_busy=False,engine=None,
                             cancel_scan=threading.Event())
         self.assertTrue(shutdown_allowed(app,success,platform='nt'))
         self.assertFalse(shutdown_allowed(app,success,platform='posix'))

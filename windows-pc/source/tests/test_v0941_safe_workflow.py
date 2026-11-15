@@ -11,8 +11,6 @@ from karaoke.fast_catalog import build_fast_catalog
 from karaoke.duplicate_review import create_review, read_review
 from karaoke.duplicate_actions import (hide_exact,show_song,exclude_from_index,
                                       restore_to_index,delete_permanently)
-from karaoke.cloud_sync import create_snapshot
-from karaoke.google_drive_sync import sync_library
 from karaoke.managed_import import ImportSession, PolicyRejected
 
 
@@ -125,47 +123,5 @@ class Workflow0941Tests(unittest.TestCase):
         self.assertEqual(read_review(report,category='exact')[0],0)
         self.assertEqual(read_review(report,category='code')[0],1)
 
-    def test_drive_only_visible_bundle_and_song_sidecars(self):
-        a,b,rows,_=self.index_two()
-        hide_exact(self.library,rows[-1]['id'],rows[0]['id'])
-        extraneous=self.source/'orphan.wav';extraneous.write_bytes(b'not indexed')
-        mapping={}
-        snap=create_snapshot(self.data,self.root/'Drive','owner@example.com',self.source,
-                             stage_media=False,media_files_out=mapping)
-        manifest=json.loads((snap/'web-manifest.json').read_text(encoding='utf8'))
-        self.assertEqual(len(manifest['songs']),1)
-        self.assertEqual(len(mapping),2)  # media + LRC, excludes hidden/orphan.
-        self.assertFalse(any((snap/'Songs').rglob('*.wav')))
-        self.assertTrue(all('External' not in Path(p).name for p in mapping))
-        self.assertNotIn(str(self.source),json.dumps(manifest))
-        self.assertEqual(json.loads((snap/'manifest.json').read_text(encoding='utf-8'))['song_scope'],'visible')
-
-    def test_drive_snapshot_stages_visible_only_by_default(self):
-        a,b,rows,_=self.index_two()
-        hide_exact(self.library,rows[-1]['id'],rows[0]['id'])
-        snap=create_snapshot(self.data,self.root/'Drive','owner@example.com',self.source)
-        self.assertTrue((snap/'Songs'/a.name).is_file())
-        self.assertFalse((snap/'Songs'/b.name).exists())
-        self.assertTrue((snap/'Songs'/a.with_suffix('.lrc').name).is_file())
-
-
 if __name__ == '__main__':unittest.main()
 
-class GoogleDriveVisible0941Tests(Workflow0941Tests):
-    def test_real_drive_fake_transport_uploads_only_visible_media(self):
-        from tests.test_google_drive_sync import FakeDrive
-        a,b,rows,_=self.index_two()
-        hide_exact(self.library,rows[-1]['id'],rows[0]['id'])
-        (self.source/'orphan.mp3').write_bytes(b'unindexed')
-        fake=FakeDrive()
-        first=sync_library(fake,self.data,'owner@example.com',[self.source],None,'new')
-        self.assertIn(a.name,fake.uploaded)
-        self.assertIn(a.with_suffix('.lrc').name,fake.uploaded)
-        self.assertNotIn(b.name,fake.uploaded)
-        self.assertNotIn('orphan.mp3',fake.uploaded)
-        self.assertEqual(fake.uploaded[-1],'web-manifest.json')
-        fake.uploaded.clear()
-        current=fake.inspect('owner@example.com')['latest']
-        sync_library(fake,self.data,'owner@example.com',[self.source],None,'update',current)
-        self.assertNotIn(a.name,fake.uploaded)
-        self.assertEqual(fake.uploaded[-1],'web-manifest.json')

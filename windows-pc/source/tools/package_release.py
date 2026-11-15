@@ -45,8 +45,8 @@ def build(project):
                 shutil.copy2(item,target)
         run([sys.executable,'-B','-m','PyInstaller','--noconfirm','--clean','--windowed','--onedir','--collect-all','soundcard','--collect-all','imageio_ffmpeg','--hidden-import','_cffi_backend','--name','XStageKaraoke','--version-file','version_info.txt','--icon','assets/xstage.ico','--add-data','assets;assets','main.py'],source,timeout=300)
         ready=source/'dist'/'XStageKaraoke'
-        names=['karaoke','tools','tests','samples','assets','web','native','third_party_licenses','main.py','build.ps1','Build-Windows.cmd','RELEASE_0914_TH.md','RELEASE_0913_TH.md','RELEASE_0912_TH.md','SOUNDFONT_GUIDE_TH.md','UI_GUIDE_TH.md','IMPORT_GUIDE_TH.md','version_info.txt','README_TH.md','CHANGELOG.md','FEATURE_STATUS.md','LEGACY_TEST_RESULTS.json','SEARCH_BENCHMARK.json','THIRD_PARTY.md','LICENSE.txt','Setup-Audio.ps1','Install-to-D.cmd','install_to_D.ps1','start.bat','requirements.txt']
-        names=['RELEASE_0925_TH.md','google-oauth-client.json.example','RELEASE_0917_TH.md','RELEASE_0916_TH.md','RELEASE_0915_TH.md']+names
+        names=['karaoke','tools','tests','samples','assets','native','third_party_licenses','main.py','build.ps1','Build-Windows.cmd','RELEASE_0914_TH.md','RELEASE_0913_TH.md','RELEASE_0912_TH.md','SOUNDFONT_GUIDE_TH.md','UI_GUIDE_TH.md','IMPORT_GUIDE_TH.md','version_info.txt','README_TH.md','CHANGELOG.md','FEATURE_STATUS.md','LEGACY_TEST_RESULTS.json','SEARCH_BENCHMARK.json','THIRD_PARTY.md','LICENSE.txt','Setup-Audio.ps1','Install-to-D.cmd','install_to_D.ps1','start.bat','requirements.txt']
+        names=['RELEASE_0925_TH.md','RELEASE_0917_TH.md','RELEASE_0916_TH.md','RELEASE_0915_TH.md']+names
         for name in names:
             item=source/name
             if item.is_dir():
