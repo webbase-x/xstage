@@ -245,7 +245,7 @@ def _source_audio_details(source):
                         if isinstance(original_lrc, str) and original_lrc.strip():
                             result["timedLrc"] = original_lrc
                         else:
-                            result["timedLrc"] = "\\n".join(timestamped)
+                            result["timedLrc"] = "\n".join(timestamped)
                         metadata = document.get("metadata") or {}
                         if isinstance(metadata, dict):
                             if not result["title"]:
