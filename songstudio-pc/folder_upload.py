@@ -308,7 +308,8 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             # The same MIDI accompaniment can belong to different songs:
             # deduplicate complete media+timed-lyrics PAIRS, not audio alone.
             lyric_hash = digest(lyric) if lyric is not None else ""
-            source_id = hashlib.sha256((digest(media)+":"+lyric_hash).encode("ascii")).hexdigest()
+            media_hash = digest(media)
+            source_id = hashlib.sha256((media_hash+":"+lyric_hash).encode("ascii")).hexdigest()
             if source_id in seen:continue
             seen.add(source_id)
             code = row["name"].strip()
@@ -344,7 +345,7 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                 continue
             if file.suffix.lower() == source_kind:
                 shutil.copyfile(media, file)
-                if digest(file) != source_id:
+                if digest(file) != media_hash:
                     raise ValueError("SHA-256 ไฟล์ที่คัดลอกไม่ตรงต้นฉบับ: " + media.name)
             elif renderer is not None:
                 renderer(media, file)
