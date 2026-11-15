@@ -38,7 +38,7 @@ All listed components are predownloaded and tested during **GitHub Actions build
 - Scan source folders, search/select songs, persist source/output preferences
 - **JSON-only lyric editing:** The head/tail/search replacement editor updates only timed Lyrics JSON, preserves original MID/LYR/CUR, interpolates display cues within each original lyric line if the text length changes, and supports ZIP backup/undo. No artificial dot or “ดนตรี>” filler text.
 - **Default export:** Original MIDI/KAR copied with SHA-256 verification + timed Lyrics JSON. Optional M4A conversion creates a new audio file without changing source MIDI. Source NCN .LYR/.CUR are import-only and never uploaded.
-- **Private Drive v4:** Exactly two folders, XStageWeb/AUDIO (media and SoundFonts) and XStageWeb/LYRICS (timed lyrics, catalogs, current.json). Legacy layouts can be read but not silently migrated, rewritten or deleted.
+- **Private Drive v4:** Exactly two folders, XStageSong/AUDIO (media and SoundFonts) and XStageSong/LYRICS (timed lyrics, catalogs, current.json). Legacy layouts can be read but not silently migrated, rewritten or deleted.
 - Convert supported audio formats to M4A (AAC 192 kbps) using FFmpeg; preserve existing M4A audio
 - Render MIDI/KAR to WAV using bundled FluidSynth and default SF2, then convert to M4A
 - **Offline AI Separation:** HTDemucs ONNX model and NumPy/ONNX Runtime are included in the Ready ZIP. Choose “แยกเสียงร้อง AI (Full Offline)” in create-step 3; create-step 4 exports the instrumental M4A plus a separate vocals M4A. Preview uses the same local AI model. No additional downloads on the user's PC.
@@ -194,10 +194,10 @@ Songs, soundfonts and output files are handled locally. The local server binds t
 ## Google Drive library layout v4 — AUDIO + LYRICS
 
 All new owner-private music libraries use exactly two flat directories under
-`XStageWeb/`; there are no format, category, code or bucket subfolders:
+`XStageSong/`; there are no format, category, code or bucket subfolders:
 
 ```text
-XStageWeb/
+XStageSong/
   AUDIO/
     00001-<source SHA prefix>.mid
     00002-<media hash>.m4a
@@ -225,7 +225,7 @@ layout-v1/v2 roots and layout-v3 `TEXT/` catalogs remain readable for backup
 and inspection, but a legacy library is not automatically migrated,
 overwritten or deleted; publishing in v4 requires verified migration.
 
-The local PC working library remains `StageWeb/` with its own local
+The local PC working library remains `XStageSong/` with its own local
 `audio/`, `lyrics/` and catalog journal structure. It must not be
 confused with the two-folder private **Google Drive** layout.
 
