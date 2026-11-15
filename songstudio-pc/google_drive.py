@@ -816,10 +816,10 @@ class GoogleDrive:
                 if (not isinstance(name, str) or name in ("", ".", "..")
                         or "/" in name or chr(92) in name or ":" in name
                         or any(ord(char) < 32 for char in name)):
-                    raise GoogleError("ชื่อไฟล์หรือโฟลเดอร์ XStageWeb ไม่ปลอดภัย")
+                    raise GoogleError("ชื่อไฟล์หรือโฟลเดอร์ XStageSong ไม่ปลอดภัย")
                 relative = prefix + name
                 if relative in seen_paths:
-                    raise GoogleError("พบชื่อไฟล์ซ้ำใน XStageWeb: " + relative)
+                    raise GoogleError("พบชื่อไฟล์ซ้ำใน XStageSong: " + relative)
                 seen_paths.add(relative)
                 if len(seen_paths) > max_items:
                     raise GoogleError("พบไฟล์เกิน 300,000 รายการ · ต้องแบ่งการสำรองเป็นชุด")
@@ -848,7 +848,7 @@ class GoogleDrive:
         walk(root_id)
         if not records:
             if kind == "db":
-                raise GoogleError("ไม่พบไฟล์ DB หรือ current.json ใน XStageWeb · "
+                raise GoogleError("ไม่พบไฟล์ DB หรือ current.json ใน XStageSong · "
                                   "ดาวน์โหลด Song หรือ ZIP ได้ แต่ยังไม่มีฐานเพลงให้กู้คืน")
             raise GoogleError("พบคลัง " + library_name +
                               " แต่ไม่พบไฟล์ที่แอปเข้าถึงได้ · "
@@ -857,17 +857,17 @@ class GoogleDrive:
         return records, library_name
 
     def _online_download_plan(self, kind, *, on_status=None):
-        """Plan a read-only, checksum-verified snapshot of XStageWeb.
+        """Plan a read-only, checksum-verified snapshot of XStageSong.
 
-        The actual Online publisher uses XStageWeb/current.json, with
+        The actual Online publisher uses XStageSong/current.json, with
         immutable catalogs and media referenced by private Google file IDs.
         The legacy Song Studio/songs path is a DIFFERENT backup format.
         """
         roots = [f for f in self.list_children("root")
-                 if f.get("name") in ("StageWeb", "XStageWeb") and
+                 if f.get("name") == "XStageSong" and
                  f.get("mimeType") == "application/vnd.google-apps.folder"]
         if len(roots) > 1:
-            raise GoogleError("พบ XStageWeb หลายคลังที่มองเห็นได้ · กรุณาเลือกคลังให้ชัดเจน")
+            raise GoogleError("พบ XStageSong หลายคลังที่มองเห็นได้ · กรุณาเลือกคลังให้ชัดเจน")
         if not roots:
             return None
         library_name = roots[0]["name"]
@@ -876,7 +876,7 @@ class GoogleDrive:
                          and f.get("mimeType") == "application/vnd.google-apps.folder"]
         if (len([f for f in lyric_folders if f.get("name") == "LYRICS"]) > 1 or
                 len([f for f in lyric_folders if f.get("name") == "TEXT"]) > 1):
-            raise GoogleError("พบ LYRICS/TEXT ซ้ำใน XStageWeb")
+            raise GoogleError("พบ LYRICS/TEXT ซ้ำใน XStageSong")
         modern = [f for section in lyric_folders
                   for f in self.list_children(section["id"])
                   if f.get("name") == "current.json"
@@ -887,7 +887,7 @@ class GoogleDrive:
             raise GoogleError("พบ current.json ทั้งใน LYRICS/TEXT และรากคลัง · หยุด")
         pointers = modern or legacy
         if len(pointers) > 1:
-            raise GoogleError("พบ current.json ซ้ำใน XStageWeb · หยุดเพื่อป้องกันกู้คืนฐานผิด")
+            raise GoogleError("พบ current.json ซ้ำใน XStageSong · หยุดเพื่อป้องกันกู้คืนฐานผิด")
         if not pointers:
             # Existing user-organized AUDIO/VIDEO/MIDI/DB can be downloaded
             # as files even when the online catalog was never published.
@@ -928,13 +928,13 @@ class GoogleDrive:
                 or any(not isinstance(x, str) or not x for x in deltas)
                 or len(set(deltas)) != len(deltas)
                 or type(count) is not int or count < 0):
-            raise GoogleError("โครงสร้าง XStageWeb/current.json ไม่ถูกต้อง")
+            raise GoogleError("โครงสร้าง XStageSong/current.json ไม่ถูกต้อง")
         files, known = [], {}
         def add(relative, file_id, digest):
             if (not isinstance(relative, str) or not relative or
                     relative.startswith("/") or "\\" in relative or ":" in relative
                     or any(s in ("", ".", "..") for s in relative.split("/"))):
-                raise GoogleError("พบพาธไฟล์ไม่ปลอดภัยใน XStageWeb")
+                raise GoogleError("พบพาธไฟล์ไม่ปลอดภัยใน XStageSong")
             digest = checksum(digest, relative)
             if not isinstance(file_id, str) or not file_id:
                 raise GoogleError("แค็ตตาล็อกไม่มี Drive File ID: " + relative)
@@ -950,13 +950,13 @@ class GoogleDrive:
                 meta = self.api("/files/" + urllib.parse.quote(file_id, safe=""),
                                 {"fields": "id,name,mimeType,size,md5Checksum"})
             except GoogleError as exc:
-                raise GoogleError("ไม่สามารถอ่าน Catalog XStageWeb เดิม · "
+                raise GoogleError("ไม่สามารถอ่าน Catalog XStageSong เดิม · "
                                   "ตรวจบัญชี/OAuth Client และสิทธิ์ drive.file: " +
                                   str(exc)) from exc
             name = meta.get("name")
             if (not isinstance(name, str) or not name.startswith(prefix) or
                     not name.endswith(".json") or "/" in name or "\\" in name):
-                raise GoogleError("ชื่อ Catalog ไม่ตรงกับ XStageWeb/current.json")
+                raise GoogleError("ชื่อ Catalog ไม่ตรงกับ XStageSong/current.json")
             doc = read_json(meta, library_name + "/" + name)
             prefix = ("LYRICS/" if pointer.get("layoutVersion") == 4 else
                        "TEXT/" if pointer.get("layoutVersion") == 3 else
@@ -965,7 +965,7 @@ class GoogleDrive:
             return doc
         base = catalog(base_id, "catalog-base-")
         if base.get("schemaVersion") != 1 or not isinstance(base.get("songs"), list):
-            raise GoogleError("Catalog หลัก XStageWeb ไม่สมบูรณ์")
+            raise GoogleError("Catalog หลัก XStageSong ไม่สมบูรณ์")
         songs = {}
         def row_id(row):
             if (not isinstance(row, dict) or
@@ -982,7 +982,7 @@ class GoogleDrive:
             if (delta.get("schemaVersion") != 1 or
                     not isinstance(delta.get("upserts"), list) or
                     not isinstance(delta.get("removes"), list)):
-                raise GoogleError("Catalog ส่วนเพิ่ม XStageWeb ไม่สมบูรณ์")
+                raise GoogleError("Catalog ส่วนเพิ่ม XStageSong ไม่สมบูรณ์")
             for key in delta["removes"]:
                 if not isinstance(key, str):
                     raise GoogleError("Catalog มีรหัสเพลงที่จะลบไม่ถูกต้อง")
@@ -993,7 +993,7 @@ class GoogleDrive:
             raise GoogleError("จำนวนเพลงใน current.json และ Catalog ไม่ตรงกัน")
         if kind != "db":
             if not songs:
-                raise GoogleError("XStageWeb ยังไม่มีเพลงที่เผยแพร่")
+                raise GoogleError("XStageSong ยังไม่มีเพลงที่เผยแพร่")
             for row in songs.values():
                 for field in ("audio", "midi", "video", "originalVideo",
                               "lyrics", "vocals", "lrc"):
@@ -1104,8 +1104,8 @@ class GoogleDrive:
             if not collected:
                 raise GoogleError(
                     "พบโฟลเดอร์คลังเพลงสำรองแบบเก่า X-Stage Song Studio/songs ที่ว่าง "
-                    "และไม่พบ XStageWeb ที่แอปมองเห็นได้ · การอัปโหลดปัจจุบันใช้ "
-                    "XStageWeb/current.json ไม่ใช่ songs/current.json · "
+                    "และไม่พบ XStageSong ที่แอปมองเห็นได้ · การอัปโหลดปัจจุบันใช้ "
+                    "XStageSong/current.json ไม่ใช่ songs/current.json · "
                     "ตรวจบัญชี Google และ OAuth Client ของการซิงค์เดิม "
                     "· ห้ามสร้างคลังใหม่เพื่อแก้ข้อผิดพลาดนี้")
             if not any(rel == "current.json" for rel, _ in collected):
@@ -1121,7 +1121,7 @@ class GoogleDrive:
             on_status("พบคลังเพลงบน Google Drive · " + str(len(collected)) +
                       " ไฟล์ · กำลังดาวน์โหลด " + kind.upper())
         base = (Path(tempfile.mkdtemp(prefix="xstage-drive-zip-")) if kind == "zip"
-                else target_root / library_name if library_name in ("StageWeb", "XStageWeb")
+                else target_root / library_name if library_name == "XStageSong"
                 else target_root / "X-Stage Song Studio" / "songs")
         done = 0
         if on_item:
