@@ -9,8 +9,6 @@ from test_studio import midi_fixture
 from karaoke.library import SongLibrary, write_json
 from karaoke.duplicate_review import create_review,read_review
 from karaoke.duplicate_actions import delete_permanently
-from karaoke.visible_sync import visible_song_plan
-from karaoke.cloud_sync import create_snapshot
 
 class NCN0941Tests(unittest.TestCase):
     def setUp(self):
@@ -54,23 +52,5 @@ class NCN0941Tests(unittest.TestCase):
         review=create_review(self.lib,verify_exact=True)
         self.assertEqual(read_review(review,category='exact')[0],0)
         self.assertEqual(self.lib.count(),2)
-
-    def test_drive_includes_only_visible_complete_ncn_triple(self):
-        files=self.song('A')
-        songs,media,skipped=visible_song_plan(self.lib.path,[self.root/'Song'])
-        self.assertEqual(len(songs),1)
-        self.assertEqual(len(media),3)
-        self.assertEqual(set(songs[0]['files']),{'media','lyrics','cursor'})
-        self.assertEqual(skipped,[])
-        snap=create_snapshot(self.data,self.root/'Drive','user@example.com',[self.root/'Song'])
-        self.assertEqual(len([p for p in (snap/'Songs').rglob('*') if p.is_file()]),3)
-        manifest=json.loads((snap/'web-manifest.json').read_text(encoding='utf-8'))
-        self.assertNotIn(str(self.root),json.dumps(manifest))
-
-    def test_missing_ncn_part_skips_entire_bundle(self):
-        media,lyr,cur=self.song('A');cur.unlink()
-        songs,files,skipped=visible_song_plan(self.lib.path,[self.root/'Song'])
-        self.assertEqual(songs,[]);self.assertEqual(files,{})
-        self.assertEqual(len(skipped),1)
 
 if __name__=='__main__':unittest.main()

@@ -15,7 +15,6 @@ from karaoke.remote_requests import RequestBook
 from karaoke.remote import RemoteServer
 from karaoke.play_stats import sync_recent, history_hits, validate_stats
 from karaoke.performance_features import PlayHistory
-from karaoke.cloud_sync import create_snapshot, validate_snapshot
 from karaoke.restore import stage_restore, apply_pending
 from karaoke.random_medley import build_preview
 
@@ -91,42 +90,6 @@ class DurablePlayStatsTests(unittest.TestCase):
             h.start(QueueItem(1), {'path':'C:/song.mid','title':'A'})
             h.finish('medley')
             self.assertEqual(history_hits(p)[0][2],2)
-
-    def test_drive_backup_and_restore_history_stats_as_optional(self):
-        with TemporaryDirectory() as d:
-            root=Path(d);source=root/'Source';dest=root/'Dest';source.mkdir();dest.mkdir()
-            for folder in (source,dest):
-                SongLibrary(folder/'songs.sqlite3')
-                write_json(folder/'settings.json',{})
-                write_json(folder/'queue.json',[])
-            write_json(source/'history.json',[self.row(1)])
-            sync_recent(source/'history.json')
-            snapshot=create_snapshot(source,root/'Drive','user@example.com')
-            dbroot=snapshot/'database'
-            self.assertTrue((dbroot/'history.json').exists())
-            self.assertTrue((dbroot/'play_stats.sqlite3').exists())
-            self.assertEqual(validate_snapshot(snapshot)['songs'],0)
-            stage_restore(dbroot,dest)
-            apply_pending(dest)
-            self.assertEqual(history_hits(dest/'history.json')[0][2],1)
-            # Legacy backup omitting both optional files still restores.
-            (dbroot/'history.json').unlink()
-            (dbroot/'play_stats.sqlite3').unlink()
-            stage_restore(dbroot,dest)
-            apply_pending(dest)
-
-    def test_snapshot_sha256_detects_tampering(self):
-        with TemporaryDirectory() as d:
-            root=Path(d);source=root/'Source';source.mkdir()
-            SongLibrary(source/'songs.sqlite3')
-            write_json(source/'settings.json',{})
-            write_json(source/'queue.json',[])
-            snapshot=create_snapshot(source,root/'Drive','user@example.com')
-            self.assertEqual(validate_snapshot(snapshot)['songs'],0)
-            with (snapshot/'database'/'queue.json').open('ab') as file:
-                file.write(b' ')
-            with self.assertRaisesRegex(ValueError,'SHA-256'):
-                validate_snapshot(snapshot)
 
     def test_rollback_after_history_write_restores_previous_files(self):
         with TemporaryDirectory() as d:

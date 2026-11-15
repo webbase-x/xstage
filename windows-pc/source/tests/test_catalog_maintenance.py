@@ -90,7 +90,7 @@ class CatalogMaintenanceTests(unittest.TestCase):
     def test_shutdown_cancel_releases_catalog_worker_and_clears_scanning(self):
         window = Mock()
         window.window.winfo_exists.return_value = True
-        app = SimpleNamespace(scanning=False, _cloud_backup_busy=False, engine=None,
+        app = SimpleNamespace(scanning=False, engine=None,
                               cancel_scan=threading.Event(), catalog_window=window,
                               library=self.library, song_queue=SimpleNamespace(items=[]),
                               status_var=Mock(), after=Mock(return_value='close-wait'),
