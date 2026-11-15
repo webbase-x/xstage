@@ -3426,6 +3426,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global PORT
+    count = 0
     try:
         count = restore_song_catalog()
         restore_scan_changes()
