@@ -2,7 +2,7 @@
 # X-Stage Song Studio — interactive Windows folder / file picker.
 # Runs within the logged-in user's desktop session, never inside a remote web page.
 param(
-    [Parameter(Mandatory=$true)][ValidateSet('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder','soundfont','oauth','vocal')]
+    [Parameter(Mandatory=$true)][ValidateSet('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder','json_source','json_destination','soundfont','oauth','vocal')]
     [string]$Kind,
     [string]$InitialPath = '',
     [switch]$SelfTest
@@ -28,7 +28,7 @@ $owner.Opacity = 0.01
 $owner.StartPosition = 'CenterScreen'
 $dialog = $null
 try {
-    if ($Kind -in @('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder')) {
+    if ($Kind -in @('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder','json_source','json_destination')) {
         $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
         $dialog.Description = @{
             source = 'เลือกโฟลเดอร์เพลงต้นฉบับ'
@@ -36,6 +36,8 @@ try {
             pc_export_folder = 'เลือกตำแหน่งจัดเก็บ XStageSong สำหรับ Karaoke PC'
             lyric_source = 'เลือกคลัง StageWeb สำหรับจัดการข้อความหัว–ท้ายเพลง'
             xsk_folder = 'เลือกโฟลเดอร์ปลายทางเก็บ XSK แบบ Pro'
+            json_source = 'เลือกโฟลเดอร์เพลงต้นทางสำหรับ Lyrics JSON Pro'
+            json_destination = 'เลือกโฟลเดอร์ปลายทางสำหรับ Lyrics JSON Pro'
             workspace = 'เลือกโฟลเดอร์เก็บเพลงที่สร้าง'
             download = 'เลือกโฟลเดอร์ดาวน์โหลด'
         }[$Kind]
@@ -49,7 +51,7 @@ try {
         $dialog.Filter = if ($Kind -eq 'soundfont') {
             'SoundFont (*.sf2;*.sf3)|*.sf2;*.sf3|All files (*.*)|*.*'
         } elseif ($Kind -eq 'vocal') {
-            'Audio (*.mp3;*.m4a;*.wav;*.flac;*.aac;*.ogg;*.wma;*.mp4;*.oga)|*.mp3;*.m4a;*.wav;*.flac;*.aac;*.ogg;*.wma;*.mp4;*.oga'
+            'Audio/Video (*.mp3;*.m4a;*.wav;*.flac;*.aac;*.ogg;*.wma;*.mp4;*.oga;*.mkv;*.avi;*.mov;*.wmv;*.webm;*.flv;*.vob;*.dat;*.mpg;*.mpeg;*.m4v;*.3gp;*.ts;*.m2ts;*.aiff;*.aif)|*.mp3;*.m4a;*.wav;*.flac;*.aac;*.ogg;*.wma;*.mp4;*.oga;*.mkv;*.avi;*.mov;*.wmv;*.webm;*.flv;*.vob;*.dat;*.mpg;*.mpeg;*.m4v;*.3gp;*.ts;*.m2ts;*.aiff;*.aif|All files (*.*)|*.*'
         } else {
             'Google OAuth JSON (*.json)|*.json|All files (*.*)|*.*'
         }
@@ -69,7 +71,7 @@ try {
     [void]$owner.Activate()
     $answer = $dialog.ShowDialog($owner)
     if ($answer -eq [System.Windows.Forms.DialogResult]::OK) {
-        $chosen = if ($Kind -eq 'vocal') { ConvertTo-Json -InputObject @($dialog.FileNames) -Compress } elseif ($Kind -in @('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder')) { $dialog.SelectedPath } else { $dialog.FileName }
+        $chosen = if ($Kind -eq 'vocal') { ConvertTo-Json -InputObject @($dialog.FileNames) -Compress } elseif ($Kind -in @('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder','json_source','json_destination')) { $dialog.SelectedPath } else { $dialog.FileName }
         if ([string]::IsNullOrWhiteSpace($chosen)) {
             throw 'หน้าต่างเลือกไฟล์ไม่คืนค่าที่เลือก'
         }
