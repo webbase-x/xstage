@@ -409,3 +409,23 @@ button.preview-lyric-line{cursor:pointer}
 .ai-export-location strong{overflow-wrap:anywhere;color:#d9f8f1}
 #ai-export-button{justify-self:start}
 @media(max-width:650px){.ai-export-panel{padding:12px}.ai-export-options{flex-direction:column}.ai-export-location{align-items:stretch;flex-direction:column}#ai-export-button{width:100%}}
+
+
+/* Keep all navigation actions reachable on laptop-height desktops.
+   The sticky sidebar itself is viewport sized; scroll its menu, not the page. */
+@media(min-width:751px){
+  .sidebar{overflow:hidden}
+  .sidebar .brand,.sidebar .edition,.sidebar .sidebar-bottom{flex-shrink:0}
+  .sidebar .navigation{
+    min-height:0;
+    flex:1 1 auto;
+    overflow-y:auto;
+    overflow-x:hidden;
+    align-content:start;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+    scrollbar-color:#406a80 transparent;
+    padding-right:3px;
+  }
+  .sidebar .nav-button{flex-shrink:0}
+}
