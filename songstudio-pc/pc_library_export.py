@@ -86,7 +86,8 @@ def _files(source):
                 # Never recycle generated Karaoke PC/Drive catalogs as lyrics
                 # when the authoring and playback XStageSong roots are shared.
                 if folder == "lyrics" and (name.casefold() == "current.json"
-                        or name.casefold().startswith(("catalog-", "database-"))):
+                        or name.casefold().startswith(("catalog-", "database-"))
+                        or "-pc-snapshot-" in name.casefold()):
                     continue
                 rel = file.relative_to(base)
                 if any(part in ("", ".", "..") for part in rel.parts):
@@ -161,12 +162,27 @@ def _plan_files(source, destination):
     replacements = {}
     copied_bytes = 0
     new_count = versioned = 0
+    shared_root = source.resolve() == destination.resolve()
     for src, rel in _files(source):
         original = destination / rel
         target = original
+        # On case-insensitive Windows, source/lyrics and Karaoke/LYRICS can
+        # be the SAME directory. Always publish a separate immutable snapshot
+        # so subsequent text edits never change a previous karaoke catalog.
+        if shared_root and rel.parts[0] == "LYRICS":
+            digest = _hash(src)[:16]
+            variant = rel.with_name(rel.stem + "-pc-snapshot-" + digest + rel.suffix)
+            target = destination / variant
+            replacements[rel.as_posix()] = variant.as_posix()
+            if not target.is_file():
+                versioned += 1
+            if target.is_symlink():
+                raise ValueError("พบ symbolic link ใน Lyrics snapshot")
+            if target.is_file() and _hash(target) != _hash(src):
+                raise FileExistsError("Lyrics snapshot มีชื่อชนกันแต่เนื้อหาไม่ตรง")
         if original.is_symlink():
             raise ValueError("พบ symbolic link ในคลัง Karaoke PC: " + str(original))
-        if original.is_file() and _hash(original) != _hash(src):
+        if not shared_root and original.is_file() and _hash(original) != _hash(src):
             if rel.parts[0] != "LYRICS":
                 raise FileExistsError(
                     "ไฟล์เสียงชื่อเดิมแต่เนื้อหาเปลี่ยน กรุณาตรวจเพลงก่อนนำเข้า: " + str(original))
