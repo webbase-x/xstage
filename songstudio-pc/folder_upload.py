@@ -219,7 +219,8 @@ def scan(folder, ncn=None):
                 unsupported.append(members[0].name)
     return {"folder": str(root), "complete": complete,
             "incomplete": incomplete, "unsupported": unsupported,
-            "fileCount": len(paths), "total": len(complete)}
+            "fileCount": len(paths), "folderCount": len({p.parent for p in paths}),
+            "total": len(complete)}
 
 
 def existing_local_catalog(folder, export):
@@ -264,13 +265,15 @@ def report(folder, export=None, ncn=None):
         for row in library["rows"]:
             kind = Path((row.get("audio") or {}).get("path") or "").suffix.lstrip(".").upper()
             kinds[kind or "UNKNOWN"] = kinds.get(kind or "UNKNOWN", 0) + 1
-        return {"folder": str(library["root"]), "fileCount": len(_indexed(library["root"])),
+        indexed = _indexed(library["root"])
+        return {"folder": str(library["root"]), "fileCount": len(indexed),
+                "folderCount": len({p.parent for p in indexed}),
                 "ready": len(library["rows"]), "incomplete": library["incomplete"],
                 "unsupported": 0, "examples": [],
                 "kinds": kinds, "source": "XStageSong catalog"}
     result = scan(folder, ncn=ncn)
     return {"folder": result["folder"], "fileCount": result["fileCount"],
-            "ready": result["total"], "incomplete": len(result["incomplete"]),
+            "folderCount": result["folderCount"], "ready": result["total"], "incomplete": len(result["incomplete"]),
             "unsupported": len(result["unsupported"]),
             "examples": result["incomplete"][:12],
             "kinds": {kind: sum(row["kind"] == kind for row in result["complete"])
