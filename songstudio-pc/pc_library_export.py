@@ -7,6 +7,7 @@ Neither Drive credentials nor a Windows installer are required.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -28,7 +29,26 @@ def destination_root(selected):
     if not isinstance(selected, str) or not selected.strip():
         raise ValueError("กรุณาเลือกตำแหน่งเก็บคลัง XStageSong สำหรับ Karaoke PC")
     chosen = Path(selected.strip()).expanduser().resolve()
-    return chosen if chosen.name.casefold() == "xstagesong" else chosen / "XStageSong"
+    if chosen.name.casefold() == "xstagesong":
+        return chosen
+    if chosen.name.casefold() == "songs":
+        return chosen / "XStageSong"
+    if ((chosen / "App" / "XStageKaraoke.exe").is_file()
+            or (chosen / "XStageKaraoke.exe").is_file()):
+        return chosen / "Songs" / "XStageSong"
+    return chosen / "XStageSong"
+
+
+def _sqlite_bridge():
+    path = Path(__file__).resolve().with_name("pc_sqlite_bridge.py")
+    if not path.is_file():
+        raise RuntimeError("ไม่พบโมดูล SQLite ของ Karaoke PC")
+    spec = importlib.util.spec_from_file_location("xstage_pc_sqlite_bridge", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("ไม่สามารถอ่านโมดูล SQLite ของ Karaoke PC")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _safe_rel(value, prefix):
@@ -62,6 +82,11 @@ def _files(source):
                 file = Path(root) / name
                 if (file.is_symlink() or not file.is_file() or
                         name.startswith(".") or file.suffix.casefold() not in suffixes):
+                    continue
+                # Never recycle generated Karaoke PC/Drive catalogs as lyrics
+                # when the authoring and playback XStageSong roots are shared.
+                if folder == "lyrics" and (name.casefold() == "current.json"
+                        or name.casefold().startswith(("catalog-", "database-"))):
                     continue
                 rel = file.relative_to(base)
                 if any(part in ("", ".", "..") for part in rel.parts):
@@ -163,8 +188,8 @@ def _plan_files(source, destination):
 def inspect(source_root, selected_destination, export):
     source = Path(source_root).expanduser().resolve()
     target = destination_root(selected_destination)
-    if target == source or target.is_relative_to(source) or source.is_relative_to(target):
-        raise ValueError("ตำแหน่งปลายทางต้องแยกจาก XStageSong ที่ใช้สร้างเพลง")
+    if target != source and (target.is_relative_to(source) or source.is_relative_to(target)):
+        raise ValueError("โฟลเดอร์ปลายทางทับซ้อนพื้นที่สร้างเพลง · เลือก XStageSong เดียวกันหรือแยกคลัง")
     records = _source(source, export)
     existing = _existing(target)
     files, _replacements, missing, bytes_to_copy, versioned = _plan_files(source, target)
@@ -172,7 +197,10 @@ def inspect(source_root, selected_destination, export):
             "songs": len(records), "existingSongs": len(existing),
             "files": len(files), "newFiles": missing,
             "updatedLyrics": versioned,
-            "bytesToCopy": bytes_to_copy}
+            "bytesToCopy": bytes_to_copy,
+            "database": str(_sqlite_bridge().database_location(target)[0]),
+            "databaseAction": "update" if _sqlite_bridge().database_location(target)[0].is_file() else "create",
+            "databaseInstalled": _sqlite_bridge().database_location(target)[1]}
 
 
 def _atomic_copy(source_file, target_file):
@@ -263,6 +291,9 @@ def publish(source_root, selected_destination, export, *, cancelled=None, progre
                   "songCount": len(combined), "generation": generation,
                   "catalogFiles": refs,
                   "publishedAt": datetime.now(timezone.utc).isoformat()})
-    return {**report, "copied": copied, "reused": reused,
+    # Reuse the exact SongLibrary SQLite schema and upsert semantics from
+    # Karaoke PC; preserve existing user edits, favorites and other rows.
+    db_result = _sqlite_bridge().sync(dest, list(combined.values()))
+    return {**report, **db_result, "copied": copied, "reused": reused,
             "songCount": len(combined),
-            "message": f"นำเข้า X-Stage Karaoke PC สำเร็จ {len(combined):,} เพลง · คัดลอกใหม่ {copied:,} ไฟล์ · ใช้เดิม {reused:,} ไฟล์ · {dest}"}
+            "message": f"นำเข้า Karaoke PC สำเร็จ {len(combined):,} เพลง · คัดลอกใหม่ {copied:,} ไฟล์ · ใช้เดิม {reused:,} ไฟล์ · ฐาน SQLite {db_result['databaseAction']} · {db_result['database']}"}
