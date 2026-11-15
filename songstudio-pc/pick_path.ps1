@@ -2,7 +2,7 @@
 # X-Stage Song Studio — interactive Windows folder / file picker.
 # Runs within the logged-in user's desktop session, never inside a remote web page.
 param(
-    [Parameter(Mandatory=$true)][ValidateSet('source','workspace','download','upload_folder','pc_export_folder','lyric_source','soundfont','oauth','vocal')]
+    [Parameter(Mandatory=$true)][ValidateSet('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder','soundfont','oauth','vocal')]
     [string]$Kind,
     [string]$InitialPath = '',
     [switch]$SelfTest
@@ -28,13 +28,14 @@ $owner.Opacity = 0.01
 $owner.StartPosition = 'CenterScreen'
 $dialog = $null
 try {
-    if ($Kind -in @('source','workspace','download','upload_folder','pc_export_folder','lyric_source')) {
+    if ($Kind -in @('source','workspace','download','upload_folder','pc_export_folder','lyric_source','xsk_folder')) {
         $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
         $dialog.Description = @{
             source = 'เลือกโฟลเดอร์เพลงต้นฉบับ'
             upload_folder = 'เลือกโฟลเดอร์เพลงที่จะตรวจและอัปโหลด'
             pc_export_folder = 'เลือกตำแหน่งจัดเก็บ XStageSong สำหรับ Karaoke PC'
             lyric_source = 'เลือกคลัง StageWeb สำหรับจัดการข้อความหัว–ท้ายเพลง'
+            xsk_folder = 'เลือกโฟลเดอร์ปลายทางเก็บ XSK แบบ Pro'
             workspace = 'เลือกโฟลเดอร์เก็บเพลงที่สร้าง'
             download = 'เลือกโฟลเดอร์ดาวน์โหลด'
         }[$Kind]
