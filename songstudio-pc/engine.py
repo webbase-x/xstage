@@ -534,7 +534,10 @@ def scan_source(full=False):
         FILE_BY_ID.clear()
         FILE_BY_ID.update((row["id"], row) for row in rows)
         FILE_BY_ID.update(AI_IMPORTED)
-        LAST_SCAN_STATS = stats
+        # Keep potentially large ID lists out of the job/status JSON polled
+        # every second; only summary counts belong in the public job snapshot.
+        LAST_SCAN_STATS = {key: value for key, value in stats.items()
+                           if key not in ("addedIds", "changedIds")}
         SCAN_CHANGE_IDS.clear()
         SCAN_CHANGE_IDS.update(stats.get("addedIds", []))
         SCAN_CHANGE_IDS.update(stats.get("changedIds", []))
