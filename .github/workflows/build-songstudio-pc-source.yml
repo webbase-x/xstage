@@ -77,6 +77,21 @@ jobs:
         run: |
           python scripts/package-song-studio-pc.py
           python - <<'PY'
+          import subprocess, sys, tempfile
+          from pathlib import Path
+          from zipfile import ZipFile
+          source=Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip")
+          with tempfile.TemporaryDirectory(prefix="studio-pc-source-") as folder:
+              with ZipFile(source) as archive:
+                  archive.extractall(folder)
+              root=next(Path(folder).iterdir())
+              command=[sys.executable,"-c","import sys;sys.path.insert(0,sys.argv[1]);import engine;print('ENGINE_IMPORT_OK')",str(root)]
+              done=subprocess.run(command,capture_output=True,text=True,timeout=45)
+              if done.returncode or "ENGINE_IMPORT_OK" not in done.stdout:
+                  raise RuntimeError("Extracted Source ZIP fails engine import: "+done.stderr[-3000:])
+          print("PASS: extracted ZIP Engine imports all bundled startup modules")
+          PY
+          python - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
           p = Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip")
