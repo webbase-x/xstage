@@ -167,6 +167,17 @@ def _source_audio_details(source):
             if companion.stat().st_size <= 250000:
                 content = NCN._decode_text(companion.read_bytes()).lstrip("\ufeff").strip()
                 if content:
+                    for header in content.splitlines()[:40]:
+                        header = header.strip()
+                        if header.startswith("[") and header.endswith("]") and ":" in header:
+                            tag, value = header[1:-1].split(":", 1)
+                            key = tag.casefold()
+                            if key in ("ti", "title") and value.strip() and not result["title"]:
+                                result["title"] = value.strip()[:180]
+                                result["metadataSource"] = "ส่วนหัวไฟล์ LRC"
+                            elif key in ("ar", "artist") and value.strip() and not result["artist"]:
+                                result["artist"] = value.strip()[:180]
+                                result["metadataSource"] = "ส่วนหัวไฟล์ LRC"
                     if _song_export_module().lrc_to_json(
                             content, source.stem).get("lines"):
                         result["timedLrc"] = content
@@ -203,7 +214,7 @@ def restore_ai_imports():
         except (OSError, ValueError, KeyError, TypeError):
             continue
 
-def import_ai_audio(source_path):
+def import_ai_audio(source_path, *, inspect_metadata=True):
     """Register a selected local audio file without scanning the song library."""
     if not isinstance(source_path, str) or not source_path.strip():
         raise ValueError("กรุณาเลือกไฟล์เพลงจากเครื่อง")
@@ -215,7 +226,8 @@ def import_ai_audio(source_path):
     if path.stat().st_size < 1000:
         raise ValueError("ไฟล์เสียงมีขนาดเล็กผิดปกติหรือไม่มีข้อมูล")
     resolved = str(path.resolve())
-    discovered = _source_audio_details(path)
+    discovered = (_source_audio_details(path) if inspect_metadata
+                  else {"title": "", "artist": ""})
     with LOCK:
         existing = next((row for row in AI_IMPORTED.values()
                          if row["path"].casefold() == resolved.casefold()), None)
@@ -508,9 +520,11 @@ def import_vocal_sources():
     added = skipped = 0
     errors = []
     imported = []
-    for raw in paths:
+    for index, raw in enumerate(paths):
         try:
-            result = import_ai_audio(raw)
+            # Resolve the first selected song immediately. Other 199 inputs
+            # remain fast, then load their metadata when the user selects one.
+            result = import_ai_audio(raw, inspect_metadata=index == 0)
             imported.append(result["song"])
             if result["alreadyImported"]:
                 skipped += 1
@@ -2455,7 +2469,7 @@ def approve_ai_lyrics(song_id, lrc_text):
         line = raw.strip()
         if not line:
             continue
-        if re.match(r"^\[(ti|ar|al|by|offset):", line, re.I):
+        if re.match(r"^\[[a-z][a-z0-9_-]{1,30}:[^\]]*\]$", line, re.I):
             continue
         match = stamp.match(line)
         if not match or int(match.group(2)) >= 60:
