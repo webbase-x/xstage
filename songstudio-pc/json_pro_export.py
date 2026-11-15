@@ -94,7 +94,8 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     entries = inspection["complete"]
     root.mkdir(parents=True, exist_ok=True)
     prior = export.existing_records(root)
-    seen = {(record.get("sourceIdentity") or {}).get("sha256") for record in prior
+    seen = {((record.get("sourceIdentity") or {}).get("sha256"),
+             (record.get("sourceIdentity") or {}).get("outputFormat")) for record in prior
             if export.record_is_complete(root, record)}
     existing = {record.get("webSongId") for record in prior
                 if export.record_is_complete(root, record)}
@@ -113,7 +114,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         try:
             source_hash = _fingerprint(media)
             identity = "json-pro/" + source_hash + "/" + output_format
-            if source_hash in seen or identity in existing:
+            if (source_hash, output_format) in seen or identity in existing:
                 skipped += 1
                 continue
             code = media.stem.strip()
@@ -137,6 +138,10 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             final_lyrics.parent.mkdir(parents=True, exist_ok=True)
             temp_audio = final_audio.with_name("." + final_audio.stem + ".partial" + final_audio.suffix)
             temp_lyrics = final_lyrics.with_name(final_lyrics.name + ".partial")
+            if temp_audio.is_symlink() or temp_lyrics.is_symlink():
+                raise ValueError("พบไฟล์ชั่วคราวแบบ Symbolic Link")
+            temp_audio.unlink(missing_ok=True)
+            temp_lyrics.unlink(missing_ok=True)
             try:
                 if output_format == "original":
                     with media.open("rb") as reader, temp_audio.open("xb") as writer:
@@ -168,11 +173,12 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                       "sourceFormat": item["kind"],
                       "sourceIdentity": {"sha256": source_hash,
                                          "canonicalPath": export.canonical_source_path(media),
-                                         "bytes": media.stat().st_size}}
+                                         "bytes": media.stat().st_size,
+                                         "outputFormat": output_format}}
             export.append_journal(root, record)
             staged_records.append(record)
             existing.add(identity)
-            seen.add(source_hash)
+            seen.add((source_hash, output_format))
             created += 1
         except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             errors += 1
@@ -180,8 +186,9 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         if progress is not None:
             progress(index, len(entries), {"created": created, "skipped": skipped,
                                             "errors": errors})
-    if staged_records:
-        export.publish_batch(root, staged_records)
+    pending = export.journal_records(root)
+    if pending:
+        export.publish_batch(root, pending)
         export.clear_published_journal(root)
     if not entries:
         raise ValueError("ไม่พบเพลงที่มีเนื้อร้องพร้อมเวลาในต้นทาง")
