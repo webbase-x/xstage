@@ -20,7 +20,7 @@ function Assert-XStageTarget([string]$Target, [string]$File) {
     $full = [IO.Path]::GetFullPath($File)
     if (!$full.StartsWith($base+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Update path escapes the installation.' }
     $relative = $full.Substring($base.Length+1)
-    $allowed = $relative -match '^(App|Source)\\' -or $relative -in @('Start-Karaoke.cmd','X-Stage Karaoke.cmd','Setup-Audio.cmd','X-Stage Karaoke.lnk')
+    $allowed = $relative -match '^(App|Source)\\' -or $relative -in @('Start-Karaoke.cmd','X-Stage Karaoke PC.cmd','Setup-Audio.cmd','X-Stage Karaoke PC.lnk','X-Stage Karaoke.cmd','X-Stage Karaoke.lnk')
     if (!$allowed) { throw ('Protected path cannot be updated: '+$relative) }
     $check = $full
     while ($check -and $check.Length -ge $base.Length) {

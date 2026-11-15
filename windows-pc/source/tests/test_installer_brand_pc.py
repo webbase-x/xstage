@@ -30,6 +30,9 @@ class PcBrandingRegression(unittest.TestCase):
         self.assertIn('XStageKaraoke.exe', installer)
         self.assertIn('X-Stage Karaoke PC.lnk', installer)
         self.assertIn('Start-Karaoke.cmd', installer)
+        safety = (ROOT / 'tools/Installer-Safety.ps1').read_text(encoding='utf-8-sig')
+        self.assertIn('X-Stage Karaoke PC.cmd', safety)
+        self.assertIn('X-Stage Karaoke PC.lnk', safety)
         self.assertIn('D:\\newKaraoke\\Karaoke', installer)
 
 if __name__ == '__main__':

@@ -72,7 +72,7 @@ def run():
                 line=next(line for line in app.lyrics.lines if len(line.words)>3)
                 app.engine.seek(line.start+.02)
                 app.paint_lyrics()
-                assert app.preview.state[0] not in ('X-Stage Karaoke','ยังไม่มีเนื้อร้องสำหรับเพลงนี้')
+                assert app.preview.state[0] not in ('X-Stage Karaoke PC','ยังไม่มีเนื้อร้องสำหรับเพลงนี้')
                 assert app.title() == DISPLAY_NAME
                 assert app.preview.state==app.stage_canvas.state,'Preview and singer lyrics diverged'
                 from PIL import Image, ImageChops
