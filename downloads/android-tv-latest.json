@@ -4,6 +4,6 @@
   "build": 1109,
   "file": "X-Stage-Karaoke-Android-v1.0.109-build1109.apk",
   "sha256": "d32eb41834a0e89b4804e0f9475ed5514958852f04b776b4f2b3174a47275bf3",
-  "source_commit": "f6273e667533fd1a639a2291186e30e1c86a17e5",
+  "source_commit": "350a250750d424c04cb155525cb69caca0a75814",
   "note": "Android TV/tablet test APK signed with the stable public X-Stage test key for in-place sideload updates; production Google Play signing is separate."
 }
