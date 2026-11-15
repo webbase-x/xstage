@@ -10,28 +10,34 @@ import json
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-patterns = (
-    "*.js", "*.html", "studio/*.js", "studio/*.html",
-    "songstudio-pc/*.py", "windows-pc/source/karaoke/*.py",
-    "android-tv/app/src/main/java/**/*.java",
-)
-files = sorted({path for pattern in patterns for path in ROOT.glob(pattern)
-                if path.is_file()})
-old_root = re.compile(r"XStageWeb|StageWeb")
+# Scan source, configuration, documentation and platform packaging scripts.
+# The old local authoring folder StageWeb is a distinct historical name; only
+# the deprecated shared cloud/PC root is prohibited.
+source_suffixes = {
+    ".js", ".mjs", ".py", ".html", ".css", ".json", ".webmanifest",
+    ".md", ".java", ".xml", ".kt", ".ps1", ".cmd", ".yml", ".yaml",
+    ".gradle", ".properties", ".txt", ".svg", ".ts", ".tsx",
+}
+files = sorted(path for path in ROOT.rglob("*") if path.is_file()
+               and path.suffix.lower() in source_suffixes
+               and not any(part in {"vendor", ".git", "__pycache__"}
+                           for part in path.relative_to(ROOT).parts)
+               and path.relative_to(ROOT).as_posix() !=
+               "scripts/check_xstagesong_storage.py")
+old_root = re.compile("xstage" + "web", re.IGNORECASE)
 failures = []
 for path in files:
-    body = path.read_text(encoding="utf-8-sig")
+    relative = path.relative_to(ROOT)
+    if old_root.search(relative.as_posix()):
+        failures.append(f"{relative}: old storage filename")
+    try:
+        body = path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError as error:
+        failures.append(f"{relative}: unable to inspect: {error}")
+        continue
     for index, line in enumerate(body.splitlines(), 1):
-        if not old_root.search(line):
-            continue
-        # Preserve existing *local* authoring work, not old Drive libraries.
-        if (path.relative_to(ROOT).as_posix() == "songstudio-pc/song_export.py"
-                and ("StageWeb" in line) and "XStageWeb" not in line):
-            continue
-        if (path.relative_to(ROOT).as_posix() == "songstudio-pc/song_index.py"
-                and 'work / "StageWeb"' in line):
-            continue  # Exclude old authoring output from the input scanner.
-        failures.append(f"{path.relative_to(ROOT)}:{index}: old storage root")
+        if old_root.search(line):
+            failures.append(f"{relative}:{index}: old X-Stage storage root")
 
 publisher = (ROOT / "songstudio-pc/online_publish.py").read_text(encoding="utf-8")
 pc_export = (ROOT / "songstudio-pc/pc_library_export.py").read_text(encoding="utf-8")
