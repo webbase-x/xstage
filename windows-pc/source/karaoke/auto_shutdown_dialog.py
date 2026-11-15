@@ -32,7 +32,7 @@ class AutoShutdownCountdown:
         self.timer = None
         self.cancelled = False
         self.window = DialogWindow(app)
-        self.window.title('ปิดเครื่องอัตโนมัติ — X-Stage Karaoke')
+        self.window.title('ปิดเครื่องอัตโนมัติ — X-Stage Karaoke PC')
         self.window.geometry('570x235')
         self.window.transient(app)
         self.window.protocol('WM_DELETE_WINDOW', self.cancel)

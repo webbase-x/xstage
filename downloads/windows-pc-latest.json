@@ -1,11 +1,11 @@
 {
-  "name": "X-Stage Karaoke Windows PC",
+  "name": "X-Stage Karaoke PC",
   "version": "1.0.76",
   "build": 1076,
   "available": false,
   "installer_file": null,
   "sha256": null,
   "minimum_updater_version": "1.0.0",
-  "message": "Unified X-Stage v1.0.76 source is prepared, but no verified Windows installer is published yet.",
+  "message": "X-Stage Karaoke PC Windows installer is not yet published as a verified update.",
   "source_archive": "downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip"
 }

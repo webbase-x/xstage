@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 
 FEED = 'https://webbase-x.github.io/xstage/downloads/windows-pc-latest.json'
 DOWNLOADS = 'https://webbase-x.github.io/xstage/downloads/'
-FILE_PATTERN = re.compile(r'X-Stage-Karaoke-Windows-v[0-9.]+-build[0-9]+\.(?:exe|msi)\Z')
+FILE_PATTERN = re.compile(r'X-Stage-Karaoke-PC-Windows-v[0-9.]+-build[0-9]+\.(?:exe|msi)\Z')
 HEX_PATTERN = re.compile(r'[0-9a-fA-F]{64}\Z')
 MAX_INSTALLER_BYTES = 300 * 1024 * 1024
 
@@ -120,12 +120,12 @@ def check_in_background(app, current_version, interactive=False):
         if update is None:
             if interactive:
                 on_ui(lambda: messagebox.showinfo('ตรวจอัปเดต X-Stage',
-                    f'X-Stage Windows v{current_version}: ยังไม่มีรุ่นใหม่ที่ผ่านการตรวจสอบและพร้อมติดตั้ง', parent=app))
+                    f'X-Stage Karaoke PC v{current_version}: ยังไม่มีรุ่นใหม่ที่ผ่านการตรวจสอบและพร้อมติดตั้ง', parent=app))
             return
 
         def ask_update():
             if not messagebox.askyesno('มี X-Stage รุ่นใหม่',
-                f"มี X-Stage Windows v{update['version']} พร้อมอัปเดต\n"
+                f"มี X-Stage Karaoke PC v{update['version']} พร้อมอัปเดต\n"
                 'ต้องการดาวน์โหลดและเปิดตัวติดตั้งตอนนี้หรือไม่?\n'
                 'ระบบจะตรวจสอบ SHA-256 ก่อนเปิดตัวติดตั้ง และไม่ลบไฟล์เพลงของคุณ', parent=app):
                 return

@@ -1,4 +1,4 @@
-﻿# X-Stage Windows PC release update. Do not advertise source ZIPs as installers.
+﻿# X-Stage Karaoke PC release update. Do not advertise source ZIPs as installers.
 # The installed X-Stage launcher or app calls this when the app starts.
 # -Install launches a verified newer Windows installer, with Windows consent.
 param(
@@ -42,22 +42,22 @@ try {
             if ($latest -eq $current -and $CurrentBuild -le 0) {
                 Write-Host 'ไม่ทราบเลข Build ของโปรแกรมที่ติดตั้ง · ตรวจ manifest.json หรือส่ง -CurrentBuild เพื่อเปรียบเทียบรุ่นเดียวกัน'
             } else {
-                Write-Host "X-Stage Windows PC $CurrentVersion เป็นรุ่นล่าสุดแล้ว"
+                Write-Host "X-Stage Karaoke PC $CurrentVersion เป็นรุ่นล่าสุดแล้ว"
             }
         }
         exit 0
     }
     $file = [string]$meta.installer_file
-    $expectedFile = "X-Stage-Karaoke-Windows-v$($meta.version)-build$($meta.build)"
+    $expectedFile = "X-Stage-Karaoke-PC-Windows-v$($meta.version)-build$($meta.build)"
     if ($file -notin @("$expectedFile.exe", "$expectedFile.msi") -or
-        $file -notmatch '^X-Stage-Karaoke-Windows-v[0-9.]+-build[0-9]+\.(exe|msi)$') {
+        $file -notmatch '^X-Stage-Karaoke-PC-Windows-v[0-9.]+-build[0-9]+\.(exe|msi)$') {
         throw 'ข้อมูลชื่อไฟล์ Windows Installer ไม่ตรงกับรุ่นที่ประกาศ'
     }
     $expected = [string]$meta.sha256
     if ($expected -notmatch '^[0-9a-fA-F]{64}$') {
         throw 'ไม่มี SHA-256 ที่ถูกต้องสำหรับตรวจสอบ Windows Installer'
     }
-    Write-Host "พบ X-Stage Windows PC v$latest (Build $newBuild)"
+    Write-Host "พบ X-Stage Karaoke PC v$latest (Build $newBuild)"
     if (-not $Install) {
         Write-Host 'เรียกสคริปต์ด้วย -Install เพื่อดาวน์โหลดและเปิดตัวติดตั้ง'
         exit 0

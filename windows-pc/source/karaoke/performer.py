@@ -200,7 +200,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         return window
 
     def _build_queue(self):
-        self.queue_window = self._dialog('คิวเพลง — X-Stage Karaoke', '850x440')
+        self.queue_window = self._dialog('คิวเพลง — X-Stage Karaoke PC', '850x440')
         self.queue_title = tk.StringVar(value='คิวเพลง')
         self.auto_var = tk.BooleanVar(value=bool(True))
         bar = ttk.Frame(self.queue_window.content, padding=12)
@@ -228,7 +228,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
             ttk.Button(actions, text=label, command=command).pack(side='left', padx=3)
 
     def _build_controls(self):
-        self.control_window = self._dialog('ควบคุมการเล่น — X-Stage Karaoke', '760x310')
+        self.control_window = self._dialog('ควบคุมการเล่น — X-Stage Karaoke PC', '760x310')
         controls = ttk.Frame(self.control_window.content, padding=16)
         controls.pack(fill='both', expand=True)
         ttk.Label(controls, textvariable=self.now_var, font=('Leelawadee UI', 14, 'bold'), wraplength=700).pack(anchor='w')
@@ -1391,7 +1391,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
             label.pack(pady=(0,16))
         except OSError:
             pass
-        ttk.Label(panel,text=f'X-Stage Karaoke รุ่น {__version__}',font=('Tahoma',18,'bold')).pack(pady=8)
+        ttk.Label(panel,text=f'X-Stage Karaoke PC รุ่น {__version__}',font=('Tahoma',18,'bold')).pack(pady=8)
         for text in ('ผู้พัฒนาโปรแกรม','ครูไพรัช  อินควรชุม','รร.เทศบาล 1(ถนนนครนอก)','เทศบาลนครสงขลา จ.สงขลา'):
             ttk.Label(panel,text=text,font=('Tahoma',12),wraplength=400,justify='center').pack(pady=4)
         ttk.Button(window.footer,text='ปิด',command=window.destroy).pack(pady=12)
@@ -1400,7 +1400,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         from .playback import WinMidi
         devices = WinMidi.devices()
         window = DialogWindow(self)
-        window.title('เลือกมิดิขาออก — X-Stage Karaoke')
+        window.title('เลือกมิดิขาออก — X-Stage Karaoke PC')
         window.transient(self)
         body = ttk.Frame(window.content, padding=18)
         body.pack(fill='both', expand=True)
@@ -1661,7 +1661,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
 
     def help(self):
         from tkinter import messagebox
-        messagebox.showinfo('วิธีใช้ X-Stage Karaoke',
+        messagebox.showinfo('วิธีใช้ X-Stage Karaoke PC',
             'เปิดโปรแกรมแล้วเริ่มที่จอเล่นเพลง\n'
             'พิมพ์ชื่อ / ศิลปิน / รหัส / เนื้อร้อง → ↑ ↓ เลือก → Enter\n'
             'กำลังเล่น/พัก/หยุด หรือมีคิวรอ: เพิ่มเข้าคิว • ไม่มีเพลงและคิวว่าง: เล่นทันที • F7 ยกเลิกเพลงปัจจุบัน\n'

@@ -1,4 +1,4 @@
-; X-Stage Karaoke v1.0.76 Windows setup wrapper.
+; X-Stage Karaoke PC v1.0.76 Windows setup wrapper.
 ; The audited install_to_D.ps1 performs dependency checks, running-app
 ; shutdown and transactional copies. The Inno wrapper does not install
 ; directly over song libraries or application data.
@@ -7,18 +7,18 @@
 
 [Setup]
 AppId={{7E9EA7F6-09A9-47E1-A580-AFA1B260D08A}
-AppName=X-Stage Karaoke
+AppName=X-Stage Karaoke PC
 AppVersion={#AppVersion}
-AppVerName=X-Stage Karaoke v{#AppVersion} (Build {#BuildNumber})
-AppPublisher=X-Stage Karaoke
-DefaultDirName={autopf}\X-Stage Karaoke
+AppVerName=X-Stage Karaoke PC v{#AppVersion} (Build {#BuildNumber})
+AppPublisher=X-Stage Karaoke PC
+DefaultDirName={autopf}\X-Stage Karaoke PC
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 Uninstallable=no
 CreateUninstallRegKey=no
 PrivilegesRequired=lowest
 OutputDir=output
-OutputBaseFilename=X-Stage-Karaoke-Windows-v{#AppVersion}-build{#BuildNumber}
+OutputBaseFilename=X-Stage-Karaoke-PC-Windows-v{#AppVersion}-build{#BuildNumber}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

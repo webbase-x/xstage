@@ -1,6 +1,6 @@
 """Offline, interactive restoration of a checked X-Stage song catalog snapshot.
 
-Close X-Stage Karaoke before running this tool. Requires CPython 3.13 and the
+Close X-Stage Karaoke PC before running this tool. Requires CPython 3.13 and the
 unpacked source folder; this script is not an unattended installer operation.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from karaoke.library import SongLibrary
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='X-Stage Karaoke — checked catalog backup restore')
+    parser = argparse.ArgumentParser(description='X-Stage Karaoke PC — checked catalog backup restore')
     parser.add_argument('--database', type=Path, default=Path(r'D:\newKaraoke\Data\songs.sqlite3'),
                         help='Path to the existing songs.sqlite3')
     parser.add_argument('--list', action='store_true', help='List snapshots only')
@@ -31,7 +31,7 @@ def main(argv=None):
         print(f'  {idx}. {item.name} ({item.stat().st_size:,} bytes)')
     if args.list:
         return 0
-    print('\nปิด X-Stage Karaoke และโปรแกรมอื่นที่กำลังใช้ฐานเพลงก่อนดำเนินการ')
+    print('\nปิด X-Stage Karaoke PC และโปรแกรมอื่นที่กำลังใช้ฐานเพลงก่อนดำเนินการ')
     answer = input('เลือกลำดับไฟล์สำรองเพื่อกู้คืน (Enter = ยกเลิก): ').strip()
     if not answer:
         return 0

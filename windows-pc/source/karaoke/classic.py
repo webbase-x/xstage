@@ -37,7 +37,7 @@ class ClassicApp(KaraokeApp):
         self.last_snapshot = 0
         super().__init__(home, data_dir)
         from . import __version__
-        self.title(f'X-Stage Karaoke {__version__} — Classic Studio')
+        self.title(f'X-Stage Karaoke PC {__version__} — Classic Studio')
         self.minsize(1000, 650)
         self.geometry(f'{min(1440, self.winfo_screenwidth()-60)}x{min(900, self.winfo_screenheight()-90)}')
         if auto_catalog and self.settings.get('auto_catalog', False):
@@ -90,14 +90,14 @@ class ClassicApp(KaraokeApp):
         settings = tk.Menu(menu, tearoff=False)
         menu.add_cascade(label='ตั้งค่า', menu=settings)
         settings.add_command(label='จอร้องเพลง สี และพื้นหลัง…', command=self.stage_settings)
-        settings.add_command(label='นโยบายความเป็นส่วนตัวของ X-Stage Karaoke', command=self.open_privacy_policy)
+        settings.add_command(label='นโยบายความเป็นส่วนตัวของ X-Stage Karaoke PC', command=self.open_privacy_policy)
         settings.add_command(label='ความสามารถและข้อจำกัดรุ่นนี้', command=self.capabilities)
         menu.add_command(label='วิธีใช้', command=self.help)
         outer = ttk.Frame(self, padding=10)
         outer.pack(fill='both', expand=True)
         bar = ttk.Frame(outer)
         bar.pack(fill='x', pady=(0, 8))
-        ttk.Label(bar, text='X-Stage Karaoke', font=('Tahoma', 19, 'bold'), foreground='#ffdf38').pack(side='left', padx=(0, 14))
+        ttk.Label(bar, text='X-Stage Karaoke PC', font=('Tahoma', 19, 'bold'), foreground='#ffdf38').pack(side='left', padx=(0, 14))
         ttk.Button(bar, text='เชื่อมคลังเดิม', command=self.connect_catalog, style='Accent.TButton').pack(side='left')
         ttk.Button(bar, text='เพิ่มเพลง', command=self.add_folder).pack(side='left', padx=5)
         ttk.Button(bar, text='ค้นหา F3', command=self.search_popup).pack(side='left')
@@ -629,7 +629,7 @@ class ClassicApp(KaraokeApp):
         if not destination:
             return
         try:
-            root = Path(destination) / time.strftime('X-Stage Karaoke-backup-%Y%m%d-%H%M%S')
+            root = Path(destination) / time.strftime('X-Stage Karaoke PC-backup-%Y%m%d-%H%M%S')
             root.mkdir(parents=True, exist_ok=False)
             with self.library.connect() as source, closing(sqlite3.connect(root / 'songs.sqlite3')) as backup:
                 source.backup(backup)
@@ -644,7 +644,7 @@ class ClassicApp(KaraokeApp):
     def restore_data(self):
         if self.engine is not None or self.recorder or self.scanning or self.remote:
             return messagebox.showinfo('กู้คืนข้อมูล','ยกเลิกเพลง (F7) หยุดบันทึกเสียง หยุดรีโมท และรอการสร้างรายการให้เสร็จก่อน',parent=self)
-        folder=filedialog.askdirectory(parent=self,title='เลือกโฟลเดอร์สำรอง X-Stage Karaoke')
+        folder=filedialog.askdirectory(parent=self,title='เลือกโฟลเดอร์สำรอง X-Stage Karaoke PC')
         if not folder:return
         try:
             from .restore import validate_backup,stage_restore
@@ -994,7 +994,7 @@ class ClassicApp(KaraokeApp):
 
     def capabilities(self):
         from . import __version__
-        messagebox.showinfo('สถานะ X-Stage Karaoke '+__version__,
+        messagebox.showinfo('สถานะ X-Stage Karaoke PC '+__version__,
             'มีแล้ว: ค้นคลัง DBF/NCN, คิวและ playlist, MIDI/KAR, EMK legacy SFDS, NCN24 lyrics, LRC, ปรับคีย์/tempo MIDI, '
             'mute/solo/pan/program, ปิดชิ้นกลอง, วน A–B, สองจอ, รีโมต LAN, สำรอง/กู้คืน SQLite, ประวัติ/แทรกคิว, SoundFont แยกกลุ่ม GM, เสียง FX, เมดเล่ย์ Mark Out/Fade และตัวแก้ LRC\n\n'
             'มีเงื่อนไข: ภาพ/เสียงตาม codec Windows; SoundFont ต้องมี native DLL ทางการ; WAV/MP3 ปรับคีย์แยกความเร็วต้องมี BASS FX; EQ สำหรับ BASS; บันทึกไมค์หรือไมค์ผสมเสียงลำโพง Windows ต้องมีอุปกรณ์และ SoundCard\n\n'

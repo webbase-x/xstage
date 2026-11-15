@@ -34,7 +34,7 @@ def patch_release(archive_path, project):
         installer_test='Passed fresh install, native file lock, running target, graceful close, path scope, and Data preservation tests',
         executable_sha256=before, executable_unchanged_from=Path(archive_path).name)
     files['RELEASE_TEST_RESULTS.json'] = json.dumps(report, ensure_ascii=False, indent=2).encode('utf-8')
-    text = '# X-Stage Karaoke '+report['version']+' - Installer revision 2\n\n'+json.dumps(report, ensure_ascii=False, indent=2)+'\n'
+    text = '# X-Stage Karaoke PC '+report['version']+' - Installer revision 2\n\n'+json.dumps(report, ensure_ascii=False, indent=2)+'\n'
     files['TEST_RESULTS.md'] = text.encode('utf-8')
     assert hashlib.sha256(files['XStageKaraoke.exe']).hexdigest() == before
     output = io.BytesIO()

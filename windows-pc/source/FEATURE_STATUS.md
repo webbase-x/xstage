@@ -191,8 +191,8 @@ Source-only feature changes: reference-only index; no auto-hide/copy/quarantine;
 - แปลงโลโก้เดิมเป็น ICO แบบ 32-bit DIB 7 ขนาด 16–256 พิกเซล แทน PNG-only ICO; ตรวจทุกเฟรมว่าไม่โปร่งใสหรือว่าง
 - ตั้ง iconbitmap ทั้งหน้าต่างปัจจุบันและค่าเริ่มต้นหน้าต่างย่อย หากโหลดไม่ได้ให้ใช้ภาพโลโก้สำรอง และเก็บ reference ภาพไว้
 - ค้นหา assets ข้าง EXE และในโฟลเดอร์ bundle ของ PyInstaller พร้อมรวม assets ใน build
-- ตัวติดตั้งสร้าง X-Stage Karaoke.lnk ในโฟลเดอร์ติดตั้ง พร้อม IconLocation ชี้โลโก้โดยตรง ไฟล์ CMD เดิมยังใช้ได้แต่ไม่มีไอคอนกำหนดเอง
-- ปิดโปรแกรมเดิม แตก ZIP แล้วรัน Install-to-D.cmd ใหม่ เปิดจาก X-Stage Karaoke.lnk; หากปักหมุดทางลัดเก่า ให้ถอนหมุดแล้วปักหมุดทางลัดใหม่
+- ตัวติดตั้งสร้าง X-Stage Karaoke PC.lnk ในโฟลเดอร์ติดตั้ง พร้อม IconLocation ชี้โลโก้โดยตรง ไฟล์ CMD เดิมยังใช้ได้แต่ไม่มีไอคอนกำหนดเอง
+- ปิดโปรแกรมเดิม แตก ZIP แล้วรัน Install-to-D.cmd ใหม่ เปิดจาก X-Stage Karaoke PC.lnk; หากปักหมุดทางลัดเก่า ให้ถอนหมุดแล้วปักหมุดทางลัดใหม่
 - ผลทดสอบ 410 รายการ ผ่าน 404 ข้าม 6 ไม่ได้สร้าง EXE หรือทดสอบหน้าต่างบน Windows จริง
 
 ## 0.5.46 — แก้ Error 0x100000001 ขณะตรวจเสียง
@@ -601,7 +601,7 @@ https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nf-mmdeviceapi-i
 
 ติดตั้ง: ปิดโปรแกรม แตก ZIP แล้วเปิด Install-to-D.cmd เมื่อติดตั้งสำเร็จตรวจรุ่น 0.5.15 และเปิด T0026 อีกครั้ง หากรายละเอียดในคลังเดิมมีข้อความเพี้ยนให้สั่งสร้างรายการเพลงใหม่เพื่อปรับข้อมูลแคช
 
-# X-Stage Karaoke 0.5.14 — แก้เส้นทางไฟล์ตอนนำเข้า catalog
+# X-Stage Karaoke PC 0.5.14 — แก้เส้นทางไฟล์ตอนนำเข้า catalog
 
 จาก build-tests(1).log ของ 0.5.13:
 test_rebuild_repairs_filename_preserves_id_favorites_queue_search_cache
@@ -633,7 +633,7 @@ upsert_catalog เดิมใช้เพียง normcase แต่ Inspector
 
 ## บันทึกรุ่นก่อน
 
-# X-Stage Karaoke 0.5.13 — แก้ครบ 3 errors จาก build-tests.log
+# X-Stage Karaoke PC 0.5.13 — แก้ครบ 3 errors จาก build-tests.log
 
 จาก log Windows/Python 3.14 ที่ผู้ใช้ส่ง:
 1. test_existing_schema_migrates: old.db ถูกเปิดค้าง → WinError 32 ตอน cleanup
@@ -670,7 +670,7 @@ https://docs.python.org/3/library/sqlite3.html#how-to-use-the-connection-context
 
 ## บันทึกรุ่นก่อน
 
-# X-Stage Karaoke 0.5.12 — แก้โฟลเดอร์ทดสอบชนกันบน Windows
+# X-Stage Karaoke PC 0.5.12 — แก้โฟลเดอร์ทดสอบชนกันบน Windows
 
 ข้อความที่ได้รับจากรุ่น 0.5.10:
 test_catalog_goal_and_processed_rows_match_active_record_count
@@ -704,7 +704,7 @@ Windows ทั่วไปไม่แยกตัวพิมพ์เล็ก
 
 ## บันทึกรุ่นก่อน
 
-# X-Stage Karaoke 0.5.11 — ทดสอบกำลังสังเคราะห์เสียงจริง
+# X-Stage Karaoke PC 0.5.11 — ทดสอบกำลังสังเคราะห์เสียงจริง
 
 ## วิธีใช้งาน
 1. ยกเลิกเพลงปัจจุบันด้วย F7
@@ -774,7 +774,7 @@ https://www.un4seen.com/doc/bassmidi/BASS_MIDI_StreamCreate.html
 
 ## บันทึกรุ่นก่อน
 
-# X-Stage Karaoke 0.5.10 — คุณภาพเสียงอัตโนมัติจากสเปก
+# X-Stage Karaoke PC 0.5.10 — คุณภาพเสียงอัตโนมัติจากสเปก
 
 ## เปิดใช้งาน
 ตั้งค่า SoundFont → คุณภาพและเอฟเฟกต์ → เลือกคุณภาพอัตโนมัติตามเครื่อง (แนะนำ)
@@ -827,7 +827,7 @@ https://www.un4seen.com/doc/bassmidi/BASS_ATTRIB_MIDI_SRC.html
 
 ## บันทึกรุ่นก่อน
 
-# X-Stage Karaoke 0.5.9 — แก้การเติมบัฟเฟอร์ SoundFont
+# X-Stage Karaoke PC 0.5.9 — แก้การเติมบัฟเฟอร์ SoundFont
 
 พบในโค้ดเดิม: จำกัดบัฟเฟอร์เล่นสดที่ 40–200 ms (ค่าเริ่มต้น 80 ms)
 แต่ไม่ได้กำหนด BASS_CONFIG_UPDATEPERIOD ซึ่งค่าเริ่มต้นของ BASS คือ 100 ms
@@ -873,7 +873,7 @@ https://www.un4seen.com/doc/bassmidi/BASS_MIDI_FontLoad.html
 
 ## บันทึกรุ่นก่อน
 
-# X-Stage Karaoke 0.5.8 — อัปเดตเฉพาะเพลงใหม่หรือที่เปลี่ยน
+# X-Stage Karaoke PC 0.5.8 — อัปเดตเฉพาะเพลงใหม่หรือที่เปลี่ยน
 
 ## วิธีใช้งานที่แนะนำ
 F2 → ที่เก็บเพลง → เพิ่มโฟลเดอร์ → แท็บสร้างรายการ
@@ -951,7 +951,7 @@ Windows ใช้ ChangeTime เมื่อระบบไฟล์รองร
 ## อัปเดตโปรแกรม
 ปิดโปรแกรม แตก ZIP ลงโฟลเดอร์ใหม่ แล้วเรียก Install-to-D.cmd
 ต้องมี Python 3.11+ Windows 64 บิตและอินเทอร์เน็ตสำหรับสร้าง EXE
-เปิด D:\newKaraoke\Karaoke\X-Stage Karaoke.cmd และตรวจรุ่นเป็น 0.5.8
+เปิด D:\newKaraoke\Karaoke\X-Stage Karaoke PC.cmd และตรวจรุ่นเป็น 0.5.8
 ตัวติดตั้งเก็บ Data และไฟล์เพลงเดิมไว้
 
 ## ผลทดสอบ
@@ -974,7 +974,7 @@ https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_basi
 
 ## บันทึกรุ่นก่อน (แนวทางใช้งานปัจจุบันให้ยึดข้อความด้านบน)
 
-# X-Stage Karaoke 0.5.7 — ศูนย์ความคืบหน้างานเพลง
+# X-Stage Karaoke PC 0.5.7 — ศูนย์ความคืบหน้างานเพลง
 
 รุ่นนี้รวมระบบตรวจ/เก็บ/ย้าย/รีไซเคิลเพลงซ้ำ และปรับงานนำเข้า/สร้างสารบัญให้เห็นความคืบหน้าชัดเจน
 
@@ -1038,7 +1038,7 @@ F2 → เพลงซ้ำ → ตรวจและจัดการเพ�
 ## อัปเดต
 ปิดโปรแกรม แตก ZIP ลงโฟลเดอร์ใหม่ แล้วเรียก Install-to-D.cmd
 ต้องมี Python 3.11+ Windows 64 บิต และอินเทอร์เน็ตสำหรับสร้าง EXE
-เปิด D:\newKaraoke\Karaoke\X-Stage Karaoke.cmd หลังติดตั้ง และตรวจรุ่นเป็น 0.5.7
+เปิด D:\newKaraoke\Karaoke\X-Stage Karaoke PC.cmd หลังติดตั้ง และตรวจรุ่นเป็น 0.5.7
 ตัวติดตั้งเก็บ Data และไฟล์เพลงเดิมไว้
 
 ## ผลตรวจสอบ
@@ -1055,7 +1055,7 @@ PROGRESS_BENCHMARK.json เป็นผลทดลอง MIDI ตัวอย�
 
 ## บันทึกรุ่นก่อน (วิธีใช้งานปัจจุบันให้ยึดข้อความด้านบน)
 
-# X-Stage Karaoke 0.5.6 — ตรวจและจัดการเพลงซ้ำ
+# X-Stage Karaoke PC 0.5.6 — ตรวจและจัดการเพลงซ้ำ
 
 ## เปิดใช้งาน
 F2 → จัดการข้อมูลเพลง → แท็บ “เพลงซ้ำ” → “ตรวจและจัดการเพลงซ้ำ”
@@ -1116,7 +1116,7 @@ NCN เทียบทั้ง MIDI + LYR + CUR และต้องมีไ�
 ## อัปเดต
 ปิดโปรแกรม แตก ZIP ลงโฟลเดอร์ใหม่ แล้วเรียก Install-to-D.cmd
 ต้องมี Python 3.11+ Windows 64 บิต และอินเทอร์เน็ตสำหรับสร้าง EXE
-หลังติดตั้ง เปิด D:\newKaraoke\Karaoke\X-Stage Karaoke.cmd ตรวจรุ่นให้เป็น 0.5.6
+หลังติดตั้ง เปิด D:\newKaraoke\Karaoke\X-Stage Karaoke PC.cmd ตรวจรุ่นให้เป็น 0.5.6
 ตัวติดตั้งเก็บ Data และไฟล์เพลงเดิมไว้
 
 ## ผลทดสอบ

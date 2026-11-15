@@ -74,7 +74,7 @@ def read_playlist(path, cancelled):
     data = parse_json(raw.decode('utf-8-sig'))
     if (not isinstance(data, dict) or data.get('format') not in ('xstage.playlist', 'newKaraoke.playlist')
             or not isinstance(data.get('tracks'), list)):
-        raise ValueError('กรุณาเลือกไฟล์เพลย์ลิสต์ที่ส่งออกจาก X-Stage Karaoke')
+        raise ValueError('กรุณาเลือกไฟล์เพลย์ลิสต์ที่ส่งออกจาก X-Stage Karaoke PC')
     version = data.get('version', 1)
     if type(version) is not int or version != 1:
         raise ValueError('ไม่รองรับรุ่นไฟล์เพลย์ลิสต์นี้')
@@ -476,7 +476,7 @@ class RandomMedleyWindow:
 
     def _choose_playlist(self):
         path = filedialog.askopenfilename(parent=self.window, title='เลือกเพลย์ลิสต์ X-Stage',
-                                         filetypes=[('เพลย์ลิสต์ X-Stage Karaoke', '*.json')])
+                                         filetypes=[('เพลย์ลิสต์ X-Stage Karaoke PC', '*.json')])
         if path:
             self.playlist_path = Path(path)
             self.playlist_text.set(str(self.playlist_path))
