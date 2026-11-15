@@ -120,7 +120,8 @@ def list_created(root, export, *, search="", offset=0, limit=100, midi_only=Fals
             original = path.read_bytes()
             doc = json.loads(original.decode("utf-8-sig"))
             _validate(doc, code or None)
-            status = "needs-format" if original != _canonical(doc).encode("utf-8") else "formatted"
+            status = ("พร้อมสร้าง .XSK" if midi_only else
+                      ("needs-format" if original != _canonical(doc).encode("utf-8") else "formatted"))
         except (OSError, ValueError, TypeError, UnicodeError) as exc:
             status = "error: " + str(exc)[:160]
         result.append({"path": key, "code": code, "title": title,
