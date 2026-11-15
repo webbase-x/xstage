@@ -109,6 +109,41 @@ class PCExportTests(unittest.TestCase):
         self.assertEqual((count, errors, warnings), (1, 0, []))
         self.assertEqual(lib.records[0]["path"], rows[0]["path"])
 
+    def test_revised_lyrics_are_versioned_and_play_latest_without_overwrite(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "windows-pc" / "source"))
+        from karaoke.pc_xstagesong import catalog_rows, source_lyrics
+
+        first = pc_export.publish(self.source, str(self.destination), export)
+        library = Path(first["destination"])
+        original = library / "LYRICS" / "0" / "00001.json"
+        old_bytes = original.read_bytes()
+        old_pointer = (library / "LYRICS" / "current.json").read_bytes()
+
+        source_lyrics_file = self.source / "lyrics" / "0" / "00001.json"
+        doc = json.loads(source_lyrics_file.read_text(encoding="utf-8"))
+        doc["lines"][0]["text"] = "แก้ไขเนื้อร้องแล้ว"
+        doc["lines"][0]["startTime"] = 2.25
+        doc["lines"][0]["syllables"] = []
+        source_lyrics_file.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        (self.source / "lyrics" / "0" / "00001.lrc").write_text(
+            "[00:02.25]แก้ไขเนื้อร้องแล้ว", encoding="utf-8")
+        preview = pc_export.inspect(self.source, str(self.destination), export)
+        self.assertEqual(preview["updatedLyrics"], 2)
+        self.assertEqual(preview["newFiles"], 2)
+        second = pc_export.publish(self.source, str(self.destination), export)
+        self.assertEqual(second["copied"], 2)
+        self.assertEqual(original.read_bytes(), old_bytes)
+        self.assertNotEqual((library / "LYRICS" / "current.json").read_bytes(), old_pointer)
+        _, rows = catalog_rows(str(library))
+        self.assertEqual(len(rows), 1)
+        lyrics = source_lyrics(rows[0]["path"])
+        self.assertEqual(lyrics.lines[0].text, "แก้ไขเนื้อร้องแล้ว")
+        self.assertEqual(lyrics.lines[0].start, 2.25)
+        third = pc_export.publish(self.source, str(self.destination), export)
+        self.assertEqual(third["copied"], 0)
+        self.assertEqual(third["songCount"], 1)
+
     def test_content_mismatch_never_overwrites_original(self):
         pc_export.publish(self.source, str(self.destination), export)
         target = self.destination / "XStageSong" / "AUDIO" / "0" / "00001.m4a"
