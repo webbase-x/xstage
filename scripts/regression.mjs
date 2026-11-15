@@ -442,11 +442,11 @@ assert.ok(windowsStartupLauncher.includes("[string]$AppPath = ''")&&
 assert.ok(windowsUpdateHelper.includes("if ($CurrentBuild -le 0 -and $CurrentVersion -ne '0.0.0')")&&
           windowsUpdateHelper.includes('ConvertFrom-Json')&&windowsUpdateHelper.includes('$newBuild -gt $CurrentBuild'),
           'Windows updater must resolve installed Build from a matching manifest before comparison');
-assert.equal(windowsSourceManifest.source_imported,false,'Windows source-import status must not be falsely marked complete');
+assert.equal(windowsSourceManifest.source_imported,true,'Verified Windows source must remain imported; installer still requires its own build gate');
 assert.equal(windowsSourceManifest.windows_build_verified,false,'Windows unverified build must remain explicitly unverified');
 assert.equal(windowsSourceManifest.installer_published,false,'Windows source ZIP is not a published installer');
-assert.equal(windowsSourceManifest.status,'SOURCE_ZIP_AVAILABLE_AWAITING_IMPORT_AND_BUILD',
-  'Windows manifest must acknowledge uploaded source ZIP without claiming a finished build');
+assert.equal(windowsSourceManifest.status,'SOURCE_IMPORTED_NOT_A_WINDOWS_RELEASE',
+  'Windows manifest must distinguish imported source from an unverified installer');
 const studioReady=JSON.parse(read('downloads/song-studio-latest.json'));
 const studioPreview=JSON.parse(read('downloads/song-studio-source-preview-latest.json'));
 assert.match(studioReady.version,/^\d+\.\d+\.\d+$/,'Song Studio PC Ready must declare a semantic version');
