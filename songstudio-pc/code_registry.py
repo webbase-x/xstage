@@ -42,8 +42,8 @@ class CodeAllocator:
     historical songs. User-defined alphanumeric unique codes stay unchanged.
     """
 
-    def __init__(self, local_rows, online_rows, local_songs: Path):
-        self.root = Path(local_songs)
+    def __init__(self, local_rows, online_rows, local_songs: Path, *, code_style='source', code_length=6):
+        if code_style not in ('source', 'numeric', 'letters', 'alphanumeric'):\n            raise ValueError('ชนิดรหัสเพลงไม่ถูกต้อง')\n        if type(code_length) is not int or not 1 <= code_length <= 12:\n            raise ValueError('ความยาวรหัสต้องอยู่ระหว่าง 1–12 หลัก')\n        self.code_style = code_style\n        self.code_length = code_length\n        self.config_next = 1\n        self.root = Path(local_songs)
         self.local = list(local_rows)
         self.online = list(online_rows)
         self.remote_by_code = defaultdict(list)
@@ -162,6 +162,45 @@ class CodeAllocator:
             return self.audio_cache[a] == self.audio_cache[b]
         except OSError:
             return False
+
+    def _configured_code(self, number):
+        if self.code_style == "numeric":
+            alphabet = "0123456789"
+        elif self.code_style == "letters":
+            alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        else:
+            alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        radix = len(alphabet)
+        if number >= radix ** self.code_length:
+            raise CodeConflict("รหัสเพลงเต็มช่วงตามรูปแบบและจำนวนหลักที่กำหนด")
+        value = ""
+        for _ in range(self.code_length):
+            value = alphabet[number % radix] + value
+            number //= radix
+        return value
+
+    def _new_configured_code(self, preferred):
+        preferred = str(preferred or "").strip().upper()
+        # Preserve source code only when it follows the selected length/charset
+        # and does not collide with a local or remote catalog.
+        if len(preferred) == self.code_length and preferred not in self.used:
+            valid = (preferred.isascii() and (
+                preferred.isdigit() if self.code_style == "numeric"
+                else preferred.isalpha() if self.code_style == "letters"
+                else preferred.isalnum()))
+            if valid:
+                self.used.add(preferred.casefold())
+                self._track_numeric(preferred)
+                return preferred
+        while self.config_next < 10 ** self.code_length if self.code_style == "numeric" else self.config_next < (26 if self.code_style == "letters" else 36) ** self.code_length:
+            code = self._configured_code(self.config_next)
+            self.config_next += 1
+            if code.casefold() not in self.used:
+                self.used.add(code.casefold())
+                self._track_numeric(code)
+                self.allocated.append(code)
+                return code
+        raise CodeConflict("ไม่เหลือรหัสเพลงว่างในรูปแบบที่เลือก")
 
     def assign_new(self, preferred):
         """Assign a new song code, considering remote + existing + prior picks."""
