@@ -844,7 +844,7 @@ class SongQueue:
         if Path(path).stat().st_size>64*1024*1024:raise ValueError('ไฟล์คิวใหญ่เกินขอบเขต 64 MB')
         data = parse_json(Path(path).read_text(encoding="utf-8"))
         if not isinstance(data, dict) or data.get("format") not in ("xstage.playlist", "newKaraoke.playlist") or not isinstance(data.get("tracks"), list):
-            raise ValueError("ไม่ใช่ไฟล์คิวเพลง X-Stage Karaoke")
+            raise ValueError("ไม่ใช่ไฟล์คิวเพลง X-Stage Karaoke PC")
         version = data.get('version', 1)
         if type(version) is not int or version != 1:
             raise ValueError('ไม่รองรับรุ่นไฟล์คิวนี้')

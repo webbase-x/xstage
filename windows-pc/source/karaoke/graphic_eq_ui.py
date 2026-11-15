@@ -35,7 +35,7 @@ def rack_size(area):
 
 class GraphicEQ(tk.Toplevel):
     def __init__(self,app):
-        super().__init__(app);self.app=app;self.configure(bg=BG);self.title('EQ X-Stage Karaoke')
+        super().__init__(app);self.app=app;self.configure(bg=BG);self.title('EQ X-Stage Karaoke PC')
         self.transient(app);self.overrideredirect(True);self.resizable(False,False)
         from .dialog_layout import work_area
         w,h,x,y=rack_size(work_area(self))
@@ -53,7 +53,7 @@ class GraphicEQ(tk.Toplevel):
             tk.Label(header,image=self.logo,bg=BG).pack(side='left',padx=(0,12))
         except (OSError,tk.TclError):pass
         title=tk.Frame(header,bg=BG);title.pack(side='left')
-        tk.Label(title,text='EQ X-Stage Karaoke',font=('Leelawadee UI',18,'bold'),fg=INK,bg=BG).pack(anchor='w')
+        tk.Label(title,text='EQ X-Stage Karaoke PC',font=('Leelawadee UI',18,'bold'),fg=INK,bg=BG).pack(anchor='w')
         tk.Label(title,text='31 BAND  •  1/3 OCTAVE  •  STEREO LINK',font=('Tahoma',9),fg=ACC,bg=BG).pack(anchor='w')
         self.button(header,'-',self.dock).pack(side='right',padx=3)
         for widget in (header,title,*title.winfo_children()):
