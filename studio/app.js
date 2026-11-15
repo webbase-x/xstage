@@ -3022,14 +3022,38 @@
   });
   $('ai-lyrics-read-source').addEventListener('click',async()=>{
     if(!Number.isInteger(aiSongId) || busy)return;
-    if(aiDetailsDirty || $('ai-lyrics-editor').value.trim()){
-      const yes=await confirmStudio('อ่านแท็กและเนื้อร้องจากไฟล์เดิมอีกครั้ง? ข้อมูลในช่องที่ยังไม่ได้บันทึกอาจถูกแทนที่ แต่ไฟล์ต้นฉบับไม่เปลี่ยน','ดึงข้อมูลจากไฟล์');
+    const chosen=aiSongId;
+    if(aiDetailsDirty || $('ai-lyrics-editor').value.trim() || $('ai-lyrics-paste').value.trim()){
+      const yes=await confirmStudio(
+        'อ่านแท็กและเนื้อร้องจากต้นฉบับอีกครั้ง? ข้อความที่กำลังแก้ในช่องอาจถูกแทนที่ แต่ไม่แก้ไฟล์ต้นฉบับหรือข้อมูลที่บันทึกแล้ว',
+        'อ่านข้อมูลต้นฉบับ');
       if(!yes)return;
     }
-    const row=aiSongs.find(x=>x.id===aiSongId) ||
-      {id:aiSongId,title:$('ai-lyrics-title').value,artist:$('ai-lyrics-artist').value,
-       code:$('ai-lyrics-title').value};
-    await aiChooseSong(row);
+    $('ai-lyrics-source-status').textContent='กำลังตรวจชื่อเพลง ศิลปิน และคำร้องจากแท็ก/ไฟล์คู่เพลง…';
+    try{
+      const file=await api('/api/ai-lyrics-source?id='+encodeURIComponent(chosen));
+      if(chosen!==aiSongId)return;
+      const title=String(file.title||'').trim();
+      const artist=String(file.artist||'').trim();
+      if(title)$('ai-lyrics-title').value=title;
+      if(artist)$('ai-lyrics-artist').value=artist;
+      if(file.timedLrc){
+        $('ai-lyrics-editor').value=String(file.timedLrc);
+      }
+      if(file.plainLyrics){
+        $('ai-lyrics-paste').value=String(file.plainLyrics);
+        aiPastedLyrics.set(chosen,String(file.plainLyrics));
+      }
+      aiDetailsDirty=true;
+      aiValidateEditor();
+      aiUpdateButtons();
+      $('ai-lyrics-source-status').textContent=(file.metadataSource||'ไม่พบแท็กชื่อเพลง')+
+        ' · '+(file.lyricsSource||'ไม่พบเนื้อร้องในไฟล์')+' · ตรวจแก้แล้วกดบันทึกก่อนส่งออก';
+      message('อ่านข้อมูลจากไฟล์ต้นฉบับแล้ว · หากต้องการใช้ผลลัพธ์ ให้ตรวจและบันทึก',false);
+    }catch(error){
+      $('ai-lyrics-source-status').textContent='อ่านข้อมูลจากไฟล์ไม่สำเร็จ: '+error.message;
+      message(error.message);
+    }
   });
   $('ai-lyrics-start').addEventListener('click',()=>{void aiStartTranscription();});
   $('ai-lyrics-align').addEventListener('click',()=>{void aiAlignPastedLyrics();});
