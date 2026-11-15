@@ -1,4 +1,4 @@
-"""XStageWeb online publish protocol tests against a private mock Drive.
+"""XStageSong online publish protocol tests against a private mock Drive.
 
 No real Google OAuth is used. The production publisher and upload_file paths
 run; only the Google network transport is mocked.
@@ -41,8 +41,8 @@ class OnlinePublishTests(unittest.TestCase):
         self.root.mkdir()
         (self.root / "current.json").write_text('{"songCount":1}', encoding="utf-8")
         self.drive = FakeOnlineDrive()
-        # Existing visible XStageWeb library is normal for incremental syncing.
-        self.drive.folder("root", "XStageWeb")
+        # Existing visible XStageSong library is normal for incremental syncing.
+        self.drive.folder("root", "XStageSong")
         self.publisher = online.OnlinePublisher(self.drive)
         self.source_json = self.publisher._json
         # Mock ONLY the private Drive GET file body. Actual JSON schema
@@ -79,7 +79,7 @@ class OnlinePublishTests(unittest.TestCase):
                 if r["parent"] == parent]
 
     def remote_root(self):
-        root = [f for f in self.folder_files() if f["name"] == "XStageWeb"]
+        root = [f for f in self.folder_files() if f["name"] == "XStageSong"]
         self.assertEqual(len(root), 1)
         return root[0]["id"]
 
@@ -109,7 +109,7 @@ class OnlinePublishTests(unittest.TestCase):
         # No legacy roots, pointers, catalog IDs or media exist.
         self.drive.items.clear()
         self.assertEqual(self.drive.list_children("root"), [])
-        with self.assertRaisesRegex(online.PublishError, "ไม่พบ XStageWeb"):
+        with self.assertRaisesRegex(online.PublishError, "ไม่พบ XStageSong"):
             self.publisher.publish(self.root, [self.first])
         self.assertEqual(self.drive.list_children("root"), [],
                          "No new folder without explicit create permission")
@@ -151,14 +151,14 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertTrue(names == {"AUDIO", "LYRICS"})
 
     def test_new_drive_publishes_requested_xstageweb_taxonomy(self):
-        # Explicit consent only. A genuinely empty Drive gets XStageWeb.
+        # Explicit consent only. A genuinely empty Drive gets XStageSong.
         self.drive.items.clear()
         result = self.publisher.publish(
             self.root, [self.first], create_new_library=True)
         self.assertEqual(result["newSongs"], 1)
         folder = next(
             f["metadata"] for f in self.drive.items.values()
-            if f["parent"] == "root" and f["metadata"]["name"] == "XStageWeb")
+            if f["parent"] == "root" and f["metadata"]["name"] == "XStageSong")
         children = self.folder_files(folder["id"])
         names = {f["name"] for f in children}
         self.assertTrue(names == {"AUDIO", "LYRICS"})
@@ -177,15 +177,15 @@ class OnlinePublishTests(unittest.TestCase):
                           side_effect=self._download_private_json):
             got = self.drive.download_library(self.base / "stage-download", "songs")
             db = self.drive.download_library(self.base / "stage-db", "db")
-        self.assertEqual(got["source"], "XStageWeb")
-        self.assertEqual(Path(got["path"]).name, "XStageWeb")
+        self.assertEqual(got["source"], "XStageSong")
+        self.assertEqual(Path(got["path"]).name, "XStageSong")
         self.assertEqual(len(list(Path(got["path"]).rglob("*.m4a"))), 1)
         self.assertEqual(db["files"], 2)
 
     def test_raw_xstageweb_folder_without_pointer_downloads_songs_zip_db(self):
         """User-managed AUDIO/MIDI/VIDEO/DB libraries need not have current.json."""
         self.drive.items.clear()
-        root = self.drive.folder("root", "XStageWeb")
+        root = self.drive.folder("root", "XStageSong")
         audio = self.drive.folder(self.drive.folder(
             self.drive.folder(self.drive.folder(root, "AUDIO"), "MP3"), "Songs"), "A")
         mid = self.drive.folder(self.drive.folder(
@@ -217,13 +217,13 @@ class OnlinePublishTests(unittest.TestCase):
                          catalog.read_bytes())
         self.assertFalse((Path(database["path"]) / "AUDIO").exists())
         with zipfile.ZipFile(archive["path"]) as bundle:
-            self.assertIn("XStageWeb/AUDIO/MP3/Songs/A/A001.mp3", bundle.namelist())
-            self.assertIn("XStageWeb/DB/library.json", bundle.namelist())
+            self.assertIn("XStageSong/AUDIO/MP3/Songs/A/A001.mp3", bundle.namelist())
+            self.assertIn("XStageSong/DB/library.json", bundle.namelist())
         self.assertEqual(len(self.drive.items), count)
 
     def test_raw_xstageweb_db_without_database_gives_clear_error(self):
         self.drive.items.clear()
-        root = self.drive.folder("root", "XStageWeb")
+        root = self.drive.folder("root", "XStageSong")
         audio = self.drive.folder(root, "AUDIO")
         song = self.base / "alone.m4a"
         song.write_bytes(b"A" * 2000)
@@ -234,7 +234,7 @@ class OnlinePublishTests(unittest.TestCase):
 
     def test_raw_xstageweb_rejects_unsafe_names_without_writing(self):
         self.drive.items.clear()
-        root = self.drive.folder("root", "XStageWeb")
+        root = self.drive.folder("root", "XStageSong")
         source = self.base / "file.mp3"
         source.write_bytes(b"A" * 2000)
         self.drive.upload_file(root, source, "../unsafe.mp3")
@@ -255,8 +255,12 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertIn(uploaded["id"], self.drive.items)
         self.assertEqual(self.pointer()[0]["layoutVersion"],4)
 
-    def test_visible_old_and_new_cloud_roots_do_not_create_duplicate_catalog(self):
-        self.drive.folder("root", "StageWeb")
+    def test_duplicate_canonical_cloud_roots_do_not_create_catalog(self):
+        duplicate = self.drive._newid()
+        self.drive.items[duplicate] = {
+            "parent": "root", "body": b"",
+            "metadata": {"id": duplicate, "name": "XStageSong",
+                         "mimeType": "application/vnd.google-apps.folder"}}
         before = len(self.drive.items)
         with self.assertRaisesRegex(online.PublishError, "มากกว่าหนึ่ง"):
             self.publisher.publish(self.root, [self.first], create_new_library=True)
@@ -277,8 +281,8 @@ class OnlinePublishTests(unittest.TestCase):
                           side_effect=self._download_private_json):
             folder = self.drive.download_library(self.base / "restore", kind="songs")
             restored = Path(folder["path"])
-            self.assertEqual(folder["source"], "XStageWeb")
-            self.assertEqual(restored.name, "XStageWeb")
+            self.assertEqual(folder["source"], "XStageSong")
+            self.assertEqual(restored.name, "XStageSong")
             self.assertTrue((restored / "LYRICS/current.json").is_file())
             self.assertEqual(len(list(restored.glob("LYRICS/catalog-base-*.json"))), 1)
             self.assertTrue(list(restored.rglob("*.m4a")))
@@ -291,8 +295,8 @@ class OnlinePublishTests(unittest.TestCase):
             self.assertFalse(list(Path(db["path"]).rglob("*.m4a")))
             archive = self.drive.download_library(self.base / "zip", kind="zip")
         with zipfile.ZipFile(archive["path"]) as bundle:
-            self.assertIn("XStageWeb/LYRICS/current.json", bundle.namelist())
-            self.assertTrue(any(x.startswith("XStageWeb/AUDIO/") for x in bundle.namelist()))
+            self.assertIn("XStageSong/LYRICS/current.json", bundle.namelist())
+            self.assertTrue(any(x.startswith("XStageSong/AUDIO/") for x in bundle.namelist()))
         self.assertEqual(len(self.drive.items), original_count)
 
     def test_online_restore_includes_delta_and_current_media_only(self):
@@ -314,7 +318,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(pointer["songCount"], 2)
 
     def test_online_download_rejects_unpublished_staging_without_creating_files(self):
-        self.drive.folder("root", "XStageWeb")
+        self.drive.folder("root", "XStageSong")
         self.drive.locked = True
         target = self.base / "not-started"
         with patch.object(roundtrip.drive, "_request",
@@ -347,7 +351,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertFalse((self.base / "corrupt").exists())
         self.drive.items[pointer_id]["metadata"]["md5Checksum"] = hashlib.md5(
             self.drive.items[pointer_id]["body"]).hexdigest()
-        conflicting = self.base / "conflict" / "XStageWeb" / "LYRICS" / "current.json"
+        conflicting = self.base / "conflict" / "XStageSong" / "LYRICS" / "current.json"
         conflicting.parent.mkdir(parents=True)
         conflicting.write_bytes(b"owner-existing-content")
         with patch.object(roundtrip.drive, "_request",
@@ -492,7 +496,7 @@ class OnlinePublishTests(unittest.TestCase):
 
     def test_missing_online_root_never_silently_creates_duplicate_library(self):
         self.drive.items.clear()
-        with self.assertRaisesRegex(online.PublishError, "ไม่พบ XStageWeb"):
+        with self.assertRaisesRegex(online.PublishError, "ไม่พบ XStageSong"):
             self.publisher.publish(self.root, [self.first])
         self.assertEqual(self.drive.items, {})
 
@@ -504,7 +508,7 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(result["totalSongs"], 1)
 
     def test_legacy_unindexed_online_root_stays_untouched(self):
-        root = self.drive.folder("root", "XStageWeb")
+        root = self.drive.folder("root", "XStageSong")
         self.drive.folder(root, "audio")
         before = dict(self.drive.items)
         with self.assertRaisesRegex(online.PublishError, "ไม่มี current.json"):
