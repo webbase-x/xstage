@@ -76,6 +76,13 @@ assert.ok(js.includes("previewLyricClockHealth()"),
   'Long playback must diagnose stalled media time or exhausted lyric timestamps');
 assert.ok(js.includes("previewLyricCoverageWarned"),
   'Missing lyrics after the last timestamp must be reported once, not silently freeze');
+assert.ok(js.includes("aiAudio.addEventListener('playing',aiStartKaraokeAnimation)") ||
+          js.includes("$('ai-lyrics-audio').addEventListener('playing',aiStartKaraokeAnimation)"),
+  'AI Lyrics karaoke wipe must resume after buffering and foreground playback');
+assert.ok(js.includes("aiClockStalledAt") && js.includes("aiCoverageWarned"),
+  'AI Lyrics playback must distinguish a stopped media clock from an exhausted LRC');
+assert.ok(js.includes("const mid=(lo+hi)>>>1;"),
+  'AI Lyrics long LRC playback should locate the current line efficiently');
 for (const id of ['ai-export-button','ai-export-lyrics','ai-export-instrumental',
                  'ai-export-choose-folder','ai-export-folder']) {
   assert.ok(html.includes('id="'+id+'"'), 'Missing selectable AI export UI: '+id);
