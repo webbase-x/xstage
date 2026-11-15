@@ -33,7 +33,7 @@ class BuildOutcomeTests(unittest.TestCase):
                    "lyricsCount": 0, "message": "1 created, 1 error"}
         with patch.object(engine, "build_library", return_value=outcome), \
              patch.dict(engine.FILE_BY_ID, {1: rows[0]}, clear=True), \
-             patch.dict(engine.PREFS, {"mode": "original"}):
+             patch.dict(engine.PREFS, {"mode": "original", "export_format": "xstage"}):
             engine.JOB = {"id": "test", "kind": "build", "state": "running",
                           "total": 1, "completed": 0, "logs": [],
                           "started": 0, "updated": 0}
