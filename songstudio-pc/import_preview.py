@@ -71,15 +71,17 @@ def scan(kind, folder, workspace, export, folder_upload, ncn):
 
 def page(items, search="", offset=0, limit=50):
     search = str(search).casefold().strip()
-    matching = [item for item in items if not search or
-                any(search in str(item.get(key, "")).casefold()
-                    for key in ("code", "title", "artist", "kind"))]
     offset = max(0, offset)
     limit = max(1, min(100, limit))
+    # Preserve original identities without an O(N) items.index() lookup per row.
+    # This matters for libraries containing tens of thousands of nested files.
+    matching = [(index, item) for index, item in enumerate(items) if
+                not search or any(search in str(item.get(key, "")).casefold()
+                                  for key in ("code", "title", "artist", "kind"))]
     return {"total": len(matching), "rows": [
-        {"id": items.index(item), "code": item["code"], "title": item["title"],
+        {"id": index, "code": item["code"], "title": item["title"],
          "artist": item["artist"], "kind": item["kind"], "status": item["status"]}
-        for item in matching[offset:offset+limit]]}
+        for index, item in matching[offset:offset+limit]]}
 
 
 def lyrics(item, export, ncn):
