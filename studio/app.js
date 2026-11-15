@@ -643,6 +643,7 @@
       'build-audio-button','select-all','select-page','clear-selection','upload-login','settings-login',
       'settings-logout','google-login-header','update-button','verify-code-registry'];
     for (const name of buttons) $(name).disabled = busy;
+    $('update-download').disabled = busy;
     $('build-button').disabled = busy || selected.size === 0;
     $('build-audio-button').disabled = busy || selected.size === 0 || !proEnabled;
     syncXskControls();
@@ -2431,7 +2432,17 @@
               await refreshPhraseBackup();
               message(job.result?.message||'ย้อนคืนสำเร็จ',false);
             } else if (job.kind === 'check-update') {
-              message(job.result?.message || (job.result?.update ? 'พบเวอร์ชันใหม่: ' + job.result.version : 'ยังไม่มี Installer รุ่นใหม่'), false);
+              const info=job.result||{};
+              $('update-result').textContent=info.message||'ไม่สามารถยืนยันเวอร์ชันได้';
+              $('update-download').hidden=!info.update;
+              $('update-version').textContent=info.update
+                ? 'มีรุ่นใหม่ v'+info.version+' Build '+info.build
+                : 'รุ่นล่าสุดที่เผยแพร่';
+              message(info.message||'ตรวจเวอร์ชันเสร็จแล้ว',false);
+            } else if (job.kind === 'download-update') {
+              const info=job.result||{};
+              $('update-result').textContent=info.message||'ดาวน์โหลด ZIP แล้ว';
+              message(info.message||'ดาวน์โหลดและตรวจไฟล์อัปเดตแล้ว',false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
           } else if (job.state === 'error') {
             if(job.kind==='ai-recording-save'){
@@ -3108,7 +3119,17 @@
     try {await post('/api/open-browser',{});message('เปิด Web Control ด้วย Local Engine ชุดเดียวกันแล้ว',false);}
     catch(e){message(e.message);}
   });
-  $('update-button').addEventListener('click',()=>{void run('check-update');});
+  $('update-button').addEventListener('click',()=>{
+    $('update-result').textContent='กำลังตรวจข้อมูลรุ่น PC Ready ที่เผยแพร่…';
+    $('update-download').hidden=true;
+    void run('check-update');
+  });
+  $('update-download').addEventListener('click',async()=>{
+    if(!await confirmStudio(
+      'ดาวน์โหลด ZIP รุ่นใหม่จาก GitHub Releases ลงในพื้นที่ส่วนตัวของโปรแกรม และตรวจ SHA-256 ก่อนบันทึก\\n\\nโปรแกรมจะไม่เขียนทับเวอร์ชันที่เปิดอยู่ กรุณาปิดโปรแกรมและแตก ZIP รุ่นใหม่แยกโฟลเดอร์ก่อนใช้งาน',
+      'ยืนยันดาวน์โหลดรุ่นใหม่',{acceptLabel:'ดาวน์โหลดและตรวจ SHA-256',cancelLabel:'ยกเลิก'}))return;
+    void run('download-update');
+  });
   $('cancel-job').addEventListener('click',async()=>{
     try{await post('/api/jobs/cancel',{});message('รับคำสั่งยกเลิกแล้ว · กำลังหยุดอย่างปลอดภัย',false);}catch(e){message(e.message);}
   });
