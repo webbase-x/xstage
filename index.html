@@ -262,7 +262,7 @@
             <div class="share-library-warning">
               <strong>คำเตือนเรื่องลิขสิทธิ์</strong>
               <p>แชร์เฉพาะเพลงที่คุณมีสิทธิ์ครอบครอง ใช้งาน หรือได้รับอนุญาตให้แบ่งปันเท่านั้น เจ้าของบัญชีผู้แชร์เป็นผู้รับผิดชอบต่อสิทธิ์ในไฟล์ที่แชร์</p>
-              <p>ผู้รับจะได้รับสิทธิ์ดูและเล่นไฟล์ในโฟลเดอร์ XStageWeb แบบอ่านอย่างเดียว ไม่สามารถแก้ไขหรือลบไฟล์ของเจ้าของผ่าน X-Stage ได้</p>
+              <p>ผู้รับจะได้รับสิทธิ์ดูและเล่นไฟล์ในโฟลเดอร์ XStageSong แบบอ่านอย่างเดียว ไม่สามารถแก้ไขหรือลบไฟล์ของเจ้าของผ่าน X-Stage ได้</p>
             </div>
             <label class="share-library-email">อีเมล Google ของผู้รับ
               <input id="share-library-email" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com">
@@ -300,7 +300,7 @@
         <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
-      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageWeb พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
+      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageSong พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
@@ -350,7 +350,7 @@
         <video id="cloud-import-video-preview" controls playsinline preload="metadata" hidden aria-label="ดูตัวอย่างวิดีโอเพื่อตรวจเนื้อร้องและเวลา"></video>
         <p id="cloud-import-video-hint" class="cloud-import-video-hint" aria-live="polite"></p>
       </section>
-      <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageWeb ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
+      <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageSong ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
       <div class="cloud-import-progress">
         <progress id="cloud-import-progress" value="0" max="100"></progress>
         <span id="cloud-import-progress-label">0%</span>
