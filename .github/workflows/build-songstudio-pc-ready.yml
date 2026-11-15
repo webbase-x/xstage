@@ -43,7 +43,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build335
+  group: xstage-songstudio-ready-build336
   cancel-in-progress: true
 
 jobs:
@@ -168,7 +168,7 @@ jobs:
       - name: Validate complete bundled Desktop OAuth pair (never user tokens)
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.35-build335"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336"
           $config = Join-Path $base "config/google-oauth-client.json"
           $hasId = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID)
           $hasSecret = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)
@@ -192,7 +192,7 @@ jobs:
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.35-build335"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -200,7 +200,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.35-build335"
+          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -213,7 +213,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.35-build335.zip"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -241,10 +241,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.35-build335
+          name: X-Stage-Song-Studio-PC-Ready-v0.3.36-build336
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.35-build335.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.35-build335.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -264,8 +264,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.35-build335"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.35-build335.zip"
+          $tag = "song-studio-pc-ready-v0.3.36-build336"
+          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.36-build336.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
@@ -303,12 +303,12 @@ jobs:
           Per-user tokens and preferences persist across releases under Windows
           LocalAppData and DPAPI. If variable is absent, one-time import is required.
           Source deduplication, recovery journal, catalogs and current.json remain.
-          Preview displays timed LRC/KAR/NCN lyrics from real components.
+          Preview uses one music file plus verified timed LRC or Lyrics JSON. Old NCN triple import is retired.
           Bundled multilingual Whisper can transcribe audible vocals OFFLINE
           into clearly marked UNVERIFIED drafts for manual review; no fake
           lyrics are generated from MIDI notes.
 
-          Limitations: not original Build205 engine. NCN audio is rendered
+          Limitations: not original Build205 engine. MIDI/KAR audio is rendered
           from MIDI via FluidSynth; compatibility varies by source.
           Google authorization requires user consent; existing Drive files
           created by other OAuth apps are outside the drive.file scope.
@@ -317,7 +317,7 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" --clobber --repo "$env:GITHUB_REPOSITORY"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.35 Build 335" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
+            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v0.3.36 Build 336" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
 
@@ -328,8 +328,8 @@ jobs:
         run: |
           # Never advertise a new ZIP until the release and ZIP checksum
           # have both succeeded. Source metadata itself contains no secrets.
-          $version = "0.3.35"
-          $build = 335
+          $version = "0.3.36"
+          $build = 336
           $tag = "song-studio-pc-ready-v$version-build$build"
           $archive = "X-Stage-Song-Studio-PC-Ready-v$version-build$build.zip"
           $file = "dist/$archive"
@@ -364,7 +364,7 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Latest PC Ready metadata already matches verified release."
           } else {
-            git commit -m "Update verified Song Studio PC Ready latest metadata to Build 335 [skip ci]"
+            git commit -m "Update verified Song Studio PC Ready latest metadata to Build 336 [skip ci]"
             if ($LASTEXITCODE -ne 0) { throw "Cannot commit latest metadata" }
             # The long Windows build may finish after another contributor
             # advances main. Rebase the metadata-only commit without forcing.

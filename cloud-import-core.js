@@ -103,8 +103,16 @@ function scan(files){
     const json=items.filter(x=>x.kind==='json'),midi=items.filter(x=>MIDI.has(x.kind));
     const lyr=items.filter(x=>x.kind==='lyr'),cur=items.filter(x=>x.kind==='cur');
     const extra=items.filter(x=>OTHER_AUDIO.has(x.kind));
-    if((sound.length===1||(!sound.length&&video.length===1))&&video.length<=1&&midi.length===0&&extra.length===0&&lyr.length===0&&cur.length===0&&
-       lrc.length<=1&&json.length<=1&&(lrc.length===1||json.length===1||video.length===1)){
+    // New import contract: one playable media file + exactly one timed
+    // companion (.lrc OR .json). Historic NCN .LYR/.CUR is not an import
+    // source and must never be required or silently paired.
+    const timedCompanions=lrc.length+json.length;
+    const legacyNcn=lyr.length>0||cur.length>0;
+    if((sound.length===1||(!sound.length&&video.length===1))&&video.length<=1&&midi.length===0&&extra.length===0&&!legacyNcn&&
+       (timedCompanions===1||
+        // A standalone karaoke video whose lyrics are burned into the
+        // picture is a separate explicit review workflow, not an NCN import.
+        (video.length===1&&timedCompanions===0))){
       const primary=sound[0]||video[0];
       if(primary.file.size<1024||(video.length&&video[0].file.size<1024)||
           (lrc.length&&lrc[0].file.size<8)||(json.length&&json[0].file.size<8)){
@@ -113,27 +121,29 @@ function scan(files){
       songs.push({key,code:primary.file.name.replace(/\.[^.]+$/,'').slice(0,140),
         audio:primary,video:video[0]||null,lrc:lrc[0]||null,json:json[0]||null,
         kind:primary.kind.toUpperCase()});
-    }else if(midi.length===1&&sound.length===0&&extra.length===0&&
-        lrc.length<=1&&json.length<=1&&lyr.length<=1&&cur.length<=1){
-      const isNcn=/\/(?:ncn)\//i.test('/'+midi[0].relative.replace(/\\/g,'/'))||
-        lyr.length>0||cur.length>0;
-      if((isNcn&&(!lyr.length||!cur.length))||(lyr.length!==cur.length)){
-        blocked.push({key,reason:'ชุด NCN ต้องมี MID + LYR + CUR รหัสเดียวกันครบทั้งสามไฟล์'});continue;
-      }
-      if(midi[0].file.size<22||(lyr.length&&lyr[0].file.size<8)||
-          (cur.length&&cur[0].file.size<2)){
-        blocked.push({key,reason:'ชุด MIDI/NCN มีขนาดไฟล์ไม่สมบูรณ์'});continue;
+    }else if(midi.length===1&&sound.length===0&&video.length===0&&extra.length===0&&
+        !legacyNcn&&timedCompanions===1){
+      if(midi[0].file.size<22||
+          (lrc.length&&lrc[0].file.size<8)||
+          (json.length&&json[0].file.size<8)){
+        blocked.push({key,reason:'ไฟล์เพลงหรือเนื้อร้องมีขนาดไม่สมบูรณ์'});continue;
       }
       midis.push({key,code:midi[0].file.name.replace(/\.[^.]+$/,'').slice(0,140),
-        midi:midi[0],lyr:lyr[0]||null,cur:cur[0]||null,lrc:lrc[0]||null,
-        json:json[0]||null,kind:lyr.length?'NCN':midi[0].kind.toUpperCase()});
+        midi:midi[0],lrc:lrc[0]||null,json:json[0]||null,
+        kind:midi[0].kind.toUpperCase()});
     }else if(sound.length||video.length||midi.length||extra.length){
-      const reason=extra.length?'สื่อเสียงชนิดนี้ต้องแปลงเป็นไฟล์ที่เบราว์เซอร์รองรับก่อน':
-        midi.length?'ไฟล์ MIDI ซ้ำ หรือชุดเพลงไม่สมบูรณ์':
-        'ไฟล์เสียงต้องมี LRC/JSON ชื่อเดียวกัน (วิดีโอที่มีเนื้อร้องฝังในภาพนำเข้าเดี่ยวได้)';
+      const reason=legacyNcn?
+        'ยกเลิกการนำเข้า NCN แบบ MID+LYR+CUR แล้ว · ต้องแปลงเป็นไฟล์เพลง + LRC หรือ Lyrics JSON ที่มีเวลาจริง':
+        extra.length?'สื่อเสียงชนิดนี้ต้องแปลงเป็นไฟล์ที่เบราว์เซอร์รองรับก่อน':
+        timedCompanions>1?'พบไฟล์เนื้อร้อง LRC และ JSON ซ้ำ · เลือกเพียงหนึ่งไฟล์ต่อเพลง':
+        midi.length>1?'พบไฟล์ MIDI ซ้ำ · ต้องมีไฟล์เพลงเพียงหนึ่งไฟล์ต่อชุด':
+        midi.length?'MIDI/KAR ต้องจับคู่กับ LRC หรือ Lyrics JSON ที่มีเวลาจริงเพียงหนึ่งไฟล์':
+        'ไฟล์เสียงต้องมี LRC/JSON ชื่อเดียวกันที่มีเวลาจริง (ยกเว้นวิดีโอคาราโอเกะแบบเนื้อร้องฝังภาพ)';
       blocked.push({key,reason});
     }else if(lrc.length||json.length||lyr.length||cur.length){
-      blocked.push({key,reason:'มีเฉพาะเนื้อร้อง แต่ไม่มีไฟล์เสียงหรือ MIDI คู่กัน'});
+      blocked.push({key,reason:legacyNcn?
+        'พบ .LYR/.CUR รุ่นเก่า · ยกเลิกการนำเข้าชุด 3 ไฟล์ ให้ใช้ไฟล์เพลง + LRC/JSON พร้อมเวลา':
+        'มีเฉพาะเนื้อร้อง แต่ไม่มีไฟล์เพลงคู่กัน'});
     }
   }
   return {songs,midis,fonts,blocked,files:seen.size};

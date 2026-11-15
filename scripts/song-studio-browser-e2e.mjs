@@ -88,26 +88,25 @@ try {
   assert.ok(archive.includes(Buffer.from('ทดสอบเนื้อร้อง')), 'LRC must contain editable timed lyric');
   console.log('PASS: Chromium loaded WebAssembly Engine and converted demo.wav to M4A + LRC locally.');
 
-  // Real standalone browser workflow: import NCN MID/LYR/CUR, read true CUR
-  // timestamps, synthesize a preview and export the original source bytes.
+  // Real standalone browser workflow: import exactly MIDI + timed Lyrics JSON,
+  // synthesize a preview, preserve original MIDI bytes, and export two files.
   const midiPage=await browser.newPage({acceptDownloads:true});
   midiPage.on('pageerror',error=>{throw Error('MIDI PAGE ERROR: '+error.message);});
   await midiPage.goto('http://127.0.0.1:'+port+'/studio/web.html',{waitUntil:'load'});
   const demoTrack=[0,0xc0,0,0,0x90,60,100,0x60,0x80,60,0,0,0xff,0x2f,0];
   const demoMidi=Buffer.from([77,84,104,100,0,0,0,6,0,0,0,1,0,96,
     77,84,114,107,0,0,0,demoTrack.length,...demoTrack]);
-  const demoLyr=Buffer.from('Test Song\nArtist\nC\n.\nHI\n');
-  const demoCur=Buffer.from([0,0,0,0,24,0]);
+  const demoJson=Buffer.from(JSON.stringify({schemaVersion:1,songCode:'NCN001',
+    lines:[{startTime:0,endTime:0.5,text:'HI'},{startTime:0.5,endTime:1,text:'NEXT'}]}));
   await midiPage.setInputFiles('#file-input',[
     {name:'NCN001.mid',mimeType:'audio/midi',buffer:demoMidi},
-    {name:'NCN001.lyr',mimeType:'application/octet-stream',buffer:demoLyr},
-    {name:'NCN001.cur',mimeType:'application/octet-stream',buffer:demoCur}
+    {name:'NCN001.json',mimeType:'application/json',buffer:demoJson}
   ]);
   await midiPage.waitForFunction(()=>document.querySelector('#catalog-note')
     .textContent.includes('พร้อมสร้าง 1'));
   await midiPage.locator('#song-list tr').first().click();
   await midiPage.waitForFunction(()=>document.querySelector('#midi-status')
-    .textContent.includes('NCN จริง'));
+    .textContent.includes('MIDI จริง'));
   assert.equal(await midiPage.locator('#midi-workspace').isVisible(),true);
   assert.match(await midiPage.locator('#lyrics-text').inputValue(),/\[00:00\.00\]HI/);
   assert.equal(await midiPage.locator('#preview-midi').isEnabled(),true);
@@ -149,11 +148,13 @@ try {
   const midiDownload=midiPage.waitForEvent('download',{timeout:20000});
   await midiPage.click('#download-result');
   const midiZip=await fsp.readFile(await (await midiDownload).path());
-  for(const name of ['NCN001.mid','NCN001.lyr','NCN001.cur','NCN001.json','NCN001.lrc'])
+  for(const name of ['NCN001.mid','NCN001.json'])
     assert.ok(midiZip.includes(Buffer.from(name)),'Browser ZIP must include '+name);
-  assert.ok(midiZip.includes(demoMidi),'NCN MIDI bytes must be kept unchanged');
-  assert.ok(midiZip.includes(demoCur),'NCN CUR bytes must be kept unchanged');
-  console.log('PASS: Browser NCN preview, real CUR timing and source-preserving ZIP export');
+  for(const legacy of ['NCN001.lyr','NCN001.cur','NCN001.lrc'])
+    assert.ok(!midiZip.includes(Buffer.from(legacy)),
+      'A two-file export must not include a legacy third/fourth sidecar');
+  assert.ok(midiZip.includes(demoMidi),'Original MIDI bytes must be unchanged');
+  console.log('PASS: browser MIDI + timed JSON preview and exact two-file export');
 
   // The second output mode must actually synthesize SF2 -> WAV and encode a
   // separate AAC/M4A locally, without copying MIDI or corrupting the lyrics.
@@ -173,17 +174,17 @@ try {
     'Rendered M4A mode must not falsely claim unneeded NCN source sidecar');
   console.log('PASS: Browser SF2 MIDI converted to genuine M4A + real-time Lyrics JSON');
 
-  // Conflict protection: equal-size replacement with different CUR bytes is
-  // NOT a verified duplicate. Never overwrite the NCN timing in the catalog.
+  // Conflict protection: a 2-file song may have ONE timed lyric companion.
+  // A second LRC in addition to JSON is ambiguous and blocks export.
   await midiPage.setInputFiles('#file-input',[{
-    name:'NCN001.cur',mimeType:'application/octet-stream',
-    buffer:Buffer.from([0,0,0,0,48,0])
+    name:'NCN001.lrc',mimeType:'text/plain',
+    buffer:Buffer.from('[00:00.00]คนละเนื้อร้อง\\n[00:00.50]ไม่ตรงกัน')
   }]);
   await midiPage.waitForFunction(()=>document.querySelector('#catalog-note')
     .textContent.includes('ต้องตรวจสอบ 1'));
   assert.equal(await midiPage.locator('#build').isEnabled(),false,
-    'Duplicate CUR with different bytes must disable unsafe NCN export');
-  console.log('PASS: Browser rejects equal-size conflicting NCN cursor files');
+    'Duplicate LRC+JSON must block ambiguous two-file export');
+  console.log('PASS: browser rejects duplicate LRC/JSON lyric companions');
   await midiPage.close();
 
   // Mobile layout must remain usable without a page-wide horizontal overflow.

@@ -2,10 +2,12 @@
 
 Existing StageWeb catalogs retain their original publishing logic. New MP3/M4A
 and timed LRC pairs are staged for the same verified online publisher.
-Unsupported VIDEO/NCN never appear as falsely playable catalog rows.
+New songs require exactly one original media file and one timed LRC/JSON companion.
 """
 from __future__ import annotations
 import hashlib
+import json
+import math
 import re
 from pathlib import Path
 
@@ -84,97 +86,113 @@ def _route(file, group, fmt):
         return ("AUDIO", fmt, sub, bucket(file.stem))
     if group == "video":
         return ("VIDEO", fmt, bucket(file.stem))
-    return ("MIDI", "NCN", {"mid": "Songs", "lyr": "Lyrics", "cur": "Cursor"}[fmt],
+    return ("MIDI", "SMF", "Songs" if file.suffix.lower() in MIDI else "Lyrics",
             bucket(file.stem))
 
 
+def _timed_json(path, code):
+    """Fail closed on malformed, unmatched, or unreviewed timed Lyrics JSON."""
+    if path.stat().st_size < 8 or path.stat().st_size > 8 * 1024 * 1024:
+        return None
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(doc, dict) or doc.get("schemaVersion") != 1:
+            return None
+        if doc.get("requiresReview") is True or doc.get("lyricsMode") == "embedded-video":
+            return None
+        source_code = str(doc.get("songCode") or "").strip()
+        if source_code and source_code.casefold() != code.casefold():
+            return None
+        lines = doc.get("lines")
+        if not isinstance(lines, list) or not lines:
+            return None
+        last = -1.0
+        for item in lines:
+            if not isinstance(item, dict) or not isinstance(item.get("text"), str) or not item["text"].strip():
+                return None
+            t = item.get("startTime")
+            if type(t) not in (int, float) or not math.isfinite(t) or not 0 <= t < 86400 or t < last:
+                return None
+            end = item.get("endTime")
+            if end is not None and (type(end) not in (int, float) or not math.isfinite(end) or
+                                   end < t or end > 86400):
+                return None
+            last = t
+        return doc
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError):
+        return None
+
+
 def scan(folder, ncn=None):
+    """Only one original song file and one timed .lrc OR .json per new song.
+
+    The obsolete .MID/.LYR/.CUR source trio is explicitly rejected, not
+    silently converted. Pre-existing online libraries are read separately.
+    """
     root = _safe_root(folder)
     paths = _indexed(root)
-    by_dir = {}
+    groups = {}
     for path in paths:
-        # Pair both same-directory originals and already sorted
-        # AUDIO/{MP3,M4A}/{Songs,Lyrics}/A and MIDI/NCN/{Songs,Lyrics,Cursor}/A.
-        # Keep the source collection prefix and bucket: never pair unrelated
-        # tracks merely because their filenames match.
         parent = path.relative_to(root).parts[:-1]
         lowered = [part.casefold() for part in parent]
         role = next((i for i, part in enumerate(lowered)
-                     if part in ("songs", "lyrics", "cursor")
-                     and i > 0), None)
+                     if part in ("song", "songs", "lyric", "lyrics", "cursor", "cursors")), None)
         if role is None:
             key = (tuple(lowered), path.stem.casefold())
         else:
             key = (tuple(lowered[:role] + lowered[role+1:]), path.stem.casefold())
-        by_dir.setdefault(key, []).append(path)
+        groups.setdefault(key, []).append(path)
+
     complete, incomplete, unsupported = [], [], []
-    handled = set()
-
-    def add(reason, members):
-        incomplete.append({"name": members[0].stem, "reason": reason})
-
-    for key, members in sorted(by_dir.items(), key=lambda x: str(x[0])):
-        if key in handled:
-            continue
-        handled.add(key)
+    for key, members in sorted(groups.items(), key=lambda item: str(item[0])):
         candidates = {}
-        for p in members:
-            candidates.setdefault(p.suffix.lower(), []).append(p)
-        # A pair must be in the same directory with the exact same stem.
-        audios = [p for p in members if p.suffix.lower() in AUDIO]
-        videos = [p for p in members if p.suffix.lower() in VIDEO]
-        midis = [p for p in members if p.suffix.lower() in MIDI]
-        if audios or videos:
-            media = audios + videos
-            lyrics = candidates.get(".lrc", [])
-            if len(media) != 1 or len(lyrics) != 1:
-                add("ต้องมี Song และ .LRC ชื่อเดียวกันอย่างละ 1 ไฟล์", members)
-                continue
-            primary, lyric = media[0], lyrics[0]
-            if not _probe_audio(primary) or not _timed_lrc(lyric):
-                add("ไฟล์เพลงสั้นผิดปกติหรือเนื้อร้อง LRC ไม่มีเวลาที่ถูกต้อง", members)
-                continue
-            fmt = AUDIO.get(primary.suffix.lower()) or VIDEO[primary.suffix.lower()]
-            group = "audio" if primary.suffix.lower() in AUDIO else "video"
-            layout = [(primary, _route(primary, group, fmt))]
-            if group == "audio":
-                layout.append((lyric, _route(lyric, "audio", fmt)))
-            else:
-                # Video Lyrics share the VIDEO category; no false Online DB references.
-                layout.append((lyric, ("VIDEO", fmt, "Lyrics", bucket(primary.stem))))
-            complete.append({"name": primary.stem, "kind": fmt,
-                             "files": layout})
-        elif midis:
-            cursors = candidates.get(".cur", [])
-            lyrs = candidates.get(".lyr", [])
-            if len(midis) != 1:
-                add("พบไฟล์ MIDI ชื่อเดียวกันหลายรายการ", members)
-                continue
-            if len(cursors) == 1 and len(lyrs) == 1:
-                trio = (midis[0], lyrs[0], cursors[0])
-                if any(p.stat().st_size < 8 for p in trio):
-                    add("NCN มีไฟล์ว่างหรือไม่สมบูรณ์", members)
-                    continue
-                complete.append({"name": midis[0].stem, "kind": "NCN", "files": [
-                    (p, _route(p, "midi", ext)) for p, ext in
-                    zip(trio, ("mid", "lyr", "cur"))]})
-            elif not cursors and not lyrs and ncn is not None:
-                try:
-                    doc = ncn.kar_document(midis[0], midis[0].stem)
-                    if not doc.get("lines"):
-                        raise ValueError("ไม่พบข้อความพร้อมเวลา")
-                    complete.append({"name": midis[0].stem, "kind": "KAR",
-                                     "files": [(midis[0], _route(midis[0], "midi", "mid"))]})
-                except (OSError, ValueError) as exc:
-                    add("MIDI ไม่มี .LYR/.CUR หรือเนื้อร้องฝังที่มีเวลาจริง: " + str(exc), members)
-            else:
-                add("NCN ต้องมี MIDI + .LYR + .CUR ชื่อเดียวกัน", members)
-        elif members:
-            if any(p.suffix.lower() in (".emk", ".lrc", ".lyr", ".cur") for p in members):
-                incomplete.append({"name": members[0].stem,
-                                   "reason": "ไฟล์ประกอบไม่มีเพลงคู่กันหรือ EMK ยังไม่ได้ตรวจโครงสร้าง"})
-            else:
-                unsupported.append(members[0].name)
+        for item in members:
+            candidates.setdefault(item.suffix.lower(), []).append(item)
+        old_ncn = candidates.get(".lyr", []) + candidates.get(".cur", [])
+        if old_ncn:
+            incomplete.append({"name": members[0].stem,
+                "reason": "ยกเลิก NCN แบบ 3 ไฟล์ MID+LYR+CUR · แปลงเป็นไฟล์เพลง + LRC/JSON ที่มีเวลาก่อน"})
+            continue
+        media = [item for item in members
+                 if item.suffix.lower() in AUDIO or item.suffix.lower() in VIDEO
+                 or item.suffix.lower() in MIDI]
+        lyrics = candidates.get(".lrc", []) + candidates.get(".json", [])
+        if not media and not lyrics:
+            unsupported.extend(item.name for item in members)
+            continue
+        if len(media) != 1 or len(lyrics) != 1:
+            incomplete.append({"name": members[0].stem,
+                "reason": "ต้องมีไฟล์เพลง 1 ไฟล์ + LRC หรือ Lyrics JSON 1 ไฟล์ ชื่อ/รหัสเดียวกัน"})
+            continue
+        music, lyric = media[0], lyrics[0]
+        suffix = music.suffix.lower()
+        minimum = 22 if suffix in MIDI else 1024
+        if music.stat().st_size < minimum:
+            incomplete.append({"name": music.stem, "reason": "ไฟล์เพลงมีขนาดไม่สมบูรณ์"})
+            continue
+        if lyric.suffix.lower() == ".lrc":
+            valid = _timed_lrc(lyric)
+        else:
+            valid = _timed_json(lyric, music.stem) is not None
+        if not valid:
+            incomplete.append({"name": music.stem,
+                "reason": "LRC/JSON ไม่มีเวลาจริง ถูกจัดเวลาไม่ครบ หรือรหัสเพลงไม่ตรง"})
+            continue
+        if suffix in MIDI:
+            fmt = "KAR" if suffix == ".kar" else "MIDI"
+            group = "midi"
+        elif suffix in AUDIO:
+            fmt = AUDIO[suffix]
+            group = "audio"
+        else:
+            fmt = VIDEO[suffix]
+            group = "video"
+        layout = [(music, _route(music, group, fmt))]
+        if group == "video":
+            layout.append((lyric, ("VIDEO", fmt, "Lyrics", bucket(music.stem))))
+        else:
+            layout.append((lyric, _route(lyric, group, fmt)))
+        complete.append({"name": music.stem, "kind": fmt, "files": layout})
     return {"folder": str(root), "complete": complete,
             "incomplete": incomplete, "unsupported": unsupported,
             "fileCount": len(paths), "total": len(complete)}
@@ -212,17 +230,16 @@ def report(folder, export=None, ncn=None):
             "unsupported": len(result["unsupported"]),
             "examples": result["incomplete"][:12],
             "kinds": {kind: sum(row["kind"] == kind for row in result["complete"])
-                      for kind in ("MP3", "M4A", "AVI", "MPG", "VCD", "WMV", "NCN")}}
+                      for kind in ("MP3", "M4A", "AVI", "MPG", "VCD", "WMV", "MIDI", "KAR")}}
 
 
 def upload(drive, folder, *, create_new_library=False, cancelled=None,
            progress=None, export=None, publisher=None, staging_root=None, validator=None,
            renderer=None, ncn=None, video_renderer=None):
-    """Publish supported ready audio+lyrics sets through the SAME online DB.
+    """Publish verified song+timed LRC/JSON pairs to the same private Drive DB.
 
-    The existing Karaoke Online schema supports audio+timed JSON. Do not put
-    unsupported VIDEO/NCN into the catalog and falsely claim playability.
-    Original source files are never modified.
+    Never accept the obsolete NCN .LYR/.CUR triple; preserve original song
+    bytes, media IDs and the owner's source files.
     """
     import json
     import shutil
@@ -285,12 +302,15 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             media = next((p for p, _ in row["files"]
                           if p.suffix.lower() in AUDIO or p.suffix.lower() in VIDEO
                           or p.suffix.lower() in MIDI), None)
-            lyric = next((p for p, _ in row["files"] if p.suffix.lower() == ".lrc"), None)
+            lyric = next((p for p, _ in row["files"] if p.suffix.lower() in (".lrc", ".json")), None)
             if media is None:
                 continue
-            source_id = digest(media)
-            if source_id in seen:
-                continue
+            # The same MIDI accompaniment can belong to different songs:
+            # deduplicate complete media+timed-lyrics PAIRS, not audio alone.
+            lyric_hash = digest(lyric) if lyric is not None else ""
+            media_hash = digest(media)
+            source_id = hashlib.sha256((media_hash+":"+lyric_hash).encode("ascii")).hexdigest()
+            if source_id in seen:continue
             seen.add(source_id)
             code = row["name"].strip()
             if not code or len(code) > 140:
@@ -303,27 +323,29 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
                      else ".m4a"))
             lyrics_file = stage / "lyrics" / (source_id[:16] + ".json")
             lrc_file = lyrics_file.with_suffix(".lrc")
-            if is_midi:
-                if ncn is None:
-                    raise ValueError("ไม่มีตัวอ่านเนื้อร้อง NCN/MIDI ในแพ็กเกจ")
-                companions = {p.suffix.lower(): p for p, _ in row["files"]}
-                if ".lyr" in companions and ".cur" in companions:
-                    pair = {"midi": str(media), "lyrics": str(companions[".lyr"]),
-                            "cursor": str(companions[".cur"]), "code": code, "missing": []}
-                    document = ncn.ncn_document(pair)
-                else:
-                    document = ncn.kar_document(media, code)
-                raw_lrc = ncn.to_lrc(document["lines"]).encode("utf-8")
+            if lyric is None:
+                raise ValueError("ไม่มีเนื้อร้อง LRC/JSON คู่กับไฟล์เพลง")
+            if lyric.suffix.lower() == ".json":
+                document = _timed_json(lyric, code)
+                if document is None:
+                    raise ValueError("Lyrics JSON ยังไม่มีเวลาที่ตรวจแล้วหรือรหัสเพลงไม่ตรง")
+                # Staging .lrc is NOT uploaded; timestamps come only from
+                # validated JSON. No synthetic timing/extra online file.
+                cues = []
+                for line in document["lines"]:
+                    when = round(float(line["startTime"]) * 100)
+                    stamp = "[%02d:%02d.%02d]" % (
+                        when // 6000, when // 100 % 60, when % 100)
+                    cues.append(stamp + line["text"])
+                raw_lrc = ("\n".join(cues) + "\n").encode("utf-8")
             else:
-                if lyric is None:
-                    continue
                 raw_lrc = lyric.read_bytes()
                 document = export.lrc_to_json(lyric.read_text(encoding="utf-8-sig"), code)
             if not document.get("lines"):
                 continue
             if file.suffix.lower() == source_kind:
                 shutil.copyfile(media, file)
-                if digest(file) != source_id:
+                if digest(file) != media_hash:
                     raise ValueError("SHA-256 ไฟล์ที่คัดลอกไม่ตรงต้นฉบับ: " + media.name)
             elif renderer is not None:
                 renderer(media, file)
@@ -338,12 +360,11 @@ def upload(drive, folder, *, create_new_library=False, cancelled=None,
             record = {
                 "webSongId": "import/" + source_id,
                 "code": code, "title": row["name"], "artist": "",
-                "sourceFormat": row["kind"],
+                "sourceFormat": ("SMF" if row["kind"] == "MIDI" else row["kind"]),
                 "audio": {"path": "audio/" + file.name},
                 "lyrics": {"path": "lyrics/" + lyrics_file.name}}
-            # NCN sources (LYR/CUR) remain on the local computer only.
-            # For Web/TV only the unmodified MIDI and timed Lyrics JSON
-            # are published; no extra source-type folders or companion files.
+            # Drive V4 publishes only the original song and verified Lyrics JSON.
+            # A temporary LRC is never included in the remote media catalog.
             if is_video and video_renderer is not None:
                 (stage / "video").mkdir(exist_ok=True)
                 video = stage / "video" / (source_id[:16] + ".mp4")

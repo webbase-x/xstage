@@ -684,24 +684,18 @@ class Importer {
             let parsed,doc,json;
             try{
               parsed=runtime.parseMidi(await midiFile.arrayBuffer());
-              if(item.lyr&&item.cur){
-                doc=runtime.ncnLyrics(new Uint8Array(await item.lyr.file.arrayBuffer()),
-                  new Uint8Array(await item.cur.file.arrayBuffer()),code,parsed);
-                // A complete MID/LYR/CUR trio can still have missing character
-                // timing. Do not publish an apparently complete karaoke song
-                // when the original CUR cannot time the entire LYR body.
-                if(doc.metadata?.timingComplete===false)
-                  throw Error('NCN CUR มีเวลาเนื้อร้องไม่ครบ · ไม่เผยแพร่ Lyrics JSON ที่มีเพียงบางส่วน');
-              }else if(item.json){
+              if(item.json){
                 if(item.json.file.size>8*1024*1024)throw Error('Lyrics JSON ใหญ่เกิน 8 MB');
                 doc=core.validLyricsJson(await item.json.file.text(),code);
               }else if(item.lrc){
                 if(item.lrc.file.size>MAX_LRC)throw Error('LRC ใหญ่เกิน 2 MB');
                 doc=core.lrcToJson(await item.lrc.file.text(),code);
-              }else doc=runtime.midiLyrics(parsed,code);
+              }else{
+                throw Error('ต้องมีไฟล์เนื้อร้อง LRC หรือ JSON พร้อมเวลาจริงอีก 1 ไฟล์');
+              }
               doc.songCode=code;
               json=encode(doc);
-            }catch(error){throw Error('ไฟล์ MIDI/NCN ไม่สมบูรณ์: '+error.message);}
+            }catch(error){throw Error('ไฟล์ MIDI หรือเนื้อร้อง 2 ไฟล์ไม่สมบูรณ์: '+error.message);}
             const [midiHash,jsonHash]=await Promise.all([
               core.hashBlob(midiFile,()=>this.check()),
               core.hashBlob(json,()=>this.check())
@@ -717,7 +711,7 @@ class Importer {
             }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;
               show('รหัส MIDI ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;}
-            const type=item.kind==='NCN'?'NCN':item.kind==='KAR'?'KAR':'SMF';
+            const type=item.kind==='KAR'?'KAR':'SMF';
             const base=safeName(code);
             let media=same?.midi;
             if(!media){
@@ -728,8 +722,7 @@ class Importer {
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyrics=await uploadMedia(json,code,['LYRICS'],jname,
               'application/json',jsonHash,.75,.25);
-            // NCN .LYR/.CUR are decoded locally; do not store the raw
-            // cursor or lyric source in the private Drive song library.
+            // Publish only original MIDI/KAR plus verified timed Lyrics JSON.
             const ident=same?.webSongId||('browser/midi/'+midiHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const record={...(same||{}),webSongId:ident,code,title:doc.title||code,

@@ -55,23 +55,26 @@ class LyricPreviewTests(unittest.TestCase):
         self.assertTrue(payload["aiEligible"])
         self.assertFalse(payload["aiAvailable"])
 
-    def test_lyric_file_missing_cursor_reports_problem_not_fake_lyrics(self):
-        ncndir = self.dir / "NCN"
-        for component in ("Song", "Lyrics", "Cursor"):
-            (ncndir / component / "0").mkdir(parents=True, exist_ok=True)
-        mid = ncndir / "Song" / "0" / "0123.MID"
-        mid.write_bytes(b"MThd" + b"\0" * 300)
-        lir = ncndir / "Lyrics" / "0" / "0123.LYR"
-        lir.write_bytes("ชื่อเพลง\nนักร้อง\nC\n\nทดสอบ".encode("cp874"))
-        row = {"id": 20, "path": str(mid), "code": "0123", "title": "ทดสอบ",
-               "artist": "นักร้อง", "kind": "MID"}
-        engine.FILE_BY_ID[20] = row
-        with patch.object(engine, "DATA", self.dir):
-            payload = engine.preview_lyrics(20)
-        self.assertEqual(payload["status"], "missing")
-        self.assertEqual(payload["lines"], [])
-        self.assertIn("cursor", payload["message"].lower())
+    def test_legacy_three_file_input_is_not_timed_karaoke(self):
+        root=self.dir/"NCN"
+        for role in ("Song","Lyrics","Cursor"):
+            (root/role/"0").mkdir(parents=True,exist_ok=True)
+        mid=root/"Song"/"0"/"0123.MID"
+        mid.write_bytes(b"MThd"+b"\0"*300)
+        (root/"Lyrics"/"0"/"0123.LYR").write_bytes(
+            "ชื่อเพลง\nนักร้อง\nC\n\nทดสอบ".encode("cp874"))
+        (root/"Cursor"/"0"/"0123.CUR").write_bytes(b"\0"*20)
+        engine.FILE_BY_ID[20]={"id":20,"path":str(mid),"code":"0123",
+                               "title":"ทดสอบ","artist":"นักร้อง","kind":"MID"}
+        with patch.object(engine,"DATA",self.dir):
+            payload=engine.preview_lyrics(20)
+        self.assertEqual(payload["status"],"missing")
+        self.assertEqual(payload["lines"],[])
         self.assertFalse(payload["aiAvailable"])
+        report=engine.preview_source_report(20)
+        self.assertFalse(report["complete"])
+        self.assertNotIn("inspect:cur",{x["value"] for x in report["options"]})
+        self.assertNotIn("inspect:lyr",{x["value"] for x in report["options"]})
 
     def test_ai_transcription_json_is_marked_draft_and_preserves_offsets(self):
         data = {"transcription": [

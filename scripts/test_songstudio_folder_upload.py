@@ -137,18 +137,62 @@ class FolderUploadTests(unittest.TestCase):
             folder.upload(object(), str(self.root), create_new_library=True,
                           export=export, publisher=PublisherStub(), staging_root=self.root)
 
-    def test_existing_folder_requires_complete_ncn_companions(self):
+    def test_legacy_ncn_trio_is_not_a_new_import(self):
         self.audio.unlink()
         self.lrc.unlink()
         (self.root / "001.mid").write_bytes(b"MThd" + b"\0"*50)
         (self.root / "001.lyr").write_bytes(b"\x00"*90)
         (self.root / "001.cur").write_bytes(b"\x00"*100)
-        scan = folder.scan(str(self.root))
-        self.assertEqual(scan["total"], 1)
-        self.assertEqual(scan["complete"][0]["kind"], "NCN")
+        report = folder.scan(str(self.root))
+        self.assertEqual(report["total"], 0)
+        self.assertIn("ยกเลิก NCN", report["incomplete"][0]["reason"])
         with self.assertRaises(ValueError):
             folder.upload(object(), str(self.root), create_new_library=True,
                           export=export, publisher=PublisherStub(), staging_root=self.root)
+
+    def test_midi_plus_lrc_publishes_exactly_one_pair(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        midi = self.root / "001.mid"
+        lrc = self.root / "001.lrc"
+        original = b"MThd" + b"\0"*70
+        midi.write_bytes(original)
+        lrc.write_text("[00:01.00]ทดสอบ MIDI\n[00:03.00]เพลงคู่เนื้อร้อง", encoding="utf-8")
+        result = folder.scan(str(self.root))
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["complete"][0]["kind"], "MIDI")
+        self.assertEqual(len(result["complete"][0]["files"]), 2)
+        publisher = PublisherStub()
+        uploaded = folder.upload(object(), str(self.root), create_new_library=True,
+                                 export=export, publisher=publisher, staging_root=self.root)
+        self.assertEqual(uploaded["ready"], 1)
+        self.assertEqual(publisher.published[0]["sourceFormat"], "SMF")
+        self.assertEqual(midi.read_bytes(), original)
+
+    def test_midi_plus_timed_json_publishes_and_unreviewed_draft_fails(self):
+        self.audio.unlink()
+        self.lrc.unlink()
+        (self.root / "101.kar").write_bytes(b"MThd" + b"\0"*50)
+        lyric = self.root / "101.json"
+        doc = export.lrc_to_json("[00:01.20]ต้นฉบับพร้อมเวลา", "101")
+        lyric.write_text(json.dumps(doc,ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(folder.report(str(self.root))["ready"], 1)
+        publisher=PublisherStub()
+        uploaded=folder.upload(object(), str(self.root),create_new_library=True,
+                               export=export,publisher=publisher,staging_root=self.root)
+        self.assertEqual(uploaded["ready"],1)
+        self.assertEqual(publisher.published[0]["sourceFormat"],"KAR")
+        doc["requiresReview"]=True
+        lyric.write_text(json.dumps(doc,ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(folder.report(str(self.root))["ready"],0)
+
+    def test_duplicated_lyrics_are_blocked(self):
+        extra=self.root / "A001.json"
+        extra.write_text(json.dumps(export.lrc_to_json(
+            "[00:03.00]ซ้ำ", "A001"),ensure_ascii=False),encoding="utf-8")
+        result=folder.scan(str(self.root))
+        self.assertEqual(result["total"],0)
+        self.assertIn("1 ไฟล์",result["incomplete"][0]["reason"])
 
     def test_organized_audio_songs_lyrics_pair(self):
         self.audio.unlink()

@@ -1,4 +1,13 @@
-# X-Stage Song Studio PC Ready v0.3.35 Build 335
+# X-Stage Song Studio PC Ready — two-file import update
+
+## New import contract — supersedes NCN trio instructions below
+
+- **For new PC/Web/Android imports:** one original song file (such as `00001.mid`, `00001.kar`, or `00001.mp3`) plus exactly one `00001.lrc` **or** `00001.json` with verified timestamps. No `.LYR` or `.CUR` is required or accepted by the new importer.
+- **Song Studio PC** scans and publishes MIDI+Lyrics JSON, or audio+Lyrics JSON, without changing original media. Legacy NCN parsers may remain for read-only verification of historical files; they are not a new upload path.
+- A MIDI/KAR with no timed lyric file is **not ready for publishing**. Audio files may still be opened in AI Lyrics to prepare and verify a new timed lyric. Google Login and upload are separate optional steps.
+- The release ZIP named below is the prior version until a new Windows Ready artifact is built and verified. Do not represent an unbuilt source change as already installed.
+
+### Previously distributed PC Ready v0.3.35 Build 335
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 

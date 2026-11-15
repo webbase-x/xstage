@@ -449,7 +449,7 @@
       (search?'ค้นหาในทุกบรรทัด: '+search+'\nแก้เฉพาะเพลงที่ตรงคำค้นหานี้\n':'')+
       '\nข้อความใหม่ร่วมกัน:\n'+replacement+'\n\n'+
       'Smart Batch: รักษาเวลาเดิมของส่วนไม่เปลี่ยน · ประมาณเฉพาะช่วงแก้ · สำรองก่อนบันทึก'+
-      '\nข้ามเพลงผิดปกติพร้อมรายงาน · ไม่แก้ MID/LYR/CUR · อัปโหลด Drive ต้องสั่งเอง',
+      '\nข้ามเพลงผิดปกติพร้อมรายงาน · ไม่แก้ไฟล์เพลงเดิม · อัปโหลด Drive ต้องสั่งเอง',
       'ยืนยันแทนที่ข้อความหลายกลุ่ม',
       {acceptLabel:'สำรองและแทนที่',cancelLabel:'ยกเลิก'});
     if(!approved||busy||ids.some(id=>!phraseSelected.has(id))||
@@ -918,7 +918,7 @@
       $('preview-lyrics-status').textContent =
         'เสียงยังเล่น แต่เวลาเนื้อร้องสิ้นสุดที่ ' +
         Math.floor(end / 60) + ':' + String(Math.floor(end % 60)).padStart(2, '0') +
-        ' · ตรวจไฟล์ LRC/LYR/CUR ที่นำเข้า (ไม่มีการแต่งเวลาเพิ่ม)';
+        ' · ตรวจไฟล์ LRC/JSON ที่นำเข้า (ไม่มีการแต่งเวลาเพิ่ม)';
     }
   }
   function animateKaraoke() {
@@ -1037,7 +1037,7 @@
     panel.append(empty);
     $('preview-lyrics-source').textContent = 'กำลังตรวจสอบ';
     $('preview-lyrics-source').dataset.state = 'loading';
-    $('preview-lyrics-status').textContent = 'ตรวจสอบ LRC / KAR / NCN (Song + Lyrics + Cursor)';
+    $('preview-lyrics-status').textContent = 'ตรวจสอบคู่เพลง + LRC หรือ Lyrics JSON พร้อมเวลาจริง';
     $('preview-lyrics-ai-tools').hidden = true;
     if (!songId) {
       empty.textContent = '♫ เลือกเพลงเพื่อดูเนื้อร้อง';
@@ -1861,11 +1861,11 @@
       const formats = Object.entries(estimate.formats || {}).sort((a,b)=>b[1]-a[1])
         .map(([extension,count]) => (extension || 'ไม่มีนามสกุล').toUpperCase() + ' ' + fmtNum(count)).join(' · ');
       if (estimate.unsupported >= estimate.songs) throw new Error(
-        'เพลงที่เลือกทั้งหมดเป็น NCN ซึ่ง PC Engine รุ่นนี้ยังแปลงไม่ได้ · กรุณาเลือกเพลงรูปแบบที่รองรับ');
+        'เพลงที่เลือกไม่มีคู่ LRC/JSON ที่ผ่านการตรวจ · กรุณาเลือกเพลงพร้อมเนื้อร้อง');
       const warning = (formats ? '\nประเภทไฟล์: ' + formats : '') +
         (estimate.warning ? '\n\n⚠ รายการขนาดใหญ่ โปรแกรมจะสร้างทีละเพลง ไม่คัดลอกต้นฉบับทั้งหมด' : '') +
         (estimate.spaceWarning ? '\n⚠ พื้นที่ว่างอาจไม่พอสำหรับสร้างทุกเพลง หากเต็มจะหยุดรายการที่เหลือและเก็บเพลงที่สำเร็จไว้' : '') +
-        (estimate.unsupported ? '\n⚠ มี ' + fmtNum(estimate.unsupported) + ' ไฟล์ NCN ซึ่งยังไม่รองรับ และจะแจ้ง ERR รายเพลง' : '');
+        (estimate.unsupported ? '\n⚠ มี ' + fmtNum(estimate.unsupported) + ' ไฟล์ที่ยังไม่รองรับ · ตรวจคู่เพลง+LRC/JSON ก่อนสร้าง' : '');
       const exportFormat=audioOnly?'m4a':$('create-export-format').value;
       const summary = 'จำนวน ' + fmtNum(estimate.songs) + ' เพลง (' + fmtSize(estimate.bytes) + ')\n' +
         'วิธีสร้าง: ' + (audioOnly ? 'M4A อย่างเดียว' :
@@ -1952,7 +1952,7 @@
       '\\nตรวจ MD5 ก่อนส่งและไม่เขียนทับไฟล์เดิม'+
       (createNew?'\\n\\nหากไม่พบ XStageWeb ที่บัญชีนี้มองเห็น ระบบจะสร้างก่อนอัปโหลด'+
        '\\nคำเตือน: หากสิทธิ์ Google ไม่ครอบคลุมคลังเดิม อาจเกิดคลังซ้ำ':'')+
-      '\\n\\nMP3/M4A ที่ผ่านการตรวจจะอัปโหลดพร้อมอัปเดต DB/current.json ให้เล่นออนไลน์ได้ทันที · VIDEO/NCN ที่ยังไม่รองรับจะข้าม';
+      '\\n\\nMP3/M4A ที่ผ่านการตรวจจะอัปโหลดพร้อมอัปเดต DB/current.json ให้เล่นออนไลน์ได้ทันที · ไฟล์ LYR/CUR แบบ NCN เก่าจะถูกข้าม · ใช้เพลง+LRC/JSON';
     if (!await confirmStudio(details,'ยืนยันตรวจครบและอัปโหลดเข้า XStageWeb',
       {acceptLabel:'ตรวจแล้ว · เริ่มอัปโหลด',cancelLabel:'ยกเลิก'})) return;
     await run('upload-folder',{create_new_library:createNew});
