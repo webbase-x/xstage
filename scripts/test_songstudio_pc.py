@@ -704,7 +704,7 @@ class PcSourceTests(unittest.TestCase):
             code, content = get("/api/status", {"Host": host, "X-XStage-Token": engine.TOKEN})
             self.assertEqual(code, 200)
             state = json.loads(content)
-            self.assertEqual(state["build"], "205-SRC")
+            self.assertEqual(state["build"], "206-SRC")
             self.assertFalse(state["google"]["connected"])
             code, content = get("/", no_token)
             self.assertEqual(code, 200)
