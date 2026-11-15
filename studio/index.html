@@ -97,11 +97,6 @@
                 <input id="xsk-tail-replace" class="field" type="text" placeholder="ข้อความที่ต้องการแทนที่">
                 <p class="hint">ไม่เปลี่ยนไฟล์ต้นฉบับ · หากมีเวลาปาดระดับอักษรที่ไม่สามารถแก้อย่างปลอดภัย ระบบจะข้ามเพลงนั้นพร้อมแจ้งเหตุผล</p>
               </div>
-              <details>
-                <summary>เปิดใช้ X-Stage Song Studio PC Pro ด้วย License Key</summary>
-                <div class="path-row"><input id="pro-license-key" class="field" type="password" autocomplete="off" placeholder="วาง License Key ที่ได้รับ"><button id="pro-license-activate" class="button ghost" type="button">เปิดใช้ Pro</button></div>
-                <p id="pro-license-status" class="hint" role="status">รุ่นทั่วไป · ส่งออกเฉพาะ XSK</p>
-              </details>
             </article>
             <div class="toolbar"><button id="scan-button" class="button primary" type="button">⌕ สแกนด่วน (เฉพาะที่เปลี่ยน)</button><button id="reconcile-button" class="button ghost" type="button" title="ใช้ดัชนีเพลงเดิมและตรวจหาไฟล์ที่เพิ่ม เปลี่ยน หรือลบ">รีเฟรชรายการ</button><button id="scan-full-button" class="button ghost" type="button" title="อ่านข้อมูลเพลงทุกไฟล์ใหม่ทั้งหมดโดยไม่ลบไฟล์ต้นฉบับ">สแกนเต็ม</button></div>
             <div class="toolbar"><button id="verify-code-registry" class="button ghost" type="button">▦ ตรวจรหัสคลัง PC + Google Drive</button></div>
@@ -336,7 +331,7 @@
 
         <section id="tab-lyric-head-tail" class="tab">
           <div class="section-top"><div><div class="eyebrow">SMART BATCH LYRICS CORRECTION</div>
-            <h2>Smart Batch · จัดการข้อความหัว–ท้ายเพลง</h2>
+            <h2>จัดการหัว–ท้ายเพลง · ค้นหาเพื่อแทนที่</h2>
             <p>จัดกลุ่มข้อความซ้ำหลักหมื่นเพลง · ยึดเวลาเดิมของอักษรที่ไม่เปลี่ยน · ข้ามไฟล์ผิดปกติพร้อมรายงาน · สำรองและ Undo ทั้งชุด · ไม่แก้ MID/LYR/CUR ต้นฉบับ</p></div>
             <span class="chip">LOCAL LIBRARY ONLY</span>
           </div>
@@ -369,7 +364,7 @@
               <button type="button" class="button ghost" data-lyric-position="all" aria-pressed="false">ทุกบรรทัด (ตามคำค้น)</button>
             </div>
             <div class="lyric-group-filter">
-              <label for="lyric-group-search">ค้นหาวลีในบรรทัดที่จะเปลี่ยน (ตรงลำดับคำ)</label>
+              <label for="lyric-group-search">ค้นหาเพื่อแทนที่ · ค้นหาวลีในบรรทัดที่ต้องการแก้</label>
               <input id="lyric-group-search" type="search" class="field" placeholder="เช่น รัก เธอ · ต้องพบคำเรียงตามนี้ในบรรทัดเดียว" disabled>
               <label class="lyric-group-repeats"><input id="lyric-group-repeats" type="checkbox" checked disabled> เฉพาะกลุ่มที่ซ้ำในคลังตั้งแต่ 2 เพลง</label>
             </div>
@@ -520,6 +515,12 @@
 
         <section id="tab-settings" class="tab">
           <div class="section-top"><div><div class="eyebrow">PREFERENCES & HEALTH</div><h2>ตั้งค่าและตรวจสภาพแวดล้อม</h2><p>ใช้การตั้งค่าชุดเดียวกันทั้งแอป PC และหน้าเว็บ</p></div></div>
+          <article class="panel" id="pro-license-settings">
+            <div class="section-heading"><div><h2>License &amp; Pro · X-Stage Song Studio PC</h2><p>เปิดใช้และตรวจสอบสิทธิ์ Pro ในเครื่องนี้ โดยไม่ส่ง License Key ไปยังเว็บไซต์</p></div></div>
+            <label for="pro-license-key">License Key สำหรับเปิดใช้ Pro</label>
+            <div class="path-row"><input id="pro-license-key" class="field" type="password" autocomplete="off" spellcheck="false" placeholder="วาง License Key ที่ได้รับ"><button id="pro-license-activate" class="button primary" type="button">เปิดใช้ Pro</button></div>
+            <p id="pro-license-status" class="hint" role="status" aria-live="polite">กำลังตรวจสอบสิทธิ์ Pro…</p>
+          </article>
           <div class="grid-2">
             <article class="panel"><div class="section-heading"><div><h2>บัญชี Google</h2><p>ลงชื่อเข้าใช้บัญชีของตนเอง · ไม่ต้องเลือกไฟล์ JSON เมื่อแอปตั้งค่าไว้แล้ว</p></div></div>
               <div class="google-config-state" id="google-config-state" aria-live="polite">กำลังตรวจการตั้งค่า OAuth ของแอป…</div>
