@@ -218,6 +218,14 @@
           <article class="panel ai-lyrics-workspace">
             <div class="section-heading"><div><h2>2. ถอดเสียงและจัดเวลาเนื้อร้อง</h2>
               <p id="ai-lyrics-selected">ยังไม่ได้เลือกเพลง</p></div><span class="chip">LRC TIMED LYRICS</span></div>
+            <div class="ai-source-metadata" aria-label="ข้อมูลและเนื้อร้องจากไฟล์ต้นฉบับ">
+              <div><label for="ai-lyrics-title">ชื่อเพลง (อ่านจากไฟล์ แก้ไขได้)</label>
+                <input id="ai-lyrics-title" class="field" type="text" maxlength="180" placeholder="ชื่อเพลง" disabled></div>
+              <div><label for="ai-lyrics-artist">ชื่อผู้ร้อง / ศิลปิน (อ่านจากไฟล์ แก้ไขได้)</label>
+                <input id="ai-lyrics-artist" class="field" type="text" maxlength="180" placeholder="ชื่อผู้ร้อง" disabled></div>
+              <div class="ai-source-save"><button id="ai-lyrics-save-details" class="button primary" type="button" disabled>✓ บันทึกชื่อเพลง ผู้ร้อง และเนื้อร้องไม่มีเวลา</button></div>
+              <p id="ai-lyrics-source-status" class="hint" role="status" aria-live="polite">เลือกไฟล์แล้วระบบจะอ่านแท็กชื่อเพลง/ผู้ร้อง และเนื้อร้อง LRC หรือแท็กเนื้อร้องก่อนใช้ AI · ไม่แก้ไขไฟล์ต้นฉบับ</p>
+            </div>
             <div class="ai-lyrics-tools">
               <div><label for="ai-lyrics-language">ภาษาที่ใช้ถอดเสียง</label>
                 <select id="ai-lyrics-language" class="field">
@@ -232,8 +240,8 @@
               <span id="ai-lyrics-status" class="ai-lyrics-status" role="status" aria-live="polite">รอนำเข้าเพลงใหม่หรือเลือกเพลงที่เคยนำเข้า</span>
             </div>
             <div class="ai-lyrics-paste-panel">
-              <label for="ai-lyrics-paste"><strong>3. มีเนื้อเพลงถูกต้องอยู่แล้ว? วางคำร้องโดยไม่ต้องใส่เวลา</strong></label>
-              <p class="hint">วางหนึ่งบรรทัดต่อหนึ่งท่อนร้อง · ใช้คำที่คุณวางไว้ตามเดิม ไม่ใช้คำที่ Whisper ฟังผิดมาแทน · ระบบจะเทียบคำกับช่วงเสียงร้องจริงและจัดเวลาเบื้องต้น</p>
+              <label for="ai-lyrics-paste"><strong>3. เนื้อร้องต้นฉบับไม่มีเวลา (อ่านอัตโนมัติและแก้ไขได้)</strong></label>
+              <p class="hint">ระบบอ่านคำร้องจากแท็กในไฟล์เสียงหรือ LRC คู่กับเพลงให้ก่อน ถ้าไม่มีจึงวางเองได้ · แก้ไขแล้วกดบันทึกข้อมูลด้านบน แม้ยังไม่มีเวลา · เมื่อต้องการจัดเวลาให้ใช้ปุ่ม AI ด้านล่าง</p>
               <textarea id="ai-lyrics-paste" class="field" rows="7" spellcheck="false"
                 placeholder="เนื้อร้องบรรทัดแรก&#10;เนื้อร้องบรรทัดที่สอง&#10;เนื้อร้องบรรทัดที่สาม"
                 disabled></textarea>
@@ -261,7 +269,7 @@
               <div class="ai-lyrics-editor-actions">
                 <button id="ai-lyrics-insert-time" class="button ghost" type="button" disabled>+ แทรกเวลาที่เล่นอยู่</button>
                 <button id="ai-lyrics-download" class="button ghost" type="button" disabled>↓ ดาวน์โหลด LRC ฉบับแก้ไข</button>
-                <button id="ai-lyrics-save" class="button primary" type="button" disabled>✓ ตรวจแล้ว บันทึกเนื้อร้อง</button>
+                <button id="ai-lyrics-save" class="button primary" type="button" disabled>✓ ตรวจแล้ว บันทึกเนื้อร้อง LRC</button>
               </div>
               <p id="ai-lyrics-validation" class="ai-lyrics-validation" role="status" aria-live="polite">ยังไม่มีเนื้อร้องให้ตรวจ</p>
               <div class="ai-export-panel" aria-label="ส่งออกไฟล์เนื้อร้องและเพลงตัดเสียงร้อง">
