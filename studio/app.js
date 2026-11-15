@@ -1911,7 +1911,7 @@
       await saveInputs(['upload-soundfont-path']);
       const createNew=$('upload-allow-new').checked;
       const agreed=await confirmStudio(
-        'อัปโหลด SoundFont ที่เลือกไปยัง XStageSong/SOUNDFONT ตามชนิด SF2/SF3'+
+        'อัปโหลด SoundFont ที่เลือกไปยัง XStageSong/AUDIO สำหรับ SoundFont SF2/SF3'+
         '\\nตรวจไฟล์และ MD5 ก่อนส่ง ไม่ทับ SoundFont เดิม'+
         (createNew?'\\nถ้ามองไม่เห็น XStageSong ระบบจะสร้างใหม่ โปรดตรวจบัญชีและสิทธิ์ Google ก่อน':'')+
         '\\n\\nหมายเหตุ: เว็บหลักยังไม่มี MIDI SoundFont Engine พร้อมเล่น',
