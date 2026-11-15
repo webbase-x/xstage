@@ -6,6 +6,8 @@ Unsupported VIDEO/NCN never appear as falsely playable catalog rows.
 """
 from __future__ import annotations
 import hashlib
+import json
+import math
 import re
 from pathlib import Path
 
@@ -18,7 +20,7 @@ AUDIO = {".mp3": "MP3", ".m4a": "M4A", ".wav": "WAV",
          ".flac": "FLAC", ".aac": "AAC", ".wma": "WMA",
          ".ogg": "OGG", ".oga": "OGG"}
 MIDI = {".mid", ".midi", ".kar"}
-LYRIC = {".lrc"}
+LYRIC = {".lrc", ".json"}
 SCAN_LIMIT = 250000
 
 
@@ -82,6 +84,30 @@ def _timed_lrc(path):
         return False
 
 
+def _timed_json(path):
+    """Validate a Lyrics JSON without inventing missing lyric timing."""
+    try:
+        if path.stat().st_size > 5_000_000:
+            return False
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        lines = data.get("lines") if isinstance(data, dict) else None
+        if data.get("schemaVersion") != 1 or not isinstance(lines, list) or not lines:
+            return False
+        previous = -1.0
+        for line in lines:
+            if not isinstance(line, dict) or not isinstance(line.get("text"), str) or not line["text"].strip():
+                return False
+            value = line.get("startTime")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return False
+            if not math.isfinite(value) or not (0 <= value < 86400) or value < previous:
+                return False
+            previous = value
+        return True
+    except (OSError, UnicodeError, ValueError, TypeError, AttributeError):
+        return False
+
+
 def _route(file, group, fmt):
     if group == "audio":
         sub = "Songs" if file.suffix.lower() in AUDIO else "Lyrics"
@@ -104,8 +130,7 @@ def scan(folder, ncn=None):
         parent = path.relative_to(root).parts[:-1]
         lowered = [part.casefold() for part in parent]
         role = next((i for i, part in enumerate(lowered)
-                     if part in ("songs", "lyrics", "cursor")
-                     and i > 0), None)
+                     if part in ("songs", "lyrics", "cursor", "audio")), None)
         if role is None:
             key = (tuple(lowered), path.stem.casefold())
         else:
@@ -130,13 +155,15 @@ def scan(folder, ncn=None):
         midis = [p for p in members if p.suffix.lower() in MIDI]
         if audios or videos:
             media = audios + videos
-            lyrics = candidates.get(".lrc", [])
+            lyrics = candidates.get(".lrc", []) + candidates.get(".json", [])
             if len(media) != 1 or len(lyrics) != 1:
-                add("ต้องมี Song และ .LRC ชื่อเดียวกันอย่างละ 1 ไฟล์", members)
+                add("ต้องมี Song และ .LRC หรือ Lyrics JSON ชื่อเดียวกันอย่างละ 1 ไฟล์", members)
                 continue
             primary, lyric = media[0], lyrics[0]
-            if not _probe_audio(primary) or not _timed_lrc(lyric):
-                add("ไฟล์เพลงสั้นผิดปกติหรือเนื้อร้อง LRC ไม่มีเวลาที่ถูกต้อง", members)
+            valid_lyrics = (_timed_json(lyric) if lyric.suffix.lower() == ".json"
+                            else _timed_lrc(lyric))
+            if not _probe_audio(primary) or not valid_lyrics:
+                add("ไฟล์เพลงสั้นผิดปกติหรือเนื้อร้องไม่มีเวลาที่ถูกต้อง", members)
                 continue
             fmt = AUDIO.get(primary.suffix.lower()) or VIDEO[primary.suffix.lower()]
             group = "audio" if primary.suffix.lower() in AUDIO else "video"
@@ -154,7 +181,15 @@ def scan(folder, ncn=None):
             if len(midis) != 1:
                 add("พบไฟล์ MIDI ชื่อเดียวกันหลายรายการ", members)
                 continue
-            if len(cursors) == 1 and len(lyrs) == 1:
+            json_lyrics = candidates.get(".json", [])
+            if len(json_lyrics) == 1 and not cursors and not lyrs:
+                if not _timed_json(json_lyrics[0]) or midis[0].stat().st_size < 22:
+                    add("MIDI กับ Lyrics JSON ไม่สมบูรณ์หรือไม่มีเวลาที่ถูกต้อง", members)
+                    continue
+                complete.append({"name": midis[0].stem, "kind": "MIDI", "files": [
+                    (midis[0], _route(midis[0], "midi", "mid")),
+                    (json_lyrics[0], ("MIDI", "JSON", "Lyrics", bucket(midis[0].stem)))]})
+            elif len(cursors) == 1 and len(lyrs) == 1:
                 trio = (midis[0], lyrs[0], cursors[0])
                 if any(p.stat().st_size < 8 for p in trio):
                     add("NCN มีไฟล์ว่างหรือไม่สมบูรณ์", members)
@@ -174,7 +209,7 @@ def scan(folder, ncn=None):
             else:
                 add("NCN ต้องมี MIDI + .LYR + .CUR ชื่อเดียวกัน", members)
         elif members:
-            if any(p.suffix.lower() in (".emk", ".lrc", ".lyr", ".cur") for p in members):
+            if any(p.suffix.lower() in (".emk", ".lrc", ".json", ".lyr", ".cur") for p in members):
                 incomplete.append({"name": members[0].stem,
                                    "reason": "ไฟล์ประกอบไม่มีเพลงคู่กันหรือ EMK ยังไม่ได้ตรวจโครงสร้าง"})
             else:
