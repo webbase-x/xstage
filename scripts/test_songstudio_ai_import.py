@@ -298,7 +298,9 @@ class IndependentAIImportTests(unittest.TestCase):
 
     def test_embedded_audio_tags_supply_plain_lyrics_without_false_timestamps(self):
         from types import SimpleNamespace
-        probe=self.root/"ffprobe"
+        # Windows builds look for ffprobe.exe beside ffmpeg.exe; Linux uses
+        # the unsuffixed ffprobe binary. Mock the correct platform name.
+        probe=self.root/("ffprobe.exe" if engine.os.name == "nt" else "ffprobe")
         probe.write_text("fake", encoding="utf-8")
         meta={"format":{"tags":{
             "title":"ชื่อเพลงจากแท็ก", "artist":"ผู้ร้องจากแท็ก",
