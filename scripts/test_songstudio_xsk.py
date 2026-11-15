@@ -38,7 +38,7 @@ class XskTests(unittest.TestCase):
         payload = xsk.seal(self.source, self.doc, "00001", "ชื่อเพลง", "ศิลปิน",
                            self.key, target)
         self.assertTrue(payload.startswith(b"XSK1"))
-        self.assertNotIn(b"ทดสอบ", payload)
+        self.assertNotIn("ทดสอบ".encode("utf-8"), payload)
         self.assertNotIn(b"MThd", payload)
         result = xsk.open_package(target, self.key)
         self.assertEqual(result["title"], "ชื่อเพลง")
