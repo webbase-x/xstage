@@ -579,7 +579,7 @@ audio.addEventListener('play',()=>{
 window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen||e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq('singer');else if(d.action==='close'){eqDisplayTarget='main';syncEqDisplaySelector();applyEqVisibility();}else if(d.action==='preset')setEqPreset(String(d.value||'flat'));else if(d.action==='bypass'){eqBypassed=!!d.value;applyEqGains();}else if(d.action==='gain'&&Number.isInteger(d.index)&&eqBandInputs[d.index]){eqBandInputs[d.index].value=String(Math.max(-12,Math.min(12,Number(d.value)||0)));eqBandInputs[d.index].dispatchEvent(new Event('input',{bubbles:true}));}});
 if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';syncEqDisplaySelector();
 function downloadQueue(){
- const data={schemaVersion:1,source:'XStageWebQueue',songs:state.queue.map(songIdentity)};
+ const data={schemaVersion:1,source:'XStageSongQueue',songs:state.queue.map(songIdentity)};
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
  const a=document.createElement('a');a.href=url;a.download='xstage-web-queue.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
@@ -587,7 +587,7 @@ $pc('pc-export').onclick=downloadQueue;
 $pc('pc-import').onclick=()=>$pc('pc-queue-file').click();
 $pc('pc-queue-file').onchange=async e=>{
  const f=e.target.files[0];if(!f||!state.token)return;
- try{if(f.size>1e6)throw Error('ไฟล์ใหญ่เกินไป');const d=JSON.parse(await f.text());if(d.source!=='XStageWebQueue'||!Array.isArray(d.songs)||d.songs.length>10000)throw Error('รูปแบบไม่ถูกต้อง');
+ try{if(f.size>1e6)throw Error('ไฟล์ใหญ่เกินไป');const d=JSON.parse(await f.text());if(d.source!=='XStageSongQueue'||!Array.isArray(d.songs)||d.songs.length>10000)throw Error('รูปแบบไม่ถูกต้อง');
  const map=new Map(state.songs.filter(playable).map(s=>[songIdentity(s),s]));let count=0;for(const id of d.songs){const s=map.get(String(id));if(s){state.queue.push(s);count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' เพลง');}catch(e){setPlayStatus('นำเข้าคิวไม่สำเร็จ: '+e.message);}e.target.value='';
 };
 $pc('pc-stage-pop').onclick=()=>{
@@ -626,8 +626,8 @@ function queueEditor(index){const song=state.queue[index];if(!song)return;show('
  const l=document.createElement('label');l.textContent='ผู้ร้อง';l.append(singer);const l2=document.createElement('label');l2.textContent='ความเร็ว';l2.append(speed);body.append(l,l2);
  body.append(b('บันทึก',()=>{if(state.queue[index]===song){state.queue[index]={...song,queueSinger:singer.value.trim(),queueSpeed:Number(speed.value)};renderQueue();}d.close();}));
 }
-el('pc-export').onclick=()=>saveFile('xstage-web-queue.json',JSON.stringify({schemaVersion:1,source:'XStageWebQueue',songs:state.queue.map(song=>({id:songIdentity(song),singer:song.queueSinger||'',speed:Number(song.queueSpeed)||1}))},null,2),'application/json');
-el('pc-queue-file').onchange=async e=>{const f=e.target.files[0];if(!f||!state.token)return;try{if(f.size>1000000)throw Error('ไฟล์ใหญ่เกินไป');const data=JSON.parse(await f.text());if(data.source!=='XStageWebQueue'||!Array.isArray(data.songs)||data.songs.length>10000)throw Error('รูปแบบคิวไม่รองรับ');
+el('pc-export').onclick=()=>saveFile('xstage-web-queue.json',JSON.stringify({schemaVersion:1,source:'XStageSongQueue',songs:state.queue.map(song=>({id:songIdentity(song),singer:song.queueSinger||'',speed:Number(song.queueSpeed)||1}))},null,2),'application/json');
+el('pc-queue-file').onchange=async e=>{const f=e.target.files[0];if(!f||!state.token)return;try{if(f.size>1000000)throw Error('ไฟล์ใหญ่เกินไป');const data=JSON.parse(await f.text());if(data.source!=='XStageSongQueue'||!Array.isArray(data.songs)||data.songs.length>10000)throw Error('รูปแบบคิวไม่รองรับ');
  const index=new Map(state.songs.filter(playable).map(song=>[songIdentity(song),song]));let count=0;for(const item of data.songs){const id=typeof item==='string'?item:String(item?.id||'');const song=index.get(id);if(song){state.queue.push({...song,queueSinger:typeof item?.singer==='string'?item.singer.slice(0,80):'',queueSpeed:[.75,.9,1,1.1,1.25,1.5].includes(Number(item?.speed))?Number(item.speed):1});count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' รายการ');}catch(e){setPlayStatus(e.message);}e.target.value='';};
 function stamp(seconds){const n=Math.max(0,Number(seconds)||0);return '['+String(Math.floor(n/60)).padStart(2,'0')+':'+(n%60).toFixed(2).padStart(5,'0')+']';}
 function lrcText(){return (state.lyrics?.lines||[]).map(line=>stamp(line.startTime)+String(line.text||'')).join('\n');}
