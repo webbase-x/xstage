@@ -112,7 +112,7 @@ function scan(files){
        (timedCompanions===1||
         // A standalone karaoke video whose lyrics are burned into the
         // picture is a separate explicit review workflow, not an NCN import.
-        (!sound.length&&video.length===1&&timedCompanions===0))){
+        (video.length===1&&timedCompanions===0))){
       const primary=sound[0]||video[0];
       if(primary.file.size<1024||(video.length&&video[0].file.size<1024)||
           (lrc.length&&lrc[0].file.size<8)||(json.length&&json[0].file.size<8)){
