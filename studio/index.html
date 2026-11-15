@@ -23,12 +23,13 @@
       </div>
       <div class="edition"><span class="small-dot"></span> PC + WEB · SAME STUDIO</div>
       <nav id="main-navigation" class="navigation" aria-label="ส่วนงาน">
-        <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>สร้างเพลงใหม่<small>4 ขั้นตอน · สแกน · เลือก · ฟัง · สร้าง</small></span></button>
-        <button class="nav-button" data-tab="ai-lyrics"><span class="nav-glyph" aria-hidden="true">✦</span><span>สร้างเนื้อร้อง AI<small>เสียงร้อง · ถอดคำ · ตั้งเวลา · ทดลองฟัง</small></span></button>
-        <button class="nav-button" data-tab="lyric-head-tail"><span class="nav-glyph" aria-hidden="true">⇄</span><span>จัดการข้อความหัว–ท้ายเพลง<small>จัดกลุ่มข้อความซ้ำ · แทนที่ · ย้อนคืน</small></span></button>
+        <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>MIDI to .XSK<small>ต้นทาง · ปลายทาง · รหัส · แปลง</small></span></button>
+        <button class="nav-button" data-tab="ai-lyrics"><span class="nav-glyph" aria-hidden="true">✦</span><span>Lyrics AI<small>เสียง/วิดีโอ · อ่านแท็ก/AI · เวลา · พรีวิว</small></span></button>
+        <button class="nav-button" data-tab="json-pro"><span class="nav-glyph" aria-hidden="true">▧</span><span>Lyrics JSON · Pro<small>คัดลอก/แปลงเสียง · ส่งออกพร้อม Catalog</small></span></button>
+        <button class="nav-button" data-tab="lyric-head-tail"><span class="nav-glyph" aria-hidden="true">⇄</span><span>แก้ไข Lyrics JSON<small>2 บรรทัดแรก/ท้าย · จัดกลุ่ม · สำรอง · Undo</small></span></button>
         <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>นำเข้า X-Stage Karaoke Online<small>Google Drive · คลังส่วนตัว</small></span></button>
         <button class="nav-button" data-tab="pc-export"><span class="nav-glyph" aria-hidden="true">▣</span><span>นำเข้า X-Stage Karaoke PC<small>AUDIO + LYRICS + SQLite DB</small></span></button>
-        <button class="nav-button" data-tab="created-json"><span class="nav-glyph" aria-hidden="true">▤</span><span>สร้าง .XSK <small>Pro · เพลงเดิม + Lyrics JSON</small></span></button>
+        <button class="nav-button" data-tab="created-json"><span class="nav-glyph" aria-hidden="true">▤</span><span>XSK จากคลัง <small>Pro · MIDI + Lyrics JSON ที่สร้างแล้ว</small></span></button>
         <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
         <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
       </nav>
@@ -56,7 +57,7 @@
         <section id="tab-create" class="tab active" aria-labelledby="page-title">
           <div class="create-assistant panel" aria-label="ตัวช่วยสร้างเพลงใหม่ทีละขั้นตอน">
             <div class="create-assistant-heading">
-              <div><div class="eyebrow">CREATE SONG · STEP BY STEP</div><h2>สร้างเพลงใหม่ทีละขั้นตอน</h2><p>ทำตามลำดับจากเลือกต้นฉบับ → เลือกเพลง → ตั้งค่าเสียงและทดลองฟัง → สร้างเพลง</p></div>
+              <div><div class="eyebrow">MIDI TO .XSK · STEP BY STEP</div><h2>MIDI to .XSK</h2><p>เลือกโฟลเดอร์ MIDI/KAR → เลือกเพลง → ตรวจเสียงและคำร้อง → กำหนดรหัส 1–12 หลัก → สร้าง .XSK · ไม่สร้างเพลงซ้ำ</p></div>
               <span id="create-step-progress" class="chip info" aria-live="polite">ขั้นตอนที่ 1 จาก 4</span>
             </div>
             <nav class="create-steps" aria-label="เลือกขั้นตอนการสร้างเพลง">
@@ -71,9 +72,12 @@
             <div class="section-heading"><div><div class="eyebrow">STEP 01 / SOURCE</div><h2 id="create-stage-1-heading">เลือกต้นฉบับและพื้นที่ทำงาน</h2><p>เลือกโฟลเดอร์เพลงและตำแหน่งบันทึก จากนั้นสแกนให้พบรายการก่อนดำเนินการต่อ</p></div><span class="chip">OFFLINE FIRST</span></div>
             <label for="create-source">โฟลเดอร์ต้นฉบับ</label>
             <div class="path-row"><input id="create-source" class="field" type="text" placeholder="เลือกโฟลเดอร์เพลงจากเครื่อง PC" autocomplete="off"><button class="button ghost" type="button" data-pick="source">เลือกโฟลเดอร์</button></div>
-            <label for="create-workspace">พื้นที่เก็บเพลงที่สร้าง (XStageSong)</label>
+            <label for="create-workspace">พื้นที่ทำงานและข้อมูลดัชนีเพลง (XStageSong)</label>
             <div class="path-row"><input id="create-workspace" class="field" type="text" autocomplete="off"><button class="button ghost" type="button" data-pick="workspace">เลือกโฟลเดอร์</button></div>
             <p class="hint">ค่าเริ่มต้น: หากพบ X-Stage Karaoke PC จะเก็บที่ Songs/XStageSong ภายในโฟลเดอร์ติดตั้ง มิฉะนั้นใช้ Music/XStageSong · เปลี่ยนตำแหน่งได้และระบบจะจำไว้ · ไฟล์ XSK จะถูกจัดเก็บตามหมวดรหัสเพลงอัตโนมัติ</p>
+            <label for="xsk-build-folder">ปลายทางสำหรับไฟล์ .XSK (แยกจากโฟลเดอร์ต้นทาง)</label>
+            <div class="path-row"><input id="xsk-build-folder" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="ใช้คลัง XStageSong เดิมถ้าเว้นว่าง"><button class="button ghost" type="button" data-pick="xsk_folder">เลือกปลายทาง</button></div>
+            <p class="hint">รูปแบบเดิม: XStageSong/MIDI/XSK/{หมวดรหัส}/{รหัส}.xsk · คัดลอก MIDI/KAR ต้นฉบับโดยไม่แก้ไฟล์ · ตรวจ SHA-256 ก่อนสร้างและตรวจความซ้ำปลายทาง</p>
             <article class="sound-settings" aria-label="ตั้งค่าการสร้าง XSK">
               <label for="create-output-kind">รูปแบบเพลงที่สร้าง</label>
               <select id="create-output-kind" class="field">
@@ -221,13 +225,13 @@
 
         <section id="tab-ai-lyrics" class="tab" aria-label="สร้างเนื้อร้องจากเพลงที่มีเสียงร้อง">
           <div class="section-top">
-            <div><div class="eyebrow">AI VOCAL TRANSCRIPTION · OFFLINE</div><h2>สร้างเนื้อร้องจากเสียงร้องด้วย AI</h2>
+            <div><div class="eyebrow">AI VOCAL TRANSCRIPTION · OFFLINE</div><h2>Lyrics AI · สร้างและแก้เนื้อร้องพร้อมเวลา</h2>
               <p>ค้นหาเพลงที่มีไฟล์เสียง → AI ถอดเสียงเป็นคำร้องพร้อมเวลา → ทดลองเล่นและแก้ไข → ยืนยันบันทึก LRC</p></div>
             <span class="chip info" id="ai-lyrics-engine-state">กำลังตรวจสอบ Whisper AI</span>
           </div>
           <article class="panel ai-lyrics-search">
             <div class="section-heading"><div><h2>1. เลือกเพลงที่มีไฟล์เสียง</h2>
-              <p>นำเข้าไฟล์เสียงใหม่ได้ที่นี่โดยตรง ไม่ต้องสแกนคลังเพลงหรือเปิดเมนูสร้างเพลงใหม่ · รองรับไฟล์เสียงที่มีเสียงร้อง</p></div>
+              <p>นำเข้าไฟล์เสียงหรือวิดีโอที่ FFmpeg บนเครื่องอ่านเสียงได้ · อ่านแท็ก/เนื้อร้องก่อนใช้ AI · ไฟล์ที่ไม่มีแทร็กเสียงจะแจ้งข้อผิดพลาด</p></div>
               <div class="ai-lyrics-import-actions">
                 <button id="ai-lyrics-import" type="button" class="button primary">+ นำเข้าเพลงใหม่</button>
                 <button id="ai-lyrics-refresh" type="button" class="button ghost">↻ แสดงเพลงที่นำเข้า</button>
@@ -269,6 +273,7 @@
               <p id="ai-lyrics-source-status" class="hint" role="status" aria-live="polite">เลือกไฟล์แล้วระบบจะอ่านแท็กชื่อเพลง/ผู้ร้อง และเนื้อร้อง LRC หรือแท็กเนื้อร้องก่อนใช้ AI · ไม่แก้ไขไฟล์ต้นฉบับ</p>
             </div>
             <div class="ai-lyrics-tools">
+              <button id="ai-lyrics-read-source" type="button" class="button ghost" disabled>▣ ดึงชื่อเพลง ผู้ร้อง และเนื้อร้องจากไฟล์อีกครั้ง</button>
               <div><label for="ai-lyrics-language">ภาษาที่ใช้ถอดเสียง</label>
                 <select id="ai-lyrics-language" class="field">
                   <option value="th">ภาษาไทย</option><option value="auto">ตรวจจับภาษาอัตโนมัติ</option><option value="en">ภาษาอังกฤษ</option>
@@ -319,8 +324,11 @@
                 <p class="hint">เลือกได้อย่างใดอย่างหนึ่งหรือทั้งสองอย่าง · หากยังไม่มีเพลงตัดเสียงร้อง ระบบจะแยกด้วย AI ก่อนส่งออก · เนื้อร้องต้องตรวจและบันทึกแล้ว</p>
                 <div class="ai-export-options">
                   <label><input id="ai-export-lyrics" type="checkbox" checked> เนื้อเพลง LRC ที่ตรวจแล้ว</label>
-                  <label><input id="ai-export-instrumental" type="checkbox" checked> เพลงตัดเสียงร้อง M4A (Instrumental)</label>
+                  <label><input id="ai-export-instrumental" type="checkbox"> เพลงตัดเสียงร้อง M4A (Instrumental)</label>
+                  <label><input id="ai-export-source" type="checkbox" checked> คัดลอก/แปลงไฟล์เพลงต้นฉบับ</label>
                 </div>
+                <label for="ai-export-format">รูปแบบไฟล์เสียงที่จะส่งออก</label>
+                <select id="ai-export-format" class="field"><option value="original">ต้นฉบับ · คัดลอกโดยไม่เปลี่ยนชนิดไฟล์</option><option value="m4a">M4A · AAC</option><option value="mp3">MP3</option><option value="wav">WAV · PCM</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select>
                 <div class="ai-export-location"><span>บันทึกที่: <strong id="ai-export-folder">กำลังอ่านตำแหน่งที่ตั้งไว้…</strong></span><button id="ai-export-choose-folder" type="button" class="button ghost">เปลี่ยนโฟลเดอร์</button></div>
                 <button id="ai-export-button" type="button" class="button primary" disabled>↓ ส่งออกไฟล์ที่เลือก</button>
                 <p id="ai-export-status" class="hint" role="status" aria-live="polite">ไฟล์เดิมจะไม่ถูกเขียนทับ และไม่มีการอัปโหลด Google Drive อัตโนมัติ</p>
@@ -330,9 +338,24 @@
           </article>
         </section>
 
+                <section id="tab-json-pro" class="tab">
+          <div class="section-top"><div><div class="eyebrow">LYRICS JSON · PRO</div><h2>ส่งออกเพลง + Lyrics JSON</h2><p>เลือกโฟลเดอร์ต้นทางและปลายทางแยกจากกัน · สแกนทุกโฟลเดอร์ย่อย · คัดลอกเสียงต้นฉบับหรือแปลงรูปแบบ · ไม่แก้เวลาเนื้อร้อง</p></div><span class="chip amber">PRO LICENSE REQUIRED</span></div>
+          <article class="panel">
+            <label for="json-pro-source">โฟลเดอร์เพลงต้นทาง</label>
+            <div class="path-row"><input id="json-pro-source" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์ที่มีเพลงพร้อม LRC/JSON หรือ MIDI/NCN"><button type="button" class="button ghost" data-pick="json_source">เลือกต้นทาง</button></div>
+            <label for="json-pro-destination">โฟลเดอร์เก็บผลลัพธ์ (XStageSong)</label>
+            <div class="path-row"><input id="json-pro-destination" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์ปลายทางที่แยกจากต้นทาง"><button type="button" class="button ghost" data-pick="json_destination">เลือกปลายทาง</button></div>
+            <label for="json-pro-format">รูปแบบไฟล์เพลงในผลลัพธ์</label>
+            <select id="json-pro-format" class="field"><option value="original">ต้นฉบับ · คัดลอกทุกไบต์</option><option value="m4a">แปลงเป็น M4A (AAC)</option><option value="mp3">แปลงเป็น MP3</option><option value="wav">แปลงเป็น WAV</option><option value="flac">แปลงเป็น FLAC</option><option value="ogg">แปลงเป็น OGG</option></select>
+            <p class="hint">เก็บใน XStageSong/audio + lyrics พร้อม current.json และ Catalog มาตรฐาน Song Studio · ตรวจ SHA-256 กันซ้ำ · ไม่เขียนทับไฟล์เดิม · เวลาปาดเดิมที่อยู่ใน JSON จะถูกเก็บไว้</p>
+            <div class="toolbar"><button id="json-pro-inspect" type="button" class="button ghost">⌕ ตรวจโฟลเดอร์ย่อยทั้งหมด</button><button id="json-pro-start" type="button" class="button primary">▧ ส่งออกเพลง + Lyrics JSON</button></div>
+            <pre id="json-pro-report" class="xsk-pro-output" role="status" aria-live="polite">เลือกต้นทางและปลายทาง แล้วตรวจความพร้อมก่อนส่งออก</pre>
+          </article>
+        </section>
+
         <section id="tab-lyric-head-tail" class="tab">
           <div class="section-top"><div><div class="eyebrow">SMART BATCH LYRICS CORRECTION</div>
-            <h2>จัดการหัว–ท้ายเพลง · ค้นหาเพื่อแทนที่</h2>
+            <h2>แก้ไข Lyrics JSON · หัว 2 บรรทัด / ท้าย 2 บรรทัด</h2>
             <p>จัดกลุ่มข้อความซ้ำหลักหมื่นเพลง · ยึดเวลาเดิมของอักษรที่ไม่เปลี่ยน · ข้ามไฟล์ผิดปกติพร้อมรายงาน · สำรองและ Undo ทั้งชุด · ไม่แก้ MID/LYR/CUR ต้นฉบับ</p></div>
             <span class="chip">LOCAL LIBRARY ONLY</span>
           </div>
