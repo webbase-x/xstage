@@ -50,7 +50,9 @@ if os.name == "nt" and (ROOT / "data").is_dir():
                 shutil.copy2(_prior, _dest)
             except OSError:
                 pass
-EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga"}
+EXT_AUDIO = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma", ".flac", ".ogg", ".oga",
+             ".webm", ".avi", ".mkv", ".mov", ".mpg", ".mpeg", ".dat", ".vob",
+             ".wmv", ".flv", ".m4v", ".3gp", ".ts", ".m2ts", ".aiff", ".aif"}
 EXT_MIDI = {".mid", ".midi", ".kar"}
 EXT_UNSUPPORTED = {".ncn"}
 PREFS_FILE = DATA / "preferences.json"
@@ -120,7 +122,8 @@ PREFS = {
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
     "export_format": "xsk", "catalog_view": "changes", "code_style": "source", "code_length": "6", "oauth": "",
-    "upload_folder": "", "lyric_source": "", "pc_export_folder": "", "xsk_folder": ""
+    "upload_folder": "", "lyric_source": "", "pc_export_folder": "", "xsk_folder": "",
+    "json_source": "", "json_destination": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
@@ -246,7 +249,7 @@ def import_ai_audio(source_path, *, inspect_metadata=True):
         raise ValueError("กรุณาเลือกไฟล์เพลงจากเครื่อง")
     path = Path(source_path).expanduser()
     if path.suffix.lower() not in EXT_AUDIO:
-        raise ValueError("รองรับการนำเข้าไฟล์เสียง MP3, M4A, WAV, FLAC, AAC, OGG, WMA และ MP4")
+        raise ValueError("ไฟล์นี้ไม่ใช่ชนิดเสียง/วิดีโอที่ PC Engine รองรับ · ตรวจชนิดที่ FFmpeg อ่านได้")
     if not path.is_file() or path.is_symlink():
         raise ValueError("ไม่พบไฟล์เพลงหรือไม่อนุญาตให้ใช้ symbolic link")
     if path.stat().st_size < 1000:
@@ -1385,7 +1388,7 @@ def build_xsk(rows, mode, options):
     keys = _module("xsk_keys.py", "xstage_xsk_keys")
     key = keys.get_key(DATA)
     export = _song_export_module()
-    root = export.songs_root(PREFS["workspace"])
+    root = export.songs_root(PREFS.get("xsk_folder") or PREFS["workspace"])
     codes = _module("code_registry.py", "xstage_xsk_codes")
     records = export.existing_records(root)
     allocator = codes.CodeAllocator(
@@ -1861,6 +1864,35 @@ def execute_job(action, options, started):
                             "· ยังไม่ได้สร้าง M4A/Lyrics"),
                 **stats
             }
+        elif action == "json-pro-export":
+            module = _module("json_pro_export.py", "xstage_json_pro_export")
+            output_format = options.get("format", "original")
+            def _json_progress(done, total, state):
+                with LOCK:
+                    JOB.update(total=total, completed=done, created=state["created"],
+                               skipped=state["skipped"], errors=state["errors"])
+                update(f"Lyrics JSON {done:,}/{total:,} · สร้าง {state['created']:,}"
+                       f" · ข้าม {state['skipped']:,} · ERR {state['errors']:,}", done)
+            def _json_convert(src, dest, kind):
+                if not ffmpeg_binary():
+                    raise ValueError("ไม่พบ FFmpeg สำหรับแปลงรูปแบบไฟล์เสียง")
+                if kind == "m4a":
+                    convert({"path": str(src)}, dest)
+                    return
+                codec = {"mp3": ["-c:a", "libmp3lame", "-q:a", "2"],
+                         "wav": ["-c:a", "pcm_s16le"],
+                         "flac": ["-c:a", "flac"],
+                         "ogg": ["-c:a", "libvorbis", "-q:a", "5"]}.get(kind)
+                if codec is None:
+                    raise ValueError("ไม่รองรับรูปแบบปลายทางที่เลือก")
+                run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error",
+                             "-nostdin", "-y", "-i", str(src), "-vn",
+                             *codec, "-f", kind if kind != "ogg" else "ogg", str(dest)])
+            result = module.export_folder(
+                PREFS["json_source"], PREFS["json_destination"],
+                output_format=output_format, export=_song_export_module(),
+                scanner=FOLDER_UPLOAD, ncn=NCN, convert=_json_convert,
+                cancelled=CANCEL, progress=_json_progress)
         elif action == "created-xsk":
             module = _module("created_xsk_export.py", "xstage_created_xsk_export")
             output_root = PREFS.get("xsk_folder") or PREFS["workspace"]
@@ -2247,6 +2279,14 @@ def start_job(data):
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
     validation = validate_build_request(data) if action == "build" else {}
+    if action == "json-pro-export":
+        if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
+            raise ValueError("ส่งออก Lyrics JSON ต้องเปิดใช้ License Pro")
+        if data.get("format") not in ("original", "m4a", "mp3", "wav", "flac", "ogg"):
+            raise ValueError("รูปแบบการแปลงไฟล์ไม่ถูกต้อง")
+        if not PREFS.get("json_source") or not PREFS.get("json_destination"):
+            raise ValueError("กรุณาเลือกโฟลเดอร์ต้นทางและปลายทาง")
+        validation = {"total": 0}
     if action == "created-xsk":
         if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
             raise ValueError("เมนูสร้าง .XSK จากเพลงที่สร้างแล้วต้องเปิดใช้ License Pro ในตั้งค่าก่อน")
@@ -2379,7 +2419,7 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "soundfont", "oauth", "vocal"):
+    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
@@ -3395,7 +3435,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
-                if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "soundfont", "oauth", "vocal"):
+                if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "soundfont", "oauth", "vocal"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
             elif path == "/api/live-preview":
