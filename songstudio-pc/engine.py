@@ -1125,20 +1125,23 @@ def separate_ai_lyrics_vocals(song_id):
 
 
 
-def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumental=False):
+def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumental=False,
+                           include_source=False, source_format="original"):
     """Export only the selected reviewed LRC and/or separated karaoke M4A.
 
     Files are copied to the user's remembered download directory, never to
     the original source folder or directly into the published song catalog.
     Exclusive file creation prevents overwrites, including concurrent exports.
     """
-    if type(song_id) is not int or not (include_lyrics or include_instrumental):
+    if type(song_id) is not int or not (include_lyrics or include_instrumental or include_source):
         raise ValueError("กรุณาเลือกเพลงและชนิดไฟล์อย่างน้อยหนึ่งรายการ")
     with LOCK:
         row = dict(AI_IMPORTED.get(song_id) or {})
     if not row:
         raise ValueError("กรุณาเลือกเพลงจากรายการที่นำเข้าในหน้า AI")
     source = Path(row["path"]).expanduser()
+    if source_format not in ("original", "m4a", "mp3", "wav", "flac", "ogg"):
+        raise ValueError("รูปแบบไฟล์เสียงที่เลือกไม่รองรับ")
     if not source.is_file() or source.is_symlink() or source.suffix.lower() not in EXT_AUDIO:
         raise ValueError("ไฟล์เสียงต้นฉบับไม่พร้อมใช้งาน")
     reviewed = ""
@@ -1176,6 +1179,11 @@ def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumenta
         tasks.append((safe + ".lrc", reviewed.encode("utf-8-sig")))
     if include_instrumental:
         tasks.append((safe + " - Instrumental.m4a", instrumental))
+    if include_source:
+        if source_format == "original":
+            tasks.append((safe + source.suffix.lower(), source))
+        else:
+            tasks.append((safe + "." + source_format, ("convert", source, source_format)))
     for i, (name, data) in enumerate(tasks, 1):
         if CANCEL.is_set():
             raise RuntimeError("ยกเลิกการส่งออก")
@@ -1189,6 +1197,28 @@ def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumenta
                 with candidate.open("xb") as output:
                     target = candidate
                     try:
+                        temporary = None
+                        if isinstance(data, tuple) and data[0] == "convert":
+                            _, original, extension = data
+                            temporary = destination / ("." + secrets.token_hex(16) + "." + extension)
+                            try:
+                                if extension == "m4a":
+                                    convert({"path": str(original)}, temporary)
+                                else:
+                                    codecs = {"mp3": ["-c:a", "libmp3lame", "-q:a", "2"],
+                                              "wav": ["-c:a", "pcm_s16le"],
+                                              "flac": ["-c:a", "flac"],
+                                              "ogg": ["-c:a", "libvorbis", "-q:a", "5"]}
+                                    run_process([ffmpeg_binary(), "-hide_banner", "-loglevel",
+                                                 "error", "-nostdin", "-y", "-i", str(original),
+                                                 "-vn", *codecs[extension], "-f", extension,
+                                                 str(temporary)])
+                                if temporary.stat().st_size < 1000:
+                                    raise ValueError("ไฟล์เสียงหลังแปลงไม่สมบูรณ์")
+                                data = temporary
+                            except BaseException:
+                                temporary.unlink(missing_ok=True)
+                                raise
                         if isinstance(data, bytes):
                             output.write(data)
                         else:
@@ -1202,7 +1232,11 @@ def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumenta
                                     output.write(block)
                         output.flush()
                         os.fsync(output.fileno())
+                        if temporary is not None:
+                            temporary.unlink(missing_ok=True)
                     except BaseException:
+                        if temporary is not None:
+                            temporary.unlink(missing_ok=True)
                         output.close()
                         candidate.unlink(missing_ok=True)
                         raise
@@ -1990,7 +2024,9 @@ def execute_job(action, options, started):
             result = export_ai_lyrics_files(
                 options.get("id"),
                 include_lyrics=options.get("lyrics") is True,
-                include_instrumental=options.get("instrumental") is True)
+                include_instrumental=options.get("instrumental") is True,
+                include_source=options.get("source") is True,
+                source_format=options.get("source_format", "original"))
         elif action == "ai-lyrics":
             song_id = options.get("id")
             with LOCK:
