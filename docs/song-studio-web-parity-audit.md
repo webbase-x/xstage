@@ -26,7 +26,7 @@ Scope: the independent browser editor at `/studio/web.html` versus the Windows S
 2. Verify SF3 in Safari and Android WebView; if Ogg decode unsupported, clearly show SF2 alternative.
 3. Import a large real NCN library with filenames split into Song/Lyrics/Cursor; verify no song mixing, unexpected duplicates, wrong credits, unsafe CUR, or silent data mutation.
 4. Test browser-only UI at phone widths and desktop widths, including duplicate selection, stop/cancel, and SoundFont switching; check resource warning stays actionable.
-5. Verify user-owned XStageWeb V4 separately before claiming Web/PC shared cloud publishing parity. Nothing in this PR deletes or rewrites Drive data.
+5. Verify user-owned XStageSong V4 separately before claiming Web/PC shared cloud publishing parity. Nothing in this PR deletes or rewrites Drive data.
 6. Change Web build/cache keys and require fully green checks prior to releasing shared `browser-midi.js` to hosted Karaoke Web and Android. Test physical devices before claiming hardware compatibility.
 
 **Release truth:** until PR merged and CI passes the latest commit, this document describes a proposed feature branch rather than production; real device validation is still required.
