@@ -2251,10 +2251,10 @@ def start_job(data):
         if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
             raise ValueError("เมนูสร้าง .XSK จากเพลงที่สร้างแล้วต้องเปิดใช้ License Pro ในตั้งค่าก่อน")
         paths = data.get("paths")
-        if (not isinstance(paths, list) or not 1 <= len(paths) <= 100
+        if (not isinstance(paths, list) or not paths
                 or any(not isinstance(value, str) or not value for value in paths)
                 or len(set(paths)) != len(paths)):
-            raise ValueError("เลือก Lyrics JSON 1–100 เพลงต่อการสร้างหนึ่งชุด")
+            raise ValueError("กรุณาเลือก Lyrics JSON อย่างน้อยหนึ่งเพลง")
         validation = {"total": len(paths)}
     if action == "lyric-skipped-recheck":
         raise ValueError("ยกเลิกเครื่องมือตรวจแก้ LYR/NCN · ให้แก้เฉพาะ Lyrics JSON")
@@ -3059,6 +3059,12 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/songs/ids":
                 self._json({"ids": [x["id"] for x in visible_files(
                     query.get("search", [""])[0], query.get("view", ["all"])[0])]})
+            elif path == "/api/created-json/paths":
+                module = _module("created_json_manager.py", "xstage_created_json_manager")
+                self._json(module.list_created_paths(
+                    _song_export_module().songs_root(PREFS["workspace"]),
+                    _song_export_module(), search=query.get("search", [""])[0],
+                    midi_only=True))
             elif path == "/api/created-json":
                 module = _module("created_json_manager.py", "xstage_created_json_manager")
                 self._json(module.list_created(
