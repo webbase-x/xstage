@@ -2,5 +2,5 @@
 
 __version__ = "1.0.76"
 __build__ = 1076
-APP_NAME = "X-Stage Karaoke"
+APP_NAME = "X-Stage Karaoke PC"
 DISPLAY_NAME = f"{APP_NAME} v{__version__} (Build {__build__})"

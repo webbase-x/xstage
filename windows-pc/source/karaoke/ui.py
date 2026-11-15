@@ -54,7 +54,7 @@ def playback_lyrics(settings, path, lyrics, stored_path):
 class LyricsCanvas(tk.Canvas):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, bg="#080e1a", highlightthickness=0, **kwargs)
-        self.state = ("พร้อมร้องเพลง", "เพิ่มเพลงเข้าคิว แล้วกดเล่น", "", "X-Stage Karaoke")
+        self.state = ("พร้อมร้องเพลง", "เพิ่มเพลงเข้าคิว แล้วกดเล่น", "", "X-Stage Karaoke PC")
         self.bind("<Configure>", lambda _: self.redraw())
 
     def show(self, current, upcoming, prefix="", title=""):
@@ -96,7 +96,7 @@ class KaraokeApp(tk.Tk):
         install_window_icon(self)
         self.data_dir = Path(data_dir or home / "data")
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.title(f"X-Stage Karaoke {__version__} — Python Karaoke")
+        self.title(f"X-Stage Karaoke PC {__version__} — Python Karaoke")
         # Respect the actual Windows work area on compact, high-DPI and
         # secondary displays. Never force a default geometry larger than the
         # monitor before PlaybackApp switches to the stage.
@@ -175,7 +175,7 @@ class KaraokeApp(tk.Tk):
         self.config(menu=menu)
         settings_menu = tk.Menu(menu, tearoff=False)
         menu.add_cascade(label="ตั้งค่า", menu=settings_menu)
-        settings_menu.add_command(label="นโยบายความเป็นส่วนตัวของ X-Stage Karaoke", command=self.open_privacy_policy)
+        settings_menu.add_command(label="นโยบายความเป็นส่วนตัวของ X-Stage Karaoke PC", command=self.open_privacy_policy)
         outer = ttk.Frame(self, padding=(24, 18))
         outer.pack(fill="both", expand=True)
         header = ttk.Frame(outer)
@@ -783,7 +783,7 @@ class KaraokeApp(tk.Tk):
                 messagebox.showerror("ข้อมูลไม่ถูกต้อง", str(error), parent=self)
 
     def export_queue(self):
-        path = filedialog.asksaveasfilename(title="ส่งออกคิว", defaultextension=".json", filetypes=[("X-Stage Karaoke playlist", "*.json")])
+        path = filedialog.asksaveasfilename(title="ส่งออกคิว", defaultextension=".json", filetypes=[("X-Stage Karaoke PC playlist", "*.json")])
         if path:
             try:
                 self.song_queue.export(path, self.library)
@@ -793,7 +793,7 @@ class KaraokeApp(tk.Tk):
 
     def import_queue(self):
         if self.scanning:return self.status_var.set('กำลังตรวจรายการเพลง กรุณารอให้เสร็จ')
-        path=filedialog.askopenfilename(title='นำเข้าคิว',filetypes=[('X-Stage Karaoke playlist','*.json')])
+        path=filedialog.askopenfilename(title='นำเข้าคิว',filetypes=[('X-Stage Karaoke PC playlist','*.json')])
         if not path:return
         payload=[]
         def work():
@@ -1329,14 +1329,14 @@ class KaraokeApp(tk.Tk):
 
     def show_error(self, error):
         self.status_var.set(str(error).splitlines()[0])
-        messagebox.showerror("X-Stage Karaoke", str(error), parent=self)
+        messagebox.showerror("X-Stage Karaoke PC", str(error), parent=self)
 
     def save_settings(self):
         self.settings.update(volume=self.volume_var.get(), auto_next=self.auto_var.get())
         self._settings_revision = write_json(self.settings_path, self.settings, expected_revision=getattr(self,'_settings_revision',JSON_UNSET))
 
     def help(self):
-        messagebox.showinfo("วิธีใช้ X-Stage Karaoke", "1. เพิ่มไฟล์หรือโฟลเดอร์เพลง แล้วค้นหาชื่อ/ศิลปิน/รหัส\n"
+        messagebox.showinfo("วิธีใช้ X-Stage Karaoke PC", "1. เพิ่มไฟล์หรือโฟลเดอร์เพลง แล้วค้นหาชื่อ/ศิลปิน/รหัส\n"
             "2. ดับเบิลคลิกเพลงเพื่อเข้าคิว กดเล่นเพื่อเริ่มคิว\n"
             "3. MIDI/KAR ใช้ตัวสังเคราะห์เสียงของระบบ ปรับคีย์และมิกเซอร์ 16 ช่องได้\n"
             "4. MP3/WAV และวิดีโอใช้ codec ที่ Windows มี ความเร็วของสื่ออาจเปลี่ยนระดับเสียงด้วย\n"
