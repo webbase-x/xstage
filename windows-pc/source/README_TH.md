@@ -52,7 +52,7 @@
 
 # X-Stage Karaoke v0.9.45
 
-รุ่นนี้เปลี่ยนเมนูคลิกขวา **X-Stage Karaoke Online…** ให้สร้าง M4A และ Lyrics JSON จาก NCN/MIDI ที่ค้นหาได้ และซิงก์เข้า Google Drive ส่วนตัวในโฟลเดอร์ `XStageWeb` แทนระบบ Backup บน Drive เดิม. ไม่มีการลบไฟล์ Backup เก่าใน Drive และยังคงการสำรองฐานเพลงในเครื่อง Windows.
+รุ่นนี้เปลี่ยนเมนูคลิกขวา **X-Stage Karaoke Online…** ให้สร้าง M4A และ Lyrics JSON จาก NCN/MIDI ที่ค้นหาได้ และซิงก์เข้า Google Drive ส่วนตัวในโฟลเดอร์ `XStageSong` แทนระบบ Backup บน Drive เดิม. ไม่มีการลบไฟล์ Backup เก่าใน Drive และยังคงการสำรองฐานเพลงในเครื่อง Windows.
 
 ระบบตรวจไฟล์และ Catalog ที่มีอยู่ก่อน ซิงก์เฉพาะรายการที่เปลี่ยน บันทึกสถานะรายเพลง และอัปโหลด Catalog เป็นรุ่น ก่อนอัปเดต `current.json` ขั้นสุดท้าย; ไม่อัปโหลดเพลงขึ้น GitHub. Source ของเว็บที่ใช้กับ GitHub Pages อยู่ใน `web/` และอัปเดต Repository `webbase-x/xstage` แล้ว.
 
@@ -63,7 +63,7 @@
 ## ขั้นตอนเมนู X-Stage Karaoke Online บน Windows
 
 1. เปิดเมนูคลิกขวา **X-Stage Karaoke Online…** → โปรแกรมอ่านฐานเพลง SQLite ของ X-Stage แบบ Read-only, ตรวจ Song Bundle และแสดงจำนวนเพลงที่รองรับ พร้อมจำนวนที่ต้องข้าม; **ยังไม่แปลงหรือเข้าสู่ระบบ Google**
-2. กด **ซิงก์ / เริ่มแปลงเพลง** เลือกบัญชี Google และยืนยันสิทธิ์ใช้สื่อ จากนั้นตรวจคลัง `XStageWeb` ที่มีอยู่เพื่อข้ามเพลงที่ไม่เปลี่ยน
+2. กด **ซิงก์ / เริ่มแปลงเพลง** เลือกบัญชี Google และยืนยันสิทธิ์ใช้สื่อ จากนั้นตรวจคลัง `XStageSong` ที่มีอยู่เพื่อข้ามเพลงที่ไม่เปลี่ยน
 3. เพลงที่ต้องแปลงจะสร้าง M4A/JSON เก็บใน `Data/WebAssets` ของเครื่องก่อน และอัปโหลดคู่ไฟล์ไป Drive ส่วนตัว **เป็นรายเพลง**; Worker เริ่มแปลงเพลงถัดไปได้ระหว่างอัปโหลดเพลงก่อนหน้า
 4. หลังทุกงานจบ จึงสร้าง `Data/WebAssets/catalogs/database-<generation>.json`, อัปโหลดฐานข้อมูลที่อ้างเฉพาะไฟล์ผ่านการตรวจครบ และอัปเดต `current.json` ของ Drive เป็นลำดับสุดท้าย; เมื่อเผยแพร่สำเร็จเก็บสำเนา `Data/WebAssets/database.json` และ `current.json` ในเครื่อง
 5. เมื่อกระบวนการสำเร็จและผู้ใช้ปิดหน้าต่างสรุปผล โปรแกรมจึงเปิด `https://webbase-x.github.io/xstage/` หากยกเลิกหรือส่ง DB ไม่สำเร็จจะไม่เปิดเว็บและ Catalog เดิมยังใช้งาน
@@ -72,7 +72,7 @@
 
 ## Offline Web Asset Generator (ไม่ต้องมี Google Drive)
 
-เปิด `Convert-Web-Assets.cmd` หรือรัน `python tools/web_asset_generator.py --input "D:\Songs\MIDI\NCN" --soundfont "D:\SoundFonts\GM.sf2" --output "D:\XStageWeb\public" --workers auto`
+เปิด `Convert-Web-Assets.cmd` หรือรัน `python tools/web_asset_generator.py --input "D:\Songs\MIDI\NCN" --soundfont "D:\SoundFonts\GM.sf2" --output "D:\XStageSong\public" --workers auto`
 
 รองรับ NCN MID/LYR/CUR, MIDI/KAR ที่มีเวลาเนื้อร้อง, AAC-LC 48 kHz 256kbps, lyrics JSON และ `database.json`. รองรับ `--metadata SONG.DBF` หรือ CSV/JSON สำหรับแก้ชื่อเพลงและศิลปิน; ติดตั้ง FFmpeg + FFprobe และ BASS native DLL ให้ครบ. เก็บ state/cache/error log ไว้นอก `public` และไม่ส่งอะไรขึ้น Drive เอง. แปลงซ้ำจะตรวจ Hash ก่อนข้ามและไม่เขียนไฟล์ที่เสียลงฐานเพลง. SoundFont โหลดหนึ่งครั้งต่อ Worker Process (ไม่แชร์ Native Handle ระหว่าง Process).
 
