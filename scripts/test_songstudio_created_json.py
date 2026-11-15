@@ -97,9 +97,9 @@ class CodeStyleTests(unittest.TestCase):
 
     def test_letters_and_alphanumeric_lengths(self):
         alpha = registry.CodeAllocator([], [], self.root, code_style="letters", code_length=4)
-        self.assertEqual(alpha.assign_new("song"), "AAAB")
+        self.assertEqual(alpha.assign_new("song-long"), "AAAB")
         mixed = registry.CodeAllocator([], [], self.root, code_style="alphanumeric", code_length=4)
-        self.assertEqual(mixed.assign_new("song"), "0001")
+        self.assertEqual(mixed.assign_new("song-long"), "0001")
 
     def test_existing_source_codes_unchanged_by_default(self):
         allocator = registry.CodeAllocator([], [], self.root)
