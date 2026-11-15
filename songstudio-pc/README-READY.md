@@ -1,3 +1,11 @@
+## Candidate features for Build 347
+
+- MIDI to .XSK selects the source, independent output folder, and code length using the existing dedup/packaging format.
+- Lyrics AI can reread media tags and paired timed JSON; export reviewed LRC and optionally an unchanged source or transcoded audio.
+- Pro Lyrics JSON can publish a separate local audio+lyrics catalog with journaling, duplicate detection, and format choices.
+- Lyrics JSON grouped editing, Online/PC import, Drive catalog publishing, backup and downloads continue using their established implementations.
+- All changes remain subject to automated Windows and browser testing. A source commit is not proof that the Ready ZIP was built or that Google Drive sign-in is working on a user's machine.
+
 # X-Stage Song Studio PC Ready v0.3.47 Build 347
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
@@ -7,7 +15,7 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 ## Release metadata
 
 - Verified PC Ready ZIP pointer: `downloads/song-studio-latest.json`. It changes to Build 347 **only after** the Windows workflow passes its offline tests, the Release uploads successfully, and the checksum is verified. Until then use the version advertised in that file.
-- Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.5 Build 205, not a ready installer).
+- Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.6 Build 206, not a ready installer).
 - Verify the published ZIP checksum with the matching GitHub Release `.zip.sha256` asset or the `sha256` field in `downloads/song-studio-latest.json` (after the release is published). Do not use hashes from older builds. This is **not** a signed EXE or MSI installer.
 - Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
 
