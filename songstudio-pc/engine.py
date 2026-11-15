@@ -88,9 +88,33 @@ def save_json(path, value):
     temp.replace(path)
 
 HOME_MUSIC = Path.home() / "Music"
+
+def default_song_workspace():
+    """Use an installed X-Stage Karaoke PC Songs folder, otherwise user Music.
+
+    Probe only known installation layouts with a real executable marker. Never
+    create folders merely because a drive or similarly named directory exists.
+    An explicit saved workspace always wins over this first-run default.
+    """
+    candidates = []
+    if os.name == "nt":
+        candidates.append(Path("D:/newKaraoke/Karaoke"))
+        local = os.environ.get("LOCALAPPDATA")
+        if local:
+            candidates.append(Path(local) / "XStageKaraoke")
+        for env_name in ("PROGRAMFILES", "PROGRAMFILES(X86)"):
+            base = os.environ.get(env_name)
+            if base:
+                candidates.append(Path(base) / "X-Stage Karaoke")
+    for root in candidates:
+        if ((root / "App" / "XStageKaraoke.exe").is_file()
+                or (root / "XStageKaraoke.exe").is_file()):
+            return str(root / "Songs" / "XStageSong")
+    return str(HOME_MUSIC / "XStageSong")
+
 PREFS = {
     "source": str(HOME_MUSIC),
-    "workspace": str(HOME_MUSIC / "X-Stage-Song-Studio"),
+    "workspace": default_song_workspace(),
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
     "export_format": "xstage", "oauth": "",
