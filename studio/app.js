@@ -539,7 +539,7 @@
     $('create-source').value = prefs.source || '';
     $('create-workspace').value = prefs.workspace || '';
     $('xsk-destination').value = prefs.xsk_folder || prefs.workspace || '';
-    $('xsk-build-folder').value = prefs.xsk_folder || prefs.workspace || '';
+    $('xsk-build-folder').value = prefs.xsk_folder || '';
     $('json-pro-source').value = prefs.json_source || '';
     $('json-pro-destination').value = prefs.json_destination || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
@@ -1978,7 +1978,7 @@
         'ยังไม่เริ่มสร้างไฟล์ · ตรวจสอบรายการที่เลือกอยู่');
       const chosenOutput=$('create-output-kind').value;
       await saveInputs(['create-source','create-soundfont','create-preset',
-         'create-mode','create-code-style','create-code-length']);
+         'create-mode','create-code-style','create-code-length','xsk-build-folder']);
       await config({export_format:chosenOutput});
       const ids = selectedIDs();
       const estimate = await post('/api/estimate', {ids});
