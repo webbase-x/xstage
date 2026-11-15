@@ -547,7 +547,11 @@ try {
   await pc.locator('#lyric-group-search').fill('');
   await pc.waitForFunction(()=>document.querySelector('#lyric-group-results')?.textContent.includes('3 เพลง'));
   await pc.click('#lyric-group-results [data-lyric-group="intro-verified-1234"]');
+  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/เลือก 1 \/ 1,000 กลุ่ม/,
+    'first checked group must persist after search debounce');
   await pc.click('#lyric-group-results [data-lyric-group="intro-other-1234"]');
+  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/เลือก 2 \/ 1,000 กลุ่ม/,
+    'second checked group must not clear the first');
   await pc.click('[data-lyric-position="last"]');
   await pc.locator('#lyric-group-results [data-lyric-group="outro-verified-1234"]')
     .waitFor();
