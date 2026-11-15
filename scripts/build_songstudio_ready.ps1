@@ -84,6 +84,7 @@ $map = @{
  'songstudio-pc/folder_upload.py' = 'folder_upload.py'
  'songstudio-pc/code_registry.py' = 'code_registry.py'
  'songstudio-pc/song_export.py' = 'song_export.py'
+ 'songstudio-pc/pc_library_export.py' = 'pc_library_export.py'
  'songstudio-pc/live_preview.py' = 'live_preview.py'
  'songstudio-pc/ai_separate.py' = 'ai_separate.py'
  'songstudio-pc/ai-model.lock.json' = 'ai-model.lock.json'
@@ -318,6 +319,7 @@ $paths = @(
  'lyric_text_groups.py',
  'google_drive.py',
  'song_export.py',
+ 'pc_library_export.py',
  'code_registry.py',
  'online_publish.py',
  'folder_upload.py',
@@ -404,6 +406,7 @@ with ZipFile(dest) as archive:
                       "ai_separate.py",
                       "live_preview.py",
                       "song_export.py",
+                      "pc_library_export.py",
                       "song_index.py",
                       "lyric_alignment.py",
                       "lyric_text_groups.py",
