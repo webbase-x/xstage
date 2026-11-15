@@ -219,6 +219,7 @@ try {
     mode: 'original', download: 'C:\\XStage\\Downloads', oauth: ''
   };
   let fakeGoogleConnected = false;
+  let proLicenseEnabled = false;
   const importedAI = new Map();
   let removedAIRequests=0;
   let simulatedJob = {id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
@@ -261,6 +262,13 @@ try {
         job:simulatedJob,
         update:{status:'unavailable'}
       };
+    } else if (url.pathname === '/api/license/status') {
+      response = {pro:proLicenseEnabled};
+    } else if (url.pathname === '/api/license/activate') {
+      // Mock a valid signed entitlement; production verifies Ed25519 in Engine.
+      assert.equal(request.postDataJSON()?.key, 'E2E-VALID-PRO-LICENSE');
+      proLicenseEnabled = true;
+      response = {pro:true};
     } else if (url.pathname === '/api/songs') {
       response = {rows:list,total:list.length};
     } else if (url.pathname === '/api/preview-lyrics') {
@@ -292,11 +300,13 @@ try {
     } else if (url.pathname === '/api/lyric-groups') {
       const position=url.searchParams.get('position')||'first';
       const search=url.searchParams.get('search')||'';
-      const ids=search==='คำจากท่อนกลาง'?[2,4]:null;
+      // Search must match the literal ordered phrase IN the selected line,
+      // never a lyric somewhere else in the same song.
       const groups=lyricBulkReady?lyricGroups.filter(g=>g.position===position):[];
-      const matched=groups.map(g=>({...g,count:ids?
-        g.songIds.filter(id=>ids.includes(id)).length:g.count,
-        libraryCount:g.count})).filter(g=>g.count>0);
+      const terms=search.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+      const matched=groups.filter(g=>!terms.length ||
+        g.text.toLocaleLowerCase().includes(terms.join(' ')))
+        .map(g=>({...g,libraryCount:g.count}));
       response={rows:matched.map(({id,position,text,count,libraryCount})=>
                   ({id,position,text,count,libraryCount})),
                 total:matched.length,songs:7,inspected:7,
@@ -304,11 +314,9 @@ try {
     } else if (url.pathname === '/api/lyric-groups-plan') {
       const data=request.postDataJSON()||{};
       const selected=lyricGroups.filter(g=>(data.groups||[]).includes(g.id));
-      const bodyMatches=data.search==='คำจากท่อนกลาง'?[2,4]:null;
-      const applicable=selected.filter(g=>g.text!==data.replacement)
-        .map(g=>({...g,songIds:bodyMatches?
-          g.songIds.filter(id=>bodyMatches.includes(id)):g.songIds}))
-        .filter(g=>g.songIds.length>0);
+      const terms=String(data.search||'').toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+      const applicable=selected.filter(g=>g.text!==data.replacement &&
+        (!terms.length || g.text.toLocaleLowerCase().includes(terms.join(' '))));
       const unique=new Set(applicable.flatMap(g=>g.songIds));
       response={groups:applicable.length,chosenGroups:(data.groups||[]).length,
         changedSongs:unique.size,
@@ -486,6 +494,18 @@ try {
   await pc.waitForFunction(() => document.getElementById('create-build-feedback-title')?.textContent.includes('รับคำสั่ง'));
   assert.match(await pc.locator('#create-build-feedback-detail').innerText(), /pc-wizard-smoke-job/);
 
+  // General users cannot export raw M4A; its control must remain hidden.
+  assert.equal(await pc.locator('#build-audio-button').isVisible(), false);
+  assert.equal(await pc.locator('#create-output-kind').inputValue(), 'xsk');
+  // Simulate a successfully verified owner Pro license and prove the legacy
+  // choice becomes visible before exercising the existing audio-only action.
+  await pc.locator('details:has(#pro-license-key) summary').click();
+  await pc.locator('#pro-license-key').fill('E2E-VALID-PRO-LICENSE');
+  await pc.click('#pro-license-activate');
+  await pc.waitForFunction(()=>document.getElementById('pro-license-status')?.textContent.includes('Pro แล้ว'));
+  await pc.locator('#create-output-kind').selectOption('m4a');
+  await pc.locator('#build-audio-button').waitFor({state:'visible'});
+  assert.equal(await pc.locator('#build-audio-button').isEnabled(), true);
   await pc.click('#build-audio-button');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
   assert.match(await pc.locator('#studio-confirm-message').innerText(), /M4A อย่างเดียว/);
@@ -512,8 +532,12 @@ try {
   await pc.locator('#lyric-group-results [data-lyric-group="intro-verified-1234"]')
     .waitFor({timeout:10000});
   await pc.locator('#lyric-group-search').fill('คำจากท่อนกลาง');
-  await pc.waitForFunction(()=>document.querySelector('#lyric-group-results')?.textContent.includes('1 เพลง'));
-  assert.match(await pc.locator('#lyric-group-results').innerText(),/1 เพลง/);
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-results')?.textContent.includes('ไม่พบ'));
+  assert.doesNotMatch(await pc.locator('#lyric-group-results').innerText(),/1 เพลง/,
+    'A phrase elsewhere in the song must not select an unrelated intro line');
+  await pc.locator('#lyric-group-search').fill('X-Stage Karaoke');
+  await pc.waitForFunction(()=>document.querySelector('#lyric-group-results')?.textContent.includes('3 เพลง'));
+  assert.match(await pc.locator('#lyric-group-results').innerText(),/3 เพลง/);
   await pc.locator('#lyric-group-search').fill('');
   await pc.waitForFunction(()=>document.querySelector('#lyric-group-results')?.textContent.includes('3 เพลง'));
   await pc.click('#lyric-group-results [data-lyric-group="intro-verified-1234"]');
@@ -522,7 +546,7 @@ try {
   await pc.locator('#lyric-group-results [data-lyric-group="outro-verified-1234"]')
     .waitFor();
   await pc.click('#lyric-group-results [data-lyric-group="outro-verified-1234"]');
-  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/3 กลุ่ม/);
+  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/เลือก 3 \/ 1,000 กลุ่ม/);
   await pc.click('[data-lyric-position="first"]');
   await pc.waitForFunction(()=>document.querySelector('#lyric-group-results input[data-lyric-group="intro-verified-1234"]')?.checked);
   // A preset immediately fills the editable replacement; typing a new
@@ -563,7 +587,7 @@ try {
   assert.equal(await pc.locator('#lyric-group-results [data-lyric-group="intro-verified-1234"]').count(),0);
   assert.match(await pc.locator('#lyric-group-results').innerText(),/ข้อความรอแก้/);
   await pc.click('#lyric-group-results [data-lyric-group="intro-pending-1234"]');
-  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/1 กลุ่ม/);
+  assert.match(await pc.locator('#lyric-group-selected-count').innerText(),/เลือก 1 \/ 1,000 กลุ่ม/);
   await pc.click('#lyric-group-undo');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
   const undoRequest=pc.waitForRequest(req=>{
