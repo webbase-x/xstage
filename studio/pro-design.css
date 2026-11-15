@@ -1,0 +1,168 @@
+/* X-Stage Song Studio PC — Pro Workspace 2026
+   Global visual system; existing controls and engine contracts stay intact. */
+:root {
+  color-scheme: dark;
+  --bg:#080c16; --side:#0c1221; --panel:#111a2b; --panel2:#182238;
+  --line:#2a3449; --ink:#f5f7ff; --muted:#a0b0c7;
+  --cyan:#72d6ff; --teal:#67e5c7; --amber:#ffc77d;
+  --danger:#ff9ca9; --radius:20px;
+  --xs-shadow:0 12px 34px #02061152;
+}
+html { scroll-behavior:smooth; scrollbar-color:#3b4a69 transparent }
+body {
+  background:radial-gradient(ellipse 60% 40% at 72% -25%,#263a6755,transparent),
+             radial-gradient(ellipse 38% 30% at 0% 75%,#103f4b30,transparent),#080c16;
+  line-height:1.6;letter-spacing:.002em;
+  font-family:"Leelawadee UI","Noto Sans Thai",Inter,"Segoe UI",sans-serif;
+}
+.shell { grid-template-columns:270px minmax(0,1fr) }
+.sidebar {
+  padding:24px 15px 18px;z-index:10;
+  background:linear-gradient(160deg,#111a2c,#0a101d 78%);
+  border-right:1px solid #2b3447;
+}
+.brand { padding:8px 9px 19px;gap:15px }
+.brand-mark {
+  width:56px;height:56px;flex:none;border-radius:17px;
+  background:linear-gradient(125deg,#21405a,#14263a 65%,#162039);
+  border:1px solid #547790;box-shadow:0 10px 24px #010a1988;
+}
+.brand-mark img { width:50px;height:50px;object-fit:contain }
+.brand strong { font-size:21px;font-weight:900;letter-spacing:.12em }
+.brand small { color:#9acbff;letter-spacing:.12em;font-size:11px }
+.brand-caption { display:block;color:#91a4c0;font-size:10px;letter-spacing:.1em;margin-top:5px }
+.edition {
+  margin:0 9px 18px;padding:8px 12px;border-radius:999px;
+  background:#122439;border-color:#334762;color:#b5d0e9;letter-spacing:.08em;
+}
+.navigation { gap:5px;overflow:auto;min-height:0;padding:3px 2px 12px }
+.nav-button {
+  padding:12px 13px;border-radius:13px;gap:12px;font-size:13px;
+  color:#c6d3e8;transition:background .15s,border-color .15s,transform .15s;
+}
+.nav-button small { color:#8f9db5;font-size:10px;line-height:1.5;margin-top:3px }
+.nav-button:hover:not(.active){background:#1d2a42;transform:translateX(2px)}
+.nav-button.active{
+  color:#fff;border:1px solid #425d83;
+  background:linear-gradient(110deg,#263d61,#1d304f);
+  box-shadow:inset 3px 0 #7fe3fb,0 6px 15px #0308163d;
+}
+.nav-button.active small { color:#b6d4eb }
+.nav-glyph {
+  width:31px;height:31px;flex:none;border-radius:10px;display:grid;
+  place-items:center;font-size:19px;color:#9de6ff;
+  background:#1d3249;border:1px solid #29455f;
+}
+.nav-button.active .nav-glyph { background:#314d6a;color:white;border-color:#4d7899 }
+.sidebar-bottom { gap:9px;padding:8px 2px }
+.pc-indicator { background:#152238;border:1px solid #324663;border-radius:13px }
+.version-info {color:#8d9fbc}
+.topbar {
+  position:sticky;top:0;z-index:8;min-height:104px;
+  padding:19px clamp(18px,2.5vw,42px);
+  border-bottom:1px solid #26344b;
+  background:#0c1424ed;backdrop-filter:blur(20px);
+}
+.topbar h1 { font-size:clamp(24px,2.2vw,32px);letter-spacing:-.035em;font-weight:900 }
+.topbar p{font-size:12px;color:#9eafc5}
+.eyebrow {font-size:10px;color:#8fdbff;letter-spacing:.16em}
+.main {max-width:1700px;padding:25px clamp(16px,2.6vw,42px) 52px}
+.section-top {align-items:center;gap:15px;margin-bottom:21px}
+.section-top h2 {font-size:clamp(21px,2vw,28px);font-weight:850;letter-spacing:-.025em}
+.section-top p {font-size:12px;max-width:830px;line-height:1.75}
+.panel {
+  background:linear-gradient(140deg,#172238fa,#10192afa);
+  border:1px solid #303d56;border-radius:20px;
+  box-shadow:var(--xs-shadow);padding:24px 25px;
+}
+.panel:focus-within{border-color:#426084}
+.section-heading h2{font-size:17px;color:#f2f6ff}
+.section-heading p{color:#9cadc4;line-height:1.7}
+.section-heading {margin-bottom:20px}
+.field {
+  min-height:47px;background:#0b1324;border:1px solid #36445e;
+  border-radius:12px;color:#f5f8ff;padding:11px 13px;transition:border-color .15s,box-shadow .15s;
+}
+.field:hover:not(:disabled){border-color:#5a6986}
+.field:focus{border-color:#75d3fa;outline:0;box-shadow:0 0 0 3px #5fbffa25}
+.button {
+  min-height:44px;border-radius:11px;font-size:12px;padding:10px 17px;
+  border-color:#3f5776;background:#243752;color:#e9f1ff;
+  transition:transform .15s,box-shadow .15s,background .15s;
+}
+.button:hover:not(:disabled){transform:translateY(-1px);background:#2e496d}
+.button.primary{
+  background:linear-gradient(110deg,#a1e9ff,#71c9f5);
+  border-color:#b5eaff;color:#0b172b;box-shadow:0 8px 20px #68beed26;
+}
+.button.primary:hover:not(:disabled){background:#c4f0ff;box-shadow:0 9px 24px #5ab9ec55}
+.button.ghost{background:#1b2c44;color:#d7e8fd}
+.hint {color:#a4b3c9;font-size:11px}
+.chip{background:#1a354b;border:1px solid #3b5874;color:#a4e8ff;padding:7px 12px}
+.chip.amber {background:#4c3726;color:#ffe0a2;border-color:#765a3b}
+.google-badge{background:#15372e;border-color:#335b4c}
+.google-badge.offline{background:#362a23}
+.searchbox{background:#0b1629;border-color:#394e6b;border-radius:12px;min-height:47px}
+.searchbox input{height:46px;color:#f5f8ff}
+.table-scroll{border:1px solid #35445f;border-radius:14px;max-height:430px}
+.song-table th{background:#202f4b;color:#c3d8f4;font-size:11px;letter-spacing:.02em;padding:14px 12px}
+.song-table td{padding:13px 12px;border-color:#2a3954}
+.song-table tr:nth-child(even){background:#121f33}
+.song-table tbody tr:hover{background:#243953}
+.song-table input[type=checkbox],input[type=checkbox]{accent-color:#80d9f5}
+.status-pill.ready,.status-pill.success{background:#164d45;color:#9ff1d3}
+.grid-2{gap:17px}
+.path-row{gap:10px}
+.catalog-panel{margin-top:20px}
+#tab-created-json .panel {display:grid;gap:10px}
+#tab-created-json .catalog-actions{margin-bottom:6px}
+#tab-created-json .table-scroll{max-height:520px}
+#tab-created-json .toolbar{margin-top:5px}
+#tab-created-json .xsk-pro-panel{
+  display:grid;gap:12px;
+  background:linear-gradient(115deg,#192c49,#132337);
+  border:1px solid #45607e;border-radius:16px;padding:18px 19px;
+}
+.xsk-pro-panel h3{margin:0;font-size:17px}
+.xsk-pro-panel p{margin:0;color:#b2c7df;font-size:12px}
+.xsk-pro-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.xsk-pro-badge{padding:5px 11px;border-radius:99px;background:#58421f;color:#ffdb8e;font-size:11px;font-weight:800;border:1px solid #8b6835}
+.xsk-pro-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.xsk-pro-actions .button.primary{font-size:13px}
+.xsk-pro-output{margin:0;background:#0c192a;border:1px solid #32445e;border-radius:12px;padding:12px;white-space:pre-wrap;max-height:280px;overflow:auto;color:#c7d9ee;font:12px/1.7 Consolas,"Leelawadee UI",monospace}
+#pro-license-settings{margin-bottom:17px;border-color:#4f607d;background:linear-gradient(120deg,#1c2b46,#142238)}
+#tab-create .create-step-link{border-radius:14px}
+#tab-create .create-step-link[aria-current="step"]{box-shadow:0 6px 15px #10253f73}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#40516c;border-radius:20px;border:2px solid #141d2d}
+::-webkit-scrollbar-track{background:#101b2d}
+@media(max-width:1100px){
+  .shell{grid-template-columns:226px minmax(0,1fr)}
+  .sidebar{padding:19px 10px}
+  .nav-button{padding:10px 9px}
+  .main{padding-inline:19px}
+  .topbar{padding-inline:19px}
+}
+@media(max-width:760px){
+  .shell{display:block}
+  .sidebar{position:relative;height:auto;padding:13px;border-right:0;border-bottom:1px solid #31415b}
+  .sidebar .brand{padding:4px 6px 10px}
+  .navigation{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:8px}
+  .nav-button{flex:0 0 auto;width:175px;scroll-snap-align:start;align-items:center;white-space:normal}
+  .nav-button small{font-size:9px}
+  .nav-glyph{width:25px;height:25px}
+  .sidebar-bottom,.edition{display:none}
+  .topbar{position:relative;min-height:75px;padding:15px 17px;flex-wrap:wrap}
+  .topbar-actions{gap:6px}
+  .main{padding:16px 12px 35px}
+  .panel{padding:17px 15px;border-radius:16px}
+  .grid-2{grid-template-columns:1fr}
+  .section-top{flex-wrap:wrap}
+  .path-row{flex-wrap:wrap}
+  .path-row .button{flex:1 0 auto}
+  .catalog-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .catalog-actions .searchbox{grid-column:1/-1;min-width:0}
+  .catalog-actions .button{white-space:normal}
+  #tab-created-json .xsk-pro-actions{display:grid;grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;scroll-behavior:auto!important}}
