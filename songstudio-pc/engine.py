@@ -94,7 +94,7 @@ PREFS = {
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
     "export_format": "xstage", "oauth": "",
-    "upload_folder": "", "lyric_source": ""
+    "upload_folder": "", "lyric_source": "", "pc_export_folder": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
@@ -1811,6 +1811,16 @@ def execute_job(action, options, started):
                 create_new_library=(options.get("create_new_library") is True),
                 cancelled=CANCEL, progress=lambda stage: update(stage))
             update(result["message"], 1)
+        elif action == "pc-export":
+            module = _module("pc_library_export.py", "xstage_pc_export")
+            local_source = _song_export_module().songs_root(PREFS["workspace"])
+            update("กำลังตรวจ XStageWeb ต้นทางและพื้นที่เก็บปลายทาง")
+            result = module.publish(
+                local_source, PREFS.get("pc_export_folder", ""),
+                _song_export_module(), cancelled=CANCEL,
+                progress=lambda done, total, name: update(
+                    f"คัดลอกไฟล์เข้า XStageWeb {done:,}/{total:,} · {name}", done))
+            update(result["message"], result["files"])
         elif action == "upload-folder":
             root = PREFS.get("upload_folder", "").strip()
             with LOCK:
@@ -2010,6 +2020,12 @@ def start_job(data):
         if not backup or data.get("backupId") != backup["id"]:
             raise ValueError("ชุดย้อนคืนไม่ตรงกับการแก้ไขล่าสุด กรุณาตรวจรายการสำรอง")
         validation = {"total": backup["songs"]}
+    if action == "pc-export":
+        module = _module("pc_library_export.py", "xstage_pc_export")
+        source = _song_export_module().songs_root(PREFS["workspace"])
+        inspection = module.inspect(
+            source, PREFS.get("pc_export_folder", ""), _song_export_module())
+        validation = {"total": inspection["files"], "destination": inspection["destination"]}
     if action == "login":
         # A Core Preview ZIP intentionally ships without an app-wide Desktop
         # OAuth client. Fail synchronously BEFORE claiming that Google Login
@@ -2097,7 +2113,7 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "upload_folder", "lyric_source", "soundfont", "oauth", "vocal"):
+    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
@@ -2740,6 +2756,11 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/history":
                 with LOCK:
                     self._json({"events": HISTORY.list_events(HISTORY_FILE)})
+            elif path == "/api/pc-export/inspect":
+                module = _module("pc_library_export.py", "xstage_pc_export")
+                self._json(module.inspect(
+                    _song_export_module().songs_root(PREFS["workspace"]),
+                    PREFS.get("pc_export_folder", ""), _song_export_module()))
             elif path == "/api/upload-folder/inspect":
                 self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module(), ncn=NCN))
             elif path == "/api/code-registry":
@@ -2966,7 +2987,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
-                if kind not in ("source", "workspace", "download", "upload_folder", "lyric_source", "soundfont", "oauth", "vocal"):
+                if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "soundfont", "oauth", "vocal"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
             elif path == "/api/live-preview":
