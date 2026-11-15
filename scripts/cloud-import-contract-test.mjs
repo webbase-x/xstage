@@ -90,7 +90,7 @@ ctx.fetch=async(raw,options={})=>{
   throw Error('Unmocked Drive API call: '+method+' '+url.href);
 };
 const drive=new Drive(()=> 'token_TEST',()=>{});
-const root=await drive.folder('root','XStageWeb');
+const root=await drive.folder('root','XStageSong');
 assert.ok(root.startsWith('item'));
 const target=await drive.ensurePath(root,['AUDIO','MP3','Songs','1']);
 const payload=new Blob([Buffer.alloc(9*1024*1024+117,0x42)],{type:'audio/mpeg'});
