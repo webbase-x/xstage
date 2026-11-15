@@ -2248,7 +2248,7 @@ def _preview_source_inventory(row, catalog):
 
 
 def preview_source_report(song_id):
-    """Report observed components, selectable source types, and timed readiness."""
+    """Report one music source + exactly one reviewed timed lyric companion."""
     if type(song_id) is not int:
         raise ValueError("รหัสเพลงสำหรับตรวจไฟล์ไม่ถูกต้อง")
     with LOCK:
@@ -2259,104 +2259,59 @@ def preview_source_report(song_id):
     choices, related = _preview_source_inventory(row, catalog)
     source = Path(row["path"])
     components = []
-    def component(kind, path, required=False):
+    def component(kind, path):
         file = Path(path) if path else None
         exists = bool(file and file.is_file() and not file.is_symlink())
         components.append({"type": kind, "name": file.name if file else "—",
-                           "found": exists, "required": bool(required),
+                           "found": exists, "required": True,
                            "size": file.stat().st_size if exists else 0})
         return exists
-    for item in related:
-        path = Path(item["path"])
-        component("เพลง " + path.suffix.upper(), path)
-    trio = row.get("ncn") or NCN.resolve_companions(source)
-    if trio:
-        if not related:
-            component("Song · MIDI", trio.get("midi"), True)
-        lyr_ok = component("Lyrics · LYR", trio.get("lyrics"), True)
-        cur_ok = component("Cursor · CUR", trio.get("cursor"), True)
-        choices.extend([
-            {"value": "inspect:lyr", "kind": "inspect", "label": "ตรวจเนื้อร้อง LYR"}
-            for _ in range(1) if lyr_ok])
-        choices.extend([
-            {"value": "inspect:cur", "kind": "inspect", "label": "ตรวจเวลา CUR"}
-            for _ in range(1) if cur_ok])
-    else:
-        lrc = _matching_lrc(source)
-        if lrc:
-            if component("Lyrics · LRC", lrc):
-                choices.append({"value": "inspect:lrc", "kind": "inspect",
-                                "label": "ตรวจเนื้อร้องและเวลา LRC"})
-        if source.suffix.lower() in EXT_MIDI:
-            embedded_ok = False
-            try:
-                embedded_ok = bool(NCN.kar_document(source, source.stem)["lines"])
-            except (ValueError, OSError):
-                pass
-            components.append({"type": "เนื้อร้องฝังใน MIDI/KAR",
-                               "name": source.name, "found": embedded_ok,
-                               "required": False, "size": source.stat().st_size})
-            if embedded_ok:
-                choices.append({"value": "inspect:embedded", "kind": "inspect",
-                                "label": "ตรวจเนื้อร้องฝังใน MIDI/KAR"})
-    proof = _preview_lyrics_row(row)
-    status = proof.get("status", "missing")
+    media_ok=component("เพลง · "+source.suffix.upper(),source)
+    try:
+        lyric = Path(row["lyrics_file"]) if row.get("lyrics_file") else _matching_lyrics(source)
+        lyric_ok=component("เนื้อร้อง · LRC/JSON",lyric)
+        if lyric_ok:
+            kind="json" if lyric.suffix.lower()==".json" else "lrc"
+            choices.append({"value":"inspect:"+kind,"kind":"inspect",
+                            "label":"ตรวจเนื้อร้องและเวลา "+kind.upper()})
+    except ValueError:
+        lyric_ok=component("เนื้อร้อง · มีไฟล์ซ้ำ",None)
+    proof=_preview_lyrics_row(row)
+    ready=(proof.get("status")=="found" and proof.get("timingComplete",True)
+           and media_ok and lyric_ok)
     return {
         "id": song_id, **preview_song_identity(row), "options": choices,
-        "components": components, "timedLyricsReady": status == "found",
-        "proofSource": proof.get("source", ""), "proofMessage": proof.get("message", ""),
-        "complete": bool(related and status == "found" and
-                         proof.get("timingComplete", True) and
-                         all(item["found"] for item in components if item["required"])),
+        "components": components, "timedLyricsReady": bool(ready),
+        "proofSource": proof.get("source",""), "proofMessage": proof.get("message",""),
+        "complete": bool(ready),
     }
 
 
 def preview_inspect(song_id, choice):
-    """Allow inspecting a real text/cursor component without claiming it is audio."""
-    if type(choice) is not str or choice not in ("inspect:lyr", "inspect:cur",
-                                                  "inspect:lrc", "inspect:embedded"):
-        raise ValueError("ชนิดไฟล์สำหรับตรวจไม่ถูกต้อง")
+    """Inspect only the selected timed LRC/JSON; no legacy CUR picker."""
+    if type(choice) is not str or choice not in ("inspect:lrc","inspect:json"):
+        raise ValueError("ยกเลิกการตรวจชุด NCN แบบ LYR/CUR · ใช้ LRC หรือ JSON")
     with LOCK:
-        row = dict(FILE_BY_ID.get(song_id) or {})
+        row=dict(FILE_BY_ID.get(song_id) or {})
     if not row:
         raise ValueError("ไม่พบเพลงที่เลือก")
-    src = Path(row["path"])
-    trio = row.get("ncn") or NCN.resolve_companions(src)
-    if choice in ("inspect:lyr", "inspect:cur"):
-        file = Path((trio or {}).get("lyrics" if choice == "inspect:lyr" else "cursor") or "")
-        if not trio or not file.is_file():
-            raise ValueError("ไม่พบไฟล์ประกอบ NCN ชนิดนี้")
-        if choice == "inspect:lyr":
-            lines = NCN._decode_text(file.read_bytes()).splitlines()
-            if len(lines) < 5:
-                raise ValueError("LYR ไม่มีส่วนหัวหรือเนื้อร้อง")
-            return {"kind": choice, "file": file.name, "verified": True,
-                    "message": "อ่านเนื้อร้อง LYR ได้ แต่ต้องตรวจ CUR + MIDI จึงยืนยันเวลาได้",
-                    "text": "\n".join(lines[4:])[:15000]}
-        raw = file.read_bytes()
-        if len(raw) % 2:
-            if raw[-1:] != b"\xff":
-                raise ValueError("CUR ไม่สมบูรณ์: จำนวนไบต์ไม่ถูกต้อง")
-            raw = raw[:-1]
-        return {"kind": choice, "file": file.name, "verified": True,
-                "message": f"อ่าน Cursor ได้ {len(raw)//2:,} ตำแหน่ง · ต้องตรวจคู่กับ MIDI และ LYR",
-                "text": ""}
-    if choice == "inspect:lrc":
-        lrc = _matching_lrc(src)
-        if not lrc:
-            raise ValueError("ไม่มีไฟล์ LRC ที่ตรงรหัสเพลงนี้")
-        text = NCN._decode_text(lrc.read_bytes())
-        if not _song_export_module().lrc_to_json(text, src.stem).get("lines"):
-            raise ValueError("LRC ไม่มี timestamp สำหรับการแสดงคาราโอเกะ")
-        return {"kind": choice, "file": lrc.name, "verified": True,
-                "message": "อ่าน LRC พร้อม timestamp ได้", "text": text[:15000]}
-    if src.suffix.lower() not in EXT_MIDI:
-        raise ValueError("เพลงที่เลือกไม่ได้เป็น MIDI/KAR")
-    doc = NCN.kar_document(src, src.stem)
-    return {"kind": choice, "file": src.name, "verified": True,
-            "message": f"อ่านเนื้อร้องฝังใน MIDI/KAR ได้ {len(doc['lines'])} บรรทัด",
-            "text": "\n".join(line["text"] for line in doc["lines"])[:15000]}
-
+    source=Path(row["path"])
+    lyric=Path(row["lyrics_file"]) if row.get("lyrics_file") else _matching_lyrics(source)
+    expected=".json" if choice=="inspect:json" else ".lrc"
+    if not lyric or lyric.suffix.lower()!=expected or not lyric.is_file():
+        raise ValueError("ไม่พบไฟล์เนื้อร้อง "+expected+" ที่ตรงกับเพลงนี้")
+    if expected==".json":
+        doc=FOLDER_UPLOAD._timed_json(lyric,source.stem)
+        if doc is None:raise ValueError("Lyrics JSON ยังไม่มีเวลาที่ผ่านการตรวจ")
+        text=json.dumps(doc,ensure_ascii=False,indent=2)[:15000]
+    else:
+        text=NCN._decode_text(lyric.read_bytes())
+        if not _song_export_module().lrc_to_json(text,source.stem).get("lines"):
+            raise ValueError("LRC ไม่มีเวลาเนื้อร้องใช้งานจริง")
+        text=text[:15000]
+    return {"kind":choice,"file":lyric.name,"verified":True,
+            "message":"ตรวจเนื้อร้อง "+expected.upper()+" พร้อมเวลาจริงแล้ว",
+            "text":text}
 
 
 def available_vocal_sources(search="", offset=0, limit=40):
