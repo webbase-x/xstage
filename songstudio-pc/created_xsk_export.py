@@ -97,4 +97,6 @@ def export_selected(root, selected, export, created_json, package, codes, key,
         f"สร้าง XSK ใหม่ {result['created']} เพลง · ข้าม MIDI ซ้ำ {result['skipped']} "
         f"· ผิดพลาด {result['errors']}"
     )
+    if not result["created"] and not result["skipped"]:
+        raise ValueError("ไม่พบเพลงที่สร้าง XSK สำเร็จ · " + "; ".join(result["issues"][:3]))
     return result
