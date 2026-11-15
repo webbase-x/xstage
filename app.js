@@ -946,7 +946,7 @@ async function openSharedLibraryPicker(){
       .setMimeTypes('application/vnd.google-apps.folder')
       .setSelectFolderEnabled(true)
       .setOwnedByMe(false)
-      .setQuery('XStageWeb')
+      .setQuery('XStageSong')
       .setMode(google.picker.DocsViewMode.LIST);
     const picker=new google.picker.PickerBuilder()
       .addView(view)
@@ -954,7 +954,7 @@ async function openSharedLibraryPicker(){
       .setDeveloperKey(key)
       .setAppId(appId)
       .setOrigin(location.origin)
-      .setTitle('ใช้ XStageWeb ของผู้แชร์โดยตรง · ไม่มีการคัดลอกไฟล์')
+      .setTitle('ใช้ XStageSong ของผู้แชร์โดยตรง · ไม่มีการคัดลอกไฟล์')
       .setCallback(async data=>{
         const action=data?.[google.picker.Response.ACTION];
         if(action===google.picker.Action.CANCEL){
@@ -969,8 +969,8 @@ async function openSharedLibraryPicker(){
           ui.gateStatus.textContent='ไม่ได้รับรหัสโฟลเดอร์จาก Google Picker';
           return;
         }
-        if(name&&name!=='StageWeb'&&name!=='XStageWeb'){
-          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ StageWeb หรือ XStageWeb ที่เจ้าของแชร์ให้';
+        if(name&&name!=='XStageSong'){
+          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ XStageSong ที่เจ้าของแชร์ให้';
           return;
         }
         ui.gateStatus.textContent='อนุญาตคลังที่แชร์แล้ว · กำลังเปิดเพลง…';
@@ -984,7 +984,7 @@ async function openSharedLibraryPicker(){
         try{
           await openDrive(state.token,idNow,state.tokenExpiresAt,state.accountSub,false);
         }catch(error){
-          setSharedLibraryGate(true,error?.message||'ยังเปิดคลังที่แชร์ไม่ได้ กรุณาเลือก XStageWeb อีกครั้ง');
+          setSharedLibraryGate(true,error?.message||'ยังเปิดคลังที่แชร์ไม่ได้ กรุณาเลือก XStageSong อีกครั้ง');
         }
       })
       .build();
@@ -1164,17 +1164,17 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   if(!instant&&!preferredRootId)instant=await loadLatestCachedCatalog(account.sub);
   if(authId!==state.authId)return;
   if(!applyInstantCatalog(instant)){
-    showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง XStageWeb…',12);
+    showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง XStageSong…',12);
     setStatus('เข้าสู่ระบบสำเร็จ · กำลังดาวน์โหลดฐานเพลงครั้งแรก…','success');
   }
 
   try{
-    const roots=await driveList("(name='StageWeb' or name='XStageWeb') and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+    const roots=await driveList("name='XStageSong' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
       // A verified empty Drive is NOT a valid cached library. An account
-      // whose XStageWeb was deleted must never show ghost songs that fail 404.
+      // whose XStageSong was deleted must never show ghost songs that fail 404.
       // Do not erase the user's browser cache permanently: their library may
       // reappear after a Google Drive permission grant or restored ownership.
       state.libraryRootId='';
@@ -1191,10 +1191,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       setAndroidTvStageAccess(true,account.sub);
       hideCatalogLoading();
       ui.songTotal.textContent='0 เพลง';
-      ui.resultCount.textContent='ยังไม่มีคลัง XStageWeb';
+      ui.resultCount.textContent='ยังไม่มีคลัง XStageSong';
       ui.libraryState.textContent='เชื่อม Google Drive แล้ว · ยังไม่มีคลังเพลงออนไลน์';
-      setStatus('บัญชี Google พร้อมแล้ว · ใช้ X-Stage Song Studio สร้าง XStageWeb และอัปโหลดเพลงครั้งแรก','success');
-      setSharedLibraryGate(true,'ยังไม่มี XStageWeb ในบัญชีนี้ · อัปโหลดด้วย Song Studio หรือเลือกคลังที่แชร์');
+      setStatus('บัญชี Google พร้อมแล้ว · ใช้ X-Stage Song Studio สร้าง XStageSong และอัปโหลดเพลงครั้งแรก','success');
+      setSharedLibraryGate(true,'ยังไม่มี XStageSong ในบัญชีนี้ · อัปโหลดด้วย Song Studio หรือเลือกคลังที่แชร์');
       return;
     }
     setSharedLibraryGate(false);
@@ -1228,7 +1228,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     const lyricDirs=await driveList(`'${root.id}' in parents and (name='LYRICS' or name='TEXT') and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
     if(lyricDirs.filter(x=>x.name==='LYRICS').length>1||
        lyricDirs.filter(x=>x.name==='TEXT').length>1)
-      throw Error('พบโฟลเดอร์ LYRICS/TEXT ซ้ำใน XStageWeb');
+      throw Error('พบโฟลเดอร์ LYRICS/TEXT ซ้ำใน XStageSong');
     const lyricPointers=(await Promise.all(lyricDirs.map(dir=>
       driveList(`'${dir.id}' in parents and name='current.json' and trashed=false`,token)))).flat();
     const oldPointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
@@ -1237,7 +1237,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     const pointers=lyricPointers.length?lyricPointers:oldPointers;
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
     if(!pointers.length){
-      // A newly created XStageWeb may contain only empty category folders or
+      // A newly created XStageSong may contain only empty category folders or
       // a SoundFont uploaded first. It is not a broken catalog. Discard the
       // previous session's visible songs, but NEVER delete any Drive data.
       // A missing pointer can also mean drive.file lacks permission; avoid
@@ -1564,7 +1564,7 @@ function openShareLibraryDialog(){
   submit.disabled=true;
   if(!state.token)status.textContent='กรุณาเข้าสู่ระบบ Google ก่อนแชร์';
   else if(!state.libraryRootOwnedByMe)status.textContent='คลังนี้เป็นคลังที่ผู้อื่นแชร์ให้ จึงไม่สามารถแชร์ต่อจาก X-Stage ได้';
-  else if(!state.libraryRootCanShare)status.textContent='บัญชีนี้ไม่มีสิทธิ์แชร์โฟลเดอร์ XStageWeb';
+  else if(!state.libraryRootCanShare)status.textContent='บัญชีนี้ไม่มีสิทธิ์แชร์โฟลเดอร์ XStageSong';
   dialog.showModal();
   if(canShare)setTimeout(()=>email.focus(),30);
 }
@@ -1577,7 +1577,7 @@ async function shareLibraryWithEmail(email){
   const params=new URLSearchParams({
     sendNotificationEmail:'true',
     supportsAllDrives:'true',
-    emailMessage:'X-Stage Karaoke: คุณได้รับสิทธิ์ดูคลังเพลง XStageWeb แบบอ่านอย่างเดียว กรุณาเข้า X-Stage ด้วยอีเมลนี้'
+    emailMessage:'X-Stage Karaoke: คุณได้รับสิทธิ์ดูคลังเพลง XStageSong แบบอ่านอย่างเดียว กรุณาเข้า X-Stage ด้วยอีเมลนี้'
   });
   const response=await googleFetch(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(state.libraryRootId)}/permissions?${params}`,
@@ -3368,7 +3368,7 @@ const xstageCloudImporter=window.XStageCloudImport?.init({
     rootId:state.libraryRootId,owned:state.libraryRootOwnedByMe}),
   refresh:async()=>{
     if(!state.token||!state.accountSub)return;
-    // Reload the canonical XStageWeb current.json/catalog after publishing.
+    // Reload the canonical XStageSong current.json/catalog after publishing.
     // Use a NEW auth request ID but never silently switch Google accounts.
     const token=state.token,id=++state.authId;
     await openDrive(token,id,state.tokenExpiresAt);
