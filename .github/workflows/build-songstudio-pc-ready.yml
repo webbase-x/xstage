@@ -44,7 +44,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: xstage-songstudio-ready-build339
+  group: xstage-songstudio-ready-main
   cancel-in-progress: true
 
 jobs:
@@ -64,6 +64,22 @@ jobs:
           python-version: '3.13'
           cache: 'pip'
           cache-dependency-path: 'songstudio-pc/ai-requirements.txt'
+      - name: Resolve build version from packaging script
+        shell: powershell
+        run: |
+          $builder = Get-Content -LiteralPath "scripts/build_songstudio_ready.ps1" -Raw -Encoding UTF8
+          if ($builder -notmatch "(?m)^\x24Version\s*=\s*'v(\d+\.\d+\.\d+)-build(\d+)'\s*$") {
+            throw "Cannot determine the exact version from Ready packaging script"
+          }
+          $version = $Matches[1]
+          $build = [int]$Matches[2]
+          $suffix = "v$version-build$build"
+          "SONGSTUDIO_READY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SONGSTUDIO_READY_BUILD=$build" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SONGSTUDIO_READY_SUFFIX=$suffix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SONGSTUDIO_READY_DIR=X-Stage-Song-Studio-PC-Ready-$suffix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SONGSTUDIO_READY_TAG=song-studio-pc-ready-$suffix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using Ready package $suffix from build script"
       - name: Prepare app icon renderer (build runner only)
         shell: powershell
         run: |
@@ -171,7 +187,7 @@ jobs:
       - name: Validate complete bundled Desktop OAuth pair (never user tokens)
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.39-build339"
+          $base = "dist/$env:SONGSTUDIO_READY_DIR"
           $config = Join-Path $base "config/google-oauth-client.json"
           $hasId = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID)
           $hasSecret = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)
@@ -195,7 +211,7 @@ jobs:
       - name: Verify real audio and MIDI conversions
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.39-build339"
+          $base = "dist/$env:SONGSTUDIO_READY_DIR"
           $py = Join-Path $base ".runtime/python/python.exe"
           if (!(Test-Path $py)) { throw "Portable Python not found" }
           & $py scripts/test_songstudio_ready.py $base
@@ -203,7 +219,7 @@ jobs:
       - name: Test bundled Windows picker and Thai Unicode return
         shell: powershell
         run: |
-          $base = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.39-build339"
+          $base = "dist/$env:SONGSTUDIO_READY_DIR"
           $picker = Join-Path $base "pick_path.ps1"
           if (!(Test-Path $picker)) { throw "Windows picker script was not bundled" }
           $reply = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $picker -Kind source -SelfTest
@@ -216,7 +232,7 @@ jobs:
       - name: Verify ZIP and SHA256 manifest
         shell: powershell
         run: |
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.39-build339.zip"
+          $zip = "dist/$env:SONGSTUDIO_READY_DIR.zip"
           $hashfile = "$zip.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $hashfile)) { throw "Missing archive or checksum" }
           $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -244,10 +260,10 @@ jobs:
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Song-Studio-PC-Ready-v0.3.39-build339
+          name: X-Stage-Song-Studio-PC-Ready-${{ env.SONGSTUDIO_READY_SUFFIX }}
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.39-build339.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.39-build339.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-*.zip
+            dist/X-Stage-Song-Studio-PC-Ready-*.zip.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -267,8 +283,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "song-studio-pc-ready-v0.3.39-build339"
-          $zip = "dist/X-Stage-Song-Studio-PC-Ready-v0.3.39-build339.zip"
+          $tag = $env:SONGSTUDIO_READY_TAG
+          $zip = "dist/$env:SONGSTUDIO_READY_DIR.zip"
           $sha = "$zip.sha256"
           $notes = @'
           Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
@@ -331,8 +347,8 @@ jobs:
         run: |
           # Never advertise a new ZIP until the release and ZIP checksum
           # have both succeeded. Source metadata itself contains no secrets.
-          $version = "0.3.39"
-          $build = 339
+          $version = $env:SONGSTUDIO_READY_VERSION
+          $build = [int]$env:SONGSTUDIO_READY_BUILD
           $tag = "song-studio-pc-ready-v$version-build$build"
           $archive = "X-Stage-Song-Studio-PC-Ready-v$version-build$build.zip"
           $file = "dist/$archive"
@@ -367,7 +383,7 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Latest PC Ready metadata already matches verified release."
           } else {
-            git commit -m "Update verified Song Studio PC Ready latest metadata to Build 339 [skip ci]"
+            git commit -m "Update verified Song Studio PC Ready latest metadata to Build $build [skip ci]"
             if ($LASTEXITCODE -ne 0) { throw "Cannot commit latest metadata" }
             # The offline build generates/changes files in this CI checkout.
             # They are already packaged and uploaded, and must not block
