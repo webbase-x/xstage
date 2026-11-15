@@ -316,6 +316,14 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
     rows = [record[2] for record in songs]
     rows.sort(key=lambda x: x["id"])
     removed = len(set(previous) - set(records))
+    # IDs remain stable across scans. Keep only the delta in the response;
+    # existing unchanged catalog rows remain in SQLite and are not reimported.
+    added_ids = [record[2]["id"] for path, record in records.items()
+                 if path not in previous]
+    changed_ids = [record[2]["id"] for path, record in records.items()
+                   if path in previous and (
+                       record[:2] != previous[path][:2] or
+                       record[2].get("_ncn_stamp") != previous[path][2].get("_ncn_stamp"))]
     # Snapshot swaps only when directory enumeration and NCN bindings finish.
     # The disk database, not the UI thread, is the long-lived source of truth.
     if on_progress:
@@ -343,5 +351,7 @@ def scan(source, workspace, db_path, notes, ncn, *, full=False,
                        (scope, len(rows), time.time(), SCHEMA))
             db.execute("DELETE FROM song_checkpoint WHERE scope=?", (scope,))
     return rows, {"songs": len(rows), "checked": scanned, "reused": reused,
-                  "added": added, "changed": changed, "removed": removed,
+                  "added": len(added_ids), "changed": len(changed_ids),
+                  "addedIds": added_ids, "changedIds": changed_ids,
+                  "removed": removed,
                   "mode": "full" if full else "incremental"}
