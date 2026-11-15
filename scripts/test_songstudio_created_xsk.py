@@ -92,6 +92,29 @@ class CreatedXskTests(unittest.TestCase):
             self.build([code])
         self.assertEqual(file.read_text(encoding="utf-8"), "{bad")
 
+    def test_export_more_than_one_hundred_in_one_job(self):
+        keys = []
+        for number in range(1, 102):
+            code = f"{number:05d}"
+            keys.append(self.song(code, number.to_bytes(2, "big")))
+        result = self.build(keys)
+        self.assertEqual(result["total"], 101)
+        self.assertEqual(result["created"], 101)
+        self.assertEqual(result["errors"], 0)
+
+    def test_bulk_catalog_selection_filters_midi_and_search(self):
+        first = self.song("00101", b"A")
+        second = self.song("00102", b"B")
+        self.records[second][1]["audio"]["path"] = "audio/0/00102.mp3"
+        selected = self.json_manager.list_created_paths(
+            self.root, SimpleNamespace(existing_records=lambda _root: [
+                {"code": "00101", "title": "Test A", "artist": "XStage",
+                 "lyrics": {"path": first}, "audio": {"path": "audio/0/00101.mid"}},
+                {"code": "00102", "title": "Test B", "artist": "XStage",
+                 "lyrics": {"path": second}, "audio": {"path": "audio/0/00102.mp3"}},
+            ], safe_media_path=self.safe_media_path), search="Test")
+        self.assertEqual(selected["paths"], [first])
+
     def test_independent_output_destination(self):
         code = self.song("00005", b"A")
         dest = Path(self.temp.name) / "output"
