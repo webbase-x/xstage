@@ -43,7 +43,14 @@ class CodeAllocator:
     """
 
     def __init__(self, local_rows, online_rows, local_songs: Path, *, code_style='source', code_length=6):
-        if code_style not in ('source', 'numeric', 'letters', 'alphanumeric'):\n            raise ValueError('ชนิดรหัสเพลงไม่ถูกต้อง')\n        if type(code_length) is not int or not 1 <= code_length <= 12:\n            raise ValueError('ความยาวรหัสต้องอยู่ระหว่าง 1–12 หลัก')\n        self.code_style = code_style\n        self.code_length = code_length\n        self.config_next = 1\n        self.root = Path(local_songs)
+        if code_style not in ('source', 'numeric', 'letters', 'alphanumeric'):
+            raise ValueError('ชนิดรหัสเพลงไม่ถูกต้อง')
+        if type(code_length) is not int or not 1 <= code_length <= 12:
+            raise ValueError('ความยาวรหัสต้องอยู่ระหว่าง 1–12 หลัก')
+        self.code_style = code_style
+        self.code_length = code_length
+        self.config_next = 1
+        self.root = Path(local_songs)
         self.local = list(local_rows)
         self.online = list(online_rows)
         self.remote_by_code = defaultdict(list)
@@ -207,6 +214,8 @@ class CodeAllocator:
     def assign_new(self, preferred):
         """Assign a new song code, considering remote + existing + prior picks."""
         preferred = str(preferred or "").strip()
+        if self.code_style != "source":
+            return self._new_configured_code(preferred)
         if preferred and preferred.casefold() not in self.used:
             self.used.add(preferred.casefold())
             self._track_numeric(preferred)
