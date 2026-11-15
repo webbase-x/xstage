@@ -117,7 +117,7 @@ PREFS = {
     "workspace": default_song_workspace(),
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
-    "export_format": "xstage", "oauth": "",
+    "export_format": "xstage", "code_style": "source", "code_length": "6", "oauth": "",
     "upload_folder": "", "lyric_source": "", "pc_export_folder": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
@@ -1316,11 +1316,16 @@ def build_library(rows, mode, options):
     registry, remote, online_verified, online_generation = code_registry_snapshot(root)
     if online_verified:
         allocator, remapped = reconcile_local_codes(root, records, registry, remote, export)
+        allocator.code_style = PREFS.get("code_style", "source")
+        allocator.code_length = int(PREFS.get("code_length", "6"))
         if remapped:
             records = export.existing_records(root)
         log(f"ตรวจรหัสสองแหล่งแล้ว · PC {len(records):,} · Google Drive {len(remote):,} เพลง")
     else:
-        allocator = registry.CodeAllocator(records, [], root)
+        allocator = registry.CodeAllocator(
+            records, [], root,
+            code_style=PREFS.get("code_style", "source"),
+            code_length=int(PREFS.get("code_length", "6")))
         log("ยังไม่ได้ยืนยันรหัสกับ Google Drive · รหัสเพลงที่สร้างขณะออฟไลน์เป็นรหัสชั่วคราวจนกว่าจะอัปโหลด")
     # Build these indices ONCE. Looking up an incomplete source by scanning
     # every catalog row for each new song was quadratic for large libraries
@@ -2946,6 +2951,15 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("มีงานกำลังดำเนินการอยู่ · เปลี่ยนโฟลเดอร์ต้นทางไม่ได้")
                     if requested.strip():
                         lyric_source_root(requested.strip())
+                if "code_style" in payload and payload["code_style"] not in ("source", "numeric", "letters", "alphanumeric"):
+                    raise ValueError("รูปแบบรหัสเพลงไม่ถูกต้อง")
+                if "code_length" in payload:
+                    try:
+                        count = int(payload["code_length"])
+                    except (ValueError, TypeError):
+                        raise ValueError("จำนวนหลักรหัสเพลงไม่ถูกต้อง")
+                    if not 1 <= count <= 12:
+                        raise ValueError("จำนวนหลักต้องอยู่ระหว่าง 1 ถึง 12")
                 for key, value in payload.items():
                     if key not in PREFS or not isinstance(value, str):
                         continue
