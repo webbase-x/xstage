@@ -290,7 +290,8 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
 
     def do_real_pc_build(only_audio):
         state, answer = http_json("POST", "/api/jobs", {
-            "action": "build", "ids": [803], "audio_only": only_audio})
+            "action": "build", "ids": [803], "audio_only": only_audio,
+            "export_format": "m4a"})
         assert state == 200 and answer.get("id"), (
             "PC confirmation did NOT start real engine job: " + str(answer))
         assert answer.get("total") == 1, (
@@ -312,10 +313,28 @@ with tempfile.TemporaryDirectory(prefix="xstage-songstudio-ready-") as scratch:
             "action": "build", "ids": [999999], "audio_only": True})
         assert unknown_status == 400 and "error" in unknown_response, (
             "Missing original must show an immediate, specific error")
-        first_http = do_real_pc_build(True)
-        assert first_http["result"]["created"] == 1 and first_http["result"]["m4aCount"] == 1
-        second_http = do_real_pc_build(False)
-        assert second_http["result"]["created"] == 0 and second_http["result"]["lyricsCount"] == 1
+        # Real consumer requests must NOT bypass signed Pro entitlement.
+        denied_status, denied_response = http_json("POST", "/api/jobs", {
+            "action": "build", "ids": [803], "audio_only": True,
+            "export_format": "m4a"})
+        assert denied_status == 400 and "Pro" in denied_response.get("error", ""), (
+            "Unsigned consumer must not be allowed to export unencrypted M4A: " +
+            str(denied_response))
+        # This is an isolated integration fixture, not a production bypass:
+        # simulate a *verified* Pro license only while testing legacy M4A
+        # through the real authenticated HTTP handler and background worker.
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        actual_module = engine._module
+        def licensed_test_module(filename, name):
+            if filename == "pro_license.py":
+                return SimpleNamespace(enabled=lambda _directory: True)
+            return actual_module(filename, name)
+        with patch.object(engine, "_module", side_effect=licensed_test_module):
+            first_http = do_real_pc_build(True)
+            assert first_http["result"]["created"] == 1 and first_http["result"]["m4aCount"] == 1
+            second_http = do_real_pc_build(False)
+            assert second_http["result"]["created"] == 0 and second_http["result"]["lyricsCount"] == 1
         output_dir = temp / "browser_pc_real_jobs" / "XStageSong"
         assert len(list((output_dir / "audio").rglob("*.m4a"))) == 1
         assert len(list((output_dir / "lyrics").rglob("*.json"))) == 1
