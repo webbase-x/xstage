@@ -120,7 +120,7 @@ PREFS = {
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
     "export_format": "xsk", "catalog_view": "changes", "code_style": "source", "code_length": "6", "oauth": "",
-    "upload_folder": "", "lyric_source": "", "pc_export_folder": ""
+    "upload_folder": "", "lyric_source": "", "pc_export_folder": "", "xsk_folder": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
@@ -1861,6 +1861,23 @@ def execute_job(action, options, started):
                             "· ยังไม่ได้สร้าง M4A/Lyrics"),
                 **stats
             }
+        elif action == "created-xsk":
+            module = _module("created_xsk_export.py", "xstage_created_xsk_export")
+            output_root = PREFS.get("xsk_folder") or PREFS["workspace"]
+            def _created_progress(done, outcome):
+                with LOCK:
+                    JOB.update(created=outcome["created"], skipped=outcome["skipped"],
+                               errors=outcome["errors"], lyricsCount=outcome["created"])
+                update(f"XSK {done}/{outcome['total']} · สร้าง {outcome['created']} "
+                       f"· ข้าม MIDI ซ้ำ {outcome['skipped']} · ERR {outcome['errors']}", done)
+            result = module.export_selected(
+                _song_export_module().songs_root(PREFS["workspace"]),
+                options["paths"], _song_export_module(),
+                _module("created_json_manager.py", "xstage_created_json_manager"),
+                _module("xsk_package.py", "xstage_xsk_package"),
+                _module("code_registry.py", "xstage_xsk_codes"),
+                _module("xsk_keys.py", "xstage_xsk_keys").get_key(DATA),
+                destination_root=output_root, cancelled=CANCEL, progress=_created_progress)
         elif action in ("build", "preview"):
             mode = PREFS.get("mode", "original")
             if mode not in ("original", "instrumental"):
@@ -2230,6 +2247,15 @@ def start_job(data):
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
     validation = validate_build_request(data) if action == "build" else {}
+    if action == "created-xsk":
+        if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
+            raise ValueError("เมนูสร้าง .XSK จากเพลงที่สร้างแล้วต้องเปิดใช้ License Pro ในตั้งค่าก่อน")
+        paths = data.get("paths")
+        if (not isinstance(paths, list) or not 1 <= len(paths) <= 100
+                or any(not isinstance(value, str) or not value for value in paths)
+                or len(set(paths)) != len(paths)):
+            raise ValueError("เลือก Lyrics JSON 1–100 เพลงต่อการสร้างหนึ่งชุด")
+        validation = {"total": len(paths)}
     if action == "lyric-skipped-recheck":
         raise ValueError("ยกเลิกเครื่องมือตรวจแก้ LYR/NCN · ให้แก้เฉพาะ Lyrics JSON")
     if action == "lyric-groups-replace":
@@ -2353,7 +2379,7 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "soundfont", "oauth", "vocal"):
+    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
