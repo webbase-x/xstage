@@ -62,6 +62,7 @@ def main() -> None:
         manifest = {
             "platform": "windows",
             "version": "1.0.76",
+            "build": 1076,
             "source_revision": "Continuous-Medley-Auto-Categories",
             "source_archive": "downloads/" + ARCHIVE_NAME,
             "sha256": EXPECTED_SHA256,
