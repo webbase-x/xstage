@@ -270,6 +270,7 @@
       !$('lyric-group-replacement').value.trim();
     $('lyric-group-undo').disabled=busy||!phraseBackup;
     $('lyric-group-select-page').disabled=!allow||phraseRows.length===0;
+    $('lyric-group-select-matching').disabled=!allow||phraseRows.length===0||phraseSelected.size>=MAX_SELECTED_LYRIC_GROUPS;
     $('lyric-group-clear').disabled=busy||phraseSelected.size===0;
     $('lyric-group-selected-count').textContent=
       'เลือก '+fmtNum(phraseSelected.size)+' / '+fmtNum(MAX_SELECTED_LYRIC_GROUPS)+' กลุ่ม';
@@ -2796,6 +2797,39 @@
     if(phraseRows.some(row=>!phraseSelected.has(row.id)))
       message('เลือกครบ '+fmtNum(MAX_SELECTED_LYRIC_GROUPS)+' กลุ่มแล้ว · บันทึกชุดที่เลือกก่อนแล้วจึงเลือกที่เหลือ');
     phraseUpdateButtons();schedulePhraseSelectionPreview();
+  });
+  $('lyric-group-select-matching').addEventListener('click',async()=>{
+    if(busy||!phraseReady||phraseSelected.size>=MAX_SELECTED_LYRIC_GROUPS)return;
+    const button=$('lyric-group-select-matching');
+    const position=phrasePosition;
+    const search=$('lyric-group-search').value.trim();
+    const repeats=$('lyric-group-repeats').checked;
+    const sequence=phraseSeq;
+    button.disabled=true;
+    try{
+      const params=new URLSearchParams({
+        position,search,repeats:repeats?'1':'0'
+      });
+      const result=await api('/api/lyric-groups/ids?'+params);
+      if(busy||!phraseReady||position!==phrasePosition||sequence!==phraseSeq
+         ||search!==$('lyric-group-search').value.trim()
+         ||repeats!==$('lyric-group-repeats').checked)return;
+      let added=0;
+      for(const id of result.ids||[]){
+        if(phraseSelected.size>=MAX_SELECTED_LYRIC_GROUPS)break;
+        if(!phraseSelected.has(id)){
+          phraseSelected.set(id,{id});
+          added++;
+        }
+      }
+      for(const check of $('lyric-group-results').querySelectorAll('input[data-lyric-group]'))
+        check.checked=phraseSelected.has(check.dataset.lyricGroup);
+      if(result.total>result.ids.length||phraseSelected.size>=MAX_SELECTED_LYRIC_GROUPS)
+        message('เพิ่ม '+fmtNum(added)+' กลุ่ม · รองรับสูงสุด 1,000 กลุ่มต่อหนึ่งงาน เมื่อเสร็จแล้วเลือกชุดต่อไป',false);
+      phraseUpdateButtons();
+      schedulePhraseSelectionPreview();
+    }catch(error){message('เลือกรายการตามตัวกรองไม่สำเร็จ: '+error.message);}
+    finally{phraseUpdateButtons();}
   });
   $('lyric-group-clear').addEventListener('click',phraseClearSelection);
   $('lyric-group-prev').addEventListener('click',()=>{
