@@ -351,7 +351,7 @@ try {
     } else if (url.pathname === '/api/ai-lyrics-approve') {
       response = {ok:true,lines:2,message:'บันทึก LRC ที่ผู้ใช้ตรวจแก้แล้ว'};
     } else if (url.pathname === '/api/upload-folder/inspect') {
-      response = {folder:'C:/XStage/StageWeb',fileCount:4,ready:2,
+      response = {folder:'C:/XStage/XStageSong',fileCount:4,ready:2,
                   incomplete:1,unsupported:1,kinds:{M4A:2},examples:[]};
     } else if (url.pathname === '/api/songs/ids') {
       response = {ids:list.map((song) => song.id)};
@@ -694,7 +694,7 @@ try {
   assert.match(await pc.locator('#google-config-state').innerText(), /ตั้งค่าแล้ว/,
     'OAuth client readiness must remain visible after Google Login');
   await pc.click('.nav-button[data-tab="upload"]');
-  await pc.fill('#upload-folder','C:/XStage/StageWeb');
+  await pc.fill('#upload-folder','C:/XStage/XStageSong');
   assert.equal(await pc.locator('#upload-folder-button').isEnabled(),true);
   await pc.click('#upload-inspect');
   await pc.waitForFunction(()=>document.querySelector('#upload-folder-report')?.textContent.includes('ชุดสมบูรณ์ 2'));
