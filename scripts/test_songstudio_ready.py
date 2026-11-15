@@ -33,6 +33,7 @@ assert (root / "pc_sqlite_bridge.py").is_file(), "Native Karaoke PC SQLite expor
 assert (root / "karaoke_library.py").is_file(), "Native Karaoke PC SongLibrary schema missing"
 
 assert (root / "code_registry.py").is_file(), "Two-source song-code registry missing from Ready ZIP"
+assert (root / "pc_ready_updates.py").is_file(), "Verified Ready updater module missing from bundled ZIP"
 print("PASS: XStageSong Drive File-ID incremental publisher bundled")
 
 assert engine.ffmpeg_binary() is not None, "FFmpeg is missing"
