@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-11-09T13:09:56.125112+00:00",
+  "platform": "linux",
+  "discovered": 1127,
+  "executed": 1122,
+  "excluded_windows_powershell": [
+    "test_validation072.BuildPython072Tests.test_build_source_is_valid_powershell_syntax",
+    "test_validation072.BuildPython072Tests.test_current_build_python_passes_and_missing_path_fails",
+    "test_validation072.BuildPython072Tests.test_default_discovery_finds_actual_compatible_python",
+    "test_validation072.BuildPython072Tests.test_no_compatible_python_does_not_launch_installer",
+    "test_validation072.BuildPython072Tests.test_selection_skips_wrong_minor_version"
+  ],
+  "skipped": 65,
+  "failures": 0,
+  "errors": 0,
+  "passed_without_skip": 1057,
+  "success": true,
+  "caveat": "Windows EXE/Google Drive real integration require a Windows machine and explicit account authorization."
+}

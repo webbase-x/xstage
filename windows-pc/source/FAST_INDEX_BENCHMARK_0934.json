@@ -1,0 +1,47 @@
+{
+  "version": "0.9.34",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "synthetic": true,
+  "songs": 1000,
+  "data_type": "synthetic WAV + LRC, different bundle sizes",
+  "trials": [
+    {
+      "name": "first_build",
+      "seconds": 0.453,
+      "songs_per_second": 2209.0,
+      "metrics": {
+        "unchanged": 0,
+        "added": 1000,
+        "updated": 0,
+        "failed": 0,
+        "duplicates": 0,
+        "digest_reused": 0,
+        "hashed": 0,
+        "copied": 0,
+        "skipped_protected": 0,
+        "outside_kept": 0,
+        "visibility_changed": 0,
+        "catalog": 1000
+      }
+    },
+    {
+      "name": "second_build",
+      "seconds": 0.206,
+      "songs_per_second": 4856.9,
+      "metrics": {
+        "unchanged": 1000,
+        "added": 0,
+        "updated": 0,
+        "failed": 0,
+        "duplicates": 0,
+        "digest_reused": 0,
+        "hashed": 0,
+        "copied": 0,
+        "skipped_protected": 0,
+        "outside_kept": 0,
+        "visibility_changed": 0,
+        "catalog": 1000
+      }
+    }
+  ]
+}

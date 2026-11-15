@@ -1,0 +1,22 @@
+{
+  "items_initial": 5000,
+  "items_new": 100,
+  "quick_added": 100,
+  "pending_after_verify": 0,
+  "timings_seconds": {
+    "quick_initial": 2.243,
+    "quick_noop": 0.49,
+    "quick_added": 0.567,
+    "deep_verify": 1.733
+  },
+  "notes": "Synthetic tiny WAV+LRC. File creation excluded. Hardware-specific, not Windows proof.",
+  "quick_metrics": {
+    "hashed": 0,
+    "reports_deferred": true,
+    "inventory_seconds": 0.1032,
+    "scanned": 5100,
+    "read_seconds": 0.4274,
+    "total_seconds": 0.5603
+  },
+  "deep_hashed": 5096
+}

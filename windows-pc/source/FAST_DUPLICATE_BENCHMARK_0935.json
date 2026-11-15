@@ -1,0 +1,25 @@
+{
+  "version": "0.9.35",
+  "synthetic": true,
+  "songs": 500,
+  "data_type": "identical WAV+LRC",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "trials": [
+    {
+      "name": "first_build",
+      "seconds": 0.309,
+      "visible_count": 1,
+      "duplicates": 499,
+      "hashed": 500,
+      "reports_reused": false
+    },
+    {
+      "name": "second_build",
+      "seconds": 0.119,
+      "visible_count": 1,
+      "duplicates": 499,
+      "hashed": 0,
+      "reports_reused": true
+    }
+  ]
+}

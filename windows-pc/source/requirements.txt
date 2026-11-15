@@ -1,0 +1,11 @@
+# EXE includes its runtime. Source rendering dependency:
+Pillow>=10.4
+numpy>=1.26,<3
+
+qrcode>=8.2,<9
+
+# Optional output streaming is included in Windows builds.
+SoundCard==0.4.6; sys_platform == "win32"
+
+# Bundles a ready-to-use FFmpeg executable into the Windows release.
+imageio-ffmpeg==0.6.0
