@@ -229,6 +229,35 @@ The local PC working library remains `XStageSong/` with its own local
 `audio/`, `lyrics/` and catalog journal structure. It must not be
 confused with the two-folder private **Google Drive** layout.
 
+## Export to X-Stage Karaoke PC (native SQLite)
+
+Song Studio and Karaoke PC both name the local library `XStageSong`.
+Use **นำเข้า X-Stage Karaoke PC** to select the installed Karaoke PC folder,
+its `Songs` folder, or the `XStageSong` folder itself. The export places
+media in `XStageSong/AUDIO`, timed lyrics and local catalog pointers in
+`XStageSong/LYRICS`, and creates or updates **Karaoke PC's native
+`songs.sqlite3` SQLite database** through its own `SongLibrary` schema and
+upsert method. The existing songs, user-edited artist/title, favorites and
+queue are preserved. A verified, timestamped SQLite backup is made before
+modifying an existing database; no files with conflicting bytes are replaced.
+
+When a genuine Karaoke PC installation is detected, the export selects
+`<install>/Data/songs.sqlite3` (or `<install>/App/data/songs.sqlite3`
+when that is the existing active DB). If both independent databases exist,
+export stops for manual resolution rather than updating the wrong one.
+For a destination that is not a verified Karaoke PC installation, a
+**portable native-format SQLite database** is written to
+`XStageSong/DB/songs.sqlite3`. This export-only database does not become
+the player's active index automatically: select that library in Karaoke PC
+or use a verified installed destination.
+
+When authoring and playback share the same physical `XStageSong` folder
+(on case-insensitive Windows, `audio` and `AUDIO` name the same directory),
+the exporter reuses identical media and publishes immutable
+`-pc-snapshot-<sha>` lyrics copies for the Karaoke PC catalog. This prevents
+later lyric changes in Song Studio from rewriting an earlier published
+Karaoke PC lyric reference.
+
 ### Verification
 
 The Windows Ready CI runs `scripts/test_songstudio_drive_layout.py` and
