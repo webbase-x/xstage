@@ -82,7 +82,7 @@ function groupKey(path){
   return [...folders,base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
 }
 function scan(files){
-  const groups=new Map(),fonts=[],blocked=[],seen=new Set();
+  const groups=new Map(),fonts=[],blocked=[],ignored=[],seen=new Set();
   for(const item of files){
     const file=item.file||item,relative=String(item.relative||file.webkitRelativePath||file.name||'');
     if(!file||!file.name||!Number.isSafeInteger(file.size)||file.size<0)continue;
@@ -91,7 +91,12 @@ function scan(files){
     const extension=ext(file.name);
     if(FONTS.has(extension)){fonts.push({file,relative,kind:extension.toUpperCase()});continue;}
     if(!AUDIO.has(extension)&&!MIDI.has(extension)&&!VIDEO.has(extension)&&!OTHER_AUDIO.has(extension)&&
-       !['lrc','lyr','cur','json'].includes(extension))continue;
+       !['lrc','lyr','cur','json'].includes(extension)){
+      ignored.push({key:relative,reason:extension?
+        'ชนิดไฟล์ .'+extension+' ไม่อยู่ในรูปแบบที่นำเข้าเพลงได้':
+        'ไฟล์ไม่มีนามสกุลที่รองรับ'});
+      continue;
+    }
     const key=groupKey(relative);
     if(!groups.has(key))groups.set(key,[]);
     groups.get(key).push({file,relative,kind:extension});
@@ -136,7 +141,7 @@ function scan(files){
       blocked.push({key,reason:'มีเฉพาะเนื้อร้อง แต่ไม่มีไฟล์เสียงหรือ MIDI คู่กัน'});
     }
   }
-  return {songs,midis,fonts,blocked,files:seen.size};
+  return {songs,midis,fonts,blocked,ignored,files:seen.size};
 }
 async function validAudio(file){
   if(file.size<1024)return false;
