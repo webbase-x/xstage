@@ -42,7 +42,8 @@
     create: ['สร้างเพลงใหม่', 'เตรียมต้นฉบับให้ครบในเครื่องก่อนเริ่มสร้าง M4A'],
     'ai-lyrics': ['สร้างเนื้อร้อง AI', 'นำเข้าเพลงใหม่ ถอดเสียงร้อง จัดเวลา และทดลองฟัง LRC'],
     'lyric-head-tail': ['จัดการข้อความหัว–ท้ายเพลง', 'ตรวจข้อความซ้ำ 4 ตำแหน่ง · แทนที่ทั้งกลุ่มและย้อนคืนได้'],
-    upload: ['อัปโหลด', 'ตรวจไฟล์ซ้ำบน Google Drive · ส่งเฉพาะเพลงที่เปลี่ยน'],
+    upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
+    'pc-export': ['นำเข้า X-Stage Karaoke PC', 'คัดลอกเพลงและเนื้อร้องไป XStageWeb/AUDIO + LYRICS ในเครื่อง'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
   };
@@ -480,6 +481,7 @@
       : 'ใช้คลังหลักของโฟลเดอร์งาน: '+(prefs.workspace||'')+' · StageWeb';
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
+    $('pc-export-folder').value = prefs.pc_export_folder || '';
     $('upload-soundfont-path').value = prefs.soundfont || '';
     $('ai-export-folder').textContent = prefs.download || 'ยังไม่ได้เลือกโฟลเดอร์';
     $('settings-oauth').value = prefs.oauth || '';
@@ -569,6 +571,8 @@
   function updateButtons() {
     $('selected-count').textContent = `เลือกแล้ว ${fmtNum(selected.size)} เพลง`;
     $('upload-inspect').disabled = busy;
+    $('pc-export-inspect').disabled = busy;
+    $('pc-export-start').disabled = busy;
     $('upload-soundfont-button').disabled = busy || !googleConnected;
     $('upload-soundfont-picker').disabled = busy;
     $('upload-folder-button').disabled = busy || !googleConnected;
@@ -682,6 +686,7 @@
                   'create-mode': 'mode', 'create-export-format': 'export_format',
                   'download-destination': 'download',
                   'upload-folder': 'upload_folder',
+                  'pc-export-folder': 'pc_export_folder',
                   'lyric-group-folder': 'lyric_source',
                   'upload-soundfont-path': 'soundfont',
                   'settings-oauth': 'oauth'};
@@ -708,6 +713,7 @@
       }
       const field = ({source:'create-source',workspace:'create-workspace',soundfont:'create-soundfont',
           download:'download-destination',upload_folder:'upload-folder',
+          pc_export_folder:'pc-export-folder',
           lyric_source:'lyric-group-folder',oauth:'settings-oauth'})[kind];
       const element = $(field);
       if (kind === 'soundfont' && ![...element.options].some(opt => opt.value === response.path)) {
@@ -1938,6 +1944,39 @@
       return null;
     }
   }
+  async function inspectPCExport(){
+    try {
+      await saveInputs(['pc-export-folder']);
+      const result=await api('/api/pc-export/inspect');
+      $('pc-export-report').textContent='คลังเพลง '+fmtNum(result.songs)+
+        ' เพลง · พบ '+fmtNum(result.files)+' ไฟล์ · ต้องคัดลอกใหม่ '+
+        fmtNum(result.newFiles)+' ไฟล์ ('+fmtSize(result.bytesToCopy)+
+        ') · เดิมในปลายทาง '+fmtNum(result.existingSongs)+' เพลง'+
+        '\\nตำแหน่งปลายทาง: '+result.destination;
+      return result;
+    } catch(error) {
+      $('pc-export-report').textContent='ตรวจคลัง Karaoke PC ไม่สำเร็จ: '+error.message;
+      message(error.message);
+      return null;
+    }
+  }
+  async function startPCExport(){
+    if(busy)return;
+    const report=await inspectPCExport();
+    if(!report || !report.songs)return message('ยังไม่มีเพลงที่สร้างสำเร็จใน StageWeb');
+    const approved=await confirmStudio(
+      'คัดลอกเพลง '+fmtNum(report.songs)+' รายการ จาก Song Studio ไปยัง\\n'+
+      report.destination+'\\nจำนวนไฟล์ '+fmtNum(report.files)+
+      ' · ต้องคัดลอกใหม่ '+fmtNum(report.newFiles)+
+      ' ('+fmtSize(report.bytesToCopy)+')\\n'+
+      'คัดลอก AUDIO, LYRICS และฐานรายการเพลงในเครื่อง โดยไม่ใช้ Google Drive\\n'+
+      'ไม่เขียนทับไฟล์ปลายทางที่เนื้อหาแตกต่างกัน',
+      'ยืนยันนำเข้า X-Stage Karaoke PC',
+      {acceptLabel:'เริ่มคัดลอก',cancelLabel:'ยกเลิก'});
+    if(!approved)return;
+    $('pc-export-status').textContent='กำลังเริ่มคัดลอกและตรวจ SHA-256 · ดูสถานะที่แผงงาน';
+    await run('pc-export');
+  }
   async function startFolderUpload() {
     if (busy || !googleConnected)
       return message('กรุณาเชื่อม Google Drive ก่อนอัปโหลด');
@@ -2047,6 +2086,8 @@
       busy = job.state === 'running';
       setGoogle(response.google);
       renderJob(job);updateButtons();
+      if (job.kind === 'pc-export' && job.state === 'running')
+        $('pc-export-status').textContent = job.stage || 'กำลังคัดลอกไฟล์เข้า XStageWeb';
       if (job.kind === 'ai-export' && job.state === 'running')
         $('ai-export-status').textContent = job.stage || job.detail || 'กำลังส่งออกไฟล์ที่เลือก';
       if (['ai-lyrics','ai-align','ai-separate-vocals'].includes(job.kind) && job.state === 'running' && aiSongId !== null)
@@ -2067,6 +2108,9 @@
               await aiRefreshSongList();
               if(job.result?.song)await aiChooseSong(job.result.song);
               message(job.result?.message||'บันทึกเสียงใหม่สำเร็จ',false);
+            } else if (job.kind === 'pc-export') {
+              $('pc-export-status').textContent='✓ '+(job.result?.message||'คัดลอกคลังเพลงสำเร็จ');
+              message(job.result?.message||'นำเข้า Karaoke PC สำเร็จ',false);
             } else if (job.kind === 'ai-export') {
               $('ai-export-status').textContent=job.result?.message ||
                 '✓ ส่งออกไฟล์ที่เลือกเรียบร้อยแล้ว';
@@ -2144,6 +2188,9 @@
               $('ai-mic-status').textContent=
                 'แปลงเสียงไม่สำเร็จ · เสียงที่อัดยังอยู่ในหน้าจอ · ตรวจ Log แล้วลองอีกครั้ง';
               aiUpdateButtons();
+            }
+            if(job.kind==='pc-export'){
+              $('pc-export-status').textContent='คัดลอกไม่สำเร็จ: '+(job.detail||'ตรวจบันทึกข้อผิดพลาด');
             }
             if(job.kind==='ai-export'){
               $('ai-export-status').textContent='ส่งออกไม่สำเร็จ: '+
@@ -2613,6 +2660,8 @@
   });
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
+  $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
+  $('pc-export-start').addEventListener('click',()=>{void startPCExport();});
   $('upload-soundfont-picker').addEventListener('click',()=>{void chooseUploadSoundfont();});
   $('upload-soundfont-button').addEventListener('click',()=>{void startSoundfontUpload();});
   $('upload-folder-button').addEventListener('click',()=>{void startFolderUpload();});
