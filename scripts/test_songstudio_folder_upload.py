@@ -65,7 +65,7 @@ class FolderUploadTests(unittest.TestCase):
     def test_existing_stageweb_catalog_publishes_original_rows(self):
         self.audio.unlink()
         self.lrc.unlink()
-        library = self.root / "StageWeb"
+        library = self.root / "XStageSong"
         audio = library / "audio" / "0" / "00001.m4a"
         lyric = library / "lyrics" / "0" / "00001.json"
         audio.parent.mkdir(parents=True)
@@ -121,7 +121,7 @@ class FolderUploadTests(unittest.TestCase):
         second=folder.upload_soundfont(drive,str(font),create_new_library=True)
         self.assertTrue(first["uploaded"])
         self.assertTrue(second["skipped"])
-        self.assertEqual(first["path"].split("/")[:2], ["XStageWeb","AUDIO"])
+        self.assertEqual(first["path"].split("/")[:2], ["XStageSong","AUDIO"])
         self.assertTrue(first["webMidiReady"])
 
     def test_invalid_soundfont_is_rejected_without_upload(self):
