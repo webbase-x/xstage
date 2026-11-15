@@ -1,4 +1,4 @@
-# X-Stage Song Studio PC Ready v0.3.36 Build 336
+# X-Stage Song Studio PC Ready v0.3.46 Build 346
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -6,14 +6,14 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Release metadata
 
-- Verified PC Ready portable ZIP pointer: `downloads/song-studio-latest.json` (Build 336 only after CI releases and updates the pointer; until then the previous Build 335 remains the published package).
+- Verified PC Ready ZIP pointer: `downloads/song-studio-latest.json`. It changes to Build 346 **only after** the Windows workflow passes its offline tests, the Release uploads successfully, and the checksum is verified. Until then use the version advertised in that file.
 - Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.5 Build 205, not a ready installer).
 - Verify the published ZIP checksum with the matching GitHub Release `.zip.sha256` asset or the `sha256` field in `downloads/song-studio-latest.json` (after the release is published). Do not use hashes from older builds. This is **not** a signed EXE or MSI installer.
 - Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.36-build336.zip** from the GitHub Releases page.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.46-build346.zip** **only after it appears as a verified asset** on the GitHub Releases page; do not mistake the Source Preview ZIP for the fully bundled Ready ZIP.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
@@ -28,10 +28,18 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 - FFmpeg and ffprobe **executables**, `.runtime/tools`
 - FluidSynth and the DLLs it requires, `.runtime/fluidsynth/bin`
 - Default GeneralUser GS `.sf2` SoundFont, NumPy, ONNX Runtime CPU and HTDemucs ONNX model (~166 MB), `.runtime/soundfonts`
-- PC engine `engine.py`, existing Song Studio PC/Web control UI, runtime manifest and third-party notices
+- PC engine `engine.py`, redesigned Pro PC/Web UI (`studio/pro-design.css`), XSK creation module (`created_xsk_export.py`), runtime manifest and third-party notices
 - New X-Stage Song Studio `studio/app-icon.svg` favicon, pre-rendered `studio/app-icon-512.png` and Windows `studio/app-icon.ico` with all icon sizes, included in Ready ZIP
 
-All listed components are predownloaded and tested during **GitHub Actions build** (on a Windows runner), not on the user's Windows PC. `Start-Song-Studio.cmd` never calls `Invoke-WebRequest` or installs software.
+All listed components are downloaded and verified **on the GitHub Actions Windows build runner**, not on the user's PC. The build additionally runs the bundled Ready launcher with `-NoLaunch` to verify that it can initialize without installing or downloading dependencies. `Start-Song-Studio.cmd` never calls `Invoke-WebRequest` or installs software.
+
+### Pro XSK from previously created songs
+
+- Open **สร้าง .XSK · Pro** after activating a valid Pro License Key under **ตั้งค่า → License & Pro**.
+- Choose MIDI/KAR + already generated, timed Lyrics JSON from the local catalog, select the XSK output folder, and create in batches of up to 100.
+- Compare MIDI content by SHA-256; skip identical tracks even when filenames differ. When different content collides with an XSK code, allocate an available numeric code before appending a new one.
+- Leave both source media and source JSON unmodified. Do not overwrite pre-existing XSK files. Report any unreadable encrypted XSK and stop rather than assuming it is new.
+- XSK encryption keys and per-user Pro licenses are not pre-activated in a public ZIP. The user must supply a valid individual Pro license; Google Drive requires network access and account authorization.
 
 ### Functions implemented in this source engine
 
