@@ -43,7 +43,7 @@
     'ai-lyrics': ['สร้างเนื้อร้อง AI', 'นำเข้าเพลงใหม่ ถอดเสียงร้อง จัดเวลา และทดลองฟัง LRC'],
     'lyric-head-tail': ['จัดการข้อความหัว–ท้ายเพลง', 'ตรวจข้อความซ้ำ 4 ตำแหน่ง · แทนที่ทั้งกลุ่มและย้อนคืนได้'],
     upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
-    'pc-export': ['นำเข้า X-Stage Karaoke PC', 'คัดลอกเพลงและเนื้อร้องไป XStageSong/AUDIO + LYRICS ในเครื่อง'],
+    'pc-export': ['นำเข้า X-Stage Karaoke PC', 'นำเข้า AUDIO + LYRICS พร้อมสร้าง/อัปเดต songs.sqlite3 ตาม Karaoke PC'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
   };
@@ -1980,7 +1980,11 @@
         ' เพลง · พบ '+fmtNum(result.files)+' ไฟล์ · ต้องคัดลอกใหม่ '+
         fmtNum(result.newFiles)+' ไฟล์ ('+fmtSize(result.bytesToCopy)+
         ') · เดิมในปลายทาง '+fmtNum(result.existingSongs)+' เพลง'+
-        '\\nตำแหน่งปลายทาง: '+result.destination;
+        '\\nตำแหน่งปลายทาง: '+result.destination+
+        '\\nSQLite: '+(result.databaseAction==='update'?'อัปเดตฐานเดิม':'สร้างฐานใหม่')+
+        ' · '+result.database+
+        (result.databaseInstalled?' · เชื่อมฐาน Karaoke PC ที่ติดตั้งแล้ว':
+        ' · โหมดส่งออก: ยังไม่พบโปรแกรม Karaoke PC ณ ตำแหน่งนี้');
       return result;
     } catch(error) {
       $('pc-export-report').textContent='ตรวจคลัง Karaoke PC ไม่สำเร็จ: '+error.message;
@@ -1997,8 +2001,11 @@
       report.destination+'\\nจำนวนไฟล์ '+fmtNum(report.files)+
       ' · ต้องคัดลอกใหม่ '+fmtNum(report.newFiles)+
       ' ('+fmtSize(report.bytesToCopy)+')\\n'+
-      'คัดลอก AUDIO, LYRICS และฐานรายการเพลงในเครื่อง โดยไม่ใช้ Google Drive\\n'+
-      'ไม่เขียนทับไฟล์ปลายทางที่เนื้อหาแตกต่างกัน',
+      'นำเข้า AUDIO, LYRICS และสร้าง/อัปเดต SQLite songs.sqlite3 ตามโครงสร้าง Karaoke PC\\n'+
+      'ตำแหน่ง DB: '+report.database+'\\n'+
+      (report.databaseInstalled?'เชื่อมฐานของ Karaoke PC ที่ติดตั้งแล้ว\\n':
+       'ยังไม่พบ Karaoke PC ที่ติดตั้ง · สร้างฐาน SQLite สำหรับส่งออกเท่านั้น\\n')+
+      'สำรองฐานเดิมก่อนอัปเดต · รักษาเพลงเดิม รายการโปรด และข้อมูลที่ผู้ใช้แก้ไข',
       'ยืนยันนำเข้า X-Stage Karaoke PC',
       {acceptLabel:'เริ่มคัดลอก',cancelLabel:'ยกเลิก'});
     if(!approved)return;
