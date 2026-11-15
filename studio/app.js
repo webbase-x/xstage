@@ -548,6 +548,7 @@
     $('create-output-kind').value = proEnabled && ['xstage','m4a'].includes(prefs.export_format)
       ? prefs.export_format : 'xsk';
     syncXskControls();
+    $('catalog-view').value = prefs.catalog_view === 'all' ? 'all' : 'changes';
     $('create-code-style').value = prefs.code_style || 'source';
     $('create-code-length').value = prefs.code_length || '6';
   }
@@ -687,10 +688,13 @@
     }
   }
   async function refreshSongs() {
-    const data = await api('/api/songs?limit=' + pageSize + '&offset=' + (page * pageSize) + '&search=' + encodeURIComponent(search));
+    const view=$('catalog-view').value;
+    const data = await api('/api/songs?limit=' + pageSize + '&offset=' + (page * pageSize) + '&search=' + encodeURIComponent(search) + '&view=' + encodeURIComponent(view));
     songs = data.rows || []; total = data.total || 0;
     const rows = $('song-rows'); rows.replaceChildren();
-    if (!songs.length) rows.innerHTML = '<tr><td colspan="5" class="empty-row">ไม่พบเพลงในรายการ · เลือกโฟลเดอร์และกดตรวจสอบไฟล์เพลง</td></tr>';
+    if (!songs.length) rows.innerHTML = '<tr><td colspan="5" class="empty-row">' +
+      (view==='changes' ? 'ไม่พบเพลงเพิ่มใหม่หรือเปลี่ยนแปลง · เลือก “เพลงทั้งหมดในคลัง” เพื่อดูของเดิม' :
+        'ไม่พบเพลงในรายการ · เลือกโฟลเดอร์และกดตรวจสอบไฟล์เพลง') + '</td></tr>';
     for (const song of songs) {
       const tr = document.createElement('tr');
       tr.className = selected.has(song.id) ? 'selected' : '';
@@ -2724,7 +2728,8 @@
   $('clear-selection').addEventListener('click',()=>{selected.clear();void refreshSongs();});
   $('select-all').addEventListener('click',async()=>{
     try {
-      const result = await api('/api/songs/ids?search='+encodeURIComponent(search));
+      const result = await api('/api/songs/ids?search='+encodeURIComponent(search)+
+        '&view='+encodeURIComponent($('catalog-view').value));
       if (result.ids.length > 1000 && !await confirmStudio(`พบ ${fmtNum(result.ids.length)} เพลงที่ตรงเงื่อนไข ต้องการเลือกทั้งหมดจริงหรือไม่?`, 'เลือกรายการทั้งหมด')) return;
       for (const id of result.ids) selected.add(id);
       await refreshSongs();
@@ -2741,6 +2746,12 @@
   });
   for (const el of document.querySelectorAll('[data-pick]')) el.addEventListener('click',()=>pick(el.dataset.pick).catch(e=>message(e.message)));
   $('verify-code-registry').addEventListener('click',()=>{void verifyCodeRegistry();});
+  $('catalog-view').addEventListener('change',async()=>{
+    page=0;
+    try {await config({catalog_view:$('catalog-view').value});}
+    catch(e){message('จำตัวกรองรายการไม่ได้: '+e.message);}
+    await refreshSongs();
+  });
   $('scan-button').addEventListener('click',async()=>{
     try{await saveInputs(['create-source']);await run('scan',{full:false});}catch(e){message(e.message);}
   });
