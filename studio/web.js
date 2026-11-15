@@ -1,21 +1,21 @@
-/* X-Stage Song Studio Web MIDI/NCN edition.
- * Sources stay on the user's device. Shared, bundled MIDI/NCN and SF2/SF3
+/* X-Stage Song Studio Web two-file MIDI/lyrics edition.
+ * Sources stay on the user's device. Shared bundled MIDI/KAR and SF2/SF3
  * parsing uses XStageBrowserMidi; FFmpeg is only for M4A conversion.
- * Never upload music or silently modify source MID/LYR/CUR bytes. */
+ * Never upload music or silently modify source files. */
 'use strict';
 (function () {
   const $ = (id) => document.getElementById(id);
   const AUDIO = new Set(['mp3', 'm4a', 'wav', 'aac', 'ogg', 'oga', 'flac']);
   const AUDIO_PRIORITY = ['m4a', 'wav', 'flac', 'mp3', 'aac', 'ogg', 'oga'];
-  const MIDI = new Set(['mid', 'midi', 'kar', 'ncn']);
-  const SIDE = new Set(['lrc', 'lyr', 'cur', 'sf2', 'sf3']);
+  const MIDI = new Set(['mid', 'midi', 'kar']);
+  const SIDE = new Set(['lrc', 'json', 'sf2', 'sf3']);
   const ALL = new Set([...AUDIO, ...MIDI, ...SIDE]);
   const entries = new Map();
   const selected = new Set();
   const fonts = new Map();
   const midiCore = window.XStageStudioMidiCore;
   const midiRuntime = window.XStageBrowserMidi;
-  if (!midiCore || !midiRuntime) throw Error('Song Studio Web: MIDI/NCN modules are missing');
+  if (!midiCore || !midiRuntime) throw Error('Song Studio Web: MIDI/KAR modules are missing');
   const encoder = new TextEncoder();
   const state = { active: null, previewURL: '', dest: null, ffmpeg: null, busy: false,
                   cancelled: false, currentIndex: 0, total: 0, currentFraction: 0,
@@ -81,7 +81,8 @@
     return !!song?.midi && (!song.audio || song.useMidi === true);
   }
   function canExport(song) {
-    if (!song || song.conflicts?.size) return false;
+    if (!song || song.conflicts?.size || song.lyr || song.cur ||
+        (song.lrc && song.json)) return false;
     if (usesMidi(song)) return midiCore.companionState(song).complete;
     return !!song.audio;
   }
@@ -212,7 +213,7 @@
     }
     const tdLyric = document.createElement('td');
     tdLyric.textContent = e.conflicts?.size?'ชื่อชน':e.lyricsText||e.lrc?'มี LRC':
-      e.lyr&&e.cur?'มี NCN CUR':e.midi?'MIDI/KAR':'—';
+      e.json?'มี Lyrics JSON':e.midi?'ต้องเพิ่ม LRC/JSON':'ยังไม่มีเนื้อร้อง';
     const tdSize = document.createElement('td');
     tdSize.textContent = readableBytes(e.audio?.size || e.midi?.size || 0);
     tr.append(tdSelect, tdTitle, tdType, tdLyric, tdSize);
@@ -237,7 +238,7 @@
     const incomplete=songs.filter(song=>!canExport(song)).length;
     $('catalog-note').textContent = 'แสดง '+Math.min(songs.length,500)+' จาก '+songs.length+
       ' เพลง · พร้อมสร้าง '+(songs.length-incomplete)+' · ต้องตรวจสอบ '+incomplete+
-      ' · รองรับ MIDI/KAR/NCN + SF2/SF3 · แสดงสูงสุด 500 แถวเพื่อให้เลื่อนเร็ว';
+      ' · MIDI/KAR ต้องคู่ LRC/JSON · แสดงสูงสุด 500 แถวเพื่อให้เลื่อนเร็ว';
     updateOverview();
   }
   async function addFiles(files, prefix) {
@@ -269,7 +270,7 @@
       const stem = baseOf(file.name);
       const id = midiCore.groupIdentity(path,file.name);
       if (!entries.has(id)) entries.set(id, {
-        id, name: stem, path, audio: null, midi: null, lrc: null, lyr:null, cur:null,
+        id, name: stem, path, audio: null, midi: null, lrc: null, json:null,
         lyricsText: null, editedLyrics:false, midiInfo:null, conflicts:new Set(),
         parts: new Map(), audioFiles: new Map(), midiFiles:new Map(),useMidi:false
       });
@@ -298,12 +299,11 @@
         if(!song.midi||ext==='mid')song.midi=file;
         song.midiInfo=null;
       }
-      if(ext==='lyr'){song.lyr=file;song.midiInfo=null;}
-      if(ext==='cur'){song.cur=file;song.midiInfo=null;}
+      if(ext==='json'){song.json=file;song.midiInfo=null;song.lyricsText=null;song.editedLyrics=false;}
       if(ext==='lrc'){song.lrc=file;song.lyricsText=null;song.editedLyrics=false;}
       accepted++;
       if(accepted%500===0){
-        notice('นำเข้ารายการแล้ว '+accepted.toLocaleString('th-TH')+' ไฟล์ · กำลังจัดกลุ่มเพลง/NCN…');
+        notice('นำเข้ารายการแล้ว '+accepted.toLocaleString('th-TH')+' ไฟล์ · กำลังจับคู่ไฟล์เพลงกับ LRC/JSON…');
         await new Promise(resolve=>setTimeout(resolve,0));
       }
     }
@@ -331,7 +331,7 @@
         output.push({ file: await child.getFile(), path });
         if (output.length >= 120000) throw new Error('เกิน 120,000 ไฟล์ กรุณาเลือกโฟลเดอร์ย่อย');
         if (output.length % 500 === 0) {
-          notice('กำลังสแกนต้นฉบับ '+output.length.toLocaleString('th-TH')+' ไฟล์ · ตรวจชุด NCN/SoundFont…');
+          notice('กำลังสแกนต้นฉบับ '+output.length.toLocaleString('th-TH')+' ไฟล์ · ตรวจ LRC/JSON และ SoundFont…');
           await new Promise(resolve=>setTimeout(resolve,0));
         }
       }
@@ -367,7 +367,11 @@
   }
   async function lyricsFor(song) {
     if (song.lyricsText !== null) return song.lyricsText;
-    song.lyricsText = song.lrc ? await song.lrc.text() : '';
+    if(song.lrc) song.lyricsText=await song.lrc.text();
+    else if(song.json){
+      const json=midiCore.jsonToDocument(await song.json.text(),song.name);
+      song.lyricsText=midiCore.documentToLrc(json);
+    }else song.lyricsText='';
     return song.lyricsText;
   }
   async function activate(id) {
@@ -419,7 +423,7 @@
       }catch(error){
         if(state.activation!==activation)return;
         song.midiInfo=null;
-        $('midi-status').textContent='ตรวจ MIDI/NCN ไม่ผ่าน: '+error.message;
+        $('midi-status').textContent='ตรวจ MIDI/KAR หรือเนื้อร้อง 2 ไฟล์ไม่ผ่าน: '+error.message;
         $('resource-status').textContent='ไม่ผ่านการตรวจโครงสร้าง · หยุดก่อนสังเคราะห์/ส่งออก';
         $('resource-status').dataset.state='warning';
         $('active-lyric').textContent='ไม่สามารถตรวจเวลาได้ · '+error.message;
@@ -712,7 +716,7 @@
     if (song.midi && usesMidi(song)) {
       const info=song.midiInfo||await midiCore.inspectSong(song,midiRuntime);
       song.midiInfo=info;
-      if(!info.safe)throw Error(info.warning||'NCN มีเวลาไม่ปลอดภัย · ข้ามไฟล์นี้');
+      if(!info.safe)throw Error(info.warning||'ไฟล์เนื้อร้องมีเวลาไม่ปลอดภัย · ข้ามไฟล์นี้');
       const inputKind=extOf(song.midi.name);
       if($('export-format').value==='m4a'){
         const audio=await renderMidiWave(song,{onStatus:message=>setProgress(
@@ -724,9 +728,6 @@
         assets.push({name:name+'.m4a',blob:m4a});
       }else{
         assets.push({name:name+'.'+inputKind,blob:song.midi});
-        if(info.kind==='NCN'){
-          assets.push({name:name+'.lyr',blob:song.lyr},{name:name+'.cur',blob:song.cur});
-        }
       }
       const lyrics=await lyricsFor(song);
       let doc=null;
@@ -736,12 +737,11 @@
           : info.safeLyrics?info.document:null;
       }
       if(doc?.lines?.length){
+        // One MIDI/M4A music file + one timed Lyrics JSON. Never a third sidecar.
         assets.push({name:name+'.json',blob:new Blob([JSON.stringify(doc)],
           {type:'application/json'})});
-        assets.push({name:name+'.lrc',blob:new Blob([
-          lyrics.replace(/\r?\n/g,'\r\n')],{type:'text/plain;charset=utf-8'})});
-      }else if(lyrics.trim()){
-        throw Error('เนื้อร้องไม่มีเวลา LRC/CUR ที่ยืนยันได้ · ไม่สร้าง JSON เทียม');
+      }else{
+        throw Error('ไม่มีเนื้อร้องพร้อมเวลาจริง · ต้องเพิ่ม LRC/JSON ก่อนส่งออก');
       }
       return assets;
     }
@@ -749,7 +749,10 @@
     if (state.cancelled) throw new Error('ยกเลิกโดยผู้ใช้');
     assets.push({name: name + '.m4a', blob: audioBlob});
     const lyrics = await lyricsFor(song);
-    if (lyrics.trim() && parseLrc(lyrics).length) assets.push({
+    if(song.json && !song.editedLyrics){
+      midiCore.jsonToDocument(await song.json.text(),song.name);
+      assets.push({name:name+'.json',blob:song.json});
+    }else if(lyrics.trim() && parseLrc(lyrics).length) assets.push({
       name: name + '.lrc', blob: new Blob([lyrics.replace(/\r?\n/g, '\r\n')], {type: 'text/plain;charset=utf-8'})
     });
     else if (lyrics.trim())
@@ -781,7 +784,7 @@
     const work=[...selected].map(id=>entries.get(id)).filter(canExport);
     if(!work.length)return notice('กรุณาเลือกเพลงที่มีชุดไฟล์ครบอย่างน้อยหนึ่งเพลง','error');
     const totalSize=work.reduce((n,e)=>n+(usesMidi(e)?e.midi.size+
-      (e.lyr?.size||0)+(e.cur?.size||0):e.audio.size),0);
+      (e.lrc?.size||0)+(e.json?.size||0):e.audio.size+(e.lrc?.size||0)+(e.json?.size||0)),0);
     if (!state.dest && totalSize > 500 * 1048576) {
       notice('ไฟล์รวมเกิน 500MB · เพื่อหลีกเลี่ยงหน่วยความจำไม่พอ กรุณาเลือกโฟลเดอร์ปลายทางหรือแบ่งงาน', 'error');
       return;
@@ -824,7 +827,7 @@
           }
           success++;
           if(usesMidi(song))midiCount++;else audioCount++;
-          if(assets.some(asset=>asset.name.toLowerCase().endsWith('.lrc')))lyricCount++;
+          if(assets.some(asset=>/\.(lrc|json)$/i.test(asset.name)))lyricCount++;
           else log('ส่งออก '+song.name+' โดยไม่มีคำร้องพร้อมเวลาจริง · ไม่สร้าง LRC/JSON เทียม',true);
           log('สร้าง ' + song.name + ' เรียบร้อย (' + assets.map((a) => a.name).join(', ') + ')');
         } catch (error) {
@@ -851,7 +854,7 @@
         setProgress('ยกเลิกงาน', 0);
       } else {
         notice(success
-          ? 'สร้างเพลงเสียง '+audioCount+' · MIDI/NCN '+midiCount+' · มี LRC '+lyricCount+
+          ? 'สร้างเพลงเสียง '+audioCount+' · MIDI/KAR '+midiCount+' · มี LRC '+lyricCount+
             ' · ข้ามรายการผิดปกติ '+errors+
             (state.archive?' · กด “ดาวน์โหลด ZIP ผลลัพธ์”':' · บันทึกลงโฟลเดอร์ที่เลือกแล้ว')
           : 'สร้างเพลงไม่สำเร็จ · ตรวจรายละเอียดข้อผิดพลาดด้านล่าง',
