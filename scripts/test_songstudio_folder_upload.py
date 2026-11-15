@@ -202,7 +202,7 @@ class FolderUploadTests(unittest.TestCase):
         first.mkdir(parents=True)
         second.mkdir(parents=True)
         for parent, code in ((first, "A001"), (second, "B002")):
-            (parent / (code + ".mp3")).write_bytes(b"ID3" + b"x" * 2500)
+            (parent / (code + ".mp3")).write_bytes(b"ID3" + code.encode("ascii") * 500)
             (parent / (code + ".lrc")).write_text(
                 "[00:05.00]ทดสอบเพลงในโฟลเดอร์ย่อย", encoding="utf-8")
         report = folder.report(str(self.root))
