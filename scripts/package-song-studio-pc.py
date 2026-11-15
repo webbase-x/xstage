@@ -24,6 +24,7 @@ FILES = {
     "songstudio-pc/code_registry.py": "code_registry.py",
     "songstudio-pc/created_json_manager.py": "created_json_manager.py",
     "songstudio-pc/created_xsk_export.py": "created_xsk_export.py",
+    "songstudio-pc/json_pro_export.py": "json_pro_export.py",
     "songstudio-pc/import_preview.py": "import_preview.py",
 "songstudio-pc/xsk_package.py": "xsk_package.py",
     "songstudio-pc/xsk_keys.py": "xsk_keys.py",
