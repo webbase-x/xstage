@@ -86,9 +86,8 @@ class PcSourceTests(unittest.TestCase):
             self.assertTrue((root / "0" / "00002.xsk").is_file())
             # Corrupt JSON must not trigger a fallback to embedded MIDI lyrics.
             (self.source / "00002.json").write_text("{broken", encoding="utf-8")
-            failed = engine.build_xsk([different], "original", {})
-            self.assertEqual(failed["errors"], 1)
-            self.assertEqual(failed["created"], 0)
+            with self.assertRaisesRegex(ValueError, "ไม่มีเพลงที่สร้างสำเร็จ"):
+                engine.build_xsk([different], "original", {})
 
     def test_incremental_catalog_view_remembers_new_items_by_source(self):
         first = {"id": 11, "path": str(self.source / "old.mp3"),
