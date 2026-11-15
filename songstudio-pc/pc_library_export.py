@@ -111,7 +111,8 @@ def _existing(root):
     return result
 
 
-def _pc_row(row):
+def _pc_row(row, replacements=None):
+    replacements = replacements or {}
     item = dict(row)
     for key, prefix, replacement in (("audio", "audio", "AUDIO"),
                                      ("lyrics", "lyrics", "LYRICS"),
@@ -119,8 +120,44 @@ def _pc_row(row):
         obj = row.get(key)
         if obj:
             path = _safe_rel(obj["path"], prefix)
-            item[key] = {**obj, "path": Path(replacement, *path.parts[1:]).as_posix()}
+            original = Path(replacement, *path.parts[1:]).as_posix()
+            item[key] = {**obj, "path": replacements.get(original, original)}
     return item
+
+
+def _plan_files(source, destination):
+    """Immutable versioned lyrics preserve the previous published catalog.
+
+    Song Studio may correct JSON timestamps after the first export.
+    A changed Lyrics JSON/LRC goes to a new content-addressed path, while
+    an existing media path with conflicting bytes is rejected for review.
+    """
+    files = []
+    replacements = {}
+    copied_bytes = 0
+    new_count = versioned = 0
+    for src, rel in _files(source):
+        original = destination / rel
+        target = original
+        if original.is_symlink():
+            raise ValueError("พบ symbolic link ในคลัง Karaoke PC: " + str(original))
+        if original.is_file() and _hash(original) != _hash(src):
+            if rel.parts[0] != "LYRICS":
+                raise FileExistsError(
+                    "ไฟล์เสียงชื่อเดิมแต่เนื้อหาเปลี่ยน กรุณาตรวจเพลงก่อนนำเข้า: " + str(original))
+            variant = rel.with_name(rel.stem + "-rev-" + _hash(src)[:16] + rel.suffix)
+            target = destination / variant
+            replacements[rel.as_posix()] = variant.as_posix()
+            versioned += 1
+            if target.is_symlink():
+                raise ValueError("พบ symbolic link ในไฟล์ Lyrics ฉบับปรับปรุง")
+            if target.is_file() and _hash(target) != _hash(src):
+                raise FileExistsError("ไฟล์ Lyrics ฉบับแก้ไขมีชื่อชนกัน: " + str(target))
+        if not target.is_file():
+            new_count += 1
+            copied_bytes += src.stat().st_size
+        files.append((src, target))
+    return files, replacements, new_count, copied_bytes, versioned
 
 
 def inspect(source_root, selected_destination, export):
@@ -130,17 +167,11 @@ def inspect(source_root, selected_destination, export):
         raise ValueError("ตำแหน่งปลายทางต้องแยกจาก XStageSong ที่ใช้สร้างเพลง")
     records = _source(source, export)
     existing = _existing(target)
-    files = list(_files(source))
-    missing = 0
-    bytes_to_copy = 0
-    for source_file, rel in files:
-        output = target / rel
-        if not output.is_file():
-            missing += 1
-            bytes_to_copy += source_file.stat().st_size
+    files, _replacements, missing, bytes_to_copy, versioned = _plan_files(source, target)
     return {"source": str(source), "destination": str(target),
             "songs": len(records), "existingSongs": len(existing),
             "files": len(files), "newFiles": missing,
+            "updatedLyrics": versioned,
             "bytesToCopy": bytes_to_copy}
 
 
@@ -193,26 +224,23 @@ def publish(source_root, selected_destination, export, *, cancelled=None, progre
     dest = Path(report["destination"])
     records = _source(source, export)
     previous = _existing(dest)
-    planned = [_pc_row(row) for row in records]
+    files, replacements, _count, _bytes, _versions = _plan_files(source, dest)
+    planned = [_pc_row(row, replacements) for row in records]
     combined = dict(previous)
     for row in planned:
-        code = row["webSongId"]
-        if code in previous and previous[code] != row:
-            # Preserve old manual edits and refrain from clobbering an existing
-            # catalog that may reference an earlier audio version.
-            raise ValueError("เพลงรหัสเดิมมีข้อมูลเปลี่ยน โปรดตรวจคลังปลายทางก่อน: " + code)
-        combined[code] = row
-    files = list(_files(source))
+        # Keep the previous immutable catalog and source file unchanged;
+        # the new pointer selects edited metadata/timing only after copying.
+        combined[row["webSongId"]] = row
     if report["bytesToCopy"] > 0:
         dest.mkdir(parents=True, exist_ok=True)
         if shutil.disk_usage(dest).free < report["bytesToCopy"] + 32 * 1024 * 1024:
             raise ValueError("พื้นที่ปลายทางไม่เพียงพอสำหรับคัดลอกไฟล์เพลง")
     # Existing files with conflicting content must never be replaced.
     copied = reused = 0
-    for i, (src, rel) in enumerate(files, 1):
+    for i, (src, target_file) in enumerate(files, 1):
         if cancelled and cancelled.is_set():
             raise RuntimeError("ยกเลิกการคัดลอกแล้ว · ฐานข้อมูลชุดเก่ายังใช้งานได้")
-        if _atomic_copy(src, dest / rel):
+        if _atomic_copy(src, target_file):
             copied += 1
         else:
             reused += 1
