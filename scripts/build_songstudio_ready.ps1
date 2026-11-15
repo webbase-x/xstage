@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.45-build345'
+$Version = 'v0.3.46-build346'
 if ($Version -match '^v(\d+\.\d+\.\d+)-build(\d+)$') {
     $AppVersion = $Matches[1]
     $AppBuild = [int]$Matches[2]
@@ -412,11 +412,25 @@ with ZipFile(dest) as archive:
     names = set(archive.namelist())
     for mandatory in ["X-Stage Song Studio.exe", ".runtime/python/python.exe",
                       ".runtime/tools/ffmpeg.exe",
+                      ".runtime/tools/ffprobe.exe",
+                      ".runtime/python/pythonw.exe",
+                      ".runtime/whisper/whisper-cli.exe",
+                      ".runtime/models/ggml-base.bin",
                       ".runtime/fluidsynth/bin/fluidsynth.exe",
                       ".runtime/soundfonts/GeneralUser-GS.sf2",
                       ".runtime/models/htdemucs_fp16weights.onnx",
                       "ai_separate.py",
                       "live_preview.py",
+                      "created_xsk_export.py",
+                      "created_json_manager.py",
+                      "xsk_package.py",
+                      "xsk_keys.py",
+                      "pro_license.py",
+                      "pc_ready_updates.py",
+                      "studio/index.html",
+                      "studio/app.js",
+                      "studio/style.css",
+                      "studio/pro-design.css",
                       "song_export.py",
                       "pc_library_export.py",
                       "song_index.py",
