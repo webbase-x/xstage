@@ -57,6 +57,57 @@
   const promptedBuildUploadJobs = new Set();
   let proEnabled = false;
   let busy = false, cancellationPending = false, editingId = null, notificationTimer = null;
+  let activeJobs = [], parallelCapacity = {parallelLimit:1,active:0,freeSlots:1};
+  const parallelGroup = action => {
+    if (['scan','build','xsk-stream','json-pro-export','created-xsk',
+         'pc-export','download','lyric-groups-scan','lyric-groups-replace',
+         'lyric-groups-undo'].includes(action)) return 'library';
+    if (['ai-lyrics','ai-align','ai-separate-vocals','ai-export','preview'].includes(action)) return 'audio-ai';
+    if (['upload','upload-folder','upload-soundfont','login','logout',
+         'check-update','download-update'].includes(action)) return 'network';
+    if (action === 'install-update') return 'installer';
+    return 'exclusive';
+  };
+  function canLaunch(action) {
+    const active=activeJobs.filter(job=>job.state==='running');
+    if(!active.length) return true;
+    const group=parallelGroup(action);
+    if(group==='exclusive'||group==='installer'||active.some(job=>
+       ['exclusive','installer'].includes(parallelGroup(job.kind))))return false;
+    if(active.some(job=>parallelGroup(job.kind)===group))return false;
+    return active.length < (parallelCapacity.parallelLimit||1);
+  }
+  function renderParallelJobs() {
+    const root=$('parallel-job-list');
+    root.replaceChildren();
+    const active=activeJobs.filter(job=>job.state==='running');
+    const slots=parallelCapacity.parallelLimit||1;
+    const ram=parallelCapacity.memoryAvailableBytes;
+    $('parallel-job-summary').textContent='ทำงานพร้อมกัน '+active.length+'/'+slots+
+      ' งาน · CPU '+(parallelCapacity.cpuCores||'—')+' คอร์'+
+      (Number.isFinite(ram)?' · RAM เหลือ '+(ram/1024**3).toFixed(1)+' GB':'');
+    for(const job of active){
+      const item=document.createElement('div');
+      item.className='parallel-job';
+      const detail=document.createElement('div');
+      const title=document.createElement('strong');
+      title.textContent=job.kind+' · '+(job.stage||'กำลังทำงาน');
+      const subtitle=document.createElement('small');
+      subtitle.textContent=job.detail||('รหัสงาน '+job.id);
+      detail.append(title,subtitle);
+      const stop=document.createElement('button');
+      stop.type='button';stop.className='button ghost';
+      stop.textContent=job.stage?.includes('กำลังยกเลิก')?'กำลังหยุด…':'หยุดเฉพาะงาน';
+      stop.disabled=stop.textContent==='กำลังหยุด…';
+      stop.addEventListener('click',async()=>{
+        stop.disabled=true;
+        try{await post('/api/jobs/cancel',{id:job.id});await poll();}
+        catch(error){stop.disabled=false;message(error.message);}
+      });
+      item.append(detail,stop);root.append(item);
+    }
+  }
+
   let createStep = 1;
   const createStepLabels = [
     'เลือกต้นฉบับและสแกนไฟล์',
@@ -631,6 +682,9 @@
   async function loadState({initialize = false} = {}) {
     const data = await api('/api/status');
     busy = data.job?.state === 'running';
+    activeJobs=data.jobs||[];
+    parallelCapacity=data.resources||parallelCapacity;
+    renderParallelJobs();
     prefs = data.preferences || prefs;
     $('engine-state').textContent = 'พร้อมใช้งานบน PC · เชื่อมต่อแล้ว';
     $('version-info').textContent = `Song Studio v${data.version} · Build ${data.build}`;
@@ -1819,8 +1873,8 @@
     $('job-panel').scrollIntoView({behavior:'smooth',block:'center'});
   }
   async function run(action, options = {}) {
-    if (busy) {
-      message('มีงานกำลังทำอยู่ · กรุณารอหรือกดยกเลิกก่อน');
+    if (!canLaunch(action)) {
+      message('งานชนิดนี้กำลังทำอยู่ หรือ CPU/RAM ไม่พร้อมรับงานเพิ่ม · ตรวจรายการงานด้านล่าง');
       return false;
     }
     if (action === 'build') {
@@ -1832,6 +1886,7 @@
       if (!response?.id) throw new Error('Local Engine ไม่คืนเลขงาน โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง');
       lastJobId = response.id; lastJobState = 'running';
       busy = true;
+      activeJobs=[{id:response.id,kind:action,state:'running',stage:'กำลังเริ่มต้น'},...activeJobs];
       updateButtons();
       if (action === 'build') {
         buildFeedback('running', 'PC Engine รับคำสั่งสร้างเพลงแล้ว',
@@ -2290,6 +2345,9 @@
       const job = response.job || {};
       const beforeBusy = busy;
       busy = job.state === 'running';
+      activeJobs=response.jobs||[];
+      parallelCapacity=response.resources||parallelCapacity;
+      renderParallelJobs();
       if (!busy) cancellationPending = false;
       setGoogle(response.google);
       renderJob(job);updateButtons();
