@@ -46,6 +46,33 @@ class PcSourceTests(unittest.TestCase):
         self.tmp.cleanup()
 
 
+    def test_completed_output_folder_is_specific_to_that_job(self):
+        """Only completed local output folders are eligible to open."""
+        root=self.dest / "XStageSong"
+        root.mkdir()
+        (root / "MIDI" / "XSK").mkdir(parents=True)
+        prefs={"workspace":str(self.dest), "xsk_folder":str(self.dest),
+               "json_destination":str(self.dest),
+               "pc_export_folder":str(self.dest)}
+        with patch.object(engine, "_song_export_module",
+                          return_value=SimpleNamespace(
+                              songs_root=lambda path: Path(path) / "XStageSong")):
+            self.assertEqual(
+                engine.completed_job_folder("xsk-stream", {}, prefs),
+                str((root / "MIDI" / "XSK").resolve()))
+            self.assertEqual(
+                engine.completed_job_folder("json-pro-export", {}, prefs),
+                str(root.resolve()))
+            self.assertIsNone(
+                engine.completed_job_folder("upload-folder", {}, prefs))
+            self.assertIsNone(
+                engine.completed_job_folder("download", {}, prefs))
+            downloaded=self.dest / "export.zip"
+            downloaded.write_bytes(b"data")
+            self.assertEqual(
+                engine.completed_job_folder("download", {"path":str(downloaded)}, prefs),
+                str(self.dest.resolve()))
+
     def test_cancelled_worker_must_exit_before_next_job(self):
         """A stopped indicator alone must not unlock the same library worker."""
         started = threading.Event()
