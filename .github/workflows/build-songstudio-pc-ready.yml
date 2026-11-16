@@ -336,8 +336,9 @@ jobs:
           $zip = "dist/$env:SONGSTUDIO_READY_DIR.zip"
           $sha = "$zip.sha256"
           $notes = @'
-          Build 349: Hardened encrypted XSK publishing and size validation,
-          improved batch metadata from paired MIDI+JSON, and versioned Lyrics JSON
+          Build 350: Simplified folder-to-folder XSK and Lyrics JSON controls,
+          removed microphone recording, simplified online uploads and Pro display.
+          Retains improved paired MIDI+JSON metadata and versioned Lyrics JSON
           exports that preserve title/artist, detect lyric-only changes, skip
           renamed identical songs, and recover verified orphaned file pairs.
           Menu: MIDI to .XSK first, MIDI to Lyrics JSON second.
@@ -427,7 +428,7 @@ jobs:
             download_url = "$base/download/$tag/$archive"
             release_url = "$base/tag/$tag"
             sha256 = $sha
-            notes = "Build 349: MIDI to XSK batched encryption, paired JSON metadata, secure no-overwrite export, lyric-version updates, crash recovery, and 8 updated menus. Windows portable ZIP; extract completely and launch the EXE."
+            notes = "Build 350: simplified MIDI to XSK and Lyrics JSON, one-click online uploads, minimized settings and Pro branding; microphone recording removed. Ready Offline ZIP with bundled Windows runtime and AI models."
           }
           ($metadata | ConvertTo-Json -Depth 5) | Set-Content -Path downloads/song-studio-latest.json -Encoding utf8
           git config user.name "github-actions[bot]"
