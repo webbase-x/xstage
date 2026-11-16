@@ -71,6 +71,7 @@ JOB_THREAD = None
 PROCESS = None
 ACTIVE_JOBS = {}
 _WORKER_LOCAL = threading.local()
+_CPU_SAMPLE = None
 MAX_PARALLEL_JOBS = 3
 
 # Each worker sees its own job state, cancellation event and subprocess.
@@ -111,6 +112,36 @@ def job_group(action):
         return "installer"
     return "exclusive"
 
+def cpu_busy_percent():
+    """Best-effort Windows system-wide CPU utilization from two passive samples."""
+    global _CPU_SAMPLE
+    if os.name != "nt":
+        try:
+            return min(100, round(os.getloadavg()[0] / max(1, os.cpu_count() or 1) * 100))
+        except (AttributeError, OSError):
+            return None
+    try:
+        import ctypes
+        class FileTime(ctypes.Structure):
+            _fields_ = [("low", ctypes.c_ulong), ("high", ctypes.c_ulong)]
+        idle, kernel, user = FileTime(), FileTime(), FileTime()
+        if not ctypes.windll.kernel32.GetSystemTimes(
+                ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)):
+            return None
+        val = lambda t: (int(t.high) << 32) | int(t.low)
+        current = (val(idle), val(kernel) + val(user))
+        with LOCK:
+            previous = _CPU_SAMPLE
+            _CPU_SAMPLE = current
+        if previous:
+            total_delta = current[1] - previous[1]
+            idle_delta = current[0] - previous[0]
+            if total_delta > 0:
+                return max(0, min(100, round((1-idle_delta/total_delta)*100)))
+    except (AttributeError, OSError, TypeError):
+        pass
+    return None
+
 def resource_snapshot():
     """Lightweight physical-memory/capacity snapshot; no extra packages."""
     cores = max(1, os.cpu_count() or 1)
@@ -149,7 +180,8 @@ def resource_snapshot():
     with LOCK:
         active = sum(1 for entry in ACTIVE_JOBS.values()
                      if entry["thread"] and entry["thread"].is_alive())
-    return {"cpuCores": cores, "memoryAvailableBytes": available,
+    return {"cpuCores": cores, "cpuBusyPercent": cpu_busy_percent(),
+            "memoryAvailableBytes": available,
             "memoryTotalBytes": total, "parallelLimit": capacity,
             "active": active, "freeSlots": max(0, capacity-active)}
 
@@ -169,6 +201,9 @@ def _check_resource_capacity(action):
         if len(active) >= state["parallelLimit"]:
             raise ValueError("เครื่องกำลังทำงานเต็มความสามารถ ("+
                              str(state["parallelLimit"])+" งานพร้อมกัน) · กรุณารอหรือลดจำนวนงาน")
+    if state.get("cpuBusyPercent") is not None and state["cpuBusyPercent"] >= 92 and state["active"] >= 1:
+        raise ValueError("CPU กำลังใช้งานสูง ("+str(state["cpuBusyPercent"])+
+                         "%) · ยังไม่รับงานเพิ่มเพื่อป้องกันโปรแกรมหน่วง")
     required = 3*1024**3 if group == "audio-ai" else 1024**3
     free = state["memoryAvailableBytes"]
     if free is not None and free < required:
