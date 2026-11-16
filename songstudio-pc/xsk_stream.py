@@ -113,7 +113,7 @@ def source_batches(source, destination, *, cancelled, on_scan=None,
         finally:
             completed.set()
             if on_scan is not None:
-                on_scan(dict(state), True, inbox.qsize())
+                on_scan(dict(state), not problems and not is_cancelled(), inbox.qsize())
 
     thread = threading.Thread(target=produce, daemon=True,
                               name="xstage-xsk-midi-discovery")
