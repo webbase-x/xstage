@@ -12,7 +12,7 @@ The Karaoke PC, Web and APK library contracts remain unchanged.
 | Lyrics AI | Work is initiated for a chosen audio/video/lyrics source; no required full-library scan | Keep user-triggered work, reuse source metadata | ASR output is a draft; do not auto-publish unreviewed lyrics |
 | Edit Lyrics JSON | User requests global group analysis to find repeated text | Keep explicit scan for groups; never pre-scan on app launch | Preserve timestamped source, backup, undo and mismatch skips |
 | Import X-Stage Karaoke Online | Check candidate files and merge catalog on explicit upload | Keep required preflight; do not run on Song Studio startup | Cloud permissions, checksum, duplicate and safe publish checks cannot be removed |
-| Import X-Stage Karaoke PC | Read saved catalog and compare files, then copy to selected destination | Keep required verification; do not run on Song Studio startup | Preserve current.json/SQLite consistency, no destructive overwrite |
+| Import X-Stage Karaoke PC | Previously did inspect then repeated source/catalog/file planning before copying | Reuse one verified plan per publish; keep separate optional UI inspection when explicitly requested | Preserve file SHA-256 at copy, current.json/SQLite consistency and no destructive overwrite |
 | Download / Drive | Explicit user action to read/download selected library content | No automatic downloads during startup | Verify downloaded files and Google account permissions |
 | Settings / local source | Restore saved preferences and catalog, no conversion on app launch | Keep lightweight restore, no proactive global scan | Preserve stored OAuth and user data between versions |
 
@@ -33,7 +33,7 @@ The Karaoke PC, Web and APK library contracts remain unchanged.
 - The source iterator keeps only pending directories plus one media group, not 280,820 song groups.
 - The post-copy hash and catalog checkpoint are intentional integrity costs and are **not** removed.
 - NCN companions must have the same filename stem in the recognized source layout. A matching name alone does not prove valid timing; cue validation happens before publication.
-- An optional *full-library inspect* button is removed from the default MIDI to Lyrics JSON workflow. Dedicated import/publish checks remain.
+- The redundant *full-library inspect* button and API are removed from the default MIDI to Lyrics JSON workflow. Dedicated import/publish checks remain.
 
 ## Release gates
 
