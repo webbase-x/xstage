@@ -452,3 +452,24 @@ button.preview-lyric-line{cursor:pointer}
 #tab-create.xsk-auto-mode #xsk-stream-build {
   min-width: 140px;
 }
+
+/* MIDI to Lyrics JSON: two folders + one confirmation button.
+   Keep hidden controls in DOM because existing export logic reads them. */
+#tab-json-pro .section-top p,
+#tab-json-pro .section-top .chip,
+#tab-json-pro label[for="json-pro-format"],
+#tab-json-pro #json-pro-format,
+#tab-json-pro .panel > p.hint,
+#tab-json-pro #json-pro-inspect {
+  display: none !important;
+}
+#tab-json-pro > .panel {
+  max-width: 760px;
+  margin-inline: auto;
+}
+#tab-json-pro #json-pro-report {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 12px;
+  margin-top: 12px;
+}
