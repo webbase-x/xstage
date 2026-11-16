@@ -1,4 +1,4 @@
-"""Regression tests for private XStageSong v4 AUDIO/LYRICS Drive layout and legacy safety."""
+"""Regression tests for typed/bucketed XStageSong Drive folders and v4 File-ID safety."""
 from __future__ import annotations
 
 import importlib.util
@@ -17,19 +17,19 @@ class XStageSongLayoutTests(unittest.TestCase):
         self.assertEqual(layout.ONLINE_ROOT, "XStageSong")
         self.assertEqual(layout.LAYOUT_VERSION, 4)
 
-    def test_all_media_use_one_flat_audio_folder(self):
+    def test_media_uses_shared_typed_bucket_folders(self):
         for source, expected in (
-                ("audio/8/My Song.m4a", "AUDIO/My Song.m4a"),
-                ("audio/_/Song.mp3", "AUDIO/Song.mp3"),
-                ("midi/4/Track.mid", "AUDIO/Track.mid"),
-                ("video/_/Movie.mp4", "AUDIO/Movie.mp4"),
-                ("audio/_/Piano.sf2", "AUDIO/Piano.sf2")):
+                ("audio/8/My Song.m4a", "AUDIO/A/My Song.m4a"),
+                ("audio/_/Song.mp3", "AUDIO/A/Song.mp3"),
+                ("midi/4/Track.mid", "MIDI/MID/A/Track.mid"),
+                ("video/_/Movie.mp4", "VIDEO/A/Movie.mp4"),
+                ("audio/_/Piano.sf2", "SOUNDFONT/Piano.sf2")):
             with self.subTest(source=source):
                 self.assertEqual(str(layout.media_drive_path(source, code="A205")), expected)
 
     def test_lyrics_json_only_in_one_flat_folder(self):
         self.assertEqual(str(layout.media_drive_path(
-            "lyrics/0/Track.json", code="B88")), "LYRICS/Track.json")
+            "lyrics/0/Track.json", code="B88")), "LYRICS/B/Track.json")
         for source in ("lyrics/0/Track.lrc", "lyrics/0/Track.lyr",
                        "midi_cursor/0/Track.cur", "midi_lyrics/0/Track.lyr"):
             with self.subTest(source=source):
@@ -38,7 +38,7 @@ class XStageSongLayoutTests(unittest.TestCase):
 
     def test_unknown_code_does_not_lose_file(self):
         self.assertEqual(str(layout.media_drive_path(
-            "audio/_/เพลง.m4a", code="เพลง")), "AUDIO/เพลง.m4a")
+            "audio/_/เพลง.m4a", code="เพลง")), "AUDIO/_/เพลง.m4a")
 
     def test_traversal_and_unhandled_types_fail_closed(self):
         for name in ("audio/../../secret.m4a", "/absolute.m4a",
