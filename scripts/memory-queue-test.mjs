@@ -95,5 +95,18 @@ handlers.get('xstage:soundfont-change')();
 assert.equal(state.queuePreparedCache.size,0,'SoundFont selection invalidates already-rendered queued audio');
 assert.ok(app.includes('state.queuePreparedCache.get(queued)'),'Player promotes completed queued song');
 assert.ok(app.includes('pending.promise'),'Player adopts an in-flight queued task');
+const realNative={XStageAndroid:{memorySnapshot:()=>JSON.stringify({
+  total:2*1024*1024*1024,available:200*1024*1024,
+  threshold:350*1024*1024,lowMemory:true})}};
+const nativeCtx={navigator:{deviceMemory:2},performance:{memory:{usedJSHeapSize:100,
+  jsHeapSizeLimit:1000}},...realNative};
+nativeCtx.window=nativeCtx;
+vm.runInNewContext(memory,nativeCtx);
+const nativeBudget=nativeCtx.XStageMemory.plan();
+assert.equal(nativeBudget.nativePressure,true,
+  'Android low-memory signal must override browser deviceMemory hint');
+assert.equal(nativeCtx.XStageMemory.canHold(1024,{}),false,
+  'No speculative fetch while Android reports low-memory');
+assert.equal(nativeBudget.level,'high');
 assert.ok(app.includes('releaseFinishedMedia()'),'Player releases already-played media');
 console.log('PASS: all media types, bounded multi-song RAM, UI level, SoundFont change, eviction and in-flight promotion');
