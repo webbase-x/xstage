@@ -336,7 +336,7 @@ jobs:
           $zip = "dist/$env:SONGSTUDIO_READY_DIR.zip"
           $sha = "$zip.sha256"
           $notes = @'
-          Build 352: Independent per-job Engine workers, resource-aware parallel tasks, per-job cancellation and RAM/CPU overload warnings.
+          Build 353: Truthful Lyrics JSON start status, explicit CPU/RAM admission feedback and parallel worker status improvements.
           removed microphone recording, simplified online uploads and Pro display.
           Retains improved paired MIDI+JSON metadata and versioned Lyrics JSON
           exports that preserve title/artist, detect lyric-only changes, skip
@@ -428,7 +428,7 @@ jobs:
             download_url = "$base/download/$tag/$archive"
             release_url = "$base/tag/$tag"
             sha256 = $sha
-            notes = "Build 352: concurrent independent PC Engine job contexts; separate cancellation, progress and subprocesses per job; CPU/RAM capacity guard and resource UI. Includes all Build 351 auto-updater features."
+            notes = "Build 353: fixes stuck Lyrics JSON starting status when Engine rejects tasks due to low RAM or resource limits; shows accurate admitted-job feedback and system warnings. Includes Build 352 parallel worker engine."
           }
           ($metadata | ConvertTo-Json -Depth 5) | Set-Content -Path downloads/song-studio-latest.json -Encoding utf8
           git config user.name "github-actions[bot]"
