@@ -113,7 +113,12 @@ class Inspector:
                     record[key] = value
                     rich.add(key)
         if ext in MIDI_EXT:
-            data = bounded(path, 64 * 1024 * 1024)
+            xsk_doc = None
+            if ext == '.xsk':
+                from .xsk_reader import read_xsk
+                data, xsk_doc = read_xsk(path)
+            else:
+                data = bounded(path, 64 * 1024 * 1024)
             assets = unpack_emk(data) if ext == '.emk' else {}
             parser=parse_midi
             if getattr(self,'capture_for_quality',False):
@@ -124,7 +129,14 @@ class Inspector:
             metadata({'title': song.title, 'artist': song.artist, 'bpm': round(song.initial_bpm, 2),
                       'key_signature':song.key_signature, 'first_lyric': ' '.join(line.text for line in song.lyrics.lines)[:512]})
             raw, cursor = assets.get('LYRIC_DATA'), assets.get('CURSOR_DATA', assets.get('CUR_DATA'))
-            if ext != '.emk':
+            if xsk_doc is not None:
+                from .lyrics import Lyrics, LyricLine
+                song.lyrics = Lyrics([LyricLine(float(line['startTime']), line['text'])
+                                      for line in xsk_doc['lines']], int(xsk_doc.get('audioOffsetMs') or 0))
+                record['format'] = 'XSK'
+                metadata({'title': xsk_doc.get('title'), 'artist': xsk_doc.get('artist'),
+                          'first_lyric': ' '.join(line['text'] for line in xsk_doc['lines'][:8])[:512]})
+            if ext not in ('.emk', '.xsk'):
                 lyr, cur = self.ncn_pair(path)
                 if lyr.is_file():
                     try:
