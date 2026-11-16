@@ -442,7 +442,11 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
   onStatus?.('กำลังสังเคราะห์เสียง MIDI…');
   const result=await ctx.startRendering();check();
   onStatus?.('กำลังเตรียมเสียงสำหรับเล่น…');
-  return {audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration};
+  const rendered={audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration};
+  // The parsed SoundFont and bounded samples remain cached; emit their
+  // updated footprint after rendering, never on every sample lookup.
+  if(fontCache?.parsed===font)fontStatusChanged();
+  return rendered;
 }
 let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 let fontLoadPromise=null;
