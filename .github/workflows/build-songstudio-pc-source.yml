@@ -85,7 +85,7 @@ jobs:
           import subprocess, sys, tempfile
           from pathlib import Path
           from zipfile import ZipFile
-          source=Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.6-Build206-Preview.zip")
+          source=Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.7-Build207-Preview.zip")
           with tempfile.TemporaryDirectory(prefix="studio-pc-source-") as folder:
               with ZipFile(source) as archive:
                   archive.extractall(folder)
@@ -99,7 +99,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
-          p = Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.6-Build206-Preview.zip")
+          p = Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.7-Build207-Preview.zip")
           with ZipFile(p) as z:
               assert z.testzip() is None
               assert len(z.namelist()) >= 7
@@ -109,7 +109,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.6-Build206-Preview.zip*
+          git add downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.7-Build207-Preview.zip*
           if git diff --cached --quiet; then
             echo "Source ZIP already matches GitHub"
             exit 0
