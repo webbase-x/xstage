@@ -490,6 +490,10 @@ async function refreshFonts(auth){
       select.onchange=()=>{
         selected=select.value;fontCache=null;
         try{localStorage.setItem(storageKey,selected);}catch{}
+        // Any pre-rendered XSK2 in the queue used the prior SoundFont.
+        // Invalidate that temporary audio before the next song starts.
+        scope.dispatchEvent?.(new CustomEvent('xstage:soundfont-change',
+          {detail:{soundFontId:selected}}));
       };
     }catch(error){
       if(sequence!==fontRefreshSequence)return;
