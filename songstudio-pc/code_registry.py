@@ -42,7 +42,7 @@ class CodeAllocator:
     historical songs. User-defined alphanumeric unique codes stay unchanged.
     """
 
-    def __init__(self, local_rows, online_rows, local_songs: Path, *, code_style='numeric', code_length=5):
+    def __init__(self, local_rows, online_rows, local_songs: Path, *, code_style='source', code_length=5):
         if code_style not in ('source', 'numeric', 'letters', 'alphanumeric'):
             raise ValueError('ชนิดรหัสเพลงไม่ถูกต้อง')
         if type(code_length) is not int or not 1 <= code_length <= 12:
