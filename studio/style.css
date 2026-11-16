@@ -473,3 +473,22 @@ button.preview-lyric-line{cursor:pointer}
   font-size: 12px;
   margin-top: 12px;
 }
+
+/* Progressive disclosure: keep main actions short; optional utilities remain reachable. */
+.secondary-feature { margin-top: 14px; }
+.secondary-feature > summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 10px 12px;
+  width: fit-content;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  list-style-position: inside;
+}
+.secondary-feature[open] > summary { margin-bottom: 12px; }
+.secondary-feature > .panel { margin-top: 0; }
+#tab-upload .cloud-panel { margin-bottom: 12px; }
+#tab-upload > .panel:not(.cloud-panel) { max-width: 840px; }
+#tab-upload #upload-inspect[hidden] { display: none !important; }
+#tab-upload #upload-folder-report:empty { display: none; }
