@@ -2548,7 +2548,12 @@
     const list = $('job-log'); list.replaceChildren();
     for (const item of job.logs || []) {const li=document.createElement('li');li.textContent=item;list.append(li);}
   }
+  // Keep at most one in-flight status request. Under heavy conversions,
+  // overlapping polls used to queue up and delay actual user commands.
+  let statusPollPending = false;
   async function poll() {
+    if(statusPollPending)return;
+    statusPollPending=true;
     try {
       const response = await api('/api/status');
       const job = response.job || {};
@@ -2721,6 +2726,8 @@
     } catch (error) {
       $('engine-state').textContent = 'การเชื่อมต่อ Local Engine หลุด · กำลังลองใหม่';
       $('job-title').textContent = 'กำลังเชื่อมต่อ Local Engine อีกครั้ง';
+    } finally {
+      statusPollPending=false;
     }
   }
   async function refreshEnvironment() {
