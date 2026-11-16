@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1] / "songstudio-pc"
 spec = importlib.util.spec_from_file_location("xsk_package", ROOT / "xsk_package.py")
@@ -57,6 +58,26 @@ class XskTests(unittest.TestCase):
         broken = bytearray(raw); broken[-1] ^= 1
         with self.assertRaises(Exception):
             xsk.open_package(broken, self.key)
+
+    def test_rejects_oversized_untrusted_xsk_before_decryption(self):
+        raw = xsk.seal(self.source, self.doc, "00001", "เพลง", "ศิลปิน", self.key)
+        with patch.object(xsk, "MAX_ENCRYPTED", len(raw) - 1):
+            with self.assertRaisesRegex(ValueError, "ใหญ่"):
+                xsk.open_package(raw, self.key)
+            path = self.root / "huge.xsk"
+            path.write_bytes(raw)
+            with self.assertRaisesRegex(ValueError, "ใหญ่"):
+                xsk.open_package(path, self.key)
+
+    def test_no_clobber_seal_preserves_existing_ciphertext(self):
+        target = xsk.destination(self.root / "XStageSong", "00001")
+        xsk.seal(self.source, self.doc, "00001", "เพลง", "ศิลปิน",
+                 self.key, target)
+        old = target.read_bytes()
+        with self.assertRaises(FileExistsError):
+            xsk.seal(self.source, self.doc, "00001", "เพลง", "ศิลปิน",
+                     self.key, target)
+        self.assertEqual(target.read_bytes(), old)
 
     def test_reject_backward_timing_and_traversal(self):
         with self.assertRaises(ValueError):
