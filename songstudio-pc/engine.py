@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.61" if READY_BUNDLE else "0.2.8-Source-Preview"
-STATUS_BUILD = "361" if READY_BUNDLE else "208-SRC"
+STATUS_VERSION = "0.3.62" if READY_BUNDLE else "0.2.8-Source-Preview"
+STATUS_BUILD = "362" if READY_BUNDLE else "208-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -104,7 +104,7 @@ def any_active_jobs():
                    for item in ACTIVE_JOBS.values())
 
 def job_group(action):
-    if action in ("scan", "build", "xsk-stream", "json-pro-export",
+    if action in ("scan", "duplicates-scan", "duplicates-apply", "build", "xsk-stream", "json-pro-export",
                   "created-xsk", "pc-export", "download", "lyric-groups-scan",
                   "lyric-groups-replace", "lyric-groups-undo"):
         return "library"
@@ -272,7 +272,8 @@ PREFS = {
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
     "export_format": "xsk", "catalog_view": "changes", "code_style": "numeric", "code_length": "5", "oauth": "",
     "upload_folder": "", "lyric_source": "", "pc_export_folder": "", "xsk_folder": "",
-    "json_source": "", "json_destination": ""
+    "json_source": "", "json_destination": "",
+    "dup_source": "", "dup_destination": ""
 }
 PREFS.update({k: v for k, v in load_json(PREFS_FILE, {}).items() if k in PREFS and isinstance(v, str)})
 NOTES = load_json(NOTES_FILE, {})
@@ -511,6 +512,7 @@ LYRIC_ALIGNMENT = _module("lyric_alignment.py", "xstage_lyric_alignment")
 LYRIC_TEXT = _module("lyric_text_groups.py", "xstage_lyric_text_groups")
 HISTORY = _module("history_store.py", "xstage_history_store")
 FOLDER_UPLOAD = _module("folder_upload.py", "xstage_folder_upload")
+DUPLICATES = _module("song_duplicate.py", "xstage_song_duplicates")
 HISTORY_FILE = DATA / "edit-history.json"
 LYRIC_TEXT_INDEX = None
 LYRIC_TEXT_BACKUPS = DATA / "lyric-text-backups"
@@ -2117,7 +2119,34 @@ def build_preview(rows, mode):
 
 def execute_job(action, options, started):
     try:
-        if action == "scan":
+        if action == "duplicates-scan":
+            def dup_progress(stage, discovered, hashed, groups):
+                with LOCK:
+                    worker_job()["scannedFiles"] = discovered
+                    worker_job()["hashedFiles"] = hashed
+                    worker_job()["duplicateGroups"] = groups
+                update(
+                    (f"ค้นหาไฟล์เพลง {discovered:,} ไฟล์" if stage == "scan"
+                     else f"ตรวจ SHA-256 {hashed:,} ไฟล์ · กลุ่มซ้ำ {groups:,}"
+                          if stage == "hash"
+                     else f"ตรวจเพลงซ้ำครบแล้ว {discovered:,} ไฟล์"))
+            result = DUPLICATES.REGISTRY.scan(
+                str(options.get("source") or worker_prefs().get("dup_source") or ""),
+                cancelled=worker_cancel(), progress=dup_progress)
+            update(result["message"], result["fileCount"])
+        elif action == "duplicates-apply":
+            selected = options.get("selected")
+            result = DUPLICATES.REGISTRY.apply(
+                scan_id=options.get("scanId"), selected=selected,
+                operation=options.get("operation"),
+                destination=(options.get("destination")
+                             or worker_prefs().get("dup_destination")),
+                confirmed=options.get("confirmed") is True,
+                cancelled=worker_cancel(),
+                progress=lambda done, total, name: update(
+                    f"จัดการไฟล์ซ้ำ {done:,}/{total:,} · {name}", done))
+            update(result["message"], result["processed"])
+        elif action == "scan":
             full = options.get("full") is True
             update("กำลังตรวจคลังเพลงใหม่ทั้งหมด" if full else
                    "กำลังสแกนด่วน · ใช้ดัชนีเดิมที่บันทึกไว้")
@@ -2614,6 +2643,22 @@ def start_job(data):
         raise ValueError("ยกเลิกฟังก์ชันบันทึกเสียงผ่านไมโครโฟนแล้ว")
     _check_resource_capacity(action)
     validation = validate_build_request(data) if action == "build" else {}
+    if action == "duplicates-scan":
+        location = str(data.get("source") or PREFS.get("dup_source") or "")
+        if not location or not Path(location).expanduser().is_dir():
+            raise ValueError("กรุณาเลือกโฟลเดอร์ต้นทางสำหรับตรวจเพลงซ้ำ")
+        validation = {"total": 0}
+    if action == "duplicates-apply":
+        chosen = data.get("selected")
+        if (not isinstance(chosen, list) or not 1 <= len(chosen) <= 300
+                or any(not isinstance(item, str) for item in chosen)):
+            raise ValueError("เลือกไฟล์ซ้ำได้ครั้งละ 1–300 ไฟล์")
+        if data.get("confirmed") is not True or data.get("operation") not in ("move", "recycle"):
+            raise ValueError("ต้องยืนยันการย้ายหรือส่งไฟล์ซ้ำเข้าถังรีไซเคิล")
+        if data.get("operation") == "move" and not (
+                data.get("destination") or PREFS.get("dup_destination")):
+            raise ValueError("กรุณาเลือกโฟลเดอร์ปลายทางสำหรับย้ายไฟล์ซ้ำ")
+        validation = {"total": len(chosen)}
     if action == "xsk-stream":
         source = str(data.get("source") or PREFS.get("source") or "")
         target = str(data.get("xsk_folder") or PREFS.get("xsk_folder")
@@ -2795,7 +2840,7 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "soundfont", "oauth", "vocal"):
+    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "dup_source", "dup_destination", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
@@ -3483,6 +3528,13 @@ class Handler(BaseHTTPRequestHandler):
                     "soundfonts": font_list(), "presets": formats(),
                     "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
+            elif path == "/api/duplicates":
+                try:
+                    offset = int(query.get("offset", ["0"])[0])
+                    limit = int(query.get("limit", ["20"])[0])
+                    self._json(DUPLICATES.REGISTRY.page(offset=offset, limit=limit))
+                except (ValueError, TypeError) as exc:
+                    self._deny(str(exc), 400)
             elif path == "/api/history":
                 with LOCK:
                     self._json({"events": HISTORY.list_events(HISTORY_FILE)})
