@@ -19,6 +19,7 @@ from .library import (SongLibrary, SongQueue, QueueItem, SearchCancelled, MIDI_E
                       SUPPORTED, read_json, write_json, read_json_snapshot, JSON_UNSET, PlaylistImportError, scan_folder)
 from .lyrics import Lyrics, parse_lrc, decode_text, sidecar_lyrics
 from .playback import MidiPlayer, MediaPlayer, WavePlayer, WinMidi
+from .queue_warm import QueueWarmup, MiB
 
 BG = "#0b1120"
 PANEL = "#141e30"
@@ -120,6 +121,8 @@ class KaraokeApp(tk.Tk):
             self.settings.update(font_size=max(84, min(120, size)), lyric_layout_version=1)
         self.library = SongLibrary(self.data_dir / "songs.sqlite3")
         self.song_queue = SongQueue(self.data_dir / "queue.json")
+        self.queue_warmup = QueueWarmup()
+        self._last_memory_report = 0
         self.engine = None
         self.current_song = None
         self.current_item = None
@@ -253,6 +256,11 @@ class KaraokeApp(tk.Tk):
         ttk.Label(queue_heading, textvariable=self.queue_title, font=("Leelawadee UI", 12, "bold")).pack(side="left")
         self.auto_var = tk.BooleanVar(value=bool(self.settings.get("auto_next", True)))
         ttk.Checkbutton(queue_heading, text="เล่นต่ออัตโนมัติ", variable=self.auto_var).pack(side="right")
+        self.memory_var = tk.StringVar(value="RAM · กำลังตรวจสถานะ · เตรียมคิวแบบจำกัด")
+        self.memory_label = tk.Label(right, textvariable=self.memory_var, anchor="w",
+                                     justify="left", bg=PANEL, fg=TEAL,
+                                     font=("Leelawadee UI", 9))
+        self.memory_label.pack(fill="x", pady=(1, 5))
         self.queues = ttk.Treeview(right, columns=("number", "title", "singer", "setting"), show="headings", height=5)
         for name, label, width in (("number", "#", 36), ("title", "เพลง", 210), ("singer", "ผู้ร้อง", 110), ("setting", "คีย์ / เร็ว", 110)):
             self.queues.heading(name, text=label)
@@ -340,15 +348,61 @@ class KaraokeApp(tk.Tk):
             select = int(previous[0]) if previous else 0
         select = min(select, len(self.song_queue.items)-1) if self.song_queue.items else None
         self.queues.delete(*self.queues.get_children())
+        warm_paths = []
         for index, item in enumerate(self.song_queue.items):
             song = self.library.get(item.song_id)
+            if song and song.get("path"):
+                warm_paths.append(song["path"])
             self.queues.insert("", "end", iid=str(index), values=(index + 1, song["title"] if song else "ไม่พบเพลง",
                                   item.singer, f"{item.key:+} / {item.speed}%"))
         self.queue_title.set(f"คิวเพลง  ·  {len(self.song_queue.items)}")
+        if getattr(self, "queue_warmup", None):
+            self.queue_warmup.request(warm_paths)
+        self._update_memory_banner()
         if select is not None and self.queues.exists(str(select)):
             self.queues.selection_set(str(select))
             self.queues.focus(str(select))
             self.queues.see(str(select))
+
+    def _update_memory_banner(self):
+        """Show REAL Windows available RAM, and explain what is only a file size."""
+        warm = getattr(self, "queue_warmup", None)
+        banner = getattr(self, "memory_var", None)
+        if warm is None or banner is None:
+            return
+        data = warm.snapshot()
+        ram = data["ram"]
+        if ram:
+            available = ram["available"] / MiB / 1024
+            capacity = ram["total"] / MiB / 1024
+            level = data["level"]
+            prefix = f"RAM ว่างจริง {available:.1f}/{capacity:.1f} GB"
+        else:
+            level = "unknown"
+            prefix = "RAM ว่างจริง: Windows ไม่เปิดเผยข้อมูล"
+        active_files = self.settings.get("soundfont_audio", {})
+        fonts = active_files.get("fonts", []) if isinstance(active_files, dict) else []
+        if not fonts and self.settings.get("soundfont"):
+            fonts = [{"path": self.settings["soundfont"]}]
+        total_font = 0
+        for row in fonts[:16]:
+            try:
+                path = Path(row["path"])
+                if path.is_file() and not path.is_symlink():
+                    total_font += path.stat().st_size
+            except (OSError, TypeError, KeyError):
+                continue
+        sf = f" · SoundFont ไฟล์ {total_font/MiB:.0f} MB" if total_font else ""
+        banner.set(prefix + f" · เตรียมคิว {data['count']} เพลง "
+                   f"{data['bytes']/MiB:.2f} MB" + sf)
+        label = getattr(self, "memory_label", None)
+        if label is not None:
+            label.configure(fg=("#fca5a5" if level == "high" else
+                                "#fde68a" if level == "medium" else
+                                TEAL if level == "low" else MUTED))
+            label.configure(textvariable=banner)
+        # Native BASS owns font allocations; displayed SF value is the
+        # on-disk size, NOT a fabricated estimate of resident native RAM.
 
     def add_files(self):
         if self.scanning:
@@ -1279,6 +1333,10 @@ class KaraokeApp(tk.Tk):
     def _tick_once(self):
         if self.closing:
             return
+        now = time.monotonic()
+        if now - getattr(self, "_last_memory_report", 0) > 4:
+            self._last_memory_report = now
+            self._update_memory_banner()
         try:
             while True:
                 kind, data = self.messages.get_nowait()
@@ -1360,5 +1418,7 @@ class KaraokeApp(tk.Tk):
         if job is not None and hasattr(job,'workspace'):step(self,'ปิดงานค้นหน้าคลัง',job.workspace.close)
         step(self,'บันทึกตั้งค่า',self.save_settings)
         step(self,'บันทึกคิว',self.song_queue.save)
+        if getattr(self, "queue_warmup", None):
+            step(self,'คืนแคชเพลงรอ',self.queue_warmup.close)
         if self.engine:step(self,'ปิดระบบเล่นเสียง',self.engine.close)
         finish(self)
