@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.59" if READY_BUNDLE else "0.2.8-Source-Preview"
-STATUS_BUILD = "359" if READY_BUNDLE else "208-SRC"
+STATUS_VERSION = "0.3.60" if READY_BUNDLE else "0.2.8-Source-Preview"
+STATUS_BUILD = "360" if READY_BUNDLE else "208-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -4044,36 +4044,14 @@ def main():
         # Do not scan the selected song folder or start conversion on launch.
         # The user explicitly starts work by pressing "ตกลง".
         url = f"http://127.0.0.1:{PORT}/#auth={TOKEN}"
-        # Open a standalone application window when Edge is installed;
-        # fall back to the system's default browser otherwise.
-        edge = Path(os.environ.get("PROGRAMFILES(X86)", "")) / "Microsoft/Edge/Application/msedge.exe"
-        if not edge.is_file():
-            edge = Path(os.environ.get("PROGRAMFILES", "")) / "Microsoft/Edge/Application/msedge.exe"
-        try:
-            if edge.is_file():
-                # Full-size PC workspace on first launch. Reuse OS screen size
-                # rather than a fixed 1280x720 browser window.
-                flags = ["--new-window", "--start-maximized"]
-                if os.name == "nt":
-                    try:
-                        import ctypes
-                        cx = max(1280, ctypes.windll.user32.GetSystemMetrics(0))
-                        cy = max(720, ctypes.windll.user32.GetSystemMetrics(1))
-                        flags += [f"--window-size={cx},{cy}", "--window-position=0,0"]
-                    except (AttributeError, OSError):
-                        pass
-                # Dedicated Edge profile isolates the Song Studio app window
-                # from the user's normal Edge tabs, allowing safe auto-close.
-                profile = DATA / "edge-app-profiles" / str(os.getpid())
-                profile.mkdir(parents=True, exist_ok=True)
-                BROWSER_PROCESS = subprocess.Popen(
-                    [str(edge), "--user-data-dir=" + str(profile),
-                     *flags, "--app=" + url],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                webbrowser.open(url)
-        except Exception:
-            webbrowser.open(url)
+        if READY_BUNDLE:
+            # PC Ready uses its bundled Qt WebEngine. No external browser,
+            # extension onboarding page or normal Edge profile is opened.
+            from desktop_window import run_desktop
+            run_desktop(server, url, DATA, UI_ROOT / "app-icon.ico")
+            return
+        # Source-preview remains usable without a bundled Qt runtime.
+        webbrowser.open(url)
         server.serve_forever(poll_interval=0.25)
 
 if __name__ == "__main__":
