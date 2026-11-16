@@ -2434,6 +2434,14 @@ def execute_job(action, options, started):
                        "ไม่มีเพลงใหม่ · ยืนยันจาก Catalog แล้ว" if skipped_only else
                        "เสร็จสิ้น"),
                 detail=result.get("message", "เสร็จแล้ว"))
+        if worker_job()["state"] == "success":
+            try:
+                output_folder = completed_job_folder(action, result, worker_prefs())
+                if output_folder:
+                    with LOCK:
+                        worker_job()["outputFolder"] = output_folder
+            except (OSError, ValueError, KeyError):
+                pass
         if (action == "install-update" and result.get("launched")
                 and os.name == "nt" and READY_BUNDLE):
             # Leave enough time for the browser to receive the success result.
@@ -3204,6 +3212,34 @@ def job_snapshot(job_id=None):
     job.pop("started", None)
     return job
 
+def completed_job_folder(action, result, prefs):
+    """Return only a known, generated local output directory (not user input)."""
+    export = _song_export_module()
+    if action in ("xsk-stream", "created-xsk"):
+        value = result.get("output")
+        if value:
+            folder = Path(value)
+        else:
+            folder = export.songs_root(prefs.get("xsk_folder") or prefs["workspace"]) / "MIDI" / "XSK"
+    elif action == "json-pro-export":
+        folder = export.songs_root(prefs["json_destination"])
+    elif action == "build":
+        folder = export.songs_root(prefs["workspace"])
+    elif action == "pc-export":
+        folder = Path(result.get("destination") or prefs.get("pc_export_folder") or "")
+    elif action == "download":
+        folder = Path(result.get("path") or "")
+    elif action == "download-update":
+        folder = Path(result.get("path") or "").parent
+    else:
+        return None
+    # Resolve only existing directories, and do not treat the current
+    # directory as an output for missing/empty result paths.
+    if not str(folder).strip() or not folder.is_dir() or folder.is_symlink():
+        return None
+    return str(folder.resolve())
+
+
 def job_snapshots():
     with LOCK:
         ids = list(ACTIVE_JOBS)[-20:]
@@ -3816,6 +3852,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(GOOGLE.show_pending_login())
             elif path == "/api/jobs":
                 self._json(start_job(payload))
+            elif path == "/api/jobs/open-output":
+                job_id = payload.get("id")
+                if not isinstance(job_id, str) or not job_id:
+                    raise ValueError("กรุณาระบุเลขงานที่เสร็จแล้ว")
+                with LOCK:
+                    entry = ACTIVE_JOBS.get(job_id)
+                    if not entry:
+                        raise ValueError("ไม่พบงานนี้ หรือประวัติงานหมดอายุ")
+                    job = entry["job"]
+                    if job.get("state") != "success" or entry["thread"].is_alive():
+                        raise ValueError("ต้องรอให้งานเสร็จก่อนเปิดปลายทาง")
+                    folder = job.get("outputFolder")
+                if not isinstance(folder, str) or not folder or not Path(folder).is_dir():
+                    raise ValueError("งานนี้ไม่มีโฟลเดอร์ผลลัพธ์ในเครื่อง")
+                if os.name != "nt":
+                    raise ValueError("เปิดโฟลเดอร์อัตโนมัติรองรับ Windows เท่านั้น")
+                subprocess.Popen(["explorer.exe", folder],
+                                 stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+                self._json({"ok": True, "path": folder})
             elif path == "/api/jobs/cancel":
                 requested = payload.get("id")
                 if requested is not None and not isinstance(requested, str):
