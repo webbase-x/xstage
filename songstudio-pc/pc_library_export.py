@@ -110,7 +110,14 @@ def _files(source):
     if not (any((source / name).is_dir() for name in ("audio", "AUDIO", "VIDEO", "MIDI"))
             and any((source / name).is_dir() for name in ("lyrics", "LYRICS"))):
         raise ValueError("คลังเพลงต้องมีโฟลเดอร์เพลงและ Lyrics JSON ที่ใช้งานได้")
+    # Windows resolves AUDIO as audio on case-insensitive filesystems.
+    # Use the actual on-disk directory spelling to avoid visiting each tree
+    # twice and copying the same song twice in a single export.
+    present = {entry.name for entry in source.iterdir()
+               if entry.is_dir() and not entry.is_symlink()}
     for folder, suffixes in (*local, *typed):
+        if folder not in present:
+            continue
         base = source / folder
         if not base.is_dir() or base.is_symlink():
             continue
