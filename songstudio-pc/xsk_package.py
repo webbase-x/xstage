@@ -20,6 +20,7 @@ from pathlib import Path
 MAGIC = b"XSK1"
 MAX_SOURCE = 128 * 1024 * 1024
 MAX_DOC = 8 * 1024 * 1024
+MAX_ENCRYPTED = MAX_SOURCE + MAX_DOC + 16 * 1024 * 1024
 CODE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
@@ -73,6 +74,33 @@ def _hash_source(source):
     return dig.hexdigest()
 
 
+def _commit_sealed_file(staged, target):
+    """Atomic no-overwrite publish on NTFS and removable Windows volumes."""
+    try:
+        os.link(staged, target)
+    except FileExistsError:
+        raise
+    except OSError:
+        if os.name != "nt":
+            # Refuse an unsafe rename/copy fallback which could expose a
+            # partial encrypted package or overwrite someone else's file.
+            raise
+        # A Windows same-volume MoveFileEx WITHOUT REPLACE_EXISTING is
+        # atomic, supports e.g. exFAT where NTFS hardlinks are unavailable.
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        mover = kernel.MoveFileExW
+        mover.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD]
+        mover.restype = wintypes.BOOL
+        MOVEFILE_WRITE_THROUGH = 0x00000008
+        if not mover(str(staged), str(target), MOVEFILE_WRITE_THROUGH):
+            error = ctypes.get_last_error()
+            if error in (80, 183):
+                raise FileExistsError("XSK มีชื่อไฟล์ซ้ำ · ไม่เขียนทับ") from None
+            raise OSError(error, "ไม่สามารถเผยแพร่ XSK บนโฟลเดอร์นี้ได้")
+
+
 def seal(source, document, code, title, artist, key, target=None):
     """Return encrypted bytes; optionally publish atomically without overwrite."""
     try:
@@ -108,7 +136,7 @@ def seal(source, document, code, title, artist, key, target=None):
             check = open_package(temp, key)
             if check["songCode"] != code:
                 raise ValueError("ตรวจไฟล์ XSK หลังเข้ารหัสไม่ผ่าน")
-            os.link(temp, target)  # Atomic no-clobber; never overwrite existing file.
+            _commit_sealed_file(temp, target)  # Never overwrite existing XSK.
         finally:
             temp.unlink(missing_ok=True)
     return encrypted
@@ -117,8 +145,14 @@ def seal(source, document, code, title, artist, key, target=None):
 def open_package(data_or_path, key):
     """Authenticate and check the MIDI digest; no media extraction to disk."""
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    data = (Path(data_or_path).read_bytes() if isinstance(data_or_path, Path)
-            else bytes(data_or_path))
+    if isinstance(data_or_path, Path):
+        if data_or_path.is_symlink() or data_or_path.stat().st_size > MAX_ENCRYPTED:
+            raise ValueError("ไฟล์ XSK ไม่ปลอดภัยหรือมีขนาดใหญ่เกินกำหนด")
+        data = data_or_path.read_bytes()
+    else:
+        data = bytes(data_or_path)
+    if len(data) > MAX_ENCRYPTED:
+        raise ValueError("ไฟล์ XSK ใหญ่เกินขีดจำกัดที่รองรับ")
     if len(data) < 33 or not data.startswith(MAGIC):
         raise ValueError("ไฟล์ XSK ไม่ใช่รุ่นที่รองรับ")
     plain = AESGCM(key).decrypt(data[4:16], data[16:], MAGIC)
@@ -129,11 +163,15 @@ def open_package(data_or_path, key):
         documents = [n for n in names if n.endswith(".json")]
         if len(documents) != 1:
             raise ValueError("XSK ต้องมีข้อมูลเพลงหนึ่งรายการ")
+        if z.getinfo(documents[0]).file_size > MAX_DOC:
+            raise ValueError("ข้อมูล Lyrics JSON ภายใน XSK ใหญ่เกินขีดจำกัด")
         doc = json.loads(z.read(documents[0]))
         media = doc.get("audio") or {}
         if (doc.get("format") != "XSK" or doc.get("formatVersion") != 1
                 or media.get("file") not in names):
             raise ValueError("โครงสร้าง XSK ไม่ถูกต้อง")
+        if z.getinfo(media["file"]).file_size > MAX_SOURCE:
+            raise ValueError("ไฟล์ MIDI ภายใน XSK ใหญ่เกินขีดจำกัด")
         with z.open(media["file"]) as stream:
             dig = hashlib.sha256()
             for block in iter(lambda: stream.read(1024 * 1024), b""):
