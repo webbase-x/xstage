@@ -3491,9 +3491,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(module.inspect(
                     _song_export_module().songs_root(PREFS["workspace"]),
                     PREFS.get("pc_export_folder", ""), _song_export_module()))
-            elif path == "/api/json-pro/inspect":
-                folder = PREFS.get("json_source", "")
-                self._json(FOLDER_UPLOAD.report(folder, ncn=NCN))
             elif path == "/api/upload-folder/inspect":
                 self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module(), ncn=NCN))
             elif path == "/api/license/status":
