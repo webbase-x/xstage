@@ -533,3 +533,22 @@ button.preview-lyric-line{cursor:pointer}
 @media(prefers-reduced-motion:reduce){
   .activity-spinner,.working-pulse,.parallel-job strong:before{animation-duration:3s}
 }
+
+/* Song Studio PC: exact-file duplicate review, readable on desktop/mobile. */
+.duplicate-results { display:grid; gap:12px; margin:14px 0; min-width:0; }
+.duplicate-group { display:grid; gap:8px; padding:14px;
+  border:1px solid rgba(180,200,230,.25); border-radius:12px;
+  background:rgba(20,30,48,.38); min-width:0; }
+.duplicate-group > strong { font-size:.94rem; overflow-wrap:anywhere; }
+.duplicate-file { display:grid; grid-template-columns:22px minmax(0,1fr) auto;
+  gap:8px; align-items:center; padding:8px 10px; border-radius:8px;
+  background:rgba(255,255,255,.035); cursor:pointer; min-width:0; }
+.duplicate-file:has(input:disabled) { opacity:.78; cursor:default; }
+.duplicate-file input { width:16px; height:16px; }
+.duplicate-file-path { font-family:ui-monospace,Consolas,monospace;
+  font-size:.82rem; overflow-wrap:anywhere; min-width:0; }
+.duplicate-file small { font-size:.74rem; color:#abc3d5; white-space:normal; text-align:right; }
+@media(max-width:700px) {
+  .duplicate-file { grid-template-columns:22px minmax(0,1fr); }
+  .duplicate-file small { grid-column:2; text-align:left; }
+}
