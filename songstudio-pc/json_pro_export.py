@@ -128,7 +128,7 @@ def _document(row, code, export, ncn):
     return doc
 
 
-def _next_code(used, style, width, preferred):
+def _next_code(used, style, width, preferred, counters):
     """Allocate a single safe, globally unique code for the media/JSON pair."""
     preferred = str(preferred or "").strip().upper()
     if (style == "source" and re.fullmatch(r"[A-Za-z0-9]{1,12}", preferred)
@@ -139,7 +139,7 @@ def _next_code(used, style, width, preferred):
                 "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if style == "letters" else
                 "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     radix = len(alphabet)
-    number = 1
+    number = counters.get((style, width), 1)
     while number < radix ** width:
         n = number
         chars = []
@@ -149,6 +149,7 @@ def _next_code(used, style, width, preferred):
         code = "".join(reversed(chars))
         if code.casefold() not in used:
             used.add(code.casefold())
+            counters[(style, width)] = number + 1
             return code
         number += 1
     raise ValueError("รหัสเพลงเต็มช่วงที่เลือก · กรุณาเพิ่มจำนวนหลัก")
@@ -184,10 +185,9 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     seen = set()
     existing = set()
     used_codes = {str(row.get("code") or "").casefold() for row in prior if row.get("code")}
-    # Also reserve orphaned files so an interrupted run cannot overwrite them.
-    for folder in (root / "audio", root / "lyrics"):
-        if folder.is_dir():
-            used_codes.update(q.stem.casefold() for q in folder.rglob("*") if q.is_file())
+    code_counters = {}
+    # Unindexed complete pairs may be recovered after a crash; keep their codes
+    # available for strict content verification in _can_recover_pair.
     for record in prior:
         if not export.record_is_complete(root, record):
             continue
@@ -230,7 +230,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 skipped += 1
                 continue
             # Allocate after fingerprint deduplication; existing songs never change.
-            code = _next_code(used_codes, code_style, code_length, source_code)
+            code = _next_code(used_codes, code_style, code_length, source_code, code_counters)
             doc["songCode"] = code
             bucket = export.source_bucket(media.name)
             relative_audio = "audio/" + bucket + "/" + code + (
