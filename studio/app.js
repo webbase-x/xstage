@@ -3427,6 +3427,204 @@
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-folder').addEventListener('change',()=>{void inspectUploadFolder();});
 
+
+  // Duplicate media only: raw-byte equality, never merge lyrics or a catalog.
+  // All file selection is explicit; the first verified copy is never offered.
+  const duplicateSelected = new Set();
+  let duplicateScanId = '';
+  let duplicatePageIndex = 0;
+  let duplicatePageRows = [];
+  let duplicatePageCount = 0;
+  let duplicateRefreshedJob = '';
+  const DUPLICATE_PAGE_SIZE = 20;
+  const DUPLICATE_SELECTION_MAX = 300;
+
+  function duplicateUpdateButtons() {
+    const scanning = canLaunch('duplicates-scan');
+    const applying = canLaunch('duplicates-apply');
+    $('dup-scan').disabled = !scanning || !$('dup-source').value.trim();
+    $('dup-refresh').disabled = busy;
+    $('dup-select-page').disabled = busy || !duplicatePageRows.length ||
+      duplicateSelected.size >= DUPLICATE_SELECTION_MAX;
+    $('dup-clear').disabled = busy || duplicateSelected.size === 0;
+    $('dup-prev').disabled = busy || duplicatePageIndex <= 0;
+    $('dup-next').disabled = busy || (duplicatePageIndex + 1) * DUPLICATE_PAGE_SIZE >= duplicatePageCount;
+    $('dup-move').disabled = !applying || duplicateSelected.size === 0 ||
+      !$('dup-destination').value.trim();
+    $('dup-recycle').disabled = !applying || duplicateSelected.size === 0;
+    $('dup-selected-count').textContent = 'เลือก ' + fmtNum(duplicateSelected.size) +
+      ' / ' + DUPLICATE_SELECTION_MAX + ' ไฟล์';
+  }
+
+  function duplicateRender(report) {
+    const root = $('dup-results');
+    root.replaceChildren();
+    if (!report.ready) {
+      duplicateScanId = '';
+      duplicatePageRows = [];
+      duplicatePageCount = 0;
+      duplicateSelected.clear();
+      $('dup-summary').textContent = 'ยังไม่มีผลตรวจ · กดตรวจเพลงซ้ำก่อน';
+      $('dup-page').textContent = 'หน้า 0/0';
+      duplicateUpdateButtons();
+      return;
+    }
+    if (report.scanId !== duplicateScanId) {
+      duplicateSelected.clear();
+      duplicateScanId = report.scanId;
+    }
+    duplicatePageCount = report.groupCount || 0;
+    duplicatePageRows = report.groups || [];
+    $('dup-summary').textContent =
+      'ตรวจไฟล์เพลง ' + fmtNum(report.fileCount) +
+      ' · กลุ่มซ้ำ ' + fmtNum(report.groupCount) +
+      ' · สำเนาเกิน ' + fmtNum(report.duplicateFiles) +
+      ' · ขนาดสำเนาประมาณ ' + (report.potentialBytes / 1024 ** 3).toFixed(2) + ' GB' +
+      ' · ข้ามไฟล์ที่ไม่ใช่เพลง ' + fmtNum(report.ignored) +
+      (report.errors ? ' · อ่านไฟล์ไม่ได้ ' + fmtNum(report.errors) : '');
+    $('dup-page').textContent = 'หน้า ' + (duplicatePageCount ? duplicatePageIndex + 1 : 0) +
+      '/' + Math.ceil(duplicatePageCount / DUPLICATE_PAGE_SIZE);
+    if (!duplicatePageRows.length) {
+      const p = document.createElement('p');
+      p.className = 'hint';
+      p.textContent = 'ไม่พบไฟล์ซ้ำที่มี SHA-256 ตรงกันในหน้านี้';
+      root.appendChild(p);
+    }
+    for (const group of duplicatePageRows) {
+      const card = document.createElement('section');
+      card.className = 'duplicate-group';
+      const header = document.createElement('strong');
+      header.textContent = group.files.length + ' ไฟล์เหมือนกัน · ' +
+        (group.size / 1024 / 1024).toFixed(2) + ' MB/ไฟล์ · SHA-256 ' +
+        group.sha256.slice(0, 16) + '…';
+      card.appendChild(header);
+      for (const file of group.files) {
+        const label = document.createElement('label');
+        label.className = 'duplicate-file';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = duplicateSelected.has(file.id);
+        checkbox.dataset.duplicateId = file.id;
+        checkbox.disabled = file.keep || file.protected || busy;
+        checkbox.setAttribute('aria-label', 'เลือกไฟล์ซ้ำ ' + file.path);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            if (duplicateSelected.size >= DUPLICATE_SELECTION_MAX) {
+              checkbox.checked = false;
+              message('เลือกได้ครั้งละไม่เกิน ' + DUPLICATE_SELECTION_MAX + ' ไฟล์');
+              return;
+            }
+            duplicateSelected.add(file.id);
+          } else {
+            duplicateSelected.delete(file.id);
+          }
+          duplicateUpdateButtons();
+        });
+        const name = document.createElement('span');
+        name.className = 'duplicate-file-path';
+        name.textContent = file.path;
+        const hint = document.createElement('small');
+        hint.textContent = file.keep ? 'ไฟล์หลัก · เก็บไว้' :
+          file.protected ? 'อยู่ใน XStageSong · ป้องกันการย้าย/ลบ' : 'ไฟล์สำเนา · เลือกได้';
+        label.append(checkbox, name, hint);
+        card.appendChild(label);
+      }
+      root.appendChild(card);
+    }
+    duplicateUpdateButtons();
+  }
+
+  async function duplicateLoad() {
+    try {
+      const result = await api('/api/duplicates?offset=' +
+        (duplicatePageIndex * DUPLICATE_PAGE_SIZE) + '&limit=' + DUPLICATE_PAGE_SIZE);
+      duplicateRender(result);
+    } catch(error) {
+      message('อ่านผลตรวจเพลงซ้ำไม่สำเร็จ: ' + error.message);
+    }
+  }
+
+  async function duplicateScan() {
+    if (!canLaunch('duplicates-scan')) return message('มีงานตรวจหรือจัดการคลังเพลงกำลังทำอยู่');
+    if (!$('dup-source').value.trim()) return message('กรุณาเลือกโฟลเดอร์เพลงต้นทาง');
+    try {
+      await saveInputs(['dup-source']);
+      duplicateSelected.clear();
+      duplicatePageIndex = 0;
+      const started = await run('duplicates-scan', {source: $('dup-source').value.trim()});
+      if (started) $('dup-status').textContent =
+        'กำลังค้นหาไฟล์เพลง · เทียบขนาดก่อน ตรวจ SHA-256 เฉพาะไฟล์ที่มีโอกาสซ้ำ';
+    } catch(error) { message(error.message); }
+  }
+
+  async function duplicateApply(operation) {
+    if (!duplicateSelected.size || !duplicateScanId)
+      return message('กรุณาเลือกไฟล์สำเนาจากผลตรวจล่าสุด');
+    if (!canLaunch('duplicates-apply'))
+      return message('มีงานคลังเพลงกำลังทำอยู่ · กรุณาให้งานเดิมเสร็จก่อน');
+    let destination = '';
+    if (operation === 'move') {
+      destination = $('dup-destination').value.trim();
+      if (!destination) return message('กรุณาเลือกโฟลเดอร์ปลายทางสำหรับย้ายไฟล์ซ้ำ');
+      try { await saveInputs(['dup-destination']); }
+      catch(error) { return message(error.message); }
+    }
+    const count = duplicateSelected.size;
+    const warning = operation === 'move'
+      ? 'ย้ายสำเนาไปยังโฟลเดอร์:\\n' + destination +
+        '\\nระบบจะคัดลอกและตรวจ SHA-256 ให้ตรงก่อนลบสำเนาจากต้นทาง'
+      : 'ส่งสำเนาเข้าถังรีไซเคิลของ Windows (ไม่ใช่ลบถาวร)\\n' +
+        'สามารถกู้คืนจากถังรีไซเคิลได้ หาก Windows รองรับ';
+    if (!await confirmStudio(
+      'กำลังจัดการไฟล์สำเนา ' + count + ' ไฟล์\\n' + warning +
+      '\\n\\nยืนยันหรือไม่? ไฟล์หลักของแต่ละกลุ่มจะถูกเก็บไว้', 'ยืนยันจัดการเพลงซ้ำ')) return;
+    try {
+      const accepted = await run('duplicates-apply', {
+        scanId: duplicateScanId, selected: [...duplicateSelected],
+        operation, destination, confirmed: true,
+      });
+      if (accepted) $('dup-status').textContent =
+        'PC Engine รับงานแล้ว · ตรวจสอบเนื้อไฟล์อีกครั้งก่อนย้าย/ส่งเข้าถังรีไซเคิล';
+    } catch(error) { message(error.message); }
+  }
+
+  $('dup-scan').addEventListener('click', () => {void duplicateScan();});
+  $('dup-refresh').addEventListener('click', () => {void duplicateLoad();});
+  $('dup-select-page').addEventListener('click', () => {
+    for (const group of duplicatePageRows) for (const file of group.files) {
+      if (file.keep || file.protected) continue;
+      if (duplicateSelected.size >= DUPLICATE_SELECTION_MAX) break;
+      duplicateSelected.add(file.id);
+    }
+    duplicateRenderPageSelection();
+  });
+  function duplicateRenderPageSelection() {
+    // Preserve selection across pagination without rebuilding the source scan.
+    for (const input of $('dup-results').querySelectorAll('input[type="checkbox"]')) {
+      const id = input.dataset.duplicateId;
+      if (id) input.checked = duplicateSelected.has(id);
+    }
+    duplicateUpdateButtons();
+  }
+  $('dup-clear').addEventListener('click', () => {
+    duplicateSelected.clear();
+    duplicateRenderPageSelection();
+  });
+  $('dup-prev').addEventListener('click', () => {
+    if (duplicatePageIndex > 0) {
+      duplicatePageIndex--;
+      void duplicateLoad();
+    }
+  });
+  $('dup-next').addEventListener('click', () => {
+    if ((duplicatePageIndex + 1) * DUPLICATE_PAGE_SIZE < duplicatePageCount) {
+      duplicatePageIndex++;
+      void duplicateLoad();
+    }
+  });
+  $('dup-move').addEventListener('click', () => {void duplicateApply('move');});
+  $('dup-recycle').addEventListener('click', () => {void duplicateApply('recycle');});
+
   async function startJsonPro() {
     if(!canLaunch('json-pro-export') || !proEnabled)
       return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
