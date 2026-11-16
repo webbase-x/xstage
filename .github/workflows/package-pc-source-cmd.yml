@@ -9,6 +9,9 @@ on:
       - 'windows-pc/source/Test-X-Stage-Karaoke-PC.cmd'
       - 'windows-pc/source/README-CMD-SOURCE-PC.md'
       - '.github/workflows/package-pc-source-cmd.yml'
+      - 'windows-pc/source/karaoke/**'
+      - 'windows-pc/source/tests/test_xsk_playback.py'
+      - 'windows-pc/source/requirements*.txt'
 
 permissions:
   contents: read
@@ -26,6 +29,12 @@ jobs:
           test -f windows-pc/source/Run-X-Stage-Karaoke-PC.cmd
           test -f windows-pc/source/Test-X-Stage-Karaoke-PC.cmd
           python3 -m compileall -q windows-pc/source/karaoke windows-pc/source/main.py
+      - name: Verify XSK authenticated playback and legacy MIDI compatibility
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check 'cryptography==50.0.2'
+          cd windows-pc/source
+          python3 -m unittest tests.test_xsk_playback -v
       - name: Create source ZIP and SHA256
         shell: bash
         run: |
