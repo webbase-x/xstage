@@ -41,7 +41,7 @@
   const tabNames = {
     create: ['MIDI to .XSK', 'เลือกต้นทาง ปลายทาง จำนวนหลักรหัสและสร้างโดยตรวจเพลงซ้ำ'],
     'ai-lyrics': ['Lyrics AI', 'นำเข้าเสียง/วิดีโอ · อ่านคำร้องจากไฟล์หรือสร้างด้วย AI · แก้เวลา · พรีวิว'],
-    'json-pro': ['Lyrics JSON · Pro', 'ส่งออกเสียงต้นฉบับหรือแปลงพร้อม Lyrics JSON และ Catalog'],
+    'json-pro': ['MIDI to Lyrics JSON', 'Pro · ส่งออก MIDI/เพลงพร้อม Lyrics JSON และ Catalog'],
     'lyric-head-tail': ['แก้ไข Lyrics JSON', '2 บรรทัดแรกและท้าย · จัดกลุ่ม · แทนที่ · ย้อนคืน'],
     upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
     'pc-export': ['นำเข้า X-Stage Karaoke PC', 'นำเข้า AUDIO + LYRICS พร้อมสร้าง/อัปเดต songs.sqlite3 ตาม Karaoke PC'],
@@ -3308,7 +3308,7 @@
     const yes=await confirmStudio('ส่งออก '+fmtNum(report.ready)+' เพลงจาก '+report.folder+
       '\\nไปที่ '+prefs.json_destination+'\\nรูปแบบ: '+format+
       '\\nตรวจ SHA-256 กันซ้ำ ไม่แก้ไฟล์ต้นฉบับ และไม่เขียนทับไฟล์เดิม',
-      'ยืนยันส่งออก Lyrics JSON Pro');
+      'ยืนยัน MIDI to Lyrics JSON');
     if(!yes)return;
     $('json-pro-report').textContent='กำลังเริ่มส่งออก '+fmtNum(report.ready)+' เพลง · ดูความคืบหน้าที่แผงงาน';
     await run('json-pro-export',{format});
