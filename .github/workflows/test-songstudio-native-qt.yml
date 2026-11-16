@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - feature/songstudio-native-qt-desktop-360
+      - feature/songstudio-fast-json-workflows-361
   pull_request:
     paths:
       - "songstudio-pc/**"
       - "scripts/build_songstudio_ready.ps1"
       - "scripts/test_songstudio_native_desktop.py"
+      - "scripts/test_songstudio_json_source_stream.py"
 
 permissions:
   contents: read
@@ -24,6 +26,8 @@ jobs:
         run: |
           python -m compileall -q songstudio-pc scripts
           if ($LASTEXITCODE -ne 0) { throw "Syntax validation failed" }
+          python -m unittest discover -s scripts -p test_songstudio_json_source_stream.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Incremental JSON source regression failed' }
           python -m unittest discover -s scripts -p test_songstudio_native_desktop.py -v
           if ($LASTEXITCODE -ne 0) { throw "Native desktop contract failed" }
       - name: Verify Windows QtWebEngine wheels and imports
@@ -52,20 +56,20 @@ jobs:
       - name: Validate offline conversions
         shell: powershell
         run: |
-          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.60-build360'
+          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.61-build361'
           & (Join-Path $bundle '.runtime/python/python.exe') scripts/test_songstudio_ready.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Offline Ready runtime conversion regression failed' }
       - name: Exercise real bundled Qt desktop startup (offscreen CI)
         shell: powershell
         run: |
-          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.60-build360'
+          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.61-build361'
           python scripts/test_songstudio_native_runtime.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Packaged native Qt Engine startup failed' }
       - name: Upload candidate ZIP for review
         uses: actions/upload-artifact@v6
         with:
-          name: SongStudio-PC-Native-Qt-v0.3.60-build360-CANDIDATE
+          name: SongStudio-PC-Native-Qt-v0.3.61-build361-CANDIDATE
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.60-build360.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.60-build360.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.61-build361.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.61-build361.zip.sha256
           retention-days: 7
