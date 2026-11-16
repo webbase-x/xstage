@@ -217,14 +217,14 @@ assert.equal(studioCueWindows([
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
 for (const id of ['json-pro-source','json-pro-destination','json-pro-format',
-                 'json-pro-inspect','json-pro-start','json-pro-report',
+                 'json-pro-start','json-pro-report',
                  'xsk-build-folder']) {
   assert.ok(html.includes('id="'+id+'"'), 'Missing next-release workflow field: '+id);
 }
 assert.ok(html.includes('data-tab="json-pro"') && html.includes('id="tab-json-pro"'),
   'Lyrics JSON Pro needs a separate navigation tab and workspace');
 assert.ok(js.includes("run('json-pro-export',{format,code_style,code_length:String(code_length)})") &&
-          js.includes("/api/json-pro/inspect") &&
+          !js.includes("/api/json-pro/inspect") &&
           js.includes("saveInputs(['json-pro-code-style','json-pro-code-length'])"),
   'Lyrics JSON Pro must pass format, filename style and code length to the local PC Engine');
 assert.ok(js.includes("/api/ai-lyrics-source?id="),
