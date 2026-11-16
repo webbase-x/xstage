@@ -345,7 +345,7 @@ class Importer {
     this.controller=null;this.folderHandle=null;this.saved=null;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.dom={};
     for(const key of ['open','dialog','close','pick','input','scan','start','pause','resume','cancel',
-      'allow-create','xsk-consent','xsk-password',
+      'allow-create',
       'source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
     this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
@@ -570,24 +570,8 @@ class Importer {
     this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
-    let xskKey=null;
-    if(this.plan.xsks.length){
-      try{
-        if(this.plan.accessKeys.length!==1)
-          fail('พบ XSK แต่ต้องมีไฟล์ XStageSong-access.xskkey เพียงหนึ่งไฟล์ในโฟลเดอร์ที่เลือก');
-        if(!this.dom['xsk-consent']?.checked)
-          fail('ต้องยืนยันว่าต้องการถอด XSK และส่ง MIDI + Lyrics JSON ไปยัง Google Drive ส่วนตัว');
-        const password=this.dom['xsk-password']?.value||'';
-        if(!scope.XStageXsk)fail('ยังไม่โหลดตัวอ่าน XSK ของเบราว์เซอร์');
-        xskKey=await scope.XStageXsk.unlockAccess(this.plan.accessKeys[0].file,password);
-      }catch(error){
-        this.running=false;this.controller=null;this.refreshButtons();
-        this.status('ไม่สามารถเปิดสิทธิ์ XSK: '+error.message);
-        return;
-      }finally{
-        if(this.dom['xsk-password'])this.dom['xsk-password'].value='';
-      }
-    }
+    if(this.plan.xsks.length&&!scope.XStageXsk)
+      fail('ยังไม่โหลดตัวอ่าน XSK2 ของเบราว์เซอร์');
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
     drive.signal=()=>this.controller.signal;
     try{
@@ -702,9 +686,9 @@ class Importer {
         let item=originalItem;
         try{
           if(item.isXsk){
-            const opened=await scope.XStageXsk.openPackage(item.file,xskKey);
-            // Decrypt in memory. Only the canonical MIDI+JSON pair is ever
-            // uploaded into the existing private Drive v4 catalog.
+            const opened=await scope.XStageXsk.openPackage(item.file);
+            // XSK2 is unencrypted. Validate ZIP, metadata and SHA-256 locally;
+            // upload only its canonical MIDI+JSON into Drive v4 catalog.
             item={...item,isMidi:true,code:opened.code,kind:'XSK',
               midi:{file:opened.midi},json:{file:opened.lyrics}};
           }
