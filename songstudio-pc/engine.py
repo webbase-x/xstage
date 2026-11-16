@@ -2663,6 +2663,13 @@ def start_job(data):
         thread = threading.Thread(target=bound_worker, daemon=True,
                                   name="xstage-studio-" + action + "-" + job_id[:6])
         with LOCK:
+            # Keep a bounded recent history; never remove a live worker.
+            if len(ACTIVE_JOBS) > 30:
+                for old_id, old_entry in list(ACTIVE_JOBS.items()):
+                    if (len(ACTIVE_JOBS) <= 25):
+                        break
+                    if not old_entry["thread"].is_alive():
+                        ACTIVE_JOBS.pop(old_id, None)
             ACTIVE_JOBS[job_id] = {"job": job_data, "cancel": cancel_event,
                                    "thread": thread, "group": job_group(action),
                                    "process": None}
