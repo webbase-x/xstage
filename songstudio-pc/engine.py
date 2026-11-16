@@ -3226,7 +3226,10 @@ def completed_job_folder(action, result, prefs):
     elif action == "build":
         folder = export.songs_root(prefs["workspace"])
     elif action == "pc-export":
-        folder = Path(result.get("destination") or prefs.get("pc_export_folder") or "")
+        value = result.get("destination") or prefs.get("pc_export_folder")
+        if not isinstance(value, str) or not value.strip():
+            return None
+        folder = Path(value)
     elif action in ("download", "download-update"):
         value = result.get("path")
         if not isinstance(value, str) or not value.strip():
