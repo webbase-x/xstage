@@ -216,6 +216,11 @@ class GoogleDrive:
         self.secret_file = self.data / "google-auth.dpapi"
         self.get_oauth_path = get_oauth_path
         self.lock = threading.RLock()
+        # A status poll must never wait behind a slow Google token refresh.
+        # This contains only public UI state, never OAuth tokens or secrets.
+        self._status_snapshot = {"configured": False, "connected": False,
+                                 "email": "", "error": "", "scope": SCOPE,
+                                 "config_source": "missing"}
         self.refresh_token = ""
         self.access_token = ""
         self.access_expires = 0.0
@@ -262,21 +267,28 @@ class GoogleDrive:
         return str(output)
 
     def status(self):
-        with self.lock:
+        # Google token() holds this lock across its remote refresh request.
+        # The local UI must remain responsive while Google is slow/offline.
+        if not self.lock.acquire(blocking=False):
+            return dict(self._status_snapshot)
+        try:
             try:
                 client = self.client_config()
-                configured = True
                 client_matches = bool(self.refresh_token) and client["client_id"] == self.client_id
                 error = (self.last_error if client_matches or not self.refresh_token
                          else "OAuth Client เปลี่ยนแล้ว กรุณาลงชื่อเข้าใช้ใหม่")
-                return {"configured": configured, "connected": client_matches,
-                        "email": self.email if client_matches else "",
-                        "error": error, "scope": SCOPE,
-                        "config_source": ("user" if Path(self.get_oauth_path()) ==
-                                          self.data / "oauth-client.json" else "bundled")}
+                result = {"configured": True, "connected": client_matches,
+                          "email": self.email if client_matches else "",
+                          "error": error, "scope": SCOPE,
+                          "config_source": ("user" if Path(self.get_oauth_path()) ==
+                                            self.data / "oauth-client.json" else "bundled")}
             except GoogleError as exc:
-                return {"configured": False, "connected": False, "email": "",
-                        "error": str(exc), "scope": SCOPE, "config_source": "missing"}
+                result = {"configured": False, "connected": False, "email": "",
+                          "error": str(exc), "scope": SCOPE, "config_source": "missing"}
+            self._status_snapshot = result
+            return dict(result)
+        finally:
+            self.lock.release()
 
     def _save(self):
         payload = _json_bytes({
