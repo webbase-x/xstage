@@ -228,4 +228,17 @@ assert.ok(js.includes("run('json-pro-export',{format})") &&
   'Lyrics JSON Pro must reach the existing local PC Engine');
 assert.ok(js.includes("/api/ai-lyrics-source?id="),
   'Explicit read-from-file control must fetch the real source metadata');
+for (const id of ['xsk-stream-build','xsk-stream-code-length',
+                 'xsk-stream-code-style','xsk-stream-status']) {
+  assert.ok(html.includes('id="'+id+'"'), 'Missing automatic MIDI XSK field '+id);
+}
+assert.ok(js.includes("run('xsk-stream',{") &&
+          js.includes("classList.toggle('xsk-auto-mode',directXsk)") &&
+          js.includes("saveInputs(['create-source','xsk-build-folder'"),
+  'MIDI XSK must start its bounded scanner from the folder without manual song selection');
+const streamPackage=fs.readFileSync('songstudio-pc/xsk_stream.py','utf8');
+assert.ok(streamPackage.includes('queue.Queue(maxsize=max_batches)') &&
+          streamPackage.includes('def produce():') &&
+          streamPackage.includes('def consume():'),
+  'Producer/consumer MIDI queue must have a hard bounded backlog');
 console.log('PASS: PC/Web Control UI syntax, bulk multi-select, lyric-body search, AI and Drive controls.');
