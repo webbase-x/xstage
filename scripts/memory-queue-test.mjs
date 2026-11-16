@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const memory=fs.readFileSync(new URL('../memory-budget.js',import.meta.url),'utf8');
 const handlers=new Map(),timers=new Map();
-let timerId=0,downloads=[],renders=0,unpacks=0;
+let timerId=0,downloads=[],renders=0,preparedXsk=0;
 const media=(id,size)=>({fileId:id,size});
 const audio={code:'001',title:'เพลงเสียง',artist:'นักร้อง',audio:media('a1',1024),lyrics:media('j1',100)};
 const video={code:'002',title:'เพลงวิดีโอ',artist:'นักร้อง',audio:media('v1',1024),lyrics:media('j2',100)};
@@ -38,7 +38,7 @@ const sandbox={
       parseMidi:()=>({duration:1}),
       render:async()=>{renders++;return {audio:wav}}
     },
-    XStageXsk:{openPackage:async()=>{unpacks++;return {
+    XStageXsk:{openPackage:async()=>{return {
       code:'004',document:{...lyrics,code:'004',title:'เพลง XSK',artist:'นักร้อง'},
       midi:new Blob(['MIDI'])}}},
   },
@@ -46,7 +46,7 @@ const sandbox={
     arrayBuffer:async()=>Uint8Array.of(1,2,3).buffer,
     headers:{get:()=>null},body:{cancel:async()=>{}}}},
   privateJson:async()=>lyrics,
-  prepareXskPlayback:async(song,token)=>({song,token,blob:wav,lyrics}),
+  prepareXskPlayback:async(song,token)=>{preparedXsk++;return {song,token,blob:wav,lyrics};},
   renderQueue:()=>{},
   getFileId:r=>r?.fileId||''
 };
@@ -78,9 +78,10 @@ prepared=await sandbox.prepareQueuedSong(midi,'t',controller.signal);
 assert.equal(prepared.blob.size,wav.size);
 prepared=await sandbox.prepareQueuedSong(xsk,'t',controller.signal);
 assert.equal(prepared.blob.size,wav.size);
-assert.ok(downloads.includes('v1')&&downloads.includes('a1')&&downloads.includes('m1')&&downloads.includes('x1'));
-assert.equal(unpacks,1);
-assert.equal(renders,2);
+assert.ok(downloads.includes('v1')&&downloads.includes('a1')&&downloads.includes('m1'),
+  'ordinary queued audio/video/MIDI must use their source media');
+assert.equal(preparedXsk,1,'XSK queue must delegate to verified XSK preparation');
+assert.equal(renders,1,'MIDI queue renders once; mocked XSK has its own preparation path');
 assert.equal(sandbox.window.XStageMemory.plan({fontBytes:3*1048576,queuedBytes:100*1048576}).level,'high');
 state.queuePreparedCache.set(audio,{song:audio,token:'t',blob:file,bytes:1024});
 state.queuePreparedCache.set(video,{song:video,token:'t',blob:file,bytes:1024});
