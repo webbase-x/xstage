@@ -157,7 +157,8 @@ def _next_code(used, style, width, preferred, counters):
 
 def export_folder(source_folder, destination_folder, *, output_format, export, scanner,
                    ncn=None, convert=None, cancelled=None, progress=None,
-                   code_style="numeric", code_length=5, scan_progress=None):
+                   code_style="numeric", code_length=5, scan_progress=None,
+                   source_stream=None):
     """Create a local Karaoke-compatible catalog; never publish to Google Drive.
 
     output_format is a constrained FFmpeg output extension or 'original'.
@@ -178,10 +179,15 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     root_real = root.resolve()
     if src_real == root_real or src_real in root_real.parents or root_real in src_real.parents:
         raise ValueError("ต้นทางและปลายทางต้องแยกจากกัน เพื่อไม่ให้อ่านหรือเขียนวนทับคลังเดิม")
-    # Inspect only once. The confirmation button starts this worker directly;
-    # a separate preflight scan would double I/O on large music folders.
-    inspection = scanner.scan(str(source), ncn=ncn, progress=scan_progress)
+    # Stream the current song from the source code/filename directly.
+    # Legacy callers may still supply the old full scanner for compatibility.
+    # No whole-library pairing pass, fabricated Lyrics JSON, or upfront count.
+    inspection = (source_stream(str(source), ncn=ncn, progress=scan_progress,
+                                cancelled=cancelled)
+                  if source_stream is not None
+                  else scanner.scan(str(source), ncn=ncn, progress=scan_progress))
     entries = inspection["complete"]
+    known_total = None if source_stream is not None else len(entries)
     root.mkdir(parents=True, exist_ok=True)
     prior = export.existing_records(root)
     seen = set()
@@ -210,8 +216,9 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         seen.add((origin.get("sha256"), origin.get("outputFormat"), lyric_hash))
     created = skipped = errors = 0
     issues = []
-    staged_records = []
+    examined = 0
     for index, item in enumerate(entries, 1):
+        examined = index
         if cancelled is not None and cancelled.is_set():
             raise RuntimeError("ยกเลิกการส่งออกแล้ว · คงไฟล์ที่สำเร็จไว้สำหรับเริ่มต่อ")
         media = next((path for path, _ in item["files"]
@@ -221,12 +228,14 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             continue
         final_audio = final_lyrics = None
         try:
-            source_hash = _fingerprint(media)
             source_code = media.stem.strip()
             if not source_code or len(source_code) > 140:
                 raise ValueError("ชื่อเพลงต้นทางไม่สามารถใช้เป็นรหัสได้")
+            # Validate actual source cues BEFORE hashing/copying media. Invalid
+            # source songs need no costly SHA-256 read of a large audio file.
             doc = _document(item, source_code, export, ncn)
             lyric_hash = _lyrics_digest(doc)
+            source_hash = _fingerprint(media)
             identity = "json-pro/" + source_hash + "/" + output_format + "/" + lyric_hash[:24]
             if (source_hash, output_format, lyric_hash) in seen or identity in existing:
                 skipped += 1
@@ -328,29 +337,29 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                                          "outputFormat": output_format,
                                          "lyricsSha256": lyric_hash}}
             export.append_journal(root, record)
-            staged_records.append(record)
             existing.add(identity)
             seen.add((source_hash, output_format, lyric_hash))
             created += 1
         except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             errors += 1
-            issues.append({"name": item["name"], "reason": str(exc)[:200]})
+            if len(issues) < 50:
+                issues.append({"name": item["name"], "reason": str(exc)[:200]})
         if progress is not None:
-            progress(index, len(entries), {"created": created, "skipped": skipped,
+            progress(index, known_total, {"created": created, "skipped": skipped,
                                             "errors": errors})
     pending = export.journal_records(root)
     if pending:
         export.publish_batch(root, pending)
         export.clear_published_journal(root)
-    if not entries:
+    if examined == 0:
         raise ValueError("ไม่พบเพลงที่มีเนื้อร้องพร้อมเวลาในต้นทาง")
     if not created and not skipped and errors:
         raise ValueError("ไม่มีไฟล์ที่ส่งออกสำเร็จ: " +
                          "; ".join(item["reason"] for item in issues[:3]))
     return {"created": created, "skipped": skipped, "errors": errors,
-            "incomplete": len(inspection["incomplete"]),
-            "unsupported": len(inspection["unsupported"]),
-            "total": len(entries), "output": str(root), "issues": issues[:50],
+            "incomplete": inspection.get("incompleteCount", len(inspection["incomplete"])),
+            "unsupported": inspection.get("unsupportedCount", len(inspection["unsupported"])),
+            "total": examined, "output": str(root), "issues": issues[:50],
             "message": (f"ส่งออก Lyrics JSON สำเร็จ {created} เพลง · ข้ามซ้ำ {skipped}"
-                        f" · ผิดพลาด {errors} · ไม่ครบ {len(inspection['incomplete'])}"
+                        f" · ผิดพลาด {errors} · ไม่ครบ {inspection.get('incompleteCount', len(inspection['incomplete']))}"
                         f" · ปลายทาง {root}")}
