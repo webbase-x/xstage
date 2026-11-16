@@ -63,6 +63,19 @@ class CreatedXskTests(unittest.TestCase):
             self.root, keys, self.export, self.created, self.package,
             self.codes, self.key, destination_root=dest)
 
+    def test_xsk_uses_product_publisher_without_windows_personal_identity(self):
+        selected = self.song("00012", b"P")
+        result = self.build([selected])
+        self.assertEqual(result["created"], 1)
+        file = self.root / "MIDI" / "XSK" / "0" / "00012.xsk"
+        document = self.package.open_package(file, self.key)
+        self.assertEqual(document["createdBy"], "X-Stage Song Studio")
+        self.assertEqual(document["publisher"], "X-Stage Song Studio")
+        self.assertEqual(document["artist"], "XStage")
+        for forbidden in ("owner", "computer", "userName", "machineName",
+                          "hostname", "windowsUser"):
+            self.assertNotIn(forbidden, document)
+
     def test_first_export_preserves_code_and_duplicate_midi_is_skipped(self):
         first = self.song("00002", b"A")
         r1 = self.build([first])
