@@ -23,7 +23,8 @@
       </div>
       <div class="edition"><span class="small-dot"></span> PC + WEB · SAME STUDIO</div>
       <nav id="main-navigation" class="navigation" aria-label="ส่วนงาน">
-        <button class="nav-button active" data-tab="create" aria-current="page"><span class="nav-glyph" aria-hidden="true">♫</span><span>MIDI to .XSK<small>เลือกโฟลเดอร์แล้วตกลง</small></span></button>
+        <button class="nav-button active" data-tab="duplicates" aria-current="page"><span class="nav-glyph" aria-hidden="true">≡</span><span>ตรวจเพลงซ้ำ<small>ไฟล์เพลงทุกชนิด · SHA-256 · ลบ/ย้าย</small></span></button>
+        <button class="nav-button" data-tab="create"><span class="nav-glyph" aria-hidden="true">♫</span><span>MIDI to .XSK<small>เลือกโฟลเดอร์แล้วตกลง</small></span></button>
         <button class="nav-button" data-tab="json-pro"><span class="nav-glyph" aria-hidden="true">▧</span><span>MIDI to Lyrics JSON<small>Pro · MIDI/เสียง + JSON พร้อมเวลา</small></span></button>
         <button class="nav-button" data-tab="ai-lyrics"><span class="nav-glyph" aria-hidden="true">✦</span><span>Lyrics AI<small>เสียง/วิดีโอ · อ่านแท็ก/AI · เวลา · พรีวิว</small></span></button>
         <button class="nav-button" data-tab="lyric-head-tail"><span class="nav-glyph" aria-hidden="true">⇄</span><span>แก้ไข Lyrics JSON<small>2 บรรทัดแรก/ท้าย · จัดกลุ่ม · สำรอง · Undo</small></span></button>
@@ -40,7 +41,7 @@
 
     <div class="workspace">
       <header class="topbar">
-        <div class="topbar-heading"><div class="eyebrow">YOUR MUSIC. YOUR CONTROL.</div><h1 id="page-title">สร้างเพลงใหม่</h1><p id="page-subtitle">เตรียมไฟล์ให้พร้อมในเครื่องก่อนเริ่มสร้างเพลงทุกครั้ง</p></div>
+        <div class="topbar-heading"><div class="eyebrow">YOUR MUSIC. YOUR CONTROL.</div><h1 id="page-title">ตรวจเพลงซ้ำ</h1><p id="page-subtitle">ตรวจเฉพาะไฟล์เพลงจากเนื้อไฟล์จริง · เลือกย้ายหรือส่งเข้าถังรีไซเคิลด้วยตนเอง</p></div>
         <div class="topbar-actions">
           <span id="google-badge" class="google-badge offline"><span class="small-dot"></span> ยังไม่เชื่อม Google</span>
           <button id="open-web" class="button ghost" type="button" title="เปิดหน้า UI เดียวกันในเบราว์เซอร์">▣ เปิด Web Control</button>
@@ -54,7 +55,51 @@
           <div><strong>Google Login เปิดบนเบราว์เซอร์แล้ว</strong><p>โปรดดูหน้าต่าง Google ที่เปิดขึ้นด้านหน้า เลือกบัญชี Google และกด <b>อนุญาต</b> เพื่อเชื่อม Google Drive กับ Song Studio PC หากไม่เห็นหน้า Google ให้กดปุ่มด้านขวา</p></div>
           <button id="google-login-focus" type="button" class="button primary">↗ เปิด Google Login อีกครั้ง</button>
         </div>
-        <section id="tab-create" class="tab active" aria-labelledby="page-title">
+        <section id="tab-duplicates" class="tab active" aria-labelledby="page-title">
+          <div class="section-top"><div><div class="eyebrow">EXACT MUSIC FILE DUPLICATES</div>
+            <h2>ตรวจเพลงซ้ำ</h2>
+            <p>ตรวจเฉพาะไฟล์เพลง MIDI, XSK, เสียงและวิดีโอทุกชนิดที่รองรับ · เทียบขนาดและ SHA-256 ของเนื้อไฟล์จริง ไม่ใช่แค่ชื่อไฟล์</p>
+          </div><span class="chip">LOCAL PC ONLY</span></div>
+          <article class="panel">
+            <label for="dup-source">โฟลเดอร์ต้นทางที่ต้องการตรวจ (รวมโฟลเดอร์ย่อย)</label>
+            <div class="path-row"><input id="dup-source" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์เพลง"><button type="button" class="button ghost" data-pick="dup_source">เลือกโฟลเดอร์</button></div>
+            <div class="toolbar">
+              <button id="dup-scan" class="button primary" type="button">⌕ ตรวจเพลงซ้ำ</button>
+              <button id="dup-refresh" class="button ghost" type="button">แสดงผลตรวจล่าสุด</button>
+            </div>
+            <p class="hint">ข้าม JSON, LRC, LYR, CUR, SoundFont, DB และไฟล์อื่นที่ไม่ใช่เพลง · เพลงเดียวกันแต่เข้ารหัสต่างกันจะไม่ถูกนับเป็นไฟล์ซ้ำแบบไบต์ต่อไบต์</p>
+            <pre id="dup-status" class="xsk-pro-output" role="status" aria-live="polite">ยังไม่ได้ตรวจเพลงซ้ำ · เลือกโฟลเดอร์แล้วกดตรวจเพลงซ้ำ</pre>
+          </article>
+          <article class="panel">
+            <div class="section-heading"><div><h3>รายการไฟล์เพลงซ้ำที่ตรวจพบ</h3>
+              <p>ไฟล์แรกของแต่ละกลุ่มจะถูกเก็บไว้เสมอ · เลือกสำเนาที่จะจัดการเอง ไม่ลบอัตโนมัติ</p>
+            </div></div>
+            <div id="dup-summary" class="hint">ยังไม่มีผลตรวจ</div>
+            <div class="toolbar">
+              <button id="dup-select-page" type="button" class="button ghost">เลือกสำเนาทั้งหมดในหน้านี้</button>
+              <button id="dup-clear" type="button" class="button ghost">ยกเลิกการเลือก</button>
+              <span id="dup-selected-count" class="hint">เลือก 0 ไฟล์</span>
+            </div>
+            <div id="dup-results" class="duplicate-results" aria-live="polite"></div>
+            <div class="toolbar">
+              <button id="dup-prev" type="button" class="button ghost">← ก่อนหน้า</button>
+              <span id="dup-page" class="hint">หน้า 0/0</span>
+              <button id="dup-next" type="button" class="button ghost">ถัดไป →</button>
+            </div>
+          </article>
+          <article class="panel">
+            <h3>จัดการไฟล์ที่เลือก</h3>
+            <label for="dup-destination">โฟลเดอร์ปลายทางสำหรับย้ายสำเนา (อยู่นอกโฟลเดอร์ต้นทาง)</label>
+            <div class="path-row"><input id="dup-destination" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์เก็บไฟล์ซ้ำที่ย้ายออก"><button type="button" class="button ghost" data-pick="dup_destination">เลือกปลายทาง</button></div>
+            <div class="toolbar">
+              <button id="dup-move" type="button" class="button primary">ย้ายไฟล์ซ้ำที่เลือก</button>
+              <button id="dup-recycle" type="button" class="button ghost">ส่งไฟล์ซ้ำที่เลือกเข้าถังรีไซเคิล</button>
+            </div>
+            <p class="hint">ทุกคำสั่งต้องยืนยันก่อน · ตรวจ SHA-256 ซ้ำก่อนย้าย/ลบ · ไม่แตะไฟล์เนื้อร้องหรือ JSON · ไม่อนุญาตลบ/ย้ายเพลงในคลัง XStageSong ที่ฐานข้อมูลอาจใช้งานอยู่ · ลบจะส่งไป Windows Recycle Bin ไม่ลบถาวร</p>
+          </article>
+        </section>
+
+        <section id="tab-create" class="tab" aria-labelledby="page-title">
           <div class="create-assistant panel" aria-label="ตัวช่วยสร้างเพลงใหม่ทีละขั้นตอน">
             <div class="create-assistant-heading">
               <div><div class="eyebrow">MIDI TO .XSK · STEP BY STEP</div><h2>MIDI to .XSK</h2><p>เลือกโฟลเดอร์ MIDI/KAR → เลือกเพลง → ตรวจเสียงและคำร้อง → กำหนดรหัส 1–12 หลัก → สร้าง .XSK · ไม่สร้างเพลงซ้ำ</p></div>

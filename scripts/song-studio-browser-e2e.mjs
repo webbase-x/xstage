@@ -417,7 +417,13 @@ try {
     return Boolean(icon && icon.complete && icon.naturalWidth > 0);
   });
   assert.equal(await pc.locator('link[rel="icon"]').getAttribute('href'), './app-icon.svg');
-  assert.equal(await pc.locator('#create-stage-1').isVisible(), true, 'step 1 should be visible initially');
+  assert.equal(await pc.locator('#dup-scan').isVisible(), true,
+    'The first startup menu must be exact-file duplicate scanning');
+  assert.equal(await pc.locator('#create-stage-1').isVisible(), false,
+    'MIDI to XSK should be menu two, not the first selected page');
+  await pc.click('.nav-button[data-tab="create"]');
+  assert.equal(await pc.locator('#create-stage-1').isVisible(), true,
+    'MIDI to XSK step 1 must be visible when its menu is opened');
   assert.equal(await pc.locator('#xsk-stream-build').isVisible(), true,
     'MIDI XSK must start from the source folder without manual song selection');
   assert.equal(await pc.locator('#create-step-next').isVisible(), false,
