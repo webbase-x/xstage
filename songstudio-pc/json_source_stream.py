@@ -17,6 +17,7 @@ MEDIA = MIDI | AUDIO | VIDEO
 MAX_FILES = 1_000_000
 # Source NCN catalogs may place MIDI, LYR and CUR under sibling role folders.
 SOURCE_ROLES = {"song", "songs", "audio", "lyrics", "lyr", "cursor", "cur"}
+COMPANION_ONLY_DIRS = {"lyrics", "lyr", "cur", "cursor", "lrc", "json"}
 ALIASES = {
     ".lyr": ("LYR", "Lyrics", "LYRICS", "lyr", "lyrics"),
     ".cur": ("CUR", "Cursor", "CURSOR", "cur", "cursor"),
@@ -126,6 +127,14 @@ def stream(source_folder, *, ncn=None, progress=None, cancelled=None):
                         if entry.is_symlink():
                             continue
                         if entry.is_dir(follow_symlinks=False):
+                            # A recognized SONG/Songs sibling already supplies
+                            # filenames. LYR/CUR/LYRICS need direct name lookups,
+                            # NOT a second traversal of hundreds of thousands
+                            # of companion files. Do not skip unrelated dirs.
+                            if entry.name.casefold() in COMPANION_ONLY_DIRS and any(
+                                    (directory / candidate).is_dir()
+                                    for candidate in ("SONG", "Songs", "songs")):
+                                continue
                             children.append(Path(entry.path))
                             continue
                         if not entry.is_file(follow_symlinks=False):
@@ -153,7 +162,12 @@ def stream(source_folder, *, ncn=None, progress=None, cancelled=None):
                         progress("validate", report["total"], None)
                     yield row
             # Only directory paths are queued, never all songs in the library.
-            folders.extend(reversed(sorted(children, key=lambda p: p.name.casefold())))
+            # Find actual songs before metadata folders. Even when no sibling
+            # can be pruned, the first conversion need not await CUR/LYR scans.
+            folders.extend(reversed(sorted(children, key=lambda p: (
+                0 if p.name.casefold() in ("song", "songs") else
+                2 if p.name.casefold() in COMPANION_ONLY_DIRS else 1,
+                p.name.casefold()))))
         if progress is not None:
             progress("discover", examined, None)
             progress("validate", report["total"], report["total"])
