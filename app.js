@@ -2081,6 +2081,9 @@ function trimQueueCache(){
   for(const song of state.queuePreparedCache.keys()){
     if(!state.queue.includes(song))state.queuePreparedCache.delete(song);
   }
+  for(const song of state.queuePreloadSkipped){
+    if(!state.queue.includes(song))state.queuePreloadSkipped.delete(song);
+  }
   const monitor=window.XStageMemory;
   if(monitor){
     let p=monitor.plan(memoryResources());
@@ -2196,6 +2199,15 @@ window.addEventListener('xstage:soundfont-change',()=>{
 window.addEventListener('xstage:font-memory',()=>{
   trimQueueCache();updateMemoryIndicators();
 });
+// Periodic passive pressure check: no network activity and no forced GC.
+// Eviction releases references; the browser/OS manages actual RAM reclaim.
+window.setInterval(()=>{
+  if(state.queuePreparedCache.size){
+    const before=state.queuePreparedCache.size;
+    trimQueueCache();
+    if(state.queuePreparedCache.size<before)renderQueue();
+  }else updateMemoryIndicators();
+},10000);
 window.addEventListener('xstage:font-memory-error',event=>{
   const el=document.getElementById('xstage-font-memory');
   if(el){el.dataset.level='high';el.textContent='SoundFont: '+String(event.detail?.message||'ไม่พร้อม');}
