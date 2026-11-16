@@ -141,6 +141,7 @@ class XskStreamTests(unittest.TestCase):
         self.midi(self.source, "00003", b"A")  # same MIDI bytes, SHA duplicate
         broken = self.midi(self.source, "00004", b"C")
         broken.with_suffix(".lrc").unlink()  # file without timed lyrics must be skipped
+        self.midi(self.source, "เพลงไทย ทดสอบ", b"D")
         old_source = engine.PREFS["source"]
         old_folder = engine.PREFS["xsk_folder"]
         old_style = engine.PREFS["code_style"]
@@ -165,14 +166,14 @@ class XskStreamTests(unittest.TestCase):
                         "xsk_folder": str(self.output),
                         "code_style": "numeric", "code_length": "5",
                     }, progressive=True)
-                self.assertEqual(outcome["created"], 2)
+                self.assertEqual(outcome["created"], 3)
                 self.assertEqual(outcome["skipped"], 1)
                 self.assertEqual(outcome["notReady"], 1)
                 self.assertEqual(outcome["errors"], 0)
                 first = list(self.output.rglob("*.xsk"))
-                self.assertEqual(len(first), 2)
+                self.assertEqual(len(first), 3)
                 self.assertEqual(len({package.open_package(p, bytes(range(32)))["audio"]["sha256"]
-                                      for p in first}), 2)
+                                      for p in first}), 3)
                 with stream.source_batches(self.source, self.output, cancelled=engine.CANCEL,
                                            batch_size=1) as rows:
                     repeat = engine.build_xsk(rows, "original", {
@@ -180,7 +181,7 @@ class XskStreamTests(unittest.TestCase):
                         "code_style": "numeric", "code_length": "5",
                     }, progressive=True)
                 self.assertEqual(repeat["created"], 0)
-                self.assertEqual(repeat["skipped"], 3)
+                self.assertEqual(repeat["skipped"], 4)
                 self.assertEqual(repeat["notReady"], 1)
         finally:
             engine.PREFS.update(source=old_source, xsk_folder=old_folder,
