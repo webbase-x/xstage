@@ -1576,6 +1576,39 @@ def _xsk_stream_scan_status(data, complete, backlog, *, job_id=None):
         target["updated"] = time.monotonic()
 
 
+def _xsk_identity(source, row, doc):
+    """Prioritize verified companion/embedded identity over scanner filenames.
+
+    The MIDI discovery scanner only knows the filename. NCN and KAR return
+    title/artist under doc.metadata, not necessarily at the document root.
+    Do not mistakenly attribute unknown songs to the application's brand.
+    """
+    metadata = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+    saved = NOTES.get(str(source), {})
+    placeholders = {"x-stage karaoke", "x-stage song studio", "xstage karaoke",
+                    "xstage song studio", "unknown", "ไม่ระบุ", "ไม่ทราบ"}
+    def meaningful(value, *, title=False):
+        if not isinstance(value, str):
+            return ""
+        value = value.strip()
+        if not value or value.casefold() in placeholders:
+            return ""
+        if title and value.casefold() == source.stem.casefold():
+            return ""
+        return value
+    title = (meaningful(saved.get("title"), title=True)
+             or meaningful(doc.get("title"), title=True)
+             or meaningful(metadata.get("title"), title=True)
+             or meaningful(row.get("title"), title=True)
+             or source.stem)
+    artist = (meaningful(saved.get("artist"))
+              or meaningful(doc.get("artist"))
+              or meaningful(metadata.get("artist"))
+              or meaningful(row.get("artist"))
+              or "ไม่ระบุศิลปิน")
+    return title, artist
+
+
 def build_xsk(rows, mode, options, *, progressive=False):
     """Seal each verified MIDI + timed lyric document without publishing raw assets."""
     if mode != "original" or options.get("audio_only"):
@@ -1652,12 +1685,11 @@ def build_xsk(rows, mode, options, *, progressive=False):
             if not doc or not doc.get("lines"):
                 raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
             doc = _xsk_apply_head_tail(doc, options)
-            # Prefer verified embedded metadata over the numeric MIDI filename.
-            # A directory scan has no artist and uses the stem as a title.
-            title = (doc.get("title") if isinstance(doc.get("title"), str)
-                     and doc["title"].strip() else row.get("title")) or source.stem
-            artist = (doc.get("artist") if isinstance(doc.get("artist"), str)
-                      and doc["artist"].strip() else row.get("artist")) or "X-Stage Song Studio"
+            title, artist = _xsk_identity(source, row, doc)
+            if title == source.stem:
+                log("XSK ไม่พบชื่อเพลงใน metadata · ใช้ชื่อไฟล์: " + source.name)
+            if artist == "ไม่ระบุศิลปิน":
+                log("XSK ไม่พบศิลปินที่ยืนยันได้: " + source.name)
             # CodeAllocator fills numeric gaps before appending after the
             # highest occupied code. The target file is still checked by seal.
             code = allocator.assign_new(preferred)
