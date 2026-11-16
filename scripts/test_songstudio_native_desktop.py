@@ -33,6 +33,14 @@ class NativeDesktopContractTests(unittest.TestCase):
         self.assertIn("run_desktop(server, url, DATA,", source)
         self.assertNotIn('"--app=" + url', source)
 
+    def test_bootstrap_restores_app_import_path_in_embedded_python(self):
+        # Python's embeddable _pth excludes the application directory.
+        # Running engine.py via runpy needs an explicit local import path.
+        bootstrap = (ROOT / "songstudio-pc" / "desktop_bootstrap.py").read_text(
+            encoding="utf-8")
+        self.assertIn("sys.path.insert(0, root_path)", bootstrap)
+        self.assertIn('runpy.run_path(str(ROOT / "engine.py")', bootstrap)
+
     def test_offline_build_contains_qt_runtime(self):
         builder = (ROOT / "scripts" / "build_songstudio_ready.ps1").read_text(
             encoding="utf-8")
