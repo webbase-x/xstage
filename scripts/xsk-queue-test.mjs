@@ -33,6 +33,7 @@ const sandbox={
     assert.equal(blob,packed);unzipped++;
     return {code:'00001',document:mimeDoc,midi:new Blob([Uint8Array.of(1,2,3)])};
   }},XStageBrowserMidi:{
+    parseMidi:()=>({duration:45}),
     selectedFont:async()=>null,
     render:async(bytes,{signal})=>{
       rendered++;assert.deepEqual(Array.from(bytes),[1,2,3]);
