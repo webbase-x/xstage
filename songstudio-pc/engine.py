@@ -1548,7 +1548,12 @@ def build_xsk(rows, mode, options, *, progressive=False):
                 log("XSK ข้าม MIDI ซ้ำ (SHA-256): " + source.name)
                 continue
             preferred = str(row.get("code") or source.stem)
-            row["code"] = preferred
+            # Thai titles and names containing spaces are valid source files,
+            # but not valid protected XSK song-code filenames. Allocate a
+            # safe numeric code instead of rejecting an otherwise valid song.
+            if not package.CODE_RE.fullmatch(preferred):
+                preferred = ""
+            row["code"] = preferred or source.stem
             _lrc, doc, _fingerprint = lyrics_package(row, export=export)
             if not doc or not doc.get("lines"):
                 raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
