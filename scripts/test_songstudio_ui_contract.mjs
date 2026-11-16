@@ -224,7 +224,7 @@ assert.ok(js.includes("run('json-pro-export',{format})") &&
   'Lyrics JSON Pro must reach the existing local PC Engine');
 assert.ok(js.includes("/api/ai-lyrics-source?id="),
   'Explicit read-from-file control must fetch the real source metadata');
-for (const id of ['xsk-stream-build','xsk-stream-code-length',
+for (const id of ['json-pro-code-style','json-pro-code-length','xsk-stream-build','xsk-stream-code-length',
                  'xsk-stream-code-style','xsk-stream-status']) {
   assert.ok(html.includes('id="'+id+'"'), 'Missing automatic MIDI XSK field '+id);
 }
