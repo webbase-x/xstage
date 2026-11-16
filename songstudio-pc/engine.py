@@ -2245,6 +2245,25 @@ def execute_job(action, options, started):
                 cancelled=CANCEL, on_progress=lambda done, total: (
                     update(f"ดาวน์โหลด ZIP รุ่นใหม่ {done:,}/{total:,} ไบต์", done)))
             update("ดาวน์โหลด ZIP และตรวจ SHA-256 สำเร็จ", 1)
+        elif action == "install-update":
+            if not READY_BUNDLE or os.name != "nt":
+                raise ValueError("ติดตั้งอัปเดตอัตโนมัติรองรับเฉพาะ PC Ready บน Windows")
+            updater = _module("pc_ready_updates.py", "xstage_pc_ready_updates")
+            update("กำลังดาวน์โหลดและตรวจ SHA-256 รุ่นใหม่", 0)
+            package = updater.download(
+                DATA / "verified-updates", STATUS_VERSION, STATUS_BUILD,
+                cancelled=CANCEL, on_progress=lambda done, total: (
+                    update(f"กำลังดาวน์โหลด {done:,}/{total:,} ไบต์", done)))
+            if not package.get("update"):
+                result = {"message": "โปรแกรมเป็นรุ่นล่าสุดที่เผยแพร่แล้ว"}
+            else:
+                update("กำลังตรวจ ZIP และติดตั้งในโฟลเดอร์รุ่นใหม่", 0)
+                result = updater.install(
+                    package["path"], ROOT, cancelled=CANCEL,
+                    on_progress=lambda done, total: update(
+                        f"กำลังติดตั้ง {done:,}/{total:,} ไฟล์", done),
+                    launch=True)
+                update("ติดตั้งและเปิดรุ่นใหม่แล้ว · หน้าต่างรุ่นเดิมจะปิดเอง", 1)
         else:
             raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
