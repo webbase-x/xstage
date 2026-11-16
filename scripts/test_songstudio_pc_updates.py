@@ -1,10 +1,11 @@
-"""Offline regression: release metadata validation, SHA download and no self-install."""
+"""Offline regression: verified Ready downloads and safe side-by-side installation."""
 import hashlib
 import importlib.util
 import io
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -77,6 +78,82 @@ class UpdateTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"SHA-256"):
                     updates.download(folder,"0.3.42","342")
             self.assertEqual(list(Path(folder).iterdir()),[])
+
+
+    @staticmethod
+    def _ready_zip(root_name, *, unsafe=False):
+        archive = io.BytesIO()
+        content = {name: (b"ready-component:" + name.encode("utf-8"))
+                   for name in updates.MANDATORY if name != ".engine-ready-manifest.json"}
+        manifest = {
+            "version": "0.3.43", "build": 343,
+            "bundle_type": "ready-offline", "platform": "windows-x64",
+            "files": [{"path": name,
+                       "sha256": hashlib.sha256(value).hexdigest()}
+                      for name, value in content.items()]
+        }
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+            for name, value in content.items():
+                z.writestr(root_name + "/" + name, value)
+            z.writestr(root_name + "/.engine-ready-manifest.json",
+                       json.dumps(manifest).encode())
+            if unsafe:
+                z.writestr(root_name + "/../outside.txt", b"malicious")
+        return archive.getvalue()
+
+    def test_install_verified_ready_side_by_side_without_launch(self):
+        name = metadata()["archive_file"]
+        root_name = Path(name).stem
+        data = self._ready_zip(root_name)
+        doc = metadata(data)
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            current = parent / "running-build342"
+            current.mkdir()
+            (current / ".engine-ready-manifest.json").write_text("{}")
+            archive = parent / name
+            archive.write_bytes(data)
+            with patch.object(updates, "_metadata", return_value=doc):
+                result = updates.install(archive, current, launch=False)
+                target = Path(result["path"])
+                self.assertTrue(target.is_dir())
+                self.assertEqual(target.name, root_name)
+                self.assertTrue((target / "studio" / "app.js").is_file())
+                self.assertTrue((current / ".engine-ready-manifest.json").is_file())
+                with self.assertRaises(FileExistsError):
+                    updates.install(archive, current, launch=False)
+
+    def test_install_rejects_unsafe_archive_before_extraction(self):
+        name = metadata()["archive_file"]
+        data = self._ready_zip(Path(name).stem, unsafe=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            current = parent / "running-build342"
+            current.mkdir()
+            (current / ".engine-ready-manifest.json").write_text("{}")
+            archive = parent / name
+            archive.write_bytes(data)
+            with patch.object(updates, "_metadata", return_value=metadata(data)):
+                with self.assertRaisesRegex(ValueError, "ไม่ปลอดภัย"):
+                    updates.install(archive, current, launch=False)
+            self.assertFalse((parent / "outside.txt").exists())
+            self.assertFalse((parent / Path(name).stem).exists())
+
+    def test_install_rejects_tampering_even_with_archive_validated(self):
+        name = metadata()["archive_file"]
+        original = self._ready_zip(Path(name).stem)
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            current = parent / "running-build342"
+            current.mkdir()
+            (current / ".engine-ready-manifest.json").write_text("{}")
+            archive = parent / name
+            archive.write_bytes(original + b"modified")
+            with patch.object(updates, "_metadata", return_value=metadata(original)):
+                with self.assertRaisesRegex(ValueError, "SHA-256"):
+                    updates.install(archive, current, launch=False)
+            self.assertFalse((parent / Path(name).stem).exists())
+
 
 
 if __name__=="__main__": unittest.main()
