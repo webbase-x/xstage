@@ -1471,9 +1471,11 @@ def _xsk_apply_head_tail(document, options):
     return modified
 
 
-def _xsk_stream_scan_status(data, complete, backlog):
+def _xsk_stream_scan_status(data, complete, backlog, *, job_id=None):
     """Discovered MIDI count is dynamic until the source walk finishes."""
     with LOCK:
+        if job_id is not None and JOB.get("id") != job_id:
+            return
         JOB["scannedFiles"] = data["files"]
         JOB["discovered"] = data["found"]
         JOB["queuedBatches"] = backlog
@@ -2036,11 +2038,13 @@ def execute_job(action, options, started):
             options["code_length"] = str(options.get("code_length") or PREFS["code_length"])
             root = _song_export_module().songs_root(options["xsk_folder"])
             scanner = _module("xsk_stream.py", "xstage_xsk_stream")
+            with LOCK:
+                scan_job_id = JOB["id"]
             with scanner.source_batches(
                     options["source"], root, cancelled=CANCEL,
                     batch_size=32, max_batches=4,
                     on_scan=lambda data, done, backlog: _xsk_stream_scan_status(
-                        data, done, backlog)) as incoming:
+                        data, done, backlog, job_id=scan_job_id)) as incoming:
                 result = build_xsk(incoming, "original", {
                     **options, "audio_only": False}, progressive=True)
         elif action in ("build", "preview"):
