@@ -202,7 +202,8 @@
   }
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
-    const track=!(/^\\/api\\/(status|environment)(?:\\?|$)/.test(path));
+    const track=!(path === '/api/status' || path.startsWith('/api/status?') ||
+      path === '/api/environment' || path.startsWith('/api/environment?'));
     const serial=++requestSerial;
     if(track)pendingRequests.set(serial,{started:Date.now(),name:requestLabel(path,opts.method||'GET')});
     try {
