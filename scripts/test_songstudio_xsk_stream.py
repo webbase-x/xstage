@@ -130,6 +130,35 @@ class XskStreamTests(unittest.TestCase):
                                                "code": "00011"}, export=export)
         self.assertIsNone(absent)
 
+    def test_xsk_identity_reads_ncn_and_kar_metadata_not_filename(self):
+        engine = load("engine")
+        source = self.source / "00001.mid"
+        row = {"path": str(source), "code": "00001",
+               "title": source.stem, "artist": ""}
+        for format_name in ("NCN", "KAR"):
+            with self.subTest(format_name=format_name):
+                doc = {"schemaVersion": 1, "sourceFormat": format_name,
+                       "metadata": {"title": "เพลงตัวอย่างจริง",
+                                    "artist": "ศิลปินตัวจริง"},
+                       "lines": [{"startTime": 1.0, "text": "ร้อง"}]}
+                self.assertEqual(engine._xsk_identity(source, row, doc),
+                                 ("เพลงตัวอย่างจริง", "ศิลปินตัวจริง"))
+
+    def test_xsk_identity_never_uses_brand_as_artist(self):
+        engine = load("engine")
+        source = self.source / "00002.mid"
+        row = {"path": str(source), "title": "00002", "artist": ""}
+        doc = {"title": "เพลงที่สอง", "artist": "X-Stage Karaoke",
+               "metadata": {"artist": "X-Stage Song Studio"}}
+        self.assertEqual(engine._xsk_identity(source, row, doc),
+                         ("เพลงที่สอง", "ไม่ระบุศิลปิน"))
+        engine.NOTES[str(source)] = {"artist": "ศิลปินแก้ไขด้วยตนเอง"}
+        try:
+            self.assertEqual(engine._xsk_identity(source, row, doc)[1],
+                             "ศิลปินแก้ไขด้วยตนเอง")
+        finally:
+            engine.NOTES.pop(str(source), None)
+
     def test_real_xsk_sealing_roundtrip_and_dedup(self):
         import sys
         # The production key uses Windows DPAPI. Replace key retrieval only
