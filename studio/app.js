@@ -56,7 +56,7 @@
   // A finished build offers uploading once per job, never automatically.
   const promptedBuildUploadJobs = new Set();
   let proEnabled = false;
-  let busy = false, editingId = null, notificationTimer = null;
+  let busy = false, cancellationPending = false, editingId = null, notificationTimer = null;
   let createStep = 1;
   const createStepLabels = [
     'เลือกต้นฉบับและสแกนไฟล์',
@@ -672,6 +672,7 @@
     for (const el of document.querySelectorAll('.download-action')) el.disabled = busy || !googleConnected;
     for (const el of document.querySelectorAll('[data-pick],.field,.song-table input[type=checkbox]')) el.disabled = busy;
     $('cancel-job').hidden = !busy;
+    $('cancel-job').disabled = cancellationPending;
     updateCreateWizard();
     phraseUpdateButtons();
     aiUpdateButtons();
@@ -2289,6 +2290,7 @@
       const job = response.job || {};
       const beforeBusy = busy;
       busy = job.state === 'running';
+      if (!busy) cancellationPending = false;
       setGoogle(response.google);
       renderJob(job);updateButtons();
       if (job.kind === 'created-xsk') {
@@ -2427,9 +2429,12 @@
               pendingAiAlignment=null;
             }
             message(job.detail || 'งานไม่สำเร็จ');
-          } else if (job.state==='cancelled' && job.kind==='ai-align') {
-            pendingAiAlignment=null;
-            $('ai-lyrics-align-review').textContent='ยกเลิกจัดเวลาแล้ว · คำร้องที่วางยังอยู่';
+          } else if (job.state==='cancelled') {
+            if (job.kind==='ai-align') {
+              pendingAiAlignment=null;
+              $('ai-lyrics-align-review').textContent='ยกเลิกจัดเวลาแล้ว · คำร้องที่วางยังอยู่';
+            }
+            message('ยกเลิกงานเรียบร้อย · พร้อมทำรายการอื่น',false);
           }
           if (['scan','build','upload','download'].includes(job.kind)) await refreshSongs();
           if (job.kind === 'build' && ['success','error'].includes(job.state) &&
@@ -3186,7 +3191,21 @@
     void run('install-update');
   });
   $('cancel-job').addEventListener('click',async()=>{
-    try{await post('/api/jobs/cancel',{});message('รับคำสั่งยกเลิกแล้ว · กำลังหยุดอย่างปลอดภัย',false);}catch(e){message(e.message);}
+    if(cancellationPending)return;
+    cancellationPending=true;
+    $('cancel-job').disabled=true;
+    try{
+      const result=await post('/api/jobs/cancel',{});
+      if(result.stopping){
+        message('กำลังหยุดงานเดิมและคืนทรัพยากร · เมื่อหยุดเสร็จสามารถทำรายการอื่นได้',false);
+      }else{
+        cancellationPending=false;
+      }
+    }catch(e){
+      cancellationPending=false;
+      $('cancel-job').disabled=false;
+      message(e.message);
+    }
   });
   $('toggle-log').addEventListener('click',()=>{
     const log = $('job-log');log.hidden=!log.hidden;
