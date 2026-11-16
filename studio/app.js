@@ -3494,9 +3494,11 @@
       const card = document.createElement('section');
       card.className = 'duplicate-group';
       const header = document.createElement('strong');
-      header.textContent = group.files.length + ' ไฟล์เหมือนกัน · ' +
+      header.textContent = group.fileCount + ' ไฟล์เหมือนกัน · ' +
         (group.size / 1024 / 1024).toFixed(2) + ' MB/ไฟล์ · SHA-256 ' +
-        group.sha256.slice(0, 16) + '…';
+        group.sha256.slice(0, 16) + '…' +
+        (group.hiddenFiles ? ' · แสดง ' + group.files.length +
+          ' ไฟล์แรก (จัดการแล้วกดแสดงผลอีกครั้ง)' : '');
       card.appendChild(header);
       for (const file of group.files) {
         const label = document.createElement('label');
