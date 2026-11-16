@@ -71,6 +71,43 @@ class PCExportTests(unittest.TestCase):
         self.assertEqual(again["reused"], 3)
         self.assertEqual(again["songCount"], 1)
 
+    def test_portable_database_matches_pc_files_and_requires_drive_publication(self):
+        outcome = pc_export.publish(self.source, str(self.destination), export)
+        root = self.destination / "XStageSong"
+        portable = root / "DB" / "songs-portable.json"
+        self.assertEqual(Path(outcome["portableDatabase"]), portable)
+        doc = json.loads(portable.read_text(encoding="utf-8"))
+        self.assertEqual(doc["format"], "xstage-portable-song-db")
+        self.assertEqual(doc["schemaVersion"], 1)
+        self.assertEqual(doc["songCount"], 1)
+        self.assertEqual(doc["platforms"], ["pc", "web", "apk"])
+        self.assertTrue(doc["webApk"]["requiresGoogleDrivePublication"])
+        row = doc["songs"][0]
+        self.assertEqual(row["code"], "00001")
+        self.assertEqual(row["title"], "เพลงทดสอบ")
+        self.assertEqual(row["artist"], "ศิลปินทดสอบ")
+        self.assertEqual(row["audio"]["path"], "AUDIO/0/00001.m4a")
+        self.assertEqual(row["lyrics"]["path"], "LYRICS/0/00001.json")
+        self.assertTrue((root / row["audio"]["path"]).is_file())
+        self.assertTrue((root / row["lyrics"]["path"]).is_file())
+        self.assertNotIn("fileId", json.dumps(doc))
+        before = doc["generation"]
+        repeated = pc_export.publish(self.source, str(self.destination), export)
+        renewed = json.loads(portable.read_text(encoding="utf-8"))
+        self.assertEqual(repeated["songCount"], 1)
+        self.assertEqual(renewed["songCount"], 1)
+        self.assertNotEqual(renewed["generation"], before)
+
+    def test_portable_database_rejects_missing_referenced_media(self):
+        root = self.destination / "XStageSong"
+        root.mkdir(parents=True)
+        with self.assertRaisesRegex(ValueError, "ไฟล์ต้นทางไม่ครบ"):
+            pc_export.portable_catalog(root, [{
+                "webSongId": "audio/0/not-present", "code": "00001",
+                "audio": {"path": "AUDIO/0/missing.m4a"},
+                "lyrics": {"path": "LYRICS/0/missing.json"},
+            }], "test")
+
     def test_destination_name_exact_and_foreign_catalog_not_overwritten(self):
         library = self.root / "Other" / "XStageSong"
         self.assertEqual(pc_export.destination_root(str(library)), library.resolve())
