@@ -76,12 +76,35 @@ const prepared=await sandbox.prepareXskPlayback(song,'token-001',
 assert.equal(prepared.blob,audio);
 assert.equal(rendered,2,'On-demand fallback can render one verified XSK');
 
-assert.ok(app.includes('if(prepared&&(getFileId(song.xsk)||!getFileId(song.midi)))'),
-  'Actual player must reuse queue-prepared XSK audio');
+assert.ok(app.includes('if(readyPrepared&&(getFileId(song.xsk)||!getFileId(song.midi)))'),
+  'Actual player must reuse completed or in-flight queued XSK audio');
 assert.ok(app.includes('prepareXskPlayback(song,token,controller.signal'),
   'Unprepared XSK must be playable directly on demand');
 assert.ok(app.includes('state.queue.shift()')&&app.includes('scheduleQueuePreload();'),
   'Queue advances then prepares its new first song');
+// Exercise the real playNext queue transition: the existing pre-render
+// must be transferred to playback, not aborted by the new front's preload.
+const nextBegin=app.indexOf('function playNext(){');
+const nextEnd=app.indexOf('// Release the finished media and lyrics',nextBegin);
+assert.ok(nextBegin>=0&&nextEnd>nextBegin);
+const runner=new Function('state','scheduleQueuePreload','renderQueue',
+  'playSong','clearIdleStage','nextMedleyCandidate','MEDLEY_RECENT_LIMIT',
+  app.slice(nextBegin,nextEnd)+'\\nreturn playNext;');
+const active={song,token:'token-001',promise:Promise.resolve({blob:audio,
+  lyrics:mimeDoc,song,token:'token-001'}),controller:new AbortController()};
+let accepted=null;
+const transition=runner(state,()=>{},()=>{},(picked,opts)=>{
+  accepted={picked,opts};
+},()=>{},()=>null,10);
+state.queue=[song,{code:'00002',title:'ถัดไป'}];
+state.queuePreload=active;state.queuePrepared=null;
+transition();
+assert.equal(state.queuePreload,null,'Pending pre-render must be detached from next queue');
+assert.equal(accepted.picked,song);
+assert.equal(accepted.opts.pending,active,'Playback must consume same in-flight Promise');
+assert.equal(active.controller.signal.aborted,false,'Do not abort promoted XSK pre-render');
+assert.equal(state.queue.length,1);
+
 assert.ok(app.includes('song.midi||song.xsk'),
   'Medley must not accidentally fetch XSK as an ordinary audio file');
 
