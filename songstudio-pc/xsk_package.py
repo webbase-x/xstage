@@ -1,9 +1,9 @@
-"""X-Stage Karaoke .xsk v1 sealed package.
+"""X-Stage Karaoke portable XSK2 (plain ZIP) package.
 
-Contains exactly one MIDI/KAR source and one timed song document. Encrypted
-with authenticated AES-256-GCM. The format itself is portable; authorized
-players still need a secure key-provisioning mechanism to open it.
-No extracted media is written to a general-user project directory.
+New XSK files are readable by PC, Web and APK without any decryption key.
+Old XSK1 AES-GCM files remain read-only compatible when the owner has a key.
+Exactly one MIDI/KAR source and one timed JSON are stored; every MIDI is
+SHA-256 verified, and original source files are never modified.
 """
 from __future__ import annotations
 
@@ -17,7 +17,8 @@ import struct
 import zipfile
 from pathlib import Path
 
-MAGIC = b"XSK1"
+MAGIC = b"XSK2"
+LEGACY_MAGIC = b"XSK1"
 MAX_SOURCE = 128 * 1024 * 1024
 MAX_DOC = 8 * 1024 * 1024
 MAX_ENCRYPTED = MAX_SOURCE + MAX_DOC + 16 * 1024 * 1024
@@ -55,7 +56,7 @@ def _validated(source, document, code, title, artist):
         if t < previous:
             raise ValueError("เวลาคำร้องย้อนหลัง · ข้ามเพลงเพื่อป้องกันเวลาเสีย")
         previous = t
-    return {"schemaVersion": 2, "format": "XSK", "formatVersion": 1,
+    return {"schemaVersion": 2, "format": "XSK", "formatVersion": 2,
             "createdBy": "X-Stage Song Studio",
             "publisher": "X-Stage Song Studio",
             "songCode": code, "title": str(title or code)[:200],
@@ -103,14 +104,12 @@ def _commit_sealed_file(staged, target):
             raise OSError(error, "ไม่สามารถเผยแพร่ XSK บนโฟลเดอร์นี้ได้")
 
 
-def seal(source, document, code, title, artist, key, target=None):
-    """Return encrypted bytes; optionally publish atomically without overwrite."""
-    try:
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    except ImportError as exc:
-        raise RuntimeError("โมดูลเข้ารหัส AES-256-GCM ไม่พร้อมในแพ็กเกจ") from exc
-    if not isinstance(key, bytes) or len(key) != 32:
-        raise ValueError("ต้องใช้กุญแจ AES-256 ที่มีสิทธิ์เท่านั้น")
+def seal(source, document, code, title, artist, key=None, target=None):
+    """Produce portable plaintext XSK2; legacy positional key is ignored.
+
+    No key or password is ever created or embedded in newly written XSK2.
+    The key parameter is retained temporarily for older internal callers.
+    """
     metadata = _validated(source, document, code, title, artist)
     raw = json.dumps(metadata, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
     if len(raw) > MAX_DOC:
@@ -121,9 +120,7 @@ def seal(source, document, code, title, artist, key, target=None):
         # Avoid path traversal by writing fixed member basenames only.
         z.writestr(metadata["audio"]["file"], Path(source).read_bytes())
         z.writestr(code + ".json", raw)
-    nonce = secrets.token_bytes(12)
-    # Header is authenticated additional data; no ZIP or JSON plaintext leak.
-    encrypted = MAGIC + nonce + AESGCM(key).encrypt(nonce, archive.getvalue(), MAGIC)
+    portable = MAGIC + archive.getvalue()
     if target is not None:
         target = Path(target)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -132,21 +129,20 @@ def seal(source, document, code, title, artist, key, target=None):
         temp = target.with_name("." + target.name + "." + secrets.token_hex(8) + ".partial")
         try:
             with temp.open("xb") as writer:
-                writer.write(encrypted)
+                writer.write(portable)
                 writer.flush()
                 os.fsync(writer.fileno())
-            check = open_package(temp, key)
+            check = open_package(temp)
             if check["songCode"] != code:
                 raise ValueError("ตรวจไฟล์ XSK หลังเข้ารหัสไม่ผ่าน")
             _commit_sealed_file(temp, target)  # Never overwrite existing XSK.
         finally:
             temp.unlink(missing_ok=True)
-    return encrypted
+    return portable
 
 
-def open_package(data_or_path, key):
-    """Authenticate and check the MIDI digest; no media extraction to disk."""
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+def open_package(data_or_path, key=None):
+    """Verify XSK2 without a key; read legacy XSK1 only with existing key."""
     if isinstance(data_or_path, Path):
         if data_or_path.is_symlink() or data_or_path.stat().st_size > MAX_ENCRYPTED:
             raise ValueError("ไฟล์ XSK ไม่ปลอดภัยหรือมีขนาดใหญ่เกินกำหนด")
@@ -155,9 +151,17 @@ def open_package(data_or_path, key):
         data = bytes(data_or_path)
     if len(data) > MAX_ENCRYPTED:
         raise ValueError("ไฟล์ XSK ใหญ่เกินขีดจำกัดที่รองรับ")
-    if len(data) < 33 or not data.startswith(MAGIC):
-        raise ValueError("ไฟล์ XSK ไม่ใช่รุ่นที่รองรับ")
-    plain = AESGCM(key).decrypt(data[4:16], data[16:], MAGIC)
+    if data.startswith(MAGIC):
+        if len(data) < 26:
+            raise ValueError("XSK2 ไม่สมบูรณ์")
+        plain = data[4:]
+    elif data.startswith(LEGACY_MAGIC):
+        if len(data) < 33 or not isinstance(key, bytes) or len(key) != 32:
+            raise ValueError("XSK1 รุ่นเก่าต้องใช้กุญแจ Windows เดิม · สร้างใหม่เป็น XSK2 เพื่อใช้กับ Web/APK")
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        plain = AESGCM(key).decrypt(data[4:16], data[16:], LEGACY_MAGIC)
+    else:
+        raise ValueError("ไฟล์ XSK ไม่ใช่ XSK1/XSK2 ที่รองรับ")
     with zipfile.ZipFile(io.BytesIO(plain)) as z:
         names = z.namelist()
         if len(names) != 2 or len(set(names)) != 2:
@@ -169,7 +173,8 @@ def open_package(data_or_path, key):
             raise ValueError("ข้อมูล Lyrics JSON ภายใน XSK ใหญ่เกินขีดจำกัด")
         doc = json.loads(z.read(documents[0]))
         media = doc.get("audio") or {}
-        if (doc.get("format") != "XSK" or doc.get("formatVersion") != 1
+        expected_version = 2 if data.startswith(MAGIC) else 1
+        if (doc.get("format") != "XSK" or doc.get("formatVersion") != expected_version
                 or media.get("file") not in names):
             raise ValueError("โครงสร้าง XSK ไม่ถูกต้อง")
         if z.getinfo(media["file"]).file_size > MAX_SOURCE:
@@ -178,6 +183,6 @@ def open_package(data_or_path, key):
             dig = hashlib.sha256()
             for block in iter(lambda: stream.read(1024 * 1024), b""):
                 dig.update(block)
-        if dig.hexdigest() != media.get("sha256"):
+        if dig.hexdigest() != media.get("sha256") or z.getinfo(media["file"]).file_size != media.get("size"):
             raise ValueError("ค่า SHA-256 ของเพลงไม่ตรง")
         return doc
