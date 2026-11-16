@@ -71,7 +71,7 @@ function zipEntries(raw){
     fail('ZIP directory ไม่ตรงหรือมีชื่อซ้ำ');
   return found;
 }
-async function openPackage(file){
+async function openPackage(file,{metadataOnly=false}={}){
   if(!file||!Number.isFinite(file.size)||file.size<26||file.size>MAX_PACKAGE)
     fail('ขนาดไฟล์ไม่ปลอดภัย');
   const bytes=u8(await file.arrayBuffer());
@@ -92,11 +92,17 @@ async function openPackage(file){
       !/^[a-f0-9]{64}$/i.test(String(audio.sha256||''))||
       !Array.isArray(doc.lines)||!doc.lines.length)
     fail('XSK ไม่มี MIDI และ Lyrics JSON ที่มีโครงสร้างถูกต้อง');
-  const media=await inflate(midiEntry.compressed,midiEntry.method,midiEntry.size);
-  const hash=new Uint8Array(await scope.crypto.subtle.digest('SHA-256',media));
-  const digest=Array.from(hash,x=>x.toString(16).padStart(2,'0')).join('');
-  if(digest!==audio.sha256.toLowerCase()||media.length!==audio.size)
-    fail('SHA-256 ของ MIDI ภายใน XSK ไม่ตรง');
+  // Import inspects only JSON metadata. Actual MIDI decompression
+  // and SHA-256 verification are postponed until queued/on-demand play.
+  // Never treat a metadata-only inspection as proof that audio is playable.
+  let media=null;
+  if(!metadataOnly){
+    media=await inflate(midiEntry.compressed,midiEntry.method,midiEntry.size);
+    const hash=new Uint8Array(await scope.crypto.subtle.digest('SHA-256',media));
+    const digest=Array.from(hash,x=>x.toString(16).padStart(2,'0')).join('');
+    if(digest!==audio.sha256.toLowerCase()||media.length!==audio.size)
+      fail('SHA-256 ของ MIDI ภายใน XSK ไม่ตรง');
+  }
   // Compatible with the existing catalog/player schemaVersion 1.
   // Keep NCN's exact per-character CUR timings for the Web/APK renderer,
   // which consumes "syllables" start/duration rather than "characters".
@@ -127,9 +133,13 @@ async function openPackage(file){
     fail('ไม่มีชื่อเพลงหรือศิลปินจริงใน XSK · กรุณาสร้างใหม่ด้วย Song Studio');
   normalized.title=identity.title;
   normalized.artist=identity.artist;
+  if(metadataOnly)return {code,document:normalized};
   return {code,document:normalized,
     midi:new File([media],midiEntry.name,{type:'audio/midi'}),
     lyrics:new File([JSON.stringify(normalized)],code+'.json',{type:'application/json'})};
 }
-scope.XStageXsk={openPackage};
+scope.XStageXsk={
+  inspectMetadata:file=>openPackage(file,{metadataOnly:true}),
+  openPackage
+};
 })(typeof window!=='undefined'?window:globalThis);
