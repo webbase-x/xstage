@@ -37,8 +37,9 @@ class XskStreamTests(unittest.TestCase):
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / (name + ".mid")
         path.write_bytes(b"MThd" + marker * 80)
-        (folder / (name + ".lrc")).write_text("[00:02.00]เนื้อร้องพร้อมเวลา",
-                                                encoding="utf-8")
+        (folder / (name + ".lrc")).write_text(
+            "[ti:ชื่อเพลง " + name + "]\\n[ar:ศิลปินทดสอบ]\\n[00:02.00]เนื้อร้องพร้อมเวลา",
+            encoding="utf-8")
         return path
 
     def test_starts_processing_first_folder_before_deeper_scan_finishes(self):
@@ -161,8 +162,7 @@ class XskStreamTests(unittest.TestCase):
 
     def test_real_xsk_sealing_roundtrip_and_dedup(self):
         import sys
-        # The production key uses Windows DPAPI. Replace key retrieval only
-        # in this portable test, never change the production code path.
+        # XSK2 must not create or require a Windows DPAPI key.
         engine = load("engine")
         package = load("xsk_package")
         self.midi(self.source, "00001", b"A")
@@ -207,7 +207,8 @@ class XskStreamTests(unittest.TestCase):
                 self.assertEqual(outcome["errors"], 0)
                 first = list(self.output.rglob("*.xsk"))
                 self.assertEqual(len(first), 3)
-                self.assertEqual(len({package.open_package(p, bytes(range(32)))["audio"]["sha256"]
+                self.assertTrue(all(p.read_bytes().startswith(b'XSK2') for p in first))
+                self.assertEqual(len({package.open_package(p)["audio"]["sha256"]
                                       for p in first}), 3)
                 parsed = [package.open_package(p, bytes(range(32))) for p in first]
                 self.assertTrue(any(item["title"] == "เพลงจาก JSON" and
