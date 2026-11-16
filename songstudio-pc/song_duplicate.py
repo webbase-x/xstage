@@ -105,6 +105,8 @@ def _recycle_windows(path):
 def _move_verified(source, destination, root, expected_digest, cancelled):
     """No-overwrite copy to new folder; verify before removing the old copy."""
     rel = source.relative_to(root)
+    if shutil.disk_usage(destination).free < source.stat().st_size + 16 * 1024 * 1024:
+        raise ValueError("พื้นที่ปลายทางไม่เพียงพอสำหรับย้ายไฟล์ซ้ำ")
     target = destination / rel
     parent = destination
     for name in rel.parts[:-1]:
@@ -265,8 +267,10 @@ class DuplicateMediaRegistry:
                         file_ids.append(file_id)
                     groups.append({"id": group_id, "sha256": digest,
                                    "size": size, "files": file_ids})
+        groups.sort(key=lambda g: (-g["size"] * (len(g["files"]) - 1), g["sha256"]))
         result = {
             "scanId": secrets.token_hex(16), "root": root, "groups": groups,
+            "groupById": {g["id"]: g for g in groups},
             "files": entries, "scanned": files, "ignored": ignored,
             "errors": errors, "hashed": hashed,
         }
@@ -297,14 +301,20 @@ class DuplicateMediaRegistry:
                     live_groups.append((group, alive))
             rows = []
             for group, alive in live_groups[offset:offset + limit]:
+                # A single dummy/placeholder MIDI may be repeated thousands
+                # of times. Send a bounded response; after a cleanup, refreshing
+                # the page reveals the next copies without re-scanning the disk.
+                shown = alive[:301]
                 rows.append({"id": group["id"], "size": group["size"],
                              "sha256": group["sha256"],
+                             "fileCount": len(alive),
+                             "hiddenFiles": len(alive) - len(shown),
                              "files": [
                                  {"id": item["id"], "path": str(item["path"]),
                                   "keep": i == 0,
                                   "protected": "xstagesong" in
                                   {p.casefold() for p in item["path"].parts}}
-                                 for i, item in enumerate(alive)]})
+                                 for i, item in enumerate(shown)]})
             return {
                 "ready": True, "scanId": state["scanId"],
                 "folder": str(state["root"]),
@@ -337,7 +347,7 @@ class DuplicateMediaRegistry:
                     raise ValueError("รายการไฟล์ซ้ำเปลี่ยนแล้ว · กรุณาโหลดผลตรวจใหม่")
                 if "xstagesong" in {p.casefold() for p in item["path"].parts}:
                     raise ValueError("ไม่อนุญาตลบ/ย้ายเพลงใน XStageSong ที่ฐานข้อมูลอาจอ้างถึง")
-                group = next(g for g in state["groups"] if g["id"] == item["group"])
+                group = state["groupById"][item["group"]]
                 alive = [state["files"][x] for x in group["files"]
                          if state["files"][x]["status"] == "active"]
                 keeper = alive[0]
