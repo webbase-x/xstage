@@ -88,7 +88,7 @@ def _local_path(root, path, prefix):
                if prefix == "lyrics" else {prefix})
     if (not isinstance(path, str) or path.split("/", 1)[0] not in allowed
             or chr(92) in path or ":" in path or chr(0) in path
-            or len(path.split("/")) < 3):
+            or len(path.split("/")) < 2):
         raise PublishError("พาธไฟล์ประกอบไม่ถูกต้อง: " + repr(path))
     item = PurePosixPath(path)
     if (item.is_absolute()
