@@ -137,7 +137,7 @@ def scan(folder, ncn=None, progress=None):
         parent = path.relative_to(root).parts[:-1]
         lowered = [part.casefold() for part in parent]
         role = next((i for i, part in enumerate(lowered)
-                     if part in ("songs", "lyrics", "cursor") and i > 0), None)
+                     if part in ("song", "songs", "lyrics", "lyr", "cur", "cursor") and i > 0), None)
         if role is None:
             role = next((i for i, part in enumerate(lowered)
                          if part in ("audio", "lyrics")), None)
