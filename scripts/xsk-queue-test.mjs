@@ -9,7 +9,7 @@ const begin=app.indexOf('async function prepareXskPlayback(');
 const end=app.indexOf('function prefetchMedleyNext(){',begin);
 assert.ok(begin>=0&&end>begin,'XSK just-in-time/queued functions exist');
 const source=app.slice(begin,end);
-let fetched=0,unzipped=0,rendered=0,painted=0,failed=false;
+let fetched=0,unzipped=0,rendered=0,painted=0,failed=false,onFontChange=null;
 const file={fileId:'file-001',size:4096};
 const song={code:'00001',title:'ทำได้เพียง',artist:'25 Hours',xsk:file};
 const state={token:'token-001',queue:[song],queuePreload:null,queuePrepared:null,
@@ -29,7 +29,9 @@ const sandbox={
   },
   privateJson:async()=>{throw Error('XSK must never retrieve a separate Lyrics JSON file')},
   renderQueue:()=>{painted++},
-  window:{XStageXsk:{openPackage:async blob=>{
+  window:{addEventListener:(event,callback)=>{
+    if(event==='xstage:soundfont-change')onFontChange=callback;
+  },XStageXsk:{openPackage:async blob=>{
     assert.equal(blob,packed);unzipped++;
     return {code:'00001',document:mimeDoc,midi:new Blob([Uint8Array.of(1,2,3)])};
   }},XStageBrowserMidi:{
@@ -53,8 +55,10 @@ assert.equal(state.queuePrepared.lyrics,mimeDoc);
 assert.equal(painted,1);
 schedule();
 assert.equal(timers.length,0,'Already prepared XSK must not be queued for reprocessing');
-sandbox.releaseQueuePreload();
-assert.equal(state.queuePrepared,null,'Clean up prepared media when account/queue resets');
+assert.equal(typeof onFontChange,'function');
+onFontChange();
+assert.equal(state.queuePrepared,null,
+  'Changing SoundFont must invalidate already synthesized queued audio');
 
 state.queue=[{...song,xsk:{...file,size:30*1024*1024}}];
 await prefetch(state.queue[0],'token-001');
