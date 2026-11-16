@@ -1522,6 +1522,14 @@ def build_xsk(rows, mode, options, *, progressive=False):
                 raise ValueError("XSK รองรับเฉพาะ MIDI/KAR ที่มีเวลาคำร้องถูกต้อง")
             if not source.is_file() or source.is_symlink():
                 raise ValueError("ไฟล์ MIDI ต้นฉบับไม่พร้อมใช้งาน")
+            # Hash first: skip already sealed MIDI before costly NCN/LRC/JSON
+            # lyric decoding. Re-reading unchanged lyric sidecars is wasteful
+            # on a 100k-track second run.
+            source_digest = package._hash_source(source)
+            if source_digest in existing_midi:
+                skipped += 1
+                log("XSK ข้าม MIDI ซ้ำ (SHA-256): " + source.name)
+                continue
             preferred = str(row.get("code") or source.stem)
             row["code"] = preferred
             _lrc, doc, _fingerprint = lyrics_package(row, export=export)
@@ -1530,13 +1538,6 @@ def build_xsk(rows, mode, options, *, progressive=False):
             doc = _xsk_apply_head_tail(doc, options)
             title = row.get("title") or source.stem
             artist = row.get("artist") or "X-Stage Song Studio"
-            # Identical MIDI means the song is already in the target,
-            # regardless of filename, lyrics or metadata.
-            source_digest = package._hash_source(source)
-            if source_digest in existing_midi:
-                skipped += 1
-                log("XSK ข้าม MIDI ซ้ำ (SHA-256): " + source.name)
-                continue
             # CodeAllocator fills numeric gaps before appending after the
             # highest occupied code. The target file is still checked by seal.
             code = allocator.assign_new(preferred)
