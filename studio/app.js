@@ -2296,23 +2296,22 @@
     if (!report || !report.ready)
       return message('ไม่มีชุดเพลงที่ตรวจแล้วว่าสมบูรณ์ · ยังไม่อัปโหลด');
     const createNew=$('upload-allow-new').checked;
-    const details='อัปโหลดจาก '+report.folder+
-      '\\nชุดสมบูรณ์ '+fmtNum(report.ready)+
-      ' · ข้ามไฟล์ไม่ครบ '+fmtNum(report.incomplete)+
-      ' · ไม่รองรับ '+fmtNum(report.unsupported)+
-      '\\nตรวจ MD5 ก่อนส่งและไม่เขียนทับไฟล์เดิม'+
-      (createNew?'\\n\\nหากไม่พบ XStageSong ที่บัญชีนี้มองเห็น ระบบจะสร้างก่อนอัปโหลด'+
-       '\\nคำเตือน: หากสิทธิ์ Google ไม่ครอบคลุมคลังเดิม อาจเกิดคลังซ้ำ':'')+
-      '\\n\\nเผยแพร่เฉพาะเพลงที่ตรวจและแปลงเนื้อร้องพร้อมเวลาได้สำเร็จ พร้อมอัปเดต DB/current.json · ไฟล์ผิดปกติหรือยังไม่รองรับจะข้าม';
-    if (!await confirmStudio(details,'ยืนยันตรวจครบและอัปโหลดเข้า XStageSong',
-      {acceptLabel:'ตรวจแล้ว · เริ่มอัปโหลด',cancelLabel:'ยกเลิก'})) return;
+    // Retain one short confirmation because a missing/inaccessible Drive library
+    // may otherwise create a duplicate when automatic library creation is enabled.
+    const details='พร้อมอัปโหลด '+fmtNum(report.ready)+' เพลง'+
+      (report.incomplete||report.unsupported
+        ? '\\nข้ามไฟล์ไม่พร้อม '+fmtNum(report.incomplete+report.unsupported)+' รายการ':'')+
+      (createNew?'\\nหากไม่พบคลังเดิม จะสร้าง XStageSong ใหม่ใน Google Drive':'');
+    if (!await confirmStudio(details,'ยืนยันอัปโหลด',
+      {acceptLabel:'อัปโหลด',cancelLabel:'ยกเลิก'})) return;
+    $('upload-folder-report').textContent='กำลังอัปโหลด '+fmtNum(report.ready)+' เพลง…';
     await run('upload-folder',{create_new_library:createNew});
   }
 
   async function offerUploadAfterBuild(job) {
     if (job.kind !== 'build' || job.state !== 'success') return;
     if (Number(job.result?.created||0) <= 0) return;
-    message('สร้างเพลงเสร็จแล้ว · หากต้องการส่งไฟล์ไป XStageSong ให้เปิดเมนูอัปโหลด เลือกโฟลเดอร์ และตรวจความพร้อมก่อน',false);
+    message('สร้างเพลงเสร็จแล้ว · หากต้องการส่งไฟล์ไป XStageSong ให้เปิดเมนูอัปโหลด เลือกโฟลเดอร์ แล้วกดอัปโหลด',false);
   }
   async function startDownload(kind) {
     if (!googleConnected) return message('ต้อง Google Login ก่อนดาวน์โหลด');
