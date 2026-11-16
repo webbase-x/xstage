@@ -2115,7 +2115,9 @@ function releaseQueuePreload(){
 }
 async function prepareQueuedSong(song,token,signal){
   const monitor=window.XStageMemory;
-  if(!monitor||monitor.plan(memoryResources()).heapPressure)return null;
+  if(!monitor)return null;
+  const pressure=monitor.plan(memoryResources());
+  if(pressure.heapPressure||pressure.nativePressure)return null;
   if(getFileId(song.xsk)){
     // The pack and the uncompressed WAV both count against available space.
     const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
