@@ -87,7 +87,7 @@ def read_vlq(stream):
 
 
 def load_midi(path: Path) -> MidiSong:
-    if path.stat().st_size > 64 * 1024 * 1024:
+    if path.suffix.lower() != ".xsk" and path.stat().st_size > 64 * 1024 * 1024:
         raise ValueError("ไฟล์ MIDI ใหญ่เกิน 64 MB")
     if path.suffix.lower() == '.xsk':
         from .xsk_reader import read_xsk
@@ -97,7 +97,8 @@ def load_midi(path: Path) -> MidiSong:
         lyrics = []
         for line in doc['lines']:
             words = []
-            for word in line.get('syllables', []):
+            # NCN XSK2 includes exact per-character CUR timestamps.
+            for word in (line.get('syllables') or line.get('characters') or []):
                 if isinstance(word, dict) and isinstance(word.get('text'), str):
                     when = word.get('start', word.get('startTime'))
                     if isinstance(when, (int, float)) and not isinstance(when, bool):
