@@ -31,6 +31,8 @@ jobs:
         run: |
           python -m compileall -q songstudio-pc scripts
           if ($LASTEXITCODE -ne 0) { throw "Syntax validation failed" }
+          python -m unittest discover -s scripts -p test_songstudio_pc_export.py -v
+          if ($LASTEXITCODE -ne 0) { throw "PC catalog export regression failed" }
           python -m unittest discover -s scripts -p test_songstudio_json_pro.py -v
           if ($LASTEXITCODE -ne 0) { throw "JSON Pro media/transcode/resume regression failed" }
           python -m unittest discover -s scripts -p test_songstudio_json_source_stream.py -v
