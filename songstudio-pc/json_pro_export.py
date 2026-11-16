@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -127,14 +128,46 @@ def _document(row, code, export, ncn):
     return doc
 
 
+def _next_code(used, style, width, preferred, counters):
+    """Allocate a single safe, globally unique code for the media/JSON pair."""
+    preferred = str(preferred or "").strip().upper()
+    if (style == "source" and re.fullmatch(r"[A-Za-z0-9]{1,12}", preferred)
+            and len(preferred) == width and preferred.casefold() not in used):
+        used.add(preferred.casefold())
+        return preferred
+    alphabet = ("0123456789" if style in ("numeric", "source") else
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if style == "letters" else
+                "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    radix = len(alphabet)
+    number = counters.get((style, width), 1)
+    while number < radix ** width:
+        n = number
+        chars = []
+        for _ in range(width):
+            chars.append(alphabet[n % radix])
+            n //= radix
+        code = "".join(reversed(chars))
+        if code.casefold() not in used:
+            used.add(code.casefold())
+            counters[(style, width)] = number + 1
+            return code
+        number += 1
+    raise ValueError("รหัสเพลงเต็มช่วงที่เลือก · กรุณาเพิ่มจำนวนหลัก")
+
+
 def export_folder(source_folder, destination_folder, *, output_format, export, scanner,
-                  ncn=None, convert=None, cancelled=None, progress=None):
+                   ncn=None, convert=None, cancelled=None, progress=None,
+                   code_style="numeric", code_length=5):
     """Create a local Karaoke-compatible catalog; never publish to Google Drive.
 
     output_format is a constrained FFmpeg output extension or 'original'.
     """
     if output_format not in AUDIO_FORMATS:
         raise ValueError("ไม่รองรับรูปแบบเสียงที่เลือก")
+    if code_style not in ("source", "numeric", "letters", "alphanumeric"):
+        raise ValueError("รูปแบบรหัสเพลงไม่ถูกต้อง")
+    if type(code_length) is not int or not 1 <= code_length <= 12:
+        raise ValueError("จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12")
     source = Path(source_folder).expanduser()
     destination = Path(destination_folder).expanduser()
     if (not source.is_dir() or source.is_symlink() or not destination_folder
@@ -151,6 +184,10 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     prior = export.existing_records(root)
     seen = set()
     existing = set()
+    used_codes = {str(row.get("code") or "").casefold() for row in prior if row.get("code")}
+    code_counters = {}
+    # Unindexed complete pairs may be recovered after a crash; keep their codes
+    # available for strict content verification in _can_recover_pair.
     for record in prior:
         if not export.record_is_complete(root, record):
             continue
@@ -183,24 +220,23 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         final_audio = final_lyrics = None
         try:
             source_hash = _fingerprint(media)
-            code = media.stem.strip()
-            if not code or len(code) > 140:
+            source_code = media.stem.strip()
+            if not source_code or len(source_code) > 140:
                 raise ValueError("ชื่อเพลงต้นทางไม่สามารถใช้เป็นรหัสได้")
-            doc = _document(item, code, export, ncn)
+            doc = _document(item, source_code, export, ncn)
             lyric_hash = _lyrics_digest(doc)
             identity = "json-pro/" + source_hash + "/" + output_format + "/" + lyric_hash[:24]
             if (source_hash, output_format, lyric_hash) in seen or identity in existing:
                 skipped += 1
                 continue
-            # Distinct lyric versions produce separate immutable exports,
-            # even when the MIDI/audio file bytes remain identical.
-            slug = (source_hash[:18] + "-" + lyric_hash[:12] +
-                    ("-raw" if output_format == "original" else "-" + output_format))
+            # Allocate after fingerprint deduplication; existing songs never change.
+            code = _next_code(used_codes, code_style, code_length, source_code, code_counters)
+            doc["songCode"] = code
             bucket = export.source_bucket(media.name)
-            relative_audio = "audio/" + bucket + "/" + slug + (
+            relative_audio = "audio/" + bucket + "/" + code + (
                 media.suffix.lower() if output_format == "original"
                 else "." + output_format)
-            relative_lyrics = "lyrics/" + bucket + "/" + slug + ".json"
+            relative_lyrics = "lyrics/" + bucket + "/" + code + ".json"
             final_audio = export.safe_media_path(root, relative_audio, "audio")
             final_lyrics = export.safe_media_path(root, relative_lyrics, "lyrics")
             # Recover an orphaned but verified pair if the process exited

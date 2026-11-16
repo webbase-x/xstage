@@ -700,6 +700,8 @@
     $('xsk-stream-code-length').value = prefs.code_length || '5';
     $('json-pro-source').value = prefs.json_source || '';
     $('json-pro-destination').value = prefs.json_destination || '';
+    $('json-pro-code-style').value = prefs.code_style || 'numeric';
+    $('json-pro-code-length').value = prefs.code_length || '5';
     $('lyric-group-folder').value = prefs.lyric_source || '';
     $('lyric-group-source-status').textContent = prefs.lyric_source
       ? 'ต้นทางที่เลือก: '+prefs.lyric_source+' · ใช้ Lyrics JSON เท่านั้น'
@@ -961,6 +963,8 @@
                   'xsk-stream-code-length': 'code_length',
                   'json-pro-source': 'json_source',
                   'json-pro-destination': 'json_destination',
+                   'json-pro-code-style': 'code_style',
+                   'json-pro-code-length': 'code_length',
                   'lyric-group-folder': 'lyric_source',
                   'upload-soundfont-path': 'soundfont',
                   'settings-oauth': 'oauth'};
@@ -3402,10 +3406,15 @@
     const report=await inspectJsonPro();
     if(!report||!report.ready)return message('ไม่มีชุดเพลงที่ตรวจผ่านพร้อม Lyrics JSON');
     const format=$('json-pro-format').value;
+    const code_style=$('json-pro-code-style').value;
+    const code_length=Number($('json-pro-code-length').value);
+    if(!Number.isInteger(code_length)||code_length<1||code_length>12)
+      return message('จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12');
+    await saveInputs(['json-pro-code-style','json-pro-code-length']);
     // The single "ตกลง" action initiates inspected batch export directly.
     // The engine still rejects invalid sources, duplicates and overwrites.
     $('json-pro-report').textContent='กำลังส่งคำสั่งส่งออก '+fmtNum(report.ready)+' เพลงไปยัง PC Engine…';
-    const started=await run('json-pro-export',{format});
+    const started=await run('json-pro-export',{format,code_style,code_length:String(code_length)});
     if(!started){
       $('json-pro-report').textContent=
         'ยังไม่ได้เริ่มส่งออก '+fmtNum(report.ready)+' เพลง · PC Engine ไม่รับงาน'+

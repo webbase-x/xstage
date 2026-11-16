@@ -55,11 +55,42 @@ class JsonProTests(unittest.TestCase):
         doc = json.loads(lyrics.read_text(encoding="utf-8"))
         self.assertEqual(doc["lines"][0]["startTime"], 2.5)
         self.assertEqual(doc["lines"][1]["startTime"], 5.1)
+        self.assertEqual(record["code"], audio.stem)
+        self.assertEqual(record["code"], lyrics.stem)
+        self.assertEqual(doc["songCode"], record["code"])
+        self.assertEqual(record["code"], "00001")
         second = self.run_export()
         self.assertEqual(second["created"], 0)
         self.assertEqual(second["skipped"], 1)
         self.assertEqual(export._read_current(target)[0]["songCount"], 1)
         self.assertEqual(hashlib.sha256(self.mp3.read_bytes()).hexdigest(), before)
+
+    def test_configurable_code_length_matches_both_files(self):
+        result = self.run_export(code_style="numeric", code_length=7)
+        self.assertEqual(result["created"], 1)
+        root = self.dest / "XStageSong"
+        record = export.existing_records(root)[0]
+        audio = export.safe_media_path(root, record["audio"]["path"], "audio")
+        lyrics = export.safe_media_path(root, record["lyrics"]["path"], "lyrics")
+        self.assertEqual(record["code"], "0000001")
+        self.assertEqual((audio.stem, lyrics.stem), ("0000001", "0000001"))
+        self.assertEqual(json.loads(lyrics.read_text(encoding="utf-8"))["songCode"], "0000001")
+
+    def test_source_code_style_keeps_safe_filename(self):
+        result = self.run_export(code_style="source", code_length=5)
+        self.assertEqual(result["created"], 1)
+        record = export.existing_records(self.dest / "XStageSong")[0]
+        self.assertEqual(record["code"], "00001")
+
+    def test_letters_code_style(self):
+        result = self.run_export(code_style="letters", code_length=3)
+        self.assertEqual(result["created"], 1)
+        record = export.existing_records(self.dest / "XStageSong")[0]
+        self.assertEqual(record["code"], "AAB")
+
+    def test_invalid_code_width_rejected(self):
+        with self.assertRaisesRegex(ValueError, "1–12"):
+            self.run_export(code_length=0)
 
     def test_nested_audio_and_lyrics_json_with_conversion(self):
         self.mp3.unlink()
