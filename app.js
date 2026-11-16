@@ -2177,8 +2177,9 @@ function scheduleQueuePreload(){
     return;
   }
   const monitor=window.XStageMemory;
-  if(!monitor||['high'].includes(monitor.plan(memoryResources()).level)&&
-     monitor.plan(memoryResources()).nativePressure)return;
+  if(!monitor)return;
+  const pressure=monitor.plan(memoryResources());
+  if(pressure.heapPressure||pressure.nativePressure)return;
   if(state.queuePreload){
     if(state.token===state.queuePreload.token&&
        state.queue.includes(state.queuePreload.song))return;
