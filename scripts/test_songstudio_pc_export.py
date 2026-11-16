@@ -75,7 +75,7 @@ class PCExportTests(unittest.TestCase):
         outcome = pc_export.publish(self.source, str(self.destination), export)
         root = self.destination / "XStageSong"
         portable = root / "DB" / "songs-portable.json"
-        self.assertEqual(Path(outcome["portableDatabase"]), portable)
+        self.assertEqual(Path(outcome["portableDatabase"]).resolve(), portable.resolve())
         doc = json.loads(portable.read_text(encoding="utf-8"))
         self.assertEqual(doc["format"], "xstage-portable-song-db")
         self.assertEqual(doc["schemaVersion"], 1)
