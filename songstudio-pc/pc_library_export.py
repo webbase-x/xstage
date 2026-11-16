@@ -356,14 +356,20 @@ def portable_catalog(destination, rows, generation):
         if not isinstance(media, str) or media.split("/", 1)[0] not in ("AUDIO", "VIDEO", "MIDI", "SOUNDFONT"):
             raise ValueError("พาธสื่อแบบพกพาไม่ได้อยู่ในหมวดที่กำหนด")
         audio_path = _safe_rel(media, media.split("/", 1)[0])
-        lyric_root = lyrics.split("/", 1)[0]
-        if lyric_root not in ("LYRICS", "AUDIO", "VIDEO", "MIDI"):
-            raise ValueError("พาธเนื้อร้องในฐานพกพาไม่ถูกต้อง")
-        if lyric_root != "LYRICS" and "/LYRICS/" not in lyrics:
-            raise ValueError("Lyrics JSON ต้องอยู่ในหมวดประเภทเพลง")
-        lyric_path = _safe_rel(lyrics, lyric_root)
+        lyric_path = None
+        if lyrics is not None:
+            lyric_root = lyrics.split("/", 1)[0] if isinstance(lyrics, str) else ""
+            if lyric_root not in ("LYRICS", "AUDIO", "VIDEO", "MIDI"):
+                raise ValueError("พาธเนื้อร้องในฐานพกพาไม่ถูกต้อง")
+            if lyric_root != "LYRICS" and "/LYRICS/" not in lyrics:
+                raise ValueError("Lyrics JSON ต้องอยู่ในหมวดประเภทเพลง")
+            lyric_path = _safe_rel(lyrics, lyric_root)
+        elif audio_path.suffix.casefold() not in (".kar", ".xsk"):
+            raise ValueError("ไฟล์เพลงชนิดนี้ต้องมี Lyrics JSON ที่ครบคู่")
         # Export the same immutable paths validated by the native PC bridge.
         for rel in (audio_path, lyric_path):
+            if rel is None:
+                continue
             file = root / rel
             if (not file.is_file() or file.is_symlink()
                     or not file.resolve().is_relative_to(root.resolve())):
@@ -374,7 +380,7 @@ def portable_catalog(destination, rows, generation):
             "artist": str(row.get("artist") or ""),
             "sourceFormat": row.get("sourceFormat"),
             "audio": {"path": audio_path.as_posix()},
-            "lyrics": {"path": lyric_path.as_posix()},
+            "lyrics": {"path": lyric_path.as_posix()} if lyric_path else None,
         })
     return {
         "schemaVersion": PORTABLE_SCHEMA, "format": PORTABLE_FORMAT,
