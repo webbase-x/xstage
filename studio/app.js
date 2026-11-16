@@ -45,7 +45,6 @@
     'lyric-head-tail': ['แก้ไข Lyrics JSON', '2 บรรทัดแรกและท้าย · จัดกลุ่ม · แทนที่ · ย้อนคืน'],
     upload: ['นำเข้า X-Stage Karaoke Online', 'ส่งเพลงขึ้น Google Drive ส่วนตัว · ตรวจรายการซ้ำก่อนเผยแพร่'],
     'pc-export': ['นำเข้า X-Stage Karaoke PC', 'นำเข้า AUDIO + LYRICS พร้อมสร้าง/อัปเดต songs.sqlite3 ตาม Karaoke PC'],
-    'created-json': ['สร้าง .XSK · Pro', 'เลือกเพลง MIDI + Lyrics JSON ที่สร้างแล้ว · ข้าม MIDI ซ้ำ · ไม่ทับไฟล์เดิม'],
     download: ['ดาวน์โหลด', 'กู้คืน Song / DB / ZIP ผ่านบัญชี Google ของคุณ'],
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
   };
@@ -246,7 +245,6 @@
       aiStopPlayback();
       if(aiMicRecorder?.state==='recording')aiStopMic();
     }
-    if (name === 'created-json') { void refreshCreatedJson(); void refreshProLicense(); }
     if (name === 'ai-lyrics') void aiRefreshSongList();
     if (name === 'settings') void refreshHistory();
     if (name === 'lyric-head-tail') {
