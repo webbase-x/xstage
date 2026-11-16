@@ -81,8 +81,8 @@
             <div class="xsk-auto-builder" id="xsk-auto-builder">
               <div class="section-heading"><div><h3>สแกนและสร้าง .XSK อัตโนมัติ</h3><p>ไม่ต้องสแกนคลังให้จบหรือเลือกเพลง · เริ่มสร้างจากชุดแรกขณะสแกนชุดต่อไป · ทำครั้งละ 32 เพลง โดยคิวรอสูงสุด 4 ชุด</p></div></div>
               <div class="form-2">
-                <div><label for="xsk-stream-code-style">รูปแบบรหัสชื่อไฟล์</label><select id="xsk-stream-code-style" class="field"><option value="source">ใช้รหัสต้นฉบับเมื่อไม่ซ้ำ</option><option value="numeric">ตัวเลขเท่านั้น</option><option value="letters">ตัวอักษร A–Z</option><option value="alphanumeric">ตัวเลขและตัวอักษร A–Z</option></select></div>
-                <div><label for="xsk-stream-code-length">จำนวนหลักรหัส (1–12)</label><input id="xsk-stream-code-length" class="field" type="number" min="1" max="12" step="1" value="6"></div>
+                <div><label for="xsk-stream-code-style">รูปแบบรหัสชื่อไฟล์</label><select id="xsk-stream-code-style" class="field"><option value="source">ใช้รหัสต้นฉบับเมื่อไม่ซ้ำ</option><option value="numeric" selected>ตัวเลขเท่านั้น · เริ่ม 00001 หากว่าง</option><option value="letters">ตัวอักษร A–Z</option><option value="alphanumeric">ตัวเลขและตัวอักษร A–Z</option></select></div>
+                <div><label for="xsk-stream-code-length">จำนวนหลักรหัส (1–12)</label><input id="xsk-stream-code-length" class="field" type="number" min="1" max="12" step="1" value="5"></div>
               </div>
               <p class="hint">ตรวจทุกโฟลเดอร์ย่อยและเลือก MIDI/MID/KAR ที่มีเนื้อร้องพร้อมเวลาตามกฎเดิมอัตโนมัติ · ไม่มีเวลาเนื้อร้องหรือพบไฟล์ผิดปกติจะข้ามและบันทึกเหตุผล · ไม่เขียนทับต้นฉบับหรือ .XSK เดิม</p>
               <div class="toolbar"><button id="xsk-stream-build" class="button primary large" type="button">ตกลง</button></div>
@@ -201,12 +201,12 @@
               <label for="create-code-style">รูปแบบรหัสชื่อไฟล์เพลงที่สร้างใหม่</label>
               <select id="create-code-style" class="field">
                 <option value="source">ใช้รหัสไฟล์ต้นฉบับ (เดิม)</option>
-                <option value="numeric">ตัวเลขเท่านั้น · 0–9</option>
+                <option value="numeric" selected>ตัวเลขเท่านั้น · เริ่ม 00001 หากว่าง</option>
                 <option value="letters">ตัวอักษรภาษาอังกฤษเท่านั้น · A–Z</option>
                 <option value="alphanumeric">ตัวเลขและตัวอักษรภาษาอังกฤษ · 0–9, A–Z</option>
               </select>
               <label for="create-code-length">จำนวนหลักรหัสเพลง (1–12)</label>
-              <input id="create-code-length" class="field" type="number" min="1" max="12" step="1" value="6">
+              <input id="create-code-length" class="field" type="number" min="1" max="12" step="1" value="5">
               <p class="hint">มีผลเฉพาะเพลงที่สร้างใหม่ ไม่เปลี่ยนชื่อไฟล์ที่สร้างแล้ว · ตรวจรหัสซ้ำกับคลังเดิมและ Google Drive ตามเงื่อนไขที่เชื่อมต่อได้</p>
               <div id="pro-legacy-format" hidden>
               <label for="create-export-format">รูปแบบส่งออกเดิม (สำหรับ Pro)</label>
