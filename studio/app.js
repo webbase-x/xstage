@@ -83,9 +83,14 @@
     const active=activeJobs.filter(job=>job.state==='running');
     const slots=parallelCapacity.parallelLimit||1;
     const ram=parallelCapacity.memoryAvailableBytes;
+    const lowRam=Number.isFinite(ram)&&ram<1024**3;
+    const cpuPercent=parallelCapacity.cpuBusyPercent;
     $('parallel-job-summary').textContent='ทำงานพร้อมกัน '+active.length+'/'+slots+
       ' งาน · CPU '+(parallelCapacity.cpuCores||'—')+' คอร์'+
-      (Number.isFinite(ram)?' · RAM เหลือ '+(ram/1024**3).toFixed(1)+' GB':'');
+      (Number.isFinite(cpuPercent)?' · ใช้งาน '+cpuPercent+'%':'')+
+      (Number.isFinite(ram)?' · RAM เหลือ '+(ram/1024**3).toFixed(1)+' GB':'')+
+      (lowRam?' · ⚠ RAM ต่ำกว่า 1 GB: ยังไม่รับงานใหม่':'')+
+      (Number.isFinite(cpuPercent)&&cpuPercent>=92?' · ⚠ CPU สูง':'');
     const recent=[...active,...activeJobs.filter(job=>job.state!=='running').slice(0,3)];
     for(const job of recent){
       const item=document.createElement('div');
@@ -1935,7 +1940,7 @@
       return true;
     } catch (error) {
       if (action === 'build') buildFeedback('error', 'ไม่สามารถเริ่มสร้างเพลงได้', error.message);
-      message(error.message);
+      message('PC Engine ไม่รับงาน: '+error.message);
       return false;
     }
   }
@@ -3253,8 +3258,16 @@
     const format=$('json-pro-format').value;
     // The single "ตกลง" action initiates inspected batch export directly.
     // The engine still rejects invalid sources, duplicates and overwrites.
-    $('json-pro-report').textContent='กำลังเริ่มส่งออก '+fmtNum(report.ready)+' เพลง · ดูความคืบหน้าที่แผงงาน';
-    await run('json-pro-export',{format});
+    $('json-pro-report').textContent='กำลังส่งคำสั่งส่งออก '+fmtNum(report.ready)+' เพลงไปยัง PC Engine…';
+    const started=await run('json-pro-export',{format});
+    if(!started){
+      $('json-pro-report').textContent=
+        'ยังไม่ได้เริ่มส่งออก '+fmtNum(report.ready)+' เพลง · PC Engine ไม่รับงาน'+
+        '\\nตรวจ RAM/CPU และข้อความแจ้งเตือนด้านบน · ยังไม่มีไฟล์ใหม่จากคำสั่งนี้';
+      return;
+    }
+    $('json-pro-report').textContent=
+      'PC Engine รับงานส่งออก '+fmtNum(report.ready)+' เพลงแล้ว · ตรวจความคืบหน้าจริงด้านล่าง';
   }
   $('json-pro-inspect').addEventListener('click',()=>{void inspectJsonPro();});
   $('json-pro-start').addEventListener('click',()=>{void startJsonPro();});
