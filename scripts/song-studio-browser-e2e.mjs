@@ -428,8 +428,7 @@ try {
   // Keep the separate Pro/legacy wizard regression intact. Only this older
   // export mode should require manually choosing tracks.
   await pc.click('.nav-button[data-tab="settings"]');
-  await pc.locator('details:has(#pro-license-key) summary').click();
-  await pc.locator('#pro-license-key').fill('E2E-VALID-PRO-LICENSE');
+  await pc.locator('#pro-license-settings #pro-license-key').fill('E2E-VALID-PRO-LICENSE');
   await pc.click('#pro-license-activate');
   await pc.waitForFunction(()=>document.getElementById('pro-license-status')?.textContent.includes('Pro แล้ว'));
   await pc.click('.nav-button[data-tab="create"]');
