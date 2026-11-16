@@ -1508,7 +1508,7 @@ def build_xsk(rows, mode, options, *, progressive=False):
             # Reserve the filename as well, even if old metadata differs.
             allocator.used.add(existing_path.stem.casefold())
             allocator._track_numeric(existing_path.stem)
-    created = skipped = errors = 0
+    created = skipped = errors = not_ready = 0
     issues = []
     with LOCK:
         JOB["total"] = 0 if progressive else len(rows)
@@ -1553,21 +1553,27 @@ def build_xsk(rows, mode, options, *, progressive=False):
             created += 1
             log("XSK สร้างและตรวจ AES-GCM / SHA-256 ผ่าน: " + code)
         except Exception as exc:
-            errors += 1
             reason = source.name + ": " + str(exc)
-            issues.append(reason)
-            log("ERR " + reason)
+            if progressive and isinstance(exc, ValueError):
+                not_ready += 1
+                log("XSK ข้ามไม่ผ่านเงื่อนไข: " + reason)
+            else:
+                errors += 1
+                log("ERR " + reason)
+            if len(issues) < 50:
+                issues.append(reason)
         finally:
             with LOCK:
                 JOB.update(created=created, skipped=skipped, errors=errors,
-                           m4aCount=0, lyricsCount=created)
+                           notReady=not_ready, m4aCount=0, lyricsCount=created)
             update((f"XSK {index:,}" + (f"/{len(rows):,}" if not progressive else "") +
-                    f" · ใหม่ {created:,} · ซ้ำ {skipped:,} · ERR {errors:,}"), index)
+                    f" · ใหม่ {created:,} · ซ้ำ {skipped:,} · ไม่พร้อม {not_ready:,} · ERR {errors:,}"), index)
     result = {"created": created, "skipped": skipped, "errors": errors,
+              "notReady": not_ready,
               "m4aCount": 0, "lyricsCount": created,
               "output": str(root / "MIDI" / "XSK"),
               "issues": issues[-50:],
-              "message": f"สร้าง XSK {created} เพลง · ข้าม {skipped} · ผิดพลาด {errors}"}
+              "message": f"สร้าง XSK {created} เพลง · ซ้ำ {skipped} · ไม่พร้อม {not_ready} · ผิดพลาด {errors}"}
     if not created and not skipped:
         raise ValueError("ไม่มีเพลงที่สร้างสำเร็จ · " + "; ".join(issues[:3]))
     return result
