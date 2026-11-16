@@ -125,6 +125,18 @@ class CodeRegistryTests(unittest.TestCase):
         allocator = codes.CodeAllocator([old], remote, self.root)
         self.assertFalse(allocator.reconcile_existing())
 
+    def test_new_five_digit_numeric_codes_start_at_lowest_free(self):
+        allocator = codes.CodeAllocator([], [], self.root,
+                                        code_style="numeric", code_length=5)
+        self.assertEqual(allocator.assign_new("91827"), "00001")
+        self.assertEqual(allocator.assign_new("91828"), "00002")
+        self.assertEqual(allocator.assign_new(None), "00003")
+        used = [{"code": "00001"}, {"code": "00003"}]
+        allocator = codes.CodeAllocator(used, [], self.root,
+                                        code_style="numeric", code_length=5)
+        self.assertEqual(allocator.assign_new("00087"), "00002")
+        self.assertEqual(allocator.assign_new(None), "00004")
+
     def test_alphanumeric_conflict_uses_numeric_namespace(self):
         old = self.song("ABC123", "000100", b"A")
         allocator = codes.CodeAllocator([old], [self.remote("ABC123", b"Z")], self.root)
