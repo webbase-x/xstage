@@ -428,7 +428,7 @@ jobs:
             download_url = "$base/download/$tag/$archive"
             release_url = "$base/tag/$tag"
             sha256 = $sha
-            notes = "Build 353: fixes stuck Lyrics JSON starting status when Engine rejects tasks due to low RAM or resource limits; shows accurate admitted-job feedback and system warnings. Includes Build 352 parallel worker engine."
+            notes = "Build 355: selectable Lyrics JSON song-code format and 1–12 character width; generated media filenames, Lyrics JSON filenames, songCode and catalog code match; non-destructive batch export and regression coverage."
           }
           ($metadata | ConvertTo-Json -Depth 5) | Set-Content -Path downloads/song-studio-latest.json -Encoding utf8
           git config user.name "github-actions[bot]"
