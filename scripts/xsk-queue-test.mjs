@@ -89,7 +89,7 @@ const nextEnd=app.indexOf('// Release the finished media and lyrics',nextBegin);
 assert.ok(nextBegin>=0&&nextEnd>nextBegin);
 const runner=new Function('state','scheduleQueuePreload','renderQueue',
   'playSong','clearIdleStage','nextMedleyCandidate','MEDLEY_RECENT_LIMIT',
-  app.slice(nextBegin,nextEnd)+'\\nreturn playNext;');
+  app.slice(nextBegin,nextEnd)+'\nreturn playNext;');
 const active={song,token:'token-001',promise:Promise.resolve({blob:audio,
   lyrics:mimeDoc,song,token:'token-001'}),controller:new AbortController()};
 let accepted=null;
