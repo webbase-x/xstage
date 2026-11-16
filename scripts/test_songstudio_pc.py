@@ -30,6 +30,10 @@ class PcSourceTests(unittest.TestCase):
         # Existing tests explicitly cover Pro-compatible legacy output.
         # Production validation still requires a verified signed license.
         engine.PREFS["export_format"] = "xstage"
+        # Legacy filename regression fixtures explicitly use source-code
+        # naming; new installations default separately to 5-digit numeric.
+        engine.PREFS["code_style"] = "source"
+        engine.PREFS["code_length"] = "6"
         real_module = engine._module
         def testing_module(filename, name):
             if filename == "pro_license.py":
