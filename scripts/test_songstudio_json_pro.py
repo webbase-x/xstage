@@ -151,9 +151,9 @@ class JsonProTests(unittest.TestCase):
             args_seen.extend(args)
             Path(args[-1]).write_bytes(b"ID3" + b"A" * 3000)
 
-        with patch.object(engine, "ensure_midi_wav", side_effect=render), \\
-             patch.object(engine, "ffmpeg_binary", return_value="ffmpeg"), \\
-             patch.object(engine, "run_process", side_effect=ffmpeg):
+        with (patch.object(engine, "ensure_midi_wav", side_effect=render),
+              patch.object(engine, "ffmpeg_binary", return_value="ffmpeg"),
+              patch.object(engine, "run_process", side_effect=ffmpeg)):
             engine.json_pro_transcode(midi, output, "mp3")
         self.assertEqual(args_seen[args_seen.index("-i") + 1], str(wav))
         self.assertTrue(output.is_file())
@@ -169,9 +169,9 @@ class JsonProTests(unittest.TestCase):
             wav.write_bytes(b"RIFF" + b"W" * 3000)
             return wav
 
-        with patch.object(engine, "ensure_midi_wav", side_effect=render), \\
-             patch.object(engine, "ffmpeg_binary", return_value="ffmpeg"), \\
-             patch.object(engine, "run_process", side_effect=RuntimeError("codec failed")):
+        with (patch.object(engine, "ensure_midi_wav", side_effect=render),
+              patch.object(engine, "ffmpeg_binary", return_value="ffmpeg"),
+              patch.object(engine, "run_process", side_effect=RuntimeError("codec failed"))):
             with self.assertRaisesRegex(RuntimeError, "codec failed"):
                 engine.json_pro_transcode(midi, self.dest / "broken.ogg", "ogg")
         self.assertFalse(wav.exists())
