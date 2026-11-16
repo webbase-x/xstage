@@ -20,12 +20,12 @@ The Karaoke PC, Web and APK library contracts remain unchanged.
 
 1. Select a source and a distinct destination once.
 2. Walk directories lazily without computing a total number of songs first.
-3. For each **existing** `00001.mid` and same-code `00001.lyr` + `00001.cur`, use the original timed NCN input. Sibling SON(G)/LYR/CUR buckets are supported; files must actually exist.
-4. For `.kar` or an SMF with embedded lyric events, parse its real lyric cues at the conversion stage.
-5. A previously created `.json` or `.lrc` can still be imported as an optional compatibility source, but no generated `.json` is demanded before conversion.
-6. Per-song validation, collision prevention and SHA-256 verification stay enabled. No synthetic lyric timestamps.
-7. Journal each completed output. On a repeat run, existing source fingerprints/catalog records prevent duplicates. Interrupted work remains recoverable from the journal.
-8. Show real `discovered/created/skipped/errors` counts without pretending that a full-library denominator is known.
+3. Prioritize actual SONG folders; do not recursively enumerate a sibling LYR/CUR/LYRICS directory when its files can be opened by filename directly.\n4. For each **existing** `00001.mid` and same-code `00001.lyr` + `00001.cur`, use the original timed NCN input. Sibling SON(G)/LYR/CUR buckets are supported; files must actually exist.
+5. For `.kar` or an SMF with embedded lyric events, parse its real lyric cues at the conversion stage.
+6. A previously created `.json` or `.lrc` can still be imported as an optional compatibility source, but no generated `.json` is demanded before conversion.
+7. Per-song validation, collision prevention and SHA-256 verification stay enabled. No synthetic lyric timestamps.
+8. Journal each completed output. On a repeat run, existing source fingerprints/catalog records prevent duplicates. Interrupted work remains recoverable from the journal.
+9. Show real `discovered/created/skipped/errors` counts without pretending that a full-library denominator is known.
 
 ## Practical performance constraints
 
