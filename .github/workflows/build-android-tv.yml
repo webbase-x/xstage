@@ -10,6 +10,7 @@ on:
       - "android-apk-download.js"
       - "style.css"
       - "index.html"
+      - "stage.html"
       - "xstage-ux.css"
       - "stage-controls.js"
       - "remote.js"
