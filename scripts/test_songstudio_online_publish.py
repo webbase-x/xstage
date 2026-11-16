@@ -127,6 +127,45 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(again["newSongs"], 0)
         self.assertEqual(self.pointer()[0]["songCount"], 1)
 
+    def test_portable_pc_export_reaches_web_and_apk_file_id_catalog(self):
+        portable = self.base / "portable-XStageSong"
+        sound = portable / "AUDIO" / "0" / "00001.m4a"
+        lyrics = portable / "LYRICS" / "0" / "00001.json"
+        sound.parent.mkdir(parents=True)
+        lyrics.parent.mkdir(parents=True)
+        sound.write_bytes(b"A" * 5200)
+        lyrics.write_text(json.dumps({
+            "schemaVersion": 1,
+            "lines": [{"startTime": 1, "endTime": 3, "text": "คำร้อง"}]
+        }, ensure_ascii=False), encoding="utf-8")
+        db = portable / "DB" / "songs-portable.json"
+        db.parent.mkdir(parents=True)
+        db.write_text(json.dumps({
+            "schemaVersion": 1, "format": "xstage-portable-song-db",
+            "layoutVersion": 4, "generation": "test-portable",
+            "songCount": 1, "songs": [{
+                "webSongId": "audio/0/00001", "code": "00001",
+                "title": "เพลงจาก PC", "artist": "ผู้ร้อง",
+                "audio": {"path": "AUDIO/0/00001.m4a"},
+                "lyrics": {"path": "LYRICS/0/00001.json"},
+            }]
+        }, ensure_ascii=False), encoding="utf-8")
+        row = {
+            "webSongId": "audio/0/00001", "code": "00001",
+            "title": "เพลงจาก PC", "artist": "ผู้ร้อง",
+            "audio": {"path": "audio/0/00001.m4a"},
+            "lyrics": {"path": "lyrics/0/00001.json"}
+        }
+        result = self.publisher.publish(portable, [row])
+        self.assertEqual(result["newSongs"], 1)
+        self.assertEqual(self.pointer()[0]["songCount"], 1)
+        remote = self.published()["audio/0/00001"]
+        self.assertEqual(remote["title"], "เพลงจาก PC")
+        self.assertIn(remote["audio"]["fileId"], self.drive.items)
+        self.assertIn(remote["lyrics"]["fileId"], self.drive.items)
+        again = self.publisher.publish(portable, [row])
+        self.assertEqual(again["duplicates"], 1)
+
     def test_first_publish_matches_online_schema_and_uploads_real_private_files(self):
         result = self.publisher.publish(self.root, [self.first])
         self.assertTrue(result["published"])
