@@ -1,4 +1,4 @@
-## Next Source Preview Build 206
+## Next Source Preview Build 207
 
 This preview adds a separate MIDI-to-XSK destination, Lyrics AI file metadata/lyrics reread, source audio copy/transcoding, Pro Lyrics JSON export, and additional regression gates. It is not a Windows PC Ready bundle or a verified installer. Check GitHub Actions and the release assets before downloading.
 
@@ -52,6 +52,6 @@ X-Stage-Song-Studio-PC-Source-Preview/
 
 Setup creates `.runtime/` and `data/` adjacent to these files.
 
-**Download path in repository:** `downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.6-Build206-Preview.zip`
+**Download path in repository:** `downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.7-Build207-Preview.zip`
 
 > The release string in the ZIP filename denotes the requested *target* PC interface/build lineage, not proof that the original Build 205's full source has been recovered.
