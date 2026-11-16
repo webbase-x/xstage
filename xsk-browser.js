@@ -98,7 +98,24 @@ async function openPackage(file){
   if(digest!==audio.sha256.toLowerCase()||media.length!==audio.size)
     fail('SHA-256 ของ MIDI ภายใน XSK ไม่ตรง');
   // Compatible with the existing catalog/player schemaVersion 1.
-  const normalized={...doc,schemaVersion:1,sourceFormat:'XSK'};
+  // Keep NCN's exact per-character CUR timings for the Web/APK renderer,
+  // which consumes "syllables" start/duration rather than "characters".
+  const lines=doc.lines.map((line,i)=>{
+    if(!Array.isArray(line.characters)||!line.characters.length||
+       Array.isArray(line.syllables)&&line.syllables.length)return line;
+    const chars=line.characters;
+    const end=Number.isFinite(line.endTime)?line.endTime:
+      Number.isFinite(doc.lines[i+1]?.startTime)?doc.lines[i+1].startTime:
+      Number(chars[chars.length-1].startTime)+0.3;
+    const syllables=chars.map((char,j)=>{
+      const start=Number(char.startTime??char.start);
+      const next=Number(chars[j+1]?.startTime??chars[j+1]?.start);
+      return {text:String(char.text??''),start,
+        duration:Math.max(0,(Number.isFinite(next)?next:end)-start)};
+    });
+    return {...line,endTime:end,syllables};
+  });
+  const normalized={...doc,lines,schemaVersion:1,sourceFormat:'XSK'};
   const core=scope.XStageImportCore;
   if(!core?.validLyricsJson)fail('ไม่พบระบบตรวจสอบ Lyrics JSON ของ X-Stage');
   core.validLyricsJson(normalized,doc.songCode);
