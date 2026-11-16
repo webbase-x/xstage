@@ -6,7 +6,7 @@ import re
 from zipfile import ZipFile, ZIP_DEFLATED, ZipInfo
 
 REPO = Path(__file__).resolve().parents[1]
-DEST = REPO / "downloads" / "X-Stage-Song-Studio-PC-Source-Launcher-v0.2.7-Build207-Preview.zip"
+DEST = REPO / "downloads" / "X-Stage-Song-Studio-PC-Source-Launcher-v0.2.8-Build208-Preview.zip"
 ROOT = "X-Stage-Song-Studio-PC-Source-Preview"
 FILES = {
     "songstudio-pc/Start-Song-Studio.cmd": "Start-Song-Studio.cmd",
