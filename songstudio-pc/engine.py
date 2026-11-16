@@ -60,6 +60,7 @@ NOTES_FILE = DATA / "song-metadata.json"
 LOCK = threading.RLock()
 TOKEN = secrets.token_urlsafe(40)
 PORT = None
+BROWSER_PROCESS = None
 JOB = {
     "id": "", "kind": "", "state": "idle", "stage": "พร้อมใช้งาน",
     "detail": "", "completed": 0, "total": 0, "elapsed": 0,
@@ -2437,7 +2438,7 @@ def execute_job(action, options, started):
                 and os.name == "nt" and READY_BUNDLE):
             # Leave enough time for the browser to receive the success result.
             # New Ready engine runs from its own verified version folder.
-            timer = threading.Timer(8.0, lambda: os._exit(0))
+            timer = threading.Timer(3.0, close_old_version_after_handoff)
             timer.daemon = True
             timer.start()
     except Exception as exc:
@@ -3866,8 +3867,24 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._json({"error": "เกิดข้อผิดพลาด: " + str(exc)}, 500)
 
+def close_old_version_after_handoff():
+    """Close only our isolated Edge app window, then retire this Engine.
+
+    The updater calls this only after the new offline Engine confirms startup.
+    Never terminate a shared browser profile or unrelated user processes.
+    """
+    browser = BROWSER_PROCESS
+    if browser and browser.poll() is None:
+        try:
+            browser.terminate()
+            browser.wait(timeout=2)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    os._exit(0)
+
+
 def main():
-    global PORT
+    global PORT, BROWSER_PROCESS
     count = 0
     try:
         count = restore_song_catalog()
@@ -3899,8 +3916,14 @@ def main():
                         flags += [f"--window-size={cx},{cy}", "--window-position=0,0"]
                     except (AttributeError, OSError):
                         pass
-                subprocess.Popen([str(edge), *flags, "--app=" + url],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Dedicated Edge profile isolates the Song Studio app window
+                # from the user's normal Edge tabs, allowing safe auto-close.
+                profile = DATA / "edge-app-profiles" / str(os.getpid())
+                profile.mkdir(parents=True, exist_ok=True)
+                BROWSER_PROCESS = subprocess.Popen(
+                    [str(edge), "--user-data-dir=" + str(profile),
+                     *flags, "--app=" + url],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 webbrowser.open(url)
         except Exception:
