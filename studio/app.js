@@ -149,19 +149,57 @@
   let pendingAiAlignment = null;
   let aiDetailsDirty = false;
 
+  // Keep a visible, non-fake heartbeat while any slow API operation is
+  // awaiting the Engine. Exclude the regular status polling requests.
+  const pendingRequests = new Map();
+  let requestSerial=0;
+  function updateRequestActivity() {
+    const panel=$('request-activity');
+    if(!panel)return;
+    const now=Date.now();
+    const visible=[...pendingRequests.values()].filter(x=>now-x.started>=700);
+    panel.hidden=visible.length===0;
+    if(!visible.length)return;
+    const oldest=visible.reduce((a,b)=>a.started<b.started?a:b);
+    const elapsed=Math.floor((now-oldest.started)/1000);
+    const seconds=fmtTime(elapsed);
+    const warning=elapsed>=60?' · ไม่มีคำตอบกลับเกิน 1 นาที โปรดตรวจสถานะเครื่อง':
+      elapsed>=20?' · ยังรอ PC Engine ตอบกลับ':'';
+    $('request-activity-text').textContent=
+      'กำลังติดต่อ PC Engine '+visible.length+' รายการ · '+oldest.name+
+      ' · ผ่านไป '+seconds+warning+' (ไม่ใช่เปอร์เซ็นต์ความคืบหน้า)';
+  }
+  const requestHeartbeat=setInterval(updateRequestActivity,750);
+  function requestLabel(path,method) {
+    if(path.includes('/inspect'))return 'ตรวจสอบไฟล์และข้อมูลต้นทาง';
+    if(path.includes('/folder-picker'))return 'เปิดหน้าต่างเลือกโฟลเดอร์';
+    if(path.includes('/jobs'))return method==='POST'?'ส่งคำสั่งงาน':'อ่านสถานะงาน';
+    if(path.includes('/config'))return 'บันทึกการตั้งค่า';
+    if(path.includes('/song'))return 'อ่านข้อมูลเพลง';
+    return 'อ่านหรือบันทึกข้อมูล';
+  }
   async function api(path, opts = {}) {
     if (!engineBase || !token) throw new Error('กรุณาเชื่อมต่อ Local Engine บน PC จากเมนู “เปิด Web Control”');
-    const response = await fetch(engineAddress(path), {
-      cache: 'no-store', credentials: onlinePage ? 'omit' : 'same-origin',
-      mode: onlinePage ? 'cors' : 'same-origin',
-      ...opts,
-      headers: {'X-XStage-Token': token, ...(opts.body ? {'Content-Type': 'application/json'} : {}), ...(opts.headers || {})}
-    });
-    const text = await response.text();
-    let payload;
-    try { payload = text ? JSON.parse(text) : {}; } catch { payload = {error: 'รูปแบบข้อมูลจาก Local Engine ไม่ถูกต้อง'}; }
-    if (!response.ok) throw new Error(payload.error || 'Local Engine ไม่ตอบรับคำสั่ง');
-    return payload;
+    const track=!(/^\\/api\\/(status|environment)(?:\\?|$)/.test(path));
+    const serial=++requestSerial;
+    if(track)pendingRequests.set(serial,{started:Date.now(),name:requestLabel(path,opts.method||'GET')});
+    try {
+      const response = await fetch(engineAddress(path), {
+        cache: 'no-store', credentials: onlinePage ? 'omit' : 'same-origin',
+        mode: onlinePage ? 'cors' : 'same-origin',
+        ...opts,
+        headers: {'X-XStage-Token': token, ...(opts.body ? {'Content-Type': 'application/json'} : {}), ...(opts.headers || {})}
+      });
+      const text = await response.text();
+      let payload;
+      try { payload = text ? JSON.parse(text) : {}; }
+      catch { payload = {error: 'รูปแบบข้อมูลจาก Local Engine ไม่ถูกต้อง'}; }
+      if (!response.ok) throw new Error(payload.error || 'Local Engine ไม่ตอบรับคำสั่ง');
+      return payload;
+    } finally {
+      pendingRequests.delete(serial);
+      updateRequestActivity();
+    }
   }
   const post = (path, data) => api(path, {method: 'POST', body: JSON.stringify(data)});
   // Every long inspection gets an honest elapsed-time heartbeat. No invented
