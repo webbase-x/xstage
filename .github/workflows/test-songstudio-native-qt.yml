@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded ~650 MB Windows builds on this development branch.
+concurrency:
+  group: songstudio-native-qt-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   native-qt-smoke:
     runs-on: windows-2022
