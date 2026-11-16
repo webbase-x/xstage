@@ -522,8 +522,18 @@ try {
   assert.equal(await pc.locator('#create-output-kind').inputValue(), 'xstage');
   for(let step=0;step<3;step++)await pc.click('#create-step-previous');
   assert.equal(await pc.locator('#create-stage-1').isVisible(),true);
+  const audioListReload=pc.waitForResponse(res=>{
+    try{return new URL(res.url()).pathname==='/api/songs' &&
+      new URL(res.url()).searchParams.get('midi_only')==='0';}
+    catch{return false;}
+  });
   await pc.locator('#create-output-kind').selectOption('m4a');
-  for(let step=0;step<3;step++)await pc.click('#create-step-next');
+  await audioListReload;
+  await pc.click('#create-step-next'); // step 2, source format change resets selections
+  await pc.locator('#song-rows tr[data-id="1"]').waitFor();
+  await pc.locator('#song-rows tr[data-id="1"]').click(); // select for M4A mode
+  await pc.click('#create-step-next'); // step 3
+  await pc.click('#create-step-next'); // step 4
   assert.equal(await pc.locator('#create-stage-4').isVisible(),true);
   await pc.locator('#build-audio-button').waitFor({state:'visible'});
   assert.equal(await pc.locator('#build-audio-button').isEnabled(), true);
