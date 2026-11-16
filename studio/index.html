@@ -29,7 +29,6 @@
         <button class="nav-button" data-tab="lyric-head-tail"><span class="nav-glyph" aria-hidden="true">⇄</span><span>แก้ไข Lyrics JSON<small>2 บรรทัดแรก/ท้าย · จัดกลุ่ม · สำรอง · Undo</small></span></button>
         <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>นำเข้า X-Stage Karaoke Online<small>Google Drive · คลังส่วนตัว</small></span></button>
         <button class="nav-button" data-tab="pc-export"><span class="nav-glyph" aria-hidden="true">▣</span><span>นำเข้า X-Stage Karaoke PC<small>AUDIO + LYRICS + SQLite DB</small></span></button>
-        <button class="nav-button" data-tab="created-json"><span class="nav-glyph" aria-hidden="true">▤</span><span>XSK จากคลัง <small>Pro · MIDI + Lyrics JSON ที่สร้างแล้ว</small></span></button>
         <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
         <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
       </nav>
@@ -519,7 +518,8 @@
           </article>
         </section>
 
-        <section id="tab-created-json" class="tab">
+        <!-- Legacy controls retained as inert DOM for old UI event handlers; menu is retired. -->
+        <section id="tab-created-json" class="tab" hidden aria-hidden="true">
           <div class="section-top"><div><div class="eyebrow">CREATED FILES · XSTAGESONG</div><h2>สร้าง .XSK จากเพลงที่มีอยู่</h2><p>เลือกเพลง MIDI/KAR พร้อม Lyrics JSON ที่อยู่ในคลังที่สร้างแล้ว · ตรวจ MIDI ซ้ำด้วย SHA-256 · ไม่เขียนทับไฟล์ต้นฉบับหรือ XSK เดิม</p></div><span class="chip amber">PRO LICENSE REQUIRED</span></div>
           <article class="panel">
             <div class="xsk-pro-panel">
