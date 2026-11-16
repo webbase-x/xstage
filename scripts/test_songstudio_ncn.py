@@ -87,7 +87,7 @@ class NcnSourceTests(unittest.TestCase):
         song = folder / "00001(1).mid"
         song.write_bytes(midi())
         (folder / "00001(1).lyr").write_bytes(
-            "ทำได้เพียง\\n25 Hours\\n\\n.\\nสวัสดี\\n".encode("cp874"))
+            "ทำได้เพียง\n25 Hours\n\n.\nสวัสดี\n".encode("cp874"))
         (folder / "00001(1).cur").write_bytes(
             struct.pack("<" + "H" * 8, *range(8)))
         found = ncn.resolve_companions(song)
@@ -104,8 +104,8 @@ class NcnSourceTests(unittest.TestCase):
         folder.mkdir()
         song = folder / "00001.mid"
         song.write_bytes(midi())
-        (folder / "00001.lyr").write_bytes("ชื่อเพลง\\nศิลปิน\\n\\nคำร้อง".encode("cp874"))
-        (folder / "00002.cur").write_bytes(b"\\x00\\x00")
+        (folder / "00001.lyr").write_bytes("ชื่อเพลง\nศิลปิน\n\nคำร้อง".encode("cp874"))
+        (folder / "00002.cur").write_bytes(b"\x00\x00")
         found = ncn.resolve_companions(song)
         self.assertEqual(found["missing"], ["cursor"])
         with self.assertRaisesRegex(ValueError, "NCN ไม่ครบ"):
