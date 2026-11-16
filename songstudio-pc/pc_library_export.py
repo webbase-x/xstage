@@ -104,11 +104,11 @@ def _files(source):
              ("lyrics", ALLOWED_LYRICS))
     typed = (("AUDIO", ALLOWED_MEDIA | {".xsk"} | VIDEO_EXT),
              ("VIDEO", VIDEO_EXT),
-             ("MIDI", {".mid", ".midi", ".kar", ".xsk"}),
+             ("MIDI", {".mid", ".midi", ".kar", ".xsk", ".json"}),
              ("LYRICS", ALLOWED_LYRICS),
              ("SOUNDFONT", {".sf2", ".sf3"}))
     if not (any((source / name).is_dir() for name in ("audio", "AUDIO", "VIDEO", "MIDI"))
-            and any((source / name).is_dir() for name in ("lyrics", "LYRICS"))):
+            and any((source / name).is_dir() for name in ("lyrics", "LYRICS", "AUDIO", "VIDEO", "MIDI"))):
         raise ValueError("คลังเพลงต้องมีโฟลเดอร์เพลงและ Lyrics JSON ที่ใช้งานได้")
     # Windows resolves AUDIO as audio on case-insensitive filesystems.
     # Use the actual on-disk directory spelling to avoid visiting each tree
@@ -202,6 +202,9 @@ def _pc_row(row, replacements=None):
         root_name = incoming.split("/", 1)[0]
         if root_name in ("AUDIO", "VIDEO", "MIDI", "SOUNDFONT", "LYRICS"):
             path = _safe_rel(incoming, root_name)
+            if key == "lyrics" and root_name not in ("LYRICS",):
+                if "/LYRICS/" not in incoming or "/SONG/" in incoming:
+                    raise ValueError("ไฟล์เนื้อร้องต้องอยู่ใน LYRICS ของประเภทเพลง")
             original = path.as_posix()
         elif key == "lyrics":
             path = _safe_rel(incoming, "lyrics")
@@ -350,7 +353,12 @@ def portable_catalog(destination, rows, generation):
         if not isinstance(media, str) or media.split("/", 1)[0] not in ("AUDIO", "VIDEO", "MIDI", "SOUNDFONT"):
             raise ValueError("พาธสื่อแบบพกพาไม่ได้อยู่ในหมวดที่กำหนด")
         audio_path = _safe_rel(media, media.split("/", 1)[0])
-        lyric_path = _safe_rel(lyrics, "LYRICS")
+        lyric_root = lyrics.split("/", 1)[0]
+        if lyric_root not in ("LYRICS", "AUDIO", "VIDEO", "MIDI"):
+            raise ValueError("พาธเนื้อร้องในฐานพกพาไม่ถูกต้อง")
+        if lyric_root != "LYRICS" and "/LYRICS/" not in lyrics:
+            raise ValueError("Lyrics JSON ต้องอยู่ในหมวดประเภทเพลง")
+        lyric_path = _safe_rel(lyrics, lyric_root)
         # Export the same immutable paths validated by the native PC bridge.
         for rel in (audio_path, lyric_path):
             file = root / rel
