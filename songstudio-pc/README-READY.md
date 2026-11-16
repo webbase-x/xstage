@@ -6,7 +6,7 @@
 - Display scanned, found, converted, duplicate, incomplete and error counts. An overall percentage is shown only after full enumeration; errors accessing subfolders fail the job rather than silently omitting songs.
 - The existing Pro legacy media-export wizard is not altered. Automated tests and Windows release verification must pass before claiming the next ZIP is ready.
 
-## Candidate features for Build 347
+## Release features for Build 348
 
 - MIDI to .XSK selects the source, independent output folder, and code length using the existing dedup/packaging format.
 - Lyrics AI can reread media tags and paired timed JSON; export reviewed LRC and optionally an unchanged source or transcoded audio.
@@ -14,7 +14,7 @@
 - Lyrics JSON grouped editing, Online/PC import, Drive catalog publishing, backup and downloads continue using their established implementations.
 - All changes remain subject to automated Windows and browser testing. A source commit is not proof that the Ready ZIP was built or that Google Drive sign-in is working on a user's machine.
 
-# X-Stage Song Studio PC Ready v0.3.47 Build 347
+# X-Stage Song Studio PC Ready v0.3.48 Build 348
 
 **Windows 10/11 x64 · portable · no installers / no download-on-first-run**
 
@@ -22,14 +22,14 @@ This is the new bundled distribution of the existing `songstudio-pc` preview eng
 
 ## Release metadata
 
-- Verified PC Ready ZIP pointer: `downloads/song-studio-latest.json`. It changes to Build 347 **only after** the Windows workflow passes its offline tests, the Release uploads successfully, and the checksum is verified. Until then use the version advertised in that file.
-- Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.6 Build 206, not a ready installer).
+- Verified PC Ready ZIP pointer: `downloads/song-studio-latest.json`. It changes to Build 348 **only after** the Windows workflow passes its offline tests, the Release uploads successfully, and the checksum is verified. Until then use the version advertised in that file.
+- Legacy Source Preview: `downloads/song-studio-source-preview-latest.json` (v0.2.7 Build 207, not a ready installer).
 - Verify the published ZIP checksum with the matching GitHub Release `.zip.sha256` asset or the `sha256` field in `downloads/song-studio-latest.json` (after the release is published). Do not use hashes from older builds. This is **not** a signed EXE or MSI installer.
 - Both the Source Preview launcher and CI Ready builder pin Python 3.13.10's official SHA-256 before extracting any Python archive.
 
 ## Open from Windows
 
-1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.47-build347.zip** **only after it appears as a verified asset** on the GitHub Releases page; do not mistake the Source Preview ZIP for the fully bundled Ready ZIP.
+1. Download **X-Stage-Song-Studio-PC-Ready-v0.3.48-build348.zip** **only after it appears as a verified asset** on the GitHub Releases page; do not mistake the Source Preview ZIP for the fully bundled Ready ZIP.
 2. Extract the **entire ZIP archive** into a folder. Do not launch the CMD directly inside the ZIP preview.
 3. Double-click **Start-Song-Studio.cmd**.
 4. The Windows folder picker and SoundFont file picker open visibly in the foreground, including Thai-language folder names. No external tools are required.
