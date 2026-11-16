@@ -2264,11 +2264,12 @@ function renderQueue() {
   state.queue.forEach((song,i)=>{
     const item=element('li','queue-item');
     const info=element('div','queue-info');
-    const waiting=!!getFileId(song.xsk)&&state.queuePreload?.song===song;
+    const waiting=state.queuePreload?.song===song;
     const ready=state.queuePreparedCache.has(song);
     info.append(element('strong','',song.title||'ไม่ระบุชื่อเพลง'),
       element('small','',(song.artist||song.code||'')+
-        (ready?' · เตรียมพร้อมเล่นแล้ว':waiting?' · กำลังเตรียม XSK2 ล่วงหน้า':'')));
+        (ready?' · เตรียมพร้อมเล่นแล้ว':waiting?' · กำลังโหลดรอในงบ RAM':
+          state.queuePreloadSkipped.has(song)?' · รอโหลดเมื่อถึงคิว':'')));
     const buttons=element('div','queue-controls');
     const up=control('↑',()=>moveQueue(i,-1),'เลื่อนขึ้น');up.disabled=i===0;
     const down=control('↓',()=>moveQueue(i,1),'เลื่อนลง');down.disabled=i===state.queue.length-1;
@@ -2281,14 +2282,30 @@ function renderQueue() {
   });
 }
 function moveQueue(index,step){const target=index+step;if(target<0||target>=state.queue.length)return;[state.queue[index],state.queue[target]]=[state.queue[target],state.queue[index]];renderQueue();}
+function releaseFinishedMedia(){
+  // Drop the completed/aborted track's media objects, but preserve its
+  // identity in history until playSong starts the next one.
+  try{player.pause();}catch{}
+  if(state.objectUrl){
+    URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl='';
+    player.removeAttribute('src');
+  }
+  resetSongVideo();
+  state.activeBlobBytes=0;state.activeVideoBytes=0;
+  trimQueueCache();
+}
 function playNext(){
   const queued=state.queue.shift();
-  const preparedQueued=queued&&state.queuePrepared?.song===queued?state.queuePrepared:null;
+  const preparedQueued=queued?(state.queuePreparedCache.get(queued)||null):null;
+  if(queued)state.queuePreparedCache.delete(queued);
   // Promote an XSK2 pre-render that is still running to active playback.
   // The next queue's preloader must not abort this in-flight job.
   const pendingQueued=queued&&state.queuePreload?.song===queued?state.queuePreload:null;
   if(preparedQueued)state.queuePrepared=null;
   if(pendingQueued)state.queuePreload=null;
+  state.queuePreloadSkipped.clear();
+  releaseFinishedMedia();
   scheduleQueuePreload();
   const song=queued||(state.medley?nextMedleyCandidate():null);
   if(!queued)state.medleyUpcoming=null;
@@ -2347,6 +2364,8 @@ function clearIdleStage(message){
   player.load();
   if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
   state.objectUrl='';
+  state.activeBlobBytes=0;
+  state.activeVideoBytes=0;
   state.current=null;
   state.lyrics=null;
   clearPlaybackResumeState();
@@ -2417,18 +2436,23 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
   state.loading=true;updateTransport();setPlayStatus('กำลังโหลดเสียงและเนื้อร้องจาก Google Drive…');
   publishPlaybackStatus('loading',song,'กำลังเตรียมไฟล์เพลงจาก Google Drive');
   try {
+    const cached=state.queuePreparedCache.get(song);
     const prepared=(preloaded?.song===song&&preloaded.token===token?preloaded
-      :state.queuePrepared?.song===song&&state.queuePrepared.token===token
-      ?state.queuePrepared:state.medleyCache?.song===song&&state.token===token?state.medleyCache:null);
-    if(prepared){if(state.queuePrepared===prepared)state.queuePrepared=null;if(state.medleyCache===prepared)state.medleyCache=null;}
+      :cached?.token===token?cached
+      :state.medleyCache?.song===song&&state.token===token?state.medleyCache:null);
+    if(prepared){
+      state.queuePreparedCache.delete(song);
+      if(state.queuePrepared===prepared)state.queuePrepared=null;
+      if(state.medleyCache===prepared)state.medleyCache=null;
+    }
     let pendingPrepared=null;
     if(!prepared&&pending?.song===song&&pending.token===token&&pending.promise){
-      setPlayStatus('กำลังรับช่วง XSK2 ที่เตรียมล่วงหน้าอยู่…');
+      setPlayStatus('กำลังรับช่วงเพลงที่เตรียมล่วงหน้าอยู่…');
       const stopPending=()=>pending.controller.abort();
       controller.signal.addEventListener('abort',stopPending,{once:true});
       try{
         const result=await boundedPlaybackTask(pending.promise,120,
-          'เตรียม XSK2 ที่อยู่ในคิวนานเกินไป',controller);
+          'เตรียมเพลงที่อยู่ในคิวนานเกินไป',controller);
         if(result?.song===song&&result.token===token&&result.blob?.size&&
            result.lyrics?.schemaVersion===1)pendingPrepared=result;
       }catch(error){
@@ -2457,7 +2481,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       return rendered.audio;
     };
     let audio,lyrics;
-    if(readyPrepared&&(getFileId(song.xsk)||!getFileId(song.midi))){
+    if(readyPrepared){
       // XSK2 prepared fully or in progress while queued: consume its
       // verified audio directly, without duplicating download/render.
       ({blob:audio,lyrics}=readyPrepared);
@@ -2480,6 +2504,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if (remember && state.current)state.history.push(state.current);
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
     state.objectUrl=url;state.current=song;state.lyrics=lyrics;
+    state.activeBlobBytes=audio.size||0;trimQueueCache();
     resetSongVideo();
     preferOriginalVideo=true;
     if(getFileId(song.video))void loadSongVideo(song,request,token,controller.signal);
