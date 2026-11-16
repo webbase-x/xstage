@@ -411,6 +411,30 @@ try {
   });
   assert.equal(await pc.locator('link[rel="icon"]').getAttribute('href'), './app-icon.svg');
   assert.equal(await pc.locator('#create-stage-1').isVisible(), true, 'step 1 should be visible initially');
+  assert.equal(await pc.locator('#xsk-stream-build').isVisible(), true,
+    'MIDI XSK must start from the source folder without manual song selection');
+  assert.equal(await pc.locator('#create-step-next').isVisible(), false,
+    'MIDI XSK must hide the old song-selection wizard');
+  const xskStreamingJob=pc.waitForRequest(req=>{
+    try{return new URL(req.url()).pathname==='/api/jobs' &&
+      req.postDataJSON()?.action==='xsk-stream' &&
+      !('ids' in req.postDataJSON());}catch{return false;}
+  });
+  await pc.click('#xsk-stream-build');
+  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  assert.match(await pc.locator('#studio-confirm-message').innerText(),/32 เพลง/);
+  await pc.click('#studio-confirm-ok');
+  await xskStreamingJob;
+  // Keep the separate Pro/legacy wizard regression intact. Only this older
+  // export mode should require manually choosing tracks.
+  await pc.click('.nav-button[data-tab="settings"]');
+  await pc.locator('details:has(#pro-license-key) summary').click();
+  await pc.locator('#pro-license-key').fill('E2E-VALID-PRO-LICENSE');
+  await pc.click('#pro-license-activate');
+  await pc.waitForFunction(()=>document.getElementById('pro-license-status')?.textContent.includes('Pro แล้ว'));
+  await pc.click('.nav-button[data-tab="create"]');
+  await pc.locator('#create-output-kind').selectOption('xstage');
+  await pc.waitForFunction(()=>!document.getElementById('tab-create')?.classList.contains('xsk-auto-mode'));
   await pc.click('#verify-code-registry');
   await pc.waitForFunction(() => document.querySelector('#code-registry-state')?.textContent.includes('TEST001'));
   assert.match(await pc.locator('#code-registry-state').innerText(), /000001/,
@@ -494,19 +518,11 @@ try {
   await pc.waitForFunction(() => document.getElementById('create-build-feedback-title')?.textContent.includes('รับคำสั่ง'));
   assert.match(await pc.locator('#create-build-feedback-detail').innerText(), /pc-wizard-smoke-job/);
 
-  // General users cannot export raw M4A; its control must remain hidden.
-  assert.equal(await pc.locator('#build-audio-button').isVisible(), false);
-  assert.equal(await pc.locator('#create-output-kind').inputValue(), 'xsk');
-  // Go back to the source stage where Pro activation is available;
-  // the wizard must preserve selected tracks across navigation.
+  // The separate Pro legacy wizard retains its existing track selection,
+  // live MIDI preview and manual audio-only workflow.
+  assert.equal(await pc.locator('#create-output-kind').inputValue(), 'xstage');
   for(let step=0;step<3;step++)await pc.click('#create-step-previous');
   assert.equal(await pc.locator('#create-stage-1').isVisible(),true);
-  // Simulate a successfully verified owner Pro license and prove the legacy
-  // choice becomes visible before exercising the existing audio-only action.
-  await pc.locator('details:has(#pro-license-key) summary').click();
-  await pc.locator('#pro-license-key').fill('E2E-VALID-PRO-LICENSE');
-  await pc.click('#pro-license-activate');
-  await pc.waitForFunction(()=>document.getElementById('pro-license-status')?.textContent.includes('Pro แล้ว'));
   await pc.locator('#create-output-kind').selectOption('m4a');
   for(let step=0;step<3;step++)await pc.click('#create-step-next');
   assert.equal(await pc.locator('#create-stage-4').isVisible(),true);
