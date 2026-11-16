@@ -2200,9 +2200,12 @@ async function preloadFirstQueueSong(song,token){
   if(!state.queue.includes(song)||state.token!==token||
      state.loading||state.queuePreparedCache.has(song))return;
   const controller=new AbortController(),version=++state.queuePreloadVersion;
-  const task={song,token,controller};state.queuePreload=task;
+  const task={song,token,controller,promise:null};state.queuePreload=task;
+  // Preserve the same Promise if this queued song reaches playback before
+  // pre-render finishes; avoids a redundant Drive fetch and MIDI render.
+  task.promise=prepareQueuedSong(song,token,controller.signal);
   try{
-    const result=await prepareQueuedSong(song,token,controller.signal);
+    const result=await task.promise;
     if(version!==state.queuePreloadVersion||controller.signal.aborted||
        state.token!==token||!state.queue.includes(song))return;
     if(result)state.queuePreparedCache.set(song,result);
@@ -2261,9 +2264,8 @@ function renderQueue() {
   state.queue.forEach((song,i)=>{
     const item=element('li','queue-item');
     const info=element('div','queue-info');
-    const waiting=!!getFileId(song.xsk)&&i===0&&
-      state.queuePreload?.song===song;
-    const ready=state.queuePrepared?.song===song;
+    const waiting=!!getFileId(song.xsk)&&state.queuePreload?.song===song;
+    const ready=state.queuePreparedCache.has(song);
     info.append(element('strong','',song.title||'ไม่ระบุชื่อเพลง'),
       element('small','',(song.artist||song.code||'')+
         (ready?' · เตรียมพร้อมเล่นแล้ว':waiting?' · กำลังเตรียม XSK2 ล่วงหน้า':'')));
