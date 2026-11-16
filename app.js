@@ -1991,6 +1991,7 @@ function setStageVisualScale(value){
   return state.visualScale;
 }
 async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=false){
+  const soundFontGeneration=state.xskSoundFontGeneration||0;
   const fileId=getFileId(song?.xsk);
   if(!fileId)throw Error('ไม่พบไฟล์ XSK2 ในฐานเพลง');
   if(!window.XStageXsk?.openPackage || !window.XStageBrowserMidi)
@@ -2027,6 +2028,8 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
     fontBytes,signal,onStatus
   });
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  if(soundFontGeneration!==(state.xskSoundFontGeneration||0))
+    throw Error('SoundFont เปลี่ยนระหว่างเตรียม XSK2 · ต้องเรนเดอร์ใหม่');
   if(!rendered?.audio?.size)throw Error('ไม่สามารถสังเคราะห์เสียงจาก XSK2 ได้');
   return {song,token,blob:rendered.audio,lyrics:unpacked.document};
 }
@@ -2186,6 +2189,7 @@ function scheduleQueuePreload(){
 window.addEventListener('xstage:soundfont-change',()=>{
   // Rendered MIDI depends on the chosen SF. Drop queued WAVs to avoid an
   // old-soundfont track; preserve catalog/lyrics and the playing song.
+  state.xskSoundFontGeneration=(state.xskSoundFontGeneration||0)+1;
   releaseQueuePreload();
   scheduleQueuePreload();
 });
