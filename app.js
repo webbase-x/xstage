@@ -2066,11 +2066,13 @@ function updateMemoryIndicators(){
     const info=window.XStageBrowserMidi?.fontStatus?.()||{};
     const bytes=Number(info.fileBytes||0),sample=Number(info.sampleBytes||0);
     const p=monitor.plan(resources),hint=p.hint.gib;
-    const concern=p.heapPressure||bytes+sample>hint*1024*1024*1024*.12;
+    const concern=p.heapPressure||p.nativePressure||
+      bytes+sample>hint*1024*1024*1024*.12;
     fontEl.dataset.level=concern?'high':
       bytes+sample>hint*1024*1024*1024*.055?'medium':'low';
     fontEl.textContent=info.loaded?'SF ใน RAM '+monitor.fmt(bytes)+
-      ' · ตัวอย่าง '+monitor.fmt(sample)+' · ใช้ซ้ำตลอดเซสชัน':
+      ' · ตัวอย่าง '+monitor.fmt(sample)+' · ใช้ซ้ำตลอดเซสชัน'+
+      (p.native?' · RAM ว่างจริง '+monitor.fmt(p.native.available):''):
       info.selectedId?'SF กำลังโหลด · ประเมินตาม RAM ของอุปกรณ์':
       'SoundFont · ใช้เสียงพื้นฐาน (ไม่ใช้ RAM ของ SF)';
     fontEl.title='แสดงขนาดข้อมูลที่แอปเก็บ ไม่ใช่ RAM ว่างของระบบ · งบแคชประมาณการจาก '+hint+' GB ('+p.hint.source+')';
@@ -2089,7 +2091,7 @@ function trimQueueCache(){
     let p=monitor.plan(memoryResources());
     const queueLimit=p.queueLimit;
     while(state.queuePreparedCache.size>queueLimit||
-        (state.queuePreparedCache.size>0&&(p.heapPressure||p.ratio>.8))){
+        (state.queuePreparedCache.size>0&&(p.heapPressure||p.nativePressure||p.ratio>.8))){
       const ranked=[...state.queuePreparedCache.keys()]
         .sort((a,b)=>state.queue.indexOf(b)-state.queue.indexOf(a));
       if(!ranked.length)break;
@@ -2175,7 +2177,8 @@ function scheduleQueuePreload(){
     return;
   }
   const monitor=window.XStageMemory;
-  if(!monitor||monitor.plan(memoryResources()).heapPressure)return;
+  if(!monitor||['high'].includes(monitor.plan(memoryResources()).level)&&
+     monitor.plan(memoryResources()).nativePressure)return;
   if(state.queuePreload){
     if(state.token===state.queuePreload.token&&
        state.queue.includes(state.queuePreload.song))return;
