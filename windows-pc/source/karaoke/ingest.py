@@ -222,7 +222,7 @@ class Inspector:
         # numeric filename or branded placeholders. Validate before indexing.
         if ext not in MIDI_EXT:
             from .lyrics import json_sidecar, read_timed_json
-            companion = json_sidecar(path)
+            companion = json_sidecar(path) if not self.sibling(path.with_suffix('.lrc')).is_file() else None
             if companion is not None:
                 timed, document = read_timed_json(companion)
                 meta = document.get('metadata') if isinstance(document.get('metadata'), dict) else {}
