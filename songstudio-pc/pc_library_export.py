@@ -95,11 +95,25 @@ def _hash(path):
 
 
 def _files(source):
-    for folder, suffixes, upper in (("audio", ALLOWED_MEDIA | {".xsk"} | VIDEO_EXT, "AUDIO"),
-                                    ("lyrics", ALLOWED_LYRICS, "LYRICS")):
+    """Enumerate legacy authoring files OR direct categorized Pro exports.
+
+    Do not include catalogs/temporary files, and never recurse into links.
+    The media category is already final for uppercase XStageSong folders.
+    """
+    local = (("audio", ALLOWED_MEDIA | {".xsk"} | VIDEO_EXT),
+             ("lyrics", ALLOWED_LYRICS))
+    typed = (("AUDIO", ALLOWED_MEDIA | {".xsk"} | VIDEO_EXT),
+             ("VIDEO", VIDEO_EXT),
+             ("MIDI", {".mid", ".midi", ".kar", ".xsk"}),
+             ("LYRICS", ALLOWED_LYRICS),
+             ("SOUNDFONT", {".sf2", ".sf3"}))
+    if not (any((source / name).is_dir() for name in ("audio", "AUDIO", "VIDEO", "MIDI"))
+            and any((source / name).is_dir() for name in ("lyrics", "LYRICS"))):
+        raise ValueError("คลังเพลงต้องมีโฟลเดอร์เพลงและ Lyrics JSON ที่ใช้งานได้")
+    for folder, suffixes in (*local, *typed):
         base = source / folder
         if not base.is_dir() or base.is_symlink():
-            raise ValueError("คลังเพลงต้องมีโฟลเดอร์ audio และ lyrics ที่ใช้งานได้")
+            continue
         for root, dirs, files in os.walk(base, followlinks=False):
             dirs[:] = sorted(n for n in dirs if not (Path(root) / n).is_symlink()
                              and not n.startswith("."))
@@ -108,17 +122,22 @@ def _files(source):
                 if (file.is_symlink() or not file.is_file() or
                         name.startswith(".") or file.suffix.casefold() not in suffixes):
                     continue
-                # Never recycle generated Karaoke PC/Drive catalogs as lyrics
-                # when the authoring and playback XStageSong roots are shared.
-                if folder == "lyrics" and (name.casefold() == "current.json"
-                        or name.casefold().startswith(("catalog-", "database-"))
-                        or "-pc-snapshot-" in name.casefold()):
+                if folder.lower() == "lyrics" and (
+                        name.casefold() == "current.json" or
+                        name.casefold().startswith(("catalog-", "database-")) or
+                        "-pc-snapshot-" in name.casefold() or
+                        "-rev-" in name.casefold()):
                     continue
                 rel = file.relative_to(base)
                 if any(part in ("", ".", "..") for part in rel.parts):
                     raise ValueError("พบพาธเพลงไม่ปลอดภัย")
-                yield file, (media_category(file.name) if folder == "audio"
-                             else Path(upper)) / rel
+                if folder == "audio":
+                    output = media_category(file.name) / rel
+                elif folder == "lyrics":
+                    output = Path("LYRICS") / rel
+                else:
+                    output = Path(folder) / rel
+                yield file, output
 
 
 def _source(source, export):
@@ -166,16 +185,24 @@ def _existing(root):
 def _pc_row(row, replacements=None):
     replacements = replacements or {}
     item = dict(row)
-    for key, prefix, replacement in (("audio", "audio", "AUDIO"),
-                                     ("lyrics", "lyrics", "LYRICS"),
-                                     ("vocals", "audio", "AUDIO")):
+    for key in ("audio", "lyrics", "vocals"):
         obj = row.get(key)
-        if obj:
-            path = _safe_rel(obj["path"], prefix)
-            original = (media_relative(obj["path"]).as_posix()
-                        if key != "lyrics" else
-                        Path(replacement, *path.parts[1:]).as_posix())
-            item[key] = {**obj, "path": replacements.get(original, original)}
+        if not obj:
+            continue
+        incoming = obj.get("path")
+        if not isinstance(incoming, str):
+            raise ValueError("พาธรายการเพลงไม่ถูกต้อง")
+        root_name = incoming.split("/", 1)[0]
+        if root_name in ("AUDIO", "VIDEO", "MIDI", "SOUNDFONT", "LYRICS"):
+            path = _safe_rel(incoming, root_name)
+            original = path.as_posix()
+        elif key == "lyrics":
+            path = _safe_rel(incoming, "lyrics")
+            original = Path("LYRICS", *path.parts[1:]).as_posix()
+        else:
+            path = _safe_rel(incoming, "audio")
+            original = media_relative(incoming).as_posix()
+        item[key] = {**obj, "path": replacements.get(original, original)}
     return item
 
 
