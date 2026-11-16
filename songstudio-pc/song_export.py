@@ -313,7 +313,7 @@ def make_record(root: Path, row: dict, audio: Path, lyrics: Path | None,
     # Assigned codes may differ from source filenames after checking both
     # libraries; the stored audio bucket, not the source name, is authoritative.
     bucket = audio.parent.name
-    if bucket not in set("0123456789_") or audio.parent.parent.name != "audio":
+    if bucket not in set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_") or audio.parent.parent.name != "audio":
         raise ValueError("ตำแหน่งไฟล์เสียงไม่อยู่ในคลังเพลงที่รองรับ")
     rel = lambda p: p.relative_to(root).as_posix() if p is not None else None
     code = str(row.get("code") or source.stem)
@@ -348,7 +348,7 @@ def _read_current(root: Path) -> tuple[dict, dict[str, dict]]:
         if not isinstance(meta, dict):
             raise ValueError("catalog metadata ไม่ถูกต้อง")
         bucket, relative = meta.get("bucket"), meta.get("path")
-        if bucket not in set("0123456789_") or bucket in current:
+        if bucket not in set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_") or bucket in current:
             raise ValueError("ชื่อกลุ่ม catalog ไม่ถูกต้องหรือซ้ำ")
         allowed = (f"database-{bucket}-", f"catalogs/database-{bucket}-")
         if (not isinstance(relative, str) or
@@ -517,7 +517,7 @@ def publish_batch(root: Path, records: list[dict]) -> dict:
     staged_by_bucket: dict[str, dict[str, dict]] = {}
     for row in records:
         bucket = row["bucket"]
-        if bucket not in set("0123456789_"):
+        if bucket not in set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_"):
             raise ValueError("catalog bucket ไม่ถูกต้อง")
         if not safe_media_path(root, row["audio"]["path"], "audio").is_file():
             raise FileNotFoundError("ไม่พบไฟล์เสียงสำหรับ catalog: " + row["audio"]["path"])
