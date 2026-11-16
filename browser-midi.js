@@ -449,12 +449,12 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
   return rendered;
 }
 let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
-let fontLoadPromise=null;
+let fontLoadPromise=null, fontWarning='';
 function fontStatus(){
   return {loaded:!!fontCache,selectedId:selected,
     fileBytes:fontCache?.bytes.byteLength||0,
     sampleBytes:fontCache?.parsed?.cacheBytes||0,
-    label:fontCache?.label||'',source:'selected SoundFont in session memory'};
+    warning:fontWarning,label:fontCache?.label||'',source:'selected SoundFont in session memory'};
 }
 function fontStatusChanged(){
   scope.dispatchEvent?.(new CustomEvent('xstage:font-memory',{detail:fontStatus()}));
@@ -512,7 +512,7 @@ async function refreshFonts(auth){
       select.value=choices.some(x=>x.value===saved)?saved:'';
       selected=select.value;
       select.onchange=()=>{
-        selected=select.value;fontCache=null;fontLoadPromise=null;fontStatusChanged();
+        selected=select.value;fontCache=null;fontLoadPromise=null;fontWarning='';fontStatusChanged();
         try{localStorage.setItem(storageKey,selected);}catch{}
         // Selected SoundFont is retained for this app session and reused.
         // Never cache private font bytes across Google accounts or on disk.
@@ -548,6 +548,12 @@ async function selectedFont(token,signal){
   if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
     return fontLoadPromise.promise;
   const task=(async()=>{
+    const early=scope.XStageMemory?.nativeRam?.();
+    if(early?.lowMemory){
+      fontWarning='Android RAM ต่ำ · ใช้เสียง MIDI พื้นฐานชั่วคราว';
+      fontStatusChanged();
+      return null;
+    }
     const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
       {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
     if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
@@ -556,14 +562,20 @@ async function selectedFont(token,signal){
     const deviceLimit=(hinted<=2?64:hinted<=4?128:256)*1048576;
     const native=scope.XStageMemory?.nativeRam?.();
     if(native?.lowMemory||native&&len&&
-       len>Math.max(16*1048576,native.available*.22))
-      fail('Android มี RAM ว่างไม่พอโหลด SoundFont นี้ · เลือก SF ขนาดเล็กหรือเสียงพื้นฐาน');
-    if(len>MAX_FONT||len>deviceLimit)
-      fail('SoundFont ใหญ่เกินงบปลอดภัยสำหรับ RAM อุปกรณ์นี้ · ใช้ไฟล์เล็กลงหรือเสียงพื้นฐาน');
+       len>Math.max(16*1048576,native.available*.22)||
+       len>MAX_FONT||len>deviceLimit){
+      fontWarning='SoundFont ใหญ่เกินงบ RAM · เล่นด้วยเสียง MIDI พื้นฐานชั่วคราว';
+      fontStatusChanged();
+      await res.body?.cancel?.();
+      return null;
+    }
     const bytes=new Uint8Array(await res.arrayBuffer());
     if(bytes.byteLength>MAX_FONT||bytes.byteLength>deviceLimit||
-       native&&bytes.byteLength>Math.max(16*1048576,native.available*.22))
-      fail('SoundFont ใหญ่เกินงบปลอดภัยของอุปกรณ์');
+       native&&bytes.byteLength>Math.max(16*1048576,native.available*.22)){
+      fontWarning='SoundFont ใช้ RAM มากเกินไป · เล่นด้วยเสียงพื้นฐานชั่วคราว';
+      fontStatusChanged();
+      return null;
+    }
     if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
     if(selected!==id||context?.token!==token||context?.sub!==sub)
       fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
@@ -571,6 +583,7 @@ async function selectedFont(token,signal){
     const parsed=parseFont(bytes);
     const label=$('xstage-soundfont-select')?.selectedOptions?.[0]?.text||'SoundFont';
     fontCache={id,sub,bytes,parsed,label};
+    fontWarning='';
     fontStatusChanged();
     return bytes;
   })();
@@ -579,6 +592,6 @@ async function selectedFont(token,signal){
   finally{if(fontLoadPromise?.promise===task)fontLoadPromise=null;}
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,
-  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
+  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);
