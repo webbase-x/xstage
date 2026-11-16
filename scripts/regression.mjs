@@ -417,8 +417,10 @@ assert.ok(androidManifest.includes('android:screenOrientation="unspecified"'),'t
 const androidPlayMeta=JSON.parse(read('downloads/android-play-latest.json'));
 assert.equal(androidPlayMeta.available,false,'Google Play alerts must not advertise an unpublished release');
 assert.equal(androidPlayMeta.package,'com.webbasex.xstage','Play metadata must target the production package');
-assert.equal(androidPlayMeta.version,version.version,'Google Play channel version must align with unified source release');
-assert.equal(androidPlayMeta.build,version.build,'Google Play channel build must align with unified source release');
+// Google Play is not being published; its version does not track Web/sideload APK.
+assert.match(androidPlayMeta.version,/^\d+\.\d+\.\d+$/,'Unpublished Play version metadata must be valid');
+assert.ok(Number.isInteger(androidPlayMeta.build)&&androidPlayMeta.build>0,
+  'Unpublished Play build metadata must be valid');
 assert.ok(androidUpdate.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest()'),'test APK and Play updates must use separate channels');
 assert.ok(androidUpdate.includes('if (update.playStore)'),'production Android install action must open the Play Store');
 assert.ok(androidMain.includes('public boolean usesGooglePlayUpdates()'),'native UI must identify its update channel');
@@ -516,7 +518,9 @@ assert.ok(app.includes('await privateFile(song.video.fileId,token,{signal})') &&
 assert.match(app,/function clearIdleStage\(message\)\{\s*resetSongVideo\(\)/,
              'Stop, cancel and exhausted queue must release any old video');
 assert.ok(app.includes("console.warn('Video unavailable; using verified audio + timed lyrics:") &&
-          app.includes("function playable(song) { return !!(getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))); }"),
+          app.includes('function playable(song) {') &&
+          app.includes('getFileId(song?.xsk)') &&
+          app.includes('(getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi)))'),
           'Unsupported MP4 must not prevent original AAC + timed lyrics playback');
 assert.ok(style.includes('#karaoke-video[hidden]') &&
           style.includes('.stage:has(#karaoke-video:not([hidden])) #lyrics'),
