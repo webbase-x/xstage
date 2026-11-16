@@ -2049,6 +2049,13 @@ function scheduleQueuePreload(){
   if(state.queuePreload?.song===song&&state.queuePreload.token===token)return;
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(song,token);},300);
 }
+// If the user changes SoundFont, the previously synthesized queued track
+// must be released, otherwise Karaoke would play it with the old voice.
+window.addEventListener('xstage:soundfont-change',()=>{
+  releaseQueuePreload();
+  scheduleQueuePreload();
+});
+
 async function preloadFirstQueueSong(song,token){
   if(song?.midi&&!getFileId(song?.xsk))return;
   if(state.queue[0]!==song||state.token!==token)return;
