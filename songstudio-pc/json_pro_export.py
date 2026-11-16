@@ -312,7 +312,8 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                         _publish_no_overwrite(temp_lyrics, final_lyrics)
                 finally:
                     temp_audio.unlink(missing_ok=True)
-                    temp_lyrics.unlink(missing_ok=True)
+                    if temp_lyrics is not None:
+                        temp_lyrics.unlink(missing_ok=True)
             title = doc.get("title") if isinstance(doc.get("title"), str) else ""
             artist = doc.get("artist") if isinstance(doc.get("artist"), str) else ""
             record = {"webSongId": identity, "code": code,
