@@ -41,6 +41,53 @@ class JsonProTests(unittest.TestCase):
         return pro.export_folder(str(self.source), str(self.dest), output_format=fmt,
                                  export=export, scanner=folder_upload, **extra)
 
+    def test_stream_creates_json_from_ncn_without_any_source_json(self):
+        stream = load("json_source_stream")
+        self.mp3.unlink()
+        self.lrc.unlink()
+        src = self.source / "MIDI/NCN"
+        midi = src / "SONG/0/00022.mid"
+        lyr = src / "LYR/0/00022.lyr"
+        cur = src / "CUR/0/00022.cur"
+        for p in (midi, lyr, cur):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b"NCN" + b"A" * 70)
+        class UnusedPreflight:
+            def scan(self, *args, **kwargs):
+                raise AssertionError("Full-library preflight should never run")
+        class Ncn:
+            def ncn_document(self, companion):
+                self.last = companion
+                return export.lrc_to_json("[00:01.00]ตัวอย่างต้นฉบับ", companion["code"])
+        ncn = Ncn()
+        result = pro.export_folder(
+            str(self.source), str(self.dest), output_format="original",
+            export=export, scanner=UnusedPreflight(), ncn=ncn,
+            source_stream=stream.stream)
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(ncn.last["code"], "00022")
+        library = self.dest / "XStageSong"
+        records = export.existing_records(library)
+        self.assertEqual(len(records), 1)
+        row = records[0]
+        self.assertEqual(row["sourceFormat"], "NCN")
+        self.assertIsNotNone(row["lyrics"])
+        self.assertEqual(row["code"], Path(row["lyrics"]["path"]).stem)
+        self.assertFalse((src / "SONG/0/00022.json").exists())
+        repeat = pro.export_folder(
+            str(self.source), str(self.dest), output_format="original",
+            export=export, scanner=UnusedPreflight(), ncn=ncn,
+            source_stream=stream.stream)
+        self.assertEqual(repeat["created"], 0)
+        self.assertEqual(repeat["skipped"], 1)
+
+    def test_stream_keeps_existing_mp3_lrc_compatibility(self):
+        stream = load("json_source_stream")
+        result = self.run_export(source_stream=stream.stream)
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["total"], 1)
+
     def test_copy_original_json_and_catalog_skip_repeat(self):
         before = hashlib.sha256(self.mp3.read_bytes()).hexdigest()
         first = self.run_export()
