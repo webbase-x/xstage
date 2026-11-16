@@ -2052,6 +2052,13 @@ function scheduleQueuePreload(){
 async function preloadFirstQueueSong(song,token){
   if(song?.midi&&!getFileId(song?.xsk))return;
   if(state.queue[0]!==song||state.token!==token)return;
+  // Do not synthesize the next XSK while the current song is still
+  // downloading/rendering: competing OfflineAudioContexts can stall TV.
+  if(state.loading){
+    state.queuePreloadTimer=setTimeout(
+      ()=>{void preloadFirstQueueSong(song,token);},1200);
+    return;
+  }
   const controller=new AbortController(),version=++state.queuePreloadVersion;
   state.queuePreload?.controller.abort();
   const task={song,token,controller};state.queuePreload=task;
