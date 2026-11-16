@@ -12,6 +12,7 @@ on:
       - 'windows-pc/source/karaoke/**'
       - 'windows-pc/source/tests/test_xsk_playback.py'
       - 'windows-pc/source/tests/test_media_json_sidecar.py'
+      - 'windows-pc/source/tests/test_queue_warm.py'
       - 'windows-pc/source/requirements*.txt'
 
 permissions:
