@@ -157,7 +157,7 @@ def _next_code(used, style, width, preferred, counters):
 
 def export_folder(source_folder, destination_folder, *, output_format, export, scanner,
                    ncn=None, convert=None, cancelled=None, progress=None,
-                   code_style="numeric", code_length=5):
+                   code_style="numeric", code_length=5, scan_progress=None):
     """Create a local Karaoke-compatible catalog; never publish to Google Drive.
 
     output_format is a constrained FFmpeg output extension or 'original'.
@@ -178,7 +178,9 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     root_real = root.resolve()
     if src_real == root_real or src_real in root_real.parents or root_real in src_real.parents:
         raise ValueError("ต้นทางและปลายทางต้องแยกจากกัน เพื่อไม่ให้อ่านหรือเขียนวนทับคลังเดิม")
-    inspection = scanner.scan(str(source), ncn=ncn)
+    # Inspect only once. The confirmation button starts this worker directly;
+    # a separate preflight scan would double I/O on large music folders.
+    inspection = scanner.scan(str(source), ncn=ncn, progress=scan_progress)
     entries = inspection["complete"]
     root.mkdir(parents=True, exist_ok=True)
     prior = export.existing_records(root)
