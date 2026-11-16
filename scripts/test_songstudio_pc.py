@@ -46,6 +46,49 @@ class PcSourceTests(unittest.TestCase):
         self.tmp.cleanup()
 
 
+    def test_cancelled_worker_must_exit_before_next_job(self):
+        """A cancelled status alone must not unlock a still-running worker."""
+        started = threading.Event()
+        release = threading.Event()
+        old_thread = engine.JOB_THREAD
+        old_job = engine.JOB
+        old_cancel = engine.CANCEL.is_set()
+        def slow_worker(action, options, began):
+            started.set()
+            release.wait(5)
+            with engine.LOCK:
+                engine.JOB["state"] = "cancelled"
+                engine.JOB["stage"] = "ยกเลิกงาน"
+        try:
+            with patch.object(engine, "execute_job", side_effect=slow_worker):
+                first = engine.start_job({"action": "scan"})
+                self.assertTrue(first["id"])
+                self.assertTrue(started.wait(3))
+                with engine.LOCK:
+                    engine.CANCEL.set()
+                    engine.JOB["state"] = "cancelled"
+                self.assertEqual(engine.job_snapshot()["state"], "running")
+                with self.assertRaisesRegex(ValueError, "งานเดิมยังหยุดไม่เสร็จ"):
+                    engine.start_job({"action": "scan"})
+                release.set()
+                engine.JOB_THREAD.join(3)
+                self.assertFalse(engine.JOB_THREAD.is_alive())
+                self.assertEqual(engine.job_snapshot()["state"], "cancelled")
+                second = engine.start_job({"action": "scan"})
+                self.assertNotEqual(first["id"], second["id"])
+                engine.JOB_THREAD.join(3)
+        finally:
+            release.set()
+            if engine.JOB_THREAD and engine.JOB_THREAD.is_alive():
+                engine.JOB_THREAD.join(3)
+            with engine.LOCK:
+                engine.JOB_THREAD = old_thread
+                engine.JOB = old_job
+                if old_cancel:
+                    engine.CANCEL.set()
+                else:
+                    engine.CANCEL.clear()
+
     def test_xsk_mid_json_pairing_deduplicates_midi_and_reuses_code_gap(self):
         """MIDI bytes, not filenames or lyric metadata, determine duplicates."""
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: F401
