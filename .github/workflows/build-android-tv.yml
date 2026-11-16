@@ -6,6 +6,7 @@ on:
     paths:
       - "android-tv/**"
       - "version.json"
+      - "downloads/windows-pc-latest.json"
       - "app.js"
       - "android-apk-download.js"
       - "style.css"
