@@ -1987,16 +1987,8 @@
       if(!source||!destination)throw new Error('กรุณาเลือกต้นทางและปลายทาง');
       if(!Number.isInteger(count)||count<1||count>12)
         throw new Error('จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12');
-      const approved=await confirmStudio(
-        'สร้าง .XSK จาก MIDI/MID/KAR ทุกเพลงที่มีเนื้อร้องพร้อมเวลาในโฟลเดอร์ย่อยทั้งหมด'+
-        '\\nต้นทาง: '+source+'\\nปลายทาง: '+destination+
-        '\\nรหัส: '+$('xsk-stream-code-style').selectedOptions[0].textContent+
-        ' · '+count+' หลัก'+
-        '\\n\\nเริ่มสร้างทันทีจากชุดแรก (32 เพลง) และสแกนชุดถัดไปพร้อมกัน'+
-        '\\nตรวจ SHA-256 ข้ามซ้ำ · ไม่เขียนทับต้นฉบับหรือ XSK เดิม'+
-        '\\nยังไม่ทราบจำนวนเพลงทั้งหมดจนกว่าจะสแกนเสร็จ',
-        'ยืนยันสแกนและสร้าง .XSK อัตโนมัติ');
-      if(!approved)return;
+      // One-click folder-to-folder batch conversion; input validation stays in place.
+      // Engine retains duplicate, input integrity and no-overwrite safety checks.
       $('xsk-stream-status').textContent='กำลังส่งงานสแกนและสร้าง .XSK แบบต่อเนื่อง…';
       const started=await run('xsk-stream',{
         source,xsk_folder:destination,
@@ -3312,7 +3304,7 @@
   }
   $('json-pro-inspect').addEventListener('click',()=>{void inspectJsonPro();});
   $('json-pro-start').addEventListener('click',()=>{void startJsonPro();});
-  $('json-pro-source').addEventListener('change',()=>{void inspectJsonPro();});
+  // Inspect on "ตกลง" only, not while users are still choosing folders.
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
   $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
   $('pc-export-start').addEventListener('click',()=>{void startPCExport();});
