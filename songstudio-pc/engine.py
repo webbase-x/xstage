@@ -3639,7 +3639,23 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("คำสั่งไม่ถูกต้อง")
             path = urllib.parse.urlsplit(self.path).path
-            if path == "/api/license/activate":
+            if path == "/api/xsk/access-export":
+                # Explicit local user action. Never return or log an unwrapped
+                # AES key or the requested password to the browser.
+                password = payload.get("password", "")
+                repeat = payload.get("repeat", "")
+                if not isinstance(password, str) or password != repeat:
+                    raise ValueError("รหัสผ่านทั้งสองช่องไม่ตรงกัน")
+                key_file = DATA / "xsk-key.dpapi"
+                if key_file.is_symlink() or not key_file.is_file():
+                    raise ValueError("ยังไม่มีกุญแจ XSK ที่สร้างโดย Song Studio บัญชีนี้")
+                access = _module("xsk_access.py", "xstage_xsk_access")
+                local_key = _module("xsk_keys.py", "xstage_xsk_keys").get_key(DATA)
+                output = Path(PREFS["download"]).expanduser() / "XStageSong-access.xskkey"
+                saved = access.export_access(local_key, password, output)
+                self._json({"ok": True, "path": saved,
+                            "notice": "ไฟล์นี้เป็นสิทธิ์เปิด XSK · อย่าเผยแพร่พร้อมรหัสผ่าน"})
+            elif path == "/api/license/activate":
                 license_module = _module("pro_license.py", "xstage_pro_license")
                 license_module.activate(DATA, payload.get("key", ""))
                 self._json({"pro": True})
