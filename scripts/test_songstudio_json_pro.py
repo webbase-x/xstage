@@ -56,7 +56,7 @@ class JsonProTests(unittest.TestCase):
         # Windows uses a case-insensitive filesystem: AUDIO and audio name
         # resolve to the same folder. Assert canonical catalog paths instead.
         self.assertTrue((target / "AUDIO").is_dir())
-        self.assertTrue((target / "LYRICS").is_dir())
+        self.assertTrue((target / "AUDIO/MP3/LYRICS").is_dir())
         self.assertEqual(hashlib.sha256(audio.read_bytes()).hexdigest(), before)
         doc = json.loads(lyrics.read_text(encoding="utf-8"))
         self.assertEqual(doc["lines"][0]["startTime"], 2.5)
@@ -189,7 +189,7 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(saved["title"], "ชื่อเพลงจาก JSON")
         self.assertEqual(saved["artist"], "ศิลปินจาก JSON")
         self.assertEqual(saved["audio"]["path"], "MIDI/MID/SONG/0/00001.mid")
-        self.assertEqual(saved["lyrics"]["path"], "AUDIO/MP3/LYRICS/0/00001.json")
+        self.assertEqual(saved["lyrics"]["path"], "MIDI/MID/LYRICS/0/00001.json")
 
     def test_midi_to_mp3_uses_soundfont_wav_before_ffmpeg(self):
         engine = load("engine")
