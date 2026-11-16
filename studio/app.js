@@ -39,6 +39,7 @@
   }
 
   const tabNames = {
+    duplicates: ['ตรวจเพลงซ้ำ', 'ไฟล์เพลงทุกชนิด · SHA-256 · ย้ายหรือส่งเข้าถังรีไซเคิลด้วยตนเอง'],
     create: ['MIDI to .XSK', 'เลือกต้นทาง ปลายทาง จำนวนหลักรหัสและสร้างโดยตรวจเพลงซ้ำ'],
     'ai-lyrics': ['Lyrics AI', 'นำเข้าเสียง/วิดีโอ · อ่านคำร้องจากไฟล์หรือสร้างด้วย AI · แก้เวลา · พรีวิว'],
     'json-pro': ['MIDI to Lyrics JSON', 'Pro · ส่งออก MIDI/เพลงพร้อม Lyrics JSON และ Catalog'],
@@ -49,7 +50,7 @@
     settings: ['ตั้งค่า', 'ทุกการตั้งค่าใช้ร่วมกันทั้งแอป PC และหน้าเว็บ']
   };
   const selected = new Set();
-  let activeTab = 'create';
+  let activeTab = 'duplicates';
   let page = 0, pageSize = 100, total = 0, search = '', searchTimer = 0;
   let songs = [], prefs = {}, googleConnected = false, googleConfigured = false;
   let lastJobId = '', lastJobState = 'idle', refreshTimer = 0;
@@ -59,7 +60,7 @@
   let busy = false, cancellationPending = false, editingId = null, notificationTimer = null;
   let activeJobs = [], parallelCapacity = {parallelLimit:1,active:0,freeSlots:1};
   const parallelGroup = action => {
-    if (['scan','build','xsk-stream','json-pro-export','created-xsk',
+    if (['scan','duplicates-scan','duplicates-apply','build','xsk-stream','json-pro-export','created-xsk',
          'pc-export','download','lyric-groups-scan','lyric-groups-replace',
          'lyric-groups-undo'].includes(action)) return 'library';
     if (['ai-lyrics','ai-align','ai-separate-vocals','ai-export','preview'].includes(action)) return 'audio-ai';
@@ -698,6 +699,8 @@
     }
   }
   function setFields() {
+    $('dup-source').value = prefs.dup_source || '';
+    $('dup-destination').value = prefs.dup_destination || '';
     $('create-source').value = prefs.source || '';
     $('create-workspace').value = prefs.workspace || '';
     $('xsk-destination').value = prefs.xsk_folder || prefs.workspace || '';
@@ -814,6 +817,7 @@
     $('upload-inspect').disabled = busy;
     $('pc-export-inspect').disabled = busy;
     $('json-pro-start').disabled=busy||!proEnabled;
+    duplicateUpdateButtons();
     $('pc-export-start').disabled = busy;
     $('upload-soundfont-button').disabled = busy || !googleConnected;
     $('upload-soundfont-picker').disabled = busy;
@@ -955,7 +959,8 @@
     if ('oauth' in patch) await refreshEnvironment();
     return response;
   }
-  const fields = {'create-source': 'source', 'create-workspace': 'workspace',
+  const fields = {'dup-source': 'dup_source', 'dup-destination': 'dup_destination',
+                  'create-source': 'source', 'create-workspace': 'workspace',
                   'create-soundfont': 'soundfont', 'create-preset': 'midi_preset',
                   'create-mode': 'mode', 'create-export-format': 'export_format',
                   'create-code-style': 'code_style', 'create-code-length': 'code_length',
@@ -997,7 +1002,8 @@
           download:'download-destination',upload_folder:'upload-folder',
           pc_export_folder:'pc-export-folder',
           lyric_source:'lyric-group-folder',xsk_folder:button?.closest('#tab-create')?'xsk-build-folder':'xsk-destination',
-          json_source:'json-pro-source',json_destination:'json-pro-destination',oauth:'settings-oauth'})[kind];
+          json_source:'json-pro-source',json_destination:'json-pro-destination',
+          dup_source:'dup-source',dup_destination:'dup-destination',oauth:'settings-oauth'})[kind];
       const element = $(field);
       if (kind === 'soundfont' && ![...element.options].some(opt => opt.value === response.path)) {
         element.add(new Option(response.path.split(/[\\/]/).pop(), response.path));
@@ -2010,6 +2016,8 @@
   // A fresh accepted job replaces only its own page's previous run state.
   // Other active jobs, catalog data and completed output files are untouched.
   const jobStatusFields = {
+    'duplicates-scan':['dup-status'],
+    'duplicates-apply':['dup-status'],
     'xsk-stream':['xsk-stream-status'],
     'json-pro-export':['json-pro-report'],
     'pc-export':['pc-export-status'],
@@ -2462,6 +2470,14 @@
     } catch (error) { message(error.message); }
   }
   function renderJob(job) {
+    if ((job.kind === 'duplicates-scan' || job.kind === 'duplicates-apply') && job.id) {
+      $('dup-status').textContent = (job.stage || '') +
+        (job.state === 'success' ? ' · เสร็จสิ้น' : job.state === 'error' ? ' · เกิดข้อผิดพลาด' : '');
+      if (job.state === 'success' && duplicateRefreshedJob !== job.id) {
+        duplicateRefreshedJob = job.id;
+        void duplicateLoad();
+      }
+    }
     const state = job.state || 'idle';
     const isRunning = state === 'running';
     // Do not silently leave the user on the original app window: the OAuth
