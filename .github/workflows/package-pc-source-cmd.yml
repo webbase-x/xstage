@@ -37,6 +37,7 @@ jobs:
           cd windows-pc/source
           python3 -m unittest discover -s tests -p 'test_xsk_playback.py' -v
           python3 -m unittest discover -s tests -p 'test_media_json_sidecar.py' -v
+          python3 -m unittest discover -s tests -p 'test_queue_warm.py' -v
       - name: Create source ZIP and SHA256
         shell: bash
         run: |
