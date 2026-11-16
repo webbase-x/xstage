@@ -65,6 +65,11 @@ jobs:
       XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # GITHUB_TOKEN can be read-only on some repository/organization
+          # policies; a fine-grained release token can be supplied explicitly.
+          # The same token is used for the verified metadata push.
+          token: ${{ secrets.XSTAGE_RELEASE_TOKEN || github.token }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -331,7 +336,7 @@ jobs:
       - name: Publish GitHub release after tests pass
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.XSTAGE_RELEASE_TOKEN || github.token }}
         run: |
           $tag = $env:SONGSTUDIO_READY_TAG
           $zip = "dist/$env:SONGSTUDIO_READY_DIR.zip"
@@ -360,11 +365,12 @@ jobs:
           search/replace editor modifies Lyrics JSON only and maintains
           Thai per-character highlight timing within the original line
           duration, marking estimated timing as such and backing up before edits.
-          Google Drive private library v4 contains ONLY AUDIO and LYRICS
-          folders. AUDIO stores all playable media including MIDI, M4A and
-          SoundFonts. LYRICS stores JSON lyric files, immutable catalogs and
-          LYRICS/current.json. Legacy catalogs are read-only until a verified
-          migration is explicitly performed; no user files are auto-deleted.
+          Build 357: fresh shared XStageSong storage taxonomy: AUDIO,
+          VIDEO, MIDI/MID, MIDI/KAR, MIDI/XSK, MIDI/NCN, LYRICS and SOUNDFONT.
+          Song Studio PC exports typed media folders, PC SQLite reads those
+          relative paths, and Drive uses file-ID catalogs. The v4 catalog
+          pointer remains at LYRICS/current.json until all clients upgrade.
+          Legacy catalogs are not auto-deleted.
           Bulk head/tail lyrics replacement offers X-Stage Karaoke presets
           plus editable custom wording, keeping confirmation and rollback.
           NEW: live separate music/SoundFont mixer, maximized PC interface,
@@ -394,12 +400,14 @@ jobs:
           } else {
             gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v$($env:SONGSTUDIO_READY_VERSION) Build $($env:SONGSTUDIO_READY_BUILD)" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
-          if ($LASTEXITCODE -ne 0) { throw "Failed to publish verified Ready ZIP" }
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release publish failed. HTTP 403 'Resource not accessible by integration' means the Actions token cannot create releases here. Add a fine-grained GitHub PAT in repository Actions secrets named XSTAGE_RELEASE_TOKEN, restricted to webbase-x/xstage with Contents: Read and write. Also verify repository/organization Actions workflow permissions; do not mark Build $env:SONGSTUDIO_READY_BUILD available until the release ZIP and SHA256 both exist."
+          }
 
       - name: Publish verified PC Ready latest.json after release
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.XSTAGE_RELEASE_TOKEN || github.token }}
         run: |
           # Never advertise a new ZIP until the release and ZIP checksum
           # have both succeeded. Source metadata itself contains no secrets.
@@ -429,7 +437,7 @@ jobs:
             download_url = "$base/download/$tag/$archive"
             release_url = "$base/tag/$tag"
             sha256 = $sha
-            notes = "Build 355: selectable Lyrics JSON song-code format and 1–12 character width; generated media filenames, Lyrics JSON filenames, songCode and catalog code match; non-destructive batch export and regression coverage."
+            notes = "Build 357: typed XStageSong AUDIO/VIDEO/MIDI/MID,KAR,XSK/LYRICS/SOUNDFONT export, metadata-preserving Lyrics JSON and non-destructive PC/Drive catalogs. SHA-256-verified ZIP."
           }
           ($metadata | ConvertTo-Json -Depth 5) | Set-Content -Path downloads/song-studio-latest.json -Encoding utf8
           git config user.name "github-actions[bot]"
