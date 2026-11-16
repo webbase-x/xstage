@@ -77,6 +77,11 @@ def _recycle_windows(path):
     if os.name != "nt":
         raise RuntimeError("ลบลงถังรีไซเคิลรองรับเฉพาะ Windows PC")
     from ctypes import wintypes
+    # Windows can permanently remove files on network/removable devices even
+    # when FOF_ALLOWUNDO is requested. Refuse those volumes; use Move instead.
+    volume_root = Path(path).anchor
+    if not volume_root or ctypes.windll.kernel32.GetDriveTypeW(volume_root) != 3:
+        raise ValueError("ถังรีไซเคิลไม่รับรองสำหรับไดรฟ์นี้ · กรุณาใช้คำสั่งย้ายแทน")
 
     class SHFILEOPSTRUCTW(ctypes.Structure):
         _fields_ = [
@@ -90,13 +95,14 @@ def _recycle_windows(path):
             ("lpszProgressTitle", wintypes.LPCWSTR),
         ]
 
-    # FO_DELETE (3), FOF_ALLOWUNDO (0x40), FOF_NOCONFIRMATION (0x10),
-    # FOF_NOERRORUI (0x400). The double-NUL terminated source is required.
+    # FO_DELETE (3), FOF_ALLOWUNDO (0x40), FOF_WANTNUKEWARNING (0x4000):
+    # Windows must warn if a file cannot be recycled. Never silently authorize
+    # permanent removal. A double-NUL terminated source is required.
     request = SHFILEOPSTRUCTW()
     request.wFunc = 3
     source = str(path) + "\0\0"
     request.pFrom = source
-    request.fFlags = 0x40 | 0x10 | 0x400
+    request.fFlags = 0x40 | 0x4000
     error = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(request))
     if error or request.fAnyOperationsAborted or path.exists():
         raise OSError("Windows ไม่ยืนยันการย้ายเข้าถังรีไซเคิล: " + str(path))
