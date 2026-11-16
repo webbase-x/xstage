@@ -28,6 +28,7 @@ on:
       - "scripts/test_songstudio_ncn.py"
       - "scripts/test_songstudio_drive_download.py"
       - "scripts/test_songstudio_pc.py"
+      - "scripts/test_songstudio_native_desktop.py"
       - "scripts/test_songstudio_pc_updates.py"
       - "scripts/test_songstudio_pc_export.py"
       - "scripts/test_songstudio_drive_layout.py"
@@ -126,6 +127,8 @@ jobs:
       - name: Regression tests for deduplication and resume
         shell: powershell
         run: |
+          & python -m unittest discover -s scripts -p test_songstudio_native_desktop.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Native Qt desktop contract regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
           if ($LASTEXITCODE -ne 0) { throw "Song Studio PC engine regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_xsk.py -v
