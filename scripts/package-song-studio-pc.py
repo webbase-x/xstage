@@ -26,6 +26,7 @@ FILES = {
     "songstudio-pc/created_xsk_export.py": "created_xsk_export.py",
     "songstudio-pc/json_pro_export.py": "json_pro_export.py",
     "songstudio-pc/json_source_stream.py": "json_source_stream.py",
+    "songstudio-pc/song_duplicate.py": "song_duplicate.py",
     "songstudio-pc/import_preview.py": "import_preview.py",
 "songstudio-pc/xsk_package.py": "xsk_package.py",
     "songstudio-pc/xsk_stream.py": "xsk_stream.py",
