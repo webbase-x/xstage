@@ -11,6 +11,6 @@
   "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.56-build356.zip",
   "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.56-build356/X-Stage-Song-Studio-PC-Ready-v0.3.56-build356.zip",
   "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.56-build356",
-  "sha256": "8ad035002378fb4658de2e07b4d8b33041192efba96e4613379f9eef08ea4deb",
+  "sha256": "89c61b640ae51ffbd01c3c5412ebca3875ac4e1949b6ce6abda0b421c57bdea8",
   "notes": "Build 355: selectable Lyrics JSON song-code format and 1–12 character width; generated media filenames, Lyrics JSON filenames, songCode and catalog code match; non-destructive batch export and regression coverage."
 }
