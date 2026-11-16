@@ -66,7 +66,7 @@ assert.equal(decoded.document.sourceFormat,'XSK');
 assert.deepEqual(Buffer.from(await decoded.midi.arrayBuffer()),midi);
 assert.equal(core.songIdentity(decoded.document,'00001').artist,'25 Hours');
 assert.equal(decoded.lyrics.name,'00001.json');
-assert.throws(()=>bridge.openPackage(new File([Buffer.from('XSK1'+'A'.repeat(64))],
+await assert.rejects(()=>bridge.openPackage(new File([Buffer.from('XSK1'+'A'.repeat(64))],
   'old.xsk')),/XSK1/);
 await assert.rejects(()=>bridge.openPackage(xsk({...doc,audio:{...doc.audio,sha256:'0'.repeat(64)}})),
   /SHA-256/);
