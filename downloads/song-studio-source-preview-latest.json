@@ -1,15 +1,15 @@
 {
   "name": "X-Stage Song Studio Windows",
   "platform": "windows",
-  "version": "0.2.7",
-  "build": 207,
+  "version": "0.2.8",
+  "build": 208,
   "available": false,
   "installer_file": null,
-  "sha256": "0ec3fa3475ae4f5dc25c4db00e2b0c7f8cb94a6b18445391b060874b4070876d",
-  "message": "Source Preview v0.2.7 Build 207: GitHub Actions source tests and ZIP verification passed. This is source launcher, not bundled Windows PC Ready or a signed installer.",
+  "sha256": "c59893adf76efb83ec2f681cb170f67897b73cedb45d9ed8de416c3b42354bb0",
+  "message": "Source Preview v0.2.8 Build 208: GitHub Actions source tests and ZIP checksum passed; includes XSK and Lyrics JSON safety fixes. Source launcher only, not a bundled Windows PC Ready installer.",
   "channel": "source-preview",
   "package_type": "source_zip",
-  "source_archive": "downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.7-Build207-Preview.zip",
+  "source_archive": "downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.8-Build208-Preview.zip",
   "installer_available": false,
   "source_available": true
 }
