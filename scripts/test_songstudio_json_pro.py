@@ -81,6 +81,18 @@ class JsonProTests(unittest.TestCase):
         self.assertTrue(media.read_bytes().startswith(b"ID3"))
         self.assertEqual(record["sourceFormat"], "MP3")
 
+    def test_renaming_identical_audio_and_lyrics_does_not_duplicate(self):
+        original = self.mp3.read_bytes()
+        text = self.lrc.read_text(encoding="utf-8")
+        self.assertEqual(self.run_export()["created"], 1)
+        (self.source / "99999.mp3").write_bytes(original)
+        (self.source / "99999.lrc").write_text(text, encoding="utf-8")
+        repeat = self.run_export()
+        self.assertEqual(repeat["created"], 0)
+        self.assertEqual(repeat["skipped"], 2)
+        self.assertEqual(len(export.existing_records(
+            self.dest / "XStageSong")), 1)
+
     def test_editing_only_lyrics_creates_new_immutable_version(self):
         first = self.run_export()
         self.assertEqual(first["created"], 1)
