@@ -129,6 +129,7 @@ def _files(source):
                 if (file.is_symlink() or not file.is_file() or
                         name.startswith(".") or file.suffix.casefold() not in suffixes):
                     continue
+                rel = file.relative_to(base)
                 if (folder.lower() == "lyrics" or
                     (folder in ("AUDIO", "VIDEO", "MIDI") and
                      "LYRICS" in rel.parts)) and (
