@@ -356,9 +356,12 @@ class KaraokeApp(tk.Tk):
             self.queues.insert("", "end", iid=str(index), values=(index + 1, song["title"] if song else "ไม่พบเพลง",
                                   item.singer, f"{item.key:+} / {item.speed}%"))
         self.queue_title.set(f"คิวเพลง  ·  {len(self.song_queue.items)}")
-        if getattr(self, "queue_warmup", None):
-            self.queue_warmup.request(warm_paths)
-        self._update_memory_banner()
+        # Partial UI objects in recovery/tests have no Tk interpreter. Only
+        # update the RAM banner when its backing widgets are present.
+        warmup=self.__dict__.get('queue_warmup')
+        if warmup:
+            warmup.request(warm_paths)
+            KaraokeApp._update_memory_banner(self)
         if select is not None and self.queues.exists(str(select)):
             self.queues.selection_set(str(select))
             self.queues.focus(str(select))
@@ -1418,7 +1421,8 @@ class KaraokeApp(tk.Tk):
         if job is not None and hasattr(job,'workspace'):step(self,'ปิดงานค้นหน้าคลัง',job.workspace.close)
         step(self,'บันทึกตั้งค่า',self.save_settings)
         step(self,'บันทึกคิว',self.song_queue.save)
-        if getattr(self, "queue_warmup", None):
-            step(self,'คืนแคชเพลงรอ',self.queue_warmup.close)
+        warmup=self.__dict__.get('queue_warmup')
+        if warmup:
+            step(self,'คืนแคชเพลงรอ',warmup.close)
         if self.engine:step(self,'ปิดระบบเล่นเสียง',self.engine.close)
         finish(self)
