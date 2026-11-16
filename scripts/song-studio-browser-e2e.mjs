@@ -424,128 +424,26 @@ try {
   await xskStreamingJob;
   assert.equal(await pc.locator('#studio-confirm-dialog').isVisible(),false,
     'One-click MIDI to .XSK should not require a second confirmation');
-  // Keep the separate Pro/legacy wizard regression intact. Only this older
-  // export mode should require manually choosing tracks.
+  // The visible MIDI to .XSK page is deliberately reduced to folder inputs
+  // and one start action. Legacy wizard controls remain in the DOM for compatibility
+  // but are not part of the user-facing workflow, even after Pro activation.
+  assert.equal(await pc.locator('#create-output-kind').isVisible(),false,
+    'Hidden legacy export format must not be required by the minimal XSK UI');
+  assert.equal(await pc.locator('#create-stage-2').isVisible(),false);
+  assert.equal(await pc.locator('#create-stage-3').isVisible(),false);
+  assert.equal(await pc.locator('#create-stage-4').isVisible(),false);
   await pc.click('.nav-button[data-tab="settings"]');
-  await pc.locator('#pro-license-settings #pro-license-key').fill('E2E-VALID-PRO-LICENSE');
+  await pc.locator('#pro-license-key').fill('E2E-VALID-PRO-LICENSE');
   await pc.click('#pro-license-activate');
   await pc.waitForFunction(()=>document.getElementById('pro-license-status')?.textContent.includes('Pro แล้ว'));
+  assert.equal(await pc.locator('#pro-license-settings').isVisible(),false,
+    'Verified Pro license should hide the activation panel');
+  assert.equal(await pc.locator('#brand-pro-status').isVisible(),true,
+    'Verified Pro license should be shown next to the upper-left application name');
   await pc.click('.nav-button[data-tab="create"]');
-  await pc.locator('#create-output-kind').selectOption('xstage');
-  await pc.waitForFunction(()=>!document.getElementById('tab-create')?.classList.contains('xsk-auto-mode'));
-  await pc.click('#verify-code-registry');
-  await pc.waitForFunction(() => document.querySelector('#code-registry-state')?.textContent.includes('TEST001'));
-  assert.match(await pc.locator('#code-registry-state').innerText(), /000001/,
-    'Two-source code-registry preview must show the proposed non-colliding code');
-  assert.equal(await pc.locator('#create-stage-2').isVisible(), false, 'step 2 should be hidden initially');
-  await pc.click('#create-step-next');
-  assert.equal(await pc.locator('#create-stage-2').isVisible(), true, 'step 2 should open');
-  await pc.locator('#song-rows tr[data-id="1"]').click();
-  await pc.click('#create-step-next');
-  assert.equal(await pc.locator('#create-stage-3').isVisible(), true, 'step 3 should open');
-  assert.equal(await pc.locator('#create-stage-3 #create-soundfont').isVisible(), true, 'SoundFont must be within step 3');
-  assert.equal(await pc.locator('#create-stage-3 #preview-audio').isVisible(), true, 'Preview player must be in the same SoundFont step');
-  await pc.waitForFunction(() => document.getElementById('preview-lyrics-source')?.textContent.includes('NCN'));
-  assert.match(await pc.locator('#preview-lyrics-lines').innerText(), /เสียงทดสอบต้นฉบับ/,
-    'Preview must prove source NCN has real karaoke lyrics');
-  // MIDI/CUR true cue boundaries must create a progressive fill (not a
-  // one-frame, all-at-once color flip at each character's start).
-  const midiWipe = await pc.evaluate(()=>{
-    const audio=document.querySelector('#preview-audio');
-    Object.defineProperty(audio,'currentTime',{configurable:true,get:()=>.3});
-    audio.dispatchEvent(new Event('timeupdate'));
-    const line=document.querySelector('#preview-lyrics-lines .preview-lyric-line[data-cue-type="midi"]');
-    const spans=line?[...line.querySelectorAll('.karaoke-wipe-text')]:[];
-    const fractions=spans.map(s=>parseFloat(s.style.getPropertyValue('--karaoke-wipe')));
-    delete audio.currentTime;
-    return {length:spans.length,fractions,content:line?.textContent};
-  });
-  assert.equal(midiWipe.length,3,'MIDI cursor cues must be preserved separately');
-  assert.equal(midiWipe.content,'เสียงทดสอบต้นฉบับ');
-  assert.ok(midiWipe.fractions[0]>20&&midiWipe.fractions[0]<80,
-    'Sung MIDI chunk should be partially colored between real cue times');
-  assert.equal(midiWipe.fractions[1],0,'Next MIDI phrase should remain unpainted');
-  assert.equal(midiWipe.fractions[2],0,'Later MIDI phrase should remain unpainted');
-  assert.equal(await pc.locator('#preview-song-search').isVisible(), true, 'Preview search must be visible in step 3');
-  await pc.locator('#preview-song-search').fill('เสียงทดสอบ');
-  await pc.locator('#preview-search-results [data-preview-id="2"]').waitFor();
-  const previewRequest = pc.waitForRequest((req) => {
-    try { return new URL(req.url()).pathname === '/api/live-preview' &&
-      req.postDataJSON()?.id === 2; } catch { return false; }
-  });
-  await pc.locator('#preview-search-results [data-preview-id="2"]').click();
-  await previewRequest;
-  await pc.waitForFunction(() => document.getElementById('preview-audio')?.src.includes('/api/live-stream'));
-  await pc.waitForFunction(() => document.getElementById('preview-lyrics-source')?.textContent.includes('ไม่พบเนื้อร้อง'));
-  assert.match(await pc.locator('#preview-lyrics-lines').innerText(), /ไม่พบเนื้อร้อง/);
-  assert.equal(await pc.locator('#preview-ai-transcribe').isEnabled(), true,
-    'When vocals exist and offline ASR is available show optional AI draft action');
-  assert.match(await pc.locator('#preview-selected').innerText(), /เสียงทดสอบ 2/);
-  const liveChange = pc.waitForRequest((req) => {
-    try { return new URL(req.url()).pathname === '/api/live-control' &&
-      req.postDataJSON()?.synth_volume === 0 &&
-      req.postDataJSON()?.music_volume === 0.8; }
-    catch { return false; }
-  });
-  await pc.locator('#preview-sf-volume').evaluate(el => {
-    el.value = '0';
-    el.dispatchEvent(new Event('input',{bubbles:true}));
-  });
-  await liveChange;
-  assert.equal(await pc.locator('#preview-sf-volume-label').innerText(), '0%');
-  assert.equal(await pc.locator('#preview-audio').getAttribute('src'),
-    'http://127.0.0.1:' + port + '/api/live-stream?ticket=one-time-demo-ticket',
-    'Realtime mixer changes must not start a new stream or reset play position');
-  await pc.click('#preview-stop-button');
-  assert.equal(await pc.locator('#preview-audio').getAttribute('src'), null, 'Stop must release live stream');
-  await pc.waitForFunction(() => !document.getElementById('create-step-next').disabled);
-  await pc.click('#create-step-next');
-  assert.equal(await pc.locator('#create-stage-4').isVisible(), true, 'step 4 should open');
-  assert.match(await pc.locator('#review-song-count').innerText(), /1/, 'review must reflect selected song count');
-  assert.match(await pc.locator('#review-soundfont').innerText(), /GeneralUser-GS/, 'review must reflect selected SoundFont');
-  await pc.click('#build-button');
-  await pc.locator('#studio-confirm-dialog[open]').waitFor();
-  assert.equal(await pc.locator('#studio-confirm-title').innerText(), 'ยืนยันเริ่มสร้างเพลง');
-  const fullBuild = pc.waitForRequest((req) => {
-    try { return new URL(req.url()).pathname === '/api/jobs' &&
-      req.postDataJSON()?.action === 'build' && req.postDataJSON()?.audio_only === false; }
-    catch { return false; }
-  });
-  await pc.click('#studio-confirm-ok');
-  await fullBuild;
-  await pc.waitForFunction(() => document.getElementById('create-build-feedback-title')?.textContent.includes('รับคำสั่ง'));
-  assert.match(await pc.locator('#create-build-feedback-detail').innerText(), /pc-wizard-smoke-job/);
+  assert.equal(await pc.locator('#xsk-stream-build').isVisible(),true);
+  assert.equal(await pc.locator('#create-output-kind').isVisible(),false);
 
-  // The separate Pro legacy wizard retains its existing track selection,
-  // live MIDI preview and manual audio-only workflow.
-  assert.equal(await pc.locator('#create-output-kind').inputValue(), 'xstage');
-  for(let step=0;step<3;step++)await pc.click('#create-step-previous');
-  assert.equal(await pc.locator('#create-stage-1').isVisible(),true);
-  const audioListReload=pc.waitForResponse(res=>{
-    try{return new URL(res.url()).pathname==='/api/songs' &&
-      new URL(res.url()).searchParams.get('midi_only')==='0';}
-    catch{return false;}
-  });
-  await pc.locator('#create-output-kind').selectOption('m4a');
-  await audioListReload;
-  await pc.click('#create-step-next'); // step 2, source format change resets selections
-  await pc.locator('#song-rows tr[data-id="1"]').waitFor();
-  await pc.locator('#song-rows tr[data-id="1"]').click(); // select for M4A mode
-  await pc.click('#create-step-next'); // step 3
-  await pc.click('#create-step-next'); // step 4
-  assert.equal(await pc.locator('#create-stage-4').isVisible(),true);
-  await pc.locator('#build-audio-button').waitFor({state:'visible'});
-  assert.equal(await pc.locator('#build-audio-button').isEnabled(), true);
-  await pc.click('#build-audio-button');
-  await pc.locator('#studio-confirm-dialog[open]').waitFor();
-  assert.match(await pc.locator('#studio-confirm-message').innerText(), /M4A อย่างเดียว/);
-  const audioBuild = pc.waitForRequest((req) => {
-    try { return new URL(req.url()).pathname === '/api/jobs' &&
-      req.postDataJSON()?.action === 'build' && req.postDataJSON()?.audio_only === true; }
-    catch { return false; }
-  });
-  await pc.click('#studio-confirm-ok');
-  await audioBuild;
   // Search the entire lyric body; choose multiple groups from several
   // positions, replace once, then continue directly with unedited groups.
   await pc.click('.nav-button[data-tab="lyric-head-tail"]');
