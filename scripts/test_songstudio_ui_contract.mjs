@@ -241,4 +241,14 @@ assert.ok(streamPackage.includes('queue.Queue(maxsize=max_batches)') &&
           streamPackage.includes('def produce():') &&
           streamPackage.includes('def consume():'),
   'Producer/consumer MIDI queue must have a hard bounded backlog');
+assert.ok(!html.includes('data-tab="created-json"'),
+  'Standalone Create XSK menu must be removed; use MIDI to .XSK');
+assert.ok(!js.includes("'created-json': ['สร้าง .XSK"),
+  'Retired standalone XSK tab must not remain in navigation routing');
+assert.ok(html.includes('data-tab="create"') && html.includes('id="xsk-stream-build"'),
+  'MIDI to .XSK must remain the single visible XSK creation workflow');
+assert.ok(html.includes('data-tab="json-pro"') &&
+          html.includes('data-tab="pc-export"') &&
+          html.includes('data-tab="upload"'),
+  'Retiring duplicate XSK menu must preserve Pro JSON and Online/PC imports');
 console.log('PASS: PC/Web Control UI syntax, bulk multi-select, lyric-body search, AI and Drive controls.');
