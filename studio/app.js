@@ -1976,6 +1976,47 @@
     $('toggle-log').setAttribute('aria-expanded', 'true');
     $('job-panel').scrollIntoView({behavior:'smooth',block:'center'});
   }
+  // A fresh accepted job replaces only its own page's previous run state.
+  // Other active jobs, catalog data and completed output files are untouched.
+  const jobStatusFields = {
+    'xsk-stream':['xsk-stream-status'],
+    'json-pro-export':['json-pro-report'],
+    'pc-export':['pc-export-status'],
+    'upload-folder':['upload-folder-report'],
+    'upload-soundfont':['upload-soundfont-status'],
+    'upload':['upload-status'],
+    'created-xsk':['created-xsk-status'],
+    'ai-lyrics':['ai-lyrics-status'],
+    'ai-align':['ai-lyrics-status','ai-lyrics-align-review'],
+    'ai-separate-vocals':['ai-lyrics-status','ai-lyrics-vocals-status'],
+    'ai-export':['ai-export-status'],
+    'check-update':['update-result'],
+    'download-update':['update-result'],
+    'install-update':['update-result'],
+  };
+  function resetStatusForNewJob(action, id) {
+    for(const field of jobStatusFields[action]||[]) {
+      const element=$(field);
+      if(element)element.textContent='กำลังเริ่มงานใหม่ · '+action+' · เลขงาน '+id;
+    }
+    // Remove only historic completed records of this same action. Live
+    // unrelated workers stay on screen and keep their own progress.
+    activeJobs=activeJobs.filter(job=>job.kind!==action || job.state==='running');
+    if(action==='build') {
+      buildFeedback('starting','เริ่มสร้างเพลงรอบใหม่','เลขงาน '+id+' · เริ่มนับใหม่');
+    }
+    $('job-title').textContent='● เริ่มงานใหม่: '+action;
+    $('job-detail').textContent='เลขงาน '+id+' · รอความคืบหน้าจาก PC Engine';
+    $('job-fraction').textContent='เริ่มงานใหม่ · 0 รายการ';
+    $('job-skip-count').textContent='ข้ามซ้ำ 0 · ERR 0 · M4A 0 · Lyrics 0';
+    $('job-eta').textContent='เวลาคงเหลือ —';
+    $('job-timing').textContent='00:00';
+    $('job-log').replaceChildren();
+    const fill=$('progress-fill');
+    fill.style.width='33%';
+    fill.classList.add('indeterminate');
+    $('job-led').className='job-led running';
+  }
   async function run(action, options = {}) {
     if (!canLaunch(action)) {
       message('งานชนิดนี้กำลังทำอยู่ หรือ CPU/RAM ไม่พร้อมรับงานเพิ่ม · ตรวจรายการงานด้านล่าง');
@@ -1989,8 +2030,10 @@
       const response = await post('/api/jobs', {action, ...options});
       if (!response?.id) throw new Error('Local Engine ไม่คืนเลขงาน โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง');
       lastJobId = response.id; lastJobState = 'running';
+      resetStatusForNewJob(action,response.id);
       busy = true;
-      activeJobs=[{id:response.id,kind:action,state:'running',stage:'กำลังเริ่มต้น'},...activeJobs];
+      activeJobs=[{id:response.id,kind:action,state:'running',stage:'กำลังเริ่มต้น',
+                   completed:0,total:response.total||0,created:0,skipped:0,errors:0,logs:[]},...activeJobs];
       updateButtons();
       if (action === 'build') {
         buildFeedback('running', 'PC Engine รับคำสั่งสร้างเพลงแล้ว',
