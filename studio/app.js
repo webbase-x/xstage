@@ -730,6 +730,33 @@
     updateCreateWizard();
     phraseUpdateButtons();
     aiUpdateButtons();
+    // Keep independent workflows accessible while an unrelated group runs.
+    const libraryOK=canLaunch('xsk-stream');
+    const audioOK=canLaunch('ai-lyrics');
+    const netOK=canLaunch('upload-folder');
+    $('xsk-stream-build').disabled=!libraryOK;
+    $('json-pro-start').disabled=!libraryOK||!proEnabled;
+    $('json-pro-inspect').disabled=!libraryOK;
+    $('ai-lyrics-start').disabled=!audioOK||!Number.isInteger(aiSongId)||!aiEngineReady;
+    $('ai-lyrics-separate').disabled=!audioOK||!Number.isInteger(aiSongId)||!aiSeparationAvailable;
+    $('ai-lyrics-align').disabled=!audioOK||!Number.isInteger(aiSongId)||
+       !(aiEngineReady||aiDraftReady)||!$('ai-lyrics-paste').value.trim();
+    $('upload-folder-button').disabled=!netOK||!googleConnected;
+    $('upload-soundfont-button').disabled=!netOK||!googleConnected;
+    $('update-button').disabled=!canLaunch('check-update');
+    $('update-download').disabled=!canLaunch('install-update');
+    for(const id of ['create-source','xsk-build-folder','xsk-stream-code-style','xsk-stream-code-length',
+                     'json-pro-source','json-pro-destination','json-pro-format']) {
+       $(id).disabled=!libraryOK;
+    }
+    for(const id of ['upload-folder','upload-soundfont-path']) $(id).disabled=!netOK;
+    for(const button of document.querySelectorAll('[data-pick]')) {
+       const kind=button.dataset.pick;
+       if(['source','xsk_folder','json_source','json_destination'].includes(kind))
+         button.disabled=!libraryOK;
+       else if(['upload_folder','soundfont'].includes(kind))
+         button.disabled=!netOK;
+    }
   }
   async function verifyCodeRegistry() {
     const button = $('verify-code-registry');
@@ -844,7 +871,7 @@
   }
   async function pick(kind, trigger=null) {
     const button = trigger || [...document.querySelectorAll('[data-pick]')].find(el => el.dataset.pick === kind);
-    if (busy || button?.disabled) return;
+    if (button?.disabled) return;
     const oldLabel = button?.textContent || '';
     if (button) {
       button.disabled = true;
@@ -1482,7 +1509,7 @@
     } catch(error) {if(seq===aiSearchSeq)panel.textContent='อ่านรายการไม่สำเร็จ: '+error.message;}
   }
   async function aiSeparateVocals(){
-    if(!Number.isInteger(aiSongId)||busy||!aiSeparationAvailable)
+    if(!Number.isInteger(aiSongId)||!canLaunch('ai-separate-vocals')||!aiSeparationAvailable)
       return message('กรุณาเลือกไฟล์เสียงร้องและตรวจว่า HTDemucs พร้อม');
     const id=aiSongId;
     const approved=await confirmStudio(
@@ -1491,7 +1518,7 @@
       'การแยกเสียงร้องอาจมีเสียงดนตรีหลงเหลือ ต้องทดลองฟังตรวจสอบ',
       'ยืนยันแยกเสียงร้องและดนตรีเป็น M4A',
       {acceptLabel:'เริ่มแยกเสียงร้อง',cancelLabel:'ยกเลิก'});
-    if(!approved||busy||aiSongId!==id)return;
+    if(!approved||!canLaunch('ai-separate-vocals')||aiSongId!==id)return;
     aiStopPlayback();
     $('ai-lyrics-vocals-status').textContent=
       'กำลังแยกเสียงร้องและดนตรีด้วย HTDemucs · ตรวจความคืบหน้าที่แผงงาน';
@@ -1758,7 +1785,7 @@
   }
 
   async function aiStartTranscription() {
-    if(!Number.isInteger(aiSongId)||!aiEngineReady||busy)
+    if(!Number.isInteger(aiSongId)||!aiEngineReady||!canLaunch('ai-lyrics'))
       return message('กรุณานำเข้าเพลงเสียงร้องและตรวจว่า Whisper AI พร้อมใช้งาน');
     const consent=await confirmStudio(
       'AI จะถอดเสียงจากไฟล์เพลงที่เลือก พร้อมประเมินเวลาแต่ละบรรทัดแบบออฟไลน์\n'+
@@ -1771,7 +1798,7 @@
       useSeparatedVocals:$('ai-lyrics-use-vocals').checked});
   }
   async function aiAlignPastedLyrics() {
-    if(!Number.isInteger(aiSongId)||busy || !(aiEngineReady||aiDraftReady))
+    if(!Number.isInteger(aiSongId)||!canLaunch('ai-align') || !(aiEngineReady||aiDraftReady))
       return message('กรุณาเลือกเพลงเสียงร้องและตรวจว่า AI พร้อม หรือมีร่าง Whisper เดิม');
     const lyrics=$('ai-lyrics-paste').value;
     if(!lyrics.trim())return message('กรุณาวางเนื้อเพลงที่ถูกต้องทีละบรรทัดก่อน');
@@ -1909,7 +1936,7 @@
   }
   const selectedIDs = () => [...selected];
   async function startStreamingXsk() {
-    if(busy)return message('มีงานอื่นกำลังทำอยู่ · หยุดหรือรอให้เสร็จก่อน');
+    if(!canLaunch('xsk-stream'))return message('งานแปลงเพลงกำลังทำอยู่ หรือเครื่องไม่พร้อมรับงานเพิ่ม');
     try{
       await saveInputs(['create-source','xsk-build-folder',
                         'xsk-stream-code-style','xsk-stream-code-length']);
@@ -2222,8 +2249,8 @@
     await run('pc-export');
   }
   async function startFolderUpload() {
-    if (busy || !googleConnected)
-      return message('กรุณาเชื่อม Google Drive ก่อนอัปโหลด');
+    if (!canLaunch('upload-folder') || !googleConnected)
+      return message('กรุณาเชื่อม Google Drive หรือรอทรัพยากรเครื่องพร้อมก่อนอัปโหลด');
     const report=await inspectUploadFolder();
     if (!report || !report.ready)
       return message('ไม่มีชุดเพลงที่ตรวจแล้วว่าสมบูรณ์ · ยังไม่อัปโหลด');
@@ -3215,7 +3242,7 @@
     }
   }
   async function startJsonPro() {
-    if(busy || !proEnabled)return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และไม่มีงานอื่นกำลังดำเนินการ');
+    if(!canLaunch('json-pro-export') || !proEnabled)return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
     const report=await inspectJsonPro();
     if(!report||!report.ready)return message('ไม่มีชุดเพลงที่ตรวจผ่านพร้อม Lyrics JSON');
     const format=$('json-pro-format').value;
