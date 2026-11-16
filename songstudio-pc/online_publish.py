@@ -75,10 +75,20 @@ def _local_path(root, path, prefix):
     item = PurePosixPath(path)
     if item.is_absolute() or any(part in ("", ".", "..") for part in item.parts):
         raise PublishError("พาธไฟล์ประกอบไม่ปลอดภัย: " + path)
-    file = (root / Path(*item.parts)).resolve()
-    if not file.is_relative_to(root.resolve()) or not file.is_file() or file.is_symlink():
+    file = root / Path(*item.parts)
+    # A verified portable export retains PC's uppercase AUDIO/LYRICS folders.
+    # Adapt only that specific format; never accept arbitrary alternate paths.
+    if not file.is_file() and (root / "DB" / "songs-portable.json").is_file():
+        import json
+        portable = json.loads((root / "DB" / "songs-portable.json").read_text(encoding="utf-8-sig"))
+        if portable.get("schemaVersion") == 1 and portable.get("format") == "xstage-portable-song-db":
+            file = root / prefix.upper() / Path(*item.parts[1:])
+    resolved = file.resolve()
+    if (not resolved.is_relative_to(root.resolve()) or not file.is_file()
+            or file.is_symlink() or any(p.is_symlink() for p in
+                                       [file.parent, *file.parents] if p != root and root in p.parents)):
         raise PublishError("ไฟล์เพลง/เนื้อร้องไม่ครบ: " + path)
-    return file
+    return resolved
 
 
 def _valid_row(root, row):
@@ -277,7 +287,14 @@ class OnlinePublisher:
                 batch_size=100):
         local_songs = Path(local_songs)
         if not (local_songs / "current.json").is_file():
-            raise PublishError("กรุณาสร้างฐานเพลงในเครื่องก่อนอัปโหลด")
+            portable = local_songs / "DB" / "songs-portable.json"
+            if not portable.is_file() or portable.is_symlink():
+                raise PublishError("กรุณาสร้างฐานเพลงในเครื่องก่อนอัปโหลด")
+            import json
+            descriptor = json.loads(portable.read_text(encoding="utf-8-sig"))
+            if (descriptor.get("format") != "xstage-portable-song-db"
+                    or descriptor.get("schemaVersion") != 1):
+                raise PublishError("ฐานเพลงพกพาไม่ถูกต้อง ไม่สามารถเผยแพร่ได้")
         ready = []
         not_ready = 0
         for row in selected_records:
