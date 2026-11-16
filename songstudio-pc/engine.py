@@ -3673,13 +3673,8 @@ def main():
         JOB["detail"] = "ไม่สามารถโหลดดัชนีเดิม: " + str(exc)
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
         PORT = server.server_port
-        if count and Path(PREFS["source"]).is_dir():
-            # Startup uses the persisted catalog immediately, then checks
-            # metadata changes in a background job. Never block the window.
-            try:
-                start_job({"action": "scan", "full": False})
-            except ValueError:
-                pass
+        # Do not scan the selected song folder or start conversion on launch.
+        # The user explicitly starts work by pressing "ตกลง".
         url = f"http://127.0.0.1:{PORT}/#auth={TOKEN}"
         # Open a standalone application window when Edge is installed;
         # fall back to the system's default browser otherwise.
