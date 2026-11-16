@@ -686,13 +686,35 @@ class Importer {
         let item=originalItem;
         try{
           if(item.isXsk){
+            // Keep the original XSK2 on Drive. Inspect its verified metadata
+            // only once on import, but do not upload decompressed MIDI/JSON.
+            // The stage unpacks and renders it just-in-time for playback.
             const opened=await scope.XStageXsk.openPackage(item.file);
-            // XSK2 is unencrypted. Validate ZIP, metadata and SHA-256 locally;
-            // upload only its canonical MIDI+JSON into Drive v4 catalog.
-            item={...item,isMidi:true,code:opened.code,kind:'XSK',
-              midi:{file:opened.midi},json:{file:opened.lyrics}};
-          }
-          if(item.isMidi){
+            const code=opened.code,identity=core.songIdentity(opened.document,code);
+            if(!identity.identityComplete)
+              throw Error('XSK: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
+            const xskHash=await core.hashBlob(item.file,()=>this.check());
+            const ident='browser/xsk/'+xskHash;
+            const candidates=byCode.get(code.toLowerCase())||[];
+            if(rows.has(ident)||candidates.some(x=>
+              String(x.xsk?.md5Checksum||'').toLowerCase()===xskHash)){
+              this.stats.duplicates++;finished++;
+              show('ข้าม XSK ซ้ำ MD5: '+code);continue;
+            }
+            if(candidates.length){
+              this.stats.conflicts++;finished++;
+              show('รหัส XSK ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;
+            }
+            const name=safeName(code)+'-'+xskHash.slice(0,16)+'.xsk';
+            const packed=await uploadMedia(item.file,code,['AUDIO'],name,
+              'application/octet-stream',xskHash,0,1);
+            const record={webSongId:ident,code,title:identity.title,
+              artist:identity.artist,sourceFormat:'XSK',lyricsMode:'timed',
+              xsk:packed};
+            rows.set(ident,record);addMaps(record);
+            revisions.push(record);this.stats.newSongs++;
+            if(revisions.length>=25)await publish();
+          }else if(item.isMidi){
             const runtime=scope.XStageBrowserMidi;
             if(!runtime)fail('ไม่พบระบบ MIDI ที่ติดมากับหน้าเว็บ · อัปเดตเว็บก่อนนำเข้า');
             const midiFile=item.midi.file,code=item.code;
