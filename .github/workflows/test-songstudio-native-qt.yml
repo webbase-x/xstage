@@ -55,6 +55,12 @@ jobs:
           $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.60-build360'
           & (Join-Path $bundle '.runtime/python/python.exe') scripts/test_songstudio_ready.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Offline Ready runtime conversion regression failed' }
+      - name: Exercise real bundled Qt desktop startup (offscreen CI)
+        shell: powershell
+        run: |
+          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.60-build360'
+          python scripts/test_songstudio_native_runtime.py $bundle
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged native Qt Engine startup failed' }
       - name: Upload candidate ZIP for review
         uses: actions/upload-artifact@v6
         with:
