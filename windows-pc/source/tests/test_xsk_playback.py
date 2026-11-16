@@ -48,6 +48,7 @@ class PortableXskPlaybackTests(unittest.TestCase):
         from karaoke.ingest import Inspector
         with tempfile.TemporaryDirectory() as dirname:
             path = self.package_xsk2(Path(dirname))
+            original = path.read_bytes()
             raw, doc = read_xsk(path)
             self.assertEqual(raw, MIDI)
             self.assertEqual((doc['title'], doc['artist']), ('ทำได้เพียง', '25 Hours'))
@@ -58,6 +59,8 @@ class PortableXskPlaybackTests(unittest.TestCase):
             self.assertEqual((indexed['title'], indexed['artist']),
                              ('ทำได้เพียง', '25 Hours'))
             self.assertEqual(indexed['format'], 'XSK')
+            self.assertEqual(path.read_bytes(), original,
+                             'Inspecting or playing XSK2 must never rewrite the source package')
 
     def test_xsk2_rejects_wrong_sha_without_windows_key(self):
         with tempfile.TemporaryDirectory() as dirname:
