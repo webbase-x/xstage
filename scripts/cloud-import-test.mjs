@@ -87,7 +87,8 @@ const xskScan=core.scan([
   {file:fake('XStageSong-access.xskkey',260),relative:'XStageSong-access.xskkey'}
 ]);
 assert.equal(xskScan.xsks.length,1,'XSK is a first-class import candidate');
-assert.equal(xskScan.accessKeys.length,1,'Encrypted portable key is discovered, not uploaded');
+assert.equal(xskScan.blocked.length,1,'Legacy XSK key file is ignored and never uploaded');
+assert.match(xskScan.blocked[0].reason,/ไม่ต้องใช้ไฟล์กุญแจ/);
 const ncnIdentity=core.songIdentity({schemaVersion:1,songCode:'00001',
   metadata:{title:'ทำได้เพียง',artist:'25 Hours'}},'00001');
 assert.equal(ncnIdentity.title,'ทำได้เพียง');
