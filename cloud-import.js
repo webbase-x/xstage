@@ -33,15 +33,25 @@ function encode(document){return new Blob([JSON.stringify(document)],{type:'appl
 function pathFor(code,kind,role,name){
   const suffix=core.ext(name),id=String(code||'').toUpperCase();
   const bucket=/^[0-9A-Z]/.test(id)?id[0]:'_';
-  if(suffix==='sf2'||suffix==='sf3')return ['SOUNDFONT',name];
-  if(suffix==='json'||kind==='json')return ['LYRICS',bucket,name];
+  const video=['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(suffix);
+  if(suffix==='sf2'||suffix==='sf3')return ['SOUNDFONT',suffix.toUpperCase(),name];
   if(suffix==='xsk')return ['MIDI','XSK',bucket,name];
-  if(suffix==='mid'||suffix==='midi')return ['MIDI','MID',bucket,name];
   if(suffix==='kar')return ['MIDI','KAR',bucket,name];
-  if(core.VIDEO?.has?.(suffix)||['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(suffix))
-    return ['VIDEO',bucket,name];
-  return ['AUDIO',bucket,name];
+  if(suffix==='mid'||suffix==='midi')
+    return ['MIDI','MID','SONG',bucket,name];
+  if(suffix==='json'||kind==='json'){
+    if(role==='NCN')return ['MIDI','NCN','LYRICS',bucket,name];
+    if(role==='MID')return ['MIDI','MID','LYRICS',bucket,name];
+    if(video||['mp4','webm'].includes(String(role).toLowerCase()))
+      return ['VIDEO',String(role).toUpperCase(),'LYRICS',bucket,name];
+    if(role&&role!=='KAR'&&role!=='XSK')
+      return ['AUDIO',String(role).toUpperCase(),'LYRICS',bucket,name];
+    return ['LYRICS',bucket,name]; // legacy isolated JSON path
+  }
+  if(video)return ['VIDEO',suffix.toUpperCase(),'SONG',bucket,name];
+  return ['AUDIO',suffix.toUpperCase(),'SONG',bucket,name];
 }
+
 async function db(){
   if(!('indexedDB' in scope))return null;
   return await new Promise((resolve,reject)=>{
@@ -771,19 +781,19 @@ class Importer {
             if(!media){
               const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
               const midiFolder=item.kind==='NCN'
-                ? ['MIDI','NCN','SONG',pathFor(code,'midi','',name)[2]]
+                ? ['MIDI','NCN','SONG',pathFor(code,'midi','',name)[3]]
                 : pathFor(code,'midi','',name).slice(0,-1);
               media=await uploadMedia(midiFile,code,midiFolder,name,
                 'audio/midi',midiHash,0,.75);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyrics=await uploadMedia(json,code,pathFor(code,'json','',jname).slice(0,-1),jname,
+            const lyrics=await uploadMedia(json,code,pathFor(code,'json',item.kind==='NCN'?'NCN':'MID',jname).slice(0,-1),jname,
               'application/json',jsonHash,.75,.25);
             // Keep lossless NCN sources in their native folders alongside the
             // separately verified timed JSON used for all player platforms.
             let ncnSource=same?.ncnSource||null;
             if(item.kind==='NCN'&&item.lyr&&item.cur&&!ncnSource){
-              const bucket=pathFor(code,'midi','',code+'.mid')[2];
+              const bucket=pathFor(code,'midi','',code+'.mid')[3];
               const sourcePart=async(source,role,extension)=>{
                 const hash=await core.hashBlob(source.file,()=>this.check());
                 const sourceName=base+'-'+hash.slice(0,16)+'.'+extension;
@@ -792,8 +802,8 @@ class Importer {
               };
               const nativeMidi=media.path?.startsWith('MIDI/NCN/SONG/')
                 ? media : await sourcePart(item.midi,'SONG',core.ext(midiFile.name));
-              const sourceLyrics=await sourcePart(item.lyr,'LYRICS','lyr');
-              const sourceCursor=await sourcePart(item.cur,'CURSOR','cur');
+              const sourceLyrics=await sourcePart(item.lyr,'LYR','lyr');
+              const sourceCursor=await sourcePart(item.cur,'CUR','cur');
               ncnSource={midi:nativeMidi,lyr:sourceLyrics,cur:sourceCursor};
             }
             const ident=same?.webSongId||('browser/midi/'+midiHash);
@@ -920,7 +930,7 @@ class Importer {
                 MEDIA_MIME[uploadKind]||'application/octet-stream',audioHash,0,.83);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyric=await uploadMedia(json,code,pathFor(code,'json','',jname).slice(0,-1),jname,'application/json',jsonHash,.83,.09);
+            const lyric=await uploadMedia(json,code,pathFor(code,'json',uploadKind,jname).slice(0,-1),jname,'application/json',jsonHash,.83,.09);
             // LRC is a local input/editing format; JSON is the only
             // lyric artifact stored on Drive in layout v3.
             let videoMedia=same?.video;
