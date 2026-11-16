@@ -226,6 +226,50 @@ def scan(folder, ncn=None):
             "total": len(complete)}
 
 
+def _portable_local_catalog(root):
+    """Validated PC export adapter for the same private Web/APK publisher."""
+    pointer = root / "DB" / "songs-portable.json"
+    if not pointer.is_file() or pointer.is_symlink():
+        return None
+    import json
+    if pointer.stat().st_size > 100 * 1024 * 1024:
+        raise ValueError("ฐานเพลงพกพามีขนาดผิดปกติ")
+    doc = json.loads(pointer.read_text(encoding="utf-8-sig"))
+    if (doc.get("schemaVersion") != 1
+            or doc.get("format") != "xstage-portable-song-db"
+            or doc.get("layoutVersion") != 4
+            or not isinstance(doc.get("songs"), list)
+            or doc.get("songCount") != len(doc["songs"])):
+        raise ValueError("ฐานเพลงพกพาไม่ตรงโครงสร้างของ X-Stage Karaoke")
+    seen = set()
+    rows = []
+    for row in doc["songs"]:
+        if not isinstance(row, dict) or not row.get("webSongId") or not row.get("code"):
+            raise ValueError("พบรายการเพลงผิดรูปแบบในฐานพกพา")
+        ident = str(row["webSongId"])
+        if ident in seen:
+            raise ValueError("ฐานเพลงพกพามีรหัสเพลงซ้ำ")
+        seen.add(ident)
+        rewritten = dict(row)
+        for field, prefix in (("audio", "AUDIO"), ("lyrics", "LYRICS")):
+            part = row.get(field)
+            value = part.get("path") if isinstance(part, dict) else None
+            if not isinstance(value, str) or not value.startswith(prefix + "/"):
+                raise ValueError("ฐานเพลงพกพาอ้างถึงตำแหน่งไฟล์ผิดรูปแบบ")
+            parts = value.split("/")
+            if (len(parts) < 3 or any(p in ("", ".", "..") for p in parts)
+                    or any(any(ch in p for ch in ("\\", ":", "\x00")) for p in parts)):
+                raise ValueError("พบพาธไม่ปลอดภัยในฐานเพลงพกพา")
+            target = root.joinpath(*parts)
+            if (not target.is_file() or target.is_symlink()
+                    or not target.resolve().is_relative_to(root.resolve())):
+                raise ValueError("ไฟล์ในฐานพกพาไม่ครบ: " + value)
+            rewritten[field] = {"path": field + "/" + "/".join(parts[1:])}
+        rows.append(rewritten)
+    return {"root": root, "rows": rows, "incomplete": 0,
+            "pointerCount": len(rows), "portable": True}
+
+
 def existing_local_catalog(folder, export):
     """Detect a complete locally generated Song Studio XStageSong library."""
     if export is None:
@@ -236,7 +280,8 @@ def existing_local_catalog(folder, export):
         candidates.append(chosen / "XStageSong")
         # Prefer an explicitly selected catalog. Avoid walking a 100k-song
         # hierarchy just to rediscover the current folder's own pointer.
-        direct = [p for p in candidates if (p / "current.json").is_file()]
+        direct = [p for p in candidates if (p / "current.json").is_file()
+                  or (p / "DB" / "songs-portable.json").is_file()]
         if not direct:
             # A selected parent can contain a library multiple levels down.
             # Do not guess between multiple libraries.
@@ -252,6 +297,9 @@ def existing_local_catalog(folder, export):
                 raise ValueError("พบคลัง XStageSong หลายแห่งในโฟลเดอร์ย่อย กรุณาเลือกคลังที่ต้องการโดยตรง")
     for root in candidates:
         if not (root / "current.json").is_file():
+            portable = _portable_local_catalog(root)
+            if portable is not None:
+                return portable
             continue
         pointer, _ = export._read_current(root)  # Invalid DB must fail closed.
         rows = export.existing_records(root)
