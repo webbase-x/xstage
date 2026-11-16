@@ -75,10 +75,12 @@ function groupKey(path){
   const pieces=String(path||'').replace(/\\/g,'/').split('/').filter(Boolean);
   const base=(pieces.pop()||'').replace(/\.[^.]+$/,'');
   const folders=pieces.filter(p=>!ROLES.has(p.toLowerCase()));
-  // Keep the enclosing format (AUDIO/MP3, VIDEO/MP4, MIDI/MID).
-  // SONG and LYRICS siblings still pair, but identical song codes in
-  // different formats must never accidentally merge into one song.
-  // NCN LYR/CUR siblings follow the same relative-code rule.
+  // Preserve old unbucketed AUDIO/VIDEO layouts where audio and video with
+  // the same basename deliberately formed one dual-media entry.
+  // New XStageSong type/SONG/<bucket> paths remain format-scoped so the
+  // same song code in MP3 and MP4 does not accidentally collide.
+  if(folders.length===2&&['audio','video'].includes(folders[0].toLowerCase()))
+    folders.splice(0,2);
   return [...folders,base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
 }
 function scan(files){
