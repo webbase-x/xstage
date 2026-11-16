@@ -732,8 +732,10 @@ class Importer {
             // cursor or lyric source in the private Drive song library.
             const ident=same?.webSongId||('browser/midi/'+midiHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
-            const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:type,midi:media,lyrics};
+            const identity=core.songIdentity(doc,code,same);
+            const record={...(same||{}),webSongId:ident,code,
+              title:identity.title,artist:identity.artist,
+              sourceFormat:type,midi:media,lyrics};
             delete record.lyr;delete record.cur;delete record.lrc;
             if(same){
               byPair.delete(String(same.midi?.md5Checksum||'').toLowerCase()+':'+
@@ -880,8 +882,9 @@ class Importer {
             }
             const ident=same?.webSongId||('browser/'+audioHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิงออนไลน์ชนกับเพลงอื่น');
-            const record={...(same||{}),webSongId:ident,code,title:doc.title||code,
-              artist:doc.artist||'',sourceFormat:uploadKind,
+            const identity=core.songIdentity(doc,code,same);
+            const record={...(same||{}),webSongId:ident,code,
+              title:identity.title,artist:identity.artist,sourceFormat:uploadKind,
               lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
               audio:media,lyrics:lyric,
               ...(videoMedia?{video:videoMedia}:{}),
