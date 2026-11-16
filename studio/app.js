@@ -2367,6 +2367,8 @@
         '\\nตำแหน่งปลายทาง: '+result.destination+
         '\\nSQLite: '+(result.databaseAction==='update'?'อัปเดตฐานเดิม':'สร้างฐานใหม่')+
         ' · '+result.database+
+        '\\nDB พกพาสำหรับเผยแพร่ Web/APK: '+result.portableDatabase+
+        '\\nWeb/APK ต้องอัปโหลดด้วยบัญชี Google Drive เพื่อสร้าง File ID จริง'+
         (result.databaseInstalled?' · เชื่อมฐาน Karaoke PC ที่ติดตั้งแล้ว':
         ' · โหมดส่งออก: ยังไม่พบโปรแกรม Karaoke PC ณ ตำแหน่งนี้');
       return result;
@@ -2387,7 +2389,8 @@
       report.destination+'\\nจำนวนไฟล์ '+fmtNum(report.files)+
       ' · ต้องคัดลอกใหม่ '+fmtNum(report.newFiles)+
       ' ('+fmtSize(report.bytesToCopy)+')\\n'+
-      'นำเข้า AUDIO, LYRICS และสร้าง/อัปเดต SQLite songs.sqlite3 ตามโครงสร้าง Karaoke PC\\n'+
+      'ส่งออก AUDIO, LYRICS, SQLite songs.sqlite3 สำหรับ PC และ DB/songs-portable.json\\n'+
+      'การใช้ผ่าน Web/APK ต้องนำเข้า Google Drive หลังส่งออก ไม่ใช้ SQLite โดยตรง\\n'+
       'ตำแหน่ง DB: '+report.database+'\\n'+
       (report.databaseInstalled?'เชื่อมฐานของ Karaoke PC ที่ติดตั้งแล้ว\\n':
        'ยังไม่พบ Karaoke PC ที่ติดตั้ง · สร้างฐาน SQLite สำหรับส่งออกเท่านั้น\\n')+
