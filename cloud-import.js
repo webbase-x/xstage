@@ -570,11 +570,11 @@ class Importer {
     this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
-    if(this.plan.xsks.length&&!scope.XStageXsk)
-      fail('ยังไม่โหลดตัวอ่าน XSK2 ของเบราว์เซอร์');
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
     drive.signal=()=>this.controller.signal;
     try{
+      if(this.plan.xsks.length&&!scope.XStageXsk)
+        fail('ยังไม่โหลดตัวอ่าน XSK2 ของเบราว์เซอร์');
       this.status('กำลังตรวจคลัง XStageSong และ current.json บน Google Drive…');
       const rootQuery="'root' in parents and name='XStageSong' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
