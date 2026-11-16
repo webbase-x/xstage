@@ -2251,7 +2251,10 @@ function togglePlayback(){
 async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=true}={}) {
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
-  if (!playable(song)) {setPlayStatus('เพลงนี้ยังไม่มีไฟล์เสียง/MIDI และ Lyrics JSON ที่พร้อมเล่น');return;}
+  if (!playable(song)) {
+    setPlayStatus('เพลงนี้ยังไม่มี XSK2 หรือไฟล์เสียง/MIDI พร้อม Lyrics JSON ที่พร้อมเล่น');
+    return;
+  }
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
@@ -2279,12 +2282,23 @@ async function playSong(song,{remember=true,preloaded=null,resumeAt=0,autoplay=t
       });
       return rendered.audio;
     };
-    const [audio,lyrics]=prepared&&!getFileId(song.midi)
-      ? [prepared.blob,prepared.lyrics]
-      : await boundedPlaybackTask(Promise.all([
-          loadMedia(),
-          privateJson(song.lyrics.fileId,token,{signal:controller.signal})
-        ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป',controller);
+    let audio,lyrics;
+    if(prepared&&(getFileId(song.xsk)||!getFileId(song.midi))){
+      // Queued XSK2 was already unpacked and synthesized during the
+      // previous song; never download, unzip or render it twice.
+      ({blob:audio,lyrics}=prepared);
+    }else if(getFileId(song.xsk)){
+      const ready=await boundedPlaybackTask(
+        prepareXskPlayback(song,token,controller.signal,message=>{
+          if(request===state.requestId)setPlayStatus(message);
+        }),120,'โหลดหรือแยก XSK2 จาก Google Drive นานเกินไป',controller);
+      audio=ready.blob;lyrics=ready.lyrics;
+    }else{
+      [audio,lyrics]=await boundedPlaybackTask(Promise.all([
+        loadMedia(),
+        privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+      ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป',controller);
+    }
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token){controller.abort();return;}
     if (!audio.size)throw Error('ไฟล์เสียงว่างเปล่า');
