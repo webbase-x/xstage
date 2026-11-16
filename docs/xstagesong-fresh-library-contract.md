@@ -4,29 +4,42 @@ The owner confirmed the library currently contains **no songs**, so new installa
 and an empty private Google Drive must start with **one** root named `XStageSong`.
 Do not attempt automatic migration of historical catalogs or prepopulate songs.
 
-## Required relative paths
+## Agreed relative paths for moving/copying a type folder
 
 ```text
 XStageSong/
-  AUDIO/<first-code-char>/<code>-<digest>.m4a|.mp3|.wav|.flac|...
-  VIDEO/<first-code-char>/<code>-<digest>.mp4|.webm|...
-  MIDI/MID/<first-code-char>/<code>-<digest>.mid
-  MIDI/KAR/<first-code-char>/<code>-<digest>.kar
-  MIDI/XSK/<first-code-char>/<code>-<digest>.xsk
-  MIDI/NCN/SONG/<first-code-char>/<code>-<digest>.mid
-  MIDI/NCN/LYRICS/<first-code-char>/<code>-<digest>.lyr
-  MIDI/NCN/CURSOR/<first-code-char>/<code>-<digest>.cur
-  LYRICS/<first-code-char>/<code>-<digest>.json
-  SOUNDFONT/<name>-<digest>.sf2|.sf3
-  DB/            # local SQLite and portable snapshots
-  CACHE/         # local transient only; no private Drive uploads
-  BACKUP/        # local backup and verified recovery
-  LOGS/          # local logging; never upload secrets
+  MIDI/MID/SONG/<bucket>/<code>.mid
+  MIDI/MID/LYRICS/<bucket>/<code>.json
+  MIDI/KAR/<bucket>/<code>.kar
+  MIDI/XSK/<bucket>/<code>.xsk
+  MIDI/NCN/SONG/<bucket>/<code>.mid
+  MIDI/NCN/LYR/<bucket>/<code>.lyr
+  MIDI/NCN/CUR/<bucket>/<code>.cur
+  AUDIO/MP3/SONG/<bucket>/<code>.mp3
+  AUDIO/MP3/LYRICS/<bucket>/<code>.json
+  AUDIO/M4A/SONG/<bucket>/<code>.m4a
+  AUDIO/M4A/LYRICS/<bucket>/<code>.json
+  AUDIO/WAV|AAC|FLAC|OGG|OGA|WMA/{SONG,LYRICS}/<bucket>/...
+  VIDEO/MP4/SONG/<bucket>/<code>.mp4
+  VIDEO/MP4/LYRICS/<bucket>/<code>.json
+  VIDEO/WEBM|MKV|AVI|MPG|MPEG|DAT|VOB|MOV|WMV|FLV/{SONG,LYRICS}/<bucket>/...
+  SOUNDFONT/SF2/<name>.sf2
+  SOUNDFONT/SF3/<name>.sf3
+  DB/ CACHE/ BACKUP/ LOGS/
 ```
 
-The bucket is the first ASCII uppercase digit/letter of **song code**, or `_`
-when unavailable. Code and title/artist are **different** properties. Catalog
-records must preserve exact relative paths and, on Drive, real Drive file IDs.
+The bucket is the first ASCII uppercase digit/letter of the **song code**,
+or `_` when unavailable. A code/extension pair determines SONG/LYRICS;
+KAR and XSK are **standalone**: no redundant SONG or LYRICS directory.
+NCN retains original MID+LYR+CUR. The whole format directory may be copied
+to another drive and reindexed using relative paths; never store absolute
+authoring-machine paths in a portable catalog. Song title/artist come from
+validated metadata rather than inferred filenames.
+
+For content-addressed Drive uploads, files may use `<code>-<digest>` as their
+basename to avoid overwrites, while the catalog still carries the assigned
+song code and exact real Drive file IDs. Changing physical filenames does not
+permit unverified reassignment to another song.
 
 ## Catalog consistency
 
@@ -39,10 +52,10 @@ records must preserve exact relative paths and, on Drive, real Drive file IDs.
   and metadata, but contains Drive file IDs rather than local paths alone.
 - XSK2 stores MIDI and its timed JSON **inside one XSK**. Do not create a
   duplicate standalone Lyrics JSON solely because of XSK2.
-- An imported original NCN trio stores all three original files under
-  `MIDI/NCN`, with a separately validated timed JSON in `LYRICS/` for Web and
-  APK playback. An incomplete trio is rejected; the original CUR timing is
-  never fabricated.
+- Original NCN files stay together under `MIDI/NCN/{SONG,LYR,CUR}`
+  by code. If a Web player needs converted timed JSON, store that verified
+  derivative in `MIDI/NCN/LYRICS` only as a playback cache; do not change the
+  original three-file NCN contract or fabricate missing CUR timing.
 - Publishing is additive. Verify complete files and checksums before
   atomically publishing a new catalog pointer. The absence of a previous
   library does *not* authorize deleting other Drive folders, app data,
