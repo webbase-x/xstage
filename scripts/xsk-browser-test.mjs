@@ -1,34 +1,21 @@
-/* Browser XSK1 authenticated interoperability with Song Studio portable access. */
+/* Portable XSK2 imported by Web and Android WebView: no key/password. */
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-import {createHash,randomBytes,webcrypto,pbkdf2Sync} from 'node:crypto';
+import {createHash,webcrypto} from 'node:crypto';
 import {deflateRawSync} from 'node:zlib';
 import {File} from 'node:buffer';
 
-const ctx={Blob,File,TextEncoder,TextDecoder,Uint8Array,DataView,DecompressionStream,
-  atob,crypto:webcrypto,console};
+const ctx={Blob,File,TextEncoder,TextDecoder,Uint8Array,DataView,
+  DecompressionStream,crypto:webcrypto,console};
 ctx.window=ctx;
 vm.runInNewContext(fs.readFileSync(new URL('../cloud-import-core.js',import.meta.url),'utf8'),ctx);
 vm.runInNewContext(fs.readFileSync(new URL('../xsk-browser.js',import.meta.url),'utf8'),ctx);
 const bridge=ctx.XStageXsk,core=ctx.XStageImportCore;
 const enc=new TextEncoder();
-const key=randomBytes(32),password='long encrypted access password';
-const salt=randomBytes(16),nonce=randomBytes(12);
-const wrapping=pbkdf2Sync(password,salt,310000,32,'sha256');
-const wrapKey=await webcrypto.subtle.importKey('raw',wrapping,'AES-GCM',false,['encrypt']);
-const accessCipher=Buffer.from(await webcrypto.subtle.encrypt({
-  name:'AES-GCM',iv:nonce,additionalData:enc.encode('XSK-ACCESS1')},wrapKey,key));
-const access={format:'XSK-ACCESS1',kdf:'PBKDF2-SHA256',iterations:310000,
-  salt:salt.toString('base64'),nonce:nonce.toString('base64'),
-  wrappedKey:accessCipher.toString('base64'),publisher:'X-Stage Song Studio'};
-const accessFile=new File([JSON.stringify(access)],'XStageSong-access.xskkey');
-const unlocked=await bridge.unlockAccess(accessFile,password);
-await assert.rejects(()=>bridge.unlockAccess(accessFile,'wrong password 123'),/รหัสผ่าน/);
 
 function zip(files){
-  const local=[],central=[];
-  let offset=0;
+  const local=[],central=[];let offset=0;
   for(const [name,raw] of files){
     const nameBytes=Buffer.from(name),source=Buffer.from(raw);
     const packed=deflateRawSync(source);
@@ -61,20 +48,16 @@ function zip(files){
   ending.writeUInt32LE(offset,16);
   return Buffer.concat([...local,centralData,ending]);
 }
-const midi=Buffer.from('MThd000000060000000101e0MTrk0000000400ff2f00','hex');
-const doc={schemaVersion:2,format:'XSK',formatVersion:1,songCode:'00001',
+const midi=Buffer.from('4d546864000000060000000101e04d54726b0000000d00903c508170803c0000ff2f00','hex');
+const doc={schemaVersion:2,format:'XSK',formatVersion:2,songCode:'00001',
   title:'ทำได้เพียง',artist:'25 Hours',createdBy:'X-Stage Song Studio',
   audio:{file:'00001.mid',type:'MID',size:midi.length,
     sha256:createHash('sha256').update(midi).digest('hex')},
   lines:[{startTime:1.2,text:'เริ่มร้อง'},{startTime:2.3,text:'ต่อไป'}]};
-const plaintext=zip([['00001.mid',midi],['00001.json',enc.encode(JSON.stringify(doc))]]);
-const iv=randomBytes(12);
-const xskKey=await webcrypto.subtle.importKey('raw',key,'AES-GCM',false,['encrypt']);
-const ciphertext=Buffer.from(await webcrypto.subtle.encrypt({
-  name:'AES-GCM',iv,additionalData:enc.encode('XSK1')},xskKey,plaintext));
-const xskBytes=Buffer.concat([Buffer.from('XSK1'),iv,ciphertext]);
-const file=new File([xskBytes],'00001.xsk');
-const decoded=await bridge.openPackage(file,unlocked);
+const xsk=(document)=>new File([Buffer.from('XSK2'),
+  zip([['00001.mid',midi],['00001.json',enc.encode(JSON.stringify(document))]])],
+  '00001.xsk');
+const decoded=await bridge.openPackage(xsk(doc));
 assert.equal(decoded.code,'00001');
 assert.equal(decoded.document.schemaVersion,1);
 assert.equal(decoded.document.title,'ทำได้เพียง');
@@ -82,7 +65,11 @@ assert.equal(decoded.document.artist,'25 Hours');
 assert.equal(decoded.document.sourceFormat,'XSK');
 assert.deepEqual(Buffer.from(await decoded.midi.arrayBuffer()),midi);
 assert.equal(core.songIdentity(decoded.document,'00001').artist,'25 Hours');
-const tampered=Buffer.from(xskBytes);tampered[tampered.length-1]^=1;
-await assert.rejects(()=>bridge.openPackage(new File([tampered],'bad.xsk'),unlocked),
-  /ไม่มีสิทธิ์|เสียหาย/);
-console.log('XSK portable access, browser AES-GCM, DEFLATE ZIP, SHA-256 and metadata PASS');
+assert.equal(decoded.lyrics.name,'00001.json');
+assert.throws(()=>bridge.openPackage(new File([Buffer.from('XSK1'+'A'.repeat(64))],
+  'old.xsk')),/XSK1/);
+await assert.rejects(()=>bridge.openPackage(xsk({...doc,audio:{...doc.audio,sha256:'0'.repeat(64)}})),
+  /SHA-256/);
+await assert.rejects(()=>bridge.openPackage(xsk({...doc,title:'00001',artist:'X-Stage Karaoke'})),
+  /ชื่อเพลงหรือศิลปิน/);
+console.log('PASS: portable XSK2 (no key), ZIP deflate, SHA-256, real identity and XSK1 migration');
