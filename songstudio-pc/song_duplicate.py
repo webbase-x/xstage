@@ -195,7 +195,11 @@ class DuplicateMediaRegistry:
                             if path.suffix.casefold() not in MEDIA_EXTENSIONS:
                                 ignored += 1
                                 continue
-                            meta = entry.stat(follow_symlinks=False)
+                            # DirEntry.stat and pathlib.Path.stat can expose
+                            # different Windows file IDs (st_ino) on some
+                            # runners. Use one normalized stat API for the
+                            # snapshot and all later stale-file checks.
+                            meta = path.stat()
                             if meta.st_size == 0:
                                 ignored += 1
                                 continue
