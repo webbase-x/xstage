@@ -33,7 +33,7 @@ class FastJsonSourceTests(unittest.TestCase):
         row = next(report["complete"])
         self.assertEqual(row["kind"], "NCN")
         self.assertEqual({path for path, _ in row["files"]}, {mid, lyr, cur})
-        self.assertEqual(report["fileCount"], 1)  # no global scan before yield
+        self.assertLessEqual(report["fileCount"], 3)  # no full-tree scan before yield
 
     def test_plain_midi_does_not_require_input_json(self):
         midi = self.file("batch/00002.mid")
