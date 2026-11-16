@@ -14,3 +14,5 @@ qrcode==8.2
 setuptools==84.2.1
 SoundCard==0.4.6
 imageio-ffmpeg==0.6.0
+
+cryptography==50.0.2
