@@ -14,7 +14,7 @@ FORMAT = "xstage-pc-local-current"
 CATALOG = "xstage-pc-local-catalog"
 MEDIA = {".mid", ".midi", ".kar", ".m4a", ".mp3", ".wav", ".wma",
          ".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov",
-         ".flac", ".ogg", ".oga", ".aac"}
+         ".flac", ".ogg", ".oga", ".aac", ".webm", ".dat", ".vob", ".flv", ".xsk"}
 
 
 def library_root(selected):
@@ -25,8 +25,9 @@ def library_root(selected):
         path = path.parent
     if path.name.casefold() != "xstagesong":
         path = path / "XStageSong"
-    if not (path / "AUDIO").is_dir() or not (path / "LYRICS").is_dir():
-        raise ValueError("ไม่พบโฟลเดอร์ XStageSong/AUDIO และ XStageSong/LYRICS ที่เลือก")
+    if not (path / "LYRICS").is_dir() or not any(
+            (path / folder).is_dir() for folder in ("AUDIO", "VIDEO", "MIDI")):
+        raise ValueError("ไม่พบ XStageSong/LYRICS และโฟลเดอร์สื่อ AUDIO/VIDEO/MIDI ที่เลือก")
     return path
 
 
@@ -68,7 +69,11 @@ def catalog_rows(selected, *, cancelled=None):
         for source in songs:
             if cancelled and cancelled.is_set():
                 raise RuntimeError("ยกเลิกการนำเข้า XStageSong แล้ว")
-            path = _inside(root, (source.get("audio") or {}).get("path"), "AUDIO")
+            media_ref = (source.get("audio") or {}).get("path")
+            prefix = media_ref.split("/", 1)[0] if isinstance(media_ref, str) else ""
+            if prefix not in ("AUDIO", "VIDEO", "MIDI"):
+                raise ValueError("Catalog อ้างถึงโฟลเดอร์สื่อที่ไม่รองรับ")
+            path = _inside(root, media_ref, prefix)
             if not path.is_file() or path.suffix.casefold() not in MEDIA:
                 raise ValueError("ไม่พบไฟล์เพลงที่ Catalog อ้างถึง: " + str(path))
             if str(path) in found:
@@ -133,13 +138,14 @@ def source_lyrics(media_path):
     """Prefer actual timed JSON. Never fabricate per-character timestamps."""
     path = Path(media_path)
     try:
-        audio = next(p for p in path.parents if p.name.casefold() == "audio"
-                     and p.parent.name.casefold() == "xstagesong")
+        category = next(p for p in path.parents if
+                        p.name.casefold() in ("audio", "video", "midi") and
+                        p.parent.name.casefold() == "xstagesong")
     except StopIteration:
         return None
-    root = audio.parent
+    root = category.parent
     try:
-        relative = path.relative_to(audio)
+        relative = path.relative_to(category)
     except ValueError:
         return None
     pointer = root / "LYRICS" / "current.json"
