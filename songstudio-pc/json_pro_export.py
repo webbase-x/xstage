@@ -232,11 +232,23 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             # Allocate after fingerprint deduplication; existing songs never change.
             code = _next_code(used_codes, code_style, code_length, source_code, code_counters)
             doc["songCode"] = code
-            bucket = export.source_bucket(media.name)
-            relative_audio = "audio/" + bucket + "/" + code + (
-                media.suffix.lower() if output_format == "original"
-                else "." + output_format)
-            relative_lyrics = "lyrics/" + bucket + "/" + code + ".json"
+            # Store the actual Pro output in the SHARED XStageSong hierarchy.
+            # Bucket follows assigned song code, not the source filename.
+            bucket = code[0].upper() if code[0].upper() in (
+                "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") else "_"
+            extension = (media.suffix.lower() if output_format == "original"
+                         else "." + output_format)
+            if extension in (".mid", ".midi"):
+                category = "MIDI/MID"
+            elif extension == ".kar":
+                category = "MIDI/KAR"
+            elif extension in (".mp4", ".webm", ".avi", ".mkv", ".mov", ".mpg",
+                               ".mpeg", ".vob", ".dat", ".wmv", ".flv"):
+                category = "VIDEO"
+            else:
+                category = "AUDIO"
+            relative_audio = category + "/" + bucket + "/" + code + extension
+            relative_lyrics = "LYRICS/" + bucket + "/" + code + ".json"
             final_audio = export.safe_media_path(root, relative_audio, "audio")
             final_lyrics = export.safe_media_path(root, relative_lyrics, "lyrics")
             # Recover an orphaned but verified pair if the process exited
