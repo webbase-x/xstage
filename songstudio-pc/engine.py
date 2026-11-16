@@ -1585,6 +1585,22 @@ def _xsk_identity(source, row, doc):
     """
     metadata = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
     saved = NOTES.get(str(source), {})
+    # Preserve standard [ti:] and [ar:] LRC metadata alongside timed lines.
+    lrc_metadata = {}
+    raw_lrc = doc.get("rawLrc")
+    if isinstance(raw_lrc, str):
+        for raw_line in raw_lrc.splitlines()[:40]:
+            line = raw_line.strip().lstrip("\ufeff")
+            if not (line.startswith("[") and "]" in line):
+                continue
+            tag = line[1:line.index("]")]
+            if ":" not in tag:
+                continue
+            field, value = tag.split(":", 1)
+            key = {"ti": "title", "title": "title",
+                   "ar": "artist", "artist": "artist"}.get(field.strip().casefold())
+            if key and value.strip() and key not in lrc_metadata:
+                lrc_metadata[key] = value.strip()
     placeholders = {"x-stage karaoke", "x-stage song studio", "xstage karaoke",
                     "xstage song studio", "unknown", "ไม่ระบุ", "ไม่ทราบ"}
     def meaningful(value, *, title=False):
@@ -1599,11 +1615,13 @@ def _xsk_identity(source, row, doc):
     title = (meaningful(saved.get("title"), title=True)
              or meaningful(doc.get("title"), title=True)
              or meaningful(metadata.get("title"), title=True)
+             or meaningful(lrc_metadata.get("title"), title=True)
              or meaningful(row.get("title"), title=True)
              or source.stem)
     artist = (meaningful(saved.get("artist"))
               or meaningful(doc.get("artist"))
               or meaningful(metadata.get("artist"))
+              or meaningful(lrc_metadata.get("artist"))
               or meaningful(row.get("artist"))
               or "ไม่ระบุศิลปิน")
     return title, artist
