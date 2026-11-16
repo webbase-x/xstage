@@ -112,7 +112,9 @@ class JsonProTests(unittest.TestCase):
         class Ncn:
             def kar_document(self, path, code):
                 return export.lrc_to_json("[00:01.00]ทดสอบ KAR", code)
-        result = self.run_export(scanner=Scanner(), ncn=Ncn())
+        result = pro.export_folder(
+            str(self.source), str(self.dest), output_format="original",
+            export=export, scanner=Scanner(), ncn=Ncn())
         self.assertEqual(result["created"], 1)
         root = self.dest / "XStageSong"
         record = export.existing_records(root)[0]
