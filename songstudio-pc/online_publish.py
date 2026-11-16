@@ -37,37 +37,56 @@ BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def media_drive_path(relative, *, code="", audio_format="M4A"):
-    """Place NEW Drive files into the shared typed/bucketed XStageSong tree.
+    """Resolve immutable Drive media inside the agreed movable type subtree.
 
-    Keep the v4 File-ID catalog and LYRICS/current.json pointer unchanged:
-    older flat AUDIO/LYRICS entries remain valid, with no destructive move.
+    Old local Song Studio paths remain readable. Only the new upload
+    destination changes; existing Drive catalogs still point to File IDs.
     """
     if not isinstance(relative, str):
         raise PublishError("พาธสื่อเพลงต้องเป็นข้อความ")
+    parts = relative.split("/")
     rel = PurePosixPath(relative)
-    if (rel.is_absolute() or any(part in (".", "..", "") for part in relative.split("/"))
-            or len(rel.parts) < 2 or chr(92) in relative or ":" in relative):
+    if (rel.is_absolute() or len(parts) < 2
+            or any(part in ("", ".", "..") for part in parts)
+            or chr(92) in relative or ":" in relative or chr(0) in relative):
         raise PublishError("พาธสื่อเพลงไม่ปลอดภัย: " + str(relative))
     suffix = rel.suffix.lower()
-    kind = rel.parts[0].lower()
+    kind = parts[0].lower()
     ident = str(code or rel.stem).upper()
     bucket = ident[0] if ident and ident[0] in BUCKETS else "_"
-    if kind in ("audio", "video", "midi") and suffix in (".sf2", ".sf3"):
-        return PurePosixPath("SOUNDFONT", rel.name)
-    if kind in ("audio", "video", "midi") and suffix in (".mid", ".midi"):
-        return PurePosixPath("MIDI", "MID", bucket, rel.name)
-    if kind in ("audio", "video", "midi") and suffix == ".kar":
-        return PurePosixPath("MIDI", "KAR", bucket, rel.name)
-    if kind in ("audio", "video", "midi") and suffix == ".xsk":
+    video_extensions = {".mp4", ".webm", ".avi", ".mkv", ".mov",
+                        ".mpg", ".mpeg", ".vob", ".dat", ".wmv", ".flv"}
+    audio_extensions = {".m4a", ".mp3", ".wav", ".aac", ".flac",
+                        ".ogg", ".oga", ".wma"}
+
+    # Already categorized: keep exactly the path that the PC catalog uses.
+    if parts[0] in {"AUDIO", "VIDEO", "MIDI"} and (
+            "SONG" in parts or "LYRICS" in parts or
+            (parts[0] == "MIDI" and len(parts) == 4 and parts[1] in {"KAR", "XSK"}) or
+            (parts[0] == "MIDI" and len(parts) == 5 and parts[1] == "NCN"
+             and parts[2] in {"LYR", "CUR"})):
+        return rel
+    if suffix in (".sf2", ".sf3"):
+        return PurePosixPath("SOUNDFONT", suffix[1:].upper(), rel.name)
+    if suffix == ".xsk":
         return PurePosixPath("MIDI", "XSK", bucket, rel.name)
-    if kind in ("audio", "video", "midi") and suffix in (
-            ".mp4", ".webm", ".avi", ".mkv", ".mov", ".mpg", ".mpeg",
-            ".vob", ".dat", ".wmv", ".flv"):
-        return PurePosixPath("VIDEO", bucket, rel.name)
-    if kind in ("audio", "video", "midi") and suffix in (
-            ".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".oga", ".wma"):
-        return PurePosixPath("AUDIO", bucket, rel.name)
-    if kind == "lyrics" and suffix == ".json":
+    if suffix == ".kar":
+        return PurePosixPath("MIDI", "KAR", bucket, rel.name)
+    if suffix in (".mid", ".midi"):
+        return PurePosixPath("MIDI", "MID", "SONG", bucket, rel.name)
+    if suffix in video_extensions:
+        return PurePosixPath("VIDEO", suffix[1:].upper(), "SONG", bucket, rel.name)
+    if suffix in audio_extensions:
+        return PurePosixPath("AUDIO", suffix[1:].upper(), "SONG", bucket, rel.name)
+    if suffix == ".json" and kind == "lyrics":
+        fmt = str(audio_format or "M4A").upper()
+        if fmt in {"MID", "MIDI"}:
+            return PurePosixPath("MIDI", "MID", "LYRICS", bucket, rel.name)
+        if "." + fmt.lower() in video_extensions:
+            return PurePosixPath("VIDEO", fmt, "LYRICS", bucket, rel.name)
+        if "." + fmt.lower() in audio_extensions:
+            return PurePosixPath("AUDIO", fmt, "LYRICS", bucket, rel.name)
+    if suffix == ".json" and kind == "lyrics":
         return PurePosixPath("LYRICS", bucket, rel.name)
     raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวดสื่อ: " + str(relative))
 
@@ -84,9 +103,11 @@ def _local_path(root, path, prefix):
     # Local Song Studio retains lowercase paths for legacy build jobs.
     # MIDI to Lyrics JSON writes directly to the new categorized hierarchy.
     allowed = ({"audio", "AUDIO", "VIDEO", "MIDI", "SOUNDFONT"}
-               if prefix == "audio" else {"lyrics", "LYRICS"}
+               if prefix == "audio" else {"lyrics", "LYRICS", "AUDIO", "VIDEO", "MIDI"}
                if prefix == "lyrics" else {prefix})
     if (not isinstance(path, str) or path.split("/", 1)[0] not in allowed
+            or (prefix == "lyrics" and path.split("/", 1)[0] in {"AUDIO", "VIDEO", "MIDI"}
+                and "/LYRICS/" not in path)
             or chr(92) in path or ":" in path or chr(0) in path
             or len(path.split("/")) < 2):
         raise PublishError("พาธไฟล์ประกอบไม่ถูกต้อง: " + repr(path))
