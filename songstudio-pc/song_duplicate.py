@@ -370,13 +370,20 @@ class DuplicateMediaRegistry:
                     raise ValueError("ลบลงถังรีไซเคิลรองรับเฉพาะ Windows")
                 target_root = None
             completed = []
+            verified_keepers = set()
             for idx, (item, keeper) in enumerate(chosen, 1):
                 if cancelled is not None and cancelled.is_set():
                     raise RuntimeError("ยกเลิกการจัดการเพลงซ้ำ")
-                for proof in (keeper, item):
+                # A single 4GB keeper may have hundreds of identical copies.
+                # Rehash it ONCE per confirmed action, not 300 times.
+                proofs = [item]
+                if keeper["id"] not in verified_keepers:
+                    proofs.insert(0, keeper)
+                for proof in proofs:
                     if (_stability(proof["path"]) != proof["stamp"]
                             or _digest(proof["path"], cancelled=cancelled) != proof["sha256"]):
                         raise ValueError("ไฟล์ต้นฉบับหรือสำเนาเปลี่ยนระหว่างตรวจ · ต้องสแกนใหม่")
+                verified_keepers.add(keeper["id"])
                 if operation == "move":
                     moved = _move_verified(item["path"], target_root, root,
                                            item["sha256"], cancelled)
