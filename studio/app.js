@@ -3434,27 +3434,33 @@
     }
   }
   async function startJsonPro() {
-    if(!canLaunch('json-pro-export') || !proEnabled)return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
-    const report=await inspectJsonPro();
-    if(!report||!report.ready)return message('ไม่มีชุดเพลงที่ตรวจผ่านพร้อม Lyrics JSON');
+    if(!canLaunch('json-pro-export') || !proEnabled)
+      return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
+    const source=$('json-pro-source').value.trim();
+    const destination=$('json-pro-destination').value.trim();
+    if(!source || !destination)
+      return message('กรุณาเลือกโฟลเดอร์ต้นทางและปลายทางก่อนส่งออก');
     const format=$('json-pro-format').value;
     const code_style=$('json-pro-code-style').value;
     const code_length=Number($('json-pro-code-length').value);
     if(!Number.isInteger(code_length)||code_length<1||code_length>12)
       return message('จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12');
-    await saveInputs(['json-pro-code-style','json-pro-code-length']);
-    // The single "ตกลง" action initiates inspected batch export directly.
-    // The engine still rejects invalid sources, duplicates and overwrites.
-    $('json-pro-report').textContent='กำลังส่งคำสั่งส่งออก '+fmtNum(report.ready)+' เพลงไปยัง PC Engine…';
+    // Do not synchronously scan all songs before starting: the PC job scans
+    // once in its worker and publishes real discovered/validated counts.
+    // The separate Inspect button remains available for deliberate preflight.
+    await saveInputs(['json-pro-source','json-pro-destination',
+                      'json-pro-code-style','json-pro-code-length']);
+    $('json-pro-report').textContent=
+      'กำลังส่งงานให้ PC Engine · จะเริ่มค้นหาไฟล์ในงานพื้นหลังทันที ไม่สแกนซ้ำ';
     const started=await run('json-pro-export',{format,code_style,code_length:String(code_length)});
     if(!started){
       $('json-pro-report').textContent=
-        'ยังไม่ได้เริ่มส่งออก '+fmtNum(report.ready)+' เพลง · PC Engine ไม่รับงาน'+
-        '\\nตรวจ RAM/CPU และข้อความแจ้งเตือนด้านบน · ยังไม่มีไฟล์ใหม่จากคำสั่งนี้';
+        'PC Engine ไม่รับงาน · ตรวจข้อความด้านบนและงานที่กำลังทำก่อนหน้า';
       return;
     }
     $('json-pro-report').textContent=
-      'PC Engine รับงานส่งออก '+fmtNum(report.ready)+' เพลงแล้ว · ตรวจความคืบหน้าจริงด้านล่าง';
+      'PC Engine รับงานแล้ว · ระบบกำลังสแกนหนึ่งรอบและทยอยส่งออกเพลง\\n'+
+      'ดูจำนวนไฟล์ที่พบจริง และจำนวนชุดที่ตรวจแล้วในแผงความคืบหน้าของงาน';
   }
   $('json-pro-inspect').addEventListener('click',()=>{void inspectJsonPro();});
   $('json-pro-start').addEventListener('click',()=>{void startJsonPro();});
