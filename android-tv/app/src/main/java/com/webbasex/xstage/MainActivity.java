@@ -2,6 +2,7 @@ package com.webbasex.xstage;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
 import android.media.AudioAttributes;
@@ -454,6 +455,26 @@ public final class MainActivity extends Activity {
     }
 
     public final class AndroidBridge {
+        @JavascriptInterface
+        public String memorySnapshot() {
+            // Android supplies actual available physical RAM and its low-memory
+            // threshold. Never expose user identity, applications or process IDs.
+            try {
+                ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                if (manager == null) return "";
+                ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
+                manager.getMemoryInfo(info);
+                JSONObject data = new JSONObject();
+                data.put("total", info.totalMem);
+                data.put("available", info.availMem);
+                data.put("threshold", info.threshold);
+                data.put("lowMemory", info.lowMemory);
+                return data.toString();
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+
         @JavascriptInterface
         public void setTextEditingActive(boolean active) {
             // DOM focus state is supplied by the trusted hosted application.
