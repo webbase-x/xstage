@@ -247,4 +247,12 @@ assert.ok(html.includes('data-tab="json-pro"') &&
           html.includes('data-tab="pc-export"') &&
           html.includes('data-tab="upload"'),
   'Retiring duplicate XSK menu must preserve Pro JSON and Online/PC imports');
+assert.ok(js.includes("post('/api/jobs/open-output',{id:job.id})") &&
+          js.includes("job.state==='success' && job.outputFolder") &&
+          js.includes("resetStatusForNewJob(action,response.id)"),
+  'Completed job cards must safely open their own destination and clear only their old status');
+assert.ok(html.includes('id="xsk-stream-code-length"') &&
+          html.includes('value="numeric" selected') &&
+          html.includes('value="5"'),
+  'New five-digit numeric file naming must be the default');
 console.log('PASS: PC/Web Control UI syntax, bulk multi-select, lyric-body search, AI and Drive controls.');
