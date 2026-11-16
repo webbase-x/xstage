@@ -263,6 +263,53 @@ def _atomic_json(path, data):
         tmp.unlink(missing_ok=True)
 
 
+PORTABLE_FORMAT = "xstage-portable-song-db"
+PORTABLE_SCHEMA = 1
+
+
+def portable_catalog(destination, rows, generation):
+    """Offline interchange database for PC and authenticated Drive publishers.
+
+    Paths are relative to XStageSong; no absolute Windows paths, secrets or
+    invented Drive file IDs. Web/APK require Drive publication to resolve IDs.
+    """
+    root = Path(destination)
+    songs = []
+    seen = set()
+    for row in sorted(rows, key=lambda item: str(item.get("webSongId", ""))):
+        ident = str(row.get("webSongId") or "")
+        if not ident or ident in seen:
+            raise ValueError("รายการฐานเพลงแบบพกพามีรหัสซ้ำหรือว่าง")
+        seen.add(ident)
+        media = (row.get("audio") or {}).get("path")
+        lyrics = (row.get("lyrics") or {}).get("path")
+        audio_path = _safe_rel(media, "AUDIO")
+        lyric_path = _safe_rel(lyrics, "LYRICS")
+        # Export the same immutable paths validated by the native PC bridge.
+        for rel in (audio_path, lyric_path):
+            file = root / rel
+            if (not file.is_file() or file.is_symlink()
+                    or not file.resolve().is_relative_to(root.resolve())):
+                raise ValueError("ฐานพกพามีไฟล์ต้นทางไม่ครบ: " + str(rel))
+        songs.append({
+            "webSongId": ident, "code": str(row.get("code") or ""),
+            "title": str(row.get("title") or ""),
+            "artist": str(row.get("artist") or ""),
+            "sourceFormat": row.get("sourceFormat"),
+            "audio": {"path": audio_path.as_posix()},
+            "lyrics": {"path": lyric_path.as_posix()},
+        })
+    return {
+        "schemaVersion": PORTABLE_SCHEMA, "format": PORTABLE_FORMAT,
+        "layoutVersion": 4, "generation": generation,
+        "songCount": len(songs), "songs": songs,
+        "mediaRoot": "AUDIO", "lyricsRoot": "LYRICS",
+        "platforms": ["pc", "web", "apk"],
+        "webApk": {"requiresGoogleDrivePublication": True,
+                   "catalogUsesDriveFileIds": True},
+    }
+
+
 def publish(source_root, selected_destination, export, *, cancelled=None, progress=None):
     report = inspect(source_root, selected_destination, export)
     source = Path(report["source"])
@@ -311,6 +358,18 @@ def publish(source_root, selected_destination, export, *, cancelled=None, progre
     # Reuse the exact SongLibrary SQLite schema and upsert semantics from
     # Karaoke PC; preserve existing user edits, favorites and other rows.
     db_result = _sqlite_bridge().sync(dest, list(combined.values()))
+    # Publish a portable database alongside Karaoke PC's native SQLite. Both
+    # are derived from the same already-verified immutable catalog snapshot.
+    portable = portable_catalog(dest, combined.values(), generation)
+    portable_path = dest / "DB" / "songs-portable.json"
+    _atomic_json(portable_path, portable)
     return {**report, **db_result, "copied": copied, "reused": reused,
             "songCount": len(combined),
-            "message": f"นำเข้า Karaoke PC สำเร็จ {len(combined):,} เพลง · คัดลอกใหม่ {copied:,} ไฟล์ · ใช้เดิม {reused:,} ไฟล์ · ฐาน SQLite {db_result['databaseAction']} · {db_result['database']}"}
+            "portableDatabase": str(portable_path),
+            "portableSchema": PORTABLE_FORMAT,
+            "webApkRequiresDriveUpload": True,
+            "message": (f"ส่งออก {len(combined):,} เพลงพร้อมฐานข้อมูล · "
+                        f"คัดลอกใหม่ {copied:,} ไฟล์ · ใช้เดิม {reused:,} ไฟล์ · "
+                        f"SQLite สำหรับ PC: {db_result['database']} · "
+                        f"JSON พกพา: {portable_path} · "
+                        "Web/APK ต้องนำเข้าคลัง Google Drive เพื่อสร้าง File ID")}
