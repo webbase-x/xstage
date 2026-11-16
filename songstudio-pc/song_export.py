@@ -99,7 +99,8 @@ def songs_root(workspace: str | Path) -> Path:
 
     # The PC-ready export uses uppercase AUDIO/LYRICS and a different
     # current.json format. Do not accidentally treat it as an authoring DB.
-    if ((target / "AUDIO").is_dir() and (target / "LYRICS").is_dir()
+    if ((target / "LYRICS" / "current.json").is_file()
+            and not (target / "current.json").is_file()
             and not (target / "audio").is_dir()):
         raise RuntimeError(
             "โฟลเดอร์นี้เป็นคลังสำหรับ Karaoke PC · กรุณาเลือกพื้นที่สร้างเพลง"
@@ -371,9 +372,13 @@ def _read_current(root: Path) -> tuple[dict, dict[str, dict]]:
 
 
 def safe_media_path(root: Path, rel: str, kind: str) -> Path:
-    """Permit canonical private media paths only, never traversal or aliases."""
-    if (not isinstance(rel, str) or not rel.startswith(kind + "/")
-            or "\\" in rel or ":" in rel or "\0" in rel
+    """Accept legacy local paths and categorized, explicitly validated paths."""
+    allowed = ({"audio", "AUDIO", "VIDEO", "MIDI", "SOUNDFONT"}
+               if kind == "audio" else {"lyrics", "LYRICS"} if kind == "lyrics"
+               else {kind})
+    if (not isinstance(rel, str) or rel.split("/", 1)[0] not in allowed
+            or chr(92) in rel or ":" in rel or chr(0) in rel
+            or len(rel.split("/")) < 3
             or any(part in ("", ".", "..") for part in rel.split("/"))
             or any(ord(char) < 32 for char in rel)):
         raise ValueError("พาธไฟล์เพลงไม่ถูกต้อง")
