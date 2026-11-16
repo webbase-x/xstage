@@ -746,6 +746,23 @@ def _matching_lrc(source: Path) -> Path | None:
     return None
 
 
+def _mirrored_lyric_sidecar(source, extension):
+    """Match by relative code and subfolders, not a global same-name search."""
+    source = Path(source)
+    direct = source.with_suffix(extension)
+    if direct.is_file():
+        return direct
+    parts = source.parts
+    for index, name in enumerate(parts[:-1]):
+        if name.casefold() not in ("audio", "songs", "song", "midi"):
+            continue
+        for lyric_name in ("LYRICS", "Lyrics", "lyrics"):
+            mirrored = Path(*parts[:index], lyric_name, *parts[index + 1:]).with_suffix(extension)
+            if mirrored.is_file() and not mirrored.is_symlink():
+                return mirrored
+    return None
+
+
 def lyrics_package(row, *, export=None):
     """Return (LRC, accurately timed JSON, source fingerprint) or no lyrics.
 
@@ -765,8 +782,8 @@ def lyrics_package(row, *, export=None):
     # A same-stem Lyrics JSON is the direct, lossless companion to MID/MIDI.
     # Do not fall back to embedded KAR text when a supplied JSON is malformed.
     if source.suffix.lower() in EXT_MIDI:
-        companion = source.with_suffix(".json")
-        if companion.is_file():
+        companion = _mirrored_lyric_sidecar(source, ".json")
+        if companion is not None:
             if companion.is_symlink() or companion.stat().st_size > 8 * 1024 * 1024:
                 raise ValueError("Lyrics JSON ไม่ปลอดภัยหรือใหญ่เกินกำหนด")
             raw_json = companion.read_bytes()
@@ -793,7 +810,7 @@ def lyrics_package(row, *, export=None):
             fingerprint.update((str(item.resolve()).casefold() + ":" +
                                 str(stat.st_size) + ":" + str(stat.st_mtime_ns)).encode("utf-8"))
         return doc["rawLrc"], doc, fingerprint.hexdigest()
-    lrc = _matching_lrc(source)
+    lrc = _matching_lrc(source) or _mirrored_lyric_sidecar(source, ".lrc")
     if lrc is not None:
         data = lrc.read_bytes()
         text = NCN._decode_text(data)
