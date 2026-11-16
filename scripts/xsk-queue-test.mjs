@@ -36,7 +36,7 @@ const sandbox={
     MiB:1048576,plan:()=>({heapPressure:false,remaining:100*1048576,
       queueLimit:2,budget:100*1048576,ratio:0,level:'low',hint:{gib:4}}),
     canHold:()=>true,statusText:()=>({level:'low',text:'ปกติ',note:''}),fmt:()=> '0 MB'
-  },addEventListener:(event,callback)=>{
+  },setInterval:()=>0,addEventListener:(event,callback)=>{
     if(event==='xstage:soundfont-change')onFontChange=callback;
   },XStageXsk:{openPackage:async blob=>{
     assert.equal(blob,packed);unzipped++;
@@ -86,7 +86,7 @@ const prepared=await sandbox.prepareXskPlayback(song,'token-001',
 assert.equal(prepared.blob,audio);
 assert.equal(rendered,2,'On-demand fallback can render one verified XSK');
 
-assert.ok(app.includes('if(readyPrepared&&(getFileId(song.xsk)||!getFileId(song.midi)))'),
+assert.ok(app.includes('if(readyPrepared){'),
   'Actual player must reuse completed or in-flight queued XSK audio');
 assert.ok(app.includes('prepareXskPlayback(song,token,controller.signal'),
   'Unprepared XSK must be playable directly on demand');
@@ -98,14 +98,14 @@ const nextBegin=app.indexOf('function playNext(){');
 const nextEnd=app.indexOf('// Release the finished media and lyrics',nextBegin);
 assert.ok(nextBegin>=0&&nextEnd>nextBegin);
 const runner=new Function('state','scheduleQueuePreload','renderQueue',
-  'playSong','clearIdleStage','nextMedleyCandidate','MEDLEY_RECENT_LIMIT',
+  'playSong','clearIdleStage','nextMedleyCandidate','MEDLEY_RECENT_LIMIT','releaseFinishedMedia',
   app.slice(nextBegin,nextEnd)+'\nreturn playNext;');
 const active={song,token:'token-001',promise:Promise.resolve({blob:audio,
   lyrics:mimeDoc,song,token:'token-001'}),controller:new AbortController()};
 let accepted=null;
 const transition=runner(state,()=>{},()=>{},(picked,opts)=>{
   accepted={picked,opts};
-},()=>{},()=>null,10);
+},()=>{},()=>null,10,()=>{});
 state.queue=[song,{code:'00002',title:'ถัดไป'}];
 state.queuePreload=active;state.queuePrepared=null;
 transition();
