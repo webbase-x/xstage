@@ -1,43 +1,14 @@
-/* XSK1 authorized browser/Android-WebView import bridge.
- * No network requests, key persistence, plaintext temp files or public tokens.
- * A password-wrapped access file is supplied by the owner from Song Studio PC.
+/* Portable unencrypted XSK2 for browser and Android WebView.
+ * Validate the exact two-file ZIP, song metadata, timed lyrics and MIDI
+ * SHA-256 locally. Nothing is executed or extracted to disk.
+ * Old encrypted XSK1 must be regenerated with Song Studio PC.
  */
 (function(scope){
 'use strict';
-const MAGIC='XSK-ACCESS1', AAD=new TextEncoder().encode(MAGIC);
 const MAX_PACKAGE=152*1024*1024, MAX_MIDI=128*1024*1024, MAX_JSON=8*1024*1024;
 const fail=message=>{throw Error('XSK: '+message);};
 const u8=(data)=>data instanceof Uint8Array?data:new Uint8Array(data);
 const ascii=(bytes)=>String.fromCharCode(...bytes);
-function base64(value){
-  if(typeof value!=='string'||value.length>300)return fail('ข้อมูลกุญแจผิดรูปแบบ');
-  const binary=atob(value);
-  return Uint8Array.from(binary,c=>c.charCodeAt(0));
-}
-async function unlockAccess(accessFile,password){
-  if(!scope.crypto?.subtle||typeof password!=='string'||password.length<12)
-    fail('ต้องใช้ WebCrypto และรหัสผ่านสิทธิ์ XSK อย่างน้อย 12 ตัวอักษร');
-  if(!accessFile||accessFile.size>4096)fail('ไฟล์สิทธิ์ XSK มีขนาดผิดปกติ');
-  let doc;
-  try{doc=JSON.parse(await accessFile.text());}
-  catch{fail('อ่านไฟล์สิทธิ์ไม่ได้');}
-  if(doc?.format!==MAGIC||doc?.kdf!=='PBKDF2-SHA256'||doc?.iterations!==310000)
-    fail('ไฟล์สิทธิ์ XSK ไม่ใช่รูปแบบที่ Song Studio รองรับ');
-  const salt=base64(doc.salt),iv=base64(doc.nonce),wrapped=base64(doc.wrappedKey);
-  if(salt.length!==16||iv.length!==12||wrapped.length!==48)
-    fail('ไฟล์สิทธิ์ XSK ไม่สมบูรณ์');
-  const seed=await scope.crypto.subtle.importKey('raw',new TextEncoder().encode(password),
-    'PBKDF2',false,['deriveKey']);
-  const wrapper=await scope.crypto.subtle.deriveKey(
-    {name:'PBKDF2',hash:'SHA-256',salt,iterations:310000},
-    seed,{name:'AES-GCM',length:256},false,['decrypt']);
-  let plaintext;
-  try{plaintext=await scope.crypto.subtle.decrypt(
-    {name:'AES-GCM',iv,additionalData:AAD},wrapper,wrapped);}
-  catch{fail('รหัสผ่านหรือไฟล์สิทธิ์ XSK ไม่ถูกต้อง');}
-  if(plaintext.byteLength!==32)fail('ความยาวกุญแจ XSK ผิดปกติ');
-  return scope.crypto.subtle.importKey('raw',plaintext,{name:'AES-GCM'},false,['decrypt']);
-}
 async function inflate(bytes,method,expected){
   if(expected<0||expected>MAX_MIDI)fail('ไฟล์ภายในมีขนาดเกินกำหนด');
   if(method===0){
@@ -100,17 +71,15 @@ function zipEntries(raw){
     fail('ZIP directory ไม่ตรงหรือมีชื่อซ้ำ');
   return found;
 }
-async function openPackage(file,key){
-  if(!file||!Number.isFinite(file.size)||file.size<33||file.size>MAX_PACKAGE)
+async function openPackage(file){
+  if(!file||!Number.isFinite(file.size)||file.size<26||file.size>MAX_PACKAGE)
     fail('ขนาดไฟล์ไม่ปลอดภัย');
   const bytes=u8(await file.arrayBuffer());
-  if(ascii(bytes.subarray(0,4))!=='XSK1')fail('ไฟล์ไม่ใช่ XSK1');
-  let plain;
-  try{plain=await scope.crypto.subtle.decrypt(
-    {name:'AES-GCM',iv:bytes.subarray(4,16),
-     additionalData:bytes.subarray(0,4)},key,bytes.subarray(16));}
-  catch{fail('ไม่มีสิทธิ์ถอดรหัส XSK หรือแพ็กเกจเสียหาย');}
-  const entries=zipEntries(plain);
+  const header=ascii(bytes.subarray(0,4));
+  if(header==='XSK1')
+    fail('ไฟล์ XSK1 รุ่นเก่ายังเข้ารหัส · กรุณาสร้างเป็น XSK2 ใหม่จาก Song Studio PC');
+  if(header!=='XSK2')fail('ไฟล์ไม่ใช่ XSK2 ที่รองรับ');
+  const entries=zipEntries(bytes.subarray(4));
   const docEntry=entries.filter(x=>x.name.endsWith('.json'))[0];
   if(!docEntry||docEntry.size>MAX_JSON)fail('ไม่พบ Lyrics JSON ภายใน XSK');
   let doc;
@@ -118,7 +87,7 @@ async function openPackage(file,key){
     await inflate(docEntry.compressed,docEntry.method,docEntry.size)));}
   catch(error){fail('ข้อมูล Lyrics JSON ภายใน XSK ผิดปกติ: '+error.message);}
   const audio=doc?.audio||{}, midiEntry=entries.find(x=>x.name===audio.file);
-  if(doc?.format!=='XSK'||doc?.formatVersion!==1||doc?.schemaVersion!==2||
+  if(doc?.format!=='XSK'||doc?.formatVersion!==2||doc?.schemaVersion!==2||
       !midiEntry||!/^.+\.(mid|midi|kar)$/i.test(midiEntry.name)||
       !/^[a-f0-9]{64}$/i.test(String(audio.sha256||''))||
       !Array.isArray(doc.lines)||!doc.lines.length)
@@ -136,9 +105,14 @@ async function openPackage(file,key){
   const code=String(doc.songCode||'').trim();
   if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(code))
     fail('รหัสเพลงภายใน XSK ไม่ปลอดภัย');
+  const identity=core.songIdentity(normalized,code);
+  if(!identity.identityComplete)
+    fail('ไม่มีชื่อเพลงหรือศิลปินจริงใน XSK · กรุณาสร้างใหม่ด้วย Song Studio');
+  normalized.title=identity.title;
+  normalized.artist=identity.artist;
   return {code,document:normalized,
     midi:new File([media],midiEntry.name,{type:'audio/midi'}),
     lyrics:new File([JSON.stringify(normalized)],code+'.json',{type:'application/json'})};
 }
-scope.XStageXsk={unlockAccess,openPackage};
+scope.XStageXsk={openPackage};
 })(typeof window!=='undefined'?window:globalThis);
