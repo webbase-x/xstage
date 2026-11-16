@@ -110,6 +110,26 @@ class XskStreamTests(unittest.TestCase):
                                        batch_size=0):
                 pass
 
+    def test_mirrored_audio_lyrics_pair_does_not_cross_albums(self):
+        engine = load("engine")
+        export = load("song_export")
+        first = self.midi(self.source / "Album A" / "AUDIO", "00011", b"A")
+        second = self.midi(self.source / "Album B" / "AUDIO", "00011", b"B")
+        first.with_suffix(".lrc").unlink()
+        second.with_suffix(".lrc").unlink()
+        lyrics = self.source / "Album A" / "LYRICS"
+        lyrics.mkdir()
+        (lyrics / "00011.json").write_text(json.dumps({
+            "schemaVersion": 1, "lines": [{"startTime": 1.5,
+                                          "endTime": 4.0, "text": "ปลอดภัย"}]
+        }, ensure_ascii=False), encoding="utf-8")
+        _, timed, _ = engine.lyrics_package({"path": str(first),
+                                              "code": "00011"}, export=export)
+        self.assertEqual(timed["lines"][0]["startTime"], 1.5)
+        _, absent, _ = engine.lyrics_package({"path": str(second),
+                                               "code": "00011"}, export=export)
+        self.assertIsNone(absent)
+
     def test_real_xsk_sealing_roundtrip_and_dedup(self):
         import sys
         # The production key uses Windows DPAPI. Replace key retrieval only
@@ -119,6 +139,8 @@ class XskStreamTests(unittest.TestCase):
         self.midi(self.source, "00001", b"A")
         self.midi(self.source, "00002", b"B")
         self.midi(self.source, "00003", b"A")  # same MIDI bytes, SHA duplicate
+        broken = self.midi(self.source, "00004", b"C")
+        broken.with_suffix(".lrc").unlink()  # file without timed lyrics must be skipped
         old_source = engine.PREFS["source"]
         old_folder = engine.PREFS["xsk_folder"]
         old_style = engine.PREFS["code_style"]
@@ -145,6 +167,8 @@ class XskStreamTests(unittest.TestCase):
                     }, progressive=True)
                 self.assertEqual(outcome["created"], 2)
                 self.assertEqual(outcome["skipped"], 1)
+                self.assertEqual(outcome["notReady"], 1)
+                self.assertEqual(outcome["errors"], 0)
                 first = list(self.output.rglob("*.xsk"))
                 self.assertEqual(len(first), 2)
                 self.assertEqual(len({package.open_package(p, bytes(range(32)))["audio"]["sha256"]
@@ -157,6 +181,7 @@ class XskStreamTests(unittest.TestCase):
                     }, progressive=True)
                 self.assertEqual(repeat["created"], 0)
                 self.assertEqual(repeat["skipped"], 3)
+                self.assertEqual(repeat["notReady"], 1)
         finally:
             engine.PREFS.update(source=old_source, xsk_folder=old_folder,
                                 code_style=old_style, code_length=old_length)
