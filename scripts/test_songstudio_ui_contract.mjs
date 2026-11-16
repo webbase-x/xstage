@@ -35,6 +35,10 @@ assert.equal(ids.length,unique.size,'HTML IDs must be unique');
 for(const [,ref] of js.matchAll(/\$\('([^']+)'\)/g))
   assert.ok(unique.has(ref),'UI references missing element: #'+ref);
 assert.doesNotThrow(()=>new Function(js),'PC Control JS must parse');
+assert.ok(js.includes("if (dialog.open) {") &&
+          js.includes("return Promise.resolve(false);") &&
+          js.includes("if (dialog.open) dialog.close();"),
+          'Concurrent Song Studio actions must not replace an active confirmation dialog');
 
 const required={
   create:['scan-button','song-rows','create-soundfont','preview-button',
