@@ -51,7 +51,7 @@ def package():
     # The source Engine loads optional feature modules dynamically. Every
     # literal module requested from _module must be included before shipping.
     engine_text = (REPO / "songstudio-pc" / "engine.py").read_text(encoding="utf-8-sig")
-    module_names = set(re.findall(r'_module\\(\\s*["\\\']([^"\\\']+\\.py)["\\\']', engine_text))
+    module_names = set(re.findall(r"""_module\(\s*["']([^"']+\.py)["']""", engine_text))
     package_names = {Path(source).name for source in FILES}
     missing = sorted(module_names - package_names)
     if missing:
