@@ -47,9 +47,7 @@ const required={
       'ai-lyrics-editor','ai-lyrics-karaoke','ai-lyrics-save',
       'ai-lyrics-download','ai-lyrics-insert-time',
       'ai-lyrics-paste','ai-lyrics-align','ai-lyrics-align-review',
-      'ai-lyrics-separate','ai-lyrics-use-vocals','ai-lyrics-vocals-status',
-      'ai-mic-start','ai-mic-stop','ai-mic-save','ai-mic-discard',
-      'ai-mic-preview','ai-mic-status','ai-mic-timer'],
+      'ai-lyrics-separate','ai-lyrics-use-vocals','ai-lyrics-vocals-status'],
   drive:['upload-folder-button','upload-folder','upload-inspect','upload-allow-new','settings-login','download-destination','settings-logout'],
 };
 for(const [area,elements] of Object.entries(required))
@@ -102,13 +100,11 @@ assert.ok(js.includes("useSeparatedVocals:$('ai-lyrics-use-vocals').checked"),
   'Whisper must honor the selected separated vocal M4A');
 assert.ok(js.includes("source_choice:$('ai-lyrics-use-vocals').checked?'ai-vocals'"),
   'Lyrics preview must support auditioning separated vocals');
-assert.ok(js.includes('navigator.mediaDevices.getUserMedia') &&
-  js.includes('new MediaRecorder('),'Microphone recording must request consent');
-assert.ok(js.includes('/api/ai-recording-upload') &&
-  js.includes("run('ai-recording-save'"),
-  'Microphone recording must upload to local engine and explicitly convert M4A');
-assert.ok(css.includes('.ai-microphone-panel'),
-  'Missing microphone recording visual controls');
+assert.ok(!html.includes('ai-microphone-panel') &&
+  !js.includes('navigator.mediaDevices.getUserMedia') &&
+  !js.includes('/api/ai-recording-upload') &&
+  !js.includes("run('ai-recording-save'"),
+  'Microphone recording has been removed while other AI Lyrics tools remain');
 assert.ok(js.includes('pendingAiAlignment'),'Missing safeguard for pasted original lyrics');
 assert.ok(css.includes('.ai-lyrics-paste-panel'),'Missing pasted lyrics UX styles');
 assert.ok(js.includes("run('lyric-groups-replace'"),'Missing safe grouped lyrics replace job');
