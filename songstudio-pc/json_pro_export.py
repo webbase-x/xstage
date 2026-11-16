@@ -26,6 +26,13 @@ def _fingerprint(path):
     return digest.hexdigest()
 
 
+def _lyrics_digest(doc):
+    """Stable digest of the exported timed document, including text edits."""
+    return hashlib.sha256(json.dumps(
+        doc, sort_keys=True, ensure_ascii=False, allow_nan=False,
+        separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def _document(row, code, export, ncn):
     members = {path.suffix.lower(): path for path, _ in row["files"]}
     lyrics = members.get(".json")
@@ -95,11 +102,26 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     entries = inspection["complete"]
     root.mkdir(parents=True, exist_ok=True)
     prior = export.existing_records(root)
-    seen = {((record.get("sourceIdentity") or {}).get("sha256"),
-             (record.get("sourceIdentity") or {}).get("outputFormat")) for record in prior
-            if export.record_is_complete(root, record)}
-    existing = {record.get("webSongId") for record in prior
-                if export.record_is_complete(root, record)}
+    seen = set()
+    existing = set()
+    for record in prior:
+        if not export.record_is_complete(root, record):
+            continue
+        existing.add(record.get("webSongId"))
+        origin = record.get("sourceIdentity") or {}
+        lyric_hash = origin.get("lyricsSha256")
+        if not lyric_hash:
+            # Legacy Build 348 exported pairs tracked audio SHA only.
+            # Read the actual saved lyrics once: unchanged exports must stay
+            # idempotent without duplicating previously published songs.
+            try:
+                lyric_file = export.safe_media_path(
+                    root, record["lyrics"]["path"], "lyrics")
+                lyric_hash = _lyrics_digest(json.loads(
+                    lyric_file.read_text(encoding="utf-8-sig")))
+            except (KeyError, TypeError, OSError, ValueError):
+                continue
+        seen.add((origin.get("sha256"), origin.get("outputFormat"), lyric_hash))
     created = skipped = errors = 0
     issues = []
     staged_records = []
@@ -114,16 +136,19 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         final_audio = final_lyrics = None
         try:
             source_hash = _fingerprint(media)
-            identity = "json-pro/" + source_hash + "/" + output_format
-            if (source_hash, output_format) in seen or identity in existing:
-                skipped += 1
-                continue
             code = media.stem.strip()
             if not code or len(code) > 140:
                 raise ValueError("ชื่อเพลงต้นทางไม่สามารถใช้เป็นรหัสได้")
-            # The file name is a stable content identity, avoiding collisions
-            # between equal song codes in different source subfolders.
-            slug = source_hash[:24] + ("-raw" if output_format == "original" else "-" + output_format)
+            doc = _document(item, code, export, ncn)
+            lyric_hash = _lyrics_digest(doc)
+            identity = "json-pro/" + source_hash + "/" + output_format + "/" + lyric_hash[:24]
+            if (source_hash, output_format, lyric_hash) in seen or identity in existing:
+                skipped += 1
+                continue
+            # Distinct lyric versions produce separate immutable exports,
+            # even when the MIDI/audio file bytes remain identical.
+            slug = (source_hash[:18] + "-" + lyric_hash[:12] +
+                    ("-raw" if output_format == "original" else "-" + output_format))
             bucket = export.source_bucket(media.name)
             relative_audio = "audio/" + bucket + "/" + slug + (
                 media.suffix.lower() if output_format == "original"
@@ -131,7 +156,6 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             relative_lyrics = "lyrics/" + bucket + "/" + slug + ".json"
             final_audio = export.safe_media_path(root, relative_audio, "audio")
             final_lyrics = export.safe_media_path(root, relative_lyrics, "lyrics")
-            doc = _document(item, code, export, ncn)
             if final_audio.exists() or final_lyrics.exists():
                 # The only safe automatic resume is an already published pair.
                 raise FileExistsError("มีชื่อไฟล์ผลลัพธ์อยู่แล้วแต่ยังไม่อยู่ใน Catalog")
@@ -173,19 +197,23 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             finally:
                 temp_audio.unlink(missing_ok=True)
                 temp_lyrics.unlink(missing_ok=True)
-            record = {"webSongId": identity, "code": code, "title": code,
-                      "artist": "", "bucket": bucket,
+            title = doc.get("title") if isinstance(doc.get("title"), str) else ""
+            artist = doc.get("artist") if isinstance(doc.get("artist"), str) else ""
+            record = {"webSongId": identity, "code": code,
+                      "title": title.strip() or code,
+                      "artist": artist.strip(), "bucket": bucket,
                       "audio": {"path": relative_audio},
                       "lyrics": {"path": relative_lyrics},
                       "sourceFormat": item["kind"],
                       "sourceIdentity": {"sha256": source_hash,
                                          "canonicalPath": export.canonical_source_path(media),
                                          "bytes": media.stat().st_size,
-                                         "outputFormat": output_format}}
+                                         "outputFormat": output_format,
+                                         "lyricsSha256": lyric_hash}}
             export.append_journal(root, record)
             staged_records.append(record)
             existing.add(identity)
-            seen.add((source_hash, output_format))
+            seen.add((source_hash, output_format, lyric_hash))
             created += 1
         except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             errors += 1
