@@ -6,7 +6,6 @@ on:
     paths:
       - "android-tv/**"
       - "version.json"
-      - "downloads/android-play-latest.json"
       - "app.js"
       - "android-apk-download.js"
       - "style.css"
@@ -22,7 +21,6 @@ on:
     paths:
       - "android-tv/**"
       - "version.json"
-      - "downloads/android-play-latest.json"
       - "app.js"
       - "android-apk-download.js"
       - "style.css"
