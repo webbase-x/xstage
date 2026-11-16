@@ -19,7 +19,7 @@ def check_cancel(cancelled):
 def available_parts(path,inspector=None):
     inspector=inspector or Inspector();path=Path(path)
     parts={'media':path}
-    if path.suffix.lower() in MIDI_EXT- {'.emk'}:
+    if path.suffix.lower() in MIDI_EXT- {'.emk', '.xsk'}:
         for role,file in zip(('lyrics','cursor'),inspector.ncn_pair(path)):
             if file.is_file():parts[role]=file
     for ext in ('.lrc','.snf'):
