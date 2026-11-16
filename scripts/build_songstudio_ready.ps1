@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.59-build359'
+$Version = 'v0.3.60-build360'
 if ($Version -match '^v(\d+\.\d+\.\d+)-build(\d+)$') {
     $AppVersion = $Matches[1]
     $AppBuild = [int]$Matches[2]
@@ -73,6 +73,7 @@ $map = @{
  'songstudio-pc/Start-Song-Studio-Ready.cmd' = 'Start-Song-Studio.cmd'
  'songstudio-pc/Start-Song-Studio-Ready.ps1' = 'Start-Song-Studio-Ready.ps1'
  'songstudio-pc/engine.py' = 'engine.py'
+ 'songstudio-pc/desktop_window.py' = 'desktop_window.py'
   'songstudio-pc/history_store.py' = 'history_store.py'
  'songstudio-pc/ncn_lyrics.py' = 'ncn_lyrics.py'
  'songstudio-pc/song_index.py' = 'song_index.py'
@@ -252,6 +253,13 @@ try {
 }
 if ((Get-Item $ModelFile).Length -lt 100MB) { throw 'AI ONNX file unexpectedly small' }
 CheckSHA $ModelFile $ModelHash
+Step 'Bundling PySide6 Qt WebEngine desktop runtime (Windows x64)'
+$QtSite = Join-Path $Runtime 'qt-site'
+New-Item -ItemType Directory -Force -Path $QtSite | Out-Null
+& python -m pip install --disable-pip-version-check --no-compile --only-binary=:all: --target $QtSite "PySide6==6.9.3"
+if ($LASTEXITCODE -ne 0) { throw 'Could not bundle pinned Qt WebEngine runtime' }
+$QtProc = Get-ChildItem -LiteralPath $QtSite -Filter 'QtWebEngineProcess.exe' -Recurse -File | Select-Object -First 1
+if (!$QtProc) { throw 'QtWebEngineProcess.exe is not included in the offline Qt bundle' }
 Step 'Bundling pinned NumPy + ONNX Runtime CPU wheels on Windows build runner'
 # actions/setup-python supplies Python 3.13 plus pip on GitHub Windows runner.
 & python -m pip install --disable-pip-version-check --no-compile --only-binary=:all: --target $AiSite "numpy==2.2.6" "onnxruntime==1.23.2" "cryptography==46.0.3"
@@ -261,7 +269,8 @@ if (!(Test-Path -LiteralPath $Pth)) { throw 'Embedded Python path configuration 
 # Python's embeddable distribution ignores global site-packages and the system
 # registry. The bundled AI dependencies live only within this ZIP.
 Add-Content -LiteralPath $Pth -Value '..\ai-site' -Encoding ASCII
-& $py -c "import numpy,onnxruntime,cryptography; print('OFFLINE_AI_READY',numpy.__version__,onnxruntime.__version__)"
+Add-Content -LiteralPath $Pth -Value '..\qt-site' -Encoding ASCII
+& $py -c "import numpy,onnxruntime,cryptography; from PySide6.QtWebEngineWidgets import QWebEngineView; print('OFFLINE_AI_AND_DESKTOP_READY',numpy.__version__,onnxruntime.__version__)"
 if ($LASTEXITCODE -ne 0) { throw 'Bundled Python cannot import local ONNX Runtime/NumPy' }
 Step 'All AI libraries and model included, no downloads required by user'
 
@@ -323,7 +332,7 @@ Step 'Native GUI EXE launcher compiled successfully'
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'X-Stage Song Studio.exe',
- 'engine.py',
+ 'engine.py', 'desktop_window.py',
  'ncn_lyrics.py',
  'song_index.py',
  'ai_lyrics.py',
@@ -346,7 +355,7 @@ $paths = @(
  '.runtime/whisper/whisper-cli.exe',
  '.runtime/python/python313._pth',
  '.runtime/ai-site/numpy/__init__.py',
- '.runtime/ai-site/onnxruntime/__init__.py',
+ '.runtime/ai-site/onnxruntime/__init__.py', '.runtime/qt-site/PySide6/__init__.py', '.runtime/qt-site/PySide6/QtWebEngineWidgets.pyd',
  'pick_path.ps1',
  'Create-Desktop-Shortcut.cmd',
  'Create-Desktop-Shortcut.ps1',
@@ -381,7 +390,7 @@ $manifest = [ordered]@{
     version = $AppVersion
     build = $AppBuild
     created_utc = [DateTime]::UtcNow.ToString('o')
-    contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont', 'HTDemucs ONNX model (MIT)', 'NumPy 2.2.6', 'ONNX Runtime 1.23.2')
+    contents = @('Python 3.13.10 embeddable', 'FFmpeg 9.x essentials', 'FluidSynth 2.6.2 win64', 'GeneralUser GS 2.0.3 SoundFont', 'HTDemucs ONNX model (MIT)', 'NumPy 2.2.6', 'ONNX Runtime 1.23.2', 'PySide6 Qt WebEngine 6.9.3')
     files = @($files)
 }
 $ManifestFile = Join-Path $Stage '.engine-ready-manifest.json'
