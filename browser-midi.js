@@ -554,10 +554,15 @@ async function selectedFont(token,signal){
     const len=Number(res.headers.get('Content-Length')||0);
     const hinted=Number(scope.navigator?.deviceMemory||4);
     const deviceLimit=(hinted<=2?64:hinted<=4?128:256)*1048576;
+    const native=scope.XStageMemory?.nativeRam?.();
+    if(native?.lowMemory||native&&len&&
+       len>Math.max(16*1048576,native.available*.22))
+      fail('Android มี RAM ว่างไม่พอโหลด SoundFont นี้ · เลือก SF ขนาดเล็กหรือเสียงพื้นฐาน');
     if(len>MAX_FONT||len>deviceLimit)
       fail('SoundFont ใหญ่เกินงบปลอดภัยสำหรับ RAM อุปกรณ์นี้ · ใช้ไฟล์เล็กลงหรือเสียงพื้นฐาน');
     const bytes=new Uint8Array(await res.arrayBuffer());
-    if(bytes.byteLength>MAX_FONT||bytes.byteLength>deviceLimit)
+    if(bytes.byteLength>MAX_FONT||bytes.byteLength>deviceLimit||
+       native&&bytes.byteLength>Math.max(16*1048576,native.available*.22))
       fail('SoundFont ใหญ่เกินงบปลอดภัยของอุปกรณ์');
     if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
     if(selected!==id||context?.token!==token||context?.sub!==sub)
