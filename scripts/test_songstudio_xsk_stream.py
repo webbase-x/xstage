@@ -138,6 +138,12 @@ class XskStreamTests(unittest.TestCase):
         package = load("xsk_package")
         self.midi(self.source, "00001", b"A")
         self.midi(self.source, "00002", b"B")
+        (self.source / "00001.lrc").unlink()
+        (self.source / "00001.json").write_text(json.dumps({
+            "schemaVersion": 1, "title": "เพลงจาก JSON",
+            "artist": "นักร้องจาก JSON",
+            "lines": [{"startTime": 2.0, "endTime": 4.0, "text": "ทดลอง"}]
+        }, ensure_ascii=False), encoding="utf-8")
         self.midi(self.source, "00003", b"A")  # same MIDI bytes, SHA duplicate
         broken = self.midi(self.source, "00004", b"C")
         broken.with_suffix(".lrc").unlink()  # file without timed lyrics must be skipped
@@ -174,6 +180,10 @@ class XskStreamTests(unittest.TestCase):
                 self.assertEqual(len(first), 3)
                 self.assertEqual(len({package.open_package(p, bytes(range(32)))["audio"]["sha256"]
                                       for p in first}), 3)
+                parsed = [package.open_package(p, bytes(range(32))) for p in first]
+                self.assertTrue(any(item["title"] == "เพลงจาก JSON" and
+                                    item["artist"] == "นักร้องจาก JSON"
+                                    for item in parsed))
                 with stream.source_batches(self.source, self.output, cancelled=engine.CANCEL,
                                            batch_size=1) as rows:
                     repeat = engine.build_xsk(rows, "original", {
