@@ -77,9 +77,6 @@
   let aiStreamId = '', aiPlaySerial = 0, aiDraftReady = false, aiEngineReady = false;
   let aiTimed = [], aiActiveIndex = -2, aiKaraokeFrame = 0;
   let aiSeparationAvailable=false,aiSeparatedPath=null;
-  let aiMicRecorder=null,aiMicStream=null,aiMicChunks=[];
-  let aiMicBlob=null,aiMicUrl='',aiMicTimer=0,aiMicStarted=0;
-  let aiMicSaving=false,aiMicPending=false;
   let phraseReady=false,phrasePosition='first',phraseOffset=0,phraseRows=[];
   let phraseSeq=0,phraseSearchTimer=0,phraseBackup=null;
   const MAX_SELECTED_LYRIC_GROUPS=1000;
@@ -243,7 +240,6 @@
     stopImportPreviews(name==='upload'?'online':name==='pc-export'?'pc':'');
     if (activeTab !== 'ai-lyrics') {
       aiStopPlayback();
-      if(aiMicRecorder?.state==='recording')aiStopMic();
     }
     if (name === 'ai-lyrics') void aiRefreshSongList();
     if (name === 'settings') void refreshHistory();
@@ -1359,12 +1355,6 @@
     $('ai-lyrics-read-source').disabled = busy || !hasSong;
     $('ai-lyrics-separate').disabled = busy || !hasSong || !aiSeparationAvailable;
     $('ai-lyrics-use-vocals').disabled = busy || !hasSong || !aiSeparatedPath;
-    const micRecording=aiMicRecorder?.state==='recording';
-    $('ai-mic-start').disabled=busy||aiMicSaving||aiMicPending||micRecording||
-      !navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined';
-    $('ai-mic-stop').disabled=!micRecording;
-    $('ai-mic-save').disabled=busy||aiMicSaving||aiMicPending||micRecording||!aiMicBlob;
-    $('ai-mic-discard').disabled=aiMicSaving||aiMicPending||micRecording||!aiMicBlob;
     $('ai-lyrics-play').disabled = busy || !hasSong;
     $('ai-lyrics-editor').disabled = !hasSong;
     $('ai-lyrics-insert-time').disabled = !hasSong || !aiAudio.src;
@@ -1451,124 +1441,6 @@
     $('ai-lyrics-vocals-status').textContent=
       'กำลังแยกเสียงร้องและดนตรีด้วย HTDemucs · ตรวจความคืบหน้าที่แผงงาน';
     await run('ai-separate-vocals',{id});
-  }
-  function aiUpdateMicTimer(){
-    if(!aiMicStarted)return;
-    const seconds=Math.min(1200,Math.floor((Date.now()-aiMicStarted)/1000));
-    $('ai-mic-timer').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+
-      ':'+String(seconds%60).padStart(2,'0');
-    if(seconds>=1200&&aiMicRecorder?.state==='recording')aiStopMic();
-  }
-  function aiMicReleaseStream(){
-    if(aiMicStream)for(const track of aiMicStream.getTracks())track.stop();
-    aiMicStream=null;
-    if(aiMicTimer){clearInterval(aiMicTimer);aiMicTimer=0;}
-  }
-  function aiMicDiscard(){
-    if(aiMicRecorder?.state==='recording')return;
-    aiMicReleaseStream();aiMicBlob=null;aiMicChunks=[];
-    if(aiMicUrl)URL.revokeObjectURL(aiMicUrl);
-    aiMicUrl='';
-    $('ai-mic-preview').pause();
-    $('ai-mic-preview').removeAttribute('src');
-    $('ai-mic-preview').hidden=true;
-    $('ai-mic-timer').textContent='00:00';
-    $('ai-mic-status').textContent='ลบเสียงที่ยังไม่บันทึกจากหน่วยความจำแล้ว · พร้อมอัดใหม่';
-    aiUpdateButtons();
-  }
-  async function aiStartMic(){
-    if(busy||aiMicSaving||aiMicPending||aiMicRecorder?.state==='recording')return;
-    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')
-      return message('เบราว์เซอร์นี้ไม่รองรับการบันทึกไมโครโฟน · ใช้ Edge หรือ Chrome เวอร์ชันล่าสุด');
-    aiMicDiscard();
-    try{
-      const stream=await navigator.mediaDevices.getUserMedia({
-        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
-      aiMicStream=stream;
-      const mime=[
-        'audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'
-      ].find(type=>MediaRecorder.isTypeSupported(type));
-      if(!mime)throw new Error('เบราว์เซอร์ไม่รองรับ WebM/MP4/OGG สำหรับไมโครโฟน');
-      aiMicRecorder=new MediaRecorder(stream,{mimeType:mime,audioBitsPerSecond:128000});
-      aiMicChunks=[];
-      aiMicRecorder.ondataavailable=event=>{
-        if(event.data?.size)aiMicChunks.push(event.data);
-        if(aiMicChunks.reduce((s,item)=>s+item.size,0)>64*1024*1024)
-          aiStopMic();
-      };
-      aiMicRecorder.onerror=()=>{
-        $('ai-mic-status').textContent='ไมโครโฟนขัดข้อง · ตรวจสิทธิ์อุปกรณ์และลองใหม่';
-        aiMicReleaseStream();aiUpdateButtons();
-      };
-      aiMicRecorder.onstop=()=>{
-        aiMicReleaseStream();
-        const blob=new Blob(aiMicChunks,{type:mime});
-        aiMicRecorder=null;
-        aiMicChunks=[];
-        if(blob.size<1000||blob.size>64*1024*1024){
-          $('ai-mic-status').textContent='เสียงสั้นเกินไปหรือเกิน 64 MB · กรุณาบันทึกใหม่';
-          aiMicBlob=null;
-        }else{
-          aiMicBlob=blob;
-          aiMicUrl=URL.createObjectURL(blob);
-          const player=$('ai-mic-preview');
-          player.src=aiMicUrl;player.hidden=false;
-          $('ai-mic-status').textContent=
-            'อัดเสร็จ · '+fmtSize(blob.size)+' · ทดลองฟังก่อนกดบันทึกเป็น M4A';
-        }
-        aiUpdateButtons();
-      };
-      aiMicRecorder.start(1000);
-      aiMicStarted=Date.now();
-      aiMicTimer=setInterval(aiUpdateMicTimer,500);
-      $('ai-mic-status').textContent=
-        '● กำลังบันทึกจากไมโครโฟนในเบราว์เซอร์ · กดหยุดก่อนทดลองฟัง · ไม่ส่งข้อมูลขึ้น Drive';
-      aiUpdateButtons();
-    }catch(error){
-      aiMicRecorder=null;aiMicReleaseStream();
-      $('ai-mic-status').textContent='เปิดไมโครโฟนไม่ได้: '+error.message;
-      aiUpdateButtons();
-    }
-  }
-  function aiStopMic(){
-    if(aiMicRecorder?.state==='recording'){
-      try{aiMicRecorder.stop();}
-      catch(error){$('ai-mic-status').textContent='หยุดอัดเสียงไม่สำเร็จ: '+error.message;}
-    }
-    aiMicReleaseStream();
-    aiUpdateButtons();
-  }
-  async function aiSaveMic(){
-    if(!aiMicBlob||busy||aiMicSaving||aiMicPending)return;
-    const blob=aiMicBlob;
-    const approved=await confirmStudio(
-      'นำเสียงร้องที่อัดผ่านไมโครโฟนมาแปลงเป็น AAC/M4A ภายในคอมพิวเตอร์\n'+
-      'จัดเก็บใน XStageSong/audio และเพิ่มเข้าเมนูสร้างเนื้อร้อง AI\n'+
-      'ไม่มีการอัปโหลด Google Drive และยังไม่เผยแพร่ในคลังเพลงออนไลน์',
-      'ยืนยันบันทึกเสียงร้องใหม่',
-      {acceptLabel:'บันทึกเสียง M4A',cancelLabel:'ยกเลิก'});
-    if(!approved||busy||blob!==aiMicBlob)return;
-    aiMicSaving=true;aiUpdateButtons();
-    $('ai-mic-status').textContent='กำลังส่งเสียงที่อัดให้ Local Engine บนเครื่องเดียวกัน…';
-    try{
-      const response=await fetch(engineAddress('/api/ai-recording-upload'),{
-        method:'POST',body:blob,cache:'no-store',
-        credentials:onlinePage?'omit':'same-origin',mode:onlinePage?'cors':'same-origin',
-        headers:{'X-XStage-Token':token,'Content-Type':blob.type||'audio/webm'}
-      });
-      const data=await response.json();
-      if(!response.ok)throw new Error(data.error||'Engine ไม่รับไฟล์เสียงที่อัด');
-      aiMicPending=true;aiMicSaving=false;
-      $('ai-mic-status').textContent='รับเสียงบันทึกแล้ว · กำลังแปลงเป็น M4A…';
-      const started=await run('ai-recording-save',{recordingId:data.recordingId});
-      if(!started)throw new Error('เริ่มแปลง M4A ไม่สำเร็จ · โปรดลองบันทึกใหม่');
-    }catch(error){
-      aiMicSaving=false;aiMicPending=false;
-      $('ai-mic-status').textContent='บันทึกไม่สำเร็จ: '+error.message+
-        ' · ยังเก็บเสียงที่อัดไว้ในหน้านี้เพื่อให้ลองใหม่';
-      message(error.message);
-    }
-    aiUpdateButtons();
   }
   async function aiImportAudio() {
     if(busy)return message('มีงานกำลังดำเนินการ กรุณาให้เสร็จก่อนนำเข้า');
@@ -2442,13 +2314,6 @@
               previewAudio.pause(); previewAudio.src = engineAddress('/api/preview?ticket=' + t);
               $('preview-label').textContent = 'ตัวอย่างเสียงพร้อม · กด ▶ เพื่อฟัง';
               previewAudio.play().catch(()=>{});
-            } else if (job.kind === 'ai-recording-save') {
-              aiMicPending=false;
-              aiMicDiscard();
-              $('ai-mic-status').textContent='✓ บันทึก M4A สำเร็จ · เลือกเสียงใหม่ในหน้า AI แล้ว';
-              await aiRefreshSongList();
-              if(job.result?.song)await aiChooseSong(job.result.song);
-              message(job.result?.message||'บันทึกเสียงใหม่สำเร็จ',false);
             } else if (job.kind === 'pc-export') {
               $('pc-export-status').textContent='✓ '+(job.result?.message||'คัดลอกคลังเพลงสำเร็จ');
               message(job.result?.message||'นำเข้า Karaoke PC สำเร็จ',false);
@@ -2534,12 +2399,6 @@
               message(info.message||'ดาวน์โหลดและตรวจไฟล์อัปเดตแล้ว',false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
           } else if (job.state === 'error') {
-            if(job.kind==='ai-recording-save'){
-              aiMicPending=false;
-              $('ai-mic-status').textContent=
-                'แปลงเสียงไม่สำเร็จ · เสียงที่อัดยังอยู่ในหน้าจอ · ตรวจ Log แล้วลองอีกครั้ง';
-              aiUpdateButtons();
-            }
             if(job.kind==='pc-export'){
               $('pc-export-status').textContent='คัดลอกไม่สำเร็จ: '+(job.detail||'ตรวจบันทึกข้อผิดพลาด');
             }
@@ -2562,11 +2421,6 @@
               pendingAiAlignment=null;
             }
             message(job.detail || 'งานไม่สำเร็จ');
-          } else if (job.state==='cancelled' && job.kind==='ai-recording-save'){
-            aiMicPending=false;
-            $('ai-mic-status').textContent=
-              'ยกเลิกการแปลงเสียง · ไฟล์ที่อัดยังอยู่ในหน้าจอเพื่อทดลองใหม่';
-            aiUpdateButtons();
           } else if (job.state==='cancelled' && job.kind==='ai-align') {
             pendingAiAlignment=null;
             $('ai-lyrics-align-review').textContent='ยกเลิกจัดเวลาแล้ว · คำร้องที่วางยังอยู่';
@@ -3052,10 +2906,6 @@
       'ใช้ไฟล์เพลงต้นฉบับสำหรับ Whisper และการทดลองฟัง';
     aiUpdateButtons();
   });
-  $('ai-mic-start').addEventListener('click',()=>{void aiStartMic();});
-  $('ai-mic-stop').addEventListener('click',aiStopMic);
-  $('ai-mic-save').addEventListener('click',()=>{void aiSaveMic();});
-  $('ai-mic-discard').addEventListener('click',aiMicDiscard);
   $('ai-lyrics-refresh').addEventListener('click',()=>{void aiRefreshSongList();});
   $('ai-lyrics-search').addEventListener('input',()=>{
     clearTimeout(aiSearchTimer);
