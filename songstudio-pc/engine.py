@@ -67,6 +67,7 @@ JOB = {
     "created": 0, "skipped": 0, "errors": 0, "m4aCount": 0, "lyricsCount": 0
 }
 CANCEL = threading.Event()
+JOB_THREAD = None
 PROCESS = None
 FILES = []
 FILE_BY_ID = {}
@@ -2274,8 +2275,9 @@ def execute_job(action, options, started):
             skipped_only = (action == "build" and result.get("created", 0) == 0
                             and result.get("skipped", 0) > 0)
             JOB.update(
-                state="error" if build_errors else "success", result=result,
-                stage=("ซิงค์บางส่วน · มีเพลงที่ต้องตรวจสอบ" if build_errors and action == "upload" else
+                state="cancelled" if CANCEL.is_set() else "error" if build_errors else "success", result=result,
+                stage=("ยกเลิกงานแล้ว" if CANCEL.is_set() else
+                       "ซิงค์บางส่วน · มีเพลงที่ต้องตรวจสอบ" if build_errors and action == "upload" else
                        "สร้างเพลงบางรายการไม่สำเร็จ" if build_errors else
                        "ไม่มีเพลงใหม่ · ยืนยันจาก Catalog แล้ว" if skipped_only else
                        "เสร็จสิ้น"),
@@ -2363,13 +2365,13 @@ def validate_build_request(data):
 
 
 def start_job(data):
-    global JOB
+    global JOB, JOB_THREAD
     action = str(data.get("action", ""))
     if action == "ai-recording-save":
         raise ValueError("ยกเลิกฟังก์ชันบันทึกเสียงผ่านไมโครโฟนแล้ว")
     with LOCK:
-        if JOB["state"] == "running":
-            raise ValueError("มีงานกำลังดำเนินการอยู่")
+        if JOB["state"] == "running" or (JOB_THREAD and JOB_THREAD.is_alive()):
+            raise ValueError("งานเดิมยังหยุดไม่เสร็จ กรุณารอให้สถานะพร้อมทำงาน")
     validation = validate_build_request(data) if action == "build" else {}
     if action == "xsk-stream":
         source = str(data.get("source") or PREFS.get("source") or "")
@@ -2483,8 +2485,8 @@ def start_job(data):
                 raise ValueError("ไม่พบ FFmpeg ที่ต้องใช้แปลงไฟล์เสียงสำหรับ AI ในแพ็กเกจ PC Ready")
         validation = {"total": 1}
     with LOCK:
-        if JOB["state"] == "running":
-            raise ValueError("มีงานกำลังดำเนินการอยู่")
+        if JOB["state"] == "running" or (JOB_THREAD and JOB_THREAD.is_alive()):
+            raise ValueError("งานเดิมยังหยุดไม่เสร็จ กรุณารอให้สถานะพร้อมทำงาน")
         CANCEL.clear()
         now = time.monotonic()
         JOB = {
@@ -2504,9 +2506,12 @@ def start_job(data):
         thread = threading.Thread(target=execute_job,
                                   args=(action, data, now), daemon=True,
                                   name="xstage-studio-" + action)
-        thread.start()
+        with LOCK:
+            JOB_THREAD = thread
+            thread.start()
     except Exception as exc:
         with LOCK:
+            JOB_THREAD = None
             JOB["state"] = "error"
             JOB["detail"] = "เริ่ม Thread สร้างเพลงไม่ได้: " + str(exc)
         raise RuntimeError("PC Engine เริ่มงานไม่ได้: " + str(exc)) from exc
@@ -3008,6 +3013,13 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8, source_cho
 def job_snapshot():
     with LOCK:
         job = dict(JOB)
+        worker_alive = bool(JOB_THREAD and JOB_THREAD.is_alive())
+    if worker_alive and job["state"] != "running":
+        # The previous worker may still be cleaning up its subprocess/files.
+        # Never unlock the controls until it has actually exited.
+        job["finalState"] = job["state"]
+        job["state"] = "running"
+        job["stage"] = "กำลังคืนทรัพยากรของงานเดิม"
     if job["state"] == "running":
         elapsed = max(0, time.monotonic() - job["started"])
         job["elapsed"] = elapsed
@@ -3626,12 +3638,19 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/jobs":
                 self._json(start_job(payload))
             elif path == "/api/jobs/cancel":
-                CANCEL.set()
                 with LOCK:
-                    p = PROCESS
-                if p:
-                    p.terminate()
-                self._json({"ok": True})
+                    active = JOB["state"] == "running" and not CANCEL.is_set()
+                    if active:
+                        CANCEL.set()
+                        JOB["stage"] = "กำลังยกเลิกงาน · รอหยุดให้เรียบร้อย"
+                        JOB["updated"] = time.monotonic()
+                    p = PROCESS if active else None
+                if p and p.poll() is None:
+                    try:
+                        p.terminate()
+                    except OSError:
+                        pass
+                self._json({"ok": True, "stopping": active})
             elif path.startswith("/api/song/"):
                 row = FILE_BY_ID.get(int(path.rsplit("/", 1)[-1]))
                 if not row:
