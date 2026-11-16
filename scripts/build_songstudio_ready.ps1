@@ -74,6 +74,7 @@ $map = @{
  'songstudio-pc/Start-Song-Studio-Ready.ps1' = 'Start-Song-Studio-Ready.ps1'
  'songstudio-pc/engine.py' = 'engine.py'
  'songstudio-pc/desktop_window.py' = 'desktop_window.py'
+ 'songstudio-pc/desktop_bootstrap.py' = 'desktop_bootstrap.py'
   'songstudio-pc/history_store.py' = 'history_store.py'
  'songstudio-pc/ncn_lyrics.py' = 'ncn_lyrics.py'
  'songstudio-pc/song_index.py' = 'song_index.py'
@@ -332,7 +333,7 @@ Step 'Native GUI EXE launcher compiled successfully'
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'X-Stage Song Studio.exe',
- 'engine.py', 'desktop_window.py',
+ 'engine.py', 'desktop_window.py', 'desktop_bootstrap.py',
  'ncn_lyrics.py',
  'song_index.py',
  'ai_lyrics.py',
