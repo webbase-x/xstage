@@ -786,9 +786,16 @@ class Importer {
               media=await uploadMedia(midiFile,code,midiFolder,name,
                 'audio/midi',midiHash,0,.75);
             }
-            const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyrics=await uploadMedia(json,code,pathFor(code,'json',item.kind==='NCN'?'NCN':'MID',jname).slice(0,-1),jname,
-              'application/json',jsonHash,.75,.25);
+            // KAR embeds timed lyrics in the MIDI container: no companion
+            // SONG or LYRICS directory is needed. XSK already uses its own
+            // self-contained upload branch above.
+            let lyrics=null;
+            if(item.kind!=='KAR'){
+              const jname=base+'-'+jsonHash.slice(0,16)+'.json';
+              lyrics=await uploadMedia(json,code,
+                pathFor(code,'json',item.kind==='NCN'?'NCN':'MID',jname).slice(0,-1),
+                jname,'application/json',jsonHash,.75,.25);
+            }
             // Keep lossless NCN sources in their native folders alongside the
             // separately verified timed JSON used for all player platforms.
             let ncnSource=same?.ncnSource||null;
