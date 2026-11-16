@@ -18,8 +18,8 @@ except ImportError:
 
 KEY = bytes(range(32))
 MIDI = (b'MThd' + struct.pack('>IHHH', 6, 0, 1, 480) +
-        b'MTrk' + struct.pack('>I', 12) +
-        b'\\x00\\x90\\x3c\\x50\\x81\\x70\\x80\\x3c\\x00\\x00\\xff\\x2f\\x00')
+        b'MTrk' + struct.pack('>I', 13) +
+        bytes.fromhex('00 90 3c 50 81 70 80 3c 00 00 ff 2f 00'))
 
 
 @unittest.skipUnless(AESGCM is not None, 'cryptography required')
@@ -58,7 +58,7 @@ class XskPlaybackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as dirname:
             path = self.package(Path(dirname))
             with self.assertRaises(Exception):
-                read_xsk(path, key=b'\\x01' * 32)
+                read_xsk(path, key=bytes([1]) * 32)
             data = bytearray(path.read_bytes())
             data[-1] ^= 1
             path.write_bytes(data)
