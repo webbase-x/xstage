@@ -2249,7 +2249,7 @@
     } finally {
       finishInspection();
     }
-  }}
+  }
   async function inspectPCExport(){
     const finishInspection=beginInspection('pc-export-report','กำลังตรวจคลังเพลงและฐานข้อมูล Karaoke PC');
     if(!finishInspection)return null;
@@ -2273,7 +2273,7 @@
     } finally {
       finishInspection();
     }
-  }}
+  }
   async function startPCExport(){
     if(busy)return;
     const report=await inspectPCExport();
@@ -3289,7 +3289,7 @@
     } finally {
       finishInspection();
     }
-  }}
+  }
   async function startJsonPro() {
     if(!canLaunch('json-pro-export') || !proEnabled)return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
     const report=await inspectJsonPro();
