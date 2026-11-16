@@ -42,7 +42,7 @@ function pathFor(code,kind,role,name){
   if(suffix==='json'||kind==='json'){
     if(role==='NCN')return ['MIDI','NCN','LYRICS',bucket,name];
     if(role==='MID')return ['MIDI','MID','LYRICS',bucket,name];
-    if(video||['mp4','webm'].includes(String(role).toLowerCase()))
+    if(video||['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(String(role).toLowerCase()))
       return ['VIDEO',String(role).toUpperCase(),'LYRICS',bucket,name];
     if(role&&role!=='KAR'&&role!=='XSK')
       return ['AUDIO',String(role).toUpperCase(),'LYRICS',bucket,name];
