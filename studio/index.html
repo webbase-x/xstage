@@ -439,13 +439,13 @@
         </section>
 
         <section id="tab-upload" class="tab">
-          <div class="section-top"><div><div class="eyebrow">PRIVATE GOOGLE DRIVE</div><h2>นำเข้า X-Stage Karaoke Online</h2><p>เช็กไฟล์ต้นทางและ MD5 บน Drive ก่อนส่ง ลดการอัปโหลดซ้ำ</p></div><span class="chip amber">GOOGLE LOGIN REQUIRED</span></div>
+          <div class="section-top"><div><h2>นำเข้า X-Stage Karaoke Online</h2></div></div>
           <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageSong ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
           <article class="panel">
-            <div class="section-heading"><div><h2>เลือกโฟลเดอร์ต้นฉบับสำหรับอัปโหลด</h2><p>ตรวจไฟล์เพลงและเนื้อร้อง LRC/JSON พร้อมเวลาจริงในทุกโฟลเดอร์ย่อย · รองรับชุด MIDI/KAR/NCN ที่ตรวจผ่าน · แปลงประเภทที่จำเป็นก่อนเผยแพร่ · ข้ามไฟล์ที่ยังไม่พร้อมโดยแจ้งสาเหตุ</p></div></div>
+            <div class="section-heading"><div><h2>เลือกโฟลเดอร์นำเข้า</h2></div></div>
             <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
-            <div class="toolbar"><button id="upload-inspect" class="button ghost" type="button">⌕ ตรวจความพร้อมไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลด + สร้าง DB พร้อมเล่น</button></div>
-            <div id="upload-folder-report" class="hint" role="status" aria-live="polite">ยังไม่ได้ตรวจโฟลเดอร์ · ระบบจะไม่ส่งไฟล์ที่ไม่มีเนื้อร้อง/ไฟล์ประกอบตามประเภทเพลง</div>
+            <div class="toolbar"><button id="upload-inspect" type="button" hidden aria-hidden="true" tabindex="-1">ตรวจไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลด</button></div>
+            <div id="upload-folder-report" class="hint" role="status" aria-live="polite"></div>
           <article class="panel import-preview-panel" aria-label="ทดลองเล่นเพลงก่อนนำเข้า">
             <div class="section-heading"><div><h2>♫ พรีวิวทดลองเล่นเพลงก่อนนำเข้า</h2><p>เลือกเพลงจากไฟล์ต้นทาง ฟังเพลงและดูเนื้อร้องพร้อมเวลาในหน้านี้ · ไม่คัดลอกหรืออัปโหลดจากการทดลองเล่น</p></div><span class="chip info">READ ONLY</span></div>
             <div class="toolbar">
@@ -463,7 +463,7 @@
             <div id="online-preview-lyrics" class="preview-lyrics-lines" role="region" aria-label="เนื้อร้องขณะทดลองฟัง" style="max-height:240px;overflow:auto"><p class="hint">เลือกเพลงเพื่อแสดงเนื้อร้องพร้อมเวลา</p></div>
             <p class="hint">ไฟล์ MIDI/KAR ใช้ SoundFont ที่ตั้งไว้ในหน้าสร้างเพลง · เพลงที่ไม่มีเนื้อร้องพร้อมเวลาจะแสดงเหตุผลชัดเจน · พรีวิวไม่แก้เพลงหรือฐานข้อมูล</p>
           </article>
-            <label class="hint" style="display:flex;gap:9px;align-items:flex-start"><input type="checkbox" id="upload-allow-new" checked style="width:18px;height:18px;flex:none"><span>สร้าง XStageSong อัตโนมัติเมื่อไม่พบโฟลเดอร์ที่เข้าถึงได้ (มีหน้าต่างยืนยันก่อนสร้าง ป้องกันการสร้างซ้ำเมื่อสิทธิ์ Google ไม่ครบ)</span></label>
+            <label class="hint" hidden><input type="checkbox" id="upload-allow-new" checked><span>สร้างคลังเมื่อจำเป็น</span></label>
             <p class="hint">เพลง MP3/M4A ที่มี LRC ถูกต้อง จะอัปโหลดและอัปเดต LYRICS/current.json หลังตรวจ MD5 · เก็บไฟล์เสียงใน AUDIO และ Lyrics JSON ใน LYRICS · ไม่อัปโหลด LYR/CUR ต้นฉบับ</p>
           </article>
           <article class="panel">
@@ -472,14 +472,6 @@
             <div class="toolbar"><button id="upload-soundfont-button" type="button" class="button primary">↑ อัปโหลด SoundFont ไป Drive</button></div>
             <p class="hint">ใช้ตัวเลือกสร้าง XStageSong ใหม่ร่วมกับเมนูอัปโหลดเพลงด้านบน · อัปโหลดแล้วเก็บเป็นไฟล์ส่วนตัวโดยไม่เขียนทับต้นฉบับหรือแก้ current.json · สามารถเลือก SoundFont ได้จากเมนูเสียง MIDI บนเว็บและ Android TV ที่รองรับ</p>
             <p id="upload-soundfont-status" class="hint" role="status" aria-live="polite">ยังไม่ได้อัปโหลด SoundFont</p>
-          </article>
-          <article class="panel drive-layout-panel">
-            <div class="section-heading"><div><h2>โครงสร้าง XStageSong บน Google Drive</h2><p>ใช้เพียง 2 โฟลเดอร์หลักเท่านั้น และไม่แก้ไขไฟล์ MID ต้นฉบับ</p></div><span class="chip info">LAYOUT V4</span></div>
-            <div class="drive-layout-grid">
-              <div class="drive-layout-section"><strong>♫ AUDIO</strong><code>XStageSong/AUDIO/</code><small>ไฟล์เสียงทุกชนิดที่เล่นได้, MIDI ต้นฉบับแบบคัดลอก, M4A, ไฟล์วิดีโอ และ SoundFont SF2/SF3 ทั้งหมดในโฟลเดอร์เดียว</small></div>
-              <div class="drive-layout-section"><strong>▤ LYRICS</strong><code>XStageSong/LYRICS/</code><code>00001-...json</code><code>catalog-base-*.json · catalog-delta-*.json</code><code>current.json</code><small>Lyrics JSON เป็นมาตรฐานของ Web/TV/PC; ไม่อัปโหลด LYR, CUR หรือ LRC ต้นฉบับ</small></div>
-            </div>
-            <p class="hint">ความปลอดภัย: คลังรุ่นเก่ายังอ่านและสำรองได้ แต่จะไม่ย้ายหรือลบโฟลเดอร์เก่าบน Drive อัตโนมัติ ตรวจสอบ/ย้ายข้อมูลก่อนเผยแพร่เป็น Layout V4</p>
           </article>
         </section>
 
