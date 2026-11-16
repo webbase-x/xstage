@@ -22,7 +22,7 @@ def available_parts(path,inspector=None):
     if path.suffix.lower() in MIDI_EXT- {'.emk', '.xsk'}:
         for role,file in zip(('lyrics','cursor'),inspector.ncn_pair(path)):
             if file.is_file():parts[role]=file
-    for ext in ('.lrc','.snf'):
+    for ext in ('.lrc','.json','.snf'):
         file=inspector.sibling(path.with_suffix(ext))
         if file.is_file():parts[ext[1:]]=file
     return parts
@@ -99,6 +99,13 @@ def assess(path,record=None,cancelled=None,inspector=None,probe=None,crosscheck_
             if not math.isfinite(offset):return result('invalid','ค่า offset เนื้อร้องไม่ถูกต้อง')
             from .lyrics import LyricLine
             lines=[LyricLine(line.start-offset,line.text,[(when-offset,text) for when,text in line.words]) for line in lrc.lines]
+        if 'json' in parts and 'lrc' not in parts and ext not in MIDI_EXT:
+            from .lyrics import read_timed_json
+            timed, document = read_timed_json(parts['json'])
+            lines = timed.lines
+            if not lines:return result('invalid','Lyrics JSON ไม่มีคำร้องพร้อมเวลา')
+            if any(line.start > duration + 2 for line in lines):
+                return result('invalid','Lyrics JSON มีเวลาเกินความยาวเพลง')
         if not math.isfinite(duration) or duration<=0:return result('invalid','ระยะเวลาสื่อไม่ถูกต้อง')
         if ext not in VIDEO_EXT:
             usable=[line for line in lines if line.text.strip()]
