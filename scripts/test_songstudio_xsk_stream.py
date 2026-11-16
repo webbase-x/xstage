@@ -172,7 +172,7 @@ class XskStreamTests(unittest.TestCase):
         source = self.source / "00013.mid"
         row = {"path": str(source), "code": "00013",
                "title": "00013", "artist": ""}
-        doc = {"rawLrc": "[ti:ชื่อเพลงจาก LRC]\\n[ar:ศิลปินจาก LRC]\\n[00:02.00]ทดสอบ",
+        doc = {"rawLrc": "[ti:ชื่อเพลงจาก LRC]\n[ar:ศิลปินจาก LRC]\n[00:02.00]ทดสอบ",
                "lines": [{"startTime": 2.0, "text": "ทดสอบ"}]}
         self.assertEqual(engine._xsk_identity(source, row, doc),
                          ("ชื่อเพลงจาก LRC", "ศิลปินจาก LRC"))
