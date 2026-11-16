@@ -46,7 +46,7 @@ class DuplicateMediaTests(unittest.TestCase):
         self.put("d/font.sf2", binary)
         report = self.found()
         self.assertEqual(report["fileCount"], 3)
-        self.assertEqual(report["groupCount"], 1)
+        self.assertEqual(report["groupCount"], 1, msg=repr(report))
         self.assertEqual(report["duplicateFiles"], 1)
         page = self.registry.page()
         self.assertTrue(page["ready"])
