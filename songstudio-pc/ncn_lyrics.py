@@ -83,8 +83,32 @@ def resolve_companions(midi: Path, index: dict | None = None, *,
     Never use files from a different code or digit bucket. Case-insensitive
     Windows compatible; does not depend on directory listing order.
     """
+    midi = Path(midi)
+    if midi.suffix.lower() not in MIDI_SUFFIXES:
+        return None
+    # Studio imports also accept exact same-stem NCN files placed in ONE
+    # directory, e.g. "00001(1).mid/.lyr/.cur". The classic split NCN
+    # Song/Lyrics/Cursor layout below is unchanged.
+    if not indexed_only:
+        direct = {}
+        try:
+            files = {p.name.casefold(): p for p in midi.parent.iterdir()
+                     if p.is_file() and not p.is_symlink()}
+            for component, suffix in (("lyrics", ".lyr"), ("cursor", ".cur")):
+                match = files.get((midi.stem + suffix).casefold())
+                if match is not None:
+                    direct[component] = str(match)
+        except OSError:
+            pass
+        if direct:
+            result = {"midi": str(midi), "lyrics": direct.get("lyrics"),
+                      "cursor": direct.get("cursor"), "format": "NCN",
+                      "code": midi.stem}
+            result["missing"] = [role for role in ("lyrics", "cursor")
+                                 if not result.get(role)]
+            return result
     found = describe(midi)
-    if not found or found[1] != "song" or midi.suffix.lower() not in MIDI_SUFFIXES:
+    if not found or found[1] != "song":
         return None
     root, _, subdir, code = found
     result = {"midi": str(midi), "lyrics": None, "cursor": None,
