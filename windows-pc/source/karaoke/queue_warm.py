@@ -16,7 +16,7 @@ from ctypes import wintypes
 from pathlib import Path
 
 MiB = 1024 * 1024
-MAX_ITEMS = 6
+MAX_ITEMS = 2
 MAX_HEADER = 64 * 1024
 MAX_HELD = MAX_ITEMS * MAX_HEADER
 
@@ -63,7 +63,7 @@ def memory_level(info):
 
 
 class QueueWarmup:
-    """At most six shallow reads; never opens audio devices or holds full songs."""
+    """At most two shallow reads; never opens audio devices or holds full songs."""
 
     def __init__(self):
         self._lock = threading.Lock()
