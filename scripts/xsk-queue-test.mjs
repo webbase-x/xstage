@@ -60,8 +60,10 @@ assert.equal(fetched,1);assert.equal(unzipped,1);assert.equal(rendered,1);
 assert.equal(state.queuePrepared.blob,audio);
 assert.equal(state.queuePrepared.lyrics,mimeDoc);
 assert.equal(painted,1);
+const timersBefore=timers.length;
 schedule();
-assert.equal(timers.length,0,'Already prepared XSK must not be queued for reprocessing');
+assert.equal(timers.length,timersBefore,
+  'Already prepared XSK must not be queued for reprocessing');
 assert.equal(state.queuePreparedCache.get(song).blob,audio);
 assert.equal(typeof onFontChange,'function');
 onFontChange();
