@@ -238,7 +238,7 @@ class IndependentAIImportTests(unittest.TestCase):
         self.assertEqual(len(engine.FILE_BY_ID), 2)
         invalid = self.root / "invalid.mid"
         invalid.write_bytes(b"MThd"*400)
-        with self.assertRaisesRegex(ValueError, "ไฟล์เสียง"):
+        with self.assertRaisesRegex(ValueError, "เสียง/วิดีโอ"):
             engine.import_ai_audio(str(invalid))
         with self.assertRaisesRegex(ValueError, "ไม่พบไฟล์"):
             engine.import_ai_audio(str(self.root / "missing.mp3"))
