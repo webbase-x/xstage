@@ -241,35 +241,46 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             extension = (media.suffix.lower() if output_format == "original"
                          else "." + output_format)
             if extension in (".mid", ".midi"):
-                category = "MIDI/MID"
+                relative_audio = "MIDI/MID/SONG/" + bucket + "/" + code + extension
+                relative_lyrics = "MIDI/MID/LYRICS/" + bucket + "/" + code + ".json"
             elif extension == ".kar":
-                category = "MIDI/KAR"
+                # KAR is self-contained and needs neither SONG nor external JSON.
+                relative_audio = "MIDI/KAR/" + bucket + "/" + code + extension
+                relative_lyrics = None
             elif extension in (".mp4", ".webm", ".avi", ".mkv", ".mov", ".mpg",
                                ".mpeg", ".vob", ".dat", ".wmv", ".flv"):
-                category = "VIDEO"
+                category = "VIDEO/" + extension[1:].upper()
+                relative_audio = category + "/SONG/" + bucket + "/" + code + extension
+                relative_lyrics = category + "/LYRICS/" + bucket + "/" + code + ".json"
             else:
-                category = "AUDIO"
-            relative_audio = category + "/" + bucket + "/" + code + extension
-            relative_lyrics = "LYRICS/" + bucket + "/" + code + ".json"
+                category = "AUDIO/" + extension[1:].upper()
+                relative_audio = category + "/SONG/" + bucket + "/" + code + extension
+                relative_lyrics = category + "/LYRICS/" + bucket + "/" + code + ".json"
             final_audio = export.safe_media_path(root, relative_audio, "audio")
-            final_lyrics = export.safe_media_path(root, relative_lyrics, "lyrics")
+            final_lyrics = (export.safe_media_path(root, relative_lyrics, "lyrics")
+                            if relative_lyrics else None)
             # Recover an orphaned but verified pair if the process exited
             # after committing files and before the journal append.
-            already_published_files = final_audio.exists() or final_lyrics.exists()
-            if already_published_files and not _can_recover_pair(
-                    media, final_audio, final_lyrics, source_hash, doc,
-                    output_format):
+            already_published_files = final_audio.exists() or (final_lyrics is not None and final_lyrics.exists())
+            if already_published_files and not (
+                    _can_recover_pair(media, final_audio, final_lyrics, source_hash,
+                                      doc, output_format) if final_lyrics is not None
+                    else (final_audio.is_file() and not final_audio.is_symlink()
+                          and _fingerprint(final_audio) == source_hash)):
                 raise FileExistsError(
                     "ผลลัพธ์เก่าไม่ครบหรือไม่ตรงข้อมูล · ไม่เขียนทับไฟล์เดิม")
             if not already_published_files:
                 final_audio.parent.mkdir(parents=True, exist_ok=True)
-                final_lyrics.parent.mkdir(parents=True, exist_ok=True)
+                if final_lyrics is not None:
+                    final_lyrics.parent.mkdir(parents=True, exist_ok=True)
                 temp_audio = final_audio.with_name("." + final_audio.stem + ".partial" + final_audio.suffix)
-                temp_lyrics = final_lyrics.with_name(final_lyrics.name + ".partial")
-                if temp_audio.is_symlink() or temp_lyrics.is_symlink():
+                temp_lyrics = (final_lyrics.with_name(final_lyrics.name + ".partial")
+                               if final_lyrics is not None else None)
+                if temp_audio.is_symlink() or (temp_lyrics is not None and temp_lyrics.is_symlink()):
                     raise ValueError("พบไฟล์ชั่วคราวแบบ Symbolic Link")
                 temp_audio.unlink(missing_ok=True)
-                temp_lyrics.unlink(missing_ok=True)
+                if temp_lyrics is not None:
+                    temp_lyrics.unlink(missing_ok=True)
                 try:
                     if output_format == "original":
                         with media.open("rb") as reader, temp_audio.open("xb") as writer:
@@ -290,13 +301,15 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                         convert(media, temp_audio, output_format)
                         if not temp_audio.is_file() or temp_audio.stat().st_size < 1000:
                             raise ValueError("ไฟล์เสียงหลังแปลงไม่สมบูรณ์")
-                    with temp_lyrics.open("x", encoding="utf-8") as writer:
-                        json.dump(doc, writer, ensure_ascii=False, allow_nan=False)
-                        writer.write("\n")
-                        writer.flush()
-                        os.fsync(writer.fileno())
+                    if temp_lyrics is not None:
+                        with temp_lyrics.open("x", encoding="utf-8") as writer:
+                            json.dump(doc, writer, ensure_ascii=False, allow_nan=False)
+                            writer.write("\n")
+                            writer.flush()
+                            os.fsync(writer.fileno())
                     _publish_no_overwrite(temp_audio, final_audio)
-                    _publish_no_overwrite(temp_lyrics, final_lyrics)
+                    if temp_lyrics is not None:
+                        _publish_no_overwrite(temp_lyrics, final_lyrics)
                 finally:
                     temp_audio.unlink(missing_ok=True)
                     temp_lyrics.unlink(missing_ok=True)
@@ -306,7 +319,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                       "title": title.strip() or code,
                       "artist": artist.strip(), "bucket": bucket,
                       "audio": {"path": relative_audio},
-                      "lyrics": {"path": relative_lyrics},
+                      "lyrics": {"path": relative_lyrics} if relative_lyrics else None,
                       "sourceFormat": item["kind"],
                       "sourceIdentity": {"sha256": source_hash,
                                          "canonicalPath": export.canonical_source_path(media),
