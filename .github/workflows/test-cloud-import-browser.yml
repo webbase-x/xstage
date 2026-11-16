@@ -6,6 +6,7 @@ on:
       - "cloud-import*.js"
       - "xsk-browser.js"
       - "scripts/xsk-browser-test.mjs"
+      - "scripts/xsk-queue-test.mjs"
       - "cloud-import*.css"
       - "index.html"
       - "app.js"
@@ -37,6 +38,7 @@ jobs:
           node scripts/cloud-import-test.mjs
           node scripts/cloud-import-contract-test.mjs
           node scripts/xsk-browser-test.mjs
+          node scripts/xsk-queue-test.mjs
           node --check xsk-browser.js
           node --check cloud-import.js
       - name: Prepare headless Chromium on CI only
