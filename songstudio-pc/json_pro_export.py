@@ -39,6 +39,47 @@ def _lyrics_digest(doc):
         separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def _publish_no_overwrite(staged, target):
+    """Commit a complete staged file without an overwrite race.
+
+    Hardlink on local NTFS/POSIX is atomic. Removable drives without links
+    get an exclusive-create copy; collisions never overwrite user files.
+    """
+    if target.exists() or target.is_symlink():
+        raise FileExistsError("มีไฟล์ปลายทางแล้ว · จะไม่เขียนทับ: " + str(target))
+    try:
+        os.link(staged, target)
+    except FileExistsError:
+        raise
+    except OSError:
+        with staged.open("rb") as source, target.open("xb") as output:
+            try:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+                output.flush()
+                os.fsync(output.fileno())
+            except BaseException:
+                output.close()
+                target.unlink(missing_ok=True)
+                raise
+    staged.unlink(missing_ok=True)
+
+
+def _can_recover_pair(media, audio, lyrics, source_hash, document, output_format):
+    """Recovery is allowed only for intact, matching, unindexed output pairs."""
+    if (audio.is_symlink() or lyrics.is_symlink()
+            or not audio.is_file() or not lyrics.is_file()):
+        return False
+    try:
+        saved = json.loads(lyrics.read_text(encoding="utf-8-sig"))
+        if saved != document:
+            return False
+        if output_format == "original":
+            return _fingerprint(audio) == source_hash
+        return audio.stat().st_size >= 1000
+    except (ValueError, TypeError, OSError):
+        return False
+
+
 def _document(row, code, export, ncn):
     members = {path.suffix.lower(): path for path, _ in row["files"]}
     lyrics = members.get(".json")
@@ -162,47 +203,53 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             relative_lyrics = "lyrics/" + bucket + "/" + slug + ".json"
             final_audio = export.safe_media_path(root, relative_audio, "audio")
             final_lyrics = export.safe_media_path(root, relative_lyrics, "lyrics")
-            if final_audio.exists() or final_lyrics.exists():
-                # The only safe automatic resume is an already published pair.
-                raise FileExistsError("มีชื่อไฟล์ผลลัพธ์อยู่แล้วแต่ยังไม่อยู่ใน Catalog")
-            final_audio.parent.mkdir(parents=True, exist_ok=True)
-            final_lyrics.parent.mkdir(parents=True, exist_ok=True)
-            temp_audio = final_audio.with_name("." + final_audio.stem + ".partial" + final_audio.suffix)
-            temp_lyrics = final_lyrics.with_name(final_lyrics.name + ".partial")
-            if temp_audio.is_symlink() or temp_lyrics.is_symlink():
-                raise ValueError("พบไฟล์ชั่วคราวแบบ Symbolic Link")
-            temp_audio.unlink(missing_ok=True)
-            temp_lyrics.unlink(missing_ok=True)
-            try:
-                if output_format == "original":
-                    with media.open("rb") as reader, temp_audio.open("xb") as writer:
-                        while True:
-                            if cancelled is not None and cancelled.is_set():
-                                raise RuntimeError("ยกเลิกการคัดลอกไฟล์ต้นฉบับ")
-                            block = reader.read(1024 * 1024)
-                            if not block:
-                                break
-                            writer.write(block)
-                        writer.flush()
-                        os.fsync(writer.fileno())
-                    if _fingerprint(temp_audio) != source_hash:
-                        raise ValueError("ตรวจ SHA-256 หลังคัดลอกต้นฉบับไม่ผ่าน")
-                else:
-                    if convert is None:
-                        raise ValueError("ไม่พบตัวแปลงเสียงของ PC Engine")
-                    convert(media, temp_audio, output_format)
-                    if not temp_audio.is_file() or temp_audio.stat().st_size < 1000:
-                        raise ValueError("ไฟล์เสียงหลังแปลงไม่สมบูรณ์")
-                with temp_lyrics.open("x", encoding="utf-8") as writer:
-                    json.dump(doc, writer, ensure_ascii=False, allow_nan=False)
-                    writer.write("\n")
-                    writer.flush()
-                    os.fsync(writer.fileno())
-                os.replace(temp_audio, final_audio)
-                os.replace(temp_lyrics, final_lyrics)
-            finally:
+            # Recover an orphaned but verified pair if the process exited
+            # after committing files and before the journal append.
+            already_published_files = final_audio.exists() or final_lyrics.exists()
+            if already_published_files and not _can_recover_pair(
+                    media, final_audio, final_lyrics, source_hash, doc,
+                    output_format):
+                raise FileExistsError(
+                    "ผลลัพธ์เก่าไม่ครบหรือไม่ตรงข้อมูล · ไม่เขียนทับไฟล์เดิม")
+            if not already_published_files:
+                final_audio.parent.mkdir(parents=True, exist_ok=True)
+                final_lyrics.parent.mkdir(parents=True, exist_ok=True)
+                temp_audio = final_audio.with_name("." + final_audio.stem + ".partial" + final_audio.suffix)
+                temp_lyrics = final_lyrics.with_name(final_lyrics.name + ".partial")
+                if temp_audio.is_symlink() or temp_lyrics.is_symlink():
+                    raise ValueError("พบไฟล์ชั่วคราวแบบ Symbolic Link")
                 temp_audio.unlink(missing_ok=True)
                 temp_lyrics.unlink(missing_ok=True)
+                try:
+                    if output_format == "original":
+                        with media.open("rb") as reader, temp_audio.open("xb") as writer:
+                            while True:
+                                if cancelled is not None and cancelled.is_set():
+                                    raise RuntimeError("ยกเลิกการคัดลอกไฟล์ต้นฉบับ")
+                                block = reader.read(1024 * 1024)
+                                if not block:
+                                    break
+                                writer.write(block)
+                            writer.flush()
+                            os.fsync(writer.fileno())
+                        if _fingerprint(temp_audio) != source_hash:
+                            raise ValueError("ตรวจ SHA-256 หลังคัดลอกต้นฉบับไม่ผ่าน")
+                    else:
+                        if convert is None:
+                            raise ValueError("ไม่พบตัวแปลงเสียงของ PC Engine")
+                        convert(media, temp_audio, output_format)
+                        if not temp_audio.is_file() or temp_audio.stat().st_size < 1000:
+                            raise ValueError("ไฟล์เสียงหลังแปลงไม่สมบูรณ์")
+                    with temp_lyrics.open("x", encoding="utf-8") as writer:
+                        json.dump(doc, writer, ensure_ascii=False, allow_nan=False)
+                        writer.write("\n")
+                        writer.flush()
+                        os.fsync(writer.fileno())
+                    _publish_no_overwrite(temp_audio, final_audio)
+                    _publish_no_overwrite(temp_lyrics, final_lyrics)
+                finally:
+                    temp_audio.unlink(missing_ok=True)
+                    temp_lyrics.unlink(missing_ok=True)
             title = doc.get("title") if isinstance(doc.get("title"), str) else ""
             artist = doc.get("artist") if isinstance(doc.get("artist"), str) else ""
             record = {"webSongId": identity, "code": code,
