@@ -421,10 +421,9 @@ try {
       !('ids' in req.postDataJSON());}catch{return false;}
   });
   await pc.click('#xsk-stream-build');
-  await pc.locator('#studio-confirm-dialog[open]').waitFor();
-  assert.match(await pc.locator('#studio-confirm-message').innerText(),/32 เพลง/);
-  await pc.click('#studio-confirm-ok');
   await xskStreamingJob;
+  assert.equal(await pc.locator('#studio-confirm-dialog').isVisible(),false,
+    'One-click MIDI to .XSK should not require a second confirmation');
   // Keep the separate Pro/legacy wizard regression intact. Only this older
   // export mode should require manually choosing tracks.
   await pc.click('.nav-button[data-tab="settings"]');
@@ -777,9 +776,10 @@ try {
   await pc.click('.nav-button[data-tab="upload"]');
   await pc.fill('#upload-folder','C:/XStage/XStageSong');
   assert.equal(await pc.locator('#upload-folder-button').isEnabled(),true);
-  await pc.click('#upload-inspect');
-  await pc.waitForFunction(()=>document.querySelector('#upload-folder-report')?.textContent.includes('ชุดสมบูรณ์ 2'));
+  assert.equal(await pc.locator('#upload-inspect').isVisible(),false,
+    'Upload preflight button is intentionally hidden; upload runs preflight');
   await pc.click('#upload-folder-button');
+  await pc.waitForFunction(()=>document.querySelector('#upload-folder-report')?.textContent.includes('ชุดสมบูรณ์ 2'));
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
   const uploadJob=pc.waitForRequest(req=>{
     try{return new URL(req.url()).pathname==='/api/jobs' &&
@@ -787,6 +787,7 @@ try {
   });
   await pc.click('#studio-confirm-ok');
   await uploadJob;
+  await pc.locator('#tab-upload details.secondary-feature').last().locator('summary').click();
   await pc.fill('#upload-soundfont-path','C:/SoundFonts/demo.sf2');
   await pc.click('#upload-soundfont-button');
   await pc.locator('#studio-confirm-dialog[open]').waitFor();
