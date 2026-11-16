@@ -28,9 +28,19 @@ function safeName(value){
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function aborted(error){return error?.name==='AbortError'||String(error?.message||'').includes('หยุดงาน');}
 function encode(document){return new Blob([JSON.stringify(document)],{type:'application/json'});}
+// Shared XStageSong taxonomy. Catalog file IDs remain authoritative, so
+// historical flat AUDIO/LYRICS v4 entries stay playable without migration.
 function pathFor(code,kind,role,name){
-  // Flat AUDIO for all media/SoundFonts, LYRICS for Lyrics/catalogs.
-  return [kind==='json'?'LYRICS':'AUDIO',name];
+  const suffix=core.ext(name),id=String(code||'').toUpperCase();
+  const bucket=/^[0-9A-Z]/.test(id)?id[0]:'_';
+  if(suffix==='sf2'||suffix==='sf3')return ['SOUNDFONT',name];
+  if(suffix==='json'||kind==='json')return ['LYRICS',bucket,name];
+  if(suffix==='xsk')return ['MIDI','XSK',bucket,name];
+  if(suffix==='mid'||suffix==='midi')return ['MIDI','MID',bucket,name];
+  if(suffix==='kar')return ['MIDI','KAR',bucket,name];
+  if(core.VIDEO?.has?.(suffix)||['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(suffix))
+    return ['VIDEO',bucket,name];
+  return ['AUDIO',bucket,name];
 }
 async function db(){
   if(!('indexedDB' in scope))return null;
@@ -706,7 +716,7 @@ class Importer {
               show('รหัส XSK ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;
             }
             const name=safeName(code)+'-'+xskHash.slice(0,16)+'.xsk';
-            const packed=await uploadMedia(item.file,code,['AUDIO'],name,
+            const packed=await uploadMedia(item.file,code,pathFor(code,'xsk','',name).slice(0,-1),name,
               'application/octet-stream',xskHash,0,1);
             const record={webSongId:ident,code,title:identity.title,
               artist:identity.artist,sourceFormat:'XSK',lyricsMode:'timed',
@@ -760,11 +770,11 @@ class Importer {
             let media=same?.midi;
             if(!media){
               const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
-              media=await uploadMedia(midiFile,code,['AUDIO'],name,
+              media=await uploadMedia(midiFile,code,pathFor(code,'midi','',name).slice(0,-1),name,
                 'audio/midi',midiHash,0,.75);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyrics=await uploadMedia(json,code,['LYRICS'],jname,
+            const lyrics=await uploadMedia(json,code,pathFor(code,'json','',jname).slice(0,-1),jname,
               'application/json',jsonHash,.75,.25);
             // NCN .LYR/.CUR are decoded locally; do not store the raw
             // cursor or lyric source in the private Drive song library.
@@ -883,7 +893,7 @@ class Importer {
             }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
-            const prefix=['AUDIO'];
+            const prefix=pathFor(code,uploadKind,'',base+'.'+uploadKind.toLowerCase()).slice(0,-1);
             let media=same?.audio;
             if(!media){
               const name=base+'-'+audioHash.slice(0,16)+'.'+uploadKind.toLowerCase();
@@ -891,7 +901,7 @@ class Importer {
                 MEDIA_MIME[uploadKind]||'application/octet-stream',audioHash,0,.83);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyric=await uploadMedia(json,code,['LYRICS'],jname,'application/json',jsonHash,.83,.09);
+            const lyric=await uploadMedia(json,code,pathFor(code,'json','',jname).slice(0,-1),jname,'application/json',jsonHash,.83,.09);
             // LRC is a local input/editing format; JSON is the only
             // lyric artifact stored on Drive in layout v3.
             let videoMedia=same?.video;
@@ -900,7 +910,7 @@ class Importer {
               else{
                 const vh=await core.hashBlob(videoFile,()=>this.check());
                 const ve=core.ext(videoFile.name).toUpperCase();
-                videoMedia=await uploadMedia(videoFile,code,['AUDIO'],
+                videoMedia=await uploadMedia(videoFile,code,pathFor(code,ve,'',base+'.'+ve.toLowerCase()).slice(0,-1),
                   base+'-'+vh.slice(0,16)+'.'+ve.toLowerCase(),
                   MEDIA_MIME[ve]||'application/octet-stream',vh);
               }
@@ -913,7 +923,7 @@ class Importer {
                 const originalName=base+'-'+sourceVideoMd5.slice(0,16)+
                   '.'+originalKind.toLowerCase();
                 originalVideoMedia=await uploadMedia(originalVideoFile,code,
-                  ['AUDIO'],
+                  pathFor(code,originalKind,'',originalName).slice(0,-1),
                   originalName,core.videoMime(originalVideoFile.name)||
                   'application/octet-stream',sourceVideoMd5);
               }
