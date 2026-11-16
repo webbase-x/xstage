@@ -1,3 +1,15 @@
+## Fresh XStageSong library for Android TV / APK
+
+The WebView player uses the same hosted X-Stage Karaoke Web catalog as PWA.
+For a fresh library the shared Drive root is `XStageSong`; new files are
+classified as `AUDIO/<bucket>/`, `VIDEO/<bucket>/`, `MIDI/MID/`,
+`MIDI/KAR/`, `MIDI/XSK/`, `MIDI/NCN/{SONG,LYRICS,CURSOR}/`,
+`LYRICS/<bucket>/`, and `SOUNDFONT/`. The compatible v4 catalog pointer
+stays at `LYRICS/current.json`, and the player addresses songs by Google
+Drive file ID, not by guessing paths. This documentation change also requests
+an APK build from the source containing the updated shared importer; only
+a green Android workflow and matching published SHA-256 prove a new binary.
+
 ## NCN MIDI/LYR/CUR on Android TV — v1.0.103 Build 1103
 
 The Android TV application loads the same hosted X-Stage Karaoke Online
