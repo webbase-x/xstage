@@ -16,10 +16,10 @@ Updated 2026-11-16. This document supersedes the encrypted XSK1 plan.
 | --- | --- | --- |
 | Song Studio PC | Creates XSK2, never creates new encryption keys | Preserves old files; may read legacy with a supplied existing key |
 | Karaoke PC | Opens and indexes direct XSK2 without a key; reads title and artist from internal JSON | Read-only when the original Windows DPAPI key is available |
-| Karaoke Web | Imports XSK2 folder files directly; verifies ZIP and SHA-256 and publishes MIDI+Lyrics JSON under the existing private Drive AUDIO/LYRICS v4 layout | Must regenerate XSK2 from the original source; Web does not decrypt XSK1 |
-| Android APK / TV | Uses the shared WebView stage and private Drive catalog once XSK2 was imported by Web | Same limitation as Web |
+| Karaoke Web | Imports a single original XSK2 to private Drive `AUDIO` after inspecting timed JSON metadata, and stores an `xsk.fileId` in the existing v4 Catalog; when queued/played, downloads XSK2 and validates ZIP/MIDI SHA-256 before synthesizing audio in memory | Must regenerate XSK2 from the original source; Web does not decrypt XSK1 |
+| Android APK / TV | Uses the same hosted WebView stage, `xsk.fileId` Catalog entries and bounded prefetch/on-demand XSK2 processing as Web | Same limitation as Web |
 
-The Web importer performs a **local unpack and validation** of XSK2 into a MIDI + Lyrics JSON pair. The player subsequently plays the private Drive pair. It does not yet stream XSK2 directly from Google Drive or provide offline playback without Google account authorization. This is intentional compatibility with the existing verified catalog, not proof of native direct-file support on all platforms.
+The Web importer stores the **original single XSK2** (no persistent extracted MIDI or JSON). It inspects the enclosed song JSON to populate the Catalog. At playback, the Web stage or Android WebView fetches XSK2 by `fileId`, unpacks it **in memory**, verifies MIDI SHA-256 and renders MIDI to temporary audio with the selected SoundFont. The first XSK2 waiting in the queue is prepared ahead of time and consumed directly when its turn arrives; preparation proceeds **one song at a time**, with a device-memory ceiling and cancellation if the queue/account changes. If an XSK2 is too large, pre-rendering fails or the song is selected before preparation finishes, playback falls back to on-demand processing. Pre-render is deferred while the current song is still loading to avoid overlapping heavy synthesis. Plain audio/video and MIDI+JSON catalog entries remain untouched. There is no permanent browser-side extraction cache or XSK2 offline mode; Google Drive access and a compatible browser/WebView are required.
 
 ## Metadata and timed lyrics
 
