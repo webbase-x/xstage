@@ -2339,6 +2339,8 @@ def validate_build_request(data):
 def start_job(data):
     global JOB
     action = str(data.get("action", ""))
+    if action == "ai-recording-save":
+        raise ValueError("ยกเลิกฟังก์ชันบันทึกเสียงผ่านไมโครโฟนแล้ว")
     with LOCK:
         if JOB["state"] == "running":
             raise ValueError("มีงานกำลังดำเนินการอยู่")
