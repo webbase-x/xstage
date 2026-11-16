@@ -46,8 +46,8 @@ def _safe_root(folder):
     return root
 
 
-def _indexed(root):
-    """Walk all nested folders without following symbolic links or hidden loops."""
+def _indexed(root, progress=None):
+    """Walk nested folders once; report real discovery counts without guessing totals."""
     files = []
     import os
     def scan_error(exc):
@@ -61,8 +61,12 @@ def _indexed(root):
             if path.is_symlink() or not path.is_file():
                 continue
             files.append(path)
+            if progress is not None and len(files) % 256 == 0:
+                progress("discover", len(files), None)
             if len(files) > SCAN_LIMIT:
                 raise ValueError("พบไฟล์เกินขีดจำกัดความปลอดภัยในการสแกน 1,000,000 ไฟล์")
+    if progress is not None:
+        progress("discover", len(files), None)
     return files
 
 
@@ -121,9 +125,9 @@ def _route(file, group, fmt):
             bucket(file.stem))
 
 
-def scan(folder, ncn=None):
+def scan(folder, ncn=None, progress=None):
     root = _safe_root(folder)
-    paths = _indexed(root)
+    paths = _indexed(root, progress=progress)
     by_dir = {}
     for path in paths:
         # Pair both same-directory originals and already sorted
@@ -148,7 +152,10 @@ def scan(folder, ncn=None):
     def add(reason, members):
         incomplete.append({"name": members[0].stem, "reason": reason})
 
-    for key, members in sorted(by_dir.items(), key=lambda x: str(x[0])):
+    groups = sorted(by_dir.items(), key=lambda x: str(x[0]))
+    for group_number, (key, members) in enumerate(groups, 1):
+        if progress is not None and (group_number == 1 or group_number % 128 == 0):
+            progress("validate", group_number, len(groups))
         if key in handled:
             continue
         handled.add(key)
@@ -220,6 +227,8 @@ def scan(folder, ncn=None):
                                    "reason": "ไฟล์ประกอบไม่มีเพลงคู่กันหรือ EMK ยังไม่ได้ตรวจโครงสร้าง"})
             else:
                 unsupported.append(members[0].name)
+    if progress is not None:
+        progress("validate", len(groups), len(groups))
     return {"folder": str(root), "complete": complete,
             "incomplete": incomplete, "unsupported": unsupported,
             "fileCount": len(paths), "folderCount": len({p.parent for p in paths}),
