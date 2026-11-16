@@ -4,7 +4,7 @@ X-Stage Song Studio PC Ready — offline-only launcher.
 The ZIP must already contain Python, FFmpeg, FluidSynth and a SoundFont.
 No software, package, runtime or model is downloaded during startup.
 #>
-param([switch]$NoLaunch)
+param([switch]$NoLaunch, [string]$ReadySignal = '')
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runtime = Join-Path $Root '.runtime'
@@ -117,6 +117,14 @@ try {
     if ($null -eq $proc) { throw 'Could not launch the local Song Studio Engine.' }
     Start-Sleep -Milliseconds 900
     if ($proc.HasExited) { throw ('Local Engine failed at launch (exit {0}).' -f $proc.ExitCode) }
+    if ($ReadySignal) {
+        $allowedParent = (Resolve-Path -LiteralPath (Split-Path -Parent $Root)).Path
+        $signalParent = (Resolve-Path -LiteralPath (Split-Path -Parent $ReadySignal)).Path
+        if (![string]::Equals($signalParent, $allowedParent, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Unsafe update startup signal path.'
+        }
+        [IO.File]::WriteAllText($ReadySignal, ("READY:{0}" -f $proc.Id), (New-Object Text.UTF8Encoding($false)))
+    }
     Write-Status ("Ready: Engine PID {0}, local UI opens in Edge or default browser." -f $proc.Id)
     Write-Status 'All audio processing and files remain on this PC.'
     exit 0
