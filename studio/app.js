@@ -86,25 +86,30 @@
     $('parallel-job-summary').textContent='ทำงานพร้อมกัน '+active.length+'/'+slots+
       ' งาน · CPU '+(parallelCapacity.cpuCores||'—')+' คอร์'+
       (Number.isFinite(ram)?' · RAM เหลือ '+(ram/1024**3).toFixed(1)+' GB':'');
-    for(const job of active){
+    const recent=[...active,...activeJobs.filter(job=>job.state!=='running').slice(0,3)];
+    for(const job of recent){
       const item=document.createElement('div');
-      item.className='parallel-job';
+      item.className='parallel-job'+(job.state==='running'?'':' parallel-job-finished');
       const detail=document.createElement('div');
       const title=document.createElement('strong');
-      title.textContent=job.kind+' · '+(job.stage||'กำลังทำงาน');
+      title.textContent=job.kind+' · '+(job.stage||(job.state==='running'?'กำลังทำงาน':'เสร็จสิ้น'));
       const subtitle=document.createElement('small');
       subtitle.textContent=job.detail||('รหัสงาน '+job.id);
       detail.append(title,subtitle);
-      const stop=document.createElement('button');
-      stop.type='button';stop.className='button ghost';
-      stop.textContent=job.stage?.includes('กำลังยกเลิก')?'กำลังหยุด…':'หยุดเฉพาะงาน';
-      stop.disabled=stop.textContent==='กำลังหยุด…';
-      stop.addEventListener('click',async()=>{
-        stop.disabled=true;
-        try{await post('/api/jobs/cancel',{id:job.id});await poll();}
-        catch(error){stop.disabled=false;message(error.message);}
-      });
-      item.append(detail,stop);root.append(item);
+      item.append(detail);
+      if(job.state==='running'){
+        const stop=document.createElement('button');
+        stop.type='button';stop.className='button ghost';
+        stop.textContent=job.stage?.includes('กำลังยกเลิก')?'กำลังหยุด…':'หยุดเฉพาะงาน';
+        stop.disabled=stop.textContent==='กำลังหยุด…';
+        stop.addEventListener('click',async()=>{
+          stop.disabled=true;
+          try{await post('/api/jobs/cancel',{id:job.id});await poll();}
+          catch(error){stop.disabled=false;message(error.message);}
+        });
+        item.append(stop);
+      }
+      root.append(item);
     }
   }
 
