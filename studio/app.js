@@ -2397,6 +2397,12 @@
               const info=job.result||{};
               $('update-result').textContent=info.message||'ดาวน์โหลด ZIP แล้ว';
               message(info.message||'ดาวน์โหลดและตรวจไฟล์อัปเดตแล้ว',false);
+            } else if (job.kind === 'install-update') {
+              const info=job.result||{};
+              $('update-result').textContent=info.launched
+                ? 'ติดตั้งเรียบร้อย · กำลังเปิด X-Stage Song Studio PC รุ่นใหม่'
+                : (info.message||'ไม่มีรุ่นใหม่ให้ติดตั้ง');
+              message($('update-result').textContent,false);
             } else message(job.result?.message || 'ดำเนินการสำเร็จ · '+job.kind, false);
           } else if (job.state === 'error') {
             if(job.kind==='pc-export'){
@@ -3175,11 +3181,9 @@
     $('update-download').hidden=true;
     void run('check-update');
   });
-  $('update-download').addEventListener('click',async()=>{
-    if(!await confirmStudio(
-      'ดาวน์โหลด ZIP รุ่นใหม่จาก GitHub Releases ลงในพื้นที่ส่วนตัวของโปรแกรม และตรวจ SHA-256 ก่อนบันทึก\\n\\nโปรแกรมจะไม่เขียนทับเวอร์ชันที่เปิดอยู่ กรุณาปิดโปรแกรมและแตก ZIP รุ่นใหม่แยกโฟลเดอร์ก่อนใช้งาน',
-      'ยืนยันดาวน์โหลดรุ่นใหม่',{acceptLabel:'ดาวน์โหลดและตรวจ SHA-256',cancelLabel:'ยกเลิก'}))return;
-    void run('download-update');
+  $('update-download').addEventListener('click',()=>{
+    $('update-result').textContent='กำลังดาวน์โหลด ตรวจ SHA-256 และติดตั้งรุ่นใหม่…';
+    void run('install-update');
   });
   $('cancel-job').addEventListener('click',async()=>{
     try{await post('/api/jobs/cancel',{});message('รับคำสั่งยกเลิกแล้ว · กำลังหยุดอย่างปลอดภัย',false);}catch(e){message(e.message);}
