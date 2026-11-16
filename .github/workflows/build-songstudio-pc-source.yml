@@ -57,6 +57,7 @@ jobs:
           python -m py_compile songstudio-pc/engine.py songstudio-pc/code_registry.py songstudio-pc/created_json_manager.py songstudio-pc/created_xsk_export.py songstudio-pc/json_pro_export.py songstudio-pc/import_preview.py songstudio-pc/xsk_package.py songstudio-pc/xsk_keys.py songstudio-pc/pro_license.py songstudio-pc/song_index.py scripts/package-song-studio-pc.py
           node --check studio/app.js
           python -m unittest discover -s scripts -p test_songstudio_xsk.py -v
+          python -m unittest discover -s scripts -p test_songstudio_xsk_stream.py -v
           python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
           python -m unittest discover -s scripts -p test_songstudio_json_pro.py -v
           python -m unittest discover -s scripts -p test_songstudio_ai_export.py -v
