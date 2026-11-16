@@ -1,3 +1,13 @@
+## Build 362 — ตรวจเพลงซ้ำ (menu 1)
+
+- The first Song Studio PC menu is **ตรวจเพลงซ้ำ**. Select any local source folder, including nested MIDI, KAR, XSK, audio, and video. It scans **media only**; JSON/LRC/LYR/CUR, SoundFonts and databases are never mistaken for songs.
+- An exact duplicate means **byte-identical file content**, verified by file size, a fast head/tail sample, then full-file SHA-256. Equal song names/codes are not sufficient; the same recording in different encodings is not claimed to be an identical file.
+- Results are grouped with an explicit protected keeper, full paths, file sizes, and SHA digest. Browse groups, select up to 300 duplicate copies per confirmed action, and choose **move** (copy+SHA-256+source remove) or **send to Windows Recycle Bin** (never permanent deletion).
+- Actual deletion/move is never automatic. The action requires a confirmation, a fresh SHA-256 comparison for both original and selected copy, and retains at least one source copy. Changed/stale files, symlinks and the active `XStageSong` library are protected.
+- A move destination must be outside the scan tree. Originals and all associated lyrics/catalog files are left untouched. Operations are restricted to the local PC Engine; no Google Drive deletion.
+- All previous MIDI to .XSK, MIDI to Lyrics JSON, Lyrics AI, editor, import/export, and download workflows remain as separate menus in their former order, shifted down by one.
+- NOTE: This menu identifies byte-identical files, **not acoustic duplicates after MP3/M4A transcoding**. Do not move/delete tracks that are actively referenced by other playlists or external databases without updating those references.
+
 ## Build 361 — Fast workflows, no forced full-library JSON scan
 
 - **MIDI to Lyrics JSON** now enumerates source media lazily by filename code; a compatible song begins converting as soon as it is discovered instead of waiting for every directory/group to be scanned.
