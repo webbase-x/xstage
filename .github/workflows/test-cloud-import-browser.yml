@@ -8,6 +8,7 @@ on:
       - "scripts/xsk-browser-test.mjs"
       - "scripts/xsk-queue-test.mjs"
       - "scripts/memory-queue-test.mjs"
+      - "scripts/soundfont-memory-test.mjs"
       - "memory-budget.js"
       - "browser-midi.js"
       - "xstage-ux.css"
@@ -44,6 +45,7 @@ jobs:
           node scripts/xsk-browser-test.mjs
           node scripts/xsk-queue-test.mjs
           node scripts/memory-queue-test.mjs
+          node scripts/soundfont-memory-test.mjs
           node --check memory-budget.js
           node --check browser-midi.js
           node --check xsk-browser.js
