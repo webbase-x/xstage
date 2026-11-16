@@ -145,7 +145,7 @@ def seal(source, document, code, title, artist, key=None, target=None):
                 os.fsync(writer.fileno())
             check = open_package(temp)
             if check["songCode"] != code:
-                raise ValueError("ตรวจไฟล์ XSK หลังเข้ารหัสไม่ผ่าน")
+                raise ValueError("ตรวจไฟล์ XSK2 หลังบรรจุ ZIP ไม่ผ่าน")
             _commit_sealed_file(temp, target)  # Never overwrite existing XSK.
         finally:
             temp.unlink(missing_ok=True)
