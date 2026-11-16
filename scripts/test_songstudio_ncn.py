@@ -50,6 +50,10 @@ class NcnSourceTests(unittest.TestCase):
         self.workspace.mkdir()
         engine.PREFS["workspace"] = str(self.workspace)
         engine.PREFS["source"] = str(self.dir / "MIDI")
+        # Legacy NCN fixture verifies original source-code preservation.
+        # Fresh PC sessions use the separately tested numeric 5-digit default.
+        engine.PREFS["code_style"] = "source"
+        engine.PREFS["code_length"] = "5"
         engine.NOTES.clear()
         engine.FILES.clear()
         engine.FILE_BY_ID.clear()
