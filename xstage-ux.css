@@ -4420,3 +4420,26 @@ html body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage #lyric
     height:clamp(23px,6cqh,55px)!important;
   }
 }
+
+
+/* X-Stage queue/SoundFont memory indicators: status is an estimate and
+   never claims physical free RAM when the browser hides that information. */
+.xstage-memory-indicator{
+  display:block;max-width:100%;font-size:11px;line-height:1.5;
+  padding:3px 7px;margin-top:4px;border-radius:7px;
+  color:#a7f3d0;background:rgba(5,110,79,.15);
+  border:1px solid rgba(52,211,153,.4);white-space:normal;
+}
+.xstage-memory-indicator[data-level="medium"]{
+  color:#fde68a;background:rgba(161,98,7,.18);
+  border-color:rgba(251,191,36,.55);
+}
+.xstage-memory-indicator[data-level="high"]{
+  color:#fecaca;background:rgba(153,27,27,.2);
+  border-color:rgba(248,113,113,.62);
+}
+.xstage-font-control .xstage-memory-indicator{width:100%;text-align:left}
+.queue-dock>.xstage-memory-indicator{margin:4px 8px 10px}
+@media(max-width:680px){
+  .xstage-font-control .xstage-memory-indicator{font-size:10px}
+}
