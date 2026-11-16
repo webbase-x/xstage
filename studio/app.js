@@ -3014,6 +3014,28 @@
   });
   $('create-build-show-log').addEventListener('click',showBuildLog);
   $('xsk-stream-build').addEventListener('click',()=>{void startStreamingXsk();});
+  $('xsk-access-export').addEventListener('click',async()=>{
+    const button=$('xsk-access-export');
+    const password=$('xsk-access-password').value;
+    const repeat=$('xsk-access-repeat').value;
+    const status=$('xsk-access-status');
+    if(password.length<12||password!==repeat){
+      status.textContent='รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษรและตรงกันทั้งสองช่อง';
+      return;
+    }
+    button.disabled=true;
+    try{
+      const result=await post('/api/xsk/access-export',{password,repeat});
+      status.textContent='บันทึกไฟล์สิทธิ์ XSK แล้ว: '+result.path+
+        ' · กรุณาเก็บรหัสผ่านแยกจากไฟล์นี้';
+      message('สร้างไฟล์สิทธิ์ XSK ที่เข้ารหัสแล้ว · ไม่เผยแพร่กุญแจดิบ',false);
+    }catch(error){status.textContent='ส่งออกสิทธิ์ XSK ไม่สำเร็จ: '+error.message;}
+    finally{
+      $('xsk-access-password').value='';
+      $('xsk-access-repeat').value='';
+      button.disabled=false;
+    }
+  });
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
