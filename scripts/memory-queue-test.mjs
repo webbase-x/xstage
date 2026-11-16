@@ -43,6 +43,7 @@ const sandbox={
     arrayBuffer:async()=>Uint8Array.of(1,2,3).buffer,
     headers:{get:()=>null},body:{cancel:async()=>{}}}},
   privateJson:async()=>lyrics,
+  prepareXskPlayback:async(song,token)=>({song,token,blob:wav,lyrics}),
   renderQueue:()=>{},
   getFileId:r=>r?.fileId||''
 };
