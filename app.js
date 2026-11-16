@@ -26,6 +26,8 @@ const state = {
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
+  queuePreparedCache:new Map(),queuePreloadSkipped:new Set(),
+  activeBlobBytes:0,activeVideoBytes:0,
   playbackRestoreAttempted:false,
   awaitingSharedLibrary:false,
   updateAvailable:null,updateAfterTrack:false,nativeUpdateAvailable:null,nativeUpdateStatus:''
@@ -2029,75 +2031,194 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   return {song,token,blob:rendered.audio,lyrics:unpacked.document};
 }
 
+// This is a bounded, voluntary cache: the active track and the selected
+// SoundFont take priority. Never claim that deviceMemory is real free RAM.
+function fontMemoryBytes(){
+  const info=window.XStageBrowserMidi?.fontStatus?.();
+  return Number(info?.fileBytes||0)+Number(info?.sampleBytes||0);
+}
+function cacheMemoryBytes(){
+  let total=0;
+  for(const item of state.queuePreparedCache.values())
+    total+=Number(item.bytes||item.blob?.size||0);
+  return total;
+}
+function memoryResources(extraBytes=0){
+  return {fontBytes:fontMemoryBytes(),queuedBytes:cacheMemoryBytes(),
+    activeBytes:state.activeBlobBytes+state.activeVideoBytes,extraBytes};
+}
+function updateMemoryIndicators(){
+  const monitor=window.XStageMemory;
+  if(!monitor)return;
+  const resources=memoryResources(),report=monitor.statusText(resources);
+  const queueEl=document.getElementById('xstage-queue-memory');
+  if(queueEl){
+    queueEl.dataset.level=report.level;
+    queueEl.textContent=report.text+
+      ' · '+state.queuePreparedCache.size+' เพลงรอพร้อม (ประมาณการ)';
+    queueEl.title=report.note;
+  }
+  const fontEl=document.getElementById('xstage-font-memory');
+  if(fontEl){
+    const info=window.XStageBrowserMidi?.fontStatus?.()||{};
+    const bytes=Number(info.fileBytes||0),sample=Number(info.sampleBytes||0);
+    const p=monitor.plan(resources),hint=p.hint.gib;
+    const concern=p.heapPressure||bytes+sample>hint*1024*1024*1024*.12;
+    fontEl.dataset.level=concern?'high':
+      bytes+sample>hint*1024*1024*1024*.055?'medium':'low';
+    fontEl.textContent=info.loaded?'SF ใน RAM '+monitor.fmt(bytes)+
+      ' · ตัวอย่าง '+monitor.fmt(sample)+' · ใช้ซ้ำตลอดเซสชัน':
+      info.selectedId?'SF กำลังโหลด · ประเมินตาม RAM ของอุปกรณ์':
+      'SoundFont · ใช้เสียงพื้นฐาน (ไม่ใช้ RAM ของ SF)';
+    fontEl.title='แสดงขนาดข้อมูลที่แอปเก็บ ไม่ใช่ RAM ว่างของระบบ · งบแคชประมาณการจาก '+hint+' GB ('+p.hint.source+')';
+  }
+}
+function trimQueueCache(){
+  // Delete stale entries first, then evict furthest songs at high pressure.
+  for(const song of state.queuePreparedCache.keys()){
+    if(!state.queue.includes(song))state.queuePreparedCache.delete(song);
+  }
+  const monitor=window.XStageMemory;
+  if(monitor){
+    let p=monitor.plan(memoryResources());
+    const queueLimit=p.queueLimit;
+    while(state.queuePreparedCache.size>queueLimit||
+        (state.queuePreparedCache.size>0&&(p.heapPressure||p.ratio>.8))){
+      const ranked=[...state.queuePreparedCache.keys()]
+        .sort((a,b)=>state.queue.indexOf(b)-state.queue.indexOf(a));
+      if(!ranked.length)break;
+      state.queuePreparedCache.delete(ranked[0]);
+      p=monitor.plan(memoryResources());
+    }
+  }
+  // Compatibility with existing queue UI and remote controls.
+  state.queuePrepared=state.queuePreparedCache.get(state.queue[0])||null;
+  updateMemoryIndicators();
+}
 function releaseQueuePreload(){
   clearTimeout(state.queuePreloadTimer);state.queuePreloadTimer=null;
   state.queuePreloadVersion++;
   state.queuePreload?.controller.abort();
-  state.queuePreload=null;state.queuePrepared=null;
+  state.queuePreload=null;
+  state.queuePrepared=null;
+  state.queuePreparedCache.clear();
+  state.queuePreloadSkipped.clear();
+  updateMemoryIndicators();
+}
+async function prepareQueuedSong(song,token,signal){
+  const monitor=window.XStageMemory;
+  if(!monitor||monitor.plan(memoryResources()).heapPressure)return null;
+  if(getFileId(song.xsk)){
+    // The pack and the uncompressed WAV both count against available space.
+    const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
+    if(!Number(song.xsk.size)||Number(song.xsk.size)>maxPacked)return null;
+    const result=await prepareXskPlayback(song,token,signal,()=>{},true);
+    if(!result||!monitor.canHold(result.blob.size,memoryResources()))return null;
+    return {...result,bytes:result.blob.size};
+  }
+  if(getFileId(song.midi)){
+    const sourceSize=Number(song.midi.size);
+    if(!sourceSize||sourceSize>12*monitor.MiB||
+       !monitor.canHold(sourceSize*2,memoryResources()))return null;
+    const [source,fontBytes,lyrics]=await Promise.all([
+      privateFile(song.midi.fileId,token,{signal}),
+      window.XStageBrowserMidi?.selectedFont(token,signal),
+      privateJson(song.lyrics.fileId,token,{signal})
+    ]);
+    if(!window.XStageBrowserMidi)throw Error('ยังไม่พบตัวเรนเดอร์ MIDI');
+    const bytes=new Uint8Array(await source.arrayBuffer());
+    if(signal.aborted)throw new DOMException('Aborted','AbortError');
+    const parsed=window.XStageBrowserMidi.parseMidi(bytes);
+    const wavBytes=Math.ceil((parsed.duration+.5)*32000*4+44);
+    const workingBytes=wavBytes*2;
+    if(!monitor.canHold(workingBytes,memoryResources()))return null;
+    const rendered=await window.XStageBrowserMidi.render(bytes,{fontBytes,signal});
+    if(signal.aborted||!monitor.canHold(rendered.audio.size,memoryResources()))return null;
+    if(lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return null;
+    return {song,token,blob:rendered.audio,lyrics,bytes:rendered.audio.size};
+  }
+  // Ordinary MP3/M4A/WAV/video + JSON: do not read an oversized file just
+  // because it is next in the queue. Small files are fetched whole.
+  if(!getFileId(song.audio)||!getFileId(song.lyrics))return null;
+  const size=Number(song.audio.size);
+  if(!size||!monitor.canHold(size*1.15,memoryResources()))return null;
+  const [response,lyrics]=await Promise.all([
+    privateFile(song.audio.fileId,token,{signal}),
+    privateJson(song.lyrics.fileId,token,{signal})
+  ]);
+  const reported=Number(response.headers?.get?.('Content-Length')||0);
+  if(reported&&!monitor.canHold(reported,memoryResources())){
+    await response.body?.cancel?.();return null;
+  }
+  const blob=await response.blob();
+  if(signal.aborted||!monitor.canHold(blob.size,memoryResources())||
+     lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return null;
+  // If the original video is separate, it will be loaded on demand at play;
+  // never keep a second high-resolution video file in the speculative cache.
+  return {song,token,blob,lyrics,bytes:blob.size};
 }
 function scheduleQueuePreload(){
   clearTimeout(state.queuePreloadTimer);
-  // Only XSK2 gets bounded queued MIDI synthesis. Legacy MIDI remains
-  // on-demand; the original ordinary audio+JSON prefetch is unchanged.
-  if(state.queue[0]?.midi&&!getFileId(state.queue[0]?.xsk)){
-    releaseQueuePreload();return;
+  trimQueueCache();
+  if(!state.token||!state.queue.length){
+    if(!state.queue.length)releaseQueuePreload();
+    return;
   }
-  if(!state.token||!state.queue.length){releaseQueuePreload();return;}
-  const song=state.queue[0],token=state.token;
-  if(state.queuePrepared?.song===song&&state.queuePrepared.token===token)return;
-  if(state.queuePrepared?.song!==song)state.queuePrepared=null;
-  if(state.queuePreload?.song===song&&state.queuePreload.token===token)return;
-  state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(song,token);},300);
+  if(state.loading){
+    state.queuePreloadTimer=setTimeout(scheduleQueuePreload,1200);
+    return;
+  }
+  const monitor=window.XStageMemory;
+  if(!monitor||monitor.plan(memoryResources()).heapPressure)return;
+  if(state.queuePreload){
+    if(state.token===state.queuePreload.token&&
+       state.queue.includes(state.queuePreload.song))return;
+    state.queuePreload.controller.abort();state.queuePreload=null;
+  }
+  const quota=monitor.plan(memoryResources()).queueLimit;
+  const windowSongs=state.queue.slice(0,quota);
+  const next=windowSongs.find(song=>!state.queuePreparedCache.has(song)&&
+    !state.queuePreloadSkipped.has(song));
+  if(!next)return;
+  if(state.queuePreparedCache.size>=quota)return;
+  state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(next,state.token);},350);
 }
-// If the user changes SoundFont, the previously synthesized queued track
-// must be released, otherwise Karaoke would play it with the old voice.
 window.addEventListener('xstage:soundfont-change',()=>{
+  // Rendered MIDI depends on the chosen SF. Drop queued WAVs to avoid an
+  // old-soundfont track; preserve catalog/lyrics and the playing song.
   releaseQueuePreload();
   scheduleQueuePreload();
 });
-
+window.addEventListener('xstage:font-memory',()=>{
+  trimQueueCache();updateMemoryIndicators();
+});
+window.addEventListener('xstage:font-memory-error',event=>{
+  const el=document.getElementById('xstage-font-memory');
+  if(el){el.dataset.level='high';el.textContent='SoundFont: '+String(event.detail?.message||'ไม่พร้อม');}
+});
 async function preloadFirstQueueSong(song,token){
-  if(song?.midi&&!getFileId(song?.xsk))return;
-  if(state.queue[0]!==song||state.token!==token)return;
-  // The current song takes priority over pre-rendering the next one.
-  if(state.loading){
-    state.queuePreloadTimer=setTimeout(
-      ()=>{void preloadFirstQueueSong(song,token);},1200);
-    return;
-  }
+  if(!state.queue.includes(song)||state.token!==token||
+     state.loading||state.queuePreparedCache.has(song))return;
   const controller=new AbortController(),version=++state.queuePreloadVersion;
-  state.queuePreload?.controller.abort();
-  const task={song,token,controller,promise:null};
-  state.queuePreload=task;
-  task.promise=(async()=>{
-    if(getFileId(song?.xsk)){
-      const smallDevice=Number(navigator.deviceMemory||8)<=4;
-      const maxPacked=smallDevice?24*1024*1024:48*1024*1024;
-      if(Number(song.xsk.size)>maxPacked)return null;
-      // The Promise can be promoted to active playback when this queue
-      // entry reaches the stage before its pre-render completes.
-      const data=await prepareXskPlayback(song,token,controller.signal,()=>{},true);
-      if(!data)return null;
-      return data.blob.size>(smallDevice?64:128)*1024*1024?null:data;
-    }
-    const [response,lyrics]=await Promise.all([
-      privateFile(song.audio.fileId,token,{signal:controller.signal}),
-      privateJson(song.lyrics.fileId,token,{signal:controller.signal})
-    ]);
-    return {song,token,blob:await response.blob(),lyrics};
-  })();
+  const task={song,token,controller};state.queuePreload=task;
   try{
-    const data=await task.promise;
-    if(version!==state.queuePreloadVersion||state.queue[0]!==song||
-       state.token!==token||controller.signal.aborted||!data?.blob?.size||
-       data.lyrics?.schemaVersion!==1||!Array.isArray(data.lyrics.lines))return;
-    state.queuePrepared=data;
+    const result=await prepareQueuedSong(song,token,controller.signal);
+    if(version!==state.queuePreloadVersion||controller.signal.aborted||
+       state.token!==token||!state.queue.includes(song))return;
+    if(result)state.queuePreparedCache.set(song,result);
+    else state.queuePreloadSkipped.add(song);
+    trimQueueCache();
+    // Avoid repainting the whole queue on every byte read.
     renderQueue();
   }catch(error){
-    if(error.name!=='AbortError')
+    if(error.name!=='AbortError'){
+      state.queuePreloadSkipped.add(song);
       console.warn('X-Stage queue prefetch:',error.message);
+    }
   }finally{
     if(state.queuePreload===task)state.queuePreload=null;
+    if(state.token===token&&!state.loading)
+      state.queuePreloadTimer=setTimeout(scheduleQueuePreload,500);
   }
 }
 function prefetchMedleyNext(){
