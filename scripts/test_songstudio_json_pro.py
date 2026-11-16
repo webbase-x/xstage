@@ -98,6 +98,36 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(doc["songs"][0]["audio"]["path"], "AUDIO/MP3/SONG/0/00001.mp3")
         self.assertTrue((root / "DB/songs.sqlite3").is_file())
 
+    def test_standalone_kar_has_no_redundant_lyrics_and_pc_db_roundtrip(self):
+        kar = self.source / "00077.kar"
+        kar.write_bytes(b"MThd" + b"K" * 128)
+        class Scanner:
+            def scan(self, folder, ncn=None, progress=None):
+                if progress:
+                    progress("discover", 1, None)
+                    progress("validate", 1, 1)
+                return {"complete": [{"kind": "KAR", "name": kar.stem,
+                                     "files": [(kar, ("MIDI", "KAR"))]}],
+                        "incomplete": [], "unsupported": []}
+        class Ncn:
+            def kar_document(self, path, code):
+                return export.lrc_to_json("[00:01.00]ทดสอบ KAR", code)
+        result = self.run_export(scanner=Scanner(), ncn=Ncn())
+        self.assertEqual(result["created"], 1)
+        root = self.dest / "XStageSong"
+        record = export.existing_records(root)[0]
+        self.assertEqual(record["audio"]["path"], "MIDI/KAR/0/00001.kar")
+        self.assertIsNone(record["lyrics"])
+        self.assertFalse((root / "MIDI/KAR/LYRICS").exists())
+        pc = load("pc_library_export")
+        dest = self.root / "standalone-kar-pc"
+        output = pc.publish(root, str(dest), export)
+        self.assertEqual(output["songCount"], 1)
+        library = dest / "XStageSong"
+        self.assertTrue((library / "MIDI/KAR/0/00001.kar").is_file())
+        portable = json.loads((library / "DB/songs-portable.json").read_text(encoding="utf-8"))
+        self.assertIsNone(portable["songs"][0]["lyrics"])
+
     def test_source_code_style_keeps_safe_filename(self):
         result = self.run_export(code_style="source", code_length=5)
         self.assertEqual(result["created"], 1)
