@@ -45,6 +45,29 @@ const media=core.scan([
 assert.deepEqual(Array.from(media.songs,x=>x.kind).sort(),['MP4','OGG','WAV'],
   'Native browser-audio and video containers must scan with timed lyrics');
 assert.equal(media.songs.find(x=>x.kind==='MP4').video.kind,'mp4');
+// User-approved XStageSong contract: pair only within a format directory.
+// KAR and XSK remain standalone, and NCN is MID+LYR+CUR.
+const agreed=core.scan([
+  {file:fake('00001.mid'),relative:'XStageSong/MIDI/MID/SONG/0/00001.mid'},
+  {file:fake('00001.json',160),relative:'XStageSong/MIDI/MID/LYRICS/0/00001.json'},
+  {file:fake('00002.mp3'),relative:'XStageSong/AUDIO/MP3/SONG/0/00002.mp3'},
+  {file:fake('00002.json',160),relative:'XStageSong/AUDIO/MP3/LYRICS/0/00002.json'},
+  {file:fake('00003.mp4'),relative:'XStageSong/VIDEO/MP4/SONG/0/00003.mp4'},
+  {file:fake('00003.json',160),relative:'XStageSong/VIDEO/MP4/LYRICS/0/00003.json'},
+  {file:fake('00004.kar'),relative:'XStageSong/MIDI/KAR/0/00004.kar'},
+  {file:fake('00005.xsk',1000),relative:'XStageSong/MIDI/XSK/0/00005.xsk'},
+  {file:fake('00006.mid'),relative:'XStageSong/MIDI/NCN/SONG/0/00006.mid'},
+  {file:fake('00006.lyr',160),relative:'XStageSong/MIDI/NCN/LYR/0/00006.lyr'},
+  {file:fake('00006.cur',160),relative:'XStageSong/MIDI/NCN/CUR/0/00006.cur'}
+]);
+assert.equal(agreed.songs.length,2,'MP3 and MP4 must pair with own JSON');
+assert.equal(agreed.midis.length,3,'MID, KAR and NCN must import from distinct folders');
+assert.equal(agreed.xsks.length,1,'Standalone XSK must import without extra JSON');
+assert.equal(agreed.midis.find(x=>x.kind==='NCN')?.cur.kind,'cur');
+assert.ok(!agreed.blocked.length,'All approved format-local bundles must pair cleanly');
+assert.notEqual(core.groupKey('AUDIO/MP3/SONG/0/00001.mp3'),
+                core.groupKey('VIDEO/MP4/SONG/0/00001.mp4'),
+                'Identical song code in different formats must not collide');
 const wavHead=Buffer.alloc(1500);
 wavHead.write('RIFF',0);wavHead.write('WAVE',8);
 const wavBlob=new Blob([wavHead]);wavBlob.name='sample.wav';
