@@ -29,8 +29,13 @@ ALIASES = {
 def _companion(root: Path, media: Path, extension: str) -> Path | None:
     """Find an exact-code source file, never fabricate a Lyrics JSON."""
     filename = media.stem + extension
+    def allowed(candidate):
+        # A sibling LYR/CUR folder may be a directory symlink. Never read
+        # outside the user-selected source tree merely because codes match.
+        return (candidate.is_file() and not candidate.is_symlink()
+                and candidate.resolve().is_relative_to(root))
     candidate = media.parent / filename
-    if candidate.is_file() and not candidate.is_symlink():
+    if allowed(candidate):
         return candidate
     relative = media.relative_to(root)
     folders = relative.parts[:-1]
@@ -43,7 +48,7 @@ def _companion(root: Path, media: Path, extension: str) -> Path | None:
             if folders[i].casefold() == role.casefold():
                 continue
             candidate = root.joinpath(*folders[:i], role, *folders[i + 1:], filename)
-            if candidate.is_file() and not candidate.is_symlink():
+            if allowed(candidate):
                 return candidate
         break
     return None
