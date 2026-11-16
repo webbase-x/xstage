@@ -53,8 +53,10 @@ class JsonProTests(unittest.TestCase):
         lyrics = export.safe_media_path(target, record["lyrics"]["path"], "lyrics")
         self.assertEqual(record["audio"]["path"], "AUDIO/0/00001.mp3")
         self.assertEqual(record["lyrics"]["path"], "LYRICS/0/00001.json")
-        self.assertFalse((target / "audio").exists())
-        self.assertFalse((target / "lyrics").exists())
+        # Windows uses a case-insensitive filesystem: AUDIO and audio name
+        # resolve to the same folder. Assert canonical catalog paths instead.
+        self.assertTrue((target / "AUDIO").is_dir())
+        self.assertTrue((target / "LYRICS").is_dir())
         self.assertEqual(hashlib.sha256(audio.read_bytes()).hexdigest(), before)
         doc = json.loads(lyrics.read_text(encoding="utf-8"))
         self.assertEqual(doc["lines"][0]["startTime"], 2.5)
