@@ -5,8 +5,23 @@ chcp 65001 >nul
 echo ================================================
 echo   X-Stage Karaoke PC - Windows Source (CMD)
 echo ================================================
+rem Support older releases that nest all sources in one child folder.
+rem Keep using this CMD file's directory (never search unrelated user files).
+if not exist "main.py" if exist "X-Stage-Karaoke-PC-Source\main.py" (
+  cd /d "%~dp0X-Stage-Karaoke-PC-Source"
+)
 if not exist "main.py" (
-  echo ERROR: main.py not found. Extract the entire ZIP first.
+  echo ERROR: main.py not found beside this launcher.
+  echo.
+  echo Extract the COMPLETE Windows-CMD-Source ZIP, not just this CMD file.
+  echo Expected: main.py, karaoke\, requirements.txt, tools\.
+  echo Open the extracted X-Stage-Karaoke-PC-Source folder and run the CMD there.
+  echo.
+  pause
+  exit /b 2
+)
+if not exist "requirements.txt" (
+  echo ERROR: requirements.txt is missing. Extract the complete ZIP.
   pause
   exit /b 2
 )
@@ -33,7 +48,7 @@ if errorlevel 1 goto setup_failed
 :launch
 echo Opening X-Stage Karaoke PC from source...
 if not exist ".local-test-data" mkdir ".local-test-data"
-".venv\Scripts\python.exe" "main.py" --data-dir "%~dp0.local-test-data" %*
+".venv\Scripts\python.exe" "main.py" --data-dir "%CD%\.local-test-data" %*
 set "EXITCODE=%ERRORLEVEL%"
 if not "%EXITCODE%"=="0" (
   echo.
