@@ -1,8 +1,8 @@
-"""Safely seal existing catalogued MIDI + Lyrics JSON as XSK (Pro only).
+"""Export existing catalogued MIDI + timed Lyrics JSON as portable XSK2.
 
-No original media or lyric documents are modified. XSK target naming and
-encryption are inherited from xsk_package. A corrupt/unreadable existing XSK
-blocks the operation rather than silently circumventing duplicate detection.
+XSK2 is an unencrypted ZIP wrapper with verified MIDI SHA-256. Original media
+and lyric documents are never modified. XSK1 files are retained untouched;
+invalid XSK2 files block unsafe deduplication and are never overwritten.
 """
 from __future__ import annotations
 
