@@ -1,9 +1,14 @@
-"""Checked Song Studio PC Ready release channel; never execute downloaded ZIP."""
+"""Verified Song Studio PC Ready updates, safely installed side-by-side."""
 from __future__ import annotations
 import hashlib
 import json
 import re
 import urllib.request
+import os
+import shutil
+import subprocess
+import tempfile
+import zipfile
 from pathlib import Path
 
 METADATA_URL = ("https://raw.githubusercontent.com/webbase-x/xstage/"
@@ -118,3 +123,161 @@ def download(folder, version, build, *, cancelled=None, on_progress=None):
                             " · ปิดโปรแกรมและแตก ZIP รุ่นใหม่แยกโฟลเดอร์ก่อนเปิดใช้")}
     finally:
         temporary.unlink(missing_ok=True)
+
+# Download bytes are authenticated against the exact release checksum before
+# any archive member is inspected. Never replace the current running bundle.
+MAX_UNPACKED = 5 * 1024 ** 3
+MAX_MEMBERS = 18000
+MANDATORY = (
+    ".engine-ready-manifest.json",
+    "Start-Song-Studio-Ready.ps1",
+    "Start-Song-Studio.cmd",
+    "engine.py",
+    "pc_ready_updates.py",
+    "studio/index.html",
+    "studio/app.js",
+    ".runtime/python/python.exe",
+    ".runtime/python/pythonw.exe",
+    ".runtime/tools/ffmpeg.exe",
+    ".runtime/soundfonts/GeneralUser-GS.sf2",
+    ".runtime/models/htdemucs_fp16weights.onnx",
+)
+
+def _inspect_archive(archive, expected_root):
+    with zipfile.ZipFile(archive) as zf:
+        infos = zf.infolist()
+        if not infos or len(infos) > MAX_MEMBERS:
+            raise ValueError("จำนวนไฟล์ ZIP อัปเดตผิดปกติ")
+        total = 0
+        files = set()
+        for entry in infos:
+            p = entry.filename.replace("\\", "/")
+            parts = p.rstrip("/").split("/")
+            if (not parts or parts[0] != expected_root or
+                any(part in ("", ".", "..") for part in parts) or
+                p.startswith("/") or ":" in p or
+                (entry.external_attr >> 16) & 0o170000 == 0o120000):
+                raise ValueError("พบเส้นทางไฟล์ไม่ปลอดภัยใน ZIP")
+            if entry.flag_bits & 1:
+                raise ValueError("ZIP ต้องไม่เข้ารหัสไฟล์ภายใน")
+            total += entry.file_size
+            if total > MAX_UNPACKED:
+                raise ValueError("ขนาดไฟล์หลังแตก ZIP มากเกินกำหนด")
+            if not entry.is_dir():
+                if p in files:
+                    raise ValueError("ZIP มีรายการไฟล์ซ้ำ")
+                files.add(p)
+        if not all(expected_root + "/" + name in files for name in MANDATORY):
+            raise ValueError("ZIP รุ่นใหม่ขาดไฟล์ที่จำเป็น")
+    return total
+
+def _verify_extracted(root):
+    manifest = root / ".engine-ready-manifest.json"
+    doc = json.loads(manifest.read_text(encoding="utf-8-sig"))
+    if doc.get("bundle_type") != "ready-offline" or doc.get("platform") != "windows-x64":
+        raise ValueError("Manifest ไม่ใช่ PC Ready Offline")
+    for entry in doc.get("files", []):
+        name = entry.get("path", "")
+        sha = entry.get("sha256", "")
+        parts = name.replace("\\", "/").split("/")
+        if (not parts or any(x in ("", ".", "..") for x in parts)
+                or not SHA.fullmatch(str(sha))):
+            raise ValueError("Manifest มีรายการไฟล์ไม่ปลอดภัย")
+        item = root.joinpath(*parts)
+        if not item.is_file() or not item.resolve().is_relative_to(root.resolve()):
+            raise ValueError("ไฟล์ใน Manifest ไม่ครบ: " + name)
+        with item.open("rb") as handle:
+            digest = hashlib.file_digest(handle, "sha256").hexdigest()
+        if digest != sha:
+            raise ValueError("ไฟล์ติดตั้งตรวจ SHA-256 ไม่ผ่าน: " + name)
+    if not doc.get("files"):
+        raise ValueError("Manifest ไม่มีรายการตรวจสอบไฟล์")
+    return doc
+
+def install(archive, current_root, *, cancelled=None, on_progress=None,
+            launch=True):
+    """Install a verified Ready ZIP into a sibling version folder.
+
+    Caller MUST pass the archive returned by download(); this function
+    independently re-checks release metadata and archive SHA. The running
+    directory is never modified. Existing destination is never overwritten.
+    """
+    if os.name != "nt" and launch:
+        raise RuntimeError("การเปิดโปรแกรมหลังติดตั้งรองรับ Windows เท่านั้น")
+    doc = _metadata()
+    archive = Path(archive).resolve(strict=True)
+    current = Path(current_root).resolve(strict=True)
+    if not (current / ".engine-ready-manifest.json").is_file():
+        raise ValueError("ติดตั้งอัตโนมัติได้เฉพาะ PC Ready Offline")
+    if archive.name != doc["archive_file"]:
+        raise ValueError("ชื่อไฟล์รุ่นใหม่ไม่ตรงกับข้อมูลเผยแพร่")
+    with archive.open("rb") as handle:
+        if hashlib.file_digest(handle, "sha256").hexdigest() != doc["sha256"]:
+            raise ValueError("ZIP ตรวจ SHA-256 ไม่ผ่าน")
+    folder_name = archive.stem
+    _inspect_archive(archive, folder_name)
+    target = current.parent / folder_name
+    if target.resolve() == current:
+        raise ValueError("ไม่อนุญาตให้ติดตั้งทับรุ่นที่กำลังใช้งาน")
+    if target.exists():
+        raise FileExistsError("พบโฟลเดอร์รุ่นใหม่อยู่แล้ว กรุณาตรวจสอบ: " + str(target))
+    if cancelled is not None and cancelled.is_set():
+        raise RuntimeError("ยกเลิกการติดตั้งแล้ว")
+    # Stage next to the final destination so the final rename is atomic.
+    with tempfile.TemporaryDirectory(prefix=".xstage-update-",dir=current.parent) as staging:
+        stage = Path(staging)
+        with zipfile.ZipFile(archive) as zf:
+            for i, item in enumerate(zf.infolist()):
+                if cancelled is not None and cancelled.is_set():
+                    raise RuntimeError("ยกเลิกการติดตั้งแล้ว")
+                zf.extract(item, stage)
+                if on_progress and i % 150 == 0:
+                    on_progress(i + 1, len(zf.infolist()))
+        extracted = stage / folder_name
+        info = _verify_extracted(extracted)
+        if info.get("version") != doc["version"] or info.get("build") != doc["build"]:
+            raise ValueError("เลขรุ่นใน ZIP ไม่ตรงกับข้อมูลเผยแพร่")
+        extracted.rename(target)
+    if launch:
+        try:
+            # Start new offline-ready engine using its verified launcher.
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy",
+                              "Bypass", "-File", str(target / "Start-Song-Studio-Ready.ps1")],
+                             cwd=str(target),
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            raise RuntimeError("ติดตั้งแล้วแต่เปิดรุ่นใหม่ไม่สำเร็จ: " + str(target)) from exc
+        _retarget_existing_shortcut(current, target)
+    return {"installed": True, "version": doc["version"], "build": doc["build"],
+            "path": str(target), "launched": bool(launch),
+            "message": "ติดตั้งรุ่นใหม่เสร็จแล้ว: " + str(target)}
+
+def _retarget_existing_shortcut(current, target):
+    """Modify only the existing desktop shortcut when it points at this bundle."""
+    if os.name != "nt":
+        return
+    # PowerShell script is invoked with positional args, never interpolated paths.
+    ps = r"""
+$old=$args[0];$new=$args[1]
+$desktop=[Environment]::GetFolderPath('DesktopDirectory')
+$link=Join-Path $desktop 'X-Stage Song Studio PC.lnk'
+if(!(Test-Path -LiteralPath $link)){exit 0}
+$w=New-Object -ComObject WScript.Shell
+$s=$w.CreateShortcut($link)
+$expected=Join-Path $old 'Start-Song-Studio.cmd'
+if([string]::Equals($s.TargetPath,$expected,[StringComparison]::OrdinalIgnoreCase)){
+  $s.TargetPath=Join-Path $new 'Start-Song-Studio.cmd'
+  $s.WorkingDirectory=$new
+  $s.IconLocation=(Join-Path $new 'studio\\app-icon.ico')+',0'
+  $s.Save()
+}
+"""
+    try:
+        subprocess.run(["powershell.exe","-NoProfile","-Command",ps,
+                        str(current),str(target)],timeout=20,
+                       stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+                       creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    except (OSError, subprocess.TimeoutExpired):
+        pass  # Never roll back an installed release due to optional shortcut.
