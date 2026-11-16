@@ -1561,8 +1561,12 @@ def build_xsk(rows, mode, options, *, progressive=False):
             if not doc or not doc.get("lines"):
                 raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
             doc = _xsk_apply_head_tail(doc, options)
-            title = row.get("title") or source.stem
-            artist = row.get("artist") or "X-Stage Song Studio"
+            # Prefer verified embedded metadata over the numeric MIDI filename.
+            # A directory scan has no artist and uses the stem as a title.
+            title = (doc.get("title") if isinstance(doc.get("title"), str)
+                     and doc["title"].strip() else row.get("title")) or source.stem
+            artist = (doc.get("artist") if isinstance(doc.get("artist"), str)
+                      and doc["artist"].strip() else row.get("artist")) or "X-Stage Song Studio"
             # CodeAllocator fills numeric gaps before appending after the
             # highest occupied code. The target file is still checked by seal.
             code = allocator.assign_new(preferred)
