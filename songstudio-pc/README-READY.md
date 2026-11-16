@@ -1,3 +1,13 @@
+## Build 361 — Fast workflows, no forced full-library JSON scan
+
+- **MIDI to Lyrics JSON** now enumerates source media lazily by filename code; a compatible song begins converting as soon as it is discovered instead of waiting for every directory/group to be scanned.
+- `00001.mid + 00001.lyr + 00001.cur` is paired from existing source files, including common `SONG/LYR/CUR` sibling folders. No source `.json` is required; lyrics and cue timing are validated at conversion.
+- Existing MIDI/KAR embedded cues, local LRC and already-authored media+JSON are still supported as optional source formats.
+- The redundant "inspect every subfolder" control is hidden on the JSON creation page. Other import/upload/catalog validations stay available when needed.
+- Displays discovered, created, duplicate and error counts without inventing a denominator before discovery completes.
+- Native Qt desktop (from Build 360), bundled Python/FFmpeg/AI, deduplication, journal/resume, no overwrite and catalog format remain unchanged.
+- Workflow audit: `docs/songstudio-pc-workflow-audit-build361.md`.
+
 ## MIDI to .XSK automatic pipeline (candidate)
 
 - Choose the source MIDI folder, XSK output folder, and song-code format/length. The default XSK mode no longer requires a completed catalog scan or manual song selection.
