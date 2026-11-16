@@ -82,4 +82,23 @@ corrupt.write('WRNG',12,'ascii');
 const corruptFile=new Blob([corrupt]);corruptFile.name='Corrupt.sf3';
 assert.equal(await core.validFont(corruptFile),false,'SoundFont missing INFO LIST must fail');
 
+const xskScan=core.scan([
+  {file:fake('00001.xsk',19255),relative:'XStageSong/MIDI/XSK/0/00001.xsk'},
+  {file:fake('XStageSong-access.xskkey',260),relative:'XStageSong-access.xskkey'}
+]);
+assert.equal(xskScan.xsks.length,1,'XSK is a first-class import candidate');
+assert.equal(xskScan.accessKeys.length,1,'Encrypted portable key is discovered, not uploaded');
+const ncnIdentity=core.songIdentity({schemaVersion:1,songCode:'00001',
+  metadata:{title:'ทำได้เพียง',artist:'25 Hours'}},'00001');
+assert.equal(ncnIdentity.title,'ทำได้เพียง');
+assert.equal(ncnIdentity.artist,'25 Hours');
+assert.equal(ncnIdentity.identityComplete,true);
+const missingIdentity=core.songIdentity({title:'00001',artist:'X-Stage Karaoke'},'00001');
+assert.equal(missingIdentity.title,'ไม่ระบุชื่อเพลง');
+assert.equal(missingIdentity.artist,'ไม่ระบุศิลปิน');
+assert.equal(missingIdentity.identityComplete,false);
+const keptIdentity=core.songIdentity({title:'00001'},'00001',{title:'เพลงแก้ไขแล้ว',artist:'ผู้ร้องจริง'});
+assert.equal(keptIdentity.title,'เพลงแก้ไขแล้ว');
+assert.equal(keptIdentity.artist,'ผู้ร้องจริง');
+
 console.log('PASS: streaming MD5, song pairing, typed validation and timed LRC contracts');
