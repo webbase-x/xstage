@@ -88,6 +88,7 @@ $map = @{
  'songstudio-pc/json_pro_export.py' = 'json_pro_export.py'
  'songstudio-pc/import_preview.py' = 'import_preview.py'
  'songstudio-pc/xsk_package.py' = 'xsk_package.py'
+ 'songstudio-pc/xsk_stream.py' = 'xsk_stream.py'
  'songstudio-pc/xsk_keys.py' = 'xsk_keys.py'
  'songstudio-pc/pro_license.py' = 'pro_license.py'
  'songstudio-pc/pc_ready_updates.py' = 'pc_ready_updates.py'
