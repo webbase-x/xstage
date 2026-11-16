@@ -21,6 +21,9 @@ const state={token:'t',queue:list,queuePreload:null,queuePrepared:null,
   activeBlobBytes:0,activeVideoBytes:0,loading:false};
 const indicators={};
 const sandbox={
+  // Extracted queue functions run outside app.js's lexical closure here.
+  // Supply its real app state explicitly; the production page defines it at startup.
+  state,
   navigator:{deviceMemory:2,userAgent:'Android'},
   performance:{memory:{usedJSHeapSize:150,jsHeapSizeLimit:1000}},
   AbortController,DOMException,Blob,Uint8Array,console,
