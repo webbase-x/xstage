@@ -42,7 +42,7 @@ class CodeAllocator:
     historical songs. User-defined alphanumeric unique codes stay unchanged.
     """
 
-    def __init__(self, local_rows, online_rows, local_songs: Path, *, code_style='source', code_length=6):
+    def __init__(self, local_rows, online_rows, local_songs: Path, *, code_style='numeric', code_length=5):
         if code_style not in ('source', 'numeric', 'letters', 'alphanumeric'):
             raise ValueError('ชนิดรหัสเพลงไม่ถูกต้อง')
         if type(code_length) is not int or not 1 <= code_length <= 12:
@@ -65,7 +65,7 @@ class CodeAllocator:
         for code in codes_of([*self.online, *self.local]):
             if NUMERIC.fullmatch(code):
                 widths[len(code)] += 1
-        self.default_width = max(widths, key=lambda w: (widths[w], w)) if widths else 6
+        self.default_width = max(widths, key=lambda w: (widths[w], w)) if widths else self.code_length
         # A library may contain 90,000+ songs. Do not re-sort the entire
         # registry for EACH new ID; scan the gaps once, incrementally.
         self.numeric_by_width = defaultdict(set)
@@ -188,9 +188,12 @@ class CodeAllocator:
 
     def _new_configured_code(self, preferred):
         preferred = str(preferred or "").strip().upper()
-        # Preserve source code only when it follows the selected length/charset
-        # and does not collide with a local or remote catalog.
-        if len(preferred) == self.code_length and preferred.casefold() not in self.used:
+        # Explicit numeric mode allocates the lowest AVAILABLE numeric ID,
+        # beginning at 00001 for width 5. A source code (e.g. 00083) must not
+        # skip free IDs or silently override the selected numbering scheme.
+        # Non-numeric modes continue to preserve a valid user-selected code.
+        if (self.code_style != "numeric" and len(preferred) == self.code_length
+                and preferred.casefold() not in self.used):
             valid = (preferred.isascii() and (
                 preferred.isdigit() if self.code_style == "numeric"
                 else preferred.isalpha() if self.code_style == "letters"
