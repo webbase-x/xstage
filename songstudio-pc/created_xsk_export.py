@@ -98,7 +98,9 @@ def export_selected(root, selected, export, created_json, package, codes, key,
             artist = (useful(record.get("artist"))
                       or useful(document.get("artist"))
                       or useful(metadata.get("artist")) or "ไม่ระบุศิลปิน")
-            package.seal(source, document, code, title, artist, key, target=target)
+            if title == source.stem or artist == "ไม่ระบุศิลปิน":
+                raise ValueError("ขาดชื่อเพลงหรือศิลปินจริง · ข้ามเพลงเพื่อไม่บันทึก DB ผิด")
+            package.seal(source, document, code, title, artist, target=target)
             midi_hashes.add(sha)
             result["created"] += 1
         except (ValueError, OSError, TypeError, KeyError, RuntimeError) as exc:
