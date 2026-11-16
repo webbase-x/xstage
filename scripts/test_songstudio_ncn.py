@@ -80,6 +80,37 @@ class NcnSourceTests(unittest.TestCase):
             cpath.write_bytes(struct.pack("<"+"H"*len(values), *values) + b"\xff")
         return mid, lpath, cpath
 
+    def test_colocated_mid_lyr_cur_resolves_real_title_and_artist(self):
+        # This is the layout of the user's 00001(1).mid/.lyr/.cur fixture.
+        folder = self.dir / "standalone"
+        folder.mkdir()
+        song = folder / "00001(1).mid"
+        song.write_bytes(midi())
+        (folder / "00001(1).lyr").write_bytes(
+            "ทำได้เพียง\\n25 Hours\\n\\n.\\nสวัสดี\\n".encode("cp874"))
+        (folder / "00001(1).cur").write_bytes(
+            struct.pack("<" + "H" * 8, *range(8)))
+        found = ncn.resolve_companions(song)
+        self.assertEqual(found["missing"], [])
+        self.assertEqual(Path(found["lyrics"]).stem, song.stem)
+        self.assertEqual(ncn.lyric_metadata(Path(found["lyrics"]))["title"], "ทำได้เพียง")
+        self.assertEqual(ncn.lyric_metadata(Path(found["lyrics"]))["artist"], "25 Hours")
+        _, doc, _ = engine.lyrics_package({"path": str(song), "code": song.stem})
+        self.assertEqual(doc["metadata"]["title"], "ทำได้เพียง")
+        self.assertEqual(doc["metadata"]["artist"], "25 Hours")
+
+    def test_colocated_ncn_incomplete_does_not_mix_other_code(self):
+        folder = self.dir / "incomplete"
+        folder.mkdir()
+        song = folder / "00001.mid"
+        song.write_bytes(midi())
+        (folder / "00001.lyr").write_bytes("ชื่อเพลง\\nศิลปิน\\n\\nคำร้อง".encode("cp874"))
+        (folder / "00002.cur").write_bytes(b"\\x00\\x00")
+        found = ncn.resolve_companions(song)
+        self.assertEqual(found["missing"], ["cursor"])
+        with self.assertRaisesRegex(ValueError, "NCN ไม่ครบ"):
+            engine.lyrics_package({"path": str(song), "code": song.stem})
+
     def test_ncns_with_mirrored_cursor_lyrics_song_resolve_one_song(self):
         mid, lyr, cur = self.make_ncn()
         self.assertEqual(engine.scan_source(), 1)
