@@ -42,7 +42,7 @@ class XStageSongLayoutTests(unittest.TestCase):
 
     def test_traversal_and_unhandled_types_fail_closed(self):
         for name in ("audio/../../secret.m4a", "/absolute.m4a",
-                     "audio/a/movie.avi", "lyrics/3/a.exe"):
+                     "audio/a/movie.exe", "lyrics/3/a.exe"):
             with self.subTest(name=name):
                 with self.assertRaises(layout.PublishError):
                     layout.media_drive_path(name, code="123")
