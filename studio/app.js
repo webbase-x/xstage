@@ -2381,7 +2381,8 @@
       const processed=Number(job.completed||0);
       const details='ตรวจไฟล์ '+fmtNum(scanned)+' · พบ MIDI '+fmtNum(discovered)+
         ' · ประมวลผล '+fmtNum(processed)+' · สร้าง '+fmtNum(job.created||0)+
-        ' · ข้ามซ้ำ '+fmtNum(job.skipped||0)+' · ERR '+fmtNum(job.errors||0);
+        ' · ข้ามซ้ำ '+fmtNum(job.skipped||0)+' · ไม่พร้อม '+fmtNum(job.notReady||0)+
+        ' · ERR '+fmtNum(job.errors||0);
       $('xsk-stream-status').textContent=details+
         (job.scanDone?'\\nสแกนจบแล้ว · กำลังทำรายการที่อยู่ในคิวให้ครบ':
            '\\nกำลังสแกนต่อพร้อมสร้างเพลง · รอคิว '+fmtNum(job.queuedBatches||0)+' ชุด')+
