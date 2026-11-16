@@ -2082,6 +2082,8 @@ def execute_job(action, options, started):
         elif action == "json-pro-export":
             module = _module("json_pro_export.py", "xstage_json_pro_export")
             output_format = options.get("format", "original")
+            code_style = options.get("code_style", worker_prefs().get("code_style", "numeric"))
+            code_length = int(options.get("code_length", worker_prefs().get("code_length", "5")))
             def _json_progress(done, total, state):
                 with LOCK:
                     worker_job().update(total=total, completed=done, created=state["created"],
@@ -2093,6 +2095,7 @@ def execute_job(action, options, started):
             result = module.export_folder(
                 worker_prefs()["json_source"], worker_prefs()["json_destination"],
                 output_format=output_format, export=_song_export_module(),
+                code_style=code_style, code_length=code_length,
                 scanner=FOLDER_UPLOAD, ncn=NCN, convert=_json_convert,
                 cancelled=worker_cancel(), progress=_json_progress)
         elif action == "created-xsk":
@@ -2554,6 +2557,14 @@ def start_job(data):
             raise ValueError("ส่งออก Lyrics JSON ต้องเปิดใช้ License Pro")
         if data.get("format") not in ("original", "m4a", "mp3", "wav", "flac", "ogg"):
             raise ValueError("รูปแบบการแปลงไฟล์ไม่ถูกต้อง")
+        if data.get("code_style", PREFS.get("code_style", "numeric")) not in ("source", "numeric", "letters", "alphanumeric"):
+            raise ValueError("ชนิดรหัสเพลงไม่ถูกต้อง")
+        try:
+            code_length = int(data.get("code_length", PREFS.get("code_length", "5")))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("จำนวนหลักรหัสเพลงไม่ถูกต้อง") from exc
+        if not 1 <= code_length <= 12:
+            raise ValueError("จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12")
         if not PREFS.get("json_source") or not PREFS.get("json_destination"):
             raise ValueError("กรุณาเลือกโฟลเดอร์ต้นทางและปลายทาง")
         validation = {"total": 0}
