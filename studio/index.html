@@ -87,22 +87,13 @@
               <p class="hint">ตรวจทุกโฟลเดอร์ย่อยและเลือก MIDI/MID/KAR ที่มีเนื้อร้องพร้อมเวลาตามกฎเดิมอัตโนมัติ · ไม่มีเวลาเนื้อร้องหรือพบไฟล์ผิดปกติจะข้ามและบันทึกเหตุผล · ไม่เขียนทับต้นฉบับหรือ .XSK เดิม</p>
               <div class="toolbar"><button id="xsk-stream-build" class="button primary large" type="button">ตกลง</button></div>
               <p id="xsk-stream-status" class="hint" role="status" aria-live="polite">พร้อมสร้าง .XSK</p>
-              <details class="xsk-access-export">
-                <summary>ส่งต่อสิทธิ์เปิด .XSK ให้ Web / APK (โดยเจ้าของไฟล์)</summary>
-                <p class="hint">สร้างไฟล์ XStageSong-access.xskkey ที่เข้ารหัสด้วยรหัสผ่านอย่างน้อย 12 ตัวอักษรไว้ในโฟลเดอร์ดาวน์โหลด ไม่เปิดเผยกุญแจดิบ ชื่อผู้ใช้หรือชื่อคอมพิวเตอร์ และไม่อัปโหลดให้เอง</p>
-                <div class="form-2">
-                  <div><label for="xsk-access-password">รหัสผ่านป้องกันสิทธิ์ XSK</label><input id="xsk-access-password" class="field" type="password" autocomplete="new-password" minlength="12" maxlength="256"></div>
-                  <div><label for="xsk-access-repeat">ยืนยันรหัสผ่านอีกครั้ง</label><input id="xsk-access-repeat" class="field" type="password" autocomplete="new-password" minlength="12" maxlength="256"></div>
-                </div>
-                <p class="hint">อย่าส่งไฟล์กุญแจพร้อมรหัสผ่านในแชต · ผู้มีทั้งไฟล์กุญแจและรหัสผ่านจะเปิดเพลง XSK ที่เข้ารหัสด้วยกุญแจเดียวกันได้</p>
-                <button class="button ghost" id="xsk-access-export" type="button">บันทึกไฟล์สิทธิ์ XSK แบบเข้ารหัส</button>
-                <p id="xsk-access-status" class="hint" role="status"></p>
-              </details>
+              <p class="hint">XSK2 ไม่เข้ารหัส · PC, Web และ APK เปิดไฟล์ที่สร้างใหม่ได้โดยไม่ต้องส่งต่อกุญแจ · ชื่อเพลงและศิลปินถูกเก็บใน Lyrics JSON ภายใน</p>
+
             </div>
             <article class="sound-settings" aria-label="ตั้งค่าการสร้าง XSK">
               <label for="create-output-kind">รูปแบบเพลงที่สร้าง</label>
               <select id="create-output-kind" class="field">
-                <option value="xsk">X-Stage Karaoke Package (.xsk) · เข้ารหัส</option>
+                <option value="xsk">X-Stage Karaoke Package (.xsk) · ไม่เข้ารหัส XSK2</option>
                 <option value="xstage">รูปแบบเดิม · เฉพาะ Pro</option>
                 <option value="m4a">M4A รูปแบบเดิม · เฉพาะ Pro</option>
               </select>
