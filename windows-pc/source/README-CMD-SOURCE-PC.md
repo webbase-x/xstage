@@ -5,7 +5,7 @@ It does not contain X-Stage Karaoke Online, Android APK, or Song Studio builds.
 
 ## Run on Windows 10 / Windows 11 (x64)
 
-1. Extract the entire ZIP to a normal writable directory (avoid Program Files).
+1. Download **Windows-CMD-Source ZIP** from the GitHub Actions artifact and extract **both ZIP layers** if GitHub downloaded an artifact ZIP containing the source ZIP. Extract the entire *inner* source ZIP to a normal writable directory (avoid Program Files). In the extracted source directory, `Run-X-Stage-Karaoke-PC.cmd` and `main.py` must be alongside one another, with `karaoke/` and `requirements.txt`. Current packages place these files at the source ZIP root; older packages may nest them under `X-Stage-Karaoke-PC-Source/`.
 2. Install **Python 3.13 x64** with Tcl/Tk and the Python launcher (if not already installed).
 3. Double-click **Run-X-Stage-Karaoke-PC.cmd**, or open CMD in this folder and run:
 
