@@ -678,7 +678,20 @@ try {
     'Upload preflight button is intentionally hidden; upload runs preflight');
   await pc.click('#upload-folder-button');
   await pc.waitForFunction(()=>document.querySelector('#upload-folder-report')?.textContent.includes('ชุดสมบูรณ์ 2'));
-  await pc.locator('#studio-confirm-dialog[open]').waitFor();
+  try {
+    await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:5000});
+  } catch (error) {
+    const diagnostics=await pc.evaluate(()=>({
+      report:document.querySelector('#upload-folder-report')?.textContent,
+      message:document.querySelector('#global-message')?.textContent,
+      modalOpen:document.querySelector('#studio-confirm-dialog')?.open,
+      buttonDisabled:document.querySelector('#upload-folder-button')?.disabled,
+      job:document.querySelector('#job-title')?.textContent,
+      uploadAllowNew:document.querySelector('#upload-allow-new')?.checked
+    }));
+    throw new Error('Upload confirmation not shown after successful preflight: '+
+      JSON.stringify({diagnostics,pcErrors})+'; '+error.message);
+  }
   const uploadJob=pc.waitForRequest(req=>{
     try{return new URL(req.url()).pathname==='/api/jobs' &&
       req.postDataJSON()?.action==='upload-folder';}catch{return false;}
