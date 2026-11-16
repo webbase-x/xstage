@@ -3445,9 +3445,8 @@
     const code_length=Number($('json-pro-code-length').value);
     if(!Number.isInteger(code_length)||code_length<1||code_length>12)
       return message('จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12');
-    // Do not synchronously scan all songs before starting: the PC job scans
-    // once in its worker and publishes real discovered/validated counts.
-    // The separate Inspect button remains available for deliberate preflight.
+    // No full-library preflight: the worker reads existing source companions
+    // by filename code and starts conversion on the first complete song.
     await saveInputs(['json-pro-source','json-pro-destination']);
     await saveInputs(['json-pro-code-style','json-pro-code-length']);
     $('json-pro-report').textContent=
@@ -3459,8 +3458,8 @@
       return;
     }
     $('json-pro-report').textContent=
-      'PC Engine รับงานแล้ว · ระบบกำลังสแกนหนึ่งรอบและทยอยส่งออกเพลง\\n'+
-      'ดูจำนวนไฟล์ที่พบจริง และจำนวนชุดที่ตรวจแล้วในแผงความคืบหน้าของงาน';
+      'PC Engine รับงานแล้ว · จับคู่ตามรหัสต้นฉบับและเริ่มแปลงเพลงทันที\\n'+
+      'ไม่รอตรวจทุกไฟล์ · ผลลัพธ์แต่ละเพลงตรวจแล้วจึงบันทึก';
   }
   $('json-pro-inspect').addEventListener('click',()=>{void inspectJsonPro();});
   $('json-pro-start').addEventListener('click',()=>{void startJsonPro();});
