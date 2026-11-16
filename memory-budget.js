@@ -33,7 +33,9 @@ function plan({fontBytes=0,queuedBytes=0,activeBytes=0,extraBytes=0}={}){
   const ratio=occupied/budget;
   const heapPressure=!!h&&h.ratio>=.78;
   const level=heapPressure||ratio>=.83?'high':ratio>=.58?'medium':'low';
-  const queueLimit=low?2:hint.gib<=4?3:4;
+  // Hard cap across PC browsers, Android WebView and phones: at most two
+  // NEXT queued songs. Low-RAM devices may prepare fewer or none.
+  const queueLimit=2;
   return {budget,occupied,remaining:Math.max(0,budget-occupied),
     ratio,level,queueLimit,heapPressure,hint,heap:h,fontBytes,activeBytes};
 }
