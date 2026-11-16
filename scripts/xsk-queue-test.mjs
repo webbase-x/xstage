@@ -13,13 +13,16 @@ let fetched=0,unzipped=0,rendered=0,painted=0,failed=false,onFontChange=null;
 const file={fileId:'file-001',size:4096};
 const song={code:'00001',title:'ทำได้เพียง',artist:'25 Hours',xsk:file};
 const state={token:'token-001',queue:[song],queuePreload:null,queuePrepared:null,
-  queuePreloadTimer:null,queuePreloadVersion:0};
+  queuePreloadTimer:null,queuePreloadVersion:0,
+  queuePreparedCache:new Map(),queuePreloadSkipped:new Set(),
+  activeBlobBytes:0,activeVideoBytes:0,loading:false};
 const packed=new Blob(['XSK2 fake']),audio=new Blob(['rendered wave']);
 const mimeDoc={schemaVersion:1,songCode:'00001',title:'ทำได้เพียง',
   artist:'25 Hours',lines:[{startTime:1.0,text:'ทดสอบ'}]};
 let timers=[];
 const sandbox={
-  state,navigator:{deviceMemory:4},AbortController,DOMException,Uint8Array,Blob,
+  state,navigator:{deviceMemory:4},document:{getElementById:()=>null},
+  AbortController,DOMException,Uint8Array,Blob,
   console:{warn:()=>{failed=true}},setTimeout(fn){timers.push(fn);return timers.length;},
   clearTimeout(){},getFileId:record=>record?.fileId||'',
   privateFile:async(id,token,{signal})=>{
@@ -29,7 +32,11 @@ const sandbox={
   },
   privateJson:async()=>{throw Error('XSK must never retrieve a separate Lyrics JSON file')},
   renderQueue:()=>{painted++},
-  window:{addEventListener:(event,callback)=>{
+  window:{XStageMemory:{
+    MiB:1048576,plan:()=>({heapPressure:false,remaining:100*1048576,
+      queueLimit:2,budget:100*1048576,ratio:0,level:'low',hint:{gib:4}}),
+    canHold:()=>true,statusText:()=>({level:'low',text:'ปกติ',note:''}),fmt:()=> '0 MB'
+  },addEventListener:(event,callback)=>{
     if(event==='xstage:soundfont-change')onFontChange=callback;
   },XStageXsk:{openPackage:async blob=>{
     assert.equal(blob,packed);unzipped++;
@@ -55,12 +62,13 @@ assert.equal(state.queuePrepared.lyrics,mimeDoc);
 assert.equal(painted,1);
 schedule();
 assert.equal(timers.length,0,'Already prepared XSK must not be queued for reprocessing');
+assert.equal(state.queuePreparedCache.get(song).blob,audio);
 assert.equal(typeof onFontChange,'function');
 onFontChange();
 assert.equal(state.queuePrepared,null,
   'Changing SoundFont must invalidate already synthesized queued audio');
 
-state.queue=[{...song,xsk:{...file,size:30*1024*1024}}];
+state.queue=[{...song,xsk:{...file,size:70*1024*1024}}];
 await prefetch(state.queue[0],'token-001');
 assert.equal(fetched,1,'Large XSK on memory-constrained APK stays on-demand');
 
