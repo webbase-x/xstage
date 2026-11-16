@@ -329,7 +329,7 @@ function parseFont(data){
     }
     return result;
   }
-  return {b,d,chunks,samples,find,cache:new Map()};
+  return {b,d,chunks,samples,find,cache:new Map(),cacheBytes:0};
 }
 async function sampleBuffer(font,index,context){
   if(font.cache.has(index))return font.cache.get(index);
@@ -350,8 +350,17 @@ async function sampleBuffer(font,index,context){
     const out=buffer.getChannelData(0);
     for(let i=0;i<n;i++)out[i]=font.d.getInt16(at+i*2,true)/32768;
   }
-  if(font.cache.size>=80)font.cache.delete(font.cache.keys().next().value);
-  font.cache.set(index,buffer);
+  // Keep decoded sample buffers across songs, but enforce a memory budget.
+  // An AudioBuffer is ~4 bytes per sample per channel; this is an estimate.
+  const low=Number(scope.navigator?.deviceMemory||4)<=2;
+  const limit=(low?12:48)*1048576;
+  const weight=buffer.length*buffer.numberOfChannels*4;
+  while(font.cache.size&&(font.cache.size>=80||font.cacheBytes+weight>limit)){
+    const oldest=font.cache.keys().next().value,removed=font.cache.get(oldest);
+    font.cacheBytes-=removed.length*removed.numberOfChannels*4;
+    font.cache.delete(oldest);
+  }
+  if(weight<=limit){font.cache.set(index,buffer);font.cacheBytes+=weight;}
   return buffer;
 }
 function toWav(audio){
@@ -376,7 +385,8 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
   const shift=Math.max(-12,Math.min(12,Math.trunc(Number(transpose)||0)));
   const muted=Array.isArray(channelMutes)?channelMutes:[];
   const levels=Array.isArray(channelVolumes)?channelVolumes:[];
-  const font=fontBytes?parseFont(fontBytes):null;
+  const font=fontBytes?(fontCache?.bytes===fontBytes&&fontCache.parsed
+    ?fontCache.parsed:parseFont(fontBytes)):null;
   let num=0,scheduled=0;
   const master=ctx.createGain();master.gain.value=font?.75:.24;master.connect(ctx.destination);
   for(const note of song.notes){
@@ -435,6 +445,16 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
   return {audio:toWav(result),lyrics:midiLyrics(song,''),duration:song.duration};
 }
 let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
+let fontLoadPromise=null;
+function fontStatus(){
+  return {loaded:!!fontCache,selectedId:selected,
+    fileBytes:fontCache?.bytes.byteLength||0,
+    sampleBytes:fontCache?.parsed?.cacheBytes||0,
+    label:fontCache?.label||'',source:'selected SoundFont in session memory'};
+}
+function fontStatusChanged(){
+  scope.dispatchEvent?.(new CustomEvent('xstage:font-memory',{detail:fontStatus()}));
+}
 async function listFolder(parent,token){
   const list=[];let page='';
   do{
@@ -453,7 +473,7 @@ async function refreshFonts(auth){
   const select=$('xstage-soundfont-select');if(!select)return;
   const sameLibrary=context?.sub===auth?.sub&&context?.rootId===auth?.rootId;
   context=auth;
-  if(!sameLibrary){selected='';fontCache=null;}
+  if(!sameLibrary){selected='';fontCache=null;fontLoadPromise=null;fontStatusChanged();}
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
     const sub=auth?.sub||'',rootId=auth?.rootId||'';
@@ -488,8 +508,15 @@ async function refreshFonts(auth){
       select.value=choices.some(x=>x.value===saved)?saved:'';
       selected=select.value;
       select.onchange=()=>{
-        selected=select.value;fontCache=null;
+        selected=select.value;fontCache=null;fontLoadPromise=null;fontStatusChanged();
         try{localStorage.setItem(storageKey,selected);}catch{}
+        // Selected SoundFont is retained for this app session and reused.
+        // Never cache private font bytes across Google accounts or on disk.
+        if(selected&&context?.token)void selectedFont(context.token).catch(error=>{
+          console.warn('SoundFont preload:',error.message);
+          scope.dispatchEvent?.(new CustomEvent('xstage:font-memory-error',
+            {detail:{message:error.message}}));
+        });
         // Any pre-rendered XSK2 in the queue used the prior SoundFont.
         // Invalidate that temporary audio before the next song starts.
         scope.dispatchEvent?.(new CustomEvent('xstage:soundfont-change',
@@ -500,7 +527,7 @@ async function refreshFonts(auth){
       select.replaceChildren(...choices);
       const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
       option.disabled=true;select.append(option);
-      selected='';fontCache=null;
+      selected='';fontCache=null;fontStatusChanged();
     }
   })();
   fontRefreshPromise=pending;
@@ -514,18 +541,35 @@ async function selectedFont(token,signal){
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
   const id=selected,sub=context.sub;
   if(fontCache?.id===id&&fontCache?.sub===sub)return fontCache.bytes;
-  const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
-    {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
-  if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
-  const len=Number(res.headers.get('Content-Length')||0);
-  if(len>MAX_FONT)fail('SoundFont ใหญ่กว่า 256 MB ไม่เหมาะกับหน่วยความจำเบราว์เซอร์');
-  const bytes=new Uint8Array(await res.arrayBuffer());
-  if(bytes.byteLength>MAX_FONT)fail('SoundFont ใหญ่เกินขอบเขตหน่วยความจำ');
-  if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
-  if(selected!==id||context?.token!==token||context?.sub!==sub)fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
-  parseFont(bytes);fontCache={id,sub,bytes};return bytes;
+  if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
+    return fontLoadPromise.promise;
+  const task=(async()=>{
+    const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
+      {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
+    if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
+    const len=Number(res.headers.get('Content-Length')||0);
+    const hinted=Number(scope.navigator?.deviceMemory||4);
+    const deviceLimit=(hinted<=2?64:hinted<=4?128:256)*1048576;
+    if(len>MAX_FONT||len>deviceLimit)
+      fail('SoundFont ใหญ่เกินงบปลอดภัยสำหรับ RAM อุปกรณ์นี้ · ใช้ไฟล์เล็กลงหรือเสียงพื้นฐาน');
+    const bytes=new Uint8Array(await res.arrayBuffer());
+    if(bytes.byteLength>MAX_FONT||bytes.byteLength>deviceLimit)
+      fail('SoundFont ใหญ่เกินงบปลอดภัยของอุปกรณ์');
+    if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
+    if(selected!==id||context?.token!==token||context?.sub!==sub)
+      fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
+    // Parse once, then reuse decoded structure and bounded sample buffers.
+    const parsed=parseFont(bytes);
+    const label=$('xstage-soundfont-select')?.selectedOptions?.[0]?.text||'SoundFont';
+    fontCache={id,sub,bytes,parsed,label};
+    fontStatusChanged();
+    return bytes;
+  })();
+  fontLoadPromise={id,sub,promise:task};
+  try{return await task;}
+  finally{if(fontLoadPromise?.promise===task)fontLoadPromise=null;}
 }
-scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,
-  reset(){fontRefreshSequence++;fontRefreshPromise=null;context=null;selected='';fontCache=null;const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
+scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,
+  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);
