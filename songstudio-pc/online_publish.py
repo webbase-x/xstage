@@ -291,7 +291,6 @@ class OnlinePublisher:
             portable = local_songs / "DB" / "songs-portable.json"
             if not portable.is_file() or portable.is_symlink():
                 raise PublishError("กรุณาสร้างฐานเพลงในเครื่องก่อนอัปโหลด")
-            import json
             descriptor = json.loads(portable.read_text(encoding="utf-8-sig"))
             if (descriptor.get("format") != "xstage-portable-song-db"
                     or descriptor.get("schemaVersion") != 1):
