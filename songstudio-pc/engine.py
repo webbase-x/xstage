@@ -83,6 +83,11 @@ def worker_job():
 def worker_cancel():
     return getattr(_WORKER_LOCAL, "cancel", CANCEL)
 
+def worker_prefs():
+    # A worker keeps its source, output and SoundFont preferences from launch.
+    # A later UI change cannot silently redirect a running conversion.
+    return getattr(_WORKER_LOCAL, "prefs", PREFS)
+
 def set_worker_process(proc):
     global PROCESS
     job_id = getattr(_WORKER_LOCAL, "id", None)
@@ -616,7 +621,7 @@ def scan_source(full=False):
     with LOCK:
         running_scan = worker_job().get("state") == "running" and worker_job().get("kind") == "scan"
     rows, stats = SONG_INDEX.scan(
-        PREFS["source"], PREFS["workspace"], DATA / "song-index.sqlite3",
+        worker_prefs()["source"], worker_prefs()["workspace"], DATA / "song-index.sqlite3",
         NOTES, NCN, full=bool(full),
         cancelled=worker_cancel() if running_scan else None, on_progress=progress)
     with LOCK:
@@ -636,7 +641,7 @@ def scan_source(full=False):
     # Persist after the successful SQLite snapshot; do not overwrite a known
     # good delta when enumeration was interrupted or failed.
     save_json(SCAN_CHANGE_FILE, {
-        "source": PREFS["source"], "workspace": PREFS["workspace"],
+        "source": worker_prefs()["source"], "workspace": worker_prefs()["workspace"],
         "ids": sorted(SCAN_CHANGE_IDS)})
     return len(rows)
 
@@ -948,7 +953,7 @@ def ensure_midi_wav(path):
         raise RuntimeError("ไม่พบ FluidSynth ในโฟลเดอร์โปรแกรม กรุณาใช้ Ready ZIP ที่รวมไลบรารีครบ")
     tmp = PREVIEW_FOLDER / (secrets.token_hex(10) + ".wav")
     # FluidSynth CLI expects flags before positional SoundFont/MIDI arguments.
-    params = [fluid, "-ni", "-F", str(tmp), "-r", "48000", PREFS["soundfont"], str(path)]
+    params = [fluid, "-ni", "-F", str(tmp), "-r", "48000", worker_prefs()["soundfont"], str(path)]
     run_process(params)
     return tmp
 
@@ -1190,7 +1195,7 @@ def ai_vocals_target(row):
             not source.is_file() or source.is_symlink()):
         raise ValueError("ต้องเลือกไฟล์เสียงต้นฉบับที่ยังอยู่ในเครื่อง")
     export = _song_export_module()
-    root = export.songs_root(PREFS["workspace"])
+    root = export.songs_root(worker_prefs()["workspace"])
     bucket = export.source_bucket(str(row.get("code") or source.name))
     key = AI_LYRICS._source_key(source)[:16]
     stem = export.safe_filename(source.stem)[:90]
@@ -1291,7 +1296,7 @@ def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumenta
         parsed = _song_export_module().lrc_to_json(reviewed, str(row.get("code") or ""))
         if not parsed.get("lines"):
             raise ValueError("เนื้อร้อง LRC ไม่มีเวลาที่ถูกต้อง")
-    destination = Path(PREFS["download"]).expanduser()
+    destination = Path(worker_prefs()["download"]).expanduser()
     if not destination.is_dir():
         raise ValueError("โฟลเดอร์ส่งออกไม่พร้อมใช้งาน · เลือกตำแหน่งในเมนูดาวน์โหลดก่อน")
     if destination.is_symlink():
@@ -1407,11 +1412,11 @@ def lyric_source_root(selected=None):
     Original audio/MIDI is never edited. Folder mode updates only validated
     .lrc files after explicit confirmation and a full recoverable backup.
     """
-    folder = PREFS.get("lyric_source", "") if selected is None else selected
+    folder = worker_prefs().get("lyric_source", "") if selected is None else selected
     if not isinstance(folder, str):
         raise ValueError("โฟลเดอร์ต้นทางข้อความหัว–ท้ายเพลงไม่ถูกต้อง")
     if not folder.strip():
-        return _song_export_module().songs_root(PREFS["workspace"])
+        return _song_export_module().songs_root(worker_prefs()["workspace"])
     try:
         selected_path = Path(folder.strip()).expanduser().resolve(strict=True)
     except (OSError, RuntimeError) as exc:
@@ -1482,7 +1487,7 @@ def reconcile_local_codes(root, records, registry, remote, export):
 def code_registry_preview():
     """Read-only two-source preview; UI can verify before new conversion."""
     export = _song_export_module()
-    root = export.songs_root(PREFS["workspace"])
+    root = export.songs_root(worker_prefs()["workspace"])
     records = export.existing_records(root)
     registry, remote, verified, generation = code_registry_snapshot(root)
     allocator = registry.CodeAllocator(records, remote, root)
@@ -1526,7 +1531,7 @@ def _source_digest(row, export):
 
 
 def _xsk_format(options):
-    return options.get("export_format", PREFS.get("export_format", "xsk"))
+    return options.get("export_format", worker_prefs().get("export_format", "xsk"))
 
 
 def _xsk_apply_head_tail(document, options):
@@ -1574,13 +1579,13 @@ def build_xsk(rows, mode, options, *, progressive=False):
     keys = _module("xsk_keys.py", "xstage_xsk_keys")
     key = keys.get_key(DATA)
     export = _song_export_module()
-    root = export.songs_root(options.get("xsk_folder") or PREFS.get("xsk_folder") or PREFS["workspace"])
+    root = export.songs_root(options.get("xsk_folder") or worker_prefs().get("xsk_folder") or worker_prefs()["workspace"])
     codes = _module("code_registry.py", "xstage_xsk_codes")
     records = export.existing_records(root)
     allocator = codes.CodeAllocator(
         records, [], root,
-        code_style=options.get("code_style", PREFS.get("code_style", "source")),
-        code_length=int(options.get("code_length", PREFS.get("code_length", "6"))))
+        code_style=options.get("code_style", worker_prefs().get("code_style", "source")),
+        code_length=int(options.get("code_length", worker_prefs().get("code_length", "6"))))
     # An XSK is an encrypted package, not an ordinary published audio record.
     # Index its authenticated MIDI digests and occupied codes once before
     # assigning any new ID. Never infer uniqueness from filenames alone.
@@ -1636,7 +1641,7 @@ def build_xsk(rows, mode, options, *, progressive=False):
             # safe numeric code instead of rejecting an otherwise valid song.
             if not package.CODE_RE.fullmatch(preferred):
                 preferred = "1".zfill(int(options.get(
-                    "code_length", PREFS.get("code_length", "6"))))
+                    "code_length", worker_prefs().get("code_length", "6"))))
             row["code"] = source.stem
             _lrc, doc, _fingerprint = lyrics_package(row, export=export)
             if not doc or not doc.get("lines"):
@@ -1702,7 +1707,7 @@ def build_library(rows, mode, options):
     export_format = options.get("export_format", "xstage")
     if export_format not in ("xstage", "m4a"):
         raise ValueError("ประเภทส่งออกต้องเป็น MIDI/Audio + Lyrics JSON หรือ M4A + Lyrics JSON")
-    root = export.songs_root(PREFS["workspace"])
+    root = export.songs_root(worker_prefs()["workspace"])
     root.mkdir(parents=True, exist_ok=True)
     for name in ("audio", "lyrics"):
         (root / name).mkdir(exist_ok=True)
@@ -1710,16 +1715,16 @@ def build_library(rows, mode, options):
     registry, remote, online_verified, online_generation = code_registry_snapshot(root)
     if online_verified:
         allocator, remapped = reconcile_local_codes(root, records, registry, remote, export)
-        allocator.code_style = PREFS.get("code_style", "source")
-        allocator.code_length = int(PREFS.get("code_length", "6"))
+        allocator.code_style = worker_prefs().get("code_style", "source")
+        allocator.code_length = int(worker_prefs().get("code_length", "6"))
         if remapped:
             records = export.existing_records(root)
         log(f"ตรวจรหัสสองแหล่งแล้ว · PC {len(records):,} · Google Drive {len(remote):,} เพลง")
     else:
         allocator = registry.CodeAllocator(
             records, [], root,
-            code_style=PREFS.get("code_style", "source"),
-            code_length=int(PREFS.get("code_length", "6")))
+            code_style=worker_prefs().get("code_style", "source"),
+            code_length=int(worker_prefs().get("code_length", "6")))
         log("ยังไม่ได้ยืนยันรหัสกับ Google Drive · รหัสเพลงที่สร้างขณะออฟไลน์เป็นรหัสชั่วคราวจนกว่าจะอัปโหลด")
     # Build these indices ONCE. Looking up an incomplete source by scanning
     # every catalog row for each new song was quadratic for large libraries
@@ -1875,7 +1880,7 @@ def build_library(rows, mode, options):
                 # workspace/song/<edited title>.m4a with NO stored source hash.
                 # Skip ambiguous legacy matches rather than creating a repeat
                 # with a new numbered output; do not touch those old files.
-                legacy = (Path(PREFS["workspace"]).expanduser() / "song" /
+                legacy = (Path(worker_prefs()["workspace"]).expanduser() / "song" /
                           (safe_stem(row.get("title") or source.stem) + ".m4a"))
                 if legacy.is_file() and legacy.stat().st_size >= 1000:
                     # An unindexed legacy file is NOT a verified completed
@@ -2081,13 +2086,13 @@ def execute_job(action, options, started):
             def _json_convert(src, dest, kind):
                 json_pro_transcode(src, dest, kind)
             result = module.export_folder(
-                PREFS["json_source"], PREFS["json_destination"],
+                worker_prefs()["json_source"], worker_prefs()["json_destination"],
                 output_format=output_format, export=_song_export_module(),
                 scanner=FOLDER_UPLOAD, ncn=NCN, convert=_json_convert,
                 cancelled=worker_cancel(), progress=_json_progress)
         elif action == "created-xsk":
             module = _module("created_xsk_export.py", "xstage_created_xsk_export")
-            output_root = PREFS.get("xsk_folder") or PREFS["workspace"]
+            output_root = worker_prefs().get("xsk_folder") or worker_prefs()["workspace"]
             def _created_progress(done, outcome):
                 with LOCK:
                     worker_job().update(created=outcome["created"], skipped=outcome["skipped"],
@@ -2095,7 +2100,7 @@ def execute_job(action, options, started):
                 update(f"XSK {done}/{outcome['total']} · สร้าง {outcome['created']} "
                        f"· ข้าม MIDI ซ้ำ {outcome['skipped']} · ERR {outcome['errors']}", done)
             result = module.export_selected(
-                _song_export_module().songs_root(PREFS["workspace"]),
+                _song_export_module().songs_root(worker_prefs()["workspace"]),
                 options["paths"], _song_export_module(),
                 _module("created_json_manager.py", "xstage_created_json_manager"),
                 _module("xsk_package.py", "xstage_xsk_package"),
@@ -2104,10 +2109,10 @@ def execute_job(action, options, started):
                 destination_root=output_root, cancelled=worker_cancel(), progress=_created_progress)
         elif action == "xsk-stream":
             options = dict(options)
-            options["source"] = str(options.get("source") or PREFS["source"])
-            options["xsk_folder"] = str(options.get("xsk_folder") or PREFS.get("xsk_folder") or PREFS["workspace"])
-            options["code_style"] = str(options.get("code_style") or PREFS["code_style"])
-            options["code_length"] = str(options.get("code_length") or PREFS["code_length"])
+            options["source"] = str(options.get("source") or worker_prefs()["source"])
+            options["xsk_folder"] = str(options.get("xsk_folder") or worker_prefs().get("xsk_folder") or worker_prefs()["workspace"])
+            options["code_style"] = str(options.get("code_style") or worker_prefs()["code_style"])
+            options["code_length"] = str(options.get("code_length") or worker_prefs()["code_length"])
             root = _song_export_module().songs_root(options["xsk_folder"])
             scanner = _module("xsk_stream.py", "xstage_xsk_stream")
             with LOCK:
@@ -2120,7 +2125,7 @@ def execute_job(action, options, started):
                 result = build_xsk(incoming, "original", {
                     **options, "audio_only": False}, progressive=True)
         elif action in ("build", "preview"):
-            mode = PREFS.get("mode", "original")
+            mode = worker_prefs().get("mode", "original")
             if mode not in ("original", "instrumental"):
                 raise ValueError("ประเภทเสียงไม่ถูกต้อง")
             if mode == "instrumental" and not ai_available():
@@ -2279,22 +2284,22 @@ def execute_job(action, options, started):
                 worker_job()["total"] = 1
             update("กำลังตรวจ SoundFont SF2/SF3 ก่อนอัปโหลด")
             result = FOLDER_UPLOAD.upload_soundfont(
-                GOOGLE, PREFS.get("soundfont", ""),
+                GOOGLE, worker_prefs().get("soundfont", ""),
                 create_new_library=(options.get("create_new_library") is True),
                 cancelled=worker_cancel(), progress=lambda stage: update(stage))
             update(result["message"], 1)
         elif action == "pc-export":
             module = _module("pc_library_export.py", "xstage_pc_export")
-            local_source = _song_export_module().songs_root(PREFS["workspace"])
+            local_source = _song_export_module().songs_root(worker_prefs()["workspace"])
             update("กำลังตรวจ XStageSong ต้นทางและพื้นที่เก็บปลายทาง")
             result = module.publish(
-                local_source, PREFS.get("pc_export_folder", ""),
+                local_source, worker_prefs().get("pc_export_folder", ""),
                 _song_export_module(), cancelled=worker_cancel(),
                 progress=lambda done, total, name: update(
                     f"คัดลอกไฟล์เข้า XStageSong {done:,}/{total:,} · {name}", done))
             update(result["message"], result["files"])
         elif action == "upload-folder":
-            root = PREFS.get("upload_folder", "").strip()
+            root = worker_prefs().get("upload_folder", "").strip()
             with LOCK:
                 worker_job()["total"] = 1
             update("กำลังตรวจเพลงและไฟล์ประกอบในโฟลเดอร์ที่เลือก")
@@ -2311,7 +2316,7 @@ def execute_job(action, options, started):
                     f"ตรวจและเผยแพร่ {done:,}/{total:,} · {name}", done))
         elif action == "upload":
             export = _song_export_module()
-            root = export.songs_root(PREFS["workspace"])
+            root = export.songs_root(worker_prefs()["workspace"])
             pointer, _ = export._read_current(root)
             if not pointer:
                 raise ValueError("ไม่พบ XStageSong/current.json กรุณาสร้างเพลงก่อนอัปโหลด")
@@ -2374,7 +2379,7 @@ def execute_job(action, options, started):
                     worker_job()["total"] = total
                 update(f"ดาวน์โหลดและตรวจ MD5 {done:,}/{total:,} ไฟล์", done)
             result = GOOGLE.download_library(
-                PREFS["download"], kind=kind, cancelled=worker_cancel(),
+                worker_prefs()["download"], kind=kind, cancelled=worker_cancel(),
                 on_status=update, on_item=downloaded_item)
             result["message"] = f"ดาวน์โหลด {result['files']} ไฟล์เสร็จแล้ว · {result['path']}"
         elif action == "check-update":
@@ -2450,7 +2455,7 @@ def validate_build_request(data):
         raise ValueError("รหัสรายการเพลงไม่ถูกต้อง กรุณาสแกนและเลือกรายการใหม่")
     if not isinstance(data.get("audio_only", False), bool):
         raise ValueError("ประเภทคำสั่งสร้างเพลงไม่ถูกต้อง")
-    export_format = data.get("export_format", PREFS.get("export_format", "xsk"))
+    export_format = data.get("export_format", worker_prefs().get("export_format", "xsk"))
     if export_format not in ("xsk", "xstage", "m4a"):
         raise ValueError("รูปแบบส่งออกไม่รองรับ")
     if (export_format != "xsk" or data.get("audio_only")) and not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
@@ -2480,7 +2485,7 @@ def validate_build_request(data):
             "ซึ่ง Song Studio PC Engine รุ่นนี้ยังแปลง NCN ไม่ได้ · "
             "กรุณาเลือก MP3/M4A/WAV หรือ MIDI/KAR ที่รองรับ")
 
-    mode = PREFS.get("mode", "original")
+    mode = worker_prefs().get("mode", "original")
     if mode not in ("original", "instrumental"):
         raise ValueError("ประเภทเสียงที่เลือกไม่ถูกต้อง")
     if mode == "instrumental" and not ai_available():
@@ -2492,7 +2497,7 @@ def validate_build_request(data):
     for row in rows[:5]:
         if not Path(row["path"]).is_file():
             raise ValueError("ไม่พบไฟล์ต้นฉบับ: " + str(row["path"]))
-    workspace = PREFS.get("workspace", "").strip()
+    workspace = worker_prefs().get("workspace", "").strip()
     if not workspace:
         raise ValueError("กรุณาเลือกโฟลเดอร์เก็บเพลงก่อนสร้าง")
     output = Path(workspace).expanduser()
@@ -2646,6 +2651,7 @@ def start_job(data):
         _WORKER_LOCAL.id = job_id
         _WORKER_LOCAL.job = job_data
         _WORKER_LOCAL.cancel = cancel_event
+        _WORKER_LOCAL.prefs = preferences
         try:
             execute_job(action, data, now)
         finally:
@@ -2653,6 +2659,7 @@ def start_job(data):
     try:
         job_data = JOB
         cancel_event = CANCEL
+        preferences = dict(PREFS)
         thread = threading.Thread(target=bound_worker, daemon=True,
                                   name="xstage-studio-" + action + "-" + job_id[:6])
         with LOCK:
