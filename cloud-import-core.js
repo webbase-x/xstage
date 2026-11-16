@@ -10,7 +10,7 @@ const FONTS=new Set(['sf2','sf3']);
 const MIDI=new Set(['mid','midi','kar']);
 const VIDEO=new Set(['mp4','avi','mpg','mpeg','dat','vob','wmv','mkv','mov','webm','flv']);
 const OTHER_AUDIO=new Set(['wma','aiff','aif','opus']);
-const ROLES=new Set(['song','songs','lyric','lyrics','cursor','cursors']);
+const ROLES=new Set(['song','songs','lyric','lyrics','lyr','cur','cursor','cursors']);
 const S=[7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
   5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
   4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
@@ -75,10 +75,10 @@ function groupKey(path){
   const pieces=String(path||'').replace(/\\/g,'/').split('/').filter(Boolean);
   const base=(pieces.pop()||'').replace(/\.[^.]+$/,'');
   const folders=pieces.filter(p=>!ROLES.has(p.toLowerCase()));
-  // Pair separately organized AUDIO/<format> and VIDEO/<format> sources by
-  // relative bucket/basename. Duplicate companions still fail closed.
-  if(folders.length>=2&&['audio','video'].includes(folders[0].toLowerCase()))
-    folders.splice(0,2);
+  // Keep the enclosing format (AUDIO/MP3, VIDEO/MP4, MIDI/MID).
+  // SONG and LYRICS siblings still pair, but identical song codes in
+  // different formats must never accidentally merge into one song.
+  // NCN LYR/CUR siblings follow the same relative-code rule.
   return [...folders,base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
 }
 function scan(files){
