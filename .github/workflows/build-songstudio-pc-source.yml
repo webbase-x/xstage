@@ -9,6 +9,7 @@ on:
       - "studio/style.css"
       - "studio/pro-design.css"
       - "scripts/test_songstudio_created_xsk.py"
+      - "scripts/test_songstudio_xsk_stream.py"
       - "scripts/test_songstudio_json_pro.py"
       - "studio/entry.js"
       - "scripts/package-song-studio-pc.py"
