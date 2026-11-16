@@ -26,6 +26,13 @@ def main():
         faulthandler.enable(file=err, all_threads=True)
         try:
             os.chdir(ROOT)
+            # Python embeddable mode uses python313._pth and excludes the
+            # script directory from sys.path. runpy.run_path() also does not
+            # insert engine.py's parent for imports such as desktop_window.
+            # Trust only the bundled, SHA-verified application directory.
+            root_path = str(ROOT)
+            if root_path not in sys.path:
+                sys.path.insert(0, root_path)
             runpy.run_path(str(ROOT / "engine.py"), run_name="__main__")
         except BaseException:
             traceback.print_exc(file=err)
