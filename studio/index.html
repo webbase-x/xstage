@@ -350,15 +350,15 @@
                 <section id="tab-json-pro" class="tab">
           <div class="section-top"><div><div class="eyebrow">MIDI TO LYRICS JSON · PRO</div><h2>MIDI to Lyrics JSON</h2><p>เลือกโฟลเดอร์ต้นทางและปลายทางแยกจากกัน · สแกนทุกโฟลเดอร์ย่อย · คัดลอกเสียงต้นฉบับหรือแปลงรูปแบบ · ไม่แก้เวลาเนื้อร้อง</p></div><span class="chip amber">PRO LICENSE REQUIRED</span></div>
           <article class="panel">
-            <label for="json-pro-source">โฟลเดอร์เพลงต้นทาง</label>
+            <label for="json-pro-source">เลือกโฟลเดอร์นำเข้า</label>
             <div class="path-row"><input id="json-pro-source" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์ที่มีเพลงพร้อม LRC/JSON หรือ MIDI/NCN"><button type="button" class="button ghost" data-pick="json_source">เลือกต้นทาง</button></div>
-            <label for="json-pro-destination">โฟลเดอร์เก็บผลลัพธ์ (XStageSong)</label>
+            <label for="json-pro-destination">เลือกโฟลเดอร์ปลายทาง</label>
             <div class="path-row"><input id="json-pro-destination" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์ปลายทางที่แยกจากต้นทาง"><button type="button" class="button ghost" data-pick="json_destination">เลือกปลายทาง</button></div>
             <label for="json-pro-format">รูปแบบไฟล์เพลงในผลลัพธ์</label>
             <select id="json-pro-format" class="field"><option value="original">ต้นฉบับ · คัดลอกทุกไบต์</option><option value="m4a">แปลงเป็น M4A (AAC)</option><option value="mp3">แปลงเป็น MP3</option><option value="wav">แปลงเป็น WAV</option><option value="flac">แปลงเป็น FLAC</option><option value="ogg">แปลงเป็น OGG</option></select>
             <p class="hint">เก็บใน XStageSong/audio + lyrics พร้อม current.json และ Catalog มาตรฐาน Song Studio · ตรวจ SHA-256 กันซ้ำ · ไม่เขียนทับไฟล์เดิม · เวลาปาดเดิมที่อยู่ใน JSON จะถูกเก็บไว้</p>
-            <div class="toolbar"><button id="json-pro-inspect" type="button" class="button ghost">⌕ ตรวจโฟลเดอร์ย่อยทั้งหมด</button><button id="json-pro-start" type="button" class="button primary">▧ ส่งออกเพลง + Lyrics JSON</button></div>
-            <pre id="json-pro-report" class="xsk-pro-output" role="status" aria-live="polite">เลือกต้นทางและปลายทาง แล้วตรวจความพร้อมก่อนส่งออก</pre>
+            <div class="toolbar"><button id="json-pro-inspect" type="button" class="button ghost">⌕ ตรวจโฟลเดอร์ย่อยทั้งหมด</button><button id="json-pro-start" type="button" class="button primary">ตกลง</button></div>
+            <pre id="json-pro-report" class="xsk-pro-output" role="status" aria-live="polite">พร้อมสร้าง Lyrics JSON</pre>
           </article>
         </section>
 
