@@ -770,20 +770,39 @@ class Importer {
             let media=same?.midi;
             if(!media){
               const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
-              media=await uploadMedia(midiFile,code,pathFor(code,'midi','',name).slice(0,-1),name,
+              const midiFolder=item.kind==='NCN'
+                ? ['MIDI','NCN','SONG',pathFor(code,'midi','',name)[2]]
+                : pathFor(code,'midi','',name).slice(0,-1);
+              media=await uploadMedia(midiFile,code,midiFolder,name,
                 'audio/midi',midiHash,0,.75);
             }
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
             const lyrics=await uploadMedia(json,code,pathFor(code,'json','',jname).slice(0,-1),jname,
               'application/json',jsonHash,.75,.25);
-            // NCN .LYR/.CUR are decoded locally; do not store the raw
-            // cursor or lyric source in the private Drive song library.
+            // Keep lossless NCN sources in their native folders alongside the
+            // separately verified timed JSON used for all player platforms.
+            let ncnSource=same?.ncnSource||null;
+            if(item.kind==='NCN'&&item.lyr&&item.cur&&!ncnSource){
+              const bucket=pathFor(code,'midi','',code+'.mid')[2];
+              const sourcePart=async(source,role,extension)=>{
+                const hash=await core.hashBlob(source.file,()=>this.check());
+                const sourceName=base+'-'+hash.slice(0,16)+'.'+extension;
+                return uploadMedia(source.file,code,['MIDI','NCN',role,bucket],
+                  sourceName,'application/octet-stream',hash);
+              };
+              const nativeMidi=media.path?.startsWith('MIDI/NCN/SONG/')
+                ? media : await sourcePart(item.midi,'SONG',core.ext(midiFile.name));
+              const sourceLyrics=await sourcePart(item.lyr,'LYRICS','lyr');
+              const sourceCursor=await sourcePart(item.cur,'CURSOR','cur');
+              ncnSource={midi:nativeMidi,lyr:sourceLyrics,cur:sourceCursor};
+            }
             const ident=same?.webSongId||('browser/midi/'+midiHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const identity=core.songIdentity(doc,code,same);
             const record={...(same||{}),webSongId:ident,code,
               title:identity.title,artist:identity.artist,
-              sourceFormat:type,midi:media,lyrics};
+              sourceFormat:type,midi:media,lyrics,
+              ...(ncnSource?{ncnSource}: {})};
             delete record.lyr;delete record.cur;delete record.lrc;
             if(same){
               byPair.delete(String(same.midi?.md5Checksum||'').toLowerCase()+':'+
