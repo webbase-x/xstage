@@ -1552,8 +1552,9 @@ def build_xsk(rows, mode, options, *, progressive=False):
             # but not valid protected XSK song-code filenames. Allocate a
             # safe numeric code instead of rejecting an otherwise valid song.
             if not package.CODE_RE.fullmatch(preferred):
-                preferred = ""
-            row["code"] = preferred or source.stem
+                preferred = "1".zfill(int(options.get(
+                    "code_length", PREFS.get("code_length", "6"))))
+            row["code"] = source.stem
             _lrc, doc, _fingerprint = lyrics_package(row, export=export)
             if not doc or not doc.get("lines"):
                 raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
