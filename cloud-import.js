@@ -345,7 +345,8 @@ class Importer {
     this.controller=null;this.folderHandle=null;this.saved=null;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.dom={};
     for(const key of ['open','dialog','close','pick','input','scan','start','pause','resume','cancel',
-      'allow-create','source','total','ready','fonts','blocked','examples','progress','progress-label',
+      'allow-create','xsk-consent','xsk-password',
+      'source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
     this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
     this.dom.open?.addEventListener('click',()=>this.open());
@@ -401,7 +402,8 @@ class Importer {
     if(!this.plan)return;
     const editor=this.videoEditor;
     const pending=editor?.pendingCount()||0;
-    const ready=this.plan.songs.length-pending+this.plan.midis.length;
+    const ready=this.plan.songs.length-pending+this.plan.midis.length+
+      this.plan.xsks.length;
     this.dom.ready.textContent=ready.toLocaleString('th-TH');
     this.dom.blocked.textContent=(this.plan.blocked.length+pending).toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,6).map(x=>x.key+' · '+x.reason);
@@ -413,7 +415,8 @@ class Importer {
   refreshButtons(){
     const approvedVideos=this.videoEditor?.eligibleCount()||0;
     const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
-    const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+this.plan.fonts.length)>0;
+    const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+
+      this.plan.xsks.length+this.plan.fonts.length)>0;
     this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
@@ -486,7 +489,8 @@ class Importer {
         :hasRelativePaths?' (เปิดใหม่ต้องเลือกโฟลเดอร์เดิมอีกครั้ง)'
         :' (เบราว์เซอร์ไม่ได้ส่งโครงสร้างโฟลเดอร์ · ตรวจสอบชุดเพลงให้ครบก่อนนำเข้า)');
     this.dom.total.textContent=this.plan.files.toLocaleString('th-TH');
-    this.dom.ready.textContent=(this.plan.songs.length+this.plan.midis.length).toLocaleString('th-TH');
+    this.dom.ready.textContent=(this.plan.songs.length+this.plan.midis.length+
+      this.plan.xsks.length).toLocaleString('th-TH');
     this.dom.fonts.textContent=this.plan.fonts.length.toLocaleString('th-TH');
     this.dom.blocked.textContent=this.plan.blocked.length.toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,7).map(x=>x.key+' · '+x.reason);
@@ -566,6 +570,24 @@ class Importer {
     this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
+    let xskKey=null;
+    if(this.plan.xsks.length){
+      try{
+        if(this.plan.accessKeys.length!==1)
+          fail('พบ XSK แต่ต้องมีไฟล์ XStageSong-access.xskkey เพียงหนึ่งไฟล์ในโฟลเดอร์ที่เลือก');
+        if(!this.dom['xsk-consent']?.checked)
+          fail('ต้องยืนยันว่าต้องการถอด XSK และส่ง MIDI + Lyrics JSON ไปยัง Google Drive ส่วนตัว');
+        const password=this.dom['xsk-password']?.value||'';
+        if(!scope.XStageXsk)fail('ยังไม่โหลดตัวอ่าน XSK ของเบราว์เซอร์');
+        xskKey=await scope.XStageXsk.unlockAccess(this.plan.accessKeys[0].file,password);
+      }catch(error){
+        this.running=false;this.controller=null;this.refreshButtons();
+        this.status('ไม่สามารถเปิดสิทธิ์ XSK: '+error.message);
+        return;
+      }finally{
+        if(this.dom['xsk-password'])this.dom['xsk-password'].value='';
+      }
+    }
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
     drive.signal=()=>this.controller.signal;
     try{
@@ -609,7 +631,8 @@ class Importer {
       const work=[...this.plan.fonts.map(x=>({...x,isFont:true})),
         ...this.plan.songs.filter(x=>!x.video||this.videoEditor?.get(x))
           .map(x=>({...x,isFont:false,isMidi:false})),
-        ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true}))];
+        ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true})),
+        ...this.plan.xsks.map(x=>({...x,isFont:false,isMidi:false,isXsk:true}))];
       const pendingVideos=this.videoEditor?.pendingCount()||0;
       if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
         ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
@@ -674,9 +697,17 @@ class Importer {
           generation,songCount:rows.size});
         this.status('เผยแพร่ DB แล้ว · '+rows.size.toLocaleString('th-TH')+' เพลง');
       };
-      for(const item of work){
+      for(const originalItem of work){
         this.check();
+        let item=originalItem;
         try{
+          if(item.isXsk){
+            const opened=await scope.XStageXsk.openPackage(item.file,xskKey);
+            // Decrypt in memory. Only the canonical MIDI+JSON pair is ever
+            // uploaded into the existing private Drive v4 catalog.
+            item={...item,isMidi:true,code:opened.code,kind:'XSK',
+              midi:{file:opened.midi},json:{file:opened.lyrics}};
+          }
           if(item.isMidi){
             const runtime=scope.XStageBrowserMidi;
             if(!runtime)fail('ไม่พบระบบ MIDI ที่ติดมากับหน้าเว็บ · อัปเดตเว็บก่อนนำเข้า');
@@ -717,7 +748,8 @@ class Importer {
             }
             if(candidates.length&&!same){this.stats.conflicts++;finished++;
               show('รหัส MIDI ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;}
-            const type=item.kind==='NCN'?'NCN':item.kind==='KAR'?'KAR':'SMF';
+            const type=item.kind==='XSK'?'XSK':item.kind==='NCN'?'NCN':
+              item.kind==='KAR'?'KAR':'SMF';
             const base=safeName(code);
             let media=same?.midi;
             if(!media){
@@ -933,7 +965,8 @@ class Importer {
       this.status(aborted(error)||this.stopRequested?
         'หยุดงานแล้ว · ไฟล์ที่ส่งสำเร็จยังอยู่ · เปิดใหม่และกดทำต่อ':
         'หยุดเพราะข้อผิดพลาด: '+(error.message||error)+' · ตรวจแล้วกดทำต่อ');
-      await this.save({status:'paused',total:this.plan.songs.length+this.plan.fonts.length,
+      await this.save({status:'paused',total:this.plan.songs.length+
+        this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length,
         error:aborted(error)?'paused':String(error.message||error)});
     }finally{
       this.running=false;this.controller=null;this.refreshButtons();
