@@ -54,6 +54,17 @@ class PCExportTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_publish_reuses_one_preflight_plan(self):
+        from unittest.mock import patch
+        with (patch.object(pc_export, "_plan_files", wraps=pc_export._plan_files) as plan,
+              patch.object(pc_export, "_source", wraps=pc_export._source) as source,
+              patch.object(pc_export, "_existing", wraps=pc_export._existing) as existing):
+            result = pc_export.publish(self.source, str(self.destination), export)
+        self.assertEqual(result["songCount"], 1)
+        plan.assert_called_once()
+        source.assert_called_once()
+        existing.assert_called_once()
+
     def test_copy_both_folders_and_reuse_without_overwriting(self):
         inspected = pc_export.inspect(self.source, str(self.destination), export)
         self.assertEqual(Path(inspected["destination"]).resolve(), (self.destination / "XStageSong").resolve())

@@ -269,25 +269,29 @@ def _plan_files(source, destination):
     return files, replacements, new_count, copied_bytes, versioned
 
 
-def inspect(source_root, selected_destination, export):
+def inspect(source_root, selected_destination, export, *, _include_plan=False):
     source = Path(source_root).expanduser().resolve()
     target = destination_root(selected_destination)
     if target != source and (target.is_relative_to(source) or source.is_relative_to(target)):
         raise ValueError("โฟลเดอร์ปลายทางทับซ้อนพื้นที่สร้างเพลง · เลือก XStageSong เดียวกันหรือแยกคลัง")
     records = _source(source, export)
     existing = _existing(target)
-    files, _replacements, missing, bytes_to_copy, versioned = _plan_files(source, target)
+    files, replacements, missing, bytes_to_copy, versioned = _plan_files(source, target)
     db_path, installed = _sqlite_bridge().database_location(target)
-    return {"source": str(source), "destination": str(target),
-            "songs": len(records), "existingSongs": len(existing),
-            "files": len(files), "newFiles": missing,
-            "updatedLyrics": versioned,
-            "bytesToCopy": bytes_to_copy,
-            "database": str(db_path),
-            "portableDatabase": str(target / "DB" / "songs-portable.json"),
-            "webApkRequiresDriveUpload": True,
-            "databaseAction": "update" if db_path.is_file() else "create",
-            "databaseInstalled": installed}
+    report = {"source": str(source), "destination": str(target),
+              "songs": len(records), "existingSongs": len(existing),
+              "files": len(files), "newFiles": missing,
+              "updatedLyrics": versioned,
+              "bytesToCopy": bytes_to_copy,
+              "database": str(db_path),
+              "portableDatabase": str(target / "DB" / "songs-portable.json"),
+              "webApkRequiresDriveUpload": True,
+              "databaseAction": "update" if db_path.is_file() else "create",
+              "databaseInstalled": installed}
+    # The UI inspect action returns only metadata. A direct publish reuses this
+    # exact verified plan rather than reading and hashing the whole library
+    # a second time before the actual atomic file-copy checks.
+    return (report, records, existing, files, replacements) if _include_plan else report
 
 
 def _atomic_copy(source_file, target_file):
@@ -395,12 +399,10 @@ def portable_catalog(destination, rows, generation):
 
 
 def publish(source_root, selected_destination, export, *, cancelled=None, progress=None):
-    report = inspect(source_root, selected_destination, export)
+    report, records, previous, files, replacements = inspect(
+        source_root, selected_destination, export, _include_plan=True)
     source = Path(report["source"])
     dest = Path(report["destination"])
-    records = _source(source, export)
-    previous = _existing(dest)
-    files, replacements, _count, _bytes, _versions = _plan_files(source, dest)
     planned = [_pc_row(row, replacements) for row in records]
     combined = dict(previous)
     for row in planned:

@@ -35,11 +35,17 @@ try {
     $ffprobe = Check-File '.runtime\tools\ffprobe.exe'
     $sfont = Check-File '.runtime\soundfonts\GeneralUser-GS.sf2'
     $engine = Check-File 'engine.py'
+    [void](Check-File 'desktop_window.py')
+    [void](Check-File 'desktop_bootstrap.py')
+    [void](Check-File 'json_source_stream.py')
+    [void](Check-File '.runtime\qt-site\PySide6\QtWebEngineWidgets.pyd')
     [void](Check-File 'ncn_lyrics.py')
     [void](Check-File 'ai_lyrics.py')
     [void](Check-File '.runtime\\whisper\\whisper-cli.exe')
     [void](Check-File '.runtime\\models\\ggml-base.bin')
     [void](Check-File 'google_drive.py')
+    $qtProcess = Get-ChildItem -LiteralPath (Join-Path $Runtime 'qt-site\PySide6') -Filter 'QtWebEngineProcess.exe' -Recurse -File | Select-Object -First 1
+    if (!$qtProcess) { throw 'Bundled Qt WebEngine runtime is missing.' }
     $livePreview = Check-File 'live_preview.py'
     $aiScript = Check-File 'ai_separate.py'
     $aiModel = Check-File '.runtime\models\htdemucs_fp16weights.onnx'
@@ -102,21 +108,36 @@ try {
         }
     } finally { $stream.Dispose() }
     if ((Get-Item $aiModel).Length -lt 100MB) { throw 'AI Separation model is incomplete.' }
-    Write-Status 'SoundFont and bundled AI ONNX dependencies verified. Nothing to install or download.'
+    $qtTest = & $py -c "from PySide6.QtWebEngineWidgets import QWebEngineView; print('QT_OK')" 2>&1
+    if ($LASTEXITCODE -ne 0 -or ($qtTest -notcontains 'QT_OK')) { throw 'Bundled Qt Desktop runtime check failed.' }
+    Write-Status 'SoundFont, AI and native Qt WebEngine runtime verified. Nothing to install or download.'
     if ($NoLaunch) {
         Write-Status 'Offline readiness check passed (NoLaunch mode).'
         exit 0
     }
+    # The bootstrap writes full traceback and Qt crash diagnostics to disk.
+    # Keep pythonw.exe: no console, no browser window and no pipe deadlocks.
+    $bootstrap = Check-File 'desktop_bootstrap.py'
+    $errorLog = Join-Path $Root 'engine-startup-error.log'
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = $pyw
-    $start.Arguments = '"' + $engine + '"'
+    $start.Arguments = '"' + $bootstrap + '"'
     $start.WorkingDirectory = $Root
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
     $proc = [System.Diagnostics.Process]::Start($start)
     if ($null -eq $proc) { throw 'Could not launch the local Song Studio Engine.' }
-    Start-Sleep -Milliseconds 900
-    if ($proc.HasExited) { throw ('Local Engine failed at launch (exit {0}).' -f $proc.ExitCode) }
+    Start-Sleep -Milliseconds 1500
+    if ($proc.HasExited) {
+        $details = if (Test-Path -LiteralPath $errorLog) {
+            (Get-Content -LiteralPath $errorLog -Raw -Encoding UTF8).Trim()
+        } else { '' }
+        if ([string]::IsNullOrWhiteSpace($details)) {
+            $details = 'No traceback logged; check Windows Event Viewer for a native Qt crash.'
+        }
+        $details = $details.Substring(0, [Math]::Min(1600, $details.Length))
+        throw ('Local Engine failed at launch (exit {0}): {1}' -f $proc.ExitCode, $details)
+    }
     if ($ReadySignal) {
         $allowedParent = (Resolve-Path -LiteralPath (Split-Path -Parent $Root)).Path
         $signalParent = (Resolve-Path -LiteralPath (Split-Path -Parent $ReadySignal)).Path
@@ -125,7 +146,7 @@ try {
         }
         [IO.File]::WriteAllText($ReadySignal, ("READY:{0}" -f $proc.Id), (New-Object Text.UTF8Encoding($false)))
     }
-    Write-Status ("Ready: Engine PID {0}, local UI opens in Edge or default browser." -f $proc.Id)
+    Write-Status ("Ready: Engine PID {0}, native Qt Desktop UI opens without Edge/browser." -f $proc.Id)
     Write-Status 'All audio processing and files remain on this PC.'
     exit 0
 }

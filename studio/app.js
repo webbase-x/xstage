@@ -813,7 +813,6 @@
     $('selected-count').textContent = `เลือกแล้ว ${fmtNum(selected.size)} เพลง`;
     $('upload-inspect').disabled = busy;
     $('pc-export-inspect').disabled = busy;
-    $('json-pro-inspect').disabled=busy;
     $('json-pro-start').disabled=busy||!proEnabled;
     $('pc-export-start').disabled = busy;
     $('upload-soundfont-button').disabled = busy || !googleConnected;
@@ -844,7 +843,6 @@
     const netOK=canLaunch('upload-folder');
     $('xsk-stream-build').disabled=!libraryOK;
     $('json-pro-start').disabled=!libraryOK||!proEnabled;
-    $('json-pro-inspect').disabled=!libraryOK;
     $('ai-lyrics-start').disabled=!audioOK||!Number.isInteger(aiSongId)||!aiEngineReady;
     $('ai-lyrics-separate').disabled=!audioOK||!Number.isInteger(aiSongId)||!aiSeparationAvailable;
     $('ai-lyrics-align').disabled=!audioOK||!Number.isInteger(aiSongId)||
@@ -3413,26 +3411,6 @@
   $('settings-logout').addEventListener('click',async()=>{if(await confirmStudio('ออกจากบัญชี Google ใน Song Studio ใช่หรือไม่?', 'ยืนยันออกจากบัญชี'))void run('logout');});
   $('upload-folder').addEventListener('change',()=>{void inspectUploadFolder();});
 
-  async function inspectJsonPro() {
-    const label=$('json-pro-report');
-    const finishInspection=beginInspection('json-pro-report','กำลังตรวจรายการเพลงและ Lyrics JSON ในโฟลเดอร์ย่อยทั้งหมด');
-    if(!finishInspection)return null;
-    try{
-      await saveInputs(['json-pro-source','json-pro-destination']);
-      const report=await api('/api/json-pro/inspect');
-      label.textContent='ตรวจ '+fmtNum(report.fileCount)+' ไฟล์ · พร้อมแปลง '+fmtNum(report.ready)+
-        ' · เนื้อร้องไม่ครบ '+fmtNum(report.incomplete)+' · ไม่รองรับ '+fmtNum(report.unsupported)+
-        '\\nต้นทาง: '+report.folder+'\\nปลายทาง: '+(prefs.json_destination||'ยังไม่ได้เลือก')+
-        (report.examples?.length?'\\nข้าม: '+report.examples.slice(0,5).map(x=>x.name+' '+x.reason).join(' | '):'');
-      return report;
-    }catch(error){
-      label.textContent='ตรวจไม่สำเร็จ: '+error.message;
-      message(error.message);
-      return null;
-    } finally {
-      finishInspection();
-    }
-  }
   async function startJsonPro() {
     if(!canLaunch('json-pro-export') || !proEnabled)
       return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
@@ -3445,9 +3423,8 @@
     const code_length=Number($('json-pro-code-length').value);
     if(!Number.isInteger(code_length)||code_length<1||code_length>12)
       return message('จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12');
-    // Do not synchronously scan all songs before starting: the PC job scans
-    // once in its worker and publishes real discovered/validated counts.
-    // The separate Inspect button remains available for deliberate preflight.
+    // No full-library preflight: the worker reads existing source companions
+    // by filename code and starts conversion on the first complete song.
     await saveInputs(['json-pro-source','json-pro-destination']);
     await saveInputs(['json-pro-code-style','json-pro-code-length']);
     $('json-pro-report').textContent=
@@ -3459,10 +3436,9 @@
       return;
     }
     $('json-pro-report').textContent=
-      'PC Engine รับงานแล้ว · ระบบกำลังสแกนหนึ่งรอบและทยอยส่งออกเพลง\\n'+
-      'ดูจำนวนไฟล์ที่พบจริง และจำนวนชุดที่ตรวจแล้วในแผงความคืบหน้าของงาน';
+      'PC Engine รับงานแล้ว · จับคู่ตามรหัสต้นฉบับและเริ่มแปลงเพลงทันที\\n'+
+      'ไม่รอตรวจทุกไฟล์ · ผลลัพธ์แต่ละเพลงตรวจแล้วจึงบันทึก';
   }
-  $('json-pro-inspect').addEventListener('click',()=>{void inspectJsonPro();});
   $('json-pro-start').addEventListener('click',()=>{void startJsonPro();});
   // Inspect on "ตกลง" only, not while users are still choosing folders.
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
