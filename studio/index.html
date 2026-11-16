@@ -28,7 +28,7 @@
         <button class="nav-button" data-tab="ai-lyrics"><span class="nav-glyph" aria-hidden="true">✦</span><span>Lyrics AI<small>เสียง/วิดีโอ · อ่านแท็ก/AI · เวลา · พรีวิว</small></span></button>
         <button class="nav-button" data-tab="lyric-head-tail"><span class="nav-glyph" aria-hidden="true">⇄</span><span>แก้ไข Lyrics JSON<small>2 บรรทัดแรก/ท้าย · จัดกลุ่ม · สำรอง · Undo</small></span></button>
         <button class="nav-button" data-tab="upload"><span class="nav-glyph" aria-hidden="true">↑</span><span>นำเข้า X-Stage Karaoke Online<small>Google Drive · คลังส่วนตัว</small></span></button>
-        <button class="nav-button" data-tab="pc-export"><span class="nav-glyph" aria-hidden="true">▣</span><span>นำเข้า X-Stage Karaoke PC<small>AUDIO + LYRICS + SQLite DB</small></span></button>
+        <button class="nav-button" data-tab="pc-export"><span class="nav-glyph" aria-hidden="true">▣</span><span>ส่งออกคลัง Karaoke<small>PC SQLite + ฐาน JSON สำหรับ Web/APK</small></span></button>
         <button class="nav-button" data-tab="download"><span class="nav-glyph" aria-hidden="true">↓</span><span>ดาวน์โหลด<small>Song · DB · ZIP</small></span></button>
         <button class="nav-button" data-tab="settings"><span class="nav-glyph" aria-hidden="true">⚙</span><span>ตั้งค่า<small>โฟลเดอร์ · Google · อัปเดต</small></span></button>
       </nav>
@@ -465,13 +465,13 @@
         </section>
 
         <section id="tab-pc-export" class="tab">
-          <div class="section-top"><div><div class="eyebrow">KARAOKE PC · LOCAL LIBRARY</div><h2>นำเข้า X-Stage Karaoke PC</h2><p>นำเข้าเพลงและเนื้อร้องจาก XStageSong พร้อมสร้างหรืออัปเดตฐาน SQLite ของ Karaoke PC (songs.sqlite3) · ทำงานออฟไลน์ · รักษาข้อมูลเดิม</p></div><span class="chip info">OFFLINE</span></div>
+          <div class="section-top"><div><div class="eyebrow">XSTAGESONG · CROSS-PLATFORM EXPORT</div><h2>ส่งออกคลังสำหรับ X-Stage Karaoke PC / Web / APK</h2><p>ส่งออก AUDIO, LYRICS, ฐาน SQLite สำหรับ Karaoke PC และ DB/songs-portable.json สำหรับโอนคลัง · Web/APK ใช้ Catalog File ID ส่วนตัวบน Google Drive ซึ่งต้องเผยแพร่ผ่านเมนูนำเข้า Online หลังส่งออก</p></div><span class="chip info">OFFLINE</span></div>
           <article class="panel">
             <div class="section-heading"><div><h2>เลือกตำแหน่งเก็บคลังเพลง PC</h2><p>เลือกโฟลเดอร์ติดตั้ง Karaoke PC, Songs หรือ XStageSong ได้ · ระบบใช้ XStageSong/AUDIO และ LYRICS ชื่อเดียวกัน · หากพบโปรแกรมจะอัปเดต Data/songs.sqlite3 ของเครื่องนั้น หากไม่พบจะสร้าง SQLite ส่งออกไว้ที่ XStageSong/DB</p></div></div>
             <div class="path-row"><input id="pc-export-folder" type="text" class="field" autocomplete="off" placeholder="เช่น D:\\Karaoke หรือ D:\\Karaoke\\Songs\\XStageSong"><button class="button ghost" type="button" data-pick="pc_export_folder">เลือกตำแหน่ง</button></div>
-            <div class="toolbar"><button id="pc-export-inspect" class="button ghost" type="button">⌕ ตรวจคลังเพลงและพื้นที่</button><button id="pc-export-start" class="button primary" type="button">▣ นำเข้า X-Stage Karaoke PC</button></div>
-            <p id="pc-export-report" class="hint" role="status" aria-live="polite">เลือกตำแหน่งปลายทาง · ระบบจะตรวจไฟล์ ฐานข้อมูล SQLite และพื้นที่โดยไม่เปลี่ยนข้อมูล</p>
-            <p id="pc-export-status" class="hint" role="status" aria-live="polite">ตรวจชื่อไฟล์ซ้ำก่อนคัดลอก · ใช้ SHA-256 ตรวจความสมบูรณ์ · ถ้าชื่อซ้ำแต่เนื้อหาต่างกันจะหยุดเพื่อให้ตรวจสอบ ไม่เขียนทับเอง · บันทึก current.json หลังคัดลอกสำเร็จ และสร้าง/อัปเดต SQLite ของ Karaoke PC แบบมีการสำรองฐานเดิม</p>
+            <div class="toolbar"><button id="pc-export-inspect" class="button ghost" type="button">⌕ ตรวจคลังเพลงและพื้นที่</button><button id="pc-export-start" class="button primary" type="button">▣ ส่งออกไฟล์พร้อมฐานข้อมูล</button></div>
+            <p id="pc-export-report" class="hint" role="status" aria-live="polite">เลือกตำแหน่งปลายทาง · ระบบจะตรวจไฟล์ SQLite และรายการเพลง JSON สำหรับทุกแพลตฟอร์มโดยไม่แก้ข้อมูล</p>
+            <p id="pc-export-status" class="hint" role="status" aria-live="polite">ตรวจชื่อไฟล์ซ้ำก่อนคัดลอก · ใช้ SHA-256 ตรวจความสมบูรณ์ · ถ้าชื่อซ้ำแต่เนื้อหาต่างกันจะหยุดเพื่อให้ตรวจสอบ ไม่เขียนทับเอง · บันทึก current.json หลังคัดลอกสำเร็จ สร้าง/อัปเดต SQLite สำหรับ Karaoke PC และ JSON DB สำหรับนำไปเผยแพร่ Web/APK ผ่านบัญชี Google Drive ที่ได้รับอนุญาต</p>
           </article>
           <article class="panel import-preview-panel" aria-label="ทดลองเล่นเพลงก่อนนำเข้า">
             <div class="section-heading"><div><h2>♫ พรีวิวทดลองเล่นเพลงก่อนนำเข้า</h2><p>เลือกเพลงจากไฟล์ต้นทาง ฟังเพลงและดูเนื้อร้องพร้อมเวลาในหน้านี้ · ไม่คัดลอกหรืออัปโหลดจากการทดลองเล่น</p></div><span class="chip info">READ ONLY</span></div>
