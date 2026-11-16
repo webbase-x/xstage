@@ -3128,20 +3128,20 @@ def prepare_live_preview(song_id, music_volume=0.8, synth_volume=0.8, source_cho
     }
 
 
-def job_snapshot():
+def job_snapshot(job_id=None):
     with LOCK:
-        job = dict(JOB)
-        worker_alive = bool(JOB_THREAD and JOB_THREAD.is_alive())
+        entry = ACTIVE_JOBS.get(job_id) if job_id else ACTIVE_JOBS.get(JOB.get("id"))
+        job = dict(entry["job"] if entry else JOB)
+        thread = entry["thread"] if entry else JOB_THREAD
+        worker_alive = bool(thread and thread.is_alive())
     if worker_alive and job["state"] != "running":
-        # The previous worker may still be cleaning up its subprocess/files.
-        # Never unlock the controls until it has actually exited.
         job["finalState"] = job["state"]
         job["state"] = "running"
         job["stage"] = "กำลังคืนทรัพยากรของงานเดิม"
     if job["state"] == "running":
-        elapsed = max(0, time.monotonic() - job["started"])
+        elapsed = max(0, time.monotonic() - job.get("started", time.monotonic()))
         job["elapsed"] = elapsed
-        job["idleFor"] = round(time.monotonic() - job["updated"])
+        job["idleFor"] = round(time.monotonic() - job.get("updated", time.monotonic()))
         if job["total"] > 0 and 0 < job["completed"] <= job["total"]:
             job["eta"] = (elapsed / job["completed"]) * (job["total"] - job["completed"])
         else:
@@ -3149,6 +3149,12 @@ def job_snapshot():
     job.pop("updated", None)
     job.pop("started", None)
     return job
+
+def job_snapshots():
+    with LOCK:
+        ids = list(ACTIVE_JOBS)[-20:]
+    return [job_snapshot(job_id) for job_id in reversed(ids)]
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "XStageStudioPCSource/0.1"
@@ -3286,7 +3292,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/status":
                 self._json({"version": STATUS_VERSION, "build": STATUS_BUILD,
-                    "job": job_snapshot(), "preferences": dict(PREFS),
+                    "job": job_snapshot(), "jobs": job_snapshots(),
+                    "resources": resource_snapshot(), "preferences": dict(PREFS),
                     "soundfonts": font_list(), "presets": formats(),
                     "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
@@ -3756,19 +3763,27 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/jobs":
                 self._json(start_job(payload))
             elif path == "/api/jobs/cancel":
+                requested = payload.get("id")
+                if requested is not None and not isinstance(requested, str):
+                    raise ValueError("รหัสงานไม่ถูกต้อง")
                 with LOCK:
-                    active = JOB["state"] == "running" and not CANCEL.is_set()
+                    job_id = requested if requested is not None else JOB.get("id")
+                    entry = ACTIVE_JOBS.get(job_id)
+                    if requested is not None and entry is None:
+                        raise ValueError("ไม่พบเลขงานที่ต้องการยกเลิก")
+                    active = bool(entry and entry["thread"] and entry["thread"].is_alive()
+                                  and not entry["cancel"].is_set())
                     if active:
-                        CANCEL.set()
-                        JOB["stage"] = "กำลังยกเลิกงาน · รอหยุดให้เรียบร้อย"
-                        JOB["updated"] = time.monotonic()
-                    p = PROCESS if active else None
+                        entry["cancel"].set()
+                        entry["job"]["stage"] = "กำลังยกเลิกงาน · รอหยุดให้เรียบร้อย"
+                        entry["job"]["updated"] = time.monotonic()
+                    p = entry.get("process") if active else None
                 if p and p.poll() is None:
                     try:
                         p.terminate()
                     except OSError:
                         pass
-                self._json({"ok": True, "stopping": active})
+                self._json({"ok": True, "id": job_id, "stopping": active})
             elif path.startswith("/api/song/"):
                 row = FILE_BY_ID.get(int(path.rsplit("/", 1)[-1]))
                 if not row:
