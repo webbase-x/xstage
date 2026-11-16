@@ -225,6 +225,9 @@ try {
   let simulatedJob = {id:'',kind:'',state:'idle',stage:'พร้อม',detail:'',
                       completed:0,total:0,logs:[]};
   const uploadRequests = [];
+  let uploadPreflightRequests=0;
+  let releaseUploadPreflight;
+  const uploadPreflightGate=new Promise(resolve=>{releaseUploadPreflight=resolve;});
   let lyricBulkReady=false,bulkBackup=null;
   const bulkGroup={id:'intro-verified-1234',position:'first',
     label:'บรรทัดแรก',text:'[X-Stage Karaoke]',count:3,
@@ -359,6 +362,10 @@ try {
     } else if (url.pathname === '/api/ai-lyrics-approve') {
       response = {ok:true,lines:2,message:'บันทึก LRC ที่ผู้ใช้ตรวจแก้แล้ว'};
     } else if (url.pathname === '/api/upload-folder/inspect') {
+      uploadPreflightRequests++;
+      // Hold the first preflight until the Upload click has joined it.
+      // Previously the second caller got null and reported zero ready songs.
+      await uploadPreflightGate;
       response = {folder:'C:/XStage/XStageSong',fileCount:4,ready:2,
                   incomplete:1,unsupported:1,kinds:{M4A:2},examples:[]};
     } else if (url.pathname === '/api/songs/ids') {
@@ -676,7 +683,13 @@ try {
   assert.equal(await pc.locator('#upload-folder-button').isEnabled(),true);
   assert.equal(await pc.locator('#upload-inspect').isVisible(),false,
     'Upload preflight button is intentionally hidden; upload runs preflight');
+  // Deterministically reproduce clicking Upload while the folder-change
+  // preflight is still waiting on the Local Engine response.
+  const firstPreflight=pc.waitForRequest(req=>new URL(req.url()).pathname==='/api/upload-folder/inspect');
+  await pc.dispatchEvent('#upload-folder','change');
+  await firstPreflight;
   await pc.click('#upload-folder-button');
+  releaseUploadPreflight();
   await pc.waitForFunction(()=>document.querySelector('#upload-folder-report')?.textContent.includes('ชุดสมบูรณ์ 2'));
   try {
     await pc.locator('#studio-confirm-dialog[open]').waitFor({timeout:5000});
@@ -692,6 +705,8 @@ try {
     throw new Error('Upload confirmation not shown after successful preflight: '+
       JSON.stringify({diagnostics,pcErrors})+'; '+error.message);
   }
+  assert.equal(uploadPreflightRequests,1,
+    'Upload must join the running folder preflight rather than starting or rejecting a second inspection');
   const uploadJob=pc.waitForRequest(req=>{
     try{return new URL(req.url()).pathname==='/api/jobs' &&
       req.postDataJSON()?.action==='upload-folder';}catch{return false;}
