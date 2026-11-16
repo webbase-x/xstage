@@ -81,6 +81,47 @@ class JsonProTests(unittest.TestCase):
         self.assertTrue(media.read_bytes().startswith(b"ID3"))
         self.assertEqual(record["sourceFormat"], "MP3")
 
+    def test_editing_only_lyrics_creates_new_immutable_version(self):
+        first = self.run_export()
+        self.assertEqual(first["created"], 1)
+        root = self.dest / "XStageSong"
+        original = export.existing_records(root)[0]
+        audio_before = export.safe_media_path(root, original["audio"]["path"], "audio")
+        lyrics_before = export.safe_media_path(root, original["lyrics"]["path"], "lyrics")
+        original_audio = audio_before.read_bytes()
+        original_text = lyrics_before.read_text(encoding="utf-8")
+        self.lrc.write_text("[00:02.50]คำร้องที่แก้ไขแล้ว\\n[00:05.10]บรรทัดสอง",
+                            encoding="utf-8")
+        updated = self.run_export()
+        self.assertEqual(updated["created"], 1)
+        records = export.existing_records(root)
+        self.assertEqual(len(records), 2)
+        self.assertEqual(audio_before.read_bytes(), original_audio)
+        self.assertEqual(lyrics_before.read_text(encoding="utf-8"), original_text)
+        self.assertEqual(len({row["lyrics"]["path"] for row in records}), 2)
+        self.assertEqual(len({row["webSongId"] for row in records}), 2)
+        self.assertNotEqual(records[0]["sourceIdentity"]["lyricsSha256"],
+                            records[1]["sourceIdentity"]["lyricsSha256"])
+        again = self.run_export()
+        self.assertEqual(again["created"], 0)
+        self.assertEqual(again["skipped"], 1)
+
+    def test_json_title_and_artist_are_preserved_in_catalog(self):
+        self.mp3.unlink()
+        self.lrc.unlink()
+        midi = self.source / "02345.mid"
+        midi.write_bytes(b"MThd" + b"T" * 100)
+        doc = export.lrc_to_json("[00:01.50]เพลงไทย", "02345")
+        doc["title"] = "ชื่อเพลงจาก JSON"
+        doc["artist"] = "ศิลปินจาก JSON"
+        (self.source / "02345.json").write_text(
+            json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        result = self.run_export()
+        self.assertEqual(result["created"], 1)
+        saved = export.existing_records(self.dest / "XStageSong")[0]
+        self.assertEqual(saved["title"], "ชื่อเพลงจาก JSON")
+        self.assertEqual(saved["artist"], "ศิลปินจาก JSON")
+
     def test_output_formats_do_not_mask_other_formats(self):
         self.run_export()
         def fake_convert(src, out, fmt):
