@@ -149,6 +149,31 @@ class JsonProTests(unittest.TestCase):
                               output_format="original", export=export,
                               scanner=folder_upload)
 
+    def test_recover_complete_files_after_interrupted_journal_append(self):
+        with patch.object(export, "append_journal", side_effect=OSError("crash")):
+            with self.assertRaisesRegex(ValueError, "ไม่มีไฟล์ที่ส่งออกสำเร็จ"):
+                self.run_export()
+        root = self.dest / "XStageSong"
+        self.assertFalse((root / "current.json").exists())
+        self.assertTrue(any((root / "audio").rglob("*.mp3")))
+        resumed = self.run_export()
+        self.assertEqual(resumed["created"], 1)
+        self.assertEqual(resumed["errors"], 0)
+        self.assertEqual(len(export.existing_records(root)), 1)
+
+    def test_exclusive_publish_never_overwrites_racing_file(self):
+        stage = self.dest / "pending.json"
+        target = self.dest / "new.json"
+        stage.write_bytes(b"pending")
+        def collision(_source, _target):
+            target.write_bytes(b"other-process")
+            raise FileExistsError("another writer")
+        with patch.object(pro.os, "link", side_effect=collision):
+            with self.assertRaises(FileExistsError):
+                pro._publish_no_overwrite(stage, target)
+        self.assertEqual(target.read_bytes(), b"other-process")
+        self.assertEqual(stage.read_bytes(), b"pending")
+
     def test_recover_when_catalog_publish_was_interrupted(self):
         with patch.object(export, "publish_batch", side_effect=OSError("simulated interruption")):
             with self.assertRaisesRegex(OSError, "interruption"):
