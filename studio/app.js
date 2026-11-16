@@ -519,6 +519,10 @@
     $('pro-license-status').textContent=proEnabled
       ? 'เปิดใช้ X-Stage Song Studio PC Pro แล้ว'
       : 'รุ่นทั่วไป · โปรดเปิดใช้ Pro ในเมนูตั้งค่า';
+    // License activation is the only reason to show the license form.
+    // Never show the PRO brand on a failed/unverified local license.
+    $('pro-license-settings').hidden=proEnabled;
+    $('brand-pro-status').hidden=!proEnabled;
     if($('xsk-pro-badge'))$('xsk-pro-badge').textContent=proEnabled?'PRO ACTIVATED':'LOCKED · PRO';
     if($('created-xsk-build'))$('created-xsk-build').disabled=!proEnabled||busy;
     $('json-pro-start').disabled=!proEnabled||busy;
