@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "index.html"
+      - "stage.html"
       - "config.js"
       - "version.json"
       - "app.js"
@@ -22,6 +23,7 @@ on:
   pull_request:
     paths:
       - "index.html"
+      - "stage.html"
       - "config.js"
       - "version.json"
       - "app.js"
