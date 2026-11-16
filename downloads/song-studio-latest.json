@@ -2,15 +2,15 @@
   "name": "X-Stage Song Studio PC Ready",
   "platform": "windows-x64",
   "channel": "pc-ready",
-  "version": "0.3.49",
-  "build": 349,
+  "version": "0.3.50",
+  "build": 350,
   "available": true,
   "package_type": "portable_zip",
   "installer_available": false,
   "installer_file": null,
-  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.49-build349.zip",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.49-build349/X-Stage-Song-Studio-PC-Ready-v0.3.49-build349.zip",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.49-build349",
-  "sha256": "ecdbebaa770b508018002701b9563aff75245ed69e8a62fc77ea12c4dd81b5d8",
-  "notes": "Build 349: MIDI to XSK batched encryption, paired JSON metadata, secure no-overwrite export, lyric-version updates, crash recovery, and 8 updated menus. Windows portable ZIP; extract completely and launch the EXE."
+  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.50-build350.zip",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.50-build350/X-Stage-Song-Studio-PC-Ready-v0.3.50-build350.zip",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.50-build350",
+  "sha256": "e195ca2a3401db0dd8f55ec87fd2a5b48a06e2ea45b9576727518633e66f960d",
+  "notes": "Build 350: simplified MIDI to XSK and Lyrics JSON, one-click online uploads, minimized settings and Pro branding; microphone recording removed. Ready Offline ZIP with bundled Windows runtime and AI models."
 }
