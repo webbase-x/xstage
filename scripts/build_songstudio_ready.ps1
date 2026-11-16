@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.61-build361'
+$Version = 'v0.3.62-build362'
 if ($Version -match '^v(\d+\.\d+\.\d+)-build(\d+)$') {
     $AppVersion = $Matches[1]
     $AppBuild = [int]$Matches[2]
@@ -89,6 +89,7 @@ $map = @{
   'songstudio-pc/created_xsk_export.py' = 'created_xsk_export.py'
  'songstudio-pc/json_pro_export.py' = 'json_pro_export.py'
  'songstudio-pc/json_source_stream.py' = 'json_source_stream.py'
+ 'songstudio-pc/song_duplicate.py' = 'song_duplicate.py'
  'songstudio-pc/import_preview.py' = 'import_preview.py'
  'songstudio-pc/xsk_package.py' = 'xsk_package.py'
  'songstudio-pc/xsk_stream.py' = 'xsk_stream.py'
@@ -334,7 +335,7 @@ Step 'Native GUI EXE launcher compiled successfully'
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'X-Stage Song Studio.exe',
- 'engine.py', 'desktop_window.py', 'desktop_bootstrap.py', 'json_source_stream.py',
+ 'engine.py', 'desktop_window.py', 'desktop_bootstrap.py', 'json_source_stream.py', 'song_duplicate.py',
  'ncn_lyrics.py',
  'song_index.py',
  'ai_lyrics.py',
