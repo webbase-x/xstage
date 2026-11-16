@@ -164,6 +164,35 @@
     return payload;
   }
   const post = (path, data) => api(path, {method: 'POST', body: JSON.stringify(data)});
+  // Every long inspection gets an honest elapsed-time heartbeat. No invented
+  // percentages or made-up inspected-file counts; final data comes from PC Engine.
+  const inspectionTimers = new Map();
+  function beginInspection(targetId, description) {
+    const element=$(targetId);
+    if(inspectionTimers.has(targetId)) return null;
+    const started=Date.now();
+    const token={started, timer:null};
+    inspectionTimers.set(targetId, token);
+    element.classList.add('working-pulse');
+    function tick(){
+      const elapsed=Math.floor((Date.now()-started)/1000);
+      const dots='.'.repeat((elapsed%3)+1);
+      const waiting=elapsed>=45
+        ? ' · Engine ยังไม่ตอบกลับ โปรดตรวจ RAM/CPU หรือรายการงานที่กำลังทำ'
+        : elapsed>=15 ? ' · ยังรอผลจาก PC Engine' : '';
+      element.textContent=description+dots+'  '+fmtTime(elapsed)+' ผ่านไป'+waiting+
+        '\\nกำลังรอผลตรวจจริง · ยังไม่ทราบจำนวนไฟล์ทั้งหมด';
+    }
+    tick();
+    token.timer=setInterval(tick,1000);
+    return () => {
+      if(inspectionTimers.get(targetId)!==token)return;
+      clearInterval(token.timer);
+      inspectionTimers.delete(targetId);
+      element.classList.remove('working-pulse');
+    };
+  }
+
   const fmtNum = n => Number(n || 0).toLocaleString('th-TH');
   const fmtSize = n => {
     let size = Number(n) || 0;
@@ -2193,7 +2222,8 @@
   }
 
   async function inspectUploadFolder() {
-    $('upload-folder-report').textContent='กำลังตรวจไฟล์ในโฟลเดอร์ที่เลือกและโฟลเดอร์ย่อยทั้งหมด…';
+    const finishInspection=beginInspection('upload-folder-report','กำลังตรวจความครบถ้วนของไฟล์ในโฟลเดอร์ย่อยทั้งหมด');
+    if(!finishInspection)return null;
     try {
       await saveInputs(['upload-folder']);
       const result=await api('/api/upload-folder/inspect');
@@ -2216,9 +2246,13 @@
       $('upload-folder-report').textContent='ตรวจโฟลเดอร์ไม่สำเร็จ: '+error.message;
       message(error.message);
       return null;
+    } finally {
+      finishInspection();
     }
-  }
+  }}
   async function inspectPCExport(){
+    const finishInspection=beginInspection('pc-export-report','กำลังตรวจคลังเพลงและฐานข้อมูล Karaoke PC');
+    if(!finishInspection)return null;
     try {
       await saveInputs(['pc-export-folder']);
       const result=await api('/api/pc-export/inspect');
@@ -2236,8 +2270,10 @@
       $('pc-export-report').textContent='ตรวจคลัง Karaoke PC ไม่สำเร็จ: '+error.message;
       message(error.message);
       return null;
+    } finally {
+      finishInspection();
     }
-  }
+  }}
   async function startPCExport(){
     if(busy)return;
     const report=await inspectPCExport();
@@ -3236,7 +3272,8 @@
 
   async function inspectJsonPro() {
     const label=$('json-pro-report');
-    label.textContent='กำลังตรวจรายการเพลงและ Lyrics JSON ในโฟลเดอร์ย่อยทั้งหมด…';
+    const finishInspection=beginInspection('json-pro-report','กำลังตรวจรายการเพลงและ Lyrics JSON ในโฟลเดอร์ย่อยทั้งหมด');
+    if(!finishInspection)return null;
     try{
       await saveInputs(['json-pro-source','json-pro-destination']);
       const report=await api('/api/json-pro/inspect');
@@ -3249,8 +3286,10 @@
       label.textContent='ตรวจไม่สำเร็จ: '+error.message;
       message(error.message);
       return null;
+    } finally {
+      finishInspection();
     }
-  }
+  }}
   async function startJsonPro() {
     if(!canLaunch('json-pro-export') || !proEnabled)return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
     const report=await inspectJsonPro();
