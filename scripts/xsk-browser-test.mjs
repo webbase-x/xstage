@@ -57,6 +57,10 @@ const doc={schemaVersion:2,format:'XSK',formatVersion:2,songCode:'00001',
 const xsk=(document)=>new File([Buffer.from('XSK2'),
   zip([['00001.mid',midi],['00001.json',enc.encode(JSON.stringify(document))]])],
   '00001.xsk');
+const meta=await bridge.inspectMetadata(xsk(doc));
+assert.equal(meta.document.title,'ทำได้เพียง');
+assert.equal(meta.document.artist,'25 Hours');
+assert.equal(meta.midi,undefined,'Import must not unpack MIDI media');
 const decoded=await bridge.openPackage(xsk(doc));
 assert.equal(decoded.code,'00001');
 assert.equal(decoded.document.schemaVersion,1);
@@ -68,8 +72,10 @@ assert.equal(core.songIdentity(decoded.document,'00001').artist,'25 Hours');
 assert.equal(decoded.lyrics.name,'00001.json');
 await assert.rejects(()=>bridge.openPackage(new File([Buffer.from('XSK1'+'A'.repeat(64))],
   'old.xsk')),/XSK1/);
-await assert.rejects(()=>bridge.openPackage(xsk({...doc,audio:{...doc.audio,sha256:'0'.repeat(64)}})),
-  /SHA-256/);
+const badDigest=xsk({...doc,audio:{...doc.audio,sha256:'0'.repeat(64)}});
+assert.equal((await bridge.inspectMetadata(badDigest)).document.title,'ทำได้เพียง',
+  'Only JSON is inspected at import; MIDI integrity checked on playback');
+await assert.rejects(()=>bridge.openPackage(badDigest),/SHA-256/);
 await assert.rejects(()=>bridge.openPackage(xsk({...doc,title:'00001',artist:'X-Stage Karaoke'})),
   /ชื่อเพลงหรือศิลปิน/);
 console.log('PASS: portable XSK2 (no key), ZIP deflate, SHA-256, real identity and XSK1 migration');
