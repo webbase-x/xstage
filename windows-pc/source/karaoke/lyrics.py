@@ -121,14 +121,86 @@ def midi_lyrics(events: list[tuple[float, str]]) -> Lyrics:
     return Lyrics(lines)
 
 
+MAX_TIMED_JSON = 8 * 1024 * 1024
+
+
+def timed_json_lyrics(document):
+    """Parse Song Studio timed JSON without inventing lyric timestamps."""
+    import math
+    if not isinstance(document, dict) or document.get("schemaVersion") not in (1, 2):
+        raise ValueError("Lyrics JSON schemaVersion ไม่รองรับ")
+    rows = document.get("lines")
+    if not isinstance(rows, list) or not rows or len(rows) > 100000:
+        raise ValueError("Lyrics JSON ไม่มีบรรทัดที่มีเวลา")
+    result = []
+    previous = -1.0
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("text"), str):
+            raise ValueError("Lyrics JSON มีบรรทัดไม่ถูกต้อง")
+        when = row.get("startTime")
+        if isinstance(when, bool) or not isinstance(when, (float, int)) or not math.isfinite(when) or not 0 <= when < 86400 or when < previous:
+            raise ValueError("Lyrics JSON มีเวลาไม่ถูกต้องหรือย้อนหลัง")
+        previous = float(when)
+        words = []
+        segments = row.get("syllables") or row.get("characters") or []
+        if not isinstance(segments, list):
+            raise ValueError("Lyrics JSON ข้อมูลเวลารายคำผิดรูปแบบ")
+        prior_word = -1.0
+        for segment in segments:
+            if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
+                raise ValueError("Lyrics JSON ข้อมูลรายคำไม่ถูกต้อง")
+            start = segment.get("start", segment.get("startTime"))
+            if isinstance(start, bool) or not isinstance(start, (float, int)) or not math.isfinite(start) or start < 0 or start < prior_word:
+                raise ValueError("Lyrics JSON เวลารายคำไม่ถูกต้อง")
+            prior_word = float(start)
+            words.append((float(start), segment["text"]))
+        result.append(LyricLine(float(when), row["text"], words))
+    offset = document.get("audioOffsetMs", 0)
+    if isinstance(offset, bool) or not isinstance(offset, (float, int)) or not math.isfinite(offset) or abs(offset) > 600000:
+        raise ValueError("Lyrics JSON audioOffsetMs ไม่ถูกต้อง")
+    return Lyrics(result, int(offset))
+
+
+def json_sidecar(path: Path):
+    """Find an explicitly paired, same-stem JSON beside a media file."""
+    path = Path(path)
+    direct = path.with_suffix(".json")
+    if direct.is_file() and not direct.is_symlink():
+        return direct
+    if not path.parent.is_dir():
+        return None
+    # Windows is case-insensitive; this also supports Linux unit fixtures.
+    for candidate in path.parent.iterdir():
+        if (candidate.suffix.casefold() == ".json"
+                and candidate.stem.casefold() == path.stem.casefold()
+                and candidate.is_file() and not candidate.is_symlink()):
+            return candidate
+    return None
+
+
+def read_timed_json(path: Path):
+    import json
+    path = Path(path)
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_TIMED_JSON:
+        raise ValueError("ไฟล์ Lyrics JSON ไม่ปลอดภัยหรือใหญ่เกิน 8 MB")
+    document = json.loads(path.read_text(encoding="utf-8-sig"))
+    return timed_json_lyrics(document), document
+
+
 def sidecar_lyrics(path: Path) -> Lyrics | None:
+    # Preserve established LRC precedence if both companions exist.
+    # A same-stem JSON is now a standalone, fully timed companion too.
     direct = path.with_suffix('.lrc')
     if direct.is_file():
         return parse_lrc(decode_text(direct.read_bytes()))
     if os.name == 'nt':
-        return None
+        companion = json_sidecar(path)
+        return read_timed_json(companion)[0] if companion is not None else None
     # Windows filesystem is case insensitive, but this is also testable elsewhere.
     for child in path.parent.iterdir():
         if child.suffix.lower() == ".lrc" and child.stem.casefold() == path.stem.casefold():
             return parse_lrc(decode_text(child.read_bytes()))
+    json_file = json_sidecar(path)
+    if json_file is not None:
+        return read_timed_json(json_file)[0]
     return None
