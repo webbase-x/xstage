@@ -1,0 +1,35 @@
+name: Song Studio native Qt desktop regression
+
+on:
+  push:
+    branches:
+      - feature/songstudio-native-qt-desktop-360
+  pull_request:
+    paths:
+      - "songstudio-pc/**"
+      - "scripts/build_songstudio_ready.ps1"
+      - "scripts/test_songstudio_native_desktop.py"
+
+permissions:
+  contents: read
+
+jobs:
+  native-qt-smoke:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python source and native launcher
+        shell: pwsh
+        run: |
+          python -m compileall -q songstudio-pc scripts
+          if ($LASTEXITCODE -ne 0) { throw "Syntax validation failed" }
+          python -m unittest discover -s scripts -p test_songstudio_native_desktop.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Native desktop contract failed" }
+      - name: Verify Windows QtWebEngine wheels and imports
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check --only-binary=:all: PySide6==6.9.3
+          if ($LASTEXITCODE -ne 0) { throw "Qt installation failed" }
+          python -c "from PySide6.QtWebEngineWidgets import QWebEngineView; from PySide6.QtWebEngineCore import QWebEngineProfile; print('QT_WEBENGINE_OK')"
+          if ($LASTEXITCODE -ne 0) { throw "QtWebEngine import failed" }
