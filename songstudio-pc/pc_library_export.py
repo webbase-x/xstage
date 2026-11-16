@@ -102,8 +102,8 @@ def _files(source):
     """
     local = (("audio", ALLOWED_MEDIA | {".xsk"} | VIDEO_EXT),
              ("lyrics", ALLOWED_LYRICS))
-    typed = (("AUDIO", ALLOWED_MEDIA | {".xsk"} | VIDEO_EXT),
-             ("VIDEO", VIDEO_EXT),
+    typed = (("AUDIO", ALLOWED_MEDIA | {".json", ".xsk"} | VIDEO_EXT),
+             ("VIDEO", VIDEO_EXT | {".json"}),
              ("MIDI", {".mid", ".midi", ".kar", ".xsk", ".json"}),
              ("LYRICS", ALLOWED_LYRICS),
              ("SOUNDFONT", {".sf2", ".sf3"}))
@@ -129,7 +129,9 @@ def _files(source):
                 if (file.is_symlink() or not file.is_file() or
                         name.startswith(".") or file.suffix.casefold() not in suffixes):
                     continue
-                if folder.lower() == "lyrics" and (
+                if (folder.lower() == "lyrics" or
+                    (folder in ("AUDIO", "VIDEO", "MIDI") and
+                     "LYRICS" in rel.parts)) and (
                         name.casefold() == "current.json" or
                         name.casefold().startswith(("catalog-", "database-")) or
                         "-pc-snapshot-" in name.casefold() or
@@ -234,7 +236,7 @@ def _plan_files(source, destination):
         # On case-insensitive Windows, source/lyrics and Karaoke/LYRICS can
         # be the SAME directory. Always publish a separate immutable snapshot
         # so subsequent text edits never change a previous karaoke catalog.
-        if shared_root and rel.parts[0] == "LYRICS":
+        if shared_root and "LYRICS" in rel.parts:
             digest = _hash(src)[:16]
             variant = rel.with_name(rel.stem + "-pc-snapshot-" + digest + rel.suffix)
             target = destination / variant
@@ -248,7 +250,7 @@ def _plan_files(source, destination):
         if original.is_symlink():
             raise ValueError("พบ symbolic link ในคลัง Karaoke PC: " + str(original))
         if not shared_root and original.is_file() and _hash(original) != _hash(src):
-            if rel.parts[0] != "LYRICS":
+            if "LYRICS" not in rel.parts:
                 raise FileExistsError(
                     "ไฟล์เสียงชื่อเดิมแต่เนื้อหาเปลี่ยน กรุณาตรวจเพลงก่อนนำเข้า: " + str(original))
             variant = rel.with_name(rel.stem + "-rev-" + _hash(src)[:16] + rel.suffix)
