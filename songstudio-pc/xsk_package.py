@@ -46,6 +46,17 @@ def _validated(source, document, code, title, artist):
         raise ValueError("ไม่มีเนื้อร้องพร้อมเวลาจริง")
     if not CODE_RE.fullmatch(code):
         raise ValueError("รหัสเพลงไม่ถูกต้อง")
+    # A missing title or singer must never be replaced with the code or the
+    # application's publisher name in a new cross-platform XSK2 catalog.
+    title = str(title or "").strip()
+    artist = str(artist or "").strip()
+    placeholders = {"x-stage karaoke", "x-stage song studio", "unknown",
+                    "ไม่ระบุชื่อเพลง", "ไม่ระบุศิลปิน"}
+    if (not title or title.casefold() in placeholders or
+            title.casefold() == code.casefold() or title.casefold() == source.stem.casefold()):
+        raise ValueError("XSK2 ต้องมีชื่อเพลงจริง ไม่ใช้ชื่อไฟล์หรือรหัสเพลง")
+    if not artist or artist.casefold() in placeholders:
+        raise ValueError("XSK2 ต้องมีชื่อศิลปินจริง ไม่ใช้ชื่อโปรแกรม")
     previous = -1.0
     for row in document["lines"]:
         if not isinstance(row, dict) or not isinstance(row.get("text"), str):
@@ -59,8 +70,8 @@ def _validated(source, document, code, title, artist):
     return {"schemaVersion": 2, "format": "XSK", "formatVersion": 2,
             "createdBy": "X-Stage Song Studio",
             "publisher": "X-Stage Song Studio",
-            "songCode": code, "title": str(title or code)[:200],
-            "artist": str(artist or "X-Stage Song Studio")[:200],
+            "songCode": code, "title": title[:200],
+            "artist": artist[:200],
             "audio": {"file": code + source.suffix.lower(),
                       "type": source.suffix[1:].upper(),
                       "size": size, "sha256": _hash_source(source)},
