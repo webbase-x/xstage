@@ -109,6 +109,7 @@
                <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
                  <option value="">เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)</option>
                </select>
+               <output id="xstage-font-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">SoundFont · ยังไม่โหลด</output>
              </label>
             <button type="button" id="mobile-home-toggle" aria-label="หน้าแรก">หน้าแรก</button>
             <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
@@ -214,7 +215,7 @@
             <p id="play-status" class="play-status" role="status"></p>
             <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-share-library">⇄ แชร์โฟลเดอร์เพลง</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button></nav>
           </div>
-          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
+          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><output id="xstage-queue-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">คิว · งบหน่วยความจำกำลังประเมิน</output><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
           <section id="xstage-eq-panel" class="xstage-eq-panel" hidden aria-label="EQ X-Stage Karaoke">
             <header class="xstage-eq-head" data-eq-drag>
               <div class="xstage-eq-brand"><img src="assets/xstage-app-icon-192.png" alt=""><strong>EQ X-Stage Karaoke</strong></div>
@@ -377,6 +378,7 @@
   <script src="https://accounts.google.com/gsi/client" defer></script>
   <script src="cloud-import-core.js?v=1111" defer></script>
   <script src="xsk-browser.js?v=1111" defer></script>
+  <script src="memory-budget.js?v=1111" defer></script>
   <script src="browser-midi.js?v=1111" defer></script>
   <script src="video-metadata-editor.js?v=1111" defer></script>
   <script src="video-transcode.js?v=1111" defer></script>
