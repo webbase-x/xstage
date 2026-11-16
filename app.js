@@ -2059,8 +2059,7 @@ window.addEventListener('xstage:soundfont-change',()=>{
 async function preloadFirstQueueSong(song,token){
   if(song?.midi&&!getFileId(song?.xsk))return;
   if(state.queue[0]!==song||state.token!==token)return;
-  // Do not synthesize the next XSK while the current song is still
-  // downloading/rendering: competing OfflineAudioContexts can stall TV.
+  // The current song takes priority over pre-rendering the next one.
   if(state.loading){
     state.queuePreloadTimer=setTimeout(
       ()=>{void preloadFirstQueueSong(song,token);},1200);
@@ -2068,33 +2067,38 @@ async function preloadFirstQueueSong(song,token){
   }
   const controller=new AbortController(),version=++state.queuePreloadVersion;
   state.queuePreload?.controller.abort();
-  const task={song,token,controller};state.queuePreload=task;
-  try{
-    let data;
+  const task={song,token,controller,promise:null};
+  state.queuePreload=task;
+  task.promise=(async()=>{
     if(getFileId(song?.xsk)){
-      // One queued XSK2 only; do not cache an entire 100,000-song library.
-      // On limited-memory TVs/phones, large XSK2 plays on-demand instead.
       const smallDevice=Number(navigator.deviceMemory||8)<=4;
       const maxPacked=smallDevice?24*1024*1024:48*1024*1024;
-      if(Number(song.xsk.size)>maxPacked)return;
-      data=await prepareXskPlayback(song,token,controller.signal,()=>{},true);
-      if(!data)return;
-      const maxRendered=smallDevice?64*1024*1024:128*1024*1024;
-      if(data.blob.size>maxRendered)return;
-    }else{
-      const [response,lyrics]=await Promise.all([
-        privateFile(song.audio.fileId,token,{signal:controller.signal}),
-        privateJson(song.lyrics.fileId,token,{signal:controller.signal})
-      ]);
-      data={song,token,blob:await response.blob(),lyrics};
+      if(Number(song.xsk.size)>maxPacked)return null;
+      // The Promise can be promoted to active playback when this queue
+      // entry reaches the stage before its pre-render completes.
+      const data=await prepareXskPlayback(song,token,controller.signal,()=>{},true);
+      if(!data)return null;
+      return data.blob.size>(smallDevice?64:128)*1024*1024?null:data;
     }
-    if(version!==state.queuePreloadVersion||state.queue[0]!==song||state.token!==token||
-       controller.signal.aborted||!data.blob.size||
+    const [response,lyrics]=await Promise.all([
+      privateFile(song.audio.fileId,token,{signal:controller.signal}),
+      privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+    ]);
+    return {song,token,blob:await response.blob(),lyrics};
+  })();
+  try{
+    const data=await task.promise;
+    if(version!==state.queuePreloadVersion||state.queue[0]!==song||
+       state.token!==token||controller.signal.aborted||!data?.blob?.size||
        data.lyrics?.schemaVersion!==1||!Array.isArray(data.lyrics.lines))return;
     state.queuePrepared=data;
     renderQueue();
-  }catch(error){if(error.name!=='AbortError')console.warn('X-Stage queue prefetch:',error.message);}
-  finally{if(state.queuePreload===task)state.queuePreload=null;}
+  }catch(error){
+    if(error.name!=='AbortError')
+      console.warn('X-Stage queue prefetch:',error.message);
+  }finally{
+    if(state.queuePreload===task)state.queuePreload=null;
+  }
 }
 function prefetchMedleyNext(){
   if(!state.medley||!state.token||state.loading)return;
