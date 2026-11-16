@@ -7,6 +7,10 @@ on:
       - "xsk-browser.js"
       - "scripts/xsk-browser-test.mjs"
       - "scripts/xsk-queue-test.mjs"
+      - "scripts/memory-queue-test.mjs"
+      - "memory-budget.js"
+      - "browser-midi.js"
+      - "xstage-ux.css"
       - "cloud-import*.css"
       - "index.html"
       - "app.js"
@@ -39,6 +43,9 @@ jobs:
           node scripts/cloud-import-contract-test.mjs
           node scripts/xsk-browser-test.mjs
           node scripts/xsk-queue-test.mjs
+          node scripts/memory-queue-test.mjs
+          node --check memory-budget.js
+          node --check browser-midi.js
           node --check xsk-browser.js
           node --check cloud-import.js
       - name: Prepare headless Chromium on CI only
