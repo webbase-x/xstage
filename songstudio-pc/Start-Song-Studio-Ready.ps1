@@ -37,6 +37,7 @@ try {
     $engine = Check-File 'engine.py'
     [void](Check-File 'desktop_window.py')
     [void](Check-File 'desktop_bootstrap.py')
+    [void](Check-File 'json_source_stream.py')
     [void](Check-File '.runtime\qt-site\PySide6\QtWebEngineWidgets.pyd')
     [void](Check-File 'ncn_lyrics.py')
     [void](Check-File 'ai_lyrics.py')
