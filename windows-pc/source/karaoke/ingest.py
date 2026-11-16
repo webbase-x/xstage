@@ -212,6 +212,23 @@ class Inspector:
                           'first_lyric': ' '.join(line.text for line in parse_lrc(text).lines)[:512]})
             except (ValueError, OSError) as error:
                 warnings.append(str(error))
+        # Audio/video with same-code .json: use actual source metadata, not
+        # numeric filename or branded placeholders. Validate before indexing.
+        if ext not in MIDI_EXT:
+            from .lyrics import json_sidecar, read_timed_json
+            companion = json_sidecar(path)
+            if companion is not None:
+                timed, document = read_timed_json(companion)
+                meta = document.get('metadata') if isinstance(document.get('metadata'), dict) else {}
+                def known(value):
+                    return value.strip() if isinstance(value, str) and value.strip().casefold() not in {
+                        'x-stage karaoke', 'x-stage song studio', 'xstage karaoke',
+                        'xstage song studio'} else ''
+                metadata({'title': known(document.get('title')) or known(meta.get('title')),
+                          'artist': known(document.get('artist')) or known(meta.get('artist')),
+                          'first_lyric': ' '.join(line.text for line in timed.lines[:8])[:512]})
+                if not timed.lines:
+                    raise ValueError('ไฟล์ Lyrics JSON ไม่มีคำร้องที่มีเวลา')
         if 'title' not in rich and title == path.stem:
             warnings.append('ไม่พบชื่อเพลงในข้อมูลต้นทาง ใช้ชื่อไฟล์ชั่วคราว')
         record['_rich'] = rich
