@@ -508,3 +508,6 @@ button.preview-lyric-line{cursor:pointer}
 .brand-pro-status[hidden], #pro-license-settings[hidden] {
   display: none !important;
 }
+
+/* Keep automatic edit/settings history functional but out of the everyday UI. */
+#edit-history-panel { display: none !important; }
