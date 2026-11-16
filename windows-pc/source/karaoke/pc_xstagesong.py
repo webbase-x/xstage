@@ -82,7 +82,12 @@ def catalog_rows(selected, *, cancelled=None):
             lyrics = source.get("lyrics")
             first = ""
             if lyrics:
-                lyric_file = _inside(root, lyrics.get("path"), "LYRICS")
+                lyric_rel = lyrics.get("path")
+                lyric_root = lyric_rel.split("/", 1)[0] if isinstance(lyric_rel, str) else ""
+                if lyric_root not in ("LYRICS", "AUDIO", "VIDEO", "MIDI") or (
+                        lyric_root != "LYRICS" and "/LYRICS/" not in lyric_rel):
+                    raise ValueError("พาธเนื้อร้องต้องอยู่ใน LYRICS ของประเภทเพลง")
+                lyric_file = _inside(root, lyric_rel, lyric_root)
                 if not lyric_file.is_file() or lyric_file.suffix.casefold() != ".json":
                     raise ValueError("ไม่พบ Lyrics JSON ของเพลง: " + path.name)
                 doc = json.loads(lyric_file.read_text(encoding="utf-8-sig"))
@@ -154,8 +159,19 @@ def source_lyrics(media_path):
         stamp = pointer.stat()
         index = _lyrics_by_media(str(pointer), stamp.st_mtime_ns, stamp.st_size)
         selected = index.get(path.relative_to(root).as_posix().casefold())
-    candidate = (_inside(root, selected, "LYRICS") if selected else
-                 root / "LYRICS" / relative.with_suffix(".json"))
+    if selected:
+        prefix = selected.split("/", 1)[0]
+        candidate = _inside(root, selected, prefix)
+    else:
+        # Accept directly copied format-local song/lyrics pairs, even when
+        # the destination has no existing database pointer.
+        parts = relative.parts
+        if len(parts) >= 4 and parts[-3].casefold() == "song":
+            candidate = category / Path(*parts[:-3]) / "LYRICS" / Path(*parts[-2:]).with_suffix(".json")
+        elif len(parts) >= 3 and parts[-3].casefold() == "song":
+            candidate = category / Path(*parts[:-3]) / "LYRICS" / Path(*parts[-2:]).with_suffix(".json")
+        else:
+            candidate = root / "LYRICS" / relative.with_suffix(".json")
     if not candidate.is_file() or candidate.is_symlink():
         return None
     doc = json.loads(candidate.read_text(encoding="utf-8-sig"))
