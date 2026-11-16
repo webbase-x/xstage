@@ -2101,8 +2101,8 @@ function syncMediaSessionMetadata(song){
   if(!('mediaSession' in navigator)||typeof MediaMetadata!=='function'||!song)return;
   try{
     navigator.mediaSession.metadata=new MediaMetadata({
-      title:song.title||song.code||'X-Stage Karaoke',
-      artist:song.artist||'X-Stage Karaoke',
+      title:song.title||'ไม่ระบุชื่อเพลง',
+      artist:song.artist||'ไม่ระบุศิลปิน',
       album:'X-Stage Karaoke Online',
       artwork:[
         {src:new URL('assets/xstage-app-icon-192.png',location.href).href,sizes:'192x192',type:'image/png'},
