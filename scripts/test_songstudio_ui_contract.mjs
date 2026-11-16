@@ -219,9 +219,10 @@ for (const id of ['json-pro-source','json-pro-destination','json-pro-format',
 }
 assert.ok(html.includes('data-tab="json-pro"') && html.includes('id="tab-json-pro"'),
   'Lyrics JSON Pro needs a separate navigation tab and workspace');
-assert.ok(js.includes("run('json-pro-export',{format})") &&
-          js.includes("/api/json-pro/inspect"),
-  'Lyrics JSON Pro must reach the existing local PC Engine');
+assert.ok(js.includes("run('json-pro-export',{format,code_style,code_length:String(code_length)})") &&
+          js.includes("/api/json-pro/inspect") &&
+          js.includes("saveInputs(['json-pro-code-style','json-pro-code-length'])"),
+  'Lyrics JSON Pro must pass format, filename style and code length to the local PC Engine');
 assert.ok(js.includes("/api/ai-lyrics-source?id="),
   'Explicit read-from-file control must fetch the real source metadata');
 for (const id of ['json-pro-code-style','json-pro-code-length','xsk-stream-build','xsk-stream-code-length',
