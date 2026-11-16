@@ -78,11 +78,12 @@ def _local_path(root, path, prefix):
     file = root / Path(*item.parts)
     # A verified portable export retains PC's uppercase AUDIO/LYRICS folders.
     # Adapt only that specific format; never accept arbitrary alternate paths.
-    if not file.is_file() and (root / "DB" / "songs-portable.json").is_file():
-        import json
-        portable = json.loads((root / "DB" / "songs-portable.json").read_text(encoding="utf-8-sig"))
-        if portable.get("schemaVersion") == 1 and portable.get("format") == "xstage-portable-song-db":
-            file = root / prefix.upper() / Path(*item.parts[1:])
+    portable_marker = root / "DB" / "songs-portable.json"
+    if (not file.is_file() and portable_marker.is_file()
+            and not portable_marker.is_symlink()):
+        # Marker schema and song rows were validated once by the caller.
+        # Never parse a potentially 100 MB catalog for every song path.
+        file = root / prefix.upper() / Path(*item.parts[1:])
     resolved = file.resolve()
     if (not resolved.is_relative_to(root.resolve()) or not file.is_file()
             or file.is_symlink() or any(p.is_symlink() for p in
