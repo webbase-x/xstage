@@ -216,6 +216,8 @@ def inspect(source_root, selected_destination, export):
             "updatedLyrics": versioned,
             "bytesToCopy": bytes_to_copy,
             "database": str(db_path),
+            "portableDatabase": str(target / "DB" / "songs-portable.json"),
+            "webApkRequiresDriveUpload": True,
             "databaseAction": "update" if db_path.is_file() else "create",
             "databaseInstalled": installed}
 
