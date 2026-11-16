@@ -2,15 +2,15 @@
   "name": "X-Stage Song Studio PC Ready",
   "platform": "windows-x64",
   "channel": "pc-ready",
-  "version": "0.3.52",
-  "build": 352,
+  "version": "0.3.53",
+  "build": 353,
   "available": true,
   "package_type": "portable_zip",
   "installer_available": false,
   "installer_file": null,
-  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.52-build352.zip",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.52-build352/X-Stage-Song-Studio-PC-Ready-v0.3.52-build352.zip",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.52-build352",
-  "sha256": "72e3cccf8265f1299d6714814a893bb2db47b8b3f3fa52833d2b720ae66d68f5",
-  "notes": "Build 352: concurrent independent PC Engine job contexts; separate cancellation, progress and subprocesses per job; CPU/RAM capacity guard and resource UI. Includes all Build 351 auto-updater features."
+  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.53-build353.zip",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.53-build353/X-Stage-Song-Studio-PC-Ready-v0.3.53-build353.zip",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.53-build353",
+  "sha256": "79a743984fd4a5939c412c166d9039828bf5431e14f22ea620341b1adc90d975",
+  "notes": "Build 353: fixes stuck Lyrics JSON starting status when Engine rejects tasks due to low RAM or resource limits; shows accurate admitted-job feedback and system warnings. Includes Build 352 parallel worker engine."
 }
