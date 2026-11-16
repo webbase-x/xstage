@@ -209,7 +209,7 @@ class OnlinePublishTests(unittest.TestCase):
         songs = self.publisher._json(pointer["catalogFileId"])["songs"]
         self.assertEqual(len(songs), 1)
         self.assertTrue(songs[0]["audio"]["path"].startswith("AUDIO/"))
-        self.assertTrue(songs[0]["lyrics"]["path"].startswith("LYRICS/"))
+        self.assertTrue(songs[0]["lyrics"]["path"].startswith("AUDIO/M4A/LYRICS/"))
         self.assertNotIn("lrc", songs[0])
         self.drive.locked = True
         with patch.object(roundtrip.drive, "_request",
