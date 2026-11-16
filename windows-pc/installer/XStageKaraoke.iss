@@ -1,9 +1,9 @@
-; X-Stage Karaoke PC v1.0.76 Windows setup wrapper.
+; X-Stage Karaoke PC v1.0.77 Windows setup wrapper.
 ; The audited install_to_D.ps1 performs dependency checks, running-app
 ; shutdown and transactional copies. The Inno wrapper does not install
 ; directly over song libraries or application data.
-#define AppVersion "1.0.76"
-#define BuildNumber "1076"
+#define AppVersion "1.0.77"
+#define BuildNumber "1077"
 
 [Setup]
 AppId={{7E9EA7F6-09A9-47E1-A580-AFA1B260D08A}
@@ -37,7 +37,7 @@ Name: "thai"; MessagesFile: "compiler:Languages\Thai.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "..\source\dist\XStageKaraoke\*"; DestDir: "{tmp}\xstage-v1076"; Flags: recursesubdirs createallsubdirs ignoreversion deleteafterinstall
+Source: "..\source\dist\XStageKaraoke\*"; DestDir: "{tmp}\xstage-v1077"; Flags: recursesubdirs createallsubdirs ignoreversion deleteafterinstall
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -47,7 +47,7 @@ var
 begin
   if CurStep <> ssPostInstall then
     Exit;
-  ScriptPath := ExpandConstant('{tmp}\xstage-v1076\install_to_D.ps1');
+  ScriptPath := ExpandConstant('{tmp}\xstage-v1077\install_to_D.ps1');
   if not FileExists(ScriptPath) then
     RaiseException('Installer package is incomplete: install_to_D.ps1 is missing.');
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
