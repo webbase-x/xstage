@@ -47,47 +47,58 @@ class PcSourceTests(unittest.TestCase):
 
 
     def test_cancelled_worker_must_exit_before_next_job(self):
-        """A cancelled status alone must not unlock a still-running worker."""
+        """A stopped indicator alone must not unlock the same library worker."""
         started = threading.Event()
         release = threading.Event()
-        old_thread = engine.JOB_THREAD
-        old_job = engine.JOB
-        old_cancel = engine.CANCEL.is_set()
+        old_thread, old_job, old_cancel = engine.JOB_THREAD, engine.JOB, engine.CANCEL
+        old_active = dict(engine.ACTIVE_JOBS)
+        engine.ACTIVE_JOBS.clear()
         def slow_worker(action, options, began):
             started.set()
             release.wait(5)
-            with engine.LOCK:
-                engine.JOB["state"] = "cancelled"
-                engine.JOB["stage"] = "ยกเลิกงาน"
+            engine.worker_job()["state"] = "cancelled"
+            engine.worker_job()["stage"] = "ยกเลิกงาน"
         try:
-            with patch.object(engine, "execute_job", side_effect=slow_worker):
+            with patch.object(engine, "resource_snapshot", return_value={
+                "parallelLimit": 3, "active": 0,
+                "memoryAvailableBytes": 8 * 1024**3
+            }), patch.object(engine, "execute_job", side_effect=slow_worker):
                 first = engine.start_job({"action": "scan"})
-                self.assertTrue(first["id"])
                 self.assertTrue(started.wait(3))
                 with engine.LOCK:
-                    engine.CANCEL.set()
-                    engine.JOB["state"] = "cancelled"
-                self.assertEqual(engine.job_snapshot()["state"], "running")
-                with self.assertRaisesRegex(ValueError, "งานเดิมยังหยุดไม่เสร็จ"):
+                    engine.ACTIVE_JOBS[first["id"]]["cancel"].set()
+                    engine.ACTIVE_JOBS[first["id"]]["job"]["state"] = "cancelled"
+                self.assertEqual(engine.job_snapshot(first["id"])["state"], "running")
+                with self.assertRaisesRegex(ValueError, "ประเภทเดียวกัน"):
                     engine.start_job({"action": "scan"})
+                # A different group is allowed even while the cancelled
+                # library worker is still releasing its resources.
+                other = engine.start_job({"action": "check-update"})
+                self.assertNotEqual(first["id"], other["id"])
                 release.set()
-                engine.JOB_THREAD.join(3)
-                self.assertFalse(engine.JOB_THREAD.is_alive())
-                self.assertEqual(engine.job_snapshot()["state"], "cancelled")
-                second = engine.start_job({"action": "scan"})
-                self.assertNotEqual(first["id"], second["id"])
-                engine.JOB_THREAD.join(3)
+                for entry in list(engine.ACTIVE_JOBS.values()):
+                    entry["thread"].join(3)
+                self.assertEqual(engine.job_snapshot(first["id"])["state"], "cancelled")
+                third = engine.start_job({"action": "scan"})
+                self.assertNotEqual(first["id"], third["id"])
+                engine.ACTIVE_JOBS[third["id"]]["thread"].join(3)
         finally:
             release.set()
-            if engine.JOB_THREAD and engine.JOB_THREAD.is_alive():
-                engine.JOB_THREAD.join(3)
+            for entry in list(engine.ACTIVE_JOBS.values()):
+                if entry["thread"].is_alive():
+                    entry["thread"].join(3)
             with engine.LOCK:
-                engine.JOB_THREAD = old_thread
-                engine.JOB = old_job
-                if old_cancel:
-                    engine.CANCEL.set()
-                else:
-                    engine.CANCEL.clear()
+                engine.ACTIVE_JOBS.clear()
+                engine.ACTIVE_JOBS.update(old_active)
+                engine.JOB_THREAD, engine.JOB, engine.CANCEL = (
+                    old_thread, old_job, old_cancel)
+
+    def test_resource_gate_rejects_low_ram_and_concurrent_conflict(self):
+        with patch.object(engine, "resource_snapshot", return_value={
+            "parallelLimit": 3, "memoryAvailableBytes": 100 * 1024**2
+        }):
+            with self.assertRaisesRegex(ValueError, "RAM"):
+                engine._check_resource_capacity("scan")
 
     def test_xsk_mid_json_pairing_deduplicates_midi_and_reuses_code_gap(self):
         """MIDI bytes, not filenames or lyric metadata, determine duplicates."""
