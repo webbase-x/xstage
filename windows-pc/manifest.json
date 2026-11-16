@@ -1,8 +1,8 @@
 {
   "platform": "windows",
-  "version": "1.0.76",
-  "build": 1076,
-  "source_revision": "Continuous-Medley-Auto-Categories",
+  "version": "1.0.77",
+  "build": 1077,
+  "source_revision": "XStageSong-Typed-Library-Initial",
   "source_archive": "downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip",
   "sha256": "bb9498deff94e8bf3debe48bcce32a9b5e6adb595c4c26783f8553128cdfe224",
   "source_files": 447,
