@@ -2,15 +2,15 @@
   "name": "X-Stage Song Studio PC Ready",
   "platform": "windows-x64",
   "channel": "pc-ready",
-  "version": "0.3.56",
-  "build": 356,
+  "version": "0.3.57",
+  "build": 357,
   "available": true,
   "package_type": "portable_zip",
   "installer_available": false,
   "installer_file": null,
-  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.56-build356.zip",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.56-build356/X-Stage-Song-Studio-PC-Ready-v0.3.56-build356.zip",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.56-build356",
-  "sha256": "1810365ce093ef8858f65c9ed96d598be46f745b1cfcb932108d026648305c0f",
-  "notes": "Build 355: selectable Lyrics JSON song-code format and 1–12 character width; generated media filenames, Lyrics JSON filenames, songCode and catalog code match; non-destructive batch export and regression coverage."
+  "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.57-build357.zip",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.57-build357/X-Stage-Song-Studio-PC-Ready-v0.3.57-build357.zip",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.57-build357",
+  "sha256": "30f31786808a9568faef50ce6b0145dbbe189a1330e22b1a7c146d2415821d9e",
+  "notes": "Build 357: typed XStageSong AUDIO/VIDEO/MIDI/MID,KAR,XSK/LYRICS/SOUNDFONT export, metadata-preserving Lyrics JSON and non-destructive PC/Drive catalogs. SHA-256-verified ZIP."
 }
