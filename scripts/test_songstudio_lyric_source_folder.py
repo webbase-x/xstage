@@ -31,6 +31,10 @@ class SelectedLyricFolderTests(unittest.TestCase):
             @staticmethod
             def songs_root(workspace):
                 return Path(workspace) / "XStageSong"
+        # The engine now snapshots preferences per worker. This isolated AST
+        # unit test must provide the same accessor as the real Engine; callers
+        # outside a worker fall back to the mutable preferences dictionary.
+        self.context["worker_prefs"] = lambda: self.context["PREFS"]
         self.context["_song_export_module"] = lambda: FakeExport()
         class StubNativeNCN:
             @staticmethod
