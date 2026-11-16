@@ -2335,9 +2335,22 @@
     for(const [kind, state] of importPreviews)if(kind!==except)state.stop();
   }
 
+  // A folder change may trigger preflight while the user immediately clicks
+  // Upload. Reuse that in-flight result instead of mistaking "already checking"
+  // for "zero ready songs". A changed source must always be rechecked.
+  let uploadInspectionPromise=null;
+  let uploadInspectionSource='';
   async function inspectUploadFolder() {
+    const source=$('upload-folder').value.trim();
+    if(uploadInspectionPromise) {
+      if(uploadInspectionSource===source)return uploadInspectionPromise;
+      await uploadInspectionPromise;
+      return inspectUploadFolder();
+    }
     const finishInspection=beginInspection('upload-folder-report','กำลังตรวจความครบถ้วนของไฟล์ในโฟลเดอร์ย่อยทั้งหมด');
     if(!finishInspection)return null;
+    uploadInspectionSource=source;
+    const inspection=(async()=>{
     try {
       await saveInputs(['upload-folder']);
       const result=await api('/api/upload-folder/inspect');
@@ -2362,6 +2375,12 @@
       return null;
     } finally {
       finishInspection();
+    }
+    })();
+    uploadInspectionPromise=inspection;
+    try{return await inspection;}
+    finally{
+      if(uploadInspectionPromise===inspection)uploadInspectionPromise=null;
     }
   }
   async function inspectPCExport(){
