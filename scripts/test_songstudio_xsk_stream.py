@@ -144,7 +144,7 @@ class XskStreamTests(unittest.TestCase):
             "artist": "นักร้องจาก JSON",
             "lines": [{"startTime": 2.0, "endTime": 4.0, "text": "ทดลอง"}]
         }, ensure_ascii=False), encoding="utf-8")
-        self.midi(self.source, "00003", b"A")  # same MIDI bytes, SHA duplicate
+        self.midi(self.source, "00003", b"B")  # duplicate of 00002, never the metadata fixture 00001
         broken = self.midi(self.source, "00004", b"C")
         broken.with_suffix(".lrc").unlink()  # file without timed lyrics must be skipped
         self.midi(self.source, "เพลงไทย ทดสอบ", b"D")
