@@ -446,6 +446,7 @@
             <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
             <div class="toolbar"><button id="upload-inspect" type="button" hidden aria-hidden="true" tabindex="-1">ตรวจไฟล์</button><button id="upload-folder-button" class="button primary" type="button" disabled>↑ อัปโหลด</button></div>
             <div id="upload-folder-report" class="hint" role="status" aria-live="polite"></div>
+          <details class="secondary-feature"><summary>ทดลองฟังเพลง (เพิ่มเติม)</summary>
           <article class="panel import-preview-panel" aria-label="ทดลองเล่นเพลงก่อนนำเข้า">
             <div class="section-heading"><div><h2>♫ พรีวิวทดลองเล่นเพลงก่อนนำเข้า</h2><p>เลือกเพลงจากไฟล์ต้นทาง ฟังเพลงและดูเนื้อร้องพร้อมเวลาในหน้านี้ · ไม่คัดลอกหรืออัปโหลดจากการทดลองเล่น</p></div><span class="chip info">READ ONLY</span></div>
             <div class="toolbar">
@@ -463,9 +464,11 @@
             <div id="online-preview-lyrics" class="preview-lyrics-lines" role="region" aria-label="เนื้อร้องขณะทดลองฟัง" style="max-height:240px;overflow:auto"><p class="hint">เลือกเพลงเพื่อแสดงเนื้อร้องพร้อมเวลา</p></div>
             <p class="hint">ไฟล์ MIDI/KAR ใช้ SoundFont ที่ตั้งไว้ในหน้าสร้างเพลง · เพลงที่ไม่มีเนื้อร้องพร้อมเวลาจะแสดงเหตุผลชัดเจน · พรีวิวไม่แก้เพลงหรือฐานข้อมูล</p>
           </article>
+          </details>
             <label class="hint" hidden><input type="checkbox" id="upload-allow-new" checked><span>สร้างคลังเมื่อจำเป็น</span></label>
-            <p class="hint">เพลง MP3/M4A ที่มี LRC ถูกต้อง จะอัปโหลดและอัปเดต LYRICS/current.json หลังตรวจ MD5 · เก็บไฟล์เสียงใน AUDIO และ Lyrics JSON ใน LYRICS · ไม่อัปโหลด LYR/CUR ต้นฉบับ</p>
+
           </article>
+          <details class="secondary-feature"><summary>อัปโหลด SoundFont (เพิ่มเติม)</summary>
           <article class="panel">
             <div class="section-heading"><div><h2>SoundFont สำหรับ MIDI (Google Drive ส่วนตัว)</h2><p>เลือก SoundFont .sf2/.sf3 เพื่อตรวจรูปแบบและ MD5 ก่อนอัปโหลดไปยัง XStageSong/AUDIO</p></div></div>
             <div class="path-row"><input id="upload-soundfont-path" type="text" class="field" placeholder="เลือกไฟล์ SoundFont .sf2 / .sf3"><button id="upload-soundfont-picker" type="button" class="button ghost">เลือก SoundFont</button></div>
@@ -473,6 +476,7 @@
             <p class="hint">ใช้ตัวเลือกสร้าง XStageSong ใหม่ร่วมกับเมนูอัปโหลดเพลงด้านบน · อัปโหลดแล้วเก็บเป็นไฟล์ส่วนตัวโดยไม่เขียนทับต้นฉบับหรือแก้ current.json · สามารถเลือก SoundFont ได้จากเมนูเสียง MIDI บนเว็บและ Android TV ที่รองรับ</p>
             <p id="upload-soundfont-status" class="hint" role="status" aria-live="polite">ยังไม่ได้อัปโหลด SoundFont</p>
           </article>
+          </details>
         </section>
 
         <section id="tab-pc-export" class="tab">
