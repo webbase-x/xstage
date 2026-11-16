@@ -55,6 +55,12 @@ sandbox.window.XStageMemory=sandbox.XStageMemory||sandbox.window.XStageMemory;
 const monitor=sandbox.window.XStageMemory;
 assert.ok(monitor,'Memory policy should load');
 assert.equal(monitor.plan().queueLimit,2);
+// Hard cap is universal, even when desktop reports abundant RAM.
+for(const ram of [1,2,4,8,16]){
+  sandbox.navigator.deviceMemory=ram;
+  assert.equal(monitor.plan().queueLimit,2,'At most two NEXT songs on '+ram+' GiB device');
+}
+sandbox.navigator.deviceMemory=2;
 assert.equal(monitor.canHold(1024,{}),true);
 const a=app.indexOf('function fontMemoryBytes(){'),b=app.indexOf('function prefetchMedleyNext(){',a);
 assert.ok(a>=0&&b>a,'Adaptive queue functions must exist in app.js');
