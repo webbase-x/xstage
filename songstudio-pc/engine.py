@@ -3227,10 +3227,12 @@ def completed_job_folder(action, result, prefs):
         folder = export.songs_root(prefs["workspace"])
     elif action == "pc-export":
         folder = Path(result.get("destination") or prefs.get("pc_export_folder") or "")
-    elif action == "download":
-        folder = Path(result.get("path") or "")
-    elif action == "download-update":
-        folder = Path(result.get("path") or "").parent
+    elif action in ("download", "download-update"):
+        value = result.get("path")
+        if not isinstance(value, str) or not value.strip():
+            return None
+        output = Path(value)
+        folder = output if output.is_dir() else output.parent if output.is_file() else output
     else:
         return None
     # Resolve only existing directories, and do not treat the current
