@@ -122,6 +122,8 @@ jobs:
         run: |
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
           if ($LASTEXITCODE -ne 0) { throw "Song Studio PC engine regressions failed" }
+          & python -m unittest discover -s scripts -p test_songstudio_xsk_stream.py -v
+          if ($LASTEXITCODE -ne 0) { throw "MIDI XSK incremental streaming regression failed" }
           & python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
           if ($LASTEXITCODE -ne 0) { throw "Pro XSK regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_json_pro.py -v
