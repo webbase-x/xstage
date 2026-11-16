@@ -458,7 +458,11 @@ assert.equal(studioReady.package_type,'portable_zip');
 assert.equal(studioReady.installer_available,false);
 assert.match(studioReady.sha256,/^[a-f0-9]{64}$/,'Ready ZIP must pin the GitHub Release digest');
 assert.equal(studioPreview.channel,'source-preview');
-assert.equal(studioPreview.version,'0.2.5');
+assert.match(studioPreview.version,/^\d+\.\d+\.\d+$/,'Song Studio Source Preview must declare a semantic version');
+assert.ok(Number.isInteger(studioPreview.build)&&studioPreview.build>=205,
+  'Song Studio Source Preview build must not regress below Build 205');
+assert.ok(studioPreview.source_archive?.includes('v'+studioPreview.version+'-Build'+studioPreview.build),
+  'Song Studio Source Preview archive must match its own version and build');
 assert.equal(studioPreview.installer_available,false);
 const studioLegacy=read('songstudio-pc/Start-Song-Studio.ps1');
 const studioBuilder=read('scripts/build_songstudio_ready.ps1');
