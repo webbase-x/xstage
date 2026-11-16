@@ -1,8 +1,8 @@
-"""Read Song Studio XSK1 packages on the same authorized Windows account.
+"""Read portable unencrypted XSK2 and legacy encrypted XSK1.
 
-Never create a key while importing, never write decrypted media to disk, and
-never consider an unverified XSK playable. Other accounts/devices require
-an explicit future key-transfer flow.
+XSK2 requires no Windows key and shares exactly the same package with
+Web and APK. Legacy XSK1 still requires the owner's existing DPAPI key.
+Always validate ZIP entries, metadata, and MIDI SHA-256 before indexing.
 """
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ import zipfile
 from ctypes import wintypes
 from pathlib import Path
 
-MAGIC = b"XSK1"
+MAGIC = b"XSK2"
+LEGACY_MAGIC = b"XSK1"
 MAX_SOURCE = 128 * 1024 * 1024
 MAX_DOC = 8 * 1024 * 1024
 MAX_ENCRYPTED = MAX_SOURCE + MAX_DOC + 16 * 1024 * 1024
@@ -68,20 +69,25 @@ def read_xsk(path, *, key=None):
     if path.suffix.casefold() != ".xsk" or path.is_symlink() or not path.is_file():
         raise ValueError("ต้องเลือกไฟล์ XSK ปกติ")
     size = path.stat().st_size
-    if size < 33 or size > MAX_ENCRYPTED:
+    if size < 26 or size > MAX_ENCRYPTED:
         raise ValueError("ขนาดแพ็กเกจ XSK ไม่ปลอดภัย")
     data = path.read_bytes()
-    if not data.startswith(MAGIC):
-        raise ValueError("XSK header ไม่ถูกต้อง")
-    if key is None:
-        key = existing_key()
-    if not isinstance(key, bytes) or len(key) != 32:
-        raise ValueError("กุญแจ XSK ไม่ถูกต้อง")
-    try:
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    except ImportError as exc:
-        raise RuntimeError("ตัวเล่นต้องติดตั้ง cryptography เพื่อเปิด XSK") from exc
-    plain = AESGCM(key).decrypt(data[4:16], data[16:], MAGIC)
+    if data.startswith(MAGIC):
+        plain = data[4:]
+        expected_version = 2
+    elif data.startswith(LEGACY_MAGIC):
+        if key is None:
+            key = existing_key()
+        if not isinstance(key, bytes) or len(key) != 32:
+            raise ValueError("XSK1 เดิมต้องใช้กุญแจ Windows ของเจ้าของไฟล์")
+        try:
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        except ImportError as exc:
+            raise RuntimeError("ตัวเล่นต้องมี cryptography สำหรับ XSK1 เดิม") from exc
+        plain = AESGCM(key).decrypt(data[4:16], data[16:], LEGACY_MAGIC)
+        expected_version = 1
+    else:
+        raise ValueError("XSK header ไม่ใช่ XSK1/XSK2 ที่รองรับ")
     with zipfile.ZipFile(io.BytesIO(plain)) as archive:
         infos = archive.infolist()
         if len(infos) != 2 or len(set(x.filename for x in infos)) != 2:
@@ -99,13 +105,22 @@ def read_xsk(path, *, key=None):
             raise ValueError("ข้อมูลภายใน XSK ใหญ่เกินขอบเขต")
         doc = json.loads(archive.read(documents[0]).decode("utf-8"))
         info = doc.get("audio")
-        if (doc.get("format") != "XSK" or doc.get("formatVersion") != 1 or
+        if (doc.get("format") != "XSK" or
+                doc.get("formatVersion") != expected_version or
                 not isinstance(info, dict) or info.get("file") != midi[0].filename or
                 not isinstance(doc.get("lines"), list)):
             raise ValueError("รูปแบบเอกสาร XSK ไม่ถูกต้อง")
+        banned = {"x-stage karaoke", "x-stage song studio", "unknown", "ไม่ระบุศิลปิน"}
+        title, artist = doc.get("title"), doc.get("artist")
+        if (not isinstance(title, str) or not title.strip() or
+                title.strip() == str(doc.get("songCode") or "") or
+                not isinstance(artist, str) or not artist.strip() or
+                artist.strip().casefold() in banned):
+            raise ValueError("XSK ไม่มีชื่อเพลงหรือศิลปินจริง · กรุณาสร้างใหม่ด้วย Song Studio")
         raw = archive.read(midi[0])
-        if hashlib.sha256(raw).hexdigest() != info.get("sha256"):
-            raise ValueError("ลายเซ็น SHA-256 ของ MIDI ไม่ตรง")
+        if (hashlib.sha256(raw).hexdigest() != info.get("sha256") or
+                len(raw) != info.get("size")):
+            raise ValueError("ลายเซ็น SHA-256 หรือขนาด MIDI ไม่ตรง")
         previous = -1
         for row in doc["lines"]:
             if not isinstance(row, dict) or not isinstance(row.get("text"), str):
