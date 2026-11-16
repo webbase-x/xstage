@@ -2280,6 +2280,13 @@ def execute_job(action, options, started):
                        "ไม่มีเพลงใหม่ · ยืนยันจาก Catalog แล้ว" if skipped_only else
                        "เสร็จสิ้น"),
                 detail=result.get("message", "เสร็จแล้ว"))
+        if (action == "install-update" and result.get("launched")
+                and os.name == "nt" and READY_BUNDLE):
+            # Leave enough time for the browser to receive the success result.
+            # New Ready engine runs from its own verified version folder.
+            timer = threading.Timer(8.0, lambda: os._exit(0))
+            timer.daemon = True
+            timer.start()
     except Exception as exc:
         with LOCK:
             JOB["state"] = "cancelled" if CANCEL.is_set() else "error"
