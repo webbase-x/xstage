@@ -32,8 +32,16 @@ def export_selected(root, selected, export, created_json, package, codes, key,
                 continue
             if file.is_symlink() or not file.is_file():
                 raise ValueError("XSK เดิมไม่ใช่ไฟล์ปกติ: " + str(file))
+            # Preserve old encrypted XSK1 without requiring a key.
+            # Reserve its filename but allow a NEW portable XSK2 from
+            # the same original MIDI (never replace the old file).
+            with file.open("rb") as old:
+                legacy = old.read(4) == b"XSK1"
+            if legacy:
+                reserved.add(file.stem)
+                continue
             try:
-                existing = package.open_package(file, key)
+                existing = package.open_package(file)
                 code = existing["songCode"]
                 digest = existing["audio"]["sha256"]
                 if (not isinstance(code, str) or not package.CODE_RE.fullmatch(code)
