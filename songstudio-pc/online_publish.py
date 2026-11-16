@@ -1,8 +1,8 @@
 """Publish Song Studio M4A + timed JSON directly into X-Stage Karaoke Online.
 
-Drive layout v4 (only AUDIO and LYRICS; no nested buckets):
-    XStageSong/AUDIO/<code>-<digest>.mid|.m4a|.mp4|.sf2|.sf3
-    XStageSong/LYRICS/<code>-<digest>.json (Lyrics JSON)
+Drive layout v4 File-ID catalog with typed media paths (backward compatible):
+    XStageSong/AUDIO/<bucket>/<code>-<digest>.m4a|.mp3\n    XStageSong/VIDEO/<bucket>/<code>-<digest>.mp4\n    XStageSong/MIDI/MID|KAR|XSK/<bucket>/<code>-<digest>.*\n    XStageSong/SOUNDFONT/<name>-<digest>.sf2|.sf3
+    XStageSong/LYRICS/<bucket>/<code>-<digest>.json (Lyrics JSON)
     XStageSong/LYRICS/catalog-base-<generation>.json
     XStageSong/LYRICS/catalog-delta-<generation>.json
     XStageSong/LYRICS/current.json (published LAST, as an atomic pointer)
@@ -37,10 +37,10 @@ BUCKETS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def media_drive_path(relative, *, code="", audio_format="M4A"):
-    """Map a local immutable media path into the private Drive taxonomy.
+    """Place NEW Drive files into the shared typed/bucketed XStageSong tree.
 
-    The extension of the rendered file, NOT its original source type, selects
-    MP3 vs M4A. The public catalog references the resulting Drive file ID.
+    Keep the v4 File-ID catalog and LYRICS/current.json pointer unchanged:
+    older flat AUDIO/LYRICS entries remain valid, with no destructive move.
     """
     if not isinstance(relative, str):
         raise PublishError("พาธสื่อเพลงต้องเป็นข้อความ")
@@ -50,15 +50,26 @@ def media_drive_path(relative, *, code="", audio_format="M4A"):
         raise PublishError("พาธสื่อเพลงไม่ปลอดภัย: " + str(relative))
     suffix = rel.suffix.lower()
     kind = rel.parts[0].lower()
+    ident = str(code or rel.stem).upper()
+    bucket = ident[0] if ident and ident[0] in BUCKETS else "_"
+    if kind in ("audio", "video", "midi") and suffix in (".sf2", ".sf3"):
+        return PurePosixPath("SOUNDFONT", rel.name)
+    if kind in ("audio", "video", "midi") and suffix in (".mid", ".midi"):
+        return PurePosixPath("MIDI", "MID", bucket, rel.name)
+    if kind in ("audio", "video", "midi") and suffix == ".kar":
+        return PurePosixPath("MIDI", "KAR", bucket, rel.name)
+    if kind in ("audio", "video", "midi") and suffix == ".xsk":
+        return PurePosixPath("MIDI", "XSK", bucket, rel.name)
     if kind in ("audio", "video", "midi") and suffix in (
-            ".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".oga",
-            ".mp4", ".webm", ".mid", ".midi", ".kar", ".sf2", ".sf3"):
-        return PurePosixPath("AUDIO", rel.name)
+            ".mp4", ".webm", ".avi", ".mkv", ".mov", ".mpg", ".mpeg",
+            ".vob", ".dat", ".wmv", ".flv"):
+        return PurePosixPath("VIDEO", bucket, rel.name)
+    if kind in ("audio", "video", "midi") and suffix in (
+            ".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".oga", ".wma"):
+        return PurePosixPath("AUDIO", bucket, rel.name)
     if kind == "lyrics" and suffix == ".json":
-        return PurePosixPath("LYRICS", rel.name)
-    # .LYR/.CUR and .LRC are local source/editing formats, not stored online.
+        return PurePosixPath("LYRICS", bucket, rel.name)
     raise PublishError("รูปแบบไฟล์ไม่รองรับการเผยแพร่ในหมวดสื่อ: " + str(relative))
-
 
 
 def _md5(path):
@@ -381,7 +392,7 @@ class OnlinePublisher:
                     folder_cache[key] = self.drive.folder(parent, name)
                 parent = folder_cache[key]
             return parent
-        # Only two Drive content folders, never nested by format or bucket.
+        # Catalog pointer stays under LYRICS for legacy v4 readers.
         for category in (("AUDIO",), ("LYRICS",)):
             if cancelled and cancelled.is_set():
                 raise PublishError("ยกเลิกการเตรียมโครงสร้าง Google Drive")
