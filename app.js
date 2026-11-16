@@ -2072,9 +2072,10 @@ function updateMemoryIndicators(){
     const p=monitor.plan(resources),hint=p.hint.gib;
     const concern=p.heapPressure||p.nativePressure||
       bytes+sample>hint*1024*1024*1024*.12;
-    fontEl.dataset.level=concern?'high':
+    fontEl.dataset.level=info.warning||concern?'high':
       bytes+sample>hint*1024*1024*1024*.055?'medium':'low';
-    fontEl.textContent=info.loaded?'SF ใน RAM '+monitor.fmt(bytes)+
+    fontEl.textContent=info.warning?info.warning:
+      info.loaded?'SF ใน RAM '+monitor.fmt(bytes)+
       ' · ตัวอย่าง '+monitor.fmt(sample)+' · ใช้ซ้ำตลอดเซสชัน'+
       (p.native?' · RAM ว่างจริง '+monitor.fmt(p.native.available):''):
       info.selectedId?'SF กำลังโหลด · ประเมินตาม RAM ของอุปกรณ์':
