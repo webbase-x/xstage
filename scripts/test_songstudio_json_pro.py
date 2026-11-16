@@ -51,6 +51,10 @@ class JsonProTests(unittest.TestCase):
         record = records[0]
         audio = export.safe_media_path(target, record["audio"]["path"], "audio")
         lyrics = export.safe_media_path(target, record["lyrics"]["path"], "lyrics")
+        self.assertEqual(record["audio"]["path"], "AUDIO/0/00001.mp3")
+        self.assertEqual(record["lyrics"]["path"], "LYRICS/0/00001.json")
+        self.assertFalse((target / "audio").exists())
+        self.assertFalse((target / "lyrics").exists())
         self.assertEqual(hashlib.sha256(audio.read_bytes()).hexdigest(), before)
         doc = json.loads(lyrics.read_text(encoding="utf-8"))
         self.assertEqual(doc["lines"][0]["startTime"], 2.5)
@@ -76,6 +80,22 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual((audio.stem, lyrics.stem), ("0000001", "0000001"))
         self.assertEqual(json.loads(lyrics.read_text(encoding="utf-8"))["songCode"], "0000001")
 
+    def test_typed_pro_export_roundtrips_to_karaoke_pc_database(self):
+        pc = load("pc_library_export")
+        created = self.run_export()
+        self.assertEqual(created["created"], 1)
+        source = self.dest / "XStageSong"
+        karaoke = self.root / "KaraokePC"
+        outcome = pc.publish(source, str(karaoke), export)
+        self.assertEqual(outcome["songCount"], 1)
+        root = karaoke / "XStageSong"
+        self.assertTrue((root / "AUDIO/0/00001.mp3").is_file())
+        self.assertTrue((root / "LYRICS/0/00001.json").is_file())
+        self.assertTrue((root / "LYRICS/current.json").is_file())
+        doc = json.loads((root / "DB/songs-portable.json").read_text(encoding="utf-8"))
+        self.assertEqual(doc["songs"][0]["audio"]["path"], "AUDIO/0/00001.mp3")
+        self.assertTrue((root / "DB/songs.sqlite3").is_file())
+
     def test_source_code_style_keeps_safe_filename(self):
         result = self.run_export(code_style="source", code_length=5)
         self.assertEqual(result["created"], 1)
@@ -87,6 +107,8 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(result["created"], 1)
         record = export.existing_records(self.dest / "XStageSong")[0]
         self.assertEqual(record["code"], "AAB")
+        self.assertEqual(record["audio"]["path"], "AUDIO/A/AAB.mp3")
+        self.assertEqual(record["lyrics"]["path"], "LYRICS/A/AAB.json")
 
     def test_invalid_code_width_rejected(self):
         with self.assertRaisesRegex(ValueError, "1–12"):
@@ -164,6 +186,8 @@ class JsonProTests(unittest.TestCase):
         saved = export.existing_records(self.dest / "XStageSong")[0]
         self.assertEqual(saved["title"], "ชื่อเพลงจาก JSON")
         self.assertEqual(saved["artist"], "ศิลปินจาก JSON")
+        self.assertEqual(saved["audio"]["path"], "MIDI/MID/0/00001.mid")
+        self.assertEqual(saved["lyrics"]["path"], "LYRICS/0/00001.json")
 
     def test_midi_to_mp3_uses_soundfont_wav_before_ffmpeg(self):
         engine = load("engine")
@@ -228,7 +252,7 @@ class JsonProTests(unittest.TestCase):
                 self.run_export()
         root = self.dest / "XStageSong"
         self.assertFalse((root / "current.json").exists())
-        self.assertTrue(any((root / "audio").rglob("*.mp3")))
+        self.assertTrue(any((root / "AUDIO").rglob("*.mp3")))
         resumed = self.run_export()
         self.assertEqual(resumed["created"], 1)
         self.assertEqual(resumed["errors"], 0)
