@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from karaoke.queue_warm import (
-    QueueWarmup, MiB, MAX_HEADER, MAX_HELD, memory_level, physical_memory,
+    QueueWarmup, MiB, MAX_HEADER, MAX_HELD, MAX_ITEMS, memory_level, physical_memory,
 )
 
 
@@ -30,10 +30,12 @@ class LocalQueueWarmupTests(unittest.TestCase):
                 }):
                     manager.request(sources)
                     deadline = time.monotonic() + 3
-                    while manager.snapshot()["count"] < 6 and time.monotonic() < deadline:
+                    while manager.snapshot()["count"] < MAX_ITEMS and time.monotonic() < deadline:
                         time.sleep(.01)
                     state = manager.snapshot()
-                    self.assertEqual(state["count"], 6)
+                    self.assertEqual(state["count"], MAX_ITEMS)
+                    self.assertEqual(state["bytes"], MAX_ITEMS * MAX_HEADER,
+                                     "Only two bounded headers may be retained")
                     self.assertLessEqual(state["bytes"], MAX_HELD)
                     self.assertEqual(state["level"], "low")
                     # A queue reorder releases stale items rather than
