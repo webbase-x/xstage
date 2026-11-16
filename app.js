@@ -1988,7 +1988,7 @@ function setStageVisualScale(value){
   saveUiPrefs({visualScale:state.visualScale});
   return state.visualScale;
 }
-async function prepareXskPlayback(song,token,signal,onStatus=()=>{}){
+async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=false){
   const fileId=getFileId(song?.xsk);
   if(!fileId)throw Error('ไม่พบไฟล์ XSK2 ในฐานเพลง');
   if(!window.XStageXsk?.openPackage || !window.XStageBrowserMidi)
@@ -2009,11 +2009,21 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{}){
      String(song.title||'')!==String(unpacked.document.title||'') ||
      String(song.artist||'')!==String(unpacked.document.artist||''))
     throw Error('XSK2 ภายในไฟล์ไม่ตรงกับชื่อเพลง/ศิลปินใน DB · กรุณานำเข้าอีกครั้ง');
+  const midiBytes=new Uint8Array(await unpacked.midi.arrayBuffer());
+  if(prefetch){
+    // OfflineAudioContext uses floating-point PCM before encoding to WAV.
+    // Bound duration before rendering to protect low-RAM Android WebViews.
+    const duration=Number(window.XStageBrowserMidi.parseMidi(midiBytes).duration);
+    const lowMemory=Number(navigator.deviceMemory||8)<=4;
+    const estimatedWorkingBytes=(duration+1)*32000*2*4*2;
+    if(!Number.isFinite(duration)||
+       estimatedWorkingBytes>(lowMemory?128:256)*1024*1024)
+      return null; // The song remains playable on demand when its turn arrives.
+  }
   onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ให้พร้อมเล่น…');
-  const rendered=await window.XStageBrowserMidi.render(
-    new Uint8Array(await unpacked.midi.arrayBuffer()),{
-      fontBytes,signal,onStatus
-    });
+  const rendered=await window.XStageBrowserMidi.render(midiBytes,{
+    fontBytes,signal,onStatus
+  });
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   if(!rendered?.audio?.size)throw Error('ไม่สามารถสังเคราะห์เสียงจาก XSK2 ได้');
   return {song,token,blob:rendered.audio,lyrics:unpacked.document};
@@ -2053,7 +2063,8 @@ async function preloadFirstQueueSong(song,token){
       const smallDevice=Number(navigator.deviceMemory||8)<=4;
       const maxPacked=smallDevice?24*1024*1024:48*1024*1024;
       if(Number(song.xsk.size)>maxPacked)return;
-      data=await prepareXskPlayback(song,token,controller.signal);
+      data=await prepareXskPlayback(song,token,controller.signal,()=>{},true);
+      if(!data)return;
       const maxRendered=smallDevice?64*1024*1024:128*1024*1024;
       if(data.blob.size>maxRendered)return;
     }else{
