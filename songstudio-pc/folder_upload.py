@@ -260,20 +260,38 @@ def _portable_local_catalog(root):
             raise ValueError("ฐานเพลงพกพามีรหัสเพลงซ้ำ")
         seen.add(ident)
         rewritten = dict(row)
-        for field, prefix in (("audio", "AUDIO"), ("lyrics", "LYRICS")):
+        for field in ("audio", "lyrics"):
             part = row.get(field)
             value = part.get("path") if isinstance(part, dict) else None
-            if not isinstance(value, str) or not value.startswith(prefix + "/"):
+            if value is None and field == "lyrics":
+                extension = str((row.get("audio") or {}).get("path") or "").lower()
+                if not extension.endswith((".kar", ".xsk")):
+                    raise ValueError("ไฟล์เพลงนี้ต้องมี Lyrics JSON")
+                rewritten[field] = None
+                continue
+            if not isinstance(value, str):
                 raise ValueError("ฐานเพลงพกพาอ้างถึงตำแหน่งไฟล์ผิดรูปแบบ")
             parts = value.split("/")
-            if (len(parts) < 3 or any(p in ("", ".", "..") for p in parts)
+            first = parts[0]
+            allowed = {"AUDIO", "VIDEO", "MIDI"} if field == "audio" else {
+                "LYRICS", "AUDIO", "VIDEO", "MIDI"}
+            if (first not in allowed or len(parts) < 3
+                    or (field == "lyrics" and first != "LYRICS"
+                        and "/LYRICS/" not in value)
+                    or any(p in ("", ".", "..") for p in parts)
                     or any(any(ch in p for ch in ("\\", ":", "\x00")) for p in parts)):
                 raise ValueError("พบพาธไม่ปลอดภัยในฐานเพลงพกพา")
             target = root.joinpath(*parts)
             if (not target.is_file() or target.is_symlink()
                     or not target.resolve().is_relative_to(root.resolve())):
                 raise ValueError("ไฟล์ในฐานพกพาไม่ครบ: " + value)
-            rewritten[field] = {"path": field + "/" + "/".join(parts[1:])}
+            # Legacy flat media catalogs are normalized to internal lower
+            # paths. The new typed layout keeps exact paths so Drive uploads
+            # preserve format-local SONG and LYRICS folders.
+            legacy = first == "LYRICS" or (
+                first == "AUDIO" and len(parts) == 3)
+            rewritten[field] = {"path": (
+                field + "/" + "/".join(parts[1:]) if legacy else value)}
         rows.append(rewritten)
     return {"root": root, "rows": rows, "incomplete": 0,
             "pointerCount": len(rows), "portable": True}
