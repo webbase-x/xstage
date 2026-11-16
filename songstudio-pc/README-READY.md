@@ -1,3 +1,11 @@
+## MIDI to .XSK automatic pipeline (candidate)
+
+- Choose the source MIDI folder, XSK output folder, and song-code format/length. The default XSK mode no longer requires a completed catalog scan or manual song selection.
+- Discovery walks nested folders incrementally without loading an entire directory. The first folder's MIDI files are queued immediately; a bounded producer (32 songs/batch, four batches waiting) scans ahead while the existing encrypted XSK builder seals previous items.
+- Preserve existing DPAPI-key integrity, AES-GCM verification, SHA-256 duplicate protection, original MIDI bytes and atomic no-overwrite outputs. On restart, previously sealed XSKs are checked and skipped; incomplete lyrics are reported separately.
+- Display scanned, found, converted, duplicate, incomplete and error counts. An overall percentage is shown only after full enumeration; errors accessing subfolders fail the job rather than silently omitting songs.
+- The existing Pro legacy media-export wizard is not altered. Automated tests and Windows release verification must pass before claiming the next ZIP is ready.
+
 ## Candidate features for Build 347
 
 - MIDI to .XSK selects the source, independent output folder, and code length using the existing dedup/packaging format.
