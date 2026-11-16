@@ -89,9 +89,13 @@ def catalog_rows(destination, records):
     seen, rows = set(), []
     allowed = {".mid", ".midi", ".kar", ".m4a", ".mp3", ".wav", ".wma",
                ".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov",
-               ".flac", ".ogg", ".oga", ".aac"}
+               ".flac", ".ogg", ".oga", ".aac", ".webm", ".dat", ".vob", ".flv", ".xsk"}
     for rec in records:
-        path = _inside(root, (rec.get("audio") or {}).get("path"), "AUDIO")
+        media_ref = (rec.get("audio") or {}).get("path")
+        prefix = media_ref.split("/", 1)[0] if isinstance(media_ref, str) else ""
+        if prefix not in ("AUDIO", "VIDEO", "MIDI"):
+            raise ValueError("ข้อมูลเพลงอ้างอิงโฟลเดอร์ AUDIO/VIDEO/MIDI ไม่ถูกต้อง")
+        path = _inside(root, media_ref, prefix)
         if not path.is_file() or path.suffix.casefold() not in allowed:
             raise ValueError("ไม่พบไฟล์เพลงที่ Karaoke PC รองรับ: " + str(path))
         key = os.path.normcase(str(path.resolve())).casefold()
@@ -113,7 +117,7 @@ def catalog_rows(destination, records):
             "path": str(path), "code": str(rec.get("code") or ""),
             "title": str(rec.get("title") or path.stem),
             "artist": str(rec.get("artist") or ""),
-            "kind": "MIDI" if ext in {".mid", ".midi", ".kar"} else
+            "kind": "MIDI" if ext in {".mid", ".midi", ".kar", ".xsk"} else
                     "VIDEO" if ext in {".mp4", ".avi", ".mov", ".mkv"} else "AUDIO",
             "format": ext[1:].upper(), "playable": 1,
             "first_lyric": first, "source_catalog": "XStageSong PC"
