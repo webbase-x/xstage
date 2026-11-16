@@ -372,10 +372,17 @@ def _read_current(root: Path) -> tuple[dict, dict[str, dict]]:
 
 def safe_media_path(root: Path, rel: str, kind: str) -> Path:
     """Accept legacy local paths and categorized, explicitly validated paths."""
-    allowed = ({"audio", "AUDIO", "VIDEO", "MIDI", "SOUNDFONT"}
-               if kind == "audio" else {"lyrics", "LYRICS"} if kind == "lyrics"
-               else {kind})
-    if (not isinstance(rel, str) or rel.split("/", 1)[0] not in allowed
+    top = rel.split("/", 1)[0] if isinstance(rel, str) else ""
+    media_roots = {"audio", "AUDIO", "VIDEO", "MIDI", "SOUNDFONT"}
+    if kind == "audio":
+        valid_root = top in media_roots
+    elif kind == "lyrics":
+        valid_root = (top in {"lyrics", "LYRICS"} or
+                      (top in {"AUDIO", "VIDEO", "MIDI"} and
+                       "/LYRICS/" in rel and "/SONG/" not in rel))
+    else:
+        valid_root = top == kind
+    if (not isinstance(rel, str) or not valid_root
             or chr(92) in rel or ":" in rel or chr(0) in rel
             or len(rel.split("/")) < 3
             or any(part in ("", ".", "..") for part in rel.split("/"))
