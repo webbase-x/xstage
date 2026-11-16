@@ -27,9 +27,15 @@ def _fingerprint(path):
 
 
 def _lyrics_digest(doc):
-    """Stable digest of the exported timed document, including text edits."""
+    """Hash lyric content independent of filename-derived songCode.
+
+    Same audio with the same timed lyrics remains a duplicate after a rename;
+    actual edits to lyric lines/timing or embedded metadata are new versions.
+    """
+    normalized = dict(doc)
+    normalized.pop("songCode", None)
     return hashlib.sha256(json.dumps(
-        doc, sort_keys=True, ensure_ascii=False, allow_nan=False,
+        normalized, sort_keys=True, ensure_ascii=False, allow_nan=False,
         separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
