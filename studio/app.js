@@ -561,8 +561,8 @@
     $('settings-oauth').value = prefs.oauth || '';
     $('create-preset').value = prefs.midi_preset || 'balanced';
     $('create-mode').value = prefs.mode || 'original';
-    $('create-output-kind').value = proEnabled && ['xstage','m4a'].includes(prefs.export_format)
-      ? prefs.export_format : 'xsk';
+    // Dedicated MIDI to .XSK menu defaults to XSK even with a Pro license.
+    $('create-output-kind').value = 'xsk';
     syncXskControls();
     $('catalog-view').value = prefs.catalog_view === 'all' ? 'all' : 'changes';
     $('create-code-style').value = prefs.code_style || 'source';
@@ -3305,11 +3305,8 @@
     const report=await inspectJsonPro();
     if(!report||!report.ready)return message('ไม่มีชุดเพลงที่ตรวจผ่านพร้อม Lyrics JSON');
     const format=$('json-pro-format').value;
-    const yes=await confirmStudio('ส่งออก '+fmtNum(report.ready)+' เพลงจาก '+report.folder+
-      '\\nไปที่ '+prefs.json_destination+'\\nรูปแบบ: '+format+
-      '\\nตรวจ SHA-256 กันซ้ำ ไม่แก้ไฟล์ต้นฉบับ และไม่เขียนทับไฟล์เดิม',
-      'ยืนยัน MIDI to Lyrics JSON');
-    if(!yes)return;
+    // The single "ตกลง" action initiates inspected batch export directly.
+    // The engine still rejects invalid sources, duplicates and overwrites.
     $('json-pro-report').textContent='กำลังเริ่มส่งออก '+fmtNum(report.ready)+' เพลง · ดูความคืบหน้าที่แผงงาน';
     await run('json-pro-export',{format});
   }
