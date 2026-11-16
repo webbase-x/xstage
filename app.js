@@ -785,7 +785,12 @@ function timeLabel(t) {
 function getFileId(data) {
   return typeof data?.fileId === 'string' && data.fileId.length > 0 ? data.fileId : '';
 }
-function playable(song) { return !!(getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))); }
+function playable(song) {
+  // XSK2 is a complete, self-describing media+lyrics package on Drive.
+  // Old catalog pairs remain supported without migration.
+  return !!(getFileId(song?.xsk) ||
+    (getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))));
+}
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
 const GOOGLE_FETCH_TIMEOUT_MS=18_000;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -1983,6 +1988,37 @@ function setStageVisualScale(value){
   saveUiPrefs({visualScale:state.visualScale});
   return state.visualScale;
 }
+async function prepareXskPlayback(song,token,signal,onStatus=()=>{}){
+  const fileId=getFileId(song?.xsk);
+  if(!fileId)throw Error('ไม่พบไฟล์ XSK2 ในฐานเพลง');
+  if(!window.XStageXsk?.openPackage || !window.XStageBrowserMidi)
+    throw Error('ตัวเล่น XSK2 หรือ MIDI ยังไม่พร้อม กรุณาอัปเดตเว็บ');
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  onStatus('กำลังโหลด XSK2 และ SoundFont จาก Google Drive…');
+  const [response,fontBytes]=await Promise.all([
+    privateFile(fileId,token,{signal}),
+    window.XStageBrowserMidi.selectedFont(token,signal)
+  ]);
+  const packed=await response.blob();
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  onStatus('กำลังตรวจและแยก XSK2 ในหน่วยความจำ…');
+  const unpacked=await window.XStageXsk.openPackage(packed);
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  // Never play a different song under a stale catalog title/code.
+  if(String(song.code||'')!==unpacked.code ||
+     String(song.title||'')!==String(unpacked.document.title||'') ||
+     String(song.artist||'')!==String(unpacked.document.artist||''))
+    throw Error('XSK2 ภายในไฟล์ไม่ตรงกับชื่อเพลง/ศิลปินใน DB · กรุณานำเข้าอีกครั้ง');
+  onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ให้พร้อมเล่น…');
+  const rendered=await window.XStageBrowserMidi.render(
+    new Uint8Array(await unpacked.midi.arrayBuffer()),{
+      fontBytes,signal,onStatus
+    });
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  if(!rendered?.audio?.size)throw Error('ไม่สามารถสังเคราะห์เสียงจาก XSK2 ได้');
+  return {song,token,blob:rendered.audio,lyrics:unpacked.document};
+}
+
 function releaseQueuePreload(){
   clearTimeout(state.queuePreloadTimer);state.queuePreloadTimer=null;
   state.queuePreloadVersion++;
@@ -1991,8 +2027,11 @@ function releaseQueuePreload(){
 }
 function scheduleQueuePreload(){
   clearTimeout(state.queuePreloadTimer);
-  // A MIDI track is synthesized on demand; queue prefetch must not treat it as an audio file.
-  if(state.queue[0]?.midi){releaseQueuePreload();return;}
+  // Only XSK2 gets bounded queued MIDI synthesis. Legacy MIDI remains
+  // on-demand; the original ordinary audio+JSON prefetch is unchanged.
+  if(state.queue[0]?.midi&&!getFileId(state.queue[0]?.xsk)){
+    releaseQueuePreload();return;
+  }
   if(!state.token||!state.queue.length){releaseQueuePreload();return;}
   const song=state.queue[0],token=state.token;
   if(state.queuePrepared?.song===song&&state.queuePrepared.token===token)return;
@@ -2001,27 +2040,42 @@ function scheduleQueuePreload(){
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(song,token);},300);
 }
 async function preloadFirstQueueSong(song,token){
-  if(song?.midi)return;
+  if(song?.midi&&!getFileId(song?.xsk))return;
   if(state.queue[0]!==song||state.token!==token)return;
   const controller=new AbortController(),version=++state.queuePreloadVersion;
   state.queuePreload?.controller.abort();
   const task={song,token,controller};state.queuePreload=task;
   try{
-    const [response,lyrics]=await Promise.all([
-      privateFile(song.audio.fileId,token,{signal:controller.signal}),
-      privateJson(song.lyrics.fileId,token,{signal:controller.signal})
-    ]);
-    const blob=await response.blob();
+    let data;
+    if(getFileId(song?.xsk)){
+      // One queued XSK2 only; do not cache an entire 100,000-song library.
+      // On limited-memory TVs/phones, large XSK2 plays on-demand instead.
+      const smallDevice=Number(navigator.deviceMemory||8)<=4;
+      const maxPacked=smallDevice?24*1024*1024:48*1024*1024;
+      if(Number(song.xsk.size)>maxPacked)return;
+      data=await prepareXskPlayback(song,token,controller.signal);
+      const maxRendered=smallDevice?64*1024*1024:128*1024*1024;
+      if(data.blob.size>maxRendered)return;
+    }else{
+      const [response,lyrics]=await Promise.all([
+        privateFile(song.audio.fileId,token,{signal:controller.signal}),
+        privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+      ]);
+      data={song,token,blob:await response.blob(),lyrics};
+    }
     if(version!==state.queuePreloadVersion||state.queue[0]!==song||state.token!==token||
-       !blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return;
-    state.queuePrepared={song,token,blob,lyrics};
+       controller.signal.aborted||!data.blob.size||
+       data.lyrics?.schemaVersion!==1||!Array.isArray(data.lyrics.lines))return;
+    state.queuePrepared=data;
+    renderQueue();
   }catch(error){if(error.name!=='AbortError')console.warn('X-Stage queue prefetch:',error.message);}
   finally{if(state.queuePreload===task)state.queuePreload=null;}
 }
 function prefetchMedleyNext(){
   if(!state.medley||!state.token||state.loading)return;
   const song=nextMedleyCandidate(),token=state.token;
-  if(!song||song.midi||state.medleyCache?.song===song||state.medleyPrefetch?.song===song)return;
+  if(!song||song.midi||song.xsk||state.medleyCache?.song===song||
+     state.medleyPrefetch?.song===song)return;
   state.medleyPrefetch?.controller?.abort();
   const task={song,token,controller:new AbortController()};state.medleyPrefetch=task;
   Promise.all([privateFile(song.audio.fileId,token,{signal:task.controller.signal}),
@@ -2056,7 +2110,13 @@ function renderQueue() {
   if (!state.queue.length) {ui.queue.append(element('li','empty-state','ยังไม่มีเพลงในคิว'));return;}
   state.queue.forEach((song,i)=>{
     const item=element('li','queue-item');
-    const info=element('div','queue-info');info.append(element('strong','',song.title||'ไม่ระบุชื่อเพลง'),element('small','',song.artist||song.code||''));
+    const info=element('div','queue-info');
+    const waiting=!!getFileId(song.xsk)&&i===0&&
+      state.queuePreload?.song===song;
+    const ready=state.queuePrepared?.song===song;
+    info.append(element('strong','',song.title||'ไม่ระบุชื่อเพลง'),
+      element('small','',(song.artist||song.code||'')+
+        (ready?' · เตรียมพร้อมเล่นแล้ว':waiting?' · กำลังเตรียม XSK2 ล่วงหน้า':'')));
     const buttons=element('div','queue-controls');
     const up=control('↑',()=>moveQueue(i,-1),'เลื่อนขึ้น');up.disabled=i===0;
     const down=control('↓',()=>moveQueue(i,1),'เลื่อนลง');down.disabled=i===state.queue.length-1;
