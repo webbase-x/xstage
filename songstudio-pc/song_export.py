@@ -100,8 +100,7 @@ def songs_root(workspace: str | Path) -> Path:
     # The PC-ready export uses uppercase AUDIO/LYRICS and a different
     # current.json format. Do not accidentally treat it as an authoring DB.
     if ((target / "LYRICS" / "current.json").is_file()
-            and not (target / "current.json").is_file()
-            and not (target / "audio").is_dir()):
+            and not (target / "current.json").is_file()):
         raise RuntimeError(
             "โฟลเดอร์นี้เป็นคลังสำหรับ Karaoke PC · กรุณาเลือกพื้นที่สร้างเพลง"
             "ของ Song Studio แยกต่างหาก")
