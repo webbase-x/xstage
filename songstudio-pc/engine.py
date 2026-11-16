@@ -270,7 +270,7 @@ PREFS = {
     "workspace": default_song_workspace(),
     "download": str(Path.home() / "Downloads"),
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
-    "export_format": "xsk", "catalog_view": "changes", "code_style": "source", "code_length": "6", "oauth": "",
+    "export_format": "xsk", "catalog_view": "changes", "code_style": "numeric", "code_length": "5", "oauth": "",
     "upload_folder": "", "lyric_source": "", "pc_export_folder": "", "xsk_folder": "",
     "json_source": "", "json_destination": ""
 }
@@ -1589,8 +1589,8 @@ def build_xsk(rows, mode, options, *, progressive=False):
     records = export.existing_records(root)
     allocator = codes.CodeAllocator(
         records, [], root,
-        code_style=options.get("code_style", worker_prefs().get("code_style", "source")),
-        code_length=int(options.get("code_length", worker_prefs().get("code_length", "6"))))
+        code_style=options.get("code_style", worker_prefs().get("code_style", "numeric")),
+        code_length=int(options.get("code_length", worker_prefs().get("code_length", "5"))))
     # An XSK is an encrypted package, not an ordinary published audio record.
     # Index its authenticated MIDI digests and occupied codes once before
     # assigning any new ID. Never infer uniqueness from filenames alone.
@@ -1646,7 +1646,7 @@ def build_xsk(rows, mode, options, *, progressive=False):
             # safe numeric code instead of rejecting an otherwise valid song.
             if not package.CODE_RE.fullmatch(preferred):
                 preferred = "1".zfill(int(options.get(
-                    "code_length", worker_prefs().get("code_length", "6"))))
+                    "code_length", worker_prefs().get("code_length", "5"))))
             row["code"] = source.stem
             _lrc, doc, _fingerprint = lyrics_package(row, export=export)
             if not doc or not doc.get("lines"):
@@ -1720,16 +1720,16 @@ def build_library(rows, mode, options):
     registry, remote, online_verified, online_generation = code_registry_snapshot(root)
     if online_verified:
         allocator, remapped = reconcile_local_codes(root, records, registry, remote, export)
-        allocator.code_style = worker_prefs().get("code_style", "source")
-        allocator.code_length = int(worker_prefs().get("code_length", "6"))
+        allocator.code_style = worker_prefs().get("code_style", "numeric")
+        allocator.code_length = int(worker_prefs().get("code_length", "5"))
         if remapped:
             records = export.existing_records(root)
         log(f"ตรวจรหัสสองแหล่งแล้ว · PC {len(records):,} · Google Drive {len(remote):,} เพลง")
     else:
         allocator = registry.CodeAllocator(
             records, [], root,
-            code_style=worker_prefs().get("code_style", "source"),
-            code_length=int(worker_prefs().get("code_length", "6")))
+            code_style=worker_prefs().get("code_style", "numeric"),
+            code_length=int(worker_prefs().get("code_length", "5")))
         log("ยังไม่ได้ยืนยันรหัสกับ Google Drive · รหัสเพลงที่สร้างขณะออฟไลน์เป็นรหัสชั่วคราวจนกว่าจะอัปโหลด")
     # Build these indices ONCE. Looking up an incomplete source by scanning
     # every catalog row for each new song was quadratic for large libraries
@@ -2543,7 +2543,7 @@ def start_job(data):
                 "source", "numeric", "letters", "alphanumeric"):
             raise ValueError("ชนิดรหัสเพลงไม่ถูกต้อง")
         try:
-            digits = int(data.get("code_length", PREFS.get("code_length", "6")))
+            digits = int(data.get("code_length", PREFS.get("code_length", "5")))
         except (ValueError, TypeError) as exc:
             raise ValueError("จำนวนหลักรหัสไฟล์ต้องเป็นตัวเลข") from exc
         if not 1 <= digits <= 12:
