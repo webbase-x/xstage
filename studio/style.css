@@ -429,3 +429,26 @@ button.preview-lyric-line{cursor:pointer}
   }
   .sidebar .nav-button{flex-shrink:0}
 }
+
+/* MIDI to .XSK: intentionally minimal folder-to-folder workflow.
+   Hidden advanced controls keep their IDs/default values for the existing engine. */
+#tab-create.xsk-auto-mode .create-assistant,
+#tab-create.xsk-auto-mode #create-stage-2,
+#tab-create.xsk-auto-mode #create-stage-3,
+#tab-create.xsk-auto-mode #create-stage-4,
+#tab-create.xsk-auto-mode #create-stage-1 > :not(label):not(.path-row):not(#xsk-auto-builder),
+#tab-create.xsk-auto-mode #create-stage-1 > label:not([for="create-source"]):not([for="xsk-build-folder"]),
+#tab-create.xsk-auto-mode #create-stage-1 > .path-row:has(#create-workspace),
+#tab-create.xsk-auto-mode #xsk-auto-builder > :not(.toolbar):not(#xsk-stream-status) {
+  display: none !important;
+}
+#tab-create.xsk-auto-mode #create-stage-1 {
+  max-width: 760px;
+  margin-inline: auto;
+}
+#tab-create.xsk-auto-mode #xsk-auto-builder {
+  margin-top: 16px;
+}
+#tab-create.xsk-auto-mode #xsk-stream-build {
+  min-width: 140px;
+}
