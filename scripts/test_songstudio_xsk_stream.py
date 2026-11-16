@@ -38,9 +38,16 @@ class XskStreamTests(unittest.TestCase):
         path = folder / (name + ".mid")
         path.write_bytes(b"MThd" + marker * 80)
         (folder / (name + ".lrc")).write_text(
-            "[ti:ชื่อเพลง " + name + "]\\n[ar:ศิลปินทดสอบ]\\n[00:02.00]เนื้อร้องพร้อมเวลา",
+            "[ti:ชื่อเพลง " + name + "]\n[ar:ศิลปินทดสอบ]\n[00:02.00]เนื้อร้องพร้อมเวลา",
             encoding="utf-8")
         return path
+
+    def test_midi_fixture_lrc_has_real_line_breaks(self):
+        midi = self.midi(self.source, "fixture", b"F")
+        lyrics = midi.with_suffix(".lrc").read_text(encoding="utf-8")
+        self.assertEqual(len(lyrics.splitlines()), 3)
+        self.assertIn("[ar:ศิลปินทดสอบ]", lyrics.splitlines())
+        self.assertTrue(lyrics.splitlines()[2].startswith("[00:02.00]"))
 
     def test_starts_processing_first_folder_before_deeper_scan_finishes(self):
         self.midi(self.source / "A", "00001")
