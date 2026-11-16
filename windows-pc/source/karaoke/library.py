@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict, replace
 from pathlib import Path
 from uuid import uuid4
 
-MIDI_EXT = {".mid", ".midi", ".kar", ".emk"}
+MIDI_EXT = {".mid", ".midi", ".kar", ".emk", ".xsk"}
 AUDIO_EXT = {".wav", ".mp3", ".wma"}
 VIDEO_EXT = {".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov"}
 SUPPORTED = MIDI_EXT | AUDIO_EXT | VIDEO_EXT
