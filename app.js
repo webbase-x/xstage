@@ -599,6 +599,7 @@ function resetSongVideo(){
   karaokeVideo.removeAttribute('src');
   karaokeVideo.load();
   if(videoObjectUrl){URL.revokeObjectURL(videoObjectUrl);videoObjectUrl='';}
+  state.activeVideoBytes=0;
 }
 function syncSongVideo(){
   if(!karaokeVideo||karaokeVideo.hidden||!karaokeVideo.src)return;
@@ -633,6 +634,8 @@ async function loadSongVideo(song,request,token,signal,{forceCompatible=false}={
         (String(media.path||'').toLowerCase().endsWith('.webm')?'video/webm':'video/mp4');
       if(videoObjectUrl)URL.revokeObjectURL(videoObjectUrl);
       videoObjectUrl=URL.createObjectURL(data.type===mime?data:new Blob([data],{type:mime}));
+      state.activeVideoBytes=data.size;
+      trimQueueCache();
       karaokeVideo.src=videoObjectUrl;
     }
     if(revision!==videoLoadRevision||request!==state.requestId)return;
@@ -2047,7 +2050,8 @@ function cacheMemoryBytes(){
   return total;
 }
 function memoryResources(extraBytes=0){
-  return {fontBytes:fontMemoryBytes(),queuedBytes:cacheMemoryBytes(),
+  return {fontBytes:fontMemoryBytes(),
+    queuedBytes:cacheMemoryBytes()+Number(state.medleyCache?.blob?.size||0),
     activeBytes:state.activeBlobBytes+state.activeVideoBytes,extraBytes};
 }
 function updateMemoryIndicators(){
@@ -2089,6 +2093,12 @@ function trimQueueCache(){
   const monitor=window.XStageMemory;
   if(monitor){
     let p=monitor.plan(memoryResources());
+    if(p.heapPressure||p.nativePressure){
+      state.medleyCache=null;
+      state.medleyPrefetch?.controller?.abort();
+      state.medleyPrefetch=null;
+      p=monitor.plan(memoryResources());
+    }
     const queueLimit=p.queueLimit;
     while(state.queuePreparedCache.size>queueLimit||
         (state.queuePreparedCache.size>0&&(p.heapPressure||p.nativePressure||p.ratio>.8))){
@@ -2251,6 +2261,9 @@ function prefetchMedleyNext(){
   const song=nextMedleyCandidate(),token=state.token;
   if(!song||song.midi||song.xsk||state.medleyCache?.song===song||
      state.medleyPrefetch?.song===song)return;
+  const policy=window.XStageMemory;
+  if(!policy||!Number(song.audio?.size)||
+     !policy.canHold(Number(song.audio.size)*1.15,memoryResources()))return;
   state.medleyPrefetch?.controller?.abort();
   const task={song,token,controller:new AbortController()};state.medleyPrefetch=task;
   Promise.all([privateFile(song.audio.fileId,token,{signal:task.controller.signal}),
@@ -2259,8 +2272,10 @@ function prefetchMedleyNext(){
       const blob=await response.blob();
       if(state.medleyPrefetch!==task||!state.medley||state.token!==token||
           nextMedleyCandidate()!==song)return;
-      if(!blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return;
+      if(!blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines)||
+         !window.XStageMemory.canHold(blob.size,memoryResources()))return;
       state.medleyCache={song,blob,lyrics};
+      updateMemoryIndicators();
     })
     .catch(()=>{/* Playback falls back to loading the next song normally. */})
     .finally(()=>{if(state.medleyPrefetch===task)state.medleyPrefetch=null;});
