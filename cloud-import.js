@@ -686,10 +686,10 @@ class Importer {
         let item=originalItem;
         try{
           if(item.isXsk){
-            // Keep the original XSK2 on Drive. Inspect its verified metadata
-            // only once on import, but do not upload decompressed MIDI/JSON.
-            // The stage unpacks and renders it just-in-time for playback.
-            const opened=await scope.XStageXsk.openPackage(item.file);
+            // Keep the original XSK2 on Drive. Read only its timed JSON
+            // metadata now. Extract and SHA-256-verify the MIDI at play time,
+            // or progressively for the first song waiting in the queue.
+            const opened=await scope.XStageXsk.inspectMetadata(item.file);
             const code=opened.code,identity=core.songIdentity(opened.document,code);
             if(!identity.identityComplete)
               throw Error('XSK: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
