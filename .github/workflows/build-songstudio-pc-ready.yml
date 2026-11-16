@@ -39,6 +39,7 @@ on:
       - "studio/style.css"
       - "studio/pro-design.css"
       - "scripts/test_songstudio_created_xsk.py"
+      - "scripts/test_songstudio_xsk.py"
       - "scripts/test_songstudio_xsk_stream.py"
       - "scripts/test_songstudio_json_pro.py"
       - "studio/entry.js"
@@ -123,9 +124,7 @@ jobs:
           & python -m unittest discover -s scripts -p test_songstudio_pc.py -v
           if ($LASTEXITCODE -ne 0) { throw "Song Studio PC engine regressions failed" }
           & python -m unittest discover -s scripts -p test_songstudio_xsk.py -v
-          if ($LASTEXITCODE -ne 0) { throw "XSK encryption, no-clobber and size-boundary regression failed" }
-          & python -m unittest discover -s scripts -p test_songstudio_xsk_access.py -v
-          if ($LASTEXITCODE -ne 0) { throw "Portable XSK access key encryption regression failed" }
+          if ($LASTEXITCODE -ne 0) { throw "XSK2 plaintext ZIP, no-clobber and size-boundary regression failed" }
           & python -m unittest discover -s scripts -p test_songstudio_xsk_stream.py -v
           if ($LASTEXITCODE -ne 0) { throw "MIDI XSK incremental streaming regression failed" }
           & python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
