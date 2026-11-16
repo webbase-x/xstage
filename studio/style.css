@@ -501,3 +501,15 @@ button.preview-lyric-line{cursor:pointer}
 
 /* Keep automatic edit/settings history functional but out of the everyday UI. */
 #edit-history-panel { display: none !important; }
+
+/* Multiple independent PC Engine workers: compact per-job controls. */
+.parallel-job-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.parallel-job{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border:1px solid var(--border,#355368);background:rgba(8,23,37,.55);
+  border-radius:10px;padding:9px 12px}
+.parallel-job>div{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
+.parallel-job strong{font-size:12px}
+.parallel-job small{font-size:11px;opacity:.82}
+.parallel-job .button{flex-shrink:0;min-height:32px;font-size:11px}
+@media(max-width:580px){.parallel-job{align-items:flex-start;flex-direction:column}
+  .parallel-job .button{width:100%}}
