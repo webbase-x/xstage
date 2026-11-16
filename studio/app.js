@@ -110,6 +110,20 @@
       subtitle.textContent=job.detail||('รหัสงาน '+job.id);
       detail.append(title,subtitle);
       item.append(detail);
+      if(job.state==='success' && job.outputFolder){
+        const open=document.createElement('button');
+        open.type='button';open.className='button ghost';
+        open.textContent='เปิดโฟลเดอร์ปลายทาง';
+        open.addEventListener('click',async()=>{
+          open.disabled=true;
+          try{
+            await post('/api/jobs/open-output',{id:job.id});
+            message('เปิดโฟลเดอร์ปลายทางของงานที่เสร็จแล้ว',false);
+          }catch(error){message(error.message);}
+          finally{open.disabled=false;}
+        });
+        item.append(open);
+      }
       if(job.state==='running'){
         const stop=document.createElement('button');
         stop.type='button';stop.className='button ghost';
