@@ -9,3 +9,6 @@ SoundCard==0.4.6; sys_platform == "win32"
 
 # Bundles a ready-to-use FFmpeg executable into the Windows release.
 imageio-ffmpeg==0.6.0
+
+# XSK1 authenticated MIDI containers (AES-GCM)
+cryptography==50.0.2
