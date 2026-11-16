@@ -174,6 +174,12 @@ class Inspector:
                 head = stream.read(4096)
             asf = bytes.fromhex('3026b2758e66cf11a6d900aa0062ce6c')
             matches = {
+                '.m4a': head[4:8] == b'ftyp',
+                '.flac': head[:4] == b'fLaC',
+                '.ogg': head[:4] == b'OggS',
+                '.oga': head[:4] == b'OggS',
+                '.aac': (len(head) >= 2 and head[0] == 0xff and
+                         head[1] & 0xf6 == 0xf0) or head[:4] == b'ADIF',
                 '.wav': head[:4] == b'RIFF' and head[8:12] == b'WAVE',
                 '.avi': head[:4] == b'RIFF' and head[8:12] == b'AVI ',
                 '.mp3': head[:3] == b'ID3' or any(head[i] == 255 and head[i+1] & 224 == 224 and head[i+1] & 6 != 0 and head[i+2] >> 4 not in (0,15) for i in range(min(1024, len(head)-3))),
