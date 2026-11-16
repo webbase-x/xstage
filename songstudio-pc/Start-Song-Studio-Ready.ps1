@@ -113,16 +113,57 @@ try {
         Write-Status 'Offline readiness check passed (NoLaunch mode).'
         exit 0
     }
+    # pythonw.exe discards fatal Python tracebacks. Use bundled python.exe with
+    # CREATE_NO_WINDOW via ProcessStartInfo and send stderr to a durable log.
+    # This does not open a console or download dependencies.
     $start = New-Object System.Diagnostics.ProcessStartInfo
-    $start.FileName = $pyw
+    $start.FileName = $py
     $start.Arguments = '"' + $engine + '"'
     $start.WorkingDirectory = $Root
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
-    $proc = [System.Diagnostics.Process]::Start($start)
-    if ($null -eq $proc) { throw 'Could not launch the local Song Studio Engine.' }
-    Start-Sleep -Milliseconds 900
-    if ($proc.HasExited) { throw ('Local Engine failed at launch (exit {0}).' -f $proc.ExitCode) }
+    $start.RedirectStandardError = $true
+    $start.RedirectStandardOutput = $true
+    $start.EnvironmentVariables['PYTHONUNBUFFERED'] = '1'
+    $start.EnvironmentVariables['PYTHONFAULTHANDLER'] = '1'
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $start
+    $stdErrPath = Join-Path $Root 'engine-startup-error.log'
+    $stdOutPath = Join-Path $Root 'engine-startup-output.log'
+    # Asynchronous callbacks prevent child stdout/stderr pipes from blocking.
+    $stderrBuffer = New-Object System.Text.StringBuilder
+    $stdoutBuffer = New-Object System.Text.StringBuilder
+    $stderrHandler = [System.Diagnostics.DataReceivedEventHandler] {
+        param($sender, $args)
+        if ($null -ne $args.Data) {
+            [void]$stderrBuffer.AppendLine($args.Data)
+            [IO.File]::AppendAllText($stdErrPath, $args.Data + [Environment]::NewLine)
+        }
+    }.GetNewClosure()
+    $stdoutHandler = [System.Diagnostics.DataReceivedEventHandler] {
+        param($sender, $args)
+        if ($null -ne $args.Data) {
+            [void]$stdoutBuffer.AppendLine($args.Data)
+            [IO.File]::AppendAllText($stdOutPath, $args.Data + [Environment]::NewLine)
+        }
+    }.GetNewClosure()
+    [IO.File]::WriteAllText($stdErrPath, '', (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($stdOutPath, '', (New-Object Text.UTF8Encoding($false)))
+    $proc.add_ErrorDataReceived($stderrHandler)
+    $proc.add_OutputDataReceived($stdoutHandler)
+    if (-not $proc.Start()) { throw 'Could not launch the local Song Studio Engine.' }
+    $proc.BeginErrorReadLine()
+    $proc.BeginOutputReadLine()
+    Start-Sleep -Milliseconds 1500
+    if ($proc.HasExited) {
+        $proc.WaitForExit()
+        $details = $stderrBuffer.ToString().Trim()
+        if ([string]::IsNullOrWhiteSpace($details)) {
+            $details = 'See engine-startup-error.log (or engine-startup-output.log).'
+        }
+        $details = $details.Substring(0, [Math]::Min(1600, $details.Length))
+        throw ('Local Engine failed at launch (exit {0}): {1}' -f $proc.ExitCode, $details)
+    }
     if ($ReadySignal) {
         $allowedParent = (Resolve-Path -LiteralPath (Split-Path -Parent $Root)).Path
         $signalParent = (Resolve-Path -LiteralPath (Split-Path -Parent $ReadySignal)).Path
