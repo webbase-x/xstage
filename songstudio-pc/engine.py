@@ -1560,15 +1560,19 @@ def _xsk_apply_head_tail(document, options):
 def _xsk_stream_scan_status(data, complete, backlog, *, job_id=None):
     """Discovered MIDI count is dynamic until the source walk finishes."""
     with LOCK:
-        if job_id is not None and worker_job().get("id") != job_id:
+        # The source discovery producer has its own Python thread, so the
+        # caller's thread-local context does not propagate automatically.
+        entry = ACTIVE_JOBS.get(job_id) if job_id else None
+        target = entry["job"] if entry else worker_job() if job_id is None else None
+        if target is None or (job_id and target.get("id") != job_id):
             return
-        worker_job()["scannedFiles"] = data["files"]
-        worker_job()["discovered"] = data["found"]
-        worker_job()["queuedBatches"] = backlog
-        worker_job()["scanDone"] = bool(complete)
+        target["scannedFiles"] = data["files"]
+        target["discovered"] = data["found"]
+        target["queuedBatches"] = backlog
+        target["scanDone"] = bool(complete)
         if complete:
-            worker_job()["total"] = data["found"]
-        worker_job()["updated"] = time.monotonic()
+            target["total"] = data["found"]
+        target["updated"] = time.monotonic()
 
 
 def build_xsk(rows, mode, options, *, progressive=False):
