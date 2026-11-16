@@ -1614,8 +1614,12 @@ def build_xsk(rows, mode, options, *, progressive=False):
     if mode != "original" or options.get("audio_only"):
         raise ValueError("XSK ต้องเป็นเพลง MIDI/KAR ต้นฉบับ ไม่ใช่โหมดแยกเสียง")
     package = _module("xsk_package.py", "xstage_xsk_package")
-    keys = _module("xsk_keys.py", "xstage_xsk_keys")
-    key = keys.get_key(DATA)
+    # XSK2 requires no encryption key. Read an existing key only to
+    # inspect/deduplicate historical XSK1 files; never create a new one.
+    legacy_file = DATA / "xsk-key.dpapi"
+    legacy_key = (_module("xsk_keys.py", "xstage_xsk_keys")._dpapi(
+        legacy_file.read_bytes(), decrypt=True)
+        if legacy_file.is_file() and not legacy_file.is_symlink() else None)
     export = _song_export_module()
     root = export.songs_root(options.get("xsk_folder") or worker_prefs().get("xsk_folder") or worker_prefs()["workspace"])
     codes = _module("code_registry.py", "xstage_xsk_codes")
@@ -1624,7 +1628,7 @@ def build_xsk(rows, mode, options, *, progressive=False):
         records, [], root,
         code_style=options.get("code_style", worker_prefs().get("code_style", "numeric")),
         code_length=int(options.get("code_length", worker_prefs().get("code_length", "5"))))
-    # An XSK is an encrypted package, not an ordinary published audio record.
+    # Read existing XSK2 (or older XSK1) only to deduplicate and reserve codes.
     # Index its authenticated MIDI digests and occupied codes once before
     # assigning any new ID. Never infer uniqueness from filenames alone.
     existing_midi = set()
@@ -1634,7 +1638,7 @@ def build_xsk(rows, mode, options, *, progressive=False):
             if not existing_path.is_file() or existing_path.is_symlink():
                 raise ValueError("พบ XSK ที่ตรวจสอบไม่ได้: " + str(existing_path))
             try:
-                existing_doc = package.open_package(existing_path, key)
+                existing_doc = package.open_package(existing_path, legacy_key)
                 digest = existing_doc["audio"]["sha256"]
                 used_code = existing_doc["songCode"]
                 if not isinstance(digest, str) or len(digest) != 64:
@@ -1686,10 +1690,8 @@ def build_xsk(rows, mode, options, *, progressive=False):
                 raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
             doc = _xsk_apply_head_tail(doc, options)
             title, artist = _xsk_identity(source, row, doc)
-            if title == source.stem:
-                log("XSK ไม่พบชื่อเพลงใน metadata · ใช้ชื่อไฟล์: " + source.name)
-            if artist == "ไม่ระบุศิลปิน":
-                log("XSK ไม่พบศิลปินที่ยืนยันได้: " + source.name)
+            if title == source.stem or artist == "ไม่ระบุศิลปิน":
+                raise ValueError("ไม่มีชื่อเพลง/ศิลปินจริงใน metadata · ข้ามเพื่อไม่สร้าง DB ผิด: " + source.name)
             # CodeAllocator fills numeric gaps before appending after the
             # highest occupied code. The target file is still checked by seal.
             code = allocator.assign_new(preferred)
@@ -1698,12 +1700,12 @@ def build_xsk(rows, mode, options, *, progressive=False):
                 raise FileExistsError("รหัส XSK ปลายทางมีอยู่แล้ว · ไม่เขียนทับ: " + code)
             row["code"] = code
             doc["songCode"] = code
-            update(f"เข้ารหัส XSK รายการ {index:,}" +
+            update(f"บรรจุ XSK2 ไม่เข้ารหัส รายการ {index:,}" +
                    (f"/{len(rows):,}" if not progressive else "") + f": {title}")
-            package.seal(source, doc, code, title, artist, key, target=output)
+            package.seal(source, doc, code, title, artist, target=output)
             existing_midi.add(source_digest)
             created += 1
-            log("XSK สร้างและตรวจ AES-GCM / SHA-256 ผ่าน: " + code)
+            log("XSK2 ไม่เข้ารหัส · ตรวจ ZIP / SHA-256 ผ่าน: " + code)
         except Exception as exc:
             reason = source.name + ": " + str(exc)
             if progressive and isinstance(exc, ValueError):
@@ -2145,7 +2147,7 @@ def execute_job(action, options, started):
                 _module("created_json_manager.py", "xstage_created_json_manager"),
                 _module("xsk_package.py", "xstage_xsk_package"),
                 _module("code_registry.py", "xstage_xsk_codes"),
-                _module("xsk_keys.py", "xstage_xsk_keys").get_key(DATA),
+                None,
                 destination_root=output_root, cancelled=worker_cancel(), progress=_created_progress)
         elif action == "xsk-stream":
             options = dict(options)
@@ -3639,23 +3641,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("คำสั่งไม่ถูกต้อง")
             path = urllib.parse.urlsplit(self.path).path
-            if path == "/api/xsk/access-export":
-                # Explicit local user action. Never return or log an unwrapped
-                # AES key or the requested password to the browser.
-                password = payload.get("password", "")
-                repeat = payload.get("repeat", "")
-                if not isinstance(password, str) or password != repeat:
-                    raise ValueError("รหัสผ่านทั้งสองช่องไม่ตรงกัน")
-                key_file = DATA / "xsk-key.dpapi"
-                if key_file.is_symlink() or not key_file.is_file():
-                    raise ValueError("ยังไม่มีกุญแจ XSK ที่สร้างโดย Song Studio บัญชีนี้")
-                access = _module("xsk_access.py", "xstage_xsk_access")
-                local_key = _module("xsk_keys.py", "xstage_xsk_keys").get_key(DATA)
-                output = Path(PREFS["download"]).expanduser() / "XStageSong-access.xskkey"
-                saved = access.export_access(local_key, password, output)
-                self._json({"ok": True, "path": saved,
-                            "notice": "ไฟล์นี้เป็นสิทธิ์เปิด XSK · อย่าเผยแพร่พร้อมรหัสผ่าน"})
-            elif path == "/api/license/activate":
+            if path == "/api/license/activate":
                 license_module = _module("pro_license.py", "xstage_pro_license")
                 license_module.activate(DATA, payload.get("key", ""))
                 self._json({"pro": True})
