@@ -81,19 +81,24 @@ def _md5(path):
 
 
 def _local_path(root, path, prefix):
-    if not isinstance(path, str) or not path.startswith(prefix + "/"):
+    # Local Song Studio retains lowercase paths for legacy build jobs.
+    # MIDI to Lyrics JSON writes directly to the new categorized hierarchy.
+    allowed = ({"audio", "AUDIO", "VIDEO", "MIDI", "SOUNDFONT"}
+               if prefix == "audio" else {"lyrics", "LYRICS"}
+               if prefix == "lyrics" else {prefix})
+    if (not isinstance(path, str) or path.split("/", 1)[0] not in allowed
+            or chr(92) in path or ":" in path or chr(0) in path
+            or len(path.split("/")) < 3):
         raise PublishError("พาธไฟล์ประกอบไม่ถูกต้อง: " + repr(path))
     item = PurePosixPath(path)
-    if item.is_absolute() or any(part in ("", ".", "..") for part in item.parts):
+    if (item.is_absolute()
+            or any(part in ("", ".", "..") for part in path.split("/"))):
         raise PublishError("พาธไฟล์ประกอบไม่ปลอดภัย: " + path)
     file = root / Path(*item.parts)
-    # A verified portable export retains PC's uppercase AUDIO/LYRICS folders.
-    # Adapt only that specific format; never accept arbitrary alternate paths.
     portable_marker = root / "DB" / "songs-portable.json"
     if (not file.is_file() and portable_marker.is_file()
-            and not portable_marker.is_symlink()):
-        # Marker schema and song rows were validated once by the caller.
-        # Never parse a potentially 100 MB catalog for every song path.
+            and not portable_marker.is_symlink() and
+            path.startswith(prefix + "/")):
         file = root / prefix.upper() / Path(*item.parts[1:])
     resolved = file.resolve()
     if (not resolved.is_relative_to(root.resolve()) or not file.is_file()
