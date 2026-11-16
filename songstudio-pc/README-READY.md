@@ -54,8 +54,8 @@ All listed components are downloaded and verified **on the GitHub Actions Window
 - Open **สร้าง .XSK · Pro** after activating a valid Pro License Key under **ตั้งค่า → License & Pro**.
 - Choose MIDI/KAR + already generated, timed Lyrics JSON from the local catalog, select the XSK output folder, and create in batches of up to 100.
 - Compare MIDI content by SHA-256; skip identical tracks even when filenames differ. When different content collides with an XSK code, allocate an available numeric code before appending a new one.
-- Leave both source media and source JSON unmodified. Do not overwrite pre-existing XSK files. Report any unreadable encrypted XSK and stop rather than assuming it is new.
-- XSK encryption keys and per-user Pro licenses are not pre-activated in a public ZIP. The user must supply a valid individual Pro license; Google Drive requires network access and account authorization.
+- Leave both source media and source JSON unmodified. Do not overwrite pre-existing XSK files. Keep legacy encrypted XSK1 under its old filename and allocate a separate code for a new XSK2; unreadable/corrupt XSK2 still fails closed.
+- XSK2 requires no encryption keys. Per-user Pro licenses are not pre-activated in a public ZIP. The user must supply a valid individual Pro license; Google Drive requires network access and account authorization.
 
 ### Functions implemented in this source engine
 
