@@ -65,13 +65,13 @@ jobs:
       XSTAGE_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.XSTAGE_GOOGLE_DESKTOP_CLIENT_ID || vars.XSTAGE_GOOGLE_DESKTOP_CLIENT_ID }}
       XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # GITHUB_TOKEN can be read-only on some repository/organization
           # policies; a fine-grained release token can be supplied explicitly.
           # The same token is used for the verified metadata push.
           token: ${{ secrets.XSTAGE_RELEASE_TOKEN || github.token }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: 'pip'
@@ -316,7 +316,7 @@ jobs:
           } finally { $archive.Dispose() }
           Write-Host "PASS: Complete offline ZIP SHA-256 $actual"
       - name: Upload verified Ready ZIP as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: X-Stage-Song-Studio-PC-Ready-${{ env.SONGSTUDIO_READY_SUFFIX }}
           path: |
