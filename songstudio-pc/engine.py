@@ -1614,12 +1614,7 @@ def build_xsk(rows, mode, options, *, progressive=False):
     if mode != "original" or options.get("audio_only"):
         raise ValueError("XSK ต้องเป็นเพลง MIDI/KAR ต้นฉบับ ไม่ใช่โหมดแยกเสียง")
     package = _module("xsk_package.py", "xstage_xsk_package")
-    # XSK2 requires no encryption key. Read an existing key only to
-    # inspect/deduplicate historical XSK1 files; never create a new one.
-    legacy_file = DATA / "xsk-key.dpapi"
-    legacy_key = (_module("xsk_keys.py", "xstage_xsk_keys")._dpapi(
-        legacy_file.read_bytes(), decrypt=True)
-        if legacy_file.is_file() and not legacy_file.is_symlink() else None)
+    # Do not open/create any encryption key for portable XSK2 exports.
     export = _song_export_module()
     root = export.songs_root(options.get("xsk_folder") or worker_prefs().get("xsk_folder") or worker_prefs()["workspace"])
     codes = _module("code_registry.py", "xstage_xsk_codes")
@@ -1637,8 +1632,18 @@ def build_xsk(rows, mode, options, *, progressive=False):
         for existing_path in xsk_root.rglob("*.xsk"):
             if not existing_path.is_file() or existing_path.is_symlink():
                 raise ValueError("พบ XSK ที่ตรวจสอบไม่ได้: " + str(existing_path))
+            # Preserve encrypted XSK1 untouched. Reserve the filename,
+            # but never treat its encrypted MIDI as an existing portable
+            # XSK2 song: the user may regenerate it safely with a new code.
+            with existing_path.open("rb") as old:
+                legacy = old.read(4) == b"XSK1"
+            if legacy:
+                allocator.used.add(existing_path.stem.casefold())
+                allocator._track_numeric(existing_path.stem)
+                log("XSK1 รุ่นเก่าคงไว้ ไม่เขียนทับ · สร้าง XSK2 ใหม่ได้: " + existing_path.name)
+                continue
             try:
-                existing_doc = package.open_package(existing_path, legacy_key)
+                existing_doc = package.open_package(existing_path)
                 digest = existing_doc["audio"]["sha256"]
                 used_code = existing_doc["songCode"]
                 if not isinstance(digest, str) or len(digest) != 64:
