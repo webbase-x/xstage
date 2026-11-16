@@ -167,6 +167,23 @@ class XskStreamTests(unittest.TestCase):
         finally:
             engine.NOTES.pop(str(source), None)
 
+    def test_xsk_identity_reads_lrc_title_artist_and_respects_manual_edits(self):
+        engine = load("engine")
+        source = self.source / "00013.mid"
+        row = {"path": str(source), "code": "00013",
+               "title": "00013", "artist": ""}
+        doc = {"rawLrc": "[ti:ชื่อเพลงจาก LRC]\\n[ar:ศิลปินจาก LRC]\\n[00:02.00]ทดสอบ",
+               "lines": [{"startTime": 2.0, "text": "ทดสอบ"}]}
+        self.assertEqual(engine._xsk_identity(source, row, doc),
+                         ("ชื่อเพลงจาก LRC", "ศิลปินจาก LRC"))
+        engine.NOTES[str(source)] = {"title": "ชื่อเพลงแก้ไข",
+                                     "artist": "ศิลปินแก้ไข"}
+        try:
+            self.assertEqual(engine._xsk_identity(source, row, doc),
+                             ("ชื่อเพลงแก้ไข", "ศิลปินแก้ไข"))
+        finally:
+            engine.NOTES.pop(str(source), None)
+
     def test_real_xsk_sealing_roundtrip_and_dedup(self):
         import sys
         # XSK2 must not create or require a Windows DPAPI key.
