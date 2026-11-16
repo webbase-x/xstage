@@ -84,10 +84,15 @@ class PcSourceTests(unittest.TestCase):
             self.assertEqual(third_result["created"], 1)
             self.assertTrue((root / "0" / "00003.xsk").is_file())
             self.assertTrue((root / "0" / "00002.xsk").is_file())
-            # Corrupt JSON must not trigger a fallback to embedded MIDI lyrics.
+            # Completed MIDI is skipped using SHA-256 before parsing lyrics;
+            # corrupted sidecars must still be rejected for NEW MIDI bytes.
             (self.source / "00002.json").write_text("{broken", encoding="utf-8")
+            duplicate_result = engine.build_xsk([different], "original", {})
+            self.assertEqual(duplicate_result["skipped"], 1)
+            brand_new = make_pair("00004", b"C" * 40)
+            (self.source / "00004.json").write_text("{broken", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "ไม่มีเพลงที่สร้างสำเร็จ"):
-                engine.build_xsk([different], "original", {})
+                engine.build_xsk([brand_new], "original", {})
 
     def test_incremental_catalog_view_remembers_new_items_by_source(self):
         first = {"id": 11, "path": str(self.source / "old.mp3"),
