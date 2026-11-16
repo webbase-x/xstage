@@ -336,7 +336,7 @@ jobs:
           $zip = "dist/$env:SONGSTUDIO_READY_DIR.zip"
           $sha = "$zip.sha256"
           $notes = @'
-          Build 353: Truthful Lyrics JSON start status, explicit CPU/RAM admission feedback and parallel worker status improvements.
+          Build 354: Animated inspection activity, five-digit numeric song codes, clean per-job restart status, safe in-app update handoff and open destination after completion.
           removed microphone recording, simplified online uploads and Pro display.
           Retains improved paired MIDI+JSON metadata and versioned Lyrics JSON
           exports that preserve title/artist, detect lyric-only changes, skip
