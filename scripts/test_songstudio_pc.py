@@ -594,6 +594,37 @@ class PcSourceTests(unittest.TestCase):
         self.assertEqual(live.blend_pcm(original, soundfont_pcm, 1, 0), original)
         self.assertEqual(live.blend_pcm(original, soundfont_pcm, 0, 1), soundfont_pcm)
 
+    def test_google_status_does_not_block_behind_network_refresh(self):
+        import importlib.util
+        import threading
+        import time
+        spec = importlib.util.spec_from_file_location(
+            "xstage_google_fast_status", REPO / "songstudio-pc" / "google_drive.py")
+        google = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(google)
+        drive = google.GoogleDrive(self.dir / "slow-google-status", lambda: "")
+        previous = drive.status()
+        entered, release = threading.Event(), threading.Event()
+
+        def refresh_holding_lock():
+            with drive.lock:
+                entered.set()
+                release.wait(timeout=3)
+
+        thread = threading.Thread(target=refresh_holding_lock, daemon=True)
+        thread.start()
+        try:
+            self.assertTrue(entered.wait(timeout=2))
+            started = time.monotonic()
+            status = drive.status()
+            elapsed = time.monotonic() - started
+            self.assertLess(elapsed, .2, "Local PC Engine status may not wait for Google")
+            self.assertEqual(status, previous)
+            self.assertNotIn("refresh_token", status)
+        finally:
+            release.set()
+            thread.join(timeout=2)
+
     def test_app_oauth_client_is_public_and_persistent_for_other_users(self):
         spec = importlib.util.spec_from_file_location("xstage_google_public",
                  REPO / "songstudio-pc" / "google_drive.py")
