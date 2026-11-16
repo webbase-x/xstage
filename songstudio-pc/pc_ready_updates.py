@@ -239,16 +239,38 @@ def install(archive, current_root, *, cancelled=None, on_progress=None,
             raise ValueError("เลขรุ่นใน ZIP ไม่ตรงกับข้อมูลเผยแพร่")
         extracted.rename(target)
     if launch:
+        # The new launcher's signal is written only AFTER it verifies the offline
+        # bundle and confirms the new Engine remains alive. Never terminate
+        # the old Engine on a mere PowerShell process-spawn success.
+        signal = target.parent / (".xstage-ready-" + os.urandom(12).hex() + ".signal")
         try:
-            # Start new offline-ready engine using its verified launcher.
-            subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy",
-                              "Bypass", "-File", str(target / "Start-Song-Studio-Ready.ps1")],
-                             cwd=str(target),
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
+            import time
+            proc = subprocess.Popen([
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(target / "Start-Song-Studio-Ready.ps1"),
+                "-ReadySignal", str(signal)
+            ], cwd=str(target),
+               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+               stderr=subprocess.DEVNULL)
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
+                if cancelled is not None and cancelled.is_set():
+                    raise RuntimeError("ยกเลิกการสลับรุ่นแล้ว · รุ่นเก่ายังเปิดอยู่")
+                if signal.exists():
+                    contents = signal.read_text(encoding="utf-8").strip()
+                    if contents.startswith("READY:") and contents[6:].isdigit():
+                        break
+                    raise RuntimeError("ข้อมูลยืนยันการเปิดรุ่นใหม่ไม่ถูกต้อง")
+                if proc.poll() is not None:
+                    raise RuntimeError("เปิดรุ่นใหม่ไม่สำเร็จ · ดู start-ready.log ในโฟลเดอร์รุ่นใหม่")
+                time.sleep(0.25)
+            else:
+                raise RuntimeError("รุ่นใหม่ไม่ยืนยันการเปิดภายในเวลาที่กำหนด · รุ่นเก่ายังเปิดอยู่")
         except OSError as exc:
             raise RuntimeError("ติดตั้งแล้วแต่เปิดรุ่นใหม่ไม่สำเร็จ: " + str(target)) from exc
+        finally:
+            signal.unlink(missing_ok=True)
         _retarget_existing_shortcut(current, target)
     return {"installed": True, "version": doc["version"], "build": doc["build"],
             "path": str(target), "launched": bool(launch),
