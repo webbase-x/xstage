@@ -82,13 +82,25 @@ function groupKey(path){
   return [...folders,base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
 }
 function scan(files){
-  const groups=new Map(),fonts=[],blocked=[],seen=new Set();
+  const groups=new Map(),fonts=[],blocked=[],seen=new Set(),xsks=[],accessKeys=[];
   for(const item of files){
     const file=item.file||item,relative=String(item.relative||file.webkitRelativePath||file.name||'');
     if(!file||!file.name||!Number.isSafeInteger(file.size)||file.size<0)continue;
     const sig=relative.toLocaleLowerCase('en-US')+'|'+file.size+'|'+(file.lastModified||0);
     if(seen.has(sig))continue;seen.add(sig);
     const extension=ext(file.name);
+    if(extension==='xsk'){
+      if(file.size<33||file.size>152*1024*1024)
+        blocked.push({key:relative,reason:'XSK ขนาดผิดปกติหรือใหญ่เกินขอบเขต'});
+      else xsks.push({file,relative,code:file.name.replace(/\.xsk$/i,''),kind:'XSK'});
+      continue;
+    }
+    if(extension==='xskkey'){
+      if(file.size>4096||file.size<50)
+        blocked.push({key:relative,reason:'ไฟล์สิทธิ์ XSK มีขนาดผิดปกติ'});
+      else accessKeys.push({file,relative});
+      continue;
+    }
     if(FONTS.has(extension)){fonts.push({file,relative,kind:extension.toUpperCase()});continue;}
     if(!AUDIO.has(extension)&&!MIDI.has(extension)&&!VIDEO.has(extension)&&!OTHER_AUDIO.has(extension)&&
        !['lrc','lyr','cur','json'].includes(extension))continue;
@@ -136,7 +148,7 @@ function scan(files){
       blocked.push({key,reason:'มีเฉพาะเนื้อร้อง แต่ไม่มีไฟล์เสียงหรือ MIDI คู่กัน'});
     }
   }
-  return {songs,midis,fonts,blocked,files:seen.size};
+  return {songs,midis,xsks,accessKeys,fonts,blocked,files:seen.size};
 }
 async function validAudio(file){
   if(file.size<1024)return false;
