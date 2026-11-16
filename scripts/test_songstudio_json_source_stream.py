@@ -23,7 +23,7 @@ class FastJsonSourceTests(unittest.TestCase):
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(contents)
-        return path
+        return path.resolve()
 
     def test_ncns_pair_from_sibling_role_directories_by_filename_code(self):
         mid = self.file("MIDI/NCN/SONG/A/00001.mid")
