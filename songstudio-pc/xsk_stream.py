@@ -66,38 +66,38 @@ def source_batches(source, destination, *, cancelled, on_scan=None,
                 if resolved == destination_real or destination_real in resolved.parents:
                     continue
                 try:
-                    with os.scandir(folder) as entries:
-                        listing = sorted(entries, key=lambda x: x.name.casefold())
+                    listing = os.scandir(folder)
                 except OSError as exc:
                     raise RuntimeError("อ่านโฟลเดอร์ย่อยไม่ได้: " + str(folder)) from exc
                 children = []
-                for entry in listing:
-                    if is_cancelled():
-                        break
-                    try:
-                        if entry.is_symlink():
+                with listing:
+                    for entry in listing:
+                        if is_cancelled():
+                            break
+                        try:
+                            if entry.is_symlink():
+                                continue
+                            if entry.is_dir(follow_symlinks=False):
+                                candidate = Path(entry.path)
+                                if candidate.resolve() != destination_real and not (
+                                        destination_real in candidate.resolve().parents):
+                                    children.append(candidate)
+                                continue
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
+                        except OSError as exc:
+                            raise RuntimeError("ตรวจรายการไฟล์ไม่ได้: " + entry.path) from exc
+                        state["files"] += 1
+                        if Path(entry.name).suffix.lower() not in EXTENSIONS:
                             continue
-                        if entry.is_dir(follow_symlinks=False):
-                            candidate = Path(entry.path)
-                            if candidate.resolve() != destination_real and not (
-                                    destination_real in candidate.resolve().parents):
-                                children.append(candidate)
-                            continue
-                        if not entry.is_file(follow_symlinks=False):
-                            continue
-                    except OSError as exc:
-                        raise RuntimeError("ตรวจรายการไฟล์ไม่ได้: " + entry.path) from exc
-                    state["files"] += 1
-                    if Path(entry.name).suffix.lower() not in EXTENSIONS:
-                        continue
-                    state["found"] += 1
-                    path = Path(entry.path)
-                    batch.append({"path": str(path), "code": path.stem,
-                                  "title": path.stem, "artist": "",
-                                  "kind": path.suffix.lstrip(".").upper()})
-                    if len(batch) >= batch_size:
-                        enqueue(batch)
-                        batch.clear()
+                        state["found"] += 1
+                        path = Path(entry.path)
+                        batch.append({"path": str(path), "code": path.stem,
+                                      "title": path.stem, "artist": "",
+                                      "kind": path.suffix.lstrip(".").upper()})
+                        if len(batch) >= batch_size:
+                            enqueue(batch)
+                            batch.clear()
                 if batch:
                     # Start the first batch even when this directory has only
                     # a few MIDI files; discovery continues in other folders.
@@ -105,7 +105,7 @@ def source_batches(source, destination, *, cancelled, on_scan=None,
                     batch.clear()
                 if on_scan is not None:
                     on_scan(dict(state), False, inbox.qsize())
-                folders.extend(reversed(children))
+                folders.extend(reversed(sorted(children, key=lambda p: p.name.casefold())))
             if batch and not is_cancelled():
                 enqueue(batch)
         except BaseException as exc:
