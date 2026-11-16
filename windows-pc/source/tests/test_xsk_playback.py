@@ -24,6 +24,56 @@ MIDI = (b'MThd' + struct.pack('>IHHH', 6, 0, 1, 480) +
         bytes.fromhex('00 90 3c 50 81 70 80 3c 00 00 ff 2f 00'))
 
 
+class PortableXskPlaybackTests(unittest.TestCase):
+    def package_xsk2(self, root):
+        doc = {
+            'schemaVersion': 2, 'format': 'XSK', 'formatVersion': 2,
+            'songCode': '00001', 'title': 'ทำได้เพียง', 'artist': '25 Hours',
+            'createdBy': 'X-Stage Song Studio',
+            'audio': {'file': '00001.mid', 'type': 'MID', 'size': len(MIDI),
+                      'sha256': hashlib.sha256(MIDI).hexdigest()},
+            'lines': [{'startTime': 0.0, 'text': 'สวัสดี',
+                       'characters': [{'startTime': 0.0, 'text': 'ส'},
+                                      {'startTime': 0.2, 'text': 'ว'}]}]}
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as z:
+            z.writestr('00001.mid', MIDI)
+            z.writestr('00001.json', json.dumps(doc, ensure_ascii=False))
+        path = root / '00001.xsk'
+        path.write_bytes(b'XSK2' + output.getvalue())
+        return path
+
+    def test_xsk2_no_key_title_artist_cursor_and_db_inspection(self):
+        from karaoke.smf import load_midi
+        from karaoke.ingest import Inspector
+        with tempfile.TemporaryDirectory() as dirname:
+            path = self.package_xsk2(Path(dirname))
+            raw, doc = read_xsk(path)
+            self.assertEqual(raw, MIDI)
+            self.assertEqual((doc['title'], doc['artist']), ('ทำได้เพียง', '25 Hours'))
+            song = load_midi(path)
+            self.assertEqual((song.title, song.artist), ('ทำได้เพียง', '25 Hours'))
+            self.assertEqual(song.lyrics.lines[0].words[1], (0.2, 'ว'))
+            indexed, warnings = Inspector().inspect(path)
+            self.assertEqual((indexed['title'], indexed['artist']),
+                             ('ทำได้เพียง', '25 Hours'))
+            self.assertEqual(indexed['format'], 'XSK')
+
+    def test_xsk2_rejects_wrong_sha_without_windows_key(self):
+        with tempfile.TemporaryDirectory() as dirname:
+            path = self.package_xsk2(Path(dirname))
+            with zipfile.ZipFile(io.BytesIO(path.read_bytes()[4:])) as z:
+                doc = json.loads(z.read('00001.json'))
+            doc['audio']['sha256'] = '0' * 64
+            out = io.BytesIO()
+            with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+                z.writestr('00001.mid', MIDI)
+                z.writestr('00001.json', json.dumps(doc))
+            path.write_bytes(b'XSK2' + out.getvalue())
+            with self.assertRaisesRegex(ValueError, 'SHA-256'):
+                read_xsk(path)
+
+
 @unittest.skipUnless(AESGCM is not None, 'cryptography required')
 class XskPlaybackTests(unittest.TestCase):
     def package(self, root):
