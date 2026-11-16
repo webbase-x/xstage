@@ -794,6 +794,7 @@ function playable(song) {
   // XSK2 is a complete, self-describing media+lyrics package on Drive.
   // Old catalog pairs remain supported without migration.
   return !!(getFileId(song?.xsk) ||
+    (getFileId(song?.midi) && song?.sourceFormat==='KAR') ||
     (getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))));
 }
 function requestHeaders(token) { return { Authorization: `Bearer ${token}` }; }
@@ -2144,7 +2145,7 @@ async function prepareQueuedSong(song,token,signal){
     const [source,fontBytes,lyrics]=await Promise.all([
       privateFile(song.midi.fileId,token,{signal}),
       window.XStageBrowserMidi?.selectedFont(token,signal),
-      privateJson(song.lyrics.fileId,token,{signal})
+      getFileId(song.lyrics)?privateJson(song.lyrics.fileId,token,{signal}):null
     ]);
     if(!window.XStageBrowserMidi)throw Error('ยังไม่พบตัวเรนเดอร์ MIDI');
     const bytes=new Uint8Array(await source.arrayBuffer());
@@ -2155,8 +2156,10 @@ async function prepareQueuedSong(song,token,signal){
     if(!monitor.canHold(workingBytes,memoryResources()))return null;
     const rendered=await window.XStageBrowserMidi.render(bytes,{fontBytes,signal});
     if(signal.aborted||!monitor.canHold(rendered.audio.size,memoryResources()))return null;
-    if(lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return null;
-    return {song,token,blob:rendered.audio,lyrics,bytes:rendered.audio.size};
+    const timedLyrics=lyrics||(song.sourceFormat==='KAR'
+      ?window.XStageBrowserMidi.midiLyrics(parsed,song.code):null);
+    if(timedLyrics?.schemaVersion!==1||!Array.isArray(timedLyrics.lines))return null;
+    return {song,token,blob:rendered.audio,lyrics:timedLyrics,bytes:rendered.audio.size};
   }
   // Ordinary MP3/M4A/WAV/video + JSON: do not read an oversized file just
   // because it is next in the queue. Small files are fetched whole.
@@ -2501,6 +2504,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       }
     }
     const readyPrepared=prepared||pendingPrepared;
+    let embeddedKaraokeLyrics=null;
     const loadMedia=async()=>{
       if(!getFileId(song.midi))return privateFile(song.audio.fileId,token,
         {signal:controller.signal}).then(r=>r.blob());
@@ -2512,6 +2516,10 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       ]);
       if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
       const midiBytes=new Uint8Array(await midiResponse.arrayBuffer());
+      if(song.sourceFormat==='KAR'&&!getFileId(song.lyrics)){
+        const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
+        embeddedKaraokeLyrics=window.XStageBrowserMidi.midiLyrics(parsed,song.code);
+      }
       const rendered=await window.XStageBrowserMidi.render(midiBytes,{
         fontBytes,signal:controller.signal,
         onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
@@ -2532,8 +2540,11 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     }else{
       [audio,lyrics]=await boundedPlaybackTask(Promise.all([
         loadMedia(),
-        privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+        getFileId(song.lyrics)
+          ?privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+          :Promise.resolve(null)
       ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป',controller);
+      if(!lyrics&&song.sourceFormat==='KAR')lyrics=embeddedKaraokeLyrics;
     }
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token){controller.abort();return;}
