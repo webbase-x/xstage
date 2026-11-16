@@ -985,6 +985,40 @@ def convert(row, target, preview=False):
         if temp_wav:
             temp_wav.unlink(missing_ok=True)
 
+def json_pro_transcode(source, destination, kind):
+    """Render MIDI with the selected SoundFont before FFmpeg encoding.
+
+    FFmpeg alone cannot reliably synthesize MIDI. Do not export an empty,
+    unplayable MP3/WAV/FLAC/OGG just because the source has a .mid extension.
+    """
+    source = Path(source)
+    destination = Path(destination)
+    if not ffmpeg_binary():
+        raise ValueError("ไม่พบ FFmpeg สำหรับแปลงรูปแบบไฟล์เสียง")
+    if kind == "m4a":
+        convert({"path": str(source)}, destination)
+        return
+    codec = {"mp3": ["-c:a", "libmp3lame", "-q:a", "2"],
+             "wav": ["-c:a", "pcm_s16le"],
+             "flac": ["-c:a", "flac"],
+             "ogg": ["-c:a", "libvorbis", "-q:a", "5"]}.get(kind)
+    if codec is None:
+        raise ValueError("ไม่รองรับรูปแบบปลายทางที่เลือก")
+    temporary_wav = None
+    try:
+        if source.suffix.lower() in EXT_MIDI:
+            temporary_wav = ensure_midi_wav(source)
+        audio_input = temporary_wav or source
+        run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error",
+                     "-nostdin", "-y", "-i", str(audio_input), "-vn",
+                     *codec, "-f", kind, str(destination)])
+        if not destination.is_file() or destination.stat().st_size < 1000:
+            raise ValueError("การแปลงไฟล์เสียงไม่สมบูรณ์")
+    finally:
+        if temporary_wav:
+            temporary_wav.unlink(missing_ok=True)
+
+
 def separate_ai(row, target, preview=False, *, vocals_only=False):
     """Split a song offline; output karaoke M4A and optional vocals M4A.
 
@@ -1998,20 +2032,7 @@ def execute_job(action, options, started):
                 update(f"Lyrics JSON {done:,}/{total:,} · สร้าง {state['created']:,}"
                        f" · ข้าม {state['skipped']:,} · ERR {state['errors']:,}", done)
             def _json_convert(src, dest, kind):
-                if not ffmpeg_binary():
-                    raise ValueError("ไม่พบ FFmpeg สำหรับแปลงรูปแบบไฟล์เสียง")
-                if kind == "m4a":
-                    convert({"path": str(src)}, dest)
-                    return
-                codec = {"mp3": ["-c:a", "libmp3lame", "-q:a", "2"],
-                         "wav": ["-c:a", "pcm_s16le"],
-                         "flac": ["-c:a", "flac"],
-                         "ogg": ["-c:a", "libvorbis", "-q:a", "5"]}.get(kind)
-                if codec is None:
-                    raise ValueError("ไม่รองรับรูปแบบปลายทางที่เลือก")
-                run_process([ffmpeg_binary(), "-hide_banner", "-loglevel", "error",
-                             "-nostdin", "-y", "-i", str(src), "-vn",
-                             *codec, "-f", kind if kind != "ogg" else "ogg", str(dest)])
+                json_pro_transcode(src, dest, kind)
             result = module.export_folder(
                 PREFS["json_source"], PREFS["json_destination"],
                 output_format=output_format, export=_song_export_module(),
