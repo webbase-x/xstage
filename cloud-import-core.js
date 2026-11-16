@@ -82,7 +82,7 @@ function groupKey(path){
   return [...folders,base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
 }
 function scan(files){
-  const groups=new Map(),fonts=[],blocked=[],seen=new Set(),xsks=[],accessKeys=[];
+  const groups=new Map(),fonts=[],blocked=[],seen=new Set(),xsks=[];
   for(const item of files){
     const file=item.file||item,relative=String(item.relative||file.webkitRelativePath||file.name||'');
     if(!file||!file.name||!Number.isSafeInteger(file.size)||file.size<0)continue;
@@ -96,9 +96,8 @@ function scan(files){
       continue;
     }
     if(extension==='xskkey'){
-      if(file.size>4096||file.size<50)
-        blocked.push({key:relative,reason:'ไฟล์สิทธิ์ XSK มีขนาดผิดปกติ'});
-      else accessKeys.push({file,relative});
+      blocked.push({key:relative,
+        reason:'XSK2 ไม่ต้องใช้ไฟล์กุญแจ .xskkey · ข้ามไฟล์นี้โดยไม่อัปโหลด'});
       continue;
     }
     if(FONTS.has(extension)){fonts.push({file,relative,kind:extension.toUpperCase()});continue;}
@@ -148,7 +147,7 @@ function scan(files){
       blocked.push({key,reason:'มีเฉพาะเนื้อร้อง แต่ไม่มีไฟล์เสียงหรือ MIDI คู่กัน'});
     }
   }
-  return {songs,midis,xsks,accessKeys,fonts,blocked,files:seen.size};
+  return {songs,midis,xsks,fonts,blocked,files:seen.size};
 }
 async function validAudio(file){
   if(file.size<1024)return false;
