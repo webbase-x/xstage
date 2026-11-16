@@ -23,6 +23,31 @@ ALLOWED_MEDIA = {".mp3", ".m4a", ".mp4", ".aac", ".wav", ".wma",
                  ".flac", ".ogg", ".oga", ".mid", ".midi", ".kar",
                  ".sf2", ".sf3"}
 ALLOWED_LYRICS = {".json", ".lrc"}
+# Retain the old AUDIO/<bucket> paths for audio, but publish native MIDI and
+# video to distinct folders. A catalog row always carries the actual path.
+VIDEO_EXT = {".mp4", ".webm", ".avi", ".mkv", ".mov", ".mpg", ".mpeg",
+             ".vob", ".dat", ".wmv", ".flv"}
+MIDI_EXT = {".mid", ".midi", ".kar", ".xsk"}
+
+def media_category(name):
+    extension = Path(name).suffix.casefold()
+    if extension == ".xsk":
+        return Path("MIDI") / "XSK"
+    if extension == ".kar":
+        return Path("MIDI") / "KAR"
+    if extension in {".mid", ".midi"}:
+        return Path("MIDI") / "MID"
+    if extension in VIDEO_EXT:
+        return Path("VIDEO")
+    if extension in {".sf2", ".sf3"}:
+        return Path("SOUNDFONT")
+    return Path("AUDIO")
+
+def media_relative(path):
+    """Convert a trusted Studio media path into a typed destination path."""
+    source = _safe_rel(path, "audio")
+    return media_category(source.name).joinpath(*source.parts[1:])
+
 
 
 def destination_root(selected):
@@ -70,7 +95,7 @@ def _hash(path):
 
 
 def _files(source):
-    for folder, suffixes, upper in (("audio", ALLOWED_MEDIA, "AUDIO"),
+    for folder, suffixes, upper in (("audio", ALLOWED_MEDIA | {".xsk"} | VIDEO_EXT, "AUDIO"),
                                     ("lyrics", ALLOWED_LYRICS, "LYRICS")):
         base = source / folder
         if not base.is_dir() or base.is_symlink():
@@ -92,7 +117,8 @@ def _files(source):
                 rel = file.relative_to(base)
                 if any(part in ("", ".", "..") for part in rel.parts):
                     raise ValueError("พบพาธเพลงไม่ปลอดภัย")
-                yield file, Path(upper) / rel
+                yield file, (media_category(file.name) if folder == "audio"
+                             else Path(upper)) / rel
 
 
 def _source(source, export):
@@ -146,7 +172,9 @@ def _pc_row(row, replacements=None):
         obj = row.get(key)
         if obj:
             path = _safe_rel(obj["path"], prefix)
-            original = Path(replacement, *path.parts[1:]).as_posix()
+            original = (media_relative(obj["path"]).as_posix()
+                        if key != "lyrics" else
+                        Path(replacement, *path.parts[1:]).as_posix())
             item[key] = {**obj, "path": replacements.get(original, original)}
     return item
 
@@ -285,7 +313,9 @@ def portable_catalog(destination, rows, generation):
         seen.add(ident)
         media = (row.get("audio") or {}).get("path")
         lyrics = (row.get("lyrics") or {}).get("path")
-        audio_path = _safe_rel(media, "AUDIO")
+        if not isinstance(media, str) or media.split("/", 1)[0] not in ("AUDIO", "VIDEO", "MIDI", "SOUNDFONT"):
+            raise ValueError("พาธสื่อแบบพกพาไม่ได้อยู่ในหมวดที่กำหนด")
+        audio_path = _safe_rel(media, media.split("/", 1)[0])
         lyric_path = _safe_rel(lyrics, "LYRICS")
         # Export the same immutable paths validated by the native PC bridge.
         for rel in (audio_path, lyric_path):
@@ -305,7 +335,8 @@ def portable_catalog(destination, rows, generation):
         "schemaVersion": PORTABLE_SCHEMA, "format": PORTABLE_FORMAT,
         "layoutVersion": 4, "generation": generation,
         "songCount": len(songs), "songs": songs,
-        "mediaRoot": "AUDIO", "lyricsRoot": "LYRICS",
+        "mediaRoot": "XStageSong", "lyricsRoot": "LYRICS",
+        "mediaFolders": ["AUDIO", "VIDEO", "MIDI", "SOUNDFONT"],
         "platforms": ["pc", "web", "apk"],
         "webApk": {"requiresGoogleDrivePublication": True,
                    "catalogUsesDriveFileIds": True},
