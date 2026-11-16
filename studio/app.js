@@ -277,8 +277,14 @@
   }
   function confirmStudio(description, title='ยืนยันรายการ',
                          {acceptLabel='ยืนยัน', cancelLabel='ยกเลิก'} = {}) {
+    // Never replace the content/listeners of an unresolved confirmation.
+    // Two near-simultaneous UI actions must not overwrite one another.
+    const dialog = $('studio-confirm-dialog');
+    if (dialog.open) {
+      message('มีหน้าต่างยืนยันรายการอื่นเปิดอยู่ · กรุณาทำรายการนั้นให้เสร็จก่อน');
+      return Promise.resolve(false);
+    }
     return new Promise(resolve => {
-      const dialog = $('studio-confirm-dialog');
       $('studio-confirm-title').textContent = title;
       $('studio-confirm-message').textContent = String(description);
       const ok = $('studio-confirm-ok');
