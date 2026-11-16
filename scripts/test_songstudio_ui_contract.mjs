@@ -214,6 +214,22 @@ assert.equal(studioCueWindows([
   {text:'A',startTime:0},{text:'B',startTime:0}
 ],0,4),null,
   'Studio should use smooth whole-line LRC approximation when no usable character times exist');
+const dupNav = html.indexOf('data-tab="duplicates"');
+const xskNav = html.indexOf('data-tab="create"');
+assert.ok(dupNav >= 0 && xskNav > dupNav &&
+          html.includes('id="tab-duplicates"') &&
+          html.includes('id="dup-move"') &&
+          html.includes('id="dup-recycle"') &&
+          html.includes('id="dup-scan"') &&
+          html.includes('id="dup-source"') &&
+          html.includes('id="dup-destination"'),
+          'Exact duplicate-file scanner must be first with move/recycle controls');
+assert.ok(js.includes("run('duplicates-scan'") &&
+          js.includes("run('duplicates-apply'") &&
+          js.includes("api('/api/duplicates?offset=") &&
+          js.includes('confirmStudio(') &&
+          css.includes('.duplicate-file'),
+          'Duplicate scanner must use authenticated local jobs and explicit confirmations');
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
 for (const id of ['json-pro-source','json-pro-destination','json-pro-format',
