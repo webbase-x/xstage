@@ -58,7 +58,19 @@ jobs:
                       continue
                   if path.suffix in {'.pyc','.pyo'}:
                       continue
-                  result.write(path,Path('X-Stage-Karaoke-PC-Source')/rel)
+                  result.write(path,rel)
+          # The launcher and main.py must be siblings at the ZIP root. This
+          # catches nested-path packaging regressions before publication.
+          with zipfile.ZipFile(archive) as check:
+              names=set(check.namelist())
+              required={'Run-X-Stage-Karaoke-PC.cmd','main.py',
+                        'requirements.txt','karaoke/__init__.py'}
+              missing=required-names
+              if missing:
+                  raise RuntimeError('Incomplete runnable CMD ZIP: '+', '.join(sorted(missing)))
+              launcher=check.read('Run-X-Stage-Karaoke-PC.cmd').decode('utf-8-sig')
+              if 'if not exist "main.py"' not in launcher:
+                  raise RuntimeError('CMD launcher no longer validates its entrypoint')
           digest=hashlib.sha256(archive.read_bytes()).hexdigest()
           (output/(name+'.sha256')).write_text(f'{digest}  {name}\n',encoding='ascii')
           print(f'Source ZIP: {archive} ({archive.stat().st_size} bytes); SHA256={digest}')
