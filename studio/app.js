@@ -3448,8 +3448,8 @@
     // Do not synchronously scan all songs before starting: the PC job scans
     // once in its worker and publishes real discovered/validated counts.
     // The separate Inspect button remains available for deliberate preflight.
-    await saveInputs(['json-pro-source','json-pro-destination',
-                      'json-pro-code-style','json-pro-code-length']);
+    await saveInputs(['json-pro-source','json-pro-destination']);
+    await saveInputs(['json-pro-code-style','json-pro-code-length']);
     $('json-pro-report').textContent=
       'กำลังส่งงานให้ PC Engine · จะเริ่มค้นหาไฟล์ในงานพื้นหลังทันที ไม่สแกนซ้ำ';
     const started=await run('json-pro-export',{format,code_style,code_length:String(code_length)});
