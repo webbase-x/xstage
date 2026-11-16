@@ -2147,14 +2147,30 @@ def execute_job(action, options, started):
                                skipped=state["skipped"], errors=state["errors"])
                 update(f"Lyrics JSON {done:,}/{total:,} · สร้าง {state['created']:,}"
                        f" · ข้าม {state['skipped']:,} · ERR {state['errors']:,}", done)
+            def _json_scan_progress(phase, count, total):
+                if worker_cancel().is_set():
+                    raise RuntimeError("ยกเลิกการตรวจไฟล์แล้ว")
+                # A real count, never a fabricated percent: total is unknown
+                # until directory traversal has completed.
+                with LOCK:
+                    worker_job()["scanPhase"] = phase
+                    worker_job()["scannedFiles" if phase == "discover" else "validatedGroups"] = count
+                    if phase == "validate":
+                        worker_job()["totalGroups"] = total
+                if phase == "discover":
+                    update(f"กำลังค้นหาไฟล์ต้นทาง · พบแล้ว {count:,} ไฟล์ (ยังไม่ทราบจำนวนทั้งหมด)")
+                else:
+                    update(f"ตรวจชุดเพลงและเนื้อร้อง {count:,}/{total:,} ชุด")
             def _json_convert(src, dest, kind):
                 json_pro_transcode(src, dest, kind)
+            update("เริ่มตรวจโฟลเดอร์ต้นทางใน PC Engine · ยังไม่ทราบจำนวนไฟล์")
             result = module.export_folder(
                 worker_prefs()["json_source"], worker_prefs()["json_destination"],
                 output_format=output_format, export=_song_export_module(),
                 code_style=code_style, code_length=code_length,
                 scanner=FOLDER_UPLOAD, ncn=NCN, convert=_json_convert,
-                cancelled=worker_cancel(), progress=_json_progress)
+                cancelled=worker_cancel(), progress=_json_progress,
+                scan_progress=_json_scan_progress)
         elif action == "created-xsk":
             module = _module("created_xsk_export.py", "xstage_created_xsk_export")
             output_root = worker_prefs().get("xsk_folder") or worker_prefs()["workspace"]
