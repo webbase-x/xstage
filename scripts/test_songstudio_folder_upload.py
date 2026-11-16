@@ -62,6 +62,65 @@ class FolderUploadTests(unittest.TestCase):
         self.assertEqual(self.audio.read_bytes(), b"ID3" + b"x" * 2500)
         self.assertFalse(list(self.root.glob("xstage-upload-*")))
 
+    def test_pc_portable_database_publishes_to_web_apk_drive_catalog(self):
+        """Exported PC DB can be selected without the authoring current.json."""
+        library = self.root / "XStageSong"
+        sound = library / "AUDIO" / "0" / "00001.m4a"
+        lyrics = library / "LYRICS" / "0" / "00001.json"
+        sound.parent.mkdir(parents=True)
+        lyrics.parent.mkdir(parents=True)
+        sound.write_bytes(b"A" * 4500)
+        lyrics.write_text(json.dumps(export.lrc_to_json(
+            "[00:05.00]คำร้องพร้อมเวลา", "00001"), ensure_ascii=False),
+            encoding="utf-8")
+        manifest = library / "DB" / "songs-portable.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({
+            "schemaVersion": 1, "format": "xstage-portable-song-db",
+            "layoutVersion": 4, "generation": "test-1", "songCount": 1,
+            "songs": [{
+                "webSongId": "audio/0/00001", "code": "00001",
+                "title": "เพลงตัวอย่าง", "artist": "ผู้ร้อง",
+                "audio": {"path": "AUDIO/0/00001.m4a"},
+                "lyrics": {"path": "LYRICS/0/00001.json"},
+            }]
+        }, ensure_ascii=False), encoding="utf-8")
+        library_info = folder.existing_local_catalog(str(library), export)
+        self.assertTrue(library_info["portable"])
+        self.assertEqual(library_info["rows"][0]["audio"]["path"], "audio/0/00001.m4a")
+        self.assertEqual(library_info["rows"][0]["lyrics"]["path"], "lyrics/0/00001.json")
+        self.assertTrue(online._valid_row(library, library_info["rows"][0]))
+        class PortableStub(PublisherStub):
+            def publish(self, root, rows, *, create_new_library=False, **kwargs):
+                assert create_new_library
+                assert not (root / "current.json").exists()
+                for row in rows:
+                    assert online._valid_row(root, row)
+                self.published.extend(rows)
+                return {"newSongs": len(rows), "updatedSongs": 0,
+                        "duplicates": 0, "conflicts": 0, "totalSongs": len(rows),
+                        "published": True}
+        publisher = PortableStub()
+        result = folder.upload(object(), str(library), create_new_library=True,
+                               export=export, publisher=publisher,
+                               validator=online._valid_row, staging_root=self.root)
+        self.assertEqual(result["newSongs"], 1)
+        self.assertEqual(publisher.published[0]["title"], "เพลงตัวอย่าง")
+
+    def test_portable_database_blocks_parent_traversal(self):
+        library = self.root / "XStageSong"
+        db = library / "DB" / "songs-portable.json"
+        db.parent.mkdir(parents=True)
+        db.write_text(json.dumps({
+            "schemaVersion": 1, "format": "xstage-portable-song-db",
+            "layoutVersion": 4, "songCount": 1,
+            "songs": [{"webSongId":"unsafe", "code":"00001",
+                       "audio":{"path":"AUDIO/../outside.m4a"},
+                       "lyrics":{"path":"LYRICS/0/song.json"}}]
+        }), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "ไม่ปลอดภัย"):
+            folder.existing_local_catalog(str(library), export)
+
     def test_existing_stageweb_catalog_publishes_original_rows(self):
         self.audio.unlink()
         self.lrc.unlink()
