@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate Python source and native launcher
         shell: pwsh
         run: |
@@ -38,8 +38,8 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Build offline PC Ready ZIP with embedded Qt
@@ -56,7 +56,7 @@ jobs:
           & (Join-Path $bundle '.runtime/python/python.exe') scripts/test_songstudio_ready.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Offline Ready runtime conversion regression failed' }
       - name: Upload candidate ZIP for review
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: SongStudio-PC-Native-Qt-v0.3.60-build360-CANDIDATE
           path: |
