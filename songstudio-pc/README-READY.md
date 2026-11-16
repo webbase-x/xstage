@@ -1,8 +1,8 @@
 ## MIDI to .XSK automatic pipeline (candidate)
 
 - Choose the source MIDI folder, XSK output folder, and song-code format/length. The default XSK mode no longer requires a completed catalog scan or manual song selection.
-- Discovery walks nested folders incrementally without loading an entire directory. The first folder's MIDI files are queued immediately; a bounded producer (32 songs/batch, four batches waiting) scans ahead while the existing encrypted XSK builder seals previous items.
-- Preserve existing DPAPI-key integrity, AES-GCM verification, SHA-256 duplicate protection, original MIDI bytes and atomic no-overwrite outputs. On restart, previously sealed XSKs are checked and skipped; incomplete lyrics are reported separately.
+- Discovery walks nested folders incrementally without loading an entire directory. The first folder's MIDI files are queued immediately; a bounded producer (32 songs/batch, four batches waiting) scans ahead while the XSK2 ZIP builder processes previous items.
+- Newly created XSK2 packages are unencrypted portable ZIP bundles containing the original MIDI/KAR and timed Lyrics JSON. SHA-256, original MIDI bytes and atomic no-overwrite are preserved. Previously encrypted XSK1 files remain untouched; they are not counted as portable XSK2 outputs. Song title and artist must be real metadata, otherwise the item is skipped and reported.
 - Display scanned, found, converted, duplicate, incomplete and error counts. An overall percentage is shown only after full enumeration; errors accessing subfolders fail the job rather than silently omitting songs.
 - The existing Pro legacy media-export wizard is not altered. Automated tests and Windows release verification must pass before claiming the next ZIP is ready.
 
