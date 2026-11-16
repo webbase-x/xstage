@@ -105,7 +105,12 @@ def catalog_rows(destination, records):
         first = ""
         lyric = rec.get("lyrics")
         if lyric:
-            lp = _inside(root, lyric.get("path"), "LYRICS")
+            lyric_rel = lyric.get("path")
+            lyric_root = lyric_rel.split("/", 1)[0] if isinstance(lyric_rel, str) else ""
+            if lyric_root not in ("LYRICS", "AUDIO", "VIDEO", "MIDI") or (
+                    lyric_root != "LYRICS" and "/LYRICS/" not in lyric_rel):
+                raise ValueError("พาธเนื้อร้องไม่อยู่ในตำแหน่งที่กำหนด")
+            lp = _inside(root, lyric_rel, lyric_root)
             if not lp.is_file() or lp.suffix.casefold() != ".json":
                 raise ValueError("ไม่พบ Lyrics JSON สำหรับ Karaoke PC")
             data = json.loads(lp.read_text(encoding="utf-8-sig"))
