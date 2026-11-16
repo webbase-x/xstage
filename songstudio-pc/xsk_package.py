@@ -56,6 +56,8 @@ def _validated(source, document, code, title, artist):
             raise ValueError("เวลาคำร้องย้อนหลัง · ข้ามเพลงเพื่อป้องกันเวลาเสีย")
         previous = t
     return {"schemaVersion": 2, "format": "XSK", "formatVersion": 1,
+            "createdBy": "X-Stage Song Studio",
+            "publisher": "X-Stage Song Studio",
             "songCode": code, "title": str(title or code)[:200],
             "artist": str(artist or "X-Stage Song Studio")[:200],
             "audio": {"file": code + source.suffix.lower(),
