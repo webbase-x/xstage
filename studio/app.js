@@ -695,8 +695,8 @@
     $('create-workspace').value = prefs.workspace || '';
     $('xsk-destination').value = prefs.xsk_folder || prefs.workspace || '';
     $('xsk-build-folder').value = prefs.xsk_folder || '';
-    $('xsk-stream-code-style').value = prefs.code_style || 'source';
-    $('xsk-stream-code-length').value = prefs.code_length || '6';
+    $('xsk-stream-code-style').value = prefs.code_style || 'numeric';
+    $('xsk-stream-code-length').value = prefs.code_length || '5';
     $('json-pro-source').value = prefs.json_source || '';
     $('json-pro-destination').value = prefs.json_destination || '';
     $('lyric-group-folder').value = prefs.lyric_source || '';
@@ -715,8 +715,8 @@
     $('create-output-kind').value = 'xsk';
     syncXskControls();
     $('catalog-view').value = prefs.catalog_view === 'all' ? 'all' : 'changes';
-    $('create-code-style').value = prefs.code_style || 'source';
-    $('create-code-length').value = prefs.code_length || '6';
+    $('create-code-style').value = prefs.code_style || 'numeric';
+    $('create-code-length').value = prefs.code_length || '5';
   }
   function soundfontOptions(items) {
     const chooser = $('create-soundfont'); const current = prefs.soundfont || '';
