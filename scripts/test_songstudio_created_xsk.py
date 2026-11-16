@@ -76,6 +76,21 @@ class CreatedXskTests(unittest.TestCase):
                           "hostname", "windowsUser"):
             self.assertNotIn(forbidden, document)
 
+    def test_encrypted_xsk1_kept_while_new_xsk2_gets_unused_code(self):
+        original = self.song("00001", b"A")
+        old = self.root / "MIDI" / "XSK" / "0" / "00001.xsk"
+        old.parent.mkdir(parents=True, exist_ok=True)
+        old.write_bytes(b"XSK1" + b"legacy-encrypted-file")
+        result = self.build([original])
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(old.read_bytes(), b"XSK1" + b"legacy-encrypted-file")
+        portable = self.root / "MIDI" / "XSK" / "0" / "00002.xsk"
+        self.assertTrue(portable.is_file())
+        self.assertEqual(portable.read_bytes()[:4], b"XSK2")
+        document = self.package.open_package(portable)
+        self.assertEqual(document["songCode"], "00002")
+        self.assertEqual(document["title"], "ทดสอบ")
+
     def test_first_export_preserves_code_and_duplicate_midi_is_skipped(self):
         first = self.song("00002", b"A")
         r1 = self.build([first])
