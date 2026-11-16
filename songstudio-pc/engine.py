@@ -2472,13 +2472,11 @@ def validate_build_request(data):
 
 
 def start_job(data):
-    global JOB, JOB_THREAD
+    global JOB, JOB_THREAD, CANCEL
     action = str(data.get("action", ""))
     if action == "ai-recording-save":
         raise ValueError("ยกเลิกฟังก์ชันบันทึกเสียงผ่านไมโครโฟนแล้ว")
-    with LOCK:
-        if JOB["state"] == "running" or (JOB_THREAD and JOB_THREAD.is_alive()):
-            raise ValueError("งานเดิมยังหยุดไม่เสร็จ กรุณารอให้สถานะพร้อมทำงาน")
+    _check_resource_capacity(action)
     validation = validate_build_request(data) if action == "build" else {}
     if action == "xsk-stream":
         source = str(data.get("source") or PREFS.get("source") or "")
@@ -2592,9 +2590,9 @@ def start_job(data):
                 raise ValueError("ไม่พบ FFmpeg ที่ต้องใช้แปลงไฟล์เสียงสำหรับ AI ในแพ็กเกจ PC Ready")
         validation = {"total": 1}
     with LOCK:
-        if JOB["state"] == "running" or (JOB_THREAD and JOB_THREAD.is_alive()):
-            raise ValueError("งานเดิมยังหยุดไม่เสร็จ กรุณารอให้สถานะพร้อมทำงาน")
-        CANCEL.clear()
+        # Recheck under the lock; two HTTP requests may arrive simultaneously.
+        _check_resource_capacity(action)
+        CANCEL = threading.Event()
         now = time.monotonic()
         JOB = {
             "id": secrets.token_hex(8), "kind": action, "state": "running",
@@ -2609,20 +2607,33 @@ def start_job(data):
             "started": now, "updated": now
         }
         job_id = JOB["id"]
+    def bound_worker():
+        _WORKER_LOCAL.id = job_id
+        _WORKER_LOCAL.job = job_data
+        _WORKER_LOCAL.cancel = cancel_event
+        try:
+            execute_job(action, data, now)
+        finally:
+            _WORKER_LOCAL.__dict__.clear()
     try:
-        thread = threading.Thread(target=execute_job,
-                                  args=(action, data, now), daemon=True,
-                                  name="xstage-studio-" + action)
+        job_data = JOB
+        cancel_event = CANCEL
+        thread = threading.Thread(target=bound_worker, daemon=True,
+                                  name="xstage-studio-" + action + "-" + job_id[:6])
         with LOCK:
+            ACTIVE_JOBS[job_id] = {"job": job_data, "cancel": cancel_event,
+                                   "thread": thread, "group": job_group(action),
+                                   "process": None}
             JOB_THREAD = thread
             thread.start()
     except Exception as exc:
         with LOCK:
+            ACTIVE_JOBS.pop(job_id, None)
             JOB_THREAD = None
             JOB["state"] = "error"
             JOB["detail"] = "เริ่ม Thread สร้างเพลงไม่ได้: " + str(exc)
         raise RuntimeError("PC Engine เริ่มงานไม่ได้: " + str(exc)) from exc
-    return {"id": job_id, **validation}
+    return {"id": job_id, "parallel": resource_snapshot(), **validation}
 
 def open_picker(kind):
     """Show an actual Windows foreground picker; preserve Unicode/Thai paths.
