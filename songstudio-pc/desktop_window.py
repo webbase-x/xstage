@@ -10,17 +10,23 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+def validate_local_ui_url(url: str) -> int:
+    """Only load our own loopback server; refuse remote app origins."""
+    parts = urlsplit(url)
+    if parts.scheme != "http" or parts.hostname != "127.0.0.1" or not parts.port or parts.username or parts.password:
+        raise ValueError("Song Studio UI must use the local loopback server")
+    return parts.port
+
+
 def run_desktop(server, url: str, data_directory: Path, icon: Path) -> None:
     """Run Qt on the main thread and the existing HTTP server on a worker."""
+    ui_port = validate_local_ui_url(url)
     from PySide6.QtCore import QUrl, Qt
     from PySide6.QtGui import QDesktopServices, QIcon
     from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
     from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
     from PySide6.QtWebEngineWidgets import QWebEngineView
 
-    local = urlsplit(url)
-    if local.scheme != "http" or local.hostname != "127.0.0.1" or not local.port:
-        raise ValueError("Song Studio UI must use the local loopback server")
 
     # QtWebEngine is embedded in the app, not the user's Edge profile.
     app = QApplication.instance() or QApplication([])
@@ -40,7 +46,7 @@ def run_desktop(server, url: str, data_directory: Path, icon: Path) -> None:
             # Never allow arbitrary remote navigation to replace the app UI.
             parts = urlsplit(target_url)
             if (parts.scheme == "http" and parts.hostname == "127.0.0.1"
-                    and parts.port == local.port):
+                    and parts.port == ui_port):
                 return True
             if parts.scheme in ("https", "http") and parts.hostname:
                 QDesktopServices.openUrl(target)
