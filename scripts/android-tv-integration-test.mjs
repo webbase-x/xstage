@@ -7,6 +7,12 @@ const host = read('stage-controls.js');
 const remote = read('remote.js');
 const main = read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
 const auth = read('android-tv/app/src/main/java/com/webbasex/xstage/GoogleDeviceAuth.java');
+assert.ok(main.includes('public String memorySnapshot()')&&
+  main.includes('manager.getMemoryInfo(info)')&&
+  main.includes('data.put("available", info.availMem)')&&
+  main.includes('data.put("lowMemory", info.lowMemory)'),
+  'Android bridge must safely report real RAM availability for prefetch pressure');
+
 const updater = read('android-tv/app/src/main/java/com/webbasex/xstage/XStageUpdateManager.java');
 
 function segment(src,begin,end){
