@@ -296,6 +296,30 @@ function lrcToJson(raw,code){
   if(!visibleLines.length)throw Error('LRC ไม่มีบรรทัดข้อความพร้อมเวลาใช้งานจริง');
   return {schemaVersion:1,songCode:code,audioOffsetMs:offset,lines:visibleLines,rawLrc:value,title,artist};
 }
+function songIdentity(document,code,previous=null){
+  // One metadata precedence contract for Web, APK WebView and local JSON.
+  // Do not confuse application publisher/creator with the performer.
+  const source=document&&typeof document==='object'?document:{};
+  const meta=source.metadata&&typeof source.metadata==='object'&&!Array.isArray(source.metadata)
+    ?source.metadata:{};
+  const old=previous&&typeof previous==='object'?previous:{};
+  const banned=new Set(['x-stage karaoke','x-stage song studio','xstage karaoke',
+    'xstage song studio','unknown','ไม่ทราบ','ไม่ระบุ','ไม่ระบุชื่อเพลง','ไม่ระบุศิลปิน']);
+  const candidate=(value,asTitle=false)=>{
+    if(typeof value!=='string')return '';
+    const clean=value.normalize('NFC').trim().slice(0,200);
+    if(!clean||banned.has(clean.toLocaleLowerCase('en-US')))return '';
+    if(asTitle&&clean===String(code||'').trim())return '';
+    return clean;
+  };
+  const title=candidate(source.title,true)||candidate(meta.title,true)||
+    candidate(old.title,true);
+  const artist=candidate(source.artist)||candidate(meta.artist)||
+    candidate(old.artist);
+  return {title:title||'ไม่ระบุชื่อเพลง',artist:artist||'ไม่ระบุศิลปิน',
+    identityComplete:Boolean(title&&artist)};
+}
+
 function validLyricsJson(raw,code){
   let document;
   try{document=typeof raw==='string'?JSON.parse(raw):raw;}
@@ -323,5 +347,5 @@ function validLyricsJson(raw,code){
   return document;
 }
 function bucket(code){const c=String(code||'').charAt(0).toUpperCase();return /[0-9A-Z]/.test(c)?c:'_';}
-scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,bucket};
+scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,songIdentity,bucket};
 })(typeof window!=='undefined'?window:globalThis);
