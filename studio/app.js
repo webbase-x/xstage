@@ -91,7 +91,15 @@
       (Number.isFinite(ram)?' · RAM เหลือ '+(ram/1024**3).toFixed(1)+' GB':'')+
       (lowRam?' · ⚠ RAM ต่ำกว่า 1 GB: ยังไม่รับงานใหม่':'')+
       (Number.isFinite(cpuPercent)&&cpuPercent>=92?' · ⚠ CPU สูง':'');
-    const recent=[...active,...activeJobs.filter(job=>job.state!=='running').slice(0,3)];
+    const completedLatest=[];
+    const seenKinds=new Set(active.map(job=>job.kind));
+    for(const job of activeJobs){
+      if(job.state==='running'||seenKinds.has(job.kind))continue;
+      seenKinds.add(job.kind);
+      completedLatest.push(job);
+      if(completedLatest.length>=3)break;
+    }
+    const recent=[...active,...completedLatest];
     for(const job of recent){
       const item=document.createElement('div');
       item.className='parallel-job'+(job.state==='running'?'':' parallel-job-finished');
