@@ -69,6 +69,113 @@ JOB = {
 CANCEL = threading.Event()
 JOB_THREAD = None
 PROCESS = None
+ACTIVE_JOBS = {}
+_WORKER_LOCAL = threading.local()
+MAX_PARALLEL_JOBS = 3
+
+# Each worker sees its own job state, cancellation event and subprocess.
+# The legacy JOB/CANCEL names continue to represent the most recently started
+# job for old API consumers, while workers never overwrite one another.
+def worker_job():
+    return getattr(_WORKER_LOCAL, "job", JOB)
+
+def worker_cancel():
+    return getattr(_WORKER_LOCAL, "cancel", CANCEL)
+
+def set_worker_process(proc):
+    global PROCESS
+    job_id = getattr(_WORKER_LOCAL, "id", None)
+    with LOCK:
+        if job_id and job_id in ACTIVE_JOBS:
+            ACTIVE_JOBS[job_id]["process"] = proc
+        else:
+            PROCESS = proc
+
+def any_active_jobs():
+    with LOCK:
+        return any(item["thread"] and item["thread"].is_alive()
+                   for item in ACTIVE_JOBS.values())
+
+def job_group(action):
+    if action in ("scan", "build", "xsk-stream", "json-pro-export",
+                  "created-xsk", "pc-export", "download", "lyric-groups-scan",
+                  "lyric-groups-replace", "lyric-groups-undo"):
+        return "library"
+    if action in ("ai-lyrics", "ai-align", "ai-separate-vocals",
+                  "ai-export", "preview"):
+        return "audio-ai"
+    if action in ("upload", "upload-folder", "upload-soundfont",
+                  "login", "logout", "check-update", "download-update"):
+        return "network"
+    if action == "install-update":
+        return "installer"
+    return "exclusive"
+
+def resource_snapshot():
+    """Lightweight physical-memory/capacity snapshot; no extra packages."""
+    cores = max(1, os.cpu_count() or 1)
+    available = None
+    total = None
+    if os.name == "nt":
+        try:
+            import ctypes
+            class MemStatus(ctypes.Structure):
+                _fields_ = [("length", ctypes.c_ulong), ("memoryLoad", ctypes.c_ulong),
+                            ("totalPhys", ctypes.c_ulonglong),
+                            ("availPhys", ctypes.c_ulonglong),
+                            ("totalPageFile", ctypes.c_ulonglong),
+                            ("availPageFile", ctypes.c_ulonglong),
+                            ("totalVirtual", ctypes.c_ulonglong),
+                            ("availVirtual", ctypes.c_ulonglong),
+                            ("availExtendedVirtual", ctypes.c_ulonglong)]
+            mem = MemStatus()
+            mem.length = ctypes.sizeof(mem)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem)):
+                available, total = mem.availPhys, mem.totalPhys
+        except (AttributeError, OSError, ValueError):
+            pass
+    else:
+        try:
+            lines = Path("/proc/meminfo").read_text().splitlines()
+            values = {x.split(":",1)[0]: int(x.split(":",1)[1].split()[0])*1024
+                      for x in lines if ":" in x and x.split(":",1)[1].strip()}
+            available = values.get("MemAvailable")
+            total = values.get("MemTotal")
+        except (OSError, ValueError, IndexError):
+            pass
+    capacity = 1 if cores < 4 else 2 if cores < 8 else MAX_PARALLEL_JOBS
+    if total is not None and total < 8 * 1024**3:
+        capacity = min(capacity, 1)
+    with LOCK:
+        active = sum(1 for entry in ACTIVE_JOBS.values()
+                     if entry["thread"] and entry["thread"].is_alive())
+    return {"cpuCores": cores, "memoryAvailableBytes": available,
+            "memoryTotalBytes": total, "parallelLimit": capacity,
+            "active": active, "freeSlots": max(0, capacity-active)}
+
+def _check_resource_capacity(action):
+    state = resource_snapshot()
+    group = job_group(action)
+    with LOCK:
+        active = [item for item in ACTIVE_JOBS.values()
+                  if item["thread"] and item["thread"].is_alive()]
+        if (group == "installer" and active) or any(
+            item["group"] in ("installer", "exclusive") for item in active):
+            raise ValueError("มีงานที่ต้องใช้ Engine แบบเฉพาะกำลังทำอยู่")
+        if group == "exclusive" and active:
+            raise ValueError("งานนี้ต้องรอให้งานอื่นหยุดก่อนเพื่อป้องกันข้อมูลชนกัน")
+        if any(item["group"] == group for item in active):
+            raise ValueError("มีงานประเภทเดียวกันกำลังทำงานอยู่ · กรุณารอหรือยกเลิกเฉพาะงานนั้น")
+        if len(active) >= state["parallelLimit"]:
+            raise ValueError("เครื่องกำลังทำงานเต็มความสามารถ ("+
+                             str(state["parallelLimit"])+" งานพร้อมกัน) · กรุณารอหรือลดจำนวนงาน")
+    required = 3*1024**3 if group == "audio-ai" else 1024**3
+    free = state["memoryAvailableBytes"]
+    if free is not None and free < required:
+        raise ValueError("หน่วยความจำ RAM เหลือน้อย ("+
+                         str(round(free/1024**3,1))+" GB) · กรุณาปิดงานอื่นก่อนเริ่ม")
+    return state
+
 FILES = []
 FILE_BY_ID = {}
 PREVIEWS = {}
@@ -467,16 +574,16 @@ def scan_source(full=False):
 
     def progress(message, completed):
         with LOCK:
-            JOB["total"] = 0  # Enumeration count is unknown; never invent a percentage.
-            JOB["completed"] = completed
+            worker_job()["total"] = 0  # Enumeration count is unknown; never invent a percentage.
+            worker_job()["completed"] = completed
         update(message)
 
     with LOCK:
-        running_scan = JOB.get("state") == "running" and JOB.get("kind") == "scan"
+        running_scan = worker_job().get("state") == "running" and worker_job().get("kind") == "scan"
     rows, stats = SONG_INDEX.scan(
         PREFS["source"], PREFS["workspace"], DATA / "song-index.sqlite3",
         NOTES, NCN, full=bool(full),
-        cancelled=CANCEL if running_scan else None, on_progress=progress)
+        cancelled=worker_cancel() if running_scan else None, on_progress=progress)
     with LOCK:
         FILES[:] = rows
         FILE_BY_ID.clear()
@@ -489,8 +596,8 @@ def scan_source(full=False):
         SCAN_CHANGE_IDS.clear()
         SCAN_CHANGE_IDS.update(stats.get("addedIds", []))
         SCAN_CHANGE_IDS.update(stats.get("changedIds", []))
-        JOB["total"] = len(rows)
-        JOB["completed"] = len(rows)
+        worker_job()["total"] = len(rows)
+        worker_job()["completed"] = len(rows)
     # Persist after the successful SQLite snapshot; do not overwrite a known
     # good delta when enumeration was interrupted or failed.
     save_json(SCAN_CHANGE_FILE, {
@@ -548,7 +655,7 @@ def remove_vocal_source(song_id):
     if type(song_id) is not int:
         raise ValueError("รหัสไฟล์เพลงไม่ถูกต้อง")
     with LOCK:
-        if JOB.get("state") == "running":
+        if worker_job().get("state") == "running":
             raise ValueError("มีงานกำลังดำเนินการ · ไม่สามารถนำเพลงออกระหว่างประมวลผลได้")
         removed = AI_IMPORTED.pop(song_id, None)
         if not removed:
@@ -582,17 +689,17 @@ def visible_files(search="", view="all"):
 
 def log(line):
     with LOCK:
-        JOB["logs"].append(str(line))
-        JOB["logs"][:] = JOB["logs"][-100:]
-        JOB["detail"] = str(line)
-        JOB["updated"] = time.monotonic()
+        worker_job()["logs"].append(str(line))
+        worker_job()["logs"][:] = worker_job()["logs"][-100:]
+        worker_job()["detail"] = str(line)
+        worker_job()["updated"] = time.monotonic()
 
 def update(stage, done=None):
     with LOCK:
-        JOB["stage"] = stage
+        worker_job()["stage"] = stage
         if done is not None:
-            JOB["completed"] = done
-        JOB["updated"] = time.monotonic()
+            worker_job()["completed"] = done
+        worker_job()["updated"] = time.monotonic()
 
 def run_process(args):
     global PROCESS
@@ -609,17 +716,17 @@ def run_process(args):
             opts["env"] = env
     with subprocess.Popen(args, **opts) as proc:
         with LOCK:
-            PROCESS = proc
+            set_worker_process(proc)
         try:
             _, stderr = proc.communicate()
-            if CANCEL.is_set():
+            if worker_cancel().is_set():
                 raise RuntimeError("ผู้ใช้ยกเลิกงาน")
             if proc.returncode:
                 msg = stderr.decode("utf-8", errors="replace")[-800:]
                 raise RuntimeError("FFmpeg ไม่สำเร็จ: " + msg)
         finally:
             with LOCK:
-                PROCESS = None
+                set_worker_process(None)
 
 def unique_target(folder, base, suffix):
     folder.mkdir(parents=True, exist_ok=True)
@@ -962,7 +1069,7 @@ def separate_ai(row, target, preview=False, *, vocals_only=False):
         finally:
             if midi_wav is not None:
                 midi_wav.unlink(missing_ok=True)
-        if CANCEL.is_set():
+        if worker_cancel().is_set():
             raise RuntimeError("ผู้ใช้ยกเลิกงาน")
 
         python = RUNTIME / "python" / "python.exe"
@@ -977,7 +1084,7 @@ def separate_ai(row, target, preview=False, *, vocals_only=False):
         output_lines = []
         with subprocess.Popen(cmd, **opts) as proc:
             with LOCK:
-                PROCESS = proc
+                set_worker_process(proc)
             try:
                 for line in proc.stdout:
                     item = line.strip()
@@ -989,14 +1096,14 @@ def separate_ai(row, target, preview=False, *, vocals_only=False):
                         fraction = item.split(" ", 2)[1]
                         update("AI ขั้น 2/4 · แยกเสียง " + fraction + " ช่วง")
                         with LOCK:
-                            JOB["detail"] = "ประมวลผลบน CPU · " + fraction + " ช่วง"
-                            JOB["updated"] = time.monotonic()
+                            worker_job()["detail"] = "ประมวลผลบน CPU · " + fraction + " ช่วง"
+                            worker_job()["updated"] = time.monotonic()
                     elif item.startswith("AI_STAGE "):
                         update("AI ขั้น 2/4 · " + item.removeprefix("AI_STAGE "))
                     elif item.startswith("AI_ERROR "):
                         log(item)
                 returncode = proc.wait()
-                if CANCEL.is_set():
+                if worker_cancel().is_set():
                     raise RuntimeError("ผู้ใช้ยกเลิกงาน")
                 if returncode:
                     raise RuntimeError(
@@ -1005,7 +1112,7 @@ def separate_ai(row, target, preview=False, *, vocals_only=False):
                     )
             finally:
                 with LOCK:
-                    PROCESS = None
+                    set_worker_process(None)
         if not instrumental.is_file() or not vocals.is_file():
             raise RuntimeError("AI separation ไม่คืนไฟล์เสียงทั้งสองส่วน")
         if not vocals_only:
@@ -1101,7 +1208,7 @@ def separate_ai_lyrics_vocals(song_id):
     try:
         update("กำลังแยกเสียงร้องและดนตรีเป็น M4A สองไฟล์ · ประมวลผลออฟไลน์")
         staged_vocal = separate_ai(row, staged_music, vocals_only=False)
-        if CANCEL.is_set():
+        if worker_cancel().is_set():
             raise RuntimeError("ผู้ใช้ยกเลิกก่อนบันทึกไฟล์ M4A")
         # Check again to avoid replacing files created by another process.
         if not finished(vocal_target):
@@ -1181,7 +1288,7 @@ def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumenta
         else:
             tasks.append((safe + "." + source_format, ("convert", source, source_format)))
     for i, (name, data) in enumerate(tasks, 1):
-        if CANCEL.is_set():
+        if worker_cancel().is_set():
             raise RuntimeError("ยกเลิกการส่งออก")
         update(f"ส่งออกไฟล์ {i}/{len(tasks)} · {name}", i - 1)
         # Reserve an unused name atomically; never replace an existing export.
@@ -1220,7 +1327,7 @@ def export_ai_lyrics_files(song_id, *, include_lyrics=False, include_instrumenta
                         else:
                             with data.open("rb") as stream:
                                 while True:
-                                    if CANCEL.is_set():
+                                    if worker_cancel().is_set():
                                         raise RuntimeError("ยกเลิกการส่งออก")
                                     block = stream.read(1024 * 1024)
                                     if not block:
@@ -1413,15 +1520,15 @@ def _xsk_apply_head_tail(document, options):
 def _xsk_stream_scan_status(data, complete, backlog, *, job_id=None):
     """Discovered MIDI count is dynamic until the source walk finishes."""
     with LOCK:
-        if job_id is not None and JOB.get("id") != job_id:
+        if job_id is not None and worker_job().get("id") != job_id:
             return
-        JOB["scannedFiles"] = data["files"]
-        JOB["discovered"] = data["found"]
-        JOB["queuedBatches"] = backlog
-        JOB["scanDone"] = bool(complete)
+        worker_job()["scannedFiles"] = data["files"]
+        worker_job()["discovered"] = data["found"]
+        worker_job()["queuedBatches"] = backlog
+        worker_job()["scanDone"] = bool(complete)
         if complete:
-            JOB["total"] = data["found"]
-        JOB["updated"] = time.monotonic()
+            worker_job()["total"] = data["found"]
+        worker_job()["updated"] = time.monotonic()
 
 
 def build_xsk(rows, mode, options, *, progressive=False):
@@ -1469,9 +1576,9 @@ def build_xsk(rows, mode, options, *, progressive=False):
     created = skipped = errors = not_ready = 0
     issues = []
     with LOCK:
-        JOB["total"] = 0 if progressive else len(rows)
+        worker_job()["total"] = 0 if progressive else len(rows)
     for index, original in enumerate(rows, 1):
-        if CANCEL.is_set():
+        if worker_cancel().is_set():
             raise RuntimeError("ยกเลิกงานสร้าง XSK · เก็บเพลงที่สำเร็จแล้ว")
         row = dict(original)
         source = Path(row["path"])
@@ -1532,7 +1639,7 @@ def build_xsk(rows, mode, options, *, progressive=False):
                 issues.append(reason)
         finally:
             with LOCK:
-                JOB.update(created=created, skipped=skipped, errors=errors,
+                worker_job().update(created=created, skipped=skipped, errors=errors,
                            notReady=not_ready, m4aCount=0, lyricsCount=created)
             update((f"XSK {index:,}" + (f"/{len(rows):,}" if not progressive else "") +
                     f" · ใหม่ {created:,} · ซ้ำ {skipped:,} · ไม่พร้อม {not_ready:,} · ERR {errors:,}"), index)
@@ -1601,11 +1708,11 @@ def build_library(rows, mode, options):
     created = skipped = errors = audio_count = lyrics_count = 0
     details = []
     with LOCK:
-        JOB["total"] = len(rows)
+        worker_job()["total"] = len(rows)
     log(f"ตรวจสอบคลังเพลงเดิม: พบ {len(records):,} รายการ (รวมรายการที่กู้จากงานก่อน)")
     try:
         for idx, row in enumerate(rows, 1):
-            if CANCEL.is_set():
+            if worker_cancel().is_set():
                 raise RuntimeError("ผู้ใช้ยกเลิกงาน; เพลงที่สำเร็จก่อนหน้านี้ถูกเก็บไว้แล้ว")
             source = Path(row["path"])
             staged = staged_vocals = target = vocal_target = None
@@ -1842,14 +1949,14 @@ def build_library(rows, mode, options):
                     for built in (committed_vocals, committed_audio):
                         if built is not None:
                             built.unlink(missing_ok=True)
-                if CANCEL.is_set():
+                if worker_cancel().is_set():
                     raise RuntimeError("ผู้ใช้ยกเลิก; บันทึกเพลงที่สำเร็จแล้วเพื่อเริ่มใหม่ได้") from exc
             finally:
                 for temporary in (staged, staged_vocals):
                     if temporary is not None:
                         temporary.unlink(missing_ok=True)
                 with LOCK:
-                    JOB.update(created=created, skipped=skipped, errors=errors,
+                    worker_job().update(created=created, skipped=skipped, errors=errors,
                                m4aCount=audio_count, lyricsCount=lyrics_count)
                 update(f"ดำเนินการ {idx}/{len(rows)} · ใหม่ {created} · ซ้ำ {skipped} · ERR {errors}", idx)
     finally:
@@ -1890,7 +1997,7 @@ def build_preview(rows, mode):
     row = rows[0]
     output = PREVIEW_FOLDER / (secrets.token_hex(16) + ".m4a")
     with LOCK:
-        JOB["total"] = 1
+        worker_job()["total"] = 1
     try:
         if mode == "instrumental":
             separate_ai(row, output, preview=True)
@@ -1932,7 +2039,7 @@ def execute_job(action, options, started):
             output_format = options.get("format", "original")
             def _json_progress(done, total, state):
                 with LOCK:
-                    JOB.update(total=total, completed=done, created=state["created"],
+                    worker_job().update(total=total, completed=done, created=state["created"],
                                skipped=state["skipped"], errors=state["errors"])
                 update(f"Lyrics JSON {done:,}/{total:,} · สร้าง {state['created']:,}"
                        f" · ข้าม {state['skipped']:,} · ERR {state['errors']:,}", done)
@@ -1942,13 +2049,13 @@ def execute_job(action, options, started):
                 PREFS["json_source"], PREFS["json_destination"],
                 output_format=output_format, export=_song_export_module(),
                 scanner=FOLDER_UPLOAD, ncn=NCN, convert=_json_convert,
-                cancelled=CANCEL, progress=_json_progress)
+                cancelled=worker_cancel(), progress=_json_progress)
         elif action == "created-xsk":
             module = _module("created_xsk_export.py", "xstage_created_xsk_export")
             output_root = PREFS.get("xsk_folder") or PREFS["workspace"]
             def _created_progress(done, outcome):
                 with LOCK:
-                    JOB.update(created=outcome["created"], skipped=outcome["skipped"],
+                    worker_job().update(created=outcome["created"], skipped=outcome["skipped"],
                                errors=outcome["errors"], lyricsCount=outcome["created"])
                 update(f"XSK {done}/{outcome['total']} · สร้าง {outcome['created']} "
                        f"· ข้าม MIDI ซ้ำ {outcome['skipped']} · ERR {outcome['errors']}", done)
@@ -1959,7 +2066,7 @@ def execute_job(action, options, started):
                 _module("xsk_package.py", "xstage_xsk_package"),
                 _module("code_registry.py", "xstage_xsk_codes"),
                 _module("xsk_keys.py", "xstage_xsk_keys").get_key(DATA),
-                destination_root=output_root, cancelled=CANCEL, progress=_created_progress)
+                destination_root=output_root, cancelled=worker_cancel(), progress=_created_progress)
         elif action == "xsk-stream":
             options = dict(options)
             options["source"] = str(options.get("source") or PREFS["source"])
@@ -1969,9 +2076,9 @@ def execute_job(action, options, started):
             root = _song_export_module().songs_root(options["xsk_folder"])
             scanner = _module("xsk_stream.py", "xstage_xsk_stream")
             with LOCK:
-                scan_job_id = JOB["id"]
+                scan_job_id = worker_job()["id"]
             with scanner.source_batches(
-                    options["source"], root, cancelled=CANCEL,
+                    options["source"], root, cancelled=worker_cancel(),
                     batch_size=32, max_batches=4,
                     on_scan=lambda data, done, backlog: _xsk_stream_scan_status(
                         data, done, backlog, job_id=scan_job_id)) as incoming:
@@ -1998,7 +2105,7 @@ def execute_job(action, options, started):
                 raise ValueError("รองรับเฉพาะคลัง Lyrics JSON ที่สร้างแล้ว · ไม่แก้ LYR/CUR/NCN ต้นฉบับ")
             update("กำลังวิเคราะห์ข้อความใน Lyrics JSON · ไม่อ่าน MID/LYR/CUR")
             index = LYRIC_TEXT.scan(
-                root, _song_export_module(), cancelled=CANCEL,
+                root, _song_export_module(), cancelled=worker_cancel(),
                 on_progress=lambda detail, done: update(detail, done))
             with LOCK:
                 global LYRIC_TEXT_INDEX
@@ -2025,14 +2132,14 @@ def execute_job(action, options, started):
             planned = LYRIC_TEXT.plan(index, groups, search=search,
                                       replacement=new_text)
             with LOCK:
-                JOB["total"] = planned["changedSongs"]
+                worker_job()["total"] = planned["changedSongs"]
             update(f"Smart Batch: ตรวจทุกเพลงและเตรียมสำรอง {planned['groups']:,} กลุ่ม · "
                    f"{planned['changedLines']:,} บรรทัดใน {planned['changedSongs']:,} เพลง")
             result = LYRIC_TEXT.apply_many_smart(
                 root, _song_export_module(), index,
                 groups, new_text, LYRIC_TEXT_BACKUPS, search=search,
                 expected_count=options.get("expectedCount"),
-                cancelled=CANCEL,
+                cancelled=worker_cancel(),
                 on_progress=lambda detail, done: update(detail, done))
             # Keep LYRIC_TEXT_INDEX: apply_many updates only changed members.
             # All unedited groups remain available for the next batch.
@@ -2045,11 +2152,11 @@ def execute_job(action, options, started):
         elif action == "ai-separate-vocals":
             song_id = options.get("id")
             with LOCK:
-                JOB["total"] = 1
+                worker_job()["total"] = 1
             result = separate_ai_lyrics_vocals(song_id)
         elif action == "ai-export":
             with LOCK:
-                JOB["total"] = 2
+                worker_job()["total"] = 2
             result = export_ai_lyrics_files(
                 options.get("id"),
                 include_lyrics=options.get("lyrics") is True,
@@ -2060,7 +2167,7 @@ def execute_job(action, options, started):
             song_id = options.get("id")
             with LOCK:
                 row = dict(FILE_BY_ID.get(song_id) or {}) if type(song_id) is int else {}
-                JOB["total"] = 1
+                worker_job()["total"] = 1
             if not row:
                 raise ValueError("ไม่พบเพลงที่ต้องการถอดเนื้อร้อง")
             lang = options.get("language", "th")
@@ -2075,7 +2182,7 @@ def execute_job(action, options, started):
                 update("ใช้ไฟล์ M4A เสียงร้องที่แยกแล้วสำหรับ Whisper AI")
             draft = AI_LYRICS.transcribe(
                 vocals or original, str(row.get("code") or original.stem),
-                DATA, RUNTIME, ffmpeg_binary(), CANCEL, update, language=lang,
+                DATA, RUNTIME, ffmpeg_binary(), worker_cancel(), update, language=lang,
                 draft_source=original)
             update("สร้างเนื้อร้องฉบับร่าง AI แล้ว · ต้องตรวจคำและเวลา", 1)
             result = {
@@ -2089,7 +2196,7 @@ def execute_job(action, options, started):
             owner_lyrics = options.get("lyrics")
             with LOCK:
                 row = dict(FILE_BY_ID.get(song_id) or {}) if type(song_id) is int else {}
-                JOB["total"] = 1
+                worker_job()["total"] = 1
             if not row or Path(row["path"]).suffix.lower() not in EXT_AUDIO:
                 raise ValueError("กรุณาเลือกเพลงที่มีเสียงร้องสำหรับจัดเวลา")
             update("กำลังจับคู่คำร้องที่วางกับเวลาจากเสียงเพลง")
@@ -2111,9 +2218,9 @@ def execute_job(action, options, started):
                     raise RuntimeError("ไม่พบ FFmpeg สำหรับสร้างร่างเสียงร้อง")
                 draft = AI_LYRICS.transcribe(
                     vocals or original, str(row.get("code") or original.stem),
-                    DATA, RUNTIME, ffmpeg, CANCEL, update,
+                    DATA, RUNTIME, ffmpeg, worker_cancel(), update,
                     language=options.get("language", "th"), draft_source=original)
-            if CANCEL.is_set():
+            if worker_cancel().is_set():
                 raise RuntimeError("ผู้ใช้ยกเลิกการจัดเวลาเนื้อเพลง")
             aligned = LYRIC_ALIGNMENT.align_lyrics(owner_lyrics, draft)
             update("จัดเวลาเบื้องต้นแล้ว · ต้องฟังตรวจทุกบรรทัดก่อนบันทึก", 1)
@@ -2122,7 +2229,7 @@ def execute_job(action, options, started):
                       " · ผลลัพธ์อยู่ในช่องแก้ไขเท่านั้น ยังไม่ได้บันทึกหรืออัปโหลด"}
         elif action == "login":
             update("เปิด Google Login บนเบราว์เซอร์ · รออนุญาตจากเจ้าของบัญชี")
-            account = GOOGLE.login(cancelled=CANCEL, on_status=update)
+            account = GOOGLE.login(cancelled=worker_cancel(), on_status=update)
             if not account.get("configured") or not account.get("connected"):
                 raise RuntimeError("Google คืนผลลัพธ์ แต่ Song Studio ยังไม่ได้บันทึกสิทธิ์ Google Drive")
             log("Google Login สำเร็จ: " + account.get("email", "(ไม่มีชื่ออีเมล)"))
@@ -2134,12 +2241,12 @@ def execute_job(action, options, started):
             result = {"message": "ออกจาก Google บน PC เครื่องนี้แล้ว (สิทธิ์ใน Google Account ยังถอนได้จากบัญชี Google)"}
         elif action == "upload-soundfont":
             with LOCK:
-                JOB["total"] = 1
+                worker_job()["total"] = 1
             update("กำลังตรวจ SoundFont SF2/SF3 ก่อนอัปโหลด")
             result = FOLDER_UPLOAD.upload_soundfont(
                 GOOGLE, PREFS.get("soundfont", ""),
                 create_new_library=(options.get("create_new_library") is True),
-                cancelled=CANCEL, progress=lambda stage: update(stage))
+                cancelled=worker_cancel(), progress=lambda stage: update(stage))
             update(result["message"], 1)
         elif action == "pc-export":
             module = _module("pc_library_export.py", "xstage_pc_export")
@@ -2147,20 +2254,20 @@ def execute_job(action, options, started):
             update("กำลังตรวจ XStageSong ต้นทางและพื้นที่เก็บปลายทาง")
             result = module.publish(
                 local_source, PREFS.get("pc_export_folder", ""),
-                _song_export_module(), cancelled=CANCEL,
+                _song_export_module(), cancelled=worker_cancel(),
                 progress=lambda done, total, name: update(
                     f"คัดลอกไฟล์เข้า XStageSong {done:,}/{total:,} · {name}", done))
             update(result["message"], result["files"])
         elif action == "upload-folder":
             root = PREFS.get("upload_folder", "").strip()
             with LOCK:
-                JOB["total"] = 1
+                worker_job()["total"] = 1
             update("กำลังตรวจเพลงและไฟล์ประกอบในโฟลเดอร์ที่เลือก")
             online_module = _module("online_publish.py", "xstage_online_publish")
             result = FOLDER_UPLOAD.upload(
                 GOOGLE, root,
                 create_new_library=(options.get("create_new_library") is True),
-                cancelled=CANCEL, export=_song_export_module(),
+                cancelled=worker_cancel(), export=_song_export_module(),
                 publisher=online_module.OnlinePublisher(GOOGLE),
                 staging_root=DATA, validator=online_module._valid_row,
                 renderer=lambda src, dest: convert({"path": str(src)}, dest),
@@ -2199,12 +2306,12 @@ def execute_job(action, options, started):
             log(f"ตรวจรหัสก่อนอัปโหลด: PC {len(records):,} · Google Drive {len(remote):,} "
                 f"· ปรับรหัส PC {remapped:,}")
             with LOCK:
-                JOB["total"] = len(records)
+                worker_job()["total"] = len(records)
             update("ตรวจเพลงซ้ำจาก XStageSong เดิมก่อนอัปโหลด · ไม่ลบเพลงเดิม")
             synced = online.OnlinePublisher(GOOGLE).publish(
                 root, records,
                 create_new_library=(options.get("create_new_library") is True),
-                cancelled=CANCEL,
+                cancelled=worker_cancel(),
                 on_progress=lambda sent, total:
                 update(f"อัปโหลดไฟล์ส่วนตัว {sent:,}/{total:,} bytes"),
                 on_batch=lambda batch, total, created, revised:
@@ -2229,10 +2336,10 @@ def execute_job(action, options, started):
             update("กำลังอ่าน Catalog จาก Google Drive โดยไม่สร้างคลังใหม่")
             def downloaded_item(done, total):
                 with LOCK:
-                    JOB["total"] = total
+                    worker_job()["total"] = total
                 update(f"ดาวน์โหลดและตรวจ MD5 {done:,}/{total:,} ไฟล์", done)
             result = GOOGLE.download_library(
-                PREFS["download"], kind=kind, cancelled=CANCEL,
+                PREFS["download"], kind=kind, cancelled=worker_cancel(),
                 on_status=update, on_item=downloaded_item)
             result["message"] = f"ดาวน์โหลด {result['files']} ไฟล์เสร็จแล้ว · {result['path']}"
         elif action == "check-update":
@@ -2243,7 +2350,7 @@ def execute_job(action, options, started):
             updater = _module("pc_ready_updates.py", "xstage_pc_ready_updates")
             result = updater.download(
                 DATA / "verified-updates", STATUS_VERSION, STATUS_BUILD,
-                cancelled=CANCEL, on_progress=lambda done, total: (
+                cancelled=worker_cancel(), on_progress=lambda done, total: (
                     update(f"ดาวน์โหลด ZIP รุ่นใหม่ {done:,}/{total:,} ไบต์", done)))
             update("ดาวน์โหลด ZIP และตรวจ SHA-256 สำเร็จ", 1)
         elif action == "install-update":
@@ -2253,14 +2360,14 @@ def execute_job(action, options, started):
             update("กำลังดาวน์โหลดและตรวจ SHA-256 รุ่นใหม่", 0)
             package = updater.download(
                 DATA / "verified-updates", STATUS_VERSION, STATUS_BUILD,
-                cancelled=CANCEL, on_progress=lambda done, total: (
+                cancelled=worker_cancel(), on_progress=lambda done, total: (
                     update(f"กำลังดาวน์โหลด {done:,}/{total:,} ไบต์", done)))
             if not package.get("update"):
                 result = {"message": "โปรแกรมเป็นรุ่นล่าสุดที่เผยแพร่แล้ว"}
             else:
                 update("กำลังตรวจ ZIP และติดตั้งในโฟลเดอร์รุ่นใหม่", 0)
                 result = updater.install(
-                    package["path"], ROOT, cancelled=CANCEL,
+                    package["path"], ROOT, cancelled=worker_cancel(),
                     on_progress=lambda done, total: update(
                         f"กำลังติดตั้ง {done:,}/{total:,} ไฟล์", done),
                     launch=True)
@@ -2274,9 +2381,9 @@ def execute_job(action, options, started):
                     (result.get("conflicts", 0) > 0 or result.get("notReady", 0) > 0)))
             skipped_only = (action == "build" and result.get("created", 0) == 0
                             and result.get("skipped", 0) > 0)
-            JOB.update(
-                state="cancelled" if CANCEL.is_set() else "error" if build_errors else "success", result=result,
-                stage=("ยกเลิกงานแล้ว" if CANCEL.is_set() else
+            worker_job().update(
+                state="cancelled" if worker_cancel().is_set() else "error" if build_errors else "success", result=result,
+                stage=("ยกเลิกงานแล้ว" if worker_cancel().is_set() else
                        "ซิงค์บางส่วน · มีเพลงที่ต้องตรวจสอบ" if build_errors and action == "upload" else
                        "สร้างเพลงบางรายการไม่สำเร็จ" if build_errors else
                        "ไม่มีเพลงใหม่ · ยืนยันจาก Catalog แล้ว" if skipped_only else
@@ -2291,13 +2398,13 @@ def execute_job(action, options, started):
             timer.start()
     except Exception as exc:
         with LOCK:
-            JOB["state"] = "cancelled" if CANCEL.is_set() else "error"
-            JOB["stage"] = "ยกเลิกงาน" if CANCEL.is_set() else "เกิดข้อผิดพลาด"
+            worker_job()["state"] = "cancelled" if worker_cancel().is_set() else "error"
+            worker_job()["stage"] = "ยกเลิกงาน" if worker_cancel().is_set() else "เกิดข้อผิดพลาด"
         log(str(exc))
     finally:
         with LOCK:
-            JOB["elapsed"] = time.monotonic() - started
-            JOB["updated"] = time.monotonic()
+            worker_job()["elapsed"] = time.monotonic() - started
+            worker_job()["updated"] = time.monotonic()
 
 def validate_build_request(data):
     """Reject impossible builds BEFORE saying that the PC Engine started."""
