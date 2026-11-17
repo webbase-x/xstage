@@ -1,612 +1,535 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace XStageMirrorIOSPC;
 
+/// <summary>
+/// Full-screen receiver shell. The actual video remains in UxPlay's native
+/// D3D11/GStreamer surface; never copies decoded frames or re-parents it.
+/// This prevents the UI shell from adding work to the video pipeline.
+/// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.0 · Build 1001";
-    private const string FeedUrl = "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
-    private static readonly Color Background = Color.FromArgb(13, 20, 38);
-    private static readonly Color Surface = Color.FromArgb(23, 33, 54);
-    private static readonly Color Muted = Color.FromArgb(169, 191, 213);
-    private static readonly Color Accent = Color.FromArgb(74, 212, 231);
-    private readonly TextBox _receiverName = new();
-    private readonly ListView _connectedDevices = new();
-    private readonly Label _connectionStatus = new();
-    private bool _sessionProbeBusy;
-    private DateTime _lastSessionProbeUtc = DateTime.MinValue;
-    private readonly Label _iosStatus = new();
-    
-    private readonly Label _updateStatus = new();
-    private readonly Button _startButton = new();
-    private readonly Button _stopButton = new();
-    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 2500 };
-    private Process? _airplayProcess;
-    private string? _bundledEngine;
+    private const string VersionText = "v1.0.1 · Build 1002";
+    private const string UpdateFeed =
+        "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
+    private static readonly Color Night = Color.FromArgb(8, 15, 28);
+    private static readonly Color Deep = Color.FromArgb(18, 40, 69);
+    private static readonly Color Frost = Color.FromArgb(235, 247, 255);
+    private static readonly Color Turquoise = Color.FromArgb(105, 228, 237);
+    private static readonly Color Soft = Color.FromArgb(163, 190, 212);
+
+    private readonly Label _title = MakeLabel("", 55, true, Frost);
+    private readonly Label _number = MakeLabel("", 92, true, Turquoise);
+    private readonly Label _version = MakeLabel("", 15, false, Soft);
+    private readonly Label _status = MakeLabel("", 20, false, Frost);
+    private readonly Label _network = MakeLabel("", 16, false, Soft);
+    private readonly System.Windows.Forms.Timer _clock = new() { Interval = 1300 };
+    private readonly VideoWindowPresentation _video = new();
+    private readonly string _name = ReceiverIdentity.DisplayName;
+    private readonly string _configFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "X-Stage", "Mirror iOS PC");
+
+    private Process? _engine;
+    private string? _engineExe;
     private bool _closing;
-    private bool _manualAirPlayStop;
-    private int _recoveryAttempts;
-    private DateTime _lastReceiverLaunchUtc = DateTime.MinValue;
+    private bool _manualStop;
+    private bool _starting;
+    private bool _checkingPeers;
+    private bool _newUpdate;
+    private int _restarts;
+    private DateTime _lastLaunch = DateTime.MinValue;
+    private DateTime _lastPeerCheck = DateTime.MinValue;
+    private DateTime _lastNetworkCheck = DateTime.MinValue;
+    private string _networkText = "กำลังตรวจสอบเครือข่าย";
     private string _receiverIssue = "";
+    private string _lastPeerText = "ยังไม่มีอุปกรณ์เชื่อมต่อ";
+    private string _renderer = "d3d11";
+    private readonly Dictionary<string, (object? value, RegistryValueKind kind, bool existed)> _originalQtSettings = new();
 
     public MainForm()
     {
-        Text = "X-Stage Mirror iOS PC • " + ReceiverIdentity.DisplayName;
-        BackColor = Background;
-        ForeColor = Color.White;
-        Font = new Font("Segoe UI", 10);
+        Text = "X-Stage Mirror iOS PC | " + _name;
+        FormBorderStyle = FormBorderStyle.None;
+        WindowState = FormWindowState.Maximized;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(730, 630);
-        Size = new Size(960, 780);
+        BackColor = Night;
+        ForeColor = Frost;
         AutoScaleMode = AutoScaleMode.Dpi;
-        BuildLayout();
+        KeyPreview = true;
+        DoubleBuffered = true;
+        ResizeRedraw = true;
+        ShowInTaskbar = true;
 
-        _timer.Tick += (_, _) =>
-        {
-            // Avoid leaving an empty discovery list after a transient native exit.
-            if (!_closing && !_manualAirPlayStop && _bundledEngine is not null &&
-                _lastReceiverLaunchUtc != DateTime.MinValue &&
-                (_airplayProcess is null || _airplayProcess.HasExited) &&
-                _recoveryAttempts < 3 &&
-                DateTime.UtcNow - _lastReceiverLaunchUtc >= TimeSpan.FromSeconds(8))
-            {
-                _recoveryAttempts++;
-                StartAirPlay(autoStart: true);
-            }
-            RefreshAirPlayStatus();
-            if (!_sessionProbeBusy && DateTime.UtcNow - _lastSessionProbeUtc > TimeSpan.FromSeconds(6))
-                _ = RefreshConnectedDevicesAsync();
-        };
-        _timer.Start();
+        _title.Text = "X-Stage Mirror PC";
+        _number.Text = "No." + ReceiverIdentity.Number.ToString("D4");
+        _version.Text = "MIRROR iOS PC     " + VersionText;
+        _status.Text = "กำลังเตรียมตัวรับ AirPlay";
+        _network.Text = "ตรวจสอบเครือข่าย…";
+        Controls.AddRange([_title, _number, _version, _status, _network]);
+        Resize += (_, _) => LayoutWelcome();
+        KeyDown += OnReceiverKeyDown;
         Shown += async (_, _) =>
         {
-            _bundledEngine = FindEngine();
-            RefreshAirPlayStatus();
-            // Users expect the PC receiver to appear as soon as the app opens.
-            // Continue to run the Windows Miracast receiver only if the OS supports it.
-            if (_bundledEngine is not null) StartAirPlay(autoStart: true);
-            await CheckUpdatesAsync(quiet: true);
+            LayoutWelcome();
+            _engineExe = FindEngine();
+            _renderer = LoadRendererPreference();
+            UpdateNetworkStatus();
+            await StartAirPlayAsync();
+            _ = CheckUpdatesSilentlyAsync();
         };
         FormClosing += (_, _) =>
         {
             _closing = true;
-            _timer.Stop();
-            StopOwnProcess();
+            _clock.Stop();
+            StopOwnEngine();
+            RestoreQtSettings();
         };
+
+        _clock.Tick += (_, _) => TickReceiver();
+        _clock.Start();
+        LayoutWelcome();
     }
 
-    private static Label TextLabel(string text, float size = 11, bool bold = false, Color? color = null)
-        => new()
-        {
-            Text = text,
-            Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular),
-            ForeColor = color ?? Color.White,
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Dock = DockStyle.Fill
-        };
-
-    private static Button ActionButton(string text, bool primary = false)
-        => new()
-        {
-            Text = text,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            AutoSize = false,
-            BackColor = primary ? Accent : Color.FromArgb(48, 67, 94),
-            ForeColor = primary ? Background : Color.White,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Height = 42,
-            FlatAppearance = { BorderSize = 0 }
-        };
-
-    // Explicitly size top-level cards. FlowLayoutPanel + AutoSize previously
-    // collapsed the entire dashboard to a narrow left column on wide monitors.
-    private int ScalePx(int px) => (int)Math.Round(px * DeviceDpi / 96.0);
-
-    private TableLayoutPanel CreateCard(params int[] rowHeights)
+    private static Label MakeLabel(string text, float size, bool bold, Color color) => new()
     {
-        var card = new TableLayoutPanel
-        {
-            ColumnCount = 1,
-            RowCount = rowHeights.Length,
-            AutoSize = false,
-            Dock = DockStyle.None,
-            GrowStyle = TableLayoutPanelGrowStyle.FixedSize,
-            Margin = Padding.Empty,
-            Padding = new Padding(ScalePx(22), ScalePx(16), ScalePx(22), ScalePx(12)),
-            BackColor = Surface
-        };
-        card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (int height in rowHeights) card.RowStyles.Add(new RowStyle(SizeType.Absolute, ScalePx(height)));
-        return card;
-    }
+        Text = text,
+        ForeColor = color,
+        BackColor = Color.Transparent,
+        TextAlign = ContentAlignment.MiddleCenter,
+        AutoEllipsis = false,
+        Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular),
+        UseCompatibleTextRendering = true
+    };
 
-    private void BuildLayout()
+    private void LayoutWelcome()
     {
-        var viewport = new Panel
+        if (IsDisposed) return;
+        var w = Math.Max(640, ClientSize.Width);
+        var h = Math.Max(480, ClientSize.Height);
+        var largeTitle = Math.Clamp(w / 29f, 27, 62);
+        var bigNumber = Math.Clamp(Math.Min(w / 13f, h / 5.6f), 44, 112);
+        SetLabel(_title, largeTitle, h * 0.29, h * 0.11);
+        SetLabel(_number, bigNumber, h * 0.415, h * 0.22);
+        SetLabel(_version, Math.Clamp(w / 96f, 11, 17), h * 0.665, h * 0.045);
+        SetLabel(_status, Math.Clamp(w / 71f, 12, 21), h * 0.755, h * 0.06);
+        SetLabel(_network, Math.Clamp(w / 90f, 11, 17), h * 0.83, h * 0.05);
+        void SetLabel(Label label, float points, double top, double height)
         {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
-            Margin = Padding.Empty,
-            BackColor = Background
-        };
-        Controls.Add(viewport);
-
-        var header = CreateCard(43, 49, 33);
-        header.BackColor = Background;
-        header.Padding = new Padding(4, 1, 4, 0);
-        header.Controls.Add(TextLabel("X-STAGE  /  MIRROR iOS PC", 14, true, Muted), 0, 0);
-        header.Controls.Add(TextLabel(ReceiverIdentity.DisplayName, 26, true, Accent), 0, 1);
-        header.Controls.Add(TextLabel("รับภาพจาก iPhone / iPad ผ่าน AirPlay   •   Windows 10/11 x64   •   " + VersionText, 10, false, Muted), 0, 2);
-
-        var ios = CreateCard(39, 53, 30, 42, 45, 37, 42);
-        ios.Controls.Add(TextLabel("ตัวรับ AirPlay · iPhone / iPad", 16, true), 0, 0);
-        _iosStatus.Dock = DockStyle.Fill;
-        _iosStatus.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        _iosStatus.TextAlign = ContentAlignment.MiddleLeft;
-        ios.Controls.Add(_iosStatus, 0, 1);
-        ios.Controls.Add(TextLabel("ชื่อเครื่องรับ AirPlay · หมายเลขสุ่มประจำ Windows ไม่เปลี่ยนเมื่อเปิดใหม่", 10, false, Muted), 0, 2);
-        _receiverName.Dock = DockStyle.Fill;
-        _receiverName.BackColor = Color.FromArgb(37, 51, 75);
-        _receiverName.ForeColor = Color.White;
-        _receiverName.BorderStyle = BorderStyle.FixedSingle;
-        _receiverName.Font = new Font("Segoe UI", 12);
-        _receiverName.Text = ReceiverIdentity.DisplayName;
-        _receiverName.ReadOnly = true;
-        _receiverName.MaxLength = 55;
-        ios.Controls.Add(_receiverName, 0, 3);
-
-        var iosButtons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
-        iosButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        iosButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-        iosButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
-        _startButton.Text = "▶  เปิดรับ AirPlay";
-        ApplyButtonStyle(_startButton, true);
-        _stopButton.Text = "■  หยุดรับภาพ";
-        ApplyButtonStyle(_stopButton, false);
-        var verifyButton = ActionButton("↻  ตรวจส่วนประกอบ");
-        verifyButton.Dock = DockStyle.Fill;
-        verifyButton.Margin = new Padding(3);
-        verifyButton.Text = "ตรวจการค้นพบ";
-        verifyButton.Click += (_, _) => ShowDiscoveryDiagnostics();
-        _startButton.Click += (_, _) => StartAirPlay();
-        _stopButton.Click += (_, _) => StopAirPlay();
-        iosButtons.Controls.Add(_startButton, 0, 0);
-        iosButtons.Controls.Add(_stopButton, 1, 0);
-        iosButtons.Controls.Add(verifyButton, 2, 0);
-        ios.Controls.Add(iosButtons, 0, 4);
-        ios.Controls.Add(TextLabel("บน iPhone: ศูนย์ควบคุม → การสะท้อนหน้าจอ → เลือกชื่อเครื่องรับ", 9, false, Muted), 0, 5);
-        ios.Controls.Add(TextLabel("เชื่อม Wi-Fi/LAN เดียวกัน · อนุญาต Bonjour/mDNS เฉพาะเครือข่าย Private", 9, false, Muted), 0, 6);
-
-        var connections = CreateCard(43, 50, 139, 47);
-        connections.Controls.Add(TextLabel("อุปกรณ์เชื่อมต่อ / Connected devices", 16, true), 0, 0);
-        _connectionStatus.Dock = DockStyle.Fill;
-        _connectionStatus.Font = new Font("Segoe UI", 11, FontStyle.Bold);
-        _connectionStatus.ForeColor = Accent;
-        _connectionStatus.Text = "กำลังตรวจสอบเซสชัน AirPlay จาก UxPlay…";
-        connections.Controls.Add(_connectionStatus, 0, 1);
-        _connectedDevices.Dock = DockStyle.Fill;
-        _connectedDevices.View = View.Details;
-        _connectedDevices.FullRowSelect = true;
-        _connectedDevices.MultiSelect = false;
-        _connectedDevices.GridLines = false;
-        _connectedDevices.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-        _connectedDevices.BorderStyle = BorderStyle.None;
-        _connectedDevices.BackColor = Color.FromArgb(31, 44, 67);
-        _connectedDevices.ForeColor = Color.White;
-        _connectedDevices.Font = new Font("Segoe UI", 10);
-        _connectedDevices.Columns.Add("อุปกรณ์ / IP", 260);
-        _connectedDevices.Columns.Add("สถานะที่ตรวจสอบได้", 500);
-        _connectedDevices.Resize += (_, _) =>
-        {
-            if (_connectedDevices.Columns.Count == 2)
-                _connectedDevices.Columns[1].Width = Math.Max(190,
-                    _connectedDevices.ClientSize.Width - _connectedDevices.Columns[0].Width - 14);
-        };
-        connections.Controls.Add(_connectedDevices, 0, 2);
-        connections.Controls.Add(TextLabel("แสดง IP เมื่อพบการเชื่อมต่อ TCP จริง · ชื่อ iPhone ไม่ได้ถูกเปิดเผยจาก UxPlay", 9, false, Muted), 0, 3);
-
-        var footer = CreateCard(33, 43, 47);
-        footer.Controls.Add(TextLabel("อัปเดตและข้อมูลระบบ", 13, true), 0, 0);
-        _updateStatus.Dock = DockStyle.Fill;
-        _updateStatus.ForeColor = Muted;
-        _updateStatus.Text = "กำลังตรวจสอบรุ่นล่าสุด…";
-        footer.Controls.Add(_updateStatus, 0, 1);
-        var updateButton = ActionButton("↻  ตรวจสอบอัปเดต");
-        updateButton.Dock = DockStyle.Fill;
-        updateButton.Click += async (_, _) => await CheckUpdatesAsync(quiet: false);
-        footer.Controls.Add(updateButton, 0, 2);
-
-        viewport.Controls.Add(header);
-        viewport.Controls.Add(ios);
-        viewport.Controls.Add(connections);
-        viewport.Controls.Add(footer);
-
-        void ResizeDashboard()
-        {
-            var available = Math.Max(0, viewport.ClientSize.Width - ScalePx(40));
-            var width = Math.Min(ScalePx(1020), Math.Max(ScalePx(600), available));
-            var x = available >= width ? (viewport.ClientSize.Width - width) / 2 : ScalePx(20);
-            int y = ScalePx(16), gap = ScalePx(16);
-            var cards = new (Control view, int height)[]
-            {
-                (header, 146), (ios, 341), (connections, 326), (footer, 164)
-            };
-            viewport.SuspendLayout();
-            try
-            {
-                foreach (var (view, height) in cards)
-                {
-                    view.SetBounds(x, y, width, ScalePx(height));
-                    y += ScalePx(height) + gap;
-                }
-                viewport.AutoScrollMinSize = new Size(width + ScalePx(40), y + ScalePx(12));
-            }
-            finally { viewport.ResumeLayout(); }
+            if (Math.Abs(label.Font.Size - points) > 1)
+                label.Font = new Font("Segoe UI", points,
+                    label == _title || label == _number ? FontStyle.Bold : FontStyle.Regular);
+            label.SetBounds(10, (int)top, Math.Max(0, ClientSize.Width - 20), (int)height);
         }
-        viewport.SizeChanged += (_, _) => ResizeDashboard();
-        ResizeDashboard();
     }
 
-    private async Task RefreshConnectedDevicesAsync()
+    protected override void OnPaintBackground(PaintEventArgs e)
     {
-        if (_sessionProbeBusy || _closing || IsDisposed) return;
-        _sessionProbeBusy = true;
-        _lastSessionProbeUtc = DateTime.UtcNow;
+        var rect = ClientRectangle;
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        using (var shade = new LinearGradientBrush(rect, Deep, Night, LinearGradientMode.ForwardDiagonal))
+            e.Graphics.FillRectangle(shade, rect);
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var side = Math.Max(rect.Width, rect.Height);
+        using var ring1 = new Pen(Color.FromArgb(14, Turquoise), 2);
+        using var ring2 = new Pen(Color.FromArgb(12, 183, 226, 255), 1);
+        e.Graphics.DrawEllipse(ring1, rect.Width / 2f - side * 0.33f, rect.Height / 2f - side * 0.33f,
+            side * 0.66f, side * 0.66f);
+        e.Graphics.DrawEllipse(ring2, rect.Width / 2f - side * 0.4f, rect.Height / 2f - side * 0.4f,
+            side * 0.8f, side * 0.8f);
+    }
+
+    private void TickReceiver()
+    {
+        if (_closing || IsDisposed) return;
+        var alive = _engine is { HasExited: false };
+        if (alive)
+        {
+            // A native fullscreen video window automatically obscures this
+            // welcome page. When the window closes, the welcome page remains.
+            if (_video.Present(_engine!.Id, Screen.FromControl(this)))
+            {
+                _status.Text = "กำลังรับภาพ AirPlay";
+                _receiverIssue = "";
+            }
+            else if (!string.IsNullOrWhiteSpace(_receiverIssue))
+                _status.Text = _receiverIssue;
+            else
+                _status.Text = "พร้อมรับภาพจาก iPhone / iPad";
+        }
+        else
+        {
+            _video.Reset();
+            _status.Text = _engineExe is null ? "ไม่พบชุด AirPlay Engine" :
+                !string.IsNullOrWhiteSpace(_receiverIssue) ? _receiverIssue :
+                "กำลังเริ่มรับ AirPlay";
+            if (!_manualStop && !_starting && _engineExe is not null && _lastLaunch != DateTime.MinValue &&
+                DateTime.UtcNow - _lastLaunch > TimeSpan.FromSeconds(8) && _restarts < 3)
+            {
+                _restarts++;
+                _ = StartAirPlayAsync(recovery: true);
+            }
+        }
+        if (DateTime.UtcNow - _lastNetworkCheck > TimeSpan.FromSeconds(8))
+            UpdateNetworkStatus();
+        if (alive && !_checkingPeers && DateTime.UtcNow - _lastPeerCheck > TimeSpan.FromSeconds(9))
+            _ = CheckPeersAsync();
+    }
+
+    private void UpdateNetworkStatus()
+    {
+        _lastNetworkCheck = DateTime.UtcNow;
         try
         {
-            int pid = _airplayProcess is { HasExited: false } ? _airplayProcess.Id : 0;
-            var snapshot = pid > 0 ? await Task.Run(() => AirPlaySessionMonitor.Probe(pid)) : null;
-            if (_closing || IsDisposed) return;
-            _connectedDevices.BeginUpdate();
-            try
-            {
-                _connectedDevices.Items.Clear();
-                if (snapshot is null)
-                {
-                    _connectionStatus.Text = "ตัวรับ AirPlay ยังไม่ทำงาน";
-                    _connectedDevices.Items.Add(new ListViewItem(new[] { "—", "ไม่มีเซสชันที่ตรวจสอบได้" }));
-                }
-                else if (snapshot.PeerAddresses.Length == 0)
-                {
-                    _connectionStatus.Text = snapshot.VideoWindow ? "กำลังแสดงภาพ (ยังไม่ทราบ IP ของผู้ส่ง)" :
-                        "เปิดตัวรับแล้ว · ยังไม่พบอุปกรณ์ที่เชื่อมต่อ";
-                    _connectedDevices.Items.Add(new ListViewItem(new[] { "—",
-                        snapshot.Problem ?? "พร้อมรับภาพ · ตรวจจับผู้ส่งหลังเริ่มเชื่อมต่อ" }));
-                }
-                else
-                {
-                    _connectionStatus.Text = snapshot.VideoWindow ?
-                        "กำลังแสดงภาพจาก AirPlay · ตรวจพบ " + snapshot.PeerAddresses.Length + " ที่อยู่ IP" :
-                        "พบการเชื่อมต่อเครือข่าย " + snapshot.PeerAddresses.Length +
-                        " ที่อยู่ IP · ยังไม่ยืนยันการฉายภาพ";
-                    foreach (var ip in snapshot.PeerAddresses)
-                        _connectedDevices.Items.Add(new ListViewItem(new[] { ip,
-                            snapshot.VideoWindow ? "มีวิดีโอ AirPlay (ชื่อผู้ส่งไม่พร้อม)" :
-                                "เชื่อมต่อ TCP · ยังไม่ยืนยันการฉายภาพ" }));
-                }
-            }
-            finally { _connectedDevices.EndUpdate(); }
+            var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up &&
+                    n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                .ToArray();
+            var matches = interfaces.SelectMany(n => n.GetIPProperties().UnicastAddresses
+                .Where(ip => ip.Address.AddressFamily == AddressFamily.InterNetwork &&
+                    !IPAddress.IsLoopback(ip.Address))
+                .Select(ip => (name: n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211
+                    ? "Wi-Fi" : "LAN", addr: ip.Address.ToString()))).ToArray();
+            _networkText = matches.Length > 0 ?
+                matches[0].name + "  ·  " + matches[0].addr : "ไม่มีการเชื่อมต่อ LAN / Wi-Fi";
         }
-        catch (Exception ex)
-        {
-            if (!_closing && !IsDisposed) _connectionStatus.Text = "ตรวจสอบอุปกรณ์ไม่ได้: " + ex.Message;
-        }
-        finally { _sessionProbeBusy = false; }
+        catch { _networkText = "ตรวจสอบเครือข่ายไม่ได้"; }
+        _network.Text = "●  " + _networkText + "    •    " +
+            (_engine is { HasExited: false } ? "AirPlay พร้อมรับ" : "AirPlay ยังไม่พร้อม");
+        _network.ForeColor = _networkText.StartsWith("ไม่มี") ? Color.FromArgb(255, 166, 111) : Soft;
     }
 
-    private static void ApplyButtonStyle(Button button, bool primary)
+    private async Task CheckPeersAsync()
     {
-        button.FlatStyle = FlatStyle.Flat;
-        button.FlatAppearance.BorderSize = 0;
-        button.BackColor = primary ? Accent : Color.FromArgb(48, 67, 94);
-        button.ForeColor = primary ? Background : Color.White;
-        button.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        button.Dock = DockStyle.Fill;
-        button.Margin = new Padding(3);
-        button.Cursor = Cursors.Hand;
+        if (_checkingPeers || _engine is not { HasExited: false }) return;
+        _checkingPeers = true;
+        _lastPeerCheck = DateTime.UtcNow;
+        try
+        {
+            int pid = _engine.Id;
+            var probe = await Task.Run(() => AirPlaySessionMonitor.Probe(pid));
+            if (_closing || IsDisposed) return;
+            _lastPeerText = probe.PeerAddresses.Length > 0
+                ? string.Join(", ", probe.PeerAddresses)
+                : probe.VideoWindow ? "วิดีโอกำลังแสดง (ไม่มีชื่อผู้ส่ง)" : "ยังไม่พบการเชื่อมต่อ TCP";
+        }
+        catch { _lastPeerText = "ตรวจสอบเซสชันไม่ได้"; }
+        finally { _checkingPeers = false; }
     }
 
     private static string? FindEngine()
     {
-        // A complete AirPlay receiver has native DLLs and GStreamer plugins;
-        // a bare XStageMirrorPC.exe is intentionally NOT reported as ready.
-        var folder = Path.Combine(AppContext.BaseDirectory, "engine", "uxplay-windows");
-        if (!Directory.Exists(folder)) return null;
-        var required = new[]
-        {
+        string folder = Path.Combine(AppContext.BaseDirectory, "engine", "uxplay-windows");
+        string[] required =
+        [
             "uxplay-windows.exe", "mDNSResponder.exe", "Qt6Core.dll",
-            "libgstreamer-1.0-0.dll", "dnssd.dll",
-            Path.Combine("lib", "gstreamer-1.0", "libgstcoreelements.dll"),
-            Path.Combine("platforms", "qwindows.dll")
-        };
-        return required.All(file => File.Exists(Path.Combine(folder, file)))
-            ? Path.Combine(folder, "uxplay-windows.exe") : null;
+            "Qt6Gui.dll", "libgstreamer-1.0-0.dll",
+            Path.Combine("platforms", "qwindows.dll"),
+            Path.Combine("lib", "gstreamer-1.0", "libgstcoreelements.dll")
+        ];
+        return required.All(file => File.Exists(Path.Combine(folder, file))) ?
+            Path.Combine(folder, "uxplay-windows.exe") : null;
     }
 
-    private static (bool installed, bool running) QueryBonjourService()
+    private static bool BonjourIsRunning()
     {
         try
         {
-            using var check = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = "sc.exe",
                 Arguments = "query \"Bonjour Service\"",
-                RedirectStandardOutput = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                RedirectStandardOutput = true
             });
-            if (check is null) return (false, false);
-            var output = check.StandardOutput.ReadToEnd();
-            if (!check.WaitForExit(3000) || check.ExitCode != 0) return (false, false);
-            return (true, Regex.IsMatch(output, @"STATE\s*:\s*4\s+RUNNING",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+            if (p is null) return false;
+            string output = p.StandardOutput.ReadToEnd();
+            return p.WaitForExit(3000) && p.ExitCode == 0 &&
+                Regex.IsMatch(output, @"STATE\s*:\s*4\s+RUNNING", RegexOptions.IgnoreCase);
         }
-        catch { return (false, false); }
+        catch { return false; }
     }
 
-    private bool EnsureBonjourService(bool autoStart = false)
+    private bool EnsureBonjour()
     {
-        var state = QueryBonjourService();
-        if (state.running) return true;
-        if (autoStart && _recoveryAttempts > 0)
-        {
-            _receiverIssue = "Bonjour Service หยุดทำงาน • เลือกเปิดรับ AirPlay อีกครั้ง";
-            return false; // Never repeatedly prompt for elevation from the recovery timer.
-        }
-        if (_bundledEngine is null) return false;
-        var message = state.installed
-            ? "พบ Bonjour Service แต่ยังไม่ทำงาน\n\nต้องการเริ่มบริการเพื่อให้อุปกรณ์ค้นหาเครื่องรับ AirPlay ได้หรือไม่?\nWindows อาจขออนุญาต Administrator"
-            : "ยังไม่มี Bonjour Service สำหรับประกาศเครื่องรับ AirPlay\nชุด X-Stage มี mDNSResponder อยู่แล้ว ไม่ต้องดาวน์โหลดเพิ่ม\n\nอนุญาตให้ลงทะเบียนบริการนี้โดย Windows Administrator หรือไม่?";
-        if (MessageBox.Show(this, message, "เตรียมการค้นหา AirPlay",
-            MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-        {
-            _receiverIssue = "ยังไม่ได้เปิด Bonjour Service • อุปกรณ์ iOS อาจค้นหาไม่พบ";
-            return false;
-        }
+        if (BonjourIsRunning()) return true;
+        if (_engineExe is null) return false;
+        var question = "Bonjour Service ยังไม่ทำงานและจำเป็นสำหรับ AirPlay" +
+            Environment.NewLine + "อนุญาตให้ Windows เริ่มบริการที่ติดตั้งพร้อมแอปหรือไม่?";
+        if (MessageBox.Show(this, question, "AirPlay", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) != DialogResult.Yes) return false;
+        var installed = IsBonjourInstalled();
         try
         {
-            var engineFolder = Path.GetDirectoryName(_bundledEngine)!;
-            var command = state.installed ? "sc.exe" : Path.Combine(engineFolder, "mDNSResponder.exe");
-            var arguments = state.installed ? "start \"Bonjour Service\"" : "-install";
-            using var setup = Process.Start(new ProcessStartInfo
+            using var process = Process.Start(new ProcessStartInfo
             {
-                FileName = command,
-                Arguments = arguments,
-                WorkingDirectory = engineFolder,
-                UseShellExecute = true,
-                Verb = "runas"
-            });
-            if (setup is null || !setup.WaitForExit(30000))
-                throw new InvalidOperationException("บริการยังไม่ตอบกลับ");
-            // A service is ready only if running, not merely present in sc.exe.
-            for (var retry = 0; retry < 5; retry++)
-            {
-                if (QueryBonjourService().running) return true;
-                System.Threading.Thread.Sleep(300);
-            }
-            throw new InvalidOperationException("Bonjour Service ยังไม่ได้เริ่มทำงาน");
-        }
-        catch (Exception ex)
-        {
-            _receiverIssue = "Bonjour Service ไม่พร้อม: " + ex.Message;
-            MessageBox.Show(this, _receiverIssue, "AirPlay Discovery",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return false;
-        }
-    }
-
-    private void LoadConfiguredAirPlayName()
-    {
-        var paths = new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "uxplay-windows", "arguments.txt"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "leapbtw", "uxplay-windows", "arguments.txt")
-        };
-        foreach (var file in paths)
-        {
-            try
-            {
-                if (!File.Exists(file)) continue;
-                var match = Regex.Match(File.ReadAllText(file), @"(?:^|\s)-n\s+([^\s]+)");
-                if (match.Success) _receiverName.Text = Environment.ExpandEnvironmentVariables(match.Groups[1].Value);
-                return; // Respect a system-wide configuration even without a -n option.
-            }
-            catch (Exception ex) { _receiverIssue = "ไม่สามารถอ่านการตั้งค่า AirPlay: " + ex.Message; }
-        }
-    }
-
-    private void ShowDiscoveryDiagnostics()
-    {
-        _bundledEngine = FindEngine();
-        var service = QueryBonjourService();
-        var receiverAlive = _airplayProcess is { HasExited: false };
-        var report = new System.Text.StringBuilder()
-            .AppendLine("X-Stage Mirror iOS PC " + VersionText)
-            .AppendLine()
-            .AppendLine("AirPlay Engine: " + (_bundledEngine is null ? "ไม่ครบ" : "พบไฟล์ครบ"))
-            .AppendLine("Bonjour Service: " + (service.running ? "กำลังทำงาน" :
-                service.installed ? "ติดตั้งแล้วแต่หยุดทำงาน" : "ไม่พบ"))
-            .AppendLine("ตัวรับ AirPlay: " + (receiverAlive ? "เปิดอยู่ (ยังไม่ยืนยัน mDNS)" : "ยังไม่ได้เปิด"))
-            .AppendLine("ชื่อเครื่องรับ: " + _receiverName.Text.Trim());
-        try
-        {
-            var addresses = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
-                    n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
-                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
-                .Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                .Take(5).Select(a => a.Address.ToString()).ToArray();
-            report.AppendLine("IPv4 ของ PC: " + (addresses.Length > 0 ?
-                string.Join(", ", addresses) : "ไม่พบการเชื่อมต่อเครือข่าย"));
-        }
-        catch { report.AppendLine("ตรวจสอบ IPv4 ไม่สำเร็จ"); }
-        report.AppendLine()
-            .AppendLine("iOS: ให้ iPhone/iPad และ PC อยู่ LAN เดียวกัน ไม่ใช้ Guest Wi-Fi ที่แยกอุปกรณ์")
-            .AppendLine("หากใช้เครือข่ายที่เชื่อถือได้ ให้ตรวจว่า Windows Firewall อนุญาต AirPlay บน Private")
-            .AppendLine("Android: ต้องรองรับ Miracast และเปิด Wireless Display ของ Windows")
-            .AppendLine("สถานะเปิดโปรเซสไม่ใช่การยืนยันว่าโทรศัพท์มองเห็นเครื่องรับแล้ว");
-        MessageBox.Show(this, report.ToString(), "ตรวจการค้นพบอุปกรณ์",
-            MessageBoxButtons.OK, MessageBoxIcon.Information);
-        RefreshAirPlayStatus();
-    }
-
-    private void RefreshAirPlayStatus()
-    {
-        bool alive = _airplayProcess is { HasExited: false };
-        _receiverName.Enabled = true; // Stable identity remains legible during an active session.
-        _startButton.Enabled = !alive && _bundledEngine is not null;
-        _stopButton.Enabled = alive;
-        _iosStatus.Text = alive
-            ? "● ตัวรับ AirPlay เปิดอยู่ • ให้ iPhone/iPad ค้นหาชื่อเครื่องรับใน LAN เดียวกัน"
-            : _bundledEngine is null
-                ? "● ชุด AirPlay Engine ไม่ครบ • ใช้ Setup EXE รุ่นเต็ม"
-                : !string.IsNullOrEmpty(_receiverIssue)
-                    ? "● " + _receiverIssue
-                    : "● ยังไม่ได้เปิด AirPlay • กดเปิดรับ AirPlay";
-        _iosStatus.ForeColor = alive ? Color.FromArgb(120, 235, 165)
-            : _bundledEngine is null || !string.IsNullOrEmpty(_receiverIssue) ? Color.Orange : Accent;
-    }
-
-    private bool WriteNameSettings(string name, bool autoStart)
-    {
-        var systemFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "uxplay-windows", "arguments.txt");
-        if (File.Exists(systemFile))
-        {
-            // Never override administrator-managed receiver naming.
-            var configured = Regex.Match(File.ReadAllText(systemFile), @"(?:^|\s)-n\s+([^\s]+)");
-            if (configured.Success &&
-                string.Equals(configured.Groups[1].Value, name, StringComparison.OrdinalIgnoreCase))
-                return true;
-            MessageBox.Show(this, "พบไฟล์กำหนดค่า AirPlay ระดับเครื่อง ชื่อเครื่องรับถูกควบคุมโดยผู้ดูแลระบบ\n" +
-                systemFile, "ชื่อเครื่องรับ AirPlay", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return false;
-        }
-        var config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "leapbtw", "uxplay-windows", "arguments.txt");
-        // UxPlay Windows splits arguments.txt on literal ASCII spaces, ignoring quotes.
-        // Non-breaking spaces are retained as one value yet render as normal spaces
-        // in the iOS AirPlay picker: "X-Stage Mirror PC No.1234".
-        var advertised = Regex.Replace(name.Trim(), @"\s+", "\u00A0");
-        var desired = "-n " + advertised + " -nh";
-        if (File.Exists(config))
-        {
-            var previous = File.ReadAllText(config).Trim();
-            if (previous == desired) return true; // Do not silently replace other apps' settings.
-            if (MessageBox.Show(this,
-                "การเปลี่ยนชื่อเครื่องรับจะเขียนทับ arguments.txt เดิมของ UxPlay\n" +
-                "ต้องการแทนที่การตั้งค่าเดิมหรือไม่?", "ยืนยันการเปลี่ยนชื่อ",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-                return false;
-        }
-        Directory.CreateDirectory(Path.GetDirectoryName(config)!);
-        File.WriteAllText(config, desired + Environment.NewLine);
-        return true;
-    }
-
-    private void StartAirPlay(bool autoStart = false)
-    {
-        try
-        {
-            if (_airplayProcess is { HasExited: false }) return;
-            if (!autoStart) { _manualAirPlayStop = false; _recoveryAttempts = 0; }
-            _bundledEngine = FindEngine();
-            if (_bundledEngine is null)
-                throw new FileNotFoundException("AirPlay Engine ไม่ครบ กรุณาติดตั้งด้วย Setup EXE รุ่นเต็ม");
-            var name = _receiverName.Text.Trim();
-            if (name.Length is < 1 or > 55 ||
-                !Regex.IsMatch(name, @"^[\p{L}\p{N} _().-]+$"))
-                throw new InvalidOperationException("ชื่อเครื่องรับต้องเป็นตัวอักษร/ตัวเลข ความยาว 1–55 ตัว");
-            if (!WriteNameSettings(name, autoStart)) return;
-            if (!EnsureBonjourService(autoStart)) { RefreshAirPlayStatus(); return; }
-            _receiverName.Text = ReceiverIdentity.DisplayName;
-            _lastReceiverLaunchUtc = DateTime.UtcNow;
-            _airplayProcess?.Dispose();
-            _airplayProcess = Process.Start(new ProcessStartInfo
-            {
-                FileName = _bundledEngine,
-                WorkingDirectory = Path.GetDirectoryName(_bundledEngine)!,
+                FileName = installed ? "sc.exe" :
+                    Path.Combine(Path.GetDirectoryName(_engineExe)!, "mDNSResponder.exe"),
+                Arguments = installed ? "start \"Bonjour Service\"" : "-install",
+                Verb = "runas",
                 UseShellExecute = true
             });
-            _receiverIssue = _airplayProcess is null ? "ไม่สามารถเริ่ม AirPlay Engine" : "";
-            RefreshAirPlayStatus();
+            if (process is null || !process.WaitForExit(30000)) return false;
+            for (int i = 0; i < 5; i++)
+            {
+                if (BonjourIsRunning()) return true;
+                System.Threading.Thread.Sleep(350);
+            }
         }
-        catch (Exception ex)
-        {
-            _receiverIssue = "เปิดตัวรับ AirPlay ไม่สำเร็จ: " + ex.Message;
-            if (!autoStart) MessageBox.Show(this, ex.Message, "AirPlay Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            RefreshAirPlayStatus();
-        }
+        catch (Exception ex) { _receiverIssue = "Bonjour: " + ex.Message; }
+        return false;
     }
 
-    private void StopOwnProcess()
+    private static bool IsBonjourInstalled()
     {
         try
         {
-            if (_airplayProcess is { HasExited: false })
+            using var p = Process.Start(new ProcessStartInfo
             {
-                _airplayProcess.CloseMainWindow();
-                if (!_airplayProcess.WaitForExit(1200)) _airplayProcess.Kill(entireProcessTree: true);
+                FileName = "sc.exe", Arguments = "query \"Bonjour Service\"",
+                UseShellExecute = false, CreateNoWindow = true
+            });
+            return p is not null && p.WaitForExit(3000) && p.ExitCode == 0;
+        }
+        catch { return false; }
+    }
+
+    private void ConfigureAirPlayName()
+    {
+        // UxPlay Windows reads whitespace-split arguments.txt. NBSP characters
+        // retain human-readable separation while remaining a single -n value.
+        var name = Regex.Replace(_name, @"\s+", "\u00A0");
+        var cfg = Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.ApplicationData), "leapbtw", "uxplay-windows", "arguments.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(cfg)!);
+        var target = "-n " + name + " -nh";
+        if (!File.Exists(cfg))
+        {
+            File.WriteAllText(cfg, target + Environment.NewLine);
+            return;
+        }
+        var old = File.ReadAllText(cfg).Trim();
+        // Keep unrelated advanced UxPlay options; only replace advertised -n.
+        if (Regex.IsMatch(old, @"(?:^|\s)-n\s+\S+"))
+            old = Regex.Replace(old, @"(?:^|\s)-n\s+\S+", " -n " + name);
+        else old += " -n " + name;
+        if (!Regex.IsMatch(old, @"(?:^|\s)-nh(?:\s|$)"))
+            old += " -nh";
+        var desired = old.Trim() + Environment.NewLine;
+        if (File.ReadAllText(cfg) != desired)
+            File.WriteAllText(cfg, desired);
+    }
+
+    private string LoadRendererPreference()
+    {
+        Directory.CreateDirectory(_configFolder);
+        var config = Path.Combine(_configFolder, "renderer.txt");
+        try
+        {
+            var saved = File.Exists(config) ? File.ReadAllText(config).Trim() : "d3d11";
+            return saved == "auto" ? "auto" : "d3d11";
+        }
+        catch { return "d3d11"; }
+    }
+
+    private void SaveRendererPreference()
+    {
+        Directory.CreateDirectory(_configFolder);
+        File.WriteAllText(Path.Combine(_configFolder, "renderer.txt"), _renderer);
+    }
+
+    private void ApplyNativeRendererSettings()
+    {
+        // The pinned Qt UxPlay launcher picks -vs and -fs from QSettings.
+        // Restore original values on a normal exit to avoid leaving other
+        // independently installed UxPlay installations reconfigured.
+        using var key = Registry.CurrentUser.CreateSubKey(@"Software\leapbtw\uxplay-windows");
+        if (key is null) throw new InvalidOperationException("เขียนค่าตัวเรนเดอร์ UxPlay ไม่ได้");
+        StoreAndSet("renderer_mode", _renderer, RegistryValueKind.String);
+        StoreAndSet("force_fs_enabled", 1, RegistryValueKind.DWord);
+        StoreAndSet("ble_enabled", 0, RegistryValueKind.DWord);
+        void StoreAndSet(string name, object desired, RegistryValueKind kind)
+        {
+            if (!_originalQtSettings.ContainsKey(name))
+            {
+                var existed = key.GetValueNames().Contains(name);
+                var value = existed ? key.GetValue(name) : null;
+                var oldKind = existed ? key.GetValueKind(name) : kind;
+                _originalQtSettings[name] = (value, oldKind, existed);
+            }
+            key.SetValue(name, desired, kind);
+        }
+    }
+
+    private void RestoreQtSettings()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\leapbtw\uxplay-windows");
+            if (key is null) return;
+            foreach (var (name, old) in _originalQtSettings)
+            {
+                if (!old.existed) key.DeleteValue(name, false);
+                else if (old.value is not null) key.SetValue(name, old.value, old.kind);
             }
         }
-        catch { /* Native process may already have exited. */ }
-        finally { _airplayProcess?.Dispose(); _airplayProcess = null; }
+        catch { /* Preserve any operating system restrictions on registry writing. */ }
     }
 
-    private void StopAirPlay()
+    private async Task StartAirPlayAsync(bool recovery = false)
     {
-        _manualAirPlayStop = true;
-        _lastReceiverLaunchUtc = DateTime.MinValue;
-        StopOwnProcess();
-        _receiverIssue = "";
-        RefreshAirPlayStatus();
+        if (_starting || _closing || _engine is { HasExited: false }) return;
+        _starting = true;
+        try
+        {
+            _engineExe = FindEngine();
+            if (_engineExe is null) throw new FileNotFoundException(
+                "ไม่พบ UxPlay/GStreamer โปรดติดตั้งด้วย Setup EXE รุ่นเต็ม");
+            if (!recovery) _restarts = 0;
+            if (!BonjourIsRunning() && !EnsureBonjour())
+                throw new InvalidOperationException("Bonjour ยังไม่พร้อมสำหรับประกาศ AirPlay");
+            // Do not kill or hijack a receiver launched by another application.
+            if (Process.GetProcessesByName("uxplay-windows")
+                .Any(p => { using (p) return !p.HasExited; }))
+                throw new InvalidOperationException(
+                    "มี UxPlay อีกตัวเปิดอยู่ กรุณาปิดแอปรับภาพรุ่นเก่าเพื่อไม่ให้แย่งพอร์ต");
+            ConfigureAirPlayName();
+            ApplyNativeRendererSettings();
+            _lastLaunch = DateTime.UtcNow;
+            _manualStop = false;
+            _video.Reset();
+            _engine?.Dispose();
+            _engine = Process.Start(new ProcessStartInfo
+            {
+                FileName = _engineExe,
+                WorkingDirectory = Path.GetDirectoryName(_engineExe)!,
+                UseShellExecute = true
+            });
+            if (_engine is null) throw new InvalidOperationException("เปิดตัวรับ AirPlay ไม่สำเร็จ");
+            _receiverIssue = "";
+            UpdateNetworkStatus();
+            // A queued continuation avoids blocking fullscreen drawing.
+            await Task.Yield();
+        }
+        catch (Exception ex)
+        {
+            _receiverIssue = ex.Message;
+            _status.Text = ex.Message;
+            WriteDiagnostic("Startup: " + ex.Message);
+        }
+        finally { _starting = false; }
     }
 
-    private static void OpenUri(string uri)
-        => Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+    private void StopOwnEngine()
+    {
+        _video.Reset();
+        try
+        {
+            if (_engine is { HasExited: false })
+            {
+                _engine.CloseMainWindow();
+                if (!_engine.WaitForExit(1100))
+                    _engine.Kill(entireProcessTree: true);
+            }
+        }
+        catch { /* The engine may have exited while disconnecting. */ }
+        finally { _engine?.Dispose(); _engine = null; }
+    }
 
-    private async Task CheckUpdatesAsync(bool quiet)
+    private void WriteDiagnostic(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(_configFolder);
+            File.AppendAllText(Path.Combine(_configFolder, "receiver.log"),
+                DateTimeOffset.Now.ToString("O") + "  " + message + Environment.NewLine);
+        }
+        catch { }
+    }
+
+    private void OnReceiverKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.F1)
+        {
+            var message = _name + Environment.NewLine +
+                VersionText + Environment.NewLine + Environment.NewLine +
+                "เครือข่าย: " + _networkText + Environment.NewLine +
+                "ตัวรับ: " + (_engine is { HasExited: false } ? "ทำงาน" : "ยังไม่พร้อม") +
+                Environment.NewLine + "เรนเดอร์: " + _renderer +
+                Environment.NewLine + "ผู้ส่ง: " + _lastPeerText + Environment.NewLine +
+                "วิดีโอเต็มจอ: " + (_video.IsShowing ? "ใช่" : "ยังไม่เปิด") +
+                Environment.NewLine + Environment.NewLine +
+                "F5 เริ่ม AirPlay ใหม่เมื่อภาพค้าง · F8 สลับ D3D11/Auto" +
+                Environment.NewLine + "Esc ออก";
+            MessageBox.Show(this, message, "สถานะ X-Stage Mirror iOS PC",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            e.Handled = true;
+        }
+        else if (e.KeyCode == Keys.F5)
+        {
+            e.Handled = true;
+            if (MessageBox.Show(this, "เริ่มตัวรับ AirPlay ใหม่หรือไม่? การเชื่อมต่อปัจจุบันจะถูกตัด",
+                "รีสตาร์ต AirPlay", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                StopOwnEngine();
+                _receiverIssue = "";
+                _restarts = 0;
+                _ = StartAirPlayAsync();
+            }
+        }
+        else if (e.KeyCode == Keys.F8)
+        {
+            e.Handled = true;
+            var next = _renderer == "d3d11" ? "auto" : "d3d11";
+            if (MessageBox.Show(this, "เปลี่ยนตัวเรนเดอร์เป็น " + next +
+                    " และเริ่มตัวรับใหม่หรือไม่? การเชื่อมต่อปัจจุบันจะถูกตัด",
+                "เลือกตัวเรนเดอร์", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                _renderer = next;
+                SaveRendererPreference();
+                StopOwnEngine();
+                _restarts = 0;
+                _ = StartAirPlayAsync();
+            }
+        }
+        else if (e.KeyCode == Keys.Escape)
+        {
+            e.Handled = true;
+            if (MessageBox.Show(this, "ออกจาก X-Stage Mirror iOS PC หรือไม่?",
+                "ออกจากแอป", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+                Close();
+        }
+    }
+
+    private async Task CheckUpdatesSilentlyAsync()
     {
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
-            using var response = await client.GetAsync(FeedUrl);
-            response.EnsureSuccessStatusCode();
+            using var response = await client.GetAsync(UpdateFeed);
+            if (!response.IsSuccessStatusCode) return;
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var obj = doc.RootElement;
-            bool available = obj.TryGetProperty("available", out var av) && av.ValueKind == JsonValueKind.True;
-            string version = obj.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
-            _updateStatus.Text = available
-                ? "มีประกาศรุ่น " + version + " (ตรวจสอบรายละเอียดที่ GitHub Releases)"
-                : "ยังไม่มีรุ่นใหม่ที่ผ่านการตรวจสอบเผยแพร่ • " + VersionText;
-            if (available && Version.TryParse(version, out var remote) && (remote > new Version(1, 0, 0) || (remote == new Version(0, 1, 2) &&
-                obj.TryGetProperty("build", out var remoteBuild) && remoteBuild.TryGetInt32(out var build) && build > 1001)))
-            {
-                var responseToUser = MessageBox.Show(this,
-                    "พบประกาศเวอร์ชัน " + version + "\nต้องการเปิด GitHub Releases เพื่อตรวจสอบไฟล์และ SHA-256 หรือไม่?",
-                    "อัปเดต X-Stage Mirror iOS PC", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                if (responseToUser == DialogResult.Yes)
-                    OpenUri("https://github.com/webbase-x/xstage/releases");
-            }
-            else if (!quiet)
-                MessageBox.Show(this, _updateStatus.Text, "X-Stage Mirror iOS PC", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("available", out var a) || a.ValueKind != JsonValueKind.True)
+                return;
+            int build = root.TryGetProperty("build", out var b) && b.TryGetInt32(out int value)
+                ? value : 0;
+            _newUpdate = build > 1002;
+            if (_newUpdate) WriteDiagnostic("New verified preview is published");
         }
-        catch (Exception ex)
-        {
-            if (_closing || IsDisposed) return;
-            _updateStatus.Text = "ตรวจสอบออนไลน์ไม่ได้ • ใช้งานการรับภาพใน LAN ต่อได้";
-            if (!quiet)
-                MessageBox.Show(this, "ไม่สามารถตรวจสอบอัปเดต: " + ex.Message,
-                    "อัปเดต", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
+        catch { /* Never prevent local AirPlay when offline. */ }
     }
 }
