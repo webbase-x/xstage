@@ -1,6 +1,6 @@
 # X-Stage Mirror PC — Windows 10 / 11
 
-**Version 0.1.0 · Build 101 · development candidate, NOT a verified release**
+**Version 0.1.1 · Build 102 · development candidate, NOT a verified release**
 
 A single Windows control application for two distinct receiver technologies:
 
@@ -17,11 +17,11 @@ dotnet publish mirror-pc/XStageMirrorPC.csproj -c Release -r win-x64 --self-cont
 
 .NET 8 Windows Desktop SDK required only to **build**. Published XStageMirrorPC.exe is self-contained. Receiver runtime binaries are separate files under `engine/uxplay-windows/` in the released ZIP; do **not** distribute a GUI-only build as a functional AirPlay receiver.
 
-`.github/workflows/build-xstage-mirror-pc.yml` compiles the Windows EXE, packages the complete portable receiver (leapbtw/uxplay-windows 2.0.0.1736), and verifies its exact filename plus pinned SHA-256 before packaging. On successful builds from `main`, `.github/workflows/publish-xstage-mirror-pc-preview.yml` publishes a **clearly labeled Preview ZIP** containing the EXE and the AirPlay runtime, a SHA-256 file, and a GPLv3 source archive. It activates `downloads/mirror-pc-preview-latest.json` only after a matching GitHub prerelease exists. The X-Stage Apps website chooses a verified stable build first, otherwise the latest preview. Each new release requires an increasing `FileVersion` build number; the workflow will not silently overwrite an older published version. A successful Preview build does **not** prove actual Windows/iPhone/Android compatibility.
+`.github/workflows/build-xstage-mirror-pc.yml` compiles the Windows EXE, packages the complete portable receiver (leapbtw/uxplay-windows 2.0.0.1736), and verifies its exact filename plus pinned SHA-256 before packaging. On successful builds from `main`, `.github/workflows/publish-xstage-mirror-pc-preview.yml` publishes a **clearly labeled Preview ZIP** containing the EXE and the AirPlay runtime, a SHA-256 file, and a GPLv3 source archive. It activates `downloads/mirror-pc-preview-latest.json` only after a matching GitHub prerelease exists. The X-Stage Apps website chooses a verified stable build first, otherwise the latest preview. Each new release requires an increasing `FileVersion` build number; the workflow will not silently overwrite an older published version. The Windows Setup EXE and portable ZIP are both included in each new Preview release after Windows CI verifies DLLs and checksums. The website automatically chooses the Setup EXE for new releases while retaining old ZIP support. A successful Preview build does **not** prove actual Windows/iPhone/Android compatibility. Native Miracast is OS/driver/hardware-specific and cannot be bundled by a third-party installer.
 
 ## Operation
 
-1. Extract the whole candidate ZIP (do not run the exe alone).
+1. **Recommended:** Download `X-Stage-Mirror-PC-v0.1.1-build102-win-x64-Setup.exe` from the X-Stage Apps website and run once. The installer contains the self-contained .NET app and complete AirPlay runtime, including Bonjour's mDNSResponder. Installing the Windows service may request Administrator approval but does not download anything. Portable ZIP is an alternative; extract the whole ZIP, not just the control EXE.
 2. Open `XStageMirrorPC.exe`; the app checks the bundled AirPlay engine locally and reports its status. Start/stop AirPlay using the in-app controls. The sender and Windows PC should share a LAN that allows mDNS and direct traffic. Windows Firewall may ask for consent.
 3. On iPhone/iPad: Control Center > Screen Mirroring > select the advertised receiver name. Third-party DRM-protected content may display black/blank video.
 4. On Android: press "Open Windows Wireless Display"; install/configure the optional Windows feature if the OS requests it. Open Cast / Smart View on an Android device that supports Miracast and select the PC. Google Cast-only Android devices are not automatically compatible.
@@ -40,4 +40,4 @@ dotnet publish mirror-pc/XStageMirrorPC.csproj -c Release -r win-x64 --self-cont
 
 ## Release/update feed
 
-`downloads/mirror-pc-latest.json` remains the stable release feed and defaults to `available: false`. The separate preview feed `downloads/mirror-pc-preview-latest.json` is automatically published after complete CI succeeds, the immutable GitHub prerelease exists, and a GPLv3 source archive and checksums have been uploaded. Users can download the newest Preview via https://webbase-x.github.io/xstage/?app=mirror-pc . The control app itself checks the stable feed for updates but does not silently install updates.
+`downloads/mirror-pc-latest.json` remains the stable release feed and defaults to `available: false`. The separate preview feed `downloads/mirror-pc-preview-latest.json` is automatically published after complete CI succeeds, the immutable GitHub prerelease exists, and a GPLv3 source archive and checksums have been uploaded. Users can download the newest Preview via https://webbase-x.github.io/xstage/?app=mirror-pc . The control app currently checks the preview feed for newer releases and opens the verified release page with user consent, but does not silently install updates.
