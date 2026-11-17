@@ -450,7 +450,7 @@ public sealed class MainForm : Form
             _updateStatus.Text = available
                 ? "มีประกาศรุ่น " + version + " (ตรวจสอบรายละเอียดที่ GitHub Releases)"
                 : "ยังไม่มีรุ่นใหม่ที่ผ่านการตรวจสอบเผยแพร่ • " + VersionText;
-            if (available && Version.TryParse(version, out var remote) && remote > new Version(0, 1, 0))
+            if (available && Version.TryParse(version, out var remote) && remote > new Version(0, 1, 1))
             {
                 var responseToUser = MessageBox.Show(this,
                     "พบประกาศเวอร์ชัน " + version + "\nต้องการเปิด GitHub Releases เพื่อตรวจสอบไฟล์และ SHA-256 หรือไม่?",
