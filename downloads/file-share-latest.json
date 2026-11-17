@@ -4,8 +4,10 @@
   "version": "0.1.0-preview.1",
   "channel": "preview",
   "file": "X-Stage-File-Share-v0.1.0-preview.1.apk",
-  "sha256": "0aba0f2abdfd972eb67a6777e9ed63cdc74af94db5fea325ff818e82d1d9d8f3",
+  "sha256": "fc68e1563bb3f49ba49459dbda87717b574eea957ccaf8a82653c511c31ebc8b",
   "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v0.1.0-preview.1/X-Stage-File-Share-v0.1.0-preview.1.apk",
   "release_url": "https://github.com/webbase-x/xstage/releases/tag/xstage-file-share-v0.1.0-preview.1",
-  "note": "Preview APK. LAN offline supported; Internet P2P best effort and may require TURN on some networks."
+  "note": "Updated APK 2026-11-17: Android receiver prepares target folder, uses compatible free-space check and reports transfer errors to browser. Preview; LAN tested in CI, Internet P2P requires supported network and Android WebView.",
+  "revision": "2026-11-17-android-receive-fix",
+  "source_commit": "bc8964530ae2f2c09b2133ba57861a20b3d8b7b5"
 }
