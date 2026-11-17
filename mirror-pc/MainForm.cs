@@ -271,58 +271,133 @@ public sealed class MainForm : Form
             ? Path.Combine(folder, "uxplay-windows.exe") : null;
     }
 
-    private bool EnsureBonjourService()
+    private static (bool installed, bool running) QueryBonjourService()
     {
-        // mDNSResponder is bundled; nothing is downloaded at first launch.
-        // Service registration is a Windows-wide action, so request consent.
-        bool Installed()
-        {
-            try
-            {
-                using var service = Process.Start(new ProcessStartInfo
-                {
-                    FileName = "sc.exe",
-                    Arguments = "query \"Bonjour Service\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                });
-                return service is not null && service.WaitForExit(2500) && service.ExitCode == 0;
-            }
-            catch { return false; }
-        }
-        if (Installed()) return true;
-        if (_bundledEngine is null) return false;
-        var approval = MessageBox.Show(this,
-            "ยังไม่มี Bonjour Service สำหรับค้นหา AirPlay ในเครือข่าย\n" +
-            "ชุด X-Stage รวมบริการนี้ไว้แล้ว ไม่ต้องดาวน์โหลดเพิ่ม\n\n" +
-            "อนุญาตให้ติดตั้งบริการจากไฟล์ภายในชุดโปรแกรมหรือไม่?\n" +
-            "Windows อาจขอสิทธิ์ผู้ดูแลระบบหนึ่งครั้ง",
-            "เตรียมระบบรับ AirPlay",
-            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-        if (approval != DialogResult.Yes) return false;
         try
         {
-            var exe = Path.Combine(Path.GetDirectoryName(_bundledEngine)!, "mDNSResponder.exe");
-            using var install = Process.Start(new ProcessStartInfo
+            using var check = Process.Start(new ProcessStartInfo
             {
-                FileName = exe,
-                Arguments = "-install",
-                WorkingDirectory = Path.GetDirectoryName(exe)!,
+                FileName = "sc.exe",
+                Arguments = "query \"Bonjour Service\"",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            if (check is null) return (false, false);
+            var output = check.StandardOutput.ReadToEnd();
+            if (!check.WaitForExit(3000) || check.ExitCode != 0) return (false, false);
+            return (true, Regex.IsMatch(output, @"STATE\s*:\s*4\s+RUNNING",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+        }
+        catch { return (false, false); }
+    }
+
+    private bool EnsureBonjourService(bool autoStart = false)
+    {
+        var state = QueryBonjourService();
+        if (state.running) return true;
+        if (autoStart && _recoveryAttempts > 0)
+        {
+            _receiverIssue = "Bonjour Service หยุดทำงาน • เลือกเปิดรับ AirPlay อีกครั้ง";
+            return false; // Never repeatedly prompt for elevation from the recovery timer.
+        }
+        if (_bundledEngine is null) return false;
+        var message = state.installed
+            ? "พบ Bonjour Service แต่ยังไม่ทำงาน\n\nต้องการเริ่มบริการเพื่อให้อุปกรณ์ค้นหาเครื่องรับ AirPlay ได้หรือไม่?\nWindows อาจขออนุญาต Administrator"
+            : "ยังไม่มี Bonjour Service สำหรับประกาศเครื่องรับ AirPlay\nชุด X-Stage มี mDNSResponder อยู่แล้ว ไม่ต้องดาวน์โหลดเพิ่ม\n\nอนุญาตให้ลงทะเบียนบริการนี้โดย Windows Administrator หรือไม่?";
+        if (MessageBox.Show(this, message, "เตรียมการค้นหา AirPlay",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            _receiverIssue = "ยังไม่ได้เปิด Bonjour Service • อุปกรณ์ iOS อาจค้นหาไม่พบ";
+            return false;
+        }
+        try
+        {
+            var engineFolder = Path.GetDirectoryName(_bundledEngine)!;
+            var command = state.installed ? "sc.exe" : Path.Combine(engineFolder, "mDNSResponder.exe");
+            var arguments = state.installed ? "start \"Bonjour Service\"" : "-install";
+            using var setup = Process.Start(new ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = arguments,
+                WorkingDirectory = engineFolder,
                 UseShellExecute = true,
                 Verb = "runas"
             });
-            if (install is null || !install.WaitForExit(30000) || install.ExitCode != 0 || !Installed())
-                throw new InvalidOperationException("Windows ไม่สามารถเปิดใช้งาน Bonjour Service ได้");
-            return true;
+            if (setup is null || !setup.WaitForExit(30000))
+                throw new InvalidOperationException("บริการยังไม่ตอบกลับ");
+            // A service is ready only if running, not merely present in sc.exe.
+            for (var retry = 0; retry < 5; retry++)
+            {
+                if (QueryBonjourService().running) return true;
+                System.Threading.Thread.Sleep(300);
+            }
+            throw new InvalidOperationException("Bonjour Service ยังไม่ได้เริ่มทำงาน");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this,
-                "เปิดใช้งาน Bonjour Service ไม่สำเร็จ: " + ex.Message +
-                "\nกรุณาใช้ Setup EXE แบบเต็มและอนุญาตสิทธิ์ผู้ดูแลระบบ",
-                "AirPlay ไม่พร้อม", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _receiverIssue = "Bonjour Service ไม่พร้อม: " + ex.Message;
+            MessageBox.Show(this, _receiverIssue, "AirPlay Discovery",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
+    }
+
+    private void LoadConfiguredAirPlayName()
+    {
+        var paths = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "uxplay-windows", "arguments.txt"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "leapbtw", "uxplay-windows", "arguments.txt")
+        };
+        foreach (var file in paths)
+        {
+            try
+            {
+                if (!File.Exists(file)) continue;
+                var match = Regex.Match(File.ReadAllText(file), @"(?:^|\s)-n\s+([^\s]+)");
+                if (match.Success) _receiverName.Text = Environment.ExpandEnvironmentVariables(match.Groups[1].Value);
+                return; // Respect a system-wide configuration even without a -n option.
+            }
+            catch (Exception ex) { _receiverIssue = "ไม่สามารถอ่านการตั้งค่า AirPlay: " + ex.Message; }
+        }
+    }
+
+    private void ShowDiscoveryDiagnostics()
+    {
+        _bundledEngine = FindEngine();
+        var service = QueryBonjourService();
+        var receiverAlive = _airplayProcess is { HasExited: false };
+        var report = new System.Text.StringBuilder()
+            .AppendLine("X-Stage Mirror PC " + VersionText)
+            .AppendLine()
+            .AppendLine("AirPlay Engine: " + (_bundledEngine is null ? "ไม่ครบ" : "พบไฟล์ครบ"))
+            .AppendLine("Bonjour Service: " + (service.running ? "กำลังทำงาน" :
+                service.installed ? "ติดตั้งแล้วแต่หยุดทำงาน" : "ไม่พบ"))
+            .AppendLine("ตัวรับ AirPlay: " + (receiverAlive ? "เปิดอยู่ (ยังไม่ยืนยัน mDNS)" : "ยังไม่ได้เปิด"))
+            .AppendLine("ชื่อเครื่องรับ: " + _receiverName.Text.Trim());
+        try
+        {
+            var addresses = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+                    n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                .Take(5).Select(a => a.Address.ToString()).ToArray();
+            report.AppendLine("IPv4 ของ PC: " + (addresses.Length > 0 ?
+                string.Join(", ", addresses) : "ไม่พบการเชื่อมต่อเครือข่าย"));
+        }
+        catch { report.AppendLine("ตรวจสอบ IPv4 ไม่สำเร็จ"); }
+        report.AppendLine()
+            .AppendLine("iOS: ให้ iPhone/iPad และ PC อยู่ LAN เดียวกัน ไม่ใช้ Guest Wi-Fi ที่แยกอุปกรณ์")
+            .AppendLine("หากใช้เครือข่ายที่เชื่อถือได้ ให้ตรวจว่า Windows Firewall อนุญาต AirPlay บน Private")
+            .AppendLine("Android: ต้องรองรับ Miracast และเปิด Wireless Display ของ Windows")
+            .AppendLine("สถานะเปิดโปรเซสไม่ใช่การยืนยันว่าโทรศัพท์มองเห็นเครื่องรับแล้ว");
+        MessageBox.Show(this, report.ToString(), "ตรวจการค้นพบอุปกรณ์",
+            MessageBoxButtons.OK, MessageBoxIcon.Information);
+        RefreshAirPlayStatus();
     }
 
     private void RefreshAirPlayStatus()
@@ -332,72 +407,82 @@ public sealed class MainForm : Form
         _startButton.Enabled = !alive && _bundledEngine is not null;
         _stopButton.Enabled = alive;
         _iosStatus.Text = alive
-            ? "● ตัวรับ AirPlay กำลังทำงาน (ไม่ได้ยืนยันว่ามีผู้ส่งเชื่อมต่อ)"
+            ? "● ตัวรับ AirPlay เปิดอยู่ • ให้ iPhone/iPad ค้นหาชื่อเครื่องรับใน LAN เดียวกัน"
             : _bundledEngine is null
-                ? "● ชุด AirPlay Engine ไม่ครบ • ติดตั้งด้วย X-Stage Mirror PC Setup EXE"
-                : "● พร้อมเริ่มตัวรับ AirPlay";
-        _iosStatus.ForeColor = alive ? Color.FromArgb(120, 235, 165) : _bundledEngine is null ? Color.Orange : Accent;
+                ? "● ชุด AirPlay Engine ไม่ครบ • ใช้ Setup EXE รุ่นเต็ม"
+                : !string.IsNullOrEmpty(_receiverIssue)
+                    ? "● " + _receiverIssue
+                    : "● ยังไม่ได้เปิด AirPlay • กดเปิดรับ AirPlay";
+        _iosStatus.ForeColor = alive ? Color.FromArgb(120, 235, 165)
+            : _bundledEngine is null || !string.IsNullOrEmpty(_receiverIssue) ? Color.Orange : Accent;
     }
 
-    private bool WriteNameSettings(string name)
+    private bool WriteNameSettings(string name, bool autoStart)
     {
-        var systemFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "uxplay-windows", "arguments.txt");
+        var systemFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "uxplay-windows", "arguments.txt");
         if (File.Exists(systemFile))
         {
-            MessageBox.Show(this, "พบการกำหนดค่า UxPlay ระดับเครื่องไว้แล้ว ซึ่งมีลำดับความสำคัญสูงกว่า\nโปรแกรมจะไม่เขียนทับไฟล์ผู้ดูแลระบบ:\n" + systemFile,
-                "ไม่สามารถเปลี่ยนชื่อผ่าน X-Stage ได้", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return true; // Upstream will use its existing machine-wide settings.
+            if (autoStart) return true; // Never modify administrator-managed configuration.
+            var configured = Regex.Match(File.ReadAllText(systemFile), @"(?:^|\s)-n\s+([^\s]+)");
+            if (configured.Success &&
+                string.Equals(configured.Groups[1].Value, name, StringComparison.OrdinalIgnoreCase))
+                return true;
+            MessageBox.Show(this, "พบไฟล์กำหนดค่า AirPlay ระดับเครื่อง ชื่อเครื่องรับถูกควบคุมโดยผู้ดูแลระบบ\n" +
+                systemFile, "ชื่อเครื่องรับ AirPlay", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return false;
         }
         var config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "leapbtw", "uxplay-windows", "arguments.txt");
-        // Upstream splits arguments.txt on spaces without shell quote parsing.
-        // Turn user-entered spaces into hyphens for a valid announced name.
         var advertised = Regex.Replace(name.Trim(), @"\s+", "-");
         var desired = "-n " + advertised + " -nh";
         if (File.Exists(config))
         {
-            string previous = File.ReadAllText(config).Trim();
-            if (previous != desired)
-            {
-                var choice = MessageBox.Show(this,
-                    "พบการตั้งค่าเดิมของ uxplay-windows\n\nการเปลี่ยนชื่อจะเขียนทับ arguments.txt ของผู้ใช้\nต้องการแทนที่การตั้งค่านี้หรือไม่?",
-                    "ยืนยันการเปลี่ยนการตั้งค่า AirPlay", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (choice != DialogResult.Yes) return false;
-            }
-            else return true;
+            var previous = File.ReadAllText(config).Trim();
+            if (previous == desired || autoStart) return true; // Preserve existing advanced options.
+            if (MessageBox.Show(this,
+                "การเปลี่ยนชื่อเครื่องรับจะเขียนทับ arguments.txt เดิมของ UxPlay\n" +
+                "ต้องการแทนที่การตั้งค่าเดิมหรือไม่?", "ยืนยันการเปลี่ยนชื่อ",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return false;
         }
         Directory.CreateDirectory(Path.GetDirectoryName(config)!);
         File.WriteAllText(config, desired + Environment.NewLine);
         return true;
     }
 
-    private void StartAirPlay()
+    private void StartAirPlay(bool autoStart = false)
     {
         try
         {
             if (_airplayProcess is { HasExited: false }) return;
+            if (!autoStart) { _manualAirPlayStop = false; _recoveryAttempts = 0; }
             _bundledEngine = FindEngine();
             if (_bundledEngine is null)
-                throw new FileNotFoundException("แพ็กเกจนี้ไม่มีตัวรับ AirPlay แบบ portable กรุณาใช้ไฟล์ ZIP ที่ผ่านการทดสอบและมีโฟลเดอร์ engine ครบถ้วน");
-            string name = _receiverName.Text.Trim();
-            // Avoid options injection or control characters in arguments.txt.
-            if (name.Length is < 1 or > 55 || !Regex.IsMatch(name, @"^[\p{L}\p{N} _().-]+$"))
-                throw new InvalidOperationException("ชื่อเครื่องรับต้องยาว 1–55 ตัวอักษร และใช้เฉพาะตัวอักษร ตัวเลข เว้นวรรค _ ( ) . -");
-            if (!WriteNameSettings(name)) return;
-            if (!EnsureBonjourService()) return;
+                throw new FileNotFoundException("AirPlay Engine ไม่ครบ กรุณาติดตั้งด้วย Setup EXE รุ่นเต็ม");
+            var name = _receiverName.Text.Trim();
+            if (name.Length is < 1 or > 55 ||
+                !Regex.IsMatch(name, @"^[\p{L}\p{N} _().-]+$"))
+                throw new InvalidOperationException("ชื่อเครื่องรับต้องเป็นตัวอักษร/ตัวเลข ความยาว 1–55 ตัว");
+            if (!WriteNameSettings(name, autoStart)) return;
+            if (!EnsureBonjourService(autoStart)) { RefreshAirPlayStatus(); return; }
             _receiverName.Text = Regex.Replace(name, @"\s+", "-");
+            _lastReceiverLaunchUtc = DateTime.UtcNow;
+            _airplayProcess?.Dispose();
             _airplayProcess = Process.Start(new ProcessStartInfo
             {
                 FileName = _bundledEngine,
                 WorkingDirectory = Path.GetDirectoryName(_bundledEngine)!,
                 UseShellExecute = true
             });
+            _receiverIssue = _airplayProcess is null ? "ไม่สามารถเริ่ม AirPlay Engine" : "";
             RefreshAirPlayStatus();
         }
         catch (Exception ex)
         {
-            _iosStatus.Text = "เปิดตัวรับ AirPlay ไม่สำเร็จ";
-            MessageBox.Show(this, ex.Message, "AirPlay Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _receiverIssue = "เปิดตัวรับ AirPlay ไม่สำเร็จ: " + ex.Message;
+            if (!autoStart) MessageBox.Show(this, ex.Message, "AirPlay Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
             RefreshAirPlayStatus();
         }
     }
@@ -408,18 +493,20 @@ public sealed class MainForm : Form
         {
             if (_airplayProcess is { HasExited: false })
             {
-                // Stop only the process started by this control app, not other Windows receivers.
                 _airplayProcess.CloseMainWindow();
                 if (!_airplayProcess.WaitForExit(1200)) _airplayProcess.Kill(entireProcessTree: true);
             }
         }
-        catch { /* Process may have exited or may deny termination. */ }
+        catch { /* Native process may already have exited. */ }
         finally { _airplayProcess?.Dispose(); _airplayProcess = null; }
     }
 
     private void StopAirPlay()
     {
+        _manualAirPlayStop = true;
+        _lastReceiverLaunchUtc = DateTime.MinValue;
         StopOwnProcess();
+        _receiverIssue = "";
         RefreshAirPlayStatus();
     }
 
