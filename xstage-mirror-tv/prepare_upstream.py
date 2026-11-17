@@ -99,10 +99,11 @@ substitute(overview, needle, replacement)
 # The full, user-selected name is the visible main-page headline, not a
 # secondary Settings-only value. Keep brand in the app label and launcher.
 substitute(overview,
-           'text = stringResource(R.string.app_name),\n'
-           '                                 style = MaterialTheme.typography.displaySmall,',
-           'text = serverName,\n'
-           '                                 style = MaterialTheme.typography.headlineMedium,')
+           'text = stringResource(R.string.app_name),',
+           'text = serverName,')
+substitute(overview,
+           'style = MaterialTheme.typography.displaySmall,',
+           'style = MaterialTheme.typography.headlineMedium,')
 overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
 (ui / "ReceiverSetupQr.kt").write_text(overlay.read_text(encoding="utf-8"), encoding="utf-8")
 
