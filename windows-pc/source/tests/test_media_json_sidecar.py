@@ -65,6 +65,21 @@ class MediaJsonTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     timed_json_lyrics(doc)
 
+    def test_karaoke_pc_imports_midi_plus_json_artist_without_embedded_tags(self):
+        from karaoke.ingest import Inspector
+        midi = self.folder / "00001.mid"
+        # Valid SMF format-0 file with one end-of-track event, no @T metadata.
+        header = b"MThd" + (6).to_bytes(4, "big")
+        header += (0).to_bytes(2, "big") + (1).to_bytes(2, "big")
+        header += (480).to_bytes(2, "big")
+        track = b"\x00\xff\x2f\x00"
+        midi.write_bytes(header + b"MTrk" + len(track).to_bytes(4, "big") + track)
+        self.write_json("00001.json", self.document())
+        record, warnings = Inspector().inspect(midi)
+        self.assertEqual(record["title"], "ชื่อเพลงจริง")
+        self.assertEqual(record["artist"], "ศิลปินจริง")
+        self.assertEqual(record["first_lyric"], "ร้องเพลง ต่อไป")
+
     def test_json_size_limit(self):
         file = self.folder / "00001.json"
         with file.open("wb") as target:
