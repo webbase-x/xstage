@@ -21,8 +21,8 @@ if ROOT is None or not (ROOT / "LICENSE").is_file():
 APP = ROOT / "app"
 PKG = "com.webbasex.xstagemirror.tv"
 NAME = "X-Stage Mirror TV"
-VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.3")
-BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "105")
+VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.4")
+BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "106")
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) or not BUILD.isdecimal() or int(BUILD) <= 0:
     raise SystemExit("Invalid Mirror TV release version/build")
 
@@ -45,7 +45,7 @@ with gradle.open("a", encoding="utf-8") as out:
 prefs = APP / "src/main/kotlin/app/airshow/tv/Prefs.kt"
 substitute(prefs,
            'val SERVER_NAME = str("server_name", "AirShow", restart = true)',
-           'val SERVER_NAME = str("server_name", "X-Stage Mirror TV", restart = true) { it.isNotBlank() && it.length <= 64 }')
+           'val SERVER_NAME = str("server_name", "X-Stage Mirror TV", restart = true) { ReceiverNamePolicy.isValid(it) }')
 substitute(prefs, 'val ALLOW_NEW_CONN = bool("allow_new_conn", true, restart = true)',
            'val ALLOW_NEW_CONN = bool("allow_new_conn", false, restart = true)')
 assert 'val REQUIRE_PIN = bool("require_pin", false' in prefs.read_text()
@@ -91,9 +91,18 @@ needle = '''stringResource(R.string.idle_hint, serverName)
                                 textAlign = TextAlign.Center
                             )'''
 replacement = needle + '''
+                            Spacer(Modifier.height(10.dp))
+                            ReceiverNameEditor(viewModel, canEdit = connections == 0)
                             Spacer(Modifier.height(12.dp))
                             ReceiverSetupQr(serverName)'''
 substitute(overview, needle, replacement)
+# The full, user-selected name is the visible main-page headline, not a
+# secondary Settings-only value. Keep brand in the app label and launcher.
+substitute(overview,
+           'text = stringResource(R.string.app_name),\n'
+           '                                 style = MaterialTheme.typography.displaySmall,',
+           'text = serverName,\n'
+           '                                 style = MaterialTheme.typography.headlineMedium,')
 overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
 (ui / "ReceiverSetupQr.kt").write_text(overlay.read_text(encoding="utf-8"), encoding="utf-8")
 
@@ -102,6 +111,13 @@ overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
 # and unknown-source permission are required.
 updater = Path(__file__).resolve().parent / "MirrorUpdateManager.kt"
 pkg_dir = APP / "src/main/kotlin/app/airshow/tv"
+for filename in ("ReceiverNamePolicy.kt",):
+    (pkg_dir / filename).write_text(
+        (Path(__file__).resolve().parent / filename).read_text(encoding="utf-8"),
+        encoding="utf-8")
+(ui / "ReceiverNameEditor.kt").write_text(
+    (Path(__file__).resolve().parent / "ReceiverNameEditor.kt").read_text(encoding="utf-8"),
+    encoding="utf-8")
 (pkg_dir / "MirrorUpdateManager.kt").write_text(updater.read_text(encoding="utf-8"), encoding="utf-8")
 cleanup = Path(__file__).resolve().parent / "MirrorUpdateCleanup.kt"
 (pkg_dir / "MirrorUpdateCleanup.kt").write_text(cleanup.read_text(encoding="utf-8"), encoding="utf-8")
@@ -113,6 +129,8 @@ substitute(activity,
            '    private lateinit var mirrorUpdates: MirrorUpdateManager')
 substitute(activity,
            '        enableEdgeToEdge()',
+           '        // Preserve older custom receiver names as a suffix.\n'
+           '        ReceiverNamePolicy.migratePreviousName(this)\n'
            '        enableEdgeToEdge()\n'
            '        // Remove only downloaded APKs whose build is already installed.\n'
            '        MirrorUpdateCleanup.purgeInstalled(this)\n'
@@ -132,6 +150,16 @@ substitute(activity,
            '        mirrorUpdates.close()')
 
 settings = ui / "SettingsScreen.kt"
+substitute(settings,
+           '    val serverName by viewModel.pref(Prefs.SERVER_NAME).collectAsState()',
+           '    val activeConnections by viewModel.connectionCount.collectAsState()')
+substitute(settings,
+           '        SettingTextField(\n'
+           '            label = stringResource(R.string.setting_server_name),\n'
+           '            value = serverName,\n'
+           '            onCommit = { viewModel.set(Prefs.SERVER_NAME, it) }\n'
+           '        )',
+           '        ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)')
 substitute(settings,
            'fun SettingsScreen(viewModel: MainViewModel) {',
            'fun SettingsScreen(viewModel: MainViewModel) {\n'

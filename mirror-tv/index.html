@@ -53,19 +53,34 @@ document.getElementById("mirror-refresh-window").addEventListener("click",()=>wi
 (async()=>{
   const status=document.getElementById("mirror-install-status");
   const link=document.getElementById("mirror-download-direct");
+  const backup=document.querySelector(".mirror-install .install-backup");
   try{
     const reply=await fetch("./test-latest.json",{cache:"no-store",credentials:"omit"});
     if(!reply.ok)throw Error("manifest "+reply.status);
     const data=await reply.json();
-    const name="X-Stage-Mirror-TV-test-v0.2.3-build105.apk";
-    if(data.available===true&&data.direct_download_available===true&&
-       data.channel==="test-preview"&&data.file===name&&data.direct_download_file===name&&
-       /^[a-f0-9]{64}$/i.test(data.sha256||"")&&data.direct_download_sha256===data.sha256&&
-       data.direct_download_url==="https://webbase-x.github.io/xstage/downloads/"+name){
+    const filename=data.file;
+    const valid=data.available===true&&data.channel==="test-preview"&&
+      /^X-Stage-Mirror-TV-test-v\d+\.\d+\.\d+-build\d+\.apk$/.test(filename||"")&&
+      /^[a-f0-9]{64}$/i.test(data.sha256||"");
+    if(!valid)throw Error("APK metadata is unavailable");
+    const release="https://github.com/webbase-x/xstage/releases/download/";
+    if(typeof data.download_url==="string"&&data.download_url.startsWith(release)&&
+        data.download_url.endsWith("/"+filename))backup.href=data.download_url;
+    const direct=data.direct_download_available===true&&
+      data.direct_download_file===filename&&
+      data.direct_download_sha256===data.sha256&&
+      data.direct_download_url==="https://webbase-x.github.io/xstage/downloads/"+filename;
+    if(direct){
+      link.href="../downloads/"+encodeURIComponent(filename);
+      link.setAttribute("download",filename);
       link.hidden=false;
-      status.textContent="APK v0.2.3 (Build 105) พร้อมดาวน์โหลดตรงจากเว็บไซต์ X-Stage";
-    }else status.textContent="ยังไม่มี APK บนเว็บไซต์โดยตรง กรุณาใช้ลิงก์สำรองด้านล่าง";
-  }catch{status.textContent="ตรวจสอบไฟล์ APK ไม่สำเร็จ กรุณาใช้ลิงก์สำรองด้านล่าง";}
+      status.textContent="APK v"+data.version+" (Build "+data.build+") พร้อมดาวน์โหลดจาก X-Stage";
+    }else{
+      status.textContent="APK v"+data.version+" มีที่ GitHub Releases กรุณาใช้ลิงก์สำรองด้านล่าง";
+    }
+  }catch{
+    status.textContent="ตรวจสอบไฟล์ APK ไม่สำเร็จ กรุณาใช้ลิงก์สำรองด้านล่าง";
+  }
 })();
 const candidate = new URLSearchParams(location.search).get("receiver");
 if(candidate && candidate.trim().length > 0 && candidate.length <= 64)

@@ -1,107 +1,19 @@
-name: Publish verified Mirror TV APK on X-Stage website (TV direct download)
+name: Mirror TV legacy direct APK publisher (superseded)
 
+# Archived entry point. Since v0.2.4 every successful Mirror TV build publishes
+# the verified test APK, corresponding GPLv3 source, and direct X-Stage download
+# in one transaction. Never re-publish old v0.2.3 metadata over a newer build.
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/publish-mirror-tv-direct-apk.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: xstage-mirror-direct-download
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  mirror-tv-direct:
+  superseded:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      GH_TOKEN: ${{ github.token }}
-      MIRROR_TAG: "xstage-mirror-tv-test-v0.2.3-build105-6e12e392"
-      MIRROR_APK: "X-Stage-Mirror-TV-test-v0.2.3-build105.apk"
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download existing immutable Mirror TV APK release
-        shell: bash
+      - name: Explain current release workflow
         run: |
-          set -euo pipefail
-          mkdir -p dist
-          gh release download "$MIRROR_TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern "$MIRROR_APK" --dir dist
-          test -s "dist/$MIRROR_APK"
-          python3 - <<'PY'
-          import hashlib, json, os, pathlib, re, zipfile
-          source = json.loads(pathlib.Path("mirror-tv/test-latest.json").read_text(encoding="utf-8"))
-          filename = os.environ["MIRROR_APK"]
-          path = pathlib.Path("dist") / filename
-          assert source["channel"] == "test-preview"
-          assert source["available"] is True
-          assert source["version"] == "0.2.3" and source["build"] == 105
-          assert source["file"] == filename
-          assert source["download_url"] == (
-              "https://github.com/webbase-x/xstage/releases/download/"
-              + os.environ["MIRROR_TAG"] + "/" + filename)
-          assert re.fullmatch(r"[0-9a-f]{64}", source["sha256"])
-          actual = hashlib.sha256(path.read_bytes()).hexdigest()
-          assert actual == source["sha256"], "Mirror TV APK hash does not match published release"
-          assert path.stat().st_size > 2_000_000, "APK size unexpectedly small"
-          with zipfile.ZipFile(path) as archive:
-              assert archive.testzip() is None, "Mirror APK ZIP integrity check failed"
-              assert "AndroidManifest.xml" in archive.namelist(), "Not a valid Android APK"
-          print("PASS verified APK SHA-256:", actual)
-          PY
-
-      - name: Publish same-origin APK, checksum and manifest for Android TV browsers
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git switch -C main origin/main
-          mkdir -p downloads
-          cp "dist/$MIRROR_APK" "downloads/$MIRROR_APK"
-          python3 - <<'PY'
-          import hashlib, json, os, pathlib
-          filename = os.environ["MIRROR_APK"]
-          direct = pathlib.Path("downloads") / filename
-          data_path = pathlib.Path("mirror-tv/test-latest.json")
-          data = json.loads(data_path.read_text(encoding="utf-8"))
-          actual = hashlib.sha256(direct.read_bytes()).hexdigest()
-          assert data["channel"] == "test-preview" and data["file"] == filename
-          assert data["sha256"] == actual, "Published APK no longer matches the current release metadata"
-          (pathlib.Path("downloads") / (filename + ".sha256")).write_text(
-              f"{actual}  {filename}\n", encoding="ascii")
-          data["direct_download_available"] = True
-          data["direct_download_file"] = filename
-          data["direct_download_url"] = (
-              "https://webbase-x.github.io/xstage/downloads/" + filename)
-          data["direct_download_sha256"] = actual
-          data["note"] = (
-              "Public same-origin APK for Android TV/TrueID browsers. "
-              "Debug-signed TEST preview only (not Google Play); production auto-update disabled. "
-              "Corresponding GPLv3 source remains attached to the public GitHub release.")
-          data_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          PY
-          git add "downloads/$MIRROR_APK" "downloads/$MIRROR_APK.sha256" mirror-tv/test-latest.json
-          if git diff --cached --quiet; then
-            echo "APK and manifest already match"
-            exit 0
-          fi
-          git commit -m "build(mirror-tv): publish direct website APK with SHA-256 [skip ci]"
-          for attempt in 1 2 3 4; do
-            git fetch origin main
-            if ! git rebase origin/main; then
-              echo "::error::Mirror TV download changed concurrently; refuse forced overwrite."
-              exit 1
-            fi
-            if git push origin HEAD:main; then
-              echo "Direct Mirror TV APK is ready for X-Stage Pages deployment."
-              exit 0
-            fi
-            if [ "$attempt" -eq 4 ]; then exit 1; fi
-          done
+          echo "Mirror TV direct APK files are now published by build-xstage-mirror-tv.yml."
+          echo "This retired task does not alter binaries or manifests."

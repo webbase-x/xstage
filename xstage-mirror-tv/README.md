@@ -27,7 +27,8 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 - Video GL surface prewarmed on receiver start; diagnostics log elapsed receiver
   startup, connection-to-video-size, and connection-to-first-video-packet times.
 - iOS Control Center > Screen Mirroring discovers the configurable receiver name.
-- Default receiver name: **X-Stage Mirror TV**; change it in the receiver's Settings.
+- Default receiver name: **X-Stage Mirror TV**. The brand prefix is fixed. On the **Overview (first screen)** select **✎ เปลี่ยนชื่ออุปกรณ์**, type an optional suffix such as **ห้องประชุม** or **TrueID ห้องนั่งเล่น**, review the preview, and select **บันทึกชื่อ**. The full name (for example, **X-Stage Mirror TV ห้องประชุม**) appears on the first screen, in iPhone/iPad Screen Mirroring discovery, and in the QR setup guide. Settings offers the same editor.
+- Suffix is limited to keep the entire receiver name within 64 characters. An empty suffix restores **X-Stage Mirror TV**. The new name persists across app restarts and a normal restart of AirPlay discovery applies the change. Rename is disabled while a sender is connected to avoid interrupting an active mirroring session. Older free-form receiver names are migrated into the suffix on first launch.
 - Automatically starts receiving on launch/boot (subject to Android background restrictions).
 - No receiver PIN by default; existing iOS consent to start screen sharing still applies.
 - One sender at a time by default: incoming senders cannot silently preempt a session.
@@ -100,7 +101,7 @@ Keep the GPLv3 and upstream attribution when redistributing modified binaries.
 2. Open **X-Stage Mirror TV**; allow Local Network access if requested.
 3. Connect iPhone and TV to the same LAN (no guest network / AP isolation).
 4. On iPhone: Control Center > Screen Mirroring > select the receiver's displayed name.
-5. Use Settings on TV to rename the receiver; wait for its AirPlay advertisement to restart.
+5. On the receiver’s first screen select **✎ เปลี่ยนชื่ออุปกรณ์**, enter only the suffix, then **บันทึกชื่อ**. After the announcement restarts, use the new name from the iOS list. When a sender is active, disconnect before editing.
 6. Check audio/video sync, portrait/landscape, reboot autostart, disconnect/reconnect.
 7. For timing diagnostics, enable Settings > Developer options > benchmark log
    and capture logcat from the physical TV box. For example:

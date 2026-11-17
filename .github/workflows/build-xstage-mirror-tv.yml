@@ -132,9 +132,17 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git switch -C main origin/main
+          # The verified test APK remains in dist after switching branches.
+          # Publish this exact binary on Pages for TrueID/Android TV browsers
+          # which cannot follow external GitHub Releases redirects.
+          mkdir -p downloads
+          cp "dist/$APK_FILE" "downloads/$APK_FILE"
           python3 - <<'PY'
-          import json,os
+          import json,os,hashlib
           from pathlib import Path
+          binary=Path("downloads")/os.environ["APK_FILE"]
+          actual=hashlib.sha256(binary.read_bytes()).hexdigest()
+          if actual!=os.environ["SHA256"]: raise SystemExit("Direct APK SHA-256 mismatch")
           data={
             "channel":"test-preview",
             "available":True,"name":"X-Stage Mirror TV Test APK",
@@ -144,9 +152,17 @@ jobs:
             "download_url":"https://github.com/webbase-x/xstage/releases/download/"+os.environ["TAG"]+"/"+os.environ["APK_FILE"],
             "note":"Debug-signed test APK. NOT a production-signed release. A previous build may need removal if the debug signing certificate changes. In-app automatic updates are disabled for this channel."
           }
+          data.update({
+            "direct_download_available":True,
+            "direct_download_file":os.environ["APK_FILE"],
+            "direct_download_sha256":actual,
+            "direct_download_url":"https://webbase-x.github.io/xstage/downloads/"+os.environ["APK_FILE"]
+          })
           Path("mirror-tv/test-latest.json").write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+          (Path("downloads")/(os.environ["APK_FILE"]+".sha256")).write_text(
+            actual+"  "+os.environ["APK_FILE"]+"\n",encoding="ascii")
           PY
-          git add mirror-tv/test-latest.json
+          git add mirror-tv/test-latest.json "downloads/$APK_FILE" "downloads/$APK_FILE.sha256"
           if git diff --cached --quiet; then
             echo "No preview feed changes"
           else

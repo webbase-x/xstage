@@ -16,6 +16,21 @@ assert 'applicationId = "com.webbasex.xstagemirror.tv"' in gradle
 assert 'buildConfig = true' in gradle
 assert "zxing:core:3.5.3" in gradle
 assert 'str("server_name", "X-Stage Mirror TV"' in prefs
+assert 'ReceiverNamePolicy.isValid(it)' in prefs
+policy = (app / "src/main/kotlin/app/airshow/tv/ReceiverNamePolicy.kt").read_text()
+editor = (app / "src/main/kotlin/app/airshow/tv/ui/ReceiverNameEditor.kt").read_text()
+assert 'const val PREFIX = "X-Stage Mirror TV"' in policy
+assert 'const val MAX_NAME_LENGTH = 64' in policy
+assert 'fun migratePreviousName(context: Context)' in policy
+assert 'prefs.edit().putString(Prefs.SERVER_NAME.key, migrated).apply()' in policy
+assert 'fromSuffix(suffixDraft)' in editor
+assert 'Text("บันทึกชื่อ")' in editor
+assert 'viewModel.set(Prefs.SERVER_NAME, namePreview)' in editor
+assert 'enabled = canEdit' in editor
+assert 'ReceiverNameEditor(viewModel, canEdit = connections == 0)' in ui
+assert 'text = serverName,' in ui
+assert 'ReceiverNamePolicy.migratePreviousName(this)' in (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
+
 assert 'bool("require_pin", false' in prefs
 assert 'bool("allow_new_conn", false' in prefs
 assert 'bool("boot_auto_start", true' in prefs
@@ -55,6 +70,9 @@ assert "mirrorUpdates.checkOnLaunch()" in activity
 assert "mirrorUpdates.onResume()" in activity
 assert "mirrorUpdates.close()" in activity
 assert "checkMirrorUpdateNow" in settings
+assert "ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)" in settings
+assert 'label = stringResource(R.string.setting_server_name)' not in settings
+
 assert "AUTO Performance" in settings
 assert "ลื่นไหล 720p" not in settings
 quality = (app / "src/main/kotlin/app/airshow/tv/service/MirrorAutoQuality.kt").read_text()
@@ -84,7 +102,7 @@ assert "https://webbase-x.github.io/xstage/mirror-tv/latest.json" in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 105' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 106' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()

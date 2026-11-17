@@ -139,10 +139,34 @@ assert.ok(storefrontScript.includes('if(id==="mirror-tv"&&appInfo[id].testManife
           'Mirror TV test APK should still be discoverable when production feed fails');
 assert.ok(read('mirror-tv/index.html').includes('id="mirror-download-direct"'),
           'Mirror TV connection guide must provide a direct install button');
-assert.ok(read('.github/workflows/publish-mirror-tv-direct-apk.yml').includes('source["sha256"]')&&
-          read('.github/workflows/publish-mirror-tv-direct-apk.yml').includes('gh release download')&&
-          read('.github/workflows/publish-mirror-tv-direct-apk.yml').includes('git add'),
-          'Mirror TV must copy an already SHA256-verified APK into the hosted download directory');
+const mirrorBuilder=read('.github/workflows/build-xstage-mirror-tv.yml');
+assert.ok(mirrorBuilder.includes('gh release create')&&
+          mirrorBuilder.includes('actual!=os.environ["SHA256"]')&&
+          mirrorBuilder.includes('direct_download_available')&&
+          mirrorBuilder.includes('git add mirror-tv/test-latest.json "downloads/$APK_FILE"'),
+          'Every new Mirror TV APK must be verified and published directly on X-Stage Pages');
+assert.ok(!read('.github/workflows/publish-mirror-tv-direct-apk.yml').includes('gh release download'),
+          'Legacy standalone publisher must not re-publish an obsolete Mirror TV APK');
+const receiverPolicy=read('xstage-mirror-tv/ReceiverNamePolicy.kt');
+const receiverEditor=read('xstage-mirror-tv/ReceiverNameEditor.kt');
+const receiverBuild=read('xstage-mirror-tv/prepare_upstream.py');
+const receiverRecipe=read('xstage-mirror-tv/test_build_recipe.py');
+assert.ok(receiverPolicy.includes('const val PREFIX = "X-Stage Mirror TV"')&&
+          receiverPolicy.includes('fun migratePreviousName(context: Context)')&&
+          receiverPolicy.includes('fun fromSuffix(rawSuffix: String)'),
+          'Mirror TV must retain the fixed brand prefix and preserve previously saved names');
+assert.ok(receiverEditor.includes('เปลี่ยนชื่ออุปกรณ์')&&
+          receiverEditor.includes('namePreview')&&
+          receiverEditor.includes('viewModel.set(Prefs.SERVER_NAME, namePreview)')&&
+          receiverEditor.includes('enabled = canEdit'),
+          'Mirror TV overview and Settings must provide a safe save-only suffix editor');
+assert.ok(receiverBuild.includes('ReceiverNameEditor(viewModel, canEdit = connections == 0)')&&
+          receiverBuild.includes('ReceiverNamePolicy.migratePreviousName(this)')&&
+          receiverBuild.includes('ReceiverNamePolicy.isValid(it)')&&
+          receiverRecipe.includes('ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)'),
+          'The Android build must wire naming, persistence and AirPlay discovery consistently');
+assert.ok(receiverBuild.includes('"0.2.4"')&&receiverBuild.includes('"106"'),
+          'The renamed Mirror receiver must be a new installable APK build, never overwrite v0.2.3');
 if(mirrorTest.direct_download_available===true){
   const name=mirrorTest.direct_download_file;
   assert.match(name,/^X-Stage-Mirror-TV-test-v\d+\.\d+\.\d+-build\d+\.apk$/);
