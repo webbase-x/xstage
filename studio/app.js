@@ -3431,6 +3431,7 @@
   // Duplicate media only: raw-byte equality, never merge lyrics or a catalog.
   // All file selection is explicit; the first verified copy is never offered.
   const duplicateSelected = new Set();
+  const duplicateKeepers = new Map();
   let duplicateScanId = '';
   let duplicatePageIndex = 0;
   let duplicatePageRows = [];
@@ -3464,6 +3465,7 @@
       duplicatePageRows = [];
       duplicatePageCount = 0;
       duplicateSelected.clear();
+      duplicateKeepers.clear();
       $('dup-summary').textContent = 'ยังไม่มีผลตรวจ · กดตรวจเพลงซ้ำก่อน';
       $('dup-page').textContent = 'หน้า 0/0';
       duplicateUpdateButtons();
@@ -3471,6 +3473,7 @@
     }
     if (report.scanId !== duplicateScanId) {
       duplicateSelected.clear();
+      duplicateKeepers.clear();
       duplicateScanId = report.scanId;
     }
     duplicatePageCount = report.groupCount || 0;
@@ -3491,6 +3494,8 @@
       root.appendChild(p);
     }
     for (const group of duplicatePageRows) {
+      const keeperId = duplicateKeepers.get(group.id) ||
+        group.files.find(file => file.keep)?.id || group.files[0]?.id;
       const card = document.createElement('section');
       card.className = 'duplicate-group';
       const header = document.createElement('strong');
@@ -3503,11 +3508,23 @@
       for (const file of group.files) {
         const label = document.createElement('label');
         label.className = 'duplicate-file';
+        const retain = document.createElement('input');
+        retain.type = 'radio';
+        retain.name = 'dup-keep-' + group.id;
+        retain.checked = file.id === keeperId;
+        retain.disabled = busy;
+        retain.title = 'เก็บไฟล์นี้เป็นต้นฉบับ · ' + file.extension;
+        retain.setAttribute('aria-label', 'เก็บไฟล์นี้ ' + file.path);
+        retain.addEventListener('change', () => {
+          duplicateKeepers.set(group.id, file.id);
+          duplicateSelected.delete(file.id);
+          duplicateRender(report);
+        });
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = duplicateSelected.has(file.id);
+        checkbox.checked = duplicateSelected.has(file.id) && file.id !== keeperId;
         checkbox.dataset.duplicateId = file.id;
-        checkbox.disabled = file.keep || file.protected || busy;
+        checkbox.disabled = file.id === keeperId || file.protected || busy;
         checkbox.setAttribute('aria-label', 'เลือกไฟล์ซ้ำ ' + file.path);
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) {
@@ -3526,9 +3543,10 @@
         name.className = 'duplicate-file-path';
         name.textContent = file.path;
         const hint = document.createElement('small');
-        hint.textContent = file.keep ? 'ไฟล์หลัก · เก็บไว้' :
-          file.protected ? 'อยู่ใน XStageSong · ป้องกันการย้าย/ลบ' : 'ไฟล์สำเนา · เลือกได้';
-        label.append(checkbox, name, hint);
+        hint.textContent = file.id === keeperId ? 'เก็บไฟล์นี้ (' + file.extension + ')' :
+          file.protected ? 'XStageSong · ห้ามย้าย/ลบ' :
+          'สำเนา · เลือกย้าย/ลบ (' + file.extension + ')';
+        label.append(retain, checkbox, name, hint);
         card.appendChild(label);
       }
       root.appendChild(card);
@@ -3539,7 +3557,8 @@
   async function duplicateLoad() {
     try {
       const result = await api('/api/duplicates?offset=' +
-        (duplicatePageIndex * DUPLICATE_PAGE_SIZE) + '&limit=' + DUPLICATE_PAGE_SIZE);
+        (duplicatePageIndex * DUPLICATE_PAGE_SIZE) + '&limit=' + DUPLICATE_PAGE_SIZE +
+        '&prefer=' + encodeURIComponent($('dup-prefer-type').value));
       duplicateRender(result);
     } catch(error) {
       message('อ่านผลตรวจเพลงซ้ำไม่สำเร็จ: ' + error.message);
