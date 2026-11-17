@@ -19,6 +19,54 @@ from pathlib import Path
 CATALOG_SCHEMA = 1
 JOURNAL_NAME = ".build-journal.jsonl"
 
+# A publisher name, a numeric filename and an empty tag are not an artist or
+# song title. These identities go into both Lyrics JSON and Karaoke catalogs.
+_UNKNOWN_IDENTITY = {
+    "x-stage karaoke", "xstage karaoke", "x-stage song studio",
+    "xstage song studio", "unknown", "ไม่ทราบ", "ไม่ระบุ",
+    "ไม่ระบุชื่อเพลง", "ไม่ระบุศิลปิน",
+}
+
+
+def lyrics_identity(document: dict, code: str = "") -> tuple[str, str]:
+    """Resolve actual song/artist tags in a timed JSON or LRC document.
+
+    Prefer the user's explicit top-level JSON fields, then original NCN/KAR
+    metadata, then [ti:]/[ar:] headers in rawLrc. Never derive identities
+    from the generated code, file stem, or program/publisher string.
+    """
+    if not isinstance(document, dict):
+        return "", ""
+    meta = document.get("metadata")
+    meta = meta if isinstance(meta, dict) else {}
+    lrc = {}
+    raw = document.get("rawLrc")
+    if isinstance(raw, str):
+        for line in raw.splitlines()[:40]:
+            match = re.match(r"^\[(ti|title|ar|artist):([^\]\r\n]*)\]", line.strip(), re.I)
+            if match:
+                key = "title" if match.group(1).lower() in ("ti", "title") else "artist"
+                if key not in lrc and match.group(2).strip():
+                    lrc[key] = match.group(2).strip()
+
+    def verified(value, is_title=False):
+        if not isinstance(value, str):
+            return ""
+        clean = value.strip()[:200]
+        if not clean or clean.casefold() in _UNKNOWN_IDENTITY:
+            return ""
+        if is_title and code and clean.casefold() == str(code).strip().casefold():
+            return ""
+        return clean
+
+    title = (verified(document.get("title"), True)
+             or verified(meta.get("title"), True)
+             or verified(lrc.get("title"), True))
+    artist = (verified(document.get("artist"))
+              or verified(meta.get("artist"))
+              or verified(lrc.get("artist")))
+    return title, artist
+
 def canonical_source_path(path: str | Path) -> str:
     """Stable identity across restarts on Windows (including case-only changes)."""
     return str(Path(path).expanduser().resolve()).replace("\\", "/").casefold()
@@ -241,13 +289,20 @@ def lrc_to_json(text: str, code: str) -> dict:
                     "duration": round(max(0., finish-cue), 4)
                 })
             line["syllables"] = syllables
-    return {
+    document = {
         "schemaVersion": 1,
         "songCode": code,
         "audioOffsetMs": offset_ms,
         "lines": lines,
         "rawLrc": text,
     }
+    # LRC title/artist headers are catalog metadata, not lyric lines.
+    title, artist = lyrics_identity(document, code)
+    if title:
+        document["title"] = title
+    if artist:
+        document["artist"] = artist
+    return document
 
 
 def atomic_json(path: Path, document: dict) -> None:
