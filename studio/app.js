@@ -58,7 +58,7 @@
   const promptedBuildUploadJobs = new Set();
   let proEnabled = false;
   let busy = false, cancellationPending = false, editingId = null, notificationTimer = null;
-  let activeJobs = [], parallelCapacity = {parallelLimit:1,active:0,freeSlots:1};
+  let activeJobs = [], parallelCapacity = {parallelLimit:null,active:0,freeSlots:null};
   const parallelGroup = action => {
     if (['scan','duplicates-scan','duplicates-apply','build','xsk-stream','json-pro-export','created-xsk',
          'pc-export','download','lyric-groups-scan','lyric-groups-replace',
@@ -76,21 +76,20 @@
     if(group==='exclusive'||group==='installer'||active.some(job=>
        ['exclusive','installer'].includes(parallelGroup(job.kind))))return false;
     if(active.some(job=>parallelGroup(job.kind)===group))return false;
-    return active.length < (parallelCapacity.parallelLimit||1);
+    return true; // No CPU/RAM/device-based job cap; same-group writes stay serialized.
   }
   function renderParallelJobs() {
     const root=$('parallel-job-list');
     root.replaceChildren();
     const active=activeJobs.filter(job=>job.state==='running');
-    const slots=parallelCapacity.parallelLimit||1;
     const ram=parallelCapacity.memoryAvailableBytes;
     const lowRam=Number.isFinite(ram)&&ram<1024**3;
     const cpuPercent=parallelCapacity.cpuBusyPercent;
-    $('parallel-job-summary').textContent='ทำงานพร้อมกัน '+active.length+'/'+slots+
-      ' งาน · CPU '+(parallelCapacity.cpuCores||'—')+' คอร์'+
+    $('parallel-job-summary').textContent='ทำงานพร้อมกัน '+active.length+
+      ' งาน · ไม่จำกัดตามสเปกเครื่อง · CPU '+(parallelCapacity.cpuCores||'—')+' คอร์'+
       (Number.isFinite(cpuPercent)?' · ใช้งาน '+cpuPercent+'%':'')+
       (Number.isFinite(ram)?' · RAM เหลือ '+(ram/1024**3).toFixed(1)+' GB':'')+
-      (lowRam?' · ⚠ RAM ต่ำกว่า 1 GB: ยังไม่รับงานใหม่':'')+
+      (lowRam?' · ⚠ RAM ต่ำกว่า 1 GB: อาจประมวลผลช้า':'')+
       (Number.isFinite(cpuPercent)&&cpuPercent>=92?' · ⚠ CPU สูง':'');
     const completedLatest=[];
     const seenKinds=new Set(active.map(job=>job.kind));
@@ -3710,7 +3709,7 @@
 
   async function startJsonPro() {
     if(!canLaunch('json-pro-export') || !proEnabled)
-      return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และมีทรัพยากรเครื่องเพียงพอ');
+      return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และไม่มีงานแก้ไขคลังเพลงอื่นทำงานอยู่');
     const source=$('json-pro-source').value.trim();
     const destination=$('json-pro-destination').value.trim();
     if(!source || !destination)
