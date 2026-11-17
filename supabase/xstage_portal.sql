@@ -92,6 +92,11 @@ grant select on public.xstage_admins to authenticated;
 grant select,insert,update on public.xstage_profiles to authenticated;
 grant select,insert,delete on public.xstage_download_events to authenticated;
 grant usage,select on sequence public.xstage_download_events_id_seq to authenticated;
+-- An RLS-invoker view gives exact totals and averages even with >100 reviews.
+create or replace view public.xstage_review_stats with (security_invoker = true) as
+select app_id, count(*)::bigint as review_count, avg(rating)::numeric(4,2) as avg_rating
+from public.xstage_reviews group by app_id;
+grant select on public.xstage_review_stats to anon,authenticated;
 -- Provision admin after Google sign-in, from SQL editor (not in a public script):
 -- insert into public.xstage_admins(user_id)
 -- select id from auth.users where email='<administrator email>'
