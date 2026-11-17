@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror iOS PC"
-#define MyAppVersion "1.0.1"
-#define MyAppBuild "1002"
+#define MyAppVersion "1.0.2"
+#define MyAppBuild "1003"
 
 [Setup]
 ; Relative to this script in mirror-ios-pc/installer. Resolve to repository root.
@@ -19,6 +19,7 @@ OutputBaseFilename=X-Stage-Mirror-iOS-PC-v{#MyAppVersion}-build{#MyAppBuild}-win
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=mirror-ios-pc\app.ico
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
