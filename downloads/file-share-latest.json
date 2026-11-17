@@ -1,13 +1,14 @@
 {
   "name": "X-Stage File Share Android Preview",
   "available": true,
-  "version": "0.1.0-preview.1",
+  "version": "0.1.1-preview.2",
   "channel": "preview",
-  "file": "X-Stage-File-Share-v0.1.0-preview.1.apk",
-  "sha256": "fc68e1563bb3f49ba49459dbda87717b574eea957ccaf8a82653c511c31ebc8b",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v0.1.0-preview.1/X-Stage-File-Share-v0.1.0-preview.1.apk",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/xstage-file-share-v0.1.0-preview.1",
-  "note": "Updated APK 2026-11-17: Android receiver prepares target folder, uses compatible free-space check and reports transfer errors to browser. Preview; LAN tested in CI, Internet P2P requires supported network and Android WebView.",
-  "revision": "2026-11-17-android-receive-fix",
-  "source_commit": "bc8964530ae2f2c09b2133ba57861a20b3d8b7b5"
+  "file": "X-Stage-File-Share-v0.1.1-preview.2.apk",
+  "sha256": "35679132b851da901d1d2de8373becb750dc21227d87e9463cd357eff0b694cb",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v0.1.1-preview.2/X-Stage-File-Share-v0.1.1-preview.2.apk",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/xstage-file-share-v0.1.1-preview.2",
+  "note": "Build 2: automatic update checks on startup and manual check, SHA-256 verified APK downloads, Android-confirmed installation, cleanup after successfully upgrading, LAN usable without Internet, and legacy Android receiver detection.",
+  "revision": "2026-11-17-build-2",
+  "source_commit": "7403265d86a2cb3633c234c4dca62c98991b9662",
+  "build_code": 2
 }
