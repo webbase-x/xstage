@@ -170,6 +170,23 @@ class MirrorAutoQuality(private val context: Context) {
         val (rawW, rawH) = context.realDisplaySize()
         val displayW = maxOf(rawW, rawH)
         val displayH = minOf(rawW, rawH)
+
+        // Virtual Android devices often report optimistic AVC decoder capabilities.
+        // Physical Android TV keeps its normal hardware-based AUTO profile.
+        val virtualHint = virtualReceiverHint()
+        if (virtualHint != null) {
+            val profile = if (displayW >= 1280 && displayH >= 720)
+                Profile(1280, 720, 30, "720p30 (virtual)")
+            else Profile(
+                (minOf(displayW, 960).coerceAtLeast(2) / 2) * 2,
+                (minOf(displayH, 540).coerceAtLeast(2) / 2) * 2,
+                30,
+                "display-fit30 (virtual)"
+            )
+            Log.i(TAG, "Virtual Android receiver ($virtualHint); conservative " +
+                profile.label + " instead of advertised 60 FPS throughput")
+            return listOf(profile)
+        }
         val decoder = runCatching {
             MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull { info ->
                 !info.isEncoder &&
@@ -202,6 +219,18 @@ class MirrorAutoQuality(private val context: Context) {
         // by starting at a conservative size and allowing future diagnostics.
         Log.w(TAG, "No reliable hardware H.264 throughput data; use safe 720p30")
         return listOf(Profile(1280, 720, 30, "720p30 (fallback)"))
+    }
+
+    private fun virtualReceiverHint(): String? {
+        // Build properties are only heuristics; some emulators spoof real phones.
+        val identity = listOf(
+            Build.MANUFACTURER, Build.BRAND, Build.MODEL, Build.DEVICE,
+            Build.PRODUCT, Build.HARDWARE, Build.FINGERPRINT
+        ).joinToString(" ") { it.orEmpty() }.lowercase()
+        return listOf(
+            "bluestacks", "vbox", "virtualbox", "ranchu", "goldfish",
+            "sdk_gphone", "emulator", "generic"
+        ).firstOrNull { identity.contains(it) }
     }
 
     private fun isHardwareDecoder(info: MediaCodecInfo): Boolean =
