@@ -1,27 +1,50 @@
 # X-Stage Mirror iOS PC
 
-**Version 1.0.0 · Build 1001 · Windows 10/11 x64 · Preview**
+**v1.0.1 · Build 1002 · Windows 10/11 x64 · Preview**
 
-Dedicated AirPlay receiver from iPhone/iPad to Windows. Independent from X-Stage Mirror Android PC.
+The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
 
-## Display identity
+## Full-screen interface
 
-Shows **X-Stage Mirror PC No.XXXX** at the top of its window. A cryptographically random four-digit number (1000–9999) is generated once per Windows user and saved under `%LOCALAPPDATA%\X-Stage\Mirror\receiver-number.txt`. This same number is shared by the iOS and Android companion apps installed for that Windows user, and remains stable across app restarts and upgrades. It is not an authentication PIN or a pairing code.
+The waiting screen displays only:
+- large **X-Stage Mirror PC / No.XXXX**, using the stable receiver identity persisted under `%LOCALAPPDATA%\X-Stage\Mirror\receiver-number.txt`;
+- small app/version/build metadata;
+- minimal AirPlay readiness / local Wi-Fi or Ethernet IPv4 status.
 
-When possible, the AirPlay receiver advertises this name via UxPlay. Because the pinned UxPlay Windows launcher parses arguments by ASCII spaces rather than shell quoting, it uses non-breaking spaces internally so the displayed name still looks like **X-Stage Mirror PC No.XXXX** in the AirPlay picker. Check physical iOS device discovery before claiming compatibility. If another globally managed UxPlay configuration overrides X-Stage, the app must not silently overwrite it.
+The four-digit number remains stable after app restarts and upgrades. The iOS AirPlay receiver advertises the equivalent name with non-breaking spaces, because the pinned upstream launcher splits `arguments.txt` on ASCII spaces.
 
-## Ready-to-use environment
+Once an iPhone/iPad starts mirroring, the **native UxPlay/GStreamer video window** takes over the full physical display. X-Stage requests full-screen D3D11 output through upstream Qt settings and applies a one-time native HWND fullscreen fallback when necessary. The waiting window stays behind the video so that on normal disconnect it becomes visible again. **No screen capture, frame copies, or SetParent** are used; those approaches add latency and can destabilize hardware video sinks.
 
-The Setup EXE embeds .NET runtime, UxPlay, GStreamer multimedia libraries and bundled Bonjour discovery service. It asks for Windows administrator consent to register Bonjour, and for optional firewall rules **only on Private network profiles**. It does not add firewall exceptions on Public networks.
+The renderer window is owned by the packaged UxPlay engine, not WinForms. Source-protected DRM content may remain blocked.
 
-A complete portable ZIP is also available; the GUI executable alone does not contain the native receiver runtime. The user may need to uninstall/close an older combined X-Stage Mirror PC before starting this AirPlay receiver, so they do not compete for local ports.
+## Addressing stream freezes
 
-## Connected device panel
+On some Windows GPUs, GStreamer D3D12 video rendering or resolution changes can fail; D3D11 is the default in v1.0.1. The application also disables optional UxPlay Bluetooth discovery for LAN use to avoid an unnecessary helper process. These settings are applied to the pinned upstream UxPlay Qt registry configuration at startup and original values are restored after **normal** shutdown. The user's renderer preference (D3D11 or Auto) persists in `%LOCALAPPDATA%\X-Stage\Mirror iOS PC\renderer.txt`.
 
-Uses the UxPlay process ID and its established TCP connections to display verifiable remote IP addresses. A UxPlay-owned video-render window additionally indicates an active rendering session. The application does **not** claim that every TCP peer is casting or guess the iPhone's model/name: UxPlay does not expose a dependable device identity API in this package.
+A frozen image **cannot be diagnosed reliably by checking whether the receiving process is alive**; the UI does not falsely claim to measure active frame delivery. The app therefore does not forcibly interrupt an apparently active stream. After a drop, it waits for UxPlay to recover normally. If the receiver process exits unexpectedly, X-Stage attempts a limited restart. Repeated freezes still require a hardware/network test and upstream logs.
 
-## Build
+### Keyboard support (hidden while waiting)
+
+- **F1** — connection and network diagnostics
+- **F5** — restart the receiver after confirmation (disconnects the current sender)
+- **F8** — change between D3D11 and Auto renderer and restart, with confirmation
+- **Esc** — exit X-Stage after confirmation
+- **Alt+F4** — exit using Windows
+
+When video fills the display, the native renderer may receive the keystrokes instead of X-Stage. Use Alt+Tab to switch to the receiver shell before pressing F1/F5/F8. Do not assume these keys work within GStreamer.
+
+## Packaging and privacy
+
+The Setup EXE embeds the self-contained .NET runtime, UxPlay, GStreamer plugins and Bonjour service. No extra application runtime downloads are required. On trusted **Private** LANs the installer offers consented firewall rules. A first-time Bonjour service registration may ask Windows for administrator permission. There are no remote relay accounts.
+
+The app presents the actual detected local network IP. Connected sender IPs can be inspected using F1 when netstat detects established UxPlay connections; it does not invent an iPhone name or frame rate.
+
+The Windows receiver is separated from **X-Stage Mirror Android PC**; the latter uses Windows-native Miracast and is not changed by this release.
+
+## Build and release
 
 `dotnet publish mirror-ios-pc/XStageMirrorIOSPC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o mirror-ios-pc/out`
 
-CI: `.github/workflows/build-xstage-mirror-ios-pc.yml` → `.github/workflows/publish-xstage-mirror-ios-pc-preview.yml`, SHA-256 validation and corresponding GPLv3 source included. Preview builds are not certified on hardware. iPhone/iPad Screen Mirroring requires local LAN allowing Bonjour/mDNS; DRM video may remain protected.
+CI workflow `.github/workflows/build-xstage-mirror-ios-pc.yml` compiles the desktop application, validates the pinned upstream runtime's SHA-256, creates a complete Windows Setup EXE plus Portable ZIP, and verifies checksums. A separate release workflow publishes a preview and updates `downloads/mirror-ios-pc-preview-latest.json` **only after** packaging succeeds.
+
+**Preview means packaging verified, not physical iOS/Windows hardware validated.** Before claiming the freeze is fully resolved, test on actual iPhone/iPad (different rotations and 5–10 minute continuous streaming sessions) and check Wi-Fi isolation, decoder compatibility, and stream logs.
