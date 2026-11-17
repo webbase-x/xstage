@@ -36,6 +36,7 @@ public final class MainActivity extends Activity {
     private LinearLayout networkError;
     private String pendingCallback;
     private boolean loaded = false;
+    private boolean pageFailed = false;
     private long lastLoad = 0;
 
     @Override
@@ -76,17 +77,20 @@ public final class MainActivity extends Activity {
                 openExternal(url);
                 return true;
             }
+            @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){
+                pageFailed=false;
+            }
             @Override public void onPageFinished(WebView view,String url){
                 super.onPageFinished(view,url);
                 loaded=true;
-                networkError.setVisibility(View.GONE);
+                if(!pageFailed)networkError.setVisibility(View.GONE);
                 deliverCallback();
             }
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error){
-                if(request.isForMainFrame())networkError.setVisibility(View.VISIBLE);
+                if(request.isForMainFrame()){pageFailed=true;networkError.setVisibility(View.VISIBLE);}
             }
             @Override public void onReceivedSslError(WebView view,SslErrorHandler handler,SslError error){
-                handler.cancel();networkError.setVisibility(View.VISIBLE);
+                handler.cancel();pageFailed=true;networkError.setVisibility(View.VISIBLE);
             }
         });
         // Let Android's trusted browser/download manager handle APK, EXE and ZIP files.
@@ -162,8 +166,9 @@ public final class MainActivity extends Activity {
         String quoted=JSONObject.quote(pendingCallback);
         browser.evaluateJavascript(
           "if(window.XStagePortal&&window.XStagePortal.completeNativeOAuth){"+
-            "window.XStagePortal.completeNativeOAuth("+quoted+");true}else{false}",value->{});
-        pendingCallback=null;
+            "window.XStagePortal.completeNativeOAuth("+quoted+");true}else{false}",value->{
+              if("true".equals(value))pendingCallback=null;
+            });
     }
     @Override protected void onNewIntent(Intent intent){
         super.onNewIntent(intent);
