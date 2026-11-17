@@ -33,6 +33,7 @@
     "studio-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน Windows, Mac, iPhone, iPad หรือ Android",fallback:[]},
     "karaoke-android":{target:"Android TV, Google TV หรือแท็บเล็ต Android (APK สำหรับติดตั้งเอง)",fallback:["karaoke-web"]},
     "file-share":{target:"โทรศัพท์ แท็บเล็ต Android 6+ หรือ Android TV ที่รองรับสำหรับติดตั้ง APK; เครื่องอื่นใช้เว็บเบราว์เซอร์",fallback:["karaoke-web"]},
+    "mirror-pc":{target:"Windows 10/11 x64 โดย iOS ใช้ AirPlay และ Android ต้องรองรับ Miracast พร้อม Windows Wireless Display",fallback:["mirror-tv"]},
     "mirror-tv":{target:"กล่องหรือทีวี Android TV / Google TV สำหรับติดตั้งแอปตัวรับ; iPhone/iPad เป็นอุปกรณ์ส่งภาพ",fallback:["karaoke-web"]}
   };
   function forApp(profile,id){
@@ -43,7 +44,7 @@
     if(web){
       return {level:"supported",text:"เปิดเว็บไซต์บนอุปกรณ์นี้ได้",target:info.target,fallback:info.fallback};
     }
-    if(id==="karaoke-pc"||id==="studio-pc"){
+    if(id==="karaoke-pc"||id==="studio-pc"||id==="mirror-pc"){
       return {level:kind==="windows"?"supported":kind==="unknown"?"unknown":"other",
         text:kind==="windows"?"ใช้งานบน Windows นี้ได้ หากเป็นรุ่น x64 และตรงตามข้อกำหนด":kind==="unknown"?"ตรวจสอบว่าเป็น Windows x64 ก่อนติดตั้ง":"รุ่นนี้ติดตั้งได้บน Windows x64 เท่านั้น",
         target:info.target,fallback:info.fallback};

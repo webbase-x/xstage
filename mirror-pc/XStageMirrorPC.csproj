@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>XStageMirrorPC</AssemblyName>
+    <RootNamespace>XStageMirrorPC</RootNamespace>
+    <Version>0.1.0</Version>
+    <FileVersion>0.1.0.101</FileVersion>
+    <ApplicationTitle>X-Stage Mirror PC</ApplicationTitle>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <PublishAot>false</PublishAot>
+  </PropertyGroup>
+</Project>

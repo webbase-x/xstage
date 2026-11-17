@@ -1,0 +1,11 @@
+{
+  "app": "X-Stage Mirror PC",
+  "platform": "Windows 10/11 x64",
+  "version": "0.1.0",
+  "build": 101,
+  "channel": "development",
+  "available": false,
+  "download_url": null,
+  "sha256": null,
+  "note": "Windows receiver candidate: native AirPlay and Miracast device verification required before public release."
+}

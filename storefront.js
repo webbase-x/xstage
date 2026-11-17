@@ -102,6 +102,17 @@
       note:"APK นี้เป็นรุ่น Preview สำหรับติดตั้งเอง ยังต้องทดสอบกับอุปกรณ์จริง โดย Internet P2P อาจล้มเหลวบนเครือข่ายที่ต้องพึ่ง TURN; หน้าเว็บ Internet ไม่ใช่เซิร์ฟเวอร์เก็บไฟล์ การรับ–ส่งผ่าน LAN ใช้งานได้โดยไม่ต้องเชื่อมอินเทอร์เน็ต",
       fallback:"ยังไม่มีไฟล์ APK X-Stage File Share ที่ตรวจสอบได้"
     },
+    "mirror-pc":{
+      title:"X-Stage Mirror PC",category:"WINDOWS · DISPLAY",
+      subtitle:"รับภาพจาก iPhone/iPad และ Android บน Windows 10/11",
+      description:"แอปควบคุมตัวรับภาพบน Windows ที่รวมทางเข้า AirPlay จาก iOS และ Wireless Display/Miracast จาก Android ในหน้าต่างเดียวกัน ตัวรับ AirPlay ใช้ UxPlay แบบพกพาที่แพ็กมาพร้อมรุ่นติดตั้ง ส่วน Android ใช้คุณสมบัติรับภาพของ Windows และต้องรองรับ Miracast ไม่ใช่ Google Cast อย่างเดียว",
+      features:["iOS ไม่ต้องติดตั้งแอปบนโทรศัพท์ ใช้ Screen Mirroring ผ่าน AirPlay","Android ใช้การแคสต์ผ่าน Miracast บนเครื่องและไดรเวอร์ที่รองรับ","ตั้งชื่อ AirPlay และควบคุมเริ่ม/หยุดตัวรับจากหน้าเดียว","Windows 10/11 x64; ตัวรับภาพจริงใช้หน้าต่างของ AirPlay/Windows","โหมด LAN ไม่ต้องใช้อินเทอร์เน็ต; ไม่มี cloud relay"],
+      hero:"รับทุกหน้าจอในห้องเดียวกัน",blurb:"สะท้อนจากมือถือสู่ Windows ได้อย่างเหมาะสม",preview:"MIRROR PC · IOS & ANDROID",
+      type:"manifest",manifest:"./downloads/mirror-pc-latest.json",
+      candidate:{label:"ดูซอร์สและผล Build รุ่นพัฒนา",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-mirror-pc.yml"},
+      note:"กำลังพัฒนา ยังไม่มีตัวติดตั้งที่ยืนยันด้วยอุปกรณ์จริง แอปไม่สามารถสร้าง Miracast ขึ้นเองได้ หาก Windows/Android ไม่รองรับ และตัวรับ UxPlay ไม่ได้แสดงภาพฝังในหน้าต่างควบคุม X-Stage",
+      fallback:"ยังไม่มี Windows Mirror PC ที่ทดสอบแล้ว"
+    },
     "mirror-tv":{
       title:"X-Stage Mirror TV",category:"ANDROID TV · DISPLAY",
       subtitle:"รับภาพจาก iPhone และ iPad บนจอ Android TV",
@@ -171,6 +182,12 @@
       const url=verified?verifiedReleaseUrl(data.download_url||data.installer_url,".exe"):"";
       return url?{available:true,url:url,status:"Windows v"+String(data.version||"ล่าสุด"),kind:"download",version:String(data.version||"")}:
         {available:false,url:"",status:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน",kind:"pending"};
+    }
+    if(id==="mirror-pc"){
+      const valid=data.available===true&&/^\d+\.\d+\.\d+$/.test(data.version||"")&&SHA256.test(data.sha256||"");
+      const url=valid?verifiedReleaseUrl(data.download_url,".zip"):"";
+      return url?{available:true,url,status:"Windows v"+String(data.version)+" · ZIP แบบพกพา",kind:"download",version:String(data.version)}:
+        {available:false,url:"",status:"อยู่ระหว่างพัฒนา · ยังไม่มี ZIP ที่ตรวจสอบแล้ว",kind:"pending"};
     }
     if(id==="file-share"){
       const version=String(data.version||"");
@@ -300,7 +317,7 @@
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
-      const label=id==="studio-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
+      const label=id==="studio-pc"||id==="mirror-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
       const support=suitability(id);
@@ -361,12 +378,12 @@
     preview.className="detail-preview";
     if(id.startsWith("studio-"))preview.classList.add("is-studio");
     else if(id==="karaoke-android")preview.classList.add("is-tv");
-    else if(id==="mirror-tv")preview.classList.add("is-mirror");
+    else if(id==="mirror-tv"||id==="mirror-pc")preview.classList.add("is-mirror");
     if(id==="mirror-tv"&&cardArt){
       preview.appendChild(cardArt.firstElementChild.cloneNode(true));
     }else{
       const img=document.createElement("img");
-      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
+      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
       img.alt="";
       preview.appendChild(img);
     }

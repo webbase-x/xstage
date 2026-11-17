@@ -1,0 +1,117 @@
+name: Build X-Stage Mirror PC Windows candidate
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mirror-pc/**'
+      - '.github/workflows/build-xstage-mirror-pc.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xstage-mirror-pc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compile Windows desktop app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish mirror-pc/XStageMirrorPC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o mirror-pc/out
+          if ($LASTEXITCODE -ne 0) { throw 'Mirror PC compilation failed' }
+          if (-not (Test-Path mirror-pc/out/XStageMirrorPC.exe)) { throw 'Mirror PC EXE missing' }
+
+      # Independent compile artifact: available even when the optional upstream
+      # AirPlay packaging gate cannot verify a compatible portable archive.
+      # This executable is NOT a complete casting app without engine files.
+      - name: Upload compiled control EXE (engine not included)
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-PC-EXE-Build101-COMPILED-ONLY
+          path: mirror-pc/out/XStageMirrorPC.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Download and validate the PINNED UxPlay portable Windows engine
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = '2.0.0.1736'
+          $repo = 'leapbtw/uxplay-windows'
+          $headers = @{ 'User-Agent' = 'XStageMirrorPC-CI'; 'Accept' = 'application/vnd.github+json' }
+          $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag"
+          $assets = @($release.assets | Where-Object {
+            $_.name -match '(?i)\.zip$' -and $_.name -match '(?i)(portable|x64|amd64)' -and $_.name -notmatch '(?i)(arm64|aarch64|source)'
+          })
+          if ($assets.Count -ne 1) {
+            throw "Expected exactly one pinned portable x64 archive, found $($assets.Count). Do NOT publish a GUI-only receiver."
+          }
+          $asset = $assets[0]
+          $expected = [string]$asset.digest
+          if ($expected -notmatch '^sha256:[a-fA-F0-9]{64}$') {
+            throw 'Upstream GitHub release does not advertise a SHA-256 digest. Refusing unverifiable engine.'
+          }
+          $download = Join-Path $env:RUNNER_TEMP 'uxplay-portable.zip'
+          Invoke-WebRequest -Headers $headers -Uri $asset.browser_download_url -OutFile $download
+          $actual = (Get-FileHash -Path $download -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected.Substring(7).ToLowerInvariant()) {
+            throw 'Pinned AirPlay portable archive SHA-256 mismatch.'
+          }
+          $unpacked = Join-Path $env:RUNNER_TEMP 'uxplay-unpacked'
+          Expand-Archive -Path $download -DestinationPath $unpacked
+          $exe = @(Get-ChildItem $unpacked -Recurse -File -Filter 'uxplay-windows.exe')
+          if ($exe.Count -ne 1) {
+            throw "Portable archive needs one uxplay-windows.exe; found $($exe.Count)"
+          }
+          $destination = 'mirror-pc/out/engine/uxplay-windows'
+          New-Item -ItemType Directory -Force $destination | Out-Null
+          Copy-Item (Join-Path $unpacked '*') $destination -Recurse -Force
+          if (-not (Get-ChildItem $destination -Recurse -File -Filter 'uxplay-windows.exe')) {
+            throw 'UxPlay binary missing from distribution after packaging'
+          }
+          @"
+          UxPlay Windows engine: $repo tag $tag
+          Asset: $($asset.name)
+          Archive SHA-256: $actual
+          URL: $($asset.browser_download_url)
+          License: GPL-3.0
+          Corresponding source: https://github.com/leapbtw/uxplay-windows/tree/$tag
+          Underlying UxPlay: https://github.com/FDH2/UxPlay
+          This candidate requires real Windows+iOS testing.
+          "@ | Set-Content -Encoding UTF8 'mirror-pc/out/THIRD_PARTY_NOTICES.txt'
+
+      - name: Publish candidate ZIP with intact portable runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $file = 'X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip'
+          $source = Resolve-Path 'mirror-pc/out'
+          Compress-Archive -Path (Join-Path $source '*') -DestinationPath $file -CompressionLevel Optimal -Force
+          if ((Get-Item $file).Length -lt 3000000) { throw 'Incomplete portable candidate ZIP' }
+          $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLowerInvariant()
+          "$hash  $file" | Set-Content -Encoding ascii "$file.sha256"
+          "Candidate SHA-256: $hash"
+          # Never publish as a stable Windows release without physical device verification.
+
+      - name: Upload Windows candidate (not public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-PC-Windows-CANDIDATE
+          path: |
+            X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip
+            X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
