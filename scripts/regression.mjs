@@ -34,6 +34,22 @@ const androidWorkflow=read('.github/workflows/build-android-tv.yml');
 assert.doesNotThrow(()=>new Function(storefrontScript),'storefront JavaScript must parse');
 assert.match(storefront,/id="store-home"/,'root must be the X-Stage Apps storefront');
 assert.match(storefront,/id="app-detail"/,'every app must have a shareable detail view');
+
+const storeLogo=read('assets/xstage-apps-logo.svg');
+const storeIcon=read('assets/xstage-apps-icon.svg');
+const storeStyle=read('storefront.css');
+assert.match(storeLogo,/<svg[^>]+viewBox="0 0 1210 254"/,'storefront must ship a dedicated SVG X-Stage Apps wordmark');
+assert.match(storeLogo,/>X-STAGE</,'full X-Stage Apps wordmark must display X-STAGE');
+assert.match(storeLogo,/>APPS</,'full X-Stage Apps wordmark must display APPS');
+assert.match(storeIcon,/<svg[^>]+viewBox="0 0 512 512"/,'storefront must ship a scalable app icon');
+assert.match(storefront,/class="wordmark new-wordmark"[^>]*>[^]*?xstage-apps-logo\.svg/,'new brand logo must replace karaoke logo in header');
+assert.match(storefront,/class="footer-logo new-footer-logo"[^>]*>[^]*?xstage-apps-logo\.svg/,'new brand logo must appear in footer');
+assert.match(storefront,/id="intro-title">หนึ่งเวที/,'new hero headline must render');
+assert.match(storefront,/class="intro section-wrap new-home-hero"/,'editorial hero must be present');
+assert.match(storeStyle,/\.intro\.new-home-hero\{/,'redesigned hero styling must load');
+assert.match(storefront,/storefront\.css\?brand=2/,'storefront refresh must bust the cached stylesheet');
+assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
+
 assert.match(storefront,/source=android-/,'old Android builds must redirect into the existing player');
 assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
 for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv']){

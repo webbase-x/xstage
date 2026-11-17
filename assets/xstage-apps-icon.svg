@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc"><title id="title">X-Stage Apps</title><desc id="desc">สัญลักษณ์ X แสงฟ้าและม่วงเหนือเวที พร้อมคลื่นเสียงตรงกลาง</desc>
+  <defs>
+    <linearGradient id="square" x1="60" y1="50" x2="460" y2="480" gradientUnits="userSpaceOnUse"><stop stop-color="#101f4b"/><stop offset=".53" stop-color="#080f2b"/><stop offset="1" stop-color="#27094b"/></linearGradient>
+    <linearGradient id="rim" x1="64" y1="470" x2="471" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#00deff"/><stop offset=".44" stop-color="#477cff"/><stop offset="1" stop-color="#de61ff"/></linearGradient>
+    <linearGradient id="slashCyan" x1="129" y1="125" x2="352" y2="406" gradientUnits="userSpaceOnUse"><stop stop-color="#adfdff"/><stop offset=".28" stop-color="#25d9ff"/><stop offset=".75" stop-color="#167aff"/><stop offset="1" stop-color="#686aff"/></linearGradient>
+    <linearGradient id="slashViolet" x1="365" y1="118" x2="144" y2="407" gradientUnits="userSpaceOnUse"><stop stop-color="#ffb9ff"/><stop offset=".35" stop-color="#cc4fff"/><stop offset=".75" stop-color="#7956fd"/><stop offset="1" stop-color="#6ef4ff"/></linearGradient>
+    <linearGradient id="platform" x1="102" y1="414" x2="414" y2="442" gradientUnits="userSpaceOnUse"><stop stop-color="#00d7ff"/><stop offset=".5" stop-color="#ceecff"/><stop offset="1" stop-color="#d25aff"/></linearGradient>
+    <linearGradient id="spot" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#8aebff" stop-opacity=".35"/><stop offset="1" stop-color="#30afff" stop-opacity="0"/></linearGradient>
+    <filter id="glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="11"/></filter>
+  </defs>
+  <rect x="21" y="21" width="470" height="470" rx="118" fill="url(#square)" stroke="url(#rim)" stroke-width="16"/>
+  <rect x="34" y="34" width="444" height="444" rx="107" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="3"/>
+  <path d="M112 100 227 148 281 358 160 298Z" fill="#32dbff" opacity=".12" filter="url(#glow)"/>
+  <path d="M402 101 288 145 237 359 356 298Z" fill="#bf56ff" opacity=".13" filter="url(#glow)"/>
+  <path d="M115 110h18l19 27-15 5z" fill="#e0fcff"/>
+  <path d="M379 111h18l-23 32-14-7z" fill="#fae6ff"/>
+  <path d="M152 140 253 279 354 402 283 402 113 150Z" fill="url(#slashCyan)"/>
+  <path d="M359 140 258 279 157 402 228 402 398 150Z" fill="url(#slashViolet)"/>
+  <path d="M157 164 267 308" fill="none" stroke="#d8ffff" stroke-opacity=".4" stroke-width="5" stroke-linecap="round"/>
+  <path d="M357 164 244 310" fill="none" stroke="#ffdbff" stroke-opacity=".4" stroke-width="5" stroke-linecap="round"/>
+  <g stroke="#fff" stroke-width="9" stroke-linecap="round">
+    <path d="M145 272v18M167 254v54M189 265v33M211 236v85M233 252v49M255 214v129M277 252v49M299 236v85M321 265v33M343 254v54M365 272v18"/>
+  </g>
+  <g stroke="#7cf4ff" stroke-width="3.5" stroke-linecap="round"><path d="M119 281h14M378 281h14"/></g>
+  <ellipse cx="256" cy="430" rx="171" ry="29" fill="#141237" stroke="url(#platform)" stroke-width="11"/>
+  <path d="M97 430c69 23 252 23 318 0" fill="none" stroke="#f8f2ff" stroke-opacity=".42" stroke-width="2"/>
+</svg>
