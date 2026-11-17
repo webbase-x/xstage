@@ -191,12 +191,12 @@ try{
     'non-Windows viewers must be guided to transfer the ZIP to Windows');
   await page.locator('#detail-back').click();
   await page.locator('#catalog:not([hidden])').waitFor();
-  console.log('PASS: X-Stage Apps premium brand, 6-app catalog, filters, deep-linked details, and verified download CTA');
+  console.log('PASS: X-Stage Apps premium brand, 7-app catalog, filters, deep-linked details, and verified download CTA');
 
   // Simulate the verified direct-download feed before the binary is mirrored by CI.
   // Android TV/TrueID browsers must never be forced into a GitHub popup.
-  const mirrorName='X-Stage-Mirror-TV-test-v0.2.3-build105.apk';
   const mirrorFeed=JSON.parse(fs.readFileSync(path.join(root,'mirror-tv/test-latest.json'),'utf8'));
+  const mirrorName=mirrorFeed.file;
   await page.route('**/mirror-tv/test-latest.json',route=>route.fulfill({
     status:200,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'},
     body:JSON.stringify({...mirrorFeed,direct_download_available:true,
