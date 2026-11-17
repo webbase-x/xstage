@@ -23,8 +23,22 @@ assert 'bool("run_in_background", true' in prefs
 assert 'bool("advertise_mirroring", true' in prefs
 assert 'ReceiverSetupQr(serverName)' in ui
 assert (app / "src/main/kotlin/app/airshow/tv/ui/ReceiverSetupQr.kt").exists()
+updater = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateManager.kt").read_text()
+activity = (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
+settings = (app / "src/main/kotlin/app/airshow/tv/ui/SettingsScreen.kt").read_text()
+assert "mirrorUpdates.checkOnLaunch()" in activity
+assert "mirrorUpdates.onResume()" in activity
+assert "mirrorUpdates.close()" in activity
+assert "checkMirrorUpdateNow" in settings
+assert "SHA-256" in updater and "getPackageArchiveInfo" in updater
+assert "FileProvider.getUriForFile" in updater
+assert "canRequestPackageInstalls()" in updater
+assert "github.com/webbase-x/xstage/releases/download/" in updater
+assert "https://webbase-x.github.io/xstage/mirror-tv/latest.json" in updater
+assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
+assert 'versionCode = 102' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
 assert (root / "NOTICE").exists()
-print("PASS: unique package, TV launcher, discoverability, PIN-free defaults, rename and QR guide")
+print("PASS: bundled receiver, no-PIN defaults, integrated installer, checksum, Android TV launcher and QR")

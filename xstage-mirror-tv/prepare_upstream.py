@@ -7,6 +7,8 @@ remain in the generated source package. No iOS companion application is used.
 from __future__ import annotations
 
 import sys
+import os
+import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from PIL import Image, ImageDraw, ImageFont
@@ -18,6 +20,10 @@ if ROOT is None or not (ROOT / "LICENSE").is_file():
 APP = ROOT / "app"
 PKG = "com.webbasex.xstagemirror.tv"
 NAME = "X-Stage Mirror TV"
+VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.0")
+BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "102")
+if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) or not BUILD.isdecimal() or int(BUILD) <= 0:
+    raise SystemExit("Invalid Mirror TV release version/build")
 
 def substitute(path: Path, before: str, after: str) -> None:
     old = path.read_text(encoding="utf-8")
@@ -28,8 +34,8 @@ def substitute(path: Path, before: str, after: str) -> None:
 
 gradle = APP / "build.gradle.kts"
 substitute(gradle, 'applicationId = "app.airshow.tv"', f'applicationId = "{PKG}"')
-substitute(gradle, 'versionName = "1.0.0"', 'versionName = "0.1.0-xstage"')
-substitute(gradle, 'versionCode = 1', 'versionCode = 101')
+substitute(gradle, 'versionName = "1.0.0"', f'versionName = "{VERSION}"')
+substitute(gradle, 'versionCode = 1', f'versionCode = {int(BUILD)}')
 with gradle.open("a", encoding="utf-8") as out:
     out.write('\n// X-Stage QR setup requires no iOS helper app.\ndependencies { implementation("com.google.zxing:core:3.5.3") }\n')
 
@@ -42,6 +48,14 @@ substitute(prefs, 'val ALLOW_NEW_CONN = bool("allow_new_conn", true, restart = t
 assert 'val REQUIRE_PIN = bool("require_pin", false' in prefs.read_text()
 assert 'val AUTO_START = bool("auto_start", true)' in prefs.read_text()
 assert 'val BOOT_AUTO_START = bool("boot_auto_start", true)' in prefs.read_text()
+
+# Android TV update handoff requires the OS-controlled package installer.
+# It is not a silent installer, and no runtime AirPlay modules are fetched.
+manifest = APP / "src/main/AndroidManifest.xml"
+substitute(manifest,
+           '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+           '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+           '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />')
 
 strings = APP / "src/main/res/values/strings.xml"
 text = strings.read_text(encoding="utf-8").replace("AirShow", NAME)
@@ -66,6 +80,49 @@ replacement = needle + '''
 substitute(overview, needle, replacement)
 overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
 (ui / "ReceiverSetupQr.kt").write_text(overlay.read_text(encoding="utf-8"), encoding="utf-8")
+
+# Add a built-in HTTPS + SHA256 updater. Only a newer, verified APK is handed
+# to Android's standard installer; Android decides whether user confirmation
+# and unknown-source permission are required.
+updater = Path(__file__).resolve().parent / "MirrorUpdateManager.kt"
+pkg_dir = APP / "src/main/kotlin/app/airshow/tv"
+(pkg_dir / "MirrorUpdateManager.kt").write_text(updater.read_text(encoding="utf-8"), encoding="utf-8")
+
+activity = pkg_dir / "MainActivity.kt"
+substitute(activity,
+           '    private val viewModel: MainViewModel by viewModels()',
+           '    private val viewModel: MainViewModel by viewModels()\n'
+           '    private lateinit var mirrorUpdates: MirrorUpdateManager')
+substitute(activity,
+           '        enableEdgeToEdge()',
+           '        enableEdgeToEdge()\n'
+           '        mirrorUpdates = MirrorUpdateManager(this)\n'
+           '        mirrorUpdates.checkOnLaunch()')
+substitute(activity,
+           '    override fun onStart() {',
+           '    fun checkMirrorUpdateNow() = mirrorUpdates.checkNow()\n\n'
+           '    override fun onResume() {\n'
+           '        super.onResume()\n'
+           '        mirrorUpdates.onResume()\n'
+           '    }\n\n'
+           '    override fun onStart() {')
+substitute(activity,
+           '    override fun onDestroy() {',
+           '    override fun onDestroy() {\n'
+           '        mirrorUpdates.close()')
+
+settings = ui / "SettingsScreen.kt"
+substitute(settings,
+           'fun SettingsScreen(viewModel: MainViewModel) {',
+           'fun SettingsScreen(viewModel: MainViewModel) {\n'
+           '    val mirrorActivity = LocalContext.current as? app.airshow.tv.MainActivity')
+substitute(settings,
+           '        SectionHeader(stringResource(R.string.section_server))',
+           '        SectionHeader(stringResource(R.string.section_server))\n'
+           '        Button(\n'
+           '            onClick = { mirrorActivity?.checkMirrorUpdateNow() },\n'
+           '            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)\n'
+           '        ) { Text("ตรวจสอบอัปเดต X-Stage Mirror TV") }')
 
 # Preserve original attribution and build a distinctive launcher/TV banner.
 font_paths = [

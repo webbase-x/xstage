@@ -1,0 +1,172 @@
+name: Release X-Stage Mirror TV signed APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version e.g. 0.2.0"
+        required: true
+        default: "0.2.0"
+        type: string
+      version_code:
+        description: "Increasing Android version code"
+        required: true
+        default: "102"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-tv-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      XSTAGE_MIRROR_VERSION: ${{ inputs.version }}
+      XSTAGE_MIRROR_BUILD: ${{ inputs.version_code }}
+      XSTAGE_MIRROR_KEYSTORE_BASE64: ${{ secrets.XSTAGE_MIRROR_KEYSTORE_BASE64 }}
+      XSTAGE_MIRROR_STORE_PASSWORD: ${{ secrets.XSTAGE_MIRROR_STORE_PASSWORD }}
+      XSTAGE_MIRROR_KEY_ALIAS: ${{ secrets.XSTAGE_MIRROR_KEY_ALIAS }}
+      XSTAGE_MIRROR_KEY_PASSWORD: ${{ secrets.XSTAGE_MIRROR_KEY_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release monotonicity and required signing secrets
+        run: |
+          python3 - <<'PY'
+          import os,json,re,sys
+          v=os.environ["XSTAGE_MIRROR_VERSION"]
+          b=os.environ["XSTAGE_MIRROR_BUILD"]
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',v) or not b.isdecimal() or int(b)<102:
+              sys.exit("Invalid release version/build")
+          m=json.load(open("mirror-tv/latest.json"))
+          if m.get("available") and int(b)<=int(m.get("build",0)):
+              sys.exit("Refusing an old or duplicate release")
+          names=("XSTAGE_MIRROR_KEYSTORE_BASE64","XSTAGE_MIRROR_STORE_PASSWORD",
+                 "XSTAGE_MIRROR_KEY_ALIAS","XSTAGE_MIRROR_KEY_PASSWORD")
+          missing=[n for n in names if not os.environ.get(n)]
+          if missing: sys.exit("Missing GitHub encrypted signing secrets: "+", ".join(missing))
+          print("Release version and private signing configuration validated")
+          PY
+
+      - name: Checkout pinned AirPlay engine and native modules
+        run: |
+          git clone --no-checkout https://github.com/omerekelly/airshow.git /tmp/xstage-mirror-airplay
+          git -C /tmp/xstage-mirror-airplay checkout --detach a0eeef208a60f69a56faadbd39eb1e1de001208c
+          test "$(git -C /tmp/xstage-mirror-airplay rev-parse HEAD)" = "a0eeef208a60f69a56faadbd39eb1e1de001208c"
+          git -C /tmp/xstage-mirror-airplay submodule update --init --recursive --depth 1
+          test -s /tmp/xstage-mirror-airplay/LICENSE
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Brand, validate, and bundle AirPlay plus built-in updater
+        run: |
+          python3 -m pip install --disable-pip-version-check Pillow==11.3.0
+          python3 xstage-mirror-tv/prepare_upstream.py /tmp/xstage-mirror-airplay
+          python3 xstage-mirror-tv/test_build_recipe.py /tmp/xstage-mirror-airplay
+
+      - name: Load persistent private signing key, never publish it
+        run: |
+          python3 - <<'PY'
+          import os,base64
+          from pathlib import Path
+          key=base64.b64decode(os.environ["XSTAGE_MIRROR_KEYSTORE_BASE64"],validate=True)
+          if len(key)<100: raise SystemExit("Invalid keystore")
+          dest=Path("/tmp/xstage-mirror-release.jks")
+          dest.write_bytes(key);dest.chmod(0o600)
+          props={
+            "storeFile":str(dest),
+            "storePassword":os.environ["XSTAGE_MIRROR_STORE_PASSWORD"],
+            "keyAlias":os.environ["XSTAGE_MIRROR_KEY_ALIAS"],
+            "keyPassword":os.environ["XSTAGE_MIRROR_KEY_PASSWORD"],
+          }
+          def esc(s):return s.replace("\\","\\\\").replace("\n","\\n").replace("\r","\\r")
+          Path("/tmp/xstage-mirror-airplay/local.properties").write_text(
+            "\n".join(k+"="+esc(v) for k,v in props.items())+"\n",encoding="utf-8")
+          PY
+
+      - name: Install Android SDK and NDK
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+
+      - name: Compile signed Android TV release (ARM32 and ARM64)
+        working-directory: /tmp/xstage-mirror-airplay
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease -Pabis=arm64-v8a,armeabi-v7a --no-daemon --stacktrace
+          test -s app/build/outputs/apk/release/app-release.apk
+
+      - name: Verify APK signature and identity
+        run: |
+          APK=/tmp/xstage-mirror-airplay/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.webbasex.xstagemirror.tv'"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "versionCode='$XSTAGE_MIRROR_BUILD'"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "versionName='$XSTAGE_MIRROR_VERSION'"
+
+      - name: Bundle executable and GPLv3 source
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK_NAME="X-Stage-Mirror-TV-v$XSTAGE_MIRROR_VERSION-build$XSTAGE_MIRROR_BUILD.apk"
+          cp /tmp/xstage-mirror-airplay/app/build/outputs/apk/release/app-release.apk "dist/$APK_NAME"
+          cd /tmp/xstage-mirror-airplay
+          tar --exclude=.git --exclude=.gradle --exclude=build --exclude=.cxx --exclude='*.apk' --exclude=local.properties \
+              -czf "$GITHUB_WORKSPACE/dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz" .
+          cd "$GITHUB_WORKSPACE"
+          (cd dist && sha256sum "$APK_NAME" X-Stage-Mirror-TV-GPLv3-source.tar.gz > SHA256SUMS.txt)
+
+      - name: Create immutable signed release with public download URL
+        run: |
+          set -euo pipefail
+          TAG="xstage-mirror-tv-v$XSTAGE_MIRROR_VERSION-build$XSTAGE_MIRROR_BUILD"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "The release tag already exists"; exit 1
+          fi
+          gh release create "$TAG" dist/* --target "$GITHUB_SHA" \
+            --title "X-Stage Mirror TV v$XSTAGE_MIRROR_VERSION (Build $XSTAGE_MIRROR_BUILD)" \
+            --notes "Fully bundled Android TV AirPlay receiver. No additional runtime downloads. Self-update checks use SHA-256 and the Android system installer (confirmation may be required). Includes GPLv3 source."
+
+      - name: Activate update feed after signed release is available
+        run: |
+          set -euo pipefail
+          APK_NAME="X-Stage-Mirror-TV-v$XSTAGE_MIRROR_VERSION-build$XSTAGE_MIRROR_BUILD.apk"
+          SHA256=$(sha256sum "dist/$APK_NAME" | cut -d' ' -f1)
+          git fetch origin main
+          git switch -C main origin/main
+          export APK_NAME SHA256
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          path=Path("mirror-tv/latest.json")
+          previous=json.loads(path.read_text(encoding="utf-8"))
+          build=int(os.environ["XSTAGE_MIRROR_BUILD"])
+          if previous.get("available") and build<=int(previous.get("build",0)):
+              raise SystemExit("Refusing to downgrade published update feed")
+          data={"available":True,"package":"com.webbasex.xstagemirror.tv",
+                "version":os.environ["XSTAGE_MIRROR_VERSION"],"build":build,
+                "file":os.environ["APK_NAME"],"sha256":os.environ["SHA256"]}
+          path.write_text(json.dumps(data,indent=2)+"\n",encoding="utf-8")
+          PY
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add mirror-tv/latest.json
+          git commit -m "release: activate Mirror TV build $XSTAGE_MIRROR_BUILD [skip ci]"
+          git push origin main
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-TV-signed-release
+          path: dist/*
+          if-no-files-found: error

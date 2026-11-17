@@ -6,6 +6,7 @@ on:
       - ".github/workflows/build-xstage-mirror-tv.yml"
       - "xstage-mirror-tv/**"
       - "mirror-tv/**"
+      - "!mirror-tv/latest.json"
   workflow_dispatch:
 
 permissions:
@@ -35,7 +36,7 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Prepare branded build, tests and launcher assets
+      - name: Prepare all-in-one APK with bundled AirPlay engine and update client
         run: |
           python3 -m pip install --disable-pip-version-check Pillow==11.3.0
           python3 xstage-mirror-tv/prepare_upstream.py /tmp/xstage-mirror-airplay

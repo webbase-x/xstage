@@ -1,0 +1,9 @@
+{
+  "available": false,
+  "package": "com.webbasex.xstagemirror.tv",
+  "version": "0.2.0",
+  "build": 102,
+  "file": "",
+  "sha256": "",
+  "notes": "Automatic updates are activated only after a securely signed GitHub Release is published."
+}
