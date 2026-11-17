@@ -15,7 +15,7 @@ DefaultDirName={autopf}\X-Stage\Mirror iOS PC
 DefaultGroupName=X-Stage
 UninstallDisplayIcon={app}\XStageMirrorIOSPC.exe
 OutputDir=mirror-ios-pc\installer\output
-OutputBaseFilename=X-Stage-Mirror-PC-v{#MyAppVersion}-build{#MyAppBuild}-win-x64-Setup
+OutputBaseFilename=X-Stage-Mirror-iOS-PC-v{#MyAppVersion}-build{#MyAppBuild}-win-x64-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -52,6 +52,7 @@ Filename: "{app}\engine\uxplay-windows\mDNSResponder.exe"; Parameters: "-install
 ; Clear only our own rule names on upgrade; leave unrelated firewall rules intact.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC AirPlay Private"""; Flags: runhidden waituntilterminated
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC Bonjour Private"""; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC mDNS Private"""; Flags: runhidden
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC mDNS Private"""; Flags: runhidden waituntilterminated
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror iOS PC AirPlay Private"" dir=in action=allow program=""{app}\engine\uxplay-windows\uxplay-windows.exe"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror iOS PC Bonjour Private"" dir=in action=allow program=""{app}\engine\uxplay-windows\mDNSResponder.exe"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
