@@ -36,9 +36,11 @@ jobs:
       XSTAGE_MIRROR_STORE_PASSWORD: ${{ secrets.XSTAGE_MIRROR_STORE_PASSWORD }}
       XSTAGE_MIRROR_KEY_ALIAS: ${{ secrets.XSTAGE_MIRROR_KEY_ALIAS }}
       XSTAGE_MIRROR_KEY_PASSWORD: ${{ secrets.XSTAGE_MIRROR_KEY_PASSWORD }}
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
 
       - name: Check release monotonicity and required signing secrets
         run: |
@@ -166,6 +168,14 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           (cd dist && sha256sum "$APK_NAME" X-Stage-Mirror-TV-GPLv3-source.tar.gz > SHA256SUMS.txt)
 
+      - name: Preserve verified signed release APK and GPLv3 source before publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-TV-signed-release-build${{ inputs.version_code || '113' }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Create immutable signed release with public download URL
         run: |
           set -euo pipefail
@@ -173,9 +183,12 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "The release tag already exists"; exit 1
           fi
-          gh release create "$TAG" dist/* --target "$GITHUB_SHA" \
+          if ! gh release create "$TAG" dist/* --target "$GITHUB_SHA" \
             --title "X-Stage Mirror TV v$XSTAGE_MIRROR_VERSION (Build $XSTAGE_MIRROR_BUILD)" \
-            --notes "Fully bundled Android TV AirPlay receiver. No additional runtime downloads. Self-update checks use SHA-256 and the Android system installer (confirmation may be required). Includes GPLv3 source."
+            --notes "Fully bundled Android TV AirPlay receiver. No additional runtime downloads. Self-update checks use SHA-256 and the Android system installer (confirmation may be required). Includes GPLv3 source."; then
+            echo "::error::GitHub Release publication denied. Verified APK and GPLv3 source remain downloadable from this Actions run. Set a fine-grained XSTAGE_MIRROR_PUBLISH_TOKEN (Contents: read/write, scoped only to webbase-x/xstage) if the built-in GITHUB_TOKEN cannot create releases."
+            exit 1
+          fi
 
       - name: Activate update feed after signed release is available
         run: |
@@ -205,8 +218,3 @@ jobs:
           git commit -m "release: activate Mirror TV build $XSTAGE_MIRROR_BUILD [skip ci]"
           git push origin main
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: X-Stage-Mirror-TV-signed-release
-          path: dist/*
-          if-no-files-found: error
