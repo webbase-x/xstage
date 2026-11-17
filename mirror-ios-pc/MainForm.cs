@@ -461,7 +461,7 @@ public sealed class MainForm : Form
     private void RefreshAirPlayStatus()
     {
         bool alive = _airplayProcess is { HasExited: false };
-        _receiverName.Enabled = !alive;
+        _receiverName.Enabled = true; // Stable identity remains legible during an active session.
         _startButton.Enabled = !alive && _bundledEngine is not null;
         _stopButton.Enabled = alive;
         _iosStatus.Text = alive
@@ -481,7 +481,7 @@ public sealed class MainForm : Form
             "uxplay-windows", "arguments.txt");
         if (File.Exists(systemFile))
         {
-            if (autoStart) return true; // Never modify administrator-managed configuration.
+            // Never override administrator-managed receiver naming.
             var configured = Regex.Match(File.ReadAllText(systemFile), @"(?:^|\s)-n\s+([^\s]+)");
             if (configured.Success &&
                 string.Equals(configured.Groups[1].Value, name, StringComparison.OrdinalIgnoreCase))
@@ -492,12 +492,15 @@ public sealed class MainForm : Form
         }
         var config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "leapbtw", "uxplay-windows", "arguments.txt");
-        var advertised = Regex.Replace(name.Trim(), @"\s+", "-");
+        // UxPlay Windows splits arguments.txt on literal ASCII spaces, ignoring quotes.
+        // Non-breaking spaces are retained as one value yet render as normal spaces
+        // in the iOS AirPlay picker: "X-Stage Mirror PC No.1234".
+        var advertised = Regex.Replace(name.Trim(), @"\s+", "\u00A0");
         var desired = "-n " + advertised + " -nh";
         if (File.Exists(config))
         {
             var previous = File.ReadAllText(config).Trim();
-            if (previous == desired || autoStart) return true; // Preserve existing advanced options.
+            if (previous == desired) return true; // Do not silently replace other apps' settings.
             if (MessageBox.Show(this,
                 "การเปลี่ยนชื่อเครื่องรับจะเขียนทับ arguments.txt เดิมของ UxPlay\n" +
                 "ต้องการแทนที่การตั้งค่าเดิมหรือไม่?", "ยืนยันการเปลี่ยนชื่อ",
@@ -524,7 +527,7 @@ public sealed class MainForm : Form
                 throw new InvalidOperationException("ชื่อเครื่องรับต้องเป็นตัวอักษร/ตัวเลข ความยาว 1–55 ตัว");
             if (!WriteNameSettings(name, autoStart)) return;
             if (!EnsureBonjourService(autoStart)) { RefreshAirPlayStatus(); return; }
-            _receiverName.Text = Regex.Replace(name, @"\s+", "-");
+            _receiverName.Text = ReceiverIdentity.DisplayName;
             _lastReceiverLaunchUtc = DateTime.UtcNow;
             _airplayProcess?.Dispose();
             _airplayProcess = Process.Start(new ProcessStartInfo
