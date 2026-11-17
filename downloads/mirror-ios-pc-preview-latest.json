@@ -1,17 +1,17 @@
 {
   "app": "X-Stage Mirror iOS PC",
-  "platform": "Windows 10/11 x64 · AirPlay",
+  "platform": "Windows 10/11 x64",
   "version": "1.0.0",
   "build": 1001,
   "channel": "preview",
-  "available": false,
-  "file": null,
-  "sha256": null,
-  "download_url": null,
-  "portable_file": null,
-  "portable_sha256": null,
-  "portable_download_url": null,
-  "source_url": null,
+  "available": true,
+  "file": "X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-Setup.exe",
+  "sha256": "06e9fe645afddd5ceceb2ff3e5d2cb6cfe76effb61efd8c1567dd2e008bd43f0",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-ios-pc-v1.0.0-build1001-preview/X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-Setup.exe",
+  "portable_file": "X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-CANDIDATE.zip",
+  "portable_sha256": "909d591a30c0ed20a8f431b3232662f397c5c6e921417b7a7cdd709dcda54581",
+  "portable_download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-ios-pc-v1.0.0-build1001-preview/X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-CANDIDATE.zip",
+  "source_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-ios-pc-v1.0.0-build1001-preview/X-Stage-Mirror-iOS-PC-v1.0.0-build1001-GPLv3-source.tar.gz",
   "tested_on_hardware": false,
-  "note": "Standalone Windows receiver under build verification; no public download before release and checksums pass."
+  "note": "Windows Preview: compile and package checks passed; physical iOS/Android/Windows testing not yet verified."
 }
