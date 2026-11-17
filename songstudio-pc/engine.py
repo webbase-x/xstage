@@ -180,16 +180,16 @@ def resource_snapshot():
             total = values.get("MemTotal")
         except (OSError, ValueError, IndexError):
             pass
-    capacity = 1 if cores < 4 else 2 if cores < 8 else MAX_PARALLEL_JOBS
-    if total is not None and total < 8 * 1024**3:
-        capacity = min(capacity, 1)
+    # Hardware telemetry is informational only. Never refuse a user job just
+    # because the CPU is busy, RAM is low, or the machine has few cores.
+    # Conflicting writes/installer jobs are still serialized below.
     with LOCK:
         active = sum(1 for entry in ACTIVE_JOBS.values()
                      if entry["thread"] and entry["thread"].is_alive())
     return {"cpuCores": cores, "cpuBusyPercent": cpu_busy_percent(),
             "memoryAvailableBytes": available,
-            "memoryTotalBytes": total, "parallelLimit": capacity,
-            "active": active, "freeSlots": max(0, capacity-active)}
+            "memoryTotalBytes": total, "parallelLimit": None,
+            "active": active, "freeSlots": None}
 
 def _check_resource_capacity(action):
     state = resource_snapshot()
@@ -204,17 +204,6 @@ def _check_resource_capacity(action):
             raise ValueError("งานนี้ต้องรอให้งานอื่นหยุดก่อนเพื่อป้องกันข้อมูลชนกัน")
         if any(item["group"] == group for item in active):
             raise ValueError("มีงานประเภทเดียวกันกำลังทำงานอยู่ · กรุณารอหรือยกเลิกเฉพาะงานนั้น")
-        if len(active) >= state["parallelLimit"]:
-            raise ValueError("เครื่องกำลังทำงานเต็มความสามารถ ("+
-                             str(state["parallelLimit"])+" งานพร้อมกัน) · กรุณารอหรือลดจำนวนงาน")
-    if state.get("cpuBusyPercent") is not None and state["cpuBusyPercent"] >= 92 and state["active"] >= 1:
-        raise ValueError("CPU กำลังใช้งานสูง ("+str(state["cpuBusyPercent"])+
-                         "%) · ยังไม่รับงานเพิ่มเพื่อป้องกันโปรแกรมหน่วง")
-    required = 3*1024**3 if group == "audio-ai" else 1024**3
-    free = state["memoryAvailableBytes"]
-    if free is not None and free < required:
-        raise ValueError("หน่วยความจำ RAM เหลือน้อย ("+
-                         str(round(free/1024**3,1))+" GB) · กรุณาปิดงานอื่นก่อนเริ่ม")
     return state
 
 FILES = []
