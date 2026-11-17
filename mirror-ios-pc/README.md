@@ -1,6 +1,6 @@
 # X-Stage Mirror iOS PC
 
-**v1.0.3 · Build 1004 · Windows 10/11 x64 · Preview**
+**v1.0.4 · Build 1005 · Windows 10/11 x64 · Preview**
 
 The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
 
@@ -43,7 +43,11 @@ The app presents the actual detected local network IP. Connected sender IPs can 
 The Windows receiver is separated from **X-Stage Mirror Android PC**; the latter uses Windows-native Miracast and is not changed by this release.
 
 
-## Automatic upgrades (Build 1004)
+## Desktop icon (Build 1005)
+
+The Windows installer always creates a **X-Stage Mirror iOS PC** desktop shortcut, including during /VERYSILENT automatic upgrades. The shortcut points to the installed executable, uses the embedded branded ICO, and is removed by the installer uninstall process. The Start menu shortcut continues to be created. No manual shortcut option is required.
+
+## Automatic upgrades (Build 1005)
 
 - The running PC receiver checks the exact X-Stage iOS PC preview feed at launch and every 30 minutes, with a short network timeout for the feed.
 - When a newer matching Windows build is published, the client automatically downloads the **complete Setup EXE** from the specifically named GitHub Release. It checks platform, app, monotonic build, semantic version, exact asset URL/file name, executable header, size limits and SHA-256. Only that checked file may launch.

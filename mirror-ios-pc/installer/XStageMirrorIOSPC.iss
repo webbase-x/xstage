@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror iOS PC"
-#define MyAppVersion "1.0.3"
-#define MyAppBuild "1004"
+#define MyAppVersion "1.0.4"
+#define MyAppBuild "1005"
 
 [Setup]
 ; Relative to this script in mirror-ios-pc/installer. Resolve to repository root.
@@ -34,7 +34,6 @@ RestartApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 Name: "privateairplay"; Description: "Allow X-Stage AirPlay discovery on trusted Private networks (recommended for iPhone/iPad)"; GroupDescription: "Local network permissions:"; Flags: checkedonce
 
 [Files]
@@ -44,7 +43,7 @@ Source: "mirror-ios-pc\out\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 
 [Icons]
 Name: "{group}\X-Stage Mirror iOS PC"; Filename: "{app}\XStageMirrorIOSPC.exe"
-Name: "{autodesktop}\X-Stage Mirror iOS PC"; Filename: "{app}\XStageMirrorIOSPC.exe"; Tasks: desktopicon
+Name: "{autodesktop}\X-Stage Mirror iOS PC"; Filename: "{app}\XStageMirrorIOSPC.exe"; Comment: "เปิด X-Stage Mirror iOS PC"; IconFilename: "{app}\XStageMirrorIOSPC.exe"
 
 [Run]
 Filename: "{app}\engine\uxplay-windows\mDNSResponder.exe"; Parameters: "-install"; WorkingDir: "{app}\engine\uxplay-windows"; Flags: runhidden waituntilterminated; Check: not BonjourServiceInstalled; StatusMsg: "Preparing bundled AirPlay discovery service..."
