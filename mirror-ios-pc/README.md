@@ -1,6 +1,6 @@
 # X-Stage Mirror iOS PC
 
-**v1.0.9 · Build 1010 · Windows 10/11 x64 · Preview**
+**v1.0.10 · Build 1011 · Windows 10/11 x64 · Preview**
 
 The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
 
@@ -18,6 +18,16 @@ regression test exercises the real private downloader with a local in-memory
 HTTP response and proves the verified file can be reopened with exclusive access.
 Build 1006/1009 cannot repair themselves until the new version is installed;
 once the fixed version is installed, subsequent updates use the corrected path.
+
+## Stop Mirroring recovery (Build 1011)
+
+The native receiver now uses -nc no to close video on Stop Mirroring.
+If the iPhone video TCP connection disappears while its AirPlay control
+connection persists, two consecutive process-owned TCP observations trigger
+hiding the stale video window and returning to the waiting screen.
+A surviving old control TCP connection cannot restore the stale frame.
+UxPlay and Bonjour stay alive. This does not detect every case of a sender
+that stops video but keeps all sockets open; test on real Windows and iOS.
 
 ## Full-screen interface
 

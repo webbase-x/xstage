@@ -36,6 +36,12 @@ internal sealed class VideoWindowPresentation
         _hidden = IntPtr.Zero;
     }
 
+    internal bool HasFreshRenderWindow(int pid)
+    {
+        var hwnd = FindRenderWindow(pid);
+        return hwnd != IntPtr.Zero && hwnd != _hidden;
+    }
+
     internal bool Present(int uxplayPid, System.Windows.Forms.Screen target)
     {
         if (_current != IntPtr.Zero && !IsWindow(_current))

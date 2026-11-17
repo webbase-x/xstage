@@ -45,11 +45,37 @@ internal static class Program
                     throw new InvalidDataException("Downloaded payload size mismatch");
             }
             Console.WriteLine("PASS: updater closed the exclusive writer before PE re-open");
+            TestStopMirroring(assembly);
         }
         finally
         {
             if (File.Exists(destination)) File.Delete(destination);
         }
+    }
+
+    private static void TestStopMirroring(Assembly assembly)
+    {
+        Type type = assembly.GetType("XStageMirrorIOSPC.AirPlaySessionTransitions", true)!;
+        object state = Activator.CreateInstance(type, true)!;
+        var observe = type.GetMethod("ShouldHide", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var hide = type.GetMethod("MarkHidden", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var hasNew = type.GetMethod("HasNewSession", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        bool ShouldHide(bool visible, params string[] sockets) =>
+            (bool)observe.Invoke(state, new object[] { sockets, visible })!;
+        bool HasNew(params string[] sockets) =>
+            (bool)hasNew.Invoke(state, new object[] { sockets })!;
+        const string control = "192.168.1.2:7000 -> 192.168.1.3:55551";
+        const string video = "192.168.1.2:7001 -> 192.168.1.3:55552";
+        const string newVideo = "192.168.1.2:7001 -> 192.168.1.3:55553";
+        if (ShouldHide(false, control) ||
+            ShouldHide(true, control, video) ||
+            ShouldHide(true, control) ||
+            !ShouldHide(true, control))
+            throw new InvalidOperationException("Video socket loss must be confirmed");
+        hide.Invoke(state, new object[] { new[] { control } });
+        if (HasNew(control) || !HasNew(control, newVideo))
+            throw new InvalidOperationException("Old control socket is not a new video session");
+        Console.WriteLine("PASS: video TCP closed despite AirPlay control socket still connected");
     }
 
     private sealed class StaticHandler(byte[] payload) : HttpMessageHandler

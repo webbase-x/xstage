@@ -13,13 +13,14 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 internal static class AirPlaySessionMonitor
 {
-    internal sealed record Snapshot(bool VideoWindow, string[] PeerAddresses, string? Problem);
+    internal sealed record Snapshot(bool VideoWindow, string[] PeerAddresses, string[] Connections, string? Problem);
 
     internal static Snapshot Probe(int receiverPid)
     {
         try
         {
             var addresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var connections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var psi = new ProcessStartInfo
             {
                 FileName = "netstat.exe",
@@ -29,13 +30,13 @@ internal static class AirPlaySessionMonitor
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            if (process is null) return new Snapshot(false, [], "Windows netstat ไม่ตอบกลับ");
+            if (process is null) return new Snapshot(false, [], [], "Windows netstat ไม่ตอบกลับ");
             // Reading stdout first prevents pipe buffer deadlocks on busy machines.
             string output = process.StandardOutput.ReadToEnd();
             if (!process.WaitForExit(3500))
             {
                 try { process.Kill(); } catch { }
-                return new Snapshot(false, [], "การตรวจ TCP ใช้เวลานานเกินไป");
+                return new Snapshot(false, [], [], "การตรวจ TCP ใช้เวลานานเกินไป");
             }
             foreach (var line in output.Split('\n'))
             {
@@ -54,13 +55,15 @@ internal static class AirPlaySessionMonitor
                     ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))
                     continue;
                 addresses.Add(ip.ToString());
+                connections.Add(fields[1] + " -> " + remote);
             }
             return new Snapshot(HasVideoWindow(receiverPid),
-                addresses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).Take(8).ToArray(), null);
+                addresses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).Take(8).ToArray(),
+                connections.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray(), null);
         }
         catch (Exception ex)
         {
-            return new Snapshot(false, [], "ตรวจสอบเซสชันไม่ได้: " + ex.Message);
+            return new Snapshot(false, [], [], "ตรวจสอบเซสชันไม่ได้: " + ex.Message);
         }
     }
 

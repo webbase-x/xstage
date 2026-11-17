@@ -18,7 +18,7 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.9 · Build 1010";
+    private const string VersionText = "v1.0.10 · Build 1011";
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
@@ -57,6 +57,7 @@ public sealed class MainForm : Form
     };
     private readonly System.Windows.Forms.Timer _clock = new() { Interval = 250 };
     private readonly VideoWindowPresentation _video = new();
+    private readonly AirPlaySessionTransitions _sessions = new();
     private readonly string _name = ReceiverIdentity.DisplayName;
     private readonly string _configFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -297,6 +298,7 @@ public sealed class MainForm : Form
         else
         {
             _video.Reset();
+            _sessions.Reset();
             _status.Text = _engineExe is null ? "ไม่พบชุด AirPlay Engine" :
                 !string.IsNullOrWhiteSpace(_receiverIssue) ? _receiverIssue :
                 "กำลังเริ่มรับ AirPlay";
@@ -361,23 +363,33 @@ public sealed class MainForm : Form
             if (probe.Problem is not null || _engine is not { HasExited: false } ||
                 _engine.Id != pid)
                 return;
-            if (probe.PeerAddresses.Length > 0)
+            if (_suppressStaleVideo)
             {
-                _sawPeerDuringVideo = true;
-                if (_suppressStaleVideo)
+                // Existing control TCP alone must not restore the old video.
+                if (_sessions.HasNewSession(probe.Connections) ||
+                    _video.HasFreshRenderWindow(pid))
                 {
                     _suppressStaleVideo = false;
+                    _sessions.MarkVisible(probe.Connections);
                     _video.RestoreAfterReconnect();
+                    _sawPeerDuringVideo = probe.PeerAddresses.Length > 0;
                     TopMost = false;
                 }
+                return;
             }
-            else if (_sawPeerDuringVideo && _video.IsShowing)
+
+            bool showing = _video.IsShowing;
+            if (showing && probe.PeerAddresses.Length > 0)
+                _sawPeerDuringVideo = true;
+            bool lostVideoSocket = _sawPeerDuringVideo &&
+                _sessions.ShouldHide(probe.Connections, showing);
+            bool noPeers = _sawPeerDuringVideo && probe.PeerAddresses.Length == 0;
+            if (lostVideoSocket || noPeers)
             {
                 _sawPeerDuringVideo = false;
                 _suppressStaleVideo = true;
+                _sessions.MarkHidden(probe.Connections);
                 _video.HideAfterDisconnect();
-                // The UxPlay window is topmost during playback. Reclaim the
-                // visible waiting screen after its stream is disconnected.
                 TopMost = true;
                 BringToFront();
                 _status.Text = "พร้อมรับภาพจาก iPhone / iPad";
@@ -476,7 +488,7 @@ public sealed class MainForm : Form
         var cfg = Path.Combine(Environment.GetFolderPath(
             Environment.SpecialFolder.ApplicationData), "leapbtw", "uxplay-windows", "arguments.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(cfg)!);
-        var desired = "-n " + display + " -nh" +
+        var desired = "-n " + display + " -nh -nc no" +
             (_lowLatency ? FastPreviewArguments : "") + Environment.NewLine;
         var original = File.Exists(cfg) ? File.ReadAllText(cfg) : null;
         if (original == desired) return;
@@ -592,6 +604,7 @@ public sealed class MainForm : Form
             _suppressStaleVideo = false;
             TopMost = false;
             _video.Reset();
+            _sessions.Reset();
             _engine?.Dispose();
             _engine = Process.Start(new ProcessStartInfo
             {
@@ -620,6 +633,7 @@ public sealed class MainForm : Form
         _suppressStaleVideo = false;
         TopMost = false;
         _video.Reset();
+        _sessions.Reset();
         try
         {
             if (_engine is { HasExited: false })
