@@ -449,7 +449,7 @@ def kar_document(midi: Path, code: str):
     # event for thousands of tracks that have no text/lyric meta-event at all.
     # This is only a fast negative filter: real candidates still use the full
     # validated event parser, and embedded lyric timings are never guessed.
-    if b"\\xff\\x01" not in raw and b"\\xff\\x05" not in raw:
+    if b"\xff\x01" not in raw and b"\xff\x05" not in raw:
         raise ValueError("ไฟล์ MIDI/KAR ไม่มีเหตุการณ์เนื้อร้องที่ฝังอยู่")
     division, tempo_map, events = midi_events(midi, raw_data=raw)
     chunks = []
