@@ -1,0 +1,166 @@
+name: Publish X-Stage Mirror Android PC latest preview
+
+on:
+  workflow_run:
+    workflows:
+      - Build X-Stage Mirror Android PC Windows
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: xstage-mirror-android-pc-preview-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: true
+
+      - name: Download Windows self-contained Setup and Portable ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name X-Stage-Mirror-Android-PC-Windows-CANDIDATE --dir dist
+          for pattern in '*-Setup.exe' '*-Setup.exe.sha256'; do
+            mapfile -t matches < <(find dist -type f -name "$pattern")
+            test "${#matches[@]}" -eq 1
+            dest="dist/$(basename "${matches[0]}")"
+            test -f "$dest" || cp "${matches[0]}" "$dest"
+          done
+
+      - name: Verify independent executable, version and both SHA-256 hashes
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, re, zipfile, xml.etree.ElementTree as ET
+          from pathlib import Path
+          props=ET.parse('mirror-android-pc/XStageMirrorAndroidPC.csproj').getroot().find('PropertyGroup')
+          version=props.findtext('Version','').strip()
+          fileversion=props.findtext('FileVersion','').strip()
+          assert re.fullmatch(r'\d+\.\d+\.\d+',version)
+          assert re.fullmatch(r'\d+\.\d+\.\d+\.\d+',fileversion)
+          a,b,c,build=map(int,fileversion.split('.'))
+          assert version==f'{a}.{b}.{c}' and build>=1
+          stem=f'X-Stage-Mirror-Android-PC-v{version}-build{build}-win-x64'
+          setup=Path(f'dist/{stem}-Setup.exe')
+          portable=Path(f'dist/{stem}-PORTABLE.zip')
+          for path in (setup,portable):
+              assert path.is_file() and path.stat().st_size>5_000_000, f'Missing/invalid {path}'
+              with path.open('rb') as f: digest=hashlib.file_digest(f,'sha256').hexdigest()
+              check=Path(str(path)+'.sha256')
+              assert check.is_file(),f'Missing SHA256 file {check}'
+              assert check.read_text(encoding='ascii').strip().split()==[digest,path.name],f'SHA256 mismatch {path}'
+              if path==setup: setup_sha=digest
+              else: portable_sha=digest
+          with setup.open('rb') as stream: assert stream.read(2)==b'MZ', 'Not a Windows EXE'
+          with zipfile.ZipFile(portable) as archive:
+              assert 'XStageMirrorAndroidPC.exe' in archive.namelist(),'Windows executable missing'
+              assert archive.testzip() is None,'Portable ZIP damaged'
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+              f.write(f'version={version}\nbuild={build}\nstem={stem}\n')
+              f.write(f'setup_sha={setup_sha}\nportable_sha={portable_sha}\n')
+          print(stem,setup_sha,portable_sha)
+          PY
+
+      - name: Package complete corresponding X-Stage Android receiver source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf "dist/X-Stage-Mirror-Android-PC-v${{ steps.verify.outputs.version }}-build${{ steps.verify.outputs.build }}-source.tar.gz" \
+            mirror-android-pc .github/workflows/build-xstage-mirror-android-pc.yml \
+            .github/workflows/publish-xstage-mirror-android-pc-preview.yml
+          test -s "dist/X-Stage-Mirror-Android-PC-v${{ steps.verify.outputs.version }}-build${{ steps.verify.outputs.build }}-source.tar.gz"
+
+      - name: Publish immutable unsigned Windows Preview
+        env:
+          VERSION: ${{ steps.verify.outputs.version }}
+          BUILD: ${{ steps.verify.outputs.build }}
+          STEM: ${{ steps.verify.outputs.stem }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="xstage-mirror-android-pc-v$VERSION-build$BUILD-preview"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Preview already exists. Increase Version/Build instead of overwriting a release."
+            exit 1
+          fi
+          cat > dist/PREVIEW_NOTES.txt <<'NOTES'
+          X-Stage Mirror Android PC — standalone Windows Miracast launcher.
+          Preview: packaging tested, NOT verified with physical Android/Windows casting devices.
+          Download Setup EXE; .NET 8 runtime is embedded. No third-party downloads.
+          Windows Wireless Display and Wi-Fi Direct / Miracast hardware & drivers MUST
+          be supported by Windows and Android. Google Cast-only senders are unsupported.
+          Setup cannot install proprietary Wi-Fi drivers or bypass Windows OS limitations.
+          Screen name on Android is the real Windows PC name, shown prominently in-app.
+          The app's persistent No.XXXX is a local X-Stage identifier, not a Windows
+          advertised Miracast name. Device sessions are controlled by Windows.
+          NOTES
+          gh release create "$tag" \
+            "dist/$STEM-Setup.exe" "dist/$STEM-Setup.exe.sha256" \
+            "dist/$STEM-PORTABLE.zip" "dist/$STEM-PORTABLE.zip.sha256" \
+            "dist/X-Stage-Mirror-Android-PC-v$VERSION-build$BUILD-source.tar.gz" \
+            --repo "$GITHUB_REPOSITORY" --target "${{ github.event.workflow_run.head_sha }}" \
+            --title "X-Stage Mirror Android PC v$VERSION Build $BUILD — Preview" \
+            --notes-file dist/PREVIEW_NOTES.txt --prerelease
+
+      - name: Update latest manifest after verified GitHub Release
+        env:
+          VERSION: ${{ steps.verify.outputs.version }}
+          BUILD: ${{ steps.verify.outputs.build }}
+          STEM: ${{ steps.verify.outputs.stem }}
+          SETUP_SHA: ${{ steps.verify.outputs.setup_sha }}
+          PORTABLE_SHA: ${{ steps.verify.outputs.portable_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="xstage-mirror-android-pc-v$VERSION-build$BUILD-preview"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx "$STEM-Setup.exe"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx "$STEM-PORTABLE.zip"
+          git fetch origin main
+          git checkout -B main origin/main
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path('downloads/mirror-android-pc-preview-latest.json')
+          old=json.loads(p.read_text('utf-8'))
+          version=os.environ['VERSION'];build=int(os.environ['BUILD']);stem=os.environ['STEM']
+          if old.get('available') and build<=int(old.get('build',0)):
+              raise SystemExit('Refusing to overwrite published or newer build')
+          tag=f'xstage-mirror-android-pc-v{version}-build{build}-preview'
+          base=f'https://github.com/webbase-x/xstage/releases/download/{tag}/'
+          new={'app':'X-Stage Mirror Android PC','platform':'Windows 10/11 x64 · Miracast',
+               'version':version,'build':build,'channel':'preview','available':True,
+               'file':stem+'-Setup.exe','sha256':os.environ['SETUP_SHA'],
+               'download_url':base+stem+'-Setup.exe',
+               'portable_file':stem+'-PORTABLE.zip','portable_sha256':os.environ['PORTABLE_SHA'],
+               'portable_download_url':base+stem+'-PORTABLE.zip',
+               'source_url':base+f'X-Stage-Mirror-Android-PC-v{version}-build{build}-source.tar.gz',
+               'tested_on_hardware':False,
+               'note':'Standalone Miracast launcher. Windows Wireless Display / drivers must be supported. Preview not hardware tested.'}
+          p.write_text(json.dumps(new,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads/mirror-android-pc-preview-latest.json
+          git commit -m "release: publish X-Stage Mirror Android PC v$VERSION Build $BUILD [skip ci]"
+          git push origin main
