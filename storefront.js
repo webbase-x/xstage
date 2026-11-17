@@ -70,7 +70,7 @@
       features:["ตรวจเพลงซ้ำจากข้อมูลไฟล์จริง","สร้าง MIDI to .XSK และ MIDI to Lyrics JSON","จัดการและตรวจแก้เนื้อร้องแบบกลุ่ม","ส่งออกไฟล์เพลงและฐานข้อมูลสำหรับระบบคาราโอเกะ"],
       hero:"สร้างและจัดการเพลงในที่เดียว",blurb:"เปลี่ยนไฟล์ต้นทางเป็นเพลงพร้อมขึ้นเวที",preview:"SONG STUDIO PC · MUSIC WORKFLOW",
       type:"manifest",manifest:"./downloads/song-studio-latest.json",
-      note:"ไฟล์ PC Ready เป็น ZIP แบบพกพา (portable) สำหรับ Windows และอาจเป็นรุ่นทดสอบ ไม่ใช่ตัวติดตั้ง EXE กรุณาตรวจหมายเหตุรุ่นและค่า SHA-256 ก่อนใช้งาน",
+      note:"ตัวติดตั้ง Setup EXE สำหรับ Windows รวมส่วนประกอบพร้อมใช้และทางลัดพร้อมไอคอน รุ่นก่อนที่ยังไม่มีตัวติดตั้งจะดาวน์โหลดเป็น ZIP แบบพกพา",
       fallback:"ยังยืนยันไฟล์ดาวน์โหลด Song Studio PC ไม่ได้"
     },
     "studio-web":{
@@ -183,8 +183,10 @@
   function getRelease(id,data){
     if(!data||typeof data!=="object")throw Error("invalid release data");
     if(id==="studio-pc"){
-      const url=data.available===true && SHA256.test(data.sha256||"") ? verifiedReleaseUrl(data.download_url,".zip") : "";
-      return url?{available:true,url:url,status:"ZIP รุ่น "+String(data.version||"ล่าสุด")+" · ทดลองใช้งาน",kind:"download",version:String(data.version||"")}:
+      const installerUrl=data.available===true && data.installer_available===true && SHA256.test(data.installer_sha256||"")
+        ? verifiedReleaseUrl(data.installer_url,".exe") : "";
+      const url=installerUrl || (data.available===true && SHA256.test(data.sha256||"") ? verifiedReleaseUrl(data.download_url,".zip") : "");
+      return url?{available:true,url:url,status:(installerUrl?"Setup EXE":"ZIP")+" รุ่น "+String(data.version||"ล่าสุด")+" · ทดลองใช้งาน",kind:"download",version:String(data.version||""),installer:!!installerUrl}:
         {available:false,url:"",status:"ยังไม่มี ZIP รุ่นที่ตรวจสอบได้",kind:"pending"};
     }
     if(id==="karaoke-android"){
@@ -368,7 +370,7 @@
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
-      const label=id==="studio-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
+      const label=id==="studio-pc"?(state.installer?"ดาวน์โหลด Setup EXE พร้อมไอคอน ↗":"ดาวน์โหลด ZIP สำหรับ Windows ↗"):
         (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?(state.installer?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":"ดาวน์โหลด ZIP รุ่นทดสอบ ↗"):
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
@@ -381,7 +383,7 @@
       pending.setAttribute("aria-disabled","true");
       pending.textContent="ยังไม่เปิดดาวน์โหลด";
       container.appendChild(pending);
-      container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
+      if(id!=="studio-pc")container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
       if(info.candidate){
         container.appendChild(createAction(info.candidate.label+" ↗",info.candidate.url,"secondary",true));
       }

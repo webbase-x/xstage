@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.65" if READY_BUNDLE else "0.2.8-Source-Preview"
-STATUS_BUILD = "365" if READY_BUNDLE else "208-SRC"
+STATUS_VERSION = "0.3.66" if READY_BUNDLE else "0.2.8-Source-Preview"
+STATUS_BUILD = "366" if READY_BUNDLE else "208-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -2837,8 +2837,7 @@ def start_job(data):
             "id": secrets.token_hex(8), "kind": action, "state": "running",
             "stage": "PC Engine รับคำสั่งแล้ว",
             "detail": ("กำลังเริ่มสแกน MIDI และสร้าง XSK คู่ขนานกัน" if action == "xsk-stream"
-                       else "รอเริ่มสร้าง " + str(validation["total"]) + " เพลง" if validation
-                       else "กำลังเริ่มต้น"),
+                       else ""),
             "completed": 0, "total": validation.get("total", 0),
             "elapsed": 0, "eta": None,
             "idleFor": 0, "logs": ["รับคำสั่งสำเร็จ · กำลังเตรียมการประมวลผล"], "result": {},
