@@ -75,19 +75,18 @@ def _companions(root, media):
     return sorted(result, key=lambda path: str(path).casefold())
 
 
-def _shared_sidecar(source, selected, active_media):
-    """Never touch same-code lyric files if another retained media may use them."""
-    for other in active_media:
-        if other == selected or other == source:
-            continue
-        if other.stem.casefold() != selected.stem.casefold():
-            continue
-        # Sharing in a media folder, or a parallel SONG subtree, is ambiguous.
-        if (other.parent == selected.parent or
-                other.parent.name.casefold() in MEDIA_ROLE_FOLDERS and
-                selected.parent.name.casefold() in MEDIA_ROLE_FOLDERS and
-                other.parent.parent == selected.parent.parent):
-            return True
+def _shared_sidecar(media):
+    """Skip companions with another media file of the same code in this folder."""
+    try:
+        for item in media.parent.iterdir():
+            if (item == media or item.is_symlink() or
+                    item.suffix.casefold() not in MEDIA_EXTENSIONS or
+                    item.stem.casefold() != media.stem.casefold()):
+                continue
+            if item.is_file():
+                return True
+    except OSError as exc:
+        raise OSError("ตรวจไฟล์เพลงที่ใช้เนื้อร้องร่วมกันไม่ได้") from exc
     return False
 
 
@@ -369,7 +368,7 @@ class DuplicateMediaRegistry:
                 "message": (f"ตรวจเพลงซ้ำ {files:,} ไฟล์ · พบกลุ่มซ้ำ {len(groups):,}"
                             f" · ไฟล์สำเนา {sum(len(g['files']) - 1 for g in groups):,}")}
 
-    def page(self, *, offset=0, limit=20):
+    def page(self, *, offset=0, limit=20, preferred_extension=""):
         if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 50:
             raise ValueError("ขอบเขตหน้ารายการไม่ถูกต้อง")
         with self.lock:
@@ -383,20 +382,26 @@ class DuplicateMediaRegistry:
                 if len(alive) > 1:
                     live_groups.append((group, alive))
             rows = []
+            preference = str(preferred_extension or "").casefold()
+            if preference and preference not in MEDIA_EXTENSIONS:
+                raise ValueError("ชนิดไฟล์ที่ต้องการเก็บไม่รองรับ")
             for group, alive in live_groups[offset:offset + limit]:
+                keeper = _preferred_keeper(alive, preference)
                 # A single dummy/placeholder MIDI may be repeated thousands
                 # of times. Send a bounded response; after a cleanup, refreshing
                 # the page reveals the next copies without re-scanning the disk.
                 shown = alive[:301]
+                if keeper not in shown:
+                    shown[-1] = keeper
                 rows.append({"id": group["id"], "size": group["size"],
                              "sha256": group["sha256"],
                              "fileCount": len(alive),
                              "hiddenFiles": len(alive) - len(shown),
                              "files": [
                                  {"id": item["id"], "path": str(item["path"]),
-                                  "keep": i == 0,
-                                  "protected": "xstagesong" in
-                                  {p.casefold() for p in item["path"].parts}}
+                                  "keep": item["id"] == keeper["id"],
+                                  "extension": item["path"].suffix.lower(),
+                                  "protected": _protected_library(item["path"])}
                                  for i, item in enumerate(shown)]})
             return {
                 "ready": True, "scanId": state["scanId"],
