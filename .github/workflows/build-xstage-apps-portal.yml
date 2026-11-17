@@ -113,7 +113,7 @@ jobs:
             source_commit="${{ github.sha }}",
             note="Verified production-signed APK; hosted web UI updates on app launch.")
           Path("downloads/apps-portal-latest.json").write_text(
-            json.dumps(feed,indent=2,ensure_ascii=False)+"\\n")
+            json.dumps(feed,indent=2,ensure_ascii=False)+"\n")
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
