@@ -1,0 +1,11 @@
+{
+  "name": "X-Stage Apps Portal for Android",
+  "available": false,
+  "channel": "pending",
+  "version": "1.0.0",
+  "build": 1,
+  "file": null,
+  "sha256": null,
+  "signer_sha256": null,
+  "note": "Signed APK will appear here after a successful verified release build."
+}

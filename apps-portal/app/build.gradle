@@ -1,0 +1,37 @@
+plugins {
+    id 'com.android.application'
+}
+android {
+    namespace 'com.webbasex.appsportal'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.webbasex.appsportal'
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+    signingConfigs {
+        portalRelease {
+            if (System.getenv('XSTAGE_PORTAL_KEYSTORE_FILE')) {
+                storeFile file(System.getenv('XSTAGE_PORTAL_KEYSTORE_FILE'))
+                storePassword System.getenv('XSTAGE_PORTAL_STORE_PASSWORD')
+                keyAlias System.getenv('XSTAGE_PORTAL_KEY_ALIAS')
+                keyPassword System.getenv('XSTAGE_PORTAL_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (System.getenv('XSTAGE_PORTAL_KEYSTORE_FILE')) {
+                signingConfig signingConfigs.portalRelease
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint { abortOnError true }
+}

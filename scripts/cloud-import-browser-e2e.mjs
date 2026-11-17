@@ -145,7 +145,7 @@ try{
   // a real browser before proceeding into the preserved karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#intro-title').waitFor();
-  assert.equal(await page.locator('.app-card').count(),7,'storefront displays seven supported app entries');
+  assert.equal(await page.locator('.app-card').count(),10,'storefront displays ten supported app entries');
   // Legacy source query must not turn a TV browser into the Karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/?source=android-tv',
                   {waitUntil:'domcontentloaded'});
@@ -155,11 +155,11 @@ try{
   await page.locator('#intro-title').waitFor();
 
   const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
-  assert.equal(logoSources.length,7,'all seven app entries must have a visual identity');
-  assert.equal(new Set(logoSources).size,7,'each X-Stage application must have a distinct icon asset');
+  assert.equal(logoSources.length,10,'all ten app entries must have a visual identity');
+  assert.equal(new Set(logoSources).size,10,'each X-Stage application must have a distinct icon asset');
 
   await page.locator('#device-advice-title').waitFor();
-  assert.equal(await page.locator('[data-device-app]').count(),7,'all seven apps expose device compatibility');
+  assert.equal(await page.locator('[data-device-app]').count(),10,'all ten apps expose device compatibility');
   const iphoneGuidance=await page.evaluate(()=>{
     const api=window.XStageDeviceGuide;
     const p=api.detect({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',platform:'iPhone'});
@@ -170,7 +170,7 @@ try{
   assert.equal(iphoneGuidance.windows.level,'other','iOS users must not be offered Windows PC installation as compatible');
 
   assert.equal(await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.every(n=>n.complete&&n.naturalWidth>0)),true,
-    'seven unique app icons must load in the real browser');
+    'ten unique app icons must load in the real browser');
 
   assert.match(await page.locator('#intro-title').textContent(),/หนึ่งเวที/);
   assert.equal(await page.locator('.new-wordmark img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
@@ -185,13 +185,13 @@ try{
   assert.equal(await page.locator('#detail-title').textContent(),'X-Stage Song Studio PC');
   // The Linux CI machine must see a Windows-only compatibility warning rather than
   // a misleading "install here" label; the verified ZIP link remains accessible.
-  const windowsZip=page.locator('#detail-actions .detail-action.primary[href$=".zip"]');
-  await windowsZip.waitFor({timeout:10000});
-  assert.ok((await windowsZip.textContent()).includes('อุปกรณ์ที่รองรับ'),
+  const windowsDownload=page.locator('#detail-actions .detail-action.primary[href$=".zip"],#detail-actions .detail-action.primary[href$=".exe"]').first();
+  await windowsDownload.waitFor({timeout:10000});
+  assert.ok((await windowsDownload.textContent()).includes('อุปกรณ์ที่รองรับ'),
     'non-Windows viewers must be guided to transfer the ZIP to Windows');
   await page.locator('#detail-back').click();
   await page.locator('#catalog:not([hidden])').waitFor();
-  console.log('PASS: X-Stage Apps premium brand, 7-app catalog, filters, deep-linked details, and verified download CTA');
+  console.log('PASS: X-Stage Apps premium brand, 10-app catalog, filters, deep-linked details, and verified download CTA');
 
   // Simulate the verified direct-download feed before the binary is mirrored by CI.
   // Android TV/TrueID browsers must never be forced into a GitHub popup.

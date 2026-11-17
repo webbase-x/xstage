@@ -1,0 +1,140 @@
+name: Build X-Stage Apps Portal Android
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps-portal/**"
+      - ".github/workflows/build-xstage-apps-portal.yml"
+  pull_request:
+    paths:
+      - "apps-portal/**"
+      - ".github/workflows/build-xstage-apps-portal.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xstage-apps-portal-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      PORTAL_KEY_BASE64: ${{ secrets.XSTAGE_PORTAL_KEYSTORE_BASE64 }}
+      PORTAL_STORE_PASSWORD: ${{ secrets.XSTAGE_PORTAL_STORE_PASSWORD }}
+      PORTAL_KEY_ALIAS: ${{ secrets.XSTAGE_PORTAL_KEY_ALIAS }}
+      PORTAL_KEY_PASSWORD: ${{ secrets.XSTAGE_PORTAL_KEY_PASSWORD }}
+      ANDROID_KEY_BASE64: ${{ secrets.XSTAGE_ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.XSTAGE_ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.XSTAGE_ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.XSTAGE_ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check web portal, database table prefix and Android contract
+        run: node scripts/portal-contract-test.mjs
+      - name: Setup Android 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare stable signing identity when configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          KEY="${PORTAL_KEY_BASE64:-${ANDROID_KEY_BASE64}}"
+          STORE="${PORTAL_STORE_PASSWORD:-${ANDROID_STORE_PASSWORD}}"
+          ALIAS="${PORTAL_KEY_ALIAS:-${ANDROID_KEY_ALIAS}}"
+          PASS="${PORTAL_KEY_PASSWORD:-${ANDROID_KEY_PASSWORD}}"
+          if [[ -n "$KEY" && -n "$STORE" && -n "$ALIAS" && -n "$PASS" ]]; then
+            printf %s "$KEY" | base64 -d > "${RUNNER_TEMP}/xstage-portal.jks"
+            echo "XSTAGE_PORTAL_KEYSTORE_FILE=${RUNNER_TEMP}/xstage-portal.jks" >> "$GITHUB_ENV"
+            echo "XSTAGE_PORTAL_STORE_PASSWORD=$STORE" >> "$GITHUB_ENV"
+            echo "XSTAGE_PORTAL_KEY_ALIAS=$ALIAS" >> "$GITHUB_ENV"
+            echo "XSTAGE_PORTAL_KEY_PASSWORD=$PASS" >> "$GITHUB_ENV"
+            echo "PORTAL_CAN_PUBLISH=true" >> "$GITHUB_ENV"
+          else
+            echo "PORTAL_CAN_PUBLISH=false" >> "$GITHUB_ENV"
+            echo "::notice::No production signing identity configured; build artifact only. Public feed remains unavailable."
+          fi
+      - name: Build Android APK
+        run: gradle -p apps-portal clean assembleDebug assembleRelease --stacktrace
+      - name: Publish test APK as CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xstage-apps-portal-test-${{ github.sha }}
+          path: apps-portal/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish stable signed APK and update feed
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.PORTAL_CAN_PUBLISH == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=apps-portal/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          FINGERPRINT="$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+          [[ "$FINGERPRINT" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::Could not verify stable signing certificate"; exit 1; }
+          python3 - "$FINGERPRINT" <<'PY'
+          import json,sys
+          from pathlib import Path
+          old=json.loads(Path("downloads/apps-portal-latest.json").read_text())
+          prior=old.get("signer_sha256")
+          if prior and prior != sys.argv[1]:
+              raise SystemExit("Refusing signer rotation; installed APKs cannot update safely")
+          PY
+          VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" apps-portal/app/build.gradle | head -1)"
+          BUILD="$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' apps-portal/app/build.gradle | head -1)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ "$BUILD" =~ ^[0-9]+$ ]]
+          NAME="X-Stage-Apps-Portal-v${VERSION}-build${BUILD}.apk"
+          mkdir -p downloads
+          cp "$APK" "downloads/$NAME"
+          sha256sum "downloads/$NAME" > "downloads/$NAME.sha256"
+          python3 - "$NAME" "$VERSION" "$BUILD" "$FINGERPRINT" <<'PY'
+          import hashlib,json,sys
+          from pathlib import Path
+          name,version,build,fingerprint=sys.argv[1:]
+          content=(Path("downloads")/name).read_bytes()
+          feed=dict(name="X-Stage Apps Portal Android",version=version,build=int(build),
+            channel="signed",available=True,file=name,
+            sha256=hashlib.sha256(content).hexdigest(),
+            signer_sha256=fingerprint,
+            download_url="https://webbase-x.github.io/xstage/downloads/"+name,
+            source_commit="${{ github.sha }}",
+            note="Verified production-signed APK; hosted web UI updates on app launch.")
+          Path("downloads/apps-portal-latest.json").write_text(
+            json.dumps(feed,indent=2,ensure_ascii=False)+"\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "downloads/$NAME" "downloads/$NAME.sha256" downloads/apps-portal-latest.json
+          git commit -m "build(portal): publish verified signed APK [skip ci]"
+          for i in 1 2 3; do
+            git fetch origin main
+            if [[ "$(git rev-parse origin/main)" != "$(git rev-parse HEAD^)" ]]; then
+              CHANGED="$(git diff --name-only "${GITHUB_SHA}" origin/main)"
+              if grep -Eq '^(apps-portal/|\.github/workflows/build-xstage-apps-portal\.yml$|downloads/apps-portal-latest\.json$|downloads/X-Stage-Apps-Portal-)' <<< "$CHANGED"; then
+                echo "::error::Portal source or feed changed during build; rerun from latest main"
+                exit 1
+              fi
+              git rebase origin/main
+            fi
+            if git push origin HEAD:main; then exit 0; fi
+          done
+          echo "::error::Could not publish APK after verifying concurrent commits"
+          exit 1

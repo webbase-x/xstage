@@ -1,0 +1,40 @@
+/* Keep the additional portal tools unobtrusive on TV, desktop and mobile. */
+.portal-account{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.portal-account>span{font-size:11px;font-weight:700;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.portal-account button,.portal-small-button,#portal-review-submit{border:1px solid #aac1e9;border-radius:12px;background:#fff;color:#164a9c;cursor:pointer;padding:10px 12px;font:inherit;font-size:12px;font-weight:780;min-height:42px}
+.portal-account button:disabled{opacity:.55;cursor:not-allowed}
+.portal-account button:hover:not(:disabled),.portal-small-button:hover{background:#e7f0ff}
+.portal-account button:focus-visible,.portal-small-button:focus-visible,#portal-review-submit:focus-visible{outline:3px solid #00a9ed;outline-offset:2px}
+.portal-history{padding-block:20px 30px}
+.portal-history .section-heading{margin-bottom:15px}
+.portal-reviews{margin:35px 0 26px;padding:26px;border:1px solid #dce4f3;border-radius:22px;background:rgba(230,239,255,.52)}
+.portal-reviews-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.portal-reviews-heading h2{margin:0;font-size:20px}
+.portal-reviews-heading strong{font-size:15px;color:#3557a7}
+.portal-reviews #portal-reviews-status{font-size:12px;color:#66758d}
+#portal-review-form{display:grid;gap:9px;max-width:640px;margin:18px 0 24px}
+#portal-review-form label{font-size:13px;font-weight:750}
+#portal-review-form select,#portal-review-form textarea{font:inherit;color:#172e55;background:#fff;border:1px solid #bfcce3;border-radius:12px;padding:10px 12px}
+#portal-review-form textarea{resize:vertical;min-height:80px}
+#portal-review-submit{background:#1564d8;color:#fff;justify-self:start;border-color:#1564d8}
+#portal-review-submit:disabled{opacity:.5}
+.portal-list{display:grid;gap:10px;margin-top:15px}
+.portal-review-item,.portal-event{border-radius:14px;border:1px solid #d9e2f2;background:#fff;padding:13px 16px;color:#21375c}
+.portal-event{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between;font-size:13px}
+.portal-review-item p{margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.portal-review-header{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.portal-stars{font-size:16px;letter-spacing:1.5px;color:#bd8419}
+.portal-muted{font-size:12px;color:#66758d}
+.portal-danger{color:#a33043;border-color:#e4b3bf}
+.portal-admin{margin-top:22px;border-top:1px solid #ccd9e9;padding-top:18px}
+.portal-self-card[hidden]{display:none!important}
+@media(max-width:920px){.portal-account{order:4;width:100%;justify-content:flex-start;margin-left:0}.portal-account>span{max-width:280px}}
+@media(max-width:600px){.portal-reviews{padding:16px}.portal-account button{font-size:11px}}
+@media(prefers-color-scheme:dark){
+ .portal-reviews{background:#182a48;border-color:#3d5275}.portal-review-item,.portal-event{background:#253551;border-color:#425575;color:#e8f0ff}
+ .portal-muted,.portal-reviews #portal-reviews-status{color:#b4c3df}
+ .portal-reviews-heading strong{color:#a7c4ff}.portal-account button,.portal-small-button{background:#263b5e;color:#d8e8ff;border-color:#55709c}
+}
+
+/* Override explicit display rules when the native hidden attribute is set. */
+#portal-review-form[hidden],#portal-history[hidden],#portal-admin[hidden],.portal-account button[hidden]{display:none!important}

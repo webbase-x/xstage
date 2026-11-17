@@ -27,6 +27,7 @@
     return {kind,label:NAME[kind],certain:kind!=="unknown"};
   }
   const catalog={
+    "apps-portal":{target:"มือถือและแท็บเล็ต Android, Android TV / Google TV ที่มี WebView และเบราว์เซอร์",fallback:["karaoke-web"]},
     "karaoke-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน iPhone, iPad, Android, Windows หรือ Mac",fallback:[]},
     "karaoke-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["karaoke-web"]},
     "studio-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["studio-web"]},

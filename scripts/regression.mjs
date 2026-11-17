@@ -153,7 +153,7 @@ assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Androi
 assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
 assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
-assert.equal((storefront.match(/data-device-app=/g)||[]).length,9,'all nine cards need device-compatibility hints');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,10,'all ten cards need device-compatibility hints');
 assert.ok(storefront.includes('storefront-device.js?brand=7'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
 assert.ok(storefront.includes('data-download-app="mirror-ios-pc"')&&storefront.includes('data-download-app="mirror-android-pc"'),'both standalone Windows mirror apps must have separate download actions');
@@ -256,8 +256,9 @@ assert.ok(receiverBuild.includes('XStageReceiverHome(')&&
           receiverBuild.includes('ReceiverNamePolicy.migratePreviousName(this)')&&
           receiverRecipe.includes('ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)'),
           'The Android build must start automatically and ask before closing on Back');
-assert.ok(receiverBuild.includes('"0.2.9"')&&receiverBuild.includes('"111"'),
-          'Mirror TV clean receiver must increment to v0.2.9 Build 111');
+assert.ok(receiverBuild.includes('VERSION = os.environ.get("XSTAGE_MIRROR_VERSION"') &&
+          receiverBuild.includes('BUILD = os.environ.get("XSTAGE_MIRROR_BUILD"'),
+          'Mirror TV clean receiver must declare configurable version and build');
 if(mirrorTest.direct_download_available===true){
   const name=mirrorTest.direct_download_file;
   assert.match(name,/^X-Stage-Mirror-TV-test-v\d+\.\d+\.\d+-build\d+\.apk$/);
@@ -777,7 +778,11 @@ assert.ok(Number.isInteger(studioReady.build)&&studioReady.build>=325,
 assert.ok(studioReady.archive_file.includes('v'+studioReady.version+'-build'+studioReady.build),
   'Song Studio release filename must match its own metadata, not a stale hard-coded release');
 assert.equal(studioReady.package_type,'portable_zip');
-assert.equal(studioReady.installer_available,false);
+if(studioReady.installer_available){
+  assert.match(studioReady.installer_file,/^X-Stage-Song-Studio-PC-v[0-9]+\.[0-9]+\.[0-9]+-build[0-9]+-win-x64-Setup\.exe$/,'Published Song Studio installer filename must be well formed');
+  assert.match(studioReady.installer_sha256,/^[a-f0-9]{64}$/,'Published installer must include SHA-256');
+  assert.ok(studioReady.installer_url.endsWith('/'+studioReady.installer_file),'Installer URL and filename must match');
+}
 assert.match(studioReady.sha256,/^[a-f0-9]{64}$/,'Ready ZIP must pin the GitHub Release digest');
 assert.equal(studioPreview.channel,'source-preview');
 assert.match(studioPreview.version,/^\d+\.\d+\.\d+$/,'Song Studio Source Preview must declare a semantic version');

@@ -51,7 +51,11 @@
   </script>
   <link rel="stylesheet" href="./storefront.css?brand=5">
   <script src="./storefront-device.js?brand=7" defer></script>
-  <script src="./storefront.js?brand=12" defer></script>
+  <script src="./storefront.js?brand=13" defer></script>
+  <script src="./portal-config.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js" defer></script>
+  <script src="./portal.js?version=1" defer></script>
+  <link rel="stylesheet" href="./portal.css?version=1">
 </head>
 <body>
   <a class="skip-link" href="#catalog">ข้ามไปยังรายการแอป</a>
@@ -62,6 +66,11 @@
         <a href="#catalog" id="nav-apps">แอปทั้งหมด</a>
         <a href="#about" id="nav-about">เกี่ยวกับโครงการ</a>
       </nav>
+      <div class="portal-account" id="portal-account">
+        <span id="portal-user">ผู้เยี่ยมชม · ดูรายการได้</span>
+        <button type="button" id="portal-login">G เข้าสู่ระบบ Google</button>
+        <button type="button" id="portal-logout" hidden>ออกจากระบบ</button>
+      </div>
       <a class="header-launch" href="./karaoke.html">เปิดคาราโอเกะ <span aria-hidden="true">↗</span></a>
     </div>
   </header>
@@ -108,7 +117,7 @@
       </div>
     </section>
     <section class="hero-meta section-wrap" aria-label="ภาพรวมแอป X-Stage">
-      <div><strong>09</strong><span>แอปและเครื่องมือในโครงการ</span></div>
+      <div><strong>10</strong><span>แอปและเครื่องมือในโครงการ</span></div>
       <div><strong>03</strong><span>แพลตฟอร์มหลัก Web · PC · TV</span></div>
       <div><strong>01</strong><span>จุดเริ่มต้นของ X-Stage ทุกแอป</span></div>
     </section>
@@ -151,6 +160,11 @@
         <label class="catalog-search"><span aria-hidden="true">⌕</span><input type="search" id="app-search" placeholder="ค้นหาแอป" autocomplete="off" aria-label="ค้นหาแอปใน X-Stage"></label>
       </div>
       <div class="app-grid" id="app-grid">
+        <article class="app-card portal-self-card" data-app="apps-portal" data-category="tools" data-name="x-stage apps portal android apk รวมแอป ดาวน์โหลด อัปเดต">
+          <a class="app-art icon-portal" href="?app=apps-portal" aria-label="รายละเอียด X-Stage Apps Portal"><img src="./assets/xstage-apps-icon.svg" width="78" height="78" loading="lazy" alt=""></a>
+          <div class="app-text"><span class="app-category">ANDROID · APP CENTER</span><h3><a href="?app=apps-portal">X-Stage Apps Portal</a></h3><p>ศูนย์รวมและดาวน์โหลดแอป X-Stage ในแอปเดียว อัปเดตรายการจากเว็บไซต์โดยตรง</p><span class="app-status" data-status="apps-portal">ตรวจสอบ APK ล่าสุด…</span><span class="device-compat" data-device-app="apps-portal"></span></div>
+          <a class="app-detail-link" href="?app=apps-portal">ดูรายละเอียด <span aria-hidden="true">↗</span></a>
+        </article>
         <article class="app-card" data-app="karaoke-web" data-category="karaoke" data-name="x-stage karaoke online เว็บ คาราโอเกะ ร้องเพลง">
           <a class="app-art icon-stage" href="?app=karaoke-web" aria-label="รายละเอียด Karaoke Online"><img src="./assets/xstage-app-icon-192.png" width="78" height="78" loading="lazy" alt=""></a>
           <div class="app-text"><span class="app-category">WEB · KARAOKE</span><h3><a href="?app=karaoke-web">X-Stage Karaoke Online</a></h3><p>เวทีคาราโอเกะส่วนตัว เล่นเพลงผ่านเว็บ</p><span class="app-status ready">พร้อมใช้งาน</span><span class="device-compat" data-device-app="karaoke-web"></span></div>
@@ -200,6 +214,11 @@
       <p id="catalog-empty" class="catalog-empty" hidden>ไม่พบแอปที่ตรงกับคำค้นหา ลองเปลี่ยนคำค้นหาหรือหมวดหมู่</p>
     </section>
 
+    <section class="portal-history section-wrap" id="portal-history" hidden>
+      <div class="section-heading"><div><span class="section-kicker">ACCOUNT HISTORY</span><h2>ประวัติการดาวน์โหลดของฉัน</h2><p>แสดงรายการกดดาวน์โหลดหลังเข้าสู่ระบบ ไม่ยืนยันว่าติดตั้งบนอุปกรณ์สำเร็จ</p></div></div>
+      <div class="portal-list" id="portal-history-list"></div>
+      <div class="portal-admin" id="portal-admin" hidden><h3>ข้อมูลผู้ดูแลระบบ</h3><p>ประวัติกิจกรรมที่ผู้ใช้ยินยอมให้บันทึก</p><div id="portal-admin-events" class="portal-list"></div></div>
+    </section>
     <section class="about-section section-wrap" id="about">
       <div class="about-card"><span class="section-kicker">ABOUT X-STAGE</span><h2>หนึ่งโครงการ<br>หลากหลายวิธีสร้างเวที</h2><p>X-Stage รวมเครื่องมือด้านคาราโอเกะและการเตรียมเพลงไว้ในระบบนิเวศเดียวกัน หน้านี้เป็นจุดเริ่มต้นสำหรับเลือกแอป ตรวจสอบสถานะเผยแพร่ และไปยังช่องทางที่เหมาะสม โดยไม่ต้องค้นหาลิงก์แยกหลายแห่ง</p><a href="#catalog">ดูแอปและไฟล์ติดตั้งสำหรับผู้ใช้ทั่วไป <span aria-hidden="true">↗</span></a></div>
     </section>
@@ -222,10 +241,22 @@
     </div>
     <div class="detail-columns"><section aria-labelledby="detail-about-title"><span class="section-kicker">OVERVIEW</span><h2 id="detail-about-title">เกี่ยวกับแอป</h2><p id="detail-description"></p></section><section aria-labelledby="detail-features-title"><span class="section-kicker">HIGHLIGHTS</span><h2 id="detail-features-title">ความสามารถหลัก</h2><ul id="detail-features"></ul></section></div>
     <section class="detail-note"><h2>ข้อมูลการดาวน์โหลด</h2><p id="detail-download-note"></p></section>
+    <section id="portal-reviews" class="portal-reviews" aria-labelledby="portal-reviews-title">
+      <div class="portal-reviews-heading"><h2 id="portal-reviews-title">คะแนนและความคิดเห็น</h2><strong id="portal-rating-summary">ยังไม่มีคะแนน</strong></div>
+      <p id="portal-reviews-status" role="status">ผู้ใช้ทั่วไปอ่านรีวิวได้ เข้าสู่ระบบ Google เพื่อให้คะแนน</p>
+      <form id="portal-review-form" hidden>
+        <label for="portal-rating">ให้คะแนนแอป</label>
+        <select id="portal-rating" required><option value="5">★★★★★ · 5 ดาว</option><option value="4">★★★★☆ · 4 ดาว</option><option value="3">★★★☆☆ · 3 ดาว</option><option value="2">★★☆☆☆ · 2 ดาว</option><option value="1">★☆☆☆☆ · 1 ดาว</option></select>
+        <label for="portal-comment">ความคิดเห็น (ไม่เกิน 1,000 ตัวอักษร)</label>
+        <textarea id="portal-comment" maxlength="1000" rows="3" placeholder="ข้อเสนอแนะเพื่อพัฒนาแอป"></textarea>
+        <button type="submit" id="portal-review-submit">บันทึกคะแนนและความคิดเห็น</button>
+      </form>
+      <div id="portal-review-list" class="portal-list"></div>
+    </section>
   </main>
 
   <footer class="site-footer">
-    <div class="section-wrap footer-inner"><div class="footer-logo new-footer-logo"><img src="./assets/xstage-apps-logo.svg" alt="X-STAGE APPS" width="180" height="46"></div><span>สร้างสรรค์ทุกเวทีในแบบของคุณ</span><a href="#catalog">แอปทั้งหมด ↗</a></div>
+    <div class="section-wrap footer-inner"><div class="footer-logo new-footer-logo"><img src="./assets/xstage-apps-logo.svg" alt="X-STAGE APPS" width="180" height="46"></div><span>สร้างสรรค์ทุกเวทีในแบบของคุณ</span><a href="./portal-privacy.html">ความเป็นส่วนตัว</a><a href="#catalog">แอปทั้งหมด ↗</a></div>
   </footer>
 </body>
 </html>
