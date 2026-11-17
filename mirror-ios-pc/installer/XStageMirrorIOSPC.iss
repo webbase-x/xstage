@@ -63,9 +63,9 @@ Filename: "{app}\engine\uxplay-windows\mDNSResponder.exe"; Parameters: "-install
 ; selects the privateairplay task. checkedonce leaves that task unchecked on an
 ; upgrade, so an unconditional delete here would silently BREAK working AirPlay.
 ; Never touch public profiles or third-party firewall rules.
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC AirPlay Private"""; Flags: runhidden; Tasks: privateairplay waituntilterminated
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC AirPlay Private"""; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC Bonjour Private"""; Flags: runhidden; Tasks: privateairplay
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC mDNS Private"""; Flags: runhidden; Tasks: privateairplay waituntilterminated
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror iOS PC mDNS Private"""; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror iOS PC AirPlay Private"" dir=in action=allow program=""{app}\engine\uxplay-windows\uxplay-windows.exe"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror iOS PC Bonjour Private"" dir=in action=allow program=""{app}\engine\uxplay-windows\mDNSResponder.exe"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror iOS PC mDNS Private"" dir=in action=allow protocol=UDP localport=5353 profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
