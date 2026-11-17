@@ -97,6 +97,16 @@ jobs:
             "\n".join(k+"="+esc(v) for k,v in props.items())+"\n",encoding="utf-8")
           PY
 
+      - name: Validate original private signing identity before the Android build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/xstage-mirror-release.jks
+          keytool -list -storetype PKCS12 -keystore /tmp/xstage-mirror-release.jks \
+            -alias "$XSTAGE_MIRROR_KEY_ALIAS" \
+            -storepass:env XSTAGE_MIRROR_STORE_PASSWORD >/dev/null
+          echo "PASS: production signing keystore and alias verified"
+
       - name: Install Android SDK and NDK
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"

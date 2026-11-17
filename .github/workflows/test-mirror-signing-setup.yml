@@ -1,0 +1,75 @@
+name: Validate Mirror TV signing setup (no private secrets)
+
+on:
+  pull_request:
+    paths:
+      - "xstage-mirror-tv/setup-signing.sh"
+      - ".github/workflows/test-mirror-signing-setup.yml"
+  push:
+    branches: [main]
+    paths:
+      - "xstage-mirror-tv/setup-signing.sh"
+      - ".github/workflows/test-mirror-signing-setup.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signing-setup-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Validate setup syntax
+        shell: bash
+        run: bash -n xstage-mirror-tv/setup-signing.sh
+      - name: Dry-run real keytool with mocked GitHub CLI (no live secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_HOME="$RUNNER_TEMP/mirror-signing-smoke"
+          export GH_STUB_DIR="$RUNNER_TEMP/mirror-signing-mock"
+          mkdir -p "$TEST_HOME" "$GH_STUB_DIR" "$RUNNER_TEMP/mockbin"
+          cat > "$RUNNER_TEMP/mockbin/gh" <<'MOCK'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          case "$1 $2" in
+            "auth status") exit 0 ;;
+            "api repos/"*) printf 'public-test-key\n'; exit 0 ;;
+            "secret list") exit 0 ;;
+            "secret set")
+              name="$3"
+              case "$name" in
+                XSTAGE_MIRROR_KEYSTORE_BASE64|XSTAGE_MIRROR_STORE_PASSWORD|XSTAGE_MIRROR_KEY_ALIAS|XSTAGE_MIRROR_KEY_PASSWORD) ;;
+                *) exit 3 ;;
+              esac
+              cat > "$GH_STUB_DIR/$name"
+              exit 0 ;;
+            "workflow run") exit 0 ;;
+            *) echo "Unexpected gh command: $*" >&2; exit 2 ;;
+          esac
+          MOCK
+          chmod 700 "$RUNNER_TEMP/mockbin/gh"
+          trap 'rm -rf "$TEST_HOME" "$GH_STUB_DIR" "$RUNNER_TEMP/mockbin" "$RUNNER_TEMP/mirror-signing-smoke.log"' EXIT
+          printf 'CREATE\nSAVED\n' |
+            env HOME="$TEST_HOME" PATH="$RUNNER_TEMP/mockbin:$PATH" \
+              bash xstage-mirror-tv/setup-signing.sh > "$RUNNER_TEMP/mirror-signing-smoke.log" 2>&1 || {
+                sed -E 's/(STORE THIS PASSWORD.*)/[redacted]/' "$RUNNER_TEMP/mirror-signing-smoke.log" |
+                  grep -E 'ERROR|Exception|No such file' || true
+                echo 'Setup dry-run failed. See local runner log (not uploaded).' >&2
+                exit 1
+              }
+          KEY="$TEST_HOME/.config/xstage/mirror-tv-release.p12"
+          test -s "$KEY"
+          for item in XSTAGE_MIRROR_KEYSTORE_BASE64 XSTAGE_MIRROR_STORE_PASSWORD XSTAGE_MIRROR_KEY_ALIAS XSTAGE_MIRROR_KEY_PASSWORD; do
+            test -s "$GH_STUB_DIR/$item"
+          done
+          base64 --decode < "$GH_STUB_DIR/XSTAGE_MIRROR_KEYSTORE_BASE64" | cmp - "$KEY"
+          export XSTAGE_MIRROR_STORE_PASSWORD="$(cat "$GH_STUB_DIR/XSTAGE_MIRROR_STORE_PASSWORD")"
+          keytool -list -storetype PKCS12 -keystore "$KEY" -alias xstage-mirror \
+            -storepass:env XSTAGE_MIRROR_STORE_PASSWORD >/dev/null
+          echo "PASS: keystore creation, four secrets, signer verification and build trigger path"

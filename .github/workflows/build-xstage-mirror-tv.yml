@@ -90,6 +90,16 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Validate private keystore before expensive native compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/xstage-mirror-signing.jks"
+          keytool -list -storetype PKCS12 -keystore "$RUNNER_TEMP/xstage-mirror-signing.jks" \
+            -alias "$XSTAGE_MIRROR_KEY_ALIAS" \
+            -storepass:env XSTAGE_MIRROR_STORE_PASSWORD >/dev/null
+          echo "PASS: permanent signing keystore, alias and store password"
+
       - name: Prepare all-in-one APK with bundled AirPlay engine and update client
         run: |
           python3 -m pip install --disable-pip-version-check Pillow==11.3.0
