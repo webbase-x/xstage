@@ -11,12 +11,15 @@ import json
 import os
 import re
 import shutil
+import time
 from pathlib import Path
 
 MEDIA_EXT = {".mid", ".midi", ".kar", ".mp3", ".m4a", ".wav", ".aac",
              ".flac", ".ogg", ".oga", ".wma", ".mp4", ".webm", ".avi",
              ".mkv", ".mov", ".mpg", ".mpeg", ".vob", ".dat", ".wmv", ".flv"}
 AUDIO_FORMATS = {"original", "m4a", "mp3", "wav", "flac", "ogg"}
+CHECKPOINT_SIZE = 1024
+CHECKPOINT_INTERVAL_SECONDS = 60
 
 
 def _fingerprint(path):
@@ -217,140 +220,162 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     created = skipped = errors = 0
     issues = []
     examined = 0
-    for index, item in enumerate(entries, 1):
-        examined = index
-        if cancelled is not None and cancelled.is_set():
-            raise RuntimeError("ยกเลิกการส่งออกแล้ว · คงไฟล์ที่สำเร็จไว้สำหรับเริ่มต่อ")
-        media = next((path for path, _ in item["files"]
-                      if path.suffix.lower() in MEDIA_EXT), None)
-        if media is None:
-            skipped += 1
-            continue
-        final_audio = final_lyrics = None
-        try:
-            source_code = media.stem.strip()
-            if not source_code or len(source_code) > 140:
-                raise ValueError("ชื่อเพลงต้นทางไม่สามารถใช้เป็นรหัสได้")
-            # Validate actual source cues BEFORE hashing/copying media. Invalid
-            # source songs need no costly SHA-256 read of a large audio file.
-            doc = _document(item, source_code, export, ncn)
-            lyric_hash = _lyrics_digest(doc)
-            source_hash = _fingerprint(media)
-            identity = "json-pro/" + source_hash + "/" + output_format + "/" + lyric_hash[:24]
-            if (source_hash, output_format, lyric_hash) in seen or identity in existing:
+    checkpointed = 0
+    checkpoint_at = time.monotonic()
+
+    def checkpoint(*, force=False):
+        nonlocal checkpointed, checkpoint_at
+        if (not force and created - checkpointed < CHECKPOINT_SIZE
+                and time.monotonic() - checkpoint_at < CHECKPOINT_INTERVAL_SECONDS):
+            return
+        # All items are already fsynced to a crash-safe journal. Publish it
+        # periodically so completed files become usable before the scan ends.
+        # An interrupted/cancelled run must also publish its last good batch.
+        pending = export.journal_records(root)
+        if pending:
+            export.publish_batch(root, pending)
+            export.clear_published_journal(root)
+        checkpointed = created
+        checkpoint_at = time.monotonic()
+
+    try:
+        for index, item in enumerate(entries, 1):
+            examined = index
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("ยกเลิกการส่งออกแล้ว · คงไฟล์ที่สำเร็จไว้สำหรับเริ่มต่อ")
+            media = next((path for path, _ in item["files"]
+                          if path.suffix.lower() in MEDIA_EXT), None)
+            if media is None:
                 skipped += 1
                 continue
-            # Allocate after fingerprint deduplication; existing songs never change.
-            code = _next_code(used_codes, code_style, code_length, source_code, code_counters)
-            doc["songCode"] = code
-            # Store the actual Pro output in the SHARED XStageSong hierarchy.
-            # Bucket follows assigned song code, not the source filename.
-            bucket = code[0].upper() if code[0].upper() in (
-                "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") else "_"
-            extension = (media.suffix.lower() if output_format == "original"
-                         else "." + output_format)
-            if extension in (".mid", ".midi"):
-                relative_audio = "MIDI/MID/SONG/" + bucket + "/" + code + extension
-                relative_lyrics = "MIDI/MID/LYRICS/" + bucket + "/" + code + ".json"
-            elif extension == ".kar":
-                # KAR is self-contained and needs neither SONG nor external JSON.
-                relative_audio = "MIDI/KAR/" + bucket + "/" + code + extension
-                relative_lyrics = None
-            elif extension in (".mp4", ".webm", ".avi", ".mkv", ".mov", ".mpg",
-                               ".mpeg", ".vob", ".dat", ".wmv", ".flv"):
-                category = "VIDEO/" + extension[1:].upper()
-                relative_audio = category + "/SONG/" + bucket + "/" + code + extension
-                relative_lyrics = category + "/LYRICS/" + bucket + "/" + code + ".json"
-            else:
-                category = "AUDIO/" + extension[1:].upper()
-                relative_audio = category + "/SONG/" + bucket + "/" + code + extension
-                relative_lyrics = category + "/LYRICS/" + bucket + "/" + code + ".json"
-            final_audio = export.safe_media_path(root, relative_audio, "audio")
-            final_lyrics = (export.safe_media_path(root, relative_lyrics, "lyrics")
-                            if relative_lyrics else None)
-            # Recover an orphaned but verified pair if the process exited
-            # after committing files and before the journal append.
-            already_published_files = final_audio.exists() or (final_lyrics is not None and final_lyrics.exists())
-            if already_published_files and not (
-                    _can_recover_pair(media, final_audio, final_lyrics, source_hash,
-                                      doc, output_format) if final_lyrics is not None
-                    else (final_audio.is_file() and not final_audio.is_symlink()
-                          and _fingerprint(final_audio) == source_hash)):
-                raise FileExistsError(
-                    "ผลลัพธ์เก่าไม่ครบหรือไม่ตรงข้อมูล · ไม่เขียนทับไฟล์เดิม")
-            if not already_published_files:
-                final_audio.parent.mkdir(parents=True, exist_ok=True)
-                if final_lyrics is not None:
-                    final_lyrics.parent.mkdir(parents=True, exist_ok=True)
-                temp_audio = final_audio.with_name("." + final_audio.stem + ".partial" + final_audio.suffix)
-                temp_lyrics = (final_lyrics.with_name(final_lyrics.name + ".partial")
-                               if final_lyrics is not None else None)
-                if temp_audio.is_symlink() or (temp_lyrics is not None and temp_lyrics.is_symlink()):
-                    raise ValueError("พบไฟล์ชั่วคราวแบบ Symbolic Link")
-                temp_audio.unlink(missing_ok=True)
-                if temp_lyrics is not None:
-                    temp_lyrics.unlink(missing_ok=True)
-                try:
-                    if output_format == "original":
-                        with media.open("rb") as reader, temp_audio.open("xb") as writer:
-                            while True:
-                                if cancelled is not None and cancelled.is_set():
-                                    raise RuntimeError("ยกเลิกการคัดลอกไฟล์ต้นฉบับ")
-                                block = reader.read(1024 * 1024)
-                                if not block:
-                                    break
-                                writer.write(block)
-                            writer.flush()
-                            os.fsync(writer.fileno())
-                        if _fingerprint(temp_audio) != source_hash:
-                            raise ValueError("ตรวจ SHA-256 หลังคัดลอกต้นฉบับไม่ผ่าน")
-                    else:
-                        if convert is None:
-                            raise ValueError("ไม่พบตัวแปลงเสียงของ PC Engine")
-                        convert(media, temp_audio, output_format)
-                        if not temp_audio.is_file() or temp_audio.stat().st_size < 1000:
-                            raise ValueError("ไฟล์เสียงหลังแปลงไม่สมบูรณ์")
-                    if temp_lyrics is not None:
-                        with temp_lyrics.open("x", encoding="utf-8") as writer:
-                            json.dump(doc, writer, ensure_ascii=False, allow_nan=False)
-                            writer.write("\n")
-                            writer.flush()
-                            os.fsync(writer.fileno())
-                    _publish_no_overwrite(temp_audio, final_audio)
-                    if temp_lyrics is not None:
-                        _publish_no_overwrite(temp_lyrics, final_lyrics)
-                finally:
+            final_audio = final_lyrics = None
+            try:
+                source_code = media.stem.strip()
+                if not source_code or len(source_code) > 140:
+                    raise ValueError("ชื่อเพลงต้นทางไม่สามารถใช้เป็นรหัสได้")
+                # Validate actual source cues BEFORE hashing/copying media. Invalid
+                # source songs need no costly SHA-256 read of a large audio file.
+                doc = _document(item, source_code, export, ncn)
+                lyric_hash = _lyrics_digest(doc)
+                source_hash = _fingerprint(media)
+                identity = "json-pro/" + source_hash + "/" + output_format + "/" + lyric_hash[:24]
+                if (source_hash, output_format, lyric_hash) in seen or identity in existing:
+                    skipped += 1
+                    continue
+                # Allocate after fingerprint deduplication; existing songs never change.
+                code = _next_code(used_codes, code_style, code_length, source_code, code_counters)
+                doc["songCode"] = code
+                # Store the actual Pro output in the SHARED XStageSong hierarchy.
+                # Bucket follows assigned song code, not the source filename.
+                bucket = code[0].upper() if code[0].upper() in (
+                    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") else "_"
+                extension = (media.suffix.lower() if output_format == "original"
+                             else "." + output_format)
+                if extension in (".mid", ".midi"):
+                    relative_audio = "MIDI/MID/SONG/" + bucket + "/" + code + extension
+                    relative_lyrics = "MIDI/MID/LYRICS/" + bucket + "/" + code + ".json"
+                elif extension == ".kar":
+                    # KAR is self-contained and needs neither SONG nor external JSON.
+                    relative_audio = "MIDI/KAR/" + bucket + "/" + code + extension
+                    relative_lyrics = None
+                elif extension in (".mp4", ".webm", ".avi", ".mkv", ".mov", ".mpg",
+                                   ".mpeg", ".vob", ".dat", ".wmv", ".flv"):
+                    category = "VIDEO/" + extension[1:].upper()
+                    relative_audio = category + "/SONG/" + bucket + "/" + code + extension
+                    relative_lyrics = category + "/LYRICS/" + bucket + "/" + code + ".json"
+                else:
+                    category = "AUDIO/" + extension[1:].upper()
+                    relative_audio = category + "/SONG/" + bucket + "/" + code + extension
+                    relative_lyrics = category + "/LYRICS/" + bucket + "/" + code + ".json"
+                final_audio = export.safe_media_path(root, relative_audio, "audio")
+                final_lyrics = (export.safe_media_path(root, relative_lyrics, "lyrics")
+                                if relative_lyrics else None)
+                # Recover an orphaned but verified pair if the process exited
+                # after committing files and before the journal append.
+                already_published_files = final_audio.exists() or (final_lyrics is not None and final_lyrics.exists())
+                if already_published_files and not (
+                        _can_recover_pair(media, final_audio, final_lyrics, source_hash,
+                                          doc, output_format) if final_lyrics is not None
+                        else (final_audio.is_file() and not final_audio.is_symlink()
+                              and _fingerprint(final_audio) == source_hash)):
+                    raise FileExistsError(
+                        "ผลลัพธ์เก่าไม่ครบหรือไม่ตรงข้อมูล · ไม่เขียนทับไฟล์เดิม")
+                if not already_published_files:
+                    final_audio.parent.mkdir(parents=True, exist_ok=True)
+                    if final_lyrics is not None:
+                        final_lyrics.parent.mkdir(parents=True, exist_ok=True)
+                    temp_audio = final_audio.with_name("." + final_audio.stem + ".partial" + final_audio.suffix)
+                    temp_lyrics = (final_lyrics.with_name(final_lyrics.name + ".partial")
+                                   if final_lyrics is not None else None)
+                    if temp_audio.is_symlink() or (temp_lyrics is not None and temp_lyrics.is_symlink()):
+                        raise ValueError("พบไฟล์ชั่วคราวแบบ Symbolic Link")
                     temp_audio.unlink(missing_ok=True)
                     if temp_lyrics is not None:
                         temp_lyrics.unlink(missing_ok=True)
-            title = doc.get("title") if isinstance(doc.get("title"), str) else ""
-            artist = doc.get("artist") if isinstance(doc.get("artist"), str) else ""
-            record = {"webSongId": identity, "code": code,
-                      "title": title.strip() or code,
-                      "artist": artist.strip(), "bucket": bucket,
-                      "audio": {"path": relative_audio},
-                      "lyrics": {"path": relative_lyrics} if relative_lyrics else None,
-                      "sourceFormat": item["kind"],
-                      "sourceIdentity": {"sha256": source_hash,
-                                         "canonicalPath": export.canonical_source_path(media),
-                                         "bytes": media.stat().st_size,
-                                         "outputFormat": output_format,
-                                         "lyricsSha256": lyric_hash}}
-            export.append_journal(root, record)
-            existing.add(identity)
-            seen.add((source_hash, output_format, lyric_hash))
-            created += 1
-        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
-            errors += 1
-            if len(issues) < 50:
-                issues.append({"name": item["name"], "reason": str(exc)[:200]})
-        if progress is not None:
-            progress(index, known_total, {"created": created, "skipped": skipped,
-                                            "errors": errors})
-    pending = export.journal_records(root)
-    if pending:
-        export.publish_batch(root, pending)
-        export.clear_published_journal(root)
+                    try:
+                        if output_format == "original":
+                            # Verify the exact bytes during copying instead of
+                            # reading the whole destination for a third time.
+                            copy_hash = hashlib.sha256()
+                            with media.open("rb") as reader, temp_audio.open("xb") as writer:
+                                while True:
+                                    if cancelled is not None and cancelled.is_set():
+                                        raise RuntimeError("ยกเลิกการคัดลอกไฟล์ต้นฉบับ")
+                                    block = reader.read(1024 * 1024)
+                                    if not block:
+                                        break
+                                    copy_hash.update(block)
+                                    writer.write(block)
+                                writer.flush()
+                                os.fsync(writer.fileno())
+                            if copy_hash.hexdigest() != source_hash:
+                                raise ValueError("ตรวจ SHA-256 ระหว่างคัดลอกต้นฉบับไม่ผ่าน")
+                        else:
+                            if convert is None:
+                                raise ValueError("ไม่พบตัวแปลงเสียงของ PC Engine")
+                            convert(media, temp_audio, output_format)
+                            if not temp_audio.is_file() or temp_audio.stat().st_size < 1000:
+                                raise ValueError("ไฟล์เสียงหลังแปลงไม่สมบูรณ์")
+                        if temp_lyrics is not None:
+                            with temp_lyrics.open("x", encoding="utf-8") as writer:
+                                json.dump(doc, writer, ensure_ascii=False, allow_nan=False)
+                                writer.write("\n")
+                                writer.flush()
+                                os.fsync(writer.fileno())
+                        _publish_no_overwrite(temp_audio, final_audio)
+                        if temp_lyrics is not None:
+                            _publish_no_overwrite(temp_lyrics, final_lyrics)
+                    finally:
+                        temp_audio.unlink(missing_ok=True)
+                        if temp_lyrics is not None:
+                            temp_lyrics.unlink(missing_ok=True)
+                title = doc.get("title") if isinstance(doc.get("title"), str) else ""
+                artist = doc.get("artist") if isinstance(doc.get("artist"), str) else ""
+                record = {"webSongId": identity, "code": code,
+                          "title": title.strip() or code,
+                          "artist": artist.strip(), "bucket": bucket,
+                          "audio": {"path": relative_audio},
+                          "lyrics": {"path": relative_lyrics} if relative_lyrics else None,
+                          "sourceFormat": item["kind"],
+                          "sourceIdentity": {"sha256": source_hash,
+                                             "canonicalPath": export.canonical_source_path(media),
+                                             "bytes": media.stat().st_size,
+                                             "outputFormat": output_format,
+                                             "lyricsSha256": lyric_hash}}
+                export.append_journal(root, record)
+                existing.add(identity)
+                seen.add((source_hash, output_format, lyric_hash))
+                created += 1
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+                errors += 1
+                if len(issues) < 50:
+                    issues.append({"name": item["name"], "reason": str(exc)[:200]})
+            checkpoint()
+            if progress is not None:
+                progress(index, known_total, {"created": created, "skipped": skipped,
+                                                "errors": errors})
+    finally:
+        checkpoint(force=True)
     if examined == 0:
         raise ValueError("ไม่พบเพลงที่มีเนื้อร้องพร้อมเวลาในต้นทาง")
     if not created and not skipped and errors:

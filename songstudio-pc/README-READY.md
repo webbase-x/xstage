@@ -1,3 +1,14 @@
+## Build 364 — MIDI to Lyrics JSON: สร้างต่อเนื่องและยกเลิกข้อจำกัดตามฮาร์ดแวร์
+
+- ยกเลิกการปฏิเสธงานเพราะ CPU ใช้งานสูง, RAM เหลือน้อย และจำนวนคอร์ CPU; ยังป้องกันงานเขียนคลังเดียวกันชนกันและการติดตั้งอัปเดตพร้อมงานอื่น
+- MIDI to Lyrics JSON เผยแพร่ Catalog เป็นระยะ (ทุก 1,024 เพลงหรือ 60 วินาทีของการประมวลผล) เพื่อให้ไฟล์ที่สำเร็จแล้วใช้ได้ก่อนจบทั้งชุด
+- เมื่อยกเลิกงานหรือสแกนผิดพลาด จะพยายามบันทึกงานที่สำเร็จแล้วลง Catalog; งานเดิมที่ทำสำเร็จใช้ต่อได้โดยไม่เขียนทับ
+- คำนวณ SHA-256 ระหว่างคัดลอกแทนการอ่านปลายทางซ้ำ; สำหรับ MIDI ดนตรีล้วนที่ไม่มีเหตุการณ์คำร้อง จะข้ามการแยกอ่าน Note/Event โดยละเอียด
+- แสดงจำนวนไฟล์ที่ค้นหา จำนวนเพลงที่สร้าง ข้ามซ้ำ และเหตุผลที่ไม่สำเร็จบนหน้า MIDI to Lyrics JSON
+- การยกเลิกข้อจำกัดฮาร์ดแวร์ไม่ใช่การยกเลิก License Pro; โหมด Pro ยังคงใช้สิทธิ์ตามเดิม
+- ผลจาก MIDI ที่ไม่มีข้อมูลคำร้องพร้อมเวลาจริงยังต้องใช้แหล่ง Lyrics/LYR+CUR, LRC/JSON หรือคำร้องที่ฝังอยู่ในไฟล์; ไม่สร้างเวลาปลอม
+- ตรวจสอบการทดสอบ GitHub Actions ของ Build 364 และไฟล์ ZIP ที่เผยแพร่ก่อนแจ้งว่าใช้งานจริงได้ครบ
+
 ## Build 363 — ตรวจเพลงซ้ำ: จัดการไฟล์เพลงและไฟล์ประกอบเป็นชุด
 
 - The first menu now supports **two separate review modes**: **SHA-256 exact bytes** (truly identical media files) and **same filename code** (manual candidates only). Same-code items can be different songs or encodings; do not treat them as proven duplicates. Same-code mode requires the user to check and affirm musical identity, and has no mass-select action.

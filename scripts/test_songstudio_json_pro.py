@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -40,6 +41,39 @@ class JsonProTests(unittest.TestCase):
     def run_export(self, fmt="original", **extra):
         return pro.export_folder(str(self.source), str(self.dest), output_format=fmt,
                                  export=export, scanner=folder_upload, **extra)
+
+    def test_checkpoint_publishes_while_more_songs_remain(self):
+        stream = load("json_source_stream")
+        for number in (2, 3):
+            code = f"{number:05d}"
+            (self.source / (code + ".mp3")).write_bytes(
+                b"ID3" + bytes([number]) * 3001)
+            (self.source / (code + ".lrc")).write_text(
+                "[00:01.00]บรรทัดทดสอบ", encoding="utf-8")
+        with patch.object(pro, "CHECKPOINT_SIZE", 2), patch.object(
+                export, "publish_batch", wraps=export.publish_batch) as publisher:
+            result = self.run_export(source_stream=stream.stream)
+        self.assertEqual(result["created"], 3)
+        self.assertEqual(publisher.call_count, 2)
+        library = self.dest / "XStageSong"
+        self.assertEqual(len(export.existing_records(library)), 3)
+        self.assertFalse((library / ".build-journal.jsonl").exists())
+
+    def test_cancel_publishes_completed_song_without_waiting_for_full_scan(self):
+        stream = load("json_source_stream")
+        (self.source / "00002.mp3").write_bytes(b"ID3" + b"Y" * 3001)
+        (self.source / "00002.lrc").write_text(
+            "[00:02.00]อีกเพลง", encoding="utf-8")
+        cancelled = threading.Event()
+        def request_cancel(done, total, state):
+            if done == 1:
+                cancelled.set()
+        with self.assertRaisesRegex(RuntimeError, "ยกเลิก"):
+            self.run_export(source_stream=stream.stream, cancelled=cancelled,
+                            progress=request_cancel)
+        library = self.dest / "XStageSong"
+        self.assertEqual(len(export.existing_records(library)), 1)
+        self.assertFalse((library / ".build-journal.jsonl").exists())
 
     def test_stream_creates_json_from_ncn_without_any_source_json(self):
         stream = load("json_source_stream")

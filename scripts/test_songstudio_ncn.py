@@ -329,6 +329,14 @@ class NcnSourceTests(unittest.TestCase):
         self.assertAlmostEqual(doc["lines"][2]["startTime"], 1.5)
         self.assertEqual(doc["lines"][0]["characters"][0]["text"], "หนึ่ง")
 
+    def test_plain_midi_without_lyrics_is_rejected_before_note_parsing(self):
+        song = self.dir / "plain-instrumental.mid"
+        song.write_bytes(midi())
+        with patch.object(ncn, "midi_events", side_effect=AssertionError(
+                "should not parse thousands of instrumental note events")):
+            with self.assertRaisesRegex(ValueError, "ไม่มีเหตุการณ์เนื้อร้อง"):
+                ncn.kar_document(song, "00088")
+
     def test_karaoke_pc_byte_identical_mid_plus_real_lyrics_json(self):
         """Existing publishing engine saves both outputs under ONE song code."""
         mid, lyr, cur = self.make_ncn("00046", "0", lyric="เพลงทดสอบ")

@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.63" if READY_BUNDLE else "0.2.8-Source-Preview"
-STATUS_BUILD = "363" if READY_BUNDLE else "208-SRC"
+STATUS_VERSION = "0.3.64" if READY_BUNDLE else "0.2.8-Source-Preview"
+STATUS_BUILD = "364" if READY_BUNDLE else "208-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -180,16 +180,16 @@ def resource_snapshot():
             total = values.get("MemTotal")
         except (OSError, ValueError, IndexError):
             pass
-    capacity = 1 if cores < 4 else 2 if cores < 8 else MAX_PARALLEL_JOBS
-    if total is not None and total < 8 * 1024**3:
-        capacity = min(capacity, 1)
+    # Hardware telemetry is informational only. Never refuse a user job just
+    # because the CPU is busy, RAM is low, or the machine has few cores.
+    # Conflicting writes/installer jobs are still serialized below.
     with LOCK:
         active = sum(1 for entry in ACTIVE_JOBS.values()
                      if entry["thread"] and entry["thread"].is_alive())
     return {"cpuCores": cores, "cpuBusyPercent": cpu_busy_percent(),
             "memoryAvailableBytes": available,
-            "memoryTotalBytes": total, "parallelLimit": capacity,
-            "active": active, "freeSlots": max(0, capacity-active)}
+            "memoryTotalBytes": total, "parallelLimit": None,
+            "active": active, "freeSlots": None}
 
 def _check_resource_capacity(action):
     state = resource_snapshot()
@@ -204,17 +204,6 @@ def _check_resource_capacity(action):
             raise ValueError("งานนี้ต้องรอให้งานอื่นหยุดก่อนเพื่อป้องกันข้อมูลชนกัน")
         if any(item["group"] == group for item in active):
             raise ValueError("มีงานประเภทเดียวกันกำลังทำงานอยู่ · กรุณารอหรือยกเลิกเฉพาะงานนั้น")
-        if len(active) >= state["parallelLimit"]:
-            raise ValueError("เครื่องกำลังทำงานเต็มความสามารถ ("+
-                             str(state["parallelLimit"])+" งานพร้อมกัน) · กรุณารอหรือลดจำนวนงาน")
-    if state.get("cpuBusyPercent") is not None and state["cpuBusyPercent"] >= 92 and state["active"] >= 1:
-        raise ValueError("CPU กำลังใช้งานสูง ("+str(state["cpuBusyPercent"])+
-                         "%) · ยังไม่รับงานเพิ่มเพื่อป้องกันโปรแกรมหน่วง")
-    required = 3*1024**3 if group == "audio-ai" else 1024**3
-    free = state["memoryAvailableBytes"]
-    if free is not None and free < required:
-        raise ValueError("หน่วยความจำ RAM เหลือน้อย ("+
-                         str(round(free/1024**3,1))+" GB) · กรุณาปิดงานอื่นก่อนเริ่ม")
     return state
 
 FILES = []
@@ -2213,6 +2202,12 @@ def execute_job(action, options, started):
                 cancelled=worker_cancel(), progress=_json_progress,
                 scan_progress=_json_scan_progress,
                 source_stream=source_stream.stream)
+            # Source count is only known after the last directory has been read.
+            # Make finished counts truthful even if interim progress was unknown.
+            with LOCK:
+                worker_job().update(total=result["total"], completed=result["total"],
+                                    created=result["created"], skipped=result["skipped"],
+                                    errors=result["errors"], lyricsCount=result["created"])
         elif action == "created-xsk":
             module = _module("created_xsk_export.py", "xstage_created_xsk_export")
             output_root = worker_prefs().get("xsk_folder") or worker_prefs()["workspace"]
@@ -2539,7 +2534,7 @@ def execute_job(action, options, started):
             raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
             build_errors = (
-                (action == "build" and result.get("errors", 0) > 0)
+                (action in ("build", "json-pro-export") and result.get("errors", 0) > 0)
                 or (action == "upload" and
                     (result.get("conflicts", 0) > 0 or result.get("notReady", 0) > 0)))
             skipped_only = (action == "build" and result.get("created", 0) == 0
