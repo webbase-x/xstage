@@ -342,6 +342,52 @@ substitute(activity,
            '    override fun onDestroy() {\n'
            '        mirrorUpdates.close()')
 
+# One Back press always asks for confirmation, including during mirroring.
+# Choosing "ปิด" stops the foreground receiver before finishing the Activity.
+substitute(activity,
+           'import androidx.activity.enableEdgeToEdge',
+           'import androidx.activity.enableEdgeToEdge\n'
+           'import androidx.activity.compose.BackHandler\n'
+           'import androidx.compose.runtime.remember\n'
+           'import androidx.compose.material3.AlertDialog\n'
+           'import androidx.compose.material3.Text\n'
+           'import androidx.compose.material3.TextButton')
+substitute(activity,
+           '        setContent {\n            AirShowTheme {',
+           '        setContent {\n'
+           '            val confirmExit = remember { mutableStateOf(false) }\n'
+           '            BackHandler(enabled = !confirmExit.value) { confirmExit.value = true }\n'
+           '            AirShowTheme {')
+substitute(activity,
+           '                    onLocalNetwork = ::_requestLocalNetwork\n'
+           '                )\n            }\n        }',
+           '                    onLocalNetwork = ::_requestLocalNetwork\n'
+           '                )\n'
+           '                if (confirmExit.value) {\n'
+           '                    AlertDialog(\n'
+           '                        onDismissRequest = { confirmExit.value = false },\n'
+           '                        title = { Text("ปิด X-Stage Mirror TV?") },\n'
+           '                        text = { Text("การรับภาพและการเชื่อมต่อจะหยุดลง") },\n'
+           '                        confirmButton = {\n'
+           '                            TextButton(onClick = {\n'
+           '                                confirmExit.value = false\n'
+           '                                viewModel.stopServer()\n'
+           '                                finish()\n'
+           '                            }) { Text("ปิด") }\n'
+           '                        },\n'
+           '                        dismissButton = {\n'
+           '                            TextButton(onClick = { confirmExit.value = false }) {\n'
+           '                                Text("ไม่ปิด")\n'
+           '                            }\n'
+           '                        }\n'
+           '                    )\n'
+           '                }\n'
+           '            }\n        }')
+# Do not allow a hidden old user preference to disable reception on launch.
+substitute(activity,
+           'if (viewModel.pref(Prefs.AUTO_START).value && svc.serverState.value == AirPlayService.ServerState.STOPPED && hasLocalNetwork())',
+           'if (svc.serverState.value == AirPlayService.ServerState.STOPPED && hasLocalNetwork())')
+
 settings = ui / "SettingsScreen.kt"
 substitute(settings,
            '    val serverName by viewModel.pref(Prefs.SERVER_NAME).collectAsState()',
@@ -364,6 +410,25 @@ substitute(settings,
            '            onClick = { mirrorActivity?.checkMirrorUpdateNow() },\n'
            '            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)\n'
            '        ) { Text("ตรวจสอบอัปเดต X-Stage Mirror TV") }')
+
+# Automatic startup and fullscreen reception are fixed product behavior,
+# not user-facing toggles that could contradict what the receiver actually does.
+substitute(settings,
+           '        SettingSwitch(\n'
+           '            title = stringResource(R.string.setting_auto_fullscreen),\n'
+           '            description = stringResource(R.string.setting_auto_fullscreen_desc),\n'
+           '            checked = autoFullscreen,\n'
+           '            onCheckedChange = { viewModel.set(Prefs.AUTO_FULLSCREEN, it) }\n'
+           '        )',
+           '')
+substitute(settings,
+           '            SettingSwitch(\n'
+           '                title = stringResource(R.string.setting_auto_start),\n'
+           '                description = stringResource(R.string.setting_auto_start_desc),\n'
+           '                checked = autoStart,\n'
+           '                onCheckedChange = { viewModel.set(Prefs.AUTO_START, it) }\n'
+           '            )',
+           '')
 
 # Apply bounded decoder/discovery performance patches to the pinned source.
 subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "performance_tuning.py"),
