@@ -7,6 +7,9 @@ on:
       - ".github/workflows/build-xstage-icons.yml"
       - "scripts/build_xstage_icons.py"
       - "assets/xstage-app-icon.svg"
+      - "assets/xstage-apps-icon.svg"
+      - "studio/web-app-icon.svg"
+      - "assets/app-icons/mirror-tv.svg"
   workflow_dispatch:
 
 permissions:
@@ -28,11 +31,41 @@ jobs:
         run: python -m pip install "Pillow>=10,<13" "CairoSVG>=2.7,<3"
       - name: Generate X-Stage icons from the stage emblem
         run: python scripts/build_xstage_icons.py
+      - name: Render distinct X-Stage Apps, Studio Web, and Mirror iOS icons
+        shell: bash
+        run: |
+          python - <<'PY'
+          from io import BytesIO
+          from pathlib import Path
+          import cairosvg
+          from PIL import Image
+
+          root = Path.cwd()
+          icons = [
+              ("assets/xstage-apps-icon.svg", "assets/xstage-apps-apple-touch-icon.png", 180),
+              ("assets/xstage-apps-icon.svg", "assets/xstage-apps-icon-192.png", 192),
+              ("studio/web-app-icon.svg", "studio/web-apple-touch-icon.png", 180),
+              ("studio/web-app-icon.svg", "studio/web-icon-192.png", 192),
+              ("studio/web-app-icon.svg", "studio/web-icon-512.png", 512),
+              ("assets/app-icons/mirror-tv.svg", "assets/app-icons/mirror-tv-apple-touch-icon.png", 180),
+          ]
+          for source, dest, size in icons:
+              output = root / dest
+              output.parent.mkdir(parents=True, exist_ok=True)
+              binary = cairosvg.svg2png(url=str(root / source), output_width=size, output_height=size)
+              image = Image.open(BytesIO(binary)).convert("RGBA")
+              bg = Image.new("RGBA", (size, size), (10, 22, 48, 255))
+              bg.alpha_composite(image)
+              bg.convert("RGB").save(output, format="PNG", optimize=True)
+              if output.stat().st_size < 1024:
+                  raise SystemExit("Icon output unexpectedly small: " + str(output))
+              print(dest, output.stat().st_size)
+          PY
       - name: Commit generated images
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/xstage-favicon-32.png assets/xstage-app-icon-192.png assets/xstage-app-icon-512.png assets/xstage-app-icon-maskable-512.png assets/xstage-apple-touch-icon.png
+          git add assets/xstage-favicon-32.png assets/xstage-app-icon-192.png assets/xstage-app-icon-512.png assets/xstage-app-icon-maskable-512.png assets/xstage-apple-touch-icon.png assets/xstage-apps-apple-touch-icon.png assets/xstage-apps-icon-192.png studio/web-apple-touch-icon.png studio/web-icon-192.png studio/web-icon-512.png assets/app-icons/mirror-tv-apple-touch-icon.png
           if ! git diff --cached --quiet; then
             git commit -m "build(icons): update X-Stage icon assets"
             git push
