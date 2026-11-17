@@ -3,6 +3,8 @@
 #define MyAppBuild "102"
 
 [Setup]
+; Relative to this script in mirror-pc/installer. Resolve to repository root.
+SourceDir=..\..
 AppId={{D54A387F-447A-483A-946D-2BBFC4CA1F8A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
