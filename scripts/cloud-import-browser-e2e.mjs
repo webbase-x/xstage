@@ -155,11 +155,11 @@ try{
   await page.locator('#intro-title').waitFor();
 
   const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
-  assert.equal(logoSources.length,7,'all seven app entries must have a visual identity');
-  assert.equal(new Set(logoSources).size,7,'each X-Stage application must have a distinct icon asset');
+  assert.equal(logoSources.length,10,'all ten app entries must have a visual identity');
+  assert.equal(new Set(logoSources).size,10,'each X-Stage application must have a distinct icon asset');
 
   await page.locator('#device-advice-title').waitFor();
-  assert.equal(await page.locator('[data-device-app]').count(),7,'all seven apps expose device compatibility');
+  assert.equal(await page.locator('[data-device-app]').count(),10,'all ten apps expose device compatibility');
   const iphoneGuidance=await page.evaluate(()=>{
     const api=window.XStageDeviceGuide;
     const p=api.detect({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',platform:'iPhone'});
@@ -170,7 +170,7 @@ try{
   assert.equal(iphoneGuidance.windows.level,'other','iOS users must not be offered Windows PC installation as compatible');
 
   assert.equal(await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.every(n=>n.complete&&n.naturalWidth>0)),true,
-    'seven unique app icons must load in the real browser');
+    'ten unique app icons must load in the real browser');
 
   assert.match(await page.locator('#intro-title').textContent(),/หนึ่งเวที/);
   assert.equal(await page.locator('.new-wordmark img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
