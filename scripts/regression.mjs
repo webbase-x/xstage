@@ -48,7 +48,7 @@ assert.match(storefront,/id="intro-title">หนึ่งเวที/,'new hero
 assert.match(storefront,/class="intro section-wrap new-home-hero"/,'editorial hero must be present');
 assert.match(storeStyle,/\.intro\.new-home-hero\{/,'redesigned hero styling must load');
 assert.match(storefront,/storefront\.css\?brand=5/,'storefront refresh must bust the cached stylesheet');
-assert.match(storefront,/storefront\.js\?brand=7/,'latest Mirror PC download UI must bust stale cached storefront script');
+assert.match(storefront,/storefront\.js\?brand=8/,'latest Mirror PC download UI must bust stale cached storefront script');
 assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
 
 // The public URL must stay on the app hub for television browsers (even
