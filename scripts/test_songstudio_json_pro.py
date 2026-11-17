@@ -304,6 +304,83 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(saved["audio"]["path"], "MIDI/MID/SONG/0/00001.mid")
         self.assertEqual(saved["lyrics"]["path"], "MIDI/MID/LYRICS/0/00001.json")
 
+    def test_lrc_title_artist_survive_json_catalog_and_pc_export(self):
+        pc = load("pc_library_export")
+        self.lrc.write_text(
+            "[ti:เพลงจากหัว LRC]\n[ar:ศิลปินจากหัว LRC]\n"
+            "[00:02.50]เนื้อร้องบรรทัดแรก\n", encoding="utf-8")
+        outcome = self.run_export()
+        self.assertEqual(outcome["created"], 1)
+        root = self.dest / "XStageSong"
+        record = export.existing_records(root)[0]
+        self.assertEqual((record["title"], record["artist"]),
+                         ("เพลงจากหัว LRC", "ศิลปินจากหัว LRC"))
+        doc = json.loads(export.safe_media_path(
+            root, record["lyrics"]["path"], "lyrics").read_text(encoding="utf-8"))
+        self.assertEqual((doc["title"], doc["artist"]),
+                         ("เพลงจากหัว LRC", "ศิลปินจากหัว LRC"))
+        out = self.root / "karaoke"
+        pc.publish(root, str(out), export)
+        manifest = json.loads((out / "XStageSong/DB/songs-portable.json").read_text(
+            encoding="utf-8"))
+        self.assertEqual((manifest["songs"][0]["title"],
+                          manifest["songs"][0]["artist"]),
+                         ("เพลงจากหัว LRC", "ศิลปินจากหัว LRC"))
+
+    def test_ncn_metadata_promoted_to_top_level_json_and_catalog(self):
+        stream = load("json_source_stream")
+        self.mp3.unlink()
+        self.lrc.unlink()
+        base = self.source / "MIDI/NCN"
+        midi = base / "SONG/0/00022.mid"
+        lyr = base / "LYR/0/00022.lyr"
+        cur = base / "CUR/0/00022.cur"
+        for path in (midi, lyr, cur):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"MThd" + b"X" * 100)
+        class Ncn:
+            def ncn_document(self, companion):
+                doc = export.lrc_to_json("[00:01.00]หนึ่งบรรทัด", companion["code"])
+                doc["metadata"] = {"title": "เพลงจาก LYR", "artist": "ศิลปินจาก LYR"}
+                return doc
+        result = self.run_export(ncn=Ncn(), source_stream=stream.stream)
+        self.assertEqual(result["created"], 1)
+        root = self.dest / "XStageSong"
+        record = export.existing_records(root)[0]
+        self.assertEqual((record["title"], record["artist"]),
+                         ("เพลงจาก LYR", "ศิลปินจาก LYR"))
+        doc = json.loads(export.safe_media_path(
+            root, record["lyrics"]["path"], "lyrics").read_text(encoding="utf-8"))
+        self.assertEqual((doc["title"], doc["artist"]),
+                         ("เพลงจาก LYR", "ศิลปินจาก LYR"))
+
+    def test_existing_json_nested_identity_and_no_false_program_name(self):
+        self.lrc.unlink()
+        document = export.lrc_to_json("[00:01.00]คำร้อง", "00001")
+        document["title"] = "00001"
+        document["artist"] = "X-Stage Song Studio"
+        document["metadata"] = {"title": "เพลงใน JSON", "artist": "ศิลปินใน JSON"}
+        (self.source / "00001.json").write_text(
+            json.dumps(document, ensure_ascii=False), encoding="utf-8")
+        result = self.run_export()
+        self.assertEqual(result["created"], 1)
+        root = self.dest / "XStageSong"
+        record = export.existing_records(root)[0]
+        self.assertEqual((record["title"], record["artist"]),
+                         ("เพลงใน JSON", "ศิลปินใน JSON"))
+        doc = json.loads(export.safe_media_path(
+            root, record["lyrics"]["path"], "lyrics").read_text(encoding="utf-8"))
+        self.assertEqual((doc["title"], doc["artist"]),
+                         ("เพลงใน JSON", "ศิลปินใน JSON"))
+
+    def test_missing_name_is_not_silently_replaced_with_code_or_publisher(self):
+        result = self.run_export()
+        self.assertEqual(result["created"], 1)
+        record = export.existing_records(self.dest / "XStageSong")[0]
+        self.assertEqual(record["title"], "ไม่ระบุชื่อเพลง")
+        self.assertEqual(record["artist"], "ไม่ระบุศิลปิน")
+
+
     def test_midi_to_mp3_uses_soundfont_wav_before_ffmpeg(self):
         engine = load("engine")
         midi = self.source / "00088.mid"
