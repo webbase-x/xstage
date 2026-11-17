@@ -108,9 +108,9 @@
       description:"แอปควบคุมตัวรับภาพบน Windows ที่รวมทางเข้า AirPlay จาก iOS และ Wireless Display/Miracast จาก Android ในหน้าต่างเดียวกัน ตัวรับ AirPlay ใช้ UxPlay แบบพกพาที่แพ็กมาพร้อมรุ่นติดตั้ง ส่วน Android ใช้คุณสมบัติรับภาพของ Windows และต้องรองรับ Miracast ไม่ใช่ Google Cast อย่างเดียว",
       features:["iOS ไม่ต้องติดตั้งแอปบนโทรศัพท์ ใช้ Screen Mirroring ผ่าน AirPlay","Android ใช้การแคสต์ผ่าน Miracast บนเครื่องและไดรเวอร์ที่รองรับ","ตั้งชื่อ AirPlay และควบคุมเริ่ม/หยุดตัวรับจากหน้าเดียว","Windows 10/11 x64; ตัวรับภาพจริงใช้หน้าต่างของ AirPlay/Windows","โหมด LAN ไม่ต้องใช้อินเทอร์เน็ต; ไม่มี cloud relay"],
       hero:"รับทุกหน้าจอในห้องเดียวกัน",blurb:"สะท้อนจากมือถือสู่ Windows ได้อย่างเหมาะสม",preview:"MIRROR PC · IOS & ANDROID",
-      type:"manifest",manifest:"./downloads/mirror-pc-latest.json",
+      type:"manifest",manifest:"./downloads/mirror-pc-latest.json",previewManifest:"./downloads/mirror-pc-preview-latest.json",
       candidate:{label:"ดูซอร์สและผล Build รุ่นพัฒนา",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-mirror-pc.yml"},
-      note:"กำลังพัฒนา ยังไม่มีตัวติดตั้งที่ยืนยันด้วยอุปกรณ์จริง แอปไม่สามารถสร้าง Miracast ขึ้นเองได้ หาก Windows/Android ไม่รองรับ และตัวรับ UxPlay ไม่ได้แสดงภาพฝังในหน้าต่างควบคุม X-Stage",
+      note:"ZIP สำหรับ Windows 10/11 x64 จะดาวน์โหลดรุ่นล่าสุดจาก GitHub Releases อัตโนมัติเมื่อเผยแพร่สำเร็จ เปิด ZIP แล้วเรียก XStageMirrorPC.exe โดยไม่ต้องติดตั้งส่วนประกอบเพิ่ม (Preview ยังไม่ได้ทดสอบบนอุปกรณ์จริง) Android ต้องรองรับ Miracast บน Windows และตัวส่ง; หน้ารับภาพเปิดผ่านระบบของ Windows",
       fallback:"ยังไม่มี Windows Mirror PC ที่ทดสอบแล้ว"
     },
     "mirror-tv":{
@@ -184,10 +184,18 @@
         {available:false,url:"",status:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน",kind:"pending"};
     }
     if(id==="mirror-pc"){
-      const valid=data.available===true&&/^\d+\.\d+\.\d+$/.test(data.version||"")&&SHA256.test(data.sha256||"");
-      const url=valid?verifiedReleaseUrl(data.download_url,".zip"):"";
-      return url?{available:true,url,status:"Windows v"+String(data.version)+" · ZIP แบบพกพา",kind:"download",version:String(data.version)}:
-        {available:false,url:"",status:"อยู่ระหว่างพัฒนา · ยังไม่มี ZIP ที่ตรวจสอบแล้ว",kind:"pending"};
+      const version=String(data.version||"");
+      const build=data.build;
+      const preview=data.channel==="preview";
+      const valid=data.available===true&&/^\d+\.\d+\.\d+$/.test(version)&&
+        Number.isSafeInteger(build)&&build>=1&&SHA256.test(data.sha256||"")&&
+        (!preview||data.file==="X-Stage-Mirror-PC-v"+version+"-build"+build+"-win-x64-CANDIDATE.zip");
+      const expected=preview?"https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v"+
+        version+"-build"+build+"-preview/"+data.file:null;
+      const url=valid&&(!preview||data.download_url===expected)?verifiedReleaseUrl(data.download_url,".zip"):"";
+      return url?{available:true,url,status:"ZIP v"+version+" · Build "+build+(preview?" · รุ่นทดสอบ":" · รุ่นล่าสุด"),
+        kind:"download",version,build,preview}:
+        {available:false,url:"",status:"ยังไม่มี ZIP Mirror PC ที่เผยแพร่แล้ว",kind:"pending"};
     }
     if(id==="file-share"){
       const version=String(data.version||"");
@@ -241,7 +249,9 @@
       quick.hidden=!available;
       if(available){
         quick.href=states[id].url;
-        quick.textContent=(id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
+        quick.textContent=id==="mirror-pc"?
+          ("⬇ ดาวน์โหลด ZIP v"+states[id].version+" (Build "+states[id].build+")") :
+          (id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
         if(states[id].url.startsWith("./")){
           quick.setAttribute("download",states[id].url.split("/").at(-1));
           quick.removeAttribute("target");
@@ -271,6 +281,12 @@
             states[id].build=Number.isSafeInteger(candidate.build)?candidate.build:null;
           }
         }catch{} // Stable release metadata remains authoritative.
+      }
+      if(id==="mirror-pc"&&!states[id].available&&appInfo[id].previewManifest){
+        try{
+          const previewResponse=await fetch(appInfo[id].previewManifest,{cache:"no-store",credentials:"omit"});
+          if(previewResponse.ok)states[id]=getRelease(id,await previewResponse.json());
+        }catch{} // Never offer a broken or unverified release URL.
       }
       if(id==="mirror-tv"&&!states[id].available&&appInfo[id].testManifest){
         try{
