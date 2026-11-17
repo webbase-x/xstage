@@ -3,7 +3,7 @@
 An independently branded GPLv3 Android TV AirPlay receiver for iPhone and iPad.
 No iOS app, accounts, or internet cloud service required for casting on the local network.
 
-## Minimal receiver screen — v0.2.9 (Build 111)
+## Minimal receiver screen — v0.2.10 (Build 112)
 
 - On opening the APK, the AirPlay receiver starts automatically when local networking is available. The previous auto-start preference no longer blocks startup.
 - The main screen displays the receiver name, readiness/connection status and a concise iPhone/iPad instruction. Debug logs, a QR setup guide, build metadata and manual start/stop/exit buttons no longer clutter the home screen.
