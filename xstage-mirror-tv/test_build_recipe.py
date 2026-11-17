@@ -91,12 +91,13 @@ assert 'Modifier.fillMaxWidth().focusGroup()' in ui
 assert 'NavigationBar(modifier = Modifier.focusGroup())' in ui
 assert 'indicatorColor = androidx.compose.ui.graphics.Color(0xFF7AE7FF)' in ui
 assert 'window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)' in activity
+settings = (app / "src/main/kotlin/app/airshow/tv/ui/SettingsScreen.kt").read_text()
 assert 'FlowRow(modifier = Modifier.focusGroup()' in settings
 assert 'selectedContainerColor = MaterialTheme.colorScheme.secondary' in settings
 theme_text = (app / "src/main/kotlin/app/airshow/tv/ui/theme/Theme.kt").read_text()
 assert 'onSurfaceVariant = Color(0xFFE1EAF8)' in theme_text
 
-settings = (app / "src/main/kotlin/app/airshow/tv/ui/SettingsScreen.kt").read_text()
+
 assert "MirrorUpdateCleanup.purgeInstalled(this)" in activity
 cleanup = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateCleanup.kt").read_text()
 assert "MY_PACKAGE_REPLACED" in cleanup
