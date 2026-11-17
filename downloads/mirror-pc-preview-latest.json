@@ -1,14 +1,17 @@
 {
   "app": "X-Stage Mirror PC",
   "platform": "Windows 10/11 x64",
-  "version": "0.1.0",
-  "build": 101,
+  "version": "0.1.1",
+  "build": 102,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip",
-  "sha256": "166fdefff76148dec5cb26a35ab56d9d8ad3229ce02c9c4f58272071bb37c604",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v0.1.0-build101-preview/X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip",
-  "source_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v0.1.0-build101-preview/X-Stage-Mirror-PC-v0.1.0-build101-GPLv3-source.tar.gz",
+  "file": "X-Stage-Mirror-PC-v0.1.1-build102-win-x64-Setup.exe",
+  "sha256": "a82a3d7106ffec22c2293ea67fd7ece77ffbd66b170f84a92b8fc305f36236e3",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v0.1.1-build102-preview/X-Stage-Mirror-PC-v0.1.1-build102-win-x64-Setup.exe",
+  "portable_file": "X-Stage-Mirror-PC-v0.1.1-build102-win-x64-CANDIDATE.zip",
+  "portable_sha256": "686b973abcb856840f147dd957c139f15ab72e0706f5c64441443754a1a4aa9e",
+  "portable_download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v0.1.1-build102-preview/X-Stage-Mirror-PC-v0.1.1-build102-win-x64-CANDIDATE.zip",
+  "source_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v0.1.1-build102-preview/X-Stage-Mirror-PC-v0.1.1-build102-GPLv3-source.tar.gz",
   "tested_on_hardware": false,
   "note": "Windows Preview: compile and package checks passed; physical iOS/Android/Windows testing not yet verified."
 }
