@@ -184,7 +184,7 @@
         {available:false,url:"",status:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน",kind:"pending"};
     }
     if(id==="mirror-pc"){
-      const valid=data.available===true&&/^\\d+\\.\\d+\\.\\d+$/.test(data.version||"")&&SHA256.test(data.sha256||"");
+      const valid=data.available===true&&/^\d+\.\d+\.\d+$/.test(data.version||"")&&SHA256.test(data.sha256||"");
       const url=valid?verifiedReleaseUrl(data.download_url,".zip"):"";
       return url?{available:true,url,status:"Windows v"+String(data.version)+" · ZIP แบบพกพา",kind:"download",version:String(data.version)}:
         {available:false,url:"",status:"อยู่ระหว่างพัฒนา · ยังไม่มี ZIP ที่ตรวจสอบแล้ว",kind:"pending"};
