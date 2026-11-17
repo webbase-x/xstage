@@ -1,0 +1,11 @@
+{
+  "name": "X-Stage File Share Android Preview",
+  "available": true,
+  "version": "0.1.0-preview.1",
+  "channel": "preview",
+  "file": "X-Stage-File-Share-v0.1.0-preview.1.apk",
+  "sha256": "0aba0f2abdfd972eb67a6777e9ed63cdc74af94db5fea325ff818e82d1d9d8f3",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v0.1.0-preview.1/X-Stage-File-Share-v0.1.0-preview.1.apk",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/xstage-file-share-v0.1.0-preview.1",
+  "note": "Preview APK. LAN offline supported; Internet P2P best effort and may require TURN on some networks."
+}
