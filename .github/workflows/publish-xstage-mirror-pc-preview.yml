@@ -1,0 +1,170 @@
+name: Publish X-Stage Mirror PC latest preview
+
+# Public PREVIEW (not stable). Trigger only after full Windows compilation
+# and integrity-checked AirPlay packaging succeed on the original main branch.
+on:
+  workflow_run:
+    workflows:
+      - Build X-Stage Mirror PC Windows candidate
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: xstage-mirror-pc-preview-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Checkout exact source revision from passed Windows build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: true
+
+      - name: Download complete candidate ZIP (not the GUI-only EXE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name X-Stage-Mirror-PC-Windows-CANDIDATE --dir dist
+
+      - name: Verify ZIP checksum, required engines and release identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, hashlib, zipfile, xml.etree.ElementTree as ET
+          from pathlib import Path
+          props=ET.parse('mirror-pc/XStageMirrorPC.csproj').getroot().find('PropertyGroup')
+          version=props.findtext('Version','').strip()
+          fileversion=props.findtext('FileVersion','').strip()
+          assert re.fullmatch(r'\d+\.\d+\.\d+', version), 'Invalid semantic version'
+          assert re.fullmatch(r'\d+\.\d+\.\d+\.\d+', fileversion), 'Invalid 4-part file version'
+          major,minor,patch,build=map(int,fileversion.split('.'))
+          assert version==f'{major}.{minor}.{patch}' and build>0, 'Version and build differ'
+          filename=f'X-Stage-Mirror-PC-v{version}-build{build}-win-x64-CANDIDATE.zip'
+          path=Path('dist')/filename
+          checksum_path=Path(str(path)+'.sha256')
+          assert path.is_file() and checksum_path.is_file(), 'Missing matched ZIP/checksum pair'
+          assert path.stat().st_size>10_000_000, 'Candidate unexpectedly small'
+          digest=hashlib.file_digest(path.open('rb'),'sha256').hexdigest()
+          expected=checksum_path.read_text(encoding='ascii').strip().split()
+          assert len(expected)==2 and expected==[digest,filename], 'SHA256SUMS mismatch'
+          with zipfile.ZipFile(path) as archive:
+              names=set(archive.namelist())
+              required={'XStageMirrorPC.exe','THIRD_PARTY_NOTICES.txt',
+                        'engine/uxplay-windows/uxplay-windows.exe',
+                        'engine/uxplay-windows/LICENSE.rtf'}
+              assert required<=names, 'Windows candidate is missing executable, engine or GPL notices'
+              assert archive.testzip() is None, 'Damaged ZIP entries'
+          manifest=Path('downloads/mirror-pc-preview-latest.json')
+          assert manifest.exists(), 'Preview manifest missing'
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              fh.write(f'version={version}\nbuild={build}\nfilename={filename}\nsha256={digest}\n')
+          print('Candidate integrity OK:',filename,digest)
+          PY
+
+      - name: Verify upstream source revision and bundle GPLv3 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=2.0.0.1736
+          PINNED_COMMIT=43cf903e8177a7db37df6bc9cd8a9d1a60dabaaa
+          git clone --depth 1 --branch "$TAG" https://github.com/leapbtw/uxplay-windows.git "$RUNNER_TEMP/uxplay-windows-source"
+          test "$(git -C "$RUNNER_TEMP/uxplay-windows-source" rev-parse HEAD)" = "$PINNED_COMMIT"
+          git -C "$RUNNER_TEMP/uxplay-windows-source" submodule update --init --recursive --depth 1
+          mkdir -p "$RUNNER_TEMP/mirror-pc-source/upstream-uxplay-windows"
+          tar -C "$RUNNER_TEMP/uxplay-windows-source" --exclude=.git -cf - . |
+            tar -C "$RUNNER_TEMP/mirror-pc-source/upstream-uxplay-windows" -xf -
+          mkdir -p "$RUNNER_TEMP/mirror-pc-source/xstage"
+          cp -R mirror-pc "$RUNNER_TEMP/mirror-pc-source/xstage/mirror-pc"
+          mkdir -p "$RUNNER_TEMP/mirror-pc-source/xstage/.github/workflows"
+          cp .github/workflows/build-xstage-mirror-pc.yml "$RUNNER_TEMP/mirror-pc-source/xstage/.github/workflows/"
+          test -s "$RUNNER_TEMP/mirror-pc-source/upstream-uxplay-windows/LICENSE.rtf"
+          test -s "$RUNNER_TEMP/mirror-pc-source/xstage/mirror-pc/MainForm.cs"
+          tar -czf "dist/X-Stage-Mirror-PC-v${{ steps.release.outputs.version }}-build${{ steps.release.outputs.build }}-GPLv3-source.tar.gz" \
+            -C "$RUNNER_TEMP/mirror-pc-source" .
+          test -s "dist/X-Stage-Mirror-PC-v${{ steps.release.outputs.version }}-build${{ steps.release.outputs.build }}-GPLv3-source.tar.gz"
+
+      - name: Publish immutable PREVIEW release (no claim of physical device validation)
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          BUILD: ${{ steps.release.outputs.build }}
+          FILE: ${{ steps.release.outputs.filename }}
+        run: |
+          set -euo pipefail
+          TAG="xstage-mirror-pc-v$VERSION-build$BUILD-preview"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Version/build already published. Bump Version/FileVersion before creating another release."
+            exit 1
+          fi
+          cat > dist/PREVIEW_NOTES.txt <<'NOTES'
+          X-Stage Mirror PC — WINDOWS PREVIEW, NOT YET PHYSICALLY DEVICE TESTED.
+          Unzip the complete ZIP and run XStageMirrorPC.exe. Do not extract the EXE alone:
+          the bundled engine/uxplay-windows directory is needed to receive iOS AirPlay.
+          Android uses Windows Wireless Display / Miracast, subject to driver and sender support.
+          Miracast is not Google Cast. No iOS app or extra AirPlay download required.
+          ZIP checksum and GPLv3 corresponding source are provided. Not an installer.
+          NOTES
+          gh release create "$TAG" \
+            "dist/$FILE" "dist/$FILE.sha256" \
+            "dist/X-Stage-Mirror-PC-v$VERSION-build$BUILD-GPLv3-source.tar.gz" \
+            --repo "$GITHUB_REPOSITORY" --target "${{ github.event.workflow_run.head_sha }}" \
+            --title "X-Stage Mirror PC v$VERSION (Build $BUILD) — Windows Preview" \
+            --notes-file dist/PREVIEW_NOTES.txt --prerelease
+
+      - name: Update public latest-preview feed ONLY after release exists
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          BUILD: ${{ steps.release.outputs.build }}
+          FILE: ${{ steps.release.outputs.filename }}
+          SHA256: ${{ steps.release.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          TAG="xstage-mirror-pc-v$VERSION-build$BUILD-preview"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx "$FILE"
+          git fetch origin main
+          git checkout -B main origin/main
+          python3 - <<'PY'
+          import os, re, json
+          from pathlib import Path
+          p=Path('downloads/mirror-pc-preview-latest.json')
+          previous=json.loads(p.read_text(encoding='utf-8'))
+          version=os.environ['VERSION']; build=int(os.environ['BUILD'])
+          if previous.get('available') and build<=int(previous.get('build',0)):
+              raise SystemExit('Refusing to downgrade or overwrite published preview build')
+          filename=os.environ['FILE']
+          tag=f'xstage-mirror-pc-v{version}-build{build}-preview'
+          base=f'https://github.com/webbase-x/xstage/releases/download/{tag}/'
+          manifest={'app':'X-Stage Mirror PC','platform':'Windows 10/11 x64',
+                    'version':version,'build':build,'channel':'preview','available':True,
+                    'file':filename,'sha256':os.environ['SHA256'],
+                    'download_url':base+filename,
+                    'source_url':base+f'X-Stage-Mirror-PC-v{version}-build{build}-GPLv3-source.tar.gz',
+                    'tested_on_hardware':False,
+                    'note':'Windows Preview: compile and package checks passed; physical iOS/Android/Windows testing not yet verified.'}
+          p.write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads/mirror-pc-preview-latest.json
+          git commit -m "release: activate X-Stage Mirror PC v$VERSION Build $BUILD preview [skip ci]"
+          git push origin main
