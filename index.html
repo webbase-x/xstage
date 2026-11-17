@@ -14,9 +14,15 @@
   <title>X-Stage Apps | เวทีของคุณ เริ่มที่นี่</title>
   <link rel="icon" type="image/svg+xml" href="./assets/xstage-apps-apple-touch-icon.png">
   <link rel="apple-touch-icon" href="./assets/xstage-apps-icon.svg">
-  <script>
-    // Older native Android builds load the site root. Preserve their player entry point.
-    if (window.XStageAndroid || /(?:\?|&)source=android-(?:tv|tablet)(?:&|$)/.test(location.search)) {
+  <script id="legacy-native-karaoke-entry">
+    // The site root is ALWAYS the public X-Stage Apps hub, including TV browsers.
+    // Only older *installed Karaoke APKs* with the native JS bridge and its
+    // versioned player launch URL need the legacy root -> player migration.
+    // A TV user agent or ?source=android-tv alone must never redirect.
+    const legacyNativeParams = new URLSearchParams(location.search);
+    if (window.XStageAndroid &&
+        /^(android-tv|android-tablet)$/.test(legacyNativeParams.get("source") || "") &&
+        /^\d/.test(legacyNativeParams.get("native_version") || "")) {
       location.replace("./karaoke.html" + location.search + location.hash);
     }
   </script>
