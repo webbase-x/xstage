@@ -503,14 +503,18 @@
   });
   window.addEventListener("popstate",routeToCurrent);
   const filterButtons=Array.from(document.querySelectorAll("[data-filter]"));
+  const platformButtons=Array.from(document.querySelectorAll("[data-platform-filter]"));
   const search=document.getElementById("app-search");
   let selectedFilter="all";
+  let selectedPlatform="all";
   function applyFilters(){
     const query=search.value.trim().toLocaleLowerCase("th-TH");
     let visible=0;
     cards.forEach(card=>{
-      const cat=card.dataset.category;
-      const matches=(selectedFilter==="all"||cat===selectedFilter) && (!query||card.dataset.name.toLocaleLowerCase("th-TH").includes(query));
+      const categoryMatches=selectedFilter==="all"||card.dataset.category===selectedFilter;
+      const platformMatches=selectedPlatform==="all"||card.dataset.platform===selectedPlatform;
+      const textMatches=!query||card.dataset.name.toLocaleLowerCase("th-TH").includes(query);
+      const matches=categoryMatches&&platformMatches&&textMatches;
       card.hidden=!matches;
       if(matches)visible++;
     });
@@ -519,6 +523,15 @@
   filterButtons.forEach(button=>button.addEventListener("click",function(){
     selectedFilter=button.dataset.filter;
     filterButtons.forEach(other=>{
+      const active=other===button;
+      other.classList.toggle("active",active);
+      other.setAttribute("aria-pressed",String(active));
+    });
+    applyFilters();
+  }));
+  platformButtons.forEach(button=>button.addEventListener("click",function(){
+    selectedPlatform=button.dataset.platformFilter;
+    platformButtons.forEach(other=>{
       const active=other===button;
       other.classList.toggle("active",active);
       other.setAttribute("aria-pressed",String(active));
