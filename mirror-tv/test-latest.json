@@ -6,11 +6,7 @@
   "version": "0.2.3",
   "build": 105,
   "file": "X-Stage-Mirror-TV-test-v0.2.3-build105.apk",
-  "sha256": "75f89296434d7a20dfaa5e66aaa1fe2e91f83934a41a63f5ba8a3121db05687a",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-test-v0.2.3-build105-6e12e392/X-Stage-Mirror-TV-test-v0.2.3-build105.apk",
-  "note": "Public same-origin APK for Android TV/TrueID browsers. Debug-signed TEST preview only (not Google Play); production auto-update disabled. Corresponding GPLv3 source remains attached to the public GitHub release.",
-  "direct_download_available": true,
-  "direct_download_file": "X-Stage-Mirror-TV-test-v0.2.3-build105.apk",
-  "direct_download_url": "https://webbase-x.github.io/xstage/downloads/X-Stage-Mirror-TV-test-v0.2.3-build105.apk",
-  "direct_download_sha256": "75f89296434d7a20dfaa5e66aaa1fe2e91f83934a41a63f5ba8a3121db05687a"
+  "sha256": "537dc0401c5152d2fafc32766f306a42aa12dc98606931b57e8834ec7dbd16f0",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-test-v0.2.3-build105-ad57ddd4/X-Stage-Mirror-TV-test-v0.2.3-build105.apk",
+  "note": "Debug-signed test APK. NOT a production-signed release. A previous build may need removal if the debug signing certificate changes. In-app automatic updates are disabled for this channel."
 }
