@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.64" if READY_BUNDLE else "0.2.8-Source-Preview"
-STATUS_BUILD = "364" if READY_BUNDLE else "208-SRC"
+STATUS_VERSION = "0.3.65" if READY_BUNDLE else "0.2.8-Source-Preview"
+STATUS_BUILD = "365" if READY_BUNDLE else "208-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -884,6 +884,40 @@ def lyrics_text(row):
         return lyrics_package(row)[0]
     except (ValueError, OSError):
         return ""
+
+
+def _carry_lyrics_identity(row, document, export):
+    """Carry verified source/user metadata into generated JSON and catalog.
+
+    The scanner starts with a filename; it is not a verified song title.
+    Saved edits take priority, but must not become a publisher/filename label.
+    Only called for the song being converted (never on every scan row).
+    """
+    if not isinstance(document, dict):
+        return
+    source = Path(row["path"])
+    discovered_title, discovered_artist = export.lyrics_identity(document, source.stem)
+    saved = NOTES.get(str(source), {})
+    unknown = {"x-stage karaoke", "xstage karaoke", "x-stage song studio",
+               "xstage song studio", "unknown", "ไม่ระบุชื่อเพลง",
+               "ไม่ระบุศิลปิน", "ไม่ระบุ"}
+    def meaningful(value, title=False):
+        value = str(value or "").strip()
+        if not value or value.casefold() in unknown:
+            return ""
+        if title and value.casefold() == source.stem.casefold():
+            return ""
+        return value[:200]
+    title = (meaningful(saved.get("title"), True)
+             or meaningful(row.get("title"), True) or discovered_title)
+    artist = (meaningful(saved.get("artist"))
+              or meaningful(row.get("artist")) or discovered_artist)
+    if title:
+        row["title"] = title
+        document["title"] = title
+    if artist:
+        row["artist"] = artist
+        document["artist"] = artist
 
 
 def preview_song_identity(row):
@@ -1845,6 +1879,8 @@ def build_library(rows, mode, options):
                     if not options.get("audio_only", False):
                         try:
                             lrc, document, lyric_fingerprint = lyrics_package(row)
+                            if document:
+                                _carry_lyrics_identity(row, document, export)
                             if document and (not previous.get("lyrics") or
                                              previous.get("lyricsSourceIdentity") != lyric_fingerprint):
                                 saved_audio = export.safe_media_path(
@@ -1854,6 +1890,8 @@ def build_library(rows, mode, options):
                                     root, saved_audio, lrc, str(row.get("code") or source.stem),
                                     document=document, repair=repair)
                                 revised = dict(previous)
+                                revised["title"] = str(row.get("title") or previous.get("title") or "")
+                                revised["artist"] = str(row.get("artist") or previous.get("artist") or "")
                                 revised["lyrics"] = {
                                     "path": upgrade.relative_to(root).as_posix()
                                 }
@@ -1898,6 +1936,8 @@ def build_library(rows, mode, options):
                         log("ข้ามไฟล์เสียงเดิมที่อยู่ระหว่างซ่อม Lyrics: " + source.name)
                         continue
                     lrc, document, lyric_fingerprint = lyrics_package(row)
+                    if document:
+                        _carry_lyrics_identity(row, document, export)
                     if not document:
                         raise ValueError(
                             "ไม่มีไฟล์ Lyrics จริงสำหรับซ่อมเพลงที่เคยสร้าง · " + source.name)
@@ -1905,6 +1945,8 @@ def build_library(rows, mode, options):
                         root, saved_audio, lrc, str(row.get("code") or source.stem),
                         document=document, repair=True)
                     revised = dict(partial)
+                    revised["title"] = str(row.get("title") or partial.get("title") or "")
+                    revised["artist"] = str(row.get("artist") or partial.get("artist") or "")
                     revised["lyrics"] = {"path": repaired.relative_to(root).as_posix()}
                     revised["lyricsSourceIdentity"] = lyric_fingerprint
                     export.append_journal(root, revised)
@@ -1963,6 +2005,8 @@ def build_library(rows, mode, options):
                 lyric_info = ("", None, "")
                 if not options.get("audio_only", False):
                     lyric_info = lyrics_package(row)
+                    if lyric_info[1]:
+                        _carry_lyrics_identity(row, lyric_info[1], export)
                 copy_midi = (source.suffix.lower() in (".mid", ".midi", ".kar") and
                              export_format == "xstage" and mode == "original"
                              and not options.get("audio_only", False))

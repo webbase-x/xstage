@@ -84,6 +84,25 @@ def _can_recover_pair(media, audio, lyrics, source_hash, document, output_format
         return False
 
 
+def _with_song_identity(document, code, export):
+    """Write real name/performer to top-level Lyrics JSON for every Karaoke app.
+
+    NCN/KAR parsers can store their names under metadata; LRC names can live
+    only inside rawLrc. Do not publish guessed filenames or app brand names.
+    """
+    title, artist = export.lyrics_identity(document, code)
+    normalized = dict(document)
+    if title:
+        normalized["title"] = title
+    else:
+        normalized.pop("title", None)
+    if artist:
+        normalized["artist"] = artist
+    else:
+        normalized.pop("artist", None)
+    return normalized
+
+
 def _document(row, code, export, ncn):
     members = {path.suffix.lower(): path for path, _ in row["files"]}
     lyrics = members.get(".json")
@@ -108,7 +127,7 @@ def _document(row, code, export, ncn):
             last = value
         doc = dict(doc)
         doc["songCode"] = code
-        return doc
+        return _with_song_identity(doc, code, export)
     lyrics = members.get(".lrc")
     if lyrics is not None:
         doc = export.lrc_to_json(lyrics.read_text(encoding="utf-8-sig"), code)
@@ -128,7 +147,7 @@ def _document(row, code, export, ncn):
     if not isinstance(doc, dict) or not doc.get("lines"):
         raise ValueError("ไม่พบข้อมูลเนื้อร้องพร้อมเวลาจริง")
     doc["songCode"] = code
-    return doc
+    return _with_song_identity(doc, code, export)
 
 
 def _next_code(used, style, width, preferred, counters):
@@ -349,11 +368,10 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                         temp_audio.unlink(missing_ok=True)
                         if temp_lyrics is not None:
                             temp_lyrics.unlink(missing_ok=True)
-                title = doc.get("title") if isinstance(doc.get("title"), str) else ""
-                artist = doc.get("artist") if isinstance(doc.get("artist"), str) else ""
+                title, artist = export.lyrics_identity(doc, source_code)
                 record = {"webSongId": identity, "code": code,
-                          "title": title.strip() or code,
-                          "artist": artist.strip(), "bucket": bucket,
+                          "title": title or "ไม่ระบุชื่อเพลง",
+                          "artist": artist or "ไม่ระบุศิลปิน", "bucket": bucket,
                           "audio": {"path": relative_audio},
                           "lyrics": {"path": relative_lyrics} if relative_lyrics else None,
                           "sourceFormat": item["kind"],

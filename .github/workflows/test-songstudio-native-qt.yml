@@ -34,10 +34,18 @@ jobs:
         run: |
           python -m compileall -q songstudio-pc scripts
           if ($LASTEXITCODE -ne 0) { throw "Syntax validation failed" }
+          python -m pip install --disable-pip-version-check cryptography==46.0.3
+          if ($LASTEXITCODE -ne 0) { throw "Cryptography test dependency unavailable" }
           python -m unittest discover -s scripts -p test_songstudio_pc_export.py -v
           if ($LASTEXITCODE -ne 0) { throw "PC catalog export regression failed" }
           python -m unittest discover -s scripts -p test_songstudio_json_pro.py -v
           if ($LASTEXITCODE -ne 0) { throw "JSON Pro media/transcode/resume regression failed" }
+          python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
+          if ($LASTEXITCODE -ne 0) { throw "XSK song/artist metadata regression failed" }
+          python -m unittest discover -s scripts -p test_songstudio_pc.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Song Studio PC identity regression failed" }
+          python -m unittest discover -s windows-pc/source/tests -p test_media_json_sidecar.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Karaoke PC MIDI plus JSON metadata regression failed" }
           node --check studio/app.js
           if ($LASTEXITCODE -ne 0) { throw "Song Studio UI JavaScript syntax failed" }
           node scripts/test_songstudio_ui_contract.mjs
@@ -74,20 +82,20 @@ jobs:
       - name: Validate offline conversions
         shell: powershell
         run: |
-          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364'
+          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365'
           & (Join-Path $bundle '.runtime/python/python.exe') scripts/test_songstudio_ready.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Offline Ready runtime conversion regression failed' }
       - name: Exercise real bundled Qt desktop startup (offscreen CI)
         shell: powershell
         run: |
-          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364'
+          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365'
           python scripts/test_songstudio_native_runtime.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Packaged native Qt Engine startup failed' }
       - name: Upload candidate ZIP for review
         uses: actions/upload-artifact@v6
         with:
-          name: SongStudio-PC-Native-Qt-v0.3.64-build364-CANDIDATE
+          name: SongStudio-PC-Native-Qt-v0.3.65-build365-CANDIDATE
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365.zip.sha256
           retention-days: 7
