@@ -458,7 +458,44 @@ assert.ok(app.includes('clearTimeout(retryTimer)')&&app.includes('if(authId!==st
           'OAuth retry and popup error callbacks must not cancel a verified token');
 assert.ok(index.includes('android-apk-download.js?v='+version.build),'browser must load the APK-only helper');
 assert.ok(!index.includes('rel="manifest"')&&!index.includes('mobile-install-app')&&!index.includes('pc-install-app'),'browser must not advertise PWA installation');
-assert.ok(!fs.existsSync(new URL('../pwa-install.js',import.meta.url))&&!fs.existsSync(new URL('../sw.js',import.meta.url)),'retired PWA script and worker must be removed');
+assert.ok(!fs.existsSync(new URL('../pwa-install.js',import.meta.url)),
+  'retired PWA installation UI must remain removed');
+const obsoleteWorker=read('sw.js');
+assert.match(storefront,/id="retire-stale-karaoke-pwa"/,
+  'public apps landing page must remove old root service-worker registrations');
+assert.match(storefront,/reg\.scope===expected/,
+  'cleanup must not unregister unrelated app workers');
+assert.match(storefront,/key\.startsWith\('xstage-shell-'\)/,
+  'cleanup must remove only X-Stage legacy shell cache');
+assert.ok(!obsoleteWorker.includes("addEventListener('fetch'") &&
+          !obsoleteWorker.includes('addEventListener("fetch"'),
+  'retirement worker must not intercept navigations or serve Karaoke cache');
+assert.ok(!obsoleteWorker.includes('caches.open(') &&
+          !obsoleteWorker.includes('serviceWorker.register('),
+  'retirement worker must never re-create a PWA or cache public pages');
+const retireHandlers={};
+const deletedShellCaches=[];
+let retirementUnregistered=0, retirementSkipped=0, retirementWait=null;
+const retiredRootWorker={
+  addEventListener:(name,handler)=>{retireHandlers[name]=handler;},
+  skipWaiting:async()=>{retirementSkipped++;},
+  registration:{unregister:async()=>{retirementUnregistered++;return true;}}
+};
+const legacyCaches={
+  keys:async()=>['xstage-shell-v1097','xstage-shell-v1078','songstudio-cache','private-catalog'],
+  delete:async key=>{deletedShellCaches.push(key);return true;}
+};
+new Function('self','caches',obsoleteWorker)(retiredRootWorker,legacyCaches);
+assert.deepEqual(Object.keys(retireHandlers).sort(),['activate','install'],
+  'old PWA replacement may only install and immediately retire');
+retireHandlers.install({waitUntil:p=>{retirementWait=p;}});
+await retirementWait;
+retireHandlers.activate({waitUntil:p=>{retirementWait=p;}});
+await retirementWait;
+assert.equal(retirementSkipped,1);
+assert.equal(retirementUnregistered,1);
+assert.deepEqual(deletedShellCaches.sort(),['xstage-shell-v1078','xstage-shell-v1097'],
+  'worker must preserve other app and private database caches');
 assert.ok(!fs.existsSync(new URL('../xstage.webmanifest',import.meta.url))&&!fs.existsSync(new URL('../manifest.webmanifest',import.meta.url)),'retired root web manifests must be removed');
 assert.ok(apk.includes('retireLegacyPwa()')&&apk.includes('reg.unregister()')&&!apk.includes('serviceWorker.register'),'old scoped PWA worker must be removed, never re-registered');
 assert.ok(apk.includes('offerPublishedAndroidApk(apk)')&&apk.includes("actionButton('ใช้ X-Stage Web ต่อ'"),'APK offer must still allow web-only operation');
