@@ -55,7 +55,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           unzip -t xstage-file-share/source.zip >/dev/null
           mkdir -p release
-          cp "$APK" release/X-Stage-File-Share-v0.1.1-preview.3.apk
+          cp "$APK" release/X-Stage-File-Share-v0.1.1-preview.4.apk
           sha256sum release/*.apk | tee release/SHA256SUMS.txt
           cp xstage-file-share/source.zip release/X-Stage-File-Share-source.zip
       - name: Upload APK and corresponding source
@@ -72,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="xstage-file-share-v0.1.1-preview.3"
+          TAG="xstage-file-share-v0.1.1-preview.4"
           printf '%s\n' 'PREVIEW / TEST ONLY. Public, non-production APK signing key. LAN path tested with JVM harness; WebRTC outside-LAN is best-effort, depends on PeerJS Cloud and STUN, requires supported Android WebView, and may fail without a TURN server. No installer can silently update Android without OS approval. See source README.' > release/RELEASE_NOTES.txt
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" release/*.apk release/SHA256SUMS.txt release/*-source.zip --clobber
