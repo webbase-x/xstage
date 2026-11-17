@@ -113,7 +113,32 @@ jobs:
       - name: Verify APK signature and identity
         run: |
           APK=/tmp/xstage-mirror-airplay/app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose "$APK"
+          CERT_OUTPUT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK")
+          CERT_SHA256=$(printf '%s\\n' "$CERT_OUTPUT" |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
+            tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          if ! [[ "$CERT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Cannot verify signed APK certificate"; exit 1
+          fi
+          # Stable and test releases MUST use one persistent signing identity.
+          PREVIEW_SHA=$(python3 - <<'PY'
+          import json
+          m=json.load(open('mirror-tv/test-latest.json',encoding='utf-8'))
+          print(m.get('signer_sha256','') if m.get('signing_mode')=='persistent' else '')
+          PY
+          )
+          STABLE_SHA=$(python3 - <<'PY'
+          import json
+          m=json.load(open('mirror-tv/latest.json',encoding='utf-8'))
+          print(m.get('signer_sha256','') if m.get('signing_mode')=='persistent' else '')
+          PY
+          )
+          for PIN in "$PREVIEW_SHA" "$STABLE_SHA"; do
+            if [ -n "$PIN" ] && [ "$PIN" != "$CERT_SHA256" ]; then
+              echo "::error::Signing identity differs from a previously published Mirror APK"; exit 1
+            fi
+          done
+          echo "SIGNER_SHA256=$CERT_SHA256" >> "$GITHUB_ENV"
           "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.webbasex.xstagemirror.tv'"
           "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "versionCode='$XSTAGE_MIRROR_BUILD'"
           "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "versionName='$XSTAGE_MIRROR_VERSION'"
@@ -159,7 +184,8 @@ jobs:
               raise SystemExit("Refusing to downgrade published update feed")
           data={"available":True,"package":"com.webbasex.xstagemirror.tv",
                 "version":os.environ["XSTAGE_MIRROR_VERSION"],"build":build,
-                "file":os.environ["APK_NAME"],"sha256":os.environ["SHA256"]}
+                "file":os.environ["APK_NAME"],"sha256":os.environ["SHA256"],
+                "signing_mode":"persistent","signer_sha256":os.environ["SIGNER_SHA256"]}
           path.write_text(json.dumps(data,indent=2)+"\n",encoding="utf-8")
           PY
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
