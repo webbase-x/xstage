@@ -21,14 +21,17 @@ public sealed class MainForm : Form
     private readonly Label _update = new();
     private readonly Label _computer = new();
     private readonly Button _openReceiver = new();
+    private readonly Label _nativeSession = new();
+    private readonly Label _connectedDevices = new();
+    private readonly System.Windows.Forms.Timer _receiverPoll = new() { Interval = 5000 };
     private bool _closing;
 
     public MainForm()
     {
-        Text = "X-Stage Mirror Android PC";
+        Text = "X-Stage Mirror Android PC • " + ReceiverIdentity.DisplayName;
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(720, 600);
-        Size = new Size(940, 700);
+        Size = new Size(960, 780);
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Base;
         ForeColor = Color.White;
@@ -37,9 +40,12 @@ public sealed class MainForm : Form
         Shown += async (_, _) =>
         {
             CheckLocalEnvironment();
+            CheckWindowsReceiverSession();
+            _receiverPoll.Start();
             await CheckUpdatesAsync();
         };
-        FormClosing += (_, _) => _closing = true;
+        _receiverPoll.Tick += (_, _) => CheckWindowsReceiverSession();
+        FormClosing += (_, _) => { _closing = true; _receiverPoll.Stop(); };
     }
 
     private int Px(int n) => (int)Math.Round(n * DeviceDpi / 96.0);
@@ -83,12 +89,12 @@ public sealed class MainForm : Form
     {
         var view = new Panel { Dock = DockStyle.Fill, BackColor = Base, AutoScroll = true };
         Controls.Add(view);
-        var top = PanelCard(48, 32, 31);
+        var top = PanelCard(42, 52, 32);
         top.BackColor = Base;
         top.Padding = new Padding(Px(4), 0, Px(4), 0);
-        top.Controls.Add(Label("X-STAGE MIRROR ANDROID PC", 21, true, Accent), 0, 0);
-        top.Controls.Add(Label("ตัวรับภาพจาก Android สู่ Windows 10 / 11", 12), 0, 1);
-        top.Controls.Add(Label("WINDOWS WIRELESS DISPLAY · MIRACAST   |   " + AppVersion, 10, false, Muted), 0, 2);
+        top.Controls.Add(Label("X-STAGE  /  MIRROR ANDROID PC", 14, true, Muted), 0, 0);
+        top.Controls.Add(Label(ReceiverIdentity.DisplayName, 26, true, Accent), 0, 1);
+        top.Controls.Add(Label("สำหรับ Android / Miracast  •  Windows 10/11 x64  •  " + AppVersion, 10, false, Muted), 0, 2);
 
         var receiver = PanelCard(45, 54, 42, 60, 52, 48, 52);
         receiver.Controls.Add(Label("ตัวรับภาพ Android ผ่าน Windows", 16, true), 0, 0);
@@ -132,7 +138,19 @@ public sealed class MainForm : Form
         other.Controls.Add(optional, 0, 0);
         other.Controls.Add(diagnosis, 1, 0);
         receiver.Controls.Add(other, 0, 5);
-        receiver.Controls.Add(Label("รองรับ Android ที่มี Miracast เช่น Smart View บางรุ่น · Google Cast อย่างเดียวใช้ช่องทางนี้ไม่ได้", 10, false, Muted), 0, 6);
+        receiver.Controls.Add(Label("Android ต้องค้นหาชื่อ Windows ด้านบน · เลข No. ใช้ระบุ X-Stage บน PC (ไม่ใช่ชื่อ Miracast)", 10, false, Muted), 0, 6);
+
+        var sessions = PanelCard(46, 53, 78, 46);
+        sessions.Controls.Add(Label("อุปกรณ์เชื่อมต่อ / Connected devices", 16, true), 0, 0);
+        _nativeSession.Dock = DockStyle.Fill;
+        _nativeSession.ForeColor = Accent;
+        _nativeSession.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+        sessions.Controls.Add(_nativeSession, 0, 1);
+        _connectedDevices.Dock = DockStyle.Fill;
+        _connectedDevices.ForeColor = Muted;
+        _connectedDevices.Font = new Font("Segoe UI", 11);
+        sessions.Controls.Add(_connectedDevices, 0, 2);
+        sessions.Controls.Add(Label("Windows ควบคุมรายชื่อผู้ส่งจริงในหน้าต่าง Wireless Display · X-Stage ไม่เดาชื่ออุปกรณ์", 10, false, Muted), 0, 3);
 
         var steps = PanelCard(37, 53, 53, 54);
         steps.Controls.Add(Label("วิธีเชื่อมต่อที่ถูกต้อง", 15, true), 0, 0);
@@ -150,7 +168,7 @@ public sealed class MainForm : Form
         bottom.Controls.Add(checkUpdate, 0, 2);
 
         var cards = new (Control view, int height)[] {
-            (top, 117), (receiver, 400), (steps, 237), (bottom, 174)
+            (top, 140), (receiver, 400), (sessions, 265), (steps, 237), (bottom, 174)
         };
         foreach (var (card, _) in cards) view.Controls.Add(card);
         void ResizeCards()
@@ -177,7 +195,7 @@ public sealed class MainForm : Form
 
     private void CheckLocalEnvironment()
     {
-        _computer.Text = "ชื่อเครื่องรับบน Windows: " + Environment.MachineName;
+        _computer.Text = "ชื่อจริงที่ Android ต้องค้นหา:  " + Environment.MachineName;
         bool wifi = NetworkInterface.GetAllNetworkInterfaces().Any(n =>
             n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 &&
             n.OperationalStatus == OperationalStatus.Up);
@@ -218,6 +236,37 @@ public sealed class MainForm : Form
             MessageBox.Show(this, "Windows ไม่สามารถเปิด Wireless Display ได้:\n" + ex.Message,
                 "X-Stage Mirror Android PC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             OpenSettings("ms-settings:optionalfeatures");
+        }
+    }
+
+    private void CheckWindowsReceiverSession()
+    {
+        if (_closing || IsDisposed) return;
+        try
+        {
+            var found = false;
+            string? windowTitle = null;
+            foreach (var process in Process.GetProcessesByName("Connect"))
+            {
+                using (process)
+                {
+                    if (process.HasExited) continue;
+                    found = true;
+                    if (!string.IsNullOrWhiteSpace(process.MainWindowTitle))
+                        windowTitle = process.MainWindowTitle;
+                }
+            }
+            _nativeSession.Text = found
+                ? "พบโปรเซส Windows Connect กำลังเปิดอยู่"
+                : "ยังตรวจไม่พบโปรเซส Connect (อาจเป็นแอป Wireless Display รุ่นใหม่)";
+            _connectedDevices.Text = windowTitle is not null
+                ? "หน้าต่าง Windows: " + windowTitle + "\nรายชื่ออุปกรณ์ที่เชื่อมต่อให้ดูในหน้าต่าง Windows โดยตรง"
+                : "รายชื่อ/จำนวนผู้ส่ง: Windows Wireless Display เป็นผู้จัดการเซสชัน\nกด เปิด Windows Wireless Display เพื่อดูผู้ส่งที่เชื่อมต่อจริง";
+        }
+        catch (Exception ex)
+        {
+            _nativeSession.Text = "ตรวจสอบสถานะตัวรับ Windows ไม่สำเร็จ";
+            _connectedDevices.Text = ex.Message;
         }
     }
 
