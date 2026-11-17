@@ -72,7 +72,7 @@ jobs:
           $native = Get-Content 'mirror-ios-pc/VideoWindowPresentation.cs' -Raw
           foreach ($expected in @(
             "var display = _name.Replace(' ', '\u2002')",
-            'var desired = "-n " + display + " -nh"',
+            'var desired = "-n " + display + " -nh -nc no"',
             'uxplay-arguments-before-xstage.txt',
             '_video.HideAfterDisconnect()',
             '_video.RestoreAfterReconnect()',
