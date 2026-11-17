@@ -145,7 +145,7 @@ try{
   // a real browser before proceeding into the preserved karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#intro-title').waitFor();
-  assert.equal(await page.locator('.app-card').count(),7,'storefront displays seven supported app entries');
+  assert.equal(await page.locator('.app-card').count(),10,'storefront displays ten supported app entries');
   // Legacy source query must not turn a TV browser into the Karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/?source=android-tv',
                   {waitUntil:'domcontentloaded'});
