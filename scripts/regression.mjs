@@ -48,7 +48,7 @@ assert.match(storefront,/id="intro-title">หนึ่งเวที/,'new hero
 assert.match(storefront,/class="intro section-wrap new-home-hero"/,'editorial hero must be present');
 assert.match(storeStyle,/\.intro\.new-home-hero\{/,'redesigned hero styling must load');
 assert.match(storefront,/storefront\.css\?brand=5/,'storefront refresh must bust the cached stylesheet');
-assert.match(storefront,/storefront\.js\?brand=5/,'Mirror TV direct-download UI must bust its old cached script');
+assert.match(storefront,/storefront\.js\?brand=7/,'latest Mirror PC download UI must bust stale cached storefront script');
 assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
 
 // The public URL must stay on the app hub for television browsers (even
@@ -81,7 +81,7 @@ assert.match(read('android-tv/app/build.gradle'),
   /XSTAGE_WEB_URL", quoteBuildConfig\("https:\/\/webbase-x\.github\.io\/xstage\/karaoke\.html"\)/,
   'new Android Karaoke APKs must launch the dedicated player URL');
 assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
-for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv','file-share']){
+for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv','mirror-pc','file-share']){
   assert.ok(storefront.includes('href="?app='+slug+'"'),'storefront must expose detail route for '+slug);
   assert.ok(storefront.includes('data-app="'+slug+'"'),'storefront must show card for '+slug);
 }
@@ -151,9 +151,21 @@ assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Androi
 assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
 assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
-assert.equal((storefront.match(/data-device-app=/g)||[]).length,7,'all seven cards need device-compatibility hints');
-assert.ok(storefront.includes('storefront-device.js?brand=5'),'device guidance must be loaded before storefront controller');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,8,'all eight cards need device-compatibility hints');
+assert.ok(storefront.includes('storefront-device.js?brand=6'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
+assert.ok(storefront.includes('data-download-app="mirror-pc"'),'Mirror PC must have a downloadable ZIP action in the catalog');
+assert.ok(storefrontScript.includes('mirror-pc-preview-latest.json'),'Mirror PC must check the latest preview manifest');
+assert.equal(deviceGuide.forApp(windows,'mirror-pc').level,'supported','Windows 10/11 must be offered Mirror PC');
+assert.equal(deviceGuide.forApp(iphone,'mirror-pc').level,'other','iOS is the sender, not the Windows receiver');
+const mirrorPcRelease=JSON.parse(read('downloads/mirror-pc-preview-latest.json'));
+assert.equal(mirrorPcRelease.channel,'preview','Mirror PC preview channel must remain explicit');
+if(mirrorPcRelease.available){
+  assert.match(mirrorPcRelease.sha256,/^[a-f0-9]{64}$/,'public Mirror PC ZIP must advertise SHA-256');
+  assert.ok(mirrorPcRelease.download_url.includes('/releases/download/xstage-mirror-pc-v'),'Mirror PC ZIP must come from a public verified release');
+  assert.ok(mirrorPcRelease.source_url?.endsWith('-GPLv3-source.tar.gz'),'Mirror PC must include GPL source distribution');
+}
+
 assert.ok(storefront.includes('data-filter="files"')&&storefront.includes('data-download-app="file-share"'),'File Share must have its own filter and APK card action');
 assert.equal(deviceGuide.forApp(androidPhone,'file-share').level,'supported','Android phones support the File Share host APK');
 assert.equal(deviceGuide.forApp(iphone,'file-share').level,'other','iOS joins File Share through browser instead of APK');
