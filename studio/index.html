@@ -64,6 +64,13 @@
             <label for="dup-source">โฟลเดอร์ต้นทางที่ต้องการตรวจ (รวมโฟลเดอร์ย่อย)</label>
             <div class="path-row"><input id="dup-source" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์เพลง"><button type="button" class="button ghost" data-pick="dup_source">เลือกโฟลเดอร์</button></div>
             <div class="toolbar">
+              <label for="dup-match-mode">วิธีตรวจเพลงซ้ำ</label>
+              <select id="dup-match-mode" class="field" style="max-width:340px">
+                <option value="exact">ไฟล์เหมือนกันทุกไบต์ (SHA-256)</option>
+                <option value="code">รหัสชื่อไฟล์ตรงกัน (อาจเป็นคนละเพลง ต้องตรวจเอง)</option>
+              </select>
+            </div>
+            <div class="toolbar">
               <button id="dup-scan" class="button primary" type="button">⌕ ตรวจเพลงซ้ำ</button>
               <button id="dup-refresh" class="button ghost" type="button">แสดงผลตรวจล่าสุด</button>
             </div>
@@ -113,6 +120,7 @@
             <label for="dup-destination">โฟลเดอร์ปลายทางสำหรับย้ายสำเนา (อยู่นอกโฟลเดอร์ต้นทาง)</label>
             <div class="path-row"><input id="dup-destination" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์เก็บไฟล์ซ้ำที่ย้ายออก"><button type="button" class="button ghost" data-pick="dup_destination">เลือกปลายทาง</button></div>
             <label class="checkbox"><input id="dup-with-companions" type="checkbox" checked> จัดการไฟล์ประกอบตามรหัสด้วย (.json / .lrc / .lyr / .cur)</label>
+            <label class="checkbox"><input id="dup-confirm-song" type="checkbox"> ฉันตรวจยืนยันด้วยตนเองว่าไฟล์ที่รหัสตรงกันเป็นเพลงเดียวกันแล้ว (จำเป็นเฉพาะโหมดตรวจจากรหัส)</label>
             <p class="hint">ก่อนลงมือจริงระบบจะแสดงแผนว่าเก็บไฟล์ชนิดใด และจะย้าย/ลบไฟล์เพลงกับไฟล์ประกอบใดบ้าง ไฟล์ประกอบที่อาจใช้ร่วมกันจะถูกเก็บไว้</p>
             <pre id="dup-plan" class="xsk-pro-output" style="max-height:280px;overflow:auto;white-space:pre-wrap" aria-live="polite">แผนจัดการจะปรากฏเมื่อกดปุ่มย้ายหรือลบ ก่อนยืนยันคำสั่งจริง</pre>
             <div class="toolbar">
