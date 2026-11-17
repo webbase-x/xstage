@@ -32,6 +32,7 @@
     "studio-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["studio-web"]},
     "studio-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน Windows, Mac, iPhone, iPad หรือ Android",fallback:[]},
     "karaoke-android":{target:"Android TV, Google TV หรือแท็บเล็ต Android (APK สำหรับติดตั้งเอง)",fallback:["karaoke-web"]},
+    "file-share":{target:"โทรศัพท์ แท็บเล็ต Android 6+ หรือ Android TV ที่รองรับสำหรับติดตั้ง APK; เครื่องอื่นใช้เว็บเบราว์เซอร์",fallback:["karaoke-web"]},
     "mirror-tv":{target:"กล่องหรือทีวี Android TV / Google TV สำหรับติดตั้งแอปตัวรับ; iPhone/iPad เป็นอุปกรณ์ส่งภาพ",fallback:["karaoke-web"]}
   };
   function forApp(profile,id){
@@ -52,6 +53,12 @@
       const maybe=kind==="android_phone"||kind==="android"||kind==="unknown";
       return {level:yes?"supported":maybe?"unknown":"other",
         text:yes?"เป็นอุปกรณ์ Android ที่เหมาะกับรุ่นนี้ โปรดตรวจสอบเวอร์ชันระบบก่อนติดตั้ง":maybe?"แนะนำ Android TV / Google TV หรือแท็บเล็ต Android; อุปกรณ์นี้อาจไม่เหมาะกับหน้าจอแอป":"ต้องติดตั้ง APK บน Android TV / Google TV หรือแท็บเล็ต Android ไม่ใช่ iOS/Windows/Mac",
+        target:info.target,fallback:info.fallback};
+    }
+    if(id==="file-share"){
+      const android=["android_tv","android_tablet","android_phone","android"].includes(kind);
+      return {level:android?"supported":kind==="unknown"?"unknown":"other",
+        text:android?"อุปกรณ์ Android นี้อาจติดตั้ง APK ตัวรับ–ส่งได้ โปรดตรวจ Android 6+ และทดสอบบนเครื่องจริง":kind==="unknown"?"ตรวจสอบว่าเครื่องหลักเป็น Android ที่ติดตั้ง APK ได้":"เครื่องนี้เปิดเว็บเพื่อรับ–ส่งไฟล์กับอุปกรณ์ Android ได้ แต่ไม่ใช่เครื่องที่ติดตั้ง APK ตัวหลัก",
         target:info.target,fallback:info.fallback};
     }
     if(id==="mirror-tv"){
