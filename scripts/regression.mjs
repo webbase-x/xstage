@@ -78,6 +78,7 @@ assert.ok(read('studio/web.webmanifest').includes('./web-app-icon.svg'),'Song St
 assert.ok(read('studio/index.html').includes('./app-icon.svg'),'Song Studio PC retains its separate native branding');
 assert.ok(read('.github/workflows/build-windows-pc.yml').includes('scripts/build_karaoke_pc_icon.py'),'Windows candidate must generate distinct PC icon before bundling');
 assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stage Mirror TV cast icon'),'Mirror TV native launcher must have a separate cast identity');
+assert.ok(read('mirror-tv/index.html').includes('../assets/app-icons/mirror-tv.svg'),'Mirror pairing guide must show its own icon');
 
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['android-apk-download.js',apk]]){
