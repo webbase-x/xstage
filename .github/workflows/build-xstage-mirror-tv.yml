@@ -1,0 +1,75 @@
+name: X-Stage Mirror TV - AirPlay APK
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build-xstage-mirror-tv.yml"
+      - "xstage-mirror-tv/**"
+      - "mirror-tv/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror-tv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - name: Checkout X-Stage source
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned GPLv3 AirPlay receiver source
+        shell: bash
+        run: |
+          git clone --no-checkout https://github.com/omerekelly/airshow.git /tmp/xstage-mirror-airplay
+          git -C /tmp/xstage-mirror-airplay checkout --detach a0eeef208a60f69a56faadbd39eb1e1de001208c
+          test "$(git -C /tmp/xstage-mirror-airplay rev-parse HEAD)" = "a0eeef208a60f69a56faadbd39eb1e1de001208c"
+          git -C /tmp/xstage-mirror-airplay submodule update --init --recursive --depth 1
+          test -f /tmp/xstage-mirror-airplay/LICENSE
+          test -f /tmp/xstage-mirror-airplay/NOTICE
+
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Prepare branded build, tests and launcher assets
+        run: |
+          python3 -m pip install --disable-pip-version-check Pillow==11.3.0
+          python3 xstage-mirror-tv/prepare_upstream.py /tmp/xstage-mirror-airplay
+          python3 xstage-mirror-tv/test_build_recipe.py /tmp/xstage-mirror-airplay
+
+      - name: Install Android API 37 and native toolchain
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+
+      - name: Compile Android TV debug APK (32-bit and 64-bit ARM)
+        working-directory: /tmp/xstage-mirror-airplay
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug -Pabis=arm64-v8a,armeabi-v7a --stacktrace --no-daemon
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Package APK and GPLv3 corresponding source
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp /tmp/xstage-mirror-airplay/app/build/outputs/apk/debug/app-debug.apk dist/X-Stage-Mirror-TV-debug.apk
+          cd /tmp/xstage-mirror-airplay
+          tar --exclude=.git --exclude=.gradle --exclude=build --exclude=.cxx --exclude='*.apk' \
+              -czf "$GITHUB_WORKSPACE/dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz" .
+          cd "$GITHUB_WORKSPACE"
+          sha256sum dist/* > dist/SHA256SUMS.txt
+
+      - name: Upload installable APK and source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-TV-AndroidTV
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

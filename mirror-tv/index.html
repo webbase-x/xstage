@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1630">
+<title>X-Stage Mirror TV | วิธีเชื่อมต่อ iPhone</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+body{margin:0;background:#070d1b;color:#edf6ff;min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box}
+main{max-width:530px;width:100%;background:#101f38;border:1px solid #2c4563;border-radius:22px;padding:24px;box-sizing:border-box}
+h1{margin:0 0 8px;font-size:27px;letter-spacing:.2px}h2{font-size:18px;color:#89deef}
+p,li{line-height:1.75}strong{color:#88e0f3}ol{padding-left:24px}
+.name{padding:13px 16px;border:1px solid #42617c;border-radius:12px;background:#142b48;font-weight:700;font-size:21px;overflow-wrap:anywhere}
+small{display:block;margin-top:20px;color:#b3c3d6;line-height:1.65}
+</style>
+</head>
+<body>
+<main>
+<h1>📺 X-Stage Mirror TV</h1>
+<p>ไม่ต้องติดตั้งแอปบน iPhone หรือ iPad ใช้ฟังก์ชัน Screen Mirroring ที่มีอยู่แล้วใน iOS</p>
+<h2>ชื่อตัวรับที่ต้องเลือก</h2><div class="name" id="receiver">X-Stage Mirror TV</div>
+<h2>วิธีเชื่อมต่อ</h2>
+<ol>
+<li>เชื่อมต่อ iPhone/iPad กับกล่องทีวีในเครือข่าย Wi-Fi เดียวกัน</li>
+<li>บนทีวี เปิดแอป X-Stage Mirror TV และดูสถานะพร้อมรับภาพ</li>
+<li>บน iPhone ปัดเปิดศูนย์ควบคุม (Control Center)</li>
+<li>แตะ <strong>Screen Mirroring</strong> แล้วเลือกชื่อที่แสดงด้านบน</li>
+<li>หน้าจอพร้อมเสียงจะปรากฏบนทีวีเมื่อเชื่อมต่อสำเร็จ</li>
+</ol>
+<p>ถ้าค้นหาไม่พบ ให้ตรวจสอบว่าอุปกรณ์อยู่ในเครือข่ายเดียวกัน ไม่ใช้ Guest Wi-Fi และไม่ได้เปิด AP isolation</p>
+<small>QR นี้เป็นคู่มือช่วยเชื่อมต่อ ไม่ใช่ระบบสั่งจับคู่หรือเริ่มสะท้อนหน้าจอโดยอัตโนมัติ ต้องเลือกตัวรับบน iOS เอง เนื้อหาที่มี DRM อาจแสดงภาพไม่ได้</small>
+</main>
+<script>
+const candidate = new URLSearchParams(location.search).get("receiver");
+if(candidate && candidate.trim().length > 0 && candidate.length <= 64)
+  document.getElementById("receiver").textContent = candidate;
+</script>
+</body>
+</html>
