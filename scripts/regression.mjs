@@ -48,7 +48,7 @@ assert.match(storefront,/id="intro-title">หนึ่งเวที/,'new hero
 assert.match(storefront,/class="intro section-wrap new-home-hero"/,'editorial hero must be present');
 assert.match(storeStyle,/\.intro\.new-home-hero\{/,'redesigned hero styling must load');
 assert.match(storefront,/storefront\.css\?brand=5/,'storefront refresh must bust the cached stylesheet');
-assert.match(storefront,/storefront\.js\?brand=8/,'latest Mirror PC download UI must bust stale cached storefront script');
+assert.match(storefront,/storefront\.js\?brand=9/,'latest Mirror PC download UI must bust stale cached storefront script');
 assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
 
 // The public URL must stay on the app hub for television browsers (even
@@ -81,7 +81,7 @@ assert.match(read('android-tv/app/build.gradle'),
   /XSTAGE_WEB_URL", quoteBuildConfig\("https:\/\/webbase-x\.github\.io\/xstage\/karaoke\.html"\)/,
   'new Android Karaoke APKs must launch the dedicated player URL');
 assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
-for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv','mirror-pc','file-share']){
+for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv','mirror-ios-pc','mirror-android-pc','file-share']){
   assert.ok(storefront.includes('href="?app='+slug+'"'),'storefront must expose detail route for '+slug);
   assert.ok(storefront.includes('data-app="'+slug+'"'),'storefront must show card for '+slug);
 }
@@ -151,13 +151,25 @@ assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Androi
 assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
 assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
-assert.equal((storefront.match(/data-device-app=/g)||[]).length,8,'all eight cards need device-compatibility hints');
-assert.ok(storefront.includes('storefront-device.js?brand=6'),'device guidance must be loaded before storefront controller');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,9,'all nine cards need device-compatibility hints');
+assert.ok(storefront.includes('storefront-device.js?brand=7'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
-assert.ok(storefront.includes('data-download-app="mirror-pc"'),'Mirror PC must have a downloadable ZIP action in the catalog');
-assert.ok(storefrontScript.includes('mirror-pc-preview-latest.json'),'Mirror PC must check the latest preview manifest');
-assert.equal(deviceGuide.forApp(windows,'mirror-pc').level,'supported','Windows 10/11 must be offered Mirror PC');
-assert.equal(deviceGuide.forApp(iphone,'mirror-pc').level,'other','iOS is the sender, not the Windows receiver');
+assert.ok(storefront.includes('data-download-app="mirror-ios-pc"')&&storefront.includes('data-download-app="mirror-android-pc"'),'both standalone Windows mirror apps must have separate download actions');
+assert.ok(storefrontScript.includes('mirror-ios-pc-preview-latest.json')&&storefrontScript.includes('mirror-android-pc-preview-latest.json'),'both standalone receiver apps must check their own latest release feeds');
+assert.equal(deviceGuide.forApp(windows,'mirror-ios-pc').level,'supported','Windows supports Mirror iOS PC');
+assert.equal(deviceGuide.forApp(windows,'mirror-android-pc').level,'supported','Windows supports Mirror Android PC control app');
+assert.equal(deviceGuide.forApp(iphone,'mirror-ios-pc').level,'other','iOS sends to the Windows receiver, not the other way around');
+for(const id of ['mirror-ios-pc','mirror-android-pc']){
+  const manifest=JSON.parse(read('downloads/'+id+'-preview-latest.json'));
+  assert.equal(manifest.channel,'preview','standalone receiver release channel must be Preview');
+  if(manifest.available){
+    assert.match(manifest.sha256,/^[a-f0-9]{64}$/,'receiver Setup EXE must have SHA-256');
+    assert.ok(manifest.download_url.endsWith('-Setup.exe'),'website must download full Setup EXE');
+    assert.ok(manifest.download_url.includes('xstage-'+id+'-v'),'receiver release tag must match its own app');
+  }
+}
+assert.ok(read('mirror-ios-pc/ReceiverIdentity.cs').includes('RandomNumberGenerator.GetInt32(1000, 10000)'),'receiver number must be cryptographically randomized and persisted');
+assert.ok(read('mirror-android-pc/ReceiverIdentity.cs').includes('receiver-number.txt'),'both apps must share the same stored receiver number');
 const mirrorPcRelease=JSON.parse(read('downloads/mirror-pc-preview-latest.json'));
 assert.equal(mirrorPcRelease.channel,'preview','Mirror PC preview channel must remain explicit');
 if(mirrorPcRelease.available){
