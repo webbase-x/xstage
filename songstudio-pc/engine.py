@@ -2202,6 +2202,12 @@ def execute_job(action, options, started):
                 cancelled=worker_cancel(), progress=_json_progress,
                 scan_progress=_json_scan_progress,
                 source_stream=source_stream.stream)
+            # Source count is only known after the last directory has been read.
+            # Make finished counts truthful even if interim progress was unknown.
+            with LOCK:
+                worker_job().update(total=result["total"], completed=result["total"],
+                                    created=result["created"], skipped=result["skipped"],
+                                    errors=result["errors"], lyricsCount=result["created"])
         elif action == "created-xsk":
             module = _module("created_xsk_export.py", "xstage_created_xsk_export")
             output_root = worker_prefs().get("xsk_folder") or worker_prefs()["workspace"]
@@ -2528,7 +2534,7 @@ def execute_job(action, options, started):
             raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
             build_errors = (
-                (action == "build" and result.get("errors", 0) > 0)
+                (action in ("build", "json-pro-export") and result.get("errors", 0) > 0)
                 or (action == "upload" and
                     (result.get("conflicts", 0) > 0 or result.get("notReady", 0) > 0)))
             skipped_only = (action == "build" and result.get("created", 0) == 0
