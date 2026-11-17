@@ -3436,6 +3436,7 @@
   let duplicatePageIndex = 0;
   let duplicatePageRows = [];
   let duplicatePageCount = 0;
+  let duplicateMatchMode = "exact";
   let duplicateRefreshedJob = '';
   const DUPLICATE_PAGE_SIZE = 20;
   const DUPLICATE_SELECTION_MAX = 300;
@@ -3445,7 +3446,8 @@
     const applying = canLaunch('duplicates-apply');
     $('dup-scan').disabled = !scanning || !$('dup-source').value.trim();
     $('dup-refresh').disabled = busy;
-    $('dup-select-page').disabled = busy || !duplicatePageRows.length ||
+    $('dup-select-page').disabled = busy || duplicateMatchMode === 'code' ||
+      !duplicatePageRows.length ||
       duplicateSelected.size >= DUPLICATE_SELECTION_MAX;
     $('dup-clear').disabled = busy || duplicateSelected.size === 0;
     $('dup-prev').disabled = busy || duplicatePageIndex <= 0;
@@ -3476,9 +3478,13 @@
       duplicateKeepers.clear();
       duplicateScanId = report.scanId;
     }
+    duplicateMatchMode = report.matchMode || 'exact';
     duplicatePageCount = report.groupCount || 0;
     duplicatePageRows = report.groups || [];
     $('dup-summary').textContent =
+      (duplicateMatchMode === 'code' ?
+        'โหมดรหัสตรงกัน · เป็นเพียงรายการที่อาจเป็นเพลงเดียวกัน ต้องตรวจเอง · ' :
+        'โหมด SHA-256 ยืนยันไฟล์เหมือนกัน · ') +
       'ตรวจไฟล์เพลง ' + fmtNum(report.fileCount) +
       ' · กลุ่มซ้ำ ' + fmtNum(report.groupCount) +
       ' · สำเนาเกิน ' + fmtNum(report.duplicateFiles) +
@@ -3499,9 +3505,11 @@
       const card = document.createElement('section');
       card.className = 'duplicate-group';
       const header = document.createElement('strong');
-      header.textContent = group.fileCount + ' ไฟล์เหมือนกัน · ' +
-        (group.size / 1024 / 1024).toFixed(2) + ' MB/ไฟล์ · SHA-256 ' +
-        group.sha256.slice(0, 16) + '…' +
+      header.textContent = group.match === 'code'
+        ? 'รหัสตรงกัน ' + group.fileCount + ' ไฟล์ · ไฟล์ต่างชนิดอาจไม่ใช่เพลงเดียวกัน'
+        : group.fileCount + ' ไฟล์เหมือนกัน · ' +
+          (group.size / 1024 / 1024).toFixed(2) + ' MB/ไฟล์ · SHA-256 ' +
+          group.sha256.slice(0, 16) + '…' +
         (group.hiddenFiles ? ' · แสดง ' + group.files.length +
           ' ไฟล์แรก (จัดการแล้วกดแสดงผลอีกครั้ง)' : '');
       card.appendChild(header);
@@ -3541,7 +3549,8 @@
         });
         const name = document.createElement('span');
         name.className = 'duplicate-file-path';
-        name.textContent = file.path;
+        name.textContent = file.path + ' · ' +
+          (file.size / 1024 / 1024).toFixed(2) + ' MB';
         const hint = document.createElement('small');
         hint.textContent = file.id === keeperId ? 'เก็บไฟล์นี้ (' + file.extension + ')' :
           file.protected ? 'XStageSong · ห้ามย้าย/ลบ' :
@@ -3572,7 +3581,11 @@
       await saveInputs(['dup-source']);
       duplicateSelected.clear();
       duplicatePageIndex = 0;
-      const started = await run('duplicates-scan', {source: $('dup-source').value.trim()});
+      const matchMode = $('dup-match-mode').value;
+      $('dup-confirm-song').checked = false;
+      const started = await run('duplicates-scan', {
+        source: $('dup-source').value.trim(), matchMode
+      });
       if (started) $('dup-status').textContent =
         'กำลังค้นหาไฟล์เพลง · เทียบขนาดก่อน ตรวจ SHA-256 เฉพาะไฟล์ที่มีโอกาสซ้ำ';
     } catch(error) { message(error.message); }
@@ -3590,11 +3603,14 @@
       try { await saveInputs(['dup-destination']); }
       catch(error) { return message(error.message); }
     }
+    if (duplicateMatchMode === 'code' && !$('dup-confirm-song').checked)
+      return message('รหัสไฟล์ตรงกันไม่รับประกันว่าเป็นเพลงเดียวกัน · ต้องตรวจและติ๊กยืนยันก่อน');
     const params = {
       scanId: duplicateScanId, selected: [...duplicateSelected],
       keeperByGroup: Object.fromEntries(duplicateKeepers.entries()),
       preferredExtension: $('dup-prefer-type').value,
       includeCompanions: $('dup-with-companions').checked,
+      sameSongConfirmed: duplicateMatchMode === 'code' && $('dup-confirm-song').checked,
       operation, destination,
     };
     try {
@@ -3634,6 +3650,19 @@
     } catch(error) { message(error.message); }
   }
 
+  $('dup-match-mode').addEventListener('change', () => {
+    duplicateSelected.clear();
+    duplicateKeepers.clear();
+    duplicateScanId = '';
+    duplicatePageRows = [];
+    duplicatePageCount = 0;
+    duplicateMatchMode = $('dup-match-mode').value;
+    $('dup-confirm-song').checked = false;
+    $('dup-summary').textContent = 'เปลี่ยนโหมดแล้ว · กรุณาสแกนเพลงใหม่';
+    $('dup-results').replaceChildren();
+    $('dup-plan').textContent = 'ยังไม่มีแผนดำเนินการ';
+    duplicateUpdateButtons();
+  });
   $('dup-prefer-type').addEventListener('change', () => {
     duplicateSelected.clear();
     duplicateKeepers.clear();
