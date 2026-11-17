@@ -376,3 +376,28 @@ body{background:radial-gradient(circle at 60% 0,#e6edff 0,transparent 32%),#f7f8
 .app-card .app-card-download:hover{background:#0958ba}
 .app-card .app-card-download:focus-visible{outline:3px solid #10b6dd;outline-offset:3px}
 @media(min-width:1200px){.app-card .app-card-download{font-size:13px}}
+
+
+/* App-center platform filters: independent from product-category chips. */
+.catalog-filter-groups{display:grid;gap:12px;min-width:0;flex:1}
+.platform-filter-row{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.platform-filter-label{font-size:12px;font-weight:800;color:#56647c;white-space:nowrap}
+.platform-strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.platform-pill{min-height:40px;padding:9px 14px;border:1px solid #cbd5e3;border-radius:999px;background:#fff;color:#25446d;font:inherit;font-size:12px;font-weight:790;cursor:pointer;transition:background .15s,color .15s}
+.platform-pill:hover{border-color:#155fd6;background:#eef5ff}
+.platform-pill.active{background:#1463ce;border-color:#1463ce;color:#fff;box-shadow:0 3px 10px #145bc52a}
+.platform-pill:focus-visible{outline:3px solid #00a9ed;outline-offset:2px}
+.catalog-tools .catalog-search{align-self:flex-start}
+@media(max-width:760px){
+ .platform-filter-row{align-items:flex-start;gap:8px}
+ .platform-filter-label{width:100%}
+ .platform-strip{gap:6px}
+ .platform-pill{padding:8px 12px;min-height:40px}
+ .catalog-tools .catalog-search{align-self:stretch}
+}
+@media(prefers-color-scheme:dark){
+ .platform-filter-label{color:#b8c9e5}
+ .platform-pill{background:#263b5e;color:#d7e7ff;border-color:#4b6286}
+ .platform-pill:hover{background:#304c79}
+ .platform-pill.active{background:#407fef;border-color:#407fef;color:#fff}
+}
