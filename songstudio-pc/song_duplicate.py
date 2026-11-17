@@ -242,6 +242,80 @@ def _move_verified(source, destination, root, expected_digest, cancelled):
         stage.unlink(missing_ok=True)
 
 
+def _move_bundle(paths, destination, root, cancelled):
+    """Stage and verify the whole media+sidecar bundle before removing sources.
+
+    Preserves the source-relative SONG/LYR/CUR structure and every basename.
+    A destination collision blocks the bundle instead of silently renaming a
+    companion and breaking its link with the song.
+    """
+    staged, published, outputs = [], [], []
+    try:
+        total = sum(path.stat().st_size for path in paths)
+        if shutil.disk_usage(destination).free < total + 16 * 1024 * 1024:
+            raise ValueError("พื้นที่ปลายทางไม่เพียงพอสำหรับย้ายเพลงและไฟล์ประกอบ")
+        for path in paths:
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("ยกเลิกงานย้ายไฟล์เพลงซ้ำ")
+            relative = path.relative_to(root)
+            parent = destination
+            for segment in relative.parts[:-1]:
+                parent = parent / segment
+                if parent.is_symlink():
+                    raise ValueError("โฟลเดอร์ปลายทางมี Symbolic Link")
+                parent.mkdir(exist_ok=True)
+            target = destination / relative
+            if target.exists() or target.is_symlink():
+                raise FileExistsError("พบไฟล์ปลายทางอยู่แล้ว · ไม่เขียนทับไฟล์เพลง/เนื้อร้อง: " + str(target))
+            outputs.append((path, target))
+        for path, target in outputs:
+            expected = _digest(path, cancelled=cancelled)
+            stage = target.parent / ("." + secrets.token_hex(12) + ".partial")
+            with path.open("rb") as incoming, stage.open("xb") as outgoing:
+                while True:
+                    if cancelled is not None and cancelled.is_set():
+                        raise RuntimeError("ยกเลิกงานย้ายไฟล์เพลงซ้ำ")
+                    chunk = incoming.read(READ_SIZE)
+                    if not chunk:
+                        break
+                    outgoing.write(chunk)
+                outgoing.flush()
+                os.fsync(outgoing.fileno())
+            staged.append(stage)
+            if _digest(stage, cancelled=cancelled) != expected:
+                raise ValueError("SHA-256 ไม่ตรงหลังคัดลอกไฟล์: " + path.name)
+            # Race protection: never remove a source that changed mid-copy.
+            if _digest(path, cancelled=cancelled) != expected:
+                raise ValueError("ไฟล์เพลงหรือเนื้อร้องเปลี่ยนระหว่างย้าย")
+        for (source, target), stage in zip(outputs, staged):
+            # Hard link provides atomic no-overwrite creation on NTFS.
+            try:
+                os.link(stage, target)
+            except OSError:
+                with stage.open("rb") as incoming, target.open("xb") as outgoing:
+                    shutil.copyfileobj(incoming, outgoing, READ_SIZE)
+                    outgoing.flush()
+                    os.fsync(outgoing.fileno())
+            published.append(target)
+            if _digest(target, cancelled=cancelled) != _digest(source, cancelled=cancelled):
+                raise ValueError("ตรวจไฟล์ที่ย้ายไม่ผ่าน · คงต้นฉบับไว้")
+        # All outputs now exist and were verified. If any remove fails, leave
+        # the already copied target files available for manual recovery.
+        for source, target in outputs:
+            source.unlink()
+        return [str(target) for _, target in outputs]
+    except BaseException:
+        # Do not erase published files after the source removal phase begins:
+        # that would lose material when a later source unlink raises.
+        if all(source.exists() for source, _ in outputs):
+            for target in published:
+                target.unlink(missing_ok=True)
+        raise
+    finally:
+        for stage in staged:
+            stage.unlink(missing_ok=True)
+
+
 class DuplicateMediaRegistry:
     def __init__(self):
         self.lock = threading.RLock()
