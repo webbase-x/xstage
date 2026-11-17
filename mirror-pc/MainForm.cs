@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Drawing;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -9,8 +8,8 @@ namespace XStageMirrorPC;
 
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v0.1.0 · Build 101";
-    private const string FeedUrl = "https://webbase-x.github.io/xstage/downloads/mirror-pc-latest.json";
+    private const string VersionText = "v0.1.1 · Build 102";
+    private const string FeedUrl = "https://webbase-x.github.io/xstage/downloads/mirror-pc-preview-latest.json";
     private static readonly Color Background = Color.FromArgb(13, 20, 38);
     private static readonly Color Surface = Color.FromArgb(23, 33, 54);
     private static readonly Color Muted = Color.FromArgb(169, 191, 213);
@@ -33,7 +32,7 @@ public sealed class MainForm : Form
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(660, 620);
+        MinimumSize = new Size(730, 630);
         Size = new Size(830, 740);
         AutoScaleMode = AutoScaleMode.Dpi;
         BuildLayout();
@@ -79,128 +78,154 @@ public sealed class MainForm : Form
             FlatAppearance = { BorderSize = 0 }
         };
 
-    private static TableLayoutPanel Grid(int rows, int gap = 0)
+    // Explicitly size top-level cards. FlowLayoutPanel + AutoSize previously
+    // collapsed the entire dashboard to a narrow left column on wide monitors.
+    private int ScalePx(int px) => (int)Math.Round(px * DeviceDpi / 96.0);
+
+    private static TableLayoutPanel CreateCard(params int[] rowHeights)
     {
-        var grid = new TableLayoutPanel
+        var card = new TableLayoutPanel
         {
             ColumnCount = 1,
-            RowCount = rows,
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0, 0, 0, gap),
-            BackColor = Surface,
-            Padding = new Padding(18)
+            RowCount = rowHeights.Length,
+            AutoSize = false,
+            Dock = DockStyle.None,
+            GrowStyle = TableLayoutPanelGrowStyle.FixedSize,
+            Margin = Padding.Empty,
+            Padding = new Padding(22, 16, 22, 12),
+            BackColor = Surface
         };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        return grid;
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        foreach (int height in rowHeights) card.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        return card;
     }
 
     private void BuildLayout()
     {
-        var scroll = new FlowLayoutPanel
+        var viewport = new Panel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
             AutoScroll = true,
-            BackColor = Background,
-            Padding = new Padding(18, 14, 18, 14)
+            Margin = Padding.Empty,
+            BackColor = Background
         };
-        Controls.Add(scroll);
+        Controls.Add(viewport);
 
-        var header = Grid(3, 14);
+        var header = CreateCard(44, 31, 31);
         header.BackColor = Background;
-        header.Padding = new Padding(3, 0, 0, 0);
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
-        header.Controls.Add(TextLabel("X-STAGE  MIRROR PC", 21, true, Accent), 0, 0);
-        header.Controls.Add(TextLabel("รับภาพจาก iPhone / iPad และ Android สู่ Windows 10 / 11", 11), 0, 1);
-        header.Controls.Add(TextLabel("AIRPLAY + WINDOWS MIRACAST  |  " + VersionText, 9, false, Muted), 0, 2);
-        scroll.Controls.Add(header);
+        header.Padding = new Padding(4, 1, 4, 0);
+        header.Controls.Add(TextLabel("X-STAGE MIRROR PC", 23, true, Accent), 0, 0);
+        header.Controls.Add(TextLabel("รับภาพจาก iPhone / iPad และ Android สู่ Windows 10 / 11", 12), 0, 1);
+        header.Controls.Add(TextLabel("AIRPLAY + WINDOWS MIRACAST   |   " + VersionText, 10, false, Muted), 0, 2);
 
-        var ios = Grid(6, 14);
-        ios.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        ios.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        ios.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        ios.RowStyles.Add(new RowStyle(SizeType.Absolute, 47));
-        ios.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        ios.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        ios.Controls.Add(TextLabel("iPhone / iPad  •  AirPlay", 14, true), 0, 0);
-        _iosStatus.ForeColor = Accent;
+        var ios = CreateCard(39, 53, 30, 42, 45, 37, 42);
+        ios.Controls.Add(TextLabel("iPhone / iPad  ·  AirPlay", 16, true), 0, 0);
         _iosStatus.Dock = DockStyle.Fill;
+        _iosStatus.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         _iosStatus.TextAlign = ContentAlignment.MiddleLeft;
         ios.Controls.Add(_iosStatus, 0, 1);
-        ios.Controls.Add(TextLabel("ชื่อเครื่องรับ AirPlay (เปลี่ยนได้เมื่อหยุดตัวรับ)", 10, false, Muted), 0, 2);
+        ios.Controls.Add(TextLabel("ชื่อเครื่องรับ AirPlay (เว้นวรรคจะแปลงเป็นเครื่องหมาย -)", 10, false, Muted), 0, 2);
         _receiverName.Dock = DockStyle.Fill;
         _receiverName.BackColor = Color.FromArgb(37, 51, 75);
         _receiverName.ForeColor = Color.White;
         _receiverName.BorderStyle = BorderStyle.FixedSingle;
         _receiverName.Font = new Font("Segoe UI", 12);
-        _receiverName.Text = "X-Stage Mirror PC";
+        _receiverName.Text = "X-Stage-Mirror-PC";
         _receiverName.MaxLength = 55;
         ios.Controls.Add(_receiverName, 0, 3);
 
-        var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        _startButton.Text = "▶  เปิดรับภาพ iOS";
+        var iosButtons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
+        iosButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        iosButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        iosButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+        _startButton.Text = "▶  เปิดรับ AirPlay";
         ApplyButtonStyle(_startButton, true);
-        _stopButton.Text = "■  หยุดรับภาพ iOS";
+        _stopButton.Text = "■  หยุดรับภาพ";
         ApplyButtonStyle(_stopButton, false);
+        var verifyButton = ActionButton("↻  ตรวจส่วนประกอบ");
+        verifyButton.Dock = DockStyle.Fill;
+        verifyButton.Margin = new Padding(3);
+        verifyButton.Click += (_, _) =>
+        {
+            _bundledEngine = FindEngine();
+            RefreshAirPlayStatus();
+            MessageBox.Show(this, _bundledEngine is null
+                ? "ชุดโปรแกรมไม่ครบ กรุณาใช้ไฟล์ติดตั้ง X-Stage Mirror PC แบบเต็มจากเว็บไซต์\n\nไฟล์ EXE เพียงไฟล์เดียวไม่ใช่ชุดตัวรับ AirPlay ที่สมบูรณ์"
+                : "พบ AirPlay Engine และไลบรารีที่จำเป็นในชุดโปรแกรมแล้ว",
+                "ตรวจสอบส่วนประกอบ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        };
         _startButton.Click += (_, _) => StartAirPlay();
         _stopButton.Click += (_, _) => StopAirPlay();
-        buttons.Controls.Add(_startButton, 0, 0);
-        buttons.Controls.Add(_stopButton, 1, 0);
-        ios.Controls.Add(buttons, 0, 4);
+        iosButtons.Controls.Add(_startButton, 0, 0);
+        iosButtons.Controls.Add(_stopButton, 1, 0);
+        iosButtons.Controls.Add(verifyButton, 2, 0);
+        ios.Controls.Add(iosButtons, 0, 4);
         ios.Controls.Add(TextLabel("บน iPhone: ศูนย์ควบคุม → การสะท้อนหน้าจอ → เลือกชื่อเครื่องรับ", 9, false, Muted), 0, 5);
-        scroll.Controls.Add(ios);
+        ios.Controls.Add(TextLabel("ต้องอยู่ใน LAN ที่อนุญาต mDNS และอนุญาต Windows Firewall เมื่อถูกถาม", 9, false, Muted), 0, 6);
 
-        var android = Grid(4, 14);
-        android.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        android.RowStyles.Add(new RowStyle(SizeType.Absolute, 37));
-        android.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        android.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-        android.Controls.Add(TextLabel("Android  •  Wireless Display / Miracast", 14, true), 0, 0);
+        var android = CreateCard(39, 53, 52, 43, 41);
+        android.Controls.Add(TextLabel("Android  ·  Wireless Display / Miracast", 16, true), 0, 0);
         _androidStatus.Dock = DockStyle.Fill;
         _androidStatus.ForeColor = Muted;
-        _androidStatus.Text = "Windows จัดการการเชื่อมต่อ • ต้องรองรับ Miracast";
+        _androidStatus.Text = "ใช้ตัวรับภาพ Wireless Display ของ Windows\nต้องรองรับ Miracast ทั้งสองเครื่องและไดรเวอร์ Wi-Fi";
         android.Controls.Add(_androidStatus, 0, 1);
-        var androidButtons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        androidButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        androidButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        var openDisplay = ActionButton("▶  เปิดตัวรับภาพ Android", true);
-        var settings = ActionButton("⚙  ตั้งค่า Windows");
+        var androidButtons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        androidButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        androidButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        var openDisplay = ActionButton("▶  เปิดรับภาพ Android", true);
+        var settings = ActionButton("⚙  ตรวจสอบ Windows");
+        openDisplay.Dock = DockStyle.Fill;
+        settings.Dock = DockStyle.Fill;
+        openDisplay.Margin = new Padding(3);
+        settings.Margin = new Padding(3);
         openDisplay.Click += (_, _) => OpenWirelessDisplay();
         settings.Click += (_, _) => OpenUri("ms-settings:project");
         androidButtons.Controls.Add(openDisplay, 0, 0);
         androidButtons.Controls.Add(settings, 1, 0);
         android.Controls.Add(androidButtons, 0, 2);
-        android.Controls.Add(TextLabel("บน Android: Cast / Smart View → เลือกชื่อ PC (Google Cast อย่างเดียวไม่ใช่ Miracast)", 9, false, Muted), 0, 3);
-        scroll.Controls.Add(android);
+        android.Controls.Add(TextLabel("Android: Cast / Smart View → เลือกชื่อ PC ที่รองรับ Miracast", 9, false, Muted), 0, 3);
+        android.Controls.Add(TextLabel("Google Cast อย่างเดียวไม่ใช่ Miracast • Windows อาจต้องเพิ่ม Wireless Display", 9, false, Muted), 0, 4);
 
-        var footer = Grid(3, 0);
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-        footer.Controls.Add(TextLabel("อัปเดตและข้อมูลระบบ", 12, true), 0, 0);
+        var footer = CreateCard(33, 43, 47);
+        footer.Controls.Add(TextLabel("อัปเดตและข้อมูลระบบ", 13, true), 0, 0);
         _updateStatus.Dock = DockStyle.Fill;
         _updateStatus.ForeColor = Muted;
-        _updateStatus.Text = "ยังไม่ได้ตรวจสอบอัปเดต";
+        _updateStatus.Text = "กำลังตรวจสอบรุ่นล่าสุด…";
         footer.Controls.Add(_updateStatus, 0, 1);
         var updateButton = ActionButton("↻  ตรวจสอบอัปเดต");
+        updateButton.Dock = DockStyle.Fill;
         updateButton.Click += async (_, _) => await CheckUpdatesAsync(quiet: false);
         footer.Controls.Add(updateButton, 0, 2);
-        scroll.Controls.Add(footer);
 
-        void ResizeCards()
+        viewport.Controls.Add(header);
+        viewport.Controls.Add(ios);
+        viewport.Controls.Add(android);
+        viewport.Controls.Add(footer);
+
+        void ResizeDashboard()
         {
-            var width = Math.Max(510, scroll.ClientSize.Width - scroll.Padding.Horizontal - 20);
-            foreach (Control c in scroll.Controls) c.Width = width;
+            var available = Math.Max(0, viewport.ClientSize.Width - 40);
+            var width = Math.Min(1020, Math.Max(600, available));
+            var x = available >= width ? (viewport.ClientSize.Width - width) / 2 : 20;
+            int y = 16, gap = 16;
+            var cards = new (Control view, int height)[]
+            {
+                (header, 119), (ios, 341), (android, 246), (footer, 164)
+            };
+            viewport.SuspendLayout();
+            try
+            {
+                foreach (var (view, height) in cards)
+                {
+                    view.SetBounds(x, y, width, height);
+                    y += height + gap;
+                }
+                viewport.AutoScrollMinSize = new Size(width + 40, y + 12);
+            }
+            finally { viewport.ResumeLayout(); }
         }
-        scroll.SizeChanged += (_, _) => ResizeCards();
-        ResizeCards();
+        viewport.SizeChanged += (_, _) => ResizeDashboard();
+        ResizeDashboard();
     }
 
     private static void ApplyButtonStyle(Button button, bool primary)
