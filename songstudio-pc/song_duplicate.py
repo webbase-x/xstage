@@ -28,6 +28,81 @@ MAX_SONGS = 1_000_000
 MAX_ACTION_FILES = 300
 READ_SIZE = 1024 * 1024
 SAMPLE_SIZE = 65536
+# These are companions only; they are not used to decide if media are duplicates.
+LYRIC_EXTENSIONS = frozenset({".json", ".lrc", ".lyr", ".cur"})
+LYRIC_ROLE_FOLDERS = {"lyrics", "lyr", "cur", "cursor", "lrc"}
+MEDIA_ROLE_FOLDERS = {"song", "songs", "audio", "midi"}
+MAX_PREVIEW_FILES = 1500
+
+
+def _protected_library(path):
+    return "xstagesong" in {part.casefold() for part in path.parts}
+
+
+def _companions(root, media):
+    """Find same-code sidecars, including mirrored NCN SONG/LYR/CUR folders.
+
+    Only already-existing files underneath the selected tree qualify; do not
+    inspect catalog/DB files or invent companion filenames. Exact stem matters.
+    """
+    roots = [media.parent]
+    relative = media.relative_to(root)
+    parts = relative.parts[:-1]
+    for i, part in enumerate(parts):
+        if part.casefold() in MEDIA_ROLE_FOLDERS:
+            for role in ("LYR", "CUR", "LYRICS", "LRC", "lyrics", "lyr", "cur"):
+                folder = root.joinpath(*parts[:i], role, *parts[i + 1:])
+                if folder.is_dir() and not folder.is_symlink():
+                    roots.append(folder)
+    found = set()
+    result = []
+    for folder in roots:
+        try:
+            entries = folder.iterdir()
+            for candidate in entries:
+                if (candidate.stem.casefold() != media.stem.casefold() or
+                        candidate.suffix.casefold() not in LYRIC_EXTENSIONS):
+                    continue
+                if (candidate.is_symlink() or not candidate.is_file() or
+                        not candidate.resolve().is_relative_to(root)):
+                    continue
+                if candidate in found:
+                    continue
+                found.add(candidate)
+                result.append(candidate)
+        except OSError as exc:
+            raise OSError("อ่านไฟล์ประกอบไม่สำเร็จ: " + str(folder)) from exc
+    return sorted(result, key=lambda path: str(path).casefold())
+
+
+def _shared_sidecar(source, selected, active_media):
+    """Never touch same-code lyric files if another retained media may use them."""
+    for other in active_media:
+        if other == selected or other == source:
+            continue
+        if other.stem.casefold() != selected.stem.casefold():
+            continue
+        # Sharing in a media folder, or a parallel SONG subtree, is ambiguous.
+        if (other.parent == selected.parent or
+                other.parent.name.casefold() in MEDIA_ROLE_FOLDERS and
+                selected.parent.name.casefold() in MEDIA_ROLE_FOLDERS and
+                other.parent.parent == selected.parent.parent):
+            return True
+    return False
+
+
+def _preferred_keeper(alive, preference):
+    # No fabricated cross-code "same song" matches: choose only among
+    # SHA-256 verified exact byte duplicates, including differently named files.
+    if preference:
+        preferred = [item for item in alive
+                     if item["path"].suffix.casefold() == preference]
+        if preferred:
+            return preferred[0]
+    # Preserve existing XStageSong library files if present; never mutate them.
+    protected = [item for item in alive if _protected_library(item["path"])]
+    return protected[0] if protected else alive[0]
+
 
 
 def _stability(path: Path, stat=None):
@@ -172,6 +247,7 @@ class DuplicateMediaRegistry:
     def __init__(self):
         self.lock = threading.RLock()
         self.state = None
+        self.preview_state = None
 
     def scan(self, folder, *, cancelled=None, progress=None):
         root = _safe_root(folder)
@@ -282,6 +358,7 @@ class DuplicateMediaRegistry:
         }
         with self.lock:
             self.state = result
+            self.preview_state = None
         if progress:
             progress("done", files, hashed, len(groups))
         return {"scanId": result["scanId"], "fileCount": files,
