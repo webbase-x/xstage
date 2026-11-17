@@ -489,33 +489,145 @@ class DuplicateMediaRegistry:
                 "groups": rows, "offset": offset, "limit": limit,
             }
 
-    def apply(self, *, scan_id, selected, operation, destination=None,
-              confirmed=False, cancelled=None, progress=None):
-        if operation not in ("move", "recycle") or confirmed is not True:
-            raise ValueError("ต้องเลือกการย้ายหรือส่งเข้าถังรีไซเคิลและยืนยันคำสั่ง")
+    def _plan_locked(self, *, scan_id, selected, keeper_by_group=None,
+                     preferred_extension="", include_companions=True):
+        state = self.state
+        if state is None or scan_id != state["scanId"]:
+            raise ValueError("ผลตรวจเพลงซ้ำหมดอายุ · กรุณาตรวจใหม่")
         if (not isinstance(selected, list) or not 1 <= len(selected) <= MAX_ACTION_FILES
                 or any(not isinstance(s, str) for s in selected)
                 or len(set(selected)) != len(selected)):
-            raise ValueError("กรุณาเลือกไฟล์ซ้ำ 1–300 ไฟล์โดยไม่ซ้ำกัน")
+            raise ValueError("เลือกไฟล์เพลงที่ต้องจัดการได้ครั้งละ 1–300 ไฟล์")
+        if not isinstance(keeper_by_group, dict) or any(
+                not isinstance(k, str) or not isinstance(v, str)
+                for k, v in keeper_by_group.items()):
+            raise ValueError("ข้อมูลไฟล์ต้นฉบับที่ต้องการเก็บไม่ถูกต้อง")
+        preference = str(preferred_extension or "").casefold()
+        if preference and preference not in MEDIA_EXTENSIONS:
+            raise ValueError("ประเภทไฟล์ที่เลือกเก็บไม่รองรับ")
+        if type(include_companions) is not bool:
+            raise ValueError("ตัวเลือกไฟล์ประกอบไม่ถูกต้อง")
+        chosen = []
+        selected_set = set(selected)
+        claimed_companions = set()
+        warnings = []
+        all_files = []
+        for fid in selected:
+            item = state["files"].get(fid)
+            if not item or item["status"] != "active":
+                raise ValueError("ไฟล์ที่เลือกถูกย้าย/ลบแล้ว · กรุณาโหลดผลตรวจล่าสุด")
+            if _protected_library(item["path"]):
+                raise ValueError("ไม่อนุญาตย้าย/ลบไฟล์เพลงใน XStageSong ที่ฐานข้อมูลอ้างถึง")
+            group = state["groupById"][item["group"]]
+            alive = [state["files"][x] for x in group["files"]
+                     if state["files"][x]["status"] == "active"]
+            default = _preferred_keeper(alive, preference)
+            keeper_id = keeper_by_group.get(group["id"], default["id"])
+            keeper = next((x for x in alive if x["id"] == keeper_id), None)
+            if keeper is None or keeper["id"] in selected_set:
+                raise ValueError("ต้องเลือกไฟล์หลักที่จะเก็บไว้ และห้ามเลือกไฟล์หลักไปลบ/ย้าย")
+            if _stability(item["path"]) != item["stamp"] or _stability(
+                    keeper["path"]) != keeper["stamp"]:
+                raise ValueError("ไฟล์เพลงถูกเปลี่ยนหลังสแกน · กรุณาตรวจใหม่")
+            sidecars = []
+            if include_companions and item["path"].suffix.casefold() != ".xsk":
+                companions = _companions(state["root"], item["path"])
+                if companions and _shared_sidecar(item["path"]):
+                    warnings.append("เก็บเนื้อร้องรหัส " + item["path"].stem +
+                                    " ไว้ เพราะมีเพลงอีกประเภทใช้รหัสร่วมกัน")
+                else:
+                    for candidate in companions:
+                        if _protected_library(candidate) or candidate in claimed_companions:
+                            warnings.append("ข้ามไฟล์ประกอบที่มีการใช้งานร่วมกัน: " + str(candidate))
+                            continue
+                        claimed_companions.add(candidate)
+                        sidecars.append((candidate, _stability(candidate)))
+            files = [(item["path"], item["stamp"], "media")] + [
+                (sidecar, stamp, "companion") for sidecar, stamp in sidecars]
+            all_files.extend(files)
+            chosen.append((item, keeper, files))
+        if len(all_files) > MAX_PREVIEW_FILES:
+            raise ValueError("ชุดเพลงและไฟล์ประกอบใหญ่เกินขีดจำกัดต่อคำสั่ง")
+        return state, chosen, all_files, warnings
+
+    def plan(self, *, scan_id, selected, operation, destination=None,
+             keeper_by_group=None, preferred_extension="",
+             include_companions=True):
+        if operation not in ("move", "recycle"):
+            raise ValueError("กรุณาเลือกย้ายหรือลบไฟล์เพลง")
+        keepers = dict(keeper_by_group or {})
         with self.lock:
-            state = self.state
-            if state is None or scan_id != state["scanId"]:
-                raise ValueError("ผลตรวจเพลงซ้ำหมดอายุ · กรุณาตรวจใหม่")
+            state, chosen, files, warnings = self._plan_locked(
+                scan_id=scan_id, selected=selected, keeper_by_group=keepers,
+                preferred_extension=preferred_extension,
+                include_companions=include_companions)
+            target = None
+            if operation == "move":
+                target = _safe_root(destination)
+                root = state["root"]
+                if (target == root or target.is_relative_to(root) or
+                        root.is_relative_to(target)):
+                    raise ValueError("ปลายทางย้ายต้องแยกจากโฟลเดอร์ต้นทาง")
+                # No-overwrite planning includes media and every related file.
+                for path, _, _ in files:
+                    output = target / path.relative_to(root)
+                    if output.exists() or output.is_symlink():
+                        raise FileExistsError("ปลายทางมีไฟล์ชื่อเดียวกัน · ไม่ย้ายทับ: " + str(output))
+            elif os.name != "nt":
+                raise ValueError("ส่งเข้าถังรีไซเคิลได้เฉพาะ Windows")
+            preview_id = secrets.token_hex(16)
+            self.preview_state = {
+                "id": preview_id, "scan_id": scan_id, "selected": tuple(selected),
+                "keepers": keepers, "preferred": preferred_extension,
+                "companions": include_companions, "operation": operation,
+                "destination": str(target) if target else "",
+                "stamps": tuple((str(path), stamp) for path, stamp, _ in files),
+            }
+            media_count = len(chosen)
+            sidecar_count = sum(kind == "companion" for _, _, kind in files)
+            return {
+                "previewId": preview_id, "mediaCount": media_count,
+                "companionCount": sidecar_count, "totalFiles": len(files),
+                "warnings": warnings[:30],
+                "files": [{"path": str(path), "kind": kind}
+                          for path, _, kind in files],
+                "keepers": [{"group": item["group"], "path": str(keeper["path"]),
+                             "type": keeper["path"].suffix.lower()}
+                            for item, keeper, _ in chosen][:MAX_ACTION_FILES],
+                "destination": str(target) if target else "",
+                "operation": operation,
+                "message": (f"เตรียม{'ย้าย' if operation == 'move' else 'ส่งเข้าถังรีไซเคิล'}"
+                            f"ไฟล์เพลง {media_count:,} + ไฟล์ประกอบ {sidecar_count:,} ไฟล์"),
+            }
+
+    def apply(self, *, scan_id, selected, operation, destination=None,
+              keeper_by_group=None, preferred_extension="",
+              include_companions=True, preview_id=None,
+              confirmed=False, cancelled=None, progress=None):
+        if operation not in ("move", "recycle") or confirmed is not True:
+            raise ValueError("ต้องเลือกการย้ายหรือส่งเข้าถังรีไซเคิลและยืนยันคำสั่ง")
+        keepers = dict(keeper_by_group or {})
+        with self.lock:
+            state, chosen, files, _ = self._plan_locked(
+                scan_id=scan_id, selected=selected, keeper_by_group=keepers,
+                preferred_extension=preferred_extension,
+                include_companions=include_companions)
             root = state["root"]
-            chosen = []
-            for fid in selected:
-                item = state["files"].get(fid)
-                if not item or item["status"] != "active":
-                    raise ValueError("รายการไฟล์ซ้ำเปลี่ยนแล้ว · กรุณาโหลดผลตรวจใหม่")
-                if "xstagesong" in {p.casefold() for p in item["path"].parts}:
-                    raise ValueError("ไม่อนุญาตลบ/ย้ายเพลงใน XStageSong ที่ฐานข้อมูลอาจอ้างถึง")
-                group = state["groupById"][item["group"]]
-                alive = [state["files"][x] for x in group["files"]
-                         if state["files"][x]["status"] == "active"]
-                keeper = alive[0]
-                if keeper["id"] == fid or keeper["id"] in selected:
-                    raise ValueError("ต้องเก็บไฟล์หลักอย่างน้อยหนึ่งไฟล์ในแต่ละกลุ่ม")
-                chosen.append((item, keeper))
+            if preview_id is not None:
+                preview = self.preview_state
+                if (preview is None or preview["id"] != preview_id or
+                        preview["scan_id"] != scan_id or
+                        preview["selected"] != tuple(selected) or
+                        preview["keepers"] != keepers or
+                        preview["preferred"] != preferred_extension or
+                        preview["companions"] != include_companions or
+                        preview["operation"] != operation or
+                        preview["stamps"] != tuple((str(path), stamp)
+                                                  for path, stamp, _ in files)):
+                    raise ValueError("แผนย้าย/ลบเปลี่ยนไป · กรุณาดูตัวอย่างแล้วกดยืนยันใหม่")
+                if (preview["destination"] !=
+                        (str(Path(destination).expanduser().resolve()) if operation == "move" else "")):
+                    raise ValueError("โฟลเดอร์ปลายทางถูกเปลี่ยนหลังยืนยัน")
             if operation == "move":
                 target_root = _safe_root(destination)
                 if (target_root == root or target_root.is_relative_to(root)
@@ -527,35 +639,45 @@ class DuplicateMediaRegistry:
                 target_root = None
             completed = []
             verified_keepers = set()
-            for idx, (item, keeper) in enumerate(chosen, 1):
+            moved_companions = 0
+            for idx, (item, keeper, bundle) in enumerate(chosen, 1):
                 if cancelled is not None and cancelled.is_set():
                     raise RuntimeError("ยกเลิกการจัดการเพลงซ้ำ")
-                # A single 4GB keeper may have hundreds of identical copies.
-                # Rehash it ONCE per confirmed action, not 300 times.
                 proofs = [item]
                 if keeper["id"] not in verified_keepers:
                     proofs.insert(0, keeper)
                 for proof in proofs:
-                    if (_stability(proof["path"]) != proof["stamp"]
-                            or _digest(proof["path"], cancelled=cancelled) != proof["sha256"]):
+                    if (_stability(proof["path"]) != proof["stamp"] or
+                            _digest(proof["path"], cancelled=cancelled) != proof["sha256"]):
                         raise ValueError("ไฟล์ต้นฉบับหรือสำเนาเปลี่ยนระหว่างตรวจ · ต้องสแกนใหม่")
                 verified_keepers.add(keeper["id"])
+                # Companion file bytes and timestamps are independently rechecked.
+                for path, stamp, kind in bundle:
+                    if kind == "companion" and _stability(path) != stamp:
+                        raise ValueError("ไฟล์ประกอบเปลี่ยนหลังดูตัวอย่าง · ต้องตรวจใหม่")
                 if operation == "move":
-                    moved = _move_verified(item["path"], target_root, root,
-                                           item["sha256"], cancelled)
+                    destinations = _move_bundle([path for path, _, _ in bundle],
+                                                 target_root, root, cancelled)
                 else:
-                    _recycle_windows(item["path"])
-                    moved = ""
+                    # Recycle song FIRST, then its sidecars. If the OS refuses
+                    # the song, no lyrics are removed; failures never nuke files.
+                    destinations = ["" for _ in bundle]
+                    for path, _, _ in bundle:
+                        _recycle_windows(path)
                 item["status"] = operation
-                completed.append({"id": item["id"], "from": str(item["path"]),
-                                  "to": moved})
+                moved_companions += len(bundle) - 1
+                completed.append({
+                    "id": item["id"], "from": str(item["path"]),
+                    "to": destinations[0], "companions": len(bundle) - 1})
                 if progress:
                     progress(idx, len(chosen), item["path"].name)
+            self.preview_state = None
             return {
-                "processed": len(completed), "operation": operation,
-                "files": completed[:50],
+                "processed": len(completed), "companionFiles": moved_companions,
+                "operation": operation, "files": completed[:50],
                 "message": (f"{'ย้าย' if operation == 'move' else 'ส่งเข้าถังรีไซเคิล'}"
-                            f"ไฟล์ซ้ำสำเร็จ {len(completed):,} ไฟล์ · เก็บไฟล์หลักไว้ทุกกลุ่ม"),
+                            f"เพลง {len(completed):,} และไฟล์ประกอบ {moved_companions:,} ไฟล์"
+                            " · เก็บไฟล์หลักที่เลือกไว้ทุกกลุ่ม"),
             }
 
 
