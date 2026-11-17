@@ -1,6 +1,6 @@
 # X-Stage Mirror iOS PC
 
-**v1.0.7 · Build 1008 · Windows 10/11 x64 · Preview**
+**v1.0.8 · Build 1009 · Windows 10/11 x64 · Preview**
 
 The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
 
@@ -25,6 +25,36 @@ Once an iPhone/iPad starts mirroring, the **native UxPlay/GStreamer video window
 
 The renderer window is owned by the packaged UxPlay engine, not WinForms. Source-protected DRM content may remain blocked.
 
+## One AirPlay name and immediate return to welcome (Build 1009)
+
+The receiver advertises **X-Stage Mirror PC No.XXXX** once and only once.
+The Windows UxPlay wrapper splits its settings file on literal ASCII spaces,
+so ordinary spaces in the `-n` value would be interpreted as separate UxPlay
+arguments. Previous releases used NBSP but the app's `.NET Regex` treated it
+as whitespace and replaced only part of the old device name; the remaining
+tokens accumulated and iPhone displayed duplicated names. NBSP also prevented
+natural line wrapping, forcing a line break after `X-`.
+
+Build 1009 writes a **fresh canonical `-n` argument** on every start, and
+uses U+2002 en-spaces between name words: UxPlay receives one Unicode name,
+while iOS may wrap the label between words instead of after the initial `X-`.
+It retains the persisted receiver number, replaces all previously accumulated
+name fragments, and saves the old file only once to
+`%LOCALAPPDATA%\\X-Stage\\Mirror iOS PC\\uxplay-arguments-before-xstage.txt`.
+This receiver deliberately owns its UxPlay settings file; third-party custom
+arguments from that file are preserved in the backup, not merged into the
+live X-Stage receiver, to avoid duplicating name/option tokens.
+
+When a previously connected sender's TCP session disappears, X-Stage checks
+for the transition about twice a second and hides the native video window.
+The waiting UI becomes visible immediately on detection. UxPlay, Bonjour,
+and the app remain alive for the next AirPlay session; if UxPlay reuses the
+same window it is restored when another sender reconnects. If the native
+rendering window itself closes first, the waiting screen is already beneath
+it. This is network/session-driven, not an unsupported claim of zero latency;
+a device that keeps TCP connected after stopping video may retain its native
+window until UxPlay itself closes it. Validate on real iOS and Windows hardware.
+
 ## Addressing stream freezes
 
 On some Windows GPUs, GStreamer D3D12 video rendering or resolution changes can fail; D3D11 is the default. The application also disables optional UxPlay Bluetooth discovery for LAN use to avoid an unnecessary helper process. These settings are applied to the pinned upstream UxPlay Qt registry configuration at startup and original values are restored after **normal** shutdown. The user's renderer preference (D3D11 or Auto) persists in `%LOCALAPPDATA%\X-Stage\Mirror iOS PC\renderer.txt`.
@@ -42,7 +72,7 @@ A frozen image **cannot be diagnosed reliably by checking whether the receiving 
 
 When video fills the display, the native renderer may receive the keystrokes instead of X-Stage. Use Alt+Tab to switch to the receiver shell before pressing F1/F5/F8. Do not assume these keys work within GStreamer.
 
-## Windows Firewall consent persistence (Build 1008)
+## Windows Firewall consent persistence (Build 1009)
 
 The optional **Allow X-Stage AirPlay discovery on trusted Private networks**
 checkbox is preselected on a first installation, but `checkedonce` makes it
@@ -56,7 +86,7 @@ are refreshed. Uninstall removes the three X-Stage rules but never unrelated
 Windows or third-party network permissions. Automated `/VERYSILENT`
 upgrades retain the existing private-network configuration.
 
-## Bonjour service upgrade compatibility (Build 1008)
+## Bonjour service upgrade compatibility (Build 1009)
 
 In Build 1006, the all-in-one Windows installer re-copied
 `engine/uxplay-windows/mDNSResponder.exe` into the application directory
@@ -86,11 +116,11 @@ The app presents the actual detected local network IP. Connected sender IPs can 
 The Windows receiver is separated from **X-Stage Mirror Android PC**; the latter uses Windows-native Miracast and is not changed by this release.
 
 
-## Desktop icon (Build 1008)
+## Desktop icon (Build 1009)
 
 The Windows installer always creates a **X-Stage Mirror iOS PC** desktop shortcut, including during /VERYSILENT automatic upgrades. The shortcut points to the installed executable, uses the embedded branded ICO, and is removed by the installer uninstall process. The Start menu shortcut continues to be created. No manual shortcut option is required.
 
-## Automatic upgrades (Build 1008)
+## Automatic upgrades (Build 1009)
 
 - The running PC receiver checks the exact X-Stage iOS PC preview feed at launch and every 30 minutes, with a short network timeout for the feed.
 - When a newer matching Windows build is published, the client automatically downloads the **complete Setup EXE** from the specifically named GitHub Release. It checks platform, app, monotonic build, semantic version, exact asset URL/file name, executable header, size limits and SHA-256. Only that checked file may launch.

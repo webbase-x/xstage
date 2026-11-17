@@ -18,7 +18,7 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.7 · Build 1008";
+    private const string VersionText = "v1.0.8 · Build 1009";
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
@@ -55,7 +55,7 @@ public sealed class MainForm : Form
         FlatStyle = FlatStyle.Flat, TabStop = false,
         Font = new Font("Segoe UI", 18, FontStyle.Bold)
     };
-    private readonly System.Windows.Forms.Timer _clock = new() { Interval = 1300 };
+    private readonly System.Windows.Forms.Timer _clock = new() { Interval = 250 };
     private readonly VideoWindowPresentation _video = new();
     private readonly string _name = ReceiverIdentity.DisplayName;
     private readonly string _configFolder = Path.Combine(
@@ -68,6 +68,8 @@ public sealed class MainForm : Form
     private bool _manualStop;
     private bool _starting;
     private bool _checkingPeers;
+    private bool _suppressStaleVideo;
+    private bool _sawPeerDuringVideo;
     private readonly MirrorAutoUpdateManager _autoUpdates;
     private string? _updateNotice;
     private DateTime _updateNoticeUntil = DateTime.MinValue;
@@ -271,17 +273,26 @@ public sealed class MainForm : Form
         var alive = _engine is { HasExited: false };
         if (alive)
         {
-            // A native fullscreen video window automatically obscures this
-            // welcome page. When the window closes, the welcome page remains.
-            if (_video.Present(_engine!.Id, Screen.FromControl(this)))
+            // Show the native renderer only during a live mirroring session.
+            // Once the sender disconnects we hide the old video surface and
+            // keep this welcome window visible without stopping the receiver.
+            if (_suppressStaleVideo)
+            {
+                _status.Text = "พร้อมรับภาพจาก iPhone / iPad";
+            }
+            else if (_video.Present(_engine!.Id, Screen.FromControl(this)))
             {
                 _status.Text = "กำลังรับภาพ AirPlay";
                 _receiverIssue = "";
             }
             else if (!string.IsNullOrWhiteSpace(_receiverIssue))
+            {
                 _status.Text = _receiverIssue;
+            }
             else
+            {
                 _status.Text = "พร้อมรับภาพจาก iPhone / iPad";
+            }
         }
         else
         {
@@ -298,7 +309,10 @@ public sealed class MainForm : Form
         }
         if (DateTime.UtcNow - _lastNetworkCheck > TimeSpan.FromSeconds(8))
             UpdateNetworkStatus();
-        if (alive && !_checkingPeers && DateTime.UtcNow - _lastPeerCheck > TimeSpan.FromSeconds(9))
+        // Lightweight, asynchronous session check (~500 ms) makes returning to
+        // the waiting screen prompt without touching the native frame pipeline.
+        if (alive && !_checkingPeers &&
+            DateTime.UtcNow - _lastPeerCheck > TimeSpan.FromMilliseconds(500))
             _ = CheckPeersAsync();
         if (_updateNotice is not null && DateTime.UtcNow < _updateNoticeUntil)
             _status.Text = _updateNotice;
@@ -341,6 +355,33 @@ public sealed class MainForm : Form
             _lastPeerText = probe.PeerAddresses.Length > 0
                 ? string.Join(", ", probe.PeerAddresses)
                 : probe.VideoWindow ? "วิดีโอกำลังแสดง (ไม่มีชื่อผู้ส่ง)" : "ยังไม่พบการเชื่อมต่อ TCP";
+
+            // No guesswork on netstat failures: only a successful observation
+            // of a previously connected session closing may hide the renderer.
+            if (probe.Problem is not null || _engine is not { HasExited: false } ||
+                _engine.Id != pid)
+                return;
+            if (probe.PeerAddresses.Length > 0)
+            {
+                _sawPeerDuringVideo = true;
+                if (_suppressStaleVideo)
+                {
+                    _suppressStaleVideo = false;
+                    _video.RestoreAfterReconnect();
+                    TopMost = false;
+                }
+            }
+            else if (_sawPeerDuringVideo && _video.IsShowing)
+            {
+                _sawPeerDuringVideo = false;
+                _suppressStaleVideo = true;
+                _video.HideAfterDisconnect();
+                // The UxPlay window is topmost during playback. Reclaim the
+                // visible waiting screen after its stream is disconnected.
+                TopMost = true;
+                BringToFront();
+                _status.Text = "พร้อมรับภาพจาก iPhone / iPad";
+            }
         }
         catch { _lastPeerText = "ตรวจสอบเซสชันไม่ได้"; }
         finally { _checkingPeers = false; }
@@ -426,32 +467,30 @@ public sealed class MainForm : Form
 
     private void ConfigureAirPlayName()
     {
-        // UxPlay Windows reads whitespace-split arguments.txt. NBSP characters
-        // retain human-readable separation while remaining a single -n value.
-        var name = Regex.Replace(_name, @"\s+", "\u00A0");
+        // The pinned Qt launcher splits arguments.txt on ASCII spaces ONLY.
+        // NBSP previously made the entire name unbreakable on iPhone and the
+        // .NET whitespace regex updated only "X-", accumulating suffixes on
+        // each restart. En-space is ONE token for Qt but wraps naturally in
+        // the iOS AirPlay picker (unlike non-breaking spaces).
+        var display = _name.Replace(' ', '\u2002');
         var cfg = Path.Combine(Environment.GetFolderPath(
             Environment.SpecialFolder.ApplicationData), "leapbtw", "uxplay-windows", "arguments.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(cfg)!);
-        var target = "-n " + name + " -nh";
-        if (!File.Exists(cfg))
+        var desired = "-n " + display + " -nh" +
+            (_lowLatency ? FastPreviewArguments : "") + Environment.NewLine;
+        var original = File.Exists(cfg) ? File.ReadAllText(cfg) : null;
+        if (original == desired) return;
+        // This X-Stage receiver owns the bundled UxPlay settings while active.
+        // Save existing options once so a user can recover them if necessary.
+        if (original is not null)
         {
-            File.WriteAllText(cfg, target + Environment.NewLine);
-            return;
+            Directory.CreateDirectory(_configFolder);
+            var backup = Path.Combine(_configFolder, "uxplay-arguments-before-xstage.txt");
+            if (!File.Exists(backup)) File.Copy(cfg, backup);
         }
-        var old = File.ReadAllText(cfg).Trim();
-        // Keep unrelated advanced UxPlay options; only replace advertised -n.
-        if (Regex.IsMatch(old, @"(?:^|\s)-n\s+\S+"))
-            old = Regex.Replace(old, @"(?:^|\s)-n\s+\S+", " -n " + name);
-        else old += " -n " + name;
-        if (!Regex.IsMatch(old, @"(?:^|\s)-nh(?:\s|$)"))
-            old += " -nh";
-        // Only remove the exact options the previous X-Stage fast-mode run added.
-        // Smooth mode remains the existing UxPlay/GStreamer behavior.
-        old = old.Replace(FastPreviewArguments, "", StringComparison.Ordinal);
-        if (_lowLatency) old += FastPreviewArguments;
-        var desired = old.Trim() + Environment.NewLine;
-        if (File.ReadAllText(cfg) != desired)
-            File.WriteAllText(cfg, desired);
+        // Canonical single -n and -nh every start: remove ALL stale names,
+        // leftover text and duplicated flags, never append to old arguments.
+        File.WriteAllText(cfg, desired);
     }
 
     private string LoadRendererPreference()
@@ -549,6 +588,9 @@ public sealed class MainForm : Form
             ApplyNativeRendererSettings();
             _lastLaunch = DateTime.UtcNow;
             _manualStop = false;
+            _sawPeerDuringVideo = false;
+            _suppressStaleVideo = false;
+            TopMost = false;
             _video.Reset();
             _engine?.Dispose();
             _engine = Process.Start(new ProcessStartInfo
@@ -574,6 +616,9 @@ public sealed class MainForm : Form
 
     private void StopOwnEngine()
     {
+        _sawPeerDuringVideo = false;
+        _suppressStaleVideo = false;
+        TopMost = false;
         _video.Reset();
         try
         {

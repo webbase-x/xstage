@@ -11,7 +11,30 @@ namespace XStageMirrorIOSPC;
 internal sealed class VideoWindowPresentation
 {
     private IntPtr _current;
-    internal bool IsShowing => _current != IntPtr.Zero && IsWindow(_current);
+    private IntPtr _hidden;
+    internal bool IsShowing => _current != IntPtr.Zero &&
+        IsWindow(_current) && IsWindowVisible(_current);
+
+    // Called only after the process-owned AirPlay TCP session is observed to
+    // disconnect. Hiding rather than closing the renderer avoids tearing down
+    // the decoding engine, native audio playback and the AirPlay listener.
+    internal void HideAfterDisconnect()
+    {
+        if (_current != IntPtr.Zero && IsWindow(_current))
+        {
+            _hidden = _current;
+            ShowWindow(_hidden, 0); // SW_HIDE
+        }
+        _current = IntPtr.Zero;
+    }
+
+    internal void RestoreAfterReconnect()
+    {
+        // UxPlay may reuse the same native video HWND for a new stream.
+        if (_hidden != IntPtr.Zero && IsWindow(_hidden))
+            ShowWindow(_hidden, 8); // SW_SHOWNA, does not steal focus
+        _hidden = IntPtr.Zero;
+    }
 
     internal bool Present(int uxplayPid, System.Windows.Forms.Screen target)
     {
@@ -35,7 +58,11 @@ internal sealed class VideoWindowPresentation
         return true;
     }
 
-    internal void Reset() => _current = IntPtr.Zero;
+    internal void Reset()
+    {
+        _current = IntPtr.Zero;
+        _hidden = IntPtr.Zero;
+    }
 
     private static IntPtr FindRenderWindow(int pid)
     {
@@ -70,6 +97,9 @@ internal sealed class VideoWindowPresentation
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindow(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
