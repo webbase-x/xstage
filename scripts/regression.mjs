@@ -75,6 +75,15 @@ for(const [slug,path,label] of uniqueApps){
 }
 assert.ok(read('studio/web.html').includes('web-app-icon.svg?v=1108'),'Song Studio Web must use its own favicon and header mark');
 assert.ok(read('studio/web.webmanifest').includes('./web-app-icon.svg'),'Song Studio Web install manifest must not reuse PC icon');
+assert.ok(read('studio/web.webmanifest').includes('./web-icon-192.png')&&read('studio/web.webmanifest').includes('./web-icon-512.png'),'Song Studio Web must install with its distinct raster icon sizes');
+assert.ok(storefront.includes('assets/xstage-apps-apple-touch-icon.png'),'X-Stage Apps iOS home-screen artwork must be distinct from Karaoke');
+assert.ok(read('studio/web.html').includes('web-apple-touch-icon.png'),'Song Studio Web iOS home-screen artwork must be separate from PC');
+assert.ok(read('mirror-tv/index.html').includes('mirror-tv-apple-touch-icon.png'),'Mirror TV pairing guide must show its own iOS bookmark art');
+for(const asset of ['assets/xstage-apps-apple-touch-icon.png','studio/web-apple-touch-icon.png','studio/web-icon-192.png','studio/web-icon-512.png','assets/app-icons/mirror-tv-apple-touch-icon.png']){
+  const data=fs.readFileSync(new URL('../'+asset,import.meta.url));
+  assert.ok(data.byteLength>1024 && data[0]===137 && data[1]===80,'Expected real generated PNG for '+asset);
+}
+
 assert.ok(read('studio/index.html').includes('./app-icon.svg'),'Song Studio PC retains its separate native branding');
 assert.ok(read('.github/workflows/build-windows-pc.yml').includes('scripts/build_karaoke_pc_icon.py'),'Windows candidate must generate distinct PC icon before bundling');
 assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stage Mirror TV cast icon'),'Mirror TV native launcher must have a separate cast identity');
