@@ -11,6 +11,6 @@
   "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.65-build365.zip",
   "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.65-build365/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365.zip",
   "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.65-build365",
-  "sha256": "7f270be1313254876dfa00fb29ac8636110f949a4476db78879a15634c435730",
+  "sha256": "24cfa631a40f318b2ca541c03bbed32654b1b55242d6d6ebe5bf194c47c951a8",
   "notes": "Build 357: typed XStageSong AUDIO/VIDEO/MIDI/MID,KAR,XSK/LYRICS/SOUNDFONT export, metadata-preserving Lyrics JSON and non-destructive PC/Drive catalogs. SHA-256-verified ZIP."
 }
