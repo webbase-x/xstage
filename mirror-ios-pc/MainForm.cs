@@ -18,7 +18,7 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.1 · Build 1002";
+    private const string VersionText = "v1.0.2 · Build 1003";
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
@@ -32,6 +32,20 @@ public sealed class MainForm : Form
     private readonly Label _version = MakeLabel("", 15, false, Soft);
     private readonly Label _status = MakeLabel("", 20, false, Frost);
     private readonly Label _network = MakeLabel("", 16, false, Soft);
+    private readonly Button _minimize = new()
+    {
+        Text = "—", AccessibleName = "ย่อหน้าต่าง",
+        BackColor = Color.FromArgb(30, 54, 79), ForeColor = Color.White,
+        FlatStyle = FlatStyle.Flat, TabStop = false,
+        Font = new Font("Segoe UI", 17, FontStyle.Bold)
+    };
+    private readonly Button _closeButton = new()
+    {
+        Text = "×", AccessibleName = "ปิดแอป",
+        BackColor = Color.FromArgb(57, 39, 55), ForeColor = Color.White,
+        FlatStyle = FlatStyle.Flat, TabStop = false,
+        Font = new Font("Segoe UI", 18, FontStyle.Bold)
+    };
     private readonly System.Windows.Forms.Timer _clock = new() { Interval = 1300 };
     private readonly VideoWindowPresentation _video = new();
     private readonly string _name = ReceiverIdentity.DisplayName;
@@ -54,6 +68,9 @@ public sealed class MainForm : Form
     private string _receiverIssue = "";
     private string _lastPeerText = "ยังไม่มีอุปกรณ์เชื่อมต่อ";
     private string _renderer = "d3d11";
+    private bool _lowLatency;
+    // Controlled by X-Stage only; preserve the user’s other UxPlay arguments.
+    private const string FastPreviewArguments = " -vsync no -s 1280x720 -fps 30";
     private readonly Dictionary<string, (object? value, RegistryValueKind kind, bool existed)> _originalQtSettings = new();
 
     public MainForm()
@@ -69,13 +86,30 @@ public sealed class MainForm : Form
         DoubleBuffered = true;
         ResizeRedraw = true;
         ShowInTaskbar = true;
+        try
+        {
+            var embedded = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            if (embedded is not null) Icon = embedded;
+        }
+        catch { /* The EXE still works if Windows cannot load its embedded icon. */ }
+
+        _minimize.FlatAppearance.BorderSize = 0;
+        _closeButton.FlatAppearance.BorderSize = 0;
+        _minimize.Click += (_, _) => WindowState = FormWindowState.Minimized;
+        _closeButton.Click += (_, _) =>
+        {
+            if (MessageBox.Show(this, "ปิด X-Stage Mirror iOS PC หรือไม่?",
+                    "ปิดแอป", MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question) == DialogResult.Yes)
+                Close();
+        };
 
         _title.Text = "X-Stage Mirror PC";
         _number.Text = "No." + ReceiverIdentity.Number.ToString("D4");
         _version.Text = "MIRROR iOS PC     " + VersionText;
         _status.Text = "กำลังเตรียมตัวรับ AirPlay";
         _network.Text = "ตรวจสอบเครือข่าย…";
-        Controls.AddRange([_title, _number, _version, _status, _network]);
+        Controls.AddRange([_title, _number, _version, _status, _network, _minimize, _closeButton]);
         Resize += (_, _) => LayoutWelcome();
         KeyDown += OnReceiverKeyDown;
         Shown += async (_, _) =>
@@ -83,6 +117,7 @@ public sealed class MainForm : Form
             LayoutWelcome();
             _engineExe = FindEngine();
             _renderer = LoadRendererPreference();
+            _lowLatency = LoadLatencyPreference();
             UpdateNetworkStatus();
             await StartAirPlayAsync();
             _ = CheckUpdatesSilentlyAsync();
@@ -116,6 +151,11 @@ public sealed class MainForm : Form
         if (IsDisposed) return;
         var w = Math.Max(640, ClientSize.Width);
         var h = Math.Max(480, ClientSize.Height);
+        const int buttonWidth = 52;
+        const int buttonGap = 10;
+        _closeButton.SetBounds(ClientSize.Width - buttonWidth - 24, 22, buttonWidth, 44);
+        _minimize.SetBounds(ClientSize.Width - (buttonWidth * 2) - buttonGap - 24, 22,
+            buttonWidth, 44);
         var largeTitle = Math.Clamp(w / 29f, 27, 62);
         var bigNumber = Math.Clamp(Math.Min(w / 13f, h / 5.6f), 44, 112);
         SetLabel(_title, largeTitle, h * 0.29, h * 0.11);
@@ -325,6 +365,10 @@ public sealed class MainForm : Form
         else old += " -n " + name;
         if (!Regex.IsMatch(old, @"(?:^|\s)-nh(?:\s|$)"))
             old += " -nh";
+        // Only remove the exact options the previous X-Stage fast-mode run added.
+        // Smooth mode remains the existing UxPlay/GStreamer behavior.
+        old = old.Replace(FastPreviewArguments, "", StringComparison.Ordinal);
+        if (_lowLatency) old += FastPreviewArguments;
         var desired = old.Trim() + Environment.NewLine;
         if (File.ReadAllText(cfg) != desired)
             File.WriteAllText(cfg, desired);
@@ -346,6 +390,24 @@ public sealed class MainForm : Form
     {
         Directory.CreateDirectory(_configFolder);
         File.WriteAllText(Path.Combine(_configFolder, "renderer.txt"), _renderer);
+    }
+
+    private bool LoadLatencyPreference()
+    {
+        try
+        {
+            var preference = Path.Combine(_configFolder, "latency-mode.txt");
+            return File.Exists(preference) &&
+                File.ReadAllText(preference).Trim() == "fast";
+        }
+        catch { return false; }
+    }
+
+    private void SaveLatencyPreference()
+    {
+        Directory.CreateDirectory(_configFolder);
+        File.WriteAllText(Path.Combine(_configFolder, "latency-mode.txt"),
+            _lowLatency ? "fast" : "smooth");
     }
 
     private void ApplyNativeRendererSettings()
@@ -469,7 +531,9 @@ public sealed class MainForm : Form
                 Environment.NewLine + "ผู้ส่ง: " + _lastPeerText + Environment.NewLine +
                 "วิดีโอเต็มจอ: " + (_video.IsShowing ? "ใช่" : "ยังไม่เปิด") +
                 Environment.NewLine + Environment.NewLine +
-                "F5 เริ่ม AirPlay ใหม่เมื่อภาพค้าง · F8 สลับ D3D11/Auto" +
+                "โหมด: " + (_lowLatency ? "ตอบสนองเร็ว 720p30 (ทดลอง)" : "ลื่นไหลเดิม") +
+                Environment.NewLine +
+                "F5 เริ่ม AirPlay ใหม่ · F8 สลับ D3D11/Auto · F9 เปลี่ยนโหมดหน่วง" +
                 Environment.NewLine + "Esc ออก";
             MessageBox.Show(this, message, "สถานะ X-Stage Mirror iOS PC",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -504,6 +568,25 @@ public sealed class MainForm : Form
                 _ = StartAirPlayAsync();
             }
         }
+        else if (e.KeyCode == Keys.F9)
+        {
+            e.Handled = true;
+            var next = !_lowLatency;
+            var description = next
+                ? "ทดลองลดความหน่วง: 720p/30 FPS และวิธีซิงก์แบบตอบสนองเร็ว อาจทำให้เสียงไม่ตรงภาพ"
+                : "กลับสู่โหมดลื่นไหลเดิมและรักษาการซิงก์เสียงกับภาพ";
+            if (MessageBox.Show(this, description + Environment.NewLine +
+                    "การเปลี่ยนจะตัดการเชื่อมต่อปัจจุบัน ยืนยันหรือไม่?",
+                    "X-Stage Mirror PC · โหมดการแสดงผล",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                _lowLatency = next;
+                SaveLatencyPreference();
+                StopOwnEngine();
+                _restarts = 0;
+                _ = StartAirPlayAsync();
+            }
+        }
         else if (e.KeyCode == Keys.Escape)
         {
             e.Handled = true;
@@ -527,7 +610,7 @@ public sealed class MainForm : Form
                 return;
             int build = root.TryGetProperty("build", out var b) && b.TryGetInt32(out int value)
                 ? value : 0;
-            _newUpdate = build > 1002;
+            _newUpdate = build > 1003;
             if (_newUpdate) WriteDiagnostic("New verified preview is published");
         }
         catch { /* Never prevent local AirPlay when offline. */ }
