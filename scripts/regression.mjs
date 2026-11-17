@@ -51,7 +51,35 @@ assert.match(storefront,/storefront\.css\?brand=5/,'storefront refresh must bust
 assert.match(storefront,/storefront\.js\?brand=5/,'Mirror TV direct-download UI must bust its old cached script');
 assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
 
-assert.match(storefront,/source=android-/,'old Android builds must redirect into the existing player');
+// The public URL must stay on the app hub for television browsers (even
+// when a legacy Android query parameter is present). Only an installed
+// versioned Karaoke APK is migrated to the dedicated player URL.
+const nativeRedirectScript=storefront.match(
+  /<script id="legacy-native-karaoke-entry">([\s\S]*?)<\/script>/)?.[1];
+assert.ok(nativeRedirectScript,'the legacy native fallback must be narrowly gated');
+const runStorefrontRedirect=(search, nativeBridge=false)=>{
+  const navigations=[];
+  const location={search,hash:'',replace:url=>navigations.push(url)};
+  const window={};
+  if(nativeBridge)window.XStageAndroid={};
+  new Function('window','location','URLSearchParams',nativeRedirectScript)(
+    window,location,URLSearchParams);
+  return navigations;
+};
+assert.deepEqual(runStorefrontRedirect(''),[],
+  'public site root must show the X-Stage Apps hub');
+assert.deepEqual(runStorefrontRedirect('?source=android-tv'),[],
+  'TV browser query must not redirect the public app hub');
+assert.deepEqual(runStorefrontRedirect('?source=android-tablet&native_version=1.0.119'),[],
+  'native-looking query without the installed Android bridge must stay on the app hub');
+assert.deepEqual(runStorefrontRedirect(''),[],
+  'opening /index.html in an ordinary browser must stay on the app hub');
+assert.deepEqual(runStorefrontRedirect('?source=android-tv&native_version=1.0.119',true),
+  ['./karaoke.html?source=android-tv&native_version=1.0.119'],
+  'a legacy installed Karaoke APK must retain its player entry point');
+assert.match(read('android-tv/app/build.gradle'),
+  /XSTAGE_WEB_URL", quoteBuildConfig\("https:\/\/webbase-x\.github\.io\/xstage\/karaoke\.html"\)/,
+  'new Android Karaoke APKs must launch the dedicated player URL');
 assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
 for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv','file-share']){
   assert.ok(storefront.includes('href="?app='+slug+'"'),'storefront must expose detail route for '+slug);
