@@ -35,3 +35,6 @@
  .portal-muted,.portal-reviews #portal-reviews-status{color:#b4c3df}
  .portal-reviews-heading strong{color:#a7c4ff}.portal-account button,.portal-small-button{background:#263b5e;color:#d8e8ff;border-color:#55709c}
 }
+
+/* Override explicit display rules when the native hidden attribute is set. */
+#portal-review-form[hidden],#portal-history[hidden],#portal-admin[hidden],.portal-account button[hidden]{display:none!important}
