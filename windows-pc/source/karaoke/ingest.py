@@ -218,9 +218,10 @@ class Inspector:
                           'first_lyric': ' '.join(line.text for line in parse_lrc(text).lines)[:512]})
             except (ValueError, OSError) as error:
                 warnings.append(str(error))
-        # Audio/video with same-code .json: use actual source metadata, not
-        # numeric filename or branded placeholders. Validate before indexing.
-        if ext not in MIDI_EXT:
+        # Audio/video AND MIDI/KAR with same-code .json: show authoring
+        # metadata from Song Studio even when the MIDI itself has no @T tags.
+        # XSK has its own sealed identity and must remain authoritative.
+        if ext != ".xsk":
             from .lyrics import json_sidecar, read_timed_json
             companion = json_sidecar(path) if not self.sibling(path.with_suffix('.lrc')).is_file() else None
             if companion is not None:
