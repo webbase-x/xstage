@@ -145,9 +145,14 @@
       message(reviewStatus,"กำลังรอเชื่อมต่อฐานข้อมูล X-Stage · เปิดดูรายละเอียดแอปได้ตามปกติ");
       return;
     }
-    const {data,error}=await client.from("xstage_reviews")
-      .select("app_id,user_id,rating,comment,created_at,updated_at")
-      .eq("app_id",appId).order("updated_at",{ascending:false}).limit(100);
+    const [reviews,stats]=await Promise.all([
+      client.from("xstage_reviews")
+        .select("app_id,user_id,rating,comment,created_at,updated_at")
+        .eq("app_id",appId).order("updated_at",{ascending:false}).limit(100),
+      client.from("xstage_review_stats")
+        .select("review_count,avg_rating").eq("app_id",appId).maybeSingle()
+    ]);
+    const {data,error}=reviews;
     if(activeApp!==appId)return;
     if(error){
       message(reviewSummary,"ไม่สามารถอ่านคะแนนได้");
@@ -155,9 +160,15 @@
       return;
     }
     latestReviews=data||[];
-    const count=latestReviews.length;
-    const sum=latestReviews.reduce((n,x)=>n+Number(x.rating||0),0);
-    message(reviewSummary,count?(sum/count).toFixed(1)+" / 5 ★ · "+count+" รีวิว":"ยังไม่มีคะแนน");
+    const shownCount=latestReviews.length;
+    const exactCount=Number(stats.data?.review_count);
+    const mean=Number(stats.data?.avg_rating);
+    const fallbackAverage=shownCount?
+      latestReviews.reduce((n,x)=>n+Number(x.rating||0),0)/shownCount:0;
+    const count=stats.error?shownCount:exactCount||0;
+    const average=stats.error?fallbackAverage:mean||0;
+    message(reviewSummary,count?average.toFixed(1)+" / 5 ★ · "+count+" รีวิว"+
+      (stats.error&&shownCount===100?" (คะแนนจาก 100 รีวิวล่าสุด)":""):"ยังไม่มีคะแนน");
     message(reviewStatus,user?"ให้คะแนน 1–5 ดาวและแสดงความคิดเห็นได้ 1 รีวิวต่อแอป":"ลงชื่อเข้าใช้ด้วย Google เพื่อเขียนรีวิว · ผู้เยี่ยมชมอ่านได้");
     reviewList.replaceChildren();
     if(!count)showInfo(reviewList,"ยังไม่มีความคิดเห็นสำหรับแอปนี้");
