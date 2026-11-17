@@ -54,8 +54,8 @@
   <script src="./storefront.js?brand=13" defer></script>
   <script src="./portal-config.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js" defer></script>
-  <script src="./portal.js?version=1" defer></script>
-  <link rel="stylesheet" href="./portal.css?version=1">
+  <script src="./portal.js?version=2" defer></script>
+  <link rel="stylesheet" href="./portal.css?version=2">
 </head>
 <body>
   <a class="skip-link" href="#catalog">ข้ามไปยังรายการแอป</a>
@@ -67,9 +67,24 @@
         <a href="#about" id="nav-about">เกี่ยวกับโครงการ</a>
       </nav>
       <div class="portal-account" id="portal-account">
-        <span id="portal-user">ผู้เยี่ยมชม · ดูรายการได้</span>
+        <span id="portal-guest-label">ผู้เยี่ยมชม · ดูรายการได้</span>
         <button type="button" id="portal-login">G เข้าสู่ระบบ Google</button>
-        <button type="button" id="portal-logout" hidden>ออกจากระบบ</button>
+        <div id="portal-profile" class="portal-profile" hidden>
+          <button type="button" id="portal-profile-toggle" class="portal-profile-toggle"
+            aria-label="เปิดเมนูโปรไฟล์ Google" aria-expanded="false" aria-controls="portal-profile-menu">
+            <span class="portal-avatar" aria-hidden="true">
+              <img id="portal-avatar-image" width="36" height="36" alt="" referrerpolicy="no-referrer" hidden>
+              <span id="portal-avatar-fallback">X</span>
+            </span>
+            <span id="portal-user">สมาชิก X-Stage</span>
+            <span class="portal-profile-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div id="portal-profile-menu" class="portal-profile-menu" hidden>
+            <strong id="portal-profile-name">สมาชิก X-Stage</strong>
+            <span id="portal-profile-email"></span>
+            <button type="button" id="portal-logout">ออกจากระบบ</button>
+          </div>
+        </div>
       </div>
       <a class="header-launch" href="./karaoke.html">เปิดคาราโอเกะ <span aria-hidden="true">↗</span></a>
     </div>
