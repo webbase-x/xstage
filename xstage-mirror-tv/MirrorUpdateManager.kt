@@ -201,7 +201,12 @@ class MirrorUpdateManager(private val activity: MainActivity) {
     private fun installedSignerSha256(): String? {
         return try {
             val manager = activity.packageManager
-            val flags = PackageManager.GET_SIGNING_CERTIFICATES
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                PackageManager.GET_SIGNING_CERTIFICATES
+            } else {
+                @Suppress("DEPRECATION")
+                PackageManager.GET_SIGNATURES
+            }
             val details = if (Build.VERSION.SDK_INT >= 33) {
                 manager.getPackageInfo(activity.packageName,
                     PackageManager.PackageInfoFlags.of(flags.toLong()))
