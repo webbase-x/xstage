@@ -92,6 +92,50 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
   A newer same-signer preview can trigger Android's user-confirmed in-place
   installer flow; it never silently installs updates.
 
+## One-time signing fix (GitHub Codespaces)
+
+If [Build X-Stage Mirror TV](../../actions/workflows/build-xstage-mirror-tv.yml)
+stops at `Require persistent private signing key`, the four encrypted GitHub
+Actions secrets have not been configured. **This is not a Kotlin compile error.**
+Never commit a private key, publish one as a CI artifact, or silently fall back
+to a rotating debug signing certificate.
+
+For a repository administrator, the setup below can initialize a **new private
+persistent certificate once** and publish its four secret values directly via
+the GitHub CLI, without putting passwords in the repository:
+
+1. Open the **webbase-x/xstage** repository in a GitHub Codespace (or a trusted
+   Linux/macOS terminal containing `gh`, `keytool` from JDK 21, `python3`, and
+   `base64`). In the repository terminal, authenticate `gh` with the repository
+   owner's privileges if necessary: `gh auth login -h github.com`.
+2. Run `bash xstage-mirror-tv/setup-signing.sh` and follow its prompts.
+   **The generated password is shown once**: save it in a private password manager.
+   The PKCS#12 keystore stays at `~/.config/xstage/mirror-tv-release.p12`,
+   outside the repository. Back up that file privately *outside the Codespace*.
+3. The script verifies the local key/certificate, refuses accidental key
+   rotation, uploads the four encrypted `XSTAGE_MIRROR_*` secrets using
+   `gh secret set` via stdin, and requests the signed Build from the `main`
+   branch. Monitor its [GitHub Actions workflow](../../actions/workflows/build-xstage-mirror-tv.yml).
+   APK publication occurs **only after** Gradle compilation, APK signature
+   verification, certificate checks, package/version checks and checksum pass.
+
+The four repository secrets are `XSTAGE_MIRROR_KEYSTORE_BASE64`,
+`XSTAGE_MIRROR_STORE_PASSWORD`, `XSTAGE_MIRROR_KEY_ALIAS`, and
+`XSTAGE_MIRROR_KEY_PASSWORD`. The GitHub repository administrator must create
+them (directly, or via the script); a GitHub App with source-edit access alone
+cannot access or create them.
+
+**If a private Mirror TV signing key already exists**, restore the *same
+original* keystore instead of generating a new one. The script rejects a newly
+generated identity if GitHub already has a Mirror keystore secret or a prior
+published certificate fingerprint. If you only have the old Build 107 debug
+APK, you cannot derive its private signing key from that APK. A newly signed
+Build 110 cannot be installed over Build 107 when the signatures differ;
+a one-time reinstall may be necessary **after preserving settings**. From the
+first private-key-signed build onward, keep the keystore/password backed up
+and reuse them on every update. Do not uninstall an existing app before a
+replacement and its signing compatibility are verified.
+
 ## Build and release
 
 Source is built from a **pinned upstream commit**:
@@ -102,9 +146,10 @@ See prepare_upstream.py for all brand, preference and QR UI changes.
 GitHub Actions: [Build X-Stage Mirror TV](../../actions/workflows/build-xstage-mirror-tv.yml).
 The successful workflow uploads **X-Stage-Mirror-TV-AndroidTV** containing:
 an APK for ARMv7/ARM64, SHA256 checksums, and full corresponding source (including
-the upstream LICENSE and NOTICE, patches and submodule sources). APK is debug-signed
-for device testing; a production release requires a private signing key and
-verification with the physical TrueID box.
+the upstream LICENSE and NOTICE, patches and submodule sources). APK is built with a persistent private signing certificate only when the
+four encrypted signing secrets are configured; otherwise the signed publication
+fails closed. A separate compile-only test never publishes its debug APK.
+Real device validation is still required on a physical TrueID box.
 
 ### Publish signed automatic updates
 
