@@ -211,8 +211,9 @@ jobs:
               throw "Bonjour upgrade rule missing: $rule"
             }
           }
-          # Ensure there is exactly one explicit service binary [Files] entry.
-          $fileLines = @($script -split "`n" | Where-Object { $_ -like 'Source:*mDNSResponder.exe*' })
+          # Count only a Source path ending in mDNSResponder.exe; exclude the generic
+          # Source: out\* with Excludes: mDNSResponder.exe (not a second file).
+          $fileLines = @($script -split "`n" | Where-Object { $_ -match '^Source:\s*"[^"]*\\mDNSResponder\.exe"\s*;' })
           if ($fileLines.Count -ne 1) {
             throw "Expected one standalone Bonjour binary file entry; found $($fileLines.Count)"
           }
