@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'mirror-ios-pc/**'
+      - 'assets/app-icons/mirror-ios-pc.svg'
       - '.github/workflows/build-xstage-mirror-ios-pc.yml'
 
 permissions:
@@ -15,12 +16,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  icon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Convert branded SVG to multi-size Windows EXE icon
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0 CairoSVG==2.7.1
+          python mirror-ios-pc/generate_icon.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-iOS-PC-ICON
+          path: mirror-ios-pc/app.ico
+          if-no-files-found: error
+          retention-days: 7
+
   compile:
+    needs: icon
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Mirror-iOS-PC-ICON
+          path: mirror-ios-pc
+      - name: Validate branded EXE icon
+        shell: pwsh
+        run: |
+          $icon = 'mirror-ios-pc/app.ico'
+          if (-not (Test-Path $icon) -or (Get-Item $icon).Length -lt 1024) {
+            throw 'Missing or invalid X-Stage application icon'
+          }
       - name: Install .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -40,21 +73,25 @@ jobs:
       - name: Upload compiled control EXE (engine not included)
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1002-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1003-COMPILED-ONLY
           path: mirror-ios-pc/out/XStageMirrorIOSPC.exe
           if-no-files-found: error
           retention-days: 30
 
   package:
-    needs: compile
+    needs: [compile, icon]
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Mirror-iOS-PC-ICON
+          path: mirror-ios-pc
       - name: Download exactly the compiled X-Stage control executable
         uses: actions/download-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1002-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1003-COMPILED-ONLY
           path: mirror-ios-pc/out
       - name: Check Windows executable prerequisite
         shell: pwsh
@@ -157,11 +194,11 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
           & $compiler 'mirror-ios-pc/installer/XStageMirrorIOSPC.iss'
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
-          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.1-build1002-win-x64-Setup.exe'
+          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe'
           if (-not (Test-Path $file -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $file).Length -lt 10000000) { throw 'Setup EXE unexpectedly small' }
           $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  X-Stage-Mirror-iOS-PC-v1.0.1-build1002-win-x64-Setup.exe" |
+          "$hash  X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe" |
             Set-Content -Encoding ascii "$file.sha256"
           Write-Host "Offline Setup EXE SHA-256: $hash"
 
@@ -169,7 +206,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $file = 'X-Stage-Mirror-iOS-PC-v1.0.1-build1002-win-x64-CANDIDATE.zip'
+          $file = 'X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-CANDIDATE.zip'
           $source = Resolve-Path 'mirror-ios-pc/out'
           Compress-Archive -Path (Join-Path $source '*') -DestinationPath $file -CompressionLevel Optimal -Force
           if ((Get-Item $file).Length -lt 3000000) { throw 'Incomplete portable candidate ZIP' }
@@ -183,9 +220,9 @@ jobs:
         with:
           name: X-Stage-Mirror-iOS-PC-Windows-CANDIDATE
           path: |
-            X-Stage-Mirror-iOS-PC-v1.0.1-build1002-win-x64-CANDIDATE.zip
-            X-Stage-Mirror-iOS-PC-v1.0.1-build1002-win-x64-CANDIDATE.zip.sha256
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.1-build1002-win-x64-Setup.exe
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.1-build1002-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-CANDIDATE.zip
+            X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-CANDIDATE.zip.sha256
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 30
