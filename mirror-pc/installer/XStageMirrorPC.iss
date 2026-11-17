@@ -51,9 +51,12 @@ Filename: "{app}\engine\uxplay-windows\mDNSResponder.exe"; Parameters: "-install
 ; during installation. Private profiles only; never open on Public networks.
 ; Clear only our own rule names on upgrade; leave unrelated firewall rules intact.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror PC AirPlay Private"""; Flags: runhidden waituntilterminated
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror PC Bonjour Private"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror PC Bonjour Private"""; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror PC mDNS Private"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""X-Stage Mirror PC mDNS Private"""; Flags: runhidden waituntilterminated
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror PC AirPlay Private"" dir=in action=allow program=""{app}\engine\uxplay-windows\uxplay-windows.exe"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror PC Bonjour Private"" dir=in action=allow program=""{app}\engine\uxplay-windows\mDNSResponder.exe"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror PC mDNS Private"" dir=in action=allow protocol=UDP localport=5353 profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{app}\XStageMirrorPC.exe"; Description: "Launch X-Stage Mirror PC"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
