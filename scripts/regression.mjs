@@ -208,7 +208,7 @@ assert.ok(receiverBuild.includes('ReceiverNameEditor(viewModel, canEdit = connec
           receiverBuild.includes('ReceiverNamePolicy.isValid(it)')&&
           receiverRecipe.includes('ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)'),
           'The Android build must wire naming, persistence and AirPlay discovery consistently');
-assert.ok(receiverBuild.includes('"0.2.7"')&&receiverBuild.includes('"109"'),
+assert.ok(receiverBuild.includes('"0.2.8"')&&receiverBuild.includes('"110"'),
           'The renamed Mirror receiver must be a new installable APK build, never overwrite v0.2.3');
 if(mirrorTest.direct_download_available===true){
   const name=mirrorTest.direct_download_file;
