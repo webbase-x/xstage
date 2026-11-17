@@ -248,6 +248,17 @@ class DuplicateMediaTests(unittest.TestCase):
         self.assertTrue(two.exists())
         self.assertTrue((self.root / "Album/00001.json").exists())
 
+    def test_same_code_parallel_song_roles_match_but_artist_namespaces_do_not(self):
+        self.put("MIDI/NCN/SONG/0/00550.mid", b"midi note" * 50)
+        self.put("AUDIO/MP3/SONG/0/00550.mp3", b"audio track" * 50)
+        self.put("ArtistOne/MIDI/SONG/1/00330.mid", b"one" * 80)
+        self.put("ArtistTwo/AUDIO/SONG/1/00330.mp3", b"two" * 80)
+        report = self.registry.scan(str(self.root), mode="code")
+        self.assertEqual(report["groupCount"], 1)
+        paths = {Path(x["path"]).suffix.lower()
+                 for x in self.registry.page()["groups"][0]["files"]}
+        self.assertEqual(paths, {".mid", ".mp3"})
+
     def test_same_code_unrelated_folders_not_grouped(self):
         self.put("ArtistOne/00001.mp3", b"A" * 500)
         self.put("ArtistTwo/00001.m4a", b"B" * 500)
