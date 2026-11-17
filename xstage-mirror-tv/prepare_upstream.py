@@ -164,13 +164,43 @@ def font(size):
     return ImageFont.truetype(font_path, size) if font_path else ImageFont.load_default()
 
 def mark(size):
-    img = Image.new("RGBA", (size, size), (12, 20, 42, 255))
-    dr = ImageDraw.Draw(img)
-    w = max(2, size // 9)
-    m = size // 4
-    dr.line([(m,m),(size-m,size-m)], fill=(55, 207, 235, 255), width=w)
-    dr.line([(size-m,m),(m,size-m)], fill=(246, 169, 69, 255), width=w)
-    return img
+    """Distinct X-Stage Mirror TV cast icon, not the Karaoke X/microphone mark."""
+    scale = size / 512.0
+    im = Image.new("RGBA", (size, size), (10, 27, 63, 255))
+    d = ImageDraw.Draw(im)
+    def box(x1, y1, x2, y2):
+        return tuple(round(v * scale) for v in (x1, y1, x2, y2))
+    def w(px):
+        return max(2, round(px * scale))
+    def line(points, fill, width):
+        d.line([(round(x * scale), round(y * scale)) for x,y in points],
+               fill=fill, width=w(width), joint="curve")
+    d.rounded_rectangle(box(7,7,505,505),radius=round(108*scale),
+                        fill=(11,37,76,255),outline=(72,214,244,255),width=w(8))
+    d.ellipse(box(166,98,495,427),fill=(20,97,157,255))
+    d.rounded_rectangle(box(113,177,415,363),radius=round(22*scale),
+                        fill=(21,71,132,255),outline=(166,240,255,255),width=w(10))
+    d.rounded_rectangle(box(126,192,401,343),radius=round(13*scale),
+                        fill=(26,136,166,255))
+    line([(224,380),(306,380)],(219,250,255,255),10)
+    line([(265,364),(265,382)],(219,250,255,255),10)
+    d.rounded_rectangle(box(71,242,171,417),radius=round(21*scale),
+                        fill=(10,34,87,255),outline=(224,245,255,255),width=w(9))
+    line([(107,397),(138,397)],(131,214,253,255),5)
+    # Fan-out from the sending iPhone to the TV is the identifying shape.
+    for b in (box(235,270,339,369),box(248,284,327,359),box(263,303,311,348)):
+        d.arc(b,205,330,fill=(166,255,250,255),width=w(9))
+    d.ellipse(box(282,319,296,333),fill=(229,255,255,255))
+    for b in (box(89,273,152,337),box(105,287,151,336),box(118,299,152,335)):
+        d.arc(b,270,360,fill=(126,242,255,255),width=w(7))
+    # Mini X-Stage family mark and product stripe.
+    line([(63,57),(121,118)],(74,230,255,255),14)
+    line([(121,57),(63,118)],(199,116,252,255),14)
+    d.text((round(256*scale),round(461*scale)),"MIRROR TV",
+           font=font(max(9,round(30*scale))),fill=(241,252,255),
+           anchor="mm")
+    return im
+
 
 def banner(size):
     w,h = size
