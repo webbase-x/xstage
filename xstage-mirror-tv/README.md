@@ -9,6 +9,15 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 - v0.2.1 baseline improvements (retained in v0.2.2): H.264 (wider hardware compatibility), AUTO video
   advertising capped at 1080p/30fps even on a 4K TV; manually selected resolutions
   and frame rates still override the default.
+- **v0.2.7 (Build 109) TV usability**: receiver room-name editing is now inline rather
+  than a modal dialog, so the field remains inside the scrollable overview when
+  the TV keyboard appears. The keyboard's Done/Enter or a hardware Enter key
+  saves the name; the Save button remains available. The focus path follows the
+  visible editor (rename → text field → save/cancel), and left/right switches
+  between action buttons. The overview can scroll on smaller TrueID displays.
+  Settings choices and the bottom navigation use grouped remote focus, brighter
+  labels, and a more prominent selected-state color. Physical TrueID remote and
+  keyboard behavior still require on-device validation.
 - **Auto Performance v0.2.2**: reads the hardware AVC decoder's frame-rate and
   resolution capabilities and chooses the highest practical motion-first profile
   automatically; no user selection needed.
@@ -117,7 +126,7 @@ Keep the GPLv3 and upstream attribution when redistributing modified binaries.
 2. Open **X-Stage Mirror TV**; allow Local Network access if requested.
 3. Connect iPhone and TV to the same LAN (no guest network / AP isolation).
 4. On iPhone: Control Center > Screen Mirroring > select the receiver's displayed name.
-5. On the receiver’s first screen select **✎ เปลี่ยนชื่ออุปกรณ์**, enter only the suffix, then **บันทึกชื่อ**. After the announcement restarts, use the new name from the iOS list. When a sender is active, disconnect before editing.
+5. On the receiver’s first screen select **✎ เปลี่ยนชื่ออุปกรณ์**, enter only the suffix, then **Enter/Done** on the keyboard or **บันทึกชื่อ**. After the announcement restarts, use the new name from the iOS list. When a sender is active, disconnect before editing.
 6. Check audio/video sync, portrait/landscape, reboot autostart, disconnect/reconnect.
 7. For timing diagnostics, enable Settings > Developer options > benchmark log
    and capture logcat from the physical TV box. For example:
