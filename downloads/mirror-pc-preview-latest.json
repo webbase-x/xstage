@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "build": 101,
   "channel": "preview",
-  "available": false,
-  "file": null,
-  "sha256": null,
-  "download_url": null,
-  "source_url": null,
-  "note": "A verified downloadable preview will appear automatically only after complete Windows CI packaging and GPL source publication."
+  "available": true,
+  "file": "X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip",
+  "sha256": "166fdefff76148dec5cb26a35ab56d9d8ad3229ce02c9c4f58272071bb37c604",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v0.1.0-build101-preview/X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip",
+  "source_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v0.1.0-build101-preview/X-Stage-Mirror-PC-v0.1.0-build101-GPLv3-source.tar.gz",
+  "tested_on_hardware": false,
+  "note": "Windows Preview: compile and package checks passed; physical iOS/Android/Windows testing not yet verified."
 }
