@@ -23,9 +23,34 @@ jobs:
     timeout-minutes: 110
     env:
       GH_TOKEN: ${{ github.token }}
+      # One persistent PRIVATE identity for signed previews and official releases.
+      # Never place a release keystore, passwords, or aliases in source control.
+      XSTAGE_MIRROR_KEYSTORE_BASE64: ${{ secrets.XSTAGE_MIRROR_KEYSTORE_BASE64 }}
+      XSTAGE_MIRROR_STORE_PASSWORD: ${{ secrets.XSTAGE_MIRROR_STORE_PASSWORD }}
+      XSTAGE_MIRROR_KEY_ALIAS: ${{ secrets.XSTAGE_MIRROR_KEY_ALIAS }}
+      XSTAGE_MIRROR_KEY_PASSWORD: ${{ secrets.XSTAGE_MIRROR_KEY_PASSWORD }}
     steps:
       - name: Checkout X-Stage source
         uses: actions/checkout@v4
+
+      - name: Require persistent private signing key before any release build
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,sys,base64
+          from pathlib import Path
+          names=("XSTAGE_MIRROR_KEYSTORE_BASE64","XSTAGE_MIRROR_STORE_PASSWORD",
+                 "XSTAGE_MIRROR_KEY_ALIAS","XSTAGE_MIRROR_KEY_PASSWORD")
+          missing=[name for name in names if not os.environ.get(name)]
+          if missing:
+              sys.exit("Mirror TV preview publication is intentionally blocked: configure the four private XSTAGE_MIRROR_* signing secrets in GitHub Actions. Missing: "+", ".join(missing)+". Never fall back to a rotating debug key.")
+          key=base64.b64decode(os.environ["XSTAGE_MIRROR_KEYSTORE_BASE64"],validate=True)
+          if len(key)<100: sys.exit("Invalid Mirror signing keystore content")
+          dest=Path(os.environ["RUNNER_TEMP"])/"xstage-mirror-signing.jks"
+          dest.write_bytes(key)
+          dest.chmod(0o600)
+          print("Persistent Mirror TV signing secrets are present; key material remains outside the checkout.")
+          PY
 
       - name: Fetch pinned GPLv3 AirPlay receiver source
         shell: bash
@@ -49,6 +74,27 @@ jobs:
           python3 xstage-mirror-tv/prepare_upstream.py /tmp/xstage-mirror-airplay
           python3 xstage-mirror-tv/test_build_recipe.py /tmp/xstage-mirror-airplay
 
+      - name: Configure signed release variant (no debug-signed APK)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          store=Path(os.environ["RUNNER_TEMP"])/"xstage-mirror-signing.jks"
+          assert store.is_file()
+          props={
+            "storeFile":str(store),
+            "storePassword":os.environ["XSTAGE_MIRROR_STORE_PASSWORD"],
+            "keyAlias":os.environ["XSTAGE_MIRROR_KEY_ALIAS"],
+            "keyPassword":os.environ["XSTAGE_MIRROR_KEY_PASSWORD"],
+          }
+          def esc(v): return v.replace("\\","\\\\").replace("\n","\\n").replace("\r","\\r")
+          output=Path("/tmp/xstage-mirror-airplay/local.properties")
+          output.write_text("\n".join(k+"="+esc(v) for k,v in props.items())+"\n",encoding="utf-8")
+          output.chmod(0o600)
+          print("Gradle release signing configured with a single private identity.")
+          PY
+
       - name: Install Android API 37 and native toolchain
         shell: bash
         run: |
@@ -56,20 +102,21 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
 
-      - name: Compile Android TV debug APK (32-bit and 64-bit ARM)
+      - name: Compile release-variant Android TV APK using the PERSISTENT signing identity
         working-directory: /tmp/xstage-mirror-airplay
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug -Pabis=arm64-v8a,armeabi-v7a --stacktrace --no-daemon
-          test -s app/build/outputs/apk/debug/app-debug.apk
+          ./gradlew :app:assembleRelease -Pabis=arm64-v8a,armeabi-v7a --stacktrace --no-daemon
+          test -s app/build/outputs/apk/release/app-release.apk
 
       - name: Package APK and GPLv3 corresponding source
         shell: bash
         run: |
           mkdir -p dist
-          cp /tmp/xstage-mirror-airplay/app/build/outputs/apk/debug/app-debug.apk dist/X-Stage-Mirror-TV-debug.apk
+          cp /tmp/xstage-mirror-airplay/app/build/outputs/apk/release/app-release.apk dist/X-Stage-Mirror-TV-signed-preview.apk
           cd /tmp/xstage-mirror-airplay
           tar --exclude=.git --exclude=.gradle --exclude=build --exclude=.cxx --exclude='*.apk' \
+              --exclude=local.properties --exclude='*.jks' --exclude='*.keystore' --exclude='*.p12' \
               -czf "$GITHUB_WORKSPACE/dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz" .
           cd "$GITHUB_WORKSPACE"
           sha256sum dist/* > dist/SHA256SUMS.txt
@@ -80,8 +127,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="dist/X-Stage-Mirror-TV-debug.apk"
-          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK"
+          APK="dist/X-Stage-Mirror-TV-signed-preview.apk"
+          CERT_OUTPUT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK")
+          CERT_SHA256=$(printf '%s\n' "$CERT_OUTPUT" |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
+            tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          if ! [[ "$CERT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Cannot verify persistent APK signing certificate SHA-256"; exit 1
+          fi
+          # Never rotate an already-published persistent signing identity.
+          PREVIOUS_SHA=$(python3 - <<'PY'
+          import json
+          with open('mirror-tv/test-latest.json',encoding='utf-8') as f: data=json.load(f)
+          print(data.get('signer_sha256','') if data.get('signing_mode')=='persistent' else '')
+          PY
+          )
+          if [ -n "$PREVIOUS_SHA" ] && [ "$PREVIOUS_SHA" != "$CERT_SHA256" ]; then
+            echo "::error::Signing certificate changed! Refusing to publish a non-updatable APK."; exit 1
+          fi
+          echo "signer_sha256=$CERT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "Validated a persistent APK signing certificate; SHA-256=$CERT_SHA256"
           "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.webbasex.xstagemirror.tv'"
           VERSION=$(python3 - <<'PY'
           import pathlib,re
@@ -109,7 +174,7 @@ jobs:
             gh release create "$TAG" "dist/$TEST_FILE" dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz dist/SHA256SUMS.txt \
               --target "$GITHUB_SHA" --prerelease \
               --title "X-Stage Mirror TV v${VERSION} Build ${BUILD} — test preview" \
-              --notes "TEST PREVIEW ONLY. Debug-signed Android TV receiver APK. Signing certificates may change across CI builds, so uninstall of an earlier test build may be required. This channel is NOT the official production-signed release and must NOT be used for in-app automatic updating. SHA-256 hashes and GPLv3 source included."
+              --notes "TEST PREVIEW built with the SAME PRIVATE PERSISTENT signing key as production. SHA-256 and signing certificate are verified; future builds keep the same certificate. Android still requires user-approved installation. Earlier debug-signed preview APKs (through Build 107) cannot be installed over without the old private signing key; one-time removal may be needed. GPLv3 source is included."
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "apk=$TEST_FILE" >> "$GITHUB_OUTPUT"
@@ -126,6 +191,7 @@ jobs:
           VERSION: ${{ steps.preview.outputs.version }}
           BUILD: ${{ steps.preview.outputs.build }}
           SHA256: ${{ steps.preview.outputs.sha256 }}
+          SIGNER_SHA256: ${{ steps.preview.outputs.signer_sha256 }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -143,6 +209,8 @@ jobs:
           binary=Path("downloads")/os.environ["APK_FILE"]
           actual=hashlib.sha256(binary.read_bytes()).hexdigest()
           if actual!=os.environ["SHA256"]: raise SystemExit("Direct APK SHA-256 mismatch")
+          if not __import__('re').fullmatch(r'[0-9a-f]{64}',os.environ['SIGNER_SHA256']):
+              raise SystemExit("Persistent signer fingerprint missing")
           data={
             "channel":"test-preview",
             "available":True,"name":"X-Stage Mirror TV Test APK",
@@ -150,7 +218,9 @@ jobs:
             "version":os.environ["VERSION"],"build":int(os.environ["BUILD"]),
             "file":os.environ["APK_FILE"],"sha256":os.environ["SHA256"],
             "download_url":"https://github.com/webbase-x/xstage/releases/download/"+os.environ["TAG"]+"/"+os.environ["APK_FILE"],
-            "note":"Debug-signed test APK. NOT a production-signed release. A previous build may need removal if the debug signing certificate changes. In-app automatic updates are disabled for this channel."
+            "signing_mode":"persistent",
+            "signer_sha256":os.environ["SIGNER_SHA256"],
+            "note":"Signed APK with persistent private certificate used for this channel and production. Newer builds with matching installed certificate can be installed in place with Android system approval. Debug-signed legacy Builds <=107 may require a one-time uninstall."
           }
           data.update({
             "direct_download_available":True,

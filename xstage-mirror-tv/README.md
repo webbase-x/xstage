@@ -43,21 +43,28 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
   app launch; Settings also has a manual "ตรวจสอบอัปเดต" button.
   A newer **production** release is downloaded, checked with SHA-256 and
   package/version, and handed to Android's standard user-approved installer.
-  A newer **test preview** opens a visible version/update notification with
-  a direct first-party APK download link; no automatic APK replacement is
-  attempted for debug-signed builds because each CI run can use a different
-  signing certificate. The user may have to uninstall the previous test APK
-  first, losing local preferences. Existing v0.2.4 and older installations
-  cannot discover preview updates until v0.2.5 is installed manually once.
+  Starting in **v0.2.6 (Build 108)**, newer previews signed by the SAME
+  persistent PRIVATE signing certificate as the installed app are downloaded,
+  SHA-256 checked and offered to Android's standard installer with user
+  approval, retaining installed app data. The installed certificate is
+  inspected on-device; if it differs, a warning and first-party download
+  link are shown instead of forcing an unsafe replacement. Legacy debug-signed
+  Builds 107 and older cannot be made compatible retrospectively when their
+  ephemeral signing keys are no longer available. A ONE-TIME uninstall of
+  a legacy preview may be necessary (and may erase its app settings).
 - Automatically deletes **only app-private downloaded update APKs** after a
   successfully installed newer or equal build, using Android's
   `MY_PACKAGE_REPLACED` broadcast plus a startup fallback. Future versions
   staged for installation are not deleted early. Public Downloads and the
   original installer APK are never touched.
-- Automatic **in-place** updates remain disabled for preview APKs until a
-  release is signed and published with a persistent private signing key.
-  Preview discovery and informational prompts remain available instead,
-  avoiding unsafe silent overwrites.
+- **Fail-closed preview signing**: Build 108 and newer cannot publish an APK
+  without the same four private `XSTAGE_MIRROR_*` signing secrets used by
+  official releases. No debug fallback is allowed. The release APK is built
+  non-debuggable and signed by Gradle; CI pins the public SHA-256 fingerprint
+  and refuses to rotate it in later releases. All keys and local.properties
+  are excluded from GPLv3 source and public artifacts.
+  A newer same-signer preview can trigger Android's user-confirmed in-place
+  installer flow; it never silently installs updates.
 
 ## Build and release
 

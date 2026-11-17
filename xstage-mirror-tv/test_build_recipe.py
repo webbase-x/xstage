@@ -127,11 +127,17 @@ assert "Android" in updater and "ลายเซ็น" in updater
 assert 'setPositiveButton("เปิดหน้าดาวน์โหลด")' in updater
 assert "downloadAndVerify(official)" in updater
 assert "downloadAndVerify(preview)" not in updater
+assert "PackageManager.GET_SIGNING_CERTIFICATES" in updater
+assert "signer_sha256" in updater and 'json.optString("signing_mode") == "persistent"' in updater
+assert "installedSignerSha256()" in updater
+assert "downloadAndVerify(signedPreview)" in updater
+assert "preview.signerSha256 == installedSigner" in updater
+assert 'json.optString("channel") != "test-preview"' in updater
 
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 107' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 108' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()

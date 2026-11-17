@@ -44,15 +44,18 @@ class MirrorUpdateManager(private val activity: MainActivity) {
     private var pendingPreview: Preview? = null
     private var alertedPreviewBuild = 0
 
-    private data class Update(val version: String, val code: Int, val sha256: String, val file: String) {
+    private data class Update(
+        val version: String, val code: Int, val sha256: String, val file: String,
         val url: String
-            get() = "https://github.com/webbase-x/xstage/releases/download/" +
-                "xstage-mirror-tv-v" + version + "-build" + code + "/" + file
-    }
+    )
 
-    // A preview is an ANNOUNCEMENT only. CI's Android debug keystore may rotate,
-    // so installing a preview APK over an older build can fail signature checks.
-    private data class Preview(val version: String, val code: Int, val url: String)
+    // Preview builds can be installed in-place ONLY when the publisher pins a
+    // persistent private signing identity matching the currently installed APK.
+    // Older CI debug-signed installs receive a download notice, never a forced update.
+    private data class Preview(
+        val version: String, val code: Int, val url: String,
+        val sha256: String, val file: String, val signerSha256: String?
+    )
 
     fun checkOnLaunch() = check(manual = false)
 
@@ -82,9 +85,23 @@ class MirrorUpdateManager(private val activity: MainActivity) {
                 } else {
                     val preview = fetchPreview()
                     if (preview != null && preview.code > BuildConfig.VERSION_CODE) {
-                        onMain {
-                            pendingPreview = preview
-                            offerPreview()
+                        val installedSigner = installedSignerSha256()
+                        if (preview.signerSha256 != null &&
+                            preview.signerSha256 == installedSigner) {
+                            if (manual) toast("พบ APK ลายเซ็นตรงกัน v" +
+                                preview.version + " กำลังดาวน์โหลด…")
+                            val signedPreview = Update(preview.version, preview.code,
+                                preview.sha256, preview.file, preview.url)
+                            val file = downloadAndVerify(signedPreview)
+                            onMain {
+                                pendingInstall = file
+                                offerInstall()
+                            }
+                        } else {
+                            onMain {
+                                pendingPreview = preview
+                                offerPreview()
+                            }
                         }
                     } else if (manual) {
                         toast("ไม่พบรุ่นใหม่กว่า v" + BuildConfig.VERSION_NAME +
@@ -143,7 +160,9 @@ class MirrorUpdateManager(private val activity: MainActivity) {
             file != "X-Stage-Mirror-TV-v" + version + "-build" + code + ".apk") {
             throw IllegalArgumentException("Invalid official update metadata")
         }
-        return Update(version, code, checksum, file)
+        val url = "https://github.com/webbase-x/xstage/releases/download/" +
+            "xstage-mirror-tv-v" + version + "-build" + code + "/" + file
+        return Update(version, code, checksum, file, url)
     }
 
     private fun fetchPreview(): Preview? {
@@ -167,7 +186,42 @@ class MirrorUpdateManager(private val activity: MainActivity) {
             url != PREVIEW_APK_BASE + file) {
             throw IllegalArgumentException("Invalid preview APK link or SHA-256 metadata")
         }
-        return Preview(version, code, url)
+        val signer = json.optString("signer_sha256").lowercase(Locale.ROOT)
+        val persistent = json.optString("signing_mode") == "persistent" &&
+            signer.matches(Regex("[0-9a-f]{64}"))
+        return Preview(version, code, url, checksum, file,
+            if (persistent) signer else null)
+    }
+
+    /**
+     * Checks the actual installed package's certificate, not a preference or
+     * server-provided device ID. Android remains the final update signature gate.
+     * A legacy debug certificate never qualifies for a persistent-key update.
+     */
+    private fun installedSignerSha256(): String? {
+        return try {
+            val manager = activity.packageManager
+            val flags = PackageManager.GET_SIGNING_CERTIFICATES
+            val details = if (Build.VERSION.SDK_INT >= 33) {
+                manager.getPackageInfo(activity.packageName,
+                    PackageManager.PackageInfoFlags.of(flags.toLong()))
+            } else {
+                @Suppress("DEPRECATION")
+                manager.getPackageInfo(activity.packageName, flags)
+            }
+            val signers = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                details.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                details.signatures
+            }
+            val signer = signers?.singleOrNull() ?: return null
+            MessageDigest.getInstance("SHA-256").digest(signer.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to verify installed signing certificate", e)
+            null
+        }
     }
 
     private fun offerPreview() {
@@ -181,10 +235,9 @@ class MirrorUpdateManager(private val activity: MainActivity) {
             .setMessage(
                 "ตรวจพบ Build " + preview.code + " (เครื่องนี้ Build " +
                 BuildConfig.VERSION_CODE + ")\n\n" +
-                "รุ่นนี้เป็น APK ทดสอบ ไม่ใช่อัปเดตอัตโนมัติ: " +
-                "ลายเซ็นของ APK ทดสอบแต่ละรุ่นอาจต่างกัน " +
-                "Android จึงอาจไม่อนุญาตให้ติดตั้งทับ " +
-                "หากต้องถอนแอปเดิม ข้อมูลและชื่อเครื่องรับที่ตั้งไว้ในแอปอาจสูญหาย\n\n" +
+                "APK นี้ใช้กุญแจลงนามไม่ตรงกับแอปที่ติดตั้งอยู่ หรือเป็นรุ่นเก่าที่ใช้กุญแจ Debug ชั่วคราว " +
+                "Android จะไม่อนุญาตให้ติดตั้งทับหากลายเซ็นต่างกัน " +
+                "การถอนแอปเดิมอาจทำให้ชื่อเครื่องรับและค่าตั้งสูญหาย\n\n" +
                 "ต้องการเปิดหน้าดาวน์โหลด APK ที่เว็บไซต์ X-Stage หรือไม่?"
             )
             .setPositiveButton("เปิดหน้าดาวน์โหลด") { _, _ ->
