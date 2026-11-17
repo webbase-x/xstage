@@ -13,6 +13,7 @@ manifest = ElementTree.parse(app / "src/main/AndroidManifest.xml")
 res = ElementTree.parse(app / "src/main/res/values/strings.xml")
 values = {entry.attrib.get("name"): entry.text for entry in res.getroot() if entry.tag == "string"}
 assert 'applicationId = "com.webbasex.xstagemirror.tv"' in gradle
+assert 'buildConfig = true' in gradle
 assert "zxing:core:3.5.3" in gradle
 assert 'str("server_name", "X-Stage Mirror TV"' in prefs
 assert 'bool("require_pin", false' in prefs

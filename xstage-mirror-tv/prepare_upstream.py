@@ -36,6 +36,8 @@ gradle = APP / "build.gradle.kts"
 substitute(gradle, 'applicationId = "app.airshow.tv"', f'applicationId = "{PKG}"')
 substitute(gradle, 'versionName = "1.0.0"', f'versionName = "{VERSION}"')
 substitute(gradle, 'versionCode = 1', f'versionCode = {int(BUILD)}')
+# AGP 9 defaults BuildConfig generation off; the updater needs VERSION_CODE.
+substitute(gradle, '        prefab = true', '        prefab = true\n        buildConfig = true')
 with gradle.open("a", encoding="utf-8") as out:
     out.write('\n// X-Stage QR setup requires no iOS helper app.\ndependencies { implementation("com.google.zxing:core:3.5.3") }\n')
 
