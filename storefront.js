@@ -21,6 +21,7 @@
       features:["ใช้งานคาราโอเกะบนเครื่อง Windows","จัดการการเล่นเพลงและคิวเพลงในโปรแกรม PC","พัฒนาการรองรับไฟล์เพลงและข้อมูลคลังร่วมกับ X-Stage Song Studio","แยกส่วนการทำงานจาก Google Drive ของ Karaoke Online"],
       hero:"เวทีเต็มรูปแบบบน PC",blurb:"คุมเสียงเพลงจากคอมพิวเตอร์ของคุณ",preview:"KARAOKE PC · WINDOWS",
       type:"manifest",manifest:"./downloads/windows-pc-latest.json",
+      candidate:{label:"ดูผล Build และไฟล์ทดสอบ Windows",url:"https://github.com/webbase-x/xstage/actions/workflows/build-windows-pc.yml"},
       note:"ดาวน์โหลดได้ต่อเมื่อโครงการเผยแพร่ตัวติดตั้ง Windows ที่ตรวจสอบแล้วเท่านั้น หากยังไม่มี กรุณาดูประกาศที่ GitHub Releases",
       fallback:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน"
     },
@@ -60,6 +61,7 @@
       features:["ใช้การส่งหน้าจอจากเมนู Screen Mirroring ของ iOS","มีคู่มือเชื่อมต่อบนทีวีและการตั้งชื่อตัวรับ","ออกแบบเพื่อรับภาพจากอุปกรณ์ใน Wi-Fi เดียวกัน","การเล่นเนื้อหาบางชนิดอาจถูกจำกัดด้วย DRM และความสามารถของอุปกรณ์"],
       hero:"ให้ทุกหน้าจอมีพื้นที่ของตัวเอง",blurb:"ส่งภาพจากมือถือสู่จอที่ใหญ่กว่า",preview:"MIRROR TV · SCREEN SHARING",
       type:"manifest",manifest:"./mirror-tv/latest.json",secondary:{label:"ดูคู่มือการเชื่อมต่อ",url:"./mirror-tv/"},
+      candidate:{label:"ดู APK รุ่นทดสอบใน GitHub Actions",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-mirror-tv.yml"},
       note:"สถานะเผยแพร่ของตัวรับ Mirror TV ตรวจสอบจากประกาศเวอร์ชันของโครงการ การมีคู่มือไม่ได้หมายความว่ามี APK ที่ติดตั้งได้แล้ว",
       fallback:"กำลังเตรียมการเผยแพร่ APK"
     }
@@ -117,7 +119,9 @@
     }
     if(id==="mirror-tv"){
       const verified=data.available===true && SHA256.test(data.sha256||"");
-      const url=verified?verifiedReleaseUrl(data.download_url,".apk"):"";
+      const releaseUrl=verified && /^X-Stage-Mirror-TV-v\d+\.\d+\.\d+-build\d+\.apk$/.test(data.file||"") && /^\d+\.\d+\.\d+$/.test(data.version||"") && Number.isSafeInteger(data.build)
+        ? "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-v"+data.version+"-build"+data.build+"/"+data.file : "";
+      const url=verified?verifiedReleaseUrl(data.download_url||releaseUrl,".apk"):"";
       return url?{available:true,url:url,status:"APK v"+String(data.version||"ล่าสุด"),kind:"download",version:String(data.version||"")}:
         {available:false,url:"",status:"ยังไม่มี APK Mirror TV เผยแพร่",kind:"pending"};
     }
@@ -156,7 +160,10 @@
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
-      container.appendChild(createAction(id==="studio-pc"?"ดาวน์โหลด ZIP ↗":"ดาวน์โหลด APK ↗",state.url,"primary",!state.url.startsWith("./")));
+      const label=id==="studio-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
+        id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
+        id==="karaoke-android"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
+      container.appendChild(createAction(label,state.url,"primary",!state.url.startsWith("./")));
     }else{
       const pending=document.createElement("span");
       pending.className="detail-action disabled";
@@ -164,9 +171,12 @@
       pending.textContent="ยังไม่เปิดดาวน์โหลด";
       container.appendChild(pending);
       container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
+      if(info.candidate){
+        container.appendChild(createAction(info.candidate.label+" ↗",info.candidate.url,"secondary",true));
+      }
     }
     if(info.secondary){
-      container.appendChild(createAction(info.secondary.label+" ↗",info.secondary.url,"secondary",false));
+      container.appendChild(createAction(info.secondary.label+" ↗",info.secondary.url,"secondary",info.secondary.url.startsWith("https://")));
     }
   }
   function renderDetail(id){
