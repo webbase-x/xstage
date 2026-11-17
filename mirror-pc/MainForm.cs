@@ -82,7 +82,7 @@ public sealed class MainForm : Form
     // collapsed the entire dashboard to a narrow left column on wide monitors.
     private int ScalePx(int px) => (int)Math.Round(px * DeviceDpi / 96.0);
 
-    private static TableLayoutPanel CreateCard(params int[] rowHeights)
+    private TableLayoutPanel CreateCard(params int[] rowHeights)
     {
         var card = new TableLayoutPanel
         {
@@ -92,11 +92,11 @@ public sealed class MainForm : Form
             Dock = DockStyle.None,
             GrowStyle = TableLayoutPanelGrowStyle.FixedSize,
             Margin = Padding.Empty,
-            Padding = new Padding(22, 16, 22, 12),
+            Padding = new Padding(ScalePx(22), ScalePx(16), ScalePx(22), ScalePx(12)),
             BackColor = Surface
         };
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (int height in rowHeights) card.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        foreach (int height in rowHeights) card.RowStyles.Add(new RowStyle(SizeType.Absolute, ScalePx(height)));
         return card;
     }
 
@@ -204,10 +204,10 @@ public sealed class MainForm : Form
 
         void ResizeDashboard()
         {
-            var available = Math.Max(0, viewport.ClientSize.Width - 40);
-            var width = Math.Min(1020, Math.Max(600, available));
-            var x = available >= width ? (viewport.ClientSize.Width - width) / 2 : 20;
-            int y = 16, gap = 16;
+            var available = Math.Max(0, viewport.ClientSize.Width - ScalePx(40));
+            var width = Math.Min(ScalePx(1020), Math.Max(ScalePx(600), available));
+            var x = available >= width ? (viewport.ClientSize.Width - width) / 2 : ScalePx(20);
+            int y = ScalePx(16), gap = ScalePx(16);
             var cards = new (Control view, int height)[]
             {
                 (header, 119), (ios, 341), (android, 246), (footer, 164)
@@ -217,10 +217,10 @@ public sealed class MainForm : Form
             {
                 foreach (var (view, height) in cards)
                 {
-                    view.SetBounds(x, y, width, height);
-                    y += height + gap;
+                    view.SetBounds(x, y, width, ScalePx(height));
+                    y += ScalePx(height) + gap;
                 }
-                viewport.AutoScrollMinSize = new Size(width + 40, y + 12);
+                viewport.AutoScrollMinSize = new Size(width + ScalePx(40), y + ScalePx(12));
             }
             finally { viewport.ResumeLayout(); }
         }
@@ -242,10 +242,73 @@ public sealed class MainForm : Form
 
     private static string? FindEngine()
     {
-        string folder = Path.Combine(AppContext.BaseDirectory, "engine", "uxplay-windows");
+        // A complete AirPlay receiver has native DLLs and GStreamer plugins;
+        // a bare XStageMirrorPC.exe is intentionally NOT reported as ready.
+        var folder = Path.Combine(AppContext.BaseDirectory, "engine", "uxplay-windows");
         if (!Directory.Exists(folder)) return null;
-        // A complete portable upstream distribution must be unpacked, not only the executable.
-        return Directory.EnumerateFiles(folder, "uxplay-windows.exe", SearchOption.AllDirectories).FirstOrDefault();
+        var required = new[]
+        {
+            "uxplay-windows.exe", "mDNSResponder.exe", "Qt6Core.dll",
+            "libgstreamer-1.0-0.dll", "dnssd.dll",
+            Path.Combine("lib", "gstreamer-1.0", "libgstcoreelements.dll"),
+            Path.Combine("platforms", "qwindows.dll")
+        };
+        return required.All(file => File.Exists(Path.Combine(folder, file)))
+            ? Path.Combine(folder, "uxplay-windows.exe") : null;
+    }
+
+    private bool EnsureBonjourService()
+    {
+        // mDNSResponder is bundled; nothing is downloaded at first launch.
+        // Service registration is a Windows-wide action, so request consent.
+        bool Installed()
+        {
+            try
+            {
+                using var service = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "sc.exe",
+                    Arguments = "query \"Bonjour Service\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                return service is not null && service.WaitForExit(2500) && service.ExitCode == 0;
+            }
+            catch { return false; }
+        }
+        if (Installed()) return true;
+        if (_bundledEngine is null) return false;
+        var approval = MessageBox.Show(this,
+            "ยังไม่มี Bonjour Service สำหรับค้นหา AirPlay ในเครือข่าย\n" +
+            "ชุด X-Stage รวมบริการนี้ไว้แล้ว ไม่ต้องดาวน์โหลดเพิ่ม\n\n" +
+            "อนุญาตให้ติดตั้งบริการจากไฟล์ภายในชุดโปรแกรมหรือไม่?\n" +
+            "Windows อาจขอสิทธิ์ผู้ดูแลระบบหนึ่งครั้ง",
+            "เตรียมระบบรับ AirPlay",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (approval != DialogResult.Yes) return false;
+        try
+        {
+            var exe = Path.Combine(Path.GetDirectoryName(_bundledEngine)!, "mDNSResponder.exe");
+            using var install = Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = "-install",
+                WorkingDirectory = Path.GetDirectoryName(exe)!,
+                UseShellExecute = true,
+                Verb = "runas"
+            });
+            if (install is null || !install.WaitForExit(30000) || install.ExitCode != 0 || !Installed())
+                throw new InvalidOperationException("Windows ไม่สามารถเปิดใช้งาน Bonjour Service ได้");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this,
+                "เปิดใช้งาน Bonjour Service ไม่สำเร็จ: " + ex.Message +
+                "\nกรุณาใช้ Setup EXE แบบเต็มและอนุญาตสิทธิ์ผู้ดูแลระบบ",
+                "AirPlay ไม่พร้อม", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
     }
 
     private void RefreshAirPlayStatus()
@@ -257,7 +320,7 @@ public sealed class MainForm : Form
         _iosStatus.Text = alive
             ? "● ตัวรับ AirPlay กำลังทำงาน (ไม่ได้ยืนยันว่ามีผู้ส่งเชื่อมต่อ)"
             : _bundledEngine is null
-                ? "● ไม่มี UxPlay แบบพกพาในแพ็กเกจ • ไม่พร้อมรับ iOS"
+                ? "● ชุด AirPlay Engine ไม่ครบ • ติดตั้งด้วย X-Stage Mirror PC Setup EXE"
                 : "● พร้อมเริ่มตัวรับ AirPlay";
         _iosStatus.ForeColor = alive ? Color.FromArgb(120, 235, 165) : _bundledEngine is null ? Color.Orange : Accent;
     }
@@ -273,7 +336,10 @@ public sealed class MainForm : Form
         }
         var config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "leapbtw", "uxplay-windows", "arguments.txt");
-        var desired = "-n \"" + name + "\" -nh";
+        // Upstream splits arguments.txt on spaces without shell quote parsing.
+        // Turn user-entered spaces into hyphens for a valid announced name.
+        var advertised = Regex.Replace(name.Trim(), @"\s+", "-");
+        var desired = "-n " + advertised + " -nh";
         if (File.Exists(config))
         {
             string previous = File.ReadAllText(config).Trim();
@@ -304,6 +370,8 @@ public sealed class MainForm : Form
             if (name.Length is < 1 or > 55 || !Regex.IsMatch(name, @"^[\p{L}\p{N} _().-]+$"))
                 throw new InvalidOperationException("ชื่อเครื่องรับต้องยาว 1–55 ตัวอักษร และใช้เฉพาะตัวอักษร ตัวเลข เว้นวรรค _ ( ) . -");
             if (!WriteNameSettings(name)) return;
+            if (!EnsureBonjourService()) return;
+            _receiverName.Text = Regex.Replace(name, @"\s+", "-");
             _airplayProcess = Process.Start(new ProcessStartInfo
             {
                 FileName = _bundledEngine,
