@@ -1,0 +1,85 @@
+name: Build X-Stage Mirror Android PC Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mirror-android-pc/**'
+      - '.github/workflows/build-xstage-mirror-android-pc.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xstage-mirror-android-pc-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compile self-contained Windows Miracast launcher
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish mirror-android-pc/XStageMirrorAndroidPC.csproj -c Release -r win-x64 `
+            --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
+            -o mirror-android-pc/out
+          if ($LASTEXITCODE -ne 0) { throw 'Mirror Android PC compilation failed' }
+          $exe = 'mirror-android-pc/out/XStageMirrorAndroidPC.exe'
+          if (-not (Test-Path $exe -PathType Leaf)) { throw 'Compiled EXE missing' }
+          if ((Get-Item $exe).Length -lt 5000000) { throw 'EXE lacks self-contained runtime' }
+
+      - name: Install Inno Setup on Windows build runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compiler install failed' }
+
+      - name: Build all-in-one Setup EXE without external dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) { $compiler = Join-Path $env:ProgramFiles 'Inno Setup 6/ISCC.exe' }
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
+          & $compiler 'mirror-android-pc/installer/XStageMirrorAndroidPC.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
+          $name = 'X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-Setup.exe'
+          $exe = "mirror-android-pc/installer/output/$name"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw 'Setup EXE missing' }
+          if ((Get-Item $exe).Length -lt 5000000) { throw 'Setup EXE unexpectedly small' }
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  $name" | Set-Content -Encoding ascii "$exe.sha256"
+          Write-Host "Verified Windows setup SHA256 $sha"
+
+      - name: Build portable Windows ZIP and checksum
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $filename = 'X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-PORTABLE.zip'
+          Compress-Archive -Path 'mirror-android-pc/out/*' -DestinationPath $filename -CompressionLevel Optimal -Force
+          if ((Get-Item $filename).Length -lt 5000000) { throw 'Portable ZIP unexpectedly small' }
+          $sha = (Get-FileHash $filename -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  $filename" | Set-Content -Encoding ascii "$filename.sha256"
+          Write-Host "Portable ZIP SHA256 $sha"
+
+      - name: Upload verified offline Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-Android-PC-Windows-CANDIDATE
+          path: |
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-Setup.exe
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-PORTABLE.zip
+            X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-PORTABLE.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
