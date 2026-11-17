@@ -114,7 +114,7 @@ jobs:
         run: |
           APK=/tmp/xstage-mirror-airplay/app/build/outputs/apk/release/app-release.apk
           CERT_OUTPUT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK")
-          CERT_SHA256=$(printf '%s\\n' "$CERT_OUTPUT" |
+          CERT_SHA256=$(printf '%s\n' "$CERT_OUTPUT" |
             sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
             tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           if ! [[ "$CERT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
