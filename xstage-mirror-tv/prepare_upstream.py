@@ -7,6 +7,7 @@ remain in the generated source package. No iOS companion application is used.
 from __future__ import annotations
 
 import sys
+import subprocess
 import os
 import re
 from pathlib import Path
@@ -20,8 +21,8 @@ if ROOT is None or not (ROOT / "LICENSE").is_file():
 APP = ROOT / "app"
 PKG = "com.webbasex.xstagemirror.tv"
 NAME = "X-Stage Mirror TV"
-VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.0")
-BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "102")
+VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.2")
+BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "104")
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) or not BUILD.isdecimal() or int(BUILD) <= 0:
     raise SystemExit("Invalid Mirror TV release version/build")
 
@@ -142,6 +143,15 @@ substitute(settings,
            '            onClick = { mirrorActivity?.checkMirrorUpdateNow() },\n'
            '            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)\n'
            '        ) { Text("ตรวจสอบอัปเดต X-Stage Mirror TV") }')
+
+# Apply bounded decoder/discovery performance patches to the pinned source.
+subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "performance_tuning.py"),
+                str(ROOT)], check=True)
+
+# Automatically select a hardware-supported quality level and safely learn from
+# sustained decode overload. Do not restart while iPhone is connected.
+subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "auto_quality_tuning.py"),
+                str(ROOT)], check=True)
 
 # Preserve original attribution and build a distinctive launcher/TV banner.
 font_paths = [
