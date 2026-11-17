@@ -125,15 +125,16 @@
       fallback:"ยังไม่มีตัวติดตั้ง Android PC ที่เผยแพร่พร้อมตรวจสอบ SHA-256"
     },
     "mirror-pc":{
-      title:"X-Stage Mirror PC",category:"WINDOWS · DISPLAY",
-      subtitle:"รับภาพจาก iPhone/iPad และ Android บน Windows 10/11",
-      description:"แอปควบคุมตัวรับภาพบน Windows ที่รวมทางเข้า AirPlay จาก iOS และ Wireless Display/Miracast จาก Android ในหน้าต่างเดียวกัน ตัวรับ AirPlay ใช้ UxPlay แบบพกพาที่แพ็กมาพร้อมรุ่นติดตั้ง ส่วน Android ใช้คุณสมบัติรับภาพของ Windows และต้องรองรับ Miracast ไม่ใช่ Google Cast อย่างเดียว",
-      features:["iOS ไม่ต้องติดตั้งแอปบนโทรศัพท์ ใช้ Screen Mirroring ผ่าน AirPlay","Android ใช้การแคสต์ผ่าน Miracast บนเครื่องและไดรเวอร์ที่รองรับ","ตั้งชื่อ AirPlay และควบคุมเริ่ม/หยุดตัวรับจากหน้าเดียว","Windows 10/11 x64; ตัวรับภาพจริงใช้หน้าต่างของ AirPlay/Windows","โหมด LAN ไม่ต้องใช้อินเทอร์เน็ต; ไม่มี cloud relay"],
-      hero:"รับทุกหน้าจอในห้องเดียวกัน",blurb:"สะท้อนจากมือถือสู่ Windows ได้อย่างเหมาะสม",preview:"MIRROR PC · IOS & ANDROID",
-      type:"manifest",manifest:"./downloads/mirror-pc-latest.json",previewManifest:"./downloads/mirror-pc-preview-latest.json",
-      candidate:{label:"ดูซอร์สและผล Build รุ่นพัฒนา",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-mirror-pc.yml"},
-      note:"Setup EXE แบบออฟไลน์รวมโปรแกรม .NET, AirPlay Engine, DLL และ Bonjour Service ไว้ครบในชุดเดียว ไม่ต้องดาวน์โหลดส่วนประกอบเพิ่มหลังติดตั้ง (Windows อาจขอสิทธิ์ Administrator สำหรับ Bonjour) รุ่น Preview ยังไม่ได้ทดสอบบนอุปกรณ์จริง และการรับ Android ยังต้องอาศัย Miracast ที่รองรับใน Windows/อุปกรณ์ส่ง",
-      fallback:"ยังไม่มี Windows Mirror PC ที่ทดสอบแล้ว"
+      title:"X-Stage Mirror PC (รุ่นรวมเดิม)",category:"WINDOWS · LEGACY",
+      subtitle:"เปลี่ยนเป็นสองแอปแยกเพื่อความเสถียร",
+      description:"รุ่นรวม iOS/Android เดิมหยุดแนะนำติดตั้งแล้ว โปรดเปลี่ยนเป็น X-Stage Mirror iOS PC สำหรับ AirPlay หรือ X-Stage Mirror Android PC สำหรับ Windows Wireless Display โดยแยกการรับสัญญาณและตัวติดตั้งอย่างชัดเจน",
+      features:["แยก AirPlay บน iPhone/iPad ออกจาก Miracast บน Android","สุ่มเลข No.XXXX ประจำเครื่องและแสดงอุปกรณ์ที่ตรวจสอบได้","Setup EXE พร้อมชุด .NET / AirPlay ตามแอปที่เลือก","โปรดปิดแอปรุ่นรวมเดิมก่อนเริ่มตัวรับ AirPlay รุ่นใหม่"],
+      hero:"เลือกแอปที่ตรงกับอุปกรณ์",blurb:"รับสัญญาณแยกระบบให้ใช้งานได้ชัดเจน",preview:"LEGACY · SELECT A NEW RECEIVER",
+      type:"manifest",manifest:"./downloads/mirror-pc-latest.json",
+      candidate:{label:"เปิด X-Stage Mirror iOS PC",url:"?app=mirror-ios-pc"},
+      secondary:{label:"เปิด X-Stage Mirror Android PC",url:"?app=mirror-android-pc"},
+      note:"เลิกแนะนำการดาวน์โหลดรุ่นรวมเดิมเพื่อป้องกันตัวรับ AirPlay หลายตัวแย่งพอร์ตเดียวกัน อุปกรณ์ที่รองรับ Miracast ต้องใช้ตัวรับ Windows",
+      fallback:"โปรดเลือก X-Stage Mirror iOS PC หรือ Mirror Android PC"
     },
     "mirror-tv":{
       title:"X-Stage Mirror TV",category:"ANDROID TV · DISPLAY",
