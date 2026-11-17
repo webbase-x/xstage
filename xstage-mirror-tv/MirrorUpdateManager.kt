@@ -43,10 +43,12 @@ class MirrorUpdateManager(private val activity: MainActivity) {
     private var permissionPageOpened = false
     private var pendingPreview: Preview? = null
     private var alertedPreviewBuild = 0
+    private var pendingIncompatibleOfficial: Update? = null
+    private var alertedIncompatibleOfficialBuild = 0
 
     private data class Update(
         val version: String, val code: Int, val sha256: String, val file: String,
-        val url: String
+        val url: String, val signerSha256: String? = null
     )
 
     // Preview builds can be installed in-place ONLY when the publisher pins a
@@ -76,11 +78,23 @@ class MirrorUpdateManager(private val activity: MainActivity) {
                     null
                 }
                 if (official != null && official.code > BuildConfig.VERSION_CODE) {
-                    if (manual) toast("พบรุ่นทางการ " + official.version + " กำลังดาวน์โหลด…")
-                    val file = downloadAndVerify(official)
-                    onMain {
-                        pendingInstall = file
-                        offerInstall()
+                    // Android cannot update an existing package signed by a
+                    // different key. Check BEFORE downloading a large APK.
+                    // This is especially important for legacy debug Build 107.
+                    val installedSigner = installedSignerSha256()
+                    if (official.signerSha256 == null ||
+                        official.signerSha256 != installedSigner) {
+                        onMain {
+                            pendingIncompatibleOfficial = official
+                            offerIncompatibleOfficial()
+                        }
+                    } else {
+                        if (manual) toast("พบรุ่นทางการ " + official.version + " กำลังดาวน์โหลด…")
+                        val file = downloadAndVerify(official)
+                        onMain {
+                            pendingInstall = file
+                            offerInstall()
+                        }
                     }
                 } else {
                     val preview = fetchPreview()
@@ -155,14 +169,17 @@ class MirrorUpdateManager(private val activity: MainActivity) {
         val code = json.optInt("build", 0)
         val checksum = json.optString("sha256").lowercase(Locale.ROOT)
         val file = json.optString("file")
+        val signer = json.optString("signer_sha256").lowercase(Locale.ROOT)
+        val persistent = json.optString("signing_mode") == "persistent"
         if (!version.matches(Regex("""[0-9]+[.][0-9]+[.][0-9]+""")) ||
             code <= 0 || !checksum.matches(Regex("[0-9a-f]{64}")) ||
-            file != "X-Stage-Mirror-TV-v" + version + "-build" + code + ".apk") {
+            file != "X-Stage-Mirror-TV-v" + version + "-build" + code + ".apk" ||
+            !persistent || !signer.matches(Regex("[0-9a-f]{64}"))) {
             throw IllegalArgumentException("Invalid official update metadata")
         }
         val url = "https://github.com/webbase-x/xstage/releases/download/" +
             "xstage-mirror-tv-v" + version + "-build" + code + "/" + file
-        return Update(version, code, checksum, file, url)
+        return Update(version, code, checksum, file, url, signer)
     }
 
     private fun fetchPreview(): Preview? {
@@ -227,6 +244,26 @@ class MirrorUpdateManager(private val activity: MainActivity) {
             Log.w(TAG, "Unable to verify installed signing certificate", e)
             null
         }
+    }
+
+    /** A different signer is NOT an installable update; do not delete user data. */
+    private fun offerIncompatibleOfficial() {
+        val update = pendingIncompatibleOfficial ?: return
+        if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (alertedIncompatibleOfficialBuild == update.code) return
+        alertedIncompatibleOfficialBuild = update.code
+        pendingIncompatibleOfficial = null
+        AlertDialog.Builder(activity)
+            .setTitle("พบรุ่นใหม่ แต่ยังติดตั้งทับไม่ได้")
+            .setMessage(
+                "พบ X-Stage Mirror TV v" + update.version + " (Build " + update.code + ").\\n\\n" +
+                "ลายเซ็นของ APK ใหม่ไม่ตรงกับแอปในเครื่อง หรืออ่านลายเซ็นเดิมไม่ได้ " +
+                "Android ไม่อนุญาตให้ติดตั้งทับ เพื่อป้องกันการปลอมแปลงแอป\\n\\n" +
+                "อย่าเพิ่งถอนแอปเดิม เพราะชื่อเครื่องรับและการตั้งค่าอาจหายไป " +
+                "หากมีไฟล์กุญแจลงนามเดิม ผู้พัฒนาต้องสร้าง APK ด้วยกุญแจนั้นจึงจะอัปเดตทับได้"
+            )
+            .setPositiveButton("ตกลง", null)
+            .show()
     }
 
     private fun offerPreview() {
@@ -378,6 +415,7 @@ class MirrorUpdateManager(private val activity: MainActivity) {
         }
         if (pendingInstall != null) offerInstall()
         if (pendingPreview != null) offerPreview()
+        if (pendingIncompatibleOfficial != null) offerIncompatibleOfficial()
     }
 
     fun close() {
