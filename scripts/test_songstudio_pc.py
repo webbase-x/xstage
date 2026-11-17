@@ -133,6 +133,25 @@ class PcSourceTests(unittest.TestCase):
             self.assertEqual(state["memoryAvailableBytes"], 100 * 1024**2)
             self.assertEqual(state["cpuBusyPercent"], 100)
 
+    def test_songstudio_carries_real_lyric_metadata_into_karaoke_catalog(self):
+        export = engine._song_export_module()
+        path = self.source / "00425.mid"
+        path.write_bytes(b"MThd" + b"\x00" * 100)
+        row = {"path": str(path), "code": "00425",
+               "title": "00425", "artist": ""}
+        doc = {"metadata": {"title": "เพลงจากต้นทาง", "artist": "ศิลปินจากต้นทาง"},
+               "lines": [{"startTime": 1.0, "text": "ร้อง"}]}
+        engine._carry_lyrics_identity(row, doc, export)
+        self.assertEqual((row["title"], row["artist"]),
+                         ("เพลงจากต้นทาง", "ศิลปินจากต้นทาง"))
+        self.assertEqual((doc["title"], doc["artist"]),
+                         ("เพลงจากต้นทาง", "ศิลปินจากต้นทาง"))
+        # A manual edit must take precedence over source metadata.
+        engine.NOTES[str(path)] = {"title": "เพลงที่แก้ไข", "artist": "ศิลปินที่แก้ไข"}
+        engine._carry_lyrics_identity(row, doc, export)
+        self.assertEqual((row["title"], row["artist"]),
+                         ("เพลงที่แก้ไข", "ศิลปินที่แก้ไข"))
+
     def test_xsk_mid_json_pairing_deduplicates_midi_and_reuses_code_gap(self):
         """MIDI bytes, not filenames or lyric metadata, determine duplicates."""
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: F401
