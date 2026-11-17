@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f7f8fd">
-  <meta name="description" content="X-Stage Apps — รวมแอปคาราโอเกะ สร้างเพลง และแสดงภาพบน TV สำหรับเว็บ Windows และ Android">
+  <meta name="description" content="X-Stage Apps — แอปคาราโอเกะ สร้างเพลง แสดงภาพและรับส่งไฟล์ผ่าน LAN/Internet สำหรับเว็บ Windows และ Android">
   <meta property="og:type" content="website">
   <meta property="og:title" content="X-Stage Apps | ทุกแอปในเวทีของคุณ">
-  <meta property="og:description" content="สำรวจ X-Stage Karaoke, Song Studio และ Mirror TV พร้อมรายละเอียดและลิงก์ดาวน์โหลดอย่างเป็นทางการ">
+  <meta property="og:description" content="สำรวจ X-Stage Karaoke, Song Studio, Mirror TV และ File Share พร้อมรายละเอียดและลิงก์ดาวน์โหลด">
   <meta property="og:image" content="https://webbase-x.github.io/xstage/assets/xstage-apps-logo.svg">
   <meta property="og:url" content="https://webbase-x.github.io/xstage/">
   <meta name="color-scheme" content="light dark">
@@ -20,9 +20,9 @@
       location.replace("./karaoke.html" + location.search + location.hash);
     }
   </script>
-  <link rel="stylesheet" href="./storefront.css?brand=4">
-  <script src="./storefront-device.js?brand=3" defer></script>
-  <script src="./storefront.js?brand=4" defer></script>
+  <link rel="stylesheet" href="./storefront.css?brand=5">
+  <script src="./storefront-device.js?brand=5" defer></script>
+  <script src="./storefront.js?brand=5" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#catalog">ข้ามไปยังรายการแอป</a>
@@ -54,7 +54,7 @@
       <div class="hero-visual">
         <div class="visual-halo" aria-hidden="true"></div>
         <a class="hero-feature" href="?app=karaoke-web" aria-label="ดูรายละเอียด X-Stage Karaoke Online">
-          <div class="feature-header"><span><i></i> FEATURED EXPERIENCE</span><b>01 / 06</b></div>
+          <div class="feature-header"><span><i></i> FEATURED EXPERIENCE</span><b>01 / 07</b></div>
           <div class="feature-stage">
             <div class="feature-light" aria-hidden="true"></div>
             <img class="feature-stage-logo" src="./assets/xstage-stage-logo.png" width="400" height="134" loading="eager" alt="X-Stage Karaoke Online">
@@ -79,7 +79,7 @@
       </div>
     </section>
     <section class="hero-meta section-wrap" aria-label="ภาพรวมแอป X-Stage">
-      <div><strong>06</strong><span>แอปและเครื่องมือในโครงการ</span></div>
+      <div><strong>07</strong><span>แอปและเครื่องมือในโครงการ</span></div>
       <div><strong>03</strong><span>แพลตฟอร์มหลัก Web · PC · TV</span></div>
       <div><strong>01</strong><span>จุดเริ่มต้นของ X-Stage ทุกแอป</span></div>
     </section>
@@ -117,6 +117,7 @@
           <button type="button" class="filter-pill" data-filter="karaoke" aria-pressed="false">คาราโอเกะ</button>
           <button type="button" class="filter-pill" data-filter="studio" aria-pressed="false">สร้างและจัดการเพลง</button>
           <button type="button" class="filter-pill" data-filter="display" aria-pressed="false">แสดงภาพ</button>
+          <button type="button" class="filter-pill" data-filter="files" aria-pressed="false">รับ–ส่งไฟล์</button>
         </div>
         <label class="catalog-search"><span aria-hidden="true">⌕</span><input type="search" id="app-search" placeholder="ค้นหาแอป" autocomplete="off" aria-label="ค้นหาแอปใน X-Stage"></label>
       </div>
@@ -150,6 +151,11 @@
           <a class="app-art icon-mirror" href="?app=mirror-tv" aria-label="รายละเอียด Mirror TV"><img src="./assets/app-icons/mirror-tv.svg" width="78" height="78" loading="lazy" alt=""></a>
           <div class="app-text"><span class="app-category">ANDROID TV · DISPLAY</span><h3><a href="?app=mirror-tv">X-Stage Mirror TV</a></h3><p>รับภาพหน้าจอจาก iPhone และ iPad บนทีวี</p><span class="app-status" data-status="mirror-tv">ตรวจสอบการเผยแพร่…</span><span class="device-compat" data-device-app="mirror-tv"></span><a class="app-card-download" data-download-app="mirror-tv" href="?app=mirror-tv" hidden>⬇ ดาวน์โหลด APK สำหรับทีวี</a></div>
           <a class="app-detail-link" href="?app=mirror-tv" aria-label="ดูรายละเอียด X-Stage Mirror TV">ดูรายละเอียด <span aria-hidden="true">↗</span></a>
+        </article>
+        <article class="app-card" data-app="file-share" data-category="files" data-name="x-stage file share android apk lan internet qr รับ ส่ง ไฟล์ หลายอุปกรณ์ มือถือ ทีวี คอมพิวเตอร์">
+          <a class="app-art icon-file-share" href="?app=file-share" aria-label="รายละเอียด X-Stage File Share"><img src="./assets/app-icons/file-share.svg" width="78" height="78" loading="lazy" alt=""></a>
+          <div class="app-text"><span class="app-category">ANDROID · FILE TRANSFER</span><h3><a href="?app=file-share">X-Stage File Share</a></h3><p>รับ–ส่งไฟล์ผ่าน LAN หรืออินเทอร์เน็ตด้วย QR และเบราว์เซอร์</p><span class="app-status" data-status="file-share">ตรวจสอบ APK รุ่น Preview…</span><span class="device-compat" data-device-app="file-share"></span><a class="app-card-download" data-download-app="file-share" href="?app=file-share" hidden>⬇ ดาวน์โหลด APK รุ่นทดสอบ</a></div>
+          <a class="app-detail-link" href="?app=file-share" aria-label="ดูรายละเอียด X-Stage File Share">ดูรายละเอียด <span aria-hidden="true">↗</span></a>
         </article>
       </div>
       <p id="catalog-empty" class="catalog-empty" hidden>ไม่พบแอปที่ตรงกับคำค้นหา ลองเปลี่ยนคำค้นหาหรือหมวดหมู่</p>
