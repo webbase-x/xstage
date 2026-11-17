@@ -31,6 +31,7 @@ assert 'ReceiverNameEditor(viewModel, canEdit = connections == 0)' in ui
 assert 'text = serverName,' in ui
 assert 'ReceiverNamePolicy.migratePreviousName(this)' in (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
 
+
 home = (app / "src/main/kotlin/app/airshow/tv/TvHomeShortcut.kt").read_text()
 assert "isRequestPinShortcutSupported" in home and "requestPinShortcut(shortcut, null)" in home
 assert "Intent.CATEGORY_HOME" in home and "Intent.CATEGORY_LAUNCHER" in home
@@ -75,6 +76,25 @@ assert 'ReceiverSetupQr(serverName)' in ui
 assert (app / "src/main/kotlin/app/airshow/tv/ui/ReceiverSetupQr.kt").exists()
 updater = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateManager.kt").read_text()
 activity = (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
+
+# TV keyboard and remote usability: name editor is part of the scrolling
+# overview, not an obscured modal dialog. Enter and IME Done both save.
+assert 'AlertDialog(' not in editor
+assert 'keyboardActions = KeyboardActions(onDone = { saveName() })' in editor
+assert 'Key.Enter' in editor and 'Key.NumPadEnter' in editor
+assert 'fieldBringIntoView.bringIntoView()' in editor
+assert 'up = openFocus; down = saveFocus' in editor
+assert 'right = cancelFocus' in editor and 'left = saveFocus' in editor
+assert 'Modifier.fillMaxSize().imePadding()' in ui
+assert '.verticalScroll(androidx.compose.foundation.rememberScrollState())' in ui
+assert 'NavigationBar(modifier = Modifier.focusGroup())' in ui
+assert 'indicatorColor = androidx.compose.ui.graphics.Color(0xFF7AE7FF)' in ui
+assert 'window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)' in activity
+assert 'FlowRow(modifier = Modifier.focusGroup()' in settings
+assert 'selectedContainerColor = MaterialTheme.colorScheme.secondary' in settings
+theme_text = (app / "src/main/kotlin/app/airshow/tv/ui/theme/Theme.kt").read_text()
+assert 'onSurfaceVariant = Color(0xFFE1EAF8)' in theme_text
+
 settings = (app / "src/main/kotlin/app/airshow/tv/ui/SettingsScreen.kt").read_text()
 assert "MirrorUpdateCleanup.purgeInstalled(this)" in activity
 cleanup = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateCleanup.kt").read_text()
@@ -137,7 +157,7 @@ assert 'json.optString("channel") != "test-preview"' in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 108' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 109' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
