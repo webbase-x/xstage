@@ -168,9 +168,9 @@ def _varlen(source: bytes, pos: int, end: int):
     raise ValueError("MIDI delta-time ยาวเกินมาตรฐาน")
 
 
-def midi_events(midi: Path, *, include_duration=False):
+def midi_events(midi: Path, *, include_duration=False, raw_data=None):
     """Extract tempo and text metadata, preserving absolute tick positions."""
-    data = Path(midi).read_bytes()
+    data = Path(midi).read_bytes() if raw_data is None else raw_data
     if len(data) < 14 or data[:4] != b"MThd":
         raise ValueError("ไฟล์ MIDI ไม่มีส่วนหัว MThd")
     length = struct.unpack_from(">I", data, 4)[0]
@@ -444,7 +444,14 @@ def kar_document(midi: Path, code: str):
     meta events also use CR/LF. A line-only control event must NOT be
     discarded by a whitespace filter. Notes alone never become lyrics.
     """
-    division, tempo_map, events = midi_events(midi)
+    raw = Path(midi).read_bytes()
+    # Most ordinary MIDI files only contain notes. Avoid parsing every note
+    # event for thousands of tracks that have no text/lyric meta-event at all.
+    # This is only a fast negative filter: real candidates still use the full
+    # validated event parser, and embedded lyric timings are never guessed.
+    if b"\\xff\\x01" not in raw and b"\\xff\\x05" not in raw:
+        raise ValueError("ไฟล์ MIDI/KAR ไม่มีเหตุการณ์เนื้อร้องที่ฝังอยู่")
+    division, tempo_map, events = midi_events(midi, raw_data=raw)
     chunks = []
     title, artist = "", ""
     for tick, track, order, tag, text in events:
