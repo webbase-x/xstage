@@ -3580,40 +3580,73 @@
 
   async function duplicateApply(operation) {
     if (!duplicateSelected.size || !duplicateScanId)
-      return message('กรุณาเลือกไฟล์สำเนาจากผลตรวจล่าสุด');
+      return message('กรุณาเลือกเพลงซ้ำที่ต้องการย้าย/ลบ');
     if (!canLaunch('duplicates-apply'))
       return message('มีงานคลังเพลงกำลังทำอยู่ · กรุณาให้งานเดิมเสร็จก่อน');
     let destination = '';
     if (operation === 'move') {
       destination = $('dup-destination').value.trim();
-      if (!destination) return message('กรุณาเลือกโฟลเดอร์ปลายทางสำหรับย้ายไฟล์ซ้ำ');
+      if (!destination) return message('กรุณาเลือกโฟลเดอร์ปลายทางสำหรับย้ายเพลงและไฟล์ประกอบ');
       try { await saveInputs(['dup-destination']); }
       catch(error) { return message(error.message); }
     }
-    const count = duplicateSelected.size;
-    const warning = operation === 'move'
-      ? 'ย้ายสำเนาไปยังโฟลเดอร์:\\n' + destination +
-        '\\nระบบจะคัดลอกและตรวจ SHA-256 ให้ตรงก่อนลบสำเนาจากต้นทาง'
-      : 'ส่งสำเนาเข้าถังรีไซเคิลของ Windows (ไม่ใช่ลบถาวร)\\n' +
-        'สามารถกู้คืนจากถังรีไซเคิลได้ หาก Windows รองรับ';
-    if (!await confirmStudio(
-      'กำลังจัดการไฟล์สำเนา ' + count + ' ไฟล์\\n' + warning +
-      '\\n\\nยืนยันหรือไม่? ไฟล์หลักของแต่ละกลุ่มจะถูกเก็บไว้', 'ยืนยันจัดการเพลงซ้ำ')) return;
+    const params = {
+      scanId: duplicateScanId, selected: [...duplicateSelected],
+      keeperByGroup: Object.fromEntries(duplicateKeepers.entries()),
+      preferredExtension: $('dup-prefer-type').value,
+      includeCompanions: $('dup-with-companions').checked,
+      operation, destination,
+    };
     try {
-      const accepted = await run('duplicates-apply', {
-        scanId: duplicateScanId, selected: [...duplicateSelected],
-        operation, destination, confirmed: true,
+      const plan = await post('/api/duplicates/plan', params);
+      const fileLines = plan.files.map(file =>
+        (file.kind === 'media' ? 'เพลง: ' : 'ไฟล์ประกอบ: ') + file.path);
+      const keepLines = plan.keepers.map(keeper =>
+        'เก็บไว้ (' + keeper.type + '): ' + keeper.path);
+      const warningLines = (plan.warnings || []).map(value => 'ข้อควรระวัง: ' + value);
+      $('dup-plan').textContent = [
+        plan.message, '--- ไฟล์ที่เก็บ ---', ...keepLines,
+        '--- ไฟล์ที่จะย้าย/ลบ ---', ...fileLines, ...warningLines,
+      ].join('\n');
+      $('dup-plan').scrollIntoView({behavior:'smooth',block:'nearest'});
+      const warning = operation === 'move'
+        ? 'ย้ายไปยังโฟลเดอร์: ' + plan.destination +
+          '\nตรวจเนื้อหาและ SHA-256 ก่อนนำไฟล์เดิมออก'
+        : 'ส่งเข้าถังรีไซเคิลของ Windows (ไม่ลบถาวรเมื่อระบบรองรับ)';
+      const snippet = fileLines.slice(0, 10).join('\n');
+      const confirmed = await confirmStudio(
+        plan.message + '\n' + warning +
+        '\n\nเก็บไฟล์ต้นฉบับ: ' + plan.keepers.length + ' กลุ่ม' +
+        '\n' + snippet +
+        (fileLines.length > 10 ? '\n... อีก ' + (fileLines.length - 10) +
+          ' ไฟล์ · ดูรายการทั้งหมดในแผนบนหน้าจอ' : '') +
+        (warningLines.length ? '\n' + warningLines.slice(0,3).join('\n') : '') +
+        '\n\nโปรดยืนยันว่าต้องการดำเนินการกับไฟล์เหล่านี้', 'ยืนยันจัดการชุดเพลง');
+      if (!confirmed) return;
+      const started = await run('duplicates-apply', {
+        ...params, previewId: plan.previewId, confirmed: true,
       });
-      if (accepted) $('dup-status').textContent =
-        'PC Engine รับงานแล้ว · ตรวจสอบเนื้อไฟล์อีกครั้งก่อนย้าย/ส่งเข้าถังรีไซเคิล';
+      if (started) {
+        duplicateSelected.clear();
+        duplicateUpdateButtons();
+        $('dup-status').textContent = 'PC Engine เริ่มจัดการชุดเพลงและไฟล์ประกอบแล้ว';
+      }
     } catch(error) { message(error.message); }
   }
 
+  $('dup-prefer-type').addEventListener('change', () => {
+    duplicateSelected.clear();
+    duplicateKeepers.clear();
+    $('dup-plan').textContent = 'เปลี่ยนชนิดไฟล์ที่ต้องการเก็บ · กรุณาเลือกเพลงซ้ำอีกครั้ง';
+    void duplicateLoad();
+  });
   $('dup-scan').addEventListener('click', () => {void duplicateScan();});
   $('dup-refresh').addEventListener('click', () => {void duplicateLoad();});
   $('dup-select-page').addEventListener('click', () => {
     for (const group of duplicatePageRows) for (const file of group.files) {
-      if (file.keep || file.protected) continue;
+      const keeperId = duplicateKeepers.get(group.id) ||
+        group.files.find(item=>item.keep)?.id;
+      if (file.id === keeperId || file.protected) continue;
       if (duplicateSelected.size >= DUPLICATE_SELECTION_MAX) break;
       duplicateSelected.add(file.id);
     }
@@ -3623,7 +3656,7 @@
     // Preserve selection across pagination without rebuilding the source scan.
     for (const input of $('dup-results').querySelectorAll('input[type="checkbox"]')) {
       const id = input.dataset.duplicateId;
-      if (id) input.checked = duplicateSelected.has(id);
+      if (id) input.checked = duplicateSelected.has(id) && !input.disabled;
     }
     duplicateUpdateButtons();
   }
