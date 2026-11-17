@@ -193,7 +193,7 @@ const receiverUpdater=read('xstage-mirror-tv/MirrorUpdateManager.kt');
 const mirrorReleaseWorkflow=read('.github/workflows/release-xstage-mirror-tv.yml');
 assert.ok(receiverUpdater.includes('official.signerSha256 != installedSigner')&&
           receiverUpdater.includes('offerIncompatibleOfficial()')&&
-          receiverUpdater.includes('Installed')===false || receiverUpdater.includes('installedSignerSha256()'),
+          receiverUpdater.includes('installedSignerSha256()'),
           'Mirror TV must screen update signing identities before Android install');
 assert.ok(mirrorBuilder.includes('LEGACY_APK="X-Stage-Mirror-TV-test-v0.2.5-build107.apk"')&&
           mirrorBuilder.includes('STABLE_SHA=$(python3')&&
