@@ -34,6 +34,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Mirror PC compilation failed' }
           if (-not (Test-Path mirror-pc/out/XStageMirrorPC.exe)) { throw 'Mirror PC EXE missing' }
 
+      # Independent compile artifact: available even when the optional upstream
+      # AirPlay packaging gate cannot verify a compatible portable archive.
+      # This executable is NOT a complete casting app without engine files.
+      - name: Upload compiled control EXE (engine not included)
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-PC-EXE-Build101-COMPILED-ONLY
+          path: mirror-pc/out/XStageMirrorPC.exe
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Download and validate the PINNED UxPlay portable Windows engine
         shell: pwsh
         run: |
