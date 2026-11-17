@@ -242,13 +242,22 @@ assert.ok(receiverEditor.includes('onDone = { saveName() }')&&
           receiverEditor.includes('right = cancelFocus')&&
           !receiverEditor.includes('AlertDialog('),
           'Mirror receiver name must stay visible and save on keyboard Enter');
-assert.ok(receiverBuild.includes('ReceiverNameEditor(viewModel, canEdit = connections == 0)')&&
+const receiverHome=read('xstage-mirror-tv/XStageReceiverHome.kt');
+assert.ok(receiverHome.includes('ReceiverNameEditor(viewModel, canEdit = true)')&&
+          receiverHome.includes('text = serverName,')&&
+          receiverHome.includes('if (mirroringActive && connections > 0)')&&
+          receiverHome.includes('onSettings: () -> Unit')&&
+          !receiverHome.includes('startServer')&&!receiverHome.includes('stopServer'),
+          'The primary Mirror TV receiver must be uncluttered, nameable and show picture without controls');
+assert.ok(receiverBuild.includes('XStageReceiverHome(')&&
+          receiverBuild.includes('BackHandler(enabled = !confirmExit.value)')&&
+          receiverBuild.includes('title = { Text("ปิด X-Stage Mirror TV?") }')&&
+          receiverBuild.includes('Text("ปิด")')&&receiverBuild.includes('Text("ไม่ปิด")')&&
           receiverBuild.includes('ReceiverNamePolicy.migratePreviousName(this)')&&
-          receiverBuild.includes('ReceiverNamePolicy.isValid(it)')&&
           receiverRecipe.includes('ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)'),
-          'The Android build must wire naming, persistence and AirPlay discovery consistently');
-assert.ok(receiverBuild.includes('"0.2.8"')&&receiverBuild.includes('"110"'),
-          'The renamed Mirror receiver must be a new installable APK build, never overwrite v0.2.3');
+          'The Android build must start automatically and ask before closing on Back');
+assert.ok(receiverBuild.includes('"0.2.9"')&&receiverBuild.includes('"111"'),
+          'Mirror TV clean receiver must increment to v0.2.9 Build 111');
 if(mirrorTest.direct_download_available===true){
   const name=mirrorTest.direct_download_file;
   assert.match(name,/^X-Stage-Mirror-TV-test-v\d+\.\d+\.\d+-build\d+\.apk$/);
