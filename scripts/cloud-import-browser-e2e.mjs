@@ -185,6 +185,31 @@ try{
   await page.locator('#detail-back').click();
   await page.locator('#catalog:not([hidden])').waitFor();
   console.log('PASS: X-Stage Apps premium brand, 6-app catalog, filters, deep-linked details, and verified download CTA');
+
+  // Simulate the verified direct-download feed before the binary is mirrored by CI.
+  // Android TV/TrueID browsers must never be forced into a GitHub popup.
+  const mirrorName='X-Stage-Mirror-TV-test-v0.2.3-build105.apk';
+  const mirrorFeed=JSON.parse(fs.readFileSync(path.join(root,'mirror-tv/test-latest.json'),'utf8'));
+  await page.route('**/mirror-tv/test-latest.json',route=>route.fulfill({
+    status:200,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'},
+    body:JSON.stringify({...mirrorFeed,direct_download_available:true,
+      direct_download_file:mirrorName,direct_download_sha256:mirrorFeed.sha256,
+      direct_download_url:'https://webbase-x.github.io/xstage/downloads/'+mirrorName})
+  }));
+  await page.goto('http://127.0.0.1:'+port+'/?app=mirror-tv',{waitUntil:'domcontentloaded'});
+  const mirrorAction=page.locator('#detail-actions a.detail-action.primary[href$=".apk"]');
+  await mirrorAction.waitFor({timeout:15000});
+  assert.equal(await mirrorAction.getAttribute('href'),'./downloads/'+mirrorName,
+    'TrueID APK must be a first-party website download, not a GitHub release redirect');
+  assert.equal(await mirrorAction.getAttribute('target'),null,
+    'TrueID APK must open without target=_blank, which TV browsers may block');
+  assert.equal(await mirrorAction.getAttribute('download'),mirrorName,
+    'Android TV browsers should receive an explicit APK download hint');
+  const quick=page.locator('[data-download-app="mirror-tv"]');
+  assert.equal(await quick.getAttribute('hidden'),null,'Mirror TV card must display a direct APK action');
+  await page.unroute('**/mirror-tv/test-latest.json');
+  console.log('PASS: TrueID/Android TV same-origin APK navigation and visible card download');
+
   await page.goto('http://127.0.0.1:'+port+'/karaoke.html',{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>{const el=document.getElementById('cloud-import-open-gate');return el&&!el.hidden;},null,{timeout:20000});
   await page.click('#cloud-import-open-gate');

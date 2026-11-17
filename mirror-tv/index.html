@@ -15,6 +15,13 @@ p,li{line-height:1.75}
 .brand-head{display:flex;align-items:center;gap:17px;margin-bottom:16px}.brand-head img{border-radius:18px;box-shadow:0 8px 22px #050b2280;flex:none}.brand-head p{margin:3px 0;color:#80deef;letter-spacing:1.5px;font-size:10px;font-weight:750}strong{color:#88e0f3}ol{padding-left:24px}
 .name{padding:13px 16px;border:1px solid #42617c;border-radius:12px;background:#142b48;font-weight:700;font-size:21px;overflow-wrap:anywhere}
 small{display:block;margin-top:20px;color:#b3c3d6;line-height:1.65}.mirror-refresh{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 16px;border:1px solid #4dadd3;border-radius:12px;background:#153b58;color:#e5faff;font:750 14px system-ui,sans-serif;cursor:pointer}.mirror-refresh:focus-visible{outline:3px solid #a2ecff;outline-offset:3px}
+.mirror-install{margin:19px 0 24px;padding:17px;background:#142a44;border:1px solid #37678e;border-radius:16px}
+.mirror-install h2{margin:0 0 8px}.mirror-install p{margin:8px 0;font-size:13px;color:#b3cee4}
+.mirror-install a{display:inline-flex;align-items:center;min-height:45px;padding:10px 15px;border-radius:12px;text-decoration:none;font-weight:800;font-size:14px}
+.mirror-install .install-direct{background:#1268cd;color:white;margin:8px 0}
+.mirror-install .install-direct[hidden]{display:none!important}
+.mirror-install .install-backup{background:#223f60;color:#b3e9ff;margin:8px 0 0}
+.mirror-install a:focus-visible{outline:3px solid #b7f1ff;outline-offset:3px}
 </style>
 </head>
 <body>
@@ -22,6 +29,13 @@ small{display:block;margin-top:20px;color:#b3c3d6;line-height:1.65}.mirror-refre
 <header class="brand-head"><img src="../assets/app-icons/mirror-tv.svg" width="74" height="74" alt="ไอคอน X-Stage Mirror TV"><div><h1>X-Stage Mirror TV</h1><p>SCREEN MIRRORING RECEIVER</p></div></header>
 <p>ไม่ต้องติดตั้งแอปบน iPhone หรือ iPad ใช้ฟังก์ชัน Screen Mirroring ที่มีอยู่แล้วใน iOS</p>
 <button id="mirror-refresh-window" class="mirror-refresh" type="button" aria-label="รีเฟรชหน้าคู่มือ Mirror TV">↻ รีเฟรชหน้าเว็บ</button>
+<section class="mirror-install" aria-label="ดาวน์โหลดแอป Mirror TV สำหรับกล่อง Android TV">
+<h2>ดาวน์โหลด Mirror TV สำหรับทีวี</h2>
+<p id="mirror-install-status" role="status">กำลังตรวจสอบไฟล์ APK ที่เผยแพร่…</p>
+<a id="mirror-download-direct" class="install-direct" hidden href="../downloads/X-Stage-Mirror-TV-test-v0.2.3-build105.apk" download="X-Stage-Mirror-TV-test-v0.2.3-build105.apk">⬇ ดาวน์โหลด APK ลงกล่อง TrueID / Android TV</a>
+<a class="install-backup" href="https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-test-v0.2.3-build105-6e12e392/X-Stage-Mirror-TV-test-v0.2.3-build105.apk" target="_blank" rel="noopener noreferrer">สำรอง: ดาวน์โหลดจาก GitHub</a>
+<p>รุ่นทดสอบสำหรับติดตั้งเอง (sideload) ไม่ได้อยู่ใน Google Play ต้องอนุญาตการติดตั้งจากแอปที่ใช้เปิดไฟล์ APK ตามข้อกำหนดของกล่องทีวี</p>
+</section>
 <h2>ชื่อตัวรับที่ต้องเลือก</h2><div class="name" id="receiver">X-Stage Mirror TV</div>
 <h2>วิธีเชื่อมต่อ</h2>
 <ol>
@@ -36,6 +50,23 @@ small{display:block;margin-top:20px;color:#b3c3d6;line-height:1.65}.mirror-refre
 </main>
 <script>
 document.getElementById("mirror-refresh-window").addEventListener("click",()=>window.location.reload());
+(async()=>{
+  const status=document.getElementById("mirror-install-status");
+  const link=document.getElementById("mirror-download-direct");
+  try{
+    const reply=await fetch("./test-latest.json",{cache:"no-store",credentials:"omit"});
+    if(!reply.ok)throw Error("manifest "+reply.status);
+    const data=await reply.json();
+    const name="X-Stage-Mirror-TV-test-v0.2.3-build105.apk";
+    if(data.available===true&&data.direct_download_available===true&&
+       data.channel==="test-preview"&&data.file===name&&data.direct_download_file===name&&
+       /^[a-f0-9]{64}$/i.test(data.sha256||"")&&data.direct_download_sha256===data.sha256&&
+       data.direct_download_url==="https://webbase-x.github.io/xstage/downloads/"+name){
+      link.hidden=false;
+      status.textContent="APK v0.2.3 (Build 105) พร้อมดาวน์โหลดตรงจากเว็บไซต์ X-Stage";
+    }else status.textContent="ยังไม่มี APK บนเว็บไซต์โดยตรง กรุณาใช้ลิงก์สำรองด้านล่าง";
+  }catch{status.textContent="ตรวจสอบไฟล์ APK ไม่สำเร็จ กรุณาใช้ลิงก์สำรองด้านล่าง";}
+})();
 const candidate = new URLSearchParams(location.search).get("receiver");
 if(candidate && candidate.trim().length > 0 && candidate.length <= 64)
   document.getElementById("receiver").textContent = candidate;

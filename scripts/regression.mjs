@@ -47,7 +47,8 @@ assert.match(storefront,/class="footer-logo new-footer-logo"[^>]*>[^]*?xstage-ap
 assert.match(storefront,/id="intro-title">หนึ่งเวที/,'new hero headline must render');
 assert.match(storefront,/class="intro section-wrap new-home-hero"/,'editorial hero must be present');
 assert.match(storeStyle,/\.intro\.new-home-hero\{/,'redesigned hero styling must load');
-assert.match(storefront,/storefront\.css\?brand=3/,'storefront refresh must bust the cached stylesheet');
+assert.match(storefront,/storefront\.css\?brand=4/,'storefront refresh must bust the cached stylesheet');
+assert.match(storefront,/storefront\.js\?brand=4/,'Mirror TV direct-download UI must bust its old cached script');
 assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
 
 assert.match(storefront,/source=android-/,'old Android builds must redirect into the existing player');
@@ -112,6 +113,7 @@ assert.equal(iphone.kind,'ios','iPhone must be detected');
 assert.equal(ipad.kind,'ios','iPadOS desktop user-agent must not be mistaken for macOS');
 assert.equal(windows.kind,'windows','Windows must be detected');
 assert.equal(androidTv.kind,'android_tv','Android TV must be detected');
+assert.equal(deviceGuide.detect({userAgent:'Mozilla/5.0 (Linux; Android 10; TrueIDTV Box) AppleWebKit',platform:'Linux'}).kind,'android_tv','TrueID TV box should be recognized as an Android TV device');
 assert.equal(androidPhone.kind,'android_phone','Android phone must be distinguished from TV');
 assert.equal(deviceGuide.forApp(iphone,'mirror-tv').level,'other','iPhone must be labelled sender, not Mirror APK receiver');
 assert.equal(deviceGuide.forApp(iphone,'karaoke-android').level,'other','iOS must not be labelled Android-compatible');
@@ -123,6 +125,34 @@ assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('
 assert.equal((storefront.match(/data-device-app=/g)||[]).length,6,'all six cards need device-compatibility hints');
 assert.ok(storefront.includes('storefront-device.js?brand=3'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
+
+const mirrorTest=JSON.parse(read('mirror-tv/test-latest.json'));
+assert.equal(mirrorTest.channel,'test-preview','Mirror TV cannot be represented as a production-signed release');
+assert.equal(mirrorTest.available,true,'verified test release must be advertised');
+assert.match(mirrorTest.sha256,/^[a-f0-9]{64}$/,'Mirror TV test SHA256 must be present');
+assert.ok(storefront.includes('data-download-app="mirror-tv"'),'Mirror TV card must provide a visible APK action when available');
+assert.ok(storefrontScript.includes('direct_download_available')&&
+          storefrontScript.includes('sameOriginFile(data.file,"downloads"'),
+          'Android TV users should receive same-origin APK downloads before external GitHub redirects');
+assert.ok(storeStyle.includes('.app-card .app-card-download[hidden]'),'Mirror TV direct action must not show until APK is verified');
+assert.ok(storefrontScript.includes('if(id==="mirror-tv"&&appInfo[id].testManifest)'),
+          'Mirror TV test APK should still be discoverable when production feed fails');
+assert.ok(read('mirror-tv/index.html').includes('id="mirror-download-direct"'),
+          'Mirror TV connection guide must provide a direct install button');
+assert.ok(read('.github/workflows/publish-mirror-tv-direct-apk.yml').includes('source["sha256"]')&&
+          read('.github/workflows/publish-mirror-tv-direct-apk.yml').includes('gh release download')&&
+          read('.github/workflows/publish-mirror-tv-direct-apk.yml').includes('git add'),
+          'Mirror TV must copy an already SHA256-verified APK into the hosted download directory');
+if(mirrorTest.direct_download_available===true){
+  const name=mirrorTest.direct_download_file;
+  assert.match(name,/^X-Stage-Mirror-TV-test-v\d+\.\d+\.\d+-build\d+\.apk$/);
+  assert.equal(mirrorTest.direct_download_sha256,mirrorTest.sha256,
+    'published direct APK SHA256 must match source release');
+  assert.equal(mirrorTest.direct_download_url,"https://webbase-x.github.io/xstage/downloads/"+name);
+  const full=new URL('../downloads/'+name,import.meta.url);
+  assert.ok(fs.existsSync(full),'Published APK file is required for active Mirror TV direct-download flag');
+}
+
 assert.ok(read('.github/workflows/build-xstage-mirror-tv.yml').includes('gh release create')&&
           read('.github/workflows/build-xstage-mirror-tv.yml').includes('test-latest.json'),
           'Mirror public test APK must be published only after checks, separate from production feed');

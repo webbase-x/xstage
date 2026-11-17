@@ -368,3 +368,10 @@ body{background:radial-gradient(circle at 60% 0,#e6edff 0,transparent 32%),#f7f8
 .detail-device-alternatives a:hover{background:#c8d7ff}
 @media(max-width:760px){.device-advice{padding:14px;gap:12px}.device-advice-chip{display:none}.device-advice-glyph{height:39px;width:39px}.detail-device-info{display:block;padding:16px 18px}.detail-device-label{display:block;margin-bottom:9px}}
 @media(prefers-color-scheme:dark){.device-advice,.detail-device-info{background:linear-gradient(130deg,#1d3156,#2d2550);border-color:#414e78}.device-advice-copy strong,.detail-device-copy strong{color:#e5edff}.device-advice-copy p,.detail-device-copy p,.detail-device-copy p#detail-device-target{color:#b8c8e6}.device-compat.supported{background:#183d35;color:#8fead1}.device-compat.other{background:#3d2a1f;color:#f9cf9a}.device-compat.unknown{background:#343356;color:#ddd8ff}}
+
+/* Clear, TV-remote-friendly direct APK download on the Mirror TV app card. */
+.app-card .app-card-download{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;padding:10px 15px;margin-top:12px;border-radius:13px;background:#0b6de0;color:#fff;font-size:12px;font-weight:850;line-height:1.4;text-decoration:none;box-shadow:0 6px 16px #136fd12f}
+.app-card .app-card-download[hidden]{display:none!important}
+.app-card .app-card-download:hover{background:#0958ba}
+.app-card .app-card-download:focus-visible{outline:3px solid #10b6dd;outline-offset:3px}
+@media(min-width:1200px){.app-card .app-card-download{font-size:13px}}

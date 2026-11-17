@@ -16,7 +16,7 @@
     const touch=Number(n.maxTouchPoints)||0;
     let kind="unknown";
     if(/Android/i.test(ua)||/Android/i.test(platform)){
-      if(/Android.TV|Google.TV|AFT[A-Z0-9-]*|BRAVIA|SHIELD.Android.TV|Smart.TV|Leanback/i.test(ua))kind="android_tv";
+      if(/Android[ ._-]?TV|Google[ ._-]?TV|AFT[A-Z0-9-]*|BRAVIA|SHIELD.Android.TV|Smart.TV|Leanback|TrueID[ ._-]?(?:TV|Box)|True[ ._-]?ID[ ._-]?TV/i.test(ua))kind="android_tv";
       else if(/\bMobile\b/i.test(ua))kind="android_phone";
       else kind="android_tablet";
     }else if(/iPhone|iPad|iPod/i.test(ua)||/iOS/i.test(platform)||(/MacIntel/i.test(platform)&&touch>1)){

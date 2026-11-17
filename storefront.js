@@ -165,8 +165,19 @@
     if(id==="mirror-tv"){
       const verified=data.available===true && SHA256.test(data.sha256||"");
       if(verified && data.channel==="test-preview"){
-        const url=verifiedReleaseUrl(data.download_url,".apk");
-        return url?{available:true,url,status:"APK v"+String(data.version||"ล่าสุด")+" · รุ่นทดสอบ (ไม่ใช่รุ่นลงนามทางการ)",kind:"download",version:String(data.version||""),test:true}:
+        // TrueID / Android TV browsers may block GitHub's redirect or target=_blank.
+        // Prefer the exact same-origin binary ONLY after its SHA-256-backed feed is published.
+        const directValid=data.direct_download_available===true &&
+          data.direct_download_file===data.file &&
+          data.direct_download_sha256===data.sha256 &&
+          data.direct_download_url==="https://webbase-x.github.io/xstage/downloads/"+data.file;
+        const direct=directValid?sameOriginFile(data.file,"downloads",/^X-Stage-Mirror-TV-test-v\d+\.\d+\.\d+-build\d+\.apk$/):"";
+        const release=verifiedReleaseUrl(data.download_url,".apk");
+        const url=direct||release;
+        return url?{available:true,url,status:"APK v"+String(data.version||"ล่าสุด")+
+          (direct?" · ดาวน์โหลดตรงสำหรับ Android TV":" · ดาวน์โหลดจาก GitHub")+
+          " · รุ่นทดสอบ",kind:"download",version:String(data.version||""),test:true,direct:!!direct,
+          releaseUrl:release}:
           {available:false,url:"",status:"ยังไม่มี APK ทดสอบ Mirror TV ที่ตรวจสอบได้",kind:"pending"};
       }
       const releaseUrl=verified && /^X-Stage-Mirror-TV-v\d+\.\d+\.\d+-build\d+\.apk$/.test(data.file||"") && /^\d+\.\d+\.\d+$/.test(data.version||"") && Number.isSafeInteger(data.build)
@@ -183,6 +194,23 @@
     el.textContent=states[id].status;
     el.classList.toggle("ready",states[id].available);
     el.classList.toggle("pending",!states[id].available);
+    const quick=document.querySelector('[data-download-app="'+id+'"]');
+    if(quick){
+      const available=states[id].available&&!!states[id].url;
+      quick.hidden=!available;
+      if(available){
+        quick.href=states[id].url;
+        quick.textContent=(id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
+        if(states[id].url.startsWith("./")){
+          quick.setAttribute("download",states[id].url.split("/").at(-1));
+          quick.removeAttribute("target");
+        }else{
+          quick.removeAttribute("download");
+          quick.target="_blank";
+          quick.rel="noopener noreferrer";
+        }
+      }
+    }
     if(new URLSearchParams(location.search).get("app")===id)renderDetail(id);
   }
   async function loadLatest(id,manifest){
@@ -204,7 +232,18 @@
         }catch{} // The production signing feed remains authoritative.
       }
     }catch{
-      states[id]={available:false,url:"",status:"ตรวจสอบรุ่นล่าสุดไม่ได้",kind:"pending",version:""};
+      // A missing production feed must never hide a verified TEST channel.
+      if(id==="mirror-tv"&&appInfo[id].testManifest){
+        try{
+          const fallback=await fetch(appInfo[id].testManifest,{cache:"no-store",credentials:"omit"});
+          if(fallback.ok)states[id]=getRelease(id,await fallback.json());
+          else states[id]={available:false,url:"",status:"ตรวจสอบ APK Mirror TV ไม่ได้",kind:"pending"};
+        }catch{
+          states[id]={available:false,url:"",status:"ตรวจสอบ APK Mirror TV ไม่ได้",kind:"pending"};
+        }
+      }else{
+        states[id]={available:false,url:"",status:"ตรวจสอบรุ่นล่าสุดไม่ได้",kind:"pending",version:""};
+      }
     }
     updateCardStatus(id);
   }
@@ -214,6 +253,7 @@
     a.textContent=label;
     a.href=url;
     if(external){a.target="_blank";a.rel="noopener noreferrer";}
+    if(!external&&/\.apk$/i.test(url))a.setAttribute("download",url.split("/").at(-1));
     return a;
   }
   function renderActions(id){
@@ -238,6 +278,13 @@
       if(info.candidate){
         container.appendChild(createAction(info.candidate.label+" ↗",info.candidate.url,"secondary",true));
       }
+    }
+    if(id==="mirror-tv"&&state.test){
+      if(state.direct&&state.releaseUrl){
+        container.appendChild(createAction("สำรอง: ดาวน์โหลดจาก GitHub ↗",state.releaseUrl,"secondary",true));
+      }
+      container.appendChild(createAction("ซอร์ส GPLv3 ของตัวรับภาพ ↗",
+        "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-test-v0.2.3-build105-6e12e392/X-Stage-Mirror-TV-GPLv3-source.tar.gz","secondary",true));
     }
     if(info.secondary){
       container.appendChild(createAction(info.secondary.label+" ↗",info.secondary.url,"secondary",info.secondary.url.startsWith("https://")));
