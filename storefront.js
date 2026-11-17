@@ -175,7 +175,7 @@
     if(id==="file-share"){
       const version=String(data.version||"");
       const expectedFile="X-Stage-File-Share-v"+version+".apk";
-      const validVersion=/^\\d+\\.\\d+\\.\\d+(?:-preview\\.\\d+)?$/.test(version);
+      const validVersion=/^\d+\.\d+\.\d+(?:-preview\.\d+)?$/.test(version);
       const file=String(data.file||"");
       const valid=data.available===true&&validVersion&&file===expectedFile&&SHA256.test(data.sha256||"");
       const expectedUrl="https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v"+version+"/"+file;
