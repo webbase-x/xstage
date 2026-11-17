@@ -73,7 +73,7 @@ jobs:
       - name: Upload compiled control EXE (engine not included)
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1003-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1004-COMPILED-ONLY
           path: mirror-ios-pc/out/XStageMirrorIOSPC.exe
           if-no-files-found: error
           retention-days: 30
@@ -91,7 +91,7 @@ jobs:
       - name: Download exactly the compiled X-Stage control executable
         uses: actions/download-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1003-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1004-COMPILED-ONLY
           path: mirror-ios-pc/out
       - name: Check Windows executable prerequisite
         shell: pwsh
@@ -194,11 +194,11 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
           & $compiler 'mirror-ios-pc/installer/XStageMirrorIOSPC.iss'
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
-          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe'
+          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.3-build1004-win-x64-Setup.exe'
           if (-not (Test-Path $file -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $file).Length -lt 10000000) { throw 'Setup EXE unexpectedly small' }
           $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe" |
+          "$hash  X-Stage-Mirror-iOS-PC-v1.0.3-build1004-win-x64-Setup.exe" |
             Set-Content -Encoding ascii "$file.sha256"
           Write-Host "Offline Setup EXE SHA-256: $hash"
 
@@ -206,7 +206,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $file = 'X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-CANDIDATE.zip'
+          $file = 'X-Stage-Mirror-iOS-PC-v1.0.3-build1004-win-x64-CANDIDATE.zip'
           $source = Resolve-Path 'mirror-ios-pc/out'
           Compress-Archive -Path (Join-Path $source '*') -DestinationPath $file -CompressionLevel Optimal -Force
           if ((Get-Item $file).Length -lt 3000000) { throw 'Incomplete portable candidate ZIP' }
@@ -220,9 +220,9 @@ jobs:
         with:
           name: X-Stage-Mirror-iOS-PC-Windows-CANDIDATE
           path: |
-            X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-CANDIDATE.zip
-            X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-CANDIDATE.zip.sha256
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.2-build1003-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-iOS-PC-v1.0.3-build1004-win-x64-CANDIDATE.zip
+            X-Stage-Mirror-iOS-PC-v1.0.3-build1004-win-x64-CANDIDATE.zip.sha256
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.3-build1004-win-x64-Setup.exe
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.3-build1004-win-x64-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 30
