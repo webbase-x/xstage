@@ -589,9 +589,13 @@ class DuplicateMediaRegistry:
             sidecars = []
             if include_companions and item["path"].suffix.casefold() != ".xsk":
                 companions = _companions(state["root"], item["path"])
-                if companions and _shared_sidecar(item["path"]):
+                keeper_uses_sidecar = (
+                    keeper["path"].suffix.casefold() not in (".xsk", ".emk")
+                    and any(part in _companions(state["root"], keeper["path"])
+                            for part in companions))
+                if companions and (_shared_sidecar(item["path"]) or keeper_uses_sidecar):
                     warnings.append("เก็บเนื้อร้องรหัส " + item["path"].stem +
-                                    " ไว้ เพราะมีเพลงอีกประเภทใช้รหัสร่วมกัน")
+                                    " ไว้ เพราะมีเพลงที่เลือกเก็บใช้เนื้อร้องร่วมกัน")
                 else:
                     for candidate in companions:
                         if _protected_library(candidate) or candidate in claimed_companions:
@@ -609,11 +613,14 @@ class DuplicateMediaRegistry:
 
     def plan(self, *, scan_id, selected, operation, destination=None,
              keeper_by_group=None, preferred_extension="",
-             include_companions=True):
+             include_companions=True, same_song_confirmed=False):
         if operation not in ("move", "recycle"):
             raise ValueError("กรุณาเลือกย้ายหรือลบไฟล์เพลง")
         keepers = dict(keeper_by_group or {})
         with self.lock:
+            if (self.state is not None and self.state["mode"] == "code"
+                    and same_song_confirmed is not True):
+                raise ValueError("รหัสตรงกันไม่รับประกันว่าเป็นเพลงเดียวกัน · ต้องตรวจและยืนยันด้วยตนเอง")
             state, chosen, files, warnings = self._plan_locked(
                 scan_id=scan_id, selected=selected, keeper_by_group=keepers,
                 preferred_extension=preferred_extension,
@@ -636,7 +643,8 @@ class DuplicateMediaRegistry:
             self.preview_state = {
                 "id": preview_id, "scan_id": scan_id, "selected": tuple(selected),
                 "keepers": keepers, "preferred": preferred_extension,
-                "companions": include_companions, "operation": operation,
+                "companions": include_companions,
+                "verifiedSong": same_song_confirmed, "operation": operation,
                 "destination": str(target) if target else "",
                 "stamps": tuple((str(path), stamp) for path, stamp, _ in files),
             }
@@ -652,19 +660,22 @@ class DuplicateMediaRegistry:
                              "type": keeper["path"].suffix.lower()}
                             for item, keeper, _ in chosen][:MAX_ACTION_FILES],
                 "destination": str(target) if target else "",
-                "operation": operation,
+                "matchMode": state["mode"], "operation": operation,
                 "message": (f"เตรียม{'ย้าย' if operation == 'move' else 'ส่งเข้าถังรีไซเคิล'}"
                             f"ไฟล์เพลง {media_count:,} + ไฟล์ประกอบ {sidecar_count:,} ไฟล์"),
             }
 
     def apply(self, *, scan_id, selected, operation, destination=None,
               keeper_by_group=None, preferred_extension="",
-              include_companions=True, preview_id=None,
-              confirmed=False, cancelled=None, progress=None):
+              include_companions=True, same_song_confirmed=False,
+              preview_id=None, confirmed=False, cancelled=None, progress=None):
         if operation not in ("move", "recycle") or confirmed is not True:
             raise ValueError("ต้องเลือกการย้ายหรือส่งเข้าถังรีไซเคิลและยืนยันคำสั่ง")
         keepers = dict(keeper_by_group or {})
         with self.lock:
+            if (self.state is not None and self.state["mode"] == "code"
+                    and same_song_confirmed is not True):
+                raise ValueError("ต้องยืนยันเองว่าไฟล์ต่างชนิดที่รหัสตรงกันเป็นเพลงเดียวกัน")
             state, chosen, files, _ = self._plan_locked(
                 scan_id=scan_id, selected=selected, keeper_by_group=keepers,
                 preferred_extension=preferred_extension,
@@ -678,6 +689,7 @@ class DuplicateMediaRegistry:
                         preview["keepers"] != keepers or
                         preview["preferred"] != preferred_extension or
                         preview["companions"] != include_companions or
+                        preview["verifiedSong"] != same_song_confirmed or
                         preview["operation"] != operation or
                         preview["stamps"] != tuple((str(path), stamp)
                                                   for path, stamp, _ in files)):
@@ -704,9 +716,14 @@ class DuplicateMediaRegistry:
                 if keeper["id"] not in verified_keepers:
                     proofs.insert(0, keeper)
                 for proof in proofs:
-                    if (_stability(proof["path"]) != proof["stamp"] or
-                            _digest(proof["path"], cancelled=cancelled) != proof["sha256"]):
-                        raise ValueError("ไฟล์ต้นฉบับหรือสำเนาเปลี่ยนระหว่างตรวจ · ต้องสแกนใหม่")
+                    if _stability(proof["path"]) != proof["stamp"]:
+                        raise ValueError("ไฟล์เพลงเปลี่ยนหลังสแกน · ต้องสแกนใหม่")
+                    # Same-code mode does not pretend differently encoded
+                    # files have identical SHA-256. Check that each is
+                    # readable; user confirms musical identity manually.
+                    checked_hash = _digest(proof["path"], cancelled=cancelled)
+                    if proof["sha256"] is not None and checked_hash != proof["sha256"]:
+                        raise ValueError("SHA-256 ของไฟล์เพลงเปลี่ยนหลังตรวจ")
                 verified_keepers.add(keeper["id"])
                 # Companion file bytes and timestamps are independently rechecked.
                 for path, stamp, kind in bundle:
