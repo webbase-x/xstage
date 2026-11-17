@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {createHash,webcrypto} from 'node:crypto';
 
 const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
-const page=read('index.html'),app=read('app.js'),style=read('cloud-import.css');
+const page=read('karaoke.html'),app=read('app.js'),style=read('cloud-import.css');
 const ids=['cloud-import-open','cloud-import-dialog','cloud-import-pick','cloud-import-input',
   'cloud-import-ready','cloud-import-fonts','cloud-import-blocked','cloud-import-start',
   'cloud-import-pause','cloud-import-resume','cloud-import-cancel','cloud-import-progress',

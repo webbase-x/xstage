@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const midi=read('browser-midi.js'),memory=read('memory-budget.js'),
-  app=read('app.js'),html=read('index.html'),css=read('xstage-ux.css'),
+  app=read('app.js'),html=read('karaoke.html'),css=read('xstage-ux.css'),
   android=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
 const ctx={navigator:{deviceMemory:2,userAgent:'Android'},
   performance:{memory:{usedJSHeapSize:100,jsHeapSizeLimit:2000}},

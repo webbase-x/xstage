@@ -6,7 +6,7 @@ const meter = read('native-audio-meter.js');
 const main = read('pc-extensions.js');
 const remote = read('remote.js');
 const host = read('stage-controls.js');
-const page = read('index.html');
+const page = read('karaoke.html');
 const css = read('xstage-ux.css');
 
 assert.ok(page.includes('native-audio-meter.js?v='),'native Android meter must be loaded from live Web UI');

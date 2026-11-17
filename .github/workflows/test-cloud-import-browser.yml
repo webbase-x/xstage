@@ -14,6 +14,7 @@ on:
       - "xstage-ux.css"
       - "cloud-import*.css"
       - "index.html"
+      - "karaoke.html"
       - "app.js"
       - "scripts/cloud-import-browser-e2e.mjs"
       - "scripts/video-browser-transcode-e2e.mjs"
@@ -23,6 +24,7 @@ on:
     paths:
       - "cloud-import*.js"
       - "index.html"
+      - "karaoke.html"
       - "app.js"
       - "scripts/cloud-import-browser-e2e.mjs"
       - ".github/workflows/test-cloud-import-browser.yml"

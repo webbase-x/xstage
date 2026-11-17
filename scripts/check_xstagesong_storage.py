@@ -63,7 +63,7 @@ if len(re.findall(r"(?<![A-Za-z])XStageSong(?![A-Za-z])", publisher)) < 1:
 
 version = json.loads((ROOT / "version.json").read_text(encoding="utf-8"))
 package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-page = (ROOT / "index.html").read_text(encoding="utf-8")
+page = (ROOT / "karaoke.html").read_text(encoding="utf-8")
 if version.get("version") != package.get("version"):
     failures.append("Web and package versions differ")
 if f"?v={version.get('build')}" not in page:

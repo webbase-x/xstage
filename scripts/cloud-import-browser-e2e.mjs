@@ -141,7 +141,7 @@ try{
     headers:{'Access-Control-Allow-Origin':'*','Content-Type':'application/json'},
     body:JSON.stringify({sub:'SUB_MOCK_E2E',email:'owner@example.com',email_verified:true})}));
   await page.route('https://www.googleapis.com/**',routeDrive);
-  await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
+  await page.goto('http://127.0.0.1:'+port+'/karaoke.html',{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>{const el=document.getElementById('cloud-import-open-gate');return el&&!el.hidden;},null,{timeout:20000});
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();

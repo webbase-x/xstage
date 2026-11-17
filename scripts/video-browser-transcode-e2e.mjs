@@ -33,7 +33,7 @@ try{
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const page=await browser.newPage();
   const errors=[];page.on('pageerror',err=>errors.push(err.message));
-  await page.goto('http://127.0.0.1:'+server.address().port+'/',{waitUntil:'load'});
+  await page.goto('http://127.0.0.1:'+server.address().port+'/karaoke.html',{waitUntil:'load'});
   const bytes=fs.readFileSync(avi).toString('base64');
   const data=await page.evaluate(async base64=>{
     const input=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
