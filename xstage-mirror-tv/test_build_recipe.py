@@ -153,6 +153,11 @@ assert "pendingPreview != null" in updater
 assert "Android" in updater and "ลายเซ็น" in updater
 assert 'setPositiveButton("เปิดหน้าดาวน์โหลด")' in updater
 assert "downloadAndVerify(official)" in updater
+assert 'official.signerSha256 == null' in updater
+assert 'official.signerSha256 != installedSigner' in updater
+assert 'offerIncompatibleOfficial()' in updater
+assert 'val persistent = json.optString("signing_mode") == "persistent"' in updater
+
 assert "downloadAndVerify(preview)" not in updater
 assert "PackageManager.GET_SIGNING_CERTIFICATES" in updater
 assert "signer_sha256" in updater and 'json.optString("signing_mode") == "persistent"' in updater
