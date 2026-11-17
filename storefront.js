@@ -43,6 +43,16 @@
     }
   }
   const appInfo={
+    "apps-portal":{
+      title:"X-Stage Apps Portal",category:"ANDROID · APP CENTER",
+      subtitle:"รวมแอป X-Stage ไว้ในแอปเดียว",
+      description:"แอป Android สำหรับเปิดศูนย์รวม X-Stage Apps โดยตรงจากเว็บไซต์ รายชื่อแอปและเนื้อหาปรับตามเว็บโดยไม่ต้องติดตั้ง APK ใหม่ มี Google Login ความคิดเห็นและประวัติการดาวน์โหลดเมื่อเชื่อมฐานข้อมูล X-Stage",
+      features:["เปิดแล้วแสดงหน้า X-Stage Apps ล่าสุดจากเว็บไซต์","อัปเดตเนื้อหาและรายการดาวน์โหลดจากเว็บโดยอัตโนมัติเมื่อเชื่อมอินเทอร์เน็ต","รองรับมือถือ แท็บเล็ต และ Android TV ที่มี WebView และเบราว์เซอร์","ซ่อนรายการดาวน์โหลด X-Stage Apps Portal ภายใน APK นี้เอง","ระบบเข้าสู่ระบบ Google และรีวิวใช้บัญชีเดียวกับหน้าเว็บ"],
+      hero:"ทุกแอป X-Stage พร้อมในมือ",blurb:"ดาวน์โหลดและสำรวจทุกแอปจากที่เดียว",preview:"X-STAGE APPS · ANDROID PORTAL",
+      type:"manifest",manifest:"./downloads/apps-portal-latest.json",
+      note:"ตัวแอปโหลดข้อมูลจากเว็บไซต์อัตโนมัติ ส่วนการอัปเดตโค้ด Android หรือสิทธิ์ระบบ ต้องออก APK รุ่นใหม่และติดตั้งด้วยลายเซ็นเดิม",
+      fallback:"ยังไม่มี APK Apps Portal ที่ลงลายเซ็นและตรวจสอบได้"
+    },
     "karaoke-web":{
       title:"X-Stage Karaoke Online",category:"WEB · KARAOKE",
       subtitle:"ร้องเพลงจากคลังส่วนตัวบนเว็บ",
@@ -148,6 +158,14 @@
       fallback:"กำลังเตรียมการเผยแพร่ APK"
     }
   };
+  const portalNative=!!window.XStagePortalAndroid || /XStageAppsPortal\/\d+/i.test(navigator.userAgent) ||
+    new URLSearchParams(location.search).get("source")==="apps-portal-android";
+  if(portalNative){
+    // The current app must never advertise its own APK inside the app itself.
+    document.querySelectorAll('.portal-self-card').forEach(card=>card.remove());
+    const requested=new URLSearchParams(location.search).get("app");
+    if(requested==="apps-portal")history.replaceState(null,"",location.pathname+"?source=apps-portal-android");
+  }
   const states={};
   const cards=Array.from(document.querySelectorAll(".app-card"));
   const home=document.getElementById("store-home");
@@ -188,6 +206,19 @@
       const url=installerUrl || (data.available===true && SHA256.test(data.sha256||"") ? verifiedReleaseUrl(data.download_url,".zip") : "");
       return url?{available:true,url:url,status:(installerUrl?"Setup EXE":"ZIP")+" รุ่น "+String(data.version||"ล่าสุด")+" · ทดลองใช้งาน",kind:"download",version:String(data.version||""),installer:!!installerUrl}:
         {available:false,url:"",status:"ยังไม่มี ZIP รุ่นที่ตรวจสอบได้",kind:"pending"};
+    }
+    if(id==="apps-portal"){
+      const version=String(data.version||"");
+      const build=data.build;
+      const filename="X-Stage-Apps-Portal-v"+version+"-build"+build+".apk";
+      const valid=data.available===true&&data.channel==="signed"&&
+        /^\d+\.\d+\.\d+$/.test(version)&&Number.isSafeInteger(build)&&build>0&&
+        data.file===filename&&SHA256.test(data.sha256||"")&&
+        data.download_url==="https://webbase-x.github.io/xstage/downloads/"+filename;
+      const url=valid?sameOriginFile(filename,"downloads",/^X-Stage-Apps-Portal-v\d+\.\d+\.\d+-build\d+\.apk$/):"";
+      return url?{available:true,url,status:"APK v"+version+" · Build "+build+" · ลงลายเซ็นแล้ว",
+        kind:"download",version,build}:
+        {available:false,url:"",status:"ยังไม่เผยแพร่ APK ที่ลงลายเซ็นแล้ว",kind:"pending"};
     }
     if(id==="karaoke-android"){
       const url=data.available!==false && SHA256.test(data.sha256||"") ? sameOriginFile(data.file,"downloads",/^X-Stage-Karaoke-Android-v\d+\.\d+\.\d+-build\d+\.apk$/) : "";
@@ -446,7 +477,7 @@
   }
   function routeToCurrent(){
     const id=new URLSearchParams(location.search).get("app");
-    if(id && renderDetail(id)){
+    if(id && (!portalNative||id!=="apps-portal") && renderDetail(id)){
       home.hidden=true;detail.hidden=false;
       window.scrollTo({top:0,behavior:"instant"});
     }else{
