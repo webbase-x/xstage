@@ -94,6 +94,11 @@ assert 'window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INP
 settings = (app / "src/main/kotlin/app/airshow/tv/ui/SettingsScreen.kt").read_text()
 assert 'FlowRow(modifier = Modifier.focusGroup()' in settings
 assert 'selectedContainerColor = MaterialTheme.colorScheme.secondary' in settings
+assert 'choiceFocus[index]' in settings
+assert 'forEachIndexed { index, (key, label)' in settings
+assert 'right = choiceFocus[index + 1]' in settings
+assert 'Tab.entries.forEachIndexed { index, t ->' in ui
+assert 'right = tabFocus[index + 1]' in ui
 theme_text = (app / "src/main/kotlin/app/airshow/tv/ui/theme/Theme.kt").read_text()
 assert 'onSurfaceVariant = Color(0xFFE1EAF8)' in theme_text
 
