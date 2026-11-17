@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071525">
+  <meta name="description" content="X-Stage Karaoke Online – เว็บแอปคาราโอเกะสำหรับคลังเพลง Google Drive ส่วนตัว">
+  <meta property="og:title" content="X-Stage Karaoke Online">
+  <meta property="og:description" content="เวทีคาราโอเกะส่วนตัว ค้นหา จัดคิว และเล่นเพลงจาก Google Drive ของคุณ">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://webbase-x.github.io/xstage/">
+  <meta property="og:image" content="https://webbase-x.github.io/xstage/assets/xstage-app-icon-512.png">
+  <meta name="twitter:card" content="summary">
+  <title>X-Stage Karaoke Online | เวทีคาราโอเกะส่วนตัว</title>
+  <link rel="icon" href="assets/xstage-app-icon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/xstage-favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="assets/xstage-app-icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="assets/xstage-apple-touch-icon.png" sizes="180x180">
+  <script>
+  // Native Android TV stays hidden until Google Drive authorization completes.
+  // Run before CSS paints the first frame to prevent a stage flash.
+  if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
+    document.documentElement.classList.add('xstage-native-auth-pending');
+  </script>
+  <link rel="stylesheet" href="style.css?v=1117">
+  <link rel="stylesheet" href="xstage-ux.css?v=1117">
+  <link rel="stylesheet" href="cloud-import.css?v=1117">
+<script id="xstage-official-logo-loader">(function(){
+  var logo=new Image();
+  logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
+  logo.onerror=function(){document.documentElement.classList.remove('xstage-uploaded-logo-ready')};
+  logo.src='assets/xstage-stage-logo.png';
+})();</script></head>
+<body class="xstage-ui-v2">
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1117" alt="" width="48" height="48">
+        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small></span>
+      </a>
+      <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
+      <div class="account-tools">
+        <span id="account" class="account-name" aria-label="บัญชี Google ปัจจุบัน" hidden></span>
+
+        <button id="desktop-update-version" class="button button-ghost" type="button">อัปเดต X-Stage</button>
+        <button id="login" class="button button-google" type="button"><span class="google-g" aria-hidden="true">G</span> เชื่อมต่อ Google Drive</button>
+        <button id="logout" class="button button-ghost" type="button" hidden>ออกจากระบบ</button>
+      </div>
+    </header>
+    <div id="status" class="status-line" role="status" aria-live="polite">เชื่อมต่อ Google Drive เพื่อเปิดคลังเพลงส่วนตัว</div>
+    <main class="studio-layout" id="studio">
+      <section class="stage-column" aria-label="เวทีคาราโอเกะ">
+        <div id="stage" class="stage" role="group" aria-label="เวที X-Stage Karaoke">
+          <video id="karaoke-video" playsinline muted preload="metadata" hidden aria-label="ภาพวิดีโอประกอบเพลง"></video>
+          <button id="video-lyrics-toggle" type="button" hidden aria-pressed="true" aria-label="เปิดหรือปิดเนื้อร้องซ้อนภาพวิดีโอ">เนื้อร้อง: แสดง</button>
+          <button id="video-original-toggle" type="button" hidden aria-pressed="false" aria-label="เลือกแสดงภาพต้นฉบับวิดีโอหากเบราว์เซอร์รองรับ">ภาพวิดีโอ: MP4</button>
+          <div class="stage-shade"></div>
+          <div id="music-loader" class="music-loader" role="status" aria-label="กำลังโหลดเพลง" aria-hidden="true">
+            <span class="music-loader-ring" aria-hidden="true"></span>
+            <span class="music-loader-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+          <div id="pull-refresh" class="pull-refresh" hidden aria-live="polite">
+            <span class="pull-refresh-icon" aria-hidden="true">↻</span>
+            <span id="pull-refresh-text">ดึงลงเพื่อรีเฟรช</span>
+          </div>
+          <div id="app-update-notice" class="app-update-notice" hidden role="status" aria-live="polite">
+            <span id="app-update-text">มี X-Stage เวอร์ชันใหม่</span>
+            <button id="app-update-action" type="button">อัปเดต</button>
+          </div>
+          <div class="stage-ambience" aria-hidden="true"></div>
+          <div class="stage-hero" aria-hidden="true">
+            <div class="stage-brand-scene">
+              <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
+              <div class="stage-brand-lockup">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1117" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+              </div>
+              <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
+            </div>
+            <canvas id="stage-viz-wave" class="stage-brand-spectrum" width="900" height="96"></canvas>
+          </div>
+          <header class="mobile-stage-header stage-toolbar" aria-label="คำสั่ง X-Stage">
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle toolbar-button" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
+            <div class="stage-search-slot"><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
+        <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
+        <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-label="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false"><button id="voice-search" class="voice-search-button" type="button" aria-label="ค้นหาเพลงด้วยเสียง" title="ค้นหาด้วยเสียง" aria-pressed="false" hidden>🎙</button><kbd>Ctrl F</kbd></div>
+        <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span id="search-refine-hint" class="search-refine-hint" hidden>พิมพ์เพิ่มเพื่อเจาะจงผลค้นหา</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
+        <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
+        <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
+      </aside></div>
+            <button id="toggle-keyboard" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="virtual-keyboard" aria-expanded="false" title="เปิดหรือซ่อนแป้นพิมพ์">⌨ <span>แป้นพิมพ์</span></button>
+            <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
+            <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
+          </header>
+          <div id="xstage-context-menu" class="xstage-context-menu" hidden role="menu" aria-label="เมนูคลิกขวา X-Stage">
+            <button type="button" data-cmd="find">ค้นหาเพลง</button>
+            <button type="button" data-cmd="queue">คิวเพลง</button>
+            <button type="button" data-cmd="eq">อีควอไลเซอร์ EQ</button>
+            <button type="button" data-cmd="stage">จอร้องแยก</button>
+            <button type="button" data-cmd="medley">เมดเลย์</button>
+            <button type="button" data-cmd="tools">เครื่องมือและตั้งค่า</button>
+            <button type="button" data-cmd="share">แชร์โฟลเดอร์เพลง</button>
+            <button type="button" data-cmd="fullscreen">เต็มหน้าจอ</button>
+          </div>
+          <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
+            <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
+            <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
+            <button type="button" id="cloud-import-open" hidden>☁ นำเข้าเพลง / SoundFont</button>
+             <label class="xstage-font-control" for="xstage-soundfont-select"><span>ซาวด์ฟอนต์ MIDI</span>
+               <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
+                 <option value="">เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)</option>
+               </select>
+               <output id="xstage-font-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">SoundFont · ยังไม่โหลด</output>
+             </label>
+            <button type="button" id="mobile-home-toggle" aria-label="หน้าแรก">หน้าแรก</button>
+            <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
+            <button type="button" id="mobile-stage-pop" aria-label="เปิดจอร้องแยก">เปิดจอร้องแยก</button>
+            <button type="button" id="mobile-medley-toggle" aria-pressed="false" aria-label="เปิดเมดเลย์สุ่มเพลงต่อเนื่อง">เปิดเมดเลย์สุ่มเพลงต่อเนื่อง</button>
+            <label class="mobile-speed-control" for="mobile-speed-select"><span>ความเร็วเพลง</span><select id="mobile-speed-select" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
+            <button type="button" id="mobile-tools-toggle" aria-label="เปิดเครื่องมือเพิ่มเติม">เครื่องมือเพิ่มเติม</button>
+            <details class="stage-extra-tools" id="stage-extra-tools">
+              <summary>เครื่องมือทั้งหมด</summary>
+              <div class="stage-extra-tools-list">
+                <button type="button" id="mobile-random">สุ่มเพลงเพิ่มในคิว</button>
+                <button type="button" id="mobile-history">ประวัติการเล่น</button>
+                <button type="button" id="mobile-favorites">เพลงโปรด</button>
+                <button type="button" id="mobile-lyrics">ตั้งค่าเนื้อร้อง / พื้นหลัง</button>
+                <button type="button" id="mobile-eq">อีควอไลเซอร์ EQ</button>
+                <button type="button" id="mobile-ab-a">ตั้งจุดวน A</button>
+                <button type="button" id="mobile-ab-b">ตั้งจุดวน B</button>
+                <button type="button" id="mobile-ab-clear">ยกเลิกจุดวน A–B</button>
+                <button type="button" id="mobile-import-queue">นำเข้าคิวเพลง</button>
+                <button type="button" id="mobile-export-queue">ส่งออกคิวเพลง</button>
+                <button type="button" id="mobile-more-tools">เครื่องมือขั้นสูง / LRC / ไมโครโฟน</button>
+                <button type="button" id="mobile-share-library">แชร์โฟลเดอร์เพลง</button>
+                <button type="button" id="mobile-clear-cache">เคลียร์แคช (คงล็อกอิน Google)</button>
+              </div>
+            </details>
+            <button type="button" id="mobile-keyboard-toggle">แป้นพิมพ์บนจอ</button>
+            <button type="button" id="toggle-remote" class="menu-direct" aria-controls="remote-pair-panel" aria-expanded="false">รีโมทมือถือ QR</button>
+            <button type="button" id="remote-request-toggle" aria-controls="remote-request-panel" aria-expanded="false">เพลงจากมือถือ <span id="remote-request-count">0</span></button>
+            <button type="button" id="mobile-update-version">ตรวจสอบ / อัปเดต X-Stage</button>
+            <a id="android-tv-apk-download" class="android-tv-apk-download" hidden>ดาวน์โหลด Android APK สำหรับ TV/แท็บเล็ต</a>
+            <button type="button" id="mobile-fullscreen-toggle">เต็มหน้าจอ / กลับ</button>
+            <button type="button" id="mobile-about-toggle">เกี่ยวกับ X-Stage</button>
+            <button type="button" id="mobile-login-toggle">เชื่อมต่อ Google Drive</button>
+            <button type="button" id="mobile-logout-toggle" hidden>ออกจากระบบ Google</button>
+          </nav>
+          <div class="stage-metrics" aria-label="นาฬิกา"><time id="stage-clock" class="stage-clock">--:--:--</time></div>
+          <div class="stage-label"><span class="on-air-dot"></span><span>NOW PLAYING</span><span id="stage-code" class="stage-code">—</span></div>
+          <div id="stage-idle" class="stage-idle"><span class="stage-idle-icon" aria-hidden="true">♪</span><strong>พร้อมร้องเพลง</strong><span>ค้นหาเพลงและกด Enter เพื่อเริ่มเล่น</span></div>
+          <canvas id="lyrics" aria-label="เนื้อร้องคาราโอเกะแสดงแบบไฮไลต์ตามเวลา" width="1200" height="300"></canvas>
+          <section id="virtual-keyboard" class="virtual-keyboard" hidden aria-label="แป้นพิมพ์บนหน้าจอ">
+            <div class="virtual-key-head"><strong id="virtual-language">ภาษาไทย</strong><button id="virtual-close" type="button">ซ่อนแป้นพิมพ์ ✕</button></div>
+            <div id="virtual-keys" class="virtual-keys"></div>
+          </section>
+          <section id="remote-pair-panel" class="remote-pair-panel" hidden aria-label="จับคู่รีโมท X-Stage">
+            <div class="remote-pair-box">
+              <div class="remote-pair-top"><strong>รีโมทมือถือ X-Stage QR</strong><button id="remote-pair-close" type="button" aria-label="ปิดหน้าต่างจับคู่">✕</button></div>
+              <canvas id="remote-qr" width="232" height="232" hidden aria-label="QR สำหรับเชื่อมต่อรีโมทมือถือ"></canvas>
+              <p id="remote-pair-status" role="status" aria-live="polite">กำลังเตรียมรีโมท…</p>
+              <a id="remote-link" target="_blank" rel="noopener noreferrer"></a>
+              <div class="remote-pair-actions">
+                <button id="remote-approve" type="button" hidden>✓ อนุญาตมือถือ</button>
+                <button id="remote-reject" type="button" hidden>✕ ปฏิเสธ</button>
+                <button id="remote-end" type="button">เปลี่ยน QR</button>
+              </div>
+              <small>อนุมัติการเชื่อมต่อครั้งแรก แล้วใช้ควบคุมและขอเพลงได้ · ไม่ต้องล็อกอิน Google บนมือถือ</small>
+            </div>
+          </section>
+          <section id="remote-request-panel" class="remote-request-panel" hidden aria-label="คำขอเพลงจากมือถือ">
+            <header class="remote-request-heading"><strong>📥 เพลงที่ขอจากมือถือ</strong><button type="button" id="remote-request-close" aria-label="ปิดคำขอเพลง">✕</button></header>
+            <div id="remote-request-list" class="remote-request-list" aria-live="polite"><p>ยังไม่มีคำขอเพลง</p></div>
+            <small>เจ้าของเวทีอนุมัติมือถือครั้งแรก · เพิ่มเพลงจากมือถือเข้าคิวได้โดยตรง</small>
+          </section>
+          <dialog id="xstage-apk-dialog" class="xstage-install-dialog" aria-labelledby="xstage-apk-title">
+            <h2 id="xstage-apk-title">ดาวน์โหลด X-Stage Android APK</h2>
+            <div id="xstage-apk-content"></div>
+            <button type="button" id="xstage-apk-close">ปิด</button>
+          </dialog>
+          <div class="transport-panel" aria-label="แผงควบคุมเพลง">
+            <div class="transport-now">
+              <img class="transport-cover" src="assets/xstage-app-icon-192.png" width="58" height="58" alt="">
+              <div class="transport-song-info">
+                <span class="transport-now-caption">สถานะเพลง</span>
+                <strong id="now-playing">ยังไม่ได้เลือกเพลง</strong>
+                <small id="now-artist">X-Stage Karaoke Online</small>
+                <div class="tv-song-meta"><span id="tv-song-key">คีย์ —</span></div>
+                <div class="timeline">
+                  <input id="seek" type="range" min="0" max="1000" value="0" aria-label="ตำแหน่งการเล่น" disabled>
+                  <span class="transport-time" title="จะแสดงเวลาเมื่อโหลดเพลงจาก Google Drive"><span id="elapsed">--:--</span><span aria-hidden="true"> / </span><span id="duration">--:--</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="transport-row">
+              <div class="transport-main">
+                <button id="stage-shuffle" class="icon-control" type="button" title="สุ่มเพลง" aria-label="สุ่มเพลง">⤨</button>
+                <button id="previous" class="icon-control" type="button" title="เพลงก่อนหน้า" aria-label="เพลงก่อนหน้า" disabled>⏮</button>
+                <button id="play-pause" class="big-play" type="button" title="เล่น/พัก (F5)" aria-label="เล่นหรือพัก" disabled>▶</button>
+                <button id="cancel-current" class="icon-control transport-text-action" type="button" title="ยกเลิกเพลงปัจจุบันและเล่นคิวถัดไป" aria-label="ยกเลิกเพลงปัจจุบันและเล่นคิวถัดไป" disabled><span class="transport-action-icon" aria-hidden="true">⤼</span><span class="transport-action-label">ยกเลิก</span></button>
+                <button id="next" class="icon-control" type="button" title="เพลงถัดไป (F6)" aria-label="เพลงถัดไป" disabled>⏭</button>
+                <button id="restart-current" class="icon-control transport-text-action" type="button" title="เริ่มเพลงปัจจุบันใหม่ตั้งแต่ต้น" aria-label="เริ่มเพลงใหม่ตั้งแต่ต้น" disabled><span class="transport-action-icon" aria-hidden="true">↺</span><span class="transport-action-label">เริ่มใหม่</span></button>
+                <button id="stage-repeat" class="icon-control" type="button" title="เปิด/ปิดวนเพลง" aria-label="เปิด/ปิดวนเพลง" aria-pressed="false">⇄</button>
+              </div>
+              <div class="transport-right">
+                <label class="volume-control"><span aria-hidden="true">◖))</span><span class="sr-only">ระดับเสียง</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="ระดับเสียง"></label>
+                <span id="stage-volume-value" class="transport-volume-value">80%</span>
+                <label class="speed-control">ความเร็ว <select id="speed" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
+                <label class="repeat-control"><input id="repeat" type="checkbox"> วนเพลง</label>
+              </div>
+            </div>
+            <div class="transport-right-actions">
+              <button id="stage-queue-toggle" class="stage-queue-toggle" type="button" aria-controls="stage-queue-panel" aria-expanded="false">☷ <span>คิวเพลง</span> <b id="stage-queue-count">0</b> <span aria-hidden="true">⌃</span></button>
+              <button id="stage-tools-toggle" class="stage-tools-toggle" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เมนู" title="เมนู">☰ <span>เมนู</span></button>
+            </div>
+            <p id="play-status" class="play-status" role="status"></p>
+            <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-share-library">⇄ แชร์โฟลเดอร์เพลง</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button></nav>
+          </div>
+          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><output id="xstage-queue-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">คิว · งบหน่วยความจำกำลังประเมิน</output><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
+          <section id="xstage-eq-panel" class="xstage-eq-panel" hidden aria-label="EQ X-Stage Karaoke">
+            <header class="xstage-eq-head" data-eq-drag>
+              <div class="xstage-eq-brand"><img src="assets/xstage-app-icon-192.png" alt=""><strong>EQ X-Stage Karaoke</strong></div>
+              <div class="xstage-eq-head-actions">
+                <button type="button" id="xstage-eq-bypass" aria-pressed="false" title="Bypass EQ">BYPASS</button>
+                <button type="button" id="xstage-eq-minimize" title="ย่อ" aria-label="ย่อหน้าต่างอีควอไลเซอร์">−</button>
+                <button type="button" id="xstage-eq-expand" title="ย่อ/ขยาย" aria-label="ย่อหรือขยายหน้าต่างอีควอไลเซอร์">⤢</button>
+                <button type="button" id="xstage-eq-close" title="ปิด" aria-label="ปิดหน้าต่างอีควอไลเซอร์">✕</button>
+              </div>
+            </header>
+            <div class="xstage-eq-toolbar">
+              <label>Preset <select id="xstage-eq-preset">
+                <option value="auto">AUTO · ตามสไตล์เพลง</option>
+                <option value="custom">กำหนดเอง</option>
+                <option value="flat">Flat</option><option value="pop">Pop</option>
+                <option value="rock">Rock</option><option value="jazz">Jazz</option>
+                <option value="vocal">Vocal</option><option value="edm">Dance / EDM</option>
+                <option value="acoustic">Acoustic</option><option value="classical">Classical</option>
+              </select></label>
+              <label id="xstage-eq-display-wrap" class="xstage-eq-display-wrap" hidden>แสดงที่
+                <select id="xstage-eq-display">
+                  <option value="main">จอหลัก</option>
+                  <option value="singer">จอร้อง</option>
+                  <option value="both">ทั้ง 2 จอ</option>
+                </select>
+              </label>
+              <button type="button" id="xstage-eq-reset">FLAT 0 dB</button>
+              <span id="xstage-eq-mode">31 BAND · 1/3 OCTAVE</span>
+            </div>
+            <div class="xstage-eq-rta-wrap">
+              <canvas id="xstage-eq-rta" width="1102" height="145" aria-label="Spectrum analyzer"></canvas>
+            </div>
+            <div class="xstage-eq-main">
+              <div id="xstage-eq-bands" class="xstage-eq-bands"></div>
+              <div class="xstage-eq-meters xstage-eq-meters-side" aria-label="ระดับเสียงซ้ายขวา">
+                <div><span>L</span><meter id="xstage-eq-meter-l" min="0" max="1" value="0"></meter></div>
+                <div><span>R</span><meter id="xstage-eq-meter-r" min="0" max="1" value="0"></meter></div>
+              </div>
+            </div>
+            <footer class="xstage-eq-footer"><span>±12 dB</span><span id="xstage-eq-song-style">AUTO: รอข้อมูลแนวเพลง</span><span>RTA · L/R PEAK</span></footer>
+          </section>
+          <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog>
+          <dialog id="share-library-dialog" class="share-library-dialog" aria-labelledby="share-library-title">
+            <header><strong id="share-library-title">แชร์โฟลเดอร์เพลง X-Stage</strong><button id="share-library-close" type="button" aria-label="ปิด">✕</button></header>
+            <div class="share-library-warning">
+              <strong>คำเตือนเรื่องลิขสิทธิ์</strong>
+              <p>แชร์เฉพาะเพลงที่คุณมีสิทธิ์ครอบครอง ใช้งาน หรือได้รับอนุญาตให้แบ่งปันเท่านั้น เจ้าของบัญชีผู้แชร์เป็นผู้รับผิดชอบต่อสิทธิ์ในไฟล์ที่แชร์</p>
+              <p>ผู้รับจะได้รับสิทธิ์ดูและเล่นไฟล์ในโฟลเดอร์ XStageSong แบบอ่านอย่างเดียว ไม่สามารถแก้ไขหรือลบไฟล์ของเจ้าของผ่าน X-Stage ได้</p>
+            </div>
+            <label class="share-library-email">อีเมล Google ของผู้รับ
+              <input id="share-library-email" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com">
+            </label>
+            <label class="share-library-ack"><input id="share-library-ack" type="checkbox"> ฉันยืนยันว่ามีสิทธิ์แชร์ไฟล์เหล่านี้ และรับผิดชอบเรื่องลิขสิทธิ์ของไฟล์ที่แชร์</label>
+            <div id="share-library-status" class="share-library-status" role="status" aria-live="polite"></div>
+            <div class="share-library-actions">
+              <button id="share-library-cancel" type="button">ยกเลิก</button>
+              <button id="share-library-submit" type="button" disabled>แชร์แบบอ่านอย่างเดียว</button>
+            </div>
+            <small>การแชร์นี้ให้สิทธิ์ Google Drive แก่อีเมลที่ระบุโดยตรง · ผู้รับต้องใช้บัญชี Google เดียวกัน และการเปิดคลังใน X-Stage ต้องเป็นไฟล์/โฟลเดอร์ที่ผู้รับอนุญาตให้ X-Stage เข้าถึงตามนโยบาย drive.file</small>
+          </dialog>
+          <div id="gate" class="login-gate" role="dialog" aria-modal="false" aria-labelledby="gate-title"><div class="gate-panel"><button id="gate-close" class="gate-close" type="button" aria-label="ปิดหน้าต่างเข้าสู่ระบบและชมหน้าเวที" title="ชมหน้าเวทีก่อน">×</button><span class="gate-glow">✦ PRIVATE STAGE</span><h1 id="gate-title">เวทีส่วนตัวของคุณ<br><span>เริ่มร้องได้ในหน้าเดียว</span></h1><p id="gate-copy">เข้าสู่ระบบด้วย Google เพื่อค้นหา จัดคิว และเล่นเพลงที่คุณซิงก์ไว้ใน Drive ของบัญชีนี้</p><button id="gate-login" class="button button-primary" type="button"><span class="google-white-g" aria-hidden="true">G</span> เข้าสู่ระบบ Google</button><button id="gate-shared-library" class="button button-primary gate-shared-library" type="button" hidden>ใช้คลังเพลงจากผู้แชร์</button><button id="cloud-import-open-gate" class="button button-primary" type="button" hidden>☁ นำเข้าเพลงจากเครื่อง</button><div id="gate-auth-status" class="gate-auth-status" role="status" aria-live="polite">พร้อมเชื่อมต่อ Google</div><small id="gate-footnote">ไฟล์เพลงอยู่ใน Google Drive ส่วนตัวของคุณเท่านั้น</small><small class="gate-preview-note">กด × เพื่อชมหน้าเวทีและเมนูก่อนได้ · การค้นหาและเล่นเพลงต้องเชื่อมต่อ Google Drive</small></div></div>
+          <div id="catalog-loading" class="catalog-loading" hidden role="status" aria-live="polite">
+            <span class="catalog-spinner" aria-hidden="true"></span>
+            <div class="catalog-loading-copy">
+              <strong id="catalog-loading-title">เข้าสู่ระบบสำเร็จ</strong>
+              <span id="catalog-loading-detail">กำลังเตรียมฐานเพลง…</span>
+              <div class="catalog-progress-row">
+                <progress id="catalog-progress" max="100" value="0" aria-label="ความคืบหน้าการเตรียมฐานเพลง"></progress>
+                <b id="catalog-progress-value">0%</b>
+              </div>
+            </div>
+          </div>
+        </div>
+        <audio id="player" preload="metadata" aria-label="เครื่องเล่นเสียง X-Stage"></audio>
+      </section>
+    </main>
+    
+    <footer class="bottom-bar"><span>© X-Stage Karaoke · Personal Google Drive Player</span><span id="connection"><span class="footer-dot"></span> Private & Secure</span><a href="privacy.html">ความเป็นส่วนตัว</a></footer>
+  </div>
+  <dialog id="cloud-import-dialog" class="cloud-import-dialog" aria-labelledby="cloud-import-title">
+    <div class="cloud-import-panel">
+      <header class="cloud-import-header">
+        <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
+        <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
+      </header>
+      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageSong พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
+      <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
+      <div class="cloud-import-actions">
+        <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
+        <button id="cloud-import-scan" type="button" disabled>ตรวจสอบอีกครั้ง</button>
+        <input id="cloud-import-input" type="file" webkitdirectory directory multiple hidden>
+      </div>
+      <div id="cloud-import-source" class="cloud-import-source">ยังไม่ได้เลือกโฟลเดอร์</div>
+      <div class="cloud-import-stats">
+        <div><b id="cloud-import-total">0</b><span>ไฟล์ที่พบ</span></div>
+        <div><b id="cloud-import-ready">0</b><span>เพลงพร้อมนำเข้า</span></div>
+        <div><b id="cloud-import-fonts">0</b><span>SoundFont</span></div>
+        <div><b id="cloud-import-blocked">0</b><span>ชุดที่ไม่พร้อม</span></div>
+      </div>
+      <div id="cloud-import-examples" class="cloud-import-examples" aria-live="polite"></div>
+      <section id="cloud-import-video-editor" class="cloud-import-video-editor" hidden aria-labelledby="cloud-import-video-heading">
+        <h3 id="cloud-import-video-heading">ข้อมูลวิดีโอคาราโอเกะก่อนนำเข้า</h3>
+        <p>เลือกไฟล์วิดีโอ ตรวจชื่อเพลงและนักร้อง ระบุว่าเนื้อร้องฝังในภาพหรือยังไม่มีเนื้อร้อง ระบบไม่เดาจากภาพว่าวิดีโอมีคาราโอเกะหรือไม่ และจะไม่สร้างเวลาเนื้อร้องปลอม</p>
+        <div class="cloud-import-video-choice">
+          <label>ค้นหาวิดีโอ <input id="cloud-import-video-filter" type="search" placeholder="ชื่อไฟล์หรือรหัสเพลง" autocomplete="off"></label>
+          <label>รายการวิดีโอ <select id="cloud-import-video-select" aria-label="เลือกวิดีโอแก้ไขข้อมูล"></select></label>
+        </div>
+        <div class="cloud-import-video-fields">
+          <label>รหัสเพลง <input id="cloud-import-video-code" maxlength="140" autocomplete="off"></label>
+          <label>ชื่อเพลง <input id="cloud-import-video-title" maxlength="180" autocomplete="off"></label>
+          <label>นักร้อง / ศิลปิน <input id="cloud-import-video-artist" maxlength="180" autocomplete="off"></label>
+          <label>อัลบั้ม <input id="cloud-import-video-album" maxlength="180" autocomplete="off"></label>
+          <label>ผู้แต่งเพลง <input id="cloud-import-video-composer" maxlength="180" autocomplete="off"></label>
+          <label>แนวเพลง <input id="cloud-import-video-genre" maxlength="80" autocomplete="off"></label>
+          <label>ภาษา <input id="cloud-import-video-language" maxlength="60" autocomplete="off"></label>
+          <label>ปีที่เผยแพร่ <input id="cloud-import-video-year" type="number" min="1900" max="2100" placeholder="ถ้าทราบ"></label>
+        </div>
+        <label>รูปแบบเนื้อร้อง
+          <select id="cloud-import-video-mode">
+            <option value="review">ยังไม่ได้ตรวจสอบ — ยังไม่นำเข้า</option>
+            <option value="embedded">มีเนื้อร้องคาราโอเกะฝังอยู่ในภาพแล้ว</option>
+            <option value="timed">ไม่มีเนื้อร้องฝังภาพ — เพิ่ม LRC พร้อมเวลาจริง</option>
+          </select>
+        </label>
+        <label id="cloud-import-video-lrc-wrap" hidden>สร้างหรือแก้ไขเนื้อร้อง LRC พร้อมเวลา
+          <textarea id="cloud-import-video-lrc" rows="5" spellcheck="false" placeholder="[00:12.50]เนื้อร้องบรรทัดแรก&#10;[00:16.25]เนื้อร้องบรรทัดต่อไป"></textarea>
+        </label>
+        <div class="cloud-import-video-tools">
+          <button type="button" id="cloud-import-video-preview-btn">▶ ทดลองดูวิดีโอ/ฟังเพลง</button>
+          <button type="button" id="cloud-import-video-stamp" hidden>+ เวลา ณ ตำแหน่งเล่น</button>
+          <button type="button" id="cloud-import-video-save">บันทึกข้อมูลเพลง</button>
+        </div>
+        <video id="cloud-import-video-preview" controls playsinline preload="metadata" hidden aria-label="ดูตัวอย่างวิดีโอเพื่อตรวจเนื้อร้องและเวลา"></video>
+        <p id="cloud-import-video-hint" class="cloud-import-video-hint" aria-live="polite"></p>
+      </section>
+      <p class="cloud-import-note">รองรับไฟล์ XSK2 ไม่เข้ารหัสจาก Song Studio PC โดยตรง ไม่ต้องใช้ไฟล์กุญแจหรือรหัสผ่าน · XSK1 รุ่นเก่าต้องสร้างใหม่เป็น XSK2</p>
+      <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageSong ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
+      <div class="cloud-import-progress">
+        <progress id="cloud-import-progress" value="0" max="100"></progress>
+        <span id="cloud-import-progress-label">0%</span>
+      </div>
+      <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
+      <p id="cloud-import-detail" class="cloud-import-detail">รองรับ MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV เก็บไฟล์ต้นฉบับไว้ใน Drive และสร้าง MP4 สำหรับเว็บเมื่อเบราว์เซอร์เล่นต้นฉบับไม่ได้ (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · รูปแบบที่เล่นต้นฉบับโดยตรงได้ขึ้นกับ Codec/เบราว์เซอร์ · วิดีโอไม่มีเนื้อร้องต้องใส่ LRC พร้อมเวลาจริง</p>
+      <footer class="cloud-import-footer">
+        <button id="cloud-import-start" type="button" disabled>เริ่มตรวจซ้ำและอัปโหลด</button>
+        <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
+        <button id="cloud-import-resume" type="button" disabled>ทำต่อ</button>
+        <button id="cloud-import-cancel" type="button" disabled>ยกเลิก (เก็บจุดทำต่อ)</button>
+      </footer>
+      <small>ปิดแท็บหรือเครื่องระหว่างงานจะหยุดอัปโหลดเอง เมื่อเปิดใหม่ให้กดทำต่อหรือเลือกโฟลเดอร์เดิม · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
+    </div>
+  </dialog>
+
+  <script>
+// Standalone stage clock: survives player initialization or Google login failures.
+(function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
+</script>
+<script>window.XSTAGE_RELEASE={version:'1.0.117',build:1117};</script>
+<script src="config.js?v=1117"></script>
+  <script src="https://accounts.google.com/gsi/client" defer></script>
+  <script src="cloud-import-core.js?v=1117" defer></script>
+  <script src="xsk-browser.js?v=1117" defer></script>
+  <script src="memory-budget.js?v=1117" defer></script>
+  <script src="browser-midi.js?v=1117" defer></script>
+  <script src="video-metadata-editor.js?v=1117" defer></script>
+  <script src="video-transcode.js?v=1117" defer></script>
+  <script src="cloud-import.js?v=1117" defer></script>
+  <script src="app.js?v=1117" defer></script><script src="pc-extensions.js?v=1117" defer></script>
+  <script src="native-audio-meter.js?v=1117" defer></script>
+  <script src="stage-controls.js?v=1117" defer></script>
+  <script src="mobile-layout.js?v=1117" defer></script>
+  <script src="android-apk-download.js?v=1117" defer></script>
+
+  <script src="stage-ui.js?v=1117" defer></script>
+</body>
+</html>

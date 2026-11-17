@@ -7,7 +7,9 @@ const app=read('app.js');
 const pc=read('pc-extensions.js');
 const host=read('stage-controls.js');
 const remote=read('remote.js');
-const index=read('index.html');
+const index=read('karaoke.html');
+const storefront=read('index.html');
+const storefrontScript=read('storefront.js');
 const css=read('xstage-ux.css');
 const style=read('style.css');
 const apk=read('android-apk-download.js');
@@ -28,6 +30,19 @@ const androidAuth=read('android-tv/app/src/main/java/com/webbasex/xstage/GoogleD
 const androidUpdate=read('android-tv/app/src/main/java/com/webbasex/xstage/XStageUpdateManager.java');
 const androidDebugManifest=read('android-tv/app/src/debug/AndroidManifest.xml');
 const androidWorkflow=read('.github/workflows/build-android-tv.yml');
+
+assert.doesNotThrow(()=>new Function(storefrontScript),'storefront JavaScript must parse');
+assert.match(storefront,/id="store-home"/,'root must be the X-Stage Apps storefront');
+assert.match(storefront,/id="app-detail"/,'every app must have a shareable detail view');
+assert.match(storefront,/source=android-/,'old Android builds must redirect into the existing player');
+assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
+for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv']){
+  assert.ok(storefront.includes('href="?app='+slug+'"'),'storefront must expose detail route for '+slug);
+  assert.ok(storefront.includes('data-app="'+slug+'"'),'storefront must show card for '+slug);
+}
+assert.ok(storefrontScript.includes('downloads/song-studio-latest.json')&&storefrontScript.includes('downloads/windows-pc-latest.json'),'desktop download status must come from published manifest');
+assert.ok(storefrontScript.includes('downloads/android-tv-latest.json')&&storefrontScript.includes('mirror-tv/latest.json'),'TV download status must come from published manifest');
+assert.ok(!storefront.includes('rel="manifest"'),'storefront must not restore retired karaoke PWA registration');
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['android-apk-download.js',apk]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');

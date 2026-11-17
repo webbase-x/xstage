@@ -25,7 +25,7 @@ assert.throws(()=>core.lrcToJson('[00:02.00]\n','A102'),/ไม่มีบร�
 const app=read('app.js'),apk=read('android-apk-download.js'),midi=read('browser-midi.js'),
   importer=read('cloud-import.js'),meter=read('native-audio-meter.js'),
   pc=read('pc-extensions.js'),stage=read('stage-ui.js'),
-  index=read('index.html'),remote=read('stage-controls.js');
+  index=read('karaoke.html'),remote=read('stage-controls.js');
 for(const [name,source] of [['app',app],['midi',midi],['importer',importer],['meter',meter],
   ['apk',apk],['pc',pc],['stage',stage],['remote',remote],]){
   assert.doesNotThrow(()=>new Function(source),name+' JavaScript must parse');
