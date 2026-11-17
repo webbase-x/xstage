@@ -129,11 +129,11 @@ substitute(overview,
 # Group bottom tabs, and make the selected tab/readable text obvious.
 substitute(overview,
            '    var tab by remember { mutableStateOf(Tab.OVERVIEW) }',
-           '    var tab by remember { mutableStateOf(Tab.OVERVIEW) }\\n'
+           '    var tab by remember { mutableStateOf(Tab.OVERVIEW) }\n'
            '    val tabFocus = remember { Tab.entries.map { FocusRequester() } }')
 substitute(overview,
-           '                    NavigationBar {\\n                        Tab.entries.forEach { t ->',
-           '                    NavigationBar(modifier = Modifier.focusGroup()) {\\n'
+           '                    NavigationBar {\n                        Tab.entries.forEach { t ->',
+           '                    NavigationBar(modifier = Modifier.focusGroup()) {\n'
            '                        Tab.entries.forEachIndexed { index, t ->')
 substitute(overview,
            'label = { Text(stringResource(t.labelRes)) },\n'
@@ -147,10 +147,10 @@ substitute(overview,
            '                                    unselectedIconColor = androidx.compose.ui.graphics.Color(0xFFC8D5E8),\n'
            '                                    unselectedTextColor = androidx.compose.ui.graphics.Color(0xFFC8D5E8)\n'
            '                                ),\n'
-           '                                modifier = Modifier.focusRequester(tabFocus[index])\\n'
-           '                                    .focusProperties {\\n'
-           '                                        if (index > 0) left = tabFocus[index - 1]\\n'
-           '                                        if (index < tabFocus.lastIndex) right = tabFocus[index + 1]\\n'
+           '                                modifier = Modifier.focusRequester(tabFocus[index])\n'
+           '                                    .focusProperties {\n'
+           '                                        if (index > 0) left = tabFocus[index - 1]\n'
+           '                                        if (index < tabFocus.lastIndex) right = tabFocus[index + 1]\n'
            '                                    }.dpadFocus()')
 # Material3's dimmed labels and weak outline are difficult to read across TVs.
 theme_file = ui / "theme" / "Theme.kt"
