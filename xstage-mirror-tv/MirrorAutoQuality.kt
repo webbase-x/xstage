@@ -103,18 +103,23 @@ class MirrorAutoQuality(private val context: Context) {
             if (activeStream && drops == 0L && jitterUs < 14_000L) stableSamples++
         }
 
-        if (badSamples >= 3 && !degradedInSession) {
-            degradedInSession = true
-            val possible = available
-            val oldLevel = preferences.getInt("level", 0).coerceIn(0, possible.lastIndex)
-            if (oldLevel < possible.lastIndex) {
-                preferences.edit().putInt("level", oldLevel + 1).putInt("stable_sessions", 0).apply()
-                pendingReannounce = true
-                Log.w(TAG, "Sustained decoder lag; switching next session from " +
-                    possible[oldLevel].label + " to " + possible[oldLevel + 1].label)
-            } else {
-                Log.w(TAG, "Decoder lag observed even at lowest hardware profile")
+        if (badSamples >= 3) {
+            if (!degradedInSession) {
+                degradedInSession = true
+                val possible = available
+                val oldLevel = preferences.getInt("level", 0).coerceIn(0, possible.lastIndex)
+                if (oldLevel < possible.lastIndex) {
+                    preferences.edit().putInt("level", oldLevel + 1)
+                        .putInt("stable_sessions", 0).apply()
+                    pendingReannounce = true
+                    Log.w(TAG, "Sustained decoder lag; switching next session from " +
+                        possible[oldLevel].label + " to " + possible[oldLevel + 1].label)
+                } else {
+                    Log.w(TAG, "Decoder lag even at lowest hardware profile")
+                }
             }
+            // Later bursts can enter catch-up again without repeatedly
+            // lowering the next-session profile during one connection.
             if (!catchUp) {
                 catchUp = true
                 return Signal.CATCH_UP
