@@ -41,12 +41,18 @@ class MirrorUpdateManager(private val activity: MainActivity) {
     @Volatile private var closed = false
     private var pendingInstall: File? = null
     private var permissionPageOpened = false
+    private var pendingPreview: Preview? = null
+    private var alertedPreviewBuild = 0
 
     private data class Update(val version: String, val code: Int, val sha256: String, val file: String) {
         val url: String
             get() = "https://github.com/webbase-x/xstage/releases/download/" +
                 "xstage-mirror-tv-v" + version + "-build" + code + "/" + file
     }
+
+    // A preview is an ANNOUNCEMENT only. CI's Android debug keystore may rotate,
+    // so installing a preview APK over an older build can fail signature checks.
+    private data class Preview(val version: String, val code: Int, val url: String)
 
     fun checkOnLaunch() = check(manual = false)
 
@@ -57,62 +63,147 @@ class MirrorUpdateManager(private val activity: MainActivity) {
         if (manual) toast("กำลังตรวจสอบอัปเดต X-Stage Mirror TV…")
         worker.execute {
             try {
-                val update = fetchLatest()
-                if (update == null || update.code <= BuildConfig.VERSION_CODE) {
-                    if (manual) toast("แอปเป็นรุ่นล่าสุดแล้ว")
-                } else {
-                    if (manual) toast("พบรุ่น " + update.version + " กำลังดาวน์โหลดอัปเดต…")
-                    val file = downloadAndVerify(update)
+                // Signed production releases retain the existing verified, system-approved
+                // update flow. A missing production release must NOT suppress preview
+                // announcements for installations made from the TEST channel.
+                val official = try {
+                    fetchLatest()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Signed release channel check failed; checking preview separately", e)
+                    null
+                }
+                if (official != null && official.code > BuildConfig.VERSION_CODE) {
+                    if (manual) toast("พบรุ่นทางการ " + official.version + " กำลังดาวน์โหลด…")
+                    val file = downloadAndVerify(official)
                     onMain {
                         pendingInstall = file
                         offerInstall()
                     }
+                } else {
+                    val preview = fetchPreview()
+                    if (preview != null && preview.code > BuildConfig.VERSION_CODE) {
+                        onMain {
+                            pendingPreview = preview
+                            offerPreview()
+                        }
+                    } else if (manual) {
+                        toast("ไม่พบรุ่นใหม่กว่า v" + BuildConfig.VERSION_NAME +
+                            " (Build " + BuildConfig.VERSION_CODE + ")")
+                    }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Update check/download failed", e)
-                if (manual) toast("ตรวจสอบอัปเดตไม่สำเร็จ: " + (e.message ?: "ไม่สามารถเชื่อมต่อได้"))
+                Log.w(TAG, "Update channels unavailable", e)
+                if (manual) toast("ตรวจสอบอัปเดตไม่สำเร็จ: " + (e.message ?: "เครือข่ายไม่พร้อม"))
             } finally {
                 checking.set(false)
             }
         }
     }
 
-    private fun fetchLatest(): Update? {
-        val conn = URL(METADATA).openConnection() as HttpURLConnection
+    private fun fetchJsonMetadata(endpoint: String): JSONObject {
+        val conn = URL(endpoint).openConnection() as HttpURLConnection
         conn.connectTimeout = 12000
         conn.readTimeout = 15000
         conn.useCaches = false
         conn.setRequestProperty("Cache-Control", "no-cache")
         try {
-            if (conn.responseCode != 200) throw IllegalStateException("Update server HTTP " + conn.responseCode)
+            if (conn.responseCode != 200) {
+                throw IllegalStateException("Update server HTTP " + conn.responseCode)
+            }
             val out = ByteArrayOutputStream()
             conn.inputStream.use { input ->
                 val buffer = ByteArray(4096)
                 while (true) {
                     val n = input.read(buffer)
                     if (n < 0) break
-                    if (out.size() + n > 8192) throw IllegalArgumentException("Update metadata too large")
+                    if (out.size() + n > 8192) {
+                        throw IllegalArgumentException("Update metadata too large")
+                    }
                     out.write(buffer, 0, n)
                 }
             }
-            val json = JSONObject(out.toString(StandardCharsets.UTF_8.name()))
-            if (!json.optBoolean("available", false)) return null
-            if (json.optString("package") != activity.packageName) {
-                throw IllegalArgumentException("Update package mismatch")
-            }
-            val version = json.optString("version")
-            val code = json.optInt("build", 0)
-            val checksum = json.optString("sha256").lowercase(Locale.ROOT)
-            val file = json.optString("file")
-            if (!version.matches(Regex("""[0-9]+[.][0-9]+[.][0-9]+""")) ||
-                code <= 0 || !checksum.matches(Regex("[0-9a-f]{64}")) ||
-                file != "X-Stage-Mirror-TV-v" + version + "-build" + code + ".apk") {
-                throw IllegalArgumentException("Invalid update metadata")
-            }
-            return Update(version, code, checksum, file)
+            return JSONObject(out.toString(StandardCharsets.UTF_8.name()))
         } finally {
             conn.disconnect()
         }
+    }
+
+    private fun fetchLatest(): Update? {
+        val json = fetchJsonMetadata(METADATA)
+        if (!json.optBoolean("available", false)) return null
+        if (json.optString("package") != activity.packageName) {
+            throw IllegalArgumentException("Official update package mismatch")
+        }
+        val version = json.optString("version")
+        val code = json.optInt("build", 0)
+        val checksum = json.optString("sha256").lowercase(Locale.ROOT)
+        val file = json.optString("file")
+        if (!version.matches(Regex("""[0-9]+[.][0-9]+[.][0-9]+""")) ||
+            code <= 0 || !checksum.matches(Regex("[0-9a-f]{64}")) ||
+            file != "X-Stage-Mirror-TV-v" + version + "-build" + code + ".apk") {
+            throw IllegalArgumentException("Invalid official update metadata")
+        }
+        return Update(version, code, checksum, file)
+    }
+
+    private fun fetchPreview(): Preview? {
+        val json = fetchJsonMetadata(PREVIEW_METADATA)
+        if (!json.optBoolean("available", false)) return null
+        if (json.optString("channel") != "test-preview" ||
+            json.optString("package") != activity.packageName) {
+            throw IllegalArgumentException("Invalid preview update channel/package")
+        }
+        val version = json.optString("version")
+        val code = json.optInt("build", 0)
+        val checksum = json.optString("sha256").lowercase(Locale.ROOT)
+        val file = json.optString("file")
+        val url = json.optString("direct_download_url")
+        if (!version.matches(Regex("""[0-9]+[.][0-9]+[.][0-9]+""")) ||
+            code <= 0 || !checksum.matches(Regex("[0-9a-f]{64}")) ||
+            file != "X-Stage-Mirror-TV-test-v" + version + "-build" + code + ".apk" ||
+            !json.optBoolean("direct_download_available", false) ||
+            json.optString("direct_download_file") != file ||
+            !json.optString("direct_download_sha256").equals(checksum, ignoreCase = true) ||
+            url != PREVIEW_APK_BASE + file) {
+            throw IllegalArgumentException("Invalid preview APK link or SHA-256 metadata")
+        }
+        return Preview(version, code, url)
+    }
+
+    private fun offerPreview() {
+        val preview = pendingPreview ?: return
+        if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (alertedPreviewBuild == preview.code) return
+        alertedPreviewBuild = preview.code
+        pendingPreview = null
+        AlertDialog.Builder(activity)
+            .setTitle("มี Mirror TV รุ่นทดสอบใหม่ v" + preview.version)
+            .setMessage(
+                "ตรวจพบ Build " + preview.code + " (เครื่องนี้ Build " +
+                BuildConfig.VERSION_CODE + ")\n\n" +
+                "รุ่นนี้เป็น APK ทดสอบ ไม่ใช่อัปเดตอัตโนมัติ: " +
+                "ลายเซ็นของ APK ทดสอบแต่ละรุ่นอาจต่างกัน " +
+                "Android จึงอาจไม่อนุญาตให้ติดตั้งทับ " +
+                "หากต้องถอนแอปเดิม ข้อมูลและชื่อเครื่องรับที่ตั้งไว้ในแอปอาจสูญหาย\n\n" +
+                "ต้องการเปิดหน้าดาวน์โหลด APK ที่เว็บไซต์ X-Stage หรือไม่?"
+            )
+            .setPositiveButton("เปิดหน้าดาวน์โหลด") { _, _ ->
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(preview.url))
+                        .addCategory(Intent.CATEGORY_BROWSABLE)
+                    activity.startActivity(intent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Cannot open preview download in TV browser", e)
+                    AlertDialog.Builder(activity)
+                        .setTitle("ไม่พบเบราว์เซอร์บนทีวี")
+                        .setMessage("เปิดลิงก์นี้จากอุปกรณ์ที่ดาวน์โหลด APK ได้ แล้วส่งไฟล์มาที่กล่องทีวี:\n" +
+                            preview.url)
+                        .setPositiveButton("ตกลง", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("ภายหลัง", null)
+            .show()
     }
 
     private fun downloadAndVerify(update: Update): File {
@@ -228,6 +319,7 @@ class MirrorUpdateManager(private val activity: MainActivity) {
             }
         }
         if (pendingInstall != null) offerInstall()
+        if (pendingPreview != null) offerPreview()
     }
 
     fun close() {
@@ -243,6 +335,8 @@ class MirrorUpdateManager(private val activity: MainActivity) {
     private companion object {
         const val TAG = "XStageMirrorUpdate"
         const val METADATA = "https://webbase-x.github.io/xstage/mirror-tv/latest.json"
+        const val PREVIEW_METADATA = "https://webbase-x.github.io/xstage/mirror-tv/test-latest.json"
+        const val PREVIEW_APK_BASE = "https://webbase-x.github.io/xstage/downloads/"
         const val APK_MIME = "application/vnd.android.package-archive"
         const val MAX_APK_BYTES = 200L * 1024L * 1024L
     }

@@ -24,3 +24,7 @@ Paste the clipboard value into the encrypted secret in GitHub (not a repo file).
 After configuring all four, manually dispatch the **Release X-Stage Mirror TV signed APK** workflow from the Actions tab. It checks the secrets, builds and verifies the release signature, publishes an immutable release with corresponding GPLv3 source and only then activates `mirror-tv/latest.json`.
 
 Do not attempt to reuse a Karaoke Android signing key, ship passwords or keys in public source, or copy the test APK into the production feed. The app package name is `com.webbasex.xstagemirror.tv` and should retain the **same signing identity** for future production updates.
+
+## Preview availability notifications
+
+Starting with v0.2.5 (Build 107), the installed app checks the signed `latest.json` channel and also the separately published `test-latest.json` channel at startup. The preview channel announces newer versions, but **never attempts an in-place preview install**. Debug signing identities may change across CI runners, so the Android package installer can refuse to install a preview over a previous preview. The app explains this risk and offers the X-Stage first-party APK URL. Uninstalling the previous app can erase settings, such as the receiver name. Existing v0.2.4 or older apps lack this preview check and need a one-time manual download and reinstall before the new prompt will appear.

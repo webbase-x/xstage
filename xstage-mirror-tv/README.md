@@ -38,17 +38,26 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 - Mirroring of DRM-protected apps is not supported.
 - All AirPlay/UxPlay native libraries and codecs are bundled into **one APK**.
   No separate codec, helper, SoundFont, media server, or iOS app is downloaded.
-- Automatically checks for signed APK updates at app startup; Settings also
-  includes a manual "ตรวจสอบอัปเดต" control. When a valid newer version exists,
-  the app downloads it, checks SHA-256 and package/version, then opens Android's
-  standard installer. Android may require permission and approval.
+- Starting in **v0.2.5 (Build 107)**, checks both the production-signed
+  `mirror-tv/latest.json` and preview `mirror-tv/test-latest.json` on every
+  app launch; Settings also has a manual "ตรวจสอบอัปเดต" button.
+  A newer **production** release is downloaded, checked with SHA-256 and
+  package/version, and handed to Android's standard user-approved installer.
+  A newer **test preview** opens a visible version/update notification with
+  a direct first-party APK download link; no automatic APK replacement is
+  attempted for debug-signed builds because each CI run can use a different
+  signing certificate. The user may have to uninstall the previous test APK
+  first, losing local preferences. Existing v0.2.4 and older installations
+  cannot discover preview updates until v0.2.5 is installed manually once.
 - Automatically deletes **only app-private downloaded update APKs** after a
   successfully installed newer or equal build, using Android's
   `MY_PACKAGE_REPLACED` broadcast plus a startup fallback. Future versions
   staged for installation are not deleted early. Public Downloads and the
   original installer APK are never touched.
-- Updates are **disabled until a release is signed and published** using a
-  persistent private signing key. This avoids broken and unsafe update flows.
+- Automatic **in-place** updates remain disabled for preview APKs until a
+  release is signed and published with a persistent private signing key.
+  Preview discovery and informational prompts remain available instead,
+  avoiding unsafe silent overwrites.
 
 ## Build and release
 
