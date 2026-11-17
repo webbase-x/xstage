@@ -93,6 +93,12 @@ needle = '''stringResource(R.string.idle_hint, serverName)
 replacement = needle + '''
                             Spacer(Modifier.height(10.dp))
                             ReceiverNameEditor(viewModel, canEdit = connections == 0)
+                            Spacer(Modifier.height(8.dp))
+                            val homeShortcutContext = LocalContext.current
+                            OutlinedButton(
+                                enabled = connections == 0,
+                                onClick = { app.airshow.tv.TvHomeShortcut.request(homeShortcutContext) }
+                            ) { Text("☆ เพิ่มแอปที่หน้าหลักทีวี") }
                             Spacer(Modifier.height(12.dp))
                             ReceiverSetupQr(serverName)'''
 substitute(overview, needle, replacement)
@@ -112,7 +118,7 @@ overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
 # and unknown-source permission are required.
 updater = Path(__file__).resolve().parent / "MirrorUpdateManager.kt"
 pkg_dir = APP / "src/main/kotlin/app/airshow/tv"
-for filename in ("ReceiverNamePolicy.kt",):
+for filename in ("ReceiverNamePolicy.kt", "TvHomeShortcut.kt"):
     (pkg_dir / filename).write_text(
         (Path(__file__).resolve().parent / filename).read_text(encoding="utf-8"),
         encoding="utf-8")
@@ -233,14 +239,16 @@ def mark(size):
 
 def banner(size):
     w,h = size
-    im = Image.new("RGB",size,(9,18,38))
+    # TV Launcher banner: solid white 16:9 background; preserve a distinctive
+    # dark casting emblem and readable navy/cyan text on both low/high density.
+    im = Image.new("RGB", size, (255,255,255))
     d = ImageDraw.Draw(im)
-    icon = mark(int(h*0.63)).convert("RGB")
-    im.paste(icon, (int(w*0.05),int(h*0.18)))
-    tx = int(w*0.39)
-    d.text((tx,int(h*0.29)), "X-STAGE", fill=(244,249,255), font=font(int(h*0.17)))
-    d.text((tx,int(h*0.52)), "MIRROR TV", fill=(67,214,239), font=font(int(h*0.13)))
-    d.text((tx,int(h*0.72)), "AirPlay receiver", fill=(179,193,217), font=font(int(h*0.065)))
+    icon = mark(int(h*0.62)).convert("RGB")
+    im.paste(icon, (int(w*0.045), int(h*0.19)))
+    tx = int(w*0.40)
+    d.text((tx,int(h*0.29)), "X-STAGE", fill=(12,29,62), font=font(int(h*0.17)))
+    d.text((tx,int(h*0.52)), "MIRROR TV", fill=(5,119,157), font=font(int(h*0.13)))
+    d.text((tx,int(h*0.72)), "AirPlay receiver", fill=(78,96,123), font=font(int(h*0.065)))
     return im
 
 for folder,size in [("mipmap-mdpi",48),("mipmap-hdpi",72),("mipmap-xhdpi",96),

@@ -154,21 +154,27 @@ tasks.register("generateXStageTvAssets") {
         javax.imageio.ImageIO.write(icon, "png", iconFile)
         javax.imageio.ImageIO.write(icon, "png", storeIcon)
 
-        // Android TV launcher banner is fixed 16:9 (320x180). Keep the
-        // 2048x682 original aspect ratio: contain, centered, never crop/stretch.
-        // A black background matches the user's supplied transparent PNG.
+        // White 16:9 (320x180) banner for Android TV and TrueID app grids.
+        // The dedicated Karaoke TV app icon is legible on white; the stage
+        // splash remains unchanged. Both densities use this same image.
         def banner = new java.awt.image.BufferedImage(320,180,java.awt.image.BufferedImage.TYPE_INT_RGB)
         def b = banner.createGraphics()
         b.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-        b.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING,java.awt.RenderingHints.VALUE_RENDER_QUALITY)
-        b.setColor(java.awt.Color.BLACK)
+        b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        b.setColor(java.awt.Color.WHITE)
         b.fillRect(0,0,320,180)
-        double scale = Math.min(316d/sourceLogo.getWidth(), 172d/sourceLogo.getHeight())
-        int scaledW = Math.max(1,Math.round(sourceLogo.getWidth()*scale) as int)
-        int scaledH = Math.max(1,Math.round(sourceLogo.getHeight()*scale) as int)
-        int left = (320-scaledW).intdiv(2)
-        int top = (180-scaledH).intdiv(2)
-        b.drawImage(sourceLogo,left,top,scaledW,scaledH,null)
+        // A dark app-tile symbol makes the product identity visible in both
+        // white and dark TV launchers, independently of the original stage art.
+        b.drawImage(icon,17,28,115,115,null)
+        b.setFont(new java.awt.Font("SansSerif",java.awt.Font.BOLD,30))
+        b.setColor(new java.awt.Color(15,32,67))
+        b.drawString("X-STAGE",142,78)
+        b.setFont(new java.awt.Font("SansSerif",java.awt.Font.BOLD,19))
+        b.setColor(new java.awt.Color(26,111,167))
+        b.drawString("KARAOKE TV",143,108)
+        b.setFont(new java.awt.Font("SansSerif",java.awt.Font.PLAIN,12))
+        b.setColor(new java.awt.Color(87,104,126))
+        b.drawString("Karaoke for Android TV",143,130)
         b.dispose()
         javax.imageio.ImageIO.write(banner, "png", bannerFile)
         javax.imageio.ImageIO.write(banner, "png", storeBanner)

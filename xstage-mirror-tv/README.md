@@ -122,3 +122,17 @@ iOS does not expose a public API for QR-initiated system-wide Screen Mirroring.
 ## License
 
 GPL-3.0; upstream copyright and NOTICE preserved. Not affiliated with Apple Inc. or TrueID.
+
+
+## White TV launcher banner and Home icon
+
+Mirror TV publishes a **white 16:9 Android TV banner** at 320×180 and 640×360,
+with the distinct dark receiver-casting icon and high-contrast navy/cyan text.
+
+On the idle screen choose **☆ เพิ่มแอปที่หน้าหลักทีวี**. If the current Android
+TV launcher supports pinned shortcuts, confirm the OS prompt. Otherwise the
+app opens the Home screen; use the remote to select **Favorite Apps > Add app (+)
+> X-Stage Mirror TV**. On some TrueID launchers the Favorites command differs,
+or sideloaded apps cannot be added automatically. The app cannot change
+Launcher Favorites without user approval. The Home action is disabled while a
+sender is connected to avoid interrupting active Screen Mirroring.

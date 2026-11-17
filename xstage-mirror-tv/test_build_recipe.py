@@ -31,6 +31,23 @@ assert 'ReceiverNameEditor(viewModel, canEdit = connections == 0)' in ui
 assert 'text = serverName,' in ui
 assert 'ReceiverNamePolicy.migratePreviousName(this)' in (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
 
+home = (app / "src/main/kotlin/app/airshow/tv/TvHomeShortcut.kt").read_text()
+assert "isRequestPinShortcutSupported" in home and "requestPinShortcut(shortcut, null)" in home
+assert "Intent.CATEGORY_HOME" in home and "Intent.CATEGORY_LAUNCHER" in home
+assert 'TvHomeShortcut.request(homeShortcutContext)' in ui
+assert (app / "src/main/res/drawable/banner.png").exists()
+assert (app / "src/main/res/drawable-xhdpi/banner.png").exists()
+from PIL import Image
+for path, size in [
+    (app / "src/main/res/drawable/banner.png", (320,180)),
+    (app / "src/main/res/drawable-xhdpi/banner.png", (640,360)),
+]:
+    with Image.open(path) as banner:
+        assert banner.size == size, (path, banner.size)
+        assert banner.convert("RGB").getpixel((0,0)) == (255,255,255), "TV banner corner must be white"
+        assert banner.convert("RGB").getpixel((banner.width-1,banner.height-1)) == (255,255,255)
+
+
 assert 'bool("require_pin", false' in prefs
 assert 'bool("allow_new_conn", false' in prefs
 assert 'bool("boot_auto_start", true' in prefs

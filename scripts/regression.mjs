@@ -91,7 +91,7 @@ assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stag
 assert.ok(read('mirror-tv/index.html').includes('../assets/app-icons/mirror-tv.svg'),'Mirror pairing guide must show its own icon');
 const tvReload=read('tv-refresh.js');
 assert.doesNotThrow(()=>new Function(tvReload),'TV refresh JS must parse');
-assert.ok(index.includes('id="tv-refresh-window"')&&index.includes('tv-refresh.js?v=1118'),'TV player must expose refresh button and logic');
+assert.ok(index.includes('id="tv-refresh-window"')&&index.includes('tv-refresh.js?v=1119'),'TV player must expose refresh button and logic');
 assert.ok(app.includes('xstage-tv-quick-refresh')&&app.includes('window.XStageTvRefreshPage?.()'),'Android TV remote quick menu must contain a working refresh action');
 assert.ok(css.includes('body.xstage-ui-v2 .stage #tv-refresh-window:not([hidden])'),'TV refresh must override stage overlay hiding');
 assert.ok(singerStage.includes('id="refresh-window"')&&singerStage.includes('window.location.reload()'),'separate TV stage must have clickable reload');
@@ -332,13 +332,46 @@ assert.ok(androidMain.includes('callJavascript("window.XStageTvOpenMenu'),'Andro
 assert.ok(androidMain.includes('if (isTelevisionDevice())')&&androidMain.includes('window.XStageTvOpenMenu'),'Android TV SEARCH key must open TV quick menu instead of focusing hidden search');
 assert.ok(androidMain.includes('settings.setUseWideViewPort(true)')&&androidMain.includes('settings.setTextZoom(100)'),'Android TV WebView must use stable viewport and text scaling');
 assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&androidManifest.includes('android:hardwareAccelerated="true"'),'Android TV app must use HTTPS-only traffic and hardware acceleration');
-assert.ok(androidGradle.includes('b.setColor(java.awt.Color.BLACK)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher banner must show the original transparent logo on black');
-assert.ok(androidGradle.includes('rootProject.file("../assets/xstage-stage-logo.png")')&&androidGradle.includes('b.fillRect(0,0,320,180)')&&androidGradle.includes('b.drawImage(sourceLogo,left,top,scaledW,scaledH,null)'),'TV launcher banner must use the exact uploaded PNG, preserve its aspect ratio, and fit within 320x180');
+assert.ok(androidGradle.includes('b.setColor(java.awt.Color.WHITE)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher banner must use a pure white 16:9 background');
+assert.ok(androidGradle.includes('rootProject.file("../assets/xstage-stage-logo.png")')&&
+          androidGradle.includes('splashFile.bytes = logoSource.bytes')&&
+          androidGradle.includes('b.drawImage(icon,17,28,115,115,null)')&&
+          androidGradle.includes('b.drawString("KARAOKE TV",143,108)'),
+          'Android TV must preserve original splash while using its dedicated Karaoke icon and navy text on a white 320x180 banner');
 assert.ok(androidGradle.includes('drawable-nodpi/xstage_tv_banner.png'),'TV launcher banner must use nodpi without Android density rescaling');
 assert.ok(androidGradle.includes('def label = "KARAOKE TV"')&&androidGradle.includes('g.fillPolygon([222,222,306]')&&!androidGradle.includes('g.drawImage(sourceLogo,iconLeft,iconTop,iconW,iconH,null)'),'Android launcher must render its own TV/play/remote icon, not the Web or stage-banner art');
 assert.ok(!androidGradle.includes('g.drawRoundRect(218,160,76,140')&&!androidGradle.includes('g.drawLine(205,398,307,398)'),'obsolete synthetic microphone launcher icon must not be regenerated');
 assert.ok(androidManifest.includes('android:roundIcon="@drawable/xstage_app_icon"')&&androidManifest.includes('android:logo="@drawable/xstage_app_icon"'),'app-grid launcher icon fallbacks must all use the new logo');
 assert.ok(androidManifest.match(/android:banner="@drawable\/xstage_tv_banner"/g)?.length===2,'activity and application must use the same official banner');
+
+assert.ok(androidManifest.includes('android.intent.category.LEANBACK_LAUNCHER')&&
+          androidManifest.includes('android.intent.category.LAUNCHER'),
+          'Karaoke TV must be discoverable and addable in TV Launcher app rows');
+const homeShortcut=read('android-tv/app/src/main/java/com/webbasex/xstage/TvHomeShortcut.java');
+const nativeTvMain=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
+assert.ok(homeShortcut.includes('isRequestPinShortcutSupported()')&&
+          homeShortcut.includes('requestPinShortcut(shortcut, null)')&&
+          homeShortcut.includes('Intent.CATEGORY_HOME'),
+          'Karaoke TV must offer explicit pinning when supported and TV Home fallback');
+assert.ok(nativeTvMain.includes('public void requestHomeIcon()')&&
+          nativeTvMain.includes('TvHomeShortcut.request(MainActivity.this)'),
+          'Karaoke TV must safely expose native requestHomeIcon bridge');
+assert.ok(app.includes('xstage-tv-quick-home')&&
+          app.includes('window.XStageAndroid?.requestHomeIcon?.()'),
+          'Karaoke TV remote quick menu must offer a Home shortcut action');
+const mirrorRecipe=read('xstage-mirror-tv/prepare_upstream.py');
+const mirrorHome=read('xstage-mirror-tv/TvHomeShortcut.kt');
+assert.ok(mirrorRecipe.includes('im = Image.new("RGB", size, (255,255,255))')&&
+          mirrorRecipe.includes('banner((320,180))')&&mirrorRecipe.includes('banner((640,360))'),
+          'Mirror TV must publish white 16:9 banners at both Android drawable densities');
+assert.ok(mirrorRecipe.includes('TvHomeShortcut.request(homeShortcutContext)')&&
+          mirrorRecipe.includes('for filename in ("ReceiverNamePolicy.kt", "TvHomeShortcut.kt")'),
+          'Mirror TV Home screen must provide a pin/favorites action');
+assert.ok(mirrorHome.includes('isRequestPinShortcutSupported')&&
+          mirrorHome.includes('requestPinShortcut(shortcut, null)')&&
+          mirrorHome.includes('Intent.CATEGORY_HOME'),
+          'Mirror TV must use supported shortcut API or guide to TV favorites');
+
 const actualBannerSourceSha=await import('node:crypto').then(x=>x.createHash('sha256').update(requireBannerSource()).digest('hex'));
 assert.equal(actualBannerSourceSha,'5cc34771ae31287ef70ff032d56763a45e5942b3f27a8623c0c81ea72f8f0622','Android logo source must be pixel-identical to the user-supplied PNG');
 assert.ok(css.includes('1.0.71 Android TV display-only stage'),'TV-specific final layout must live in the last-loaded UX stylesheet');

@@ -259,3 +259,19 @@ android-tv/app/build/outputs/bundle/
 สิทธิ์ `REQUEST_INSTALL_PACKAGES` อยู่เฉพาะ debug/Test APK ผ่าน `src/debug/AndroidManifest.xml` เท่านั้น ไม่ถูกรวมใน Google Play release AAB
 
 **สำคัญ:** APK 1.0.57 และเก่ากว่าเคยใช้ debug signing key ที่สร้างใหม่บน CI จึงต้องถอนการติดตั้งรุ่นเก่าแล้วติดตั้ง 1.0.58 หนึ่งครั้ง หลังจากนั้น Test APK รุ่นใหม่สามารถอัปเดตทับกันได้
+
+
+## Android TV / TrueID home screen tile
+
+The official Android TV launcher banner is **white 320 × 180 px** with the
+dedicated dark X-Stage Karaoke TV app identity. The app has both
+`LEANBACK_LAUNCHER` and `LAUNCHER` manifest categories.
+
+On the TV remote, press **Menu** while using Karaoke and choose
+**☆ เพิ่มไอคอนลงหน้าหลักทีวี**. If the TV launcher supports pinning, Android
+asks for confirmation. Otherwise, the app shows the native Home screen;
+under **Favorite Apps**, choose **+ Add app** and select **X-Stage Karaoke**.
+Some TrueID launcher revisions may organize favorites differently or prevent
+sideloaded apps from being favorited; the app cannot force an unauthorized
+change to the launcher. It remains available under Installed apps if the
+launcher lists sideloaded apps.

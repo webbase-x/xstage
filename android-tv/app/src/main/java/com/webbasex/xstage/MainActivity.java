@@ -549,6 +549,12 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void requestHomeIcon() {
+            // UI-thread handoff from the signed, trusted Karaoke WebView.
+            runOnUiThread(() -> TvHomeShortcut.request(MainActivity.this));
+        }
+
+        @JavascriptInterface
         public boolean isAndroidTvApp() {
             return isTelevisionDevice();
         }
