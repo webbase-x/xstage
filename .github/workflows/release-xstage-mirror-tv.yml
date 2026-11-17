@@ -9,12 +9,12 @@ on:
       version:
         description: "Semantic version e.g. 0.2.0"
         required: true
-        default: "0.2.7"
+        default: "0.2.8"
         type: string
       version_code:
         description: "Increasing Android version code"
         required: true
-        default: "109"
+        default: "110"
         type: string
 
 permissions:
@@ -30,8 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      XSTAGE_MIRROR_VERSION: ${{ inputs.version || '0.2.7' }}
-      XSTAGE_MIRROR_BUILD: ${{ inputs.version_code || '109' }}
+      XSTAGE_MIRROR_VERSION: ${{ inputs.version || '0.2.8' }}
+      XSTAGE_MIRROR_BUILD: ${{ inputs.version_code || '110' }}
       XSTAGE_MIRROR_KEYSTORE_BASE64: ${{ secrets.XSTAGE_MIRROR_KEYSTORE_BASE64 }}
       XSTAGE_MIRROR_STORE_PASSWORD: ${{ secrets.XSTAGE_MIRROR_STORE_PASSWORD }}
       XSTAGE_MIRROR_KEY_ALIAS: ${{ secrets.XSTAGE_MIRROR_KEY_ALIAS }}
