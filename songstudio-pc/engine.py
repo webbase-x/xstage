@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.62" if READY_BUNDLE else "0.2.8-Source-Preview"
-STATUS_BUILD = "362" if READY_BUNDLE else "208-SRC"
+STATUS_VERSION = "0.3.63" if READY_BUNDLE else "0.2.8-Source-Preview"
+STATUS_BUILD = "363" if READY_BUNDLE else "208-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -2141,6 +2141,10 @@ def execute_job(action, options, started):
                 operation=options.get("operation"),
                 destination=(options.get("destination")
                              or worker_prefs().get("dup_destination")),
+                keeper_by_group=options.get("keeperByGroup") or {},
+                preferred_extension=options.get("preferredExtension") or "",
+                include_companions=options.get("includeCompanions", True),
+                preview_id=options.get("previewId"),
                 confirmed=options.get("confirmed") is True,
                 cancelled=worker_cancel(),
                 progress=lambda done, total, name: update(
@@ -2653,8 +2657,11 @@ def start_job(data):
         if (not isinstance(chosen, list) or not 1 <= len(chosen) <= 300
                 or any(not isinstance(item, str) for item in chosen)):
             raise ValueError("เลือกไฟล์ซ้ำได้ครั้งละ 1–300 ไฟล์")
-        if data.get("confirmed") is not True or data.get("operation") not in ("move", "recycle"):
-            raise ValueError("ต้องยืนยันการย้ายหรือส่งไฟล์ซ้ำเข้าถังรีไซเคิล")
+        if (data.get("confirmed") is not True or
+                data.get("operation") not in ("move", "recycle") or
+                not isinstance(data.get("previewId"), str) or
+                not data.get("previewId")):
+            raise ValueError("ต้องตรวจแผนไฟล์เพลงและไฟล์ประกอบก่อนยืนยันการย้าย/ลบ")
         if data.get("operation") == "move" and not (
                 data.get("destination") or PREFS.get("dup_destination")):
             raise ValueError("กรุณาเลือกโฟลเดอร์ปลายทางสำหรับย้ายไฟล์ซ้ำ")
@@ -3532,7 +3539,9 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     offset = int(query.get("offset", ["0"])[0])
                     limit = int(query.get("limit", ["20"])[0])
-                    self._json(DUPLICATES.REGISTRY.page(offset=offset, limit=limit))
+                    self._json(DUPLICATES.REGISTRY.page(
+                        offset=offset, limit=limit,
+                        preferred_extension=query.get("prefer", [""])[0]))
                 except (ValueError, TypeError) as exc:
                     self._deny(str(exc), 400)
             elif path == "/api/history":
@@ -3995,6 +4004,15 @@ class Handler(BaseHTTPRequestHandler):
                 # Reopen the exact in-progress Google OAuth URL. The browser
                 # never receives the OAuth URL or the refresh token via our API.
                 self._json(GOOGLE.show_pending_login())
+            elif path == "/api/duplicates/plan":
+                self._json(DUPLICATES.REGISTRY.plan(
+                    scan_id=payload.get("scanId"),
+                    selected=payload.get("selected"),
+                    operation=payload.get("operation"),
+                    destination=payload.get("destination"),
+                    keeper_by_group=payload.get("keeperByGroup") or {},
+                    preferred_extension=payload.get("preferredExtension") or "",
+                    include_companions=payload.get("includeCompanions", True)))
             elif path == "/api/jobs":
                 self._json(start_job(payload))
             elif path == "/api/jobs/open-output":
