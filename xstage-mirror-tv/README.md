@@ -100,6 +100,17 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
   A newer same-signer preview can trigger Android's user-confirmed in-place
   installer flow; it never silently installs updates.
 
+## APK signer audit — Android SDK Build Tools 37
+
+The shared `verify_apk_signer.py` accepts the older `Signer #1 certificate SHA-256 digest`
+and newer `V3.0 Signer: certificate SHA-256 digest` output from
+`apksigner verify --verbose --print-certs`. Both preview and production jobs
+compare the **verified APK certificate SHA-256** with the certificate exported
+from the configured **persistent private keystore**. A missing, conflicting or
+unexpected identity always fails publication; this is a parsing compatibility
+fix, not a signing bypass. The preview workflow runs parser regression tests
+before compilation.
+
 ## One-time signing fix (GitHub Codespaces)
 
 If [Build X-Stage Mirror TV](../../actions/workflows/build-xstage-mirror-tv.yml)
