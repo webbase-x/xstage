@@ -38,6 +38,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "PC catalog export regression failed" }
           python -m unittest discover -s scripts -p test_songstudio_json_pro.py -v
           if ($LASTEXITCODE -ne 0) { throw "JSON Pro media/transcode/resume regression failed" }
+          python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
+          if ($LASTEXITCODE -ne 0) { throw "XSK song/artist metadata regression failed" }
+          python -m unittest discover -s scripts -p test_songstudio_pc.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Song Studio PC identity regression failed" }
+          python -m unittest discover -s windows-pc/source/tests -p test_media_json_sidecar.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Karaoke PC MIDI plus JSON metadata regression failed" }
           node --check studio/app.js
           if ($LASTEXITCODE -ne 0) { throw "Song Studio UI JavaScript syntax failed" }
           node scripts/test_songstudio_ui_contract.mjs
