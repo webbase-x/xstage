@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror iOS PC"
-#define MyAppVersion "1.0.2"
-#define MyAppBuild "1003"
+#define MyAppVersion "1.0.3"
+#define MyAppBuild "1004"
 
 [Setup]
 ; Relative to this script in mirror-ios-pc/installer. Resolve to repository root.
@@ -59,6 +59,9 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror iOS PC Bonjour Private"" dir=in action=allow program=""{app}\engine\uxplay-windows\mDNSResponder.exe"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""X-Stage Mirror iOS PC mDNS Private"" dir=in action=allow protocol=UDP localport=5353 profile=private"; Flags: runhidden waituntilterminated; Tasks: privateairplay
 Filename: "{app}\XStageMirrorIOSPC.exe"; Description: "Launch X-Stage Mirror iOS PC"; Flags: nowait postinstall skipifsilent
+; Auto-update installation runs only after the client verifies the downloaded Setup EXE.
+; Relaunch without requiring a click after a successful SILENT update.
+Filename: "{app}\XStageMirrorIOSPC.exe"; Parameters: "/updated"; Flags: nowait skipifnotsilent
 
 [UninstallRun]
 ; Remove only our program-specific rules; do not uninstall Bonjour because other
