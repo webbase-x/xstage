@@ -3,14 +3,14 @@
   "available": true,
   "name": "X-Stage Mirror TV Test APK",
   "package": "com.webbasex.xstagemirror.tv",
-  "version": "0.2.4",
-  "build": 106,
-  "file": "X-Stage-Mirror-TV-test-v0.2.4-build106.apk",
-  "sha256": "1e68b8a602a66ce89b5dc9b49c7c3bb61434098a96470ec507210246b14ce111",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-test-v0.2.4-build106-3e8237a2/X-Stage-Mirror-TV-test-v0.2.4-build106.apk",
+  "version": "0.2.5",
+  "build": 107,
+  "file": "X-Stage-Mirror-TV-test-v0.2.5-build107.apk",
+  "sha256": "98279c2f5a824cb9d93104af5df1f286f23ac787498b6789d6b28fb3bf4e891d",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-test-v0.2.5-build107-8bdc61a4/X-Stage-Mirror-TV-test-v0.2.5-build107.apk",
   "note": "Debug-signed test APK. NOT a production-signed release. A previous build may need removal if the debug signing certificate changes. In-app automatic updates are disabled for this channel.",
   "direct_download_available": true,
-  "direct_download_file": "X-Stage-Mirror-TV-test-v0.2.4-build106.apk",
-  "direct_download_sha256": "1e68b8a602a66ce89b5dc9b49c7c3bb61434098a96470ec507210246b14ce111",
-  "direct_download_url": "https://webbase-x.github.io/xstage/downloads/X-Stage-Mirror-TV-test-v0.2.4-build106.apk"
+  "direct_download_file": "X-Stage-Mirror-TV-test-v0.2.5-build107.apk",
+  "direct_download_sha256": "98279c2f5a824cb9d93104af5df1f286f23ac787498b6789d6b28fb3bf4e891d",
+  "direct_download_url": "https://webbase-x.github.io/xstage/downloads/X-Stage-Mirror-TV-test-v0.2.5-build107.apk"
 }
