@@ -67,27 +67,40 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          # The upstream x64 asset is intentionally named uxplay-windows.zip
+          # (WITHOUT "portable", "x64" or "amd64"). Pin exact name AND hash.
           $tag = '2.0.0.1736'
           $repo = 'leapbtw/uxplay-windows'
+          $assetName = 'uxplay-windows.zip'
+          $pinnedSha256 = '9d3a51c15fc9db857351195e7eb7bbb21700d9ae25d936a54bcf8536b62cca18'
+          $expectedUrl = "https://github.com/$repo/releases/download/$tag/$assetName"
           $headers = @{ 'User-Agent' = 'XStageMirrorPC-CI'; 'Accept' = 'application/vnd.github+json' }
           $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag"
-          $assets = @($release.assets | Where-Object {
-            $_.name -match '(?i)\.zip$' -and $_.name -match '(?i)(portable|x64|amd64)' -and $_.name -notmatch '(?i)(arm64|aarch64|source)'
-          })
+          if ($release.tag_name -cne $tag) {
+            throw "Unexpected upstream release tag: $($release.tag_name)"
+          }
+          $assets = @($release.assets | Where-Object { $_.name -ceq $assetName })
           if ($assets.Count -ne 1) {
-            throw "Expected exactly one pinned portable x64 archive, found $($assets.Count). Do NOT publish a GUI-only receiver."
+            $found = (@($release.assets | ForEach-Object { $_.name }) -join ', ')
+            throw "Expected exactly one pinned x64 archive '$assetName'; found $($assets.Count). Release assets: $found"
           }
           $asset = $assets[0]
-          $expected = [string]$asset.digest
-          if ($expected -notmatch '^sha256:[a-fA-F0-9]{64}$') {
-            throw 'Upstream GitHub release does not advertise a SHA-256 digest. Refusing unverifiable engine.'
+          if ($asset.browser_download_url -cne $expectedUrl) {
+            throw "Unexpected upstream download URL for pinned archive"
+          }
+          if ([string]$asset.digest -cne "sha256:$pinnedSha256") {
+            throw "Upstream checksum differs from the reviewed pinned SHA-256; do not package"
+          }
+          if ([long]$asset.size -lt 10000000) {
+            throw "Upstream portable archive is suspiciously small"
           }
           $download = Join-Path $env:RUNNER_TEMP 'uxplay-portable.zip'
-          Invoke-WebRequest -Headers $headers -Uri $asset.browser_download_url -OutFile $download
+          Invoke-WebRequest -Headers $headers -Uri $expectedUrl -OutFile $download
           $actual = (Get-FileHash -Path $download -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $expected.Substring(7).ToLowerInvariant()) {
-            throw 'Pinned AirPlay portable archive SHA-256 mismatch.'
+          if ($actual -cne $pinnedSha256) {
+            throw "Pinned AirPlay portable archive SHA-256 mismatch (actual $actual)."
           }
+          Write-Host "Verified $assetName ($((Get-Item $download).Length) bytes), SHA-256 $actual"
           $unpacked = Join-Path $env:RUNNER_TEMP 'uxplay-unpacked'
           Expand-Archive -Path $download -DestinationPath $unpacked
           $exe = @(Get-ChildItem $unpacked -Recurse -File -Filter 'uxplay-windows.exe')
