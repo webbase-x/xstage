@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.XSTAGE_RELEASE_TOKEN || github.token }}
       SOURCE_RUN: "44006131078"
       SOURCE_SHA: "6acb5dc5aff73c7e0ccbc1f02be8571346cc0032"
       TAG: "xstage-karaoke-pc-preview-v1.0.78-build1078"
@@ -62,6 +62,8 @@ jobs:
           mv "dist/verified-$INSTALLER" "dist/$INSTALLER"
           printf '%s  %s\n' "$actual" "$INSTALLER" > "dist/$INSTALLER.sha256"
 
+      # This repo may deny release creation to the default Actions integration.
+      # Prefer the existing scoped XSTAGE_RELEASE_TOKEN used by Song Studio.
       - name: Publish public PREVIEW only
         shell: bash
         run: |

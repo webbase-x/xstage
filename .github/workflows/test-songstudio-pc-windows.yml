@@ -1,11 +1,12 @@
-name: X-Stage Song Studio PC Windows bootstrap smoke
+name: X-Stage Song Studio PC public distribution smoke
 
 on:
   push:
     branches: [main]
     paths:
       - "songstudio-pc/**"
-      - "downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip"
+      - "downloads/song-studio-latest.json"
+      - "downloads/song-studio-source-preview-latest.json"
       - ".github/workflows/test-songstudio-pc-windows.yml"
   workflow_dispatch:
 
@@ -13,37 +14,38 @@ permissions:
   contents: read
 
 jobs:
-  windows-source:
+  windows-consumer-release:
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Extract published PC source archive
-        shell: powershell
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: "x64"
+      - name: Validate public Ready release metadata, without source-only archive
+        shell: pwsh
         run: |
-          $zip = "downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.5-Build205-Preview.zip"
-          if (!(Test-Path $zip)) { throw "Published ZIP missing" }
-          Expand-Archive -LiteralPath $zip -DestinationPath "$env:RUNNER_TEMP\songstudio" -Force
-          $root = Join-Path $env:RUNNER_TEMP "songstudio\X-Stage-Song-Studio-PC-Source-Preview"
-          if (!(Test-Path (Join-Path $root "Start-Song-Studio.cmd"))) { throw "CMD missing" }
-          if (!(Test-Path (Join-Path $root "engine.py"))) { throw "Engine missing" }
-          Write-Host "Extracted verified source archive to $root"
-      - name: First-run Windows bootstrap using official Python and FFmpeg
-        shell: powershell
+          $ErrorActionPreference = 'Stop'
+          $meta = Get-Content 'downloads/song-studio-latest.json' -Raw | ConvertFrom-Json
+          $legacy = Get-Content 'downloads/song-studio-source-preview-latest.json' -Raw | ConvertFrom-Json
+          if ($meta.channel -ne 'pc-ready' -or $meta.package_type -ne 'portable_zip' -or $meta.available -ne $true) {
+            throw 'Consumer release metadata must identify a published PC Ready ZIP'
+          }
+          if ($meta.sha256 -notmatch '^[0-9a-f]{64}$' -or $meta.download_url -notlike 'https://github.com/webbase-x/xstage/releases/download/*.zip') {
+            throw 'Release ZIP URL or SHA-256 missing'
+          }
+          if ($legacy.source_available -ne $false -or $null -ne $legacy.source_archive) {
+            throw 'Public source-only preview must be disabled'
+          }
+          Write-Host "PASS: PC Ready is public; no source-only preview download advertised."
+      - name: Compile current PC launcher sources on Windows
+        shell: pwsh
         run: |
-          $root = Join-Path $env:RUNNER_TEMP "songstudio\X-Stage-Song-Studio-PC-Source-Preview"
-          & (Join-Path $root "Start-Song-Studio.ps1")
-          if ($LASTEXITCODE -ne 0) { throw "Windows bootstrap failed. See setup log." }
-          if (!(Test-Path (Join-Path $root ".runtime\python\pythonw.exe"))) { throw "Embedded Python is missing" }
-          if (!(Test-Path (Join-Path $root ".runtime\tools\ffmpeg.exe"))) { throw "FFmpeg missing" }
-          & (Join-Path $root ".runtime\python\python.exe") -m py_compile (Join-Path $root "engine.py")
-          if ($LASTEXITCODE -ne 0) { throw "Engine syntax check failed" }
-          Write-Host "PASS: Windows download, verification and local engine startup."
-      - name: Stop test engine
-        if: always()
-        shell: powershell
-        run: |
-          $root = Join-Path $env:RUNNER_TEMP "songstudio\X-Stage-Song-Studio-PC-Source-Preview"
-          Get-CimInstance Win32_Process | Where-Object {
-            $_.Name -eq 'pythonw.exe' -and $_.ExecutablePath -like "$root*"
-          } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          $ErrorActionPreference = 'Stop'
+          python -m compileall -q songstudio-pc
+          if ($LASTEXITCODE -ne 0) { throw 'Song Studio source syntax failure' }
+          foreach ($name in @('songstudio-pc/Start-Song-Studio.cmd', 'songstudio-pc/Start-Song-Studio.ps1', 'songstudio-pc/engine.py')) {
+            if (-not (Test-Path $name)) { throw "Missing PC source fixture: $name" }
+          }
+          Write-Host "PASS: current Windows launcher sources parse; published Ready packaging is validated by build-songstudio-pc-ready.yml."
