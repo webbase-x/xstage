@@ -1,0 +1,17 @@
+{
+  "app": "X-Stage Mirror iOS PC",
+  "platform": "Windows 10/11 x64 · AirPlay",
+  "version": "1.0.0",
+  "build": 1001,
+  "channel": "preview",
+  "available": false,
+  "file": null,
+  "sha256": null,
+  "download_url": null,
+  "portable_file": null,
+  "portable_sha256": null,
+  "portable_download_url": null,
+  "source_url": null,
+  "tested_on_hardware": false,
+  "note": "Standalone Windows receiver under build verification; no public download before release and checksums pass."
+}
