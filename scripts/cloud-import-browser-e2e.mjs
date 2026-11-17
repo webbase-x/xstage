@@ -185,13 +185,13 @@ try{
   assert.equal(await page.locator('#detail-title').textContent(),'X-Stage Song Studio PC');
   // The Linux CI machine must see a Windows-only compatibility warning rather than
   // a misleading "install here" label; the verified ZIP link remains accessible.
-  const windowsZip=page.locator('#detail-actions .detail-action.primary[href$=".zip"]');
-  await windowsZip.waitFor({timeout:10000});
-  assert.ok((await windowsZip.textContent()).includes('อุปกรณ์ที่รองรับ'),
+  const windowsDownload=page.locator('#detail-actions .detail-action.primary[href$=".zip"],#detail-actions .detail-action.primary[href$=".exe"]').first();
+  await windowsDownload.waitFor({timeout:10000});
+  assert.ok((await windowsDownload.textContent()).includes('อุปกรณ์ที่รองรับ'),
     'non-Windows viewers must be guided to transfer the ZIP to Windows');
   await page.locator('#detail-back').click();
   await page.locator('#catalog:not([hidden])').waitFor();
-  console.log('PASS: X-Stage Apps premium brand, 7-app catalog, filters, deep-linked details, and verified download CTA');
+  console.log('PASS: X-Stage Apps premium brand, 10-app catalog, filters, deep-linked details, and verified download CTA');
 
   // Simulate the verified direct-download feed before the binary is mirrored by CI.
   // Android TV/TrueID browsers must never be forced into a GitHub popup.
