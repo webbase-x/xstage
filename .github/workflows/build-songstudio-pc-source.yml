@@ -1,129 +1,21 @@
-name: X-Stage Song Studio PC Source ZIP
+name: X-Stage Song Studio PC Source ZIP (private-only distribution disabled on public repo)
+
+# This public repository never publishes source-only archives.
+# Restore a source-packaging workflow only inside a PRIVATE source repository
+# with repository collaborator access restricted to the approved maintainers.
+# Consumer-facing binaries are published by build-songstudio-pc-ready.yml.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "songstudio-pc/**"
-      - "studio/index.html"
-      - "studio/app.js"
-      - "studio/style.css"
-      - "studio/pro-design.css"
-      - "scripts/test_songstudio_created_xsk.py"
-      - "scripts/test_songstudio_xsk_stream.py"
-      - "scripts/test_songstudio_json_pro.py"
-      - "studio/entry.js"
-      - "scripts/package-song-studio-pc.py"
-      - "scripts/test_songstudio_import_preview.py"
-      - "scripts/test_songstudio_created_json.py"
-      - "scripts/test_songstudio_pc.py"
-      - "scripts/test_songstudio_pc_updates.py"
-      - "scripts/test_songstudio_pc_export.py"
-      - "scripts/test_songstudio_ai_import.py"
-      - "scripts/test_songstudio_drive_roundtrip.py"
-      - "scripts/test_songstudio_online_publish.py"
-      - "scripts/test_songstudio_code_registry.py"
-      - "scripts/test_songstudio_lyrics_preview.py"
-      - "scripts/test_songstudio_pasted_lyrics.py"
-      - "scripts/test_songstudio_lyric_text_groups.py"
-      - "scripts/test_songstudio_ncn.py"
-      - "scripts/test_songstudio_smart_scan.py"
-      - "scripts/test_songstudio_drive_download.py"
-      - "scripts/test_songstudio_build_outcomes.py"
-      - ".github/workflows/build-songstudio-pc-source.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: songstudio-pc-source-zip
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  source:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+  source-distribution-policy:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install XSK cryptography for regression tests
-        run: python -m pip install cryptography==46.0.3
-      - name: Validate source and local API
+      - name: Explain private-source requirement
         run: |
-          python -m py_compile songstudio-pc/engine.py songstudio-pc/code_registry.py songstudio-pc/created_json_manager.py songstudio-pc/created_xsk_export.py songstudio-pc/json_pro_export.py songstudio-pc/xsk_stream.py songstudio-pc/import_preview.py songstudio-pc/xsk_package.py songstudio-pc/xsk_keys.py songstudio-pc/pro_license.py songstudio-pc/song_index.py scripts/package-song-studio-pc.py
-          node --check studio/app.js
-          python -m unittest discover -s scripts -p test_songstudio_xsk.py -v
-          python -m unittest discover -s scripts -p test_songstudio_xsk_stream.py -v
-          python -m unittest discover -s scripts -p test_songstudio_created_xsk.py -v
-          python -m unittest discover -s scripts -p test_songstudio_json_pro.py -v
-          python -m unittest discover -s scripts -p test_songstudio_ai_export.py -v
-          python -m unittest discover -s scripts -p test_songstudio_import_preview.py -v
-          python -m unittest discover -s scripts -p test_songstudio_created_json.py -v
-          python -m unittest discover -s scripts -p test_songstudio_pc.py -v
-          python -m unittest discover -s scripts -p test_songstudio_pc_updates.py -v
-          python -m unittest discover -s scripts -p test_songstudio_pc_export.py -v
-          python -m unittest discover -s scripts -p test_songstudio_ncn.py -v
-          python -m unittest discover -s scripts -p test_songstudio_smart_scan.py -v
-          python -m unittest discover -s scripts -p test_songstudio_lyrics_preview.py -v
-          python -m unittest discover -s scripts -p test_songstudio_pasted_lyrics.py -v
-          python -m unittest discover -s scripts -p test_songstudio_lyric_text_groups.py -v
-          python -m unittest discover -s scripts -p test_songstudio_lrc_folder.py -v
-          python -m unittest discover -s scripts -p test_songstudio_ai_import.py -v
-          python -m unittest discover -s scripts -p test_songstudio_drive_download.py -v
-          python -m unittest discover -s scripts -p test_songstudio_drive_roundtrip.py -v
-          python -m unittest discover -s scripts -p test_songstudio_code_registry.py -v
-          python -m unittest discover -s scripts -p test_songstudio_online_publish.py -v
-          python -m unittest discover -s scripts -p test_songstudio_build_outcomes.py -v
-      - name: Build verified source ZIP and SHA256
-        run: |
-          python scripts/package-song-studio-pc.py
-          python - <<'PY'
-          import subprocess, sys, tempfile
-          from pathlib import Path
-          from zipfile import ZipFile
-          source=Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.8-Build208-Preview.zip")
-          with tempfile.TemporaryDirectory(prefix="studio-pc-source-") as folder:
-              with ZipFile(source) as archive:
-                  archive.extractall(folder)
-              root=next(Path(folder).iterdir())
-              command=[sys.executable,"-c","import sys;sys.path.insert(0,sys.argv[1]);import engine;print('ENGINE_IMPORT_OK')",str(root)]
-              done=subprocess.run(command,capture_output=True,text=True,timeout=45)
-              if done.returncode or "ENGINE_IMPORT_OK" not in done.stdout:
-                  raise RuntimeError("Extracted Source ZIP fails engine import: "+done.stderr[-3000:])
-          print("PASS: extracted ZIP Engine imports all bundled startup modules")
-          PY
-          python - <<'PY'
-          from pathlib import Path
-          from zipfile import ZipFile
-          p = Path("downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.8-Build208-Preview.zip")
-          with ZipFile(p) as z:
-              assert z.testzip() is None
-              assert len(z.namelist()) >= 7
-          print("ZIP verified:", p.stat().st_size, "bytes")
-          PY
-      - name: Publish direct download in existing GitHub repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.8-Build208-Preview.zip*
-          if git diff --cached --quiet; then
-            echo "Source ZIP already matches GitHub"
-            exit 0
-          fi
-          # If a newer source revision arrived while tests ran, never publish
-          # a stale ZIP over the newer code (or force-push the repository).
-          git fetch origin main
-          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
-            echo "SKIPPED: newer main revision exists; its own workflow will publish."
-            exit 0
-          fi
-          git commit -m "build(song-studio): publish PC source ZIP and SHA-256 [skip ci]"
-          # A concurrent writer may still race between fetch and push.
-          if ! git push origin HEAD:main; then
-            echo "SKIPPED: remote advanced during publishing; never overwrite it."
-            exit 0
-          fi
+          echo "::notice::No source ZIP will be generated or published from this public repository."
+          echo "::notice::Move proprietary development sources to a private GitHub repository and grant explicit collaborator permissions before distributing source-only archives."
+          echo "::notice::Public runnable app releases remain independent of this workflow."

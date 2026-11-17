@@ -88,6 +88,16 @@ assert.ok(read('studio/index.html').includes('./app-icon.svg'),'Song Studio PC r
 assert.ok(read('.github/workflows/build-windows-pc.yml').includes('scripts/build_karaoke_pc_icon.py'),'Windows candidate must generate distinct PC icon before bundling');
 assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stage Mirror TV cast icon'),'Mirror TV native launcher must have a separate cast identity');
 assert.ok(read('mirror-tv/index.html').includes('../assets/app-icons/mirror-tv.svg'),'Mirror pairing guide must show its own icon');
+const tvReload=read('tv-refresh.js');
+assert.doesNotThrow(()=>new Function(tvReload),'TV refresh JS must parse');
+assert.ok(index.includes('id="tv-refresh-window"')&&index.includes('tv-refresh.js?v=1118'),'TV player must expose refresh button and logic');
+assert.ok(app.includes('xstage-tv-quick-refresh')&&app.includes('window.XStageTvRefreshPage?.()'),'Android TV remote quick menu must contain a working refresh action');
+assert.ok(css.includes('body.xstage-ui-v2 .stage #tv-refresh-window:not([hidden])'),'TV refresh must override stage overlay hiding');
+assert.ok(singerStage.includes('id="refresh-window"')&&singerStage.includes('window.location.reload()'),'separate TV stage must have clickable reload');
+assert.ok(read('mirror-tv/index.html').includes('id="mirror-refresh-window"')&&read('mirror-tv/index.html').includes('window.location.reload()'),'Mirror TV website must expose a refresh button');
+assert.ok(storefrontScript.includes('windows-pc-preview-latest.json'),'Public storefront must advertise only a verified Windows binary preview, not an unbuilt EXE');
+assert.ok(read('SOURCE_DISTRIBUTION_POLICY.md').includes('GPLv3'),'Repository policy must preserve the GPLv3 source obligation for Mirror TV');
+
 
 const guideSource=read('storefront-device.js');
 const guideModule={exports:{}};
@@ -556,8 +566,13 @@ assert.equal(studioPreview.channel,'source-preview');
 assert.match(studioPreview.version,/^\d+\.\d+\.\d+$/,'Song Studio Source Preview must declare a semantic version');
 assert.ok(Number.isInteger(studioPreview.build)&&studioPreview.build>=205,
   'Song Studio Source Preview build must not regress below Build 205');
-assert.ok(studioPreview.source_archive?.includes('v'+studioPreview.version+'-Build'+studioPreview.build),
-  'Song Studio Source Preview archive must match its own version and build');
+assert.equal(studioPreview.source_available,false,'Public source-only ZIP distribution must be disabled');
+assert.equal(studioPreview.source_archive,null,'Public source metadata must not advertise direct source download');
+assert.ok(!read('.github/workflows/build-songstudio-pc-source.yml').includes('upload-artifact') &&
+          !read('.github/workflows/build-songstudio-pc-source.yml').includes('git add downloads/'),
+  'Source preview workflow must never upload or commit public source bundles');
+assert.ok(!read('.github/workflows/package-pc-source-cmd.yml').includes('upload-artifact'),
+  'Windows CMD source ZIP workflow must no longer publish public source archives');
 assert.equal(studioPreview.installer_available,false);
 const studioLegacy=read('songstudio-pc/Start-Song-Studio.ps1');
 const studioBuilder=read('scripts/build_songstudio_ready.ps1');

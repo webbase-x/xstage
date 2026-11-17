@@ -1,0 +1,13 @@
+{
+  "channel": "preview",
+  "available": false,
+  "name": "X-Stage Karaoke PC Windows PREVIEW",
+  "platform": "windows-x64",
+  "version": "1.0.78",
+  "build": 1078,
+  "installer_file": null,
+  "sha256": null,
+  "download_url": null,
+  "source_commit": "6acb5dc5aff73c7e0ccbc1f02be8571346cc0032",
+  "note": "Available after passing verified CI candidate has been published as a GitHub prerelease."
+}

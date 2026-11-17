@@ -52,6 +52,6 @@ X-Stage-Song-Studio-PC-Source-Preview/
 
 Setup creates `.runtime/` and `data/` adjacent to these files.
 
-**Download path in repository:** `downloads/X-Stage-Song-Studio-PC-Source-Launcher-v0.2.8-Build208-Preview.zip`
+**Distribution policy:** source-only preview archives are no longer offered on the public downloads website. Public users should install the verified **X-Stage Song Studio PC Ready** ZIP from `downloads/song-studio-latest.json`. Restricted developer-source sharing needs a private repository with GitHub-enforced access controls; see `SOURCE_DISTRIBUTION_POLICY.md`.
 
 > The release string in the ZIP filename denotes the requested *target* PC interface/build lineage, not proof that the original Build 205's full source has been recovered.

@@ -14,13 +14,14 @@ h1{margin:0 0 8px;font-size:27px;letter-spacing:.2px}h2{font-size:18px;color:#89
 p,li{line-height:1.75}
 .brand-head{display:flex;align-items:center;gap:17px;margin-bottom:16px}.brand-head img{border-radius:18px;box-shadow:0 8px 22px #050b2280;flex:none}.brand-head p{margin:3px 0;color:#80deef;letter-spacing:1.5px;font-size:10px;font-weight:750}strong{color:#88e0f3}ol{padding-left:24px}
 .name{padding:13px 16px;border:1px solid #42617c;border-radius:12px;background:#142b48;font-weight:700;font-size:21px;overflow-wrap:anywhere}
-small{display:block;margin-top:20px;color:#b3c3d6;line-height:1.65}
+small{display:block;margin-top:20px;color:#b3c3d6;line-height:1.65}.mirror-refresh{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 16px;border:1px solid #4dadd3;border-radius:12px;background:#153b58;color:#e5faff;font:750 14px system-ui,sans-serif;cursor:pointer}.mirror-refresh:focus-visible{outline:3px solid #a2ecff;outline-offset:3px}
 </style>
 </head>
 <body>
 <main>
 <header class="brand-head"><img src="../assets/app-icons/mirror-tv.svg" width="74" height="74" alt="ไอคอน X-Stage Mirror TV"><div><h1>X-Stage Mirror TV</h1><p>SCREEN MIRRORING RECEIVER</p></div></header>
 <p>ไม่ต้องติดตั้งแอปบน iPhone หรือ iPad ใช้ฟังก์ชัน Screen Mirroring ที่มีอยู่แล้วใน iOS</p>
+<button id="mirror-refresh-window" class="mirror-refresh" type="button" aria-label="รีเฟรชหน้าคู่มือ Mirror TV">↻ รีเฟรชหน้าเว็บ</button>
 <h2>ชื่อตัวรับที่ต้องเลือก</h2><div class="name" id="receiver">X-Stage Mirror TV</div>
 <h2>วิธีเชื่อมต่อ</h2>
 <ol>
@@ -34,6 +35,7 @@ small{display:block;margin-top:20px;color:#b3c3d6;line-height:1.65}
 <small>QR นี้เป็นคู่มือช่วยเชื่อมต่อ ไม่ใช่ระบบสั่งจับคู่หรือเริ่มสะท้อนหน้าจอโดยอัตโนมัติ ต้องเลือกตัวรับบน iOS เอง เนื้อหาที่มี DRM อาจแสดงภาพไม่ได้</small>
 </main>
 <script>
+document.getElementById("mirror-refresh-window").addEventListener("click",()=>window.location.reload());
 const candidate = new URLSearchParams(location.search).get("receiver");
 if(candidate && candidate.trim().length > 0 && candidate.length <= 64)
   document.getElementById("receiver").textContent = candidate;

@@ -6,6 +6,5 @@
   "installer_file": null,
   "sha256": null,
   "minimum_updater_version": "1.0.0",
-  "message": "X-Stage Karaoke PC Windows installer is not yet published as a verified update.",
-  "source_archive": "downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip"
+  "message": "Stable Windows installer is not yet signed/published. The verified public PREVIEW installer, if available, is advertised separately in windows-pc-preview-latest.json."
 }

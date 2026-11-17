@@ -1,84 +1,19 @@
-name: Package X-Stage Karaoke PC source ZIP for CMD testing
+name: X-Stage Karaoke PC CMD Source ZIP (private-only distribution disabled on public repo)
 
+# No direct public source archive publication.
+# Public installers are built by build-windows-pc.yml.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'windows-pc/source/Run-X-Stage-Karaoke-PC.cmd'
-      - 'windows-pc/source/Test-X-Stage-Karaoke-PC.cmd'
-      - 'windows-pc/source/README-CMD-SOURCE-PC.md'
-      - '.github/workflows/package-pc-source-cmd.yml'
-      - 'windows-pc/source/karaoke/**'
-      - 'windows-pc/source/tests/test_xsk_playback.py'
-      - 'windows-pc/source/tests/test_media_json_sidecar.py'
-      - 'windows-pc/source/tests/test_queue_warm.py'
-      - 'windows-pc/source/requirements*.txt'
 
 permissions:
   contents: read
 
 jobs:
-  package-source:
+  source-distribution-policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Validate source entrypoint and CMD files
-        shell: bash
+      - name: Explain private-source requirement
         run: |
-          test -f windows-pc/source/main.py
-          test -f windows-pc/source/requirements.txt
-          test -f windows-pc/source/Run-X-Stage-Karaoke-PC.cmd
-          test -f windows-pc/source/Test-X-Stage-Karaoke-PC.cmd
-          python3 -m compileall -q windows-pc/source/karaoke windows-pc/source/main.py
-      - name: Verify XSK authenticated playback and legacy MIDI compatibility
-        shell: bash
-        run: |
-          python3 -m pip install --disable-pip-version-check 'cryptography==50.0.2'
-          cd windows-pc/source
-          python3 -m unittest discover -s tests -p 'test_xsk_playback.py' -v
-          python3 -m unittest discover -s tests -p 'test_media_json_sidecar.py' -v
-          python3 -m unittest discover -s tests -p 'test_queue_warm.py' -v
-      - name: Create source ZIP and SHA256
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib, zipfile
-          root=Path('windows-pc/source')
-          output=Path('pc-source-artifacts')
-          output.mkdir(exist_ok=True)
-          name='X-Stage-Karaoke-PC-v1.0.76-build1076-Windows-CMD-Source.zip'
-          archive=output/name
-          excluded={'.git','.venv','__pycache__','dist','build','.local-test-data','data'}
-          with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as result:
-              for path in sorted(root.rglob('*')):
-                  rel=path.relative_to(root)
-                  if not path.is_file() or any(part in excluded for part in rel.parts):
-                      continue
-                  if path.suffix in {'.pyc','.pyo'}:
-                      continue
-                  result.write(path,rel)
-          # The launcher and main.py must be siblings at the ZIP root. This
-          # catches nested-path packaging regressions before publication.
-          with zipfile.ZipFile(archive) as check:
-              names=set(check.namelist())
-              required={'Run-X-Stage-Karaoke-PC.cmd','main.py',
-                        'requirements.txt','karaoke/__init__.py'}
-              missing=required-names
-              if missing:
-                  raise RuntimeError('Incomplete runnable CMD ZIP: '+', '.join(sorted(missing)))
-              launcher=check.read('Run-X-Stage-Karaoke-PC.cmd').decode('utf-8-sig')
-              if 'if not exist "main.py"' not in launcher:
-                  raise RuntimeError('CMD launcher no longer validates its entrypoint')
-          digest=hashlib.sha256(archive.read_bytes()).hexdigest()
-          (output/(name+'.sha256')).write_text(f'{digest}  {name}\n',encoding='ascii')
-          print(f'Source ZIP: {archive} ({archive.stat().st_size} bytes); SHA256={digest}')
-          PY
-      - name: Upload source ZIP for download
-        uses: actions/upload-artifact@v4
-        with:
-          name: X-Stage-Karaoke-PC-v1.0.76-build1076-Windows-CMD-Source
-          path: pc-source-artifacts/*
-          if-no-files-found: error
-          retention-days: 30
+          echo "::notice::CMD source-only ZIP generation is disabled in the public repository."
+          echo "::notice::A private source repository with explicit collaborator permissions is required."
+          echo "::notice::This does not restrict viewing the current public source repository or existing Git history."

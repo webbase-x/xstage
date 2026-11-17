@@ -51,6 +51,7 @@
     <main class="studio-layout" id="studio">
       <section class="stage-column" aria-label="เวทีคาราโอเกะ">
         <div id="stage" class="stage" role="group" aria-label="เวที X-Stage Karaoke">
+          <button type="button" id="tv-refresh-window" hidden title="โหลดหน้าเว็บทีวีใหม่" aria-label="รีเฟรชหน้าเว็บทีวี">↻ <span>รีเฟรช</span></button>
           <video id="karaoke-video" playsinline muted preload="metadata" hidden aria-label="ภาพวิดีโอประกอบเพลง"></video>
           <button id="video-lyrics-toggle" type="button" hidden aria-pressed="true" aria-label="เปิดหรือปิดเนื้อร้องซ้อนภาพวิดีโอ">เนื้อร้อง: แสดง</button>
           <button id="video-original-toggle" type="button" hidden aria-pressed="false" aria-label="เลือกแสดงภาพต้นฉบับวิดีโอหากเบราว์เซอร์รองรับ">ภาพวิดีโอ: MP4</button>
@@ -383,6 +384,7 @@
   <script src="video-metadata-editor.js?v=1118" defer></script>
   <script src="video-transcode.js?v=1118" defer></script>
   <script src="cloud-import.js?v=1118" defer></script>
+  <script src="tv-refresh.js?v=1118" defer></script>
   <script src="app.js?v=1118" defer></script><script src="pc-extensions.js?v=1118" defer></script>
   <script src="native-audio-meter.js?v=1118" defer></script>
   <script src="stage-controls.js?v=1118" defer></script>

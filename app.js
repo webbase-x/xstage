@@ -230,6 +230,7 @@ function xstageTvQuickMenu(){
     '<button type="button" id="xstage-tv-quick-new-qr">สร้าง QR ใหม่</button>'+
     '<button type="button" id="xstage-tv-quick-play">เล่น / พักเพลง</button>'+
     '<button type="button" id="xstage-tv-quick-update">ตรวจสอบอัปเดต</button>'+
+    '<button type="button" id="xstage-tv-quick-refresh">↻ รีเฟรชหน้าจอทีวี</button>'+
     '<button type="button" id="xstage-tv-quick-close">กลับสู่เวที</button>'+
     '</div></div>';
   document.body.append(panel);
@@ -253,6 +254,7 @@ function xstageTvQuickMenu(){
     panel.hidden=true;
     void triggerImmediateVersionUpdate();
   });
+  panel.querySelector('#xstage-tv-quick-refresh').addEventListener('click',()=>{panel.hidden=true;window.XStageTvRefreshPage?.();});
   panel.querySelector('#xstage-tv-quick-close').addEventListener('click',()=>{panel.hidden=true;});
   return panel;
 }

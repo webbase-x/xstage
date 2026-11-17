@@ -58,7 +58,7 @@
       description:"โปรแกรมคาราโอเกะสำหรับ Windows ในโครงการ X-Stage ออกแบบสำหรับจัดการและเล่นคลังเพลงบนคอมพิวเตอร์ รุ่น PC แยกจาก Karaoke Online โดยเฉพาะ",
       features:["ใช้งานคาราโอเกะบนเครื่อง Windows","จัดการการเล่นเพลงและคิวเพลงในโปรแกรม PC","พัฒนาการรองรับไฟล์เพลงและข้อมูลคลังร่วมกับ X-Stage Song Studio","แยกส่วนการทำงานจาก Google Drive ของ Karaoke Online"],
       hero:"เวทีเต็มรูปแบบบน PC",blurb:"คุมเสียงเพลงจากคอมพิวเตอร์ของคุณ",preview:"KARAOKE PC · WINDOWS",
-      type:"manifest",manifest:"./downloads/windows-pc-latest.json",
+      type:"manifest",manifest:"./downloads/windows-pc-latest.json",previewManifest:"./downloads/windows-pc-preview-latest.json",
       candidate:{label:"ดูผล Build และไฟล์ทดสอบ Windows",url:"https://github.com/webbase-x/xstage/actions/workflows/build-windows-pc.yml"},
       note:"ดาวน์โหลดได้ต่อเมื่อโครงการเผยแพร่ตัวติดตั้ง Windows ที่ตรวจสอบแล้วเท่านั้น หากยังไม่มี กรุณาดูประกาศที่ GitHub Releases",
       fallback:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน"
@@ -149,6 +149,12 @@
         {available:false,url:"",status:"ยังไม่มี APK ที่ตรวจสอบได้",kind:"pending"};
     }
     if(id==="karaoke-pc"){
+      if(data.channel==="preview"){
+        const valid=data.available===true&&SHA256.test(data.sha256||"")&&/^X-Stage-Karaoke-PC-Windows-v\d+\.\d+\.\d+-build\d+\.exe$/.test(data.installer_file||"");
+        const url=valid?verifiedReleaseUrl(data.download_url,".exe"):"";
+        return url?{available:true,url,status:"EXE v"+String(data.version||"ล่าสุด")+" · รุ่นทดลอง (ยังไม่ลงนาม)",kind:"download",version:String(data.version||""),preview:true}:
+          {available:false,url:"",status:"ยังไม่มี EXE รุ่นทดลองที่ตรวจสอบได้",kind:"pending"};
+      }
       const remote=data.installer_published===true||data.available===true;
       const verified=remote && SHA256.test(data.sha256||"");
       const url=verified?verifiedReleaseUrl(data.download_url||data.installer_url,".exe"):"";
@@ -184,6 +190,12 @@
       if(!response.ok)throw Error("HTTP "+response.status);
       const data=await response.json();
       states[id]=getRelease(id,data);
+      if(id==="karaoke-pc"&&!states[id].available&&appInfo[id].previewManifest){
+        try{
+          const candidateResponse=await fetch(appInfo[id].previewManifest,{cache:"no-store",credentials:"omit"});
+          if(candidateResponse.ok)states[id]=getRelease(id,await candidateResponse.json());
+        }catch{} // Stable release metadata remains authoritative.
+      }
       if(id==="mirror-tv"&&!states[id].available&&appInfo[id].testManifest){
         try{
           const previewResponse=await fetch(appInfo[id].testManifest,{cache:"no-store",credentials:"omit"});
@@ -242,7 +254,8 @@
     detailElements.showcaseTitle.textContent=info.hero;
     detailElements.showcaseCopy.textContent=info.blurb;
     detailElements.note.textContent=info.note+(state.kind==="pending"?" · "+state.status:"")+
-      (state.test?" · Mirror TV รุ่นทดสอบลงนามด้วยกุญแจ Debug ของ CI; การติดตั้งทับรุ่นก่อนหรือการอัปเดตอัตโนมัติอาจใช้ไม่ได้ ต้องถอนการติดตั้งก่อนหากลายเซ็นไม่ตรงกัน":"");
+      (state.test?" · Mirror TV รุ่นทดสอบลงนามด้วยกุญแจ Debug ของ CI; การติดตั้งทับรุ่นก่อนหรือการอัปเดตอัตโนมัติอาจใช้ไม่ได้ ต้องถอนการติดตั้งก่อนหากลายเซ็นไม่ตรงกัน":"")+
+      (state.preview?" · Karaoke PC EXE เป็นรุ่นทดลองที่ผ่าน CI แต่ยังไม่มีลายเซ็นผู้เผยแพร่ที่เชื่อถือได้ และยังไม่ได้ทดสอบติดตั้งด้วยตนเองครบทุกเครื่อง Windows SmartScreen อาจเตือน และไม่ควรใช้เป็นการอัปเดตอัตโนมัติของรุ่นทางการ":"");
     renderDeviceInfo(id);
     detailElements.features.replaceChildren();
     for(const feature of info.features){

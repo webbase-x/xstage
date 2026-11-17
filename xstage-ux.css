@@ -4443,3 +4443,9 @@ html body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage #lyric
 @media(max-width:680px){
   .xstage-font-control .xstage-memory-indicator{font-size:10px}
 }
+
+/* TV web refresh is deliberately kept separate from player and remote QR controls. */
+body.xstage-ui-v2 .stage #tv-refresh-window{position:absolute!important;top:clamp(10px,1.6vh,20px)!important;left:50%!important;right:auto!important;bottom:auto!important;transform:translateX(-50%)!important;z-index:230!important;min-height:44px!important;min-width:116px;padding:8px 16px!important;border-radius:12px!important;border:1px solid #82d9f6!important;color:#eaffff!important;background:rgba(4,28,53,.82)!important;backdrop-filter:blur(10px);font-weight:800;cursor:pointer;touch-action:manipulation}
+body.xstage-ui-v2 .stage #tv-refresh-window[hidden]{display:none!important}
+body.xstage-ui-v2 .stage #tv-refresh-window:not([hidden]){display:flex!important;align-items:center;justify-content:center;gap:7px;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
+body.xstage-ui-v2 .stage #tv-refresh-window:focus-visible{outline:3px solid #aef3ff;outline-offset:3px}
