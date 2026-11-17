@@ -14,10 +14,27 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 for cmd in gh keytool python3 base64; do
   command -v "$cmd" >/dev/null 2>&1 || die "Missing $cmd. Use a Codespace with GitHub CLI and JDK 21."
 done
+# Codespaces exposes a repository-scoped GITHUB_TOKEN. GitHub CLI gives
+# GH_TOKEN/GITHUB_TOKEN priority over a personal OAuth login, so the automatic
+# Codespaces token may be able to push code but not manage Actions Secrets.
+# Prefer a verified, separately authorized login when the env token is limited.
 gh auth status -h github.com >/dev/null 2>&1 ||
-  die "Sign into GitHub CLI with a repository admin account: gh auth login -h github.com"
-gh api "repos/$REPO/actions/secrets/public-key" -q '.key' >/dev/null 2>&1 ||
-  die "This account cannot administer GitHub Actions secrets for $REPO."
+  die "GitHub CLI is not authenticated. Sign in as the repository owner."
+GH=(gh)
+if ! "${GH[@]}" api "repos/$REPO/actions/secrets/public-key" -q '.key' >/dev/null 2>&1; then
+  if { [[ -n "${GH_TOKEN:-}" ]] || [[ -n "${GITHUB_TOKEN:-}" ]]; } &&
+      env -u GH_TOKEN -u GITHUB_TOKEN gh api "repos/$REPO/actions/secrets/public-key" -q '.key' >/dev/null 2>&1; then
+    GH=(env -u GH_TOKEN -u GITHUB_TOKEN gh)
+    printf 'Using authorized personal GitHub CLI login instead of restricted Codespaces token.\n'
+  else
+    printf >&2 '\nGitHub Codespaces may be masking your repository-owner login with its restricted GITHUB_TOKEN.\n'
+    printf >&2 'Run this in the Codespaces terminal (do NOT paste tokens into chat):\n'
+    printf >&2 '  env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --web --hostname github.com --scopes repo\n'
+    printf >&2 '  env -u GH_TOKEN -u GITHUB_TOKEN gh api repos/%s/actions/secrets/public-key --jq .key_id\n' "$REPO"
+    printf >&2 'Then rerun this script. If the public-key request still fails, configure Actions Secrets from the repository Settings page, or check repository permissions.\n'
+    die "No GitHub credential with Actions Secrets access for $REPO."
+  fi
+fi
 
 # A public fingerprint pin is not a private key. Never rotate it accidentally.
 PIN="$(python3 - "$ROOT" <<'PY'
@@ -38,7 +55,7 @@ print(next(iter(pins),""))
 PY
 )"
 if [[ ! -f "$KEYSTORE" ]]; then
-  if gh secret list -R "$REPO" | grep -Eq '^XSTAGE_MIRROR_KEYSTORE_BASE64[[:space:]]'; then
+  if "${GH[@]}" secret list -R "$REPO" | grep -Eq '^XSTAGE_MIRROR_KEYSTORE_BASE64[[:space:]]'; then
     die "A private keystore already exists in GitHub Secrets. Restore its ORIGINAL file; never generate a replacement."
   fi
   [[ -z "$PIN" ]] || die "A signer is already published ($PIN). Restore the original private keystore."
@@ -88,15 +105,15 @@ print(m.group(1).replace(":","").lower())
 printf 'Verified signing certificate SHA-256: %s\n' "$FINGERPRINT"
 
 # gh encrypts stdin locally before publishing to GitHub Actions secrets.
-base64 < "$KEYSTORE" | tr -d '\r\n' | gh secret set XSTAGE_MIRROR_KEYSTORE_BASE64 -R "$REPO"
-printf '%s' "$XSTAGE_MIRROR_SETUP_PASSWORD" | gh secret set XSTAGE_MIRROR_STORE_PASSWORD -R "$REPO"
-printf '%s' "$ALIAS" | gh secret set XSTAGE_MIRROR_KEY_ALIAS -R "$REPO"
-printf '%s' "$XSTAGE_MIRROR_SETUP_PASSWORD" | gh secret set XSTAGE_MIRROR_KEY_PASSWORD -R "$REPO"
+base64 < "$KEYSTORE" | tr -d '\r\n' | "${GH[@]}" secret set XSTAGE_MIRROR_KEYSTORE_BASE64 -R "$REPO"
+printf '%s' "$XSTAGE_MIRROR_SETUP_PASSWORD" | "${GH[@]}" secret set XSTAGE_MIRROR_STORE_PASSWORD -R "$REPO"
+printf '%s' "$ALIAS" | "${GH[@]}" secret set XSTAGE_MIRROR_KEY_ALIAS -R "$REPO"
+printf '%s' "$XSTAGE_MIRROR_SETUP_PASSWORD" | "${GH[@]}" secret set XSTAGE_MIRROR_KEY_PASSWORD -R "$REPO"
 printf '\nAll four encrypted GitHub Secrets uploaded.\n'
 printf 'BACK UP this keystore outside the repository AND Codespace: %s\n' "$KEYSTORE"
 printf 'Do not share the keystore or password.\n'
 
-if gh workflow run build-xstage-mirror-tv.yml -R "$REPO" --ref main; then
+if "${GH[@]}" workflow run build-xstage-mirror-tv.yml -R "$REPO" --ref main; then
   printf 'Signed Build requested: https://github.com/%s/actions/workflows/build-xstage-mirror-tv.yml\n' "$REPO"
 else
   printf 'Secrets saved. Start the Build manually from GitHub Actions:\n'
