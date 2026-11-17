@@ -778,7 +778,11 @@ assert.ok(Number.isInteger(studioReady.build)&&studioReady.build>=325,
 assert.ok(studioReady.archive_file.includes('v'+studioReady.version+'-build'+studioReady.build),
   'Song Studio release filename must match its own metadata, not a stale hard-coded release');
 assert.equal(studioReady.package_type,'portable_zip');
-assert.equal(studioReady.installer_available,false);
+if(studioReady.installer_available){
+  assert.match(studioReady.installer_file,/^X-Stage-Song-Studio-PC-v[0-9]+\.[0-9]+\.[0-9]+-build[0-9]+-win-x64-Setup\.exe$/,'Published Song Studio installer filename must be well formed');
+  assert.match(studioReady.installer_sha256,/^[a-f0-9]{64}$/,'Published installer must include SHA-256');
+  assert.ok(studioReady.installer_url.endsWith('/'+studioReady.installer_file),'Installer URL and filename must match');
+}
 assert.match(studioReady.sha256,/^[a-f0-9]{64}$/,'Ready ZIP must pin the GitHub Release digest');
 assert.equal(studioPreview.channel,'source-preview');
 assert.match(studioPreview.version,/^\d+\.\d+\.\d+$/,'Song Studio Source Preview must declare a semantic version');
