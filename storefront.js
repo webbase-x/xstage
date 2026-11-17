@@ -390,8 +390,6 @@
       if(state.direct&&state.releaseUrl){
         container.appendChild(createAction("สำรอง: ดาวน์โหลดจาก GitHub ↗",state.releaseUrl,"secondary",true));
       }
-      container.appendChild(createAction("ซอร์ส GPLv3 ของตัวรับภาพ ↗",
-        "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-test-v0.2.3-build105-6e12e392/X-Stage-Mirror-TV-GPLv3-source.tar.gz","secondary",true));
     }
     if(info.secondary){
       container.appendChild(createAction(info.secondary.label+" ↗",info.secondary.url,"secondary",info.secondary.url.startsWith("https://")));
