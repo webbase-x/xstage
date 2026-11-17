@@ -10,6 +10,7 @@ on:
   push:
     paths:
       - 'windows-pc/source/**'
+      - 'scripts/build_karaoke_pc_icon.py'
       # Metadata-only updates must not run an installer build without imported Windows source.
       - 'windows-pc/installer/**'
       - '.github/workflows/build-windows-pc.yml'

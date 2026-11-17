@@ -5,6 +5,7 @@ Generates windows-pc/source/assets/xstage.ico just before Windows packaging.
 Never modifies the Online player's original X/microphone icon.
 """
 from pathlib import Path
+import struct
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,10 +54,42 @@ def make_icon(size=512):
            font=font, fill=(243, 248, 255))
     return im
 
+
+def write_legacy_windows_ico(image, output):
+    """Use 7 uncompressed 32-bit BMP icon frames, including 256x256.
+
+    The Karaoke PC release contract verifies BMP/DIB frames rather than
+    PNG-in-ICO. Windows shortcut, installer and tkinter all accept these.
+    """
+    sizes = (16, 24, 32, 48, 64, 128, 256)
+    frames = []
+    for size in sizes:
+        pixels = image.resize((size, size), Image.Resampling.LANCZOS).convert("RGB").load()
+        xor = bytearray()
+        for y in range(size - 1, -1, -1):
+            for x in range(size):
+                red, green, blue = pixels[x, y]
+                xor.extend((blue, green, red, 255))
+        xor_bytes = bytes(xor)
+        and_mask = b"\0" * (((size + 31) // 32) * 4 * size)
+        header = struct.pack("<IiiHHIIiiII", 40, size, size * 2,
+                             1, 32, 0, len(xor_bytes), 0, 0, 0, 0)
+        frames.append(header + xor_bytes + and_mask)
+    result = bytearray(struct.pack("<HHH", 0, 1, len(frames)))
+    offset = 6 + 16 * len(frames)
+    for size, frame in zip(sizes, frames):
+        dimension = size if size < 256 else 0
+        result.extend(struct.pack("<BBBBHHII", dimension, dimension, 0, 0,
+                                  1, 32, len(frame), offset))
+        offset += len(frame)
+    for frame in frames:
+        result.extend(frame)
+    output.write_bytes(result)
+
 def main():
     TARGET.parent.mkdir(parents=True, exist_ok=True)
     image = make_icon()
-    image.save(TARGET, format="ICO", sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+    write_legacy_windows_ico(image, TARGET)
     if TARGET.stat().st_size < 2048:
         raise SystemExit("Generated ICO is unexpectedly small")
     print("X-Stage Karaoke PC Windows ICO:", TARGET, TARGET.stat().st_size, "bytes")
