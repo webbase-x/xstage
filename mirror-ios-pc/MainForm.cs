@@ -15,6 +15,10 @@ public sealed class MainForm : Form
     private static readonly Color Muted = Color.FromArgb(169, 191, 213);
     private static readonly Color Accent = Color.FromArgb(74, 212, 231);
     private readonly TextBox _receiverName = new();
+    private readonly ListView _connectedDevices = new();
+    private readonly Label _connectionStatus = new();
+    private bool _sessionProbeBusy;
+    private DateTime _lastSessionProbeUtc = DateTime.MinValue;
     private readonly Label _iosStatus = new();
     
     private readonly Label _updateStatus = new();
@@ -31,13 +35,13 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "X-Stage Mirror iOS PC";
+        Text = "X-Stage Mirror iOS PC • " + ReceiverIdentity.DisplayName;
         BackColor = Background;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(730, 630);
-        Size = new Size(850, 660);
+        Size = new Size(960, 780);
         AutoScaleMode = AutoScaleMode.Dpi;
         BuildLayout();
 
@@ -54,12 +58,13 @@ public sealed class MainForm : Form
                 StartAirPlay(autoStart: true);
             }
             RefreshAirPlayStatus();
+            if (!_sessionProbeBusy && DateTime.UtcNow - _lastSessionProbeUtc > TimeSpan.FromSeconds(6))
+                _ = RefreshConnectedDevicesAsync();
         };
         _timer.Start();
         Shown += async (_, _) =>
         {
             _bundledEngine = FindEngine();
-            LoadConfiguredAirPlayName();
             RefreshAirPlayStatus();
             // Users expect the PC receiver to appear as soon as the app opens.
             // Continue to run the Windows Miracast receiver only if the OS supports it.
@@ -132,12 +137,12 @@ public sealed class MainForm : Form
         };
         Controls.Add(viewport);
 
-        var header = CreateCard(44, 31, 31);
+        var header = CreateCard(43, 49, 33);
         header.BackColor = Background;
         header.Padding = new Padding(4, 1, 4, 0);
-        header.Controls.Add(TextLabel("X-STAGE MIRROR iOS PC", 23, true, Accent), 0, 0);
-        header.Controls.Add(TextLabel("AirPlay Receiver สำหรับ iPhone / iPad บน Windows 10 / 11", 12), 0, 1);
-        header.Controls.Add(TextLabel("AIRPLAY ONLY · NO MIRACAST   |   " + VersionText, 10, false, Muted), 0, 2);
+        header.Controls.Add(TextLabel("X-STAGE  /  MIRROR iOS PC", 14, true, Muted), 0, 0);
+        header.Controls.Add(TextLabel(ReceiverIdentity.DisplayName, 26, true, Accent), 0, 1);
+        header.Controls.Add(TextLabel("รับภาพจาก iPhone / iPad ผ่าน AirPlay   •   Windows 10/11 x64   •   " + VersionText, 10, false, Muted), 0, 2);
 
         var ios = CreateCard(39, 53, 30, 42, 45, 37, 42);
         ios.Controls.Add(TextLabel("ตัวรับ AirPlay · iPhone / iPad", 16, true), 0, 0);
@@ -145,13 +150,14 @@ public sealed class MainForm : Form
         _iosStatus.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         _iosStatus.TextAlign = ContentAlignment.MiddleLeft;
         ios.Controls.Add(_iosStatus, 0, 1);
-        ios.Controls.Add(TextLabel("ชื่อเครื่องรับ AirPlay (เว้นวรรคจะแปลงเป็นเครื่องหมาย -)", 10, false, Muted), 0, 2);
+        ios.Controls.Add(TextLabel("ชื่อเครื่องรับ AirPlay · หมายเลขสุ่มประจำ Windows ไม่เปลี่ยนเมื่อเปิดใหม่", 10, false, Muted), 0, 2);
         _receiverName.Dock = DockStyle.Fill;
         _receiverName.BackColor = Color.FromArgb(37, 51, 75);
         _receiverName.ForeColor = Color.White;
         _receiverName.BorderStyle = BorderStyle.FixedSingle;
         _receiverName.Font = new Font("Segoe UI", 12);
-        _receiverName.Text = "X-Stage-Mirror-iOS-PC";
+        _receiverName.Text = ReceiverIdentity.DisplayName;
+        _receiverName.ReadOnly = true;
         _receiverName.MaxLength = 55;
         ios.Controls.Add(_receiverName, 0, 3);
 
@@ -175,7 +181,35 @@ public sealed class MainForm : Form
         iosButtons.Controls.Add(verifyButton, 2, 0);
         ios.Controls.Add(iosButtons, 0, 4);
         ios.Controls.Add(TextLabel("บน iPhone: ศูนย์ควบคุม → การสะท้อนหน้าจอ → เลือกชื่อเครื่องรับ", 9, false, Muted), 0, 5);
-        ios.Controls.Add(TextLabel("ต้องอยู่ใน LAN ที่อนุญาต mDNS และอนุญาต Windows Firewall เมื่อถูกถาม", 9, false, Muted), 0, 6);
+        ios.Controls.Add(TextLabel("เชื่อม Wi-Fi/LAN เดียวกัน · อนุญาต Bonjour/mDNS เฉพาะเครือข่าย Private", 9, false, Muted), 0, 6);
+
+        var connections = CreateCard(43, 50, 139, 47);
+        connections.Controls.Add(TextLabel("อุปกรณ์เชื่อมต่อ / Connected devices", 16, true), 0, 0);
+        _connectionStatus.Dock = DockStyle.Fill;
+        _connectionStatus.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+        _connectionStatus.ForeColor = Accent;
+        _connectionStatus.Text = "กำลังตรวจสอบเซสชัน AirPlay จาก UxPlay…";
+        connections.Controls.Add(_connectionStatus, 0, 1);
+        _connectedDevices.Dock = DockStyle.Fill;
+        _connectedDevices.View = View.Details;
+        _connectedDevices.FullRowSelect = true;
+        _connectedDevices.MultiSelect = false;
+        _connectedDevices.GridLines = false;
+        _connectedDevices.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+        _connectedDevices.BorderStyle = BorderStyle.None;
+        _connectedDevices.BackColor = Color.FromArgb(31, 44, 67);
+        _connectedDevices.ForeColor = Color.White;
+        _connectedDevices.Font = new Font("Segoe UI", 10);
+        _connectedDevices.Columns.Add("อุปกรณ์ / IP", 260);
+        _connectedDevices.Columns.Add("สถานะที่ตรวจสอบได้", 500);
+        _connectedDevices.Resize += (_, _) =>
+        {
+            if (_connectedDevices.Columns.Count == 2)
+                _connectedDevices.Columns[1].Width = Math.Max(190,
+                    _connectedDevices.ClientSize.Width - _connectedDevices.Columns[0].Width - 14);
+        };
+        connections.Controls.Add(_connectedDevices, 0, 2);
+        connections.Controls.Add(TextLabel("แสดง IP เมื่อพบการเชื่อมต่อ TCP จริง · ชื่อ iPhone ไม่ได้ถูกเปิดเผยจาก UxPlay", 9, false, Muted), 0, 3);
 
         var footer = CreateCard(33, 43, 47);
         footer.Controls.Add(TextLabel("อัปเดตและข้อมูลระบบ", 13, true), 0, 0);
@@ -190,6 +224,7 @@ public sealed class MainForm : Form
 
         viewport.Controls.Add(header);
         viewport.Controls.Add(ios);
+        viewport.Controls.Add(connections);
         viewport.Controls.Add(footer);
 
         void ResizeDashboard()
@@ -200,7 +235,7 @@ public sealed class MainForm : Form
             int y = ScalePx(16), gap = ScalePx(16);
             var cards = new (Control view, int height)[]
             {
-                (header, 119), (ios, 341), (footer, 164)
+                (header, 146), (ios, 341), (connections, 326), (footer, 164)
             };
             viewport.SuspendLayout();
             try
@@ -216,6 +251,53 @@ public sealed class MainForm : Form
         }
         viewport.SizeChanged += (_, _) => ResizeDashboard();
         ResizeDashboard();
+    }
+
+    private async Task RefreshConnectedDevicesAsync()
+    {
+        if (_sessionProbeBusy || _closing || IsDisposed) return;
+        _sessionProbeBusy = true;
+        _lastSessionProbeUtc = DateTime.UtcNow;
+        try
+        {
+            int pid = _airplayProcess is { HasExited: false } ? _airplayProcess.Id : 0;
+            var snapshot = pid > 0 ? await Task.Run(() => AirPlaySessionMonitor.Probe(pid)) : null;
+            if (_closing || IsDisposed) return;
+            _connectedDevices.BeginUpdate();
+            try
+            {
+                _connectedDevices.Items.Clear();
+                if (snapshot is null)
+                {
+                    _connectionStatus.Text = "ตัวรับ AirPlay ยังไม่ทำงาน";
+                    _connectedDevices.Items.Add(new ListViewItem(new[] { "—", "ไม่มีเซสชันที่ตรวจสอบได้" }));
+                }
+                else if (snapshot.PeerAddresses.Length == 0)
+                {
+                    _connectionStatus.Text = snapshot.VideoWindow ? "กำลังแสดงภาพ (ยังไม่ทราบ IP ของผู้ส่ง)" :
+                        "เปิดตัวรับแล้ว · ยังไม่พบอุปกรณ์ที่เชื่อมต่อ";
+                    _connectedDevices.Items.Add(new ListViewItem(new[] { "—",
+                        snapshot.Problem ?? "พร้อมรับภาพ · ตรวจจับผู้ส่งหลังเริ่มเชื่อมต่อ" }));
+                }
+                else
+                {
+                    _connectionStatus.Text = snapshot.VideoWindow ?
+                        "กำลังแสดงภาพจาก AirPlay · ตรวจพบ " + snapshot.PeerAddresses.Length + " ที่อยู่ IP" :
+                        "พบการเชื่อมต่อเครือข่าย " + snapshot.PeerAddresses.Length +
+                        " ที่อยู่ IP · ยังไม่ยืนยันการฉายภาพ";
+                    foreach (var ip in snapshot.PeerAddresses)
+                        _connectedDevices.Items.Add(new ListViewItem(new[] { ip,
+                            snapshot.VideoWindow ? "มีวิดีโอ AirPlay (ชื่อผู้ส่งไม่พร้อม)" :
+                                "เชื่อมต่อ TCP · ยังไม่ยืนยันการฉายภาพ" }));
+                }
+            }
+            finally { _connectedDevices.EndUpdate(); }
+        }
+        catch (Exception ex)
+        {
+            if (!_closing && !IsDisposed) _connectionStatus.Text = "ตรวจสอบอุปกรณ์ไม่ได้: " + ex.Message;
+        }
+        finally { _sessionProbeBusy = false; }
     }
 
     private static void ApplyButtonStyle(Button button, bool primary)
