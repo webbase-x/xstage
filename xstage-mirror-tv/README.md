@@ -3,13 +3,13 @@
 An independently branded GPLv3 Android TV AirPlay receiver for iPhone and iPad.
 No iOS app, accounts, or internet cloud service required for casting on the local network.
 
-## Minimal receiver screen — v0.2.10 (Build 112)
+## Mirror TV receiver — v0.2.11 (Build 113)
 
 - On opening the APK, the AirPlay receiver starts automatically when local networking is available. The previous auto-start preference no longer blocks startup.
-- The main screen displays the receiver name, readiness/connection status and a concise iPhone/iPad instruction. Debug logs, a QR setup guide, build metadata and manual start/stop/exit buttons no longer clutter the home screen.
+- The main screen displays the receiver name, a compact **Version / Build** line sourced from Android BuildConfig, readiness/connection status and a concise iPhone/iPad instruction. Debug logs, a QR setup guide and manual start/stop/exit buttons do not clutter the home screen.
 - **เปลี่ยนชื่อ** reveals the existing inline name editor only on demand. **ตั้งค่า** opens advanced options.
 - While mirroring, the picture fills the entire display without app overlays. Pressing the TV remote **Back** key prompts **ปิด** (stop receiver and finish the app) or **ไม่ปิด** (keep receiving).
-- Permissions and errors remain visible when reception cannot begin. Runtime device validation on TrueID hardware and BlueStacks 5 is still required.
+- Permissions and errors remain visible when reception cannot begin. Identifiable Android emulators start AUTO video at a conservative 720p30 (or lower on small displays); physical Android TVs retain normal hardware-adaptive selection. Disconnections now log elapsed connection time and whether a video size or first video packet was received. Runtime device validation on TrueID hardware and BlueStacks 5 is still required.
 
 ## Scope and behavior
 
