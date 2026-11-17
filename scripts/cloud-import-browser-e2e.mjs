@@ -176,7 +176,12 @@ try{
   await page.locator('.app-card[data-app="studio-pc"] .app-detail-link').click();
   await page.locator('#app-detail:not([hidden])').waitFor();
   assert.equal(await page.locator('#detail-title').textContent(),'X-Stage Song Studio PC');
-  await page.locator('#detail-actions .detail-action.primary').filter({hasText:'ดาวน์โหลด ZIP'}).waitFor({timeout:10000});
+  // The Linux CI machine must see a Windows-only compatibility warning rather than
+  // a misleading "install here" label; the verified ZIP link remains accessible.
+  const windowsZip=page.locator('#detail-actions .detail-action.primary[href$=".zip"]');
+  await windowsZip.waitFor({timeout:10000});
+  assert.ok((await windowsZip.textContent()).includes('อุปกรณ์ที่รองรับ'),
+    'non-Windows viewers must be guided to transfer the ZIP to Windows');
   await page.locator('#detail-back').click();
   await page.locator('#catalog:not([hidden])').waitFor();
   console.log('PASS: X-Stage Apps premium brand, 6-app catalog, filters, deep-linked details, and verified download CTA');
