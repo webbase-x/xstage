@@ -93,7 +93,14 @@ internal fun XStageReceiverHome(
             maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(7.dp))
+        Text(
+            text = "Version ${app.airshow.tv.BuildConfig.VERSION_NAME}  ·  Build ${app.airshow.tv.BuildConfig.VERSION_CODE}",
+            style = MaterialTheme.typography.labelLarge,
+            color = Color(0xFFACC9DF),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
