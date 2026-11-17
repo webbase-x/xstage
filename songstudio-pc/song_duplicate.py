@@ -594,7 +594,7 @@ class DuplicateMediaRegistry:
                     keeper["path"]) != keeper["stamp"]:
                 raise ValueError("ไฟล์เพลงถูกเปลี่ยนหลังสแกน · กรุณาตรวจใหม่")
             sidecars = []
-            if include_companions and item["path"].suffix.casefold() != ".xsk":
+            if include_companions:
                 companions = _companions(state["root"], item["path"])
                 keeper_uses_sidecar = (
                     keeper["path"].suffix.casefold() not in (".xsk", ".emk")
