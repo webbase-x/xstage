@@ -1,6 +1,6 @@
 # X-Stage Mirror iOS PC
 
-**v1.0.10 · Build 1011 · Windows 10/11 x64 · Preview**
+**v1.0.11 · Build 1012 · Windows 10/11 x64 · Preview**
 
 The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
 
@@ -28,6 +28,30 @@ hiding the stale video window and returning to the waiting screen.
 A surviving old control TCP connection cannot restore the stale frame.
 UxPlay and Bonjour stay alive. This does not detect every case of a sender
 that stops video but keeps all sockets open; test on real Windows and iOS.
+
+## Stale frame fallback after client goes offline (Build 1012)
+
+A real iPhone-to-Windows report confirmed Build 1011 still left the last
+Control Center frame on display after Stop Mirroring. Inspecting the pinned
+libuxplay source showed that loss of client feedback deliberately sets
+`close_window = false` unless the `-nofreeze` flag is enabled.
+Build 1011 enabled `-nc no` (explicit RTSP Stop Mirroring), but it did not
+cover this independent network-reset path.
+
+Build 1012 writes these UxPlay arguments at every receiver startup:
+
+`-nc no -nofreeze -reset 6`
+
+`-nc no` requests closing the native renderer on an explicit stop;
+`-nofreeze` prevents retained final frames on disconnected/offline reset;
+`-reset 6` reduces UxPlay's feedback-silence reset from the 15-second
+default to 6 seconds. It does NOT imply a guaranteed zero-delay shutdown
+or detect a sender that continues sending valid heartbeats after stopping
+video. The existing PID-owned socket monitor remains a backup. No
+per-frame pixel comparison or forced restarts are used.
+
+The unit/CI contract asserts the exact full startup flags, but success on
+the user's real Windows+iPhone setup still needs post-install verification.
 
 ## Full-screen interface
 

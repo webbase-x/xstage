@@ -18,7 +18,7 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.10 · Build 1011";
+    private const string VersionText = "v1.0.11 · Build 1012";
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
@@ -488,7 +488,12 @@ public sealed class MainForm : Form
         var cfg = Path.Combine(Environment.GetFolderPath(
             Environment.SpecialFolder.ApplicationData), "leapbtw", "uxplay-windows", "arguments.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(cfg)!);
-        var desired = "-n " + display + " -nh -nc no" +
+        // UxPlay defaults to retaining the last video frame after a lost
+        // sender / feedback timeout. -nofreeze closes that native video
+        // window on reset. -reset 6 reduces the offline detection delay from
+        // its 15-second default while allowing several missed heartbeats.
+        // -nc no independently closes video after an explicit Stop Mirroring.
+        var desired = "-n " + display + " -nh -nc no -nofreeze -reset 6" +
             (_lowLatency ? FastPreviewArguments : "") + Environment.NewLine;
         var original = File.Exists(cfg) ? File.ReadAllText(cfg) : null;
         if (original == desired) return;

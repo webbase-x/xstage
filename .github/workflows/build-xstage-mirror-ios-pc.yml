@@ -72,7 +72,7 @@ jobs:
           $native = Get-Content 'mirror-ios-pc/VideoWindowPresentation.cs' -Raw
           foreach ($expected in @(
             "var display = _name.Replace(' ', '\u2002')",
-            'var desired = "-n " + display + " -nh -nc no"',
+            'var desired = "-n " + display + " -nh -nc no -nofreeze -reset 6"',
             'uxplay-arguments-before-xstage.txt',
             '_video.HideAfterDisconnect()',
             '_video.RestoreAfterReconnect()',
@@ -89,7 +89,9 @@ jobs:
               -not $native.Contains('ShowWindow(_hidden, 8)')) {
             throw 'Native video hide/recovery contract missing'
           }
-          if (-not $ui.Contains(' -nc no')) { throw 'UxPlay must close native renderer on stop' }
+          if (-not $ui.Contains(' -nc no -nofreeze -reset 6')) {
+            throw 'UxPlay must close video on Stop Mirroring and after offline reset'
+          }
           Write-Host 'PASS: native close and fallback session disconnect contract'
       - name: Install .NET 8
         uses: actions/setup-dotnet@v4
@@ -117,7 +119,7 @@ jobs:
       - name: Upload compiled control EXE (engine not included)
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1011-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1012-COMPILED-ONLY
           path: mirror-ios-pc/out/XStageMirrorIOSPC.exe
           if-no-files-found: error
           retention-days: 30
@@ -135,7 +137,7 @@ jobs:
       - name: Download exactly the compiled X-Stage control executable
         uses: actions/download-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1011-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1012-COMPILED-ONLY
           path: mirror-ios-pc/out
       - name: Check Windows executable prerequisite
         shell: pwsh
@@ -279,11 +281,11 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
           & $compiler 'mirror-ios-pc/installer/XStageMirrorIOSPC.iss'
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
-          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.10-build1011-win-x64-Setup.exe'
+          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.11-build1012-win-x64-Setup.exe'
           if (-not (Test-Path $file -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $file).Length -lt 10000000) { throw 'Setup EXE unexpectedly small' }
           $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  X-Stage-Mirror-iOS-PC-v1.0.10-build1011-win-x64-Setup.exe" |
+          "$hash  X-Stage-Mirror-iOS-PC-v1.0.11-build1012-win-x64-Setup.exe" |
             Set-Content -Encoding ascii "$file.sha256"
           Write-Host "Offline Setup EXE SHA-256: $hash"
 
@@ -291,7 +293,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $file = 'X-Stage-Mirror-iOS-PC-v1.0.10-build1011-win-x64-CANDIDATE.zip'
+          $file = 'X-Stage-Mirror-iOS-PC-v1.0.11-build1012-win-x64-CANDIDATE.zip'
           $source = Resolve-Path 'mirror-ios-pc/out'
           Compress-Archive -Path (Join-Path $source '*') -DestinationPath $file -CompressionLevel Optimal -Force
           if ((Get-Item $file).Length -lt 3000000) { throw 'Incomplete portable candidate ZIP' }
@@ -305,9 +307,9 @@ jobs:
         with:
           name: X-Stage-Mirror-iOS-PC-Windows-CANDIDATE
           path: |
-            X-Stage-Mirror-iOS-PC-v1.0.10-build1011-win-x64-CANDIDATE.zip
-            X-Stage-Mirror-iOS-PC-v1.0.10-build1011-win-x64-CANDIDATE.zip.sha256
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.10-build1011-win-x64-Setup.exe
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.10-build1011-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-iOS-PC-v1.0.11-build1012-win-x64-CANDIDATE.zip
+            X-Stage-Mirror-iOS-PC-v1.0.11-build1012-win-x64-CANDIDATE.zip.sha256
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.11-build1012-win-x64-Setup.exe
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.11-build1012-win-x64-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 30

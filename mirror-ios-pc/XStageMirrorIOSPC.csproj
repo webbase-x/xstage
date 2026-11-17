@@ -7,8 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>XStageMirrorIOSPC</AssemblyName>
     <RootNamespace>XStageMirrorIOSPC</RootNamespace>
-    <Version>1.0.10</Version>
-    <FileVersion>1.0.10.1011</FileVersion>
+    <Version>1.0.11</Version>
+    <FileVersion>1.0.11.1012</FileVersion>
     <ApplicationTitle>X-Stage Mirror iOS PC</ApplicationTitle>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
