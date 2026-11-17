@@ -26,6 +26,13 @@ assert (app / "src/main/kotlin/app/airshow/tv/ui/ReceiverSetupQr.kt").exists()
 updater = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateManager.kt").read_text()
 activity = (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
 settings = (app / "src/main/kotlin/app/airshow/tv/ui/SettingsScreen.kt").read_text()
+assert "MirrorUpdateCleanup.purgeInstalled(this)" in activity
+cleanup = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateCleanup.kt").read_text()
+assert "MY_PACKAGE_REPLACED" in cleanup
+assert "BuildConfig.VERSION_CODE" in cleanup
+assert "File(context.cacheDir" not in cleanup
+assert "xstage-mirror-update-" in cleanup
+assert "installedVersion" in cleanup
 assert "mirrorUpdates.checkOnLaunch()" in activity
 assert "mirrorUpdates.onResume()" in activity
 assert "mirrorUpdates.close()" in activity
@@ -36,9 +43,11 @@ assert "canRequestPackageInstalls()" in updater
 assert "github.com/webbase-x/xstage/releases/download/" in updater
 assert "https://webbase-x.github.io/xstage/mirror-tv/latest.json" in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
+assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
+assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
 assert 'versionCode = 102' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
 assert (root / "NOTICE").exists()
-print("PASS: bundled receiver, no-PIN defaults, integrated installer, checksum, Android TV launcher and QR")
+print("PASS: one-APK receiver, verified installer, safe post-install cleanup, Android TV launcher and QR")

@@ -56,6 +56,19 @@ substitute(manifest,
            '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
            '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
            '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />')
+# Only our app's successful package replacement triggers cleanup. The protected
+# system action is not exposed as a general exported receiver.
+substitute(manifest,
+           '        <receiver\n            android:name=".BootReceiver"',
+           '        <receiver\n'
+           '            android:name=".MirrorUpdateCleanupReceiver"\n'
+           '            android:enabled="true"\n'
+           '            android:exported="false">\n'
+           '            <intent-filter>\n'
+           '                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n'
+           '            </intent-filter>\n'
+           '        </receiver>\n\n'
+           '        <receiver\n            android:name=".BootReceiver"')
 
 strings = APP / "src/main/res/values/strings.xml"
 text = strings.read_text(encoding="utf-8").replace("AirShow", NAME)
@@ -87,6 +100,8 @@ overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
 updater = Path(__file__).resolve().parent / "MirrorUpdateManager.kt"
 pkg_dir = APP / "src/main/kotlin/app/airshow/tv"
 (pkg_dir / "MirrorUpdateManager.kt").write_text(updater.read_text(encoding="utf-8"), encoding="utf-8")
+cleanup = Path(__file__).resolve().parent / "MirrorUpdateCleanup.kt"
+(pkg_dir / "MirrorUpdateCleanup.kt").write_text(cleanup.read_text(encoding="utf-8"), encoding="utf-8")
 
 activity = pkg_dir / "MainActivity.kt"
 substitute(activity,
@@ -96,6 +111,8 @@ substitute(activity,
 substitute(activity,
            '        enableEdgeToEdge()',
            '        enableEdgeToEdge()\n'
+           '        // Remove only downloaded APKs whose build is already installed.\n'
+           '        MirrorUpdateCleanup.purgeInstalled(this)\n'
            '        mirrorUpdates = MirrorUpdateManager(this)\n'
            '        mirrorUpdates.checkOnLaunch()')
 substitute(activity,
