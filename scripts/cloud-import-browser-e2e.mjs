@@ -150,6 +150,18 @@ try{
   const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
   assert.equal(logoSources.length,6,'all six app entries must have a visual identity');
   assert.equal(new Set(logoSources).size,6,'each X-Stage application must have a distinct icon asset');
+
+  await page.locator('#device-advice-title').waitFor();
+  assert.equal(await page.locator('[data-device-app]').count(),6,'all six apps expose device compatibility');
+  const iphoneGuidance=await page.evaluate(()=>{
+    const api=window.XStageDeviceGuide;
+    const p=api.detect({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',platform:'iPhone'});
+    return {name:p.label,mirror:api.forApp(p,'mirror-tv'),windows:api.forApp(p,'karaoke-pc')};
+  });
+  assert.equal(iphoneGuidance.mirror.level,'other','iPhone must be a Mirror sender, not an Android TV APK receiver');
+  assert.ok(iphoneGuidance.mirror.text.includes('Android TV'),'iOS users must be told the compatible TV type');
+  assert.equal(iphoneGuidance.windows.level,'other','iOS users must not be offered Windows PC installation as compatible');
+
   assert.equal(await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.every(n=>n.complete&&n.naturalWidth>0)),true,
     'six unique app icons must load in the real browser');
 

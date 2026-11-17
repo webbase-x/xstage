@@ -348,3 +348,23 @@ body{background:radial-gradient(circle at 60% 0,#e6edff 0,transparent 32%),#f7f8
   .footer-inner{color:#bac5e5}
   .detail-note{background:#1a2340;border-color:#3c4770}
 }
+
+/* Device-aware installation guidance: separate platform compatibility from release availability. */
+.device-advice{display:flex;align-items:center;gap:16px;margin:7px 0 24px;padding:18px 21px;border-radius:22px;background:linear-gradient(120deg,#e9f2ff,#f4eeff);border:1px solid #d9e6ff}
+.device-advice-glyph{display:grid;place-items:center;flex:none;width:44px;height:44px;background:linear-gradient(130deg,#2774ea,#8b61e9);color:white;border-radius:15px;font-weight:800;font-size:29px}
+.device-advice-copy{min-width:0;flex:1}.device-advice-copy strong{display:block;font-size:14px;color:#263d71}.device-advice-copy p{font-size:12px;line-height:1.7;margin:4px 0 0;color:#576b91}
+.device-advice-chip{margin-left:auto;white-space:nowrap;color:#697da6;font-weight:850;font-size:9px;letter-spacing:1.4px}
+.device-compat{display:block;width:fit-content;font-size:11px;font-weight:760;padding:3px 9px;margin-top:8px;border-radius:99px}
+.device-compat.supported{color:#1d8065;background:#e4f7ef}.device-compat.other{color:#9f6628;background:#fff0d8}.device-compat.unknown{color:#696886;background:#eeeeff}
+.detail-device-info{display:flex;align-items:flex-start;gap:18px;margin:24px 0 8px;padding:21px 25px;background:#f0f4ff;border:1px solid #e1e9ff;border-radius:22px}
+.detail-device-label{min-width:142px;font-size:12px;font-weight:850}
+.detail-device-label.supported{color:#17816b}.detail-device-label.other{color:#a46727}.detail-device-label.unknown{color:#5d67a3}
+.detail-device-copy{min-width:0;flex:1}
+.detail-device-copy strong{display:block;color:#253b75;font-size:14px}
+.detail-device-copy p{font-size:13px;color:#616c88;margin:4px 0;line-height:1.75}
+.detail-device-copy p#detail-device-target{color:#3a5487;font-weight:700}
+.detail-device-alternatives{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.detail-device-alternatives a{background:#e2eafe;color:#325ed5;padding:8px 13px;border-radius:99px;font-size:12px;font-weight:800}
+.detail-device-alternatives a:hover{background:#c8d7ff}
+@media(max-width:760px){.device-advice{padding:14px;gap:12px}.device-advice-chip{display:none}.device-advice-glyph{height:39px;width:39px}.detail-device-info{display:block;padding:16px 18px}.detail-device-label{display:block;margin-bottom:9px}}
+@media(prefers-color-scheme:dark){.device-advice,.detail-device-info{background:linear-gradient(130deg,#1d3156,#2d2550);border-color:#414e78}.device-advice-copy strong,.detail-device-copy strong{color:#e5edff}.device-advice-copy p,.detail-device-copy p,.detail-device-copy p#detail-device-target{color:#b8c8e6}.device-compat.supported{background:#183d35;color:#8fead1}.device-compat.other{background:#3d2a1f;color:#f9cf9a}.device-compat.unknown{background:#343356;color:#ddd8ff}}

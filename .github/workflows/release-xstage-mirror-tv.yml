@@ -1,11 +1,9 @@
 name: Release X-Stage Mirror TV signed APK
 
+# Official production releases require private signing secrets.
+# Do not auto-run (and fail) on normal source pushes when secrets are absent.
+# Public test builds are published by build-xstage-mirror-tv.yml instead.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "xstage-mirror-tv/**"
-      - ".github/workflows/release-xstage-mirror-tv.yml"
   workflow_dispatch:
     inputs:
       version:

@@ -7,15 +7,22 @@ on:
       - "xstage-mirror-tv/**"
       - "mirror-tv/**"
       - "!mirror-tv/latest.json"
+      - "!mirror-tv/test-latest.json"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: xstage-mirror-preview-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   mirror-tv:
     runs-on: ubuntu-latest
     timeout-minutes: 110
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout X-Stage source
         uses: actions/checkout@v4
@@ -66,6 +73,96 @@ jobs:
               -czf "$GITHUB_WORKSPACE/dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz" .
           cd "$GITHUB_WORKSPACE"
           sha256sum dist/* > dist/SHA256SUMS.txt
+
+      - name: Verify test APK and publish public prerelease
+        id: preview
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="dist/X-Stage-Mirror-TV-debug.apk"
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.webbasex.xstagemirror.tv'"
+          VERSION=$(python3 - <<'PY'
+          import pathlib,re
+          content=pathlib.Path("xstage-mirror-tv/prepare_upstream.py").read_text()
+          match=re.search(r'VERSION\s*=\s*os\.environ\.get\("XSTAGE_MIRROR_VERSION",\s*"([0-9.]+)"\)',content)
+          if not match: raise SystemExit("Version missing")
+          print(match.group(1))
+          PY
+          )
+          BUILD=$(python3 - <<'PY'
+          import pathlib,re
+          content=pathlib.Path("xstage-mirror-tv/prepare_upstream.py").read_text()
+          match=re.search(r'BUILD\s*=\s*os\.environ\.get\("XSTAGE_MIRROR_BUILD",\s*"([0-9]+)"\)',content)
+          if not match: raise SystemExit("Build number missing")
+          print(match.group(1))
+          PY
+          )
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "versionCode='$BUILD'"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -F "versionName='$VERSION'"
+          TEST_FILE="X-Stage-Mirror-TV-test-v${VERSION}-build${BUILD}.apk"
+          mv "$APK" "dist/$TEST_FILE"
+          (cd dist && sha256sum "$TEST_FILE" X-Stage-Mirror-TV-GPLv3-source.tar.gz > SHA256SUMS.txt)
+          TAG="xstage-mirror-tv-test-v${VERSION}-build${BUILD}-${GITHUB_SHA:0:8}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" "dist/$TEST_FILE" dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz dist/SHA256SUMS.txt \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "X-Stage Mirror TV v${VERSION} Build ${BUILD} — test preview" \
+              --notes "TEST PREVIEW ONLY. Debug-signed Android TV receiver APK. Signing certificates may change across CI builds, so uninstall of an earlier test build may be required. This channel is NOT the official production-signed release and must NOT be used for in-app automatic updating. SHA-256 hashes and GPLv3 source included."
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "apk=$TEST_FILE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "dist/$TEST_FILE" | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Update test download feed without touching production signing feed
+        if: steps.preview.outcome == 'success'
+        shell: bash
+        env:
+          TAG: ${{ steps.preview.outputs.tag }}
+          APK_FILE: ${{ steps.preview.outputs.apk }}
+          VERSION: ${{ steps.preview.outputs.version }}
+          BUILD: ${{ steps.preview.outputs.build }}
+          SHA256: ${{ steps.preview.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git switch -C main origin/main
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          data={
+            "channel":"test-preview",
+            "available":True,"name":"X-Stage Mirror TV Test APK",
+            "package":"com.webbasex.xstagemirror.tv",
+            "version":os.environ["VERSION"],"build":int(os.environ["BUILD"]),
+            "file":os.environ["APK_FILE"],"sha256":os.environ["SHA256"],
+            "download_url":"https://github.com/webbase-x/xstage/releases/download/"+os.environ["TAG"]+"/"+os.environ["APK_FILE"],
+            "note":"Debug-signed test APK. NOT a production-signed release. A previous build may need removal if the debug signing certificate changes. In-app automatic updates are disabled for this channel."
+          }
+          Path("mirror-tv/test-latest.json").write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+          PY
+          git add mirror-tv/test-latest.json
+          if git diff --cached --quiet; then
+            echo "No preview feed changes"
+          else
+            git commit -m "build(mirror): publish verified test APK metadata [skip ci]"
+            for attempt in 1 2 3 4; do
+              git fetch origin main
+              if git rebase origin/main && git push origin HEAD:main; then
+                echo "Mirror preview metadata published"
+                break
+              fi
+              if [ "$attempt" -eq 4 ]; then
+                echo "::error::Cannot publish preview feed"
+                exit 1
+              fi
+            done
+          fi
 
       - name: Upload installable APK and source package
         uses: actions/upload-artifact@v4

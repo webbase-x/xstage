@@ -4,6 +4,44 @@
   const REPO="https://github.com/webbase-x/xstage";
   const RELEASES=REPO+"/releases";
   const SHA256=/^[a-f0-9]{64}$/i;
+  const deviceGuide=window.XStageDeviceGuide;
+  const currentDevice=deviceGuide?deviceGuide.detect(navigator):{kind:"unknown",label:"อุปกรณ์นี้"};
+  function suitability(id){return deviceGuide?deviceGuide.forApp(currentDevice,id):{level:"unknown",text:"โปรดตรวจสอบระบบที่รองรับ",target:"ตรวจสอบรายละเอียดอุปกรณ์ที่รองรับ",fallback:[]};}
+  function populateDeviceGuide(){
+    document.getElementById("device-advice-title").textContent="อุปกรณ์ที่ตรวจพบ: "+currentDevice.label;
+    document.getElementById("device-advice-message").textContent=deviceGuide?deviceGuide.overview(currentDevice):"ตรวจสอบอุปกรณ์ที่รองรับในรายละเอียดแต่ละแอป";
+    for(const id of Object.keys(appInfo)){
+      const tag=document.querySelector('[data-device-app="'+id+'"]');
+      if(!tag)continue;
+      const item=suitability(id);
+      tag.className="device-compat "+item.level;
+      tag.textContent=item.level==="supported"?"เหมาะกับอุปกรณ์นี้":item.level==="other"?"ต้องใช้อุปกรณ์อื่น":"ตรวจสอบความเข้ากันได้";
+      tag.title=item.text+" · "+item.target;
+    }
+  }
+  function renderDeviceInfo(id){
+    const support=suitability(id);
+    const label=document.getElementById("detail-device-label");
+    const title=document.getElementById("detail-device-title");
+    const message=document.getElementById("detail-device-message");
+    const target=document.getElementById("detail-device-target");
+    const alternatives=document.getElementById("detail-device-alternatives");
+    label.className="detail-device-label "+support.level;
+    label.textContent=support.level==="supported"?"✓ อุปกรณ์ที่เหมาะสม":support.level==="other"?"! ต้องใช้อุปกรณ์อื่น":"i ตรวจสอบเพิ่มเติม";
+    title.textContent="สำหรับ "+currentDevice.label;
+    message.textContent=support.text;
+    target.textContent="อุปกรณ์ที่แนะนำ: "+support.target;
+    alternatives.replaceChildren();
+    const names={"karaoke-web":"Karaoke Online","studio-web":"Song Studio Web"};
+    if(support.level!=="supported"){
+      for(const alt of support.fallback){
+        if(alt===id||!appInfo[alt])continue;
+        const a=document.createElement("a");a.href="?app="+encodeURIComponent(alt);
+        a.textContent="แนะนำ "+(names[alt]||appInfo[alt].title)+" ↗";
+        alternatives.appendChild(a);
+      }
+    }
+  }
   const appInfo={
     "karaoke-web":{
       title:"X-Stage Karaoke Online",category:"WEB · KARAOKE",
@@ -60,7 +98,7 @@
       description:"โครงการตัวรับภาพหน้าจอสำหรับ Android TV เพื่อแสดงหน้าจอจาก iPhone หรือ iPad โดยใช้ฟังก์ชัน Screen Mirroring ของ iOS หน้าคู่มือแนะนำการเชื่อมต่อและเงื่อนไขเครือข่าย",
       features:["ใช้การส่งหน้าจอจากเมนู Screen Mirroring ของ iOS","มีคู่มือเชื่อมต่อบนทีวีและการตั้งชื่อตัวรับ","ออกแบบเพื่อรับภาพจากอุปกรณ์ใน Wi-Fi เดียวกัน","การเล่นเนื้อหาบางชนิดอาจถูกจำกัดด้วย DRM และความสามารถของอุปกรณ์"],
       hero:"ให้ทุกหน้าจอมีพื้นที่ของตัวเอง",blurb:"ส่งภาพจากมือถือสู่จอที่ใหญ่กว่า",preview:"MIRROR TV · SCREEN SHARING",
-      type:"manifest",manifest:"./mirror-tv/latest.json",secondary:{label:"ดูคู่มือการเชื่อมต่อ",url:"./mirror-tv/"},
+      type:"manifest",manifest:"./mirror-tv/latest.json",testManifest:"./mirror-tv/test-latest.json",secondary:{label:"ดูคู่มือการเชื่อมต่อ",url:"./mirror-tv/"},
       candidate:{label:"ดู APK รุ่นทดสอบใน GitHub Actions",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-mirror-tv.yml"},
       note:"สถานะเผยแพร่ของตัวรับ Mirror TV ตรวจสอบจากประกาศเวอร์ชันของโครงการ การมีคู่มือไม่ได้หมายความว่ามี APK ที่ติดตั้งได้แล้ว",
       fallback:"กำลังเตรียมการเผยแพร่ APK"
@@ -119,6 +157,11 @@
     }
     if(id==="mirror-tv"){
       const verified=data.available===true && SHA256.test(data.sha256||"");
+      if(verified && data.channel==="test-preview"){
+        const url=verifiedReleaseUrl(data.download_url,".apk");
+        return url?{available:true,url,status:"APK v"+String(data.version||"ล่าสุด")+" · รุ่นทดสอบ (ไม่ใช่รุ่นลงนามทางการ)",kind:"download",version:String(data.version||""),test:true}:
+          {available:false,url:"",status:"ยังไม่มี APK ทดสอบ Mirror TV ที่ตรวจสอบได้",kind:"pending"};
+      }
       const releaseUrl=verified && /^X-Stage-Mirror-TV-v\d+\.\d+\.\d+-build\d+\.apk$/.test(data.file||"") && /^\d+\.\d+\.\d+$/.test(data.version||"") && Number.isSafeInteger(data.build)
         ? "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-v"+data.version+"-build"+data.build+"/"+data.file : "";
       const url=verified?verifiedReleaseUrl(data.download_url||releaseUrl,".apk"):"";
@@ -141,6 +184,12 @@
       if(!response.ok)throw Error("HTTP "+response.status);
       const data=await response.json();
       states[id]=getRelease(id,data);
+      if(id==="mirror-tv"&&!states[id].available&&appInfo[id].testManifest){
+        try{
+          const previewResponse=await fetch(appInfo[id].testManifest,{cache:"no-store",credentials:"omit"});
+          if(previewResponse.ok)states[id]=getRelease(id,await previewResponse.json());
+        }catch{} // The production signing feed remains authoritative.
+      }
     }catch{
       states[id]={available:false,url:"",status:"ตรวจสอบรุ่นล่าสุดไม่ได้",kind:"pending",version:""};
     }
@@ -163,7 +212,9 @@
       const label=id==="studio-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
-      container.appendChild(createAction(label,state.url,"primary",!state.url.startsWith("./")));
+      const support=suitability(id);
+      const adjusted=support.level==="other"?"ไฟล์สำหรับอุปกรณ์ที่รองรับ ↗":label;
+      container.appendChild(createAction(adjusted,state.url,"primary",!state.url.startsWith("./")));
     }else{
       const pending=document.createElement("span");
       pending.className="detail-action disabled";
@@ -190,7 +241,9 @@
     detailElements.description.textContent=info.description;
     detailElements.showcaseTitle.textContent=info.hero;
     detailElements.showcaseCopy.textContent=info.blurb;
-    detailElements.note.textContent=info.note+(state.kind==="pending"?" · "+state.status:"");
+    detailElements.note.textContent=info.note+(state.kind==="pending"?" · "+state.status:"")+
+      (state.test?" · Mirror TV รุ่นทดสอบลงนามด้วยกุญแจ Debug ของ CI; การติดตั้งทับรุ่นก่อนหรือการอัปเดตอัตโนมัติอาจใช้ไม่ได้ ต้องถอนการติดตั้งก่อนหากลายเซ็นไม่ตรงกัน":"");
+    renderDeviceInfo(id);
     detailElements.features.replaceChildren();
     for(const feature of info.features){
       const li=document.createElement("li");li.textContent=feature;detailElements.features.appendChild(li);
@@ -273,6 +326,7 @@
     applyFilters();
   }));
   search.addEventListener("input",applyFilters);
+  populateDeviceGuide();
   routeToCurrent();
   for(const id of Object.keys(appInfo)){
     if(appInfo[id].manifest)loadLatest(id,appInfo[id].manifest);

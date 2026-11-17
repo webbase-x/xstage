@@ -1,0 +1,12 @@
+{
+  "channel": "test-preview",
+  "available": false,
+  "name": "X-Stage Mirror TV Test APK",
+  "package": "com.webbasex.xstagemirror.tv",
+  "version": "0.2.3",
+  "build": 105,
+  "file": "",
+  "sha256": "",
+  "download_url": "",
+  "note": "Preview APK will be enabled only when the CI build, Android APK signature verification, immutable GitHub prerelease and SHA-256 publication succeed. Production updater feed remains separate."
+}

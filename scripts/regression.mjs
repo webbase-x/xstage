@@ -47,7 +47,7 @@ assert.match(storefront,/class="footer-logo new-footer-logo"[^>]*>[^]*?xstage-ap
 assert.match(storefront,/id="intro-title">หนึ่งเวที/,'new hero headline must render');
 assert.match(storefront,/class="intro section-wrap new-home-hero"/,'editorial hero must be present');
 assert.match(storeStyle,/\.intro\.new-home-hero\{/,'redesigned hero styling must load');
-assert.match(storefront,/storefront\.css\?brand=2/,'storefront refresh must bust the cached stylesheet');
+assert.match(storefront,/storefront\.css\?brand=3/,'storefront refresh must bust the cached stylesheet');
 assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
 
 assert.match(storefront,/source=android-/,'old Android builds must redirect into the existing player');
@@ -88,6 +88,38 @@ assert.ok(read('studio/index.html').includes('./app-icon.svg'),'Song Studio PC r
 assert.ok(read('.github/workflows/build-windows-pc.yml').includes('scripts/build_karaoke_pc_icon.py'),'Windows candidate must generate distinct PC icon before bundling');
 assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stage Mirror TV cast icon'),'Mirror TV native launcher must have a separate cast identity');
 assert.ok(read('mirror-tv/index.html').includes('../assets/app-icons/mirror-tv.svg'),'Mirror pairing guide must show its own icon');
+
+const guideSource=read('storefront-device.js');
+const guideModule={exports:{}};
+assert.doesNotThrow(()=>new Function('module',guideSource)(guideModule),'device guidance module must parse');
+const deviceGuide=guideModule.exports;
+const iphone=deviceGuide.detect({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15',platform:'iPhone'});
+const ipad=deviceGuide.detect({userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',platform:'MacIntel',maxTouchPoints:5});
+const windows=deviceGuide.detect({userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',platform:'Win32'});
+const androidTv=deviceGuide.detect({userAgent:'Mozilla/5.0 (Linux; Android 12; SHIELD Android TV)',platform:'Linux'});
+const androidPhone=deviceGuide.detect({userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 9) Mobile Safari/537.36',platform:'Linux'});
+assert.equal(iphone.kind,'ios','iPhone must be detected');
+assert.equal(ipad.kind,'ios','iPadOS desktop user-agent must not be mistaken for macOS');
+assert.equal(windows.kind,'windows','Windows must be detected');
+assert.equal(androidTv.kind,'android_tv','Android TV must be detected');
+assert.equal(androidPhone.kind,'android_phone','Android phone must be distinguished from TV');
+assert.equal(deviceGuide.forApp(iphone,'mirror-tv').level,'other','iPhone must be labelled sender, not Mirror APK receiver');
+assert.equal(deviceGuide.forApp(iphone,'karaoke-android').level,'other','iOS must not be labelled Android-compatible');
+assert.equal(deviceGuide.forApp(windows,'karaoke-pc').level,'supported','Windows should recommend Karaoke PC');
+assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Android TV should recommend Mirror receiver');
+assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
+assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
+assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,6,'all six cards need device-compatibility hints');
+assert.ok(storefront.includes('storefront-device.js?brand=3'),'device guidance must be loaded before storefront controller');
+assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
+assert.ok(read('.github/workflows/build-xstage-mirror-tv.yml').includes('gh release create')&&
+          read('.github/workflows/build-xstage-mirror-tv.yml').includes('test-latest.json'),
+          'Mirror public test APK must be published only after checks, separate from production feed');
+assert.ok(read('.github/workflows/release-xstage-mirror-tv.yml').includes('workflow_dispatch:')&&
+          !read('.github/workflows/release-xstage-mirror-tv.yml').includes('branches: [main]'),
+          'production Mirror signed release must not fail automatically when owner secrets are missing');
+
 
 
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['android-apk-download.js',apk]]){
