@@ -230,6 +230,16 @@ assert.ok(js.includes("run('duplicates-scan'") &&
           js.includes('confirmStudio(') &&
           css.includes('.duplicate-file'),
           'Duplicate scanner must use authenticated local jobs and explicit confirmations');
+assert.ok(html.includes('id="dup-match-mode"') &&
+          html.includes('id="dup-prefer-type"') &&
+          html.includes('id="dup-confirm-song"') &&
+          html.includes('id="dup-with-companions"') &&
+          html.includes('id="dup-plan"') &&
+          js.includes("post('/api/duplicates/plan'") &&
+          js.includes('keeperByGroup:') &&
+          js.includes('includeCompanions:') &&
+          js.includes('sameSongConfirmed:'),
+          'Song duplicate management must preview all sidecars and preserve selected keeper');
 assert.ok(css.includes('.ai-lyrics-karaoke'),'Missing karaoke styles');
 assert.ok(css.includes('.preview-file-selector'),'Missing file proof styling');
 for (const id of ['json-pro-source','json-pro-destination','json-pro-format',
