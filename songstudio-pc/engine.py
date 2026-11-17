@@ -2132,6 +2132,7 @@ def execute_job(action, options, started):
                      else f"ตรวจเพลงซ้ำครบแล้ว {discovered:,} ไฟล์"))
             result = DUPLICATES.REGISTRY.scan(
                 str(options.get("source") or worker_prefs().get("dup_source") or ""),
+                mode=options.get("matchMode", "exact"),
                 cancelled=worker_cancel(), progress=dup_progress)
             update(result["message"], result["fileCount"])
         elif action == "duplicates-apply":
@@ -2144,6 +2145,7 @@ def execute_job(action, options, started):
                 keeper_by_group=options.get("keeperByGroup") or {},
                 preferred_extension=options.get("preferredExtension") or "",
                 include_companions=options.get("includeCompanions", True),
+                same_song_confirmed=options.get("sameSongConfirmed", False),
                 preview_id=options.get("previewId"),
                 confirmed=options.get("confirmed") is True,
                 cancelled=worker_cancel(),
@@ -2651,6 +2653,8 @@ def start_job(data):
         location = str(data.get("source") or PREFS.get("dup_source") or "")
         if not location or not Path(location).expanduser().is_dir():
             raise ValueError("กรุณาเลือกโฟลเดอร์ต้นทางสำหรับตรวจเพลงซ้ำ")
+        if data.get("matchMode", "exact") not in ("exact", "code"):
+            raise ValueError("โหมดตรวจเพลงซ้ำไม่ถูกต้อง")
         validation = {"total": 0}
     if action == "duplicates-apply":
         chosen = data.get("selected")
@@ -4012,7 +4016,8 @@ class Handler(BaseHTTPRequestHandler):
                     destination=payload.get("destination"),
                     keeper_by_group=payload.get("keeperByGroup") or {},
                     preferred_extension=payload.get("preferredExtension") or "",
-                    include_companions=payload.get("includeCompanions", True)))
+                    include_companions=payload.get("includeCompanions", True),
+                    same_song_confirmed=payload.get("sameSongConfirmed", False)))
             elif path == "/api/jobs":
                 self._json(start_job(payload))
             elif path == "/api/jobs/open-output":
