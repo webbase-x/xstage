@@ -30,6 +30,7 @@ class CreatedXskTests(unittest.TestCase):
         self.export = SimpleNamespace(
             safe_media_path=self.safe_media_path,
             existing_records=lambda _root: [],
+            lyrics_identity=load("song_export").lyrics_identity,
         )
         self.created = SimpleNamespace(
             _records=lambda _root, _exp: self.records,
@@ -75,6 +76,21 @@ class CreatedXskTests(unittest.TestCase):
         for forbidden in ("owner", "computer", "userName", "machineName",
                           "hostname", "windowsUser"):
             self.assertNotIn(forbidden, document)
+
+    def test_xsk_uses_real_json_metadata_when_catalog_has_placeholders(self):
+        selected = self.song("00021", b"P")
+        lyrics, record = self.records[selected]
+        record["title"] = "00021"
+        record["artist"] = "ไม่ระบุศิลปิน"
+        doc = json.loads(lyrics.read_text(encoding="utf-8"))
+        doc["metadata"] = {"title": "เพลงจาก NCN", "artist": "ศิลปินจาก NCN"}
+        lyrics.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        result = self.build([selected])
+        self.assertEqual(result["created"], 1)
+        file = self.root / "MIDI" / "XSK" / "0" / "00021.xsk"
+        packed = self.package.open_package(file)
+        self.assertEqual((packed["title"], packed["artist"]),
+                         ("เพลงจาก NCN", "ศิลปินจาก NCN"))
 
     def test_encrypted_xsk1_kept_while_new_xsk2_gets_unused_code(self):
         original = self.song("00001", b"A")
