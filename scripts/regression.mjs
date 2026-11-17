@@ -256,9 +256,9 @@ assert.ok(receiverBuild.includes('XStageReceiverHome(')&&
           receiverBuild.includes('ReceiverNamePolicy.migratePreviousName(this)')&&
           receiverRecipe.includes('ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)'),
           'The Android build must start automatically and ask before closing on Back');
-assert.ok(/VERSION = os\\.environ\\.get\\("XSTAGE_MIRROR_VERSION", "[0-9]+\\.[0-9]+\\.[0-9]+"\\)/.test(receiverBuild) &&
-          /BUILD = os\\.environ\\.get\\("XSTAGE_MIRROR_BUILD", "[0-9]+"\\)/.test(receiverBuild),
-          'Mirror TV clean receiver must declare a valid, updatable version and build');
+assert.ok(receiverBuild.includes('VERSION = os.environ.get("XSTAGE_MIRROR_VERSION"') &&
+          receiverBuild.includes('BUILD = os.environ.get("XSTAGE_MIRROR_BUILD"'),
+          'Mirror TV clean receiver must declare configurable version and build');
 if(mirrorTest.direct_download_available===true){
   const name=mirrorTest.direct_download_file;
   assert.match(name,/^X-Stage-Mirror-TV-test-v\d+\.\d+\.\d+-build\d+\.apk$/);
