@@ -141,6 +141,26 @@ try{
     headers:{'Access-Control-Allow-Origin':'*','Content-Type':'application/json'},
     body:JSON.stringify({sub:'SUB_MOCK_E2E',email:'owner@example.com',email_verified:true})}));
   await page.route('https://www.googleapis.com/**',routeDrive);
+  // The public project homepage is a standalone app collection. Verify it in
+  // a real browser before proceeding into the preserved karaoke player.
+  await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
+  await page.locator('#intro-title').waitFor();
+  assert.equal(await page.locator('.app-card').count(),6,'storefront displays six supported app entries');
+  assert.match(await page.locator('#intro-title').textContent(),/หนึ่งเวที/);
+  assert.equal(await page.locator('.new-wordmark img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
+    'new X-Stage Apps wordmark must load in browser');
+  assert.equal(await page.locator('.brand-hero-insignia img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
+    'new X-Stage Apps icon must load in browser');
+  await page.locator('[data-filter="studio"]').click();
+  assert.equal(await page.locator('.app-card:visible').count(),2,'studio filter must expose only two apps');
+  await page.locator('[data-filter="all"]').click();
+  await page.locator('.app-card[data-app="studio-pc"] .app-detail-link').click();
+  await page.locator('#app-detail:not([hidden])').waitFor();
+  assert.equal(await page.locator('#detail-title').textContent(),'X-Stage Song Studio PC');
+  await page.locator('#detail-actions .detail-action.primary').filter({hasText:'ดาวน์โหลด ZIP'}).waitFor({timeout:10000});
+  await page.locator('#detail-back').click();
+  await page.locator('#catalog:not([hidden])').waitFor();
+  console.log('PASS: X-Stage Apps premium brand, 6-app catalog, filters, deep-linked details, and verified download CTA');
   await page.goto('http://127.0.0.1:'+port+'/karaoke.html',{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>{const el=document.getElementById('cloud-import-open-gate');return el&&!el.hidden;},null,{timeout:20000});
   await page.click('#cloud-import-open-gate');
