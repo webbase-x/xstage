@@ -89,24 +89,16 @@ def export_selected(root, selected, export, created_json, package, codes, key,
             target = package.destination(output_root, code)
             if target.exists() or target.is_symlink():
                 raise FileExistsError("XSK มีรหัสนี้อยู่แล้ว · ไม่เขียนทับ: " + code)
-            # The generated JSON can carry NCN/KAR identity in metadata.
-            # Numeric source filenames and branded defaults are not artists.
-            metadata = document.get("metadata") if isinstance(document.get("metadata"), dict) else {}
-            def useful(value, *, title=False):
-                value = value.strip() if isinstance(value, str) else ""
-                if value.casefold() in {"x-stage karaoke", "x-stage song studio",
-                                        "xstage karaoke", "xstage song studio"}:
-                    return ""
-                if title and value.casefold() in {source.stem.casefold(), code.casefold()}:
-                    return ""
-                return value
-            title = (useful(record.get("title"), title=True)
-                     or useful(document.get("title"), title=True)
-                     or useful(metadata.get("title"), title=True) or source.stem)
-            artist = (useful(record.get("artist"))
-                      or useful(document.get("artist"))
-                      or useful(metadata.get("artist")) or "ไม่ระบุศิลปิน")
-            if title == source.stem or artist == "ไม่ระบุศิลปิน":
+            # Catalog placeholders from an older Lyrics JSON export must not
+            # override the real artist embedded in the JSON's NCN/KAR/LRC tags.
+            # Manual catalog edits still take priority when they are genuine.
+            doc_title, doc_artist = export.lyrics_identity(document, source.stem)
+            record_title, record_artist = export.lyrics_identity(
+                {"title": record.get("title"), "artist": record.get("artist")},
+                source.stem)
+            title = record_title or doc_title
+            artist = record_artist or doc_artist
+            if not title or not artist:
                 raise ValueError("ขาดชื่อเพลงหรือศิลปินจริง · ข้ามเพลงเพื่อไม่บันทึก DB ผิด")
             package.seal(source, document, code, title, artist, target=target)
             midi_hashes.add(sha)
