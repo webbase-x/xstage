@@ -35,7 +35,8 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
     val fullName by viewModel.pref(Prefs.SERVER_NAME).collectAsState()
-    var editOpen by remember { mutableStateOf(false) }
+    // Keep the input visible without requiring an extra click.
+    val editOpen = true
     var suffixDraft by remember(fullName, editOpen) {
         mutableStateOf(ReceiverNamePolicy.suffixOf(fullName))
     }
@@ -56,15 +57,10 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
         if (!valid) return
         viewModel.set(Prefs.SERVER_NAME, namePreview)
         keyboard?.hide()
-        editOpen = false
+        openFocus.requestFocus()
     }
 
-    LaunchedEffect(editOpen) {
-        if (editOpen) {
-            fieldFocus.requestFocus()
-            fieldBringIntoView.bringIntoView()
-        }
-    }
+    // On TV, opening a keyboard on initial render obscures the field.
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -73,7 +69,10 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
             color = MaterialTheme.colorScheme.onSurface
         )
         OutlinedButton(
-            onClick = { editOpen = !editOpen },
+            onClick = {
+                fieldFocus.requestFocus()
+                scope.launch { kotlinx.coroutines.delay(280); fieldBringIntoView.bringIntoView() }
+            },
             enabled = canEdit,
             border = BorderStroke(
                 if (openFocused) 3.dp else 1.dp,
@@ -85,10 +84,10 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
             ),
             modifier = Modifier
                 .focusRequester(openFocus)
-                .focusProperties { if (editOpen) down = fieldFocus }
+                .focusProperties { down = fieldFocus }
                 .onFocusChanged { openFocused = it.isFocused }
         ) {
-            Text(if (editOpen) "ปิดการแก้ไข" else "✎ เปลี่ยนชื่ออุปกรณ์", fontWeight = FontWeight.SemiBold)
+            Text("✎ เปลี่ยนชื่ออุปกรณ์ (ช่องพิมพ์ด้านล่าง)", fontWeight = FontWeight.SemiBold)
         }
         if (!canEdit) {
             Text(
@@ -99,7 +98,8 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
         }
         if (editOpen) {
             Surface(
-                modifier = Modifier.fillMaxWidth().imePadding(),
+                // IME padding is already applied by the parent screen.
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
@@ -153,7 +153,10 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
                             .focusRequester(fieldFocus)
                             .focusProperties { up = openFocus; down = saveFocus }
                             .onFocusChanged {
-                                if (it.isFocused) scope.launch { fieldBringIntoView.bringIntoView() }
+                                if (it.isFocused) scope.launch {
+                                    kotlinx.coroutines.delay(300)
+                                    fieldBringIntoView.bringIntoView()
+                                }
                             }
                             .onPreviewKeyEvent {
                                 if ((it.key == Key.Enter || it.key == Key.NumPadEnter) && valid) {
@@ -186,7 +189,11 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
                             Text("บันทึกชื่อ", fontWeight = FontWeight.Bold)
                         }
                         OutlinedButton(
-                            onClick = { keyboard?.hide(); editOpen = false },
+                            onClick = {
+                                keyboard?.hide()
+                                suffixDraft = ReceiverNamePolicy.suffixOf(fullName)
+                                openFocus.requestFocus()
+                            },
                             border = BorderStroke(
                                 if (cancelFocused) 3.dp else 1.dp,
                                 if (cancelFocused) MaterialTheme.colorScheme.secondary

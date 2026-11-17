@@ -29,6 +29,9 @@ assert 'viewModel.set(Prefs.SERVER_NAME, namePreview)' in editor
 assert 'enabled = canEdit' in editor
 assert 'ReceiverNameEditor(viewModel, canEdit = connections == 0)' in ui
 assert 'text = serverName,' in ui
+assert 'v${app.airshow.tv.BuildConfig.VERSION_NAME} · Build ${app.airshow.tv.BuildConfig.VERSION_CODE}' in ui
+assert 'val editOpen = true' in editor
+assert '.imePadding(),' not in editor
 assert 'ReceiverNamePolicy.migratePreviousName(this)' in (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
 
 

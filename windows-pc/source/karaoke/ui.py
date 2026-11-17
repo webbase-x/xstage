@@ -97,7 +97,7 @@ class KaraokeApp(tk.Tk):
         install_window_icon(self)
         self.data_dir = Path(data_dir or home / "data")
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.title(f"X-Stage Karaoke PC {__version__} — Python Karaoke")
+        self.title(DISPLAY_NAME)
         # Respect the actual Windows work area on compact, high-DPI and
         # secondary displays. Never force a default geometry larger than the
         # monitor before PlaybackApp switches to the stage.

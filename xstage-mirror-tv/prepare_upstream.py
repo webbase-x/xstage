@@ -93,6 +93,12 @@ needle = '''stringResource(R.string.idle_hint, serverName)
 replacement = needle + '''
                             Spacer(Modifier.height(10.dp))
                             ReceiverNameEditor(viewModel, canEdit = connections == 0)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "v${app.airshow.tv.BuildConfig.VERSION_NAME} · Build ${app.airshow.tv.BuildConfig.VERSION_CODE}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Spacer(Modifier.height(8.dp))
                             val homeShortcutContext = LocalContext.current
                             OutlinedButton(
@@ -351,12 +357,13 @@ def banner(size):
     # dark casting emblem and readable navy/cyan text on both low/high density.
     im = Image.new("RGB", size, (255,255,255))
     d = ImageDraw.Draw(im)
-    icon = mark(int(h*0.62)).convert("RGB")
-    im.paste(icon, (int(w*0.045), int(h*0.19)))
-    tx = int(w*0.40)
-    d.text((tx,int(h*0.29)), "X-STAGE", fill=(12,29,62), font=font(int(h*0.17)))
-    d.text((tx,int(h*0.52)), "MIRROR TV", fill=(5,119,157), font=font(int(h*0.13)))
-    d.text((tx,int(h*0.72)), "AirPlay receiver", fill=(78,96,123), font=font(int(h*0.065)))
+    icon = mark(int(h*0.56)).convert("RGB")
+    im.paste(icon, (int(w*0.045), int(h*0.22)))
+    tx = int(w*0.36)
+    # Product name is dominant, with X-STAGE as a smaller parent brand.
+    d.text((tx,int(h*0.32)), "X-STAGE", fill=(75,98,128), font=font(int(h*0.095)))
+    d.text((tx,int(h*0.55)), "MIRROR TV", fill=(5,99,143), font=font(int(h*0.17)))
+    d.text((tx,int(h*0.72)), "AirPlay receiver", fill=(78,96,123), font=font(int(h*0.068)))
     return im
 
 for folder,size in [("mipmap-mdpi",48),("mipmap-hdpi",72),("mipmap-xhdpi",96),

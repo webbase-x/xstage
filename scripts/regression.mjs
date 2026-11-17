@@ -392,7 +392,9 @@ assert.ok(androidGradle.includes('b.setColor(java.awt.Color.WHITE)')&&androidGra
 assert.ok(androidGradle.includes('rootProject.file("../assets/xstage-stage-logo.png")')&&
           androidGradle.includes('splashFile.bytes = logoSource.bytes')&&
           androidGradle.includes('b.drawImage(icon,17,28,115,115,null)')&&
-          androidGradle.includes('b.drawString("KARAOKE TV",143,108)'),
+          androidGradle.includes('b.drawString("KARAOKE",142,100)')&&
+          androidGradle.includes('b.drawString("TV",143,122)')&&
+          androidGradle.includes('b.drawString("X-STAGE",142,65)'),
           'Android TV must preserve original splash while using its dedicated Karaoke icon and navy text on a white 320x180 banner');
 assert.ok(androidGradle.includes('drawable-nodpi/xstage_tv_banner.png'),'TV launcher banner must use nodpi without Android density rescaling');
 assert.ok(androidGradle.includes('def label = "KARAOKE TV"')&&androidGradle.includes('g.fillPolygon([222,222,306]')&&!androidGradle.includes('g.drawImage(sourceLogo,iconLeft,iconTop,iconW,iconH,null)'),'Android launcher must render its own TV/play/remote icon, not the Web or stage-banner art');
