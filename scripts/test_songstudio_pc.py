@@ -124,12 +124,14 @@ class PcSourceTests(unittest.TestCase):
                 engine.JOB_THREAD, engine.JOB, engine.CANCEL = (
                     old_thread, old_job, old_cancel)
 
-    def test_resource_gate_rejects_low_ram_and_concurrent_conflict(self):
+    def test_resource_gate_does_not_reject_low_ram_or_busy_cpu(self):
         with patch.object(engine, "resource_snapshot", return_value={
-            "parallelLimit": 3, "memoryAvailableBytes": 100 * 1024**2
+            "parallelLimit": None, "memoryAvailableBytes": 100 * 1024**2,
+            "cpuBusyPercent": 100, "active": 0
         }):
-            with self.assertRaisesRegex(ValueError, "RAM"):
-                engine._check_resource_capacity("scan")
+            state = engine._check_resource_capacity("scan")
+            self.assertEqual(state["memoryAvailableBytes"], 100 * 1024**2)
+            self.assertEqual(state["cpuBusyPercent"], 100)
 
     def test_xsk_mid_json_pairing_deduplicates_midi_and_reuses_code_gap(self):
         """MIDI bytes, not filenames or lyric metadata, determine duplicates."""
