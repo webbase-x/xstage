@@ -39,7 +39,8 @@ jobs:
       - name: Validate Mirror TV UI recipe and regression syntax before signing
         shell: bash
         run: |
-          python3 -m py_compile xstage-mirror-tv/prepare_upstream.py xstage-mirror-tv/test_build_recipe.py
+          python3 -m py_compile xstage-mirror-tv/prepare_upstream.py xstage-mirror-tv/test_build_recipe.py xstage-mirror-tv/verify_apk_signer.py
+          python3 xstage-mirror-tv/verify_apk_signer.py --self-test
           node --check scripts/regression.mjs
           python3 - <<'PY'
           from pathlib import Path
@@ -160,10 +161,11 @@ jobs:
         run: |
           set -euo pipefail
           APK="dist/X-Stage-Mirror-TV-signed-preview.apk"
-          CERT_OUTPUT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK")
-          CERT_SHA256=$(printf '%s\n' "$CERT_OUTPUT" |
-            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
-            tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          CERT_SHA256=$(python3 xstage-mirror-tv/verify_apk_signer.py \
+            --apk "$APK" \
+            --keystore "$RUNNER_TEMP/xstage-mirror-signing.jks" \
+            --alias "$XSTAGE_MIRROR_KEY_ALIAS" \
+            --apksigner "$ANDROID_HOME/build-tools/37.0.0/apksigner")
           if ! [[ "$CERT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
             echo "::error::Cannot verify persistent APK signing certificate SHA-256"; exit 1
           fi
@@ -192,15 +194,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/mirror-legacy"
           if gh release download "$LEGACY_TAG" --repo "$GITHUB_REPOSITORY" \
               --pattern "$LEGACY_APK" --dir "$RUNNER_TEMP/mirror-legacy"; then
-            LEGACY_OUTPUT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify \
-              --print-certs "$RUNNER_TEMP/mirror-legacy/$LEGACY_APK")
-            LEGACY_SHA=$(printf '%s\n' "$LEGACY_OUTPUT" |
-              sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
-              tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-            if [ "$LEGACY_SHA" = "$CERT_SHA256" ]; then
-              echo "Build 107 public preview and new release share the same signer: in-place update eligible"
+            if LEGACY_SHA=$(python3 xstage-mirror-tv/verify_apk_signer.py \
+              --apk "$RUNNER_TEMP/mirror-legacy/$LEGACY_APK" \
+              --apksigner "$ANDROID_HOME/build-tools/37.0.0/apksigner"); then
+              if [ "$LEGACY_SHA" = "$CERT_SHA256" ]; then
+                echo "Build 107 public preview and new release share the same signer: in-place update eligible"
+              else
+                echo "::warning::Build 107's public APK signer differs from this build. Android cannot upgrade Build 107 in place without the original private signing key."
+              fi
             else
-              echo "::warning::Build 107's public APK signer differs from this build. Android cannot upgrade Build 107 in place without the original private signing key."
+              echo "::warning::Could not validate legacy Build 107 APK signer; no in-place migration claim."
             fi
           else
             echo "::warning::Cannot audit legacy Build 107 APK; do not claim guaranteed in-place migration."
