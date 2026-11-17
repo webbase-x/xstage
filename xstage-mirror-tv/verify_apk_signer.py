@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 CERT_LINE = re.compile(
-    r"\\bcertificate\\s+SHA-256\\s+digest\\s*:\\s*([0-9a-fA-F]{64})\\b",
+    r"\bcertificate\s+SHA-256\s+digest\s*:\s*([0-9a-fA-F]{64})\b",
     re.IGNORECASE,
 )
 
@@ -64,16 +64,16 @@ def private_keystore_certificate_sha256(keystore: str, alias: str) -> str:
 def self_test() -> None:
     digest_a = "a" * 64
     digest_b = "b" * 64
-    assert signer_sha256(f"Signer #1 certificate SHA-256 digest: {digest_a}\\n") == digest_a
-    assert signer_sha256(f"V3.0 Signer: certificate SHA-256 digest: {digest_a}\\n") == digest_a
+    assert signer_sha256(f"Signer #1 certificate SHA-256 digest: {digest_a}\n") == digest_a
+    assert signer_sha256(f"V3.0 Signer: certificate SHA-256 digest: {digest_a}\n") == digest_a
     assert signer_sha256(
-        f"V2 Signer: certificate SHA-256 digest: {digest_a}\\n"
-        f"V3.0 Signer: certificate SHA-256 digest: {digest_a}\\n"
+        f"V2 Signer: certificate SHA-256 digest: {digest_a}\n"
+        f"V3.0 Signer: certificate SHA-256 digest: {digest_a}\n"
     ) == digest_a
     for value in (
-        "Verified using v3 scheme (APK Signature Scheme v3): true\\n",
-        f"Signer #1 certificate SHA-256 digest: {digest_a}\\n"
-        f"Signer #2 certificate SHA-256 digest: {digest_b}\\n",
+        "Verified using v3 scheme (APK Signature Scheme v3): true\n",
+        f"Signer #1 certificate SHA-256 digest: {digest_a}\n"
+        f"Signer #2 certificate SHA-256 digest: {digest_b}\n",
     ):
         try:
             signer_sha256(value)
