@@ -92,6 +92,16 @@
       note:"APK ที่ให้ดาวน์โหลดเป็นรุ่นทดสอบสำหรับติดตั้งเอง (sideload) ไม่ใช่แอปที่เผยแพร่ผ่าน Google Play ควรตรวจความเข้ากันได้กับอุปกรณ์ก่อนติดตั้ง",
       fallback:"ยังตรวจสอบไฟล์ APK ที่ยืนยันไม่ได้"
     },
+    "file-share":{
+      title:"X-Stage File Share",category:"ANDROID · FILE TRANSFER",
+      subtitle:"รับ–ส่งไฟล์ผ่าน LAN และอินเทอร์เน็ตโดยเลือกเส้นทางให้อัตโนมัติ",
+      description:"ติดตั้ง APK บนอุปกรณ์ Android เพื่อให้เครื่องอื่นสแกน QR เปิดเบราว์เซอร์แล้วรับ–ส่งไฟล์ได้ รองรับหลายอุปกรณ์พร้อมกัน ไฟล์ที่ได้รับยังอยู่ในเครื่อง Android โดยไม่ต้องพึ่ง Cloud สำหรับการรับ–ส่งผ่าน LAN ส่วนการเชื่อมต่อ Internet ใช้ WebRTC แบบทดลองและอาจไม่สำเร็จในบางเครือข่าย",
+      features:["Android เป็นเครื่องหลัก: รับไฟล์เป็นค่าเริ่มต้น หรือเปลี่ยนเป็นส่งไฟล์","QR เปิดหน้าเบราว์เซอร์สำหรับผู้ร่วมใช้โดยไม่ต้องติดตั้งแอป","ใช้งานใน LAN ได้โดยไม่ต้องมีอินเทอร์เน็ต และหลายเครื่องเชื่อมต่อได้","Internet P2P (Preview): เชื่อมต่อข้ามเครือข่ายเมื่อสภาพแวดล้อมรองรับ; ยังไม่มี TURN relay","แสดงประวัติและเปิดไฟล์ที่ยังอยู่ใน Android ด้วยแอปที่ติดตั้งไว้"],
+      hero:"ส่งไฟล์ถึงกัน ไม่ว่าจะอยู่ใกล้หรือไกล",blurb:"หนึ่งแอป Android หลายเบราว์เซอร์ เชื่อมต่อด้วย QR",preview:"FILE SHARE · LAN & INTERNET",
+      type:"manifest",manifest:"./downloads/file-share-latest.json",secondary:{label:"เปิดหน้าเชื่อมต่อผ่าน Internet (Preview)",url:"./file-share/"},
+      note:"APK นี้เป็นรุ่น Preview สำหรับติดตั้งเอง ยังต้องทดสอบกับอุปกรณ์จริง โดย Internet P2P อาจล้มเหลวบนเครือข่ายที่ต้องพึ่ง TURN; หน้าเว็บ Internet ไม่ใช่เซิร์ฟเวอร์เก็บไฟล์ การรับ–ส่งผ่าน LAN ใช้งานได้โดยไม่ต้องเชื่อมอินเทอร์เน็ต",
+      fallback:"ยังไม่มีไฟล์ APK X-Stage File Share ที่ตรวจสอบได้"
+    },
     "mirror-tv":{
       title:"X-Stage Mirror TV",category:"ANDROID TV · DISPLAY",
       subtitle:"รับภาพจาก iPhone และ iPad บนจอ Android TV",
@@ -161,6 +171,17 @@
       const url=verified?verifiedReleaseUrl(data.download_url||data.installer_url,".exe"):"";
       return url?{available:true,url:url,status:"Windows v"+String(data.version||"ล่าสุด"),kind:"download",version:String(data.version||"")}:
         {available:false,url:"",status:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน",kind:"pending"};
+    }
+    if(id==="file-share"){
+      const version=String(data.version||"");
+      const expectedFile="X-Stage-File-Share-v"+version+".apk";
+      const validVersion=/^\\d+\\.\\d+\\.\\d+(?:-preview\\.\\d+)?$/.test(version);
+      const file=String(data.file||"");
+      const valid=data.available===true&&validVersion&&file===expectedFile&&SHA256.test(data.sha256||"");
+      const expectedUrl="https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v"+version+"/"+file;
+      const url=valid&&data.download_url===expectedUrl?verifiedReleaseUrl(expectedUrl,".apk"):"";
+      return url?{available:true,url,status:"APK v"+version+" · "+(data.channel==="preview"?"รุ่น Preview":"เผยแพร่แล้ว"),kind:"download",version}:
+        {available:false,url:"",status:"ยังไม่มี APK File Share ที่ตรวจสอบได้",kind:"pending"};
     }
     if(id==="mirror-tv"){
       const verified=data.available===true && SHA256.test(data.sha256||"");
@@ -264,7 +285,7 @@
     }else if(state.available && state.url){
       const label=id==="studio-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
-        id==="karaoke-android"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
+        id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
       const support=suitability(id);
       const adjusted=support.level==="other"?"ไฟล์สำหรับอุปกรณ์ที่รองรับ ↗":label;
       container.appendChild(createAction(adjusted,state.url,"primary",!state.url.startsWith("./")));
@@ -327,7 +348,7 @@
       preview.appendChild(cardArt.firstElementChild.cloneNode(true));
     }else{
       const img=document.createElement("img");
-      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg" })[id]||"./assets/xstage-stage-logo.png";
+      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
       img.alt="";
       preview.appendChild(img);
     }
