@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title id="title">X-Stage Mirror PC</title><desc id="desc">Windows PC screen receiving two wireless mobile displays</desc>
+<defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#182a54"/><stop offset="1" stop-color="#11182a"/></linearGradient><linearGradient id="s"><stop stop-color="#5fe4f5"/><stop offset="1" stop-color="#ac8cf7"/></linearGradient></defs>
+<rect x="10" y="10" width="492" height="492" rx="110" fill="url(#g)" stroke="#638cf5" stroke-width="6"/>
+<rect x="86" y="144" width="340" height="230" rx="23" fill="#080f21" stroke="url(#s)" stroke-width="17"/>
+<rect x="109" y="167" width="294" height="182" rx="7" fill="#223b68"/>
+<path d="M235 374v35m42-35v35m-103 3h164" fill="none" stroke="#9db9e8" stroke-width="15" stroke-linecap="round"/>
+<rect x="146" y="195" width="66" height="121" rx="12" fill="#223553" stroke="#62e2f5" stroke-width="7"/>
+<rect x="298" y="195" width="66" height="121" rx="12" fill="#223553" stroke="#c49dfa" stroke-width="7"/>
+<path d="M220 239q37-28 74 0M231 260q25-16 50 0" fill="none" stroke="#72e9f5" stroke-width="9" stroke-linecap="round"/>
+<circle cx="256" cy="285" r="6" fill="#72e9f5"/>
+</svg>
