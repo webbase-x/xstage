@@ -115,6 +115,9 @@ substitute(overview,
 # disappear. Keep the same layout but give its content a bounded scroll viewport
 # which responds to keyboard insets and TV remote focus.
 substitute(overview,
+           'import androidx.compose.foundation.focusable',
+           'import androidx.compose.foundation.focusable\\nimport androidx.compose.foundation.focusGroup')
+substitute(overview,
            '    Column(modifier = Modifier.fillMaxSize()) {\n        // content area',
            '    Column(modifier = Modifier.fillMaxSize().imePadding()) {\n        // content area')
 substitute(overview,
