@@ -47,6 +47,23 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 - Mirroring of DRM-protected apps is not supported.
 - All AirPlay/UxPlay native libraries and codecs are bundled into **one APK**.
   No separate codec, helper, SoundFont, media server, or iOS app is downloaded.
+- **v0.2.8 (Build 110) safe in-place upgrades**: official and preview
+  releases must use the same **persistent private Android signing key**.
+  The update manifest records the signing certificate SHA-256. At launch the
+  receiver compares it to its installed APK's signer, in addition to comparing
+  versionCode and validating the downloaded APK SHA-256. Compatible newer APKs
+  are handed to Android's system installer, which still requires user approval
+  and preserves app data. A signature mismatch is reported **before** downloading
+  an APK; the app remains installed and LAN casting remains available.
+  Both publishing workflows reject accidental signing-key changes, and the
+  preview workflow audits the original public Build 107 APK certificate.
+  **Build 107 compatibility cannot be guaranteed:** if it was installed from
+  the debug-signed APK and its original private signing key is unavailable,
+  Android does not permit an in-place update to a newly signed APK. Changing
+  package name, version, or manifest cannot bypass this security rule. Do not
+  uninstall until the receiver name and settings have been noted and a safe
+  replacement plan is available. Builds 110 and later signed with the same
+  persistent key are designed to update in place.
 - Starting in **v0.2.5 (Build 107)**, checks both the production-signed
   `mirror-tv/latest.json` and preview `mirror-tv/test-latest.json` on every
   app launch; Settings also has a manual "ตรวจสอบอัปเดต" button.
