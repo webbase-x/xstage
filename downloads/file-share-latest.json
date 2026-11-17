@@ -1,14 +1,14 @@
 {
   "name": "X-Stage File Share Android Preview",
   "available": true,
-  "version": "0.1.1-preview.3",
+  "version": "0.1.1-preview.4",
   "channel": "preview",
-  "file": "X-Stage-File-Share-v0.1.1-preview.3.apk",
-  "sha256": "fc6eec8d4f4284864852405d29a4b8479b69cd49cb0df727f0faf4d4fbfe9a67",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v0.1.1-preview.3/X-Stage-File-Share-v0.1.1-preview.3.apk",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/xstage-file-share-v0.1.1-preview.3",
-  "note": "Build 3: QR layout adapted for Android TV/projectors, FIT_CENTER square image, 4-module margin and additional white quiet zone. Existing update verification, Android confirmation and offline LAN retained.",
-  "revision": "2026-11-17-build-3-qr",
-  "source_commit": "f575318861ec4a97115280af4953a286e3762d6e",
-  "build_code": 3
+  "file": "X-Stage-File-Share-v0.1.1-preview.4.apk",
+  "sha256": "37a1425507f8cd462f81d7d3a4d3f5931842f489d1c7b602c7265b85de6f0354",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-file-share-v0.1.1-preview.4/X-Stage-File-Share-v0.1.1-preview.4.apk",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/xstage-file-share-v0.1.1-preview.4",
+  "note": "Build 4 adds receiver transfer name, progress, completed/failed status and ongoing Android foreground notification; keeps Internet WebRTC host owned by the foreground service across Android activity switches; supports retry of failed files for LAN and Internet browser clients. Browser background transfers remain subject to iOS/Safari limitations.",
+  "revision": "2026-11-17-build-4-transfer-status-retry",
+  "source_commit": "bd6b093114af62301ee750186d82452e860734ef",
+  "build_code": 4
 }
