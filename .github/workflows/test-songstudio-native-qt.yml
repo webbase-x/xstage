@@ -74,20 +74,20 @@ jobs:
       - name: Validate offline conversions
         shell: powershell
         run: |
-          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364'
+          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365'
           & (Join-Path $bundle '.runtime/python/python.exe') scripts/test_songstudio_ready.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Offline Ready runtime conversion regression failed' }
       - name: Exercise real bundled Qt desktop startup (offscreen CI)
         shell: powershell
         run: |
-          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364'
+          $bundle = 'dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365'
           python scripts/test_songstudio_native_runtime.py $bundle
           if ($LASTEXITCODE -ne 0) { throw 'Packaged native Qt Engine startup failed' }
       - name: Upload candidate ZIP for review
         uses: actions/upload-artifact@v6
         with:
-          name: SongStudio-PC-Native-Qt-v0.3.64-build364-CANDIDATE
+          name: SongStudio-PC-Native-Qt-v0.3.65-build365-CANDIDATE
           path: |
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364.zip
-            dist/X-Stage-Song-Studio-PC-Ready-v0.3.64-build364.zip.sha256
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365.zip
+            dist/X-Stage-Song-Studio-PC-Ready-v0.3.65-build365.zip.sha256
           retention-days: 7
