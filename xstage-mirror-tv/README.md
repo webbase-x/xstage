@@ -6,6 +6,17 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 ## Scope and behavior
 
 - Runs on compatible Android TV / Google TV / TrueID TV boxes (device-specific validation required).
+- v0.2.1 performance defaults: H.264 (wider hardware compatibility), AUTO video
+  advertising capped at 1080p/30fps even on a 4K TV; manually selected resolutions
+  and frame rates still override the default.
+- Three remote-control settings presets: **720p30** (weaker hardware or poor Wi-Fi),
+  **720p60** (motion and scrolling), **1080p30** (clearer static content).
+- Decoder input backpressure bounded to about 25ms per packet (100ms startup),
+  instead of the previous 200ms/1s worst-case waits. This reduces stalling,
+  but overload can still cause dropped frames; try 720p30 first if stutters persist.
+- Android NSD retries failed AirPlay announcements with bounded backoff.
+- Video GL surface prewarmed on receiver start; diagnostics log elapsed receiver
+  startup, connection-to-video-size, and connection-to-first-video-packet times.
 - iOS Control Center > Screen Mirroring discovers the configurable receiver name.
 - Default receiver name: **X-Stage Mirror TV**; change it in the receiver's Settings.
 - Automatically starts receiving on launch/boot (subject to Android background restrictions).
@@ -82,6 +93,13 @@ Keep the GPLv3 and upstream attribution when redistributing modified binaries.
 4. On iPhone: Control Center > Screen Mirroring > select the receiver's displayed name.
 5. Use Settings on TV to rename the receiver; wait for its AirPlay advertisement to restart.
 6. Check audio/video sync, portrait/landscape, reboot autostart, disconnect/reconnect.
+7. For timing diagnostics, enable Settings > Developer options > benchmark log
+   and capture logcat from the physical TV box. For example:
+   `adb logcat -v time -s AirPlayService:I XStageMirrorDiscovery:I VideoRenderer:W BENCHMARK:I`
+   (exact service log tag may vary by build).
+   Record iPhone selection-to-first-visible-frame, FPS, frame drops and jitter
+   while scrolling at each preset. Static CI builds cannot verify physical
+   TrueID TV networking or measure end-to-end mirroring latency.
 
 **Security:** PIN-free reception is intended for trusted private networks.
 Anyone on the LAN may be able to request mirroring; turn on a PIN in Settings

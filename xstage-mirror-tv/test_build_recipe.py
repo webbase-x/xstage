@@ -22,6 +22,23 @@ assert 'bool("boot_auto_start", true' in prefs
 assert 'bool("auto_start", true' in prefs
 assert 'bool("run_in_background", true' in prefs
 assert 'bool("advertise_mirroring", true' in prefs
+assert 'int("max_fps", 30,' in prefs
+assert 'str("h265", OFF,' in prefs
+service = (app / "src/main/kotlin/app/airshow/tv/service/AirPlayService.kt").read_text()
+renderer = (app / "src/main/kotlin/app/airshow/tv/renderer/VideoRenderer.kt").read_text()
+discovery = (app / "src/main/kotlin/app/airshow/tv/discovery/NsdServiceManager.kt").read_text()
+assert "if (auto) minOf(maxW, 1920)" in service
+assert "if (auto) minOf(maxH, 1080)" in service
+assert "prewarmPipeline()" in service and "fun prewarmPipeline()" in renderer
+assert "First video packet after " in service
+assert "Negotiated video size after " in service
+assert "Receiver startup: " in service
+assert "FEED_WAIT_US = 5_000L" in renderer
+assert "FEED_RETRIES = 5" in renderer
+assert "FIRST_FEED_RETRIES = 20" in renderer
+assert "700L, 1_800L, 4_000L, 8_000L" in discovery
+assert "removeCallbacksAndMessages(null)" in discovery
+assert "registerAttempt(service, attempt + 1)" in discovery
 assert 'ReceiverSetupQr(serverName)' in ui
 assert (app / "src/main/kotlin/app/airshow/tv/ui/ReceiverSetupQr.kt").exists()
 updater = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateManager.kt").read_text()
@@ -38,6 +55,8 @@ assert "mirrorUpdates.checkOnLaunch()" in activity
 assert "mirrorUpdates.onResume()" in activity
 assert "mirrorUpdates.close()" in activity
 assert "checkMirrorUpdateNow" in settings
+assert "1280x720" in settings and "1920x1080" in settings
+assert "ลื่นไหล 720p" in settings
 assert "SHA-256" in updater and "getPackageArchiveInfo" in updater
 assert "FileProvider.getUriForFile" in updater
 assert "canRequestPackageInstalls()" in updater
@@ -46,9 +65,9 @@ assert "https://webbase-x.github.io/xstage/mirror-tv/latest.json" in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 102' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 103' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
 assert (root / "NOTICE").exists()
-print("PASS: one-APK receiver, verified installer, safe post-install cleanup, Android TV launcher and QR")
+print("PASS: Mirror TV receiver, profiles, discovery retries, verified updater and cleanup")
