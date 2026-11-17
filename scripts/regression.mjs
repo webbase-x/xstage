@@ -188,6 +188,19 @@ const receiverPolicy=read('xstage-mirror-tv/ReceiverNamePolicy.kt');
 const receiverEditor=read('xstage-mirror-tv/ReceiverNameEditor.kt');
 const receiverBuild=read('xstage-mirror-tv/prepare_upstream.py');
 const receiverRecipe=read('xstage-mirror-tv/test_build_recipe.py');
+
+const receiverUpdater=read('xstage-mirror-tv/MirrorUpdateManager.kt');
+const mirrorReleaseWorkflow=read('.github/workflows/release-xstage-mirror-tv.yml');
+assert.ok(receiverUpdater.includes('official.signerSha256 != installedSigner')&&
+          receiverUpdater.includes('offerIncompatibleOfficial()')&&
+          receiverUpdater.includes('Installed')===false || receiverUpdater.includes('installedSignerSha256()'),
+          'Mirror TV must screen update signing identities before Android install');
+assert.ok(mirrorBuilder.includes('LEGACY_APK="X-Stage-Mirror-TV-test-v0.2.5-build107.apk"')&&
+          mirrorBuilder.includes('STABLE_SHA=$(python3')&&
+          mirrorReleaseWorkflow.includes('"signing_mode":"persistent"')&&
+          mirrorReleaseWorkflow.includes('"signer_sha256":os.environ["SIGNER_SHA256"]'),
+          'Mirror release process must audit legacy signing and pin new releases');
+
 assert.ok(receiverPolicy.includes('const val PREFIX = "X-Stage Mirror TV"')&&
           receiverPolicy.includes('fun migratePreviousName(context: Context)')&&
           receiverPolicy.includes('fun fromSuffix(rawSuffix: String)'),
