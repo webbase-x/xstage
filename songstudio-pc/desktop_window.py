@@ -59,7 +59,8 @@ def run_desktop(server, url: str, data_directory: Path, icon: Path) -> None:
     class Window(QMainWindow):
         def __init__(self):
             super().__init__()
-            self.setWindowTitle("X-Stage Song Studio PC")
+            from engine import STATUS_VERSION, STATUS_BUILD
+            self.setWindowTitle(f"X-Stage Song Studio PC v{STATUS_VERSION} · Build {STATUS_BUILD}")
             self.resize(1440, 900)
             self.view = QWebEngineView(self)
             self.page = LocalPage(profile, self.view)
