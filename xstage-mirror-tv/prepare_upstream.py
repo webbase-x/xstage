@@ -158,6 +158,78 @@ substitute(overview,
            '                                        if (index > 0) left = tabFocus[index - 1]\n'
            '                                        if (index < tabFocus.lastIndex) right = tabFocus[index + 1]\n'
            '                                    }.dpadFocus()')
+# Replace the busy upstream home/transport surface with a calm receiver view.
+# Perform this after upstream UI substitutions so they remain pinned and audited.
+minimal_home = Path(__file__).resolve().parent / "XStageReceiverHome.kt"
+(ui / "XStageReceiverHome.kt").write_text(
+    minimal_home.read_text(encoding="utf-8"), encoding="utf-8")
+screen = overview.read_text(encoding="utf-8")
+video_back = '        BackHandler { viewModel.stopVideoPlayback() }\n'
+if screen.count(video_back) != 1:
+    raise RuntimeError("Expected one upstream video-back handler")
+screen = screen.replace(video_back, '')
+screen = screen.replace(
+    'if (justStarted && !audioOnly && !videoPlaybackActive && autoFullscreen && pin == null)',
+    'if (justStarted && !audioOnly && !videoPlaybackActive && pin == null)')
+start = screen.index('    if (fullscreen) {\n        BackHandler { fullscreen = false }')
+end = screen.index('\n    // pin dialog', start)
+screen = screen[:start] + '''    if (fullscreen) {
+        FullscreenVideo(
+            viewModel = viewModel,
+            video = video,
+            onExitFullscreen = { fullscreen = false },
+            onPip = onPip
+        )
+    } else if (tab == Tab.OVERVIEW) {
+        XStageReceiverHome(
+            viewModel = viewModel,
+            video = video,
+            onSettings = { tab = Tab.SETTINGS },
+            onLocalNetwork = onLocalNetwork
+        )
+    } else {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TextButton(
+                onClick = { tab = Tab.OVERVIEW },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    .dpadFocus()
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("กลับหน้าหลัก")
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                SettingsScreen(viewModel)
+            }
+        }
+    }
+''' + screen[end:]
+# Remove the unreachable upstream overview and its start/stop button.
+start = screen.index('\n@Composable\nprivate fun TabContent(')
+end = screen.index('\n@Composable\nprivate fun FullscreenVideo(', start)
+screen = screen[:start] + screen[end:]
+# During screen mirroring, picture only: no PiP/close overlays over the video.
+start = screen.index('@Composable\nprivate fun FullscreenVideo(')
+end = screen.index('\n// dacp scanning', start)
+screen = screen[:start] + '''@Composable
+private fun FullscreenVideo(
+    viewModel: MainViewModel,
+    video: @Composable () -> Unit,
+    onExitFullscreen: () -> Unit,
+    onPip: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        video()
+    }
+}
+''' + screen[end:]
+if 'viewModel::startServer' in screen or 'viewModel::stopServer' in screen:
+    raise RuntimeError("Unexpected manual receiver control remains in primary UI")
+overview.write_text(screen, encoding="utf-8")
+
 # Material3's dimmed labels and weak outline are difficult to read across TVs.
 theme_file = ui / "theme" / "Theme.kt"
 substitute(theme_file, 'primary = Color(0xFFFF5A6E)', 'primary = Color(0xFF7AE7FF)')
