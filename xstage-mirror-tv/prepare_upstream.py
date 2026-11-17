@@ -116,7 +116,7 @@ substitute(overview,
 # which responds to keyboard insets and TV remote focus.
 substitute(overview,
            'import androidx.compose.foundation.focusable',
-           'import androidx.compose.foundation.focusable\\nimport androidx.compose.foundation.focusGroup')
+           'import androidx.compose.foundation.focusable\nimport androidx.compose.foundation.focusGroup')
 substitute(overview,
            '    Column(modifier = Modifier.fillMaxSize()) {\n        // content area',
            '    Column(modifier = Modifier.fillMaxSize().imePadding()) {\n        // content area')
