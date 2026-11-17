@@ -187,6 +187,34 @@ for pad, count in [('                        ', 3), ('                ', 1)]:
     settings_text = settings_text.replace(target,
         pad + 'modifier = Modifier.dpadFocus(),\n' + pad + chip_colors +
         '\n' + pad[:-4] + ')')
+# In each setting's one-line choice row, DPAD LEFT/RIGHT must visit the
+# immediate adjacent option, instead of choosing an unrelated control.
+settings_text = settings_text.replace(
+    'import androidx.compose.ui.focus.onFocusChanged',
+    'import androidx.compose.ui.focus.FocusRequester\n'
+    'import androidx.compose.ui.focus.focusProperties\n'
+    'import androidx.compose.ui.focus.focusRequester\n'
+    'import androidx.compose.ui.focus.onFocusChanged')
+settings_text = settings_text.replace(
+    '    FlowRow(modifier = Modifier.focusGroup(),\n'
+    '            horizontalArrangement = Arrangement.spacedBy(8.dp)) {\n'
+    '        options.forEach { (key, label) ->',
+    '    val choiceFocus = remember(options) { List(options.size) { FocusRequester() } }\n'
+    '    FlowRow(modifier = Modifier.focusGroup(),\n'
+    '            horizontalArrangement = Arrangement.spacedBy(8.dp)) {\n'
+    '        options.forEachIndexed { index, (key, label) ->')
+settings_text = settings_text.replace(
+    '                modifier = Modifier.dpadFocus(),\n'
+    '                colors = FilterChipDefaults.filterChipColors(',
+    '                modifier = Modifier.focusRequester(choiceFocus[index])\n'
+    '                    .focusProperties {\n'
+    '                        if (index > 0) left = choiceFocus[index - 1]\n'
+    '                        if (index < choiceFocus.lastIndex) right = choiceFocus[index + 1]\n'
+    '                    }.dpadFocus(),\n'
+    '                colors = FilterChipDefaults.filterChipColors(')
+if 'choiceFocus[index]' not in settings_text or 'forEachIndexed { index, (key, label)' not in settings_text:
+    raise RuntimeError("TV choice focus chain was not installed")
+
 settings_p.write_text(settings_text, encoding="utf-8")
 
 overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
