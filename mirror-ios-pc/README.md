@@ -1,6 +1,6 @@
 # X-Stage Mirror iOS PC
 
-**v1.0.5 · Build 1006 · Windows 10/11 x64 · Preview**
+**v1.0.6 · Build 1007 · Windows 10/11 x64 · Preview**
 
 The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
 
@@ -42,6 +42,27 @@ A frozen image **cannot be diagnosed reliably by checking whether the receiving 
 
 When video fills the display, the native renderer may receive the keystrokes instead of X-Stage. Use Alt+Tab to switch to the receiver shell before pressing F1/F5/F8. Do not assume these keys work within GStreamer.
 
+## Bonjour service upgrade compatibility (Build 1007)
+
+In Build 1006, the all-in-one Windows installer re-copied
+`engine/uxplay-windows/mDNSResponder.exe` into the application directory
+every time. If that binary was running as the Windows **Bonjour Service**,
+Inno Setup's Restart Manager displayed an "Automatically close the
+applications" prompt or stopped the service. Build 1007 excludes the
+binary from the recursively replaced application files and installs it as
+a separate **missing-file-only** entry, with an early `Check` so Restart
+Manager does not consider the already present and in-use binary. The binary
+is retained during uninstall while an existing Windows service may still
+refer to it. The actual Bonjour Service registration happens only if the
+service is not installed. Do not forcibly stop a shared Bonjour service
+during ordinary X-Stage upgrades.
+
+Fresh installations still include the verified bundled mDNSResponder and
+AirPlay runtime, and do not require an extra download. The installer and
+X-Stage source change do not modify an existing non-X-Stage Bonjour service
+binary installed elsewhere. A real Windows upgrade with Bonjour running
+should still be checked before treating the issue as fully confirmed.
+
 ## Packaging and privacy
 
 The Setup EXE embeds the self-contained .NET runtime, UxPlay, GStreamer plugins and Bonjour service. No extra application runtime downloads are required. On trusted **Private** LANs the installer offers consented firewall rules. A first-time Bonjour service registration may ask Windows for administrator permission. There are no remote relay accounts.
@@ -51,11 +72,11 @@ The app presents the actual detected local network IP. Connected sender IPs can 
 The Windows receiver is separated from **X-Stage Mirror Android PC**; the latter uses Windows-native Miracast and is not changed by this release.
 
 
-## Desktop icon (Build 1006)
+## Desktop icon (Build 1007)
 
 The Windows installer always creates a **X-Stage Mirror iOS PC** desktop shortcut, including during /VERYSILENT automatic upgrades. The shortcut points to the installed executable, uses the embedded branded ICO, and is removed by the installer uninstall process. The Start menu shortcut continues to be created. No manual shortcut option is required.
 
-## Automatic upgrades (Build 1006)
+## Automatic upgrades (Build 1007)
 
 - The running PC receiver checks the exact X-Stage iOS PC preview feed at launch and every 30 minutes, with a short network timeout for the feed.
 - When a newer matching Windows build is published, the client automatically downloads the **complete Setup EXE** from the specifically named GitHub Release. It checks platform, app, monotonic build, semantic version, exact asset URL/file name, executable header, size limits and SHA-256. Only that checked file may launch.

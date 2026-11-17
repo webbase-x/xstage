@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror iOS PC"
-#define MyAppVersion "1.0.5"
-#define MyAppBuild "1006"
+#define MyAppVersion "1.0.6"
+#define MyAppBuild "1007"
 
 [Setup]
 ; Relative to this script in mirror-ios-pc/installer. Resolve to repository root.
@@ -37,9 +37,17 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "privateairplay"; Description: "Allow X-Stage AirPlay discovery on trusted Private networks (recommended for iPhone/iPad)"; GroupDescription: "Local network permissions:"; Flags: checkedonce
 
 [Files]
-Source: "mirror-ios-pc\out\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Ensure Bonjour Service registration uses only bundled mDNSResponder.exe.
-; This action needs Windows administrator permission but NO extra download.
+Source: "mirror-ios-pc\out\*"; Excludes: "mDNSResponder.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Bonjour Service runs from mDNSResponder.exe. Installing the file again during
+; an upgrade causes Restart Manager to ask to close the shared Windows service.
+; Keep its binary in the same location and install it ONLY when missing. A Check
+; is necessary because onlyifdoesntexist alone still lets Restart Manager see
+; the locked file before deciding whether to skip it.
+; Do not remove this binary on uninstall: the Windows Bonjour Service may be
+; shared with other AirPlay applications and its service path may point here.
+Source: "mirror-ios-pc\out\engine\uxplay-windows\mDNSResponder.exe"; DestDir: "{app}\engine\uxplay-windows"; Flags: onlyifdoesntexist uninsneveruninstall; Check: not FileExists(ExpandConstant('{app}\engine\uxplay-windows\mDNSResponder.exe'))
+; The app still bundles Bonjour for fresh installations and installs the
+; service only if it is absent; it never forcibly stops an existing service.
 
 [Icons]
 Name: "{group}\X-Stage Mirror iOS PC"; Filename: "{app}\XStageMirrorIOSPC.exe"

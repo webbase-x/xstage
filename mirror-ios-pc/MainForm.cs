@@ -18,7 +18,7 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.5 · Build 1006";
+    private const string VersionText = "v1.0.6 · Build 1007";
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
