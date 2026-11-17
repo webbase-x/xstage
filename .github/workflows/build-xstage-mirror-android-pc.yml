@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: xstage-mirror-android-pc-\${{ github.ref }}
+  group: xstage-mirror-android-pc-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
