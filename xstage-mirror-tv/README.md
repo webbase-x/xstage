@@ -182,6 +182,12 @@ reinstalling dependencies or deleting app settings.
 Building manually: run the steps in .github/workflows/build-xstage-mirror-tv.yml.
 Keep the GPLv3 and upstream attribution when redistributing modified binaries.
 
+## BlueStacks 5 emulator limitation
+
+BlueStacks 5 on Windows is **not a validated Android TV receiver target**. Even if the AirPlay service name appears in iOS Screen Mirroring, a connection and usable video are not guaranteed: emulator NAT/virtual networking can prevent Bonjour/mDNS discovery or the inbound TCP media session, and its virtual Android decoder may behave differently from physical TV hardware. Seeing the name alone does not prove that AirPlay setup or video decoding has succeeded. Do not present emulator testing as proof of TrueID compatibility.
+
+When the goal is to display an iPhone/iPad on a Windows computer, use the dedicated native **X-Stage Mirror iOS PC** receiver from the storefront (`?app=mirror-ios-pc`), on the same trusted LAN, rather than trying to route AirPlay through BlueStacks. For TV reception, test the Android APK on a physical Android TV / Google TV / TrueID device. This does not claim BlueStacks can be repaired solely through APK changes.
+
 ## Install and test
 
 1. On the TV box, enable installation from a trusted source and install the generated APK.
