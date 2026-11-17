@@ -256,9 +256,9 @@ class MirrorUpdateManager(private val activity: MainActivity) {
         AlertDialog.Builder(activity)
             .setTitle("พบรุ่นใหม่ แต่ยังติดตั้งทับไม่ได้")
             .setMessage(
-                "พบ X-Stage Mirror TV v" + update.version + " (Build " + update.code + ").\\n\\n" +
+                "พบ X-Stage Mirror TV v" + update.version + " (Build " + update.code + ").\n\n" +
                 "ลายเซ็นของ APK ใหม่ไม่ตรงกับแอปในเครื่อง หรืออ่านลายเซ็นเดิมไม่ได้ " +
-                "Android ไม่อนุญาตให้ติดตั้งทับ เพื่อป้องกันการปลอมแปลงแอป\\n\\n" +
+                "Android ไม่อนุญาตให้ติดตั้งทับ เพื่อป้องกันการปลอมแปลงแอป\n\n" +
                 "อย่าเพิ่งถอนแอปเดิม เพราะชื่อเครื่องรับและการตั้งค่าอาจหายไป " +
                 "หากมีไฟล์กุญแจลงนามเดิม ผู้พัฒนาต้องสร้าง APK ด้วยกุญแจนั้นจึงจะอัปเดตทับได้"
             )
