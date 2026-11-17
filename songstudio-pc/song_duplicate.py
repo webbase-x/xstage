@@ -57,21 +57,37 @@ def _companions(root, media):
     found = set()
     result = []
     for folder in roots:
-        try:
-            entries = folder.iterdir()
-            for candidate in entries:
-                if (candidate.stem.casefold() != media.stem.casefold() or
-                        candidate.suffix.casefold() not in LYRIC_EXTENSIONS):
-                    continue
+        # Direct filename lookups are O(extensions), not O(all lyrics in folder).
+        # A single LYR directory may contain 100,000+ files.
+        for extension in LYRIC_EXTENSIONS:
+            candidate = folder / (media.stem + extension)
+            try:
                 if (candidate.is_symlink() or not candidate.is_file() or
                         not candidate.resolve().is_relative_to(root)):
                     continue
-                if candidate in found:
-                    continue
-                found.add(candidate)
-                result.append(candidate)
-        except OSError as exc:
-            raise OSError("อ่านไฟล์ประกอบไม่สำเร็จ: " + str(folder)) from exc
+            except OSError as exc:
+                raise OSError("อ่านไฟล์ประกอบไม่สำเร็จ: " + str(candidate)) from exc
+            resolved = candidate.resolve()
+            if resolved not in found:
+                found.add(resolved)
+                result.append(resolved)
+        # POSIX filesystems are case-sensitive. Windows direct lookups already
+        # match ".JSON"/".json"; the fallback here handles unusual UNIX files.
+        if os.name != "nt":
+            try:
+                for candidate in folder.iterdir():
+                    if (candidate.stem.casefold() != media.stem.casefold() or
+                            candidate.suffix.casefold() not in LYRIC_EXTENSIONS):
+                        continue
+                    if candidate.is_symlink() or not candidate.is_file():
+                        continue
+                    resolved = candidate.resolve()
+                    if not resolved.is_relative_to(root) or resolved in found:
+                        continue
+                    found.add(resolved)
+                    result.append(resolved)
+            except OSError as exc:
+                raise OSError("อ่านไฟล์ประกอบไม่สำเร็จ: " + str(folder)) from exc
     return sorted(result, key=lambda path: str(path).casefold())
 
 
@@ -99,17 +115,24 @@ def _code_group_key(root, path):
 
 
 def _shared_sidecar(media):
-    """Skip companions with another media file of the same code in this folder."""
-    try:
-        for item in media.parent.iterdir():
-            if (item == media or item.is_symlink() or
-                    item.suffix.casefold() not in MEDIA_EXTENSIONS or
-                    item.stem.casefold() != media.stem.casefold()):
-                continue
-            if item.is_file() and item.suffix.casefold() not in (".xsk", ".emk"):
-                return True
-    except OSError as exc:
-        raise OSError("ตรวจไฟล์เพลงที่ใช้เนื้อร้องร่วมกันไม่ได้") from exc
+    """Protect lyrics if another file format with the same code needs them."""
+    # The PC runs on case-insensitive NTFS: no slow folder-wide listing.
+    for extension in MEDIA_EXTENSIONS:
+        if extension in (".xsk", ".emk", media.suffix.casefold()):
+            continue
+        if media.with_suffix(extension).is_file():
+            return True
+    if os.name != "nt":
+        try:
+            for item in media.parent.iterdir():
+                if (item == media or item.is_symlink() or
+                        item.suffix.casefold() not in MEDIA_EXTENSIONS or
+                        item.stem.casefold() != media.stem.casefold()):
+                    continue
+                if item.is_file() and item.suffix.casefold() not in (".xsk", ".emk"):
+                    return True
+        except OSError as exc:
+            raise OSError("ตรวจไฟล์ที่ใช้เนื้อร้องร่วมกันไม่ได้") from exc
     return False
 
 
