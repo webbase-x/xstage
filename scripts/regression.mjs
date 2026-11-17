@@ -125,6 +125,8 @@ assert.ok(app.includes('xstage-tv-quick-refresh')&&app.includes('window.XStageTv
 assert.ok(css.includes('body.xstage-ui-v2 .stage #tv-refresh-window:not([hidden])'),'TV refresh must override stage overlay hiding');
 assert.ok(singerStage.includes('id="refresh-window"')&&singerStage.includes('window.location.reload()'),'separate TV stage must have clickable reload');
 assert.ok(read('mirror-tv/index.html').includes('id="mirror-refresh-window"')&&read('mirror-tv/index.html').includes('window.location.reload()'),'Mirror TV website must expose a refresh button');
+assert.ok(read('mirror-tv/index.html').includes('BlueStacks 5')&&read('mirror-tv/index.html').includes('../?app=mirror-ios-pc'),'Mirror TV guide must explain emulator limitations and link to native Windows receiver');
+assert.ok(read('xstage-mirror-tv/README.md').includes('BlueStacks 5 emulator limitation'),'Mirror TV README must document unsupported emulator receiver testing');
 assert.ok(storefrontScript.includes('windows-pc-preview-latest.json'),'Public storefront must advertise only a verified Windows binary preview, not an unbuilt EXE');
 assert.ok(read('SOURCE_DISTRIBUTION_POLICY.md').includes('GPLv3'),'Repository policy must preserve the GPLv3 source obligation for Mirror TV');
 
