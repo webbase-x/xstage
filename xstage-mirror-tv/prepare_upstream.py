@@ -116,14 +116,14 @@ substitute(overview,
 # which responds to keyboard insets and TV remote focus.
 substitute(overview,
            'import androidx.compose.foundation.focusable',
-           'import androidx.compose.foundation.focusable\nimport androidx.compose.foundation.focusGroup')
+           'import androidx.compose.foundation.focusable\nimport androidx.compose.foundation.focusGroup\nimport androidx.compose.foundation.verticalScroll')
 substitute(overview,
            '    Column(modifier = Modifier.fillMaxSize()) {\n        // content area',
            '    Column(modifier = Modifier.fillMaxSize().imePadding()) {\n        // content area')
 substitute(overview,
            'horizontalAlignment = Alignment.CenterHorizontally,\n                        modifier = Modifier.padding(horizontal = 24.dp)',
            'horizontalAlignment = Alignment.CenterHorizontally,\n'
-           '                        modifier = Modifier.fillMaxWidth()\n'
+           '                        modifier = Modifier.fillMaxWidth().focusGroup()\n'
            '                            .verticalScroll(androidx.compose.foundation.rememberScrollState())\n'
            '                            .padding(horizontal = 24.dp)')
 # Group bottom tabs, and make the selected tab/readable text obvious.
