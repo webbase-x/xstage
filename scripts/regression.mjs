@@ -47,13 +47,13 @@ assert.match(storefront,/class="footer-logo new-footer-logo"[^>]*>[^]*?xstage-ap
 assert.match(storefront,/id="intro-title">หนึ่งเวที/,'new hero headline must render');
 assert.match(storefront,/class="intro section-wrap new-home-hero"/,'editorial hero must be present');
 assert.match(storeStyle,/\.intro\.new-home-hero\{/,'redesigned hero styling must load');
-assert.match(storefront,/storefront\.css\?brand=4/,'storefront refresh must bust the cached stylesheet');
-assert.match(storefront,/storefront\.js\?brand=4/,'Mirror TV direct-download UI must bust its old cached script');
+assert.match(storefront,/storefront\.css\?brand=5/,'storefront refresh must bust the cached stylesheet');
+assert.match(storefront,/storefront\.js\?brand=5/,'Mirror TV direct-download UI must bust its old cached script');
 assert.ok(!storefront.includes('xstage-app-icon-192.png" width="38"'),'storefront header must not reuse old Karaoke icon');
 
 assert.match(storefront,/source=android-/,'old Android builds must redirect into the existing player');
 assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
-for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv']){
+for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv','file-share']){
   assert.ok(storefront.includes('href="?app='+slug+'"'),'storefront must expose detail route for '+slug);
   assert.ok(storefront.includes('data-app="'+slug+'"'),'storefront must show card for '+slug);
 }
@@ -65,7 +65,8 @@ const uniqueApps=[
   ['karaoke-pc','assets/app-icons/karaoke-pc.svg','KARAOKE PC'],
   ['studio-web','studio/web-app-icon.svg','STUDIO WEB'],
   ['karaoke-android','assets/app-icons/karaoke-android.svg','KARAOKE TV'],
-  ['mirror-tv','assets/app-icons/mirror-tv.svg','MIRROR TV']
+  ['mirror-tv','assets/app-icons/mirror-tv.svg','MIRROR TV'],
+  ['file-share','assets/app-icons/file-share.svg','FILE SHARE']
 ];
 for(const [slug,path,label] of uniqueApps){
   const icon=read(path);
@@ -122,9 +123,17 @@ assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Androi
 assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
 assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
-assert.equal((storefront.match(/data-device-app=/g)||[]).length,6,'all six cards need device-compatibility hints');
-assert.ok(storefront.includes('storefront-device.js?brand=3'),'device guidance must be loaded before storefront controller');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,7,'all seven cards need device-compatibility hints');
+assert.ok(storefront.includes('storefront-device.js?brand=5'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
+assert.ok(storefront.includes('data-filter="files"')&&storefront.includes('data-download-app="file-share"'),'File Share must have its own filter and APK card action');
+assert.equal(deviceGuide.forApp(androidPhone,'file-share').level,'supported','Android phones support the File Share host APK');
+assert.equal(deviceGuide.forApp(iphone,'file-share').level,'other','iOS joins File Share through browser instead of APK');
+const fileShareRelease=JSON.parse(read('downloads/file-share-latest.json'));
+assert.equal(fileShareRelease.channel,'preview','File Share APK must be labelled Preview');
+assert.match(fileShareRelease.sha256,/^[a-f0-9]{64}$/,'File Share APK SHA-256 must be specified');
+assert.ok(fileShareRelease.download_url.includes('xstage-file-share-v')&&fileShareRelease.download_url.endsWith('.apk'),'File Share must link to a published APK binary');
+assert.ok(storefrontScript.includes('downloads/file-share-latest.json'),'File Share must load its verified public APK feed');
 
 const mirrorTest=JSON.parse(read('mirror-tv/test-latest.json'));
 assert.equal(mirrorTest.channel,'test-preview','Mirror TV cannot be represented as a production-signed release');
