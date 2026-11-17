@@ -20,9 +20,9 @@ class DuplicateMediaTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / "input"
+        self.root = (Path(self.tmp.name) / "input").resolve()
         self.root.mkdir()
-        self.output = Path(self.tmp.name) / "quarantine"
+        self.output = (Path(self.tmp.name) / "quarantine").resolve()
         self.output.mkdir()
         self.registry = duplicates.DuplicateMediaRegistry()
 
