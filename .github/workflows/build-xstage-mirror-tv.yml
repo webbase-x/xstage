@@ -25,7 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 110
     env:
-      GH_TOKEN: ${{ github.token }}
+      # Optional narrowly scoped GitHub publishing token when the built-in token cannot create Releases.
+      GH_TOKEN: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
       # One persistent PRIVATE identity for signed previews and official releases.
       # Never place a release keystore, passwords, or aliases in source control.
       XSTAGE_MIRROR_KEYSTORE_BASE64: ${{ secrets.XSTAGE_MIRROR_KEYSTORE_BASE64 }}
@@ -35,6 +36,8 @@ jobs:
     steps:
       - name: Checkout X-Stage source
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
 
       - name: Validate Mirror TV UI recipe and regression syntax before signing
         shell: bash
@@ -154,7 +157,7 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           sha256sum dist/* > dist/SHA256SUMS.txt
 
-      - name: Verify test APK and publish public prerelease
+      - name: Verify signed test APK and prepare distribution
         id: preview
         if: github.ref == 'refs/heads/main'
         shell: bash
@@ -233,17 +236,45 @@ jobs:
           mv "$APK" "dist/$TEST_FILE"
           (cd dist && sha256sum "$TEST_FILE" X-Stage-Mirror-TV-GPLv3-source.tar.gz > SHA256SUMS.txt)
           TAG="xstage-mirror-tv-test-v${VERSION}-build${BUILD}-${GITHUB_SHA:0:8}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" "dist/$TEST_FILE" dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz dist/SHA256SUMS.txt \
-              --target "$GITHUB_SHA" --prerelease \
-              --title "X-Stage Mirror TV v${VERSION} Build ${BUILD} — test preview" \
-              --notes "TEST PREVIEW built with the SAME PRIVATE PERSISTENT signing key as production. SHA-256 and signing certificate are verified; future builds keep the same certificate. Android still requires user-approved installation. Earlier debug-signed preview APKs (through Build 107) cannot be installed over without the old private signing key; one-time removal may be needed. GPLv3 source is included."
-          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "apk=$TEST_FILE" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "sha256=$(sha256sum "dist/$TEST_FILE" | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified APK and complete GPLv3 source even if Releases API is forbidden
+        if: steps.preview.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-TV-AndroidTV-build${{ steps.preview.outputs.build }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub prerelease when token has Release permission
+        id: publication
+        if: steps.preview.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          TAG: ${{ steps.preview.outputs.tag }}
+          TEST_FILE: ${{ steps.preview.outputs.apk }}
+          VERSION: ${{ steps.preview.outputs.version }}
+          BUILD: ${{ steps.preview.outputs.build }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            for asset in "$TEST_FILE" X-Stage-Mirror-TV-GPLv3-source.tar.gz SHA256SUMS.txt; do
+              gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fx "$asset"
+            done
+            echo "Already published complete prerelease: $TAG"
+          else
+            gh release create "$TAG" "dist/$TEST_FILE" dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz dist/SHA256SUMS.txt \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "X-Stage Mirror TV v${VERSION} Build ${BUILD} — test preview" \
+              --notes "Persistent-key signed APK: signer verified against private keystore. Debug-signed Build 107 needs a one-time uninstall if signing identities differ. GPLv3 corresponding source and checksums are included."
+            echo "Published prerelease: $TAG"
+          fi
 
       - name: Update test download feed without touching production signing feed
         if: steps.preview.outcome == 'success'
@@ -255,6 +286,7 @@ jobs:
           BUILD: ${{ steps.preview.outputs.build }}
           SHA256: ${{ steps.preview.outputs.sha256 }}
           SIGNER_SHA256: ${{ steps.preview.outputs.signer_sha256 }}
+          RELEASE_PUBLISHED: ${{ steps.publication.outcome == 'success' }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -266,6 +298,19 @@ jobs:
           # which cannot follow external GitHub Releases redirects.
           mkdir -p downloads
           cp "dist/$APK_FILE" "downloads/$APK_FILE"
+          # If Releases API is blocked, supply corresponding GPLv3 source
+          # alongside the APK on GitHub Pages; never advertise a missing Release.
+          SOURCE_FILE="X-Stage-Mirror-TV-GPLv3-source-v${VERSION}-build${BUILD}.tar.gz"
+          if [ "$RELEASE_PUBLISHED" != "true" ]; then
+            SOURCE_SIZE=$(stat -c '%s' dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz)
+            if [ "$SOURCE_SIZE" -gt 95000000 ]; then
+              echo "::error::GPL source archive too large for safe Pages git publication"
+              exit 1
+            fi
+            cp dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz "downloads/$SOURCE_FILE"
+            sha256sum "downloads/$SOURCE_FILE" > "downloads/$SOURCE_FILE.sha256"
+            echo "::warning::GitHub Releases API denied publishing. Will publish verified signed APK plus GPLv3 source on GitHub Pages."
+          fi
           python3 - <<'PY'
           import json,os,hashlib
           from pathlib import Path
@@ -274,13 +319,20 @@ jobs:
           if actual!=os.environ["SHA256"]: raise SystemExit("Direct APK SHA-256 mismatch")
           if not __import__('re').fullmatch(r'[0-9a-f]{64}',os.environ['SIGNER_SHA256']):
               raise SystemExit("Persistent signer fingerprint missing")
+          release_published=os.environ["RELEASE_PUBLISHED"]=="true"
+          direct_url="https://webbase-x.github.io/xstage/downloads/"+os.environ["APK_FILE"]
+          release_url="https://github.com/webbase-x/xstage/releases/download/"+os.environ["TAG"]+"/"+os.environ["APK_FILE"]
+          source_file="X-Stage-Mirror-TV-GPLv3-source-v"+os.environ["VERSION"]+"-build"+os.environ["BUILD"]+".tar.gz"
+          source_url=("https://github.com/webbase-x/xstage/releases/download/"+os.environ["TAG"]+"/X-Stage-Mirror-TV-GPLv3-source.tar.gz") if release_published else ("https://webbase-x.github.io/xstage/downloads/"+source_file)
           data={
             "channel":"test-preview",
             "available":True,"name":"X-Stage Mirror TV Test APK",
             "package":"com.webbasex.xstagemirror.tv",
             "version":os.environ["VERSION"],"build":int(os.environ["BUILD"]),
             "file":os.environ["APK_FILE"],"sha256":os.environ["SHA256"],
-            "download_url":"https://github.com/webbase-x/xstage/releases/download/"+os.environ["TAG"]+"/"+os.environ["APK_FILE"],
+            "download_url":release_url if release_published else direct_url,
+            "release_download_available":release_published,
+            "source_url":source_url,
             "signing_mode":"persistent",
             "signer_sha256":os.environ["SIGNER_SHA256"],
             "note":"Signed APK with persistent private certificate used for this channel and production. Newer builds with matching installed certificate can be installed in place with Android system approval. Debug-signed legacy Builds <=107 may require a one-time uninstall."
@@ -296,6 +348,9 @@ jobs:
             actual+"  "+os.environ["APK_FILE"]+"\n",encoding="ascii")
           PY
           git add mirror-tv/test-latest.json "downloads/$APK_FILE" "downloads/$APK_FILE.sha256"
+          if [ "$RELEASE_PUBLISHED" != "true" ]; then
+            git add "downloads/$SOURCE_FILE" "downloads/$SOURCE_FILE.sha256"
+          fi
           if git diff --cached --quiet; then
             echo "No preview feed changes"
           else
@@ -313,10 +368,3 @@ jobs:
             done
           fi
 
-      - name: Upload installable APK and source package
-        uses: actions/upload-artifact@v4
-        with:
-          name: X-Stage-Mirror-TV-AndroidTV
-          path: dist/*
-          if-no-files-found: error
-          retention-days: 30
