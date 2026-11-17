@@ -75,6 +75,22 @@ def _companions(root, media):
     return sorted(result, key=lambda path: str(path).casefold())
 
 
+def _code_group_key(root, path):
+    """Conservative same-code grouping for manual review only.
+
+    Media in one folder are comparable. SONG role subfolders from matching
+    buckets can also be compared across audio/midi/video type directories.
+    Never join arbitrary same codes from unrelated album folders.
+    """
+    parts = [part.casefold() for part in path.relative_to(root).parts]
+    dirs = parts[:-1]
+    stem = path.stem.casefold()
+    if "song" in dirs or "songs" in dirs:
+        marker = next(i for i, part in enumerate(dirs) if part in ("song", "songs"))
+        return ("song", *dirs[marker + 1:], stem)
+    return ("folder", *dirs, stem)
+
+
 def _shared_sidecar(media):
     """Skip companions with another media file of the same code in this folder."""
     try:
@@ -83,7 +99,7 @@ def _shared_sidecar(media):
                     item.suffix.casefold() not in MEDIA_EXTENSIONS or
                     item.stem.casefold() != media.stem.casefold()):
                 continue
-            if item.is_file():
+            if item.is_file() and item.suffix.casefold() not in (".xsk", ".emk"):
                 return True
     except OSError as exc:
         raise OSError("ตรวจไฟล์เพลงที่ใช้เนื้อร้องร่วมกันไม่ได้") from exc
@@ -322,9 +338,12 @@ class DuplicateMediaRegistry:
         self.state = None
         self.preview_state = None
 
-    def scan(self, folder, *, cancelled=None, progress=None):
+    def scan(self, folder, *, mode="exact", cancelled=None, progress=None):
+        if mode not in ("exact", "code"):
+            raise ValueError("โหมดตรวจเพลงซ้ำไม่ถูกต้อง")
         root = _safe_root(folder)
         by_size = defaultdict(list)
+        by_code = defaultdict(list)
         files = 0
         ignored = 0
         errors = 0
@@ -360,7 +379,11 @@ class DuplicateMediaRegistry:
                             if meta.st_size == 0:
                                 ignored += 1
                                 continue
-                            by_size[meta.st_size].append((path, _stability(path, meta)))
+                            if mode == "code":
+                                by_code[_code_group_key(root, path)].append(
+                                    (path, _stability(path, meta)))
+                            else:
+                                by_size[meta.st_size].append((path, _stability(path, meta)))
                             files += 1
                             if files > MAX_SONGS:
                                 raise ValueError("จำนวนไฟล์เพลงเกินขีดจำกัด 1,000,000")
@@ -422,10 +445,40 @@ class DuplicateMediaRegistry:
                         file_ids.append(file_id)
                     groups.append({"id": group_id, "sha256": digest,
                                    "size": size, "files": file_ids})
-        groups.sort(key=lambda g: (-g["size"] * (len(g["files"]) - 1), g["sha256"]))
+        if mode == "code":
+            # Same stem is ONLY a candidate relationship. No SHA equality is
+            # asserted; user must manually confirm music identity per action.
+            groups.clear()
+            entries.clear()
+            for key, files_for_code in by_code.items():
+                if len(files_for_code) < 2:
+                    continue
+                copies = [(path, stamp) for path, stamp in files_for_code
+                          if _stability(path) == stamp]
+                if len(copies) < 2:
+                    continue
+                copies.sort(key=lambda item: str(item[0]).casefold())
+                group_id = "g" + str(len(groups) + 1)
+                file_ids = []
+                for path, stamp in copies:
+                    file_id = "f" + str(len(entries) + 1)
+                    entries[file_id] = {
+                        "id": file_id, "group": group_id, "path": path,
+                        "stamp": stamp, "sha256": None, "size": stamp[0],
+                        "status": "active"}
+                    file_ids.append(file_id)
+                groups.append({"id": group_id, "sha256": "",
+                               "match": "code", "size": 0,
+                               "bytesToSave": max(0, sum(stamp[0] for _, stamp in copies)
+                                                 - min(stamp[0] for _, stamp in copies)),
+                               "files": file_ids})
+        groups.sort(key=lambda g: (
+            -(g.get("bytesToSave") or g["size"] * (len(g["files"]) - 1)),
+            g["sha256"]))
         result = {
             "scanId": secrets.token_hex(16), "root": root, "groups": groups,
             "groupById": {g["id"]: g for g in groups},
+            "mode": mode,
             "files": entries, "scanned": files, "ignored": ignored,
             "errors": errors, "hashed": hashed,
         }
@@ -434,10 +487,10 @@ class DuplicateMediaRegistry:
             self.preview_state = None
         if progress:
             progress("done", files, hashed, len(groups))
-        return {"scanId": result["scanId"], "fileCount": files,
+        return {"scanId": result["scanId"], "matchMode": mode, "fileCount": files,
                 "groupCount": len(groups),
                 "duplicateFiles": sum(len(g["files"]) - 1 for g in groups),
-                "potentialBytes": sum(g["size"] * (len(g["files"]) - 1) for g in groups),
+                "potentialBytes": sum(g.get("bytesToSave") or g["size"] * (len(g["files"]) - 1) for g in groups),
                 "ignored": ignored, "errors": errors,
                 "message": (f"ตรวจเพลงซ้ำ {files:,} ไฟล์ · พบกลุ่มซ้ำ {len(groups):,}"
                             f" · ไฟล์สำเนา {sum(len(g['files']) - 1 for g in groups):,}")}
@@ -468,6 +521,7 @@ class DuplicateMediaRegistry:
                 if keeper not in shown:
                     shown[-1] = keeper
                 rows.append({"id": group["id"], "size": group["size"],
+                             "match": state["mode"],
                              "sha256": group["sha256"],
                              "fileCount": len(alive),
                              "hiddenFiles": len(alive) - len(shown),
@@ -475,17 +529,20 @@ class DuplicateMediaRegistry:
                                  {"id": item["id"], "path": str(item["path"]),
                                   "keep": item["id"] == keeper["id"],
                                   "extension": item["path"].suffix.lower(),
+                                  "size": item["size"],
                                   "protected": _protected_library(item["path"])}
                                  for i, item in enumerate(shown)]})
             return {
                 "ready": True, "scanId": state["scanId"],
-                "folder": str(state["root"]),
+                "folder": str(state["root"]), "matchMode": state["mode"],
                 "fileCount": state["scanned"], "ignored": state["ignored"],
                 "errors": state["errors"], "hashed": state["hashed"],
                 "groupCount": len(live_groups),
                 "duplicateFiles": sum(len(alive) - 1 for _, alive in live_groups),
-                "potentialBytes": sum(g["size"] * (len(alive) - 1)
-                                      for g, alive in live_groups),
+                "potentialBytes": sum(
+                    (sum(item["size"] for item in alive) - min(item["size"] for item in alive))
+                    if state["mode"] == "code" else g["size"] * (len(alive) - 1)
+                    for g, alive in live_groups),
                 "groups": rows, "offset": offset, "limit": limit,
             }
 
