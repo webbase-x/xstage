@@ -69,7 +69,8 @@ replace_once(service,
              '    private var foregroundStarted = false',
              '    private var foregroundStarted = false\n'
              '    @Volatile private var connectionStartedAtMs = 0L\n'
-             '    @Volatile private var firstFrameSeen = false')
+             '    @Volatile private var firstFrameSeen = false\n'
+             '    @Volatile private var firstVideoSizeSeen = false')
 replace_once(service,
              '        val effectiveName = prefs[Prefs.SERVER_NAME].ifBlank { Prefs.SERVER_NAME.def }',
              '        val startupMs = SystemClock.elapsedRealtime()\n'
@@ -89,6 +90,7 @@ replace_once(service,
              '        if (firstConnection) {\n'
              '            connectionStartedAtMs = SystemClock.elapsedRealtime()\n'
              '            firstFrameSeen = false\n'
+             '            firstVideoSizeSeen = false\n'
              '        }')
 replace_once(service,
              '    override fun onVideoData(data: ByteArray, ntpTimeNs: Long, isH265: Boolean) {\n'
@@ -102,6 +104,7 @@ replace_once(service,
              '        videoRenderer.feedFrame(data, ntpTimeNs, isH265)')
 replace_once(service,
              '        log("Video size: ',
+             '        if (w > 0f && h > 0f) firstVideoSizeSeen = true\n'
              '        if (connectionStartedAtMs > 0L) {\n'
              '            Log.i(TAG, "Negotiated video size after " +\n'
              '                (SystemClock.elapsedRealtime() - connectionStartedAtMs) + " ms")\n'
@@ -111,8 +114,22 @@ replace_once(service,
              '        if (_connectionCount.value == 0) {\n'
              '            // clients may drop without POST /stop;',
              '        if (_connectionCount.value == 0) {\n'
+             '            val durationMs = if (connectionStartedAtMs > 0L)\n'
+             '                SystemClock.elapsedRealtime() - connectionStartedAtMs else -1L\n'
+             '            if (durationMs >= 0L) {\n'
+             '                val phase = when {\n'
+             '                    firstFrameSeen -> "video-packets-arrived"\n'
+             '                    firstVideoSizeSeen -> "video-size-only"\n'
+             '                    else -> "connected-without-video"\n'
+             '                }\n'
+             '                Log.i(TAG, "AirPlay session ended: durationMs=$durationMs phase=$phase")\n'
+             '                if (durationMs < 15_000L && !firstFrameSeen) {\n'
+             '                    Log.w(TAG, "Short AirPlay session without video data; inspect sender handshake and network before decoder")\n'
+             '                }\n'
+             '            }\n'
              '            connectionStartedAtMs = 0L\n'
              '            firstFrameSeen = false\n'
+             '            firstVideoSizeSeen = false\n'
              '            // clients may drop without POST /stop;')
 
 settings = package / "ui/SettingsScreen.kt"
@@ -135,4 +152,4 @@ replace_once(settings,
              '        }, modifier = Modifier.padding(horizontal = 16.dp)) { Text("คมชัด 1080p / 30 FPS") }')
 
 print("PASS: 1080p AUTO cap, H.264 compatibility, bounded decoder queue,"
-      " prewarm, NSD retries, first-frame timing and TV profiles")
+      " prewarm, NSD retries, session-phase diagnostics and TV profiles")
