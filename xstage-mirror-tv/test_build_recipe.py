@@ -27,9 +27,17 @@ assert 'fromSuffix(suffixDraft)' in editor
 assert 'Text("บันทึกชื่อ"' in editor
 assert 'viewModel.set(Prefs.SERVER_NAME, namePreview)' in editor
 assert 'enabled = canEdit' in editor
-assert 'ReceiverNameEditor(viewModel, canEdit = connections == 0)' in ui
-assert 'text = serverName,' in ui
-assert 'v${app.airshow.tv.BuildConfig.VERSION_NAME} · Build ${app.airshow.tv.BuildConfig.VERSION_CODE}' in ui
+receiver_home = (app / "src/main/kotlin/app/airshow/tv/ui/XStageReceiverHome.kt").read_text()
+assert 'XStageReceiverHome(' in ui
+assert 'ReceiverNameEditor(viewModel, canEdit = true)' in receiver_home
+assert 'text = serverName,' in receiver_home
+assert 'text = "พร้อมรับภาพ"' not in receiver_home  # status comes from actual running state
+assert 'state == ServerState.RUNNING -> "พร้อมรับภาพ"' in receiver_home
+assert 'viewModel::stopServer' not in ui and 'viewModel::startServer' not in ui
+assert 'NavigationBar(' not in ui
+assert 'ReceiverSetupQr(serverName)' not in ui
+assert 'Text("ตั้งค่า"' in receiver_home
+
 assert 'val editOpen = true' in editor
 assert '.imePadding(),' not in editor
 assert 'ReceiverNamePolicy.migratePreviousName(this)' in (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
@@ -38,7 +46,7 @@ assert 'ReceiverNamePolicy.migratePreviousName(this)' in (app / "src/main/kotlin
 home = (app / "src/main/kotlin/app/airshow/tv/TvHomeShortcut.kt").read_text()
 assert "isRequestPinShortcutSupported" in home and "requestPinShortcut(shortcut, null)" in home
 assert "Intent.CATEGORY_HOME" in home and "Intent.CATEGORY_LAUNCHER" in home
-assert 'TvHomeShortcut.request(homeShortcutContext)' in ui
+assert 'TvHomeShortcut.request' in (app / "src/main/kotlin/app/airshow/tv/TvHomeShortcut.kt").read_text()
 assert (app / "src/main/res/drawable/banner.png").exists()
 assert (app / "src/main/res/drawable-xhdpi/banner.png").exists()
 from PIL import Image
@@ -75,7 +83,7 @@ assert "FIRST_FEED_RETRIES = 20" in renderer
 assert "700L, 1_800L, 4_000L, 8_000L" in discovery
 assert "removeCallbacksAndMessages(null)" in discovery
 assert "registerAttempt(service, attempt + 1)" in discovery
-assert 'ReceiverSetupQr(serverName)' in ui
+assert 'ReceiverSetupQr(serverName)' not in ui
 assert (app / "src/main/kotlin/app/airshow/tv/ui/ReceiverSetupQr.kt").exists()
 updater = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateManager.kt").read_text()
 activity = (app / "src/main/kotlin/app/airshow/tv/MainActivity.kt").read_text()
@@ -88,11 +96,11 @@ assert 'Key.Enter' in editor and 'Key.NumPadEnter' in editor
 assert 'fieldBringIntoView.bringIntoView()' in editor
 assert 'up = openFocus; down = saveFocus' in editor
 assert 'right = cancelFocus' in editor and 'left = saveFocus' in editor
-assert 'Modifier.fillMaxSize().imePadding()' in ui
-assert '.verticalScroll(androidx.compose.foundation.rememberScrollState())' in ui
-assert 'Modifier.fillMaxWidth().focusGroup()' in ui
-assert 'NavigationBar(modifier = Modifier.focusGroup())' in ui
-assert 'indicatorColor = androidx.compose.ui.graphics.Color(0xFF7AE7FF)' in ui
+assert '.imePadding()' in receiver_home
+assert '.verticalScroll(rememberScrollState())' in receiver_home
+assert '.focusGroup()' in receiver_home
+assert 'Text(if (editingName)' in receiver_home
+assert 'if (mirroringActive && connections > 0)' in receiver_home
 assert 'window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)' in activity
 settings = (app / "src/main/kotlin/app/airshow/tv/ui/SettingsScreen.kt").read_text()
 assert 'FlowRow(modifier = Modifier.focusGroup()' in settings
@@ -100,8 +108,8 @@ assert 'selectedContainerColor = MaterialTheme.colorScheme.secondary' in setting
 assert 'choiceFocus[index]' in settings
 assert 'forEachIndexed { index, (key, label)' in settings
 assert 'right = choiceFocus[index + 1]' in settings
-assert 'Tab.entries.forEachIndexed { index, t ->' in ui
-assert 'right = tabFocus[index + 1]' in ui
+assert 'else if (tab == Tab.OVERVIEW)' in ui
+assert 'SettingsScreen(viewModel)' in ui
 theme_text = (app / "src/main/kotlin/app/airshow/tv/ui/theme/Theme.kt").read_text()
 assert 'onSurfaceVariant = Color(0xFFE1EAF8)' in theme_text
 
@@ -116,10 +124,20 @@ assert "installedVersion" in cleanup
 assert "mirrorUpdates.checkOnLaunch()" in activity
 assert "mirrorUpdates.onResume()" in activity
 assert "mirrorUpdates.close()" in activity
+assert 'BackHandler(enabled = !confirmExit.value)' in activity
+assert 'title = { Text("ปิด X-Stage Mirror TV?") }' in activity
+assert 'Text("ปิด")' in activity and 'Text("ไม่ปิด")' in activity
+assert 'viewModel.stopServer()' in activity and 'finish()' in activity
+assert 'if (svc.serverState.value == AirPlayService.ServerState.STOPPED && hasLocalNetwork())' in activity
+assert 'viewModel.pref(Prefs.AUTO_START).value &&' not in activity
+assert 'BackHandler { fullscreen = false }' not in ui
+assert 'BackHandler { viewModel.stopVideoPlayback() }' not in ui
 assert "checkMirrorUpdateNow" in settings
 assert "ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)" in settings
 assert 'label = stringResource(R.string.setting_server_name)' not in settings
 
+assert "setting_auto_fullscreen" not in settings
+assert "setting_auto_start" not in settings
 assert "AUTO Performance" in settings
 assert "ลื่นไหล 720p" not in settings
 quality = (app / "src/main/kotlin/app/airshow/tv/service/MirrorAutoQuality.kt").read_text()
@@ -172,9 +190,9 @@ assert 'json.optString("channel") != "test-preview"' in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 110' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 111' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
 assert (root / "NOTICE").exists()
-print("PASS: Mirror TV device-auto quality, slow downshift, smooth catch-up, mDNS and updater")
+print("PASS: Mirror TV minimal auto-ready UI, Back confirmation, quality, mDNS, updater")
