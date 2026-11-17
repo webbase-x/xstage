@@ -17,7 +17,7 @@ dotnet publish mirror-pc/XStageMirrorPC.csproj -c Release -r win-x64 --self-cont
 
 .NET 8 Windows Desktop SDK required only to **build**. Published XStageMirrorPC.exe is self-contained. Receiver runtime binaries are separate files under `engine/uxplay-windows/` in the released ZIP; do **not** distribute a GUI-only build as a functional AirPlay receiver.
 
-`.github/workflows/build-xstage-mirror-pc.yml` performs Windows compilation and attempts to package a pinned upstream portable receiver (leapbtw/uxplay-windows 2.0.0.1736). It fails closed if the expected portable x64 zip or a SHA-256 digest cannot be verified; no stale or unverified package is silently used. Successful workflow artifact remains a **candidate** until actual Windows/iOS/Android compatibility testing. No public update manifest is set to available automatically.
+`.github/workflows/build-xstage-mirror-pc.yml` compiles the Windows EXE, packages the complete portable receiver (leapbtw/uxplay-windows 2.0.0.1736), and verifies its exact filename plus pinned SHA-256 before packaging. On successful builds from `main`, `.github/workflows/publish-xstage-mirror-pc-preview.yml` publishes a **clearly labeled Preview ZIP** containing the EXE and the AirPlay runtime, a SHA-256 file, and a GPLv3 source archive. It activates `downloads/mirror-pc-preview-latest.json` only after a matching GitHub prerelease exists. The X-Stage Apps website chooses a verified stable build first, otherwise the latest preview. Each new release requires an increasing `FileVersion` build number; the workflow will not silently overwrite an older published version. A successful Preview build does **not** prove actual Windows/iPhone/Android compatibility.
 
 ## Operation
 
@@ -40,4 +40,4 @@ dotnet publish mirror-pc/XStageMirrorPC.csproj -c Release -r win-x64 --self-cont
 
 ## Release/update feed
 
-`downloads/mirror-pc-latest.json` starts with `available: false`. Do not publish a download link until a verified, complete package and GPLv3 compliance artifacts exist. This build provides manual release checking; self-updating is deliberately not advertised until a verified updater is added.
+`downloads/mirror-pc-latest.json` remains the stable release feed and defaults to `available: false`. The separate preview feed `downloads/mirror-pc-preview-latest.json` is automatically published after complete CI succeeds, the immutable GitHub prerelease exists, and a GPLv3 source archive and checksums have been uploaded. Users can download the newest Preview via https://webbase-x.github.io/xstage/?app=mirror-pc . The control app itself checks the stable feed for updates but does not silently install updates.
