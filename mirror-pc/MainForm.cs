@@ -8,7 +8,7 @@ namespace XStageMirrorPC;
 
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v0.1.1 · Build 102";
+    private const string VersionText = "v0.1.2 · Build 103";
     private const string FeedUrl = "https://webbase-x.github.io/xstage/downloads/mirror-pc-preview-latest.json";
     private static readonly Color Background = Color.FromArgb(13, 20, 38);
     private static readonly Color Surface = Color.FromArgb(23, 33, 54);
@@ -24,6 +24,10 @@ public sealed class MainForm : Form
     private Process? _airplayProcess;
     private string? _bundledEngine;
     private bool _closing;
+    private bool _manualAirPlayStop;
+    private int _recoveryAttempts;
+    private DateTime _lastReceiverLaunchUtc = DateTime.MinValue;
+    private string _receiverIssue = "";
 
     public MainForm()
     {
@@ -37,12 +41,29 @@ public sealed class MainForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         BuildLayout();
 
-        _timer.Tick += (_, _) => RefreshAirPlayStatus();
+        _timer.Tick += (_, _) =>
+        {
+            // Avoid leaving an empty discovery list after a transient native exit.
+            if (!_closing && !_manualAirPlayStop && _bundledEngine is not null &&
+                _lastReceiverLaunchUtc != DateTime.MinValue &&
+                (_airplayProcess is null || _airplayProcess.HasExited) &&
+                _recoveryAttempts < 3 &&
+                DateTime.UtcNow - _lastReceiverLaunchUtc >= TimeSpan.FromSeconds(8))
+            {
+                _recoveryAttempts++;
+                StartAirPlay(autoStart: true);
+            }
+            RefreshAirPlayStatus();
+        };
         _timer.Start();
         Shown += async (_, _) =>
         {
             _bundledEngine = FindEngine();
+            LoadConfiguredAirPlayName();
             RefreshAirPlayStatus();
+            // Users expect the PC receiver to appear as soon as the app opens.
+            // Continue to run the Windows Miracast receiver only if the OS supports it.
+            if (_bundledEngine is not null) StartAirPlay(autoStart: true);
             await CheckUpdatesAsync(quiet: true);
         };
         FormClosing += (_, _) =>
@@ -145,15 +166,8 @@ public sealed class MainForm : Form
         var verifyButton = ActionButton("↻  ตรวจส่วนประกอบ");
         verifyButton.Dock = DockStyle.Fill;
         verifyButton.Margin = new Padding(3);
-        verifyButton.Click += (_, _) =>
-        {
-            _bundledEngine = FindEngine();
-            RefreshAirPlayStatus();
-            MessageBox.Show(this, _bundledEngine is null
-                ? "ชุดโปรแกรมไม่ครบ กรุณาใช้ไฟล์ติดตั้ง X-Stage Mirror PC แบบเต็มจากเว็บไซต์\n\nไฟล์ EXE เพียงไฟล์เดียวไม่ใช่ชุดตัวรับ AirPlay ที่สมบูรณ์"
-                : "พบ AirPlay Engine และไลบรารีที่จำเป็นในชุดโปรแกรมแล้ว",
-                "ตรวจสอบส่วนประกอบ", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        };
+        verifyButton.Text = "ตรวจการค้นพบ";
+        verifyButton.Click += (_, _) => ShowDiscoveryDiagnostics();
         _startButton.Click += (_, _) => StartAirPlay();
         _stopButton.Click += (_, _) => StopAirPlay();
         iosButtons.Controls.Add(_startButton, 0, 0);
