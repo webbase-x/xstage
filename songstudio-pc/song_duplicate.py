@@ -582,7 +582,7 @@ class DuplicateMediaRegistry:
             keeper_id = keeper_by_group.get(group["id"], default["id"])
             keeper = next((x for x in alive if x["id"] == keeper_id), None)
             if keeper is None or keeper["id"] in selected_set:
-                raise ValueError("ต้องเลือกไฟล์หลักที่จะเก็บไว้ และห้ามเลือกไฟล์หลักไปลบ/ย้าย")
+                raise ValueError("ต้องเก็บไฟล์หลักอย่างน้อยหนึ่งไฟล์ไว้ และห้ามเลือกไฟล์หลักไปลบ/ย้าย")
             if _stability(item["path"]) != item["stamp"] or _stability(
                     keeper["path"]) != keeper["stamp"]:
                 raise ValueError("ไฟล์เพลงถูกเปลี่ยนหลังสแกน · กรุณาตรวจใหม่")
