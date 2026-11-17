@@ -1,5 +1,6 @@
 package app.airshow.tv.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.shape.RoundedCornerShape
+import app.airshow.tv.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +82,13 @@ internal fun XStageReceiverHome(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Image(
+            painter = painterResource(R.drawable.airshow_mark),
+            contentDescription = "โลโก้ X-Stage Mirror TV",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(88.dp).clip(RoundedCornerShape(20.dp))
+        )
+        Spacer(Modifier.height(12.dp))
         Text(
             text = "X-STAGE  /  MIRROR TV",
             style = MaterialTheme.typography.labelLarge,
