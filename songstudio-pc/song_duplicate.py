@@ -87,7 +87,14 @@ def _code_group_key(root, path):
     stem = path.stem.casefold()
     if "song" in dirs or "songs" in dirs:
         marker = next(i for i, part in enumerate(dirs) if part in ("song", "songs"))
-        return ("song", *dirs[marker + 1:], stem)
+        format_buckets = {"midi", "ncn", "kar", "xsk", "audio", "video",
+                          "mp3", "mp4", "m4a", "wav", "flac", "ogg",
+                          "webm", "mkv", "avi", "aac", "mov"}
+        # Only strip known *format* prefixes. Preserve ArtistOne/ArtistTwo
+        # namespace; identical numeric codes across artists are not proof
+        # of the same song and must never be grouped automatically.
+        namespace = tuple(part for part in dirs[:marker] if part not in format_buckets)
+        return ("song", *namespace, "/", *dirs[marker + 1:], stem)
     return ("folder", *dirs, stem)
 
 
