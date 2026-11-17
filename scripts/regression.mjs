@@ -181,6 +181,30 @@ if(mirrorPcRelease.available){
 }
 
 assert.ok(storefront.includes('data-filter="files"')&&storefront.includes('data-download-app="file-share"'),'File Share must have its own filter and APK card action');
+const expectedPlatformCards={
+  'apps-portal':'android',
+  'karaoke-web':'website',
+  'karaoke-pc':'windows',
+  'studio-pc':'windows',
+  'studio-web':'website',
+  'karaoke-android':'android',
+  'mirror-ios-pc':'windows',
+  'mirror-android-pc':'windows',
+  'mirror-tv':'android',
+  'file-share':'android'
+};
+const platformCards=[...storefront.matchAll(/<article class="app-card[^"]*" data-app="([^"]+)" data-category="([^"]+)" data-platform="([^"]+)" data-name="/g)];
+assert.equal(platformCards.length,10,'all catalog apps must declare a platform');
+for(const card of platformCards){
+  assert.equal(card[3],expectedPlatformCards[card[1]],'wrong platform classification: '+card[1]);
+}
+for(const platform of ['all','windows','android','website']){
+  assert.ok(storefront.includes('data-platform-filter="'+platform+'"'),'missing platform filter '+platform);
+}
+assert.match(storefrontScript,/const platformMatches=selectedPlatform==="all"/,'platform filter must combine with category filters');
+assert.match(storefrontScript,/const matches=categoryMatches&&platformMatches&&textMatches/,'category platform and search must compose');
+assert.match(storefrontScript,/platformButtons\.forEach\(button=>button\.addEventListener\("click"/,'platform controls must respond to user selection');
+assert.match(read('storefront.css'),/\.platform-pill\.active/,'platform filter active state must be visible');
 assert.equal(deviceGuide.forApp(androidPhone,'file-share').level,'supported','Android phones support the File Share host APK');
 assert.equal(deviceGuide.forApp(iphone,'file-share').level,'other','iOS joins File Share through browser instead of APK');
 const fileShareRelease=JSON.parse(read('downloads/file-share-latest.json'));
