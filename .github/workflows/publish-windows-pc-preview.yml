@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      GH_TOKEN: ${{ secrets.XSTAGE_RELEASE_TOKEN || github.token }}
+      GH_TOKEN: ${{ github.token }}
       SOURCE_RUN: "44006131078"
       SOURCE_SHA: "6acb5dc5aff73c7e0ccbc1f02be8571346cc0032"
       TAG: "xstage-karaoke-pc-preview-v1.0.78-build1078"
@@ -62,51 +62,51 @@ jobs:
           mv "dist/verified-$INSTALLER" "dist/$INSTALLER"
           printf '%s  %s\n' "$actual" "$INSTALLER" > "dist/$INSTALLER.sha256"
 
-      # This repo may deny release creation to the default Actions integration.
-      # Prefer the existing scoped XSTAGE_RELEASE_TOKEN used by Song Studio.
-      - name: Publish public PREVIEW only
+      # The public GitHub Releases endpoint rejects this repository's CI token
+      # (HTTP 403). Publish only the verified EXE to the existing Pages file
+      # channel, exactly as the tested Android APK channel already does.
+      - name: Publish verified unsigned Windows PREVIEW EXE for public users
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx "$INSTALLER"
-          else
-            gh release create "$TAG" "dist/$INSTALLER" "dist/$INSTALLER.sha256" \
-              --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --prerelease \
-              --title "X-Stage Karaoke PC 1.0.78 (1078) Windows PREVIEW" \
-              --notes "Binary-only Windows preview verified by CI and SHA-256. NOT code-signed, NOT manually qualified for every Windows configuration; SmartScreen may warn. No source-only ZIP distributed by this release."
+          test -s "dist/$INSTALLER"
+          size=$(stat -c %s "dist/$INSTALLER")
+          if [ "$size" -gt 90000000 ]; then
+            echo "::error::Installer is too large for safe public-repo distribution; configure a release upload token instead."
+            exit 1
           fi
-
-      - name: Enable preview download feed after release exists
-        shell: bash
-        run: |
-          set -euo pipefail
           HASH=$(cut -d ' ' -f1 "dist/$INSTALLER.sha256")
           export HASH
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git switch -C main origin/main
+          mkdir -p downloads
+          cp "dist/$INSTALLER" "downloads/$INSTALLER"
+          cp "dist/$INSTALLER.sha256" "downloads/$INSTALLER.sha256"
           python3 - <<'PY'
           import json,os
           from pathlib import Path
           name=os.environ['INSTALLER']
-          data={
+          info={
             'channel':'preview','available':True,
             'name':'X-Stage Karaoke PC Windows PREVIEW',
             'platform':'windows-x64','version':'1.0.78','build':1078,
             'installer_file':name,'sha256':os.environ['HASH'],
-            'download_url':'https://github.com/'+os.environ['GITHUB_REPOSITORY']+'/releases/download/'+os.environ['TAG']+'/'+name,
+            'download_url':'https://webbase-x.github.io/xstage/downloads/'+name,
             'source_commit':os.environ['SOURCE_SHA'],
-            'note':'Unsigned preview installer, CI verified with SHA-256. Windows SmartScreen may show a warning. Not an official signed update.'
+            'note':'Unsigned public binary preview from verified Windows CI. Not an official signed updater; SmartScreen may warn.'
           }
-          Path('downloads/windows-pc-preview-latest.json').write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
+          Path('downloads/windows-pc-preview-latest.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
           PY
-          git add downloads/windows-pc-preview-latest.json
+          git add "downloads/$INSTALLER" "downloads/$INSTALLER.sha256" downloads/windows-pc-preview-latest.json
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "build(windows): publish preview binary metadata [skip ci]"
+          git commit -m "build(windows): publish verified public preview EXE"
           for attempt in 1 2 3 4; do
             git fetch origin main
-            if git rebase origin/main && git push origin HEAD:main; then exit 0; fi
+            if git rebase origin/main && git push origin HEAD:main; then
+              echo "Published signed SHA-256 manifest and unsigned Windows EXE to public binary channel."
+              exit 0
+            fi
             if [ "$attempt" -eq 4 ]; then exit 1; fi
           done
