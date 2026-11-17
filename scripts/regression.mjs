@@ -160,12 +160,18 @@ assert.ok(receiverEditor.includes('เปลี่ยนชื่ออุปก
           receiverEditor.includes('viewModel.set(Prefs.SERVER_NAME, namePreview)')&&
           receiverEditor.includes('enabled = canEdit'),
           'Mirror TV overview and Settings must provide a safe save-only suffix editor');
+assert.ok(receiverEditor.includes('onDone = { saveName() }')&&
+          receiverEditor.includes('Key.NumPadEnter')&&
+          receiverEditor.includes('fieldBringIntoView.bringIntoView()')&&
+          receiverEditor.includes('right = cancelFocus')&&
+          !receiverEditor.includes('AlertDialog('),
+          'Mirror receiver name must stay visible and save on keyboard Enter');
 assert.ok(receiverBuild.includes('ReceiverNameEditor(viewModel, canEdit = connections == 0)')&&
           receiverBuild.includes('ReceiverNamePolicy.migratePreviousName(this)')&&
           receiverBuild.includes('ReceiverNamePolicy.isValid(it)')&&
           receiverRecipe.includes('ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)'),
           'The Android build must wire naming, persistence and AirPlay discovery consistently');
-assert.ok(receiverBuild.includes('"0.2.4"')&&receiverBuild.includes('"106"'),
+assert.ok(receiverBuild.includes('"0.2.7"')&&receiverBuild.includes('"109"'),
           'The renamed Mirror receiver must be a new installable APK build, never overwrite v0.2.3');
 if(mirrorTest.direct_download_available===true){
   const name=mirrorTest.direct_download_file;
