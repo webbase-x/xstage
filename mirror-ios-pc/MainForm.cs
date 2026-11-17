@@ -18,7 +18,7 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.2 · Build 1003";
+    private const string VersionText = "v1.0.3 · Build 1004";
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
@@ -59,7 +59,9 @@ public sealed class MainForm : Form
     private bool _manualStop;
     private bool _starting;
     private bool _checkingPeers;
-    private bool _newUpdate;
+    private readonly MirrorAutoUpdateManager _autoUpdates;
+    private string? _updateNotice;
+    private DateTime _updateNoticeUntil = DateTime.MinValue;
     private int _restarts;
     private DateTime _lastLaunch = DateTime.MinValue;
     private DateTime _lastPeerCheck = DateTime.MinValue;
@@ -110,6 +112,34 @@ public sealed class MainForm : Form
         _status.Text = "กำลังเตรียมตัวรับ AirPlay";
         _network.Text = "ตรวจสอบเครือข่าย…";
         Controls.AddRange([_title, _number, _version, _status, _network, _minimize, _closeButton]);
+        _autoUpdates = new MirrorAutoUpdateManager(
+            message =>
+            {
+                if (_closing || IsDisposed || !IsHandleCreated) return;
+                try
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        if (_closing || IsDisposed) return;
+                        _updateNotice = message;
+                        _updateNoticeUntil = DateTime.UtcNow.AddSeconds(12);
+                        _status.Text = message;
+                    }));
+                }
+                catch (InvalidOperationException) { /* The window is closing. */ }
+            },
+            () =>
+            {
+                if (_closing || IsDisposed || !IsHandleCreated) return;
+                try
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        if (!_closing && !IsDisposed) Close();
+                    }));
+                }
+                catch (InvalidOperationException) { /* The window is closing. */ }
+            });
         Resize += (_, _) => LayoutWelcome();
         KeyDown += OnReceiverKeyDown;
         Shown += async (_, _) =>
@@ -120,7 +150,7 @@ public sealed class MainForm : Form
             _lowLatency = LoadLatencyPreference();
             UpdateNetworkStatus();
             await StartAirPlayAsync();
-            _ = CheckUpdatesSilentlyAsync();
+            _ = _autoUpdates.CheckAsync();
         };
         FormClosing += (_, _) =>
         {
@@ -223,6 +253,9 @@ public sealed class MainForm : Form
             UpdateNetworkStatus();
         if (alive && !_checkingPeers && DateTime.UtcNow - _lastPeerCheck > TimeSpan.FromSeconds(9))
             _ = CheckPeersAsync();
+        if (_updateNotice is not null && DateTime.UtcNow < _updateNoticeUntil)
+            _status.Text = _updateNotice;
+        _ = _autoUpdates.CheckAsync();
     }
 
     private void UpdateNetworkStatus()
@@ -597,22 +630,4 @@ public sealed class MainForm : Form
         }
     }
 
-    private async Task CheckUpdatesSilentlyAsync()
-    {
-        try
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
-            using var response = await client.GetAsync(UpdateFeed);
-            if (!response.IsSuccessStatusCode) return;
-            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var root = doc.RootElement;
-            if (!root.TryGetProperty("available", out var a) || a.ValueKind != JsonValueKind.True)
-                return;
-            int build = root.TryGetProperty("build", out var b) && b.TryGetInt32(out int value)
-                ? value : 0;
-            _newUpdate = build > 1003;
-            if (_newUpdate) WriteDiagnostic("New verified preview is published");
-        }
-        catch { /* Never prevent local AirPlay when offline. */ }
-    }
 }
