@@ -1,3 +1,14 @@
+## Build 363 — ตรวจเพลงซ้ำ: จัดการไฟล์เพลงและไฟล์ประกอบเป็นชุด
+
+- The first menu now supports **two separate review modes**: **SHA-256 exact bytes** (truly identical media files) and **same filename code** (manual candidates only). Same-code items can be different songs or encodings; do not treat them as proven duplicates. Same-code mode requires the user to check and affirm musical identity, and has no mass-select action.
+- Set **preferred file type to keep** (.XSK, .MID, .KAR, .MP3, .M4A, .MP4, etc.) or choose a **keeper radio** for each duplicate group. A previous "original" can be moved/recycled only after another file is selected to remain.
+- Per-song **companion sidecars** are discovered from exact matching filename stems (.json, .lrc, .lyr, .cur), including supported sibling SONG/LYR/CUR and SONG/LYRICS directory layouts. They are **not** part of media duplicate detection. A companion shared with another retained media is protected, not removed.
+- Before any destructive action, the local PC Engine generates a complete **plan preview**: keeper paths and types, all media and sidecars to change, skipped shared files, operation and selected destination. A fresh per-preview ID is required for confirmation.
+- **Move** uses an independently chosen folder outside the original scan tree. All files from the same song are staged, SHA-256 verified and stored with source-relative directory paths and original basenames; destination collisions fail closed, never overwrite or rename a companion.
+- **Delete** sends the selected media and companions to the **Windows Recycle Bin**, never intentionally permanently deletes, and refuses unsupported drives. The live `XStageSong` catalog remains protected. One kept media file per duplicate group is mandatory.
+- No automatic deletion, no Google Drive deletion, and no name-only match is ever auto-acted on. The user must explicitly select affected songs and approve the preview.
+- Tested: NCN MID+LYR+CUR moves, audio+JSON trash, keeper replacement, type preference, stale preview token, shared-sidecar preservation, Windows native Qt bundle, and UI contracts.
+
 ## Build 362 — ตรวจเพลงซ้ำ (menu 1)
 
 - The first Song Studio PC menu is **ตรวจเพลงซ้ำ**. Select any local source folder, including nested MIDI, KAR, XSK, audio, and video. It scans **media only**; JSON/LRC/LYR/CUR, SoundFonts and databases are never mistaken for songs.

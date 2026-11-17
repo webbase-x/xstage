@@ -64,6 +64,13 @@
             <label for="dup-source">โฟลเดอร์ต้นทางที่ต้องการตรวจ (รวมโฟลเดอร์ย่อย)</label>
             <div class="path-row"><input id="dup-source" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์เพลง"><button type="button" class="button ghost" data-pick="dup_source">เลือกโฟลเดอร์</button></div>
             <div class="toolbar">
+              <label for="dup-match-mode">วิธีตรวจเพลงซ้ำ</label>
+              <select id="dup-match-mode" class="field" style="max-width:340px">
+                <option value="exact">ไฟล์เหมือนกันทุกไบต์ (SHA-256)</option>
+                <option value="code">รหัสชื่อไฟล์ตรงกัน (อาจเป็นคนละเพลง ต้องตรวจเอง)</option>
+              </select>
+            </div>
+            <div class="toolbar">
               <button id="dup-scan" class="button primary" type="button">⌕ ตรวจเพลงซ้ำ</button>
               <button id="dup-refresh" class="button ghost" type="button">แสดงผลตรวจล่าสุด</button>
             </div>
@@ -72,14 +79,35 @@
           </article>
           <article class="panel">
             <div class="section-heading"><div><h3>รายการไฟล์เพลงซ้ำที่ตรวจพบ</h3>
-              <p>ไฟล์แรกของแต่ละกลุ่มจะถูกเก็บไว้เสมอ · เลือกสำเนาที่จะจัดการเอง ไม่ลบอัตโนมัติ</p>
+              <p>ไฟล์แรกของแต่ละกลุ่มจะถูกเก็บไว้เสมอ · เลือกไฟล์ชนิดที่ต้องการเก็บและสำเนาที่จะจัดการเอง ไม่ลบอัตโนมัติ</p>
             </div></div>
+            <div class="toolbar">
+              <label for="dup-prefer-type">เลือกชนิดไฟล์ที่ต้องการเก็บไว้</label>
+              <select id="dup-prefer-type" class="field" aria-label="ชนิดไฟล์ที่ต้องการเก็บไว้" style="max-width:210px">
+                <option value="">อัตโนมัติ (ไฟล์แรก)</option>
+                <option value=".xsk">.XSK</option>
+                <option value=".mid">.MID</option>
+                <option value=".midi">.MIDI</option>
+                <option value=".kar">.KAR</option>
+                <option value=".mp3">.MP3</option>
+                <option value=".m4a">.M4A</option>
+                <option value=".mp4">.MP4</option>
+                <option value=".wav">.WAV</option>
+                <option value=".flac">.FLAC</option>
+                <option value=".ogg">.OGG</option>
+                <option value=".webm">.WebM</option>
+                <option value=".mkv">.MKV</option>
+                <option value=".avi">.AVI</option>
+              </select>
+              <span class="hint">เปลี่ยนไฟล์ที่เก็บของแต่ละกลุ่มได้ในรายการด้านล่าง</span>
+            </div>
             <div id="dup-summary" class="hint">ยังไม่มีผลตรวจ</div>
             <div class="toolbar">
               <button id="dup-select-page" type="button" class="button ghost">เลือกสำเนาทั้งหมดในหน้านี้</button>
               <button id="dup-clear" type="button" class="button ghost">ยกเลิกการเลือก</button>
               <span id="dup-selected-count" class="hint">เลือก 0 ไฟล์</span>
             </div>
+            <p class="hint">ในแต่ละกลุ่มเลือกปุ่มวงกลม “เก็บไฟล์นี้” เพื่อกำหนดไฟล์หลัก สามารถเลือกย้าย/ลบไฟล์ต้นฉบับเดิมได้ถ้าเลือกไฟล์อื่นเป็นหลักก่อน</p>
             <div id="dup-results" class="duplicate-results" aria-live="polite"></div>
             <div class="toolbar">
               <button id="dup-prev" type="button" class="button ghost">← ก่อนหน้า</button>
@@ -91,6 +119,10 @@
             <h3>จัดการไฟล์ที่เลือก</h3>
             <label for="dup-destination">โฟลเดอร์ปลายทางสำหรับย้ายสำเนา (อยู่นอกโฟลเดอร์ต้นทาง)</label>
             <div class="path-row"><input id="dup-destination" class="field" type="text" autocomplete="off" spellcheck="false" placeholder="เลือกโฟลเดอร์เก็บไฟล์ซ้ำที่ย้ายออก"><button type="button" class="button ghost" data-pick="dup_destination">เลือกปลายทาง</button></div>
+            <label class="checkbox"><input id="dup-with-companions" type="checkbox" checked> จัดการไฟล์ประกอบตามรหัสด้วย (.json / .lrc / .lyr / .cur)</label>
+            <label class="checkbox"><input id="dup-confirm-song" type="checkbox"> ฉันตรวจยืนยันด้วยตนเองว่าไฟล์ที่รหัสตรงกันเป็นเพลงเดียวกันแล้ว (จำเป็นเฉพาะโหมดตรวจจากรหัส)</label>
+            <p class="hint">ก่อนลงมือจริงระบบจะแสดงแผนว่าเก็บไฟล์ชนิดใด และจะย้าย/ลบไฟล์เพลงกับไฟล์ประกอบใดบ้าง ไฟล์ประกอบที่อาจใช้ร่วมกันจะถูกเก็บไว้</p>
+            <pre id="dup-plan" class="xsk-pro-output" style="max-height:280px;overflow:auto;white-space:pre-wrap" aria-live="polite">แผนจัดการจะปรากฏเมื่อกดปุ่มย้ายหรือลบ ก่อนยืนยันคำสั่งจริง</pre>
             <div class="toolbar">
               <button id="dup-move" type="button" class="button primary">ย้ายไฟล์ซ้ำที่เลือก</button>
               <button id="dup-recycle" type="button" class="button ghost">ส่งไฟล์ซ้ำที่เลือกเข้าถังรีไซเคิล</button>

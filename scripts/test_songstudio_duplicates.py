@@ -20,9 +20,9 @@ class DuplicateMediaTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / "input"
+        self.root = (Path(self.tmp.name) / "input").resolve()
         self.root.mkdir()
-        self.output = Path(self.tmp.name) / "quarantine"
+        self.output = (Path(self.tmp.name) / "quarantine").resolve()
         self.output.mkdir()
         self.registry = duplicates.DuplicateMediaRegistry()
 
@@ -159,6 +159,146 @@ class DuplicateMediaTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.registry.scan(str(self.root), cancelled=cancelled)
         self.assertEqual(self.registry.page()["scanId"], report["scanId"])
+
+    def test_move_ncn_media_and_mirrored_lyr_cur_as_one_bundle(self):
+        original = self.put("MIDI/NCN/SONG/A/00001.mid", b"midi" * 500)
+        self.put("MIDI/NCN/LYR/A/00001.lyr", b"lyrics 00001")
+        self.put("MIDI/NCN/CUR/A/00001.cur", b"cursor 00001")
+        moved = self.put("MIDI/NCN/SONG/B/00002.mid", original.read_bytes())
+        lyric = self.put("MIDI/NCN/LYR/B/00002.lyr", b"lyrics 00002")
+        cursor = self.put("MIDI/NCN/CUR/B/00002.cur", b"cursor 00002")
+        report = self.found()
+        group = self.registry.page()["groups"][0]
+        other = next(file for file in group["files"] if file["path"] == str(moved))
+        plan = self.registry.plan(scan_id=report["scanId"],
+                                  selected=[other["id"]],
+                                  operation="move", destination=str(self.output))
+        self.assertEqual(plan["mediaCount"], 1)
+        self.assertEqual(plan["companionCount"], 2)
+        self.assertEqual(plan["totalFiles"], 3)
+        self.registry.apply(scan_id=report["scanId"], selected=[other["id"]],
+                            operation="move", destination=str(self.output),
+                            preview_id=plan["previewId"], confirmed=True)
+        for path in (moved, lyric, cursor):
+            self.assertFalse(path.exists())
+            self.assertTrue((self.output / path.relative_to(self.root)).exists())
+        self.assertTrue(original.exists())
+        self.assertTrue((self.root / "MIDI/NCN/LYR/A/00001.lyr").exists())
+
+    def test_keep_a_different_file_instead_of_default_original(self):
+        first = self.put("A/1.mp3", b"same" * 200)
+        second = self.put("B/2.m4a", first.read_bytes())
+        report = self.found()
+        group = self.registry.page()["groups"][0]
+        first_id = next(x["id"] for x in group["files"] if x["path"] == str(first))
+        second_id = next(x["id"] for x in group["files"] if x["path"] == str(second))
+        keepers = {group["id"]: second_id}
+        plan = self.registry.plan(scan_id=report["scanId"],
+                                  selected=[first_id], keeper_by_group=keepers,
+                                  operation="move", destination=str(self.output))
+        result = self.registry.apply(scan_id=report["scanId"], selected=[first_id],
+                                     keeper_by_group=keepers, operation="move",
+                                     destination=str(self.output),
+                                     preview_id=plan["previewId"], confirmed=True)
+        self.assertEqual(result["processed"], 1)
+        self.assertFalse(first.exists())
+        self.assertTrue(second.exists())
+        self.assertTrue((self.output / "A/1.mp3").exists())
+
+    def test_format_preference_keeps_requested_type(self):
+        one = self.put("A/01.mid", b"binary" * 100)
+        self.put("B/02.xsk", one.read_bytes())
+        report = self.found()
+        group = self.registry.page(preferred_extension=".xsk")["groups"][0]
+        keeper = next(x for x in group["files"] if x["keep"])
+        self.assertEqual(keeper["extension"], ".xsk")
+        self.assertEqual(keeper["path"], str(self.root / "B/02.xsk"))
+        selected = next(x["id"] for x in group["files"] if not x["keep"])
+        plan = self.registry.plan(scan_id=report["scanId"], selected=[selected],
+                                  preferred_extension=".xsk", operation="move",
+                                  destination=str(self.output))
+        self.assertIn(".xsk", plan["keepers"][0]["type"])
+
+    def test_same_code_different_encoding_needs_manual_ack(self):
+        one = self.put("Album/00001.mp3", b"music A" * 200)
+        two = self.put("Album/00001.m4a", b"music B" * 150)
+        self.put("Album/00001.json", b'{"lines":[]}')
+        report = self.registry.scan(str(self.root), mode="code")
+        self.assertEqual(report["groupCount"], 1)
+        group = self.registry.page(preferred_extension=".m4a")["groups"][0]
+        self.assertEqual(group["match"], "code")
+        self.assertEqual(next(x for x in group["files"] if x["keep"])["extension"], ".m4a")
+        first = next(x for x in group["files"] if x["extension"] == ".mp3")
+        with self.assertRaisesRegex(ValueError, "ยืนยัน"):
+            self.registry.plan(scan_id=report["scanId"], selected=[first["id"]],
+                               operation="move", destination=str(self.output),
+                               preferred_extension=".m4a")
+        plan = self.registry.plan(scan_id=report["scanId"], selected=[first["id"]],
+                                  operation="move", destination=str(self.output),
+                                  preferred_extension=".m4a",
+                                  same_song_confirmed=True)
+        self.assertEqual(plan["companionCount"], 0) # JSON shared with M4A keeper
+        self.assertTrue(plan["warnings"])
+        result = self.registry.apply(scan_id=report["scanId"], selected=[first["id"]],
+                                     operation="move", destination=str(self.output),
+                                     preferred_extension=".m4a", same_song_confirmed=True,
+                                     preview_id=plan["previewId"], confirmed=True)
+        self.assertEqual(result["processed"], 1)
+        self.assertFalse(one.exists())
+        self.assertTrue(two.exists())
+        self.assertTrue((self.root / "Album/00001.json").exists())
+
+    def test_same_code_parallel_song_roles_match_but_artist_namespaces_do_not(self):
+        self.put("MIDI/NCN/SONG/0/00550.mid", b"midi note" * 50)
+        self.put("AUDIO/MP3/SONG/0/00550.mp3", b"audio track" * 50)
+        self.put("ArtistOne/MIDI/SONG/1/00330.mid", b"one" * 80)
+        self.put("ArtistTwo/AUDIO/SONG/1/00330.mp3", b"two" * 80)
+        report = self.registry.scan(str(self.root), mode="code")
+        self.assertEqual(report["groupCount"], 1)
+        paths = {Path(x["path"]).suffix.lower()
+                 for x in self.registry.page()["groups"][0]["files"]}
+        self.assertEqual(paths, {".mid", ".mp3"})
+
+    def test_same_code_unrelated_folders_not_grouped(self):
+        self.put("ArtistOne/00001.mp3", b"A" * 500)
+        self.put("ArtistTwo/00001.m4a", b"B" * 500)
+        report = self.registry.scan(str(self.root), mode="code")
+        self.assertEqual(report["groupCount"], 0)
+
+    def test_preview_token_and_dest_are_immutable(self):
+        self.put("A/1.mid", b"same" * 100)
+        self.put("B/2.mid", b"same" * 100)
+        report = self.found()
+        selected = self.registry.page()["groups"][0]["files"][1]["id"]
+        plan = self.registry.plan(scan_id=report["scanId"], selected=[selected],
+                                  operation="move", destination=str(self.output))
+        with self.assertRaisesRegex(ValueError, "แผน"):
+            self.registry.apply(scan_id=report["scanId"], selected=[selected],
+                                operation="move", destination=str(self.output),
+                                preview_id="wrong", confirmed=True)
+        self.assertIsNotNone(plan["previewId"])
+        self.assertTrue((self.root / "B/2.mid").exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows Recycle Bin only")
+    def test_recycle_media_and_json_with_confirmation(self):
+        self.put("A/00001.mp3", b"same" * 150)
+        song = self.put("B/00002.mp3", b"same" * 150)
+        lyric = self.put("B/00002.json", b'{"schemaVersion":1}')
+        report = self.found()
+        group = self.registry.page()["groups"][0]
+        fid = next(x["id"] for x in group["files"] if x["path"] == str(song))
+        plan = self.registry.plan(scan_id=report["scanId"], selected=[fid],
+                                  operation="recycle")
+        self.assertEqual(plan["companionCount"], 1)
+        with patch.object(duplicates, "_recycle_windows",
+                          side_effect=lambda path: path.unlink()) as recycle:
+            self.registry.apply(scan_id=report["scanId"], selected=[fid],
+                                operation="recycle", preview_id=plan["previewId"],
+                                confirmed=True)
+        self.assertEqual(recycle.call_count, 2)
+        self.assertFalse(song.exists())
+        self.assertFalse(lyric.exists())
+        self.assertTrue((self.root / "A/00001.mp3").exists())
 
     @unittest.skipUnless(os.name == "nt", "Windows Recycle Bin only")
     def test_recycle_action_only_on_verified_selected_duplicate(self):
