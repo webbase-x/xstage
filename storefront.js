@@ -188,20 +188,21 @@
       const build=data.build;
       const preview=data.channel==="preview";
       const prefix="X-Stage-Mirror-PC-v"+version+"-build"+build+"-win-x64-";
-      const extension=preview?".exe":".exe";
-      const expectedFile=prefix+"Setup.exe";
+      const installer=data.file===prefix+"Setup.exe";
+      const portable=data.file===prefix+"CANDIDATE.zip";
       const valid=data.available===true&&/^\d+\.\d+\.\d+$/.test(version)&&
         Number.isSafeInteger(build)&&build>0&&SHA256.test(data.sha256||"")&&
-        data.file===expectedFile;
+        (installer||portable);
       const expectedUrl=preview?
         "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v"+
-        version+"-build"+build+"-preview/"+expectedFile:null;
+        version+"-build"+build+"-preview/"+data.file:null;
       const url=valid&&(!preview||data.download_url===expectedUrl)?
-        verifiedReleaseUrl(data.download_url,extension):"";
+        verifiedReleaseUrl(data.download_url,installer?".exe":".zip"):"";
       return url?{
         available:true,url,
-        status:"Setup EXE v"+version+" · Build "+build+(preview?" · รุ่นทดสอบ":" · รุ่นล่าสุด"),
-        kind:"download",version,build,preview
+        status:(installer?"Setup EXE":"Portable ZIP")+" v"+version+" · Build "+build+
+          (preview?" · รุ่นทดสอบ":" · รุ่นล่าสุด"),
+        kind:"download",version,build,preview,installer
       }:{available:false,url:"",status:"ยังไม่มีตัวติดตั้ง Mirror PC ที่ตรวจสอบแล้ว",kind:"pending"};
     }
     if(id==="file-share"){
@@ -257,7 +258,7 @@
       if(available){
         quick.href=states[id].url;
         quick.textContent=id==="mirror-pc"?
-          ("⬇ ดาวน์โหลด Setup EXE v"+states[id].version+" (Build "+states[id].build+")") :
+          ("⬇ ดาวน์โหลด "+(states[id].installer?"Setup EXE":"ZIP")+" v"+states[id].version+" (Build "+states[id].build+")") :
           (id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
         if(states[id].url.startsWith("./")){
           quick.setAttribute("download",states[id].url.split("/").at(-1));
@@ -341,7 +342,7 @@
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
       const label=id==="studio-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
-        id==="mirror-pc"?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":
+        id==="mirror-pc"?(state.installer?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":"ดาวน์โหลด ZIP รุ่นทดสอบ ↗"):
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
       const support=suitability(id);
