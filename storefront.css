@@ -102,6 +102,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #007a
 .icon-studio-web{background:linear-gradient(145deg,#185b7b,#443ca7)}
 .icon-tv{background:linear-gradient(145deg,#121b35,#273f81);padding:4px}
 .icon-mirror{background:linear-gradient(135deg,#0b9db7,#2056b2)}
+.icon-file-share{background:linear-gradient(135deg,#0a5667,#2649a5)}
 .app-text{flex:1}
 .app-category{font-size:10px;color:#85858d;letter-spacing:1.35px;font-weight:800}
 .app-card h3{font-size:17px;font-weight:800;letter-spacing:-.45px;line-height:1.35;margin:5px 0 5px}
