@@ -7,11 +7,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>XStageMirrorIOSPC</AssemblyName>
     <RootNamespace>XStageMirrorIOSPC</RootNamespace>
-    <Version>1.0.4</Version>
-    <FileVersion>1.0.4.1005</FileVersion>
+    <Version>1.0.5</Version>
+    <FileVersion>1.0.5.1006</FileVersion>
     <ApplicationTitle>X-Stage Mirror iOS PC</ApplicationTitle>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <PlatformTarget>x64</PlatformTarget>
     <PublishAot>false</PublishAot>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="logo.png" LogicalName="XStageMirrorIOSPC.logo.png" />
+  </ItemGroup>
 </Project>

@@ -18,7 +18,7 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.4 · Build 1005";
+    private const string VersionText = "v1.0.5 · Build 1006";
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
@@ -27,6 +27,15 @@ public sealed class MainForm : Form
     private static readonly Color Turquoise = Color.FromArgb(105, 228, 237);
     private static readonly Color Soft = Color.FromArgb(163, 190, 212);
 
+    // Logo uses the same source artwork as the EXE icon; PNG is built into the
+    // app's managed assembly, so no external runtime file or network is needed.
+    private readonly PictureBox _logo = new()
+    {
+        AccessibleName = "โลโก้ X-Stage Mirror PC",
+        SizeMode = PictureBoxSizeMode.Zoom,
+        BackColor = Color.Transparent,
+        TabStop = false
+    };
     private readonly Label _title = MakeLabel("", 55, true, Frost);
     private readonly Label _number = MakeLabel("", 92, true, Turquoise);
     private readonly Label _version = MakeLabel("", 15, false, Soft);
@@ -94,6 +103,7 @@ public sealed class MainForm : Form
             if (embedded is not null) Icon = embedded;
         }
         catch { /* The EXE still works if Windows cannot load its embedded icon. */ }
+        _logo.Image = LoadBrandLogo();
 
         _minimize.FlatAppearance.BorderSize = 0;
         _closeButton.FlatAppearance.BorderSize = 0;
@@ -111,7 +121,8 @@ public sealed class MainForm : Form
         _version.Text = "MIRROR iOS PC     " + VersionText;
         _status.Text = "กำลังเตรียมตัวรับ AirPlay";
         _network.Text = "ตรวจสอบเครือข่าย…";
-        Controls.AddRange([_title, _number, _version, _status, _network, _minimize, _closeButton]);
+        Controls.AddRange([_logo, _title, _number, _version, _status, _network,
+            _minimize, _closeButton]);
         _autoUpdates = new MirrorAutoUpdateManager(
             message =>
             {
@@ -159,10 +170,32 @@ public sealed class MainForm : Form
             StopOwnEngine();
             RestoreQtSettings();
         };
+        FormClosed += (_, _) =>
+        {
+            var image = _logo.Image;
+            _logo.Image = null;
+            image?.Dispose();
+        };
 
         _clock.Tick += (_, _) => TickReceiver();
         _clock.Start();
         LayoutWelcome();
+    }
+
+    private static Image? LoadBrandLogo()
+    {
+        // EmbeddedResource is generated from assets/app-icons/mirror-ios-pc.svg
+        // during CI, and survives single-file .NET publishing.
+        using var stream = typeof(MainForm).Assembly
+            .GetManifestResourceStream("XStageMirrorIOSPC.logo.png");
+        if (stream is not null)
+        {
+            using var source = Image.FromStream(stream);
+            return new Bitmap(source);
+        }
+        // Keep a useful logo if a developer compiled outside the official pipeline.
+        try { return Icon.ExtractAssociatedIcon(Application.ExecutablePath)?.ToBitmap(); }
+        catch { return null; }
     }
 
     private static Label MakeLabel(string text, float size, bool bold, Color color) => new()
@@ -186,13 +219,27 @@ public sealed class MainForm : Form
         _closeButton.SetBounds(ClientSize.Width - buttonWidth - 24, 22, buttonWidth, 44);
         _minimize.SetBounds(ClientSize.Width - (buttonWidth * 2) - buttonGap - 24, 22,
             buttonWidth, 44);
+        // Place the brand icon clearly above the title and preserve separation
+        // from the two window buttons, receiver number and status text.
+        var logoSize = Math.Clamp((int)Math.Min(w * 0.19, h * 0.185), 72, 168);
+        var logoTop = Math.Max(76, (int)(h * 0.12));
+        _logo.SetBounds(Math.Max(0, (ClientSize.Width - logoSize) / 2),
+            logoTop, logoSize, logoSize);
+        var titleTop = Math.Max(logoTop + logoSize + 7, h * 0.35);
+        var titleHeight = h * 0.105;
+        var numberTop = Math.Max(titleTop + titleHeight + 8, h * 0.48);
+        var numberHeight = h * 0.19;
+        var versionTop = Math.Max(numberTop + numberHeight + 9, h * 0.70);
+        var versionHeight = Math.Max(23, h * 0.048);
+        var statusTop = Math.Max(versionTop + versionHeight + 12, h * 0.79);
+        var networkTop = Math.Max(statusTop + h * 0.058 + 8, h * 0.865);
         var largeTitle = Math.Clamp(w / 29f, 27, 62);
         var bigNumber = Math.Clamp(Math.Min(w / 13f, h / 5.6f), 44, 112);
-        SetLabel(_title, largeTitle, h * 0.29, h * 0.11);
-        SetLabel(_number, bigNumber, h * 0.415, h * 0.22);
-        SetLabel(_version, Math.Clamp(w / 96f, 11, 17), h * 0.665, h * 0.045);
-        SetLabel(_status, Math.Clamp(w / 71f, 12, 21), h * 0.755, h * 0.06);
-        SetLabel(_network, Math.Clamp(w / 90f, 11, 17), h * 0.83, h * 0.05);
+        SetLabel(_title, largeTitle, titleTop, titleHeight);
+        SetLabel(_number, bigNumber, numberTop, numberHeight);
+        SetLabel(_version, Math.Clamp(w / 96f, 11, 17), versionTop, versionHeight);
+        SetLabel(_status, Math.Clamp(w / 71f, 12, 21), statusTop, h * 0.058);
+        SetLabel(_network, Math.Clamp(w / 90f, 11, 17), networkTop, h * 0.052);
         void SetLabel(Label label, float points, double top, double height)
         {
             if (Math.Abs(label.Font.Size - points) > 1)
