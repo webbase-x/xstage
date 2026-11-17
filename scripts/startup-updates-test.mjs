@@ -103,7 +103,10 @@ assert.ok(windows.includes("if ($CurrentBuild -le 0 -and $CurrentVersion -ne '0.
   'Updater must read local manifest if the running app does not supply its build number');
 const ready=JSON.parse(read('downloads/song-studio-latest.json'));
 assert.equal(ready.package_type,'portable_zip','PC Ready must never masquerade as an EXE installer');
-assert.equal(ready.installer_available,false);
+if(ready.installer_available){
+  assert.match(ready.installer_sha256,/^[a-f0-9]{64}$/,'Ready installer must include a trusted checksum');
+  assert.ok(ready.installer_file.endsWith('-Setup.exe'),'published Ready installer must have Setup.exe extension');
+}
 assert.match(ready.sha256,/^[a-f0-9]{64}$/);
 assert.ok(publishedApk.build>0&&/^[a-fA-F0-9]{64}$/.test(publishedApk.sha256),'published APK metadata must identify an actual signed artifact');
 console.log('X-Stage startup updater contract: 4 web behaviors and 12 release/channel safety checks passed');
