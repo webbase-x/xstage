@@ -164,8 +164,36 @@ jobs:
           print(data.get('signer_sha256','') if data.get('signing_mode')=='persistent' else '')
           PY
           )
-          if [ -n "$PREVIOUS_SHA" ] && [ "$PREVIOUS_SHA" != "$CERT_SHA256" ]; then
-            echo "::error::Signing certificate changed! Refusing to publish a non-updatable APK."; exit 1
+          STABLE_SHA=$(python3 - <<'PY'
+          import json
+          m=json.load(open('mirror-tv/latest.json',encoding='utf-8'))
+          print(m.get('signer_sha256','') if m.get('signing_mode')=='persistent' else '')
+          PY
+          )
+          for PIN in "$PREVIOUS_SHA" "$STABLE_SHA"; do
+            if [ -n "$PIN" ] && [ "$PIN" != "$CERT_SHA256" ]; then
+              echo "::error::Signing certificate changed! Refusing to publish a non-updatable APK."; exit 1
+            fi
+          done
+          # Audit the installed legacy test APK's *actual* signer. Neither
+          # version numbers nor APK checksums can override Android's key check.
+          LEGACY_TAG="xstage-mirror-tv-test-v0.2.5-build107-8bdc61a4"
+          LEGACY_APK="X-Stage-Mirror-TV-test-v0.2.5-build107.apk"
+          mkdir -p "$RUNNER_TEMP/mirror-legacy"
+          if gh release download "$LEGACY_TAG" --repo "$GITHUB_REPOSITORY" \\
+              --pattern "$LEGACY_APK" --dir "$RUNNER_TEMP/mirror-legacy"; then
+            LEGACY_OUTPUT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify \\
+              --print-certs "$RUNNER_TEMP/mirror-legacy/$LEGACY_APK")
+            LEGACY_SHA=$(printf '%s\\n' "$LEGACY_OUTPUT" |
+              sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
+              tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+            if [ "$LEGACY_SHA" = "$CERT_SHA256" ]; then
+              echo "Build 107 public preview and new release share the same signer: in-place update eligible"
+            else
+              echo "::warning::Build 107's public APK signer differs from this build. Android cannot upgrade Build 107 in place without the original private signing key."
+            fi
+          else
+            echo "::warning::Cannot audit legacy Build 107 APK; do not claim guaranteed in-place migration."
           fi
           echo "signer_sha256=$CERT_SHA256" >> "$GITHUB_OUTPUT"
           echo "Validated a persistent APK signing certificate; SHA-256=$CERT_SHA256"
