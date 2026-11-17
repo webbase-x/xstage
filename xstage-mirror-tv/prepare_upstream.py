@@ -110,6 +110,74 @@ substitute(overview,
 substitute(overview,
            'style = MaterialTheme.typography.displaySmall,',
            'style = MaterialTheme.typography.headlineMedium,')
+# The original overview centers a fixed-height stack. On 720p Android TV,
+# adding the receiver-name editor and QR made the lower controls overlap or
+# disappear. Keep the same layout but give its content a bounded scroll viewport
+# which responds to keyboard insets and TV remote focus.
+substitute(overview,
+           '    Column(modifier = Modifier.fillMaxSize()) {\n        // content area',
+           '    Column(modifier = Modifier.fillMaxSize().imePadding()) {\n        // content area')
+substitute(overview,
+           'horizontalAlignment = Alignment.CenterHorizontally,\n                        modifier = Modifier.padding(horizontal = 24.dp)',
+           'horizontalAlignment = Alignment.CenterHorizontally,\n'
+           '                        modifier = Modifier.fillMaxWidth()\n'
+           '                            .verticalScroll(androidx.compose.foundation.rememberScrollState())\n'
+           '                            .padding(horizontal = 24.dp)')
+# Group bottom tabs, and make the selected tab/readable text obvious.
+substitute(overview,
+           '                    NavigationBar {\n                        Tab.entries.forEach { t ->',
+           '                    NavigationBar(modifier = Modifier.focusGroup()) {\n'
+           '                        Tab.entries.forEach { t ->')
+substitute(overview,
+           'label = { Text(stringResource(t.labelRes)) },\n'
+           '                                modifier = Modifier.dpadFocus()',
+           'label = { Text(stringResource(t.labelRes),\n'
+           '                                    fontWeight = if (tab == t) FontWeight.Bold else FontWeight.Medium) },\n'
+           '                                colors = NavigationBarItemDefaults.colors(\n'
+           '                                    selectedIconColor = androidx.compose.ui.graphics.Color(0xFF082A3C),\n'
+           '                                    selectedTextColor = androidx.compose.ui.graphics.Color(0xFFE8FAFF),\n'
+           '                                    indicatorColor = androidx.compose.ui.graphics.Color(0xFF7AE7FF),\n'
+           '                                    unselectedIconColor = androidx.compose.ui.graphics.Color(0xFFC8D5E8),\n'
+           '                                    unselectedTextColor = androidx.compose.ui.graphics.Color(0xFFC8D5E8)\n'
+           '                                ),\n'
+           '                                modifier = Modifier.dpadFocus()')
+# Material3's dimmed labels and weak outline are difficult to read across TVs.
+theme_file = ui / "theme" / "Theme.kt"
+substitute(theme_file, 'primary = Color(0xFFFF5A6E)', 'primary = Color(0xFF7AE7FF)')
+substitute(theme_file, 'onPrimary = Color(0xFF2A0A10)', 'onPrimary = Color(0xFF082A3C)')
+substitute(theme_file, 'onSurfaceVariant = Color(0xFFA9B8CF)',
+           'onSurfaceVariant = Color(0xFFE1EAF8)')
+substitute(theme_file, 'outline = Color(0xFF2A3B58)', 'outline = Color(0xFF91A7C7)')
+substitute(theme_file, 'surfaceTint = Color(0xFFFF5A6E)', 'surfaceTint = Color(0xFF7AE7FF)')
+
+# All preset chips should clearly distinguish selected/unselected states.
+# Treat each horizontal choice row as a focus group for TV remote traversal.
+settings_p = ui / "SettingsScreen.kt"
+settings_text = settings_p.read_text(encoding="utf-8")
+settings_text = settings_text.replace(
+    'import androidx.compose.foundation.layout.*',
+    'import androidx.compose.foundation.layout.*\nimport androidx.compose.foundation.focusGroup')
+old_flow = 'FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {'
+if settings_text.count(old_flow) != 2:
+    raise RuntimeError("Expected two settings choice groups")
+settings_text = settings_text.replace(
+    old_flow,
+    'FlowRow(modifier = Modifier.focusGroup(),\n'
+    '            horizontalArrangement = Arrangement.spacedBy(8.dp)) {')
+chip_colors = ('colors = FilterChipDefaults.filterChipColors(\n'
+               '                            selectedContainerColor = MaterialTheme.colorScheme.secondary,\n'
+               '                            selectedLabelColor = MaterialTheme.colorScheme.onSecondary,\n'
+               '                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,\n'
+               '                            labelColor = MaterialTheme.colorScheme.onSurface),')
+for pad, count in [('                        ', 3), ('                ', 1)]:
+    target = pad + 'modifier = Modifier.dpadFocus()\n' + pad[:-4] + ')'
+    if settings_text.count(target) != count:
+        raise RuntimeError(f"Unexpected chip count for {pad!r}: {settings_text.count(target)}")
+    settings_text = settings_text.replace(target,
+        pad + 'modifier = Modifier.dpadFocus(),\n' + pad + chip_colors +
+        '\n' + pad[:-4] + ')')
+settings_p.write_text(settings_text, encoding="utf-8")
+
 overlay = Path(__file__).resolve().parent / "ReceiverSetupQr.kt"
 (ui / "ReceiverSetupQr.kt").write_text(overlay.read_text(encoding="utf-8"), encoding="utf-8")
 
@@ -136,6 +204,7 @@ substitute(activity,
            '    private lateinit var mirrorUpdates: MirrorUpdateManager')
 substitute(activity,
            '        enableEdgeToEdge()',
+           '        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)\n'
            '        // Preserve older custom receiver names as a suffix.\n'
            '        ReceiverNamePolicy.migratePreviousName(this)\n'
            '        enableEdgeToEdge()\n'
