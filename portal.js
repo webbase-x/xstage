@@ -14,7 +14,7 @@
   const reviewList=$("portal-review-list"), reviewSummary=$("portal-rating-summary");
   const adminPanel=$("portal-admin"), adminEvents=$("portal-admin-events");
   const appIds=()=>Array.from(document.querySelectorAll(".app-card[data-app]")).map(c=>c.dataset.app);
-  let client=null,user=null,isAdmin=false,activeApp=null,latestReviews=[];
+  let client=null,user=null,isAdmin=false,activeApp=null,latestReviews=[],backendReady=false;
   const safeText=value=>String(value==null?"":value);
   function message(node,value){if(node)node.textContent=value;}
   function currentApp(){const id=new URLSearchParams(location.search).get("app");return id&&appIds().includes(id)?id:null;}
@@ -140,7 +140,7 @@
     resetReviewArea();
     activeApp=appId;
     reviewForm.hidden=!user;
-    if(!client){
+    if(!client||!backendReady){
       message(reviewSummary,"ยังไม่เปิดระบบรีวิว");
       message(reviewStatus,"กำลังรอเชื่อมต่อฐานข้อมูล X-Stage · เปิดดูรายละเอียดแอปได้ตามปกติ");
       return;
@@ -178,7 +178,7 @@
     $("portal-comment").value=mine?.comment||"";
   }
   async function loadSession(){
-    if(!client)return;
+    if(!client||!backendReady)return;
     const {data}=await client.auth.getUser();
     user=data?.user||null;
     refreshAccount();
@@ -186,8 +186,8 @@
     if(activeApp)await loadReviews(activeApp);
   }
   async function signIn(){
-    if(!client){
-      window.alert("Google Login ยังไม่ได้เชื่อมต่อฐานข้อมูล X-Stage กรุณาตั้งค่า portal-config.js");
+    if(!client||!backendReady){
+      window.alert("Google Login ยังไม่พร้อม เพราะฐานข้อมูล xstage_ ยังไม่ได้ตั้งค่า");
       return;
     }
     let redirectTo=location.origin+location.pathname+location.search;
@@ -266,9 +266,24 @@
   client.auth.onAuthStateChange((_event,session)=>{
     user=session?.user||null;
     refreshAccount();
+    if(!backendReady)return;
     setTimeout(()=>{void loadHistory();void loadAdmin();if(activeApp)void loadReviews(activeApp);},0);
   });
+  login.disabled=true;
   refreshAccount();
   updateRoute();
-  void loadSession();
+  // Fail closed: do not enable account/review features until REST + RLS schema exists.
+  void client.from("xstage_reviews").select("app_id").limit(0).then(async ({error})=>{
+    if(error){
+      message(reviewStatus,"ระบบ Google Login และรีวิวรอติดตั้งตาราง xstage_ ใน Supabase ISSQL");
+      message(reviewSummary,"ยังไม่เปิดระบบรีวิว");
+      login.title="ฐานข้อมูล xstage_ ยังไม่พร้อม";
+      return;
+    }
+    backendReady=true;
+    login.disabled=false;
+    login.title="เข้าสู่ระบบด้วยบัญชี Google";
+    refreshAccount();
+    await loadSession();
+  });
 })();
