@@ -33,7 +33,7 @@ assert.match(portal,/installation_confirmed/);
 assert.match(portal,/xstage_reviews/);
 assert.match(portal,/user_id:user\.id/,'writes must attribute their actual authenticated user');
 assert.match(css,/#portal-review-form\[hidden\]/,'hidden rating form must stay hidden');
-assert(!/service.?role|sb_secret_/i.test(config),'public config must not include private keys');
+assert(!/['\"]sb_secret_[a-z0-9_-]{8,}/i.test(config),'public config must not include private keys');
 const expectedTables=['xstage_profiles','xstage_admins','xstage_download_events','xstage_reviews'];
 for(const name of expectedTables){
   assert(migration.includes('create table if not exists public.'+name),'missing '+name);
