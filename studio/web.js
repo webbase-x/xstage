@@ -338,7 +338,16 @@
     }
   }
   async function chooseFolder() {
-    if (typeof window.showDirectoryPicker !== 'function') {
+    // Dedicated Song Studio Web release metadata: never impersonate Karaoke's build.
+  fetch('./web-version.json', {cache:'no-store',credentials:'omit'})
+    .then(response=>response.ok?response.json():null)
+    .then(data=>{
+      if(data && typeof data.version==='string' && Number.isSafeInteger(data.build)){
+        const el=$('studio-web-release');
+        if(el)el.textContent='Song Studio Web v'+data.version+' · Build '+data.build;
+      }
+    }).catch(()=>{});
+  if (typeof window.showDirectoryPicker !== 'function') {
       $('folder-input').click(); return;
     }
     try {

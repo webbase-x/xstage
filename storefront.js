@@ -212,7 +212,10 @@
   function updateCardStatus(id){
     const el=document.querySelector('[data-status="'+id+'"]');
     if(!el)return;
-    el.textContent=states[id].status;
+    const state=states[id];
+    const release=(state.version&&Number.isSafeInteger(state.build))
+      ?' · v'+state.version+' · Build '+state.build : '';
+    el.textContent=state.status+release;
     el.classList.toggle("ready",states[id].available);
     el.classList.toggle("pending",!states[id].available);
     const quick=document.querySelector('[data-download-app="'+id+'"]');
@@ -240,16 +243,26 @@
       if(!response.ok)throw Error("HTTP "+response.status);
       const data=await response.json();
       states[id]=getRelease(id,data);
+      states[id].build=Number.isSafeInteger(data.build)?data.build:
+        (Number.isSafeInteger(data.build_code)?data.build_code:null);
       if(id==="karaoke-pc"&&!states[id].available&&appInfo[id].previewManifest){
         try{
           const candidateResponse=await fetch(appInfo[id].previewManifest,{cache:"no-store",credentials:"omit"});
-          if(candidateResponse.ok)states[id]=getRelease(id,await candidateResponse.json());
+          if(candidateResponse.ok){
+            const candidate=await candidateResponse.json();
+            states[id]=getRelease(id,candidate);
+            states[id].build=Number.isSafeInteger(candidate.build)?candidate.build:null;
+          }
         }catch{} // Stable release metadata remains authoritative.
       }
       if(id==="mirror-tv"&&!states[id].available&&appInfo[id].testManifest){
         try{
           const previewResponse=await fetch(appInfo[id].testManifest,{cache:"no-store",credentials:"omit"});
-          if(previewResponse.ok)states[id]=getRelease(id,await previewResponse.json());
+          if(previewResponse.ok){
+            const preview=await previewResponse.json();
+            states[id]=getRelease(id,preview);
+            states[id].build=Number.isSafeInteger(preview.build)?preview.build:null;
+          }
         }catch{} // The production signing feed remains authoritative.
       }
     }catch{
@@ -257,7 +270,11 @@
       if(id==="mirror-tv"&&appInfo[id].testManifest){
         try{
           const fallback=await fetch(appInfo[id].testManifest,{cache:"no-store",credentials:"omit"});
-          if(fallback.ok)states[id]=getRelease(id,await fallback.json());
+          if(fallback.ok){
+            const preview=await fallback.json();
+            states[id]=getRelease(id,preview);
+            states[id].build=Number.isSafeInteger(preview.build)?preview.build:null;
+          }
           else states[id]={available:false,url:"",status:"ตรวจสอบ APK Mirror TV ไม่ได้",kind:"pending"};
         }catch{
           states[id]={available:false,url:"",status:"ตรวจสอบ APK Mirror TV ไม่ได้",kind:"pending"};
@@ -318,7 +335,8 @@
     detailElements.category.textContent=info.category;
     detailElements.title.textContent=info.title;
     detailElements.subtitle.textContent=info.subtitle;
-    detailElements.status.textContent=state.status;
+    detailElements.status.textContent=state.status+
+      (state.version&&Number.isSafeInteger(state.build)?' · v'+state.version+' · Build '+state.build:'');
     detailElements.description.textContent=info.description;
     detailElements.showcaseTitle.textContent=info.hero;
     detailElements.showcaseCopy.textContent=info.blurb;
@@ -412,5 +430,18 @@
   routeToCurrent();
   for(const id of Object.keys(appInfo)){
     if(appInfo[id].manifest)loadLatest(id,appInfo[id].manifest);
+  }
+  for(const [id,url] of Object.entries({
+    'karaoke-web':'./version.json',
+    'studio-web':'./studio/web-version.json'
+  })){
+    fetch(url,{cache:'no-store',credentials:'omit'})
+      .then(response=>response.ok?response.json():null)
+      .then(data=>{
+        if(!data||typeof data.version!=='string'||!Number.isSafeInteger(data.build))return;
+        states[id].version=data.version;
+        states[id].build=data.build;
+        updateCardStatus(id);
+      }).catch(()=>{});
   }
 })();
