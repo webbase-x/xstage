@@ -46,7 +46,7 @@ assert 'ReceiverNamePolicy.migratePreviousName(this)' in (app / "src/main/kotlin
 home = (app / "src/main/kotlin/app/airshow/tv/TvHomeShortcut.kt").read_text()
 assert "isRequestPinShortcutSupported" in home and "requestPinShortcut(shortcut, null)" in home
 assert "Intent.CATEGORY_HOME" in home and "Intent.CATEGORY_LAUNCHER" in home
-assert 'TvHomeShortcut.request' in (app / "src/main/kotlin/app/airshow/tv/TvHomeShortcut.kt").read_text()
+assert 'fun request(' in (app / "src/main/kotlin/app/airshow/tv/TvHomeShortcut.kt").read_text()
 assert (app / "src/main/res/drawable/banner.png").exists()
 assert (app / "src/main/res/drawable-xhdpi/banner.png").exists()
 from PIL import Image
