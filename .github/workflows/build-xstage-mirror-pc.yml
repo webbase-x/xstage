@@ -40,7 +40,7 @@ jobs:
       - name: Upload compiled control EXE (engine not included)
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Mirror-PC-EXE-Build101-COMPILED-ONLY
+          name: X-Stage-Mirror-PC-EXE-Build102-COMPILED-ONLY
           path: mirror-pc/out/XStageMirrorPC.exe
           if-no-files-found: error
           retention-days: 30
@@ -54,7 +54,7 @@ jobs:
       - name: Download exactly the compiled X-Stage control executable
         uses: actions/download-artifact@v4
         with:
-          name: X-Stage-Mirror-PC-EXE-Build101-COMPILED-ONLY
+          name: X-Stage-Mirror-PC-EXE-Build102-COMPILED-ONLY
           path: mirror-pc/out
       - name: Check Windows executable prerequisite
         shell: pwsh
@@ -124,11 +124,52 @@ jobs:
           This candidate requires real Windows+iOS testing.
           "@ | Set-Content -Encoding UTF8 'mirror-pc/out/THIRD_PARTY_NOTICES.txt'
 
+      - name: Verify bundled AirPlay dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $engine = 'mirror-pc/out/engine/uxplay-windows'
+          foreach ($file in @('uxplay-windows.exe','mDNSResponder.exe','Qt6Core.dll',
+              'Qt6Gui.dll','Qt6Widgets.dll','dnssd.dll',
+              'libgstreamer-1.0-0.dll','lib/gstreamer-1.0/libgstcoreelements.dll',
+              'platforms/qwindows.dll','LICENSE.rtf')) {
+            if (-not (Test-Path (Join-Path $engine $file) -PathType Leaf)) {
+              throw "Missing bundled AirPlay component: $file"
+            }
+          }
+          if (-not (Test-Path mirror-pc/out/XStageMirrorPC.exe -PathType Leaf)) {
+            throw 'Self-contained X-Stage desktop EXE missing'
+          }
+
+      - name: Install Inno Setup compiler on build runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed on CI runner' }
+
+      - name: Build all-in-one installer EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) { $compiler = Join-Path $env:ProgramFiles 'Inno Setup 6/ISCC.exe' }
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
+          & $compiler 'mirror-pc/installer/XStageMirrorPC.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
+          $file = 'mirror-pc/installer/output/X-Stage-Mirror-PC-v0.1.1-build102-win-x64-Setup.exe'
+          if (-not (Test-Path $file -PathType Leaf)) { throw 'Setup EXE missing' }
+          if ((Get-Item $file).Length -lt 10000000) { throw 'Setup EXE unexpectedly small' }
+          $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  X-Stage-Mirror-PC-v0.1.1-build102-win-x64-Setup.exe" |
+            Set-Content -Encoding ascii "$file.sha256"
+          Write-Host "Offline Setup EXE SHA-256: $hash"
+
       - name: Publish candidate ZIP with intact portable runtime
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $file = 'X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip'
+          $file = 'X-Stage-Mirror-PC-v0.1.1-build102-win-x64-CANDIDATE.zip'
           $source = Resolve-Path 'mirror-pc/out'
           Compress-Archive -Path (Join-Path $source '*') -DestinationPath $file -CompressionLevel Optimal -Force
           if ((Get-Item $file).Length -lt 3000000) { throw 'Incomplete portable candidate ZIP' }
@@ -142,7 +183,9 @@ jobs:
         with:
           name: X-Stage-Mirror-PC-Windows-CANDIDATE
           path: |
-            X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip
-            X-Stage-Mirror-PC-v0.1.0-build101-win-x64-CANDIDATE.zip.sha256
+            X-Stage-Mirror-PC-v0.1.1-build102-win-x64-CANDIDATE.zip
+            X-Stage-Mirror-PC-v0.1.1-build102-win-x64-CANDIDATE.zip.sha256
+            mirror-pc/installer/output/X-Stage-Mirror-PC-v0.1.1-build102-win-x64-Setup.exe
+            mirror-pc/installer/output/X-Stage-Mirror-PC-v0.1.1-build102-win-x64-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 30
