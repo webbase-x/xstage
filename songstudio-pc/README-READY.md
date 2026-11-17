@@ -1,5 +1,6 @@
-## Build 366 — ไอคอน Windows Taskbar
+## Build 366 — Setup EXE และไอคอน Windows Taskbar
 
+- เพิ่ม Setup.exe พร้อม runtime สำหรับติดตั้งแบบออฟไลน์ สร้างทางลัด Desktop/Start Menu พร้อมไอคอน และตรวจติดตั้งจริงใน Windows CI
 - กำหนด AppUserModelID ให้โปรเซสหน้าต่างก่อนเปิด Qt และกำหนดไอคอนให้หน้าต่างโดยตรง
 - ฝังไอคอนในตัวเปิด EXE และใช้ EXE สำหรับทางลัด Desktop รวมถึงทางลัดที่ย้ายหลังอัปเดต
 - หน้าเว็บ Song Studio ไม่พาไป GitHub Releases เมื่อยังไม่มีไฟล์พร้อมดาวน์โหลด

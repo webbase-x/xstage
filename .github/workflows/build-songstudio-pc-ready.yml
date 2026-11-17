@@ -59,7 +59,7 @@ concurrency:
 jobs:
   bundle-windows:
     runs-on: windows-2022
-    timeout-minutes: 40
+    timeout-minutes: 60
     env:
       # Owner sets Desktop Client ID as Actions Variable and the matching
       # Desktop Client Secret as Actions Secret. Native clients are public;
@@ -321,6 +321,34 @@ jobs:
             }
           } finally { $archive.Dispose() }
           Write-Host "PASS: Complete offline ZIP SHA-256 $actual"
+      - name: Build and verify offline Setup EXE with app icons
+        shell: pwsh
+        run: |
+          $compiler = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+          if (!(Test-Path $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+          if (!(Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
+          $bundle = (Resolve-Path "dist/$env:SONGSTUDIO_READY_DIR").Path
+          $output = (Resolve-Path 'dist').Path
+          & $compiler "/DAppVersion=$env:SONGSTUDIO_READY_VERSION" "/DAppBuild=$env:SONGSTUDIO_READY_BUILD" "/DBundleDir=$bundle" "/DOutputPath=$output" songstudio-pc/installer/SongStudio.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Setup EXE compilation failed' }
+          $setup = Join-Path $output "X-Stage-Song-Studio-PC-v$env:SONGSTUDIO_READY_VERSION-build$env:SONGSTUDIO_READY_BUILD-win-x64-Setup.exe"
+          & python scripts/verify_songstudio_exe_icon.py "$bundle/X-Stage Song Studio.exe" $setup
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded EXE icon verification failed' }
+          $installed = Join-Path $env:RUNNER_TEMP 'SongStudioInstalled'
+          $process = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$installed+'"')) -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Setup installation failed: $($process.ExitCode)" }
+          if (!(Test-Path "$installed/X-Stage Song Studio.exe")) { throw 'Installed launcher missing' }
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$installed/Start-Song-Studio-Ready.ps1" -NoLaunch
+          if ($LASTEXITCODE -ne 0) { throw 'Installed offline runtime verification failed' }
+          $link = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'X-Stage Song Studio PC.lnk'
+          $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($link)
+          if ($shortcut.TargetPath -ne (Join-Path $installed 'X-Stage Song Studio.exe')) { throw 'Installer shortcut target mismatch' }
+          if ($shortcut.IconLocation -notlike '*app-icon.ico*') { throw 'Installer shortcut icon missing' }
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $([IO.Path]::GetFileName($setup))" | Set-Content "$setup.sha256" -Encoding ascii
       - name: Upload verified Ready ZIP as workflow artifact
         uses: actions/upload-artifact@v6
         with:
@@ -328,6 +356,8 @@ jobs:
           path: |
             dist/X-Stage-Song-Studio-PC-Ready-*.zip
             dist/X-Stage-Song-Studio-PC-Ready-*.zip.sha256
+            dist/X-Stage-Song-Studio-PC-*-Setup.exe
+            dist/X-Stage-Song-Studio-PC-*-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -350,64 +380,14 @@ jobs:
           $tag = $env:SONGSTUDIO_READY_TAG
           $zip = "dist/$env:SONGSTUDIO_READY_DIR.zip"
           $sha = "$zip.sha256"
-          $notes = @'
-          Build 354: Animated inspection activity, five-digit numeric song codes, clean per-job restart status, safe in-app update handoff and open destination after completion.
-          removed microphone recording, simplified online uploads and Pro display.
-          Retains improved paired MIDI+JSON metadata and versioned Lyrics JSON
-          exports that preserve title/artist, detect lyric-only changes, skip
-          renamed identical songs, and recover verified orphaned file pairs.
-          Menu: MIDI to .XSK first, MIDI to Lyrics JSON second.
-          Windows 10/11 x64 offline portable. Includes Python, FFmpeg, FluidSynth,
-          GeneralUser SoundFont, NumPy, ONNX Runtime CPU, and the 166 MB
-          verified HTDemucs ONNX model. AI Separation creates local karaoke
-          instrumental and vocals files. No installation or model download
-          on user's PC. Redesigned X-Stage Song Studio PC app icon included
-          as SVG favicon, Windows ICO, and 512px PNG. Optional desktop
-          shortcut uses the matching Windows ICO. Live karaoke preview
-          streams music with MIDI SoundFont without creating preview files.
-          Extract full ZIP and run Start-Song-Studio.cmd.
-          Default song export uses byte-identical original MIDI/KAR plus timed
-          Lyrics JSON (SHA-256 verified), or optional M4A conversion plus JSON.
-          Original NCN .LYR/.CUR is local read-only import material and is
-          never modified or uploaded to Google Drive. Raw NCN editing and
-          LYR skip/recheck tooling have been removed. The head/tail and
-          search/replace editor modifies Lyrics JSON only and maintains
-          Thai per-character highlight timing within the original line
-          duration, marking estimated timing as such and backing up before edits.
-          Build 357: fresh shared XStageSong storage taxonomy: AUDIO,
-          VIDEO, MIDI/MID, MIDI/KAR, MIDI/XSK, MIDI/NCN, LYRICS and SOUNDFONT.
-          Song Studio PC exports typed media folders, PC SQLite reads those
-          relative paths, and Drive uses file-ID catalogs. The v4 catalog
-          pointer remains at LYRICS/current.json until all clients upgrade.
-          Legacy catalogs are not auto-deleted.
-          Bulk head/tail lyrics replacement offers X-Stage Karaoke presets
-          plus editable custom wording, keeping confirmation and rollback.
-          NEW: live separate music/SoundFont mixer, maximized PC interface,
-          two verified build modes, and private Google Desktop OAuth/Drive sync.
-          Google Desktop OAuth ID and matching Secret may be bundled by the
-          developer via Actions Variable and Secret. When absent, users import
-          their own complete Desktop JSON once.
-          If the owner has not configured BOTH Desktop OAuth values, Google Login
-          requires a one-time Desktop Client JSON import in Advanced Settings.
-          This release does NOT provide automatic Google Login in that case.
-          Per-user tokens and preferences persist across releases under Windows
-          LocalAppData and DPAPI. If variable is absent, one-time import is required.
-          Source deduplication, recovery journal, catalogs and current.json remain.
-          Preview displays timed LRC/KAR/NCN lyrics from real components.
-          Bundled multilingual Whisper can transcribe audible vocals OFFLINE
-          into clearly marked UNVERIFIED drafts for manual review; no fake
-          lyrics are generated from MIDI notes.
-
-          Limitations: not original Build205 engine. NCN audio is rendered
-          from MIDI via FluidSynth; compatibility varies by source.
-          Google authorization requires user consent; existing Drive files
-          created by other OAuth apps are outside the drive.file scope.
-          '@
+          $setup = "dist/X-Stage-Song-Studio-PC-v$env:SONGSTUDIO_READY_VERSION-build$env:SONGSTUDIO_READY_BUILD-win-x64-Setup.exe"
+          $setupSha = "$setup.sha256"
+          $notes = "Build $env:SONGSTUDIO_READY_BUILD`: Windows Setup EXE with embedded app icon, matching Desktop/Start Menu shortcuts and explicit Taskbar identity. Removes the stale waiting-to-create song count. Includes verified offline runtime and models. Setup.exe is the recommended download; ZIP remains available for portable use and in-app updates. Windows x64."
           gh release view $tag --repo "$env:GITHUB_REPOSITORY" 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag "$zip" "$sha" --clobber --repo "$env:GITHUB_REPOSITORY"
+            gh release upload $tag "$zip" "$sha" "$setup" "$setupSha" --clobber --repo "$env:GITHUB_REPOSITORY"
           } else {
-            gh release create $tag "$zip" "$sha" --title "X-Stage Song Studio PC Ready v$($env:SONGSTUDIO_READY_VERSION) Build $($env:SONGSTUDIO_READY_BUILD)" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
+            gh release create $tag "$zip" "$sha" "$setup" "$setupSha" --title "X-Stage Song Studio PC Ready v$($env:SONGSTUDIO_READY_VERSION) Build $($env:SONGSTUDIO_READY_BUILD)" --notes $notes --prerelease --latest=false --target "$env:GITHUB_SHA" --repo "$env:GITHUB_REPOSITORY"
           }
           if ($LASTEXITCODE -ne 0) {
             throw "Release publish failed. HTTP 403 'Resource not accessible by integration' means the Actions token cannot create releases here. Add a fine-grained GitHub PAT in repository Actions secrets named XSTAGE_RELEASE_TOKEN, restricted to webbase-x/xstage with Contents: Read and write. Also verify repository/organization Actions workflow permissions; do not mark Build $env:SONGSTUDIO_READY_BUILD available until the release ZIP and SHA256 both exist."
@@ -424,10 +404,11 @@ jobs:
           $build = [int]$env:SONGSTUDIO_READY_BUILD
           $tag = "song-studio-pc-ready-v$version-build$build"
           $archive = "X-Stage-Song-Studio-PC-Ready-v$version-build$build.zip"
+          $installer = "X-Stage-Song-Studio-PC-v$version-build$build-win-x64-Setup.exe"
           $file = "dist/$archive"
           if (!(Test-Path $file)) { throw "Verified PC Ready ZIP is missing" }
           $assets = gh release view $tag --repo "$env:GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
-          if ($LASTEXITCODE -ne 0 -or $assets -notcontains $archive) {
+          if ($LASTEXITCODE -ne 0 -or $assets -notcontains $archive -or $assets -notcontains $installer) {
             throw "Cannot confirm newly published release ZIP"
           }
           $sha = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -440,13 +421,15 @@ jobs:
             build = $build
             available = $true
             package_type = "portable_zip"
-            installer_available = $false
-            installer_file = $null
+            installer_available = $true
+            installer_file = $installer
+            installer_url = "$base/download/$tag/$installer"
+            installer_sha256 = (Get-FileHash "dist/$installer" -Algorithm SHA256).Hash.ToLowerInvariant()
             archive_file = $archive
             download_url = "$base/download/$tag/$archive"
             release_url = "$base/tag/$tag"
             sha256 = $sha
-            notes = "Build 357: typed XStageSong AUDIO/VIDEO/MIDI/MID,KAR,XSK/LYRICS/SOUNDFONT export, metadata-preserving Lyrics JSON and non-destructive PC/Drive catalogs. SHA-256-verified ZIP."
+            notes = "Build ${build}: Setup EXE with embedded icon and matching Windows Taskbar identity. Removed waiting-to-create count. Verified offline installer and portable ZIP."
           }
           ($metadata | ConvertTo-Json -Depth 5) | Set-Content -Path downloads/song-studio-latest.json -Encoding utf8
           git config user.name "github-actions[bot]"
