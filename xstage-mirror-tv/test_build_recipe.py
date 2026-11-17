@@ -24,7 +24,7 @@ assert 'const val MAX_NAME_LENGTH = 64' in policy
 assert 'fun migratePreviousName(context: Context)' in policy
 assert 'prefs.edit().putString(Prefs.SERVER_NAME.key, migrated).apply()' in policy
 assert 'fromSuffix(suffixDraft)' in editor
-assert 'Text("บันทึกชื่อ")' in editor
+assert 'Text("บันทึกชื่อ"' in editor
 assert 'viewModel.set(Prefs.SERVER_NAME, namePreview)' in editor
 assert 'enabled = canEdit' in editor
 assert 'ReceiverNameEditor(viewModel, canEdit = connections == 0)' in ui
@@ -87,6 +87,7 @@ assert 'up = openFocus; down = saveFocus' in editor
 assert 'right = cancelFocus' in editor and 'left = saveFocus' in editor
 assert 'Modifier.fillMaxSize().imePadding()' in ui
 assert '.verticalScroll(androidx.compose.foundation.rememberScrollState())' in ui
+assert 'Modifier.fillMaxWidth().focusGroup()' in ui
 assert 'NavigationBar(modifier = Modifier.focusGroup())' in ui
 assert 'indicatorColor = androidx.compose.ui.graphics.Color(0xFF7AE7FF)' in ui
 assert 'window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)' in activity
