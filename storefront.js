@@ -203,7 +203,7 @@
       preview.appendChild(cardArt.firstElementChild.cloneNode(true));
     }else{
       const img=document.createElement("img");
-      img.src=id.startsWith("studio-")?"./studio/app-icon.svg":id==="karaoke-android"?"./assets/xstage-tv-pro-logo.svg":"./assets/xstage-stage-logo.png";
+      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg" })[id]||"./assets/xstage-stage-logo.png";
       img.alt="";
       preview.appendChild(img);
     }

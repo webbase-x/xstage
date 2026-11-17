@@ -69,6 +69,18 @@ jobs:
           python-version: '3.13'
           architecture: 'x64'
 
+      - name: Render dedicated Karaoke PC Windows launcher icon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pip install --disable-pip-version-check "Pillow>=10,<13"
+          if ($LASTEXITCODE -ne 0) { throw "Pillow install for native PC icon failed" }
+          python scripts/build_karaoke_pc_icon.py
+          if ($LASTEXITCODE -ne 0) { throw "X-Stage Karaoke PC icon generation failed" }
+          if (-not (Test-Path windows-pc/source/assets/xstage.ico)) {
+            throw 'Distinct Karaoke PC Windows icon was not created'
+          }
+
       - name: Build Windows app and run full regression tests
         shell: pwsh
         run: |

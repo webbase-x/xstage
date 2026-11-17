@@ -1,17 +1,22 @@
 name: Release X-Stage Mirror TV signed APK
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "xstage-mirror-tv/**"
+      - ".github/workflows/release-xstage-mirror-tv.yml"
   workflow_dispatch:
     inputs:
       version:
         description: "Semantic version e.g. 0.2.0"
         required: true
-        default: "0.2.0"
+        default: "0.2.3"
         type: string
       version_code:
         description: "Increasing Android version code"
         required: true
-        default: "102"
+        default: "105"
         type: string
 
 permissions:
@@ -27,8 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      XSTAGE_MIRROR_VERSION: ${{ inputs.version }}
-      XSTAGE_MIRROR_BUILD: ${{ inputs.version_code }}
+      XSTAGE_MIRROR_VERSION: ${{ inputs.version || '0.2.3' }}
+      XSTAGE_MIRROR_BUILD: ${{ inputs.version_code || '105' }}
       XSTAGE_MIRROR_KEYSTORE_BASE64: ${{ secrets.XSTAGE_MIRROR_KEYSTORE_BASE64 }}
       XSTAGE_MIRROR_STORE_PASSWORD: ${{ secrets.XSTAGE_MIRROR_STORE_PASSWORD }}
       XSTAGE_MIRROR_KEY_ALIAS: ${{ secrets.XSTAGE_MIRROR_KEY_ALIAS }}

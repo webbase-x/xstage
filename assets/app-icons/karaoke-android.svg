@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc"><title id="title">X-Stage KARAOKE TV</title><desc id="desc">Distinct X-Stage KARAOKE TV icon</desc><defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1c294d"/><stop offset=".58" stop-color="#0a1433"/><stop offset="1" stop-color="#133d2c"/></linearGradient>
+<linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a1f2b8"/><stop offset="1" stop-color="#49b4ff"/></linearGradient>
+<radialGradient id="glow"><stop stop-color="#a1f2b8" stop-opacity=".42"/><stop offset="1" stop-color="#a1f2b8" stop-opacity="0"/></radialGradient>
+<filter id="shadow"><feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#050920" flood-opacity=".6"/></filter></defs>
+<rect x="8" y="8" width="496" height="496" rx="108" fill="url(#bg)"/><rect x="12" y="12" width="488" height="488" rx="104" fill="none" stroke="url(#accent)" stroke-width="7"/>
+<circle cx="268" cy="222" r="214" fill="url(#glow)"/>
+<g transform="translate(45 40)" fill="none" stroke="url(#accent)" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5 64 74M66 5 8 74"/></g>
+<path d="M42 127h428" stroke="#a8bcff" stroke-opacity=".19" stroke-width="2"/>
+
+<g filter="url(#shadow)">
+<rect x="69" y="161" width="365" height="207" rx="22" fill="#13264b" stroke="#8cd4ff" stroke-width="10"/>
+<rect x="88" y="180" width="326" height="166" rx="11" fill="#182968"/>
+<path d="M104 340v-77l78-79 76 79 75-79 66 68v88" fill="#4c53b0" opacity=".33"/>
+<path d="M224 220 224 310 305 265Z" fill="#d8fff3" stroke="#72e0ff" stroke-width="8" stroke-linejoin="round"/>
+<path d="M197 382h108m-54-14v14" stroke="#cbdaf7" stroke-width="10" stroke-linecap="round"/>
+<rect x="329" y="261" width="79" height="120" rx="25" fill="#071833" stroke="#c7d7ff" stroke-width="7" transform="rotate(14 369 318)"/>
+<circle cx="370" cy="295" r="14" fill="#8affc2"/><path d="M363 330h14m-13 19h14" stroke="#a0d7ff" stroke-width="8" stroke-linecap="round"/>
+<path d="M117 208v-10m20 26v-39m20 32v-24" stroke="#69efbb" stroke-width="7" stroke-linecap="round"/>
+</g>
+<path d="M89 412h334" stroke="url(#accent)" stroke-opacity=".55" stroke-width="3"/>
+<text x="256" y="456" font-family="Arial,DejaVu Sans,sans-serif" fill="#f3f7ff" font-size="29" font-weight="800" letter-spacing="1" text-anchor="middle">KARAOKE TV</text>
+</svg>

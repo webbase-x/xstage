@@ -60,6 +60,26 @@ assert.ok(storefrontScript.includes('downloads/song-studio-latest.json')&&storef
 assert.ok(storefrontScript.includes('downloads/android-tv-latest.json')&&storefrontScript.includes('mirror-tv/latest.json'),'TV download status must come from published manifest');
 assert.ok(!storefront.includes('rel="manifest"'),'storefront must not restore retired karaoke PWA registration');
 
+const uniqueApps=[
+  ['karaoke-pc','assets/app-icons/karaoke-pc.svg','KARAOKE PC'],
+  ['studio-web','studio/web-app-icon.svg','STUDIO WEB'],
+  ['karaoke-android','assets/app-icons/karaoke-android.svg','KARAOKE TV'],
+  ['mirror-tv','assets/app-icons/mirror-tv.svg','MIRROR TV']
+];
+for(const [slug,path,label] of uniqueApps){
+  const icon=read(path);
+  assert.ok(icon.includes(label),'Unique product icon must identify '+slug);
+  const card=storefront.match(new RegExp('<article class="app-card" data-app="'+slug+'"[^]*?<\\/article>'))?.[0];
+  assert.ok(card&&card.includes(path.replace(/^assets\//,'./assets/').replace(/^studio\//,'./studio/')),
+    'App collection must display its own logo for '+slug);
+}
+assert.ok(read('studio/web.html').includes('web-app-icon.svg?v=1108'),'Song Studio Web must use its own favicon and header mark');
+assert.ok(read('studio/web.webmanifest').includes('./web-app-icon.svg'),'Song Studio Web install manifest must not reuse PC icon');
+assert.ok(read('studio/index.html').includes('./app-icon.svg'),'Song Studio PC retains its separate native branding');
+assert.ok(read('.github/workflows/build-windows-pc.yml').includes('scripts/build_karaoke_pc_icon.py'),'Windows candidate must generate distinct PC icon before bundling');
+assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stage Mirror TV cast icon'),'Mirror TV native launcher must have a separate cast identity');
+
+
 for(const [name,source] of [['app.js',app],['pc-extensions.js',pc],['stage-controls.js',host],['remote.js',remote],['stage-ui.js',stageUi],['mobile-layout.js',mobile],['android-apk-download.js',apk]]){
   assert.doesNotThrow(()=>new Function(source),name+' must parse');
 }
@@ -209,7 +229,7 @@ assert.ok(androidManifest.includes('android:usesCleartextTraffic="false"')&&andr
 assert.ok(androidGradle.includes('b.setColor(java.awt.Color.BLACK)')&&androidGradle.includes('b.fillRect(0,0,320,180)'),'Android TV launcher banner must show the original transparent logo on black');
 assert.ok(androidGradle.includes('rootProject.file("../assets/xstage-stage-logo.png")')&&androidGradle.includes('b.fillRect(0,0,320,180)')&&androidGradle.includes('b.drawImage(sourceLogo,left,top,scaledW,scaledH,null)'),'TV launcher banner must use the exact uploaded PNG, preserve its aspect ratio, and fit within 320x180');
 assert.ok(androidGradle.includes('drawable-nodpi/xstage_tv_banner.png'),'TV launcher banner must use nodpi without Android density rescaling');
-assert.ok(androidGradle.includes('g.drawImage(sourceLogo,iconLeft,iconTop,iconW,iconH,null)'),'Android launcher app-grid icon must show the same full official logo, not the old X symbol');
+assert.ok(androidGradle.includes('def label = "KARAOKE TV"')&&androidGradle.includes('g.fillPolygon([222,222,306]')&&!androidGradle.includes('g.drawImage(sourceLogo,iconLeft,iconTop,iconW,iconH,null)'),'Android launcher must render its own TV/play/remote icon, not the Web or stage-banner art');
 assert.ok(!androidGradle.includes('g.drawRoundRect(218,160,76,140')&&!androidGradle.includes('g.drawLine(205,398,307,398)'),'obsolete synthetic microphone launcher icon must not be regenerated');
 assert.ok(androidManifest.includes('android:roundIcon="@drawable/xstage_app_icon"')&&androidManifest.includes('android:logo="@drawable/xstage_app_icon"'),'app-grid launcher icon fallbacks must all use the new logo');
 assert.ok(androidManifest.match(/android:banner="@drawable\/xstage_tv_banner"/g)?.length===2,'activity and application must use the same official banner');

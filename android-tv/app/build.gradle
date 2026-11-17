@@ -106,20 +106,50 @@ tasks.register("generateXStageTvAssets") {
             throw new GradleException("Could not decode official stage logo PNG")
         splashFile.bytes = logoSource.bytes
 
-        // Some Google TV / Android TV launchers render android:icon instead of
-        // android:banner in the app grid. Both MUST show this same full image.
+        // Dedicated Karaoke Android launcher artwork. Keep the original stage
+        // banner/splash untouched, but do not reuse it as the app-grid icon.
+        // Draw at build time with Java2D: independent of external downloads.
         def icon = new java.awt.image.BufferedImage(512, 512, java.awt.image.BufferedImage.TYPE_INT_ARGB)
         def g = icon.createGraphics()
-        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
         g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY)
-        g.setColor(java.awt.Color.BLACK)
-        g.fillRect(0,0,512,512)
-        double iconScale = Math.min(488d/sourceLogo.getWidth(), 480d/sourceLogo.getHeight())
-        int iconW = Math.max(1,Math.round(sourceLogo.getWidth()*iconScale) as int)
-        int iconH = Math.max(1,Math.round(sourceLogo.getHeight()*iconScale) as int)
-        int iconLeft = (512-iconW).intdiv(2)
-        int iconTop = (512-iconH).intdiv(2)
-        g.drawImage(sourceLogo,iconLeft,iconTop,iconW,iconH,null)
+        g.setPaint(new java.awt.GradientPaint(16f, 18f, new java.awt.Color(28,45,88), 498f, 502f, new java.awt.Color(17,57,53)))
+        g.fillRoundRect(9, 9, 494, 494, 108, 108)
+        g.setStroke(new java.awt.BasicStroke(7f))
+        g.setPaint(new java.awt.GradientPaint(10f,10f,new java.awt.Color(139,241,193),500f,500f,new java.awt.Color(80,146,255)))
+        g.drawRoundRect(13, 13, 486, 486, 103, 103)
+        // Top-left family X symbol.
+        g.setStroke(new java.awt.BasicStroke(15f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND))
+        g.drawLine(54,45,109,114)
+        g.drawLine(110,45,54,114)
+        // Theatre-screen silhouette with violet stage and a prominent play key.
+        g.setColor(new java.awt.Color(132,220,255))
+        g.setStroke(new java.awt.BasicStroke(11f))
+        g.drawRoundRect(70,160,364,204,24,24)
+        g.setColor(new java.awt.Color(38,50,118))
+        g.fillRoundRect(85,175,334,176,17,17)
+        g.setColor(new java.awt.Color(97,103,201,93))
+        g.fillPolygon([90,176,264,419] as int[],[337,188,337,337] as int[],4)
+        g.setColor(new java.awt.Color(211,255,244))
+        g.fillPolygon([222,222,306] as int[],[217,312,265] as int[],3)
+        g.setColor(new java.awt.Color(180,237,255))
+        g.setStroke(new java.awt.BasicStroke(9f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND))
+        g.drawLine(197,382,306,382)
+        g.drawLine(251,367,251,381)
+        // Android TV remote is an identifying feature, unlike Web/PC editions.
+        g.setColor(new java.awt.Color(9,23,51))
+        g.fillRoundRect(332,264,71,117,26,26)
+        g.setColor(new java.awt.Color(173,219,255))
+        g.drawRoundRect(332,264,71,117,26,26)
+        g.setColor(new java.awt.Color(136,247,193))
+        g.fillOval(356,292,24,24)
+        g.setStroke(new java.awt.BasicStroke(7f))
+        g.drawLine(354,339,377,339)
+        g.setFont(new java.awt.Font("SansSerif",java.awt.Font.BOLD,29))
+        g.setColor(java.awt.Color.WHITE)
+        def label = "KARAOKE TV"
+        def metrics = g.getFontMetrics()
+        g.drawString(label, (512-metrics.stringWidth(label)).intdiv(2),456)
         g.dispose()
         javax.imageio.ImageIO.write(icon, "png", iconFile)
         javax.imageio.ImageIO.write(icon, "png", storeIcon)

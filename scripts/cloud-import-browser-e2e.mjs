@@ -146,6 +146,13 @@ try{
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#intro-title').waitFor();
   assert.equal(await page.locator('.app-card').count(),6,'storefront displays six supported app entries');
+
+  const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
+  assert.equal(logoSources.length,6,'all six app entries must have a visual identity');
+  assert.equal(new Set(logoSources).size,6,'each X-Stage application must have a distinct icon asset');
+  assert.equal(await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.every(n=>n.complete&&n.naturalWidth>0)),true,
+    'six unique app icons must load in the real browser');
+
   assert.match(await page.locator('#intro-title').textContent(),/หนึ่งเวที/);
   assert.equal(await page.locator('.new-wordmark img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
     'new X-Stage Apps wordmark must load in browser');

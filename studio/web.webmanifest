@@ -10,7 +10,7 @@
   "theme_color": "#071321",
   "icons": [
     {
-      "src": "./app-icon.svg",
+      "src": "./web-app-icon.svg",
       "type": "image/svg+xml",
       "sizes": "any",
       "purpose": "any maskable"
