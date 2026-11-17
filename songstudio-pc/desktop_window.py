@@ -9,6 +9,21 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
+APP_USER_MODEL_ID = "XStage.SongStudio.PC"
+
+
+def configure_windows_taskbar() -> None:
+    """Identify the actual GUI process, not its Python runtime, to Explorer."""
+    if os.name != "nt":
+        return
+    import ctypes
+    set_app_id = ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID
+    set_app_id.argtypes = [ctypes.c_wchar_p]
+    set_app_id.restype = ctypes.c_long
+    result = set_app_id(APP_USER_MODEL_ID)
+    if result < 0:
+        raise OSError(result, "Cannot set Song Studio Windows taskbar identity")
+
 
 def validate_local_ui_url(url: str) -> int:
     """Only load our own loopback server; refuse remote app origins."""
@@ -21,6 +36,8 @@ def validate_local_ui_url(url: str) -> int:
 def run_desktop(server, url: str, data_directory: Path, icon: Path) -> None:
     """Run Qt on the main thread and the existing HTTP server on a worker."""
     ui_port = validate_local_ui_url(url)
+    # Must run in pythonw.exe before Qt creates any native windows.
+    configure_windows_taskbar()
     from PySide6.QtCore import QUrl, Qt
     from PySide6.QtGui import QDesktopServices, QIcon
     from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
@@ -32,8 +49,10 @@ def run_desktop(server, url: str, data_directory: Path, icon: Path) -> None:
     app = QApplication.instance() or QApplication([])
     app.setApplicationName("X-Stage Song Studio PC")
     app.setOrganizationName("X-Stage")
-    if icon.is_file():
-        app.setWindowIcon(QIcon(str(icon)))
+    app_icon = QIcon(str(icon)) if icon.is_file() else QIcon()
+    if app_icon.isNull():
+        app_icon = QIcon(str(icon.with_name("app-icon-512.png")))
+    app.setWindowIcon(app_icon)
     profile = QWebEngineProfile("SongStudio", app)
     profile.setPersistentStoragePath(str(data_directory / "qt-webengine" / "storage"))
     profile.setCachePath(str(data_directory / "qt-webengine" / "cache"))
@@ -59,6 +78,7 @@ def run_desktop(server, url: str, data_directory: Path, icon: Path) -> None:
     class Window(QMainWindow):
         def __init__(self):
             super().__init__()
+            self.setWindowIcon(app_icon)
             from engine import STATUS_VERSION, STATUS_BUILD
             self.setWindowTitle(f"X-Stage Song Studio PC v{STATUS_VERSION} · Build {STATUS_BUILD}")
             self.resize(1440, 900)

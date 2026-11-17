@@ -1,6 +1,8 @@
 """Regression checks for Song Studio PC's embedded native desktop."""
 import importlib.util
+import ctypes
 import unittest
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +13,21 @@ SPEC.loader.exec_module(desktop)
 
 
 class NativeDesktopContractTests(unittest.TestCase):
+    def test_windows_taskbar_uses_own_identity(self):
+        setter = Mock(return_value=0)
+        shell = Mock(SetCurrentProcessExplicitAppUserModelID=setter)
+        with patch.object(desktop.os, "name", "nt"), patch(
+                "ctypes.windll", Mock(shell32=shell), create=True):
+            desktop.configure_windows_taskbar()
+        setter.assert_called_once_with("XStage.SongStudio.PC")
+
+    def test_taskbar_identity_failure_is_reported(self):
+        shell = Mock(SetCurrentProcessExplicitAppUserModelID=Mock(return_value=-1))
+        with patch.object(desktop.os, "name", "nt"), patch(
+                "ctypes.windll", Mock(shell32=shell), create=True):
+            with self.assertRaises(OSError):
+                desktop.configure_windows_taskbar()
+
     def test_only_loopback_web_ui_is_allowed(self):
         self.assertEqual(desktop.validate_local_ui_url(
             "http://127.0.0.1:34567/#auth=token"), 34567)

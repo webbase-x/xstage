@@ -2,7 +2,7 @@
 # Optional shortcut: gives the Windows desktop launcher the Song Studio PC icon.
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Launcher = Join-Path $Root 'Start-Song-Studio.cmd'
+$Launcher = Join-Path $Root 'X-Stage Song Studio.exe'
 $Icon = Join-Path $Root 'studio\app-icon.ico'
 if (!(Test-Path -LiteralPath $Launcher) -or !(Test-Path -LiteralPath $Icon)) {
     throw 'Please extract the entire X-Stage Song Studio PC Ready ZIP before creating a shortcut.'

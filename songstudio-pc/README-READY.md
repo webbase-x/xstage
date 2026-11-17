@@ -1,3 +1,10 @@
+## Build 366 — ไอคอน Windows Taskbar
+
+- กำหนด AppUserModelID ให้โปรเซสหน้าต่างก่อนเปิด Qt และกำหนดไอคอนให้หน้าต่างโดยตรง
+- ฝังไอคอนในตัวเปิด EXE และใช้ EXE สำหรับทางลัด Desktop รวมถึงทางลัดที่ย้ายหลังอัปเดต
+- หน้าเว็บ Song Studio ไม่พาไป GitHub Releases เมื่อยังไม่มีไฟล์พร้อมดาวน์โหลด
+- ต้องตรวจ Taskbar บน Windows จริงหลังติดตั้งรุ่นนี้; การทดสอบบน Linux ไม่ยืนยันภาพบน Taskbar
+
 ## Build 365 — เก็บชื่อเพลงและศิลปินให้ตรงกันสำหรับ Karaoke ทุกแพลตฟอร์ม
 
 - MIDI to Lyrics JSON อ่านชื่อเพลง/ศิลปินจริงจาก Lyrics JSON, NCN LYR, KAR metadata และหัว LRC [ti:]/[ar:] แล้วบันทึกลง top-level title/artist ของ Lyrics JSON พร้อมกับ Song Studio Catalog

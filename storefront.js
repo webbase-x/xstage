@@ -381,7 +381,7 @@
       pending.setAttribute("aria-disabled","true");
       pending.textContent="ยังไม่เปิดดาวน์โหลด";
       container.appendChild(pending);
-      container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
+      if(id!=="studio-pc")container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
       if(info.candidate){
         container.appendChild(createAction(info.candidate.label+" ↗",info.candidate.url,"secondary",true));
       }

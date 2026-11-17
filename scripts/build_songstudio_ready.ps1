@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = Split-Path -Parent $PSScriptRoot
-$Version = 'v0.3.65-build365'
+$Version = 'v0.3.66-build366'
 if ($Version -match '^v(\d+\.\d+\.\d+)-build(\d+)$') {
     $AppVersion = $Matches[1]
     $AppBuild = [int]$Matches[2]
@@ -326,7 +326,7 @@ $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 if (!(Test-Path -LiteralPath $csc)) { throw 'Windows .NET Framework C# compiler is unavailable' }
 $launcher = Join-Path $Stage 'X-Stage Song Studio.exe'
 $cs = Join-Path $Repo 'songstudio-pc/StudioLauncher.cs'
-& $csc /nologo /target:winexe /platform:x64 /optimize+ /reference:System.Windows.Forms.dll ("/out:" + $launcher) $cs
+& $csc /nologo /target:winexe /platform:x64 /optimize+ /reference:System.Windows.Forms.dll ("/win32icon:" + (Join-Path $Stage 'studio/app-icon.ico')) ("/out:" + $launcher) $cs
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $launcher) -or (Get-Item $launcher).Length -lt 4096) {
     throw 'Native Windows Song Studio EXE launcher compilation failed'
 }

@@ -289,8 +289,9 @@ if(!(Test-Path -LiteralPath $link)){exit 0}
 $w=New-Object -ComObject WScript.Shell
 $s=$w.CreateShortcut($link)
 $expected=Join-Path $old 'Start-Song-Studio.cmd'
-if([string]::Equals($s.TargetPath,$expected,[StringComparison]::OrdinalIgnoreCase)){
-  $s.TargetPath=Join-Path $new 'Start-Song-Studio.cmd'
+$expectedExe=Join-Path $old 'X-Stage Song Studio.exe'
+if([string]::Equals($s.TargetPath,$expected,[StringComparison]::OrdinalIgnoreCase) -or [string]::Equals($s.TargetPath,$expectedExe,[StringComparison]::OrdinalIgnoreCase)){
+  $s.TargetPath=Join-Path $new 'X-Stage Song Studio.exe'
   $s.WorkingDirectory=$new
   $s.IconLocation=(Join-Path $new 'studio\\app-icon.ico')+',0'
   $s.Save()
