@@ -37,6 +37,8 @@ assert 'viewModel::stopServer' not in ui and 'viewModel::startServer' not in ui
 assert 'NavigationBar(' not in ui
 assert 'ReceiverSetupQr(serverName)' not in ui
 assert 'Text("ตั้งค่า"' in receiver_home
+assert 'BuildConfig.VERSION_NAME' in receiver_home
+assert 'BuildConfig.VERSION_CODE' in receiver_home
 
 assert 'val editOpen = true' in editor
 assert '.imePadding(),' not in editor
@@ -142,6 +144,8 @@ assert "AUTO Performance" in settings
 assert "ลื่นไหล 720p" not in settings
 quality = (app / "src/main/kotlin/app/airshow/tv/service/MirrorAutoQuality.kt").read_text()
 assert "MediaCodecList.REGULAR_CODECS" in quality
+assert "virtualReceiverHint()" in quality
+assert 'Profile(1280, 720, 30, "720p30 (virtual)")' in quality
 assert "areSizeAndRateSupported" in quality
 assert "getSharedPreferences" in quality and "stable_sessions" in quality
 assert "badSamples >= 3" in quality and "Signal.CATCH_UP" in quality
@@ -190,7 +194,7 @@ assert 'json.optString("channel") != "test-preview"' in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 112' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 113' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
