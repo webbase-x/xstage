@@ -145,10 +145,10 @@ try{
   // a real browser before proceeding into the preserved karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#intro-title').waitFor();
-  assert.equal(await page.locator('.app-card').count(),6,'storefront displays six supported app entries');
+  assert.equal(await page.locator('.app-card').count(),7,'storefront displays seven supported app entries');
 
   const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
-  assert.equal(logoSources.length,6,'all six app entries must have a visual identity');
+  assert.equal(logoSources.length,7,'all seven app entries must have a visual identity');
   assert.equal(new Set(logoSources).size,6,'each X-Stage application must have a distinct icon asset');
 
   await page.locator('#device-advice-title').waitFor();
