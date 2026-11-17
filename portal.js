@@ -9,6 +9,10 @@
     /^(sb_publishable_|eyJ)/.test(config.supabasePublishableKey||"");
   const $=id=>document.getElementById(id);
   const login=$("portal-login"), logout=$("portal-logout"), userLabel=$("portal-user");
+  const guestLabel=$("portal-guest-label"), profile=$("portal-profile");
+  const profileToggle=$("portal-profile-toggle"), profileMenu=$("portal-profile-menu");
+  const profileName=$("portal-profile-name"), profileEmail=$("portal-profile-email");
+  const avatarImage=$("portal-avatar-image"), avatarFallback=$("portal-avatar-fallback");
   const historySection=$("portal-history"), historyList=$("portal-history-list");
   const reviewForm=$("portal-review-form"), reviewStatus=$("portal-reviews-status");
   const reviewList=$("portal-review-list"), reviewSummary=$("portal-rating-summary");
@@ -33,13 +37,96 @@
   }
   function showInfo(parent,value){parent.appendChild(element("p","portal-muted",value));}
   function canUsePortal(){return client!==null;}
+  function displayName(account){
+    const google=account?.identities?.find(identity=>identity.provider==="google")?.identity_data;
+    return safeText(account?.user_metadata?.full_name || account?.user_metadata?.name ||
+      google?.full_name || account?.email?.split("@")[0] || "สมาชิก X-Stage").trim().slice(0,80);
+  }
+  function googleAvatarUrl(account){
+    const google=account?.identities?.find(identity=>identity.provider==="google")?.identity_data;
+    const candidates=[google?.picture,google?.avatar_url,
+      account?.user_metadata?.avatar_url,account?.user_metadata?.picture];
+    for(const value of candidates){
+      if(typeof value!=="string")continue;
+      try{
+        const url=new URL(value);
+        const host=url.hostname.toLowerCase();
+        // Only fetch Google-hosted account images, never arbitrary user-supplied URLs.
+        if(url.protocol==="https:" && (host==="googleusercontent.com" ||
+          host.endsWith(".googleusercontent.com") || host==="ggpht.com" ||
+          host.endsWith(".ggpht.com")))return url.href;
+      }catch{}
+    }
+    return "";
+  }
+  function initials(name){
+    const parts=name.split(/\s+/).filter(Boolean);
+    return (parts.length>1?(parts[0].slice(0,1)+parts[parts.length-1].slice(0,1)):
+      (parts[0]||"X").slice(0,2)).toLocaleUpperCase("th-TH");
+  }
+  function closeProfileMenu(){
+    profileMenu.hidden=true;
+    profileToggle.setAttribute("aria-expanded","false");
+  }
   function refreshAccount(){
     login.hidden=!!user;
-    logout.hidden=!user;
-    userLabel.textContent=user?"เข้าสู่ระบบ: "+safeText(user.user_metadata?.name||user.email||"สมาชิก X-Stage"):"ผู้เยี่ยมชม · ดูรายการได้";
+    guestLabel.hidden=!!user;
+    profile.hidden=!user;
+    closeProfileMenu();
+    if(user){
+      const name=displayName(user);
+      userLabel.textContent=name;
+      profileName.textContent=name;
+      profileEmail.textContent=safeText(user.email||"");
+      profileToggle.setAttribute("aria-label","โปรไฟล์ Google ของ "+name+" · เปิดเมนูบัญชี");
+      avatarFallback.textContent=initials(name);
+      avatarFallback.hidden=false;
+      avatarImage.hidden=true;
+      const photo=googleAvatarUrl(user);
+      if(photo){
+        if(avatarImage.src!==photo)avatarImage.src=photo;
+        // Show the fallback until the image has loaded successfully.
+        if(avatarImage.complete&&avatarImage.naturalWidth>0){
+          avatarImage.hidden=false;
+          avatarFallback.hidden=true;
+        }
+      }else{
+        avatarImage.removeAttribute("src");
+      }
+    }else{
+      avatarImage.removeAttribute("src");
+      avatarImage.hidden=true;
+      avatarFallback.hidden=false;
+      profileEmail.textContent="";
+      userLabel.textContent="สมาชิก X-Stage";
+    }
     historySection.hidden=!user;
     reviewForm.hidden=!user||!activeApp||!canUsePortal();
   }
+  avatarImage?.addEventListener("load",()=>{
+    if(!user || avatarImage.src!==googleAvatarUrl(user))return;
+    avatarImage.hidden=false;
+    avatarFallback.hidden=true;
+  });
+  avatarImage?.addEventListener("error",()=>{
+    avatarImage.hidden=true;
+    avatarFallback.hidden=false;
+  });
+  profileToggle?.addEventListener("click",()=>{
+    if(!user)return;
+    const opening=profileMenu.hidden;
+    profileMenu.hidden=!opening;
+    profileToggle.setAttribute("aria-expanded",String(opening));
+  });
+  document.addEventListener("click",event=>{
+    if(!profile.contains(event.target))closeProfileMenu();
+  });
+  document.addEventListener("keydown",event=>{
+    if(event.key==="Escape"&&!profileMenu.hidden){
+      closeProfileMenu();
+      profileToggle.focus();
+    }
+  });
   async function loadAdmin(){
     isAdmin=false;adminPanel.hidden=true;
     if(!user||!client)return;
