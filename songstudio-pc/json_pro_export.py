@@ -18,8 +18,8 @@ MEDIA_EXT = {".mid", ".midi", ".kar", ".mp3", ".m4a", ".wav", ".aac",
              ".flac", ".ogg", ".oga", ".wma", ".mp4", ".webm", ".avi",
              ".mkv", ".mov", ".mpg", ".mpeg", ".vob", ".dat", ".wmv", ".flv"}
 AUDIO_FORMATS = {"original", "m4a", "mp3", "wav", "flac", "ogg"}
-CHECKPOINT_SIZE = 64
-CHECKPOINT_INTERVAL_SECONDS = 15
+CHECKPOINT_SIZE = 1024
+CHECKPOINT_INTERVAL_SECONDS = 60
 
 
 def _fingerprint(path):
