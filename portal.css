@@ -38,3 +38,26 @@
 
 /* Override explicit display rules when the native hidden attribute is set. */
 #portal-review-form[hidden],#portal-history[hidden],#portal-admin[hidden],.portal-account button[hidden]{display:none!important}
+
+/* Google account identity: loaded only after authentication, visible in Web and APK. */
+.portal-profile{position:relative;display:flex;align-items:center;min-width:0}
+.portal-profile-toggle{display:flex;align-items:center;gap:9px;max-width:230px;min-height:46px;padding:5px 10px 5px 5px!important;border-radius:999px!important}
+.portal-profile-toggle:hover{background:#e7f0ff}
+.portal-avatar{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#296ddb,#7658d8);color:#fff;font-size:13px;font-weight:800}
+.portal-avatar img{width:100%;height:100%;display:block;object-fit:cover;border-radius:50%}
+.portal-avatar img[hidden],.portal-avatar span[hidden]{display:none!important}
+#portal-user{font-size:12px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:138px;text-align:left}
+.portal-profile-chevron{font-size:15px;color:#5f73a0;line-height:1}
+.portal-profile-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:110;display:grid;gap:8px;min-width:230px;max-width:min(290px,90vw);padding:14px;border:1px solid #d3dff3;background:#fff;color:#17305a;border-radius:16px;box-shadow:0 14px 40px #14284c2e}
+.portal-profile-menu strong{font-size:14px;font-weight:850;overflow-wrap:anywhere}
+.portal-profile-menu>span{font-size:12px;color:#66758d;overflow-wrap:anywhere}
+.portal-profile-menu button{width:100%;text-align:center;justify-self:stretch}
+.portal-profile[hidden],.portal-profile-menu[hidden],#portal-guest-label[hidden]{display:none!important}
+@media(max-width:600px){
+ .portal-profile-toggle{max-width:min(235px,80vw)}
+ .portal-profile-menu{left:0;right:auto;max-width:min(290px,90vw)}
+}
+@media(prefers-color-scheme:dark){
+ .portal-profile-menu{background:#263b5e;color:#e7f0ff;border-color:#55709c;box-shadow:0 14px 40px #070e2090}
+ .portal-profile-menu>span,.portal-profile-chevron{color:#c3d3ec}
+}
