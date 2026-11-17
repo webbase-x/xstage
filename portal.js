@@ -115,6 +115,15 @@
         $("portal-comment").focus();
       });
       row.appendChild(edit);
+      const removeMine=element("button","portal-small-button portal-danger","ลบรีวิวของฉัน");
+      removeMine.type="button";
+      removeMine.addEventListener("click",async()=>{
+        if(!window.confirm("ลบคะแนนและความคิดเห็นของคุณสำหรับแอปนี้?"))return;
+        const result=await client.from("xstage_reviews").delete().eq("app_id",item.app_id).eq("user_id",user.id);
+        if(result.error)window.alert(result.error.message);
+        else await loadReviews(activeApp);
+      });
+      row.appendChild(removeMine);
     }
     if(isAdmin){
       const remove=element("button","portal-small-button portal-danger","ลบรีวิวผิดกฎ");
