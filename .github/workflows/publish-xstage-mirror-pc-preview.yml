@@ -42,6 +42,13 @@ jobs:
           mkdir -p dist
           gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --name X-Stage-Mirror-PC-Windows-CANDIDATE --dir dist
+          # Preserve the complete installer, whether nested or flat in Actions artifact.
+          mapfile -t setups < <(find dist -type f -name 'X-Stage-Mirror-PC-v*-win-x64-Setup.exe')
+          test "${#setups[@]}" -eq 1
+          test -f "dist/$(basename "${setups[0]}")" || cp "${setups[0]}" "dist/$(basename "${setups[0]}")"
+          mapfile -t sums < <(find dist -type f -name 'X-Stage-Mirror-PC-v*-win-x64-Setup.exe.sha256')
+          test "${#sums[@]}" -eq 1
+          test -f "dist/$(basename "${sums[0]}")" || cp "${sums[0]}" "dist/$(basename "${sums[0]}")"
 
       - name: Verify ZIP checksum, required engines and release identity
         id: release
@@ -66,6 +73,14 @@ jobs:
           digest=hashlib.file_digest(path.open('rb'),'sha256').hexdigest()
           expected=checksum_path.read_text(encoding='ascii').strip().split()
           assert len(expected)==2 and expected==[digest,filename], 'SHA256SUMS mismatch'
+          setupname=f'X-Stage-Mirror-PC-v{version}-build{build}-win-x64-Setup.exe'
+          setup=Path('dist')/setupname
+          setup_sum=Path(str(setup)+'.sha256')
+          assert setup.is_file() and setup_sum.is_file(), 'Missing complete Setup EXE and checksum'
+          assert setup.stat().st_size>10_000_000, 'Setup EXE unexpectedly small'
+          with setup.open('rb') as handle: setup_digest=hashlib.file_digest(handle,'sha256').hexdigest()
+          assert setup_sum.read_text(encoding='ascii').strip().split()==[setup_digest,setupname], 'Setup EXE SHA256 mismatch'
+          with setup.open('rb') as handle: assert handle.read(2)==b'MZ', 'Installer must be a Windows PE executable'
           with zipfile.ZipFile(path) as archive:
               names=set(archive.namelist())
               required={'XStageMirrorPC.exe','THIRD_PARTY_NOTICES.txt',
@@ -77,6 +92,7 @@ jobs:
           assert manifest.exists(), 'Preview manifest missing'
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
               fh.write(f'version={version}\nbuild={build}\nfilename={filename}\nsha256={digest}\n')
+              fh.write(f'setupfile={setupname}\nsetupsha256={setup_digest}\n')
           print('Candidate integrity OK:',filename,digest)
           PY
 
@@ -117,14 +133,19 @@ jobs:
           fi
           cat > dist/PREVIEW_NOTES.txt <<'NOTES'
           X-Stage Mirror PC — WINDOWS PREVIEW, NOT YET PHYSICALLY DEVICE TESTED.
-          Unzip the complete ZIP and run XStageMirrorPC.exe. Do not extract the EXE alone:
-          the bundled engine/uxplay-windows directory is needed to receive iOS AirPlay.
-          Android uses Windows Wireless Display / Miracast, subject to driver and sender support.
+          Recommended: use the Setup EXE. It contains the entire .NET and AirPlay runtime,
+          including Bonjour Service. Nothing additional must be downloaded after setup.
+          Windows may request administrator approval for the bundled discovery service.
+          Alternative: extract the complete portable ZIP, not the bare EXE.
+          Android uses Windows Wireless Display / Miracast where the OS, Wi-Fi driver,
+          and sender hardware support it. The installer cannot provide missing Miracast.
           Miracast is not Google Cast. No iOS app or extra AirPlay download required.
           ZIP checksum and GPLv3 corresponding source are provided. Not an installer.
           NOTES
           gh release create "$TAG" \
             "dist/$FILE" "dist/$FILE.sha256" \
+            "dist/X-Stage-Mirror-PC-v$VERSION-build$BUILD-win-x64-Setup.exe" \
+            "dist/X-Stage-Mirror-PC-v$VERSION-build$BUILD-win-x64-Setup.exe.sha256" \
             "dist/X-Stage-Mirror-PC-v$VERSION-build$BUILD-GPLv3-source.tar.gz" \
             --repo "$GITHUB_REPOSITORY" --target "${{ github.event.workflow_run.head_sha }}" \
             --title "X-Stage Mirror PC v$VERSION (Build $BUILD) — Windows Preview" \
@@ -137,10 +158,13 @@ jobs:
           BUILD: ${{ steps.release.outputs.build }}
           FILE: ${{ steps.release.outputs.filename }}
           SHA256: ${{ steps.release.outputs.sha256 }}
+          SETUP_FILE: ${{ steps.release.outputs.setupfile }}
+          SETUP_SHA256: ${{ steps.release.outputs.setupsha256 }}
         run: |
           set -euo pipefail
           TAG="xstage-mirror-pc-v$VERSION-build$BUILD-preview"
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx "$FILE"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx "$SETUP_FILE"
           git fetch origin main
           git checkout -B main origin/main
           python3 - <<'PY'
@@ -156,8 +180,10 @@ jobs:
           base=f'https://github.com/webbase-x/xstage/releases/download/{tag}/'
           manifest={'app':'X-Stage Mirror PC','platform':'Windows 10/11 x64',
                     'version':version,'build':build,'channel':'preview','available':True,
-                    'file':filename,'sha256':os.environ['SHA256'],
-                    'download_url':base+filename,
+                    'file':os.environ['SETUP_FILE'],'sha256':os.environ['SETUP_SHA256'],
+                    'download_url':base+os.environ['SETUP_FILE'],
+                    'portable_file':filename,'portable_sha256':os.environ['SHA256'],
+                    'portable_download_url':base+filename,
                     'source_url':base+f'X-Stage-Mirror-PC-v{version}-build{build}-GPLv3-source.tar.gz',
                     'tested_on_hardware':False,
                     'note':'Windows Preview: compile and package checks passed; physical iOS/Android/Windows testing not yet verified.'}
