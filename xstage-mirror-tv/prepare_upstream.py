@@ -21,8 +21,8 @@ if ROOT is None or not (ROOT / "LICENSE").is_file():
 APP = ROOT / "app"
 PKG = "com.webbasex.xstagemirror.tv"
 NAME = "X-Stage Mirror TV"
-VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.1")
-BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "103")
+VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.2")
+BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "104")
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) or not BUILD.isdecimal() or int(BUILD) <= 0:
     raise SystemExit("Invalid Mirror TV release version/build")
 
@@ -146,6 +146,11 @@ substitute(settings,
 
 # Apply bounded decoder/discovery performance patches to the pinned source.
 subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "performance_tuning.py"),
+                str(ROOT)], check=True)
+
+# Automatically select a hardware-supported quality level and safely learn from
+# sustained decode overload. Do not restart while iPhone is connected.
+subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "auto_quality_tuning.py"),
                 str(ROOT)], check=True)
 
 # Preserve original attribution and build a distinctive launcher/TV banner.

@@ -6,11 +6,20 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 ## Scope and behavior
 
 - Runs on compatible Android TV / Google TV / TrueID TV boxes (device-specific validation required).
-- v0.2.1 performance defaults: H.264 (wider hardware compatibility), AUTO video
+- v0.2.1 baseline improvements (retained in v0.2.2): H.264 (wider hardware compatibility), AUTO video
   advertising capped at 1080p/30fps even on a 4K TV; manually selected resolutions
   and frame rates still override the default.
-- Three remote-control settings presets: **720p30** (weaker hardware or poor Wi-Fi),
-  **720p60** (motion and scrolling), **1080p30** (clearer static content).
+- **Auto Performance v0.2.2**: reads the hardware AVC decoder's frame-rate and
+  resolution capabilities and chooses the highest practical motion-first profile
+  automatically; no user selection needed.
+- During mirroring it checks decoded-frame pacing, compressed-input drops and
+  sustained load in 2-second windows. When video accumulates a backlog it
+  discards only **already decoded** older display images, never H.264/H.265
+  reference packets, so a live session stays connected.
+- On sustained overload, saves a lower resolution/FPS profile for the **next**
+  mirroring session; after three long stable sessions it cautiously upgrades.
+  The sender's negotiated stream is not guaranteed to accept mid-session
+  quality changes, so the app never forcibly disconnects the iPhone.
 - Decoder input backpressure bounded to about 25ms per packet (100ms startup),
   instead of the previous 200ms/1s worst-case waits. This reduces stalling,
   but overload can still cause dropped frames; try 720p30 first if stutters persist.
