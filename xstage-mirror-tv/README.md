@@ -3,6 +3,14 @@
 An independently branded GPLv3 Android TV AirPlay receiver for iPhone and iPad.
 No iOS app, accounts, or internet cloud service required for casting on the local network.
 
+## Minimal receiver screen — v0.2.9 (Build 111)
+
+- On opening the APK, the AirPlay receiver starts automatically when local networking is available. The previous auto-start preference no longer blocks startup.
+- The main screen displays the receiver name, readiness/connection status and a concise iPhone/iPad instruction. Debug logs, a QR setup guide, build metadata and manual start/stop/exit buttons no longer clutter the home screen.
+- **เปลี่ยนชื่อ** reveals the existing inline name editor only on demand. **ตั้งค่า** opens advanced options.
+- While mirroring, the picture fills the entire display without app overlays. Pressing the TV remote **Back** key prompts **ปิด** (stop receiver and finish the app) or **ไม่ปิด** (keep receiving).
+- Permissions and errors remain visible when reception cannot begin. Runtime device validation on TrueID hardware and BlueStacks 5 is still required.
+
 ## Scope and behavior
 
 - Runs on compatible Android TV / Google TV / TrueID TV boxes (device-specific validation required).
@@ -36,13 +44,13 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 - Video GL surface prewarmed on receiver start; diagnostics log elapsed receiver
   startup, connection-to-video-size, and connection-to-first-video-packet times.
 - iOS Control Center > Screen Mirroring discovers the configurable receiver name.
-- Default receiver name: **X-Stage Mirror TV**. The brand prefix is fixed. On the **Overview (first screen)** select **✎ เปลี่ยนชื่ออุปกรณ์**, type an optional suffix such as **ห้องประชุม** or **TrueID ห้องนั่งเล่น**, review the preview, and select **บันทึกชื่อ**. The full name (for example, **X-Stage Mirror TV ห้องประชุม**) appears on the first screen, in iPhone/iPad Screen Mirroring discovery, and in the QR setup guide. Settings offers the same editor.
+- Default receiver name: **X-Stage Mirror TV**. The brand prefix is fixed. On the **first screen** select **เปลี่ยนชื่อ** and then **✎ เปลี่ยนชื่ออุปกรณ์**, type an optional suffix such as **ห้องประชุม** or **TrueID ห้องนั่งเล่น**, review the preview, and select **บันทึกชื่อ**. The full name (for example, **X-Stage Mirror TV ห้องประชุม**) appears on the first screen, in iPhone/iPad Screen Mirroring discovery, and in the QR setup guide. Settings offers the same editor.
 - Suffix is limited to keep the entire receiver name within 64 characters. An empty suffix restores **X-Stage Mirror TV**. The new name persists across app restarts and a normal restart of AirPlay discovery applies the change. Rename is disabled while a sender is connected to avoid interrupting an active mirroring session. Older free-form receiver names are migrated into the suffix on first launch.
 - Automatically starts receiving on launch/boot (subject to Android background restrictions).
 - No receiver PIN by default; existing iOS consent to start screen sharing still applies.
 - One sender at a time by default: incoming senders cannot silently preempt a session.
 - H.264/H.265 and audio decode use the existing upstream Android UxPlay/MediaCodec path.
-- Displays a **QR setup guide** on the receiver's idle screen. Scanning opens
+- Previously displayed a **QR setup guide** on the receiver's idle screen (now hidden on the minimal home). Scanning opens
   /mirror-tv/ with the receiver name; QR cannot automatically trigger iOS mirroring.
 - Mirroring of DRM-protected apps is not supported.
 - All AirPlay/UxPlay native libraries and codecs are bundled into **one APK**.
@@ -194,7 +202,7 @@ When the goal is to display an iPhone/iPad on a Windows computer, use the dedica
 2. Open **X-Stage Mirror TV**; allow Local Network access if requested.
 3. Connect iPhone and TV to the same LAN (no guest network / AP isolation).
 4. On iPhone: Control Center > Screen Mirroring > select the receiver's displayed name.
-5. On the receiver’s first screen select **✎ เปลี่ยนชื่ออุปกรณ์**, enter only the suffix, then **Enter/Done** on the keyboard or **บันทึกชื่อ**. After the announcement restarts, use the new name from the iOS list. When a sender is active, disconnect before editing.
+5. On the receiver’s first screen select **เปลี่ยนชื่อ**, then **✎ เปลี่ยนชื่ออุปกรณ์**, enter only the suffix, then **Enter/Done** on the keyboard or **บันทึกชื่อ**. After the announcement restarts, use the new name from the iOS list. When a sender is active, disconnect before editing.
 6. Check audio/video sync, portrait/landscape, reboot autostart, disconnect/reconnect.
 7. For timing diagnostics, enable Settings > Developer options > benchmark log
    and capture logcat from the physical TV box. For example:
@@ -222,7 +230,7 @@ GPL-3.0; upstream copyright and NOTICE preserved. Not affiliated with Apple Inc.
 Mirror TV publishes a **white 16:9 Android TV banner** at 320×180 and 640×360,
 with the distinct dark receiver-casting icon and high-contrast navy/cyan text.
 
-On the idle screen choose **☆ เพิ่มแอปที่หน้าหลักทีวี**. If the current Android
+Use the Android TV launcher's **Favorite Apps > Add app (+)** menu to put the app on Home. If the current Android
 TV launcher supports pinned shortcuts, confirm the OS prompt. Otherwise the
 app opens the Home screen; use the remote to select **Favorite Apps > Add app (+)
 > X-Stage Mirror TV**. On some TrueID launchers the Favorites command differs,
