@@ -210,7 +210,7 @@ public sealed class MainForm : Form
             int y = ScalePx(16), gap = ScalePx(16);
             var cards = new (Control view, int height)[]
             {
-                (header, 119), (ios, 341), (android, 246), (footer, 164)
+                (header, 119), (ios, 341), (android, 282), (footer, 164)
             };
             viewport.SuspendLayout();
             try
