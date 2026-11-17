@@ -2,6 +2,7 @@ name: X-Stage Mirror TV - AirPlay APK
 
 on:
   push:
+    branches: [main]
     paths:
       - ".github/workflows/build-xstage-mirror-tv.yml"
       - "xstage-mirror-tv/**"
@@ -19,6 +20,8 @@ concurrency:
 
 jobs:
   mirror-tv:
+    # Never expose repository signing secrets to manual runs on other branches.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 110
     env:

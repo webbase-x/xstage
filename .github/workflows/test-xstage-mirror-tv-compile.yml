@@ -1,0 +1,56 @@
+name: Mirror TV compile-only regression (no signing secrets)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "xstage-mirror-tv/**"
+      - ".github/workflows/test-xstage-mirror-tv-compile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-tv-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-only:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch verified AirPlay GPLv3 source
+        shell: bash
+        run: |
+          git clone --no-checkout https://github.com/omerekelly/airshow.git /tmp/xstage-mirror-compile
+          git -C /tmp/xstage-mirror-compile checkout --detach a0eeef208a60f69a56faadbd39eb1e1de001208c
+          test "$(git -C /tmp/xstage-mirror-compile rev-parse HEAD)" = "a0eeef208a60f69a56faadbd39eb1e1de001208c"
+          git -C /tmp/xstage-mirror-compile submodule update --init --recursive --depth 1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Patch and validate Mirror TV updater source
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check Pillow==11.3.0
+          python3 xstage-mirror-tv/prepare_upstream.py /tmp/xstage-mirror-compile
+          python3 xstage-mirror-tv/test_build_recipe.py /tmp/xstage-mirror-compile
+          test ! -e /tmp/xstage-mirror-compile/local.properties
+      - name: Install Android SDK tools for compilation
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Compile-only test (APK is NEVER published or uploaded)
+        working-directory: /tmp/xstage-mirror-compile
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug -Pabis=arm64-v8a,armeabi-v7a --stacktrace --no-daemon
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          echo "PASS: Mirror TV Kotlin/native code compiled. This ephemeral debug APK is intentionally not a distributable update."

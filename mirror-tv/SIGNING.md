@@ -14,14 +14,20 @@ In [GitHub Actions repository secrets](https://github.com/webbase-x/xstage/setti
 3. `XSTAGE_MIRROR_KEY_ALIAS`: Alias of the Android signing key.
 4. `XSTAGE_MIRROR_KEY_PASSWORD`: Password for the signing key.
 
-On Windows, a first-time owner can generate a new signing keystore on a private machine with Android Studio/JDK's `keytool`. Keep a durable private backup of the keystore and passwords; losing them prevents in-place updates of production APKs. You can obtain Base64 locally with PowerShell:
+On Windows, a first-time owner can generate a new signing keystore on a **private** machine with Android Studio/JDK's `keytool`. For example, create `C:\\secure` privately, then run the following command in PowerShell. Choose strong passwords when prompted and never share them in chat:
+
+```powershell
+keytool -genkeypair -keystore C:\\secure\\XStageMirrorRelease.jks -storetype PKCS12 -alias xstage-mirror -keyalg RSA -keysize 3072 -validity 10000 -dname "CN=X-Stage Mirror TV, O=X-Stage"
+```
+
+Keep a durable private backup of that one keystore and its passwords; losing them prevents in-place updates of subsequent APKs. For PKCS12, the store and key passwords may be the same (GitHub still requires both secret fields). You can obtain Base64 locally with PowerShell:
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\secure\XStageMirrorRelease.jks")) |
     Set-Clipboard
 ```
 Paste the clipboard value into the encrypted secret in GitHub (not a repo file).
 
-After configuring all four, manually dispatch the **Release X-Stage Mirror TV signed APK** workflow from the Actions tab. It checks the secrets, builds and verifies the release signature, publishes an immutable release with corresponding GPLv3 source and only then activates `mirror-tv/latest.json`.
+After configuring all four, rerun **X-Stage Mirror TV - AirPlay APK** on the `main` branch to publish the first persistent-key preview (v0.2.6 Build 108 or later). This step intentionally cannot be performed until the secrets exist. Also note that the 0.2.5 / Build 107 legacy debug APK cannot inherit the new signing identity: a one-time uninstall may be necessary. For subsequent production releases, manually dispatch the **Release X-Stage Mirror TV signed APK** workflow from the Actions tab. It checks the secrets, builds and verifies the release signature, publishes an immutable release with corresponding GPLv3 source and only then activates `mirror-tv/latest.json`.
 
 Do not attempt to reuse a Karaoke Android signing key, ship passwords or keys in public source, or copy the test APK into the production feed. The app package name is `com.webbasex.xstagemirror.tv` and should retain the **same signing identity** for future production updates.
 
