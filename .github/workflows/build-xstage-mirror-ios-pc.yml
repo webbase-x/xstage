@@ -1,0 +1,191 @@
+name: Build X-Stage Mirror iOS PC Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mirror-ios-pc/**'
+      - '.github/workflows/build-xstage-mirror-ios-pc.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xstage-mirror-ios-pc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compile Windows desktop app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish mirror-ios-pc/XStageMirrorIOSPC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o mirror-ios-pc/out
+          if ($LASTEXITCODE -ne 0) { throw 'Mirror PC compilation failed' }
+          if (-not (Test-Path mirror-ios-pc/out/XStageMirrorIOSPC.exe)) { throw 'Mirror PC EXE missing' }
+
+      # Independent compile artifact: available even when the optional upstream
+      # AirPlay packaging gate cannot verify a compatible portable archive.
+      # This executable is NOT a complete casting app without engine files.
+      - name: Upload compiled control EXE (engine not included)
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1001-COMPILED-ONLY
+          path: mirror-ios-pc/out/XStageMirrorIOSPC.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  package:
+    needs: compile
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exactly the compiled X-Stage control executable
+        uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1001-COMPILED-ONLY
+          path: mirror-ios-pc/out
+      - name: Check Windows executable prerequisite
+        shell: pwsh
+        run: |
+          if (-not (Test-Path mirror-ios-pc/out/XStageMirrorIOSPC.exe -PathType Leaf)) {
+            throw 'Compiled Mirror PC executable was not downloaded'
+          }
+
+      - name: Download and validate the PINNED UxPlay portable Windows engine
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # The upstream x64 asset is intentionally named uxplay-windows.zip
+          # (WITHOUT "portable", "x64" or "amd64"). Pin exact name AND hash.
+          $tag = '2.0.0.1736'
+          $repo = 'leapbtw/uxplay-windows'
+          $assetName = 'uxplay-windows.zip'
+          $pinnedSha256 = '9d3a51c15fc9db857351195e7eb7bbb21700d9ae25d936a54bcf8536b62cca18'
+          $expectedUrl = "https://github.com/$repo/releases/download/$tag/$assetName"
+          $headers = @{ 'User-Agent' = 'XStageMirrorIOSPC-CI'; 'Accept' = 'application/vnd.github+json' }
+          $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag"
+          if ($release.tag_name -cne $tag) {
+            throw "Unexpected upstream release tag: $($release.tag_name)"
+          }
+          $assets = @($release.assets | Where-Object { $_.name -ceq $assetName })
+          if ($assets.Count -ne 1) {
+            $found = (@($release.assets | ForEach-Object { $_.name }) -join ', ')
+            throw "Expected exactly one pinned x64 archive '$assetName'; found $($assets.Count). Release assets: $found"
+          }
+          $asset = $assets[0]
+          if ($asset.browser_download_url -cne $expectedUrl) {
+            throw "Unexpected upstream download URL for pinned archive"
+          }
+          if ([string]$asset.digest -cne "sha256:$pinnedSha256") {
+            throw "Upstream checksum differs from the reviewed pinned SHA-256; do not package"
+          }
+          if ([long]$asset.size -lt 10000000) {
+            throw "Upstream portable archive is suspiciously small"
+          }
+          $download = Join-Path $env:RUNNER_TEMP 'uxplay-portable.zip'
+          Invoke-WebRequest -Headers $headers -Uri $expectedUrl -OutFile $download
+          $actual = (Get-FileHash -Path $download -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -cne $pinnedSha256) {
+            throw "Pinned AirPlay portable archive SHA-256 mismatch (actual $actual)."
+          }
+          Write-Host "Verified $assetName ($((Get-Item $download).Length) bytes), SHA-256 $actual"
+          $unpacked = Join-Path $env:RUNNER_TEMP 'uxplay-unpacked'
+          Expand-Archive -Path $download -DestinationPath $unpacked
+          $exe = @(Get-ChildItem $unpacked -Recurse -File -Filter 'uxplay-windows.exe')
+          if ($exe.Count -ne 1) {
+            throw "Portable archive needs one uxplay-windows.exe; found $($exe.Count)"
+          }
+          $destination = 'mirror-ios-pc/out/engine/uxplay-windows'
+          New-Item -ItemType Directory -Force $destination | Out-Null
+          Copy-Item (Join-Path $unpacked '*') $destination -Recurse -Force
+          if (-not (Get-ChildItem $destination -Recurse -File -Filter 'uxplay-windows.exe')) {
+            throw 'UxPlay binary missing from distribution after packaging'
+          }
+          @"
+          UxPlay Windows engine: $repo tag $tag
+          Asset: $($asset.name)
+          Archive SHA-256: $actual
+          URL: $($asset.browser_download_url)
+          License: GPL-3.0
+          Corresponding source: https://github.com/leapbtw/uxplay-windows/tree/$tag
+          Underlying UxPlay: https://github.com/FDH2/UxPlay
+          This candidate requires real Windows+iOS testing.
+          "@ | Set-Content -Encoding UTF8 'mirror-ios-pc/out/THIRD_PARTY_NOTICES.txt'
+
+      - name: Verify bundled AirPlay dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $engine = 'mirror-ios-pc/out/engine/uxplay-windows'
+          foreach ($file in @('uxplay-windows.exe','mDNSResponder.exe','Qt6Core.dll',
+              'Qt6Gui.dll','Qt6Widgets.dll','dnssd.dll',
+              'libgstreamer-1.0-0.dll','lib/gstreamer-1.0/libgstcoreelements.dll',
+              'platforms/qwindows.dll','LICENSE.rtf')) {
+            if (-not (Test-Path (Join-Path $engine $file) -PathType Leaf)) {
+              throw "Missing bundled AirPlay component: $file"
+            }
+          }
+          if (-not (Test-Path mirror-ios-pc/out/XStageMirrorIOSPC.exe -PathType Leaf)) {
+            throw 'Self-contained X-Stage desktop EXE missing'
+          }
+
+      - name: Install Inno Setup compiler on build runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed on CI runner' }
+
+      - name: Build all-in-one installer EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) { $compiler = Join-Path $env:ProgramFiles 'Inno Setup 6/ISCC.exe' }
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
+          & $compiler 'mirror-ios-pc/installer/XStageMirrorIOSPC.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
+          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-Setup.exe'
+          if (-not (Test-Path $file -PathType Leaf)) { throw 'Setup EXE missing' }
+          if ((Get-Item $file).Length -lt 10000000) { throw 'Setup EXE unexpectedly small' }
+          $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-Setup.exe" |
+            Set-Content -Encoding ascii "$file.sha256"
+          Write-Host "Offline Setup EXE SHA-256: $hash"
+
+      - name: Publish candidate ZIP with intact portable runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $file = 'X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-CANDIDATE.zip'
+          $source = Resolve-Path 'mirror-ios-pc/out'
+          Compress-Archive -Path (Join-Path $source '*') -DestinationPath $file -CompressionLevel Optimal -Force
+          if ((Get-Item $file).Length -lt 3000000) { throw 'Incomplete portable candidate ZIP' }
+          $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLowerInvariant()
+          "$hash  $file" | Set-Content -Encoding ascii "$file.sha256"
+          "Candidate SHA-256: $hash"
+          # Never publish as a stable Windows release without physical device verification.
+
+      - name: Upload Windows candidate (not public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-iOS-PC-Windows-CANDIDATE
+          path: |
+            X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-CANDIDATE.zip
+            X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-CANDIDATE.zip.sha256
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-Setup.exe
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.0-build1001-win-x64-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 30
