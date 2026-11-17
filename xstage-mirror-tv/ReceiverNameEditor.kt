@@ -87,7 +87,7 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
                 .focusProperties { down = fieldFocus }
                 .onFocusChanged { openFocused = it.isFocused }
         ) {
-            Text("✎ เลือกช่องพิมพ์ชื่อห้อง", fontWeight = FontWeight.SemiBold)
+            Text("✎ เปลี่ยนชื่ออุปกรณ์ (ช่องพิมพ์ด้านล่าง)", fontWeight = FontWeight.SemiBold)
         }
         if (!canEdit) {
             Text(
