@@ -7,9 +7,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>XStageMirrorIOSPC</AssemblyName>
     <RootNamespace>XStageMirrorIOSPC</RootNamespace>
-    <Version>1.0.1</Version>
-    <FileVersion>1.0.1.1002</FileVersion>
+    <Version>1.0.2</Version>
+    <FileVersion>1.0.2.1003</FileVersion>
     <ApplicationTitle>X-Stage Mirror iOS PC</ApplicationTitle>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
     <PublishAot>false</PublishAot>
   </PropertyGroup>
