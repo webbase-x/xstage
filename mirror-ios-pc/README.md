@@ -1,8 +1,23 @@
 # X-Stage Mirror iOS PC
 
-**v1.0.8 · Build 1009 · Windows 10/11 x64 · Preview**
+**v1.0.9 · Build 1010 · Windows 10/11 x64 · Preview**
 
 The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
+
+## Auto-update file locking fix (Build 1010)
+
+The previous updater downloaded an installer to a .partial file with exclusive
+FileShare.None access, then tried to reopen that same file for PE header
+verification *before* the writer was disposed. This reliably caused
+`IOException: The process cannot access the file ... because it is being used
+by another process` even without any third-party process locking the file.
+
+Build 1010 disposes the writer before reopening for PE header validation,
+while preserving SHA-256, size, URL and Windows PE safety checks. A Windows
+regression test exercises the real private downloader with a local in-memory
+HTTP response and proves the verified file can be reopened with exclusive access.
+Build 1006/1009 cannot repair themselves until the new version is installed;
+once the fixed version is installed, subsequent updates use the corrected path.
 
 ## Full-screen interface
 

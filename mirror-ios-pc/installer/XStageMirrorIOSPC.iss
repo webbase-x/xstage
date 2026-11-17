@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror iOS PC"
-#define MyAppVersion "1.0.8"
-#define MyAppBuild "1009"
+#define MyAppVersion "1.0.9"
+#define MyAppBuild "1010"
 
 [Setup]
 ; Relative to this script in mirror-ios-pc/installer. Resolve to repository root.

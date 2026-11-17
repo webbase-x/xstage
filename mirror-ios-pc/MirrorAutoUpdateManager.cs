@@ -179,26 +179,31 @@ internal sealed class MirrorAutoUpdateManager
             throw new InvalidDataException("ขนาดตัวติดตั้งผิดปกติ");
 
         await using var network = await response.Content.ReadAsStreamAsync();
-        await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write,
-            FileShare.None, 128 * 1024, FileOptions.Asynchronous);
-        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[128 * 1024];
-        long transferred = 0;
-        int bytesRead;
-        while ((bytesRead = await network.ReadAsync(buffer.AsMemory())) > 0)
+        // Finish writing and RELEASE the exclusive FileShare.None handle before
+        // reopening this file for the PE header check. Keeping the writer alive
+        // used to throw IOException on every update, even on a healthy Windows PC.
+        await using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write,
+            FileShare.None, 128 * 1024, FileOptions.Asynchronous))
         {
-            transferred += bytesRead;
-            if (transferred > MaximumInstallerBytes)
-                throw new InvalidDataException("ไฟล์อัปเดตใหญ่เกินขีดจำกัด");
-            digest.AppendData(buffer, 0, bytesRead);
-            await output.WriteAsync(buffer.AsMemory(0, bytesRead));
+            using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[128 * 1024];
+            long transferred = 0;
+            int bytesRead;
+            while ((bytesRead = await network.ReadAsync(buffer.AsMemory())) > 0)
+            {
+                transferred += bytesRead;
+                if (transferred > MaximumInstallerBytes)
+                    throw new InvalidDataException("ไฟล์อัปเดตใหญ่เกินขีดจำกัด");
+                digest.AppendData(buffer, 0, bytesRead);
+                await output.WriteAsync(buffer.AsMemory(0, bytesRead));
+            }
+            await output.FlushAsync();
+            if (transferred < MinimumInstallerBytes)
+                throw new InvalidDataException("ดาวน์โหลดตัวติดตั้งไม่ครบ");
+            var calculated = Convert.ToHexString(digest.GetHashAndReset());
+            if (!calculated.Equals(update.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("SHA-256 ไม่ตรงกับ GitHub Release ที่ประกาศ");
         }
-        await output.FlushAsync();
-        if (transferred < MinimumInstallerBytes)
-            throw new InvalidDataException("ดาวน์โหลดตัวติดตั้งไม่ครบ");
-        var calculated = Convert.ToHexString(digest.GetHashAndReset());
-        if (!calculated.Equals(update.Sha256, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("SHA-256 ไม่ตรงกับ GitHub Release ที่ประกาศ");
 
         // The exact known asset is a PE installer, not an HTML error page.
         await using var check = new FileStream(destination, FileMode.Open, FileAccess.Read, FileShare.Read);
