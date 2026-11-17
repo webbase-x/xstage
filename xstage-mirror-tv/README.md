@@ -15,6 +15,19 @@ No iOS app, accounts, or internet cloud service required for casting on the loca
 - Displays a **QR setup guide** on the receiver's idle screen. Scanning opens
   /mirror-tv/ with the receiver name; QR cannot automatically trigger iOS mirroring.
 - Mirroring of DRM-protected apps is not supported.
+- All AirPlay/UxPlay native libraries and codecs are bundled into **one APK**.
+  No separate codec, helper, SoundFont, media server, or iOS app is downloaded.
+- Automatically checks for signed APK updates at app startup; Settings also
+  includes a manual "ตรวจสอบอัปเดต" control. When a valid newer version exists,
+  the app downloads it, checks SHA-256 and package/version, then opens Android's
+  standard installer. Android may require permission and approval.
+- Automatically deletes **only app-private downloaded update APKs** after a
+  successfully installed newer or equal build, using Android's
+  `MY_PACKAGE_REPLACED` broadcast plus a startup fallback. Future versions
+  staged for installation are not deleted early. Public Downloads and the
+  original installer APK are never touched.
+- Updates are **disabled until a release is signed and published** using a
+  persistent private signing key. This avoids broken and unsafe update flows.
 
 ## Build and release
 
@@ -29,6 +42,34 @@ an APK for ARMv7/ARM64, SHA256 checksums, and full corresponding source (includi
 the upstream LICENSE and NOTICE, patches and submodule sources). APK is debug-signed
 for device testing; a production release requires a private signing key and
 verification with the physical TrueID box.
+
+### Publish signed automatic updates
+
+A debug-signed APK from Actions is for first-stage testing only: GitHub-hosted
+debug keystores are not persistent across builds, so they cannot provide safe
+in-place updates. Do **not** publish them as an automatic update.
+
+The separate [signed release workflow](../../actions/workflows/release-xstage-mirror-tv.yml)
+accepts a semantic version and monotonically increasing build number, and needs
+four encrypted repository secrets:
+
+- `XSTAGE_MIRROR_KEYSTORE_BASE64`: your dedicated **private** Android release
+  keystore, base64 encoded. Do not commit it to source control.
+- `XSTAGE_MIRROR_STORE_PASSWORD`: keystore password.
+- `XSTAGE_MIRROR_KEY_ALIAS`: signing key alias.
+- `XSTAGE_MIRROR_KEY_PASSWORD`: key password.
+
+It produces the **fully bundled and signed** APK plus GPLv3 source archive
+in a public GitHub Release, then publishes the verified SHA-256 and release
+version to `mirror-tv/latest.json` on GitHub Pages. Old apps check that HTTPS
+manifest on startup. Publishing is stopped if signing secrets are missing,
+the APK build fails, or the version is not newer.
+
+**Important migration:** the earlier v0.1.0 debug APK and the stable release
+will have different signing certificates. If v0.1.0 debug was installed, uninstall
+it once to install the stable signed build. After that, all updates use the
+same private signing certificate and can be installed in place without
+reinstalling dependencies or deleting app settings.
 
 Building manually: run the steps in .github/workflows/build-xstage-mirror-tv.yml.
 Keep the GPLv3 and upstream attribution when redistributing modified binaries.
