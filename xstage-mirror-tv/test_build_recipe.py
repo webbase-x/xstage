@@ -67,6 +67,9 @@ assert "SAMPLE_MS = 2_000L" in quality
 assert "Never terminate" in quality
 assert "mirrorAutoQuality.choose()" in service
 assert "mirrorAutoQuality.sample(" in service
+assert "videoRenderer.decodedFrameCount" in service
+assert "decodedFrameCount" in renderer
+assert "decoderBacklog" in quality
 assert "mirrorAutoQuality.startSession()" in service
 assert "mirrorAutoQuality.endSession()" in service
 assert "isRenegotiationPending()" in service

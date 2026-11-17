@@ -43,6 +43,7 @@ class MirrorAutoQuality(private val context: Context) {
     private var lastSampleMs = 0L
     private var lastFrameCount = 0L
     private var lastInputDrops = 0L
+    private var lastDecodedCount = 0L
     private var badSamples = 0
     private var stableSamples = 0
     private var degradedInSession = false
@@ -69,6 +70,7 @@ class MirrorAutoQuality(private val context: Context) {
         lastSampleMs = sessionSinceMs
         lastFrameCount = 0L
         lastInputDrops = 0L
+        lastDecodedCount = 0L
         badSamples = 0
         stableSamples = 0
         degradedInSession = false
@@ -80,21 +82,24 @@ class MirrorAutoQuality(private val context: Context) {
      * Returns only transition edges, not an action for each incoming frame.
      */
     @Synchronized
-    fun sample(totalFrames: Long, totalInputDrops: Long, jitterUs: Long): Signal {
+    fun sample(totalFrames: Long, totalInputDrops: Long, jitterUs: Long, totalDecodedFrames: Long): Signal {
         val now = SystemClock.elapsedRealtime()
         if (sessionSinceMs == 0L || now - lastSampleMs < SAMPLE_MS) return Signal.NONE
 
         val frames = (totalFrames - lastFrameCount).coerceAtLeast(0L)
         val drops = (totalInputDrops - lastInputDrops).coerceAtLeast(0L)
+        val decoded = (totalDecodedFrames - lastDecodedCount).coerceAtLeast(0L)
         val duration = (now - lastSampleMs).coerceAtLeast(1L)
         lastFrameCount = totalFrames
         lastInputDrops = totalInputDrops
+        lastDecodedCount = totalDecodedFrames
         lastSampleMs = now
 
         // Changes on screen may be idle/static; low FPS alone is not proof
         // of slow hardware or Wi-Fi. Use observed drops / jitter only on motion.
         val activeStream = frames * 1000L / duration >= 12L
-        val overloaded = activeStream && (drops >= 2L || jitterUs > 25_000L)
+        val decoderBacklog = frames >= 24L && decoded * 100L < frames * 70L
+        val overloaded = activeStream && (drops >= 2L || jitterUs > 25_000L || decoderBacklog)
         if (overloaded) {
             badSamples++
             stableSamples = 0

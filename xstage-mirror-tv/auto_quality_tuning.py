@@ -70,7 +70,8 @@ change(service,
         when (mirrorAutoQuality.sample(
             videoRenderer.frameCount,
             videoRenderer.droppedFrames,
-            videoRenderer.framePacingJitterUs
+            videoRenderer.framePacingJitterUs,
+            videoRenderer.decodedFrameCount
         )) {
             MirrorAutoQuality.Signal.CATCH_UP -> {
                 // Only drop already-decoded display frames, never H.264
@@ -112,6 +113,19 @@ change(service,
         log("Sender disconnected (''')
 
 renderer = package / "renderer/VideoRenderer.kt"
+change(renderer,
+       '    @Volatile var frameCount = 0L; private set',
+       '    @Volatile var frameCount = 0L; private set\n'
+       '    @Volatile var decodedFrameCount = 0L; private set')
+change(renderer,
+       '        fps = 0; bitrateBps = 0; frameCount = 0; codecName = ""',
+       '        fps = 0; bitrateBps = 0; frameCount = 0; codecName = ""\n'
+       '        decodedFrameCount = 0L')
+change(renderer,
+       '    private fun _recordOutputFrameTime() {\n        val now = System.nanoTime()',
+       '    private fun _recordOutputFrameTime() {\n'
+       '        decodedFrameCount++\n'
+       '        val now = System.nanoTime()')
 change(renderer,
        '    var scheduledOutputBufferRelease = true',
        '    @Volatile var catchUpMode = false\n'
