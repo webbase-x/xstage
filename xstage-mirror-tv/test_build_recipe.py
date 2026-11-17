@@ -62,6 +62,7 @@ assert "MediaCodecList.REGULAR_CODECS" in quality
 assert "areSizeAndRateSupported" in quality
 assert "getSharedPreferences" in quality and "stable_sessions" in quality
 assert "badSamples >= 3" in quality and "Signal.CATCH_UP" in quality
+assert 'supported.filterNot { it.label == "1080p30" }' in quality
 assert "SAMPLE_MS = 2_000L" in quality
 assert "Never terminate" in quality
 assert "mirrorAutoQuality.choose()" in service

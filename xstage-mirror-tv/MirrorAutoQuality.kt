@@ -180,7 +180,13 @@ class MirrorAutoQuality(private val context: Context) {
                     }.getOrDefault(false)
                 } == true
         }
-        if (supported.isNotEmpty()) return supported
+        // Prefer smoother 720p60 to sharper-but-slower 1080p30. If the
+        // receiver cannot handle 720p60, retain 1080p30 as a fallback.
+        // Avoid degrading from 720p60 to a heavier 1080p30 workload.
+        val motionFirst = if (supported.any { it.label == "720p60" }) {
+            supported.filterNot { it.label == "1080p30" }
+        } else supported
+        if (motionFirst.isNotEmpty()) return motionFirst
 
         // Incomplete manufacturer codec metadata is common. Avoid black-screen
         // by starting at a conservative size and allowing future diagnostics.
