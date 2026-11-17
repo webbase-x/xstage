@@ -401,3 +401,28 @@ body{background:radial-gradient(circle at 60% 0,#e6edff 0,transparent 32%),#f7f8
  .platform-pill:hover{background:#304c79}
  .platform-pill.active{background:#407fef;border-color:#407fef;color:#fff}
 }
+
+
+/* iOS edge-to-edge browsers: reserve the status bar / Dynamic Island and keep
+   the sticky header inside the safe viewport even after scrolling. */
+:root{--xstage-status-safe-top:env(safe-area-inset-top,0px)}
+body{padding-top:var(--xstage-status-safe-top)}
+.site-header{top:var(--xstage-status-safe-top);z-index:70}
+html{scroll-padding-top:calc(96px + var(--xstage-status-safe-top))}
+.skip-link:focus{top:calc(12px + var(--xstage-status-safe-top))}
+@media(max-width:920px){
+  .header-inner{height:auto;min-height:66px;display:flex;flex-wrap:wrap;justify-content:space-between;column-gap:12px;row-gap:8px;padding-block:9px}
+  .wordmark.new-wordmark{margin-right:auto}
+  .header-launch{margin-left:0}
+}
+@media(max-width:760px){
+  /* Mobile already has a Karaoke action in the hero. Don't crowd the header
+     with a duplicated launch button next to the Google account controls. */
+  .header-inner{height:auto;min-height:62px;flex-wrap:nowrap;gap:8px}
+  .site-header .header-launch{display:none}
+  .wordmark.new-wordmark{min-width:0;flex:0 1 auto}
+  .new-wordmark img{width:min(175px,43vw);max-width:100%;height:auto}
+}
+@media(max-width:370px){
+  .new-wordmark img{width:min(150px,40vw)}
+}
