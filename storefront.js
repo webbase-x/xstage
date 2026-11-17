@@ -110,7 +110,7 @@
       hero:"รับทุกหน้าจอในห้องเดียวกัน",blurb:"สะท้อนจากมือถือสู่ Windows ได้อย่างเหมาะสม",preview:"MIRROR PC · IOS & ANDROID",
       type:"manifest",manifest:"./downloads/mirror-pc-latest.json",previewManifest:"./downloads/mirror-pc-preview-latest.json",
       candidate:{label:"ดูซอร์สและผล Build รุ่นพัฒนา",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-mirror-pc.yml"},
-      note:"ZIP สำหรับ Windows 10/11 x64 จะดาวน์โหลดรุ่นล่าสุดจาก GitHub Releases อัตโนมัติเมื่อเผยแพร่สำเร็จ เปิด ZIP แล้วเรียก XStageMirrorPC.exe โดยไม่ต้องติดตั้งส่วนประกอบเพิ่ม (Preview ยังไม่ได้ทดสอบบนอุปกรณ์จริง) Android ต้องรองรับ Miracast บน Windows และตัวส่ง; หน้ารับภาพเปิดผ่านระบบของ Windows",
+      note:"Setup EXE แบบออฟไลน์รวมโปรแกรม .NET, AirPlay Engine, DLL และ Bonjour Service ไว้ครบในชุดเดียว ไม่ต้องดาวน์โหลดส่วนประกอบเพิ่มหลังติดตั้ง (Windows อาจขอสิทธิ์ Administrator สำหรับ Bonjour) รุ่น Preview ยังไม่ได้ทดสอบบนอุปกรณ์จริง และการรับ Android ยังต้องอาศัย Miracast ที่รองรับใน Windows/อุปกรณ์ส่ง",
       fallback:"ยังไม่มี Windows Mirror PC ที่ทดสอบแล้ว"
     },
     "mirror-tv":{
@@ -187,15 +187,22 @@
       const version=String(data.version||"");
       const build=data.build;
       const preview=data.channel==="preview";
+      const prefix="X-Stage-Mirror-PC-v"+version+"-build"+build+"-win-x64-";
+      const extension=preview?".exe":".exe";
+      const expectedFile=prefix+"Setup.exe";
       const valid=data.available===true&&/^\d+\.\d+\.\d+$/.test(version)&&
-        Number.isSafeInteger(build)&&build>=1&&SHA256.test(data.sha256||"")&&
-        (!preview||data.file==="X-Stage-Mirror-PC-v"+version+"-build"+build+"-win-x64-CANDIDATE.zip");
-      const expected=preview?"https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v"+
-        version+"-build"+build+"-preview/"+data.file:null;
-      const url=valid&&(!preview||data.download_url===expected)?verifiedReleaseUrl(data.download_url,".zip"):"";
-      return url?{available:true,url,status:"ZIP v"+version+" · Build "+build+(preview?" · รุ่นทดสอบ":" · รุ่นล่าสุด"),
-        kind:"download",version,build,preview}:
-        {available:false,url:"",status:"ยังไม่มี ZIP Mirror PC ที่เผยแพร่แล้ว",kind:"pending"};
+        Number.isSafeInteger(build)&&build>0&&SHA256.test(data.sha256||"")&&
+        data.file===expectedFile;
+      const expectedUrl=preview?
+        "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-pc-v"+
+        version+"-build"+build+"-preview/"+expectedFile:null;
+      const url=valid&&(!preview||data.download_url===expectedUrl)?
+        verifiedReleaseUrl(data.download_url,extension):"";
+      return url?{
+        available:true,url,
+        status:"Setup EXE v"+version+" · Build "+build+(preview?" · รุ่นทดสอบ":" · รุ่นล่าสุด"),
+        kind:"download",version,build,preview
+      }:{available:false,url:"",status:"ยังไม่มีตัวติดตั้ง Mirror PC ที่ตรวจสอบแล้ว",kind:"pending"};
     }
     if(id==="file-share"){
       const version=String(data.version||"");
@@ -250,7 +257,7 @@
       if(available){
         quick.href=states[id].url;
         quick.textContent=id==="mirror-pc"?
-          ("⬇ ดาวน์โหลด ZIP v"+states[id].version+" (Build "+states[id].build+")") :
+          ("⬇ ดาวน์โหลด Setup EXE v"+states[id].version+" (Build "+states[id].build+")") :
           (id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
         if(states[id].url.startsWith("./")){
           quick.setAttribute("download",states[id].url.split("/").at(-1));
@@ -333,7 +340,8 @@
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
-      const label=id==="studio-pc"||id==="mirror-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
+      const label=id==="studio-pc"?"ดาวน์โหลด ZIP สำหรับ Windows ↗":
+        id==="mirror-pc"?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
       const support=suitability(id);
