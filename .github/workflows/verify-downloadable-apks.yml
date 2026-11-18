@@ -10,7 +10,6 @@ on:
     paths:
       - '.github/workflows/verify-downloadable-apks.yml'
       - 'downloads/apps-portal-latest.json'
-      - 'downloads/remote-latest.json'
       - 'downloads/android-tv-latest.json'
       - 'downloads/file-share-latest.json'
       - 'mirror-tv/*latest.json'
@@ -23,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        feed: [downloads/apps-portal-latest.json, downloads/remote-latest.json, downloads/android-tv-latest.json, downloads/file-share-latest.json, mirror-tv/test-latest.json, mirror-tv/latest.json]
+        feed: [downloads/apps-portal-latest.json, downloads/android-tv-latest.json, downloads/file-share-latest.json, mirror-tv/test-latest.json, mirror-tv/latest.json]
     steps:
       - uses: actions/checkout@v4
       - name: Verify public APK, file digest and signing certificate
