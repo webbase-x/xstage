@@ -55,10 +55,16 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          KEY="${PORTAL_KEY_BASE64:-${ANDROID_KEY_BASE64}}"
-          STORE="${PORTAL_STORE_PASSWORD:-${ANDROID_STORE_PASSWORD}}"
-          ALIAS="${PORTAL_KEY_ALIAS:-${ANDROID_KEY_ALIAS}}"
-          PASS="${PORTAL_KEY_PASSWORD:-${ANDROID_KEY_PASSWORD}}"
+          KEY="$PORTAL_KEY_BASE64"
+          STORE="$PORTAL_STORE_PASSWORD"
+          ALIAS="$PORTAL_KEY_ALIAS"
+          PASS="$PORTAL_KEY_PASSWORD"
+          if [[ -z "$KEY$STORE$ALIAS$PASS" ]]; then
+            KEY="$ANDROID_KEY_BASE64"
+            STORE="$ANDROID_STORE_PASSWORD"
+            ALIAS="$ANDROID_KEY_ALIAS"
+            PASS="$ANDROID_KEY_PASSWORD"
+          fi
           if [[ -n "$KEY" && -n "$STORE" && -n "$ALIAS" && -n "$PASS" ]]; then
             printf %s "$KEY" | base64 -d > "${RUNNER_TEMP}/xstage-portal.jks"
             echo "XSTAGE_PORTAL_KEYSTORE_FILE=${RUNNER_TEMP}/xstage-portal.jks" >> "$GITHUB_ENV"
