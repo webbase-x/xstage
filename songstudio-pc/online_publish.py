@@ -134,9 +134,20 @@ def _valid_row(root, row):
         raise PublishError("ข้อมูลเพลงในฐานท้องถิ่นไม่สมบูรณ์")
     media = row.get("audio") or {}
     lyrics = row.get("lyrics") or {}
+    sound = _local_path(root, media.get("path"), "audio")
+    if sound.suffix.casefold() == ".xsk":
+        if sound.stat().st_size < 32:
+            raise PublishError("ไฟล์ XSK2 ไม่สมบูรณ์")
+        # XSK carries its own SHA-256 verified MIDI and timed Lyrics JSON.
+        # A new private Drive row uses xsk.fileId instead of lyrics.fileId.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "xstage_online_xsk", Path(__file__).with_name("xsk_package.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.open_package(sound).get("formatVersion") == 2
     if not lyrics or not lyrics.get("path"):
         return False
-    sound = _local_path(root, media.get("path"), "audio")
     lyric = _local_path(root, lyrics["path"], "lyrics")
     minimum = 22 if sound.suffix.lower() in (".mid", ".midi", ".kar") else 1000
     if sound.stat().st_size < minimum:
@@ -379,10 +390,12 @@ class OnlinePublisher:
         by_pair = {}
         for item in remote.values():
             by_code.setdefault(str(item.get("code") or "").casefold(), []).append(item)
-            audio_hash = (item.get("audio") or item.get("midi") or {}).get("md5Checksum")
+            audio_hash = (item.get("xsk") or item.get("audio") or item.get("midi") or {}).get("md5Checksum")
             lyric_hash = (item.get("lyrics") or {}).get("md5Checksum")
+            if item.get("xsk"):
+                lyric_hash = "xsk-internal"
             if (isinstance(audio_hash, str) and len(audio_hash) == 32
-                    and isinstance(lyric_hash, str) and len(lyric_hash) == 32):
+                    and isinstance(lyric_hash, str) and len(lyric_hash) > 0):
                 by_pair.setdefault((audio_hash.lower(), lyric_hash.lower()), item)
         # Compute duplicate evidence only for same-code candidates. Never skip
         # or overwrite on title match alone. Older clients may use an unrelated
@@ -513,8 +526,9 @@ class OnlinePublisher:
                 raise PublishError("ยกเลิกซิงค์ Google Drive · ชุดเพลงที่เผยแพร่ก่อนหน้ายังคงใช้งานได้")
             code = str(row["code"]).casefold()
             sound = _local_path(local_songs, row["audio"]["path"], "audio")
-            lyric = _local_path(local_songs, row["lyrics"]["path"], "lyrics")
-            s_hash, l_hash = _md5(sound), _md5(lyric)
+            is_xsk = sound.suffix.casefold() == ".xsk"
+            lyric = None if is_xsk else _local_path(local_songs, row["lyrics"]["path"], "lyrics")
+            s_hash, l_hash = _md5(sound), ("xsk-internal" if is_xsk else _md5(lyric))
             # Exact M4A+Lyrics bytes are the same song even if the local
             # filename or catalog code was changed. Never infer equivalence
             # from title alone.
@@ -528,7 +542,7 @@ class OnlinePublisher:
                 # A PC catalog can use a filename-derived webSongId that
                 # already exists remotely for an entirely different track.
                 # Never overwrite that remote song's identity or its code.
-                if matches_md5(exact_id.get("audio") or exact_id.get("midi"), s_hash):
+                if matches_md5(exact_id.get("xsk") or exact_id.get("audio") or exact_id.get("midi"), s_hash):
                     counts["conflicts"] += 1
                     continue
             elif exact_id and exact_id not in candidates:
@@ -537,13 +551,14 @@ class OnlinePublisher:
             for candidate in candidates:
                 if str(candidate.get("code") or "").casefold() != code:
                     continue
-                a_id = (candidate.get("audio") or candidate.get("midi") or {}).get("fileId")
+                a_id = (candidate.get("xsk") or candidate.get("audio") or candidate.get("midi") or {}).get("fileId")
                 l_id = (candidate.get("lyrics") or {}).get("fileId")
-                if not a_id or not l_id:
+                if not a_id or (not l_id and not candidate.get("xsk")):
                     continue
-                if matches_md5(candidate.get("audio") or candidate.get("midi"), s_hash):
+                if matches_md5(candidate.get("xsk") or candidate.get("audio") or candidate.get("midi"), s_hash):
                     same_audio = candidate
-                    if matches_md5(candidate.get("lyrics"), l_hash):
+                    if (is_xsk and candidate.get("xsk")) or (
+                            not is_xsk and matches_md5(candidate.get("lyrics"), l_hash)):
                         same_both = candidate
                         break
             if same_both:
@@ -554,11 +569,12 @@ class OnlinePublisher:
                 # title/artist happen to match. Keep old song and flag conflict.
                 counts["conflicts"] += 1
                 continue
-            audio = (dict(same_audio.get("audio") or same_audio.get("midi")) if same_audio else
+            audio = (dict(same_audio.get("xsk") or same_audio.get("audio") or same_audio.get("midi")) if same_audio else
                      upload(sound, row["audio"]["path"], code=row["code"]))
             source_format = sound.suffix.lstrip(".").upper()
-            lyrics = upload(lyric, row["lyrics"]["path"], code=row["code"],
-                            audio_format=source_format)
+            lyrics = (None if is_xsk else upload(
+                lyric, row["lyrics"]["path"], code=row["code"],
+                audio_format=source_format))
             # The timed JSON is the only published text artifact. Local LRC
             # remains on the PC for import/editing but is not duplicated in Drive.
             lrc_media = None
@@ -579,9 +595,18 @@ class OnlinePublisher:
             item = {"webSongId": ident, "code": str(row["code"]),
                     "title": str(row.get("title") or row["code"]),
                     "artist": str(row.get("artist") or ""),
-                    "sourceFormat": str(row.get("sourceFormat") or source_format),
-                    "lyrics": lyrics}
-            item["midi" if is_midi else "audio"] = audio
+                    "sourceFormat": str(row.get("sourceFormat") or source_format)}
+            if is_xsk:
+                item["xsk"] = audio
+            else:
+                item["lyrics"] = lyrics
+                item["midi" if is_midi else "audio"] = audio
+            if isinstance(row.get("sourceRegistry"), dict):
+                item["sourceRegistry"] = {
+                    key: row["sourceRegistry"][key]
+                    for key in ("songId", "mediaSha256", "lyricsSha256",
+                                "contentSha256", "bundleId")
+                    if key in row["sourceRegistry"]}
             # Files are uploaded and verified BEFORE publishing the pointer.
             # Android APK uses the same HTML5 video+audio player as WEB; MIDI
             # keeps both its original SMF and fallback pre-rendered M4A.
