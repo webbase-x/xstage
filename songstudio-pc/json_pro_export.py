@@ -7,6 +7,7 @@ Unsupported or malformed pairs are reported, not published as playable songs.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -20,6 +21,16 @@ MEDIA_EXT = {".mid", ".midi", ".kar", ".mp3", ".m4a", ".wav", ".aac",
 AUDIO_FORMATS = {"original", "m4a", "mp3", "wav", "flac", "ogg"}
 CHECKPOINT_SIZE = 1024
 CHECKPOINT_INTERVAL_SECONDS = 60
+
+
+def _review_module():
+    """Use the same local outcome history in source checkouts and Ready ZIPs."""
+    path = Path(__file__).with_name("json_pro_review.py")
+    spec = importlib.util.spec_from_file_location("xstage_json_pro_review", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 
 def _fingerprint(path):
@@ -180,7 +191,7 @@ def _next_code(used, style, width, preferred, counters):
 def export_folder(source_folder, destination_folder, *, output_format, export, scanner,
                    ncn=None, convert=None, cancelled=None, progress=None,
                    code_style="numeric", code_length=5, scan_progress=None,
-                   source_stream=None):
+                   source_stream=None, retry_errors_only=False):
     """Create a local Karaoke-compatible catalog; never publish to Google Drive.
 
     output_format is a constrained FFmpeg output extension or 'original'.
@@ -197,11 +208,17 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             or destination.is_symlink()):
         raise ValueError("กรุณาเลือกต้นทางและปลายทางที่เป็นโฟลเดอร์ปกติ")
     root = export.songs_root(destination)
+    review = _review_module()
     src_real = source.resolve()
     root_real = root.resolve()
     if src_real == root_real or src_real in root_real.parents or root_real in src_real.parents:
         raise ValueError("ต้นทางและปลายทางต้องแยกจากกัน เพื่อไม่ให้อ่านหรือเขียนวนทับคลังเดิม")
     # Stream the current song from the source code/filename directly.
+    # In retry mode enumerate ONLY the persisted errors; do not revisit
+    # tens of thousands of already completed songs.
+    if retry_errors_only:
+        source_stream = lambda folder, **kw: review.retry_stream(
+            folder, root, output_format=output_format, **kw)
     # Legacy callers may still supply the old full scanner for compatibility.
     # No whole-library pairing pass, fabricated Lyrics JSON, or upfront count.
     inspection = (source_stream(str(source), ncn=ncn, progress=scan_progress,
@@ -216,6 +233,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     existing = set()
     used_codes = {str(row.get("code") or "").casefold() for row in prior if row.get("code")}
     code_counters = {}
+
     # Unindexed complete pairs may be recovered after a crash; keep their codes
     # available for strict content verification in _can_recover_pair.
     for record in prior:
@@ -236,7 +254,17 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             except (KeyError, TypeError, OSError, ValueError):
                 continue
         seen.add((origin.get("sha256"), origin.get("outputFormat"), lyric_hash))
-    created = skipped = errors = 0
+    legacy_by_source = {}
+    for record in prior:
+        origin = record.get("sourceIdentity") or {}
+        if (record.get("webSongId") in existing
+                and origin.get("outputFormat") == output_format
+                and origin.get("canonicalPath") and origin.get("sha256")):
+            legacy_by_source[origin["canonicalPath"]] = (
+                origin["sha256"], origin.get("bytes"), record["webSongId"])
+    db = review.connect(root)
+    source_root = str(src_real)
+    created = skipped = errors = deferred = resumed = 0
     issues = []
     examined = 0
     checkpointed = 0
@@ -254,6 +282,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         if pending:
             export.publish_batch(root, pending)
             export.clear_published_journal(root)
+        db.commit()
         checkpointed = created
         checkpoint_at = time.monotonic()
 
@@ -268,7 +297,35 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 skipped += 1
                 continue
             final_audio = final_lyrics = None
+            source_signature = ""
             try:
+                source_signature = review.signature(item["files"])
+                previous = review.lookup(db, media, output_format)
+                if (not retry_errors_only and previous
+                        and previous[0] == source_signature):
+                    previous_status, previous_identity = previous[1], previous[2]
+                    if previous_status in ("completed", "duplicate") and previous_identity in existing:
+                        skipped += 1
+                        resumed += 1
+                        continue
+                    if previous_status == "error":
+                        # Keep unresolved ERR visible until an explicit retry.
+                        deferred += 1
+                        continue
+                # Fast legacy resume: a verified output in the old Catalog is
+                # retained. Compare media SHA to avoid skipping an edited song
+                # merely because its filename or size matches.
+                legacy = legacy_by_source.get(export.canonical_source_path(media))
+                if (not retry_errors_only and legacy
+                        and media.stat().st_size == legacy[1]
+                        and _fingerprint(media) == legacy[0]):
+                    skipped += 1
+                    resumed += 1
+                    review.record(db, media=media, source_root=source_root,
+                                  output_format=output_format,
+                                  source_signature=source_signature,
+                                  status="completed", identity=legacy[2])
+                    continue
                 source_code = media.stem.strip()
                 if not source_code or len(source_code) > 140:
                     raise ValueError("ชื่อเพลงต้นทางไม่สามารถใช้เป็นรหัสได้")
@@ -280,6 +337,11 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 identity = "json-pro/" + source_hash + "/" + output_format + "/" + lyric_hash[:24]
                 if (source_hash, output_format, lyric_hash) in seen or identity in existing:
                     skipped += 1
+                    review.record(db, media=media, source_root=source_root,
+                                  output_format=output_format,
+                                  source_signature=source_signature,
+                                  status="duplicate", reason="เนื้อร้องและไฟล์เพลงซ้ำกับ Catalog ที่ยืนยันแล้ว",
+                                  identity=identity)
                     continue
                 # Allocate after fingerprint deduplication; existing songs never change.
                 code = _next_code(used_codes, code_style, code_length, source_code, code_counters)
@@ -383,26 +445,43 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 export.append_journal(root, record)
                 existing.add(identity)
                 seen.add((source_hash, output_format, lyric_hash))
+                review.record(db, media=media, source_root=source_root,
+                              output_format=output_format,
+                              source_signature=source_signature,
+                              status="completed", identity=identity)
                 created += 1
             except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
                 errors += 1
+                review.record(db, media=media, source_root=source_root,
+                              output_format=output_format,
+                              source_signature=source_signature,
+                              status="error", reason=str(exc)[:500])
                 if len(issues) < 50:
                     issues.append({"name": item["name"], "reason": str(exc)[:200]})
-            checkpoint()
-            if progress is not None:
-                progress(index, known_total, {"created": created, "skipped": skipped,
-                                                "errors": errors})
+            finally:
+                if index % 128 == 0:
+                    db.commit()
+                checkpoint()
+                if progress is not None:
+                    progress(index, known_total, {"created": created, "skipped": skipped,
+                                                    "errors": errors,
+                                                    "resumed": resumed, "deferred": deferred})
     finally:
-        checkpoint(force=True)
+        try:
+            checkpoint(force=True)
+        finally:
+            db.commit()
+            db.close()
     if examined == 0:
         raise ValueError("ไม่พบเพลงที่มีเนื้อร้องพร้อมเวลาในต้นทาง")
     if not created and not skipped and errors:
         raise ValueError("ไม่มีไฟล์ที่ส่งออกสำเร็จ: " +
                          "; ".join(item["reason"] for item in issues[:3]))
     return {"created": created, "skipped": skipped, "errors": errors,
+            "resumed": resumed, "deferred": deferred,
             "incomplete": inspection.get("incompleteCount", len(inspection["incomplete"])),
             "unsupported": inspection.get("unsupportedCount", len(inspection["unsupported"])),
             "total": examined, "output": str(root), "issues": issues[:50],
-            "message": (f"ส่งออก Lyrics JSON สำเร็จ {created} เพลง · ข้ามซ้ำ {skipped}"
-                        f" · ผิดพลาด {errors} · ไม่ครบ {inspection.get('incompleteCount', len(inspection['incomplete']))}"
+            "message": (f"ส่งออก Lyrics JSON สำเร็จ {created} เพลง · ข้ามซ้ำ/มีแล้ว {skipped}"
+                        f" · ต่อจากรุ่นเดิม {resumed} · ERR ค้างทบทวน {deferred} · ผิดพลาดใหม่ {errors} · ไม่ครบ {inspection.get('incompleteCount', len(inspection['incomplete']))}"
                         f" · ปลายทาง {root}")}
