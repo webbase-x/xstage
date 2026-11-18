@@ -76,6 +76,16 @@ def _sqlite_bridge():
     return module
 
 
+def _registry_module():
+    path = Path(__file__).resolve().with_name("song_registry.py")
+    spec = importlib.util.spec_from_file_location("xstage_portable_song_registry", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("ไม่พบโมดูลทะเบียนเพลงหลายเครื่อง")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _safe_rel(value, prefix):
     if not isinstance(value, str) or not value.startswith(prefix + "/"):
         raise ValueError("ตำแหน่งไฟล์เพลงไม่อยู่ในคลังที่รองรับ")
@@ -151,18 +161,15 @@ def _files(source):
 
 
 def _source(source, export):
-    pointer, buckets = export._read_current(source)
-    if not pointer:
-        raise ValueError("ไม่พบ XStageSong/current.json กรุณาสร้างเพลงก่อนส่งออกไป Karaoke PC")
-    records = []
-    for group in buckets.values():
-        records.extend(group.get("songs") or [])
-    if len(records) != pointer.get("songCount"):
-        raise ValueError("Catalog จาก Song Studio มีจำนวนเพลงไม่ตรง หยุดเพื่อป้องกันฐานเสีย")
-    for row in records:
-        if not export.record_is_complete(source, row):
-            raise ValueError("เพลงหรือ Lyrics JSON ไม่ครบ: " + str(row.get("code", ""))[:80])
-    return records
+    """Read a movable source catalog, including indexed or legacy XSK2.
+
+    Song numbers are local aliases; the portable song registry prevents
+    collisions across PCs, USB transfers and independent conversion runs.
+    """
+    rows = _registry_module().source_rows(source, export, include_xsk=True)
+    if not rows:
+        raise ValueError("ไม่มีเพลงที่ตรวจสอบได้ในคลัง XStageSong ต้นทาง")
+    return rows
 
 
 def _existing(root):
@@ -219,7 +226,31 @@ def _pc_row(row, replacements=None):
     return item
 
 
-def _plan_files(source, destination):
+def _selected_files(source, records):
+    """Resolve only referenced media, not every file found on a big drive."""
+    seen = set()
+    for record in records:
+        mapped = _pc_row(record)
+        for name in ("audio", "lyrics", "vocals"):
+            source_rel = (record.get(name) or {}).get("path")
+            dest_rel = (mapped.get(name) or {}).get("path")
+            if not source_rel or not dest_rel:
+                continue
+            if source_rel in seen:
+                continue
+            seen.add(source_rel)
+            if (not isinstance(source_rel, str) or "\\" in source_rel
+                    or source_rel.startswith("/") or ":" in source_rel
+                    or any(p in ("", ".", "..") for p in source_rel.split("/"))):
+                raise ValueError("พาธไฟล์เพลงต้นทางไม่ปลอดภัย")
+            file = source.joinpath(*source_rel.split("/"))
+            if (not file.is_file() or file.is_symlink()
+                    or not file.resolve().is_relative_to(source.resolve())):
+                raise ValueError("เพลงที่เลือกมีไฟล์ต้นทางไม่ครบ: " + source_rel)
+            yield file, Path(dest_rel)
+
+
+def _plan_files(source, destination, records=None):
     """Immutable versioned lyrics preserve the previous published catalog.
 
     Song Studio may correct JSON timestamps after the first export.
@@ -231,7 +262,8 @@ def _plan_files(source, destination):
     copied_bytes = 0
     new_count = versioned = 0
     shared_root = source.resolve() == destination.resolve()
-    for src, rel in _files(source):
+    for src, rel in (_selected_files(source, records)
+                     if records is not None else _files(source)):
         original = destination / rel
         target = original
         # On case-insensitive Windows, source/lyrics and Karaoke/LYRICS can
@@ -252,8 +284,23 @@ def _plan_files(source, destination):
             raise ValueError("พบ symbolic link ในคลัง Karaoke PC: " + str(original))
         if not shared_root and original.is_file() and _hash(original) != _hash(src):
             if "LYRICS" not in rel.parts:
-                raise FileExistsError(
-                    "ไฟล์เสียงชื่อเดิมแต่เนื้อหาเปลี่ยน กรุณาตรวจเพลงก่อนนำเข้า: " + str(original))
+                if records is None:
+                    raise FileExistsError(
+                        "ไฟล์เสียงชื่อเดิมแต่เนื้อหาเปลี่ยน กรุณาตรวจเพลงก่อนนำเข้า: " + str(original))
+                # Different machines can both produce 00001.xsk; retain both
+                # immutable files and record a unique destination media path.
+                variant = rel.with_name(rel.stem + "-asset-" + _hash(src)[:16] + rel.suffix)
+                target = destination / variant
+                replacements[rel.as_posix()] = variant.as_posix()
+                if target.is_symlink() or (target.is_file() and _hash(target) != _hash(src)):
+                    raise FileExistsError("ชื่อไฟล์สำรองชนกับเนื้อหาอื่น: " + str(target))
+                if not target.is_file():
+                    versioned += 1
+                if not target.is_file():
+                    new_count += 1
+                    copied_bytes += src.stat().st_size
+                files.append((src, target))
+                continue
             variant = rel.with_name(rel.stem + "-rev-" + _hash(src)[:16] + rel.suffix)
             target = destination / variant
             replacements[rel.as_posix()] = variant.as_posix()
@@ -269,17 +316,31 @@ def _plan_files(source, destination):
     return files, replacements, new_count, copied_bytes, versioned
 
 
-def inspect(source_root, selected_destination, export, *, _include_plan=False):
+def inspect(source_root, selected_destination, export, *, _include_plan=False,
+            groups=None):
     source = Path(source_root).expanduser().resolve()
+    if source.name.casefold() != "xstagesong":
+        source = source / "XStageSong"
     target = destination_root(selected_destination)
     if target != source and (target.is_relative_to(source) or source.is_relative_to(target)):
         raise ValueError("โฟลเดอร์ปลายทางทับซ้อนพื้นที่สร้างเพลง · เลือก XStageSong เดียวกันหรือแยกคลัง")
-    records = _source(source, export)
+    source_records = _source(source, export)
     existing = _existing(target)
-    files, replacements, missing, bytes_to_copy, versioned = _plan_files(source, target)
+    registry = _registry_module()
+    # Only the import projection receives collision-free codes. Never change
+    # metadata, filenames or published catalogs on the source computer.
+    all_records = registry.assign_target_codes(source_records, existing.values()) if groups is not None else source_records
+    selection = registry.classify(all_records, existing.values(), groups) if groups is not None else None
+    records = selection["selected"] if selection is not None else all_records
+    files, replacements, missing, bytes_to_copy, versioned = _plan_files(
+        source, target, records if groups is not None else None)
     db_path, installed = _sqlite_bridge().database_location(target)
     report = {"source": str(source), "destination": str(target),
-              "songs": len(records), "existingSongs": len(existing),
+              "songs": len(records), "candidateSongs": len(source_records),
+              "groups": (selection or {}).get("counts", {}),
+              "duplicates": (selection or {}).get("duplicates", [])[:25],
+              "conflicts": (selection or {}).get("conflicts", [])[:25],
+              "existingSongs": len(existing),
               "files": len(files), "newFiles": missing,
               "updatedLyrics": versioned,
               "bytesToCopy": bytes_to_copy,
@@ -398,9 +459,14 @@ def portable_catalog(destination, rows, generation):
     }
 
 
-def publish(source_root, selected_destination, export, *, cancelled=None, progress=None):
+def publish(source_root, selected_destination, export, *, cancelled=None, progress=None,
+            groups=None):
     report, records, previous, files, replacements = inspect(
-        source_root, selected_destination, export, _include_plan=True)
+        source_root, selected_destination, export, _include_plan=True, groups=groups)
+    if not records and groups is not None:
+        return {**report, "copied": 0, "reused": 0,
+                "songCount": len(previous), "message":
+                "ไม่มีเพลงใหม่ตามตัวกรอง · คลัง Karaoke PC เดิมไม่เปลี่ยน"}
     source = Path(report["source"])
     dest = Path(report["destination"])
     planned = [_pc_row(row, replacements) for row in records]
@@ -449,6 +515,19 @@ def publish(source_root, selected_destination, export, *, cancelled=None, progre
     portable = portable_catalog(dest, combined.values(), generation)
     portable_path = dest / "DB" / "songs-portable.json"
     _atomic_json(portable_path, portable)
+    if groups is not None:
+        registry = _registry_module()
+        registry.log_import(dest, "pc", source, records, "imported",
+                            "คัดลอกและเผยแพร่ SQLite/Catalog ผ่านแล้ว")
+        # Duplicates remain in a reviewable record; no source/target file is
+        # removed automatically, even after a successful import.
+        all_rows = _source(source, export)
+        duplicate_rows = [r for r in all_rows
+                          if (r.get("audio") or {}).get("path") in
+                          {x["path"] for x in report.get("duplicates", [])}]
+        if duplicate_rows:
+            registry.log_import(dest, "pc", source, duplicate_rows, "duplicate",
+                                "พบไฟล์/เพลงที่มีแล้วในฐานปลายทาง · ไม่ลบไฟล์")
     return {**report, **db_result, "copied": copied, "reused": reused,
             "songCount": len(combined),
             "portableDatabase": str(portable_path),
