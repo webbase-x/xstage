@@ -555,6 +555,12 @@
             <label><input type="checkbox" id="drive-import-allow-new"> อนุญาตสร้างคลัง XStageSong ใหม่ เฉพาะเมื่อยืนยันว่าไม่มีคลังเดิม</label>
             <div class="toolbar"><button id="drive-import-inspect" type="button" class="button ghost">ตรวจเทียบฐาน Drive</button><button id="drive-import-start" type="button" class="button primary">อัปเดต Karaoke Web / APK</button></div>
             <p class="hint" id="drive-import-report" role="status" aria-live="polite">ยังไม่ตรวจฐาน · ต้องเชื่อม Google และมีสิทธิ์เข้าถึงคลัง Drive เดิมก่อน</p>
+            <details id="drive-import-review" class="secondary-feature">
+              <summary>ทบทวนรายการซ้ำ / รหัสชนจากการอัปเดต Google Drive</summary>
+              <div class="toolbar"><button id="drive-import-review-refresh" class="button ghost" type="button">อ่านรายการจากฐาน</button><button id="drive-import-review-prev" class="button ghost" type="button">ก่อนหน้า</button><span id="drive-import-review-page" class="hint">—</span><button id="drive-import-review-next" class="button ghost" type="button">ถัดไป</button></div>
+              <p id="drive-import-review-status" class="hint">รายการนี้มาจากฐานเพลงที่เลือก · ไม่มีการลบเพลงใน Google Drive อัตโนมัติ</p>
+              <div class="table-scroll" role="region" aria-label="รายการเพลงซ้ำ Google Drive"><table class="song-table"><thead><tr><th>ไฟล์เพลง</th><th>สถานะ</th><th>SHA-256 / เหตุผล</th></tr></thead><tbody id="drive-import-review-rows"><tr><td colspan="3">ยังไม่มีรายการ</td></tr></tbody></table></div>
+            </details>
           </article>
 
           <article class="panel">
