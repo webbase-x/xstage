@@ -26,7 +26,8 @@ MAX_MIDI_BYTES = 64 * 1024 * 1024
 
 def source_info(workspace, song_id):
     """Resolve exactly the media registered for this Song ID, never by filename."""
-    core.init(workspace)
+    # The app initializes schema once at startup. Range media requests
+    # must NOT execute SQLite DDL on each seek/scrub of a large video.
     with core.connect(workspace) as db:
         row=db.execute("""SELECT s.id AS song_id,s.code,s.title,s.artist,
                 m.id AS media_id,m.sha256,m.extension,m.bytes,m.stored_path,
