@@ -591,7 +591,14 @@ def stats(workspace):
                             ("lyrics","xstage_lyric_versions"),("exports","xstage_exports")):
             counts[label]=db.execute("SELECT count(*) FROM "+table).fetchone()[0]
         counts["songs_with_lyrics"]=db.execute(
-            "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1").fetchone()[0]
+            "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1 AND timing_status!='incomplete'").fetchone()[0]
+        counts["songs_partial_lyrics"]=db.execute(
+            "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1 AND timing_status='incomplete'").fetchone()[0]
+        counts["songs_draft_lyrics"]=db.execute(
+            """SELECT COUNT(*) FROM xstage_lyric_drafts d
+               WHERE NOT EXISTS (SELECT 1 FROM xstage_lyric_versions v
+                  WHERE v.song_id=d.song_id AND v.is_current=1 AND v.timing_status!='incomplete')"""
+        ).fetchone()[0]
         counts["songs_without_lyrics"]=max(0,counts["songs"]-counts["songs_with_lyrics"])
         counts["songs_estimated_timing"]=db.execute(
             "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1 AND timing_status='estimated'"
@@ -609,7 +616,8 @@ def import_issues(workspace, limit=80):
                        i.created_at,b.source_root
                    FROM xstage_import_items i
                    JOIN xstage_import_batches b ON b.id=i.batch_id
-                   WHERE i.outcome IN ('error','lyrics-error','timing-incomplete')
+                   WHERE i.outcome IN ('error','lyrics-error','timing-incomplete',
+                                       'partial-lyrics','untimed-lyrics','missing-lyr')
                    ORDER BY i.id DESC LIMIT ?""",
                    (max(1,min(int(limit),250)),)).fetchall()
         return [dict(row) for row in rows]
@@ -832,6 +840,8 @@ def build_song(workspace,song_id):
         version=db.execute("""SELECT * FROM xstage_lyric_versions
           WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
         if not version: raise ValueError("เพลงนี้ยังไม่มีเนื้อร้องพร้อมเวลา · ยังสร้าง Karaoke ไม่ได้")
+        if version["timing_status"]=="incomplete":
+            raise ValueError("เพลงนี้มีเนื้อร้องบางส่วนแต่ CUR ยังไม่ครบ · ตรวจสอบเวลาปาดสีก่อนสร้าง XMID")
         lines=get_version_lines(db,version["id"])
         meta=metadata_bytes(pair,version,lines)
         # Do not require or make a second original-file copy. Resolve the
