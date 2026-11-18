@@ -17,6 +17,7 @@ import threading
 import unicodedata
 import uuid
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -65,6 +66,7 @@ def root_folder(workspace):
 def db_path(workspace):
     return root_folder(workspace) / "DB" / "xstage_plus.sqlite3"
 
+@contextmanager
 def connect(workspace):
     path = db_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,7 +75,11 @@ def connect(workspace):
     c.execute("PRAGMA foreign_keys=ON")
     c.execute("PRAGMA busy_timeout=25000")
     c.execute("PRAGMA journal_mode=WAL")
-    return c
+    try:
+        with c:
+            yield c
+    finally:
+        c.close()
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS xstage_media(
@@ -327,13 +333,11 @@ def import_folder(workspace,source,progress=None,cancel=None):
                     title=path.stem
                     artist=""
                     song_id=uuid.uuid4().hex
+                    seq=db.execute("SELECT COALESCE(MAX(code),0)+1 FROM xstage_songs").fetchone()[0]
                     db.execute("""INSERT INTO xstage_songs
                      (id,code,media_id,title,artist,original_code,created_at)
                      VALUES (?,?,?,?,?,?,?)""",
-                     (song_id,None,media_id,title,artist,path.stem,now()))
-                    # code receives stable SQLite sequence only after row insert.
-                    seq=db.execute("SELECT rowid FROM xstage_songs WHERE id=?",(song_id,)).fetchone()[0]
-                    db.execute("UPDATE xstage_songs SET code=? WHERE id=?",(seq,song_id))
+                     (song_id,seq,media_id,title,artist,path.stem,now()))
                     totals["files_new"]+=1
                     song=db.execute("SELECT * FROM xstage_songs WHERE id=?",(song_id,)).fetchone()
                     media=db.execute("SELECT * FROM xstage_media WHERE id=?",(media_id,)).fetchone()
@@ -354,7 +358,14 @@ def import_folder(workspace,source,progress=None,cancel=None):
                         _,new=insert_version(db,song,media,doc,source_sig,
                             "NCN" if comps.get(".lyr") and comps.get(".cur") else
                             "LRC" if comps.get(".lrc") else "KAR")
-                        if new: totals["lyrics_new"]+=1;outcome="new-lyrics"
+                        if new:
+                            totals["lyrics_new"]+=1
+                            outcome="new-lyrics"
+                            meta=doc.get("metadata") or {}
+                            if song["title"]==song["original_code"] and meta.get("title"):
+                                db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
+                                           (str(meta["title"])[:255],
+                                            str(meta.get("artist") or "")[:255],song_id))
                     elif doc and not valid_lines(doc):
                         message="เนื้อร้องหรือ CUR ยังจับเวลาไม่ครบ · เก็บสื่อไว้รอตรวจ"
                         outcome="timing-incomplete"
