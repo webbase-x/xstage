@@ -58,6 +58,7 @@
     const result=await api("/api/status");
     for(const key of ["songs","media","lyrics","exports"])
       text("stat-"+key,number(result[key]));
+    text("stat-with-text",number(result.songs_with_text));
     text("stat-ready",number(result.songs_with_lyrics));
     text("stat-pending",number(result.songs_without_lyrics));
     const estimated=number(result.songs_estimated_timing);
@@ -94,7 +95,7 @@
       const row=document.createElement("tr");
       const format=song.extension.toUpperCase();
       const ready=Boolean(song.version_id&&song.timing_status!=="incomplete");
-      const available=Boolean(song.version_id);
+      const available=Boolean(song.version_id||song.draft_reason);
       const timingLabel=ready? song.timing_status:
         song.timing_status==="incomplete"?"เนื้อร้องบางส่วน · CUR ไม่ครบ":
         song.draft_reason?"เก็บเนื้อร้องแล้ว · รอ Timing":"ยังไม่พบเนื้อร้องพร้อมเวลา";
@@ -160,13 +161,21 @@
       for(const line of data.lines){
         const element=document.createElement("div");element.className="lyric-line";
         const timing=document.createElement("code");
-        timing.textContent=Number(line.start).toFixed(2)+" – "+Number(line.end).toFixed(2)+"s";
+        timing.textContent=line.start===null||line.end===null?
+          "รอ Timing":Number(line.start).toFixed(2)+" – "+Number(line.end).toFixed(2)+"s";
         const details=document.createElement("div");
         const words=document.createElement("p");words.textContent=line.text;
         const note=document.createElement("small");
         note.textContent="บรรทัด "+(line.position+1)+" · "+line.timing+
                          " · จุดปาดสี "+line.cues.length+" จุด";
         details.append(words,note);element.append(timing,details);list.append(element);
+      }
+      if(data.draft&&data.version.timing_status==="incomplete"){
+        const section=document.createElement("div");section.className="lyric-draft-summary";
+        const title=document.createElement("strong");
+        title.textContent="เนื้อร้องทั้งหมดจาก LYR · บางช่วงยังไม่มีเวลาปาดสี";
+        const raw=document.createElement("pre");raw.textContent=data.draft.text;
+        section.append(title,raw);list.append(section);
       }
       $("lyrics-dialog").showModal();
     }catch(error){toast(error.message,true);}
