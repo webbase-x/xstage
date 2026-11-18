@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror Android PC"
-#define MyAppVersion "1.0.1"
-#define MyAppBuild "1002"
+#define MyAppVersion "1.0.2"
+#define MyAppBuild "1003"
 
 [Setup]
 SourceDir=..\..
@@ -18,6 +18,7 @@ OutputBaseFilename=X-Stage-Mirror-Android-PC-v{#MyAppVersion}-build{#MyAppBuild}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=mirror-android-pc\app.ico
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest

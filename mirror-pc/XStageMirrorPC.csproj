@@ -7,9 +7,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>XStageMirrorPC</AssemblyName>
     <RootNamespace>XStageMirrorPC</RootNamespace>
-    <Version>0.1.2</Version>
-    <FileVersion>0.1.2.103</FileVersion>
+    <Version>0.1.3</Version>
+    <FileVersion>0.1.3.104</FileVersion>
     <ApplicationTitle>X-Stage Mirror PC</ApplicationTitle>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <PublishAot>false</PublishAot>
