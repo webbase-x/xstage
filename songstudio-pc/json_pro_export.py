@@ -209,6 +209,10 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
         raise ValueError("กรุณาเลือกต้นทางและปลายทางที่เป็นโฟลเดอร์ปกติ")
     root = export.songs_root(destination)
     review = _review_module()
+    spec = importlib.util.spec_from_file_location(
+        "xstage_song_registry", Path(__file__).with_name("song_registry.py"))
+    registry = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(registry)
     src_real = source.resolve()
     root_real = root.resolve()
     if src_real == root_real or src_real in root_real.parents or root_real in src_real.parents:
@@ -444,6 +448,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                                              "outputFormat": output_format,
                                              "lyricsSha256": lyric_hash}}
                 export.append_journal(root, record)
+                registry.register_catalog_row(root, record)
                 existing.add(identity)
                 seen.add((source_hash, output_format, lyric_hash))
                 review.record(db, media=media, source_root=source_root,
