@@ -1815,6 +1815,8 @@ def build_xsk(rows, mode, options, *, progressive=False):
                   "issues": issues[-50:],
                   "message": (f"สร้าง XSK {created} เพลง · ซ้ำ/มีแล้ว {skipped} · ใช้ผลเดิม {resumed}"
                               f" · ค้างทบทวน {deferred} · ไม่พร้อมใหม่ {not_ready} · ERR ใหม่ {errors}")}
+        if not progressive and not created and not skipped:
+            raise ValueError("ไม่มีเพลงที่สร้างสำเร็จ · " + "; ".join(issues[:3]))
         return result
     finally:
         review_db.commit()
