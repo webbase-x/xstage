@@ -69,11 +69,22 @@ def _find_ci(folder: Path, name: str) -> Path | None:
 
 
 @lru_cache(maxsize=1024)
-def _file_names(folder: Path) -> dict[str, Path]:
+def _file_names_at_stamp(folder: Path, mtime_ns: int, ctime_ns: int) -> dict[str, Path]:
+    # Cache by directory revision rather than permanently by path. New NCN
+    # LYR/CUR companions created after the first song must become visible.
     try:
-        return {p.name.casefold(): p for p in folder.iterdir() if p.is_file()}
+        return {p.name.casefold(): p for p in folder.iterdir()
+                if p.is_file() and not p.is_symlink()}
     except OSError:
         return {}
+
+
+def _file_names(folder: Path) -> dict[str, Path]:
+    try:
+        stat = folder.stat()
+    except OSError:
+        return {}
+    return _file_names_at_stamp(folder, stat.st_mtime_ns, stat.st_ctime_ns)
 
 
 def resolve_companions(midi: Path, index: dict | None = None, *,

@@ -154,7 +154,7 @@ assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown',
 assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
 assert.equal((storefront.match(/data-device-app=/g)||[]).length,10,'all ten cards need device-compatibility hints');
-assert.ok(storefront.includes('storefront-device.js?brand=7'),'device guidance must be loaded before storefront controller');
+assert.ok(/storefront-device\.js\?brand=[1-9]\d*/.test(storefront) && storefront.indexOf('storefront-device.js') < storefront.indexOf('storefront.js'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
 assert.ok(storefront.includes('data-download-app="mirror-ios-pc"')&&storefront.includes('data-download-app="mirror-android-pc"'),'both standalone Windows mirror apps must have separate download actions');
 assert.ok(storefrontScript.includes('mirror-ios-pc-preview-latest.json')&&storefrontScript.includes('mirror-android-pc-preview-latest.json'),'both standalone receiver apps must check their own latest release feeds');
