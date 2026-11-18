@@ -28,6 +28,7 @@ jobs:
           python3 -m compileall -q songstudio-pc windows-pc/source/karaoke
           PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_pc.py' -q
           PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_pc_export.py' -q
+          PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_multi_import.py' -q
           PYTHONPATH=windows-pc/source python3 -m unittest discover -s windows-pc/source/tests -p 'test_songstudio_audio.py' -q
           PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_drive_layout.py' -q
           PYTHONPATH=scripts python3 -m unittest discover -s scripts -p 'test_songstudio_online_publish.py' -q
