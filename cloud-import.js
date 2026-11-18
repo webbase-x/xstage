@@ -36,6 +36,12 @@ function pathFor(code,kind,role,name){
   const video=['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(suffix);
   if(suffix==='sf2'||suffix==='sf3')return ['SOUNDFONT',suffix.toUpperCase(),name];
   if(suffix==='xsk')return ['MIDI','XSK',bucket,name];
+  if(core.xmediaExtensions?.includes(suffix)){
+    if(suffix==='xmid')return ['MIDI','XMID',bucket,name];
+    if(['xmp4','xwebm','xmkv','xavi','xmpg','xmpeg','xdat','xvob','xmov','xwmv','xflv'].includes(suffix))
+      return ['VIDEO',suffix.toUpperCase(),bucket,name];
+    return ['AUDIO',suffix.toUpperCase(),bucket,name];
+  }
   if(suffix==='kar')return ['MIDI','KAR',bucket,name];
   if(suffix==='mid'||suffix==='midi')
     return ['MIDI','MID','SONG',bucket,name];
@@ -423,7 +429,7 @@ class Importer {
     const editor=this.videoEditor;
     const pending=editor?.pendingCount()||0;
     const ready=this.plan.songs.length-pending+this.plan.midis.length+
-      this.plan.xsks.length;
+      this.plan.xsks.length+this.plan.xmedias.length;
     this.dom.ready.textContent=ready.toLocaleString('th-TH');
     this.dom.blocked.textContent=(this.plan.blocked.length+pending).toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,6).map(x=>x.key+' · '+x.reason);
@@ -436,7 +442,7 @@ class Importer {
     const approvedVideos=this.videoEditor?.eligibleCount()||0;
     const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
     const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+
-      this.plan.xsks.length+this.plan.fonts.length)>0;
+      this.plan.xsks.length+this.plan.xmedias.length+this.plan.fonts.length)>0;
     this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
@@ -510,7 +516,7 @@ class Importer {
         :' (เบราว์เซอร์ไม่ได้ส่งโครงสร้างโฟลเดอร์ · ตรวจสอบชุดเพลงให้ครบก่อนนำเข้า)');
     this.dom.total.textContent=this.plan.files.toLocaleString('th-TH');
     this.dom.ready.textContent=(this.plan.songs.length+this.plan.midis.length+
-      this.plan.xsks.length).toLocaleString('th-TH');
+      this.plan.xsks.length+this.plan.xmedias.length).toLocaleString('th-TH');
     this.dom.fonts.textContent=this.plan.fonts.length.toLocaleString('th-TH');
     this.dom.blocked.textContent=this.plan.blocked.length.toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,7).map(x=>x.key+' · '+x.reason);
@@ -518,14 +524,14 @@ class Importer {
     this.updateVideoStats();
     this.progress(0,1);
     this.status('ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์');
-    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length});
+    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.xsks.length+this.plan.xmedias.length+this.plan.fonts.length});
     this.refreshButtons();
   }
   async save(extra={}){
     const auth=this.session();
     if(!auth?.sub)return;
     const data={version:1,label:this.dom.source.textContent,updatedAt:Date.now(),
-      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0),
+      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0)+(this.plan?.xsks.length||0)+(this.plan?.xmedias.length||0),
       fonts:this.plan?.fonts.length||0,videoEdits:this.videoEditor?.exportEdits()||[],...extra};
     if(this.folderHandle)data.handle=this.folderHandle;
     this.saved=data;await checkpoint(auth.sub,data);
@@ -595,6 +601,8 @@ class Importer {
     try{
       if(this.plan.xsks.length&&!scope.XStageXsk)
         fail('ยังไม่โหลดตัวอ่าน XSK2 ของเบราว์เซอร์');
+      if(this.plan.xmedias.length&&!scope.XStageXMedia)
+        fail('ยังไม่โหลดตัวอ่าน X-Media ของเบราว์เซอร์');
       this.status('กำลังตรวจคลัง XStageSong และ current.json บน Google Drive…');
       const rootQuery="'root' in parents and name='XStageSong' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
@@ -636,7 +644,8 @@ class Importer {
         ...this.plan.songs.filter(x=>!x.video||this.videoEditor?.get(x))
           .map(x=>({...x,isFont:false,isMidi:false})),
         ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true})),
-        ...this.plan.xsks.map(x=>({...x,isFont:false,isMidi:false,isXsk:true}))];
+        ...this.plan.xsks.map(x=>({...x,isFont:false,isMidi:false,isXsk:true})),
+        ...this.plan.xmedias.map(x=>({...x,isFont:false,isMidi:false,isXMedia:true}))];
       const pendingVideos=this.videoEditor?.pendingCount()||0;
       if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
         ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
@@ -705,7 +714,40 @@ class Importer {
         this.check();
         let item=originalItem;
         try{
-          if(item.isXsk){
+          if(item.isXMedia){
+            const opened=await scope.XStageXMedia.inspectMetadata(item.file);
+            const code=String(opened.code||'').trim().slice(0,140);
+            const identity=core.songIdentity(opened.document,code);
+            if(!code||!identity.identityComplete)
+              throw Error('X-Media: รหัสเพลง ชื่อเพลง หรือศิลปินจริงไม่ครบ');
+            const wholeHash=await core.hashBlob(item.file,()=>this.check());
+            const candidates=byCode.get(code.toLowerCase())||[];
+            const same=candidates.find(x=>String(x.xmedia?.mediaSha256||'').toLowerCase()===opened.mediaSha256);
+            if(same&&String(same.xmedia?.metadataSha256||'').toLowerCase()===opened.metadataSha256){
+              this.stats.duplicates++;finished++;show('ข้าม X-Media ซ้ำ: '+code);continue;
+            }
+            if(candidates.length&&!same){
+              this.stats.conflicts++;finished++;
+              show('รหัส X-Media ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;
+            }
+            const suffix=core.ext(item.file.name),name=safeName(code)+'-'+wholeHash.slice(0,16)+'.'+suffix;
+            const packed=await uploadMedia(item.file,code,pathFor(code,suffix,'',name).slice(0,-1),name,
+              'application/octet-stream',wholeHash,0,1);
+            const ident=same?.webSongId||('browser/xmedia/'+opened.mediaSha256);
+            const record={...(same||{}),webSongId:ident,code,title:identity.title,artist:identity.artist,
+              sourceFormat:opened.format,lyricsMode:'timed',
+              xmedia:{...packed,mediaSha256:opened.mediaSha256,metadataSha256:opened.metadataSha256,
+                mediaKind:opened.mediaKind,mediaExtension:opened.mediaExtension}};
+            delete record.audio;delete record.video;delete record.originalVideo;delete record.midi;
+            delete record.lyrics;delete record.xsk;delete record.ncnSource;
+            if(same){
+              const oldCode=String(same.code||'').toLowerCase();
+              byCode.set(oldCode,(byCode.get(oldCode)||[]).filter(x=>x.webSongId!==ident));
+            }
+            rows.set(ident,record);addMaps(record);revisions.push(record);
+            this.stats[same?'updated':'newSongs']++;
+            if(revisions.length>=25)await publish();
+          }else if(item.isXsk){
             // Keep the original XSK2 on Drive. Read only its timed JSON
             // metadata now. Extract and SHA-256-verify the MIDI at play time,
             // or progressively for the first song waiting in the queue.
@@ -1018,7 +1060,7 @@ class Importer {
         'หยุดงานแล้ว · ไฟล์ที่ส่งสำเร็จยังอยู่ · เปิดใหม่และกดทำต่อ':
         'หยุดเพราะข้อผิดพลาด: '+(error.message||error)+' · ตรวจแล้วกดทำต่อ');
       await this.save({status:'paused',total:this.plan.songs.length+
-        this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length,
+        this.plan.midis.length+this.plan.xsks.length+this.plan.xmedias.length+this.plan.fonts.length,
         error:aborted(error)?'paused':String(error.message||error)});
     }finally{
       this.running=false;this.controller=null;this.refreshButtons();

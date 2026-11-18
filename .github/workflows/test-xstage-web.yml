@@ -28,3 +28,26 @@ jobs:
           node-version: "20"
       - name: X-Stage regression
         run: npm test
+
+  karaoke-xmedia:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: X-Media browser and importer contracts
+        run: |
+          node scripts/xmedia-browser-test.mjs
+          node scripts/cloud-import-test.mjs
+          node scripts/cloud-import-contract-test.mjs
+          node --check xmedia-browser.js
+          node --check cloud-import.js
+          node --check app.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Karaoke PC X-Media compatibility
+        env:
+          PYTHONPATH: windows-pc/source
+        run: python -m unittest windows-pc/source/tests/test_xmedia_playback.py

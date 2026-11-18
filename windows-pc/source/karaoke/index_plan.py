@@ -31,6 +31,21 @@ class SongPlan:
         examined=0
         if not Path(folder).is_dir():
             self.errors.append('ไม่พบโฟลเดอร์: '+str(folder));return
+        # Song Studio Plus exports are indexed from its read-only xstage_* SQLite
+        # first. os.walk still runs afterwards so legacy files in the same root
+        # remain visible and DB omissions never hide established formats.
+        try:
+            from .plus_catalog import discover
+            plus_rows, plus_warnings = discover(folder, allowed)
+            for plus_path, hint in plus_rows:
+                self.add_hint(plus_path, hint)
+            self.errors.extend(plus_warnings)
+            if events and plus_rows:
+                events(dict(type='notice',ok=True,path=str(folder),
+                            title='Song Studio Plus SQLite',
+                            note=f'อ่าน X-Media จากฐานใหม่ {len(plus_rows):,} เพลง'))
+        except (OSError, ValueError) as error:
+            self.errors.append('อ่านฐาน Song Studio Plus ไม่สำเร็จ: '+str(error))
         def onerror(error):self.errors.append(str(error))
         for root,dirs,files in os.walk(folder,followlinks=False,onerror=onerror):
             if cancelled and cancelled.is_set():break

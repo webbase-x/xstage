@@ -15,7 +15,7 @@ from pathlib import Path
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
 from . import __version__, DISPLAY_NAME
-from .library import (SongLibrary, SongQueue, QueueItem, SearchCancelled, MIDI_EXT, VIDEO_EXT,
+from .library import (SongLibrary, SongQueue, QueueItem, SearchCancelled, MIDI_EXT, VIDEO_EXT, XMEDIA_EXT,
                       SUPPORTED, read_json, write_json, read_json_snapshot, JSON_UNSET, PlaylistImportError, scan_folder)
 from .lyrics import Lyrics, parse_lrc, decode_text, sidecar_lyrics
 from .playback import MidiPlayer, MediaPlayer, WavePlayer, WinMidi
@@ -35,14 +35,18 @@ def timestamp(seconds):
 
 
 def playback_lyrics(settings, path, lyrics, stored_path):
-    sidecar = sidecar_lyrics(path)
-    if sidecar:
-        lyrics = sidecar
-    else:
-        from .pc_xstagesong import source_lyrics
-        studio_lyrics = source_lyrics(path)
-        if studio_lyrics is not None:
-            lyrics = studio_lyrics
+    # X-Media is self-contained: do not let an accidental same-stem LRC/JSON
+    # silently replace the embedded, SHA-verified timing. Explicit user lyric
+    # overrides below still remain available.
+    if Path(path).suffix.lower() not in XMEDIA_EXT:
+        sidecar = sidecar_lyrics(path)
+        if sidecar:
+            lyrics = sidecar
+        else:
+            from .pc_xstagesong import source_lyrics
+            studio_lyrics = source_lyrics(path)
+            if studio_lyrics is not None:
+                lyrics = studio_lyrics
     overrides = settings.get("lyric_files", {})
     if isinstance(overrides, dict) and stored_path in overrides:
         lyric_path = Path(overrides[stored_path])
@@ -963,7 +967,14 @@ class KaraokeApp(tk.Tk):
             self.lyrics = Lyrics()
             self.show_main_media(False)
             path = Path(song["path"])
-            video = path.suffix.lower() in VIDEO_EXT
+            play_path = path
+            xmedia_lyrics = None
+            if path.suffix.lower() in XMEDIA_EXT and path.suffix.lower() != '.xmid':
+                from .xmedia_reader import materialize_media
+                from .lyrics import timed_json_lyrics
+                play_path, xmedia_document = materialize_media(path, self.data_dir / 'xmedia-cache')
+                xmedia_lyrics = timed_json_lyrics(xmedia_document)
+            video = play_path.suffix.lower() in VIDEO_EXT
             if path.suffix.lower() in MIDI_EXT:
                 output = None
                 if not prepared and self.settings.get('synth_backend') == 'bass':
@@ -979,12 +990,12 @@ class KaraokeApp(tk.Tk):
                 self.key_box.configure(state="normal")
             else:
                 from .pcm_player import PcmPlayer,available
-                use_pcm=not video and path.suffix.lower() in ('.wav','.mp3') and available(self.home/'native'/'x64')
+                use_pcm=not video and play_path.suffix.lower() in ('.wav','.mp3') and available(self.home/'native'/'x64')
                 from .studio_audio import FALLBACK_EXT, SongStudioAudioPlayer
-                studio_format = not video and path.suffix.lower() in FALLBACK_EXT
+                studio_format = not video and play_path.suffix.lower() in FALLBACK_EXT
                 new_engine = (prepared[0] if prepared else
                               PcmPlayer(self.home/'native'/'x64') if use_pcm else
-                              WavePlayer() if path.suffix.lower() == ".wav" else
+                              WavePlayer() if play_path.suffix.lower() == ".wav" else
                               SongStudioAudioPlayer() if studio_format else MediaPlayer())
                 if studio_format and not prepared:
                     self.status_var.set('กำลังเตรียมเสียงจาก Song Studio · กำลังตรวจตัวถอดรหัส Windows/FFmpeg')
@@ -994,9 +1005,9 @@ class KaraokeApp(tk.Tk):
                     self.update_idletasks()
                 handle = self.stage_video.winfo_id() if video and self.stage and self.stage.winfo_exists() else self.video_frame.winfo_id()
                 phase = 'file'
-                if not prepared:new_engine.load(path, handle, video)
+                if not prepared:new_engine.load(play_path, handle, video)
                 phase = 'system'
-                lyrics = Lyrics()
+                lyrics = xmedia_lyrics or Lyrics()
                 if use_pcm:
                     new_engine.set_key(item.key);self.key_box.configure(state="normal")
                 else:
@@ -1043,10 +1054,10 @@ class KaraokeApp(tk.Tk):
             medley=medley_options(self.settings)
             if session(item):
                 if not prepared:
-                    scan_tail = path.suffix.lower() != '.mp3'
-                    new_engine.medley_bounds = source_bounds(new_engine, path, scan_tail=scan_tail)
+                    scan_tail = play_path.suffix.lower() != '.mp3'
+                    new_engine.medley_bounds = source_bounds(new_engine, play_path, scan_tail=scan_tail)
                     if not scan_tail and new_engine.medley_bounds is not None:
-                        new_engine.medley_tail_path = path
+                        new_engine.medley_tail_path = play_path
                 start = start_at_trimmed_edge(new_engine, lyrics, offset)
                 if start:
                     record(self, 'medley_head_trim', song_id=item.song_id, seconds=round(start, 3))

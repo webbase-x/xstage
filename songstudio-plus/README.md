@@ -53,8 +53,10 @@ Only the person listening can choose **ฟังแล้วตรง**, **พ�
 **ยังต้องตรวจ**, optionally adding a note. Those actions enter the persistent
 `xstage_swipe_reviews` history, per Song ID and Lyrics Version ID. A file
 without sufficient timing may be listened to but cannot be exported by the
-pre-build shortcut. This is a source-file audition, **not** X-media container
-playback; Karaoke PC/Web/Android have not been changed to decode X-media v1.
+pre-build shortcut. This preview pane remains a source-file audition, **not** X-media container
+playback. X-Media v1 output is decoded by Karaoke Web/Android v1.0.120
+Build 1120 and by the current Karaoke PC compatibility source; older Karaoke
+builds remain unchanged and may not understand X-Media.
 
 **NCN import rule:** an NCN MID with missing/empty matching LYR or CUR is
 skipped *before* calculating the MID SHA-256. A skip reason is recorded; no
@@ -191,7 +193,7 @@ cannot open a Plus container simply by renaming it.
 
 - No automatic speech-to-text / vocal alignment for MP3/M4A/MP4 yet.
 - No full real-time MIDI/SoundFont XMID playback engine yet.
-- Karaoke PC/Web/APK do not yet support X-Media v1.
+- X-Media v1 requires Karaoke Web/Android v1.0.120 Build 1120 or a Karaoke PC build containing the current compatibility layer; older player builds remain unsupported.
 - No native merge of a separate Plus SQLite file from another PC yet;
   importing source folders from many PCs is supported.
 - No signed Windows installer or automatic updating yet.

@@ -109,6 +109,27 @@ function soundfontFixture(){
   const prefix=Buffer.alloc(8);prefix.write('RIFF');prefix.writeUInt32LE(body.length,4);
   return Buffer.concat([prefix,body]);
 }
+function xmediaFixture({code,title,artist,extension='xmp3'}){
+  const packedText=value=>{const raw=Buffer.from(String(value),'utf8'),head=Buffer.alloc(4);
+    head.writeUInt32LE(raw.length);return Buffer.concat([head,raw]);};
+  const number=value=>{const raw=Buffer.alloc(8);raw.writeDoubleLE(value);return raw;};
+  const lines=Buffer.alloc(4);lines.writeUInt32LE(1);
+  const cues=Buffer.alloc(4);cues.writeUInt32LE(2);
+  const metadata=Buffer.concat([
+    packedText('song-'+code),packedText(code),packedText('version-'+code),
+    packedText(title),packedText(artist),packedText('complete'),lines,
+    number(1),number(4),packedText('สวัสดีจาก X-Media'),packedText('complete'),cues,
+    number(1),number(.5),packedText('สวัสดี'),
+    number(1.5),number(1),packedText('จาก X-Media')
+  ]);
+  const media=Buffer.concat([Buffer.from('ID3'),Buffer.alloc(8192,0x4d)]);
+  const mediaSha=createHash('sha256').update(media).digest();
+  const metadataSha=createHash('sha256').update(metadata).digest();
+  const header=Buffer.alloc(92);header.write('XSTGPLS1',0,'ascii');header.writeUInt32LE(1,8);
+  header.writeBigUInt64LE(BigInt(metadata.length),12);header.writeBigUInt64LE(BigInt(media.length),20);
+  mediaSha.copy(header,28);metadataSha.copy(header,60);
+  return {name:code+'.'+extension,packed:Buffer.concat([header,metadata,media]),mediaSha:mediaSha.toString('hex')};
+}
 fs.writeFileSync(path.join(dir,'X100.mp3'),Buffer.concat([Buffer.from('ID3'),Buffer.alloc(4096)]));
 fs.writeFileSync(path.join(dir,'X100.lrc'),'[ti:ทดสอบเว็บ]\n[ar:ศิลปินทดสอบ]\n[00:01.00]สวัสดี\n[00:04.00]ขอบคุณ\n');
 const m4a=Buffer.alloc(4096);m4a.write('ftyp',4,'ascii');
@@ -124,6 +145,8 @@ fs.writeFileSync(path.join(dir,'J200.json'),JSON.stringify({
 }));
 fs.writeFileSync(path.join(dir,'General.sf2'),soundfontFixture());
 fs.writeFileSync(path.join(dir,'Unconverted.mid'),Buffer.from('MThd0000'));
+const xmedia=xmediaFixture({code:'M600',title:'เพลง X-Media จริง',artist:'ศิลปิน X-Media'});
+fs.writeFileSync(path.join(dir,xmedia.name),xmedia.packed);
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try{
   const context=await browser.newContext({serviceWorkers:'block'});
@@ -145,7 +168,8 @@ try{
   // a real browser before proceeding into the preserved karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#intro-title').waitFor();
-  assert.equal(await page.locator('.app-card').count(),10,'storefront displays ten supported app entries');
+  const storefrontCount=await page.locator('.app-card').count();
+  assert.equal(storefrontCount,11,'storefront displays all currently supported app entries');
   // Legacy source query must not turn a TV browser into the Karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/?source=android-tv',
                   {waitUntil:'domcontentloaded'});
@@ -155,11 +179,11 @@ try{
   await page.locator('#intro-title').waitFor();
 
   const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
-  assert.equal(logoSources.length,10,'all ten app entries must have a visual identity');
-  assert.equal(new Set(logoSources).size,10,'each X-Stage application must have a distinct icon asset');
+  assert.equal(logoSources.length,storefrontCount,'all app entries must have a visual identity');
+  assert.equal(new Set(logoSources).size,storefrontCount,'each X-Stage application must have a distinct icon asset');
 
   await page.locator('#device-advice-title').waitFor();
-  assert.equal(await page.locator('[data-device-app]').count(),10,'all ten apps expose device compatibility');
+  assert.equal(await page.locator('[data-device-app]').count(),storefrontCount,'all current apps expose device compatibility');
   const iphoneGuidance=await page.evaluate(()=>{
     const api=window.XStageDeviceGuide;
     const p=api.detect({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',platform:'iPhone'});
@@ -170,7 +194,7 @@ try{
   assert.equal(iphoneGuidance.windows.level,'other','iOS users must not be offered Windows PC installation as compatible');
 
   assert.equal(await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.every(n=>n.complete&&n.naturalWidth>0)),true,
-    'ten unique app icons must load in the real browser');
+    'all current app icons must load in the real browser');
 
   assert.match(await page.locator('#intro-title').textContent(),/หนึ่งเวที/);
   assert.equal(await page.locator('.new-wordmark img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
@@ -178,7 +202,7 @@ try{
   assert.equal(await page.locator('.brand-hero-insignia img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
     'new X-Stage Apps icon must load in browser');
   await page.locator('[data-filter="studio"]').click();
-  assert.equal(await page.locator('.app-card:visible').count(),2,'studio filter must expose only two apps');
+  assert.equal(await page.locator('.app-card:visible').count(),3,'studio filter must expose the three current Studio apps');
   await page.locator('[data-filter="all"]').click();
   await page.locator('.app-card[data-app="studio-pc"] .app-detail-link').click();
   await page.locator('#app-detail:not([hidden])').waitFor();
@@ -191,12 +215,18 @@ try{
     'non-Windows viewers must be guided to transfer the ZIP to Windows');
   await page.locator('#detail-back').click();
   await page.locator('#catalog:not([hidden])').waitFor();
-  console.log('PASS: X-Stage Apps premium brand, 10-app catalog, filters, deep-linked details, and verified download CTA');
+  console.log('PASS: X-Stage Apps premium brand, current app catalog, filters, deep-linked details, and verified download CTA');
 
   // Simulate the verified direct-download feed before the binary is mirrored by CI.
   // Android TV/TrueID browsers must never be forced into a GitHub popup.
   const mirrorFeed=JSON.parse(fs.readFileSync(path.join(root,'mirror-tv/test-latest.json'),'utf8'));
   const mirrorName=mirrorFeed.file;
+  // Force the fallback branch for this scenario. Production Mirror TV may be
+  // newer and use its verified GitHub Release URL; that is tested elsewhere.
+  await page.route('**/mirror-tv/latest.json',route=>route.fulfill({
+    status:200,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'},
+    body:JSON.stringify({available:false,channel:'production'})
+  }));
   await page.route('**/mirror-tv/test-latest.json',route=>route.fulfill({
     status:200,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'},
     body:JSON.stringify({...mirrorFeed,direct_download_available:true,
@@ -215,6 +245,7 @@ try{
   const quick=page.locator('[data-download-app="mirror-tv"]');
   assert.equal(await quick.getAttribute('hidden'),null,'Mirror TV card must display a direct APK action');
   await page.unroute('**/mirror-tv/test-latest.json');
+  await page.unroute('**/mirror-tv/latest.json');
   console.log('PASS: TrueID/Android TV same-origin APK navigation and visible card download');
 
   await page.goto('http://127.0.0.1:'+port+'/karaoke.html',{waitUntil:'domcontentloaded'});
@@ -222,7 +253,7 @@ try{
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='2');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
   assert.equal(await page.locator('#cloud-import-fonts').textContent(),'1');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'3',
     'Two unreviewed videos must not silently become embedded karaoke');
@@ -234,14 +265,14 @@ try{
   await page.locator('#cloud-import-video-album').fill('อัลบั้มทดสอบ');
   await page.locator('#cloud-import-video-mode').selectOption('embedded');
   await page.click('#cloud-import-video-save');
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
   await videoPick.selectOption(await videoPick.locator('option',{hasText:'A500.avi'}).getAttribute('value'));
   await page.locator('#cloud-import-video-title').fill('วิดีโอ AVI ไม่มีเนื้อร้องฝัง');
   await page.locator('#cloud-import-video-artist').fill('นักร้อง AVI');
   await page.locator('#cloud-import-video-mode').selectOption('timed');
   await page.locator('#cloud-import-video-lrc').fill(['[00:00.10]ทดสอบเสียงและภาพ AVI','[00:00.60]สร้าง LRC จากเวลาจริง'].join(String.fromCharCode(10)));
   await page.click('#cloud-import-video-save');
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
   await page.check('#cloud-import-allow-create');
   await page.click('#cloud-import-start');
@@ -255,12 +286,12 @@ try{
     throw error;
   }
   const status=await page.locator('#cloud-import-status').textContent();
-  assert.ok(status.includes('เพลงใหม่ 4'),status);
+  assert.ok(status.includes('เพลงใหม่ 5'),status);
   assert.ok(status.includes('SoundFont 1'),status);
   assert.equal(rootCreated,1,'Only one private XStageSong root should be created');
   assert.ok([...records.values()].some(x=>x.name==='current.json'),'Playable DB pointer must be created');
   const pointer=[...records.values()].find(x=>x.name==='current.json');
-  assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,4);
+  assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,5);
   assert.ok([...records.values()].some(x=>x.name.endsWith('.mp4')));
   const published=[...records.values()].filter(x=>x.name.startsWith('catalog-'));
   assert.ok(published.some(x=>x.data.toString('utf8').includes('embedded-video')),
@@ -269,6 +300,15 @@ try{
     const v=JSON.parse(x.data.toString('utf8'));
     return v.songs||v.upserts||[];
   });
+  const xmediaRow=publishedRows.find(x=>x.code==='M600');
+  assert.ok(xmediaRow&&xmediaRow.title==='เพลง X-Media จริง'&&xmediaRow.artist==='ศิลปิน X-Media',
+    'X-Media must publish embedded title and artist');
+  assert.equal(xmediaRow.xmedia?.mediaSha256,xmedia.mediaSha,
+    'X-Media catalog must retain embedded media SHA-256');
+  assert.ok(xmediaRow.xmedia?.fileId&&!xmediaRow.audio&&!xmediaRow.video,
+    'X-Media must remain a single Drive object rather than split sidecars');
+  assert.ok(records.get(xmediaRow.xmedia.fileId)?.name.endsWith('.xmp3'),
+    'Drive must store the original X-Media container');
   const videoRow=publishedRows.find(x=>x.code==='V400');
   assert.ok(videoRow&&videoRow.title==='วิดีโอทดสอบ'&&
     videoRow.artist==='นักร้องตัวอย่าง','Artist/title metadata must be published');
@@ -298,7 +338,7 @@ try{
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
-    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),{timeout:60000});
+    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 5'),{timeout:60000});
   assert.equal(payloadUploads,firstCount,'Second upload should be 100% deduplicated by MD5');
   // Cancel/pause while an additional large file is being prepared. A browser
   // restart should not lose the completed DB and can reselect the same folder.
@@ -306,7 +346,7 @@ try{
   fs.writeFileSync(path.join(dir,'K300.mp3'),k300);
   fs.writeFileSync(path.join(dir,'K300.lrc'),'[00:01.00]เพลงที่หยุดกลางทาง\n');
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='6');
   await page.click('#cloud-import-start');
   await page.locator('#cloud-import-pause:not([disabled])').waitFor();
   await page.click('#cloud-import-pause');
@@ -323,7 +363,7 @@ try{
   await chooser.setFiles(dir);
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),null,{timeout:90000});
   const finalPointer=[...records.values()].find(x=>x.name==='current.json');
-  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,5,
+  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,6,
     'Reopening and resuming must publish the missing track without losing previous entries');
   assert.deepEqual(scriptErrors,[], 'No browser JavaScript errors are allowed');
   console.log('PASS: Chromium folder selection, Google session, private Drive uploads, pointer/catalog and replay-safe MD5 dedup');

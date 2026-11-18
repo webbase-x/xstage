@@ -63,6 +63,14 @@ const agreed=core.scan([
 assert.equal(agreed.songs.length,2,'MP3 and MP4 must pair with own JSON');
 assert.equal(agreed.midis.length,3,'MID, KAR and NCN must import from distinct folders');
 assert.equal(agreed.xsks.length,1,'Standalone XSK must import without extra JSON');
+const xmediaScan=core.scan([
+  {file:fake('00007.xmid',500),relative:'XStageSong/MIDI/XMID/0/00007.xmid'},
+  {file:fake('00008.xmp3',500),relative:'XStageSong/AUDIO/XMP3/0/00008.xmp3'},
+  {file:fake('00009.xmp4',500),relative:'XStageSong/VIDEO/XMP4/0/00009.xmp4'}
+]);
+assert.equal(xmediaScan.xmedias.length,3,'X-Media must scan as self-contained song files');
+assert.deepEqual(Array.from(xmediaScan.xmedias,x=>x.kind).sort(),['XMID','XMP3','XMP4']);
+assert.ok(!xmediaScan.blocked.length,'Valid-size X-Media candidates must not require sidecar JSON');
 assert.equal(agreed.midis.find(x=>x.kind==='NCN')?.cur.kind,'cur');
 assert.ok(!agreed.blocked.length,'All approved format-local bundles must pair cleanly');
 assert.notEqual(core.groupKey('AUDIO/MP3/SONG/0/00001.mp3'),

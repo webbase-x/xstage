@@ -605,6 +605,19 @@ function resetSongVideo(){
   if(videoObjectUrl){URL.revokeObjectURL(videoObjectUrl);videoObjectUrl='';}
   state.activeVideoBytes=0;
 }
+function showEmbeddedSongVideo(data,mime='video/mp4'){
+  if(!karaokeVideo||!data?.size)return;
+  if(videoObjectUrl)URL.revokeObjectURL(videoObjectUrl);
+  videoObjectUrl=URL.createObjectURL(data.type===mime?data:new Blob([data],{type:mime}));
+  state.activeVideoBytes=data.size;
+  karaokeVideo.src=videoObjectUrl;
+  karaokeVideo.muted=true;
+  karaokeVideo.hidden=false;
+  karaokeVideo.load();
+  updateOriginalVideoToggle(state.current);
+  updateVideoLyricsToggle();
+  syncSongVideo();
+}
 function syncSongVideo(){
   if(!karaokeVideo||karaokeVideo.hidden||!karaokeVideo.src)return;
   karaokeVideo.playbackRate=player.playbackRate;
@@ -797,7 +810,7 @@ function getFileId(data) {
 function playable(song) {
   // XSK2 is a complete, self-describing media+lyrics package on Drive.
   // Old catalog pairs remain supported without migration.
-  return !!(getFileId(song?.xsk) ||
+  return !!(getFileId(song?.xmedia) || getFileId(song?.xsk) ||
     (getFileId(song?.midi) && song?.sourceFormat==='KAR') ||
     (getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))));
 }
@@ -2042,6 +2055,47 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   return {song,token,blob:rendered.audio,lyrics:unpacked.document};
 }
 
+async function prepareXMediaPlayback(song,token,signal,onStatus=()=>{},prefetch=false){
+  const fileId=getFileId(song?.xmedia);
+  if(!fileId)throw Error('ไม่พบไฟล์ X-Media ในฐานเพลง');
+  if(!window.XStageXMedia?.openPackage)
+    throw Error('ตัวอ่าน X-Media ยังไม่พร้อม กรุณาอัปเดตเว็บ');
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  onStatus('กำลังโหลด X-Media จาก Google Drive…');
+  const response=await privateFile(fileId,token,{signal});
+  const packed=await response.blob();
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  onStatus('กำลังตรวจ SHA-256 และอ่านเนื้อร้องใน X-Media…');
+  const opened=await window.XStageXMedia.openPackage(packed,{verifyMedia:true,signal,name:song.xmedia?.path||song.code+'.'+String(song.sourceFormat||'xmp3').toLowerCase()});
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  if(String(song.code||'')!==String(opened.code||'') ||
+     String(song.title||'')!==String(opened.document.title||'') ||
+     String(song.artist||'')!==String(opened.document.artist||''))
+    throw Error('X-Media ภายในไฟล์ไม่ตรงกับชื่อเพลง/ศิลปินใน DB · กรุณานำเข้าอีกครั้ง');
+  if(song.xmedia?.mediaSha256 &&
+     String(song.xmedia.mediaSha256).toLowerCase()!==opened.mediaSha256)
+    throw Error('X-Media media SHA-256 ไม่ตรงกับฐานเพลง');
+  if(prefetch&&opened.mediaKind==='video')return null;
+  if(opened.mediaKind==='midi'){
+    if(!window.XStageBrowserMidi)throw Error('ตัวเล่น MIDI ยังไม่พร้อม กรุณาอัปเดตเว็บ');
+    const midiBytes=new Uint8Array(await opened.media.arrayBuffer());
+    if(prefetch){
+      const duration=Number(window.XStageBrowserMidi.parseMidi(midiBytes).duration);
+      const lowMemory=Number(navigator.deviceMemory||8)<=4;
+      const estimatedWorkingBytes=(duration+1)*32000*2*4*2;
+      if(!Number.isFinite(duration)||estimatedWorkingBytes>(lowMemory?128:256)*1024*1024)return null;
+    }
+    onStatus('กำลังสังเคราะห์ MIDI จาก X-Media…');
+    const fontBytes=await window.XStageBrowserMidi.selectedFont(token,signal);
+    const rendered=await window.XStageBrowserMidi.render(midiBytes,{fontBytes,signal,onStatus});
+    if(!rendered?.audio?.size)throw Error('ไม่สามารถสังเคราะห์เสียง MIDI จาก X-Media ได้');
+    return {song,token,blob:rendered.audio,lyrics:opened.document};
+  }
+  if(!opened.media?.size)throw Error('X-Media ไม่มีข้อมูลเสียง/วิดีโอ');
+  return {song,token,blob:opened.media,lyrics:opened.document,
+    videoBlob:opened.mediaKind==='video'?opened.media:null,videoMime:opened.mimeType};
+}
+
 // This is a bounded, voluntary cache: the active track and the selected
 // SoundFont take priority. Never claim that deviceMemory is real free RAM.
 function fontMemoryBytes(){
@@ -2134,6 +2188,13 @@ async function prepareQueuedSong(song,token,signal){
   if(!monitor)return null;
   const pressure=monitor.plan(memoryResources());
   if(pressure.heapPressure||pressure.nativePressure)return null;
+  if(getFileId(song.xmedia)){
+    const size=Number(song.xmedia.size);
+    if(!size||!monitor.canHold(size*1.2,memoryResources()))return null;
+    const result=await prepareXMediaPlayback(song,token,signal,()=>{},true);
+    if(!result||!monitor.canHold(result.blob.size,memoryResources()))return null;
+    return {...result,bytes:result.blob.size};
+  }
   if(getFileId(song.xsk)){
     // The pack and the uncompressed WAV both count against available space.
     const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
@@ -2472,7 +2533,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
   if (!playable(song)) {
-    setPlayStatus('เพลงนี้ยังไม่มี XSK2 หรือไฟล์เสียง/MIDI พร้อม Lyrics JSON ที่พร้อมเล่น');
+    setPlayStatus('เพลงนี้ยังไม่มี X-Media, XSK2 หรือไฟล์เสียง/MIDI พร้อม Lyrics JSON ที่พร้อมเล่น');
     return;
   }
   const request=++state.requestId;
@@ -2530,11 +2591,20 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       });
       return rendered.audio;
     };
-    let audio,lyrics;
+    let audio,lyrics,xmediaVideo=null,xmediaVideoMime='video/mp4';
     if(readyPrepared){
       // XSK2 prepared fully or in progress while queued: consume its
       // verified audio directly, without duplicating download/render.
       ({blob:audio,lyrics}=readyPrepared);
+      xmediaVideo=readyPrepared.videoBlob||null;
+      xmediaVideoMime=readyPrepared.videoMime||xmediaVideoMime;
+    }else if(getFileId(song.xmedia)){
+      const ready=await boundedPlaybackTask(
+        prepareXMediaPlayback(song,token,controller.signal,message=>{
+          if(request===state.requestId)setPlayStatus(message);
+        }),180,'โหลดหรือตรวจ X-Media จาก Google Drive นานเกินไป',controller);
+      audio=ready.blob;lyrics=ready.lyrics;
+      xmediaVideo=ready.videoBlob||null;xmediaVideoMime=ready.videoMime||xmediaVideoMime;
     }else if(getFileId(song.xsk)){
       const ready=await boundedPlaybackTask(
         prepareXskPlayback(song,token,controller.signal,message=>{
@@ -2560,7 +2630,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     state.activeBlobBytes=audio.size||0;trimQueueCache();
     resetSongVideo();
     preferOriginalVideo=true;
-    if(getFileId(song.video))void loadSongVideo(song,request,token,controller.signal);
+    if(xmediaVideo)showEmbeddedSongVideo(xmediaVideo,xmediaVideoMime);
+    else if(getFileId(song.video))void loadSongVideo(song,request,token,controller.signal);
     syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
     const musicalKey=String(song.key||song.musicKey||song.originalKey||song.keySignature||'').trim();
@@ -3149,7 +3220,7 @@ function androidTvAuthPanel(){
   panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-labelledby','android-tv-auth-title');
   panel.innerHTML='<div class="android-tv-auth-box">'+
-    '<img class="android-tv-auth-brand" src="assets/xstage-stage-logo.png?v=1119" width="2048" height="682" alt="X-Stage Karaoke Online">'+
+    '<img class="android-tv-auth-brand" src="assets/xstage-stage-logo.png?v=1120" width="2048" height="682" alt="X-Stage Karaoke Online">'+
     '<span class="android-tv-auth-kicker">X-STAGE ANDROID · <b id="android-tv-auth-version">กำลังอ่านรุ่น…</b></span>'+
     '<h2 id="android-tv-auth-title">เข้าสู่ระบบ Google ผ่านมือถือ</h2>'+
     '<p class="android-tv-auth-copy">สแกน QR ด้วยมือถือหรืออุปกรณ์อื่น แล้วกรอกรหัสที่แสดง</p>'+
@@ -3211,7 +3282,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1119';
+    script.src='./assets/vendor/qrcode.min.js?v=1120';
     script.async=true;
     let done=false;
     const finish=error=>{

@@ -64,7 +64,16 @@ jobs:
             throw 'Ready builder must check Python before extracting'
           }
           $ready = Get-Content downloads/song-studio-latest.json -Raw | ConvertFrom-Json
-          if ($ready.package_type -ne 'portable_zip' -or $ready.installer_available -ne $false) {
-            throw 'Ready release cannot masquerade as an EXE installer'
+          if ($ready.package_type -ne 'portable_zip') {
+            throw 'Ready release must retain its portable ZIP package'
+          }
+          if ($ready.installer_available -eq $true) {
+            if ($ready.installer_file -notlike '*-Setup.exe') {
+              throw 'Ready installer file must be a Setup EXE'
+            }
+            $installerSha = [string]$ready.installer_sha256
+            if ($installerSha.Length -ne 64 -or $installerSha -match '[^a-f0-9]') {
+              throw 'Ready installer metadata must include a trusted SHA-256'
+            }
           }
           Write-Host 'PASS: platform scripts and packaging metadata'

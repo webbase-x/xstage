@@ -13,9 +13,37 @@ from dataclasses import dataclass, asdict, replace
 from pathlib import Path
 from uuid import uuid4
 
-MIDI_EXT = {".mid", ".midi", ".kar", ".emk", ".xsk"}
-AUDIO_EXT = {".wav", ".mp3", ".wma", ".m4a", ".aac", ".flac", ".ogg", ".oga"}
-VIDEO_EXT = {".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov"}
+# Keep the extension contract local: Song Studio PC intentionally loads this
+# module directly from its file path to reuse the exact SQLite schema, so a
+# package-relative import here would break that long-standing bridge.
+_XMEDIA_INNER = {
+    ".xmid": ".mid",
+    ".xmp3": ".mp3", ".xm4a": ".m4a", ".xwav": ".wav", ".xaac": ".aac",
+    ".xflac": ".flac", ".xogg": ".ogg", ".xoga": ".oga", ".xwma": ".wma",
+    ".xmp4": ".mp4", ".xwebm": ".webm", ".xmkv": ".mkv", ".xavi": ".avi",
+    ".xmpg": ".mpg", ".xmpeg": ".mpeg", ".xdat": ".dat", ".xvob": ".vob",
+    ".xmov": ".mov", ".xwmv": ".wmv", ".xflv": ".flv",
+}
+XMEDIA_EXT = frozenset(_XMEDIA_INNER)
+XMEDIA_MIDI_EXT = frozenset({".xmid"})
+XMEDIA_AUDIO_EXT = frozenset({
+    ".xmp3", ".xm4a", ".xwav", ".xaac", ".xflac", ".xogg", ".xoga", ".xwma",
+})
+XMEDIA_VIDEO_EXT = XMEDIA_EXT - XMEDIA_MIDI_EXT - XMEDIA_AUDIO_EXT
+
+
+def inner_extension(path_or_ext):
+    text = str(path_or_ext)
+    ext = text.casefold() if text.startswith(".") and "/" not in text and "\\" not in text else Path(text).suffix.casefold()
+    try:
+        return _XMEDIA_INNER[ext]
+    except KeyError as error:
+        raise ValueError("ยังไม่รองรับนามสกุล X-Media นี้") from error
+
+
+MIDI_EXT = {".mid", ".midi", ".kar", ".emk", ".xsk"} | set(XMEDIA_MIDI_EXT)
+AUDIO_EXT = {".wav", ".mp3", ".wma", ".m4a", ".aac", ".flac", ".ogg", ".oga"} | set(XMEDIA_AUDIO_EXT)
+VIDEO_EXT = {".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov"} | set(XMEDIA_VIDEO_EXT)
 SUPPORTED = MIDI_EXT | AUDIO_EXT | VIDEO_EXT
 
 
@@ -23,7 +51,8 @@ def song_supports_key(song):
     if not song:return False
     ext=Path(str(dict(song).get('path',''))).suffix.lower()
     if ext in MIDI_EXT:return True
-    if ext in ('.wav','.mp3'):
+    effective=inner_extension(ext) if ext in XMEDIA_EXT else ext
+    if effective in ('.wav','.mp3'):
         from .pcm_player import available
         return available()
     return False

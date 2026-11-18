@@ -5,6 +5,8 @@ on:
     paths:
       - "cloud-import*.js"
       - "xsk-browser.js"
+      - "xmedia-browser.js"
+      - "scripts/xmedia-browser-test.mjs"
       - "scripts/xsk-browser-test.mjs"
       - "scripts/xsk-queue-test.mjs"
       - "scripts/memory-queue-test.mjs"
@@ -23,6 +25,8 @@ on:
   pull_request:
     paths:
       - "cloud-import*.js"
+      - "xmedia-browser.js"
+      - "scripts/xmedia-browser-test.mjs"
       - "index.html"
       - "karaoke.html"
       - "app.js"
@@ -45,12 +49,14 @@ jobs:
           node scripts/cloud-import-test.mjs
           node scripts/cloud-import-contract-test.mjs
           node scripts/xsk-browser-test.mjs
+          node scripts/xmedia-browser-test.mjs
           node scripts/xsk-queue-test.mjs
           node scripts/memory-queue-test.mjs
           node scripts/soundfont-memory-test.mjs
           node --check memory-budget.js
           node --check browser-midi.js
           node --check xsk-browser.js
+          node --check xmedia-browser.js
           node --check cloud-import.js
       - name: Prepare headless Chromium on CI only
         run: |

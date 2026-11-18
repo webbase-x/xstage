@@ -120,7 +120,7 @@ assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stag
 assert.ok(read('mirror-tv/index.html').includes('../assets/app-icons/mirror-tv.svg'),'Mirror pairing guide must show its own icon');
 const tvReload=read('tv-refresh.js');
 assert.doesNotThrow(()=>new Function(tvReload),'TV refresh JS must parse');
-assert.ok(index.includes('id="tv-refresh-window"')&&index.includes('tv-refresh.js?v=1119'),'TV player must expose refresh button and logic');
+assert.ok(index.includes('id="tv-refresh-window"')&&index.includes('tv-refresh.js?v=1120'),'TV player must expose refresh button and logic');
 assert.ok(app.includes('xstage-tv-quick-refresh')&&app.includes('window.XStageTvRefreshPage?.()'),'Android TV remote quick menu must contain a working refresh action');
 assert.ok(css.includes('body.xstage-ui-v2 .stage #tv-refresh-window:not([hidden])'),'TV refresh must override stage overlay hiding');
 assert.ok(singerStage.includes('id="refresh-window"')&&singerStage.includes('window.location.reload()'),'separate TV stage must have clickable reload');
@@ -297,9 +297,10 @@ if(mirrorTest.direct_download_available===true){
 assert.ok(read('.github/workflows/build-xstage-mirror-tv.yml').includes('gh release create')&&
           read('.github/workflows/build-xstage-mirror-tv.yml').includes('test-latest.json'),
           'Mirror public test APK must be published only after checks, separate from production feed');
-assert.ok(read('.github/workflows/release-xstage-mirror-tv.yml').includes('workflow_dispatch:')&&
-          !read('.github/workflows/release-xstage-mirror-tv.yml').includes('branches: [main]'),
-          'production Mirror signed release must not fail automatically when owner secrets are missing');
+assert.ok(mirrorReleaseWorkflow.includes('workflow_dispatch:')&&
+          mirrorReleaseWorkflow.includes("github.event.head_commit.message == 'release(mirror-tv): publish")&&
+          mirrorReleaseWorkflow.includes("github.event_name == 'workflow_dispatch'"),
+          'production Mirror signed release may have a guarded main hook but must not run on ordinary pushes');
 
 
 

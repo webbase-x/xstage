@@ -91,7 +91,7 @@
       hero:"เพลงเป็นระเบียบในสตูดิโอใหม่",blurb:"หนึ่งคลัง SQLite · สื่อไม่ซ้ำ · เนื้อร้องหลายเวอร์ชัน",preview:"SONG STUDIO PLUS · SQLITE FIRST",
       type:"manifest",manifest:"./downloads/song-studio-plus-latest.json",
       secondary:{label:"ชมหน้าตา Studio Plus (UI Preview)",url:"./songstudio-plus/web/"},
-      note:"v0.1.0 Technical Preview เท่านั้น · EXE ทดสอบใน GitHub Actions ยังไม่ได้ลงลายเซ็นดิจิทัล และระบบ Karaoke PC/Web/APK ยังเล่นไฟล์ X-Media รุ่นใหม่ไม่ได้ ห้ามใช้กับคลังหลักโดยยังไม่สำรองข้อมูล",
+      note:"v0.1.6 Technical Preview · EXE ทดสอบใน GitHub Actions ยังไม่ได้ลงลายเซ็นดิจิทัล · X-Media v1 รองรับใน Karaoke Web/Android v1.0.120 Build 1120 และ Karaoke PC รุ่น compatibility ปัจจุบัน โดยเพลงรูปแบบเดิมยังใช้ได้ตามเดิม",
       fallback:"Technical Preview · ยังไม่มี EXE รุ่นลงลายเซ็นพร้อมใช้งานจริง"
     },
     "studio-web":{
