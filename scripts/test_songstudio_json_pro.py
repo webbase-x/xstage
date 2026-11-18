@@ -475,6 +475,51 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(export._read_current(root)[0]["songCount"], 1)
         self.assertFalse((root / ".build-journal.jsonl").exists())
 
+    def test_new_ready_resumes_legacy_catalog_without_decoding_old_lyrics(self):
+        self.assertEqual(self.run_export()["created"], 1)
+        library = self.dest / "XStageSong"
+        # Legacy Ready builds have a valid Catalog, not the new review database.
+        (library / "DB" / "json-pro-review.sqlite3").unlink()
+        with patch.object(pro, "_document", side_effect=AssertionError(
+                "an already published source must not be parsed again")):
+            resumed = self.run_export()
+        self.assertEqual((resumed["created"], resumed["skipped"], resumed["resumed"]), (0, 1, 1))
+        self.assertEqual(len(export.existing_records(library)), 1)
+
+    def test_review_errors_persist_and_retry_only_reprocesses_failed_source(self):
+        source_stream = load("json_source_stream")
+        midi = self.source / "03702.mid"
+        midi.write_bytes(b"NOPE" + b"\\0" * 60)
+
+        class Ncn:
+            def kar_document(self, source, code):
+                raise ValueError("ไฟล์ MIDI ไม่มีส่วนหัว MThd")
+
+        initial = self.run_export(ncn=Ncn(), source_stream=source_stream.stream)
+        self.assertEqual((initial["created"], initial["errors"]), (1, 1))
+        review = load("json_pro_review")
+        library = self.dest / "XStageSong"
+        first = review.review(library, self.source, "original", status="error")
+        self.assertEqual(first["total"], 1)
+        self.assertEqual(first["items"][0]["name"], "03702.mid")
+        self.assertIn("MThd", first["items"][0]["reason"])
+
+        # Restarting a newer PC Ready keeps the successful song and defers the
+        # unchanged failure instead of reprocessing all files.
+        continued = self.run_export(ncn=Ncn(), source_stream=source_stream.stream)
+        self.assertEqual((continued["created"], continued["resumed"],
+                          continued["deferred"], continued["errors"]), (0, 1, 1, 0))
+        self.assertEqual(len(export.existing_records(library)), 1)
+
+        # Once a real timed companion is supplied, retry only the saved ERR.
+        (self.source / "03702.lrc").write_text(
+            "[00:02.00]ซ่อมข้อมูลแล้ว", encoding="utf-8")
+        retried = self.run_export(source_stream=source_stream.stream,
+                                  retry_errors_only=True)
+        self.assertEqual((retried["created"], retried["errors"], retried["total"]), (1, 0, 1))
+        self.assertEqual(len(export.existing_records(library)), 2)
+        self.assertEqual(review.review(library, self.source, "original", status="error")["total"], 0)
+
     def test_invalid_lyrics_not_published(self):
         self.lrc.write_text("ไม่มีเวลา", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "ไม่พบเพลง"):
