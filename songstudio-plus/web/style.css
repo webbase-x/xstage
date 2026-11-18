@@ -13,3 +13,8 @@
 .browse-btn{border:1px solid #4d6684;border-radius:8px;background:#1e344f;color:#c9f1fa;font-weight:600;font-size:11px;white-space:nowrap;padding:8px 11px;flex:none}
 .browse-btn:hover:not(:disabled){background:#305476;border-color:#73cbd5}
 @media(max-width:430px){.browse-btn{max-width:106px;white-space:normal;font-size:10px;line-height:1.3}}
+
+/* File count is authoritative; never fake a percentage when source total is unknown. */
+.progress-fill.indeterminate{animation:plus-scan 1.8s ease-in-out infinite;transform-origin:left}
+@keyframes plus-scan{0%{transform:translateX(0);opacity:.55}50%{transform:translateX(205%);opacity:1}100%{transform:translateX(0);opacity:.55}}
+@media(prefers-reduced-motion:reduce){.progress-fill.indeterminate{animation:none}}
