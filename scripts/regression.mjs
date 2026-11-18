@@ -297,9 +297,11 @@ if(mirrorTest.direct_download_available===true){
 assert.ok(read('.github/workflows/build-xstage-mirror-tv.yml').includes('gh release create')&&
           read('.github/workflows/build-xstage-mirror-tv.yml').includes('test-latest.json'),
           'Mirror public test APK must be published only after checks, separate from production feed');
-assert.ok(read('.github/workflows/release-xstage-mirror-tv.yml').includes('workflow_dispatch:')&&
-          !read('.github/workflows/release-xstage-mirror-tv.yml').includes('branches: [main]'),
-          'production Mirror signed release must not fail automatically when owner secrets are missing');
+const mirrorReleaseWorkflow=read('.github/workflows/release-xstage-mirror-tv.yml');
+assert.ok(mirrorReleaseWorkflow.includes('workflow_dispatch:')&&
+          mirrorReleaseWorkflow.includes("github.event.head_commit.message == 'release(mirror-tv): publish")&&
+          mirrorReleaseWorkflow.includes("github.event_name == 'workflow_dispatch'"),
+          'production Mirror signed release may have a guarded main hook but must not run on ordinary pushes');
 
 
 
