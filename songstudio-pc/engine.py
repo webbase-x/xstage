@@ -35,8 +35,8 @@ DATA = ((Path(_LOCAL_APP_DATA) if _LOCAL_APP_DATA else
         if os.name == "nt" else ROOT / "data")
 RUNTIME = ROOT / ".runtime"
 READY_BUNDLE = (ROOT / ".engine-ready-manifest.json").is_file()
-STATUS_VERSION = "0.3.69" if READY_BUNDLE else "0.2.8-Source-Preview"
-STATUS_BUILD = "369" if READY_BUNDLE else "208-SRC"
+STATUS_VERSION = "0.3.70" if READY_BUNDLE else "0.2.8-Source-Preview"
+STATUS_BUILD = "370" if READY_BUNDLE else "208-SRC"
 DATA.mkdir(parents=True, exist_ok=True)
 # Import the older per-ZIP data folder only once. Never overwrite newer
 # preferences, credentials or the DPAPI token already in AppData.
@@ -2276,10 +2276,17 @@ def execute_job(action, options, started):
                     raise RuntimeError("ยกเลิกการตรวจไฟล์แล้ว")
                 with LOCK:
                     worker_job()["scanPhase"] = phase
-                    worker_job()["scannedFiles" if phase == "discover" else "validatedGroups"] = count
-                    if total is not None:
-                        worker_job()["totalGroups"] = total
-                if phase == "discover":
+                    if phase == "catalog":
+                        worker_job()["catalogIndexed"] = count
+                    else:
+                        worker_job()["scannedFiles" if phase == "discover" else "validatedGroups"] = count
+                        if total is not None:
+                            worker_job()["totalGroups"] = total
+                if phase == "catalog":
+                    update("กำลังเปิดดัชนี Catalog เดิม · ไม่อ่านไฟล์เพลงทั้งหมด"
+                           if total is None else
+                           f"อ่านดัชนี Catalog {count:,} รายการแล้ว · กำลังเริ่มจากเพลงแรก")
+                elif phase == "discover":
                     update(f"ค้นหาไฟล์ต้นฉบับแล้ว {count:,} ไฟล์ · แปลงไปพร้อมค้นหา")
                 elif total is not None:
                     update(f"ค้นหาเสร็จ · พบเพลงเข้าคิวแปลง {count:,} เพลง")
