@@ -87,6 +87,11 @@ def _file_names(folder: Path) -> dict[str, Path]:
     return _file_names_at_stamp(folder, stat.st_mtime_ns, stat.st_ctime_ns)
 
 
+# The source index explicitly clears this cache after refreshing its scan.
+# Preserve that public callable contract while making per-folder writes visible.
+_file_names.cache_clear = _file_names_at_stamp.cache_clear
+
+
 def resolve_companions(midi: Path, index: dict | None = None, *,
                        indexed_only: bool = False) -> dict | None:
     """Resolve .MID/.LYR/.CUR in mirrored Song/Lyrics/Cursor directories.
