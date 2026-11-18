@@ -395,7 +395,8 @@ def import_folder(workspace,source,progress=None,cancel=None):
     init(target)
     batch=uuid.uuid4().hex
     totals={"files_seen":0,"files_new":0,"media_duplicates":0,
-            "lyrics_new":0,"failures":0,"hash_cache_hits":0,"bytes_hashed":0}
+            "lyrics_new":0,"partial_lyrics":0,"draft_lyrics":0,
+            "failures":0,"hash_cache_hits":0,"bytes_hashed":0}
     with WRITE_LOCK,connect(target) as db:
         db.execute("""INSERT INTO xstage_import_batches
             (id,source_root,created_at,status) VALUES (?,?,?,'running')""",
@@ -468,38 +469,86 @@ def import_folder(workspace,source,progress=None,cancel=None):
                     verified_sha256=excluded.verified_sha256,
                     last_seen=excluded.last_seen""",
                     (original_path,media["id"],before.st_size,before.st_mtime_ns,h,now()))
-                parts=[]
-                for ext in (".lyr",".cur",".lrc"):
-                    companion=comps.get(ext)
-                    if companion:
-                        parts.append(ext.encode()+b"\x00"+digest(companion).encode())
-                source_sig=binary_digest(*parts) if parts else None
-                if source_sig and db.execute("""SELECT 1 FROM xstage_lyric_versions
-                    WHERE song_id=? AND source_sha256=?""",(song_id,source_sig)).fetchone():
-                    outcome="same-lyrics"
+                # Never SHA-256 the .LYR/.CUR/.LRC files. Their small
+                # stat-only stamp avoids re-parsing unchanged successful
+                # sources; new/changed companions are decoded and compared
+                # through the SQLite lyric-version table.
+                stamp=companion_stamp(comps)
+                cached_lyrics=db.execute("""SELECT * FROM xstage_lyric_scan_cache
+                    WHERE source_path=?""",(original_path,)).fetchone()
+                has_version=db.execute("""SELECT 1 FROM xstage_lyric_versions
+                    WHERE song_id=? LIMIT 1""",(song_id,)).fetchone()
+                if (cached_lyrics and cached_lyrics["media_sha256"]==h and
+                        cached_lyrics["companion_stamp"]==stamp and
+                        cached_lyrics["outcome"] in ("new-lyrics","same-lyrics","no-lyrics") and
+                        (has_version or cached_lyrics["outcome"]=="no-lyrics")):
+                    outcome="same-lyrics" if has_version else "no-lyrics"
                 else:
                     try:
                         doc=document_for(path,comps)
                         parsed=valid_lines(doc) if doc else None
                         if parsed:
-                            _,new=insert_version(db,song,media,doc,source_sig,
+                            _,new=insert_version(db,song,media,doc,None,
                                 "NCN" if comps.get(".lyr") and comps.get(".cur") else
                                 "LRC" if comps.get(".lrc") else "KAR")
-                            if new:
+                            meta=doc.get("metadata") or {}
+                            partial=meta.get("timingComplete",True) is False
+                            if new and partial:
+                                totals["partial_lyrics"]+=1
+                                outcome="partial-lyrics"
+                                message="เก็บบรรทัดที่มีเวลา CUR จริงได้บางส่วน · ยังไม่พร้อมสร้าง XMID"
+                            elif new:
                                 totals["lyrics_new"]+=1
                                 outcome="new-lyrics"
-                                meta=doc.get("metadata") or {}
-                                if song["title"]==song["original_code"] and meta.get("title"):
-                                    db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
-                                       (str(meta["title"])[:255],
-                                        str(meta.get("artist") or "")[:255],song_id))
+                            else:
+                                outcome="same-lyrics"
+                            if song["title"]==song["original_code"] and meta.get("title"):
+                                db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
+                                    (str(meta["title"])[:255],
+                                     str(meta.get("artist") or "")[:255],song_id))
+                            if comps.get(".lyr") and partial:
+                                save_draft(db,song,comps[".lyr"],"CUR timing incomplete")
+                                totals["draft_lyrics"]+=1
+                            elif not partial:
+                                db.execute("DELETE FROM xstage_lyric_drafts WHERE song_id=?",(song_id,))
+                        elif comps.get(".lyr"):
+                            # Preserve LYR text even without CUR, without
+                            # inventing timing or reporting it as ready.
+                            save_draft(db,song,comps[".lyr"],
+                                       "CUR missing or unrecognized")
+                            totals["draft_lyrics"]+=1
+                            outcome="untimed-lyrics"
+                            message="บันทึกเนื้อร้องแล้ว แต่ยังไม่พบเวลาปาดสีที่ตรวจสอบได้"
+                        elif comps.get(".cur") and path.suffix.lower() in MIDI_EXT:
+                            outcome="missing-lyr"
+                            message="พบ CUR แต่ไม่พบไฟล์ LYR ที่ตรงกับเพลง"
                         elif doc:
-                            message="เนื้อร้องหรือ CUR ยังจับเวลาไม่ครบ · เก็บสื่อไว้รอตรวจ"
                             outcome="timing-incomplete"
+                            message="ข้อมูลเวลาปาดสีไม่ครบ · ยังไม่พร้อมสร้างคาราโอเกะ"
+                        else:
+                            outcome="no-lyrics"
+                        if outcome in ("new-lyrics","same-lyrics","no-lyrics"):
+                            db.execute("""INSERT INTO xstage_lyric_scan_cache
+                              (source_path,media_sha256,companion_stamp,outcome,last_scanned)
+                              VALUES (?,?,?,?,?)
+                              ON CONFLICT(source_path) DO UPDATE SET
+                              media_sha256=excluded.media_sha256,
+                              companion_stamp=excluded.companion_stamp,
+                              outcome=excluded.outcome,
+                              last_scanned=excluded.last_scanned""",
+                              (original_path,h,stamp,outcome,now()))
                     except (OSError,ValueError,TypeError,KeyError) as lyric_error:
                         outcome="lyrics-error"
                         totals["failures"]+=1
                         message=str(lyric_error)[:350]
+                        # A valid LYR should survive even if the associated
+                        # CUR or MIDI parser failed; never hide the real error.
+                        if comps.get(".lyr"):
+                            try:
+                                save_draft(db,song,comps[".lyr"],message)
+                                totals["draft_lyrics"]+=1
+                            except (OSError,ValueError,UnicodeError):
+                                pass
                 db.execute("""INSERT INTO xstage_import_items
                  (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
                  VALUES (?,?,?,?,?,?,?,?)""",
