@@ -9,16 +9,21 @@ from functools import lru_cache
 import json
 from pathlib import Path
 from .lyrics import Lyrics, LyricLine
+from .xmedia_reader import XMEDIA_EXT, inspect_xmedia
 
 FORMAT = "xstage-pc-local-current"
 CATALOG = "xstage-pc-local-catalog"
 MEDIA = {".mid", ".midi", ".kar", ".m4a", ".mp3", ".wav", ".wma",
          ".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov",
-         ".flac", ".ogg", ".oga", ".aac", ".webm", ".dat", ".vob", ".flv", ".xsk"}
+         ".flac", ".ogg", ".oga", ".aac", ".webm", ".dat", ".vob", ".flv", ".xsk"} | set(XMEDIA_EXT)
 
 
 def library_root(selected):
     path = Path(selected).expanduser().resolve()
+    if path.name.casefold() == "db" and (path / "xstage_plus.sqlite3").is_file():
+        path = path.parent
+    if (path / "DB" / "xstage_plus.sqlite3").is_file():
+        return path
     if path.name.casefold() == "audio":
         path = path.parent
     elif path.name.casefold() == "lyrics":
@@ -27,7 +32,7 @@ def library_root(selected):
         path = path / "XStageSong"
     if not (path / "LYRICS").is_dir() or not any(
             (path / folder).is_dir() for folder in ("AUDIO", "VIDEO", "MIDI")):
-        raise ValueError("ไม่พบ XStageSong/LYRICS และโฟลเดอร์สื่อ AUDIO/VIDEO/MIDI ที่เลือก")
+        raise ValueError("ไม่พบ XStageSong แบบเดิม หรือ workspace Song Studio Plus ที่มี DB/xstage_plus.sqlite3")
     return path
 
 
@@ -46,6 +51,23 @@ def _inside(root, relative, prefix):
 
 def catalog_rows(selected, *, cancelled=None):
     root = library_root(selected)
+    if (root / "DB" / "xstage_plus.sqlite3").is_file():
+        from .plus_catalog import discover
+        discovered, warnings = discover(root)
+        if warnings and not discovered:
+            raise ValueError("; ".join(warnings))
+        rows = []
+        for path, hint in discovered:
+            if cancelled and cancelled.is_set():
+                raise RuntimeError("ยกเลิกการนำเข้า Song Studio Plus แล้ว")
+            rows.append({"path": str(path), "code": str(hint.get("code") or ""),
+                         "title": str(hint.get("title") or path.stem),
+                         "artist": str(hint.get("artist") or ""),
+                         "kind": str(hint.get("kind") or "AUDIO"),
+                         "format": str(hint.get("format") or path.suffix[1:].upper()),
+                         "playable": 1, "first_lyric": str(hint.get("first_lyric") or ""),
+                         "source_catalog": "Song Studio Plus SQLite"})
+        return root, rows
     file = root / "LYRICS" / "current.json"
     if not file.is_file():
         raise ValueError("ไม่พบ XStageSong/LYRICS/current.json กรุณานำเข้าจาก Song Studio ก่อน")
@@ -69,7 +91,8 @@ def catalog_rows(selected, *, cancelled=None):
         for source in songs:
             if cancelled and cancelled.is_set():
                 raise RuntimeError("ยกเลิกการนำเข้า XStageSong แล้ว")
-            media_ref = (source.get("audio") or {}).get("path")
+            xmedia_ref = source.get("xmedia") if isinstance(source.get("xmedia"), dict) else None
+            media_ref = (xmedia_ref or source.get("audio") or {}).get("path")
             prefix = media_ref.split("/", 1)[0] if isinstance(media_ref, str) else ""
             if prefix not in ("AUDIO", "VIDEO", "MIDI"):
                 raise ValueError("Catalog อ้างถึงโฟลเดอร์สื่อที่ไม่รองรับ")
@@ -81,6 +104,10 @@ def catalog_rows(selected, *, cancelled=None):
             found.add(str(path))
             lyrics = source.get("lyrics")
             first = ""
+            embedded = None
+            if xmedia_ref:
+                embedded = inspect_xmedia(path)["document"]
+                first = " ".join(str(line.get("text") or "") for line in embedded.get("lines", [])[:8])[:512]
             if lyrics:
                 lyric_rel = lyrics.get("path")
                 lyric_root = lyric_rel.split("/", 1)[0] if isinstance(lyric_rel, str) else ""
@@ -95,11 +122,11 @@ def catalog_rows(selected, *, cancelled=None):
                     raise ValueError("Lyrics JSON ไม่ถูกต้อง: " + lyric_file.name)
                 first = " ".join(str(line.get("text") or "") for line in doc["lines"][:8])[:512]
             ext = path.suffix.casefold()
-            rows.append({"path": str(path), "code": str(source.get("code") or ""),
-                         "title": str(source.get("title") or path.stem),
-                         "artist": str(source.get("artist") or ""),
-                         "kind": "MIDI" if ext in {".mid", ".midi", ".kar"} else
-                                 "VIDEO" if ext in {".mp4", ".avi", ".mov", ".mkv"} else "AUDIO",
+            rows.append({"path": str(path), "code": str((embedded or {}).get("songCode") or source.get("code") or ""),
+                         "title": str((embedded or {}).get("title") or source.get("title") or path.stem),
+                         "artist": str((embedded or {}).get("artist") or source.get("artist") or ""),
+                         "kind": "MIDI" if ext in {".mid", ".midi", ".kar", ".xmid"} else
+                                 "VIDEO" if ext in {".mp4", ".avi", ".mov", ".mkv", ".xmp4", ".xavi", ".xmov", ".xmkv"} else "AUDIO",
                          "format": ext[1:].upper(), "playable": 1,
                          "first_lyric": first, "source_catalog": "XStageSong PC"})
     if len(rows) != pointer.get("songCount"):
