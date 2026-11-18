@@ -49,6 +49,20 @@ class PlusTests(unittest.TestCase):
     def lrc(self,path,text="[00:01.00]By Nick >>>\n[00:05.00]Next line\n"):
         (path.parent/(path.stem+".lrc")).write_text(text,encoding="utf-8")
 
+    def test_windows_ui_scales_and_remains_offline_ready(self):
+        root=Path(__file__).resolve().parents[1]
+        desktop=(root/"desktop_ui.py").read_text(encoding="utf-8")
+        css=(root/"web"/"style.css").read_text(encoding="utf-8")
+        html=(root/"web"/"index.html").read_text(encoding="utf-8")
+        self.assertIn("self.default_zoom=1.20",desktop)
+        self.assertIn("self.web.setZoomFactor(self.default_zoom)",desktop)
+        for shortcut in ("Ctrl++","Ctrl+-","Ctrl+0"):
+            self.assertIn(shortcut,desktop)
+        self.assertIn("max-width:2800px",css)
+        self.assertIn("font-family:\"Segoe UI\"",css)
+        self.assertNotIn("fonts.googleapis.com",css)
+        self.assertIn("zoom-hint",html)
+
     def test_schema_all_tables_prefixed_and_separate_from_legacy(self):
         with plus.connect(self.workspace) as db:
             names=[row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
