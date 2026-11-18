@@ -183,6 +183,9 @@ class Handler(BaseHTTPRequestHandler):
                 source=body.get("folder","")
                 result=self.state.start_job("import",lambda progress,cancel:
                     core.import_folder(self.state.workspace,source,progress,cancel))
+            elif path=="/api/recover-lyrics":
+                result=self.state.start_job("recover",lambda progress,cancel:
+                    core.recover_existing_lyrics(self.state.workspace,progress,cancel))
             elif path=="/api/edit/plan":
                 result=core.plan_edit(self.state.workspace,body.get("q",""),body.get("keys",[]))
             elif path=="/api/edit/apply":
