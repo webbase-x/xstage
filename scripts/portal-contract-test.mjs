@@ -57,5 +57,12 @@ assert.match(native,/xstageapps/);
 assert.match(native,/\.supabase/,'OAuth must be handled through a trusted external browser');
 assert.match(native,/setAllowFileAccess\(false\)/);
 assert.match(workflow,/apksigner/,'signed APK verification must be in release job');
-assert.equal(feed.available,false,'do not claim signed APK is published before build');
+if(feed.available){
+  assert.equal(feed.channel,'signed','published Portal APK must use the signed channel');
+  assert.match(String(feed.file||''),/^X-Stage-Apps-Portal-v[0-9.]+-build[0-9]+\.apk$/);
+  assert.match(String(feed.sha256||''),/^[a-f0-9]{64}$/,'published Portal APK must include SHA-256');
+  assert.match(String(feed.signer_sha256||''),/^[a-f0-9]{64}$/,'published Portal APK must pin signer SHA-256');
+}else{
+  assert.ok(!feed.file&&!feed.download_url,'unavailable Portal feed must not advertise an APK');
+}
 console.log('PASS: X-Stage portal UI, Google auth PKCE, RLS table prefix, Android identity, signed APK feed.');
