@@ -124,9 +124,15 @@ def _record(db, root, path, row, *, media_sha, lyrics_sha="", kind):
     file_sha = (cache[2] if cache and cache[:2] == (st.st_size, st.st_mtime_ns)
                 else _hash(file))
     song = _song_id(media_sha, lyrics_sha)
-    descriptor = {**row, "sourceRegistry": {
+    # A song may have XSK, MIDI+JSON, MP3 or MP4 assets. Its Song ID is
+    # shared, but each representation requires a unique karaoke catalog ID.
+    # Never reuse filename-derived IDs from two unrelated computers.
+    asset_id = song + "-format-" + file.suffix.lower().lstrip(".")
+    descriptor = {**row, "webSongId": asset_id,
+                  "sourceRegistry": {
         "songId": song, "mediaSha256": media_sha, "lyricsSha256": lyrics_sha,
-        "contentSha256": file_sha, "bundleId": bundle_id(db)}}
+        "contentSha256": file_sha, "bundleId": bundle_id(db),
+        "originalWebSongId": str(row.get("webSongId") or "")}}
     db.execute("""INSERT INTO entries(path,size,mtime_ns,content_sha,media_sha,
        lyrics_sha,song_id,kind,record_json,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(path) DO UPDATE SET size=excluded.size,mtime_ns=excluded.mtime_ns,
@@ -150,7 +156,7 @@ def register_xsk(root, file, document, *, db=None):
     code = str(document.get("songCode") or "")
     digest = str(media.get("sha256") or "")
     lyric = _lyrics_fingerprint(document)
-    row = {"webSongId": _song_id(digest, lyric),
+    row = {"webSongId": _song_id(digest, lyric) + "-format-xsk",
            "code": code, "title": str(document.get("title") or ""),
            "artist": str(document.get("artist") or ""),
            "sourceFormat": "XSK", "audio": {"path": name}, "lyrics": None,
