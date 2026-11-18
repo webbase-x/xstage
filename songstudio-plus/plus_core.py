@@ -366,22 +366,31 @@ def import_folder(workspace,source,progress=None,cancel=None):
                      WHERE song_id=? AND source_sha256=?""",(song_id,source_sig)).fetchone():
                     outcome="same-lyrics"
                 else:
-                    doc=document_for(path,comps)
-                    if doc and valid_lines(doc):
-                        _,new=insert_version(db,song,media,doc,source_sig,
-                            "NCN" if comps.get(".lyr") and comps.get(".cur") else
-                            "LRC" if comps.get(".lrc") else "KAR")
-                        if new:
-                            totals["lyrics_new"]+=1
-                            outcome="new-lyrics"
-                            meta=doc.get("metadata") or {}
-                            if song["title"]==song["original_code"] and meta.get("title"):
-                                db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
-                                           (str(meta["title"])[:255],
-                                            str(meta.get("artist") or "")[:255],song_id))
-                    elif doc and not valid_lines(doc):
-                        message="เนื้อร้องหรือ CUR ยังจับเวลาไม่ครบ · เก็บสื่อไว้รอตรวจ"
-                        outcome="timing-incomplete"
+                    # A bad or partial lyric companion MUST NOT roll back a
+                    # verified media record. Keep the source once, log the
+                    # lyric problem and permit fixing LYR/CUR on the next scan.
+                    try:
+                        doc=document_for(path,comps)
+                        parsed=valid_lines(doc) if doc else None
+                        if parsed:
+                            _,new=insert_version(db,song,media,doc,source_sig,
+                                "NCN" if comps.get(".lyr") and comps.get(".cur") else
+                                "LRC" if comps.get(".lrc") else "KAR")
+                            if new:
+                                totals["lyrics_new"]+=1
+                                outcome="new-lyrics"
+                                meta=doc.get("metadata") or {}
+                                if song["title"]==song["original_code"] and meta.get("title"):
+                                    db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
+                                               (str(meta["title"])[:255],
+                                                str(meta.get("artist") or "")[:255],song_id))
+                        elif doc:
+                            message="เนื้อร้องหรือ CUR ยังจับเวลาไม่ครบ · เก็บสื่อไว้รอตรวจ"
+                            outcome="timing-incomplete"
+                    except (OSError,ValueError,TypeError,KeyError) as lyric_error:
+                        outcome="lyrics-error"
+                        totals["failures"]+=1
+                        message=str(lyric_error)[:350]
                 db.execute("""INSERT OR REPLACE INTO xstage_import_items
                 (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
                 VALUES (?,?,?,?,?,?,?,?)""",
