@@ -254,53 +254,70 @@ def source_for_build(workspace, db, media):
 
 
 def companion_candidates(media):
-    """Find exact-code NCN companions without scanning entire song buckets.
+    """Discover exact-stem LYR/CUR/LRC without hashing or copying sidecars.
 
-    Handles common split layouts such as Song/Lyrics/Cursor and the
-    equivalent Songs/Lyric/CUR spellings. A companion must share BOTH the
-    same parent collection and the same relative bucket/code, never simply
-    a filename match from a different import source.
+    Prefer companions in the same folder, then mirrored folders within the
+    SAME source collection. Also accept flat and bucketed libraries where
+    MIDI is not inside a directory explicitly named Song. Never look up a
+    matching stem globally, because unrelated collections reuse song codes.
+    Each candidate is a bounded direct file lookup, not a directory scan.
     """
     p=Path(media)
     result={".lyr":None,".cur":None,".lrc":None}
-    def probe(folder,stem,extension):
-        for suffix in (extension,extension.upper()):
-            candidate=folder/(stem+suffix)
+    def probe(folder,ext):
+        for suffix in (ext,ext.upper()):
+            candidate=folder/(p.stem+suffix)
             if candidate.is_file() and not candidate.is_symlink():
                 return candidate
         return None
     for ext in result:
-        result[ext]=probe(p.parent,p.stem,ext)
-    if p.suffix.lower() in MIDI_EXT and not all(
+        result[ext]=probe(p.parent,ext)
+    if p.suffix.lower() not in MIDI_EXT or all(
             result[ext] for ext in (".lyr",".cur")):
-        context=None
-        found=ncn_reader.describe(p)
-        if found and found[1]=="song":
-            root,_,subdir,_=found
-            context=(root,subdir)
-        else:
-            # "Songs"/"Midi" folders also occur in NCN collection exports.
-            # No directory listing or broad recursive search per song.
-            for ancestor in p.parents:
-                if ancestor.name.casefold() in ("song","songs","mid","midi"):
-                    context=(ancestor.parent,p.parent.relative_to(ancestor))
-                    break
-        if context:
-            root,subdir=context
-            for ext,aliases in (
-                (".lyr",("Lyrics","Lyric","Lyr")),
-                (".cur",("Cursor","Cursors","Cur")),
-            ):
-                if result[ext]:
-                    continue
-                for alias in aliases:
-                    for folder_name in (alias,alias.lower(),alias.upper()):
-                        match=probe(root/folder_name/subdir,p.stem,ext)
-                        if match:
-                            result[ext]=match
-                            break
-                    if result[ext]:
+        return result
+
+    roots=[]
+    seen=set()
+    def add(root,subdir):
+        key=(str(root).casefold(),str(subdir).casefold())
+        if key not in seen:
+            roots.append((root,subdir))
+            seen.add(key)
+    found=ncn_reader.describe(p)
+    if found and found[1]=="song":
+        add(found[0],found[2])
+    # Mirror families: Song/Songs/MID/MIDI/Music and their LYR/CUR siblings.
+    for ancestor in p.parents:
+        if ancestor.name.casefold() in ("song","songs","mid","midi","music"):
+            add(ancestor.parent,p.parent.relative_to(ancestor))
+            break
+    # Other collections use <root>/0/<code>.mid and
+    # <root>/Lyrics/0/<code>.lyr, without a Song component.
+    ancestor=p.parent
+    for _ in range(4):
+        add(ancestor,p.parent.relative_to(ancestor))
+        if ancestor.parent==ancestor:
+            break
+        ancestor=ancestor.parent
+
+    aliases={
+        ".lyr":("Lyrics","Lyric","Lyr","Texts"),
+        ".cur":("Cursor","Cursors","Cur","Timing"),
+    }
+    for root,subdir in roots:
+        for ext,names in aliases.items():
+            if result[ext]:
+                continue
+            for name in names:
+                for folder in (name,name.lower(),name.upper()):
+                    match=probe(root/folder/subdir,ext)
+                    if match:
+                        result[ext]=match
                         break
+                if result[ext]:
+                    break
+        if result[".lyr"] and result[".cur"]:
+            break
     return result
 
 def parse_lrc(path):
