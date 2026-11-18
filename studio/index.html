@@ -614,6 +614,13 @@
             <div class="path-row"><input id="pc-export-folder" type="text" class="field" autocomplete="off" placeholder="เช่น D:\\Karaoke หรือ D:\\Karaoke\\Songs\\XStageSong"><button class="button ghost" type="button" data-pick="pc_export_folder">เลือกตำแหน่ง</button></div>
             <div class="toolbar"><button id="pc-export-inspect" class="button ghost" type="button">⌕ ตรวจคลังเพลงและพื้นที่</button><button id="pc-export-start" class="button primary" type="button">▣ ส่งออกไฟล์พร้อมฐานข้อมูล</button></div>
             <p id="pc-export-report" class="hint" role="status" aria-live="polite">เลือกตำแหน่งปลายทาง · ระบบจะตรวจไฟล์ SQLite และรายการเพลง JSON สำหรับทุกแพลตฟอร์มโดยไม่แก้ข้อมูล</p>
+            <details class="secondary-feature" id="pc-import-review">
+              <summary>ทบทวนเพลงซ้ำ / รหัสชนจากการนำเข้าก่อนหน้า</summary>
+              <div class="toolbar"><button type="button" id="pc-import-review-refresh" class="button ghost">อ่านรายการจากฐาน</button><button type="button" id="pc-import-review-prev" class="button ghost">ก่อนหน้า</button><span id="pc-import-review-page" class="hint">—</span><button type="button" id="pc-import-review-next" class="button ghost">ถัดไป</button></div>
+              <p id="pc-import-review-status" class="hint">แสดงหลักฐานจาก Import History เท่านั้น · การย้ายหรือลบไฟล์จริงต้องตรวจไฟล์และยืนยันก่อนดำเนินการ</p>
+              <div class="table-scroll" role="region" aria-label="รายการเพลงซ้ำจากฐาน"><table class="song-table"><thead><tr><th>ไฟล์เพลง</th><th>สถานะ</th><th>SHA-256 / เหตุผล</th></tr></thead><tbody id="pc-import-review-rows"><tr><td colspan="3">ยังไม่มีรายการ</td></tr></tbody></table></div>
+              <p class="hint">หากต้องการย้ายหรือลบไฟล์ ให้ไปเมนู “ตรวจเพลงซ้ำ” ซึ่งจะตรวจไฟล์จริง, SHA-256, และไฟล์ประกอบอีกครั้งก่อนทำรายการ เพื่อไม่ทำลาย Catalog ที่ใช้งานอยู่</p>
+            </details>
             <p id="pc-export-status" class="hint" role="status" aria-live="polite">ตรวจชื่อไฟล์ซ้ำก่อนคัดลอก · ใช้ SHA-256 ตรวจความสมบูรณ์ · ถ้าชื่อซ้ำแต่เนื้อหาต่างกันจะหยุดเพื่อให้ตรวจสอบ ไม่เขียนทับเอง · บันทึก current.json หลังคัดลอกสำเร็จ สร้าง/อัปเดต SQLite สำหรับ Karaoke PC และ JSON DB สำหรับนำไปเผยแพร่ Web/APK ผ่านบัญชี Google Drive ที่ได้รับอนุญาต</p>
           </article>
           <article class="panel import-preview-panel" aria-label="ทดลองเล่นเพลงก่อนนำเข้า">
