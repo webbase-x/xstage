@@ -479,9 +479,29 @@ def stats(workspace):
         for label,table in (("songs","xstage_songs"),("media","xstage_media"),
                             ("lyrics","xstage_lyric_versions"),("exports","xstage_exports")):
             counts[label]=db.execute("SELECT count(*) FROM "+table).fetchone()[0]
+        counts["songs_with_lyrics"]=db.execute(
+            "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1").fetchone()[0]
+        counts["songs_without_lyrics"]=max(0,counts["songs"]-counts["songs_with_lyrics"])
+        counts["songs_estimated_timing"]=db.execute(
+            "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1 AND timing_status='estimated'"
+        ).fetchone()[0]
+        counts["lyrics_versions"]=counts["lyrics"]
         counts["latest_batches"]=[dict(x) for x in db.execute(
             "SELECT * FROM xstage_import_batches ORDER BY created_at DESC LIMIT 4")]
         return counts
+
+def import_issues(workspace, limit=80):
+    """Recent failed or incomplete lyric imports; a media-only row is not an error."""
+    init(workspace)
+    with connect(workspace) as db:
+        rows=db.execute("""SELECT i.source_name,i.source_path,i.outcome,i.message,
+                       i.created_at,b.source_root
+                   FROM xstage_import_items i
+                   JOIN xstage_import_batches b ON b.id=i.batch_id
+                   WHERE i.outcome IN ('error','lyrics-error','timing-incomplete')
+                   ORDER BY i.id DESC LIMIT ?""",
+                   (max(1,min(int(limit),250)),)).fetchall()
+        return [dict(row) for row in rows]
 
 def songs(workspace,query="",limit=80,offset=0):
     init(workspace)
