@@ -19,6 +19,13 @@ def load(name):
     return module
 
 
+def minimal_midi():
+    track = bytes.fromhex("00 FF 2F 00")
+    return (b"MThd" + (6).to_bytes(4, "big")
+            + bytes.fromhex("00 00 00 01 01 E0")
+            + b"MTrk" + len(track).to_bytes(4, "big") + track)
+
+
 pro = load("json_pro_export")
 export = load("song_export")
 folder_upload = load("folder_upload")
@@ -86,6 +93,7 @@ class JsonProTests(unittest.TestCase):
         for p in (midi, lyr, cur):
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(b"NCN" + b"A" * 70)
+        midi.write_bytes(minimal_midi())
         class UnusedPreflight:
             def scan(self, *args, **kwargs):
                 raise AssertionError("Full-library preflight should never run")
@@ -614,7 +622,9 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(continued["pendingErrors"], 1)
         self.assertEqual(len(export.existing_records(library)), 1)
 
-        # Once a real timed companion is supplied, retry only the saved ERR.
+        # Repair both the corrupt MIDI and its missing timed companion.
+        # Adding lyrics alone must never make an invalid MIDI playable.
+        midi.write_bytes(minimal_midi())
         (self.source / "03702.lrc").write_text(
             "[00:02.00]ซ่อมข้อมูลแล้ว", encoding="utf-8")
         retried = self.run_export(source_stream=source_stream.stream,
