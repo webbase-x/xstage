@@ -2508,7 +2508,9 @@
         const path=document.createElement('td');
         path.textContent=item.path||'—';
         const status=document.createElement('td');
-        status.textContent=item.status==='duplicate'?'ซ้ำเดิม':'รหัสชน/รอตรวจ';
+        status.textContent=item.status==='duplicate'?'ซ้ำเดิม':
+          item.status==='conflict'?'รหัสชน/รอตรวจ':
+          item.status.startsWith('resolved_')?'จัดการแล้ว':item.status;
         const detail=document.createElement('td');
         detail.textContent=(item.sha256||'').slice(0,16)+'… · '+(item.reason||'');
         row.append(path,status,detail);
@@ -2530,6 +2532,45 @@
         ' รายการจากทะเบียนนำเข้าที่ตรวจแล้ว · ยังไม่ได้ลบหรือย้ายไฟล์ใด';
     } catch(error) {
       $('pc-import-review-status').textContent='ไม่สามารถอ่านทะเบียนเพลงซ้ำ: '+error.message;
+      message(error.message);
+    }
+  }
+  let driveImportReviewOffset=0, driveImportReviewTotal=0;
+  async function loadDriveImportReview(offset=0) {
+    try {
+      await saveInputs(['drive-import-source']);
+      const result=await api('/api/import-bundle/duplicates?target=drive&offset='+Math.max(0,offset));
+      const body=$('drive-import-review-rows');
+      body.replaceChildren();
+      for(const item of result.items||[]) {
+        const row=document.createElement('tr');
+        const path=document.createElement('td');
+        path.textContent=item.path||'—';
+        const status=document.createElement('td');
+        status.textContent=item.status==='duplicate'?'ซ้ำเดิม':
+          item.status==='conflict'?'รหัสชน/รอตรวจ':
+          item.status.startsWith('resolved_')?'จัดการแล้ว':item.status;
+        const detail=document.createElement('td');
+        detail.textContent=(item.sha256||'').slice(0,16)+'… · '+(item.reason||'');
+        row.append(path,status,detail); body.append(row);
+      }
+      if(!body.children.length) {
+        const row=document.createElement('tr'),cell=document.createElement('td');
+        cell.colSpan=3;cell.textContent='ไม่มีประวัติซ้ำ/รหัสชนในฐานต้นทาง';
+        row.append(cell);body.append(row);
+      }
+      driveImportReviewOffset=result.offset||0;
+      driveImportReviewTotal=result.total||0;
+      $('drive-import-review-page').textContent=driveImportReviewTotal
+        ? fmtNum(driveImportReviewOffset+1)+'–'+
+          fmtNum(Math.min(driveImportReviewTotal,driveImportReviewOffset+50))+
+          ' / '+fmtNum(driveImportReviewTotal):'0 รายการ';
+      $('drive-import-review-prev').disabled=driveImportReviewOffset===0;
+      $('drive-import-review-next').disabled=driveImportReviewOffset+50>=driveImportReviewTotal;
+      $('drive-import-review-status').textContent='พบ '+fmtNum(driveImportReviewTotal)+
+        ' รายการ · ข้อมูลจากประวัตินำเข้า ไม่สั่งลบ Google Drive อัตโนมัติ';
+    }catch(error){
+      $('drive-import-review-status').textContent='อ่านรายการซ้ำไม่สำเร็จ: '+error.message;
       message(error.message);
     }
   }
@@ -3975,6 +4016,9 @@
   $('pc-import-review-prev').addEventListener('click',()=>{void loadPCImportReview(Math.max(0,pcImportReviewOffset-50));});
   $('pc-import-review-next').addEventListener('click',()=>{void loadPCImportReview(pcImportReviewOffset+50);});
   $('drive-import-inspect').addEventListener('click',()=>{void inspectDriveBundle();});
+  $('drive-import-review-refresh').addEventListener('click',()=>{void loadDriveImportReview(0);});
+  $('drive-import-review-prev').addEventListener('click',()=>{void loadDriveImportReview(Math.max(0,driveImportReviewOffset-50));});
+  $('drive-import-review-next').addEventListener('click',()=>{void loadDriveImportReview(driveImportReviewOffset+50);});
   $('drive-import-start').addEventListener('click',()=>{void startDriveBundle();});
   $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
   $('pc-export-start').addEventListener('click',()=>{void startPCExport();});
