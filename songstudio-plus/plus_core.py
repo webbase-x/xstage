@@ -343,6 +343,38 @@ def companion_candidates(media):
             break
     return result
 
+def is_ncn_media(path,companions=None):
+    """NCN MID requires its matched LYR+CUR triplet; KAR/audio remain independent."""
+    p=Path(path)
+    if p.suffix.lower() not in (".mid",".midi"):
+        return False
+    if any(part.casefold()=="ncn" for part in p.parts):
+        return True
+    found=ncn_reader.describe(p)
+    if found and found[1]=="song":
+        return True
+    if any(ancestor.name.casefold() in ("song","songs") for ancestor in p.parents):
+        return True
+    comps=companions or {}
+    return bool(comps.get(".lyr") or comps.get(".cur"))
+
+
+def ncn_missing_companions(companions):
+    """Missing and empty companions cannot form a complete NCN triplet."""
+    result=[]
+    for ext in (".lyr",".cur"):
+        file=companions.get(ext)
+        if file is None:
+            result.append(ext[1:].upper())
+        else:
+            try:
+                if Path(file).stat().st_size==0:
+                    result.append(ext[1:].upper()+" (ว่าง)")
+            except OSError:
+                result.append(ext[1:].upper())
+    return result
+
+
 def parse_lrc(path):
     import re
     lines=[]
@@ -552,7 +584,7 @@ def import_folder(workspace,source,progress=None,cancel=None):
     batch=uuid.uuid4().hex
     totals={"files_seen":0,"files_new":0,"media_duplicates":0,
             "lyrics_new":0,"partial_lyrics":0,"draft_lyrics":0,
-            "failures":0,"hash_cache_hits":0,"bytes_hashed":0}
+            "skipped_ncn":0,"failures":0,"hash_cache_hits":0,"bytes_hashed":0}
     with WRITE_LOCK,connect(target) as db:
         db.execute("""INSERT INTO xstage_import_batches
             (id,source_root,created_at,status) VALUES (?,?,?,'running')""",
@@ -569,6 +601,24 @@ def import_folder(workspace,source,progress=None,cancel=None):
             h=None
             savepoint=False
             try:
+                # Validate NCN triplet before hashing; skip unpaired tracks
+                # and preserve any existing SQLite entries untouched.
+                comps=companion_candidates(path)
+                if is_ncn_media(path,comps):
+                    missing=ncn_missing_companions(comps)
+                    if missing:
+                        totals["skipped_ncn"]+=1
+                        outcome="skipped-ncn-incomplete"
+                        message="ข้าม NCN: "+", ".join(missing)+" ไม่มีหรือว่าง"
+                        db.execute("""INSERT INTO xstage_import_items
+                         (batch_id,source_path,source_name,media_sha256,song_id,
+                          outcome,message,created_at)
+                         VALUES (?,?,?,?,?,?,?,?)""",
+                         (batch,original_path,path.name,None,None,outcome,message,now()))
+                        if totals["files_seen"]%64==0:
+                            db.commit()
+                        if progress: progress(dict(totals),path.name)
+                        continue
                 before=path.stat()
                 if not 0<=before.st_size<SIZE_LIMIT:
                     raise ValueError("ขนาดไฟล์ไม่อยู่ในช่วงที่รองรับ")
@@ -584,8 +634,8 @@ def import_folder(workspace,source,progress=None,cancel=None):
                 after=path.stat()
                 if (after.st_size,after.st_mtime_ns)!=(before.st_size,before.st_mtime_ns):
                     raise ValueError("ไฟล์เพลงต้นฉบับเปลี่ยนระหว่างตรวจ SHA-256")
-                # Compute companions only AFTER media hash deduplication.
-                comps=companion_candidates(path)
+                # Companions were checked first so incomplete NCN source sets
+                # never trigger an expensive media SHA-256 or registration.
                 db.execute("SAVEPOINT plus_media_item")
                 savepoint=True
                 media=db.execute("SELECT * FROM xstage_media WHERE sha256=?",(h,)).fetchone()
@@ -952,7 +1002,7 @@ def import_issues(workspace, limit=80):
                    FROM xstage_import_items i
                    JOIN xstage_import_batches b ON b.id=i.batch_id
                    WHERE i.outcome IN ('error','lyrics-error','timing-incomplete',
-                                       'partial-lyrics','untimed-lyrics','missing-lyr')
+                                       'partial-lyrics','untimed-lyrics','missing-lyr','skipped-ncn-incomplete')
                    ORDER BY i.id DESC LIMIT ?""",
                    (max(1,min(int(limit),250)),)).fetchall()
         return [dict(row) for row in rows]
