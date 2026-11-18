@@ -8,6 +8,7 @@ from pathlib import Path
 from karaoke.ingest import Inspector
 from karaoke.index_plan import SongPlan
 from karaoke.plus_catalog import discover
+from karaoke.pc_xstagesong import catalog_rows
 from karaoke.smf import load_midi
 from karaoke.xmedia_reader import HEADER, MAGIC, inspect_xmedia, materialize_media
 
@@ -87,6 +88,11 @@ class XMediaPlaybackTests(unittest.TestCase):
             self.assertFalse(warnings)
             self.assertEqual(len(rows),1)
             self.assertEqual(rows[0][1]['title'],'เพลงจากฐาน')
+            imported_root, imported_rows=catalog_rows(root)
+            self.assertEqual(imported_root,root)
+            self.assertEqual(len(imported_rows),1)
+            self.assertEqual(imported_rows[0]['source_catalog'],'Song Studio Plus SQLite')
+            self.assertEqual(imported_rows[0]['title'],'เพลงจากฐาน')
             with SongPlan() as plan:
                 plan.folder(root)
                 hint=plan.hint(export)
