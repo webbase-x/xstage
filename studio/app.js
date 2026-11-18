@@ -2093,7 +2093,56 @@
     }
   }
   const selectedIDs = () => [...selected];
-  async function startStreamingXsk() {
+  let xskReviewOffset=0, xskReviewTotal=0;
+  const XSK_REVIEW_PAGE_SIZE=50;
+  async function loadXskReview(offset=0) {
+    if(!$('create-source').value.trim()) return message('กรุณาเลือกต้นทาง MIDI ก่อนทบทวนผล');
+    try {
+      await saveInputs(['create-source','xsk-build-folder']);
+      const filter=$('xsk-review-filter').value;
+      $('xsk-review-summary').textContent='กำลังอ่านประวัติจากคลัง XStageSong…';
+      const result=await api('/api/xsk/review?status='+encodeURIComponent(filter)+'&offset='+Number(offset));
+      xskReviewOffset=result.offset||0;
+      xskReviewTotal=result.total||0;
+      const body=$('xsk-review-rows');
+      body.replaceChildren();
+      for(const item of result.items||[]) {
+        const row=document.createElement('tr');
+        const name=document.createElement('td');
+        name.textContent=item.name||'ไฟล์';
+        name.title=item.path||'';
+        const status=document.createElement('td');
+        status.textContent={
+          completed:'สร้างสำเร็จ',duplicate:'ข้ามซ้ำ',
+          not_ready:'ไม่พร้อม',error:'ERR'
+        }[item.status]||item.status;
+        const reason=document.createElement('td');
+        reason.textContent=item.reason||'ตรวจและบันทึกผลลัพธ์เรียบร้อยแล้ว';
+        row.append(name,status,reason);
+        body.append(row);
+      }
+      if(!body.children.length) {
+        const row=document.createElement('tr'),cell=document.createElement('td');
+        cell.colSpan=3;cell.className='empty-row';
+        cell.textContent='ยังไม่มีรายการสำหรับตัวกรองนี้ · ใช้ “สร้างต่อจาก XSK เดิม” เพื่อรวบรวมสถานะของรุ่นก่อน';
+        row.append(cell);body.append(row);
+      }
+      $('xsk-review-summary').textContent=
+        'ประวัติในคลังเดิม · สำเร็จ '+fmtNum(result.counts?.completed||0)+
+        ' · ข้ามซ้ำ '+fmtNum(result.counts?.duplicate||0)+
+        ' · ไม่พร้อม '+fmtNum(result.counts?.not_ready||0)+
+        ' · ERR '+fmtNum(result.counts?.error||0);
+      $('xsk-review-page').textContent=xskReviewTotal
+        ? fmtNum(xskReviewOffset+1)+'–'+fmtNum(Math.min(xskReviewTotal,xskReviewOffset+XSK_REVIEW_PAGE_SIZE))+
+          ' / '+fmtNum(xskReviewTotal) : '0 รายการ';
+      $('xsk-review-prev').disabled=xskReviewOffset===0;
+      $('xsk-review-next').disabled=xskReviewOffset+XSK_REVIEW_PAGE_SIZE>=xskReviewTotal;
+    } catch(error) {
+      $('xsk-review-summary').textContent='ทบทวนรายการ XSK ไม่สำเร็จ: '+error.message;
+      message(error.message);
+    }
+  }
+  async function startStreamingXsk(retryIssuesOnly=false) {
     if(!canLaunch('xsk-stream'))return message('งานแปลงเพลงกำลังทำอยู่ หรือเครื่องไม่พร้อมรับงานเพิ่ม');
     try{
       await saveInputs(['create-source','xsk-build-folder',
@@ -2106,14 +2155,23 @@
         throw new Error('จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12');
       // One-click folder-to-folder batch conversion; input validation stays in place.
       // Engine retains duplicate, input integrity and no-overwrite safety checks.
-      $('xsk-stream-status').textContent='กำลังส่งงานสแกนและสร้าง .XSK แบบต่อเนื่อง…';
+      if(retryIssuesOnly) {
+        const check=await api('/api/xsk/review?status=all&offset=0');
+        if(!((check.counts?.not_ready||0)+(check.counts?.error||0)))
+          return message('ยังไม่มีรายการ XSK ที่ไม่พร้อมหรือ ERR ในฐานประวัติ · ให้สั่งสร้างต่อจากคลังเดิมหนึ่งรอบก่อน');
+      }
+      $('xsk-stream-status').textContent=retryIssuesOnly
+        ? 'กำลังลองใหม่เฉพาะไฟล์ XSK ที่ไม่พร้อม/ERR จากประวัติ'
+        : 'กำลังสร้าง XSK ต่อจากคลังเดิมโดยไม่สร้างไฟล์ที่ยืนยันแล้วซ้ำ';
       const started=await run('xsk-stream',{
         source,xsk_folder:destination,
         code_style:$('xsk-stream-code-style').value,
-        code_length:String(count)
+        code_length:String(count),
+        retry_issues_only:retryIssuesOnly
       });
-      if(started)$('xsk-stream-status').textContent=
-        'PC Engine รับงานแล้ว · จัดคิวครั้งละ 32 เพลง · ตรวจความคืบหน้าที่แผงงานด้านล่าง';
+      if(started)$('xsk-stream-status').textContent=retryIssuesOnly
+        ? 'PC Engine รับงานทบทวนเฉพาะไม่พร้อม/ERR แล้ว · ไม่สแกนเพลงที่สำเร็จ'
+        : 'PC Engine รับงานแล้ว · ตรวจใช้ XSK เดิมและสร้างใหม่จากชุดแรกทันที';
     }catch(error){
       $('xsk-stream-status').textContent='เริ่มงานไม่สำเร็จ: '+error.message;
       message(error.message);
@@ -2547,7 +2605,9 @@
       const details='ตรวจไฟล์ '+fmtNum(scanned)+' · พบ MIDI '+fmtNum(discovered)+
         ' · ประมวลผล '+fmtNum(processed)+' · สร้าง '+fmtNum(job.created||0)+
         ' · ข้ามซ้ำ '+fmtNum(job.skipped||0)+' · ไม่พร้อม '+fmtNum(job.notReady||0)+
-        ' · ERR '+fmtNum(job.errors||0);
+        ' · ERR '+fmtNum(job.errors||0)+
+        ' · ใช้ผลเดิม '+fmtNum(job.resumed||0)+
+        ' · ค้างทบทวน '+fmtNum(job.deferred||0);
       $('xsk-stream-status').textContent=details+
         (job.scanDone?'\\nสแกนจบแล้ว · กำลังทำรายการที่อยู่ในคิวให้ครบ':
            '\\nกำลังสแกนต่อพร้อมสร้างเพลง · รอคิว '+fmtNum(job.queuedBatches||0)+' ชุด')+
@@ -3081,6 +3141,11 @@
   });
   $('create-build-show-log').addEventListener('click',showBuildLog);
   $('xsk-stream-build').addEventListener('click',()=>{void startStreamingXsk();});
+  $('xsk-stream-retry').addEventListener('click',()=>{void startStreamingXsk(true);});
+  $('xsk-review-refresh').addEventListener('click',()=>{void loadXskReview(0);});
+  $('xsk-review-filter').addEventListener('change',()=>{void loadXskReview(0);});
+  $('xsk-review-prev').addEventListener('click',()=>{void loadXskReview(Math.max(0,xskReviewOffset-XSK_REVIEW_PAGE_SIZE));});
+  $('xsk-review-next').addEventListener('click',()=>{void loadXskReview(xskReviewOffset+XSK_REVIEW_PAGE_SIZE);});
   $('build-button').addEventListener('click',()=>{void startBuild(false);});
   $('build-audio-button').addEventListener('click',()=>{void startBuild(true);});
   $('preview-button').addEventListener('click',()=>{void startLivePreview();});
