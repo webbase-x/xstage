@@ -18,11 +18,11 @@ concurrency:
 jobs:
   core-and-web:
     name: SQLite, NCN, X-media and UI checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Compile standalone app
@@ -53,8 +53,8 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Install isolated EXE builder
@@ -75,7 +75,7 @@ jobs:
           "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           "Local-only SQLite Engine. XMID/X-media player integration pending. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           Write-Host "EXE SHA-256 $hash"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: X-Stage-Song-Studio-Plus-v0.1.5-Windows-Preview
           path: |
