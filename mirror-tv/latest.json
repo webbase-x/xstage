@@ -1,9 +1,11 @@
 {
-  "available": false,
+  "available": true,
   "package": "com.webbasex.xstagemirror.tv",
-  "version": "0.2.0",
-  "build": 102,
-  "file": "",
-  "sha256": "",
-  "notes": "Automatic updates are activated only after a securely signed GitHub Release is published."
+  "version": "0.2.13",
+  "build": 115,
+  "file": "X-Stage-Mirror-TV-v0.2.13-build115.apk",
+  "sha256": "795c4ccaa6282da143f6670e365605218c159ca0ce6c25f2fb4e1e285982dd1c",
+  "signing_mode": "persistent",
+  "signer_sha256": "1dd8553727b1a94616410310955c9eb28b7b3ced091f1d658516de4c79a6eea0",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-mirror-tv-v0.2.13-build115/X-Stage-Mirror-TV-v0.2.13-build115.apk"
 }
