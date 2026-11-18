@@ -278,6 +278,99 @@ class LyricHeadTailTests(unittest.TestCase):
         self.assertEqual(bulk.undo(self.backups,self.root,result["backupId"])["restoredSongs"],1)
         self.assertEqual((self.root/"lyrics"/"0"/"001.json").read_bytes(),before)
 
+    def test_nick_three_exact_line_groups_replace_35_songs_with_independent_cues(self):
+        # Search is case-insensitive, but groups are exact complete lines.
+        # A single replacement is applied to every selected full-line group.
+        cases = [(".....nick.....", 10), ("Nick ......", 5),
+                 ("By  nick >>>", 20)]
+        originals = {}
+        for group_number, (old_text, count) in enumerate(cases):
+            for number in range(count):
+                code = str(1000 + group_number * 100 + number)
+                audio = self.root / "audio" / "0" / (code + ".m4a")
+                audio.write_bytes(b"fLaC!" * 3000)
+                lines = ["intro", "another intro", old_text,
+                         "the following line", "outro", "the end"]
+                lrc_text = "".join(
+                    f"[00:{(index + 1) * 2:02d}.00]{line}\\n"
+                    for index, line in enumerate(lines))
+                lyric = export.save_lyrics(self.root, audio, lrc_text, code)
+                document = json.loads(lyric.read_text(encoding="utf-8"))
+                edited_line = document["lines"][2]
+                start, end = edited_line["startTime"], edited_line["endTime"]
+                units = bulk._display_units(old_text)
+                # A different non-linear original CUR pacing for each song.
+                power = 0.7 + number * 0.07
+                positions = [start + (end - start) *
+                             (index / len(units)) ** power
+                             for index in range(len(units))]
+                edited_line["syllables"] = [
+                    {"text": unit, "start": position,
+                     "duration": (positions[index + 1] if index + 1 < len(units)
+                                  else end) - position}
+                    for index, (unit, position) in enumerate(zip(units, positions))]
+                edited_line["characters"] = [
+                    {"text": unit, "startTime": position}
+                    for unit, position in zip(units, positions)]
+                lyric.write_text(json.dumps(document, ensure_ascii=False),
+                                 encoding="utf-8")
+                row = {"webSongId": "audio/0/" + code, "code": code,
+                       "title": "เพลง " + code, "artist": "ศิลปิน",
+                       "sourceFormat": "MP3", "mode": "original", "bucket": "0",
+                       "audio": {"path": "audio/0/" + code + ".m4a",
+                                 "size": audio.stat().st_size},
+                       "lyrics": {"path": "lyrics/0/" + code + ".json"},
+                       "vocals": None}
+                self.records.append(row)
+                originals[code] = document
+        export.publish_batch(self.root, self.records)
+        snapshot = self.snapshot()
+        groups = bulk.list_groups(snapshot, "all", search="Nick")["rows"]
+        self.assertEqual(sorted(item["count"] for item in groups), [5, 10, 20])
+        replacement = "x-stage karaoke"
+        group_ids = [item["id"] for item in groups]
+        plan = bulk.plan(snapshot, group_ids, search="Nick",
+                         replacement=replacement)
+        self.assertEqual((plan["changedSongs"], plan["changedLines"]), (35, 35))
+        result = bulk.apply_many_smart(
+            self.root, export, snapshot, group_ids, replacement, self.backups,
+            search="Nick", expected_count=35)
+        self.assertEqual(result["changedSongs"], 35)
+        self.assertEqual(result["changedLines"], 35)
+        self.assertEqual(result["skippedInvalid"], 0)
+        self.assertEqual(result["estimatedLines"], 35)
+        swipe_shapes = set()
+        for row in self.records:
+            code = row["code"]
+            if code not in originals:
+                continue
+            updated = json.loads(
+                (self.root / row["lyrics"]["path"]).read_text(encoding="utf-8"))
+            before = originals[code]
+            self.assertEqual(updated["lines"][2]["text"], replacement)
+            self.assertEqual(updated["lines"][2]["timingMethod"],
+                             "line-local-resampled-original-cues")
+            for index in (0, 1, 3, 4, 5):
+                self.assertEqual(updated["lines"][index], before["lines"][index])
+            self.assertEqual(updated["lines"][2]["startTime"],
+                             before["lines"][2]["startTime"])
+            self.assertEqual(updated["lines"][2]["endTime"],
+                             before["lines"][2]["endTime"])
+            cues = updated["lines"][2]["syllables"]
+            self.assertEqual("".join(cue["text"] for cue in cues), replacement)
+            self.assertEqual(
+                [(c["text"], c["start"]) for c in cues],
+                [(c["text"], c["startTime"])
+                 for c in updated["lines"][2]["characters"]])
+            self.assertTrue(all(before["lines"][2]["startTime"] <= c["start"] <=
+                                before["lines"][2]["endTime"] for c in cues))
+            swipe_shapes.add(tuple(round(c["start"] - cues[0]["start"], 3)
+                                   for c in cues))
+        self.assertGreater(len(swipe_shapes), 1,
+                           "Each song must retain its own non-linear swipe pacing")
+        self.assertEqual(
+            bulk.undo(self.backups, self.root, result["backupId"])["restoredSongs"], 35)
+
     def test_all_line_search_requires_query_and_rejects_overlong_phrase(self):
         snap=self.snapshot()
         self.assertEqual(bulk.list_groups(snap,"all",search="")["total"],0)
