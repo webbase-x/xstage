@@ -84,10 +84,15 @@ class RiskAuditTests(unittest.TestCase):
         self.assertIn("CUE_OUTSIDE_LINE",[f["rule"] for f in entries[0]["findings"]])
 
     def test_incomplete_cur_not_falsely_labeled_playable_risk(self):
-        self.ncn(cursor=False)
+        self.put("NCN/Song/0/00400.mid",midi())
+        self.put("NCN/Lyrics/0/00400.lyr",
+                 "เพลงทดสอบ\nผู้ร้อง\nC\n\nNick\n".encode("cp874"))
+        result=core.import_folder(self.workspace,self.source)
+        self.assertEqual(result["skipped_ncn"],1)
+        self.assertEqual(core.stats(self.workspace)["songs"],0)
         report=audit.scan(self.workspace)
-        # A missing CUR creates only an untimed draft: there is no
-        # current version to diagnose, so there must be no invented risk.
+        # Missing CUR means NCN source is skipped, never labeled a risk
+        # or made available as an imaginary playable song.
         self.assertEqual(report["total"],0)
         self.assertEqual(audit.list_findings(self.workspace,"structural")["total"],0)
         self.assertEqual(audit.list_findings(self.workspace,"unverified")["total"],0)
