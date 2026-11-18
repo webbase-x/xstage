@@ -21,15 +21,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      PORTAL_KEY_BASE64: ${{ secrets.XSTAGE_PORTAL_KEYSTORE_BASE64 }}
-      PORTAL_STORE_PASSWORD: ${{ secrets.XSTAGE_PORTAL_STORE_PASSWORD }}
-      PORTAL_KEY_ALIAS: ${{ secrets.XSTAGE_PORTAL_KEY_ALIAS }}
-      PORTAL_KEY_PASSWORD: ${{ secrets.XSTAGE_PORTAL_KEY_PASSWORD }}
-      ANDROID_KEY_BASE64: ${{ secrets.XSTAGE_ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_STORE_PASSWORD: ${{ secrets.XSTAGE_ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.XSTAGE_ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.XSTAGE_ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -51,6 +42,12 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Prepare stable signing identity when configured
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          PORTAL_KEY_BASE64: ${{ secrets.XSTAGE_MIRROR_KEYSTORE_BASE64 }}
+          PORTAL_STORE_PASSWORD: ${{ secrets.XSTAGE_MIRROR_STORE_PASSWORD }}
+          PORTAL_KEY_ALIAS: ${{ secrets.XSTAGE_MIRROR_KEY_ALIAS }}
+          PORTAL_KEY_PASSWORD: ${{ secrets.XSTAGE_MIRROR_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
@@ -59,12 +56,6 @@ jobs:
           STORE="$PORTAL_STORE_PASSWORD"
           ALIAS="$PORTAL_KEY_ALIAS"
           PASS="$PORTAL_KEY_PASSWORD"
-          if [[ -z "$KEY$STORE$ALIAS$PASS" ]]; then
-            KEY="$ANDROID_KEY_BASE64"
-            STORE="$ANDROID_STORE_PASSWORD"
-            ALIAS="$ANDROID_KEY_ALIAS"
-            PASS="$ANDROID_KEY_PASSWORD"
-          fi
           if [[ -n "$KEY" && -n "$STORE" && -n "$ALIAS" && -n "$PASS" ]]; then
             printf %s "$KEY" | base64 -d > "${RUNNER_TEMP}/xstage-portal.jks"
             echo "XSTAGE_PORTAL_KEYSTORE_FILE=${RUNNER_TEMP}/xstage-portal.jks" >> "$GITHUB_ENV"
@@ -107,6 +98,9 @@ jobs:
           import json,sys
           from pathlib import Path
           old=json.loads(Path("downloads/apps-portal-latest.json").read_text())
+          mirror=json.loads(Path("mirror-tv/test-latest.json").read_text())
+          if mirror.get("signing_mode") != "persistent" or mirror.get("signer_sha256") != sys.argv[1]:
+              raise SystemExit("Portal certificate differs from the published Mirror TV certificate")
           prior=old.get("signer_sha256")
           if prior and prior != sys.argv[1]:
               raise SystemExit("Refusing signer rotation; installed APKs cannot update safely")
