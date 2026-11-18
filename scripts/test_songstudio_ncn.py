@@ -341,6 +341,30 @@ class NcnSourceTests(unittest.TestCase):
         self.assertAlmostEqual(document["lines"][0]["characters"][1]["startTime"], .25)
         self.assertEqual(mid.read_bytes(), raw, "Do not alter source MIDI files")
 
+    def test_karaoke_protected_marker_parses_original_tempo_read_only(self):
+        # Legacy karaoke uses Lock/Good as headers, followed by valid SMF
+        # header/tracks and a proprietary trailing notice.
+        for marker in (b"Lock", b"Good"):
+            with self.subTest(marker=marker):
+                code = "0004" + ("9" if marker == b"Lock" else "A")
+                mid, lyr, cur = self.make_ncn(code, "0", lyric="กข")
+                original = marker + mid.read_bytes()[4:] + (
+                    b"\r\n-=-=-\r\nNote: protected source notice\r\n")
+                mid.write_bytes(original)
+                document = ncn.ncn_document(ncn.resolve_companions(mid))
+                self.assertEqual(document["sourceFormat"], "NCN")
+                self.assertEqual(document["lines"][0]["text"], "กข")
+                self.assertAlmostEqual(
+                    document["lines"][0]["characters"][1]["startTime"], .25)
+                self.assertEqual(mid.read_bytes(), original)
+
+    def test_karaoke_protected_marker_rejects_invalid_track(self):
+        mid, lyr, cur = self.make_ncn("0004B", "0", lyric="กข")
+        invalid = b"Lock" + mid.read_bytes()[4:14] + b"NoTr" + mid.read_bytes()[18:]
+        mid.write_bytes(invalid)
+        with self.assertRaisesRegex(ValueError, "track"):
+            ncn.ncn_document(ncn.resolve_companions(mid))
+
     def test_unknown_midi_header_is_reported_not_guessed(self):
         mid, lyr, cur = self.make_ncn("00048", "0", lyric="กข")
         mid.write_bytes(b"NOPE" + mid.read_bytes()[4:])
