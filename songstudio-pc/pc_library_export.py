@@ -349,9 +349,19 @@ def inspect(source_root, selected_destination, export, *, _include_plan=False,
               "webApkRequiresDriveUpload": True,
               "databaseAction": "update" if db_path.is_file() else "create",
               "databaseInstalled": installed}
-    # The UI inspect action returns only metadata. A direct publish reuses this
-    # exact verified plan rather than reading and hashing the whole library
-    # a second time before the actual atomic file-copy checks.
+    # Internal only: preserve all exact duplicates for the review database.
+    # The public preview remains bounded to 25 rows.
+    if _include_plan and selection is not None:
+        duplicate_paths = {item["path"] for item in selection["duplicates"]}
+        conflict_codes = {str(item["code"]) for item in selection["conflicts"]}
+        report["_duplicate_rows"] = [
+            row for row in all_records
+            if (row.get("audio") or {}).get("path") in duplicate_paths]
+        report["_conflict_rows"] = [
+            row for row in all_records if str(row.get("code")) in conflict_codes
+            and (row.get("audio") or {}).get("path") not in duplicate_paths]
+    # A direct publish reuses the same verified plan, while user-visible
+    # inspection returns metadata and short samples only.
     return (report, records, existing, files, replacements) if _include_plan else report
 
 
@@ -465,10 +475,20 @@ def publish(source_root, selected_destination, export, *, cancelled=None, progre
             groups=None):
     report, records, previous, files, replacements = inspect(
         source_root, selected_destination, export, _include_plan=True, groups=groups)
+    duplicates_to_review = report.pop("_duplicate_rows", [])
+    conflicts_to_review = report.pop("_conflict_rows", [])
     if not records and groups is not None:
+        if duplicates_to_review:
+            _registry_module().log_import(
+                report["destination"], "pc", report["source"], duplicates_to_review,
+                "duplicate", "เพลงนี้มีในฐาน Karaoke PC อยู่แล้ว · ไม่คัดลอกซ้ำ")
+        if conflicts_to_review:
+            _registry_module().log_import(
+                report["destination"], "pc", report["source"], conflicts_to_review,
+                "conflict", "เพลงคนละชุดใช้รหัสตรงกัน · ต้องตรวจสอบ")
         return {**report, "copied": 0, "reused": 0,
                 "songCount": len(previous), "message":
-                "ไม่มีเพลงใหม่ตามตัวกรอง · คลัง Karaoke PC เดิมไม่เปลี่ยน"}
+                "ไม่มีเพลงใหม่ตามตัวกรอง · บันทึกรายการซ้ำและความขัดแย้งไว้ทบทวนแล้ว"}
     source = Path(report["source"])
     dest = Path(report["destination"])
     planned = [_pc_row(row, replacements) for row in records]
@@ -521,15 +541,14 @@ def publish(source_root, selected_destination, export, *, cancelled=None, progre
         registry = _registry_module()
         registry.log_import(dest, "pc", source, records, "imported",
                             "คัดลอกและเผยแพร่ SQLite/Catalog ผ่านแล้ว")
-        # Duplicates remain in a reviewable record; no source/target file is
-        # removed automatically, even after a successful import.
-        all_rows = _source(source, export)
-        duplicate_rows = [r for r in all_rows
-                          if (r.get("audio") or {}).get("path") in
-                          {x["path"] for x in report.get("duplicates", [])}]
-        if duplicate_rows:
-            registry.log_import(dest, "pc", source, duplicate_rows, "duplicate",
-                                "พบไฟล์/เพลงที่มีแล้วในฐานปลายทาง · ไม่ลบไฟล์")
+        # Register every duplicate and unresolved code conflict from the
+        # exact same import plan, not just the 25 visible preview examples.
+        if duplicates_to_review:
+            registry.log_import(dest, "pc", source, duplicates_to_review, "duplicate",
+                                "มีอยู่ในฐานปลายทางแล้ว · ไม่คัดลอกไฟล์ซ้ำ")
+        if conflicts_to_review:
+            registry.log_import(dest, "pc", source, conflicts_to_review, "conflict",
+                                "รหัสเพลงขัดแย้ง · ไม่ลบไฟล์")
     return {**report, **db_result, "copied": copied, "reused": reused,
             "songCount": len(combined),
             "portableDatabase": str(portable_path),
