@@ -1,11 +1,13 @@
 {
-  "name": "X-Stage Apps Portal for Android",
-  "available": false,
-  "channel": "pending",
+  "name": "X-Stage Apps Portal Android",
   "version": "1.0.0",
   "build": 1,
-  "file": null,
-  "sha256": null,
-  "signer_sha256": null,
-  "note": "Signed APK will appear here after a successful verified release build."
+  "channel": "signed",
+  "available": true,
+  "file": "X-Stage-Apps-Portal-v1.0.0-build1.apk",
+  "sha256": "de0ac1b7457265a7f467efa6ebe79f50785e0c748ec0a2b1371d00304030a873",
+  "signer_sha256": "1dd8553727b1a94616410310955c9eb28b7b3ced091f1d658516de4c79a6eea0",
+  "download_url": "https://webbase-x.github.io/xstage/downloads/X-Stage-Apps-Portal-v1.0.0-build1.apk",
+  "source_commit": "6a20aea907cdaea8cc1287f045f1798c4c672ded",
+  "note": "Verified production-signed APK; hosted web UI updates on app launch."
 }
