@@ -64,3 +64,19 @@
 }
 
 .zoom-hint{font-size:10px;line-height:1.5;color:#a7b9d1}
+
+/* Clear song readiness overview: media entries and lyric versions aren't interchangeable. */
+@media(min-width:950px){
+  .stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(min-width:691px) and (max-width:949px){
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+.stat-attention{border-color:#795838;background:linear-gradient(140deg,#222b3d,#302a2b)}
+.stat-attention strong{color:#f1c793}
+.issues-panel{margin-top:18px}
+.issues-panel .panel-head{margin-bottom:10px;align-items:center}
+.issues-list{max-height:380px;overflow-y:auto;display:grid;gap:9px;scrollbar-width:thin}
+.issue-item{border:1px solid #36445f;border-radius:11px;background:#111e35;padding:12px 15px}
+.issue-item strong{display:block;font-size:12px;color:#dfeaff;overflow-wrap:anywhere}
+.issue-item p{font-size:11px;color:#bdc7d9;margin:6px 0 0;line-height:1.7;overflow-wrap:anywhere}
