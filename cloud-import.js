@@ -429,7 +429,7 @@ class Importer {
     const editor=this.videoEditor;
     const pending=editor?.pendingCount()||0;
     const ready=this.plan.songs.length-pending+this.plan.midis.length+
-      this.plan.xsks.length;
+      this.plan.xsks.length+this.plan.xmedias.length;
     this.dom.ready.textContent=ready.toLocaleString('th-TH');
     this.dom.blocked.textContent=(this.plan.blocked.length+pending).toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,6).map(x=>x.key+' · '+x.reason);
@@ -442,7 +442,7 @@ class Importer {
     const approvedVideos=this.videoEditor?.eligibleCount()||0;
     const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
     const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+
-      this.plan.xsks.length+this.plan.fonts.length)>0;
+      this.plan.xsks.length+this.plan.xmedias.length+this.plan.fonts.length)>0;
     this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
@@ -524,7 +524,7 @@ class Importer {
     this.updateVideoStats();
     this.progress(0,1);
     this.status('ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์');
-    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length});
+    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.xsks.length+this.plan.xmedias.length+this.plan.fonts.length});
     this.refreshButtons();
   }
   async save(extra={}){
@@ -1060,7 +1060,7 @@ class Importer {
         'หยุดงานแล้ว · ไฟล์ที่ส่งสำเร็จยังอยู่ · เปิดใหม่และกดทำต่อ':
         'หยุดเพราะข้อผิดพลาด: '+(error.message||error)+' · ตรวจแล้วกดทำต่อ');
       await this.save({status:'paused',total:this.plan.songs.length+
-        this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length,
+        this.plan.midis.length+this.plan.xsks.length+this.plan.xmedias.length+this.plan.fonts.length,
         error:aborted(error)?'paused':String(error.message||error)});
     }finally{
       this.running=false;this.controller=null;this.refreshButtons();
