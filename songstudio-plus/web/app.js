@@ -8,9 +8,15 @@
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
                  songOffset:0,songHasNext:false,groupOffset:0,groupHasNext:false,
                  selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
-                 lyricTimed:[],lyricDraft:[],lyricOffset:0,lyricShowDraft:false};
+                 lyricTimed:[],lyricDraft:[],lyricOffset:0,lyricShowDraft:false,
+                 previewOffset:0,previewSongs:[],previewHasNext:false,
+                 previewSelected:null,previewPlaying:false,previewHeard:false,
+                 previewTime:0,previewDuration:0,previewRaf:null,
+                 previewLastPaint:0,previewMidiSample:0,previewMidiAt:0,
+                 previewPolling:false,previewMidiPoll:null};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
-                build:"สร้างไฟล์ X-Stage",library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
+                preview:"ทดสอบก่อนสร้าง .x...",build:"สร้างไฟล์ X-Stage",
+                library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
   function text(id,value){const node=$(id);if(node)node.textContent=value;}
   function toast(message,error=false){
@@ -36,6 +42,7 @@
   }
   function view(name){
     if(!labels[name])return;
+    if(state.view==="preview"&&name!=="preview")void stopPreviewPlayback();
     state.view=name;
     for(const element of document.querySelectorAll(".view"))
       element.classList.toggle("is-visible",element.id==="view-"+name);
@@ -47,6 +54,7 @@
       void refreshSongs();
     }
     if(name==="import")void refreshStatus();
+    if(name==="preview")void loadPreviewSongs();
     if(name==="risks")void loadRisks();
     if(name==="lyrics"&&$("lyrics-search").value.trim())void searchGroups();
     document.title=labels[name]+" · X-Stage Song Studio Plus";
@@ -640,11 +648,324 @@
     state.riskFilter=filter;state.riskOffset=0;
     void loadRisks();
   }
+  function previewFormatSeconds(seconds){
+    if(!Number.isFinite(seconds))return "00:00";
+    const whole=Math.max(0,Math.floor(seconds));
+    return String(Math.floor(whole/60)).padStart(2,"0")+":"+
+      String(whole%60).padStart(2,"0");
+  }
+  async function loadPreviewSongs(){
+    if(!state.ready)return;
+    try{
+      const pageSize=visibleRows();
+      const found=await api("/api/songs?q="+encodeURIComponent($("preview-search").value.trim())+
+        "&limit="+(pageSize+1)+"&offset="+state.previewOffset);
+      state.previewHasNext=(found.rows||[]).length>pageSize;
+      state.previewSongs=(found.rows||[]).slice(0,pageSize);
+      renderPreviewSongs();
+    }catch(error){toast(error.message,true);}
+  }
+  function renderPreviewSongs(){
+    const box=$("preview-songs");box.replaceChildren();
+    if(!state.previewSongs.length){
+      const empty=document.createElement("p");
+      empty.className="empty-small";empty.textContent="ไม่พบเพลงที่ตรงคำค้น";
+      box.append(empty);
+    }
+    for(const song of state.previewSongs){
+      const button=document.createElement("button");
+      button.type="button";button.className="preview-track";
+      button.classList.toggle("chosen",state.previewSelected?.song_id===song.id);
+      const title=document.createElement("strong");
+      title.textContent=String(song.code).padStart(8,"0")+" · "+song.title;
+      const small=document.createElement("small");
+      small.textContent=(song.artist||"ไม่ระบุศิลปิน")+
+        " · "+song.extension.toUpperCase()+" · "+
+        (song.version_id?(song.timing_status==="incomplete"?"CUR ไม่ครบ":song.timing_status):
+          "ยังไม่มีเวลาปาด");
+      button.append(title,small);
+      button.addEventListener("click",()=>void selectPreviewSong(song));
+      box.append(button);
+    }
+    text("preview-page","หน้า "+number(Math.floor(state.previewOffset/visibleRows())+1));
+    $("preview-prev").disabled=state.previewOffset<=0;
+    $("preview-next").disabled=!state.previewHasNext;
+  }
+  function currentPreviewMedia(){
+    return state.previewSelected?.mode==="video"?$("preview-video"):$("preview-audio");
+  }
+  async function stopPreviewPlayback(){
+    const old=state.previewSelected;
+    state.previewPlaying=false;
+    for(const e of [$("preview-audio"),$("preview-video")]){e.pause();e.removeAttribute("src");e.load();}
+    if(old?.mode==="midi"&&state.token){
+      try{await api("/api/preview/midi/stop",{});}catch{/* engine may be shutting down */}
+    }
+    if(state.previewMidiPoll){clearInterval(state.previewMidiPoll);state.previewMidiPoll=null;}
+  }
+  async function selectPreviewSong(song){
+    await stopPreviewPlayback();
+    state.previewSelected=null;
+    state.previewTime=0;state.previewDuration=0;state.previewHeard=false;
+    updatePreviewControls();
+    try{
+      const details=await api("/api/preview?song_id="+encodeURIComponent(song.id));
+      state.previewSelected=details;
+      state.previewDuration=details.duration||0;
+      state.previewTime=0;
+      state.previewMidiSample=0;
+      state.previewMidiAt=performance.now();
+      text("preview-song-title",String(details.code).padStart(8,"0")+" · "+details.title);
+      text("preview-song-artist",details.artist||"ไม่ระบุศิลปิน");
+      text("preview-media-mode",details.mode==="midi"?"MIDI / Windows Synth":
+        details.mode==="video"?"VIDEO / Original":"AUDIO / Original");
+      text("preview-warning",details.warning);
+      text("preview-review-status",
+        details.version_id?"ยังไม่มีผลตรวจจากการฟังเพลงนี้ในหน้านี้":
+        "ยังไม่มีเนื้อร้องพร้อมเวลา · ทดสอบเสียงต้นฉบับได้ แต่ยังสร้าง .x... ไม่ได้");
+      $("preview-video").hidden=details.mode!=="video";
+      $("preview-cover").hidden=details.mode==="video";
+      if(details.mode!=="midi"){
+        const media=currentPreviewMedia();
+        media.src="/api/preview/media?song_id="+encodeURIComponent(song.id)+
+          "&token="+encodeURIComponent(state.token);
+        media.load();
+      }
+      renderPreviewSongs();
+      updatePreviewControls();
+      updatePreviewLyrics();
+    }catch(error){
+      text("preview-warning",error.message);
+      toast(error.message,true);
+    }
+  }
+  function updatePreviewControls(){
+    const detail=state.previewSelected;
+    const selected=Boolean(detail);
+    const canReview=selected&&Boolean(detail.version_id)&&state.previewHeard;
+    $("preview-play").disabled=!selected;
+    $("preview-pause").disabled=!selected||!state.previewPlaying;
+    $("preview-seek").disabled=!selected||state.previewDuration<=0;
+    $("preview-seek").max=String(Math.max(0,state.previewDuration));
+    $("preview-seek").value=String(Math.min(state.previewDuration,state.previewTime));
+    $("preview-pass").disabled=!canReview;
+    $("preview-fail").disabled=!canReview;
+    $("preview-needs").disabled=!selected||!detail.version_id;
+    $("preview-note").disabled=!selected||!detail.version_id;
+    $("preview-to-build").disabled=!selected||!detail.version_id||
+      detail.timing_status==="incomplete";
+    text("preview-clock",previewFormatSeconds(state.previewTime)+
+      " / "+previewFormatSeconds(state.previewDuration));
+  }
+  async function playPreview(){
+    const track=state.previewSelected;
+    if(!track)return;
+    try{
+      if(track.mode==="midi"){
+        const status=await api("/api/preview/midi/play",{
+          song_id:track.song_id,seek:Math.min(state.previewTime,
+            Math.max(0,state.previewDuration-0.05))
+        });
+        if(status.status==="error")throw new Error(status.error||"MIDI Synthesizer ไม่พร้อม");
+        state.previewMidiSample=status.position||0;
+        state.previewMidiAt=performance.now();
+        state.previewPlaying=true;
+        state.previewHeard=true;
+        if(!state.previewMidiPoll)
+          state.previewMidiPoll=setInterval(()=>void pollPreviewMidi(),250);
+      }else{
+        const media=currentPreviewMedia();
+        await media.play();
+        state.previewPlaying=true;
+        state.previewHeard=true;
+      }
+      text("preview-warning",track.warning);
+      updatePreviewControls();
+      requestPreviewFrame();
+    }catch(error){
+      state.previewPlaying=false;
+      text("preview-warning","เล่นเสียงไม่ได้: "+error.message+
+        " · ไม่บันทึกว่าตรวจการปาดสีผ่าน");
+      toast(error.message,true);
+      updatePreviewControls();
+    }
+  }
+  async function pausePreview(){
+    const track=state.previewSelected;
+    if(!track)return;
+    if(track.mode==="midi"){
+      try{
+        const status=await api("/api/preview/midi/pause",{});
+        state.previewTime=status.position;
+      }catch(error){toast(error.message,true);}
+    }else{
+      currentPreviewMedia().pause();
+      state.previewTime=currentPreviewMedia().currentTime||0;
+    }
+    state.previewPlaying=false;
+    updatePreviewControls();
+    updatePreviewLyrics();
+  }
+  async function seekPreview(seconds){
+    const track=state.previewSelected;if(!track)return;
+    state.previewTime=Math.max(0,Math.min(state.previewDuration,Number(seconds)||0));
+    if(track.mode==="midi"){
+      if(state.previewPlaying)await playPreview();
+    }else{
+      const player=currentPreviewMedia();
+      if(Number.isFinite(player.duration))player.currentTime=state.previewTime;
+    }
+    updatePreviewControls();updatePreviewLyrics();
+  }
+  async function pollPreviewMidi(){
+    if(!state.previewSelected||state.previewSelected.mode!=="midi"||
+       !state.previewPlaying||state.previewPolling)return;
+    state.previewPolling=true;
+    try{
+      const result=await api("/api/preview/midi/status");
+      if(result.song_id!==state.previewSelected.song_id)return;
+      state.previewMidiSample=result.position||0;
+      state.previewMidiAt=performance.now();
+      if(result.status!=="playing"){
+        state.previewPlaying=false;
+        state.previewTime=result.position||0;
+        if(result.status==="error")text("preview-warning",
+          "Windows MIDI Synthesizer ไม่สามารถเล่นเพลงนี้ได้ · ไม่ยืนยันเวลาปาดสี");
+        updatePreviewControls();updatePreviewLyrics();
+      }
+    }catch(error){toast(error.message,true);}
+    finally{state.previewPolling=false;}
+  }
+  function requestPreviewFrame(){
+    if(state.previewRaf!==null)return;
+    const loop=time=>{
+      state.previewRaf=null;
+      if(state.view!=="preview"||!state.previewSelected)return;
+      if(state.previewPlaying){
+        if(state.previewSelected.mode==="midi"){
+          state.previewTime=Math.min(state.previewDuration,
+            state.previewMidiSample+(performance.now()-state.previewMidiAt)/1000);
+        }else{
+          const player=currentPreviewMedia();
+          state.previewTime=player.currentTime||0;
+        }
+        if(time-state.previewLastPaint>45){
+          state.previewLastPaint=time;
+          updatePreviewControls();updatePreviewLyrics();
+        }
+        state.previewRaf=requestAnimationFrame(loop);
+      }
+    };
+    state.previewRaf=requestAnimationFrame(loop);
+  }
+  function updatePreviewLyrics(){
+    const details=state.previewSelected;
+    const present=$("preview-current-line");
+    const next=$("preview-next-line");
+    present.replaceChildren();
+    if(!details){present.textContent="♪  เนื้อร้องและเวลาปาดสีจากฐาน SQLite";next.textContent="เลือกเพลง";return;}
+    const lines=details.lines||[];
+    if(!lines.length){
+      present.textContent=details.draft?"พบเนื้อร้อง LYR แต่ไม่มี Timing":"ยังไม่มีเนื้อร้องพร้อมเวลา";
+      next.textContent=details.draft?.raw_text?.split("\n").find(x=>x.trim())||
+        "ไม่สร้างเวลา CUR ที่ไม่มีอยู่จริง";
+      return;
+    }
+    const current=state.previewTime;
+    let index=lines.findIndex((line,i)=>
+      current>=line.start&&current<(line.end||line.start+.5));
+    if(index===-1){
+      index=lines.findIndex(line=>line.start>current);
+      if(index===-1)index=lines.length-1;
+    }
+    const line=lines[index];
+    const cues=line.cues||[];
+    if(cues.length){
+      for(const cue of cues){
+        const elem=document.createElement("span");
+        elem.textContent=cue.text;
+        elem.className="preview-glyph";
+        const progress=cue.duration<=0?(current>=cue.start?100:0):
+          Math.max(0,Math.min(100,(current-cue.start)/cue.duration*100));
+        elem.style.setProperty("--sweep",progress.toFixed(1)+"%");
+        present.append(elem);
+      }
+    }else{
+      present.textContent=line.text||"—";
+    }
+    next.textContent=lines[index+1]?.text||(
+      line.timing==="incomplete"?"CUR ยังไม่ครบ · ไม่จำลองเวลาที่ขาด":
+      "♪");
+  }
+  async function recordPreviewOutcome(action){
+    const track=state.previewSelected;
+    if(!track?.version_id)return;
+    const note=$("preview-note").value.trim();
+    try{
+      await api("/api/preview/review",{
+        song_id:track.song_id,version_id:track.version_id,
+        action,note
+      });
+      const label={passed:"ฟังแล้วตรง",confirmed:"พบปาดผิดจริง",
+                   "needs-review":"ยังต้องตรวจต่อ"}[action];
+      text("preview-review-status","บันทึกแล้ว: "+label+" · เวอร์ชัน "+track.version_id);
+      toast("บันทึกประวัติการฟังจริงใน SQLite แล้ว");
+    }catch(error){toast(error.message,true);}
+  }
+  function previewToBuild(){
+    const track=state.previewSelected;
+    if(!track?.version_id||track.timing_status==="incomplete")return;
+    state.selectedSongs.add(track.song_id);
+    void stopPreviewPlayback();
+    view("build");
+    updateBuildSelection();
+    toast("เลือก "+track.title+" เข้ารายการสร้าง .x... แล้ว");
+  }
   function bind(){
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",()=>view(button.dataset.view));
+    $("preview-find").addEventListener("click",()=>{
+      state.previewOffset=0;void loadPreviewSongs();
+    });
+    $("preview-search").addEventListener("keydown",event=>{
+      if(event.key==="Enter"){state.previewOffset=0;void loadPreviewSongs();}
+    });
+    $("preview-prev").addEventListener("click",()=>{
+      state.previewOffset=Math.max(0,state.previewOffset-visibleRows());
+      void loadPreviewSongs();
+    });
+    $("preview-next").addEventListener("click",()=>{
+      state.previewOffset+=visibleRows();void loadPreviewSongs();
+    });
+    $("preview-play").addEventListener("click",()=>void playPreview());
+    $("preview-pause").addEventListener("click",()=>void pausePreview());
+    $("preview-seek").addEventListener("change",event=>void seekPreview(event.target.value));
+    for(const type of ["audio","video"]){
+      const media=$("preview-"+type);
+      media.addEventListener("loadedmetadata",()=>{
+        if(state.previewSelected?.mode!==type)return;
+        state.previewDuration=Number.isFinite(media.duration)?media.duration:0;
+        updatePreviewControls();
+      });
+      media.addEventListener("ended",()=>{
+        if(state.previewSelected?.mode!==type)return;
+        state.previewPlaying=false;state.previewTime=state.previewDuration;
+        updatePreviewControls();updatePreviewLyrics();
+      });
+      media.addEventListener("error",()=>{
+        if(state.previewSelected?.mode!==type)return;
+        state.previewPlaying=false;
+        text("preview-warning","ตัวเล่นนี้ไม่รองรับรูปแบบ/Codec ของไฟล์ต้นฉบับ"+
+          " · ไม่สรุปผลการปาดสี ต้องใช้ตัวเล่นที่รองรับจริง");
+        updatePreviewControls();
+      });
+    }
+    $("preview-pass").addEventListener("click",()=>void recordPreviewOutcome("passed"));
+    $("preview-fail").addEventListener("click",()=>void recordPreviewOutcome("confirmed"));
+    $("preview-needs").addEventListener("click",()=>void recordPreviewOutcome("needs-review"));
+    $("preview-to-build").addEventListener("click",previewToBuild);
     $("issues-load").addEventListener("click",()=>void loadImportIssues());
     $("issues-close").addEventListener("click",()=>$("issues-dialog").close());
     $("issues-prev").addEventListener("click",()=>{
