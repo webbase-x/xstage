@@ -89,7 +89,7 @@ class XMediaPlaybackTests(unittest.TestCase):
             self.assertEqual(len(rows),1)
             self.assertEqual(rows[0][1]['title'],'เพลงจากฐาน')
             imported_root, imported_rows=catalog_rows(root)
-            self.assertEqual(imported_root,root)
+            self.assertTrue(imported_root.samefile(root),'Plus import must return the same workspace directory')
             self.assertEqual(len(imported_rows),1)
             self.assertEqual(imported_rows[0]['source_catalog'],'Song Studio Plus SQLite')
             self.assertEqual(imported_rows[0]['title'],'เพลงจากฐาน')
