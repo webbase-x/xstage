@@ -40,6 +40,7 @@ try {
     [void](Check-File 'json_source_stream.py')
     [void](Check-File 'json_pro_review.py')
     [void](Check-File 'xsk_review.py')
+    [void](Check-File 'song_registry.py')
     [void](Check-File 'song_duplicate.py')
     [void](Check-File '.runtime\qt-site\PySide6\QtWebEngineWidgets.pyd')
     [void](Check-File 'ncn_lyrics.py')
