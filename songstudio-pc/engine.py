@@ -2214,7 +2214,9 @@ def execute_job(action, options, started):
             def _json_progress(done, total, state):
                 with LOCK:
                     worker_job().update(completed=done, created=state["created"],
-                                        skipped=state["skipped"], errors=state["errors"])
+                                        skipped=state["skipped"], errors=state["errors"],
+                                        resumed=state.get("resumed", 0),
+                                        deferred=state.get("deferred", 0))
                     if total is not None:
                         worker_job()["total"] = total
                 # Total is deliberately unknown until the final source is found.
@@ -2254,7 +2256,9 @@ def execute_job(action, options, started):
             with LOCK:
                 worker_job().update(total=result["total"], completed=result["total"],
                                     created=result["created"], skipped=result["skipped"],
-                                    errors=result["errors"], lyricsCount=result["created"])
+                                    errors=result["errors"], lyricsCount=result["created"],
+                                    resumed=result.get("resumed", 0),
+                                    deferred=result.get("deferred", 0))
         elif action == "created-xsk":
             module = _module("created_xsk_export.py", "xstage_created_xsk_export")
             output_root = worker_prefs().get("xsk_folder") or worker_prefs()["workspace"]
