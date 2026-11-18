@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 
 
@@ -89,7 +90,7 @@ def review(root, source_root, output_format, *, status="all", offset=0, limit=50
         raise ValueError("ตัวกรองรายการไม่ถูกต้อง")
     if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("ช่วงรายการไม่ถูกต้อง")
-    with connect(root) as db:
+    with closing(connect(root)) as db:
         clause = "WHERE source_root=? AND output_format=?"
         args = [canonical(source_root), output_format]
         totals = dict(db.execute(
@@ -126,7 +127,7 @@ def retry_stream(source_folder, destination_folder, *, output_format, ncn=None,
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     from_path = canonical(source)
-    with connect(destination_folder) as db:
+    with closing(connect(destination_folder)) as db:
         sources = [name for (name,) in db.execute(
             "SELECT source_path FROM json_pro_review "
             "WHERE source_root=? AND output_format=? AND status='error' "
