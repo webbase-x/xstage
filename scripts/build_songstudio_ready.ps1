@@ -89,6 +89,7 @@ $map = @{
   'songstudio-pc/created_xsk_export.py' = 'created_xsk_export.py'
  'songstudio-pc/json_pro_export.py' = 'json_pro_export.py'
  'songstudio-pc/json_source_stream.py' = 'json_source_stream.py'
+ 'songstudio-pc/json_pro_review.py' = 'json_pro_review.py'
  'songstudio-pc/song_duplicate.py' = 'song_duplicate.py'
  'songstudio-pc/import_preview.py' = 'import_preview.py'
  'songstudio-pc/xsk_package.py' = 'xsk_package.py'
@@ -335,7 +336,7 @@ Step 'Native GUI EXE launcher compiled successfully'
 # 6. Runtime integrity manifest, packaged with the app
 $paths = @(
  'X-Stage Song Studio.exe',
- 'engine.py', 'desktop_window.py', 'desktop_bootstrap.py', 'json_source_stream.py', 'song_duplicate.py',
+ 'engine.py', 'desktop_window.py', 'desktop_bootstrap.py', 'json_source_stream.py', 'json_pro_review.py', 'song_duplicate.py',
  'ncn_lyrics.py',
  'song_index.py',
  'ai_lyrics.py',
