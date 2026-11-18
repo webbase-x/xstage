@@ -440,8 +440,9 @@ class JsonProTests(unittest.TestCase):
 
     def test_recover_complete_files_after_interrupted_journal_append(self):
         with patch.object(export, "append_journal", side_effect=OSError("crash")):
-            with self.assertRaisesRegex(ValueError, "ไม่มีไฟล์ที่ส่งออกสำเร็จ"):
-                self.run_export()
+            attempt = self.run_export()
+        self.assertEqual((attempt["created"], attempt["errors"], attempt["pendingErrors"]),
+                         (0, 1, 1))
         root = self.dest / "XStageSong"
         self.assertFalse((root / "current.json").exists())
         self.assertTrue(any((root / "AUDIO").rglob("*.mp3")))
@@ -570,7 +571,9 @@ class JsonProTests(unittest.TestCase):
 
     def test_failed_lyrics_return_actionable_error_without_publishing(self):
         self.lrc.write_text("ไม่มีเวลา", encoding="utf-8")
-        result = self.run_export()
+        # The real PC Engine uses the streaming discovery path. The old
+        # library-upload preflight rejects this source before JSON Pro sees it.
+        result = self.run_export(source_stream=load("json_source_stream").stream)
         self.assertEqual((result["created"], result["errors"], result["pendingErrors"]), (0, 1, 1))
         self.assertTrue(result["issues"])
         self.assertFalse((self.dest / "XStageSong" / "current.json").exists())
