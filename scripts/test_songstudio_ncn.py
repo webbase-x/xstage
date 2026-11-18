@@ -329,6 +329,24 @@ class NcnSourceTests(unittest.TestCase):
         self.assertAlmostEqual(doc["lines"][2]["startTime"], 1.5)
         self.assertEqual(doc["lines"][0]["characters"][0]["text"], "หนึ่ง")
 
+    def test_legacy_ncn1_midi_parses_real_cursor_timing(self):
+        # PC Karaoke accepts NCN1 with the same MIDI header/track layout.
+        # Song Studio must not reject a valid source just for this signature.
+        mid, lyr, cur = self.make_ncn("00047", "0", lyric="กข")
+        raw = b"NCN1" + mid.read_bytes()[4:]
+        mid.write_bytes(raw)
+        document = ncn.ncn_document(ncn.resolve_companions(mid))
+        self.assertEqual(document["sourceFormat"], "NCN")
+        self.assertEqual(document["lines"][0]["text"], "กข")
+        self.assertAlmostEqual(document["lines"][0]["characters"][1]["startTime"], .25)
+        self.assertEqual(mid.read_bytes(), raw, "Do not alter source MIDI files")
+
+    def test_unknown_midi_header_is_reported_not_guessed(self):
+        mid, lyr, cur = self.make_ncn("00048", "0", lyric="กข")
+        mid.write_bytes(b"NOPE" + mid.read_bytes()[4:])
+        with self.assertRaisesRegex(ValueError, "4E 4F 50 45"):
+            ncn.ncn_document(ncn.resolve_companions(mid))
+
     def test_plain_midi_without_lyrics_is_rejected_before_note_parsing(self):
         song = self.dir / "plain-instrumental.mid"
         song.write_bytes(midi())
