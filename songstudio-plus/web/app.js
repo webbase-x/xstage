@@ -298,8 +298,9 @@
           " · เนื้อร้องใหม่ "+number(p.lyrics_new)+" · ผิดพลาด "+number(p.failures):
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
       text("progress-count",number(p.files_seen||p.done||0)+" รายการ");
-      const progress=job.status==="running"?37:job.status==="completed"?100:0;
-      $("progress-fill").style.width=progress+"%";
+      const progressBar=$("progress-fill");
+      progressBar.classList.toggle("indeterminate",job.status==="running");
+      progressBar.style.width=job.status==="completed"?"100%":job.status==="running"?"32%":"0%";
       const signature=job.id+":"+job.status;
       if(state.jobSignature!==signature){
         state.jobSignature=signature;
