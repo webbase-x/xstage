@@ -145,7 +145,8 @@ try{
   // a real browser before proceeding into the preserved karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#intro-title').waitFor();
-  assert.equal(await page.locator('.app-card').count(),10,'storefront displays ten supported app entries');
+  const storefrontCount=await page.locator('.app-card').count();
+  assert.equal(storefrontCount,11,'storefront displays all currently supported app entries');
   // Legacy source query must not turn a TV browser into the Karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/?source=android-tv',
                   {waitUntil:'domcontentloaded'});
@@ -155,8 +156,8 @@ try{
   await page.locator('#intro-title').waitFor();
 
   const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
-  assert.equal(logoSources.length,10,'all ten app entries must have a visual identity');
-  assert.equal(new Set(logoSources).size,10,'each X-Stage application must have a distinct icon asset');
+  assert.equal(logoSources.length,storefrontCount,'all app entries must have a visual identity');
+  assert.equal(new Set(logoSources).size,storefrontCount,'each X-Stage application must have a distinct icon asset');
 
   await page.locator('#device-advice-title').waitFor();
   assert.equal(await page.locator('[data-device-app]').count(),10,'all ten apps expose device compatibility');
