@@ -471,6 +471,13 @@ def ncn_document(companions):
         while body and not body[-1].strip(b" \x00\x1a"):
             body.pop()
 
+    # In some legacy NCN variants a visually blank LYR row consumes its
+    # own CUR newline entry. Detect this only from an exact CUR count,
+    # otherwise keep the established nonblank-line convention.
+    blanks=sum(1 for part in body if not part.strip())
+    blank_markers=(blanks>0 and len(positions)==needed(body)+blanks)
+    if blank_markers:
+        warnings.append("CUR มีตำแหน่งบรรทัดว่างตามต้นฉบับ")
     division, tempo_map, _, midi_duration = midi_events(
         Path(companions["midi"]), include_duration=True)
     rendered = []
@@ -480,6 +487,8 @@ def ncn_document(companions):
     stop_song = False
     for raw_line in body:
         if not raw_line.strip():
+            if blank_markers and cursor_index<len(positions):
+                cursor_index+=1
             continue
         chars = []
         text_parts = []
