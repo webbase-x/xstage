@@ -81,7 +81,7 @@ assert.match(read('android-tv/app/build.gradle'),
   /XSTAGE_WEB_URL", quoteBuildConfig\("https:\/\/webbase-x\.github\.io\/xstage\/karaoke\.html"\)/,
   'new Android Karaoke APKs must launch the dedicated player URL');
 assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
-for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-web','karaoke-android','mirror-tv','mirror-ios-pc','mirror-android-pc','file-share']){
+for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-plus','studio-web','karaoke-android','mirror-tv','mirror-ios-pc','mirror-android-pc','file-share']){
   assert.ok(storefront.includes('href="?app='+slug+'"'),'storefront must expose detail route for '+slug);
   assert.ok(storefront.includes('data-app="'+slug+'"'),'storefront must show card for '+slug);
 }
@@ -153,7 +153,7 @@ assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Androi
 assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
 assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
-assert.equal((storefront.match(/data-device-app=/g)||[]).length,10,'all ten cards need device-compatibility hints');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,11,'all eleven cards need device-compatibility hints');
 assert.ok(/storefront-device\.js\?brand=[1-9]\d*/.test(storefront) && storefront.indexOf('storefront-device.js') < storefront.indexOf('storefront.js'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
 assert.ok(storefront.includes('data-download-app="mirror-ios-pc"')&&storefront.includes('data-download-app="mirror-android-pc"'),'both standalone Windows mirror apps must have separate download actions');
@@ -186,6 +186,7 @@ const expectedPlatformCards={
   'karaoke-web':'website',
   'karaoke-pc':'windows',
   'studio-pc':'windows',
+  'studio-plus':'windows',
   'studio-web':'website',
   'karaoke-android':'android',
   'mirror-ios-pc':'windows',
@@ -194,7 +195,7 @@ const expectedPlatformCards={
   'file-share':'android'
 };
 const platformCards=[...storefront.matchAll(/<article class="app-card[^"]*" data-app="([^"]+)" data-category="([^"]+)" data-platform="([^"]+)" data-name="/g)];
-assert.equal(platformCards.length,10,'all catalog apps must declare a platform');
+assert.equal(platformCards.length,11,'all catalog apps must declare a platform');
 for(const card of platformCards){
   assert.equal(card[3],expectedPlatformCards[card[1]],'wrong platform classification: '+card[1]);
 }
