@@ -108,6 +108,14 @@ CREATE TABLE IF NOT EXISTS xstage_import_items(
  source_path TEXT NOT NULL, source_name TEXT NOT NULL, media_sha256 TEXT,
  song_id TEXT REFERENCES xstage_songs(id), outcome TEXT NOT NULL, message TEXT,
  created_at TEXT NOT NULL, UNIQUE(batch_id,source_path));
+CREATE TABLE IF NOT EXISTS xstage_lyric_scan_cache(
+ source_path TEXT PRIMARY KEY, media_sha256 TEXT NOT NULL,
+ companion_stamp TEXT NOT NULL, outcome TEXT NOT NULL,
+ last_scanned TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS xstage_lyric_drafts(
+ song_id TEXT PRIMARY KEY REFERENCES xstage_songs(id),
+ source_path TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL,
+ raw_text TEXT NOT NULL, reason TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS xstage_lyric_versions(
  id TEXT PRIMARY KEY, song_id TEXT NOT NULL REFERENCES xstage_songs(id),
  content_sha256 TEXT NOT NULL, source_sha256 TEXT, origin TEXT NOT NULL,
@@ -246,7 +254,9 @@ def document_for(path, companions):
     return None
 
 def valid_lines(doc):
-    if not doc or not doc.get("lines") or not doc.get("metadata",{}).get("timingComplete",True):
+    # A short historical CUR may still contain dozens of verified lines.
+    # Preserve them as an INCOMPLETE version, never as ready for export.
+    if not doc or not doc.get("lines"):
         return None
     result=[]
     for line in doc["lines"]:
@@ -294,12 +304,18 @@ def insert_version(db,song,media,doc,source_signature,origin="NCN"):
     meta=doc.get("metadata",{})
     title=(meta.get("title") or song["title"]).strip()[:255]
     artist=(meta.get("artist") or song["artist"]).strip()[:255]
-    status="original" if all(l[4]=="original" for l in lines) else "estimated"
-    db.execute("UPDATE xstage_lyric_versions SET is_current=0 WHERE song_id=?",(song["id"],))
+    status=("incomplete" if meta.get("timingComplete",True) is False else
+            "original" if all(l[4]=="original" for l in lines) else "estimated")
+    previous=db.execute("SELECT origin FROM xstage_lyric_versions WHERE song_id=? AND is_current=1",
+                        (song["id"],)).fetchone()
+    # A reimport must not silently erase the user's reviewed/edited version.
+    activate=not previous or previous["origin"]!="edit"
+    if activate:
+        db.execute("UPDATE xstage_lyric_versions SET is_current=0 WHERE song_id=?",(song["id"],))
     db.execute("""INSERT INTO xstage_lyric_versions
       (id,song_id,content_sha256,source_sha256,origin,timing_status,title,artist,created_at,is_current)
-      VALUES (?,?,?,?,?,?,?,?,?,1)""",
-      (version,song["id"],signature,source_signature,origin,status,title,artist,now()))
+      VALUES (?,?,?,?,?,?,?,?,?,?)""",
+      (version,song["id"],signature,source_signature,origin,status,title,artist,now(),int(activate)))
     for index,(text,start,end,cues,line_status) in enumerate(lines):
         cur=db.execute("""INSERT INTO xstage_lyric_lines
             (version_id,position,text,normalized_text,start_time,end_time,timing_status)
@@ -310,6 +326,52 @@ def insert_version(db,song,media,doc,source_signature,origin="NCN"):
              (line_id,position,text,start_time,duration) VALUES (?,?,?,?,?)""",
              (cur.lastrowid,ci,glyph,at,duration))
     return version,True
+
+def companion_stamp(companions):
+    """Sidecar identity via path/size/mtime, WITHOUT any content SHA-256.
+
+    The real lyric identity is checked after parsing against its version.
+    An unchanged source can skip re-parsing on later imports; timestamp and
+    size updates cause re-validation.
+    """
+    parts=[]
+    for ext in (".lyr",".cur",".lrc"):
+        item=companions.get(ext)
+        if item:
+            stat=Path(item).stat()
+            parts.append((ext,str(Path(item).resolve()),stat.st_size,stat.st_mtime_ns))
+    return json.dumps(parts,ensure_ascii=False,separators=(",",":"))
+
+def save_draft(db,song,lyr_path,reason):
+    """Preserve human-readable LYR text even when CUR/MIDI timing is absent.
+
+    Drafts are NOT counted as timed karaoke-ready lyrics and cannot be built.
+    """
+    raw=Path(lyr_path).read_bytes()
+    if len(raw)>1024*1024:
+        raise ValueError("ไฟล์ .LYR ใหญ่เกิน 1 MB")
+    raw=raw.split(b"\\x1a",1)[0]
+    rows=raw.replace(b"\\r\\n",b"\\n").replace(b"\\r",b"\\n").split(b"\\n")
+    if len(rows)<5:
+        raise ValueError("ไฟล์ .LYR ไม่มีหัวข้อมูลและเนื้อร้องครบตามโครงสร้าง NCN")
+    # Reuse the same CP874/UTF-8 fallback as the NCN timed parser.
+    title=ncn_reader._decode_text(rows[0]).strip()[:255]
+    artist=ncn_reader._decode_text(rows[1]).strip()[:255]
+    body=ncn_reader._decode_text(b"\\n".join(rows[4:])).strip()
+    if not body:
+        raise ValueError("ไฟล์ .LYR ไม่มีเนื้อร้องให้บันทึก")
+    db.execute("""INSERT INTO xstage_lyric_drafts
+          (song_id,source_path,title,artist,raw_text,reason,updated_at)
+          VALUES (?,?,?,?,?,?,?)
+          ON CONFLICT(song_id) DO UPDATE SET
+          source_path=excluded.source_path,title=excluded.title,
+          artist=excluded.artist,raw_text=excluded.raw_text,
+          reason=excluded.reason,updated_at=excluded.updated_at""",
+          (song["id"],str(Path(lyr_path).resolve()),title,artist,body,reason,now()))
+    if song["title"]==song["original_code"] and title:
+        db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
+                   (title,artist,song["id"]))
+
 
 def iter_source(root):
     for base,dirs,files in os.walk(root):
