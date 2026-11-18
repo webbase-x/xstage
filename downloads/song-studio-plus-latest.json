@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Plus",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "channel": "technical-preview",
   "available": false,
   "windows_artifact_build": true,

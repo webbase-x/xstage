@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.5
+# X-Stage Song Studio Plus — Technical Preview v0.1.6
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,7 +8,7 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
-## Five core workflows
+## Seven core workflows
 
 1. Import: search a source folder recursively, hash original media first
    with streamed SHA-256, compare against SQLite, then locate required lyrics
@@ -23,9 +23,51 @@ Web and Android players do not yet decode the new binary format.
 4. Audio/video lyrics: attach a timed LRC file to a registered song. LRC
    provides line boundaries; per-glyph timing is estimated and clearly
    marked as such. Automatic AI transcription is NOT included in preview.
-5. X-Media Builder: stream-copy media into a single XMID/XMP3/XM4A/XMP4
+5. Pre-build audition: choose a registered song, play real audio/video
+   through a local HTTP Range stream, or MIDI on the Windows MIDI Mapper.
+   Preview the actual SQLite lyric cues against the sound and manually mark
+   pass / timing error / needs-review. Does NOT produce an X-media file.
+6. X-Media Builder: stream-copy media into a single XMID/XMP3/XM4A/XMP4
    file with embedded binary title, artist, lyrics and timing. No sidecar
    JSON or XSK is generated.
+7. Evidence-only risk history: identify exact line/cue structural errors,
+   separate estimated timing from confirmed problems, and keep all manual
+   review outcomes attached to the reviewed lyrics version.
+
+## Prebuild audition: listen before producing .x...
+
+Open **ทดสอบก่อนสร้าง .x...** (menu 04). Search by title, artist or code,
+select a song, then press Play. Audio/video uses the exact original registered
+source via a loopback-only byte-range endpoint (no media copy). MIDI uses the
+Windows MIDI Mapper through WinMM and standard tempo/time events, without
+installing a separate SoundFont. If Windows has no output synthesizer, the app
+reports the issue; unsupported audio/video codecs similarly report failure.
+
+Lyrics are read from the current SQLite Lyrics Version, with real stored
+per-character/syllable cue timestamps. Estimated LRC timing is labeled and
+is NOT silently treated as measured data. Previews can be paused/seeked, but
+seeking into the middle of a sustained MIDI note may not restore its sound:
+for definitive validation, listen from the beginning of that phrase.
+
+Only the person listening can choose **ฟังแล้วตรง**, **พบปาดผิดจริง**, or
+**ยังต้องตรวจ**, optionally adding a note. Those actions enter the persistent
+`xstage_swipe_reviews` history, per Song ID and Lyrics Version ID. A file
+without sufficient timing may be listened to but cannot be exported by the
+pre-build shortcut. This is a source-file audition, **not** X-media container
+playback; Karaoke PC/Web/Android have not been changed to decode X-media v1.
+
+**NCN import rule:** an NCN MID with missing/empty matching LYR or CUR is
+skipped *before* calculating the MID SHA-256. A skip reason is recorded; no
+new song or incomplete lyrics version is created. Existing legacy SQLite
+records are not retroactively deleted. Standalone MIDI/KAR and audio/video
+are still registered independently.
+
+## Windows taskbar and screen fitting
+
+The Windows application sets both its EXE icon and the native HWND small/
+large icons used by taskbar and Alt+Tab. Workspace views occupy the available
+window height; song lists and lyrics/risk details use numbered pages instead
+of long scrollbars. Use Ctrl+Plus / Ctrl+Minus / Ctrl+0 for zoom.
 
 ## Start
 
@@ -153,7 +195,7 @@ cannot open a Plus container simply by renaming it.
 - No native merge of a separate Plus SQLite file from another PC yet;
   importing source folders from many PCs is supported.
 - No signed Windows installer or automatic updating yet.
-- No user-reviewed playback/lyric audition UI yet.
+- Prebuild audition uses the original media; Windows playback device and supported codecs are not guaranteed on every PC.
 - Very large real-world collections need additional load testing.
 
 ## Tests

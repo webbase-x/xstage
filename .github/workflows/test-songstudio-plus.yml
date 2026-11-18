@@ -40,11 +40,11 @@ jobs:
           import app
           assert app.Handler.server_version.startswith("XStageSongStudioPlus")
           page=Path("songstudio-plus/web/index.html").read_text(encoding="utf-8")
-          for token in ['data-view="import"','data-view="lyrics"','data-view="media"','data-view="build"','data-view="library"']:
+          for token in ['data-view="import"','data-view="lyrics"','data-view="media"','data-view="preview"','data-view="build"','data-view="library"','data-view="risks"']:
               assert token in page,token
           assert "Lyrics JSON" not in page
           assert ".xsk" not in page.lower()
-          print("PASS: new standalone five-menu app contract")
+          print("PASS: seven-menu standalone app with real pre-export preview")
           PY
 
   windows-preview:
@@ -63,23 +63,23 @@ jobs:
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Plus-v0.1.5-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" songstudio-plus/app.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Plus-v0.1.6-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
-          if (!(Test-Path "dist/X-Stage-Song-Studio-Plus-v0.1.5-preview.exe")) { throw "EXE not produced" }
+          if (!(Test-Path "dist/X-Stage-Song-Studio-Plus-v0.1.6-preview.exe")) { throw "EXE not produced" }
       - name: Verify EXE hash and package preview
         shell: pwsh
         run: |
-          $exe="dist/X-Stage-Song-Studio-Plus-v0.1.5-preview.exe"
+          $exe="dist/X-Stage-Song-Studio-Plus-v0.1.6-preview.exe"
           $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-          "X-Stage Song Studio Plus v0.1.5 Native Windows Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
+          "X-Stage Song Studio Plus v0.1.6 Native Windows Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
-          "Local-only SQLite Engine. XMID/X-media player integration pending. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
+          "Local-only SQLite Engine. Original media prebuild preview (WinMM MIDI) included. X-container player integration pending. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           Write-Host "EXE SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Plus-v0.1.5-Windows-Preview
+          name: X-Stage-Song-Studio-Plus-v0.1.6-Windows-Preview
           path: |
-            dist/X-Stage-Song-Studio-Plus-v0.1.5-preview.exe
+            dist/X-Stage-Song-Studio-Plus-v0.1.6-preview.exe
             dist/README-Preview.txt
           retention-days: 14
           if-no-files-found: error
