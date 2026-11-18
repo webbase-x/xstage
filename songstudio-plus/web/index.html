@@ -42,8 +42,8 @@
           <div class="hero-copy">
             <span class="hero-pill"><span class="small-dot"></span> NEW GENERATION KARAOKE STUDIO</span>
             <h1 id="import-title">เพลงของคุณ<br><span class="gradient-text">เป็นระเบียบในที่เดียว</span></h1>
-            <p>เลือกโฟลเดอร์ต้นทางครั้งเดียว ระบบตรวจ SHA-256 ของไฟล์เพลงก่อน แล้วบันทึกข้อมูลและเนื้อร้องที่จำเป็นลง SQLite โดยไม่แก้ไฟล์เดิม</p>
-            <div class="hero-trust"><span>✓ ไม่ลบต้นฉบับ</span><span>✓ ตัดสื่อซ้ำ</span><span>✓ ทำต่อได้</span></div>
+            <p>เลือกโฟลเดอร์ต้นทางครั้งเดียว ระบบตรวจ SHA-256 แล้วบันทึกข้อมูลและเวลาปาดสีลง SQLite โดยไม่คัดลอก ไม่สำรอง และไม่แก้ไฟล์เพลงต้นฉบับ</p>
+            <div class="hero-trust"><span>✓ ไม่สำรองต้นฉบับ</span><span>✓ ตัดสื่อซ้ำ</span><span>✓ ทำต่อได้</span></div>
           </div>
           <div class="hero-art" aria-hidden="true">
             <div class="vinyl-disc"><div class="vinyl-inner"><span>+</span></div></div>
@@ -63,7 +63,7 @@
             <label class="field-label" for="source-folder">โฟลเดอร์ต้นทาง (PC / USB / HDD)</label>
             <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เช่น D:\NCN หรือ E:\My Music"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
             <p class="field-hint">ค้นหาโฟลเดอร์ย่อยอัตโนมัติ รองรับ MID, KAR, MP3, M4A, WAV, FLAC, MP4, MKV และ WEBM</p>
-            <button class="primary-btn full" id="import-start" type="button">เริ่มตรวจ SHA-256 และนำเข้า <span>↗</span></button>
+            <button class="primary-btn full" id="import-start" type="button">ตรวจ SHA-256 และลงทะเบียน SQLite <span>↗</span></button>
             <div class="divider-inline"><span>ตรวจสอบแบบปลอดภัย</span></div>
             <div class="step-list"><div><b>01</b><span>SHA-256 ของไฟล์สื่อก่อน</span><span class="step-check">✓</span></div><div><b>02</b><span>เทียบ Hash ใน SQLite</span><span class="step-check">✓</span></div><div><b>03</b><span>ดึง LYR/CUR เฉพาะที่จำเป็น</span><span class="step-check">✓</span></div></div>
           </article>
@@ -71,13 +71,13 @@
             <div class="panel-head"><div><span class="label-top">LIVE ACTIVITY</span><h2>สถานะการทำงาน</h2></div><span class="status-badge" id="activity-status">พร้อมทำงาน</span></div>
             <div class="progress-symbol">↻</div>
             <h3 id="activity-title">พร้อมเริ่มงานใหม่</h3>
-            <p id="activity-subtitle">รายการจะเริ่มประมวลผลเป็นชุด ไม่จำเป็นต้องรอสแกนทุกไฟล์ก่อน</p>
+            <p id="activity-subtitle">อ่านไฟล์ต้นฉบับเฉพาะเท่าที่จำเป็น บันทึก SQLite เป็นชุด โดยไม่คัดลอกไฟล์เพลง</p>
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <div class="progress-numbers"><span id="progress-detail">ยังไม่มีงาน</span><span id="progress-count">—</span></div>
             <button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดงานหลังไฟล์ปัจจุบัน</button>
           </article>
         </div>
-        <div class="panel tip-panel"><span class="tip-icon">✦</span><div><strong>นำเข้าหลายเครื่องได้ ไม่ต้องเปลี่ยนชื่อไฟล์ก่อน</strong><p>ชื่อไฟล์ต้นฉบับซ้ำกันไม่เป็นปัญหา ระบบใช้ SHA-256 แยกไฟล์จริง และเก็บเนื้อร้องต่างเวอร์ชันโดยไม่คัดลอกสื่อซ้ำ</p></div></div>
+        <div class="panel tip-panel"><span class="tip-icon">✦</span><div><strong>นำเข้าหลายเครื่องได้ ไม่ต้องเปลี่ยนชื่อไฟล์ก่อน</strong><p>ชื่อไฟล์ต้นฉบับซ้ำกันไม่เป็นปัญหา ระบบใช้ SHA-256 แยกไฟล์และเก็บเนื้อร้องต่างเวอร์ชัน · ตอนส่งออกต้องเข้าถึงไฟล์ต้นฉบับได้</p></div></div>
       </section>
       <section class="view" id="view-lyrics" aria-labelledby="lyrics-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> SMART LYRICS EDITOR</div>
