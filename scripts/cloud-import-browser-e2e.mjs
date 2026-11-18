@@ -194,7 +194,7 @@ try{
   assert.equal(iphoneGuidance.windows.level,'other','iOS users must not be offered Windows PC installation as compatible');
 
   assert.equal(await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.every(n=>n.complete&&n.naturalWidth>0)),true,
-    'ten unique app icons must load in the real browser');
+    'all current app icons must load in the real browser');
 
   assert.match(await page.locator('#intro-title').textContent(),/หนึ่งเวที/);
   assert.equal(await page.locator('.new-wordmark img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
@@ -202,7 +202,7 @@ try{
   assert.equal(await page.locator('.brand-hero-insignia img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
     'new X-Stage Apps icon must load in browser');
   await page.locator('[data-filter="studio"]').click();
-  assert.equal(await page.locator('.app-card:visible').count(),2,'studio filter must expose only two apps');
+  assert.equal(await page.locator('.app-card:visible').count(),3,'studio filter must expose the three current Studio apps');
   await page.locator('[data-filter="all"]').click();
   await page.locator('.app-card[data-app="studio-pc"] .app-detail-link').click();
   await page.locator('#app-detail:not([hidden])').waitFor();
