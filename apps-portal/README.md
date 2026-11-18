@@ -32,14 +32,10 @@ URL and *public* publishable key configured in `portal-config.js`. Do not commit
 the expected keystore environment variables are set.
 
 Workflow `.github/workflows/build-xstage-apps-portal.yml` runs Android CI and
-uploads a test APK artifact. A direct public download is **blocked** until a stable
-signing keystore is available. GitHub Actions Secrets can be:
-
-- `XSTAGE_PORTAL_KEYSTORE_BASE64`, `XSTAGE_PORTAL_STORE_PASSWORD`,
-  `XSTAGE_PORTAL_KEY_ALIAS`, `XSTAGE_PORTAL_KEY_PASSWORD`; or
-- existing shared X-Stage Android signing secrets `XSTAGE_ANDROID_KEYSTORE_BASE64`,
-  `XSTAGE_ANDROID_KEYSTORE_PASSWORD`, `XSTAGE_ANDROID_KEY_ALIAS`,
-  `XSTAGE_ANDROID_KEY_PASSWORD`.
+uploads a verified test APK artifact. Publishing from main uses the persistent Mirror TV
+signing identity configured in GitHub Actions Secrets (`XSTAGE_MIRROR_KEYSTORE_BASE64`,
+`XSTAGE_MIRROR_STORE_PASSWORD`, `XSTAGE_MIRROR_KEY_ALIAS`, and `XSTAGE_MIRROR_KEY_PASSWORD`).
+The Portal APK must match the certificate recorded in the Mirror TV persistent feed.
 
 The workflow verifies the APK signature and refuses to change the signing certificate
 relative to an existing published feed. It publishes only a verified APK under
