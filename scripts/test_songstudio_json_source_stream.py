@@ -74,7 +74,8 @@ class FastJsonSourceTests(unittest.TestCase):
     def test_engine_uses_stream_without_global_preflight(self):
         engine = (ROOT / "songstudio-pc" / "engine.py").read_text(encoding="utf-8")
         self.assertIn('source_stream=source_stream.stream', engine)
-        self.assertIn('เริ่มจับคู่รหัสไฟล์ต้นฉบับ', engine)
+        self.assertIn('กำลังสร้างต่อจาก Catalog รุ่นก่อน', engine)
+        self.assertIn('retry_errors_only=retry_errors_only', engine)
         exporter = (ROOT / "songstudio-pc" / "json_pro_export.py").read_text(
             encoding="utf-8")
         self.assertIn("source_stream(str(source)", exporter)
