@@ -1100,6 +1100,8 @@
       state.token=session.token;
       setReady(true);
       text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
+      if(state.view==="preview")await loadPreviewSongs();
+      if(state.view==="risks")await loadRisks();
       await refreshStatus();
       await refreshJobs();
       setInterval(()=>{void refreshJobs();},1600);
