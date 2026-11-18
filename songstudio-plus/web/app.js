@@ -325,7 +325,7 @@
           job.kind==="recover"?
           "กู้คืนพร้อมใช้ "+number(p.recovered_ready)+" · CUR ไม่ครบ "+number(p.partial_lyrics)+
           " · LYR รอเวลา "+number(p.draft_lyrics)+" · ไม่พบต้นฉบับ "+number(p.missing_sources)+
-          " · อ่านผิดพลาด "+number(p.failures):
+          " · ต้นฉบับเปลี่ยน "+number(p.changed_sources)+" · อ่านผิดพลาด "+number(p.failures):
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
       text("progress-count",number(p.processed||p.files_seen||p.done||0)+
         (job.kind==="recover"?" / "+number(p.total):"")+" รายการ");
