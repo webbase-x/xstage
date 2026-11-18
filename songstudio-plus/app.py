@@ -10,6 +10,7 @@ import mimetypes
 import os
 import secrets
 import sys
+import time
 import threading
 import traceback
 import urllib.parse
@@ -31,7 +32,7 @@ class State:
         job_id=secrets.token_hex(10)
         job={"id":job_id,"kind":kind,"status":"running","progress":{},
              "message":"กำลังเตรียมงาน","error":None,"result":None,
-             "cancel":threading.Event()}
+             "cancel":threading.Event(),"started_at":time.monotonic()}
         with self.lock:
             if any(x["status"]=="running" for x in self.jobs.values()):
                 raise ValueError("มีงานกำลังทำอยู่ กรุณารอให้เสร็จก่อนเริ่มงานถัดไป")
@@ -55,12 +56,16 @@ class State:
 
     def update(self,job,summary,message):
         with self.lock:
+            summary=dict(summary)
+            elapsed=max(time.monotonic()-job["started_at"],0.001)
+            items=summary.get("files_seen",summary.get("done",0))
+            summary["files_per_second"]=round(items/elapsed,1)
             job["progress"]=summary
             job["message"]=str(message)[:240]
 
     def jobs_snapshot(self):
         with self.lock:
-            return [{k:v for k,v in job.items() if k!="cancel"}
+            return [{k:v for k,v in job.items() if k not in ("cancel","started_at")}
                     for job in list(self.jobs.values())[-10:]][::-1]
 
 class Handler(BaseHTTPRequestHandler):
