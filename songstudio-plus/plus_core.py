@@ -251,13 +251,13 @@ def source_for_build(workspace, db, media):
                 changed=True
         except OSError:
             pass
+    if changed:
+        raise ValueError("ไฟล์ต้นฉบับเปลี่ยนหลังลงทะเบียน · กรุณานำเข้าเพลงนั้นอีกครั้งก่อนสร้าง XMID")
     stored=media["stored_path"]
     if stored:
         legacy=Path(workspace)/stored
         if legacy.is_file():
             return legacy
-    if changed:
-        raise ValueError("ไฟล์ต้นฉบับเปลี่ยนหลังลงทะเบียน · กรุณานำเข้าเพลงนั้นอีกครั้งก่อนสร้าง XMID")
     raise ValueError("ไม่พบไฟล์เพลงต้นฉบับ กรุณาเชื่อมต่อ USB/HDD หรือเพิ่มแหล่งเพลงใหม่ก่อนส่งออก")
 
 
@@ -884,7 +884,7 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                 db.execute("""INSERT OR REPLACE INTO xstage_import_items
                    (batch_id,source_path,source_name,media_sha256,song_id,
                     outcome,message,created_at) VALUES (?,?,?,?,?,?,?,?)""",
-                   (batch,str(event_path or paths[0]["source_path"] or ""),
+                   (batch,str(event_path or paths[0]["source_path"] or ("unresolved://"+song_id)),
                     Path(event_path).name if event_path else "",
                     paths[0]["sha256"],song_id,outcome,note,now()))
                 db.execute("RELEASE SAVEPOINT lyrics_recovery")
@@ -895,7 +895,7 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                 db.execute("""INSERT OR REPLACE INTO xstage_import_items
                    (batch_id,source_path,source_name,media_sha256,song_id,
                     outcome,message,created_at) VALUES (?,?,?,?,?,?,?,?)""",
-                   (batch,str(event_path or paths[0]["source_path"] or ""),
+                   (batch,str(event_path or paths[0]["source_path"] or ("unresolved://"+song_id)),
                     "",paths[0]["sha256"],song_id,"error",str(err)[:350],now()))
             totals["processed"]+=1
             if totals["processed"]%64==0:
