@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.0
+# X-Stage Song Studio Plus — Technical Preview v0.1.1
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -15,8 +15,8 @@ Web and Android players do not yet decode the new binary format.
    and timing companions. NCN uses MID + LYR + CUR. Other MIDI/KAR, audio,
    and video are registered without fake lyrics.
 2. SQLite: all relational tables start with xstage_; Song ID, media SHA-256,
-   and Lyrics Version ID are separate. Keep one immutable media source copy
-   per unique hash in the private workspace.
+   and Lyrics Version ID are separate. Do NOT create any backup or copy of imported media.
+   SQLite stores only source references, SHA-256, and metadata.
 3. Lyrics Editor: search whole lyric lines, group identical complete lines,
    select any set of groups, replace full lines, retain independent timing
    per song, and undo edits. Interpolated cues are marked estimated.
@@ -29,22 +29,23 @@ Web and Android players do not yet decode the new binary format.
 
 ## Start
 
-Python 3.11+ with standard library:
+Python 3.11+ for the core and local API. The native Windows desktop requires
+PySide6 (bundled in the Windows Preview EXE):
 
     python songstudio-plus/app.py --workspace "D:\XStageSongPlus"
 
 Windows Preview EXE is built by:
 https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-plus.yml
 
-The app opens a loopback-only HTTP interface at 127.0.0.1 on a random port.
+The Windows EXE opens its own embedded desktop window, not Chrome or Edge.
+The internal API remains loopback-only at 127.0.0.1 on a random port.
 Source data is kept on the PC; no cloud upload in Plus.
 
 ## Workspace
 
     XStageSongPlus/
       DB/xstage_plus.sqlite3
-      SOURCE/MID/<sha-prefix>/<sha256>.mid
-      SOURCE/MP3/<sha-prefix>/<sha256>.mp3
+      (no SOURCE media or backup folder created by new imports)
       MIDI/MID/XMID/0/00000001.xmid
       AUDIO/XMP3/0/00000002.xmp3
       AUDIO/XM4A/0/...
@@ -94,11 +95,15 @@ cannot open a Plus container simply by renaming it.
 ## Safety and recovery
 
 - Never alters or deletes any import source.
-- Stores one verified original media copy by hash.
+- Never copies, backs up, moves, or deletes original media on import.
+- SQLite stores verified source locations and SHA-256; files must remain accessible
+  for X-media export. Re-import from a new source location to relink media.
+- Earlier preview-created SOURCE copies, if present, are left untouched.
 - Rejects overwriting unknown or changed X-media output.
 - SQLite transactions protect edits. Undo refuses to overwrite subsequent
   edits on selected songs.
-- SHA-256 verifies the source before build and the finished media payload.
+- X-media build hashes the source while copying into the final X-file and
+  verifies against the stored SHA-256 in the same streaming pass.
 - Failed individual inputs are logged in xstage_import_items, other files
   continue importing.
 - Re-importing the same folder safely resumes through deduplication.
