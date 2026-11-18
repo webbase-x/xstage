@@ -19,11 +19,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import plus_core as core
+import risk_audit as risks
 
 class State:
     def __init__(self,workspace):
         self.workspace=Path(workspace).expanduser().resolve()
         core.init(self.workspace)
+        risks.init(self.workspace)
         self.jobs={}
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
@@ -124,6 +126,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200,{"jobs":self.state.jobs_snapshot()});return
         if path=="/api/import-issues":
             self.send_json(200,{"rows":core.import_issues(self.state.workspace,80)});return
+        if path=="/api/swipe-risks":
+            self.send_json(200,risks.list_findings(
+                self.state.workspace,q.get("category",["structural"])[0],
+                int(q.get("limit",[100])[0]),int(q.get("offset",[0])[0])));return
+        if path=="/api/swipe-history":
+            self.send_json(200,risks.history(self.state.workspace));return
         if path=="/api/songs":
             self.send_json(200,{"rows":core.songs(self.state.workspace,
                 q.get("q",[""])[0],q.get("limit",[80])[0],q.get("offset",[0])[0])});return
@@ -200,6 +208,16 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/recover-lyrics":
                 result=self.state.start_job("recover",lambda progress,cancel:
                     core.recover_existing_lyrics(self.state.workspace,progress,cancel))
+            elif path=="/api/swipe/scan":
+                result=self.state.start_job("swipe-audit",lambda progress,cancel:
+                    risks.scan(self.state.workspace,progress,cancel))
+            elif path=="/api/swipe/review":
+                result=risks.review(self.state.workspace,
+                    body.get("song_id",""),body.get("version_id",""),
+                    body.get("action",""),body.get("note",""))
+            elif path=="/api/swipe/open-source":
+                result=risks.open_original(self.state.workspace,
+                    body.get("song_id",""),body.get("version_id",""))
             elif path=="/api/edit/plan":
                 result=core.plan_edit(self.state.workspace,body.get("q",""),body.get("keys",[]))
             elif path=="/api/edit/apply":
