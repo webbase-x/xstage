@@ -802,7 +802,7 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
     init(workspace)
     totals={"processed":0,"total":0,"recovered_ready":0,
             "partial_lyrics":0,"draft_lyrics":0,
-            "missing_sources":0,"changed_sources":0,"failures":0}
+            "missing_sources":0,"changed_sources":0,"skipped_ncn":0,"failures":0}
     batch=uuid.uuid4().hex
     with WRITE_LOCK,connect(workspace) as db:
         entries=db.execute("""SELECT s.id AS song_id,s.code,m.id AS media_id,
@@ -878,6 +878,12 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                 else:
                     for _,source,comps in ranked:
                         event_path=source
+                        if is_ncn_media(source,comps):
+                            missing=ncn_missing_companions(comps)
+                            if missing:
+                                outcome="skipped-ncn-incomplete"
+                                note="ข้าม NCN: "+", ".join(missing)+" ไม่มีหรือว่าง"
+                                continue
                         try:
                             doc=document_for(source,comps)
                             lines=valid_lines(doc) if doc else None
@@ -929,7 +935,9 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                                 except (OSError,ValueError,UnicodeError):
                                     pass
                             continue
-                    if outcome=="lyrics-error":
+                    if outcome=="skipped-ncn-incomplete":
+                        totals["skipped_ncn"]+=1
+                    elif outcome=="lyrics-error":
                         totals["failures"]+=1
                 db.execute("""INSERT OR REPLACE INTO xstage_import_items
                    (batch_id,source_path,source_name,media_sha256,song_id,
