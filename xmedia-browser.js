@@ -59,8 +59,8 @@ class SHA256{
   end(){const before=this.bytes;const rem=(56-((before+1)%64)+64)%64,pad=new Uint8Array(1+rem+8);pad[0]=128;const bits=BigInt(before)*8n;for(let i=0;i<8;i++)pad[pad.length-1-i]=Number((bits>>BigInt(i*8))&255n);this.append(pad);if(this.used)throw Error('SHA-256 padding failure');const out=new Uint8Array(32);for(let i=0;i<8;i++){out[i*4]=(this.h[i]>>>24)&255;out[i*4+1]=(this.h[i]>>>16)&255;out[i*4+2]=(this.h[i]>>>8)&255;out[i*4+3]=this.h[i]&255;}return out;}
 }
 async function sha256Blob(blob,signal){const h=new SHA256();for(let at=0;at<blob.size;at+=4*1024*1024){if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');h.append(new Uint8Array(await blob.slice(at,Math.min(blob.size,at+4*1024*1024)).arrayBuffer()));}return h.end();}
-async function inspectMetadata(blob){
-  const format=formatOf(blob?.name||'');if(!format)throw Error('ยังไม่รองรับนามสกุล X-Media นี้');
+async function inspectMetadata(blob,name=blob?.name||''){
+  const format=formatOf(name);if(!format)throw Error('ยังไม่รองรับนามสกุล X-Media นี้');
   if(!blob||!Number.isSafeInteger(blob.size)||blob.size<HEADER_BYTES)throw Error('X-Media มีขนาดไม่สมบูรณ์');
   const head=new Uint8Array(await blob.slice(0,HEADER_BYTES).arrayBuffer()),view=new DataView(head.buffer,head.byteOffset,head.byteLength);
   if(utf8(head.subarray(0,8))!==MAGIC)throw Error('X-Media magic ไม่ถูกต้อง');
@@ -72,10 +72,10 @@ async function inspectMetadata(blob){
   const actualMetadataSha=await sha256(metadata);if(!equalBytes(metadataSha,actualMetadataSha))throw Error('X-Media metadata SHA-256 ไม่ตรงกัน');
   const document=decodeMetadata(metadata);
   return {document,code:document.songCode,title:document.title,artist:document.artist,mediaOffset,mediaBytes,
-    mediaSha256:hex(mediaSha),metadataSha256:hex(metadataSha),mediaKind:format.kind,mediaExtension:format.extension,mimeType:format.mime,format:ext(blob.name).toUpperCase()};
+    mediaSha256:hex(mediaSha),metadataSha256:hex(metadataSha),mediaKind:format.kind,mediaExtension:format.extension,mimeType:format.mime,format:ext(name).toUpperCase()};
 }
-async function openPackage(blob,{verifyMedia=true,signal}={}){
-  const info=await inspectMetadata(blob),media=blob.slice(info.mediaOffset,info.mediaOffset+info.mediaBytes,info.mimeType);
+async function openPackage(blob,{verifyMedia=true,signal,name=blob?.name||''}={}){
+  const info=await inspectMetadata(blob,name),media=blob.slice(info.mediaOffset,info.mediaOffset+info.mediaBytes,info.mimeType);
   if(verifyMedia){const actual=await sha256Blob(media,signal);if(hex(actual)!==info.mediaSha256)throw Error('X-Media media SHA-256 ไม่ตรงกัน');}
   return {...info,media};
 }
