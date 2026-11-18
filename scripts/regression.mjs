@@ -297,7 +297,6 @@ if(mirrorTest.direct_download_available===true){
 assert.ok(read('.github/workflows/build-xstage-mirror-tv.yml').includes('gh release create')&&
           read('.github/workflows/build-xstage-mirror-tv.yml').includes('test-latest.json'),
           'Mirror public test APK must be published only after checks, separate from production feed');
-const mirrorReleaseWorkflow=read('.github/workflows/release-xstage-mirror-tv.yml');
 assert.ok(mirrorReleaseWorkflow.includes('workflow_dispatch:')&&
           mirrorReleaseWorkflow.includes("github.event.head_commit.message == 'release(mirror-tv): publish")&&
           mirrorReleaseWorkflow.includes("github.event_name == 'workflow_dispatch'"),
