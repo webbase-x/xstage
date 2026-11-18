@@ -995,6 +995,13 @@
     $("risk-passed").addEventListener("click",()=>void saveRiskReview("passed"));
     $("risk-needs-review").addEventListener("click",()=>void saveRiskReview("needs-review"));
     $("risk-open-source").addEventListener("click",()=>void openRiskSource());
+    $("risk-open-preview").addEventListener("click",()=>{
+      const item=state.riskSelected;
+      if(!item)return;
+      $("risk-dialog").close();
+      view("preview");
+      void selectPreviewSong({id:item.song_id});
+    });
     $("risk-open-lyrics").addEventListener("click",()=>{
       const song=state.riskSelected;
       if(!song)return;
