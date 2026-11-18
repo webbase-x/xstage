@@ -215,7 +215,7 @@ class XskStreamTests(unittest.TestCase):
         self.assertEqual(len(list(library.rglob("*.xsk"))), 1)
 
         waiting.with_suffix(".lrc").write_text(
-            "[ti:เพลงใหม่พร้อมใช้]\\n[ar:ศิลปินใหม่]\\n[00:02.00]เนื้อร้องใหม่",
+            "[ti:เพลงใหม่พร้อมใช้]\n[ar:ศิลปินใหม่]\n[00:02.00]เนื้อร้องใหม่",
             encoding="utf-8")
         pending, total = review.pending_rows(library, self.source)
         self.assertEqual(total, 1)
@@ -289,7 +289,8 @@ class XskStreamTests(unittest.TestCase):
                     }, progressive=True)
                 self.assertEqual(repeat["created"], 0)
                 self.assertEqual(repeat["skipped"], 4)
-                self.assertEqual(repeat["notReady"], 1)
+                self.assertEqual(repeat["notReady"], 0)
+                self.assertEqual(repeat["deferred"], 1)
         finally:
             engine.PREFS.update(source=old_source, xsk_folder=old_folder,
                                 code_style=old_style, code_length=old_length)
