@@ -2480,7 +2480,11 @@
     if(busy)return;
     const plan=await inspectPCExport();
     if(!plan)return;
-    if(!plan.songs)return message('ไม่มีรายการใหม่ตามตัวกรอง · ไม่เปลี่ยนฐาน Karaoke PC เดิม');
+    if(!plan.songs && !(plan.groups?.duplicate||plan.groups?.conflict))
+      return message('ไม่มีรายการใหม่หรือเพลงซ้ำจากชุดที่เลือก');
+    if(!plan.songs) {
+      $('pc-export-status').textContent='กำลังบันทึกเฉพาะประวัติรายการซ้ำ โดยไม่แก้ Catalog เพลงเดิม';
+    }
     const groups=selectedImportGroups('pc');
     const prompt='นำเข้า '+fmtNum(plan.songs)+' เพลง ไปยัง Karaoke PC'+
       '\nจาก '+plan.source+'\nไป '+plan.destination+
@@ -2491,6 +2495,43 @@
       {acceptLabel:'เริ่มอัปเดต',cancelLabel:'ยกเลิก'}))return;
     $('pc-export-status').textContent='กำลังนำเข้าจากฐานเพลงต้นทาง · ตรวจ SHA-256 และความซ้ำ';
     await run('pc-export',{groups});
+  }
+  let pcImportReviewOffset=0,pcImportReviewTotal=0;
+  async function loadPCImportReview(offset=0) {
+    try {
+      await saveInputs(['pc-export-folder']);
+      const result=await api('/api/import-bundle/duplicates?target=pc&offset='+Math.max(0,offset));
+      const body=$('pc-import-review-rows');
+      body.replaceChildren();
+      for(const item of result.items||[]) {
+        const row=document.createElement('tr');
+        const path=document.createElement('td');
+        path.textContent=item.path||'—';
+        const status=document.createElement('td');
+        status.textContent=item.status==='duplicate'?'ซ้ำเดิม':'รหัสชน/รอตรวจ';
+        const detail=document.createElement('td');
+        detail.textContent=(item.sha256||'').slice(0,16)+'… · '+(item.reason||'');
+        row.append(path,status,detail);
+        body.append(row);
+      }
+      if(!body.children.length) {
+        const row=document.createElement('tr'), cell=document.createElement('td');
+        cell.colSpan=3;cell.textContent='ยังไม่มีรายการเพลงซ้ำจากการนำเข้าที่ตรวจแล้ว';
+        row.append(cell);body.append(row);
+      }
+      pcImportReviewOffset=result.offset||0;
+      pcImportReviewTotal=result.total||0;
+      $('pc-import-review-page').textContent=pcImportReviewTotal
+        ? fmtNum(pcImportReviewOffset+1)+'–'+fmtNum(Math.min(pcImportReviewTotal,pcImportReviewOffset+50))+
+          ' / '+fmtNum(pcImportReviewTotal):'0 รายการ';
+      $('pc-import-review-prev').disabled=pcImportReviewOffset===0;
+      $('pc-import-review-next').disabled=pcImportReviewOffset+50>=pcImportReviewTotal;
+      $('pc-import-review-status').textContent='พบ '+fmtNum(pcImportReviewTotal)+
+        ' รายการจากทะเบียนนำเข้าที่ตรวจแล้ว · ยังไม่ได้ลบหรือย้ายไฟล์ใด';
+    } catch(error) {
+      $('pc-import-review-status').textContent='ไม่สามารถอ่านทะเบียนเพลงซ้ำ: '+error.message;
+      message(error.message);
+    }
   }
   async function inspectDriveBundle(){
     if(!googleConnected)return message('กรุณาเชื่อม Google Drive ก่อนอ่าน Catalog เดิม');
@@ -3930,6 +3971,9 @@
   $('json-pro-review-next').addEventListener('click',()=>{void loadJsonReview(jsonReviewOffset+JSON_REVIEW_PAGE_SIZE);});
   // Inspect on "ตกลง" only, not while users are still choosing folders.
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
+  $('pc-import-review-refresh').addEventListener('click',()=>{void loadPCImportReview(0);});
+  $('pc-import-review-prev').addEventListener('click',()=>{void loadPCImportReview(Math.max(0,pcImportReviewOffset-50));});
+  $('pc-import-review-next').addEventListener('click',()=>{void loadPCImportReview(pcImportReviewOffset+50);});
   $('drive-import-inspect').addEventListener('click',()=>{void inspectDriveBundle();});
   $('drive-import-start').addEventListener('click',()=>{void startDriveBundle();});
   $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
