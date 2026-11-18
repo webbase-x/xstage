@@ -266,6 +266,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     db = review.connect(root)
     source_root = str(src_real)
     created = skipped = errors = deferred = resumed = 0
+    pending_errors = 0
     issues = []
     examined = 0
     checkpointed = 0
@@ -502,17 +503,21 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             checkpoint(force=True)
         finally:
             db.commit()
-            db.close()
-    if examined == 0:
+            try:
+                pending_errors = review.pending_errors(db, source_root, output_format)
+            finally:
+                db.close()
+    if examined == 0 and not retry_errors_only:
         raise ValueError("ไม่พบเพลงที่มีเนื้อร้องพร้อมเวลาในต้นทาง")
-    if not retry_errors_only and not created and not skipped and errors:
-        raise ValueError("ไม่มีไฟล์ที่ส่งออกสำเร็จ: " +
-                         "; ".join(item["reason"] for item in issues[:3]))
+    # Return per-file issues and the real persisted ERR queue even when every
+    # item failed. Never publish media without validated timed lyrics.
     return {"created": created, "skipped": skipped, "errors": errors,
             "resumed": resumed, "deferred": deferred,
+            "pendingErrors": pending_errors,
+            "retryErrorsOnly": bool(retry_errors_only),
             "incomplete": inspection.get("incompleteCount", len(inspection["incomplete"])),
             "unsupported": inspection.get("unsupportedCount", len(inspection["unsupported"])),
             "total": examined, "output": str(root), "issues": issues[:50],
             "message": (f"ส่งออก Lyrics JSON สำเร็จ {created} เพลง · ข้ามซ้ำ/มีแล้ว {skipped}"
-                        f" · ต่อจากรุ่นเดิม {resumed} · ERR ค้างทบทวน {deferred} · ผิดพลาดในรอบนี้ {errors} · ไม่ครบ {inspection.get('incompleteCount', len(inspection['incomplete']))}"
+                        f" · ต่อจากรุ่นเดิม {resumed} · ERR ค้างทบทวน {pending_errors} · ผิดพลาดในรอบนี้ {errors} · ไม่ครบ {inspection.get('incompleteCount', len(inspection['incomplete']))}"
                         f" · ปลายทาง {root}")}

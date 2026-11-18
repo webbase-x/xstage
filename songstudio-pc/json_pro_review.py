@@ -63,6 +63,15 @@ def lookup(db, media, output_format):
     ).fetchone()
 
 
+def pending_errors(db, source_root, output_format):
+    """Return all unresolved errors, not just the ones skipped in this run."""
+    return db.execute(
+        "SELECT COUNT(*) FROM json_pro_review "
+        "WHERE source_root=? AND output_format=? AND status='error'",
+        (canonical(source_root), output_format),
+    ).fetchone()[0]
+
+
 def record(db, *, media, source_root, output_format, source_signature,
            status, reason="", identity=""):
     if status not in ("completed", "duplicate", "error"):

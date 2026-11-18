@@ -2703,12 +2703,13 @@
       const created=Number(job.created||0), skipped=Number(job.skipped||0);
       const errors=Number(job.errors||0), resumed=Number(job.resumed||0);
       const deferred=Number(job.deferred||0);
+      const pending=job.result ? Number(job.result.pendingErrors ?? deferred) : null;
       const issueList=(job.result?.issues||[]).slice(0,8)
         .map(item=>'• '+(item.name||'ไฟล์')+' — '+(item.reason||'ไม่สำเร็จ'));
       const total=Number(job.result?.total||0);
       $('json-pro-report').textContent=
         (isRunning?'กำลังสร้าง Lyrics JSON · ค้นหาและแปลงพร้อมกัน':
-         state==='success'?'✓ สร้าง Lyrics JSON เสร็จแล้ว':
+         state==='success'?(errors || pending ? '⚠ ตรวจเสร็จแล้ว · ยังมี ERR ต้องแก้ไข' : '✓ สร้าง Lyrics JSON เสร็จแล้ว'):
          state==='cancelled'?'หยุดงานแล้ว · ผลลัพธ์ที่สำเร็จบันทึกใน Catalog':
          'สร้าง Lyrics JSON มีข้อผิดพลาด')+
         '\nตรวจพบไฟล์ '+fmtNum(job.scannedFiles||0)+
@@ -2716,7 +2717,8 @@
         ' · ตรวจแล้ว '+fmtNum(done)+(total?' / '+fmtNum(total):'')+
         ' · สร้าง '+fmtNum(created)+' · ข้ามซ้ำ '+fmtNum(skipped)+
         ' · ผิดพลาด '+fmtNum(errors)+' · ใช้ผลเดิม '+fmtNum(resumed)+
-        ' · ERR ค้างทบทวน '+fmtNum(deferred)+
+        ' · ข้าม ERR เดิม '+fmtNum(deferred)+
+        ' · ERR ค้างทบทวน '+(pending===null?'ตรวจหลังจบงาน':fmtNum(pending))+
         '\n'+(job.result?.message||job.detail||job.stage||'')+
         (issueList.length?'\\nสาเหตุที่ต้องตรวจสอบ:\\n'+issueList.join('\\n'):'');
     }

@@ -555,6 +555,7 @@ class JsonProTests(unittest.TestCase):
         continued = self.run_export(ncn=Ncn(), source_stream=source_stream.stream)
         self.assertEqual((continued["created"], continued["resumed"],
                           continued["deferred"], continued["errors"]), (0, 1, 1, 0))
+        self.assertEqual(continued["pendingErrors"], 1)
         self.assertEqual(len(export.existing_records(library)), 1)
 
         # Once a real timed companion is supplied, retry only the saved ERR.
@@ -563,14 +564,35 @@ class JsonProTests(unittest.TestCase):
         retried = self.run_export(source_stream=source_stream.stream,
                                   retry_errors_only=True)
         self.assertEqual((retried["created"], retried["errors"], retried["total"]), (1, 0, 1))
+        self.assertEqual(retried["pendingErrors"], 0)
         self.assertEqual(len(export.existing_records(library)), 2)
         self.assertEqual(review.review(library, self.source, "original", status="error")["total"], 0)
 
-    def test_invalid_lyrics_not_published(self):
+    def test_failed_lyrics_return_actionable_error_without_publishing(self):
         self.lrc.write_text("ไม่มีเวลา", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "ไม่พบเพลง"):
-            self.run_export()
+        result = self.run_export()
+        self.assertEqual((result["created"], result["errors"], result["pendingErrors"]), (0, 1, 1))
+        self.assertTrue(result["issues"])
         self.assertFalse((self.dest / "XStageSong" / "current.json").exists())
+
+    def test_retry_same_errors_never_claims_zero_remaining(self):
+        stream = load("json_source_stream")
+        midi = self.source / "03700.mid"
+        midi.write_bytes(b"NOPE" + bytes(60))
+
+        class Ncn:
+            def kar_document(self, source, code):
+                raise ValueError("ไฟล์ MIDI ไม่มีส่วนหัว MThd")
+
+        first = self.run_export(ncn=Ncn(), source_stream=stream.stream)
+        self.assertEqual((first["created"], first["errors"], first["pendingErrors"]),
+                         (1, 1, 1))
+        retry = self.run_export(ncn=Ncn(), source_stream=stream.stream,
+                                retry_errors_only=True)
+        self.assertEqual((retry["created"], retry["errors"], retry["deferred"],
+                          retry["pendingErrors"], retry["total"]), (0, 1, 0, 1, 1))
+        self.assertIn("ERR ค้างทบทวน 1", retry["message"])
+        self.assertEqual(len(export.existing_records(self.dest / "XStageSong")), 1)
 
 
 if __name__ == "__main__":
