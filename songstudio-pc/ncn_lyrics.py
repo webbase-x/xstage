@@ -171,19 +171,18 @@ def _varlen(source: bytes, pos: int, end: int):
 def midi_events(midi: Path, *, include_duration=False, raw_data=None):
     """Extract tempo and text metadata, preserving absolute tick positions."""
     data = Path(midi).read_bytes() if raw_data is None else raw_data
-    # Legacy Nick Karaoke / NCN files sometimes use NCN1 in place of the
-    # Standard MIDI MThd signature. The PC karaoke reader already recognizes
-    # this exact legacy variant; the subsequent header and track structures
-    # must still pass the same strict checks as a normal MIDI file.
+    # Some legacy karaoke MIDI files use "Lock" or "Good" in place of
+    # MThd and include a proprietary copyright/provenance text appendix.
+    # Read actual MIDI events and tempo without modifying the source or
+    # fabricating cues. The complete header and track structure below must
+    # still validate; unknown signatures are never guessed or searched for.
     if len(data) < 14:
         raise ValueError("ไฟล์ MIDI สั้นเกินไปหรือส่วนหัวไม่สมบูรณ์")
     signature = data[:4]
-    if signature not in (b"MThd", b"NCN1"):
-        # Do not search for an MThd sequence in arbitrary bytes or invent
-        # karaoke timing from an unknown/corrupted source file.
+    if signature not in (b"MThd", b"NCN1", b"Lock", b"Good"):
         found = signature.hex(" ").upper()
         raise ValueError(
-            f"ไฟล์ MIDI ไม่ใช่รูปแบบ MThd/NCN1 (ส่วนหัวจริง: {found})"
+            f"ไฟล์ MIDI ไม่ใช่รูปแบบ MThd/NCN1/Lock/Good (ส่วนหัวจริง: {found})"
         )
     length = struct.unpack_from(">I", data, 4)[0]
     if length < 6 or len(data) < 8 + length:
