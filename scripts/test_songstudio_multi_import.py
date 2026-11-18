@@ -89,6 +89,26 @@ class MultiComputerImportTests(unittest.TestCase):
         self.assertEqual(third["songCount"], 1)
         self.assertEqual(third["copied"], 0)
 
+    def test_duplicate_review_is_resolved_only_after_source_file_is_gone(self):
+        first_root, _ = self.source("A")
+        second_root, duplicate = self.source("B")
+        pc.publish(first_root, str(self.destination), export, groups=GROUPS)
+        pc.publish(second_root, str(self.destination), export, groups=GROUPS)
+        target = self.destination / "XStageSong"
+        before = registry.duplicate_page(target, target="pc")
+        self.assertEqual(before["total"], 1)
+        self.assertEqual(before["items"][0]["status"], "duplicate")
+        self.assertEqual(registry.reconcile_duplicate_actions(
+            target, second_root, [duplicate], target="pc", operation="move"), 0)
+        self.assertTrue(duplicate.is_file())
+        duplicate.unlink()
+        self.assertEqual(registry.reconcile_duplicate_actions(
+            target, second_root, [duplicate], target="pc", operation="move"), 1)
+        after = registry.duplicate_page(target, target="pc")
+        self.assertEqual(after["total"], 1)  # Keep audit history.
+        self.assertEqual(after["items"][0]["status"], "resolved_move")
+        self.assertTrue((target / "DB" / "songs.sqlite3").is_file())
+
     def test_same_song_from_different_computers_is_detected_without_copy(self):
         one, file_a = self.source("A")
         first = pc.publish(one, str(self.destination), export, groups=GROUPS)
