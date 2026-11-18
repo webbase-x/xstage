@@ -239,13 +239,16 @@ def source_for_build(workspace, db, media):
     """
     entries=db.execute("""SELECT source_path,bytes,mtime_ns FROM xstage_media_sources
           WHERE media_id=? ORDER BY last_seen DESC""",(media["id"],)).fetchall()
+    changed=False
     for entry in entries:
         candidate=Path(entry["source_path"])
         try:
             stat=candidate.stat()
-            if (candidate.is_file() and stat.st_size==media["bytes"] and
-                    stat.st_mtime_ns==entry["mtime_ns"]):
-                return candidate
+            if candidate.is_file():
+                if (stat.st_size==media["bytes"] and
+                        stat.st_mtime_ns==entry["mtime_ns"]):
+                    return candidate
+                changed=True
         except OSError:
             pass
     stored=media["stored_path"]
@@ -253,6 +256,8 @@ def source_for_build(workspace, db, media):
         legacy=Path(workspace)/stored
         if legacy.is_file():
             return legacy
+    if changed:
+        raise ValueError("ไฟล์ต้นฉบับเปลี่ยนหลังลงทะเบียน · กรุณานำเข้าเพลงนั้นอีกครั้งก่อนสร้าง XMID")
     raise ValueError("ไม่พบไฟล์เพลงต้นฉบับ กรุณาเชื่อมต่อ USB/HDD หรือเพิ่มแหล่งเพลงใหม่ก่อนส่งออก")
 
 
