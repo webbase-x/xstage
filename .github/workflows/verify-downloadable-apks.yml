@@ -43,7 +43,7 @@ jobs:
           done
           signer=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
           "$signer" verify --verbose --print-certs app.apk | tee verification.txt
-          actual=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' verification.txt)
+          actual=$(sed -En 's/^(Signer #1 |V[0-9.]+ Signer: )certificate SHA-256 digest: ([[:xdigit:]]{64})$/\2/p' verification.txt | sort -u)
           [[ "$actual" =~ ^[a-f0-9]{64}$ ]]
           prior=$(jq -r '.signer_sha256 // empty' "$FEED")
           [[ -z "$prior" || "$actual" == "$prior" ]]
