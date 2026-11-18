@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.4
+# X-Stage Song Studio Plus — Technical Preview v0.1.5
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -74,6 +74,32 @@ filename. Original filenames and paths are retained in SQLite.
 SHA-256 of MP3 and M4A is not an identity of the underlying musical work.
 Matching titles do not prove byte-identity either. The preview never deletes
 or automatically merges similar-sounding media.
+
+## Recover lyrics for songs already registered in SQLite
+
+Open the new Import screen and choose **"ตรวจซ่อมเนื้อร้องและเวลาปาดสี"**.
+This targeted job searches saved original media locations for songs that
+currently have **no complete timed lyric version**. It does not need to
+recatalog the media, perform media SHA-256 again, copy songs, or create
+backups. It also restores complete versions mistakenly displaced by
+partial CUR versions in the earlier preview (one-time SQLite repair).
+
+Recovery tries measured NCN MID/LYR/CUR first, then a timed LRC sidecar or
+embedded MIDI/KAR lyrics. It understands flat, bucketed, and mirrored
+Song(s)/Lyrics/Lyr/Cursor/Cur directories and MP3/MP4 + LRC in sibling
+Lyrics folders. UTF-8 Thai LYR converted from CP874 and CUR entries for
+blank lines are recognized only when byte/timing evidence supports them.
+
+A text-only LYR is **stored and previewable** even without usable CUR.
+Partially timed CUR lines are kept with an `incomplete` status, never
+advertised as fully synced. LRC provides line times; interpolated per-glyph
+sweeps are **estimated**, not measured. A missing/changed original source
+is reported separately and never silently paired with another song.
+Manual lyric edits and complete original versions are protected.
+
+The dashboard now separates songs with *any readable lyric text*, songs
+with *complete line timing*, and total historical lyric versions. Those
+three quantities are intentionally not interchangeable.
 
 ## Binary X-Media format v1
 
