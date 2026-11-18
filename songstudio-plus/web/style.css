@@ -18,3 +18,40 @@
 .progress-fill.indeterminate{animation:plus-scan 1.8s ease-in-out infinite;transform-origin:left}
 @keyframes plus-scan{0%{transform:translateX(0);opacity:.55}50%{transform:translateX(205%);opacity:1}100%{transform:translateX(0);opacity:.55}}
 @media(prefers-reduced-motion:reduce){.progress-fill.indeterminate{animation:none}}
+
+
+/* Studio Plus Windows widescreen legibility.
+   The first release capped content at 1480px, leaving enormous gutters on
+   UHD displays and making the actual song workflow look miniature. */
+@media (min-width: 1500px) {
+  .content{max-width:2380px;padding:38px clamp(32px,3vw,74px) 20px}
+  .topbar{padding-inline:clamp(32px,3vw,74px)}
+  .hero{min-height:355px}
+  .hero-copy{padding:44px clamp(35px,3vw,72px)}
+  .hero-copy h1{font-size:clamp(41px,3vw,64px)}
+  .hero-copy p{font-size:15px;line-height:1.9;max-width:840px}
+  .hero-trust span{font-size:13px}
+  .stat-grid{gap:18px;margin:22px 0}
+  .stat{padding:22px 26px}
+  .stat>span{font-size:13px}
+  .stat strong{font-size:clamp(34px,2.1vw,44px)}
+  .stat small{font-size:12px}
+  .panel{padding:30px}
+  .panel-head h2{font-size:20px}
+  .field-label,.step-list div{font-size:14px}
+  .field-hint,.notice p,.tip-panel p{font-size:12px}
+  .input-wrap{min-height:54px}
+  .input-wrap input{font-size:14px}
+  .primary-btn{padding:15px 23px}
+  .progress-panel>p{font-size:14px}
+  .progress-numbers{font-size:12px}
+}
+@media (min-width: 2400px) {
+  .content{max-width:2800px}
+  .hero-art{min-height:350px}
+  .vinyl-disc{right:15%;width:305px;height:305px}
+  .hero-copy h1{font-size:68px}
+  .two-col{grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr)}
+  .nav-link>span:last-child{font-size:14px}
+  .nav-link small{font-size:11px}
+}
