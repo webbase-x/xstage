@@ -43,6 +43,9 @@ assert.equal(opened.mediaExtension,'mp3');
 assert.equal(opened.document.lines[0].syllables.length,2);
 assert.equal(opened.document.lines[0].syllables[1].start,1.5);
 assert.equal(Buffer.from(await opened.media.arrayBuffer()).subarray(0,3).toString(),'ID3');
+const nameless=new Blob([await blob.arrayBuffer()]);
+const driveOpened=await api.openPackage(nameless,{name:'AUDIO/XMP3/0/00000042.xmp3'});
+assert.equal(driveOpened.mediaKind,'audio','Drive Blob without File.name must use catalog path');
 
 const xmid=fixture('00000042.xmid').blob;
 assert.equal((await api.inspectMetadata(xmid)).mediaKind,'midi');
