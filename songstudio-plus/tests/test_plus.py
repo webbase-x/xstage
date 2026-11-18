@@ -234,7 +234,7 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
         self.assertEqual(plus.stats(self.workspace)["songs_partial_lyrics"],0)
         self.assertEqual(plus.stats(self.workspace)["songs_draft_lyrics"],0)
-        self.assertIsNone(song_info.get("draft_reason"))
+        self.assertIsNone(plus.songs(self.workspace)[0].get("draft_reason"))
 
     def test_missing_cur_saves_lyr_text_without_fake_timing(self):
         song=self.put("NCN/Song/0/07777.mid",midi())
