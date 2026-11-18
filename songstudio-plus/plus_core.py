@@ -18,6 +18,7 @@ import unicodedata
 import uuid
 from collections import defaultdict
 from contextlib import contextmanager
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -255,14 +256,38 @@ def source_for_build(workspace, db, media):
     raise ValueError("ไม่พบไฟล์เพลงต้นฉบับ กรุณาเชื่อมต่อ USB/HDD หรือเพิ่มแหล่งเพลงใหม่ก่อนส่งออก")
 
 
-def companion_candidates(media):
-    """Discover exact-stem LYR/CUR/LRC without hashing or copying sidecars.
+@lru_cache(maxsize=4096)
+def _sidecar_folders_for_stamp(root_text,mtime_ns):
+    """Cache collection directory layout, never the existence of lyric files."""
+    root=Path(root_text)
+    names={
+        ".lyr":("Lyrics","Lyric","Lyr","Texts"),
+        ".cur":("Cursor","Cursors","Cur","Timing"),
+        ".lrc":("Lyrics","Lyric","LRC","TimedLyrics"),
+    }
+    result={}
+    for ext,aliases in names.items():
+        folders=[]
+        for alias in aliases:
+            for name in (alias,alias.lower(),alias.upper()):
+                folder=root/name
+                if folder.is_dir() and folder not in folders:
+                    folders.append(folder)
+        result[ext]=tuple(folders)
+    return result
 
-    Prefer companions in the same folder, then mirrored folders within the
-    SAME source collection. Also accept flat and bucketed libraries where
-    MIDI is not inside a directory explicitly named Song. Never look up a
-    matching stem globally, because unrelated collections reuse song codes.
-    Each candidate is a bounded direct file lookup, not a directory scan.
+def _sidecar_folders(root):
+    try:
+        return _sidecar_folders_for_stamp(str(root),root.stat().st_mtime_ns)
+    except OSError:
+        return {}
+
+def companion_candidates(media):
+    """Exact-code sidecar matching: no backup, hashing or recursive per-song scan.
+
+    Directory layouts are cached by root revision so 100k MIDI files do not
+    require repeated probes of nonexistent Lyrics/CUR folder aliases.
+    Supports flat, bucketed and sibling NCN trees and sidecar LRC for media.
     """
     p=Path(media)
     result={".lyr":None,".cur":None,".lrc":None}
@@ -272,12 +297,11 @@ def companion_candidates(media):
             if candidate.is_file() and not candidate.is_symlink():
                 return candidate
         return None
-    for ext in result:
+    eligible=(".lyr",".cur",".lrc") if p.suffix.lower() in MIDI_EXT else (".lrc",)
+    for ext in eligible:
         result[ext]=probe(p.parent,ext)
-    if p.suffix.lower() not in MIDI_EXT or all(
-            result[ext] for ext in (".lyr",".cur")):
+    if all(result[e] for e in eligible):
         return result
-
     roots=[]
     seen=set()
     def add(root,subdir):
@@ -285,40 +309,32 @@ def companion_candidates(media):
         if key not in seen:
             roots.append((root,subdir))
             seen.add(key)
-    found=ncn_reader.describe(p)
-    if found and found[1]=="song":
-        add(found[0],found[2])
-    # Mirror families: Song/Songs/MID/MIDI/Music and their LYR/CUR siblings.
+    if p.suffix.lower() in MIDI_EXT:
+        found=ncn_reader.describe(p)
+        if found and found[1]=="song":
+            add(found[0],found[2])
     for ancestor in p.parents:
-        if ancestor.name.casefold() in ("song","songs","mid","midi","music"):
+        if ancestor.name.casefold() in (
+                "song","songs","mid","midi","music","audio","video","vdo"):
             add(ancestor.parent,p.parent.relative_to(ancestor))
             break
-    # Other collections use <root>/0/<code>.mid and
-    # <root>/Lyrics/0/<code>.lyr, without a Song component.
     ancestor=p.parent
     for _ in range(4):
         add(ancestor,p.parent.relative_to(ancestor))
         if ancestor.parent==ancestor:
             break
         ancestor=ancestor.parent
-
-    aliases={
-        ".lyr":("Lyrics","Lyric","Lyr","Texts"),
-        ".cur":("Cursor","Cursors","Cur","Timing"),
-    }
     for root,subdir in roots:
-        for ext,names in aliases.items():
+        directories=_sidecar_folders(root)
+        for ext in eligible:
             if result[ext]:
                 continue
-            for name in names:
-                for folder in (name,name.lower(),name.upper()):
-                    match=probe(root/folder/subdir,ext)
-                    if match:
-                        result[ext]=match
-                        break
-                if result[ext]:
+            for folder in directories.get(ext,()):
+                found=probe(folder/subdir,ext)
+                if found:
+                    result[ext]=found
                     break
-        if result[".lyr"] and result[".cur"]:
+        if all(result[e] for e in eligible):
             break
     return result
 
