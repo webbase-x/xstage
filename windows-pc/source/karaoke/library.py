@@ -13,9 +13,11 @@ from dataclasses import dataclass, asdict, replace
 from pathlib import Path
 from uuid import uuid4
 
-MIDI_EXT = {".mid", ".midi", ".kar", ".emk", ".xsk"}
-AUDIO_EXT = {".wav", ".mp3", ".wma", ".m4a", ".aac", ".flac", ".ogg", ".oga"}
-VIDEO_EXT = {".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov"}
+from .xmedia_reader import XMEDIA_EXT, XMEDIA_MIDI_EXT, XMEDIA_AUDIO_EXT, XMEDIA_VIDEO_EXT, inner_extension
+
+MIDI_EXT = {".mid", ".midi", ".kar", ".emk", ".xsk"} | set(XMEDIA_MIDI_EXT)
+AUDIO_EXT = {".wav", ".mp3", ".wma", ".m4a", ".aac", ".flac", ".ogg", ".oga"} | set(XMEDIA_AUDIO_EXT)
+VIDEO_EXT = {".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov"} | set(XMEDIA_VIDEO_EXT)
 SUPPORTED = MIDI_EXT | AUDIO_EXT | VIDEO_EXT
 
 
@@ -23,7 +25,8 @@ def song_supports_key(song):
     if not song:return False
     ext=Path(str(dict(song).get('path',''))).suffix.lower()
     if ext in MIDI_EXT:return True
-    if ext in ('.wav','.mp3'):
+    effective=inner_extension(ext) if ext in XMEDIA_EXT else ext
+    if effective in ('.wav','.mp3'):
         from .pcm_player import available
         return available()
     return False
