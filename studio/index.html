@@ -162,8 +162,27 @@
                 <div><label for="xsk-stream-code-length">จำนวนหลักรหัส (1–12)</label><input id="xsk-stream-code-length" class="field" type="number" min="1" max="12" step="1" value="5"></div>
               </div>
               <p class="hint">ตรวจทุกโฟลเดอร์ย่อยและเลือก MIDI/MID/KAR ที่มีเนื้อร้องพร้อมเวลาตามกฎเดิมอัตโนมัติ · ไม่มีเวลาเนื้อร้องหรือพบไฟล์ผิดปกติจะข้ามและบันทึกเหตุผล · ไม่เขียนทับต้นฉบับหรือ .XSK เดิม</p>
-              <div class="toolbar"><button id="xsk-stream-build" class="button primary large" type="button">ตกลง</button></div>
-              <p id="xsk-stream-status" class="hint" role="status" aria-live="polite">พร้อมสร้าง .XSK</p>
+              <div class="toolbar"><button id="xsk-stream-build" class="button primary large" type="button">สร้างต่อจาก XSK เดิม</button><button id="xsk-stream-retry" class="button ghost" type="button">ลองใหม่เฉพาะไม่พร้อม / ERR</button></div>
+              <p id="xsk-stream-status" class="hint" role="status" aria-live="polite">พร้อมสร้าง .XSK ต่อจากคลังเดิม</p>
+              <details id="xsk-review-panel" class="xsk-legacy-tools">
+                <summary>ทบทวนรายการที่ข้าม / ไม่พร้อม / ERR</summary>
+                <div class="toolbar">
+                  <label for="xsk-review-filter">แสดงรายการ</label>
+                  <select id="xsk-review-filter" class="field" style="max-width:220px">
+                    <option value="not_ready">ยังไม่พร้อม</option>
+                    <option value="error">ผิดพลาด ERR</option>
+                    <option value="duplicate">ข้ามซ้ำ</option>
+                    <option value="completed">สร้างสำเร็จ / มีอยู่แล้ว</option>
+                    <option value="all">ทั้งหมด</option>
+                  </select>
+                  <button id="xsk-review-refresh" class="button ghost" type="button">แสดงผลทบทวน</button>
+                </div>
+                <p id="xsk-review-summary" class="hint" role="status">ประวัติจากรุ่นก่อนจะรวบรวมเมื่อสั่งสร้างต่อจาก XSK เดิมครั้งแรก</p>
+                <div class="table-scroll" role="region" aria-label="รายการทบทวน XSK" tabindex="0">
+                  <table class="song-table"><thead><tr><th>ไฟล์ต้นฉบับ</th><th>สถานะ</th><th>สาเหตุ</th></tr></thead><tbody id="xsk-review-rows"><tr><td colspan="3" class="empty-row">กดแสดงผลทบทวน</td></tr></tbody></table>
+                </div>
+                <div class="toolbar"><button id="xsk-review-prev" type="button" class="button ghost">ก่อนหน้า</button><span id="xsk-review-page" class="hint">—</span><button id="xsk-review-next" type="button" class="button ghost">ถัดไป</button></div>
+              </details>
               <p class="hint">XSK2 ไม่เข้ารหัส · PC, Web และ APK เปิดไฟล์ที่สร้างใหม่ได้โดยไม่ต้องส่งต่อกุญแจ · ชื่อเพลงและศิลปินถูกเก็บใน Lyrics JSON ภายใน</p>
 
             </div>
