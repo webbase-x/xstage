@@ -531,7 +531,9 @@ def publish(source_root, selected_destination, export, *, cancelled=None, progre
                   "publishedAt": datetime.now(timezone.utc).isoformat()})
     # Reuse the exact SongLibrary SQLite schema and upsert semantics from
     # Karaoke PC; preserve existing user edits, favorites and other rows.
-    db_result = _sqlite_bridge().sync(dest, list(combined.values()))
+    db_result = _sqlite_bridge().sync(
+        dest, list(combined.values()),
+        preferred_ids={row["webSongId"] for row in planned})
     # Publish a portable database alongside Karaoke PC's native SQLite. Both
     # are derived from the same already-verified immutable catalog snapshot.
     portable = portable_catalog(dest, combined.values(), generation)
