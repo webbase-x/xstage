@@ -1,0 +1,50 @@
+name: Verify downloadable Android APKs
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-downloadable-apks.yml'
+      - 'downloads/*-latest.json'
+      - 'mirror-tv/*latest.json'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feed: [downloads/apps-portal-latest.json, downloads/remote-latest.json, downloads/android-tv-latest.json, downloads/file-share-latest.json, mirror-tv/test-latest.json, mirror-tv/latest.json]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public APK, file digest and signing certificate
+        env:
+          FEED: ${{ matrix.feed }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(jq -r '.available == false' "$FEED")" == true ]]; then
+            echo "::notice::$FEED has no published APK"
+            exit 0
+          fi
+          filename=$(jq -er '.file | select(test("^[A-Za-z0-9._-]+\\.apk$"))' "$FEED")
+          url=$(jq -r '.direct_download_url // .download_url // empty' "$FEED")
+          url=${url:-https://webbase-x.github.io/xstage/downloads/$filename}
+          case "$url" in
+            https://webbase-x.github.io/xstage/downloads/*|https://github.com/webbase-x/xstage/releases/download/*) ;;
+            *) exit 1 ;;
+          esac
+          expected=$(jq -er '.sha256 | select(test("^[a-f0-9]{64}$"))' "$FEED")
+          for attempt in {1..8}; do
+            if curl -fsSL --proto '=https' --max-time 90 "$url" -o app.apk && echo "$expected  app.apk" | sha256sum -c -; then break; fi
+            [[ "$attempt" -lt 8 ]] || exit 1
+            sleep 20
+          done
+          signer=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$signer" verify --verbose --print-certs app.apk | tee verification.txt
+          actual=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' verification.txt)
+          [[ "$actual" =~ ^[a-f0-9]{64}$ ]]
+          prior=$(jq -r '.signer_sha256 // empty' "$FEED")
+          [[ -z "$prior" || "$actual" == "$prior" ]]
+          echo "$filename verified. Certificate SHA-256: $actual" >> "$GITHUB_STEP_SUMMARY"
