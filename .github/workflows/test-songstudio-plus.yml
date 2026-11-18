@@ -58,11 +58,12 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install isolated EXE builder
-        run: python -m pip install "pyinstaller>=6,<7"
+        run: python -m pip install "pyinstaller>=6,<7" "pillow>=11,<13"
       - name: Build standalone EXE with embedded web frontend
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "X-Stage-Song-Studio-Plus-v0.1.0-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" songstudio-plus/app.py
+          python songstudio-plus/make_icon.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Plus-v0.1.0-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
           if (!(Test-Path "dist/X-Stage-Song-Studio-Plus-v0.1.0-preview.exe")) { throw "EXE not produced" }
       - name: Verify EXE hash and package preview
