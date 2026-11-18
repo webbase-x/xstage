@@ -539,6 +539,24 @@
         <section id="tab-upload" class="tab">
           <div class="section-top"><div><h2>นำเข้า X-Stage Karaoke Online</h2></div></div>
           <article class="panel cloud-panel"><div class="cloud-symbol">↑</div><div class="cloud-text"><strong>คลังเพลง XStageSong ส่วนตัว</strong><span id="upload-google-state">กรุณาเชื่อม Google ก่อนอัปโหลด</span></div><button id="upload-login" class="button ghost">เชื่อม Google</button></article>
+          <article class="panel" id="drive-bundle-panel">
+            <div class="section-heading"><div><h2>เผยแพร่ฐานเพลงจากเครื่องอื่นไป Google Drive</h2><p>เลือกคลัง XStageSong จาก PC หรือ USB ที่สร้างคนละวันได้ · เทียบกับ Catalog เดิมก่อนเผยแพร่ · ใช้ฐานเดียวกับ Karaoke Web/APK</p></div></div>
+            <label for="drive-import-source">โฟลเดอร์ XStageSong ต้นทาง</label>
+            <div class="path-row"><input id="drive-import-source" type="text" class="field" autocomplete="off" placeholder="ใช้คลังปัจจุบัน หรือเลือก XStageSong จากอีกเครื่อง"><button type="button" class="button ghost" data-pick="import_source_folder">เลือกต้นทาง</button></div>
+            <fieldset class="secondary-feature import-group-options">
+              <legend><strong>ชุดเพลงที่จะเผยแพร่</strong></legend>
+              <div class="toolbar">
+                <label><input type="checkbox" data-import-kind="drive" value="new" checked> เพลงใหม่</label>
+                <label><input type="checkbox" data-import-kind="drive" value="variant" checked> รูปแบบอื่นของเพลงเดิม</label>
+                <label><input type="checkbox" data-import-kind="drive" value="updated" checked> เพลงที่แก้ไข</label>
+                <label><input type="checkbox" data-import-kind="drive" value="duplicate"> ทบทวนรายการซ้ำ</label>
+              </div>
+            </fieldset>
+            <label><input type="checkbox" id="drive-import-allow-new"> อนุญาตสร้างคลัง XStageSong ใหม่ เฉพาะเมื่อยืนยันว่าไม่มีคลังเดิม</label>
+            <div class="toolbar"><button id="drive-import-inspect" type="button" class="button ghost">ตรวจเทียบฐาน Drive</button><button id="drive-import-start" type="button" class="button primary">อัปเดต Karaoke Web / APK</button></div>
+            <p class="hint" id="drive-import-report" role="status" aria-live="polite">ยังไม่ตรวจฐาน · ต้องเชื่อม Google และมีสิทธิ์เข้าถึงคลัง Drive เดิมก่อน</p>
+          </article>
+
           <article class="panel">
             <div class="section-heading"><div><h2>เลือกโฟลเดอร์นำเข้า</h2></div></div>
             <div class="path-row"><input id="upload-folder" type="text" class="field" placeholder="เลือกโฟลเดอร์เพลง MP3 / M4A / VIDEO / NCN"><button type="button" class="button ghost" data-pick="upload_folder">เลือกโฟลเดอร์</button></div>
@@ -581,6 +599,18 @@
           <div class="section-top"><div><div class="eyebrow">XSTAGESONG · CROSS-PLATFORM EXPORT</div><h2>ส่งออกคลังสำหรับ X-Stage Karaoke PC / Web / APK</h2><p>ส่งออก AUDIO, LYRICS, ฐาน SQLite สำหรับ Karaoke PC และ DB/songs-portable.json สำหรับโอนคลัง · Web/APK ใช้ Catalog File ID ส่วนตัวบน Google Drive ซึ่งต้องเผยแพร่ผ่านเมนูนำเข้า Online หลังส่งออก</p></div><span class="chip info">OFFLINE</span></div>
           <article class="panel">
             <div class="section-heading"><div><h2>เลือกตำแหน่งเก็บคลังเพลง PC</h2><p>เลือกโฟลเดอร์ติดตั้ง Karaoke PC, Songs หรือ XStageSong ได้ · ระบบใช้ XStageSong/AUDIO และ LYRICS ชื่อเดียวกัน · หากพบโปรแกรมจะอัปเดต Data/songs.sqlite3 ของเครื่องนั้น หากไม่พบจะสร้าง SQLite ส่งออกไว้ที่ XStageSong/DB</p></div></div>
+            <label for="pc-import-source">คลังเพลงต้นทาง (เลือก XStageSong ที่สร้างจากเครื่องอื่นได้)</label>
+            <div class="path-row"><input id="pc-import-source" class="field" type="text" autocomplete="off" placeholder="เว้นว่างเพื่อใช้ XStageSong ปัจจุบัน หรือเลือกโฟลเดอร์จาก USB / เครื่องอื่น"><button class="button ghost" type="button" data-pick="import_source_folder">เลือกต้นทาง</button></div>
+            <fieldset class="secondary-feature import-group-options" id="pc-import-filters">
+              <legend><strong>ชุดเพลงที่จะอัปเดต</strong></legend>
+              <div class="toolbar">
+                <label><input type="checkbox" data-import-kind="pc" value="new" checked> เพลงใหม่</label>
+                <label><input type="checkbox" data-import-kind="pc" value="variant" checked> เพลงเดิมคนละสกุล</label>
+                <label><input type="checkbox" data-import-kind="pc" value="updated" checked> เวอร์ชันแก้ไข</label>
+                <label><input type="checkbox" data-import-kind="pc" value="duplicate"> ตรวจรายการซ้ำเหมือนกัน</label>
+              </div>
+              <p class="hint">ชื่อหรือเลขเพลงเหมือนกันไม่ใช่หลักฐานว่าเป็นเพลงเดียวกัน · ไม่ลบเพลงและไฟล์ประกอบอัตโนมัติ · รายการที่ตรวจพบซ้ำสามารถเปิดทบทวนได้ภายหลัง</p>
+            </fieldset>
             <div class="path-row"><input id="pc-export-folder" type="text" class="field" autocomplete="off" placeholder="เช่น D:\\Karaoke หรือ D:\\Karaoke\\Songs\\XStageSong"><button class="button ghost" type="button" data-pick="pc_export_folder">เลือกตำแหน่ง</button></div>
             <div class="toolbar"><button id="pc-export-inspect" class="button ghost" type="button">⌕ ตรวจคลังเพลงและพื้นที่</button><button id="pc-export-start" class="button primary" type="button">▣ ส่งออกไฟล์พร้อมฐานข้อมูล</button></div>
             <p id="pc-export-report" class="hint" role="status" aria-live="polite">เลือกตำแหน่งปลายทาง · ระบบจะตรวจไฟล์ SQLite และรายการเพลง JSON สำหรับทุกแพลตฟอร์มโดยไม่แก้ข้อมูล</p>
