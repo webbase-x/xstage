@@ -2066,7 +2066,7 @@ async function prepareXMediaPlayback(song,token,signal,onStatus=()=>{},prefetch=
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังตรวจ SHA-256 และอ่านเนื้อร้องใน X-Media…');
-  const opened=await window.XStageXMedia.openPackage(packed,{verifyMedia:true,signal});
+  const opened=await window.XStageXMedia.openPackage(packed,{verifyMedia:true,signal,name:song.xmedia?.path||song.code+'.'+String(song.sourceFormat||'xmp3').toLowerCase()});
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   if(String(song.code||'')!==String(opened.code||'') ||
      String(song.title||'')!==String(opened.document.title||'') ||
