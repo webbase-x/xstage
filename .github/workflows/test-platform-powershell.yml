@@ -68,10 +68,11 @@ jobs:
             throw 'Ready release must retain its portable ZIP package'
           }
           if ($ready.installer_available -eq $true) {
-            if ($ready.installer_file -notmatch '-Setup\.exe
- -or $ready.installer_sha256 -notmatch '^[a-f0-9]{64}
-) {
-              throw 'Ready installer metadata must include a Setup EXE and trusted SHA-256'
+            if ($ready.installer_file -notlike '*-Setup.exe') {
+              throw 'Ready installer file must be a Setup EXE'
+            }
+            if ([string]$ready.installer_sha256 -notmatch '^[a-f0-9]{64}') {
+              throw 'Ready installer metadata must include a trusted SHA-256'
             }
           }
           Write-Host 'PASS: platform scripts and packaging metadata'
