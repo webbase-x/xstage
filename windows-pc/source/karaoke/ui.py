@@ -35,14 +35,18 @@ def timestamp(seconds):
 
 
 def playback_lyrics(settings, path, lyrics, stored_path):
-    sidecar = sidecar_lyrics(path)
-    if sidecar:
-        lyrics = sidecar
-    else:
-        from .pc_xstagesong import source_lyrics
-        studio_lyrics = source_lyrics(path)
-        if studio_lyrics is not None:
-            lyrics = studio_lyrics
+    # X-Media is self-contained: do not let an accidental same-stem LRC/JSON
+    # silently replace the embedded, SHA-verified timing. Explicit user lyric
+    # overrides below still remain available.
+    if Path(path).suffix.lower() not in XMEDIA_EXT:
+        sidecar = sidecar_lyrics(path)
+        if sidecar:
+            lyrics = sidecar
+        else:
+            from .pc_xstagesong import source_lyrics
+            studio_lyrics = source_lyrics(path)
+            if studio_lyrics is not None:
+                lyrics = studio_lyrics
     overrides = settings.get("lyric_files", {})
     if isinstance(overrides, dict) and stored_path in overrides:
         lyric_path = Path(overrides[stored_path])
