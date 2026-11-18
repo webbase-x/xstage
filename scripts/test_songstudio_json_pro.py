@@ -475,6 +475,40 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(export._read_current(root)[0]["songCount"], 1)
         self.assertFalse((root / ".build-journal.jsonl").exists())
 
+    def test_large_old_catalog_does_not_validate_every_media_before_first_song(self):
+        # The old flow opened each media file and Lyrics JSON before finding
+        # even the first source. Legacy metadata must be indexed without I/O.
+        old = [
+            {"webSongId": f"legacy-{i}", "code": str(10000 + i),
+             "audio": {"path": f"AUDIO/MP3/SONG/1/{i}.mp3"},
+             "lyrics": {"path": f"AUDIO/MP3/LYRICS/1/{i}.json"},
+             "sourceIdentity": {"sha256": "f" * 64,
+                                "outputFormat": "original",
+                                "canonicalPath": f"legacy/{i}",
+                                "bytes": 1000}}
+            for i in range(5000)
+        ]
+        stages = []
+        with (patch.object(export, "existing_records", return_value=old),
+              patch.object(export, "record_is_complete", side_effect=AssertionError(
+                  "Unrelated old files must be checked only on duplicate match"))):
+            result = pro.export_folder(
+                str(self.source), str(self.dest), output_format="original",
+                export=export, scanner=folder_upload,
+                scan_progress=lambda *parts: stages.append(parts))
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(stages, [("catalog", 0, None), ("catalog", 5000, 5000)])
+
+    def test_missing_old_audio_must_not_suppress_regeneration(self):
+        self.assertEqual(self.run_export()["created"], 1)
+        root = self.dest / "XStageSong"
+        previous = export.existing_records(root)[0]
+        export.safe_media_path(root, previous["audio"]["path"], "audio").unlink()
+        result = self.run_export()
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["skipped"], 0)
+        self.assertEqual(len(export.existing_records(root)), 2)
+
     def test_new_ready_resumes_legacy_catalog_without_decoding_old_lyrics(self):
         self.assertEqual(self.run_export()["created"], 1)
         library = self.dest / "XStageSong"
