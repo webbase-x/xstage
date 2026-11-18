@@ -8,7 +8,7 @@ import os
 import shutil
 import uuid
 from .ingest import Inspector
-from .library import canonical, write_json, SearchCancelled, MIDI_EXT
+from .library import canonical, write_json, SearchCancelled, MIDI_EXT, XMEDIA_EXT
 
 
 def digest(path, cancelled=None, events=None):
@@ -38,7 +38,10 @@ def bundle(path, inspector=None):
     inspector = inspector or Inspector()
     path = Path(path)
     parts = {'media': path}
-    kind = 'midi' if path.suffix.lower() in MIDI_EXT - {'.emk'} else path.suffix.lower()
+    ext = path.suffix.lower()
+    if ext in XMEDIA_EXT:
+        return 'xmedia:'+ext.lstrip('.'), parts
+    kind = 'midi' if ext in MIDI_EXT - {'.emk'} else ext
     if kind == 'midi':
         lyr, cur = inspector.ncn_pair(path)
         def exists(file):
