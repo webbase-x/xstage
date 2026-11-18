@@ -38,14 +38,18 @@ def drum_pattern(song, end):
         return MidiSong(rows,b-a+.001,Lyrics(),initial_bpm=bpm), b-a
     return None
 
-def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=False):
+def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=False,cache_dir=None):
     from .bass import BassSynth
     from .playback import MidiPlayer
     from .pcm_player import PcmPlayer
-    from .library import MIDI_EXT
+    from .library import MIDI_EXT, XMEDIA_EXT
+    original_path = path
     engine=rhythm=None
     try:
-        if path.suffix.lower() in MIDI_EXT:
+        if path.suffix.lower() in XMEDIA_EXT and path.suffix.lower() != '.xmid':
+            from .xmedia_reader import materialize_media
+            path, _ = materialize_media(path, cache_dir)
+        if original_path.suffix.lower() in MIDI_EXT:
             engine=MidiPlayer(output=BassSynth(native,settings=settings));engine.load(path)
             engine.set_channel(3,muted=melody)
         else:engine=PcmPlayer(native);engine.load(path)
@@ -104,14 +108,16 @@ class Decks:
         item=app.song_queue.items[0];row=app.library.get(item.song_id)
         if not row:self.discard();return
         path=Path(row['path'])
-        from .library import MIDI_EXT
+        from .library import MIDI_EXT, XMEDIA_EXT
+        from .xmedia_reader import inner_extension
         from .pcm_player import available
         native = app.home / 'native' / 'x64'
-        if path.suffix.lower() not in MIDI_EXT|{'.wav','.mp3'}:
+        effective = inner_extension(path) if path.suffix.lower() in XMEDIA_EXT else path.suffix.lower()
+        if path.suffix.lower() not in MIDI_EXT and effective not in {'.wav','.mp3'}:
             self.discard();return
         if path.suffix.lower() in MIDI_EXT and app.settings.get('synth_backend')!='bass':
             self.discard();return
-        if full_song and path.suffix.lower() in ('.wav', '.mp3') and not available(native):
+        if full_song and effective in ('.wav', '.mp3') and not available(native):
             self.discard();return
         try:key=preparation_key(app,item,path)
         except OSError:self.discard();return
@@ -131,7 +137,7 @@ class Decks:
         same_session = session(item) and session(item) == session(getattr(app, 'current_item', None))
         self.future=self.pool.submit(
             build, native, deepcopy(app.settings), path, item.key, item.speed,
-            app.melody_var.get(), pattern, bool(session(item)), bool(same_session))
+            app.melody_var.get(), pattern, bool(session(item)), bool(same_session), app.data_dir / 'xmedia-cache')
     def ready(self):
         return self.future is not None and self.future.done() and not self.future.cancelled() and self.future.exception() is None
     def matches(self,item,app=None):

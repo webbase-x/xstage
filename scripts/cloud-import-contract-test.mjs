@@ -11,7 +11,8 @@ const ids=['cloud-import-open','cloud-import-dialog','cloud-import-pick','cloud-
   'cloud-import-allow-create'];
 for(const id of ids)assert.ok(page.includes('id="'+id+'"'),'Missing cloud importer control: '+id);
 assert.ok(page.includes('cloud-import-core.js?v=')&&page.includes('cloud-import.js?v=')&&
-  page.includes('cloud-import.css?v='),'Browser importer must be loaded with the main WEB shell');
+  page.includes('xmedia-browser.js?v=')&&page.includes('cloud-import.css?v='),
+  'Browser importer and X-Media reader must be loaded with the main WEB shell');
 assert.ok(style.includes('.cloud-import-dialog')&&style.includes('@media(max-width:700px)'));
 assert.ok(app.includes('XStageCloudImport?.init')&&app.includes('refresh:async()=>')&&
           app.includes("xstage:auth-cleared"),'Import must receive the verified session and refresh canonical catalog');

@@ -28,3 +28,10 @@ jobs:
           node-version: "20"
       - name: X-Stage regression
         run: npm test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Karaoke PC X-Media compatibility
+        env:
+          PYTHONPATH: windows-pc/source
+        run: python -m unittest windows-pc/source/tests/test_xmedia_playback.py

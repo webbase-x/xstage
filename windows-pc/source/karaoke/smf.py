@@ -87,6 +87,15 @@ def read_vlq(stream):
 
 
 def load_midi(path: Path) -> MidiSong:
+    if path.suffix.lower() == '.xmid':
+        from .xmedia_reader import read_midi_payload
+        from .lyrics import timed_json_lyrics
+        payload, doc = read_midi_payload(path)
+        song = parse_midi(payload, legacy=True)
+        song.lyrics = timed_json_lyrics(doc)
+        song.title = doc.get('title') or song.title
+        song.artist = doc.get('artist') or song.artist
+        return song
     if path.suffix.lower() != ".xsk" and path.stat().st_size > 64 * 1024 * 1024:
         raise ValueError("ไฟล์ MIDI ใหญ่เกิน 64 MB")
     if path.suffix.lower() == '.xsk':

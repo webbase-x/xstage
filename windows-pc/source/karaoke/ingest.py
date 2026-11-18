@@ -93,7 +93,7 @@ class Inspector:
                     first_lyric=' '.join(line.strip() for line in rows[4:] if line.strip())[:512])
 
     def inspect(self, item):
-        from .library import SUPPORTED, MIDI_EXT, VIDEO_EXT, filename_info, canonical
+        from .library import SUPPORTED, MIDI_EXT, VIDEO_EXT, XMEDIA_EXT, filename_info, canonical
         path = Path(item)
         ext = path.suffix.lower()
         if ext not in SUPPORTED:
@@ -112,7 +112,29 @@ class Inspector:
                 if str(value).strip():
                     record[key] = value
                     rich.add(key)
-        if ext in MIDI_EXT:
+        if ext in XMEDIA_EXT:
+            from .xmedia_reader import inspect_xmedia, read_midi_payload
+            info = inspect_xmedia(path)
+            document = info['document']
+            record.update(code=str(document.get('songCode') or code),
+                          title=str(document.get('title') or title),
+                          artist=str(document.get('artist') or artist),
+                          kind=info['kind'], format=info['format'])
+            metadata({'title': document.get('title'), 'artist': document.get('artist'),
+                      'first_lyric': ' '.join(str(line.get('text') or '') for line in document.get('lines', [])[:8])[:512]})
+            if info['kind'] == 'MIDI':
+                data, _ = read_midi_payload(path)
+                parser = parse_midi
+                if getattr(self,'capture_for_quality',False):
+                    from .midi_structure import parse_structure
+                    parser = parse_structure
+                song = parser(data, legacy=True)
+                if getattr(self,'capture_for_quality',False):
+                    self.last_quality=dict(song=song,assets={},ncn_lyrics=None,ncn_error=None)
+                metadata({'bpm': round(song.initial_bpm, 2), 'key_signature': song.key_signature})
+            else:
+                warnings.append('X-Media: ตรวจ metadata SHA-256 แล้ว; media SHA-256 จะตรวจครบก่อนเปิดเล่น')
+        elif ext in MIDI_EXT:
             xsk_doc = None
             if ext == '.xsk':
                 from .xsk_reader import read_xsk
@@ -209,8 +231,8 @@ class Inspector:
                     metadata(dict(title=decode_text(tag[3:33].rstrip(b'\x00 ')), artist=decode_text(tag[33:63].rstrip(b'\x00 '))))
                 metadata(tagged)
             warnings.append('ตรวจส่วนหัวคอนเทนเนอร์แล้ว; ต้องทดสอบตัวถอดรหัสบน Windows ขณะเล่น')
-        lrc = self.sibling(path.with_suffix('.lrc'))
-        if lrc.is_file():
+        lrc = None if ext in XMEDIA_EXT else self.sibling(path.with_suffix('.lrc'))
+        if lrc is not None and lrc.is_file():
             try:
                 text = decode_text(bounded(lrc, 1024 * 1024))
                 tags = dict((k.lower(), v.strip()) for k,v in re.findall(r'\[(ti|ar|key):([^\]\r\n]*)\]', text, re.I))
@@ -221,7 +243,7 @@ class Inspector:
         # Audio/video AND MIDI/KAR with same-code .json: show authoring
         # metadata from Song Studio even when the MIDI itself has no @T tags.
         # XSK has its own sealed identity and must remain authoritative.
-        if ext != ".xsk":
+        if ext != ".xsk" and ext not in XMEDIA_EXT:
             from .lyrics import json_sidecar, read_timed_json
             companion = json_sidecar(path) if not self.sibling(path.with_suffix('.lrc')).is_file() else None
             if companion is not None:
