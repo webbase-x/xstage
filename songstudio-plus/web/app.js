@@ -3,9 +3,11 @@
   const $ = id => document.getElementById(id);
   const state = {token:null,ready:false,view:"import",groups:[],selectedGroups:new Set(),
                  songs:[],selectedSongs:new Set(),latestEdit:null,activeJob:null,
-                 jobSignature:"",toastTimer:null};
+                 jobSignature:"",toastTimer:null,riskFilter:"structural",
+                 riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
+                 riskHistory:[],riskSelected:null,riskEvidenceIndex:0};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
-                build:"สร้างไฟล์ X-Stage",library:"คลังเพลง"};
+                build:"สร้างไฟล์ X-Stage",library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
   function text(id,value){const node=$(id);if(node)node.textContent=value;}
   function toast(message,error=false){
@@ -39,6 +41,7 @@
     text("breadcrumb",labels[name]);
     if(name==="library"||name==="build"||name==="media")void refreshSongs();
     if(name==="import")void refreshStatus();
+    if(name==="risks")void loadRisks();
     if(name==="lyrics"&&$("lyrics-search").value.trim())void searchGroups();
     document.title=labels[name]+" · X-Stage Song Studio Plus";
     history.replaceState(null,"","#"+name);
@@ -49,7 +52,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Plus บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","lyrics-find","media-attach","build-start","source-browse","lrc-browse"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","lrc-browse"]){
       $(id).disabled=!enabled;
     }
   }
@@ -290,7 +293,7 @@
   }
   async function startJob(kind,payload){
     try{
-      const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":"/api/build";
+      const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":kind==="swipe-audit"?"/api/swipe/scan":"/api/build";
       const result=await api(endpoint,payload);
       state.activeJob=result.job;
       toast("เริ่มงานแล้ว ระบบประมวลผลต่อเนื่อง");
@@ -308,11 +311,13 @@
       $("build-start").disabled=!state.ready||!state.selectedSongs.size||Boolean(state.activeJob);
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
+      $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
       if(!job)return;
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
       text("activity-title",job.kind==="import"?"นำเข้าและตรวจ SHA-256":
-          job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":"สร้างไฟล์ X-Stage Plus");
+          job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":
+           job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อจาก SQLite":"สร้างไฟล์ X-Stage Plus");
       text("activity-subtitle",job.message||"");
       const p=job.progress||{};
       text("progress-detail",job.kind==="import"?
@@ -326,9 +331,14 @@
           "กู้คืนพร้อมใช้ "+number(p.recovered_ready)+" · CUR ไม่ครบ "+number(p.partial_lyrics)+
           " · LYR รอเวลา "+number(p.draft_lyrics)+" · ไม่พบต้นฉบับ "+number(p.missing_sources)+
           " · ต้นฉบับเปลี่ยน "+number(p.changed_sources)+" · อ่านผิดพลาด "+number(p.failures):
+          job.kind==="swipe-audit"?
+          "ตรวจแล้ว "+number(p.processed)+" / "+number(p.total)+
+          " · ผิดปกติจากข้อมูล "+number(p.structural_songs)+
+          " · เวลาประมาณ "+number(p.estimated_songs)+
+          " · CUR ไม่ครบ "+number(p.blocked_songs):
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
       text("progress-count",number(p.processed||p.files_seen||p.done||0)+
-        (job.kind==="recover"?" / "+number(p.total):"")+" รายการ");
+        (job.kind==="recover"||job.kind==="swipe-audit"?" / "+number(p.total):"")+" รายการ");
       const progressBar=$("progress-fill");
       progressBar.classList.toggle("indeterminate",job.status==="running");
       progressBar.style.width=job.status==="completed"?"100%":job.status==="running"?"32%":"0%";
@@ -337,8 +347,9 @@
         state.jobSignature=signature;
         if(job.status==="completed"||job.status==="failed"){
           await refreshStatus();
-          if(state.view!=="import")await refreshSongs();
-          toast(job.status==="completed"?"งาน "+(job.kind==="import"?"นำเข้า":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":"สร้างไฟล์")+" เสร็จแล้ว":
+          if(state.view==="risks")await loadRisks();
+          else if(state.view!=="import")await refreshSongs();
+          toast(job.status==="completed"?"งาน "+(job.kind==="import"?"นำเข้า":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
             job.error||"งานล้มเหลว",job.status==="failed");
         }
       }
@@ -379,12 +390,227 @@
       toast("พบ "+number(rows.length)+" รายการที่ต้องตรวจสอบ");
     }catch(error){toast(error.message,true);}
   }
+  const riskCategories={
+    structural:"พบหลักฐานผิดปกติ",unverified:"เวลาโดยประมาณ",
+    blocked:"ข้อมูล CUR ไม่ครบ",history:"ประวัติการตรวจ"
+  };
+  const riskRules={
+    INVALID_LINE_RANGE:"เวลาเริ่ม–จบบรรทัดไม่ถูกต้อง",
+    NO_SWEEP_CUES:"เนื้อร้องไม่มีจุดปาดสี",
+    CUE_TEXT_DIFFERS:"ข้อความจุดปาดสีไม่ตรงกับเนื้อร้อง",
+    CUE_TIME_REVERSES:"จุดปาดสีเรียงเวลาย้อนกลับ",
+    CUE_OUTSIDE_LINE:"จุดปาดสีอยู่นอกช่วงบรรทัด",
+    CUE_OVERLAP:"เวลาปาดสีทับตำแหน่งถัดไป",
+    ESTIMATED_SWEEP:"จุดปาดสีใช้เวลาประมาณ ยังไม่ยืนยันผิด",
+    INCOMPLETE_CUR:"CUR ไม่ครบ ยังปาดสีไม่ได้",
+    EMPTY_TIMED_VERSION:"เวอร์ชันนี้ไม่มีบรรทัดพร้อมเวลา"
+  };
+  const reviewNames={
+    opened:"เปิดต้นฉบับ",confirmed:"ฟังแล้วยืนยันว่าผิด",
+    passed:"ทดลองแล้วตรง", "needs-review":"ยังต้องตรวจ"
+  };
+  function riskElement(tag,klass,content){
+    const e=document.createElement(tag);
+    if(klass)e.className=klass;
+    if(content!==undefined)e.textContent=String(content);
+    return e;
+  }
+  async function loadRisks(){
+    if(!state.ready)return;
+    try{
+      const filter=state.riskFilter,offset=state.riskOffset;
+      const latest=await api("/api/swipe-risks?category="+
+           encodeURIComponent(filter==="history"?"all":filter)+"&limit=5&offset="+
+           encodeURIComponent(filter==="history"?0:offset));
+      const run=latest.run;
+      text("risk-structural",run?number(run.structural_songs):"—");
+      text("risk-unverified",run?number(run.estimated_songs):"—");
+      text("risk-blocked",run?number(run.blocked_songs):"—");
+      text("risk-audit-status",run?
+        "ตรวจรอบล่าสุด "+run.finished_at+" · "+number(run.songs_checked)+
+        " เพลงที่มี Lyrics Version ปัจจุบัน · ไม่สุ่มตัวอย่าง":
+        "ยังไม่มีผลตรวจ กดตรวจเพลงทั้งคลังเพื่อบันทึกหลักฐานจริง");
+      for(const b of document.querySelectorAll("[data-risk-filter]"))
+        b.classList.toggle("selected",b.dataset.riskFilter===filter);
+      if(filter==="history"){
+        const log=await api("/api/swipe-history");
+        state.riskHistory=[
+          ...(log.runs||[]).map(x=>({when:x.started_at,kind:"run",data:x})),
+          ...(log.reviews||[]).map(x=>({when:x.created_at,kind:"review",data:x}))
+        ].sort((a,b)=>b.when.localeCompare(a.when));
+        state.riskTotal=state.riskHistory.length;
+        renderRiskHistory();
+      }else{
+        state.riskTotal=latest.total||0;
+        state.riskRows=latest.rows||[];
+        renderRiskList();
+      }
+      updateRiskPagination();
+    }catch(error){toast(error.message,true);}
+  }
+  function updateRiskPagination(){
+    const beginning=state.riskTotal?state.riskOffset+1:0;
+    const end=Math.min(state.riskOffset+state.riskLimit,state.riskTotal);
+    text("risk-page-info",number(beginning)+"–"+number(end)+
+      " / "+number(state.riskTotal)+" รายการ");
+    $("risk-prev").disabled=state.riskOffset<=0;
+    $("risk-next").disabled=state.riskOffset+state.riskLimit>=state.riskTotal;
+  }
+  function renderRiskList(){
+    const target=$("risk-rows");target.replaceChildren();
+    text("risk-list-title",riskCategories[state.riskFilter]);
+    if(!state.riskRows.length){
+      target.append(riskElement("p","risk-empty",
+        state.riskTotal?"ไม่มีรายการในหน้านี้":
+        "ยังไม่มีรายการที่พบหลักฐานตามตัวกรองนี้ · ไม่แสดงเพลงที่ไม่มีหลักฐาน"));
+      return;
+    }
+    for(const entry of state.riskRows){
+      const card=riskElement("article","risk-record");
+      const main=riskElement("div","risk-record-main");
+      const identity=riskElement("strong","risk-song-name",
+        String(entry.code).padStart(8,"0")+" · "+entry.title);
+      const desc=riskElement("p","risk-song-meta",
+        (entry.artist||"ไม่ระบุศิลปิน")+" · "+entry.extension.toUpperCase()+
+        " · "+(reviewNames[entry.review_status]||"ยังไม่ได้ทดลองฟัง"));
+      const proof=riskElement("p","risk-proof",
+        (riskRules[entry.rule]||entry.rule)+" · "+
+        (entry.line_position>=0?"บรรทัด "+(entry.line_position+1)+" · ":"")+
+        entry.evidence);
+      main.append(identity,desc,proof);
+      const action=riskElement("button","quiet-btn risk-detail-button","ดูหลักฐาน / ทดลองเปิด");
+      action.type="button";
+      action.addEventListener("click",()=>openRiskDialog(entry));
+      card.append(main,action);target.append(card);
+    }
+  }
+  function renderRiskHistory(){
+    const target=$("risk-rows");target.replaceChildren();
+    text("risk-list-title","ประวัติการตรวจและทดลองฟัง");
+    const rows=state.riskHistory.slice(state.riskOffset,state.riskOffset+state.riskLimit);
+    if(!rows.length){
+      target.append(riskElement("p","risk-empty","ยังไม่มีประวัติการตรวจหรือทดลองฟัง"));return;
+    }
+    for(const entry of rows){
+      const line=riskElement("article","risk-record");
+      if(entry.kind==="run"){
+        const run=entry.data;
+        const box=riskElement("div","risk-record-main");
+        box.append(
+          riskElement("strong","risk-song-name","รอบตรวจ · "+entry.when),
+          riskElement("p","risk-song-meta",
+            "ตรวจ "+number(run.songs_checked)+" เพลง · ผิดปกติ "+number(run.structural_songs)+
+            " · ประมาณ "+number(run.estimated_songs)+" · CUR ไม่ครบ "+number(run.blocked_songs)+
+            " · "+run.status)
+        );
+        line.append(box);
+      }else{
+        const review=entry.data;
+        const box=riskElement("div","risk-record-main");
+        box.append(
+          riskElement("strong","risk-song-name",
+            String(review.code).padStart(8,"0")+" · "+review.title),
+          riskElement("p","risk-song-meta",
+            (reviewNames[review.action]||review.action)+" · "+entry.when),
+          riskElement("p","risk-proof",review.note||"ไม่ได้ระบุหมายเหตุ")
+        );
+        line.append(box);
+      }
+      target.append(line);
+    }
+  }
+  function openRiskDialog(item){
+    state.riskSelected=item;state.riskEvidenceIndex=0;
+    text("risk-modal-title",String(item.code).padStart(8,"0")+" · "+item.title);
+    text("risk-modal-description",
+      "Lyrics Version "+item.version_id+" · "+riskCategories[item.category]+
+      " · ผลการฟัง: "+(reviewNames[item.review_status]||"ยังไม่ได้ทดลองฟัง"));
+    $("risk-review-note").value="";
+    renderRiskEvidence();
+    $("risk-dialog").showModal();
+  }
+  function renderRiskEvidence(){
+    const item=state.riskSelected;
+    if(!item)return;
+    const findings=item.findings||[];
+    const evidence=findings[state.riskEvidenceIndex];
+    const target=$("risk-evidence-content");target.replaceChildren();
+    if(evidence){
+      const title=riskElement("strong","risk-evidence-title",riskRules[evidence.rule]||evidence.rule);
+      const line=riskElement("p","risk-evidence-meta",
+        evidence.line_position<0?"ทั้งเวอร์ชัน":
+        "บรรทัด "+(evidence.line_position+1)+" · "+Number(evidence.line_start).toFixed(2)+
+        "–"+Number(evidence.line_end).toFixed(2)+" วินาที");
+      const words=riskElement("p","risk-evidence-lyrics",evidence.excerpt||"");
+      const description=riskElement("p","risk-evidence-description",evidence.evidence);
+      target.append(title,line,words,description);
+    }
+    text("risk-evidence-page",number(state.riskEvidenceIndex+1)+
+       " / "+number(findings.length)+" หลักฐาน");
+    $("risk-evidence-prev").disabled=state.riskEvidenceIndex<=0;
+    $("risk-evidence-next").disabled=state.riskEvidenceIndex+1>=findings.length;
+  }
+  async function saveRiskReview(action){
+    const item=state.riskSelected;
+    if(!item)return;
+    const note=$("risk-review-note").value.trim();
+    try{
+      await api("/api/swipe/review",{
+        song_id:item.song_id,version_id:item.version_id,action,note
+      });
+      $("risk-dialog").close();
+      toast("บันทึกผลการทดลองลงประวัติ SQLite แล้ว");
+      await loadRisks();
+    }catch(error){toast(error.message,true);}
+  }
+  async function openRiskSource(){
+    if(!state.riskSelected)return;
+    const item=state.riskSelected;
+    try{
+      const answer=await api("/api/swipe/open-source",{
+        song_id:item.song_id,version_id:item.version_id
+      });
+      toast(answer.note||"เปิดต้นฉบับแล้ว · ยังไม่ได้ยืนยันปาดสี");
+      await loadRisks();
+    }catch(error){toast(error.message,true);}
+  }
+  function riskFilterChanged(filter){
+    state.riskFilter=filter;state.riskOffset=0;
+    void loadRisks();
+  }
   function bind(){
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",()=>view(button.dataset.view));
     $("issues-load").addEventListener("click",()=>void loadImportIssues());
+    $("risk-scan").addEventListener("click",()=>void startJob("swipe-audit",{}));
+    for(const button of document.querySelectorAll("[data-risk-filter]"))
+      button.addEventListener("click",()=>riskFilterChanged(button.dataset.riskFilter));
+    $("risk-prev").addEventListener("click",()=>{
+      state.riskOffset=Math.max(0,state.riskOffset-state.riskLimit);
+      void loadRisks();
+    });
+    $("risk-next").addEventListener("click",()=>{
+      state.riskOffset+=state.riskLimit;void loadRisks();
+    });
+    $("risk-close").addEventListener("click",()=>$("risk-dialog").close());
+    $("risk-evidence-prev").addEventListener("click",()=>{
+      state.riskEvidenceIndex=Math.max(0,state.riskEvidenceIndex-1);renderRiskEvidence();
+    });
+    $("risk-evidence-next").addEventListener("click",()=>{
+      state.riskEvidenceIndex+=1;renderRiskEvidence();
+    });
+    $("risk-confirmed").addEventListener("click",()=>void saveRiskReview("confirmed"));
+    $("risk-passed").addEventListener("click",()=>void saveRiskReview("passed"));
+    $("risk-needs-review").addEventListener("click",()=>void saveRiskReview("needs-review"));
+    $("risk-open-source").addEventListener("click",()=>void openRiskSource());
+    $("risk-open-lyrics").addEventListener("click",()=>{
+      const song=state.riskSelected;
+      if(!song)return;
+      $("risk-dialog").close();
+      void openLyrics({id:song.song_id,title:song.title});
+    });
     $("import-start").addEventListener("click",()=>{
       const folder=$("source-folder").value.trim();
       if(!folder)return toast("กรุณาระบุโฟลเดอร์ต้นทาง",true);
