@@ -29,7 +29,8 @@ concurrency:
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release(mirror-tv): publish v0.2.13 build 115')
+    if: >-
+      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release(mirror-tv): publish v0.2.13 build 115')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
