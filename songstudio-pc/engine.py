@@ -1657,129 +1657,168 @@ def build_xsk(rows, mode, options, *, progressive=False):
     if mode != "original" or options.get("audio_only"):
         raise ValueError("XSK ต้องเป็นเพลง MIDI/KAR ต้นฉบับ ไม่ใช่โหมดแยกเสียง")
     package = _module("xsk_package.py", "xstage_xsk_package")
+    review = _module("xsk_review.py", "xstage_xsk_review")
     # Do not open/create any encryption key for portable XSK2 exports.
     export = _song_export_module()
     root = export.songs_root(options.get("xsk_folder") or worker_prefs().get("xsk_folder") or worker_prefs()["workspace"])
-    codes = _module("code_registry.py", "xstage_xsk_codes")
-    records = export.existing_records(root)
-    allocator = codes.CodeAllocator(
-        records, [], root,
-        code_style=options.get("code_style", worker_prefs().get("code_style", "numeric")),
-        code_length=int(options.get("code_length", worker_prefs().get("code_length", "5"))))
-    # Read existing XSK2 (or older XSK1) only to deduplicate and reserve codes.
-    # Index its authenticated MIDI digests and occupied codes once before
-    # assigning any new ID. Never infer uniqueness from filenames alone.
-    existing_midi = set()
-    xsk_root = root / "MIDI" / "XSK"
-    if xsk_root.is_dir():
-        for existing_path in xsk_root.rglob("*.xsk"):
-            if not existing_path.is_file() or existing_path.is_symlink():
-                raise ValueError("พบ XSK ที่ตรวจสอบไม่ได้: " + str(existing_path))
-            # Preserve encrypted XSK1 untouched. Reserve the filename,
-            # but never treat its encrypted MIDI as an existing portable
-            # XSK2 song: the user may regenerate it safely with a new code.
-            with existing_path.open("rb") as old:
-                legacy = old.read(4) == b"XSK1"
-            if legacy:
+    review_db = review.connect(root)
+    try:
+        codes = _module("code_registry.py", "xstage_xsk_codes")
+        records = export.existing_records(root)
+        allocator = codes.CodeAllocator(
+            records, [], root,
+            code_style=options.get("code_style", worker_prefs().get("code_style", "numeric")),
+            code_length=int(options.get("code_length", worker_prefs().get("code_length", "5"))))
+        # Read existing XSK2 (or older XSK1) only to deduplicate and reserve codes.
+        # Index its authenticated MIDI digests and occupied codes once before
+        # assigning any new ID. Never infer uniqueness from filenames alone.
+        existing_midi = set()
+        xsk_root = root / "MIDI" / "XSK"
+        if xsk_root.is_dir():
+            for existing_path in xsk_root.rglob("*.xsk"):
+                if not existing_path.is_file() or existing_path.is_symlink():
+                    raise ValueError("พบ XSK ที่ตรวจสอบไม่ได้: " + str(existing_path))
+                # Preserve encrypted XSK1 untouched. Reserve the filename,
+                # but never treat its encrypted MIDI as an existing portable
+                # XSK2 song: the user may regenerate it safely with a new code.
+                with existing_path.open("rb") as old:
+                    legacy = old.read(4) == b"XSK1"
+                if legacy:
+                    allocator.used.add(existing_path.stem.casefold())
+                    allocator._track_numeric(existing_path.stem)
+                    log("XSK1 รุ่นเก่าคงไว้ ไม่เขียนทับ · สร้าง XSK2 ใหม่ได้: " + existing_path.name)
+                    continue
+                try:
+                    cached = review.verified(review_db, existing_path)
+                    if cached is not None:
+                        digest, used_code = cached
+                    else:
+                        existing_doc = package.open_package(existing_path)
+                        digest = existing_doc["audio"]["sha256"]
+                        used_code = existing_doc["songCode"]
+                        review.store_verified(review_db, existing_path, digest, used_code)
+                    if not isinstance(digest, str) or len(digest) != 64:
+                        raise ValueError("SHA-256 ของ XSK ไม่ถูกต้อง")
+                    if not isinstance(used_code, str) or not package.CODE_RE.fullmatch(used_code):
+                        raise ValueError("รหัสเพลง XSK ไม่ถูกต้อง")
+                except Exception as exc:
+                    raise ValueError(
+                        "ไม่สามารถตรวจความซ้ำของ XSK เดิมได้ จึงไม่สร้างเพลงใหม่: "
+                        + str(existing_path) + " (" + str(exc) + ")") from exc
+                existing_midi.add(digest)
+                allocator.used.add(used_code.casefold())
+                allocator._track_numeric(used_code)
+                # Reserve the filename as well, even if old metadata differs.
                 allocator.used.add(existing_path.stem.casefold())
                 allocator._track_numeric(existing_path.stem)
-                log("XSK1 รุ่นเก่าคงไว้ ไม่เขียนทับ · สร้าง XSK2 ใหม่ได้: " + existing_path.name)
-                continue
+        created = skipped = errors = not_ready = resumed = deferred = 0
+        source_root = str(options.get("source") or worker_prefs().get("source") or "")
+        retry_only = options.get("retry_issues_only") is True
+        issues = []
+        with LOCK:
+            worker_job()["total"] = 0 if progressive else len(rows)
+        for index, original in enumerate(rows, 1):
+            if worker_cancel().is_set():
+                raise RuntimeError("ยกเลิกงานสร้าง XSK · เก็บเพลงที่สำเร็จแล้ว")
+            row = dict(original)
+            source = Path(row["path"])
+            stamp = ""
+            source_digest = ""
             try:
-                existing_doc = package.open_package(existing_path)
-                digest = existing_doc["audio"]["sha256"]
-                used_code = existing_doc["songCode"]
-                if not isinstance(digest, str) or len(digest) != 64:
-                    raise ValueError("SHA-256 ของ XSK ไม่ถูกต้อง")
-                if not isinstance(used_code, str) or not package.CODE_RE.fullmatch(used_code):
-                    raise ValueError("รหัสเพลง XSK ไม่ถูกต้อง")
+                stamp = review.signature(source)
+                previous = review.lookup(review_db, source)
+                if previous is not None and previous[0] == stamp and not retry_only:
+                    old_status, old_digest = previous[1], previous[2]
+                    if old_status in ("completed", "duplicate") and old_digest in existing_midi:
+                        skipped += 1
+                        resumed += 1
+                        continue
+                    if old_status in ("not_ready", "error"):
+                        deferred += 1
+                        continue
+                if source.suffix.lower() not in EXT_MIDI:
+                    raise ValueError("XSK รองรับเฉพาะ MIDI/KAR ที่มีเวลาคำร้องถูกต้อง")
+                if not source.is_file() or source.is_symlink():
+                    raise ValueError("ไฟล์ MIDI ต้นฉบับไม่พร้อมใช้งาน")
+                # Hash first: skip already sealed MIDI before costly NCN/LRC/JSON
+                # lyric decoding. Re-reading unchanged lyric sidecars is wasteful
+                # on a 100k-track second run.
+                source_digest = package._hash_source(source)
+                if source_digest in existing_midi:
+                    skipped += 1
+                    review.record(review_db, source, source_root, signature_value=stamp,
+                                  status="duplicate", digest=source_digest,
+                                  reason="MIDI เหมือนกับ XSK2 ที่ตรวจสอบ SHA-256 แล้ว")
+                    log("XSK ข้าม MIDI ซ้ำ (SHA-256): " + source.name)
+                    continue
+                preferred = str(row.get("code") or source.stem)
+                # Thai titles and names containing spaces are valid source files,
+                # but not valid protected XSK song-code filenames. Allocate a
+                # safe numeric code instead of rejecting an otherwise valid song.
+                if not package.CODE_RE.fullmatch(preferred):
+                    preferred = "1".zfill(int(options.get(
+                        "code_length", worker_prefs().get("code_length", "5"))))
+                row["code"] = source.stem
+                _lrc, doc, _fingerprint = lyrics_package(row, export=export)
+                if not doc or not doc.get("lines"):
+                    raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
+                doc = _xsk_apply_head_tail(doc, options)
+                title, artist = _xsk_identity(source, row, doc)
+                if title == source.stem or artist == "ไม่ระบุศิลปิน":
+                    raise ValueError("ไม่มีชื่อเพลง/ศิลปินจริงใน metadata · ข้ามเพื่อไม่สร้าง DB ผิด: " + source.name)
+                # CodeAllocator fills numeric gaps before appending after the
+                # highest occupied code. The target file is still checked by seal.
+                code = allocator.assign_new(preferred)
+                output = package.destination(root, code)
+                if output.exists() or output.is_symlink():
+                    raise FileExistsError("รหัส XSK ปลายทางมีอยู่แล้ว · ไม่เขียนทับ: " + code)
+                row["code"] = code
+                doc["songCode"] = code
+                update(f"บรรจุ XSK2 ไม่เข้ารหัส รายการ {index:,}" +
+                       (f"/{len(rows):,}" if not progressive else "") + f": {title}")
+                package.seal(source, doc, code, title, artist, target=output)
+                review.store_verified(review_db, output, source_digest, code)
+                review.record(review_db, source, source_root, signature_value=stamp,
+                              status="completed", digest=source_digest,
+                              output_path=str(output))
+                existing_midi.add(source_digest)
+                created += 1
+                log("XSK2 ไม่เข้ารหัส · ตรวจ ZIP / SHA-256 ผ่าน: " + code)
             except Exception as exc:
-                raise ValueError(
-                    "ไม่สามารถตรวจความซ้ำของ XSK เดิมได้ จึงไม่สร้างเพลงใหม่: "
-                    + str(existing_path) + " (" + str(exc) + ")") from exc
-            existing_midi.add(digest)
-            allocator.used.add(used_code.casefold())
-            allocator._track_numeric(used_code)
-            # Reserve the filename as well, even if old metadata differs.
-            allocator.used.add(existing_path.stem.casefold())
-            allocator._track_numeric(existing_path.stem)
-    created = skipped = errors = not_ready = 0
-    issues = []
-    with LOCK:
-        worker_job()["total"] = 0 if progressive else len(rows)
-    for index, original in enumerate(rows, 1):
-        if worker_cancel().is_set():
-            raise RuntimeError("ยกเลิกงานสร้าง XSK · เก็บเพลงที่สำเร็จแล้ว")
-        row = dict(original)
-        source = Path(row["path"])
-        try:
-            if source.suffix.lower() not in EXT_MIDI:
-                raise ValueError("XSK รองรับเฉพาะ MIDI/KAR ที่มีเวลาคำร้องถูกต้อง")
-            if not source.is_file() or source.is_symlink():
-                raise ValueError("ไฟล์ MIDI ต้นฉบับไม่พร้อมใช้งาน")
-            # Hash first: skip already sealed MIDI before costly NCN/LRC/JSON
-            # lyric decoding. Re-reading unchanged lyric sidecars is wasteful
-            # on a 100k-track second run.
-            source_digest = package._hash_source(source)
-            if source_digest in existing_midi:
-                skipped += 1
-                log("XSK ข้าม MIDI ซ้ำ (SHA-256): " + source.name)
-                continue
-            preferred = str(row.get("code") or source.stem)
-            # Thai titles and names containing spaces are valid source files,
-            # but not valid protected XSK song-code filenames. Allocate a
-            # safe numeric code instead of rejecting an otherwise valid song.
-            if not package.CODE_RE.fullmatch(preferred):
-                preferred = "1".zfill(int(options.get(
-                    "code_length", worker_prefs().get("code_length", "5"))))
-            row["code"] = source.stem
-            _lrc, doc, _fingerprint = lyrics_package(row, export=export)
-            if not doc or not doc.get("lines"):
-                raise ValueError("ไม่มีเนื้อร้องที่มีเวลาจริงสำหรับสร้าง XSK")
-            doc = _xsk_apply_head_tail(doc, options)
-            title, artist = _xsk_identity(source, row, doc)
-            if title == source.stem or artist == "ไม่ระบุศิลปิน":
-                raise ValueError("ไม่มีชื่อเพลง/ศิลปินจริงใน metadata · ข้ามเพื่อไม่สร้าง DB ผิด: " + source.name)
-            # CodeAllocator fills numeric gaps before appending after the
-            # highest occupied code. The target file is still checked by seal.
-            code = allocator.assign_new(preferred)
-            output = package.destination(root, code)
-            if output.exists() or output.is_symlink():
-                raise FileExistsError("รหัส XSK ปลายทางมีอยู่แล้ว · ไม่เขียนทับ: " + code)
-            row["code"] = code
-            doc["songCode"] = code
-            update(f"บรรจุ XSK2 ไม่เข้ารหัส รายการ {index:,}" +
-                   (f"/{len(rows):,}" if not progressive else "") + f": {title}")
-            package.seal(source, doc, code, title, artist, target=output)
-            existing_midi.add(source_digest)
-            created += 1
-            log("XSK2 ไม่เข้ารหัส · ตรวจ ZIP / SHA-256 ผ่าน: " + code)
-        except Exception as exc:
-            reason = source.name + ": " + str(exc)
-            if progressive and isinstance(exc, ValueError):
-                not_ready += 1
-                log("XSK ข้ามไม่ผ่านเงื่อนไข: " + reason)
-            else:
-                errors += 1
-                log("ERR " + reason)
-            if len(issues) < 50:
-                issues.append(reason)
-        finally:
-            with LOCK:
-                worker_job().update(created=created, skipped=skipped, errors=errors,
-                           notReady=not_ready, m4aCount=0, lyricsCount=created)
-            update((f"XSK {index:,}" + (f"/{len(rows):,}" if not progressive else "") +
-                    f" · ใหม่ {created:,} · ซ้ำ {skipped:,} · ไม่พร้อม {not_ready:,} · ERR {errors:,}"), index)
-    result = {"created": created, "skipped": skipped, "errors": errors,
-              "notReady": not_ready,
-              "m4aCount": 0, "lyricsCount": created,
-              "output": str(root / "MIDI" / "XSK"),
-              "issues": issues[-50:],
-              "message": f"สร้าง XSK {created} เพลง · ซ้ำ {skipped} · ไม่พร้อม {not_ready} · ผิดพลาด {errors}"}
-    if not created and not skipped:
-        raise ValueError("ไม่มีเพลงที่สร้างสำเร็จ · " + "; ".join(issues[:3]))
-    return result
-
+                reason = source.name + ": " + str(exc)
+                if progressive and isinstance(exc, ValueError):
+                    not_ready += 1
+                    issue_status = "not_ready"
+                    log("XSK ข้ามไม่ผ่านเงื่อนไข: " + reason)
+                else:
+                    errors += 1
+                    issue_status = "error"
+                    log("ERR " + reason)
+                review.record(review_db, source, source_root, signature_value=stamp,
+                              status=issue_status, reason=str(exc)[:500])
+                if len(issues) < 50:
+                    issues.append(reason)
+            finally:
+                if index % 32 == 0:
+                    review_db.commit()
+                with LOCK:
+                    worker_job().update(created=created, skipped=skipped, errors=errors,
+                               notReady=not_ready, resumed=resumed, deferred=deferred,
+                               m4aCount=0, lyricsCount=created)
+                update((f"XSK {index:,}" + (f"/{len(rows):,}" if not progressive else "") +
+                        f" · ใหม่ {created:,} · ซ้ำ {skipped:,} · ใช้ผลเดิม {resumed:,}"
+                        f" · ค้างทบทวน {deferred:,} · ไม่พร้อม {not_ready:,} · ERR {errors:,}"), index)
+        result = {"created": created, "skipped": skipped, "errors": errors,
+                  "notReady": not_ready, "resumed": resumed, "deferred": deferred,
+                  "m4aCount": 0, "lyricsCount": created,
+                  "output": str(root / "MIDI" / "XSK"),
+                  "issues": issues[-50:],
+                  "message": (f"สร้าง XSK {created} เพลง · ซ้ำ/มีแล้ว {skipped} · ใช้ผลเดิม {resumed}"
+                              f" · ค้างทบทวน {deferred} · ไม่พร้อมใหม่ {not_ready} · ERR ใหม่ {errors}")}
+        return result
+    finally:
+        review_db.commit()
+        review_db.close()
 
 def build_library(rows, mode, options):
     """Idempotent across independent sessions; checkpoint before next song.
