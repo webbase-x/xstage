@@ -7,7 +7,8 @@
                  riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
                  songOffset:0,songHasNext:false,groupOffset:0,groupHasNext:false,
-                 selectedGroupInfo:new Map(),issueRows:[],issueOffset:0};
+                 selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
+                 lyricTimed:[],lyricDraft:[],lyricOffset:0,lyricShowDraft:false};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 build:"สร้างไฟล์ X-Stage",library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
@@ -174,30 +175,48 @@
     text("build-count",number(state.selectedSongs.size)+" เพลง");
     $("build-start").disabled=!state.ready||state.selectedSongs.size===0||Boolean(state.activeJob);
   }
+  function renderLyricPage(){
+    const entries=state.lyricShowDraft?state.lyricDraft:state.lyricTimed;
+    const target=$("lyrics-modal-lines");
+    target.replaceChildren();
+    const size=visibleRows();
+    const slice=entries.slice(state.lyricOffset,state.lyricOffset+size);
+    for(const line of slice){
+      const item=document.createElement("div");
+      item.className="lyric-line";
+      const time=document.createElement("code");
+      time.textContent=line.start===null||line.end===null?
+        "รอ Timing":Number(line.start).toFixed(2)+"–"+Number(line.end).toFixed(2)+"s";
+      const detail=document.createElement("div");
+      const words=document.createElement("p");
+      words.textContent=line.text;
+      words.title=line.text;
+      const label=document.createElement("small");
+      label.textContent="บรรทัด "+(line.position+1)+" · "+line.timing+
+        " · จุดปาดสี "+(line.cues||[]).length+" จุด";
+      detail.append(words,label);item.append(time,detail);target.append(item);
+    }
+    if(!slice.length)target.append(riskElement("p","empty-small","ไม่มีเนื้อร้องในส่วนนี้"));
+    text("lyrics-page-info",number(state.lyricOffset+(slice.length?1:0))+"–"+
+      number(state.lyricOffset+slice.length)+" / "+number(entries.length)+" บรรทัด");
+    $("lyrics-prev").disabled=state.lyricOffset<=0;
+    $("lyrics-next").disabled=state.lyricOffset+size>=entries.length;
+    const hasDraft=state.lyricDraft.length>0&&state.lyricTimed.length>0;
+    $("lyrics-show-draft").hidden=!hasDraft;
+    if(hasDraft)$("lyrics-show-draft").textContent=state.lyricShowDraft?
+      "ดูบรรทัดพร้อมเวลา":"ดูข้อความ LYR ทั้งหมด";
+  }
   async function openLyrics(song){
     try{
       const data=await api("/api/lyrics?song_id="+encodeURIComponent(song.id));
       text("lyrics-modal-title",song.title+" · "+data.version.timing_status);
-      const list=$("lyrics-modal-lines");list.replaceChildren();
-      for(const line of data.lines){
-        const element=document.createElement("div");element.className="lyric-line";
-        const timing=document.createElement("code");
-        timing.textContent=line.start===null||line.end===null?
-          "รอ Timing":Number(line.start).toFixed(2)+" – "+Number(line.end).toFixed(2)+"s";
-        const details=document.createElement("div");
-        const words=document.createElement("p");words.textContent=line.text;
-        const note=document.createElement("small");
-        note.textContent="บรรทัด "+(line.position+1)+" · "+line.timing+
-                         " · จุดปาดสี "+line.cues.length+" จุด";
-        details.append(words,note);element.append(timing,details);list.append(element);
-      }
-      if(data.draft&&data.version.timing_status==="incomplete"){
-        const section=document.createElement("div");section.className="lyric-draft-summary";
-        const title=document.createElement("strong");
-        title.textContent="เนื้อร้องทั้งหมดจาก LYR · บางช่วงยังไม่มีเวลาปาดสี";
-        const raw=document.createElement("pre");raw.textContent=data.draft.text;
-        section.append(title,raw);list.append(section);
-      }
+      state.lyricTimed=data.lines||[];
+      state.lyricDraft=data.draft?data.draft.text.split(/\r?\n/).map((value,index)=>({
+        position:index,text:value,start:null,end:null,timing:"untimed",cues:[]
+      })):[];
+      state.lyricShowDraft=state.lyricTimed.length===0;
+      state.lyricOffset=0;
+      renderLyricPage();
       $("lyrics-dialog").showModal();
     }catch(error){toast(error.message,true);}
   }
@@ -741,6 +760,16 @@
       catch(error){toast(error.message,true);}
     });
     $("lyrics-close").addEventListener("click",()=>$("lyrics-dialog").close());
+    $("lyrics-prev").addEventListener("click",()=>{
+      state.lyricOffset=Math.max(0,state.lyricOffset-visibleRows());renderLyricPage();
+    });
+    $("lyrics-next").addEventListener("click",()=>{
+      state.lyricOffset+=visibleRows();renderLyricPage();
+    });
+    $("lyrics-show-draft").addEventListener("click",()=>{
+      state.lyricShowDraft=!state.lyricShowDraft;
+      state.lyricOffset=0;renderLyricPage();
+    });
   }
   async function init(){
     bind();
