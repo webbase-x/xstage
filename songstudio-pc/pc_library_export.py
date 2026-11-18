@@ -329,7 +329,7 @@ def inspect(source_root, selected_destination, export, *, _include_plan=False,
     registry = _registry_module()
     # Only the import projection receives collision-free codes. Never change
     # metadata, filenames or published catalogs on the source computer.
-    all_records = registry.assign_target_codes(source_records, existing.values()) if groups is not None else source_records
+    all_records = registry.assign_target_codes(source_records, existing.values())
     selection = registry.classify(all_records, existing.values(), groups) if groups is not None else None
     records = selection["selected"] if selection is not None else all_records
     files, replacements, missing, bytes_to_copy, versioned = _plan_files(
