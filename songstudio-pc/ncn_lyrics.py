@@ -92,6 +92,22 @@ def _file_names(folder: Path) -> dict[str, Path]:
 _file_names.cache_clear = _file_names_at_stamp.cache_clear
 
 
+def _find_companion_file(folder: Path, code: str, suffix: str) -> Path | None:
+    """Prefer O(1) exact-code paths; never trust a potentially stale listing.
+
+    On Windows, filename lookup is case-insensitive even when the source NCN
+    uses upper-case .LYR/.CUR. Newly copied companions are found immediately.
+    """
+    for extension in (suffix, suffix.upper()):
+        candidate = folder / (code + extension)
+        if candidate.is_file() and not candidate.is_symlink():
+            return candidate
+    candidate = _file_names(folder).get((code + suffix).casefold())
+    if candidate is not None and candidate.is_file() and not candidate.is_symlink():
+        return candidate
+    return None
+
+
 def resolve_companions(midi: Path, index: dict | None = None, *,
                        indexed_only: bool = False) -> dict | None:
     """Resolve .MID/.LYR/.CUR in mirrored Song/Lyrics/Cursor directories.
@@ -144,7 +160,7 @@ def resolve_companions(midi: Path, index: dict | None = None, *,
         for part in subdir.parts:
             folder = _find_ci(folder, part) if folder else None
         if folder:
-            candidate = _file_names(folder).get((midi.stem + suffix).casefold())
+            candidate = _find_companion_file(folder, midi.stem, suffix)
             if candidate is not None:
                 result[key] = str(candidate)
     missing = [name for name in ("lyrics", "cursor") if not result[name]]
