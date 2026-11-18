@@ -82,6 +82,8 @@ def connect(workspace):
         c.close()
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS xstage_migrations(
+ key TEXT PRIMARY KEY, applied_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS xstage_media(
  id TEXT PRIMARY KEY, sha256 TEXT NOT NULL UNIQUE, extension TEXT NOT NULL,
  bytes INTEGER NOT NULL, stored_path TEXT NOT NULL, first_filename TEXT NOT NULL,
@@ -151,10 +153,80 @@ CREATE TABLE IF NOT EXISTS xstage_exports(
  REFERENCES xstage_lyric_versions(id), output_path TEXT NOT NULL,
  sha256 TEXT NOT NULL, created_at TEXT NOT NULL);
 """
+def _quality(status):
+    # Complete, independently timed lyrics outrank incomplete CUR fragments.
+    return {"incomplete":0,"estimated":1,"original":2,
+            "preserved":3,"verified":4}.get(status,0)
+
+def _line_total(db,version_id):
+    return db.execute(
+        "SELECT COUNT(*) FROM xstage_lyric_lines WHERE version_id=?",
+        (version_id,)).fetchone()[0]
+
+def _prefer_version(db,song_id,version_id):
+    """Promote improved evidence, never replace a user's edited lyric version."""
+    candidate=db.execute(
+        "SELECT id,origin,timing_status FROM xstage_lyric_versions WHERE id=? AND song_id=?",
+        (version_id,song_id)).fetchone()
+    if candidate is None:
+        raise ValueError("ไม่พบ Lyrics Version ที่ต้องประเมิน")
+    current=db.execute("""SELECT id,origin,timing_status FROM xstage_lyric_versions
+                         WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
+    if current and current["id"]==candidate["id"]:
+        return True
+    if current and (current["origin"]=="edit" or current["timing_status"]=="verified"):
+        return False
+    new_rank=_quality(candidate["timing_status"])
+    old_rank=_quality(current["timing_status"]) if current else -1
+    if new_rank<old_rank:
+        return False
+    if new_rank==old_rank and current:
+        # Do not reorder equally sound versions on each reimport unless
+        # the new one covers *more* lyric lines.
+        if _line_total(db,candidate["id"])<=_line_total(db,current["id"]):
+            return False
+    db.execute("UPDATE xstage_lyric_versions SET is_current=0 WHERE song_id=?",
+               (song_id,))
+    db.execute("UPDATE xstage_lyric_versions SET is_current=1 WHERE id=?",
+               (candidate["id"],))
+    return True
+
+def _repair_historical_lyrics(db):
+    """One-time non-destructive repair of older incorrect current pointers."""
+    if db.execute("SELECT 1 FROM xstage_migrations WHERE key=?",
+                  ("plus-lyrics-quality-v1",)).fetchone():
+        return
+    # Repair only the cases known to be wrong, not manually edited songs.
+    affected=db.execute("""
+        SELECT DISTINCT v.song_id FROM xstage_lyric_versions v
+        WHERE NOT EXISTS (
+          SELECT 1 FROM xstage_lyric_versions c
+          WHERE c.song_id=v.song_id AND c.is_current=1)
+        OR (EXISTS (
+          SELECT 1 FROM xstage_lyric_versions c
+          WHERE c.song_id=v.song_id AND c.is_current=1
+            AND c.timing_status='incomplete' AND c.origin!='edit')
+          AND EXISTS (
+          SELECT 1 FROM xstage_lyric_versions complete
+          WHERE complete.song_id=v.song_id
+            AND complete.timing_status!='incomplete'))
+    """).fetchall()
+    for (song_id,) in affected:
+        rows=db.execute("""SELECT id,timing_status FROM xstage_lyric_versions
+                           WHERE song_id=?""",(song_id,)).fetchall()
+        if not rows:
+            continue
+        best=max(rows,key=lambda v:(_quality(v["timing_status"]),
+                                     _line_total(db,v["id"])))
+        _prefer_version(db,song_id,best["id"])
+    db.execute("INSERT INTO xstage_migrations(key,applied_at) VALUES (?,?)",
+               ("plus-lyrics-quality-v1",now()))
+
 def init(workspace):
     with WRITE_LOCK:
         with connect(workspace) as db:
             db.executescript(SCHEMA)
+            _repair_historical_lyrics(db)
     return db_path(workspace)
 
 def source_for_build(workspace, db, media):
@@ -313,28 +385,30 @@ def content_sha(lines):
 
 def insert_version(db,song,media,doc,source_signature,origin="NCN"):
     lines=valid_lines(doc)
-    if not lines: return (None,False)
+    if not lines:
+        return (None,False)
     signature=content_sha(lines)
-    prior=db.execute(
-        "SELECT id FROM xstage_lyric_versions WHERE song_id=? AND content_sha256=?",
-        (song["id"],signature)).fetchone()
-    if prior: return (prior["id"],False)
-    version=uuid.uuid4().hex
-    meta=doc.get("metadata",{})
-    title=(meta.get("title") or song["title"]).strip()[:255]
-    artist=(meta.get("artist") or song["artist"]).strip()[:255]
+    meta=doc.get("metadata") or {}
     status=("incomplete" if meta.get("timingComplete",True) is False else
             "original" if all(l[4]=="original" for l in lines) else "estimated")
-    previous=db.execute("SELECT origin FROM xstage_lyric_versions WHERE song_id=? AND is_current=1",
-                        (song["id"],)).fetchone()
-    # A reimport must not silently erase the user's reviewed/edited version.
-    activate=not previous or previous["origin"]!="edit"
-    if activate:
-        db.execute("UPDATE xstage_lyric_versions SET is_current=0 WHERE song_id=?",(song["id"],))
+    prior=db.execute("""SELECT id,timing_status FROM xstage_lyric_versions
+                        WHERE song_id=? AND content_sha256=?""",
+                     (song["id"],signature)).fetchone()
+    if prior:
+        # A later, fully verified CUR can close an earlier partial import
+        # without unnecessarily creating a second content-identical version.
+        if _quality(status)>_quality(prior["timing_status"]):
+            db.execute("""UPDATE xstage_lyric_versions SET timing_status=?
+                          WHERE id=?""",(status,prior["id"]))
+        _prefer_version(db,song["id"],prior["id"])
+        return prior["id"],False
+    version=uuid.uuid4().hex
+    title=str(meta.get("title") or song["title"]).strip()[:255]
+    artist=str(meta.get("artist") or song["artist"]).strip()[:255]
     db.execute("""INSERT INTO xstage_lyric_versions
       (id,song_id,content_sha256,source_sha256,origin,timing_status,title,artist,created_at,is_current)
-      VALUES (?,?,?,?,?,?,?,?,?,?)""",
-      (version,song["id"],signature,source_signature,origin,status,title,artist,now(),int(activate)))
+      VALUES (?,?,?,?,?,?,?,?,?,0)""",
+      (version,song["id"],signature,source_signature,origin,status,title,artist,now()))
     for index,(text,start,end,cues,line_status) in enumerate(lines):
         cur=db.execute("""INSERT INTO xstage_lyric_lines
             (version_id,position,text,normalized_text,start_time,end_time,timing_status)
@@ -344,6 +418,7 @@ def insert_version(db,song,media,doc,source_signature,origin="NCN"):
             db.execute("""INSERT INTO xstage_lyric_cues
              (line_id,position,text,start_time,duration) VALUES (?,?,?,?,?)""",
              (cur.lastrowid,ci,glyph,at,duration))
+    _prefer_version(db,song["id"],version)
     return version,True
 
 def companion_stamp(companions):
