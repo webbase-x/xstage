@@ -305,11 +305,18 @@ def classify(rows, existing, selected_groups=None):
         siblings = by_song.get(family, []) if family else []
         if prior:
             oldreg = prior.get("sourceRegistry") or {}
-            if oldreg.get("contentSha256") == reg.get("contentSha256") and (
+            old_fmt = Path((prior.get("audio") or {}).get("path", "")).suffix.casefold()
+            if oldreg.get("songId") == family and family:
+                # Two XSK builds may contain identical MIDI and timed lyrics
+                # but have different ZIP metadata / file hashes. The verified
+                # musical identity is equal: do not import those twice.
+                category = ("duplicate" if old_fmt == fmt
+                            and prior.get("title") == row.get("title")
+                            and prior.get("artist") == row.get("artist")
+                            else "updated")
+            elif oldreg.get("contentSha256") == reg.get("contentSha256") and (
                     oldreg.get("lyricsSha256") == reg.get("lyricsSha256")):
                 category = "duplicate"
-            elif oldreg.get("songId") == family and family:
-                category = "updated"
             else:
                 category = "conflict"
         elif siblings:
@@ -342,14 +349,30 @@ def assign_target_codes(records, destination_rows):
     with code 00001 must not overwrite unrelated 00001 from machine A.
     """
     used = {}
+    destination_by_id = {}
     for row in destination_rows:
         code = str(row.get("code") or "").casefold()
         if code:
             used.setdefault(code, row)
+        stable_id = str(row.get("webSongId") or "")
+        if stable_id:
+            destination_by_id.setdefault(stable_id, row)
     result = []
     for original in records:
         row = dict(original)
         code = str(row.get("code") or "")
+        prior = destination_by_id.get(str(row.get("webSongId") or ""))
+        if prior and ((prior.get("sourceRegistry") or {}).get("songId") ==
+                      (row.get("sourceRegistry") or {}).get("songId")):
+            # Previous import may have assigned an alias. Reuse it forever,
+            # even when the original machine's code is still 00001.
+            previous_code = str(prior.get("code") or "")
+            if previous_code and previous_code.casefold() in used:
+                if code != previous_code:
+                    row["originalCode"] = code
+                row["code"] = previous_code
+                result.append(row)
+                continue
         occupying = used.get(code.casefold())
         if occupying is not None:
             same = ((occupying.get("sourceRegistry") or {}).get("songId")
