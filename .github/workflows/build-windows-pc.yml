@@ -1,16 +1,17 @@
-name: X-Stage Karaoke PC installer candidate (v1.0.78)
+name: X-Stage Karaoke PC installer candidate (v1.0.79)
 
 on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - 'Import X-Stage Windows PC v1.0.78 continuous medley source'
+      - 'Import X-Stage Windows PC v1.0.79 continuous medley source'
     types:
       - completed
   push:
     paths:
       - 'windows-pc/source/**'
       - 'scripts/build_karaoke_pc_icon.py'
+      - 'scripts/verify_songstudio_exe_icon.py'
       # Metadata-only updates must not run an installer build without imported Windows source.
       - 'windows-pc/installer/**'
       - '.github/workflows/build-windows-pc.yml'
@@ -36,7 +37,7 @@ jobs:
         run: |
           if [ -f windows-pc/source/Build-Source.ps1 ] &&
              [ -f windows-pc/source/karaoke/continuous_medley.py ] &&
-             python3 -c "import json,sys; m=json.load(open('windows-pc/manifest.json')); sys.exit(0 if m.get('source_imported') is True and m.get('version')=='1.0.78' and m.get('build')==1078 else 1)"; then
+             python3 -c "import json,sys; m=json.load(open('windows-pc/manifest.json')); sys.exit(0 if m.get('source_imported') is True and m.get('version')=='1.0.79' and m.get('build')==1079 else 1)"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
             echo "Windows source verified and imported; installer build can proceed."
           else
@@ -57,8 +58,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $meta = Get-Content windows-pc/manifest.json -Raw | ConvertFrom-Json
-          if ($meta.source_imported -ne $true -or $meta.version -ne '1.0.78' -or $meta.build -ne 1078) {
-            throw 'Windows v1.0.78 source is not imported. Upload the SHA-256 verified source ZIP before building.'
+          if ($meta.source_imported -ne $true -or $meta.version -ne '1.0.79' -or $meta.build -ne 1079) {
+            throw 'Windows v1.0.79 source is not imported. Upload the SHA-256 verified source ZIP before building.'
           }
           if (-not (Test-Path windows-pc/source/Build-Source.ps1) -or
               -not (Test-Path windows-pc/source/karaoke/continuous_medley.py)) {
@@ -100,6 +101,8 @@ jobs:
                                'dist/XStageKaraoke/release-manifest.json')) {
               if (-not (Test-Path $file -PathType Leaf)) { throw "Build incomplete: $file" }
             }
+            & ((Get-Command python).Source) ../../scripts/verify_songstudio_exe_icon.py dist/XStageKaraoke/XStageKaraoke.exe
+            if ($LASTEXITCODE -ne 0) { throw 'Application EXE missing native icon' }
             & ((Get-Command python).Source) tools/verify_release.py --verify --package dist/XStageKaraoke
             if ($LASTEXITCODE -ne 0) { throw 'Release manifest integrity check failed.' }
           } finally { Pop-Location }
@@ -119,11 +122,13 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup ISCC.exe not found.' }
           & $compiler 'windows-pc/installer/XStageKaraoke.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed: $LASTEXITCODE" }
-          $setup = 'windows-pc/installer/output/X-Stage-Karaoke-PC-Windows-v1.0.78-build1078.exe'
+          $setup = 'windows-pc/installer/output/X-Stage-Karaoke-PC-Windows-v1.0.79-build1079.exe'
           if (-not (Test-Path $setup -PathType Leaf)) { throw 'Installer EXE was not produced.' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer EXE is unexpectedly small.' }
+          python scripts/verify_songstudio_exe_icon.py $setup
+          if ($LASTEXITCODE -ne 0) { throw 'Installer EXE missing native icon' }
           $hash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  X-Stage-Karaoke-PC-Windows-v1.0.78-build1078.exe" |
+          "$hash  X-Stage-Karaoke-PC-Windows-v1.0.79-build1079.exe" |
             Set-Content -Encoding ascii "$setup.sha256"
           Get-Item $setup | Select-Object FullName, Length
           Write-Host "Installer SHA256: $hash"
@@ -132,7 +137,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Karaoke-PC-Windows-v1.0.78-build1078-CANDIDATE
+          name: X-Stage-Karaoke-PC-Windows-v1.0.79-build1079-CANDIDATE
           if-no-files-found: error
           retention-days: 30
           path: |

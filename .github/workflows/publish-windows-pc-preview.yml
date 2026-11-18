@@ -1,11 +1,10 @@
 name: Publish X-Stage Karaoke PC Windows binary preview
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/publish-windows-pc-preview.yml"
-  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - 'X-Stage Karaoke PC installer candidate (v1.0.79)'
+    types: [completed]
 
 permissions:
   actions: read
@@ -17,16 +16,22 @@ concurrency:
 
 jobs:
   release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN: "44006131078"
-      SOURCE_SHA: "6acb5dc5aff73c7e0ccbc1f02be8571346cc0032"
-      TAG: "xstage-karaoke-pc-preview-v1.0.78-build1078"
-      INSTALLER: "X-Stage-Karaoke-PC-Windows-v1.0.78-build1078.exe"
+      SOURCE_RUN: ${{ github.event.workflow_run.id }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      TAG: "xstage-karaoke-pc-preview-v1.0.79-build1079"
+      INSTALLER: "X-Stage-Karaoke-PC-Windows-v1.0.79-build1079.exe"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Check exact successful Windows source/build provenance
         shell: bash
         run: |
@@ -34,22 +39,17 @@ jobs:
           python3 - <<'PY'
           import json
           d=json.load(open('windows-pc/manifest.json',encoding='utf8'))
-          assert d['source_imported'] and d['version']=='1.0.78' and d['build']==1078
+          assert d['source_imported'] and d['version']=='1.0.79' and d['build']==1079
           PY
           verified=$(gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha --jq '[.conclusion,.headSha]|join(" ")')
           test "$verified" = "success $SOURCE_SHA" || { echo "::error::Original candidate run was not successful"; exit 1; }
-          changed=$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$GITHUB_SHA" --jq '.files[].filename')
-          if printf '%s\n' "$changed" | grep -Eq '^(windows-pc/|scripts/build_karaoke_pc_icon.py$|.github/workflows/build-windows-pc.yml$)'; then
-            echo "::error::Windows sources have changed since the passing build"
-            exit 1
-          fi
 
       - name: Extract only verified public EXE (no source ZIP)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "X-Stage-Karaoke-PC-Windows-v1.0.78-build1078-CANDIDATE" --dir dist
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "X-Stage-Karaoke-PC-Windows-v1.0.79-build1079-CANDIDATE" --dir dist
           exe=$(find dist -type f -name "$INSTALLER" -print -quit)
           check=$(find dist -type f -name "$INSTALLER.sha256" -print -quit)
           test -n "$exe" && test -n "$check"
@@ -91,7 +91,7 @@ jobs:
           info={
             'channel':'preview','available':True,
             'name':'X-Stage Karaoke PC Windows PREVIEW',
-            'platform':'windows-x64','version':'1.0.78','build':1078,
+            'platform':'windows-x64','version':'1.0.79','build':1079,
             'installer_file':name,'sha256':os.environ['HASH'],
             'download_url':'https://webbase-x.github.io/xstage/downloads/'+name,
             'source_commit':os.environ['SOURCE_SHA'],
