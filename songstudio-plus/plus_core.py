@@ -86,6 +86,12 @@ CREATE TABLE IF NOT EXISTS xstage_media(
  id TEXT PRIMARY KEY, sha256 TEXT NOT NULL UNIQUE, extension TEXT NOT NULL,
  bytes INTEGER NOT NULL, stored_path TEXT NOT NULL, first_filename TEXT NOT NULL,
  created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS xstage_media_sources(
+ source_path TEXT PRIMARY KEY, media_id TEXT NOT NULL REFERENCES xstage_media(id),
+ bytes INTEGER NOT NULL, mtime_ns INTEGER NOT NULL,
+ verified_sha256 TEXT NOT NULL, last_seen TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS xstage_media_source_lookup
+ ON xstage_media_sources(media_id,last_seen);
 CREATE TABLE IF NOT EXISTS xstage_songs(
  id TEXT PRIMARY KEY, code INTEGER NOT NULL UNIQUE, media_id TEXT NOT NULL UNIQUE
  REFERENCES xstage_media(id), title TEXT NOT NULL, artist TEXT NOT NULL,
@@ -143,30 +149,29 @@ def init(workspace):
             db.executescript(SCHEMA)
     return db_path(workspace)
 
-def media_location(workspace, sha, ext):
-    return root_folder(workspace) / "SOURCE" / ext.lstrip(".").upper() / sha[:2] / (sha+ext)
+def source_for_build(workspace, db, media):
+    """Resolve a verified source without copying it on import.
 
-def safe_store(source, destination, expected_sha):
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.is_file():
-        if digest(destination) != expected_sha:
-            raise ValueError("ต้นฉบับในคลังมี Hash ไม่ตรง · ปฏิเสธการเขียนทับ")
-        return
-    fd, name = tempfile.mkstemp(prefix=".xstage-plus-", dir=destination.parent)
-    os.close(fd)
-    stage = Path(name)
-    try:
-        with Path(source).open("rb") as inp, stage.open("wb") as out:
-            shutil.copyfileobj(inp,out,1024*1024)
-            out.flush()
-            os.fsync(out.fileno())
-        if digest(stage)!=expected_sha:
-            raise ValueError("ไฟล์ต้นฉบับเปลี่ยนระหว่างนำเข้า")
-        if destination.exists():
-            raise ValueError("ปลายทางถูกสร้างโดยกระบวนการอื่น")
-        os.replace(stage,destination)
-    finally:
-        stage.unlink(missing_ok=True)
+    Legacy Plus entries retain a SOURCE/... path. New Plus entries reference
+    one or more absolute source paths registered under xstage_media_sources.
+    If a USB is unplugged, stop safely and ask for the source again.
+    """
+    stored=media["stored_path"]
+    if stored:
+        legacy=root_folder(workspace) / stored
+        if legacy.is_file():
+            return legacy
+    entries=db.execute("""SELECT source_path,bytes FROM xstage_media_sources
+          WHERE media_id=? ORDER BY last_seen DESC""",(media["id"],)).fetchall()
+    for entry in entries:
+        candidate=Path(entry["source_path"])
+        try:
+            if candidate.is_file() and candidate.stat().st_size==media["bytes"]:
+                return candidate
+        except OSError:
+            pass
+    raise ValueError("ไม่พบไฟล์เพลงต้นฉบับ กรุณาเชื่อมต่อ USB/HDD หรือเพิ่มแหล่งเพลงใหม่ก่อนส่งออก")
+
 
 def companion_candidates(media):
     # Match direct companions for all formats; the classic split NCN tree
