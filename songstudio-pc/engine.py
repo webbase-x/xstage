@@ -111,7 +111,7 @@ def job_group(action):
     if action in ("ai-lyrics", "ai-align", "ai-separate-vocals",
                   "ai-export", "preview"):
         return "audio-ai"
-    if action in ("upload", "upload-folder", "upload-soundfont",
+    if action in ("upload", "upload-bundle", "upload-folder", "upload-soundfont",
                   "login", "logout", "check-update", "download-update"):
         return "network"
     if action == "install-update":
@@ -261,6 +261,7 @@ PREFS = {
     "soundfont": "", "midi_preset": "balanced", "mode": "original",
     "export_format": "xsk", "catalog_view": "changes", "code_style": "numeric", "code_length": "5", "oauth": "",
     "upload_folder": "", "lyric_source": "", "pc_export_folder": "", "xsk_folder": "",
+    "import_source_folder": "",
     "json_source": "", "json_destination": "",
     "dup_source": "", "dup_destination": ""
 }
@@ -2516,13 +2517,15 @@ def execute_job(action, options, started):
             update(result["message"], 1)
         elif action == "pc-export":
             module = _module("pc_library_export.py", "xstage_pc_export")
-            local_source = _song_export_module().songs_root(worker_prefs()["workspace"])
-            update("กำลังตรวจ XStageSong ต้นทางและพื้นที่เก็บปลายทาง")
+            local_source = _song_export_module().songs_root(
+                worker_prefs().get("import_source_folder") or worker_prefs()["workspace"])
+            update("กำลังเทียบฐาน XStageSong ต้นทางกับ Karaoke PC เดิม")
             result = module.publish(
                 local_source, worker_prefs().get("pc_export_folder", ""),
                 _song_export_module(), cancelled=worker_cancel(),
+                groups=options.get("groups"),
                 progress=lambda done, total, name: update(
-                    f"คัดลอกไฟล์เข้า XStageSong {done:,}/{total:,} · {name}", done))
+                    f"คัดลอกเพลงที่เปลี่ยน {done:,}/{total:,} · {name}", done))
             update(result["message"], result["files"])
         elif action == "upload-folder":
             root = worker_prefs().get("upload_folder", "").strip()
@@ -2540,6 +2543,50 @@ def execute_job(action, options, started):
                 video_renderer=render_browser_video, ncn=NCN,
                 progress=lambda done, total, name: update(
                     f"ตรวจและเผยแพร่ {done:,}/{total:,} · {name}", done))
+        elif action == "upload-bundle":
+            export = _song_export_module()
+            registry = _module("song_registry.py", "xstage_source_bundle_registry")
+            online = _module("online_publish.py", "xstage_online_publish")
+            source = export.songs_root(
+                worker_prefs().get("import_source_folder") or worker_prefs()["workspace"])
+            update("กำลังตรวจฐานเพลงจากเครื่องต้นทางและ Google Drive เดิม")
+            source_records = registry.source_rows(source, export)
+            publisher = online.OnlinePublisher(GOOGLE)
+            snapshot = publisher.read_code_registry(
+                allow_missing_root=(options.get("create_new_library") is True))
+            remote = snapshot["songs"]
+            assigned = registry.assign_target_codes(source_records, remote)
+            plan = registry.classify(assigned, remote, options.get("groups"))
+            selected = plan["selected"]
+            log(f"XStageSong หลายเครื่อง: พบ {len(source_records):,} · เลือก {len(selected):,}"
+                f" · ซ้ำ {plan['counts']['duplicate']:,}"
+                f" · รหัสขัดแย้ง {plan['counts']['conflict']:,}")
+            if selected:
+                with LOCK:
+                    worker_job()["total"] = len(selected)
+                synced = publisher.publish(
+                    source, selected,
+                    create_new_library=(options.get("create_new_library") is True),
+                    cancelled=worker_cancel(),
+                    on_progress=lambda sent, total:
+                    update(f"อัปโหลดเฉพาะสื่อที่เปลี่ยน {sent:,}/{total:,} bytes"),
+                    on_batch=lambda batch, total, created, revised:
+                    update(f"เผยแพร่ฐาน Drive ชุดที่ {batch} · รวม {total:,} เพลง"),
+                    on_row=lambda done, total, skipped:
+                    update(f"ตรวจเพลงและซิงค์ {done + skipped:,}/{total + skipped:,}", done + skipped))
+                registry.log_import(source, "drive", source, selected, "published",
+                                    "ผลการเผยแพร่ลง Google Drive ดูที่ผลซิงค์")
+            else:
+                synced = {"newSongs": 0, "updatedSongs": 0, "duplicates": 0,
+                          "conflicts": 0, "notReady": 0, "totalSongs": len(remote),
+                          "published": False}
+            result = {
+                "message": (f"ซิงค์ฐานหลายเครื่อง · เพิ่ม {synced['newSongs']} · "
+                            f"อัปเดต {synced['updatedSongs']} · "
+                            f"ข้ามไฟล์ซ้ำ {synced['duplicates']} · "
+                            f"รอตรวจรหัส {synced['conflicts']} · "
+                            f"รวมใน Drive {synced['totalSongs']} เพลง"),
+                "selection": plan["counts"], **synced}
         elif action == "upload":
             export = _song_export_module()
             root = export.songs_root(worker_prefs()["workspace"])
@@ -2851,10 +2898,25 @@ def start_job(data):
         validation = {"total": backup["songs"]}
     if action == "pc-export":
         module = _module("pc_library_export.py", "xstage_pc_export")
-        source = _song_export_module().songs_root(PREFS["workspace"])
+        source = _song_export_module().songs_root(
+            PREFS.get("import_source_folder") or PREFS["workspace"])
+        groups = data.get("groups", ["new", "variant", "updated"])
+        if not isinstance(groups, list) or any(
+                g not in ("new", "variant", "updated", "duplicate", "conflict") for g in groups):
+            raise ValueError("กลุ่มเพลงที่จะนำเข้าไม่ถูกต้อง")
         inspection = module.inspect(
-            source, PREFS.get("pc_export_folder", ""), _song_export_module())
+            source, PREFS.get("pc_export_folder", ""), _song_export_module(), groups=groups)
         validation = {"total": inspection["files"], "destination": inspection["destination"]}
+    if action == "upload-bundle":
+        groups = data.get("groups", ["new", "variant", "updated"])
+        if not isinstance(groups, list) or any(
+                g not in ("new", "variant", "updated", "duplicate", "conflict") for g in groups):
+            raise ValueError("กลุ่มเพลงที่จะเผยแพร่ไม่ถูกต้อง")
+        source = _song_export_module().songs_root(
+            PREFS.get("import_source_folder") or PREFS["workspace"])
+        if not source.is_dir():
+            raise ValueError("ไม่พบ XStageSong ต้นทางที่เลือก")
+        validation = {"total": 0}
     if action == "login":
         # A Core Preview ZIP intentionally ships without an app-wide Desktop
         # OAuth client. Fail synchronously BEFORE claiming that Google Login
@@ -2958,7 +3020,7 @@ def open_picker(kind):
     Microsoft Edge. The bundled PS script supplies a top-most dialog owner,
     and base64-encoded UTF-8 stdout avoids Windows console encoding damage.
     """
-    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "dup_source", "dup_destination", "soundfont", "oauth", "vocal"):
+    if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "import_source_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "dup_source", "dup_destination", "soundfont", "oauth", "vocal"):
         raise ValueError("ประเภทหน้าต่างเลือกโฟลเดอร์/ไฟล์ไม่ถูกต้อง")
     if os.name != "nt":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์แบบ PC รองรับเฉพาะ Windows")
@@ -3688,9 +3750,36 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"events": HISTORY.list_events(HISTORY_FILE)})
             elif path == "/api/pc-export/inspect":
                 module = _module("pc_library_export.py", "xstage_pc_export")
+                groups = [g for g in query.get("groups", ["new,variant,updated"])[0].split(",") if g]
                 self._json(module.inspect(
-                    _song_export_module().songs_root(PREFS["workspace"]),
-                    PREFS.get("pc_export_folder", ""), _song_export_module()))
+                    _song_export_module().songs_root(
+                        PREFS.get("import_source_folder") or PREFS["workspace"]),
+                    PREFS.get("pc_export_folder", ""), _song_export_module(),
+                    groups=groups))
+            elif path == "/api/import-bundle/duplicates":
+                registry = _module("song_registry.py", "xstage_source_bundle_registry")
+                target = query.get("target", ["pc"])[0]
+                selected = (PREFS.get("pc_export_folder") if target == "pc"
+                            else PREFS.get("import_source_folder") or PREFS["workspace"])
+                root = (_module("pc_library_export.py", "xstage_pc_export").destination_root(selected)
+                        if target == "pc" else _song_export_module().songs_root(selected))
+                self._json(registry.duplicate_page(
+                    root, target=target,
+                    offset=max(0, int(query.get("offset", ["0"])[0]))))
+            elif path == "/api/drive-import/inspect":
+                registry = _module("song_registry.py", "xstage_source_bundle_registry")
+                source = _song_export_module().songs_root(
+                    PREFS.get("import_source_folder") or PREFS["workspace"])
+                rows = registry.source_rows(source, _song_export_module())
+                remote = _module("online_publish.py", "xstage_online_publish").OnlinePublisher(
+                    GOOGLE).read_code_registry()["songs"]
+                projected = registry.assign_target_codes(rows, remote)
+                groups = [g for g in query.get("groups", ["new,variant,updated"])[0].split(",") if g]
+                plan = registry.classify(projected, remote, groups)
+                self._json({"source": str(source), "songs": len(plan["selected"]),
+                            "candidateSongs": len(rows), "groups": plan["counts"],
+                            "conflicts": plan["conflicts"][:25],
+                            "duplicates": plan["duplicates"][:25]})
             elif path == "/api/upload-folder/inspect":
                 self._json(FOLDER_UPLOAD.report(PREFS.get("upload_folder", ""), _song_export_module(), ncn=NCN))
             elif path == "/api/license/status":
@@ -4066,7 +4155,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(import_ai_audio(payload.get("path")))
             elif path == "/api/folder-picker":
                 kind = payload.get("kind", "")
-                if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "dup_source", "dup_destination", "soundfont", "oauth", "vocal"):
+                if kind not in ("source", "workspace", "download", "upload_folder", "pc_export_folder", "import_source_folder", "lyric_source", "xsk_folder", "json_source", "json_destination", "dup_source", "dup_destination", "soundfont", "oauth", "vocal"):
                     raise ValueError("ประเภทไฟล์ไม่ถูกต้อง")
                 self._json({"path": open_picker(kind)})
             elif path == "/api/live-preview":
