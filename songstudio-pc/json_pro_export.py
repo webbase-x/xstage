@@ -474,7 +474,7 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             db.close()
     if examined == 0:
         raise ValueError("ไม่พบเพลงที่มีเนื้อร้องพร้อมเวลาในต้นทาง")
-    if not created and not skipped and errors:
+    if not retry_errors_only and not created and not skipped and errors:
         raise ValueError("ไม่มีไฟล์ที่ส่งออกสำเร็จ: " +
                          "; ".join(item["reason"] for item in issues[:3]))
     return {"created": created, "skipped": skipped, "errors": errors,
