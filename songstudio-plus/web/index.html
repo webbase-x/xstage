@@ -24,6 +24,7 @@
       <button class="nav-link" data-view="media" type="button"><span class="nav-icon">03</span><span>เสียงและวิดีโอ<small>เพิ่มเนื้อร้องที่มีเวลา</small></span></button>
       <button class="nav-link" data-view="build" type="button"><span class="nav-icon">04</span><span>สร้างไฟล์ X-Stage<small>XMID · XMP3 · XM4A · XMP4</small></span></button>
       <button class="nav-link" data-view="library" type="button"><span class="nav-icon">05</span><span>คลังเพลง<small>ค้นหา · ตรวจสอบ · เวอร์ชัน</small></span></button>
+      <button class="nav-link" data-view="risks" type="button"><span class="nav-icon">06</span><span>ประวัติเสี่ยงปาดเนื้อ<small>หลักฐานจริง · ทดลองเปิด · บันทึกผล</small></span></button>
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
@@ -161,12 +162,75 @@
           <p class="field-hint">รายการเพลงบนหน้านี้แสดงครั้งละไม่เกิน 80 เพลง เพื่อรักษาความเร็วของโปรแกรม</p>
         </article>
       </section>
+
+      <section class="view" id="view-risks" aria-labelledby="risks-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> EVIDENCE-BASED SWIPE AUDIT</div>
+        <div class="page-intro">
+          <div><h1 id="risks-title">เพลงเสี่ยง <span class="gradient-text">ปาดเนื้อผิดพลาด</span></h1>
+          <p>คัดจากข้อความและจุดปาดสีใน SQLite จริง ไม่สุ่ม ไม่เดาว่าเพลงผิด จะแยกหลักฐานจริงออกจากเวลาที่เป็นเพียงค่าประมาณ</p></div>
+          <span class="section-symbol">⌁</span>
+        </div>
+        <article class="panel risk-summary-panel">
+          <div class="panel-head">
+            <div><span class="label-top">EVIDENCE, NOT GUESSES</span><h2>ผลการตรวจปาดสีจริง</h2></div>
+            <button id="risk-scan" class="primary-btn" type="button">ตรวจเพลงทั้งคลัง <span>↻</span></button>
+          </div>
+          <div class="risk-stat-grid">
+            <div><span>ข้อมูลปาดสีผิดปกติ</span><strong id="risk-structural">—</strong><small>มีหลักฐานตำแหน่ง / ข้อความไม่ตรง</small></div>
+            <div><span>เวลาเป็นค่าประมาณ</span><strong id="risk-unverified">—</strong><small>ยังไม่ถือว่าเพลงผิด</small></div>
+            <div><span>CUR ไม่ครบ</span><strong id="risk-blocked">—</strong><small>ยังไม่สามารถทดลองปาดได้</small></div>
+          </div>
+          <p class="risk-audit-status" id="risk-audit-status">ยังไม่มีผลตรวจ กดตรวจเพลงในคลังเพื่อบันทึกหลักฐานลง SQLite</p>
+        </article>
+        <article class="panel risk-list-panel">
+          <div class="panel-head">
+            <div><span class="label-top">SONGS TO TEST</span><h2 id="risk-list-title">รายการพร้อมตรวจด้วยตนเอง</h2></div>
+            <div class="toolbar risk-filters">
+              <button class="quiet-btn risk-filter selected" data-risk-filter="structural" type="button">พบหลักฐานผิดปกติ</button>
+              <button class="quiet-btn risk-filter" data-risk-filter="unverified" type="button">เวลาโดยประมาณ</button>
+              <button class="quiet-btn risk-filter" data-risk-filter="blocked" type="button">ข้อมูลไม่ครบ</button>
+              <button class="quiet-btn risk-filter" data-risk-filter="history" type="button">ประวัติการตรวจ</button>
+            </div>
+          </div>
+          <div id="risk-rows" class="risk-rows">
+            <p class="empty-small">ยังไม่มีการตรวจ กรุณากดปุ่ม “ตรวจเพลงทั้งคลัง”</p>
+          </div>
+          <div class="risk-pagination">
+            <span id="risk-page-info">—</span>
+            <div class="toolbar">
+              <button id="risk-prev" class="quiet-btn" type="button" disabled>‹ ก่อนหน้า</button>
+              <button id="risk-next" class="quiet-btn" type="button" disabled>ถัดไป ›</button>
+            </div>
+          </div>
+          <p class="risk-footnote">เปิดเพลงต้นฉบับผ่าน Windows อาจเล่นเสียงอย่างเดียว ยังยืนยันความตรงของตัวปาดไม่ได้ ต้องฟังกับตัวเล่นคาราโอเกะที่รองรับแล้วบันทึกผลด้วยตนเอง</p>
+        </article>
+      </section>
       <footer class="footer"><span>© X-Stage Song Studio Plus</span><span>PRIVATE · LOCAL FIRST · ORIGINAL MEDIA SAFE</span></footer>
     </div>
   </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <dialog id="confirm-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-icon">!</div><h2 id="confirm-title">ยืนยันการแก้ไข</h2><p id="confirm-text"></p><div class="dialog-actions"><button value="cancel" class="quiet-btn" type="submit">ยกเลิก</button><button value="yes" class="primary-btn" type="submit">ยืนยัน</button></div></form></dialog>
-<dialog id="lyrics-dialog" class="lyrics-dialog"><div class="modal-head"><h2 id="lyrics-modal-title">เนื้อร้องและ Timing</h2><button class="quiet-btn" id="lyrics-close">✕ ปิด</button></div><div id="lyrics-modal-lines"></div></dialog>
+<dialog id="risk-dialog" class="risk-dialog">
+    <div class="modal-head"><div><span class="label-top">REAL EVIDENCE & HUMAN REVIEW</span><h2 id="risk-modal-title">ตรวจหลักฐานการปาดเนื้อ</h2></div><button id="risk-close" class="quiet-btn" type="button">✕ ปิด</button></div>
+    <p id="risk-modal-description" class="field-hint"></p>
+    <div class="risk-evidence-box">
+      <div id="risk-evidence-content"></div>
+      <div class="risk-pagination">
+        <span id="risk-evidence-page">—</span>
+        <div class="toolbar"><button id="risk-evidence-prev" class="quiet-btn" type="button">‹</button><button id="risk-evidence-next" class="quiet-btn" type="button">›</button></div>
+      </div>
+    </div>
+    <label class="field-label" for="risk-review-note">บันทึกสิ่งที่ได้ยินจริง (ไม่บังคับ)</label>
+    <textarea id="risk-review-note" rows="2" maxlength="800" placeholder="เช่น คำที่ 3 ปาดช้ากว่าเสียงจริง เมื่อทดสอบกับเครื่อง..."></textarea>
+    <div class="risk-modal-actions">
+      <button id="risk-open-source" class="quiet-btn" type="button">▶ เปิดเพลงต้นฉบับ</button>
+      <button id="risk-open-lyrics" class="quiet-btn" type="button">☷ ดูเนื้อร้อง</button>
+      <button id="risk-confirmed" class="quiet-btn" type="button">พบปาดผิดจริง</button>
+      <button id="risk-passed" class="quiet-btn" type="button">ทดลองแล้วตรง</button>
+      <button id="risk-needs-review" class="quiet-btn" type="button">ยังต้องตรวจ</button>
+    </div>
+  </dialog>
+  <dialog id="lyrics-dialog" class="lyrics-dialog"><div class="modal-head"><h2 id="lyrics-modal-title">เนื้อร้องและ Timing</h2><button class="quiet-btn" id="lyrics-close">✕ ปิด</button></div><div id="lyrics-modal-lines"></div></dialog>
 </body>
 </html>
