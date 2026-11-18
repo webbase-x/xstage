@@ -889,6 +889,11 @@ def stats(workspace):
         counts["songs_estimated_timing"]=db.execute(
             "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1 AND timing_status='estimated'"
         ).fetchone()[0]
+        counts["songs_with_text"]=db.execute("""
+            SELECT COUNT(DISTINCT song_id) FROM (
+                SELECT song_id FROM xstage_lyric_versions
+                UNION SELECT song_id FROM xstage_lyric_drafts)
+        """).fetchone()[0]
         counts["lyrics_versions"]=counts["lyrics"]
         counts["latest_batches"]=[dict(x) for x in db.execute(
             "SELECT * FROM xstage_import_batches ORDER BY created_at DESC LIMIT 4")]
