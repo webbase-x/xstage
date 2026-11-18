@@ -1,6 +1,10 @@
 name: Verify downloadable Android APKs
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Release X-Stage Mirror TV signed APK", "Build X-Stage Apps Portal Android"]
+    branches: [main]
+    types: [completed]
   push:
     branches: [main]
     paths:
@@ -14,6 +18,7 @@ permissions:
   contents: read
 jobs:
   verify:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
