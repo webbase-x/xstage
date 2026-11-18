@@ -2522,7 +2522,8 @@
     if(job.kind==='json-pro-export'){
       const done=Number(job.completed||0), found=Number(job.validatedGroups||0);
       const created=Number(job.created||0), skipped=Number(job.skipped||0);
-      const errors=Number(job.errors||0);
+      const errors=Number(job.errors||0), resumed=Number(job.resumed||0);
+      const deferred=Number(job.deferred||0);
       const issueList=(job.result?.issues||[]).slice(0,8)
         .map(item=>'• '+(item.name||'ไฟล์')+' — '+(item.reason||'ไม่สำเร็จ'));
       const total=Number(job.result?.total||0);
@@ -2535,7 +2536,8 @@
         ' · พบชุดเพลง '+fmtNum(found)+
         ' · ตรวจแล้ว '+fmtNum(done)+(total?' / '+fmtNum(total):'')+
         ' · สร้าง '+fmtNum(created)+' · ข้ามซ้ำ '+fmtNum(skipped)+
-        ' · ผิดพลาด '+fmtNum(errors)+
+        ' · ผิดพลาด '+fmtNum(errors)+' · ใช้ผลเดิม '+fmtNum(resumed)+
+        ' · ERR ค้างทบทวน '+fmtNum(deferred)+
         '\\n'+(job.result?.message||job.detail||job.stage||'')+
         (issueList.length?'\\nสาเหตุที่ต้องตรวจสอบ:\\n'+issueList.join('\\n'):'');
     }
