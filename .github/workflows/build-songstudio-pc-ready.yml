@@ -370,16 +370,24 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
-      # Core audio/lyrics/Web/Windows tests and an artifact are generated
-      # even when the repository owner has not supplied Desktop OAuth yet.
-      # The publicly advertised all-functions Ready release remains blocked
-      # until users can Google Login with the app's bundled Desktop client.
-      - name: Gate full-featured public release on Desktop OAuth
+      # A tested offline EXE is still useful if OAuth is not configured.
+      # Publish it as a limited-capability prerelease rather than blocking
+      # the installer altogether. NEVER make it an automatic update without
+      # the bundled Google Desktop OAuth client.
+      - name: Classify verified EXE release capability
         shell: powershell
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID) -or
-              [string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)) {
-            throw "Cannot publish all-functions-ready ZIP: Google Desktop OAuth Client ID and Secret must both be configured in repo Actions"
+          $hasId = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_ID)
+          $hasSecret = ![string]::IsNullOrWhiteSpace($env:XSTAGE_GOOGLE_DESKTOP_CLIENT_SECRET)
+          if ($hasId -ne $hasSecret) {
+            throw "Incomplete Google Desktop OAuth client pair; cannot safely release"
+          }
+          $ready = if ($hasId -and $hasSecret) { 'true' } else { 'false' }
+          "SONGSTUDIO_READY_OAUTH_BUNDLED=$ready" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if ($ready -eq 'true') {
+            Write-Host "PASS: full-featured verified EXE can be published and advertised for updates."
+          } else {
+            Write-Warning "Google Desktop OAuth not bundled. Publish verified EXE as core-only prerelease; keep latest.json on last verified full-featured build."
           }
       - name: Publish GitHub release after tests pass
         shell: pwsh
@@ -391,7 +399,13 @@ jobs:
           $sha = "$zip.sha256"
           $setup = "dist/X-Stage-Song-Studio-PC-v$env:SONGSTUDIO_READY_VERSION-build$env:SONGSTUDIO_READY_BUILD-win-x64-Setup.exe"
           $setupSha = "$setup.sha256"
-          $notes = "Build $env:SONGSTUDIO_READY_BUILD`: Windows Setup EXE with embedded app icon, matching Desktop/Start Menu shortcuts and explicit Taskbar identity. Removes the stale waiting-to-create song count. Includes verified offline runtime and models. Setup.exe is the recommended download; ZIP remains available for portable use and in-app updates. Windows x64."
+          $oauthReady = $env:SONGSTUDIO_READY_OAUTH_BUNDLED -eq 'true'
+          $capabilityNote = if ($oauthReady) {
+            "Google Desktop OAuth client is bundled and automatic updates may be advertised after release verification."
+          } else {
+            "CORE-ONLY PRERELEASE: Google Desktop OAuth client is NOT bundled. Google Login / Drive may require manual client setup. This release is NOT advertised as an automatic update."
+          }
+          $notes = "Build $env:SONGSTUDIO_READY_BUILD`: Windows Setup EXE with app icon, verified offline runtime and models, plus portable ZIP. $capabilityNote Windows x64."
           gh release view $tag --repo "$env:GITHUB_REPOSITORY" 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag "$zip" "$sha" "$setup" "$setupSha" --clobber --repo "$env:GITHUB_REPOSITORY"
@@ -403,6 +417,7 @@ jobs:
           }
 
       - name: Publish verified PC Ready latest.json after release
+        if: env.SONGSTUDIO_READY_OAUTH_BUNDLED == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.XSTAGE_RELEASE_TOKEN || github.token }}
