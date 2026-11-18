@@ -492,6 +492,29 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(second["total"],0)
         self.assertEqual(plus.stats(self.workspace)["lyrics_versions"],before)
 
+    def test_audio_mirrored_lrc_yields_estimated_sweep_not_fake_original(self):
+        self.put("Media/Audio/0/06710.mp3",b"MP3-DATA"*120)
+        self.put("Media/LRC/0/06710.lrc",
+                 "[00:01.00]First\n[00:04.00]Second\n".encode("utf-8"))
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["lyrics_new"],1)
+        self.assertEqual(result["failures"],0)
+        song=plus.songs(self.workspace)[0]
+        self.assertEqual(song["timing_status"],"estimated")
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
+
+    def test_new_sidecar_folders_are_detected_without_restarting(self):
+        self.put("Collection/Song/0/06012.mid",midi())
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["lyrics_new"],0)
+        self.put("Collection/Lyrics/0/06012.lyr",
+                 "ชื่อเพลง\nผู้ร้อง\nC\n\nNick\n".encode("cp874"))
+        self.put("Collection/Cursor/0/06012.cur",
+                 struct.pack("<5H",0,1,2,3,4))
+        repaired=plus.recover_existing_lyrics(self.workspace)
+        self.assertEqual(repaired["recovered_ready"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_text"],1)
+
     def test_missing_lyrics_not_claimed_as_karaoke(self):
         self.put("no-lyrics.mp3",b"audio"*200)
         plus.import_folder(self.workspace,self.src)
