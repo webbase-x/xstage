@@ -394,6 +394,72 @@ class PlusTests(unittest.TestCase):
                            (edited,)).fetchone()
         self.assertEqual(row["origin"],"edit")
 
+    def test_one_click_recovery_reads_existing_lyrics_without_media_hash(self):
+        from unittest.mock import patch
+        self.put("NCN/Song/0/01681.mid",midi())
+        first=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(first["files_new"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],0)
+        self.put("NCN/Lyrics/0/01681.lyr",
+                 "กู้เนื้อร้อง\nนักร้อง\nC\n\nNick\n".encode("cp874"))
+        self.put("NCN/Cursor/0/01681.cur",struct.pack("<5H",0,1,2,3,4))
+        with patch.object(plus,"digest",side_effect=AssertionError("Media must not be rehashed")):
+            repaired=plus.recover_existing_lyrics(self.workspace)
+        self.assertEqual(repaired["total"],1)
+        self.assertEqual(repaired["recovered_ready"],1)
+        self.assertEqual(repaired["failures"],0)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
+        self.assertEqual(plus.stats(self.workspace)["media"],1)
+        self.assertFalse((self.workspace/"SOURCE").exists())
+        self.assertEqual(plus.songs(self.workspace)[0]["title"],"กู้เนื้อร้อง")
+
+    def test_recovery_reports_disconnected_source_without_fake_lyrics(self):
+        source=self.put("offline.mid",midi())
+        plus.import_folder(self.workspace,self.src)
+        source.unlink()
+        recovery=plus.recover_existing_lyrics(self.workspace)
+        self.assertEqual(recovery["missing_sources"],1)
+        self.assertEqual(recovery["recovered_ready"],0)
+        self.assertEqual(recovery["failures"],0)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],0)
+
+    def test_utf8_lyr_can_align_to_original_cp874_cursor(self):
+        self.put("NCN/Song/0/00888.mid",midi())
+        lyric="รักเธอ"
+        self.put("NCN/Lyrics/0/00888.lyr",
+                 ("ชื่อเพลง\nศิลปิน\nC\n\n"+lyric+"\n").encode("utf-8-sig"))
+        count=1+len(lyric.encode("cp874"))
+        self.put("NCN/Cursor/0/00888.cur",
+                 struct.pack("<"+"H"*count,*range(count)))
+        report=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(report["failures"],0)
+        self.assertEqual(report["lyrics_new"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
+        song=plus.songs(self.workspace)[0]
+        with plus.connect(self.workspace) as db:
+            version=db.execute("SELECT id FROM xstage_lyric_versions WHERE song_id=? AND is_current=1",
+                               (song["id"],)).fetchone()[0]
+            lines=plus.get_version_lines(db,version)
+        self.assertEqual(lines[0][0]["text"],lyric)
+
+    def test_ncn_blank_lyric_row_consumes_cursor_when_count_matches(self):
+        self.put("NCN/Song/0/00482.mid",midi())
+        self.put("NCN/Lyrics/0/00482.lyr",
+                 "ชื่อเพลง\nศิลปิน\nC\n\nNick\n\nNext\n".encode("cp874"))
+        # 5 cues for Nick, one blank-row marker, 5 cues for Next.
+        self.put("NCN/Cursor/0/00482.cur",struct.pack("<11H",*range(11)))
+        report=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(report["failures"],0)
+        self.assertEqual(report["lyrics_new"],1)
+        song=plus.songs(self.workspace)[0]
+        with plus.connect(self.workspace) as db:
+            vid=db.execute("SELECT id FROM xstage_lyric_versions WHERE is_current=1").fetchone()[0]
+            lines=plus.get_version_lines(db,vid)
+        self.assertEqual(len(lines),2)
+        self.assertEqual(lines[1][0]["text"],"Next")
+        # Each cursor position is 1/48 second at 120 BPM and division=480.
+        self.assertAlmostEqual(lines[1][0]["start_time"],7/48,places=3)
+
     def test_missing_lyrics_not_claimed_as_karaoke(self):
         self.put("no-lyrics.mp3",b"audio"*200)
         plus.import_folder(self.workspace,self.src)
