@@ -104,6 +104,31 @@ class OnlinePublishTests(unittest.TestCase):
         self.assertEqual(len(songs), pointer["songCount"])
         return songs
 
+    def test_xsk2_without_separate_json_publishes_web_apk_file_id(self):
+        spec = importlib.util.spec_from_file_location(
+            "xstage_xsk_test", REPO / "songstudio-pc" / "xsk_package.py")
+        xsk = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(xsk)
+        midi = self.base / "00009.mid"
+        midi.write_bytes(b"MThd" + b"U" * 200)
+        doc = {"schemaVersion": 1, "lines": [
+            {"startTime": 1.0, "endTime": 3, "text": "เนื้อร้องทดสอบ"}]}
+        target = self.root / "MIDI" / "XSK" / "0" / "00009.xsk"
+        xsk.seal(midi, doc, "00009", "เพลง XSK ออนไลน์", "ศิลปินทดสอบ", target=target)
+        row = {"webSongId": "xsk2-00009", "code": "00009",
+               "title": "เพลง XSK ออนไลน์", "artist": "ศิลปินทดสอบ",
+               "sourceFormat": "XSK", "audio": {"path": "MIDI/XSK/0/00009.xsk"}}
+        self.assertTrue(online._valid_row(self.root, row))
+        outcome = self.publisher.publish(self.root, [row])
+        self.assertEqual(outcome["newSongs"], 1)
+        remote = self.published()["xsk2-00009"]
+        self.assertIn(remote["xsk"]["fileId"], self.drive.items)
+        self.assertNotIn("lyrics", remote)
+        self.assertEqual(remote["sourceFormat"], "XSK")
+        again = self.publisher.publish(self.root, [row])
+        self.assertEqual(again["duplicates"], 1)
+        self.assertEqual(self.pointer()[0]["songCount"], 1)
+
     def test_completely_empty_google_drive_creates_first_xstagesong_and_db(self):
         # Users migrating to the new system can begin with an EMPTY Drive.
         # No legacy roots, pointers, catalog IDs or media exist.
