@@ -6,8 +6,12 @@
   "windows_artifact_build": true,
   "code_signed": false,
   "format": "embedded-xmedia-v1",
-  "player_compatible": false,
+  "player_compatible": true,
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-plus.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Native Windows Technical Preview: source references only, NO original media backup/copy, unsigned EXE in GitHub Actions, not production"
+  "status": "Native Windows Technical Preview: source references only, NO original media backup/copy, unsigned EXE in GitHub Actions, not production",
+  "player_min_web_version": "1.0.120",
+  "player_min_web_build": 1120,
+  "player_format": "embedded-xmedia-v1",
+  "player_note": "X-Media v1 is supported by Karaoke Web/Android v1.0.120 Build 1120 and current Karaoke PC compatibility source; older builds are not guaranteed."
 }
