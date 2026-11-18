@@ -223,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
                 with core.WRITE_LOCK,core.connect(self.state.workspace) as db:
                     song=db.execute("SELECT * FROM xstage_songs WHERE id=?",(song_id,)).fetchone()
                     if not song: raise ValueError("ไม่พบเพลง")
-                    vid,created=core.insert_version(db,song,None,document,core.digest(lrc_path),"LRC")
+                    vid,created=core.insert_version(db,song,None,document,None,"LRC")
                 result={"version":vid,"created":created,"timing_status":"estimated"}
             elif path=="/api/build":
                 ids=body.get("song_ids",[])
