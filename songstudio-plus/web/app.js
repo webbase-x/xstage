@@ -58,6 +58,12 @@
     const result=await api("/api/status");
     for(const key of ["songs","media","lyrics","exports"])
       text("stat-"+key,number(result[key]));
+    text("stat-ready",number(result.songs_with_lyrics));
+    text("stat-pending",number(result.songs_without_lyrics));
+    const estimated=number(result.songs_estimated_timing);
+    text("issues-summary",number(result.songs_without_lyrics)+
+      " เพลงยังไม่มี Lyrics Version พร้อมเวลา · อีก "+estimated+
+      " เพลงมีเวลาปาดสีบางส่วนที่ประมาณขึ้น · ตรวจข้อมูล LYR/CUR และรายการนำเข้าที่ผิดพลาดได้ด้านล่าง");
   }
   async function refreshSongs(){
     if(!state.ready)return;
@@ -320,11 +326,38 @@
       if(result.path)$(target).value=result.path;
     }catch(error){toast("เปิดหน้าต่างเลือกไฟล์ไม่สำเร็จ: "+error.message,true);}
   }
+  async function loadImportIssues(){
+    const container=$("issues-list");
+    container.replaceChildren();
+    try{
+      const result=await api("/api/import-issues");
+      const rows=result.rows||[];
+      if(!rows.length){
+        const empty=document.createElement("p");
+        empty.className="empty-small";
+        empty.textContent="ยังไม่พบรายการอ่านเนื้อร้องผิดพลาดที่บันทึกไว้";
+        container.append(empty);return;
+      }
+      for(const item of rows){
+        const line=document.createElement("div");line.className="issue-item";
+        const header=document.createElement("strong");
+        header.textContent=item.source_name+" · "+(
+          item.outcome==="error"?"ตรวจไฟล์ผิดพลาด":
+          item.outcome==="timing-incomplete"?"Timing ไม่ครบ":"อ่านเนื้อร้องผิดพลาด");
+        const detail=document.createElement("p");
+        detail.textContent=item.message||"ไม่พบรายละเอียดข้อผิดพลาด";
+        line.append(header,detail);
+        container.append(line);
+      }
+      toast("พบ "+number(rows.length)+" รายการที่ต้องตรวจสอบ");
+    }catch(error){toast(error.message,true);}
+  }
   function bind(){
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",()=>view(button.dataset.view));
+    $("issues-load").addEventListener("click",()=>void loadImportIssues());
     $("import-start").addEventListener("click",()=>{
       const folder=$("source-folder").value.trim();
       if(!folder)return toast("กรุณาระบุโฟลเดอร์ต้นทาง",true);
