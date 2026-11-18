@@ -83,10 +83,13 @@ def _inside(root, rel, prefix):
     return raw
 
 
-def catalog_rows(destination, records):
+def catalog_rows(destination, records, *, preferred_ids=None):
     """Match karaoke.pc_xstagesong.catalog_rows' columns and media identities."""
     root = Path(destination)
-    seen, rows = set(), []
+    # Retain historical lyrics in JSON catalogs; the native SQLite index has
+    # only one playback row for a physical audio path.
+    seen, positions, rows = {}, {}, []
+    preferred_ids = set(preferred_ids) if preferred_ids is not None else None
     allowed = {".mid", ".midi", ".kar", ".m4a", ".mp3", ".wav", ".wma",
                ".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov",
                ".flac", ".ogg", ".oga", ".aac", ".webm", ".dat", ".vob", ".flv", ".xsk"}
@@ -99,9 +102,17 @@ def catalog_rows(destination, records):
         if not path.is_file() or path.suffix.casefold() not in allowed:
             raise ValueError("ไม่พบไฟล์เพลงที่ Karaoke PC รองรับ: " + str(path))
         key = os.path.normcase(str(path.resolve())).casefold()
+        replacement = False
         if key in seen:
-            raise ValueError("พบไฟล์เพลงซ้ำในฐาน Karaoke PC: " + str(path))
-        seen.add(key)
+            if preferred_ids is None:
+                raise ValueError("พบไฟล์เพลงซ้ำในฐาน Karaoke PC: " + str(path))
+            old_preferred = seen[key] in preferred_ids
+            new_preferred = str(rec.get("webSongId") or "") in preferred_ids
+            if old_preferred == new_preferred:
+                raise ValueError("เพลงหลายเวอร์ชันอ้างไฟล์เดียวกันโดยไม่ระบุรุ่นใช้งาน: " + str(path))
+            if not new_preferred:
+                continue
+            replacement = True
         first = ""
         lyric = rec.get("lyrics")
         if lyric:
@@ -118,7 +129,7 @@ def catalog_rows(destination, records):
                 raise ValueError("รูปแบบเนื้อร้อง Karaoke PC ไม่ถูกต้อง")
             first = " ".join(str(v.get("text") or "") for v in data["lines"][:8])[:512]
         ext = path.suffix.casefold()
-        rows.append({
+        song_row = {
             "path": str(path), "code": str(rec.get("code") or ""),
             "title": str(rec.get("title") or path.stem),
             "artist": str(rec.get("artist") or ""),
@@ -126,11 +137,17 @@ def catalog_rows(destination, records):
                     "VIDEO" if ext in {".mp4", ".avi", ".mov", ".mkv"} else "AUDIO",
             "format": ext[1:].upper(), "playable": 1,
             "first_lyric": first, "source_catalog": "XStageSong PC"
-        })
+        }
+        if replacement:
+            rows[positions[key]] = song_row
+        else:
+            positions[key] = len(rows)
+            rows.append(song_row)
+        seen[key] = str(rec.get("webSongId") or "")
     return rows
 
 
-def sync(destination, records):
+def sync(destination, records, *, preferred_ids=None):
     """Create or safely upsert the native Karaoke SQLite index.
 
     SQLite online backup runs before any modification to an existing DB.
@@ -142,7 +159,7 @@ def sync(destination, records):
     if db_path.is_symlink() or any(p.is_symlink() for p in db_path.parents):
         raise ValueError("พบ symbolic link ในตำแหน่งฐานเพลง")
     # Validate every file BEFORE touching any database.
-    rows = catalog_rows(dest, records)
+    rows = catalog_rows(dest, records, preferred_ids=preferred_ids)
     existed = db_path.is_file()
     if db_path.exists() and not existed:
         raise ValueError("ปลายทางฐานเพลงไม่ใช่ไฟล์ SQLite")
