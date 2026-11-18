@@ -91,7 +91,7 @@
             <button class="quiet-btn" type="button" id="issues-load">ตรวจสอบรายการผิดพลาด</button>
           </div>
           <p class="field-hint" id="issues-summary">เพลงที่ยังไม่มีเนื้อร้องอาจเกิดจากไม่มีไฟล์ LYR/CUR หรือมี Timing ที่อ่านไม่ได้ ไม่จำเป็นต้องเป็นไฟล์เพลงเสีย</p>
-          <div id="issues-list" class="issues-list" role="region" aria-label="รายละเอียดรายการนำเข้าที่ต้องตรวจสอบ"></div>
+          <p class="field-hint issues-launch-hint">กดปุ่มด้านบนเพื่อดูรายการตามหน้า</p>
         </section>
         <div class="panel tip-panel"><span class="tip-icon">✦</span><div><strong>นำเข้าหลายเครื่องได้ ไม่ต้องเปลี่ยนชื่อไฟล์ก่อน</strong><p>ชื่อไฟล์ต้นฉบับซ้ำกันไม่เป็นปัญหา ระบบใช้ SHA-256 แยกไฟล์และเก็บเนื้อร้องต่างเวอร์ชัน · ตอนส่งออกต้องเข้าถึงไฟล์ต้นฉบับได้</p></div></div>
       </section>
@@ -108,6 +108,7 @@
             <div class="panel-head"><div><span class="label-top">MATCHING LINES</span><h2>กลุ่มข้อความที่พบ</h2></div><span class="count-pill" id="groups-count">0 กลุ่ม</span></div>
             <div class="toolbar"><button class="quiet-btn" id="groups-all" type="button">เลือกทั้งหมดที่แสดง</button><button class="quiet-btn" id="groups-clear" type="button">ล้างการเลือก</button></div>
             <div class="group-list" id="group-list"><p class="empty-small">ค้นคำเพื่อแสดงกลุ่มบรรทัด</p></div>
+            <div class="list-pagination"><span id="groups-page-info">หน้า 1</span><div class="toolbar"><button id="groups-prev" class="quiet-btn" type="button">‹ ก่อนหน้า</button><button id="groups-next" class="quiet-btn" type="button">ถัดไป ›</button></div></div>
           </article>
           <article class="panel">
             <div class="panel-head"><div><span class="label-top">BATCH REPLACE</span><h2>แทนที่ข้อความทั้งบรรทัด</h2></div></div>
@@ -142,6 +143,7 @@
             <div class="panel-head"><div><span class="label-top">CHOOSE SONGS</span><h2>เลือกเพลงสำหรับสร้างไฟล์</h2></div><span class="count-pill" id="build-count">0 เพลง</span></div>
             <div class="toolbar"><button class="quiet-btn" id="build-all" type="button">เลือกทุกเพลงที่พร้อมในหน้านี้</button><button class="quiet-btn" id="build-clear" type="button">ยกเลิกทั้งหมด</button></div>
             <div class="build-list" id="build-list"><p class="empty-small">ยังไม่มีเพลงในคลัง</p></div>
+            <div class="list-pagination"><span id="build-page-info">หน้า 1</span><div class="toolbar"><button id="build-prev" class="quiet-btn" type="button">‹ ก่อนหน้า</button><button id="build-next" class="quiet-btn" type="button">ถัดไป ›</button></div></div>
           </article>
           <article class="panel">
             <div class="panel-head"><div><span class="label-top">EXPORT ENGINE</span><h2>สร้างไฟล์พร้อมเนื้อร้อง</h2></div></div>
@@ -159,7 +161,7 @@
         <article class="panel">
           <div class="search-combo"><div class="input-wrap"><span class="search-icon">⌕</span><input id="library-search" type="search" placeholder="ค้นหาชื่อเพลง ศิลปิน หรือรหัสเดิม"></div><button class="primary-btn" id="library-find">ค้นหา</button></div>
           <div class="table-scroll"><table><thead><tr><th>รหัสใหม่</th><th>ชื่อเพลง / ศิลปิน</th><th>ชนิด</th><th>เนื้อร้อง</th><th>ไฟล์ X</th><th></th></tr></thead><tbody id="library-rows"><tr><td colspan="6" class="empty-cell">ยังไม่มีเพลงในคลัง</td></tr></tbody></table></div>
-          <p class="field-hint">รายการเพลงบนหน้านี้แสดงครั้งละไม่เกิน 80 เพลง เพื่อรักษาความเร็วของโปรแกรม</p>
+          <div class="list-pagination"><span id="library-page-info">หน้า 1</span><div class="toolbar"><button id="library-prev" class="quiet-btn" type="button">‹ ก่อนหน้า</button><button id="library-next" class="quiet-btn" type="button">ถัดไป ›</button></div></div>
         </article>
       </section>
 
@@ -211,6 +213,11 @@
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <dialog id="confirm-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-icon">!</div><h2 id="confirm-title">ยืนยันการแก้ไข</h2><p id="confirm-text"></p><div class="dialog-actions"><button value="cancel" class="quiet-btn" type="submit">ยกเลิก</button><button value="yes" class="primary-btn" type="submit">ยืนยัน</button></div></form></dialog>
+<dialog id="issues-dialog" class="issues-dialog">
+  <div class="modal-head"><div><span class="label-top">IMPORT DIAGNOSTICS</span><h2>ประวัติการนำเข้าที่ต้องตรวจสอบ</h2></div><button id="issues-close" class="quiet-btn" type="button">✕ ปิด</button></div>
+  <div id="issues-list" class="issues-list" role="region" aria-label="รายละเอียดรายการนำเข้าที่ต้องตรวจสอบ"></div>
+  <div class="list-pagination"><span id="issues-page-info">—</span><div class="toolbar"><button id="issues-prev" class="quiet-btn" type="button">‹ ก่อนหน้า</button><button id="issues-next" class="quiet-btn" type="button">ถัดไป ›</button></div></div>
+</dialog>
 <dialog id="risk-dialog" class="risk-dialog">
     <div class="modal-head"><div><span class="label-top">REAL EVIDENCE & HUMAN REVIEW</span><h2 id="risk-modal-title">ตรวจหลักฐานการปาดเนื้อ</h2></div><button id="risk-close" class="quiet-btn" type="button">✕ ปิด</button></div>
     <p id="risk-modal-description" class="field-hint"></p>
