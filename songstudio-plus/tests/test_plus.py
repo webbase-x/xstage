@@ -171,6 +171,24 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(Path(built["path"]).suffix,".xmid")
         self.assertEqual(plus.inspect_xfile(built["path"],True)["media_sha256"],plus.digest(p))
 
+    def test_bad_ncn_lyric_companion_keeps_verified_media(self):
+        midi_file=self.put("corrupt.mid",midi())
+        self.put("corrupt.lyr",b"broken")
+        self.put("corrupt.cur",b"\\x00\\x00")
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["files_new"],1)
+        self.assertEqual(result["failures"],1)
+        self.assertEqual(plus.stats(self.workspace)["media"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs"],1)
+        self.assertEqual(plus.stats(self.workspace)["lyrics"],0)
+        song=plus.songs(self.workspace)[0]
+        with self.assertRaisesRegex(ValueError,"เนื้อร้อง"):
+            plus.build_song(self.workspace,song["id"])
+        with plus.connect(self.workspace) as db:
+            outcome=db.execute(
+                "SELECT outcome FROM xstage_import_items ORDER BY id DESC LIMIT 1").fetchone()[0]
+        self.assertEqual(outcome,"lyrics-error")
+
     def test_missing_lyrics_not_claimed_as_karaoke(self):
         self.put("no-lyrics.mp3",b"audio"*200)
         plus.import_folder(self.workspace,self.src)
