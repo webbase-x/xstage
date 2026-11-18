@@ -88,3 +88,7 @@
 .recover-action small{font-size:11px;line-height:1.7;color:#a4bacf}
 .recover-btn{border-color:#528da0;color:#ccf4f3;font-weight:600}
 .recover-btn span{font-size:18px;margin-right:4px}
+
+.lyric-draft-summary{margin-top:24px;border-top:1px solid #465b75;padding:18px 8px}
+.lyric-draft-summary strong{color:#a7ecde;font-size:13px}
+.lyric-draft-summary pre{font:13px/1.9 "Leelawadee UI","Segoe UI",Tahoma,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;color:#d3e4ee;background:#101f36;border:1px solid #31435c;border-radius:12px;padding:16px;max-height:420px;overflow-y:auto}
