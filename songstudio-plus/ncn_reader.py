@@ -359,6 +359,9 @@ def _timed_lines_to_json(lines, code, format_name, metadata=None):
     for n, line in enumerate(lines):
         next_time = lines[n+1]["startTime"] if n+1 < len(lines) else line["startTime"]+4
         line["endTime"] = round(max(line["startTime"]+.05, next_time), 3)
+        if n+1 == len(lines):
+            # The legacy last-line +4s boundary is an estimate, not a CUR cue.
+            line["endTimeEstimated"] = True
         # X-Stage Karaoke PC/Web consumes syllables[start,duration,text].
         # NCN CUR byte cues and KAR MIDI meta-event cues are already timed;
         # carry them through rather than letting the stage interpolate an
