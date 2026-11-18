@@ -174,23 +174,35 @@ def source_for_build(workspace, db, media):
 
 
 def companion_candidates(media):
-    # Match direct companions for all formats; the classic split NCN tree
-    # is handled by the validated ncn_reader path resolver.
-    p = Path(media)
-    files = {}
-    try:
-        names = {x.name.casefold(): x for x in p.parent.iterdir()
-                 if x.is_file() and not x.is_symlink()}
-    except OSError:
-        names = {}
-    for extension in (".lyr",".cur",".lrc"):
-        files[extension] = names.get((p.stem+extension).casefold())
+    """O(1) companion path probes per song, never list a huge MIDI folder.
+
+    Previously calling iterdir() on a 10,000-file bucket for EVERY MIDI was
+    quadratic and could appear frozen. Windows handles casing natively; for
+    portable fixtures probe common lower/upper extension spellings explicitly.
+    """
+    p=Path(media)
+    result={".lyr":None,".cur":None,".lrc":None}
+    def probe(folder,stem,extension):
+        for suffix in (extension,extension.upper()):
+            candidate=folder/(stem+suffix)
+            if candidate.is_file() and not candidate.is_symlink():
+                return candidate
+        return None
+    for ext in result:
+        result[ext]=probe(p.parent,p.stem,ext)
     if p.suffix.lower() in MIDI_EXT:
-        resolved = ncn_reader.resolve_companions(p)
-        if resolved:
-            files[".lyr"] = files[".lyr"] or (Path(resolved["lyrics"]) if resolved.get("lyrics") else None)
-            files[".cur"] = files[".cur"] or (Path(resolved["cursor"]) if resolved.get("cursor") else None)
-    return files
+        found=ncn_reader.describe(p)
+        if found and found[1]=="song":
+            root,_,subdir,_=found
+            for ext,role in ((".lyr","Lyrics"),(".cur","Cursor")):
+                if result[ext]:
+                    continue
+                for folder_name in (role,role.lower(),role.upper()):
+                    match=probe(root/folder_name/subdir,p.stem,ext)
+                    if match:
+                        result[ext]=match
+                        break
+    return result
 
 def parse_lrc(path):
     import re
