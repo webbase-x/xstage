@@ -80,3 +80,11 @@
 .issue-item{border:1px solid #36445f;border-radius:11px;background:#111e35;padding:12px 15px}
 .issue-item strong{display:block;font-size:12px;color:#dfeaff;overflow-wrap:anywhere}
 .issue-item p{font-size:11px;color:#bdc7d9;margin:6px 0 0;line-height:1.7;overflow-wrap:anywhere}
+
+/* Fast lyrics recovery for the existing SQLite catalog, separate from import. */
+.recover-action{margin-top:14px;padding:16px;border:1px solid #376072;border-radius:13px;background:linear-gradient(105deg,#163348,#182740);display:grid;gap:12px}
+.recover-action>div{display:grid;gap:5px}
+.recover-action strong{font-size:13px;color:#b8eee9}
+.recover-action small{font-size:11px;line-height:1.7;color:#a4bacf}
+.recover-btn{border-color:#528da0;color:#ccf4f3;font-weight:600}
+.recover-btn span{font-size:18px;margin-right:4px}
