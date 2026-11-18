@@ -129,6 +129,13 @@ def _retime_visual_units(line, old_text, new_text):
         raise ValueError("ไม่มีอักษรที่จะจัดเวลาไฮไลต์")
     old_units = _display_units(old_text)
     original = line.get("syllables") or []
+    # Older NCN JSON can contain character-level CUR cues without syllables.
+    # Reuse the measured timing of this song rather than a uniform estimate.
+    if "syllables" not in line and line.get("characters"):
+        original = [
+            {"text": item.get("text"), "start": item.get("startTime")}
+            for item in line["characters"] if isinstance(item, dict)
+        ]
     start = line.get("startTime")
     end = line.get("endTime")
     if (isinstance(start, bool) or isinstance(end, bool)
@@ -168,6 +175,20 @@ def _retime_visual_units(line, old_text, new_text):
         # Same number of visible characters: never move any timestamp.
         positions = source[:]
         method = "original-cue-positions"
+    elif source and sum(size for _, _, size in
+                        SequenceMatcher(a=old_units, b=units, autojunk=False).get_matching_blocks()
+                        ) < max(3, int(0.6 * min(len(old_units), len(units)))):
+        # Whole-line change: incidental matching letters are NOT safe timing
+        # anchors. Resample the original cue trajectory independently per song.
+        trajectory = source + [end]
+        positions = []
+        for index in range(len(units)):
+            progress = index * len(old_units) / len(units)
+            segment = min(int(progress), len(old_units) - 1)
+            fraction = progress - segment
+            positions.append(trajectory[segment] +
+                             (trajectory[segment + 1] - trajectory[segment]) * fraction)
+        method = "line-local-resampled-original-cues"
     elif source:
         positions = [None] * len(units)
         matcher = SequenceMatcher(a=old_units, b=units, autojunk=False)
@@ -214,6 +235,12 @@ def _retime_visual_units(line, old_text, new_text):
         cues.append({"text": glyph, "start": round(at, 4),
                      "duration": round(max(0.0, following - at), 4)})
     line["syllables"] = cues
+    if "characters" in line:
+        # Do not leave stale NCN character text/times in the edited line.
+        line["characters"] = [
+            {"text": cue["text"], "startTime": cue["start"]}
+            for cue in cues
+        ]
     line["timingEstimated"] = True  # Text was replaced, even if cue positions were reused.
     line["timingMethod"] = method
     return method != "original-cue-positions"
