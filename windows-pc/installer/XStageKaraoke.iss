@@ -1,9 +1,9 @@
-; X-Stage Karaoke PC v1.0.79 Windows setup wrapper.
+; X-Stage Karaoke PC v1.0.80 Windows setup wrapper.
 ; The audited install_to_D.ps1 performs dependency checks, running-app
 ; shutdown and transactional copies. The Inno wrapper does not install
 ; directly over song libraries or application data.
-#define AppVersion "1.0.79"
-#define BuildNumber "1079"
+#define AppVersion "1.0.80"
+#define BuildNumber "1080"
 
 [Setup]
 AppId={{7E9EA7F6-09A9-47E1-A580-AFA1B260D08A}
