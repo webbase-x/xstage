@@ -2208,6 +2208,7 @@ def execute_job(action, options, started):
             module = _module("json_pro_export.py", "xstage_json_pro_export")
             source_stream = _module("json_source_stream.py", "xstage_json_source_stream")
             output_format = options.get("format", "original")
+            retry_errors_only = options.get("retry_errors_only") is True
             code_style = options.get("code_style", worker_prefs().get("code_style", "numeric"))
             code_length = int(options.get("code_length", worker_prefs().get("code_length", "5")))
             def _json_progress(done, total, state):
@@ -2237,7 +2238,8 @@ def execute_job(action, options, started):
                     update(f"พบไฟล์ต้นฉบับพร้อมแปลง {count:,} เพลง · ไม่รอสแกนครบ")
             def _json_convert(src, dest, kind):
                 json_pro_transcode(src, dest, kind)
-            update("เริ่มจับคู่รหัสไฟล์ต้นฉบับและสร้าง Lyrics JSON ทันที")
+            update("กำลังทบทวนเฉพาะ ERR ที่บันทึกไว้" if retry_errors_only
+                   else "กำลังสร้างต่อจาก Catalog รุ่นก่อน · ไม่สร้างเพลงเดิมซ้ำ")
             result = module.export_folder(
                 worker_prefs()["json_source"], worker_prefs()["json_destination"],
                 output_format=output_format, export=_song_export_module(),
@@ -2245,7 +2247,8 @@ def execute_job(action, options, started):
                 scanner=FOLDER_UPLOAD, ncn=NCN, convert=_json_convert,
                 cancelled=worker_cancel(), progress=_json_progress,
                 scan_progress=_json_scan_progress,
-                source_stream=source_stream.stream)
+                source_stream=source_stream.stream,
+                retry_errors_only=retry_errors_only)
             # Source count is only known after the last directory has been read.
             # Make finished counts truthful even if interim progress was unknown.
             with LOCK:
@@ -2742,6 +2745,8 @@ def start_job(data):
             raise ValueError("จำนวนหลักรหัสเพลงต้องอยู่ระหว่าง 1–12")
         if not PREFS.get("json_source") or not PREFS.get("json_destination"):
             raise ValueError("กรุณาเลือกโฟลเดอร์ต้นทางและปลายทาง")
+        if not isinstance(data.get("retry_errors_only", False), bool):
+            raise ValueError("ตัวเลือกทบทวน ERR ไม่ถูกต้อง")
         validation = {"total": 0}
     if action == "created-xsk":
         if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
@@ -3577,6 +3582,21 @@ class Handler(BaseHTTPRequestHandler):
                     "soundfonts": font_list(), "presets": formats(),
                     "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
+            elif path == "/api/json-pro/review":
+                if not PREFS.get("json_destination") or not PREFS.get("json_source"):
+                    self._deny("กรุณาเลือกต้นทางและปลายทางของ Lyrics JSON", 400)
+                    return
+                try:
+                    review_module = _module("json_pro_review.py", "xstage_json_pro_review")
+                    output_format = query.get("format", ["original"])[0]
+                    status = query.get("status", ["all"])[0]
+                    offset = int(query.get("offset", ["0"])[0])
+                    self._json(review_module.review(
+                        _song_export_module().songs_root(PREFS["json_destination"]),
+                        PREFS["json_source"], output_format,
+                        status=status, offset=offset, limit=50))
+                except (OSError, ValueError, TypeError) as exc:
+                    self._deny(str(exc), 400)
             elif path == "/api/duplicates":
                 try:
                     offset = int(query.get("offset", ["0"])[0])
