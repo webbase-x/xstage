@@ -2322,16 +2322,27 @@ def execute_job(action, options, started):
             options["code_style"] = str(options.get("code_style") or worker_prefs()["code_style"])
             options["code_length"] = str(options.get("code_length") or worker_prefs()["code_length"])
             root = _song_export_module().songs_root(options["xsk_folder"])
-            scanner = _module("xsk_stream.py", "xstage_xsk_stream")
-            with LOCK:
-                scan_job_id = worker_job()["id"]
-            with scanner.source_batches(
-                    options["source"], root, cancelled=worker_cancel(),
-                    batch_size=32, max_batches=4,
-                    on_scan=lambda data, done, backlog: _xsk_stream_scan_status(
-                        data, done, backlog, job_id=scan_job_id)) as incoming:
+            if options.get("retry_issues_only") is True:
+                review = _module("xsk_review.py", "xstage_xsk_review")
+                incoming, count = review.pending_rows(
+                    root, options["source"], cancelled=worker_cancel())
+                with LOCK:
+                    worker_job().update(total=count, discovered=count,
+                                        scannedFiles=0, scanDone=True)
+                update(f"ทบทวนเฉพาะ XSK ที่ไม่พร้อม/ERR {count:,} รายการ · ไม่สแกนเพลงสำเร็จ")
                 result = build_xsk(incoming, "original", {
                     **options, "audio_only": False}, progressive=True)
+            else:
+                scanner = _module("xsk_stream.py", "xstage_xsk_stream")
+                with LOCK:
+                    scan_job_id = worker_job()["id"]
+                with scanner.source_batches(
+                        options["source"], root, cancelled=worker_cancel(),
+                        batch_size=32, max_batches=4,
+                        on_scan=lambda data, done, backlog: _xsk_stream_scan_status(
+                            data, done, backlog, job_id=scan_job_id)) as incoming:
+                    result = build_xsk(incoming, "original", {
+                        **options, "audio_only": False}, progressive=True)
         elif action in ("build", "preview"):
             mode = worker_prefs().get("mode", "original")
             if mode not in ("original", "instrumental"):
@@ -2624,7 +2635,8 @@ def execute_job(action, options, started):
             raise RuntimeError("คำสั่งไม่ถูกต้องหรือยังไม่รองรับ: " + str(action))
         with LOCK:
             build_errors = (
-                (action in ("build", "json-pro-export") and result.get("errors", 0) > 0)
+                (action in ("build", "json-pro-export", "xsk-stream")
+                 and result.get("errors", 0) > 0)
                 or (action == "upload" and
                     (result.get("conflicts", 0) > 0 or result.get("notReady", 0) > 0)))
             skipped_only = (action == "build" and result.get("created", 0) == 0
@@ -2772,6 +2784,8 @@ def start_job(data):
             raise ValueError("จำนวนหลักรหัสไฟล์ต้องเป็นตัวเลข") from exc
         if not 1 <= digits <= 12:
             raise ValueError("จำนวนหลักรหัสไฟล์ต้องอยู่ระหว่าง 1–12")
+        if not isinstance(data.get("retry_issues_only", False), bool):
+            raise ValueError("ตัวเลือกทบทวน XSK ไม่ถูกต้อง")
         validation = {"total": 0}
     if action == "json-pro-export":
         if not _module("pro_license.py", "xstage_pro_license").enabled(DATA):
@@ -3625,6 +3639,19 @@ class Handler(BaseHTTPRequestHandler):
                     "soundfonts": font_list(), "presets": formats(),
                     "google": GOOGLE.status(),
                     "update": {"status": "unavailable"}})
+            elif path == "/api/xsk/review":
+                if not PREFS.get("source"):
+                    self._deny("กรุณาเลือกโฟลเดอร์ MIDI ต้นทาง", 400)
+                    return
+                try:
+                    review = _module("xsk_review.py", "xstage_xsk_review")
+                    folder = _song_export_module().songs_root(
+                        PREFS.get("xsk_folder") or PREFS["workspace"])
+                    self._json(review.page(
+                        folder, PREFS["source"], status=query.get("status", ["all"])[0],
+                        offset=int(query.get("offset", ["0"])[0]), limit=50))
+                except (OSError, ValueError, TypeError) as exc:
+                    self._deny(str(exc), 400)
             elif path == "/api/json-pro/review":
                 if not PREFS.get("json_destination") or not PREFS.get("json_source"):
                     self._deny("กรุณาเลือกต้นทางและปลายทางของ Lyrics JSON", 400)
