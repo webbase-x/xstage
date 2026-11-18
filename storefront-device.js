@@ -31,6 +31,7 @@
     "karaoke-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน iPhone, iPad, Android, Windows หรือ Mac",fallback:[]},
     "karaoke-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["karaoke-web"]},
     "studio-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["studio-web"]},
+    "studio-plus":{target:"คอมพิวเตอร์ Windows 10/11 x64 (Preview EXE ยังไม่ลงนาม)",fallback:["studio-web"]},
     "studio-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน Windows, Mac, iPhone, iPad หรือ Android",fallback:[]},
     "karaoke-android":{target:"Android TV, Google TV หรือแท็บเล็ต Android (APK สำหรับติดตั้งเอง)",fallback:["karaoke-web"]},
     "file-share":{target:"โทรศัพท์ แท็บเล็ต Android 6+ หรือ Android TV ที่รองรับสำหรับติดตั้ง APK; เครื่องอื่นใช้เว็บเบราว์เซอร์",fallback:["karaoke-web"]},
