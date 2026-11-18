@@ -8,6 +8,8 @@ const AUDIO=new Set(['mp3','m4a','wav','aac','flac','ogg','oga']);
 const BROWSER_VIDEO=new Set(['mp4','webm']);
 const FONTS=new Set(['sf2','sf3']);
 const MIDI=new Set(['mid','midi','kar']);
+const XMEDIA=new Set(['xmid','xmp3','xm4a','xwav','xaac','xflac','xogg','xoga','xwma',
+  'xmp4','xwebm','xmkv','xavi','xmpg','xmpeg','xdat','xvob','xmov','xwmv','xflv']);
 const VIDEO=new Set(['mp4','avi','mpg','mpeg','dat','vob','wmv','mkv','mov','webm','flv']);
 const OTHER_AUDIO=new Set(['wma','aiff','aif','opus']);
 const ROLES=new Set(['song','songs','lyric','lyrics','lyr','cur','cursor','cursors']);
@@ -84,7 +86,7 @@ function groupKey(path){
   return [...folders,base].join('/').normalize('NFC').toLocaleLowerCase('en-US');
 }
 function scan(files){
-  const groups=new Map(),fonts=[],blocked=[],seen=new Set(),xsks=[];
+  const groups=new Map(),fonts=[],blocked=[],seen=new Set(),xsks=[],xmedias=[];
   for(const item of files){
     const file=item.file||item,relative=String(item.relative||file.webkitRelativePath||file.name||'');
     if(!file||!file.name||!Number.isSafeInteger(file.size)||file.size<0)continue;
@@ -95,6 +97,11 @@ function scan(files){
       if(file.size<33||file.size>152*1024*1024)
         blocked.push({key:relative,reason:'XSK ขนาดผิดปกติหรือใหญ่เกินขอบเขต'});
       else xsks.push({file,relative,code:file.name.replace(/\.xsk$/i,''),kind:'XSK'});
+      continue;
+    }
+    if(XMEDIA.has(extension)){
+      if(file.size<92)blocked.push({key:relative,reason:'X-Media มีขนาดเล็กกว่าส่วนหัวมาตรฐาน'});
+      else xmedias.push({file,relative,code:file.name.replace(/\.[^.]+$/,''),kind:extension.toUpperCase()});
       continue;
     }
     if(extension==='xskkey'){
@@ -149,7 +156,7 @@ function scan(files){
       blocked.push({key,reason:'มีเฉพาะเนื้อร้อง แต่ไม่มีไฟล์เสียงหรือ MIDI คู่กัน'});
     }
   }
-  return {songs,midis,xsks,fonts,blocked,files:seen.size};
+  return {songs,midis,xsks,xmedias,fonts,blocked,files:seen.size};
 }
 async function validAudio(file){
   if(file.size<1024)return false;
@@ -360,5 +367,5 @@ function validLyricsJson(raw,code){
   return document;
 }
 function bucket(code){const c=String(code||'').charAt(0).toUpperCase();return /[0-9A-Z]/.test(c)?c:'_';}
-scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,songIdentity,bucket};
+scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,songIdentity,bucket,xmediaExtensions:[...XMEDIA]};
 })(typeof window!=='undefined'?window:globalThis);
