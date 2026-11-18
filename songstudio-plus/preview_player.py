@@ -188,12 +188,14 @@ class MidiPreview:
         self.origin=0.0
         self.stop_event=None
         self.worker=None
+        self.error=""
 
     def _stop_locked(self):
+        # Capture position before modifying the "playing" state.
+        self.position=self._position_locked()
         if self.stop_event is not None:
             self.stop_event.set()
         self.status="paused" if self.song_id is not None else "stopped"
-        self.position=self._position_locked()
 
     def _position_locked(self):
         if self.status=="playing":
@@ -212,7 +214,8 @@ class MidiPreview:
         with self.lock:
             return {"song_id":self.song_id,"status":self.status,
                     "position":round(self._position_locked(),3),
-                    "duration":round(self.duration,3)}
+                    "duration":round(self.duration,3),
+                    "error":self.error}
 
     @staticmethod
     def _open_winmm():
@@ -236,11 +239,12 @@ class MidiPreview:
                              str(code)+") · ไม่สามารถยืนยันเสียง MIDI ได้")
         return lib,out
 
-    def _play_thread(self,events,duration,offset,stop_event):
+    def _play_thread(self,events,duration,offset,stop_event,ready_event):
         handle=None
         lib=None
         try:
             lib,handle=self._open_winmm()
+            ready_event.set()  # MIDI Mapper opened successfully.
             # Restore channel program/continuous controllers up to requested
             # seek position. Notes already sounding at a seek point are NOT
             # inferred: only a full play-through proves alignment reliably.
@@ -273,6 +277,7 @@ class MidiPreview:
                 if self.stop_event is stop_event:
                     self.status="error"
                     self.error=str(error)
+            ready_event.set()
         finally:
             if lib and handle:
                 lib.midiOutReset(handle)
@@ -283,14 +288,26 @@ class MidiPreview:
         if path.suffix.lower() not in MIDI_EXT:
             raise ValueError("เพลงนี้ไม่ใช่ MIDI")
         events,duration=iter_midi_messages(path)
-        if duration<=0:raise ValueError("MIDI ไม่มีระยะเวลาเล่นที่ตรวจสอบได้")
+        if duration<=0:
+            raise ValueError("MIDI ไม่มีระยะเวลาเล่นที่ตรวจสอบได้")
+        # A cursor/tempo-only MIDI fixture is valid but not audible.
+        if not any((msg&0xF0)==0x90 and ((msg>>16)&0x7F)>0 for _,msg in events):
+            raise ValueError("MIDI นี้ไม่มีโน้ตสำหรับสร้างเสียงทดสอบ")
         seek=float(seek)
         if not 0<=seek<duration:
             raise ValueError("ตำแหน่งเริ่มเล่นอยู่นอกช่วงเพลง")
         if os.name!="nt":
             raise ValueError("Windows MIDI Synthesizer ใช้งานได้เฉพาะบน Windows")
         with self.lock:
+            prior=self.worker
             if self.stop_event is not None:self.stop_event.set()
+        # MIDI Mapper devices may be exclusive; release the previous output
+        # before opening the next one. Never join under the state lock.
+        if prior is not None and prior.is_alive():
+            prior.join(timeout=2.0)
+            if prior.is_alive():
+                raise ValueError("MIDI รุ่นก่อนยังหยุดไม่สำเร็จ ลองหยุดเล่นอีกครั้ง")
+        with self.lock:
             self.events=events
             self.duration=duration
             self.song_id=song_id
@@ -299,12 +316,21 @@ class MidiPreview:
             self.status="playing"
             self.error=""
             stop_event=threading.Event()
+            ready_event=threading.Event()
             self.stop_event=stop_event
             worker=threading.Thread(target=self._play_thread,
-                                    args=(events,duration,seek,stop_event),
+                                    args=(events,duration,seek,stop_event,ready_event),
                                     daemon=True,name="Plus-MIDI-Preview")
             self.worker=worker
             worker.start()
+        # Do not say "playing" before Windows confirms that the MIDI output
+        # exists and accepted a device handle.
+        if not ready_event.wait(timeout=2.0):
+            self.pause()
+            raise ValueError("Windows MIDI Synthesizer ไม่ตอบสนอง ไม่สามารถทดสอบเสียงได้")
+        with self.lock:
+            if self.status=="error":
+                raise ValueError(self.error or "Windows MIDI Synthesizer ไม่พร้อม")
             return self.state()
 
     def pause(self):
