@@ -32,6 +32,53 @@ def set_windows_identity():
         raise OSError(result,"Cannot set Windows taskbar identity")
 
 
+
+def _apply_taskbar_icon(window,icon_path):
+    """Set both Windows taskbar (small) and Alt-Tab (large) icon handles.
+
+    Qt/QIcon generally sets these itself, but some PyInstaller/QtWebEngine
+    builds otherwise display a Qt/Python generic taskbar icon. Handles live
+    until the window closes and are never installed globally.
+    """
+    if os.name!="nt" or not Path(icon_path).is_file():
+        return []
+    import ctypes
+    from ctypes import wintypes
+    user32=ctypes.WinDLL("user32",use_last_error=True)
+    user32.LoadImageW.argtypes=(wintypes.HINSTANCE,wintypes.LPCWSTR,
+                                wintypes.UINT,ctypes.c_int,ctypes.c_int,wintypes.UINT)
+    user32.LoadImageW.restype=wintypes.HANDLE
+    user32.SendMessageW.argtypes=(wintypes.HWND,wintypes.UINT,
+                                  wintypes.WPARAM,wintypes.LPARAM)
+    user32.SendMessageW.restype=wintypes.LPARAM
+    user32.GetSystemMetrics.argtypes=(ctypes.c_int,)
+    user32.GetSystemMetrics.restype=ctypes.c_int
+    IMAGE_ICON=1
+    LR_LOADFROMFILE=0x10
+    WM_SETICON=0x80
+    ICON_SMALL=0
+    ICON_BIG=1
+    hwnd=int(window.winId())
+    handles=[]
+    for icon_type,metric_x,metric_y in ((ICON_SMALL,49,50),(ICON_BIG,11,12)):
+        width=user32.GetSystemMetrics(metric_x)
+        height=user32.GetSystemMetrics(metric_y)
+        handle=user32.LoadImageW(None,str(icon_path),IMAGE_ICON,
+                                 width,height,LR_LOADFROMFILE)
+        if handle:
+            user32.SendMessageW(hwnd,WM_SETICON,icon_type,int(handle))
+            handles.append(handle)
+    return handles
+
+def _destroy_taskbar_icons(handles):
+    if not handles or os.name!="nt":
+        return
+    import ctypes
+    user32=ctypes.WinDLL("user32")
+    user32.DestroyIcon.argtypes=(ctypes.c_void_p,)
+    for handle in handles:
+        user32.DestroyIcon(handle)
+
 def run_desktop(server,url,workspace,icon_path):
     port=validate_local(url)
     set_windows_identity()
@@ -44,7 +91,10 @@ def run_desktop(server,url,workspace,icon_path):
     app=QApplication.instance() or QApplication([])
     app.setApplicationName("X-Stage Song Studio Plus")
     app.setOrganizationName("X-Stage")
-    icon=QIcon(str(icon_path)) if Path(icon_path).is_file() else QIcon()
+    preferred=Path(icon_path)
+    fallback=Path(__file__).resolve().parent/"web"/"icon.svg"
+    icon_file=preferred if preferred.is_file() else fallback
+    icon=QIcon(str(icon_file)) if icon_file.is_file() else QIcon()
     if not icon.isNull():
         app.setWindowIcon(icon)
     storage=Path(workspace)/"QT"
@@ -108,9 +158,14 @@ def run_desktop(server,url,workspace,icon_path):
                   kwargs={"poll_interval":0.2},
                   daemon=True,name="studio-plus-local-engine")
     worker.start()
+    native_icons=[]
     try:
         window.showMaximized()
+        # Handle becomes available only after the native top-level HWND
+        # exists; explicitly assign its taskbar and Alt-Tab images.
+        native_icons=_apply_taskbar_icon(window,icon_file)
         return app.exec()
     finally:
+        _destroy_taskbar_icons(native_icons)
         server.shutdown()
         worker.join(timeout=5)
