@@ -232,40 +232,37 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
     entries = inspection["complete"]
     known_total = None if source_stream is not None else len(entries)
     root.mkdir(parents=True, exist_ok=True)
+    # Old libraries may have 100,000+ songs on a slow drive. Never stat
+    # every media file and read every Lyrics JSON before the first conversion.
+    # Only actual duplicate candidates need physical verification.
+    if scan_progress is not None:
+        scan_progress("catalog", 0, None)
     prior = export.existing_records(root)
     seen = set()
-    existing = set()
+    existing = {row.get("webSongId"): row for row in prior if row.get("webSongId")}
     used_codes = {str(row.get("code") or "").casefold() for row in prior if row.get("code")}
     code_counters = {}
-
-    # Unindexed complete pairs may be recovered after a crash; keep their codes
-    # available for strict content verification in _can_recover_pair.
-    for record in prior:
-        if not export.record_is_complete(root, record):
-            continue
-        existing.add(record.get("webSongId"))
-        origin = record.get("sourceIdentity") or {}
-        lyric_hash = origin.get("lyricsSha256")
-        if not lyric_hash:
-            # Legacy Build 348 exported pairs tracked audio SHA only.
-            # Read the actual saved lyrics once: unchanged exports must stay
-            # idempotent without duplicating previously published songs.
-            try:
-                lyric_file = export.safe_media_path(
-                    root, record["lyrics"]["path"], "lyrics")
-                lyric_hash = _lyrics_digest(json.loads(
-                    lyric_file.read_text(encoding="utf-8-sig")))
-            except (KeyError, TypeError, OSError, ValueError):
-                continue
-        seen.add((origin.get("sha256"), origin.get("outputFormat"), lyric_hash))
+    by_audio_hash = {}
     legacy_by_source = {}
+    validated = {}
+
+    def verified_old(record):
+        key = id(record)
+        if key not in validated:
+            validated[key] = export.record_is_complete(root, record)
+        return validated[key]
+
     for record in prior:
         origin = record.get("sourceIdentity") or {}
-        if (record.get("webSongId") in existing
-                and origin.get("outputFormat") == output_format
-                and origin.get("canonicalPath") and origin.get("sha256")):
+        source_sha = origin.get("sha256")
+        fmt = origin.get("outputFormat")
+        if source_sha and fmt:
+            by_audio_hash.setdefault((source_sha, fmt), []).append(record)
+        if fmt == output_format and origin.get("canonicalPath") and source_sha:
             legacy_by_source[origin["canonicalPath"]] = (
-                origin["sha256"], origin.get("bytes"), record["webSongId"])
+                source_sha, origin.get("bytes"), record)
+    if scan_progress is not None:
+        scan_progress("catalog", len(prior), len(prior))
     db = review.connect(root)
     source_root = str(src_real)
     created = skipped = errors = deferred = resumed = 0
@@ -308,7 +305,9 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 if (not retry_errors_only and previous
                         and previous[0] == source_signature):
                     previous_status, previous_identity = previous[1], previous[2]
-                    if previous_status in ("completed", "duplicate") and previous_identity in existing:
+                    if (previous_status in ("completed", "duplicate")
+                            and previous_identity in existing
+                            and verified_old(existing[previous_identity])):
                         skipped += 1
                         resumed += 1
                         continue
@@ -323,13 +322,14 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 legacy = legacy_by_source.get(export.canonical_source_path(media))
                 if (not retry_errors_only and previous is None and legacy
                         and media.stat().st_size == legacy[1]
-                        and _fingerprint(media) == legacy[0]):
+                        and _fingerprint(media) == legacy[0]
+                        and verified_old(legacy[2])):
                     skipped += 1
                     resumed += 1
                     review.record(db, media=media, source_root=source_root,
                                   output_format=output_format,
                                   source_signature=source_signature,
-                                  status="completed", identity=legacy[2])
+                                  status="completed", identity=legacy[2]["webSongId"])
                     continue
                 source_code = media.stem.strip()
                 if not source_code or len(source_code) > 140:
@@ -340,7 +340,30 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 lyric_hash = _lyrics_digest(doc)
                 source_hash = _fingerprint(media)
                 identity = "json-pro/" + source_hash + "/" + output_format + "/" + lyric_hash[:24]
-                if (source_hash, output_format, lyric_hash) in seen or identity in existing:
+                # Verify only matching legacy fingerprints, never all historical
+                # outputs at startup. Incomplete historical assets cannot block
+                # a replacement and old lyrics without hashes are read lazily.
+                duplicate = (source_hash, output_format, lyric_hash) in seen
+                old = existing.get(identity)
+                if not duplicate and old is not None and verified_old(old):
+                    duplicate = True
+                if not duplicate:
+                    for old in by_audio_hash.get((source_hash, output_format), ()):
+                        if not verified_old(old):
+                            continue
+                        old_lyric_hash = (old.get("sourceIdentity") or {}).get("lyricsSha256")
+                        if not old_lyric_hash:
+                            try:
+                                lyric_file = export.safe_media_path(
+                                    root, old["lyrics"]["path"], "lyrics")
+                                old_lyric_hash = _lyrics_digest(json.loads(
+                                    lyric_file.read_text(encoding="utf-8-sig")))
+                            except (KeyError, TypeError, OSError, ValueError):
+                                continue
+                        if old_lyric_hash == lyric_hash:
+                            duplicate = True
+                            break
+                if duplicate:
                     skipped += 1
                     review.record(db, media=media, source_root=source_root,
                                   output_format=output_format,
@@ -449,7 +472,8 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                                              "lyricsSha256": lyric_hash}}
                 export.append_journal(root, record)
                 registry.register_catalog_row(root, record)
-                existing.add(identity)
+                existing[identity] = record
+                validated[id(record)] = True
                 seen.add((source_hash, output_format, lyric_hash))
                 review.record(db, media=media, source_root=source_root,
                               output_format=output_format,
