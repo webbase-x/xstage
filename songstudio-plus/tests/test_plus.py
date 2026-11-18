@@ -198,6 +198,79 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(Path(built["path"]).suffix,".xmid")
         self.assertEqual(plus.inspect_xfile(built["path"],True)["media_sha256"],plus.digest(p))
 
+    def test_only_media_file_is_sha256_hashed_and_ncns_can_recover(self):
+        from unittest.mock import patch
+        song=self.put("NCN/Song/0/01337.mid",midi())
+        lyr=self.put("NCN/Lyrics/0/01337.lyr",
+            "เพลงทดสอบ\nศิลปิน\nC\n\nNick\nAnother\n".encode("cp874"))
+        # Deliberately short CUR: first line's cues still have real times.
+        cur=self.put("NCN/Cursor/0/01337.cur",struct.pack("<5H",0,1,2,3,4))
+        original_digest=plus.digest
+        with patch.object(plus,"digest",wraps=original_digest) as file_hash:
+            first=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(first["files_new"],1)
+        self.assertEqual(first["partial_lyrics"],1)
+        self.assertEqual(first["failures"],0)
+        self.assertEqual([Path(x.args[0]).suffix.lower()
+                          for x in file_hash.call_args_list],[".mid"])
+        song_info=plus.songs(self.workspace)[0]
+        self.assertEqual(song_info["timing_status"],"incomplete")
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],0)
+        self.assertEqual(plus.stats(self.workspace)["songs_partial_lyrics"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs_draft_lyrics"],0)
+        with plus.connect(self.workspace) as db:
+            draft=db.execute("SELECT raw_text FROM xstage_lyric_drafts").fetchone()[0]
+        self.assertIn("Another",draft)
+        with self.assertRaisesRegex(ValueError,"CUR"):
+            plus.build_song(self.workspace,song_info["id"])
+        # Source MID unchanged -> cache its SHA. CUR is re-read but NOT SHA'd.
+        cur.write_bytes(struct.pack("<13H",*range(13)))
+        with patch.object(plus,"digest",wraps=original_digest) as rehash:
+            second=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(second["failures"],0)
+        self.assertEqual(second["lyrics_new"],1)
+        self.assertEqual(second["hash_cache_hits"],1)
+        self.assertEqual(rehash.call_count,0)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs_partial_lyrics"],0)
+        self.assertEqual(plus.stats(self.workspace)["songs_draft_lyrics"],0)
+        self.assertIsNone(song_info.get("draft_reason"))
+
+    def test_missing_cur_saves_lyr_text_without_fake_timing(self):
+        song=self.put("NCN/Song/0/07777.mid",midi())
+        self.put("NCN/Lyrics/0/07777.lyr",
+                 "ชื่อเพลง\nชื่อศิลปิน\nC\n\nทดสอบเนื้อร้อง\n".encode("cp874"))
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["failures"],0)
+        self.assertEqual(result["draft_lyrics"],1)
+        self.assertEqual(result["lyrics_new"],0)
+        info=plus.songs(self.workspace)[0]
+        self.assertEqual(info["title"],"ชื่อเพลง")
+        self.assertEqual(info["artist"],"ชื่อศิลปิน")
+        self.assertIsNone(info["version_id"])
+        self.assertTrue(info["draft_reason"])
+        self.assertEqual(plus.stats(self.workspace)["songs_draft_lyrics"],1)
+        with plus.connect(self.workspace) as db:
+            raw=db.execute("SELECT raw_text FROM xstage_lyric_drafts").fetchone()[0]
+        self.assertIn("ทดสอบเนื้อร้อง",raw)
+        with self.assertRaisesRegex(ValueError,"เนื้อร้อง"):
+            plus.build_song(self.workspace,info["id"])
+
+    def test_reimport_same_lyrics_skips_sidecar_parsing(self):
+        from unittest.mock import patch
+        song=self.put("NCN/Song/0/00105.mid",midi())
+        self.put("NCN/Lyrics/0/00105.lyr",
+                 "ชื่อเพลง\nชื่อศิลปิน\nC\n\nNick\n".encode("cp874"))
+        self.put("NCN/Cursor/0/00105.cur",struct.pack("<5H",0,1,2,3,4))
+        plus.import_folder(self.workspace,self.src)
+        before=plus.stats(self.workspace)["lyrics"]
+        with patch.object(plus,"document_for",side_effect=AssertionError("reparsed companions")):
+            after=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(after["failures"],0)
+        self.assertEqual(after["lyrics_new"],0)
+        self.assertEqual(after["hash_cache_hits"],1)
+        self.assertEqual(plus.stats(self.workspace)["lyrics"],before)
+
     def test_bad_ncn_lyric_companion_keeps_verified_media(self):
         midi_file=self.put("corrupt.mid",midi())
         self.put("corrupt.lyr",b"broken")
