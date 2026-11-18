@@ -717,6 +717,8 @@
     $('download-destination').value = prefs.download || '';
     $('upload-folder').value = prefs.upload_folder || '';
     $('pc-export-folder').value = prefs.pc_export_folder || '';
+    $('pc-import-source').value = prefs.import_source_folder || '';
+    $('drive-import-source').value = prefs.import_source_folder || '';
     $('upload-soundfont-path').value = prefs.soundfont || '';
     $('ai-export-folder').textContent = prefs.download || 'ยังไม่ได้เลือกโฟลเดอร์';
     $('settings-oauth').value = prefs.oauth || '';
@@ -966,6 +968,8 @@
                   'download-destination': 'download',
                   'upload-folder': 'upload_folder',
                   'pc-export-folder': 'pc_export_folder',
+                   'pc-import-source': 'import_source_folder',
+                   'drive-import-source': 'import_source_folder',
                   'xsk-build-folder': 'xsk_folder',
                   'xsk-stream-code-style': 'code_style',
                   'xsk-stream-code-length': 'code_length',
@@ -1000,6 +1004,7 @@
       const field = ({source:'create-source',workspace:'create-workspace',soundfont:'create-soundfont',
           download:'download-destination',upload_folder:'upload-folder',
           pc_export_folder:'pc-export-folder',
+           import_source_folder:button?.closest('#tab-upload')?'drive-import-source':'pc-import-source',
           lyric_source:'lyric-group-folder',xsk_folder:button?.closest('#tab-create')?'xsk-build-folder':'xsk-destination',
           json_source:'json-pro-source',json_destination:'json-pro-destination',
           dup_source:'dup-source',dup_destination:'dup-destination',oauth:'settings-oauth'})[kind];
@@ -2446,52 +2451,85 @@
       if(uploadInspectionPromise===inspection)uploadInspectionPromise=null;
     }
   }
+  function selectedImportGroups(target) {
+    return [...new Set([...document.querySelectorAll('input[data-import-kind="'+target+'"]:checked')]
+      .map(element=>element.value))];
+  }
   async function inspectPCExport(){
-    const finishInspection=beginInspection('pc-export-report','กำลังตรวจคลังเพลงและฐานข้อมูล Karaoke PC');
+    const finishInspection=beginInspection('pc-export-report','กำลังตรวจ XStageSong ต้นทางและฐาน Karaoke PC');
     if(!finishInspection)return null;
     try {
-      await saveInputs(['pc-export-folder']);
-      const result=await api('/api/pc-export/inspect');
-      $('pc-export-report').textContent='คลังเพลง '+fmtNum(result.songs)+
-        ' เพลง · พบ '+fmtNum(result.files)+' ไฟล์ · ต้องคัดลอกใหม่ '+
-        fmtNum(result.newFiles)+' ไฟล์ ('+fmtSize(result.bytesToCopy)+
-        ') · เดิมในปลายทาง '+fmtNum(result.existingSongs)+' เพลง'+
-        '\\nตำแหน่งปลายทาง: '+result.destination+
-        '\\nSQLite: '+(result.databaseAction==='update'?'อัปเดตฐานเดิม':'สร้างฐานใหม่')+
-        ' · '+result.database+
-        '\\nDB พกพาสำหรับเผยแพร่ Web/APK: '+result.portableDatabase+
-        '\\nWeb/APK ต้องอัปโหลดด้วยบัญชี Google Drive เพื่อสร้าง File ID จริง'+
-        (result.databaseInstalled?' · เชื่อมฐาน Karaoke PC ที่ติดตั้งแล้ว':
-        ' · โหมดส่งออก: ยังไม่พบโปรแกรม Karaoke PC ณ ตำแหน่งนี้');
+      await saveInputs(['pc-import-source','pc-export-folder']);
+      const groups=selectedImportGroups('pc');
+      const result=await api('/api/pc-export/inspect?groups='+encodeURIComponent(groups.join(',')));
+      $('pc-export-report').textContent=
+        'ต้นทาง '+result.source+'\nเลือก '+fmtNum(result.songs)+' จาก '+fmtNum(result.candidateSongs)+' เพลง'+
+        '\nกลุ่มเพลง '+Object.entries(result.groups||{}).map(([key,n])=>key+' '+fmtNum(n)).join(' · ')+
+        '\nSQLite '+result.database+' ('+result.databaseAction+')'+
+        '\nต้องคัดลอกใหม่ '+fmtNum(result.newFiles)+' ไฟล์ · '+fmtSize(result.bytesToCopy)+
+        (result.conflicts?.length?'\nรหัสที่ต้องตรวจ '+result.conflicts.map(x=>x.code).slice(0,3).join(', '):'')+
+        '\nไม่มีการลบหรือเขียนทับเพลงเดิมอัตโนมัติ';
       return result;
     } catch(error) {
-      $('pc-export-report').textContent='ตรวจคลัง Karaoke PC ไม่สำเร็จ: '+error.message;
+      $('pc-export-report').textContent='ตรวจคลังเพลงไม่ได้: '+error.message;
       message(error.message);
       return null;
-    } finally {
-      finishInspection();
-    }
+    } finally {finishInspection();}
   }
   async function startPCExport(){
     if(busy)return;
-    const report=await inspectPCExport();
-    if(!report || !report.songs)return message('ยังไม่มีเพลงที่สร้างสำเร็จใน XStageSong');
-    const approved=await confirmStudio(
-      'คัดลอกเพลง '+fmtNum(report.songs)+' รายการ จาก Song Studio ไปยัง\\n'+
-      report.destination+'\\nจำนวนไฟล์ '+fmtNum(report.files)+
-      ' · ต้องคัดลอกใหม่ '+fmtNum(report.newFiles)+
-      ' ('+fmtSize(report.bytesToCopy)+')\\n'+
-      'ส่งออก AUDIO, LYRICS, SQLite songs.sqlite3 สำหรับ PC และ DB/songs-portable.json\\n'+
-      'การใช้ผ่าน Web/APK ต้องนำเข้า Google Drive หลังส่งออก ไม่ใช้ SQLite โดยตรง\\n'+
-      'ตำแหน่ง DB: '+report.database+'\\n'+
-      (report.databaseInstalled?'เชื่อมฐานของ Karaoke PC ที่ติดตั้งแล้ว\\n':
-       'ยังไม่พบ Karaoke PC ที่ติดตั้ง · สร้างฐาน SQLite สำหรับส่งออกเท่านั้น\\n')+
-      'สำรองฐานเดิมก่อนอัปเดต · รักษาเพลงเดิม รายการโปรด และข้อมูลที่ผู้ใช้แก้ไข',
-      'ยืนยันนำเข้า X-Stage Karaoke PC',
-      {acceptLabel:'เริ่มคัดลอก',cancelLabel:'ยกเลิก'});
-    if(!approved)return;
-    $('pc-export-status').textContent='กำลังเริ่มคัดลอกและตรวจ SHA-256 · ดูสถานะที่แผงงาน';
-    await run('pc-export');
+    const plan=await inspectPCExport();
+    if(!plan)return;
+    if(!plan.songs)return message('ไม่มีรายการใหม่ตามตัวกรอง · ไม่เปลี่ยนฐาน Karaoke PC เดิม');
+    const groups=selectedImportGroups('pc');
+    const prompt='นำเข้า '+fmtNum(plan.songs)+' เพลง ไปยัง Karaoke PC'+
+      '\nจาก '+plan.source+'\nไป '+plan.destination+
+      '\nกลุ่มที่เลือก: '+groups.join(', ')+
+      '\nคัดลอกใหม่ '+fmtNum(plan.newFiles)+' ไฟล์ ('+fmtSize(plan.bytesToCopy)+')'+
+      '\nสร้าง/อัปเดต SQLite และ DB แบบพกพา โดยสำรองฐานเดิมก่อน ไม่ลบไฟล์ต้นฉบับ';
+    if(!await confirmStudio(prompt,'ยืนยันนำเข้า Karaoke PC',
+      {acceptLabel:'เริ่มอัปเดต',cancelLabel:'ยกเลิก'}))return;
+    $('pc-export-status').textContent='กำลังนำเข้าจากฐานเพลงต้นทาง · ตรวจ SHA-256 และความซ้ำ';
+    await run('pc-export',{groups});
+  }
+  async function inspectDriveBundle(){
+    if(!googleConnected)return message('กรุณาเชื่อม Google Drive ก่อนอ่าน Catalog เดิม');
+    const finish=beginInspection('drive-import-report','กำลังตรวจฐานเพลง Google Drive');
+    if(!finish)return null;
+    try {
+      await saveInputs(['drive-import-source']);
+      const groups=encodeURIComponent(selectedImportGroups('drive').join(','));
+      const result=await api('/api/drive-import/inspect?groups='+groups);
+      $('drive-import-report').textContent='ต้นทาง '+result.source+
+        '\nเลือก '+fmtNum(result.songs)+' จาก '+fmtNum(result.candidateSongs)+' เพลง'+
+        '\n'+Object.entries(result.groups||{}).map(([kind,n])=>kind+' '+fmtNum(n)).join(' · ')+
+        (result.conflicts?.length?'\nต้องทบทวนรหัส '+fmtNum(result.conflicts.length)+' รายการ':'');
+      return result;
+    } catch(error) {
+      $('drive-import-report').textContent='ตรวจ Drive ไม่สำเร็จ: '+error.message;
+      message(error.message);
+      return null;
+    } finally {finish();}
+  }
+  async function startDriveBundle(){
+    if(!canLaunch('upload-bundle')||!googleConnected)
+      return message('กรุณาเชื่อม Google Drive และรอให้งานเดิมเสร็จก่อน');
+    const groups=selectedImportGroups('drive');
+    if(!groups.length)return message('เลือกประเภทเพลงที่จะเผยแพร่ก่อน');
+    const allowNew=$('drive-import-allow-new').checked;
+    const plan=await inspectDriveBundle();
+    // First publication without a visible current.json needs an explicit user
+    // approval; a failed read must not be treated as proof of an empty Drive.
+    if(!plan)return;
+    if(!plan.songs)return message('ไม่มีเพลงใหม่ตามตัวกรองที่จะเผยแพร่');
+    const details='จาก '+plan.source+'\nจำนวน '+fmtNum(plan.songs)+' เพลง'+
+      '\nประเภท '+groups.join(', ')+
+      '\nจะรักษาคลังเดิมและไม่ลบเพลงที่มีอยู่'+
+      (allowNew?'\nอนุญาตสร้างคลังใหม่เมื่อไม่พบคลังเดิมที่มองเห็นได้':'');
+    if(!await confirmStudio(details,'ยืนยันเผยแพร่ Karaoke Web / APK',
+      {acceptLabel:'อัปเดต Google Drive',cancelLabel:'ยกเลิก'}))return;
+    $('drive-import-report').textContent='กำลังเผยแพร่เฉพาะรายการที่เลือก · ไม่เริ่มฐานใหม่';
+    await run('upload-bundle',{groups,create_new_library:allowNew});
   }
   async function startFolderUpload() {
     if (!canLaunch('upload-folder') || !googleConnected)
@@ -3891,6 +3929,8 @@
   $('json-pro-review-next').addEventListener('click',()=>{void loadJsonReview(jsonReviewOffset+JSON_REVIEW_PAGE_SIZE);});
   // Inspect on "ตกลง" only, not while users are still choosing folders.
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
+  $('drive-import-inspect').addEventListener('click',()=>{void inspectDriveBundle();});
+  $('drive-import-start').addEventListener('click',()=>{void startDriveBundle();});
   $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
   $('pc-export-start').addEventListener('click',()=>{void startPCExport();});
   $('upload-soundfont-picker').addEventListener('click',()=>{void chooseUploadSoundfont();});
