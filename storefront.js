@@ -43,15 +43,6 @@
     }
   }
   const appInfo={
-    "remote":{
-      title:"X-Stage Remote",category:"ANDROID · TOUCH REMOTE",subtitle:"ยกจอ Android มาไว้บนมือถือ",
-      description:"แอปตัวรับบน Android 8+ จับคู่มือถือด้วย QR เพื่อดูจอจริงและส่งคำสั่งแตะ ปัด และพิมพ์ รุ่นทดสอบ LAN ต้องอนุญาตแชร์จอและสิทธิ์ควบคุมบนเครื่องแม่",
-      features:["แตะและปัดตรงภาพหน้าจอ","จับคู่ QR และบันทึกรายการเครื่อง","เบราว์เซอร์และดาวน์โหลด APK ลงเครื่องแม่","ทำงานเบื้องหลัง พร้อมปุ่มปิดจากแบนเนอร์","ค้นหา LAN ผ่านเครื่อง Android ที่เชื่อมต่อได้"],
-      hero:"หน้าจอใหญ่ ในมือคุณ",blurb:"มือถือเป็นจอสัมผัสของ Android",preview:"X-STAGE REMOTE · LAN PREVIEW",
-      type:"manifest",manifest:"./downloads/remote-latest.json",
-      note:"ติดตั้ง APK บนเครื่องแม่ เปิดสิทธิ์ควบคุมและอนุญาตแชร์จอ แล้วใช้มือถือสแกน QR ภายใน 2 นาที ใช้เฉพาะ LAN ส่วนตัวเพราะส่งข้อมูลผ่าน HTTP รุ่นนี้ใช้ลายเซ็นทดสอบ ยังต้องตรวจบนทีวีและ iPhone/iPad จริง ไม่รับรองหน้าป้องกันการจับภาพหรือการติดตั้งแบบไม่ต้องยืนยัน การค้นหาจากเว็บเมื่อทุกเครื่องเปลี่ยน IP ต้องกรอกที่อยู่ใหม่หรือสแกน QR",
-      fallback:"ยังไม่มี APK ลงลายเซ็นสำหรับเผยแพร่"
-    },
     "apps-portal":{
       title:"X-Stage Apps Portal",category:"ANDROID · APP CENTER",
       subtitle:"รวมแอป X-Stage ไว้ในแอปเดียว",
@@ -215,12 +206,6 @@
       const url=installerUrl || (data.available===true && SHA256.test(data.sha256||"") ? verifiedReleaseUrl(data.download_url,".zip") : "");
       return url?{available:true,url:url,status:(installerUrl?"Setup EXE":"ZIP")+" รุ่น "+String(data.version||"ล่าสุด")+" · ทดลองใช้งาน",kind:"download",version:String(data.version||""),installer:!!installerUrl}:
         {available:false,url:"",status:"ยังไม่มี ZIP รุ่นที่ตรวจสอบได้",kind:"pending"};
-    }
-    if(id==="remote"){
-      const filename="X-Stage-Remote-v"+data.version+"-build"+data.build+"-test.apk";
-      const valid=data.available===true&&data.channel==="debug-preview"&&SHA256.test(data.sha256||"")&&SHA256.test(data.signer_sha256||"")&&data.file===filename&&data.download_url==="https://webbase-x.github.io/xstage/downloads/"+filename;
-      const url=valid?sameOriginFile(filename,"downloads",/^X-Stage-Remote-v\d+\.\d+\.\d+-build\d+-test\.apk$/):"";
-      return url?{available:true,url,status:"APK v"+data.version+" · Build "+data.build+" · รุ่นทดสอบ",kind:"download",version:String(data.version)}:{available:false,url:"",status:"กำลังเตรียม APK รุ่นทดสอบ",kind:"pending"};
     }
     if(id==="apps-portal"){
       const version=String(data.version||"");
@@ -481,7 +466,7 @@
       preview.appendChild(cardArt.firstElementChild.cloneNode(true));
     }else{
       const img=document.createElement("img");
-      img.src=({ "remote":"./assets/app-icons/remote.svg", "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
+      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
       img.alt="";
       preview.appendChild(img);
     }
