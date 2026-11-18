@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Plus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "channel": "technical-preview",
   "available": false,
   "windows_artifact_build": true,
@@ -9,5 +9,5 @@
   "player_compatible": false,
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-plus.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Windows Technical Preview: unsigned EXE in GitHub Actions artifact, not production"
+  "status": "Native Windows Technical Preview: source references only, NO original media backup/copy, unsigned EXE in GitHub Actions, not production"
 }
