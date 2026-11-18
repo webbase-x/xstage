@@ -1,10 +1,10 @@
 {
   "name": "X-Stage Karaoke PC",
-  "version": "1.0.78",
-  "build": 1078,
+  "version": "1.0.79",
+  "build": 1079,
   "available": false,
   "installer_file": null,
   "sha256": null,
   "minimum_updater_version": "1.0.0",
-  "message": "Stable Windows installer is not yet signed/published. The verified public PREVIEW installer, if available, is advertised separately in windows-pc-preview-latest.json."
+  "message": "Stable Windows installer is not yet signed/published. Windows source is v1.0.79 build 1079; the verified public PREVIEW installer, if available, is advertised separately in windows-pc-preview-latest.json."
 }
