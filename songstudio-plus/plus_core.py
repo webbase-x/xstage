@@ -350,14 +350,14 @@ def save_draft(db,song,lyr_path,reason):
     raw=Path(lyr_path).read_bytes()
     if len(raw)>1024*1024:
         raise ValueError("ไฟล์ .LYR ใหญ่เกิน 1 MB")
-    raw=raw.split(b"\\x1a",1)[0]
-    rows=raw.replace(b"\\r\\n",b"\\n").replace(b"\\r",b"\\n").split(b"\\n")
+    raw=raw.split(b"\x1a",1)[0]
+    rows=raw.replace(b"\r\n",b"\n").replace(b"\r",b"\n").split(b"\n")
     if len(rows)<5:
         raise ValueError("ไฟล์ .LYR ไม่มีหัวข้อมูลและเนื้อร้องครบตามโครงสร้าง NCN")
     # Reuse the same CP874/UTF-8 fallback as the NCN timed parser.
     title=ncn_reader._decode_text(rows[0]).strip()[:255]
     artist=ncn_reader._decode_text(rows[1]).strip()[:255]
-    body=ncn_reader._decode_text(b"\\n".join(rows[4:])).strip()
+    body=ncn_reader._decode_text(b"\n".join(rows[4:])).strip()
     if not body:
         raise ValueError("ไฟล์ .LYR ไม่มีเนื้อร้องให้บันทึก")
     db.execute("""INSERT INTO xstage_lyric_drafts
