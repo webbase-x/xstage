@@ -238,6 +238,17 @@
       <button id="risk-needs-review" class="quiet-btn" type="button">ยังต้องตรวจ</button>
     </div>
   </dialog>
-  <dialog id="lyrics-dialog" class="lyrics-dialog"><div class="modal-head"><h2 id="lyrics-modal-title">เนื้อร้องและ Timing</h2><button class="quiet-btn" id="lyrics-close">✕ ปิด</button></div><div id="lyrics-modal-lines"></div></dialog>
+  <dialog id="lyrics-dialog" class="lyrics-dialog">
+  <div class="modal-head"><h2 id="lyrics-modal-title">เนื้อร้องและ Timing</h2><button class="quiet-btn" id="lyrics-close">✕ ปิด</button></div>
+  <div id="lyrics-modal-lines"></div>
+  <div class="list-pagination">
+    <span id="lyrics-page-info">—</span>
+    <div class="toolbar">
+      <button class="quiet-btn" id="lyrics-show-draft" type="button" hidden>ดูข้อความ LYR ทั้งหมด</button>
+      <button class="quiet-btn" id="lyrics-prev" type="button">‹ ก่อนหน้า</button>
+      <button class="quiet-btn" id="lyrics-next" type="button">ถัดไป ›</button>
+    </div>
+  </div>
+</dialog>
 </body>
 </html>
