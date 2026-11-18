@@ -236,20 +236,22 @@ def source_for_build(workspace, db, media):
     one or more absolute source paths registered under xstage_media_sources.
     If a USB is unplugged, stop safely and ask for the source again.
     """
-    stored=media["stored_path"]
-    if stored:
-        legacy=root_folder(workspace) / stored
-        if legacy.is_file():
-            return legacy
-    entries=db.execute("""SELECT source_path,bytes FROM xstage_media_sources
+    entries=db.execute("""SELECT source_path,bytes,mtime_ns FROM xstage_media_sources
           WHERE media_id=? ORDER BY last_seen DESC""",(media["id"],)).fetchall()
     for entry in entries:
         candidate=Path(entry["source_path"])
         try:
-            if candidate.is_file() and candidate.stat().st_size==media["bytes"]:
+            stat=candidate.stat()
+            if (candidate.is_file() and stat.st_size==media["bytes"] and
+                    stat.st_mtime_ns==entry["mtime_ns"]):
                 return candidate
         except OSError:
             pass
+    stored=media["stored_path"]
+    if stored:
+        legacy=Path(workspace)/stored
+        if legacy.is_file():
+            return legacy
     raise ValueError("ไม่พบไฟล์เพลงต้นฉบับ กรุณาเชื่อมต่อ USB/HDD หรือเพิ่มแหล่งเพลงใหม่ก่อนส่งออก")
 
 
@@ -729,11 +731,12 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
     init(workspace)
     totals={"processed":0,"total":0,"recovered_ready":0,
             "partial_lyrics":0,"draft_lyrics":0,
-            "missing_sources":0,"failures":0}
+            "missing_sources":0,"changed_sources":0,"failures":0}
     batch=uuid.uuid4().hex
     with WRITE_LOCK,connect(workspace) as db:
         entries=db.execute("""SELECT s.id AS song_id,s.code,m.id AS media_id,
-            m.sha256,m.stored_path,x.source_path
+            m.sha256,m.stored_path,x.source_path,
+            x.bytes AS source_bytes,x.mtime_ns AS source_mtime_ns
             FROM xstage_songs s
             JOIN xstage_media m ON m.id=s.media_id
             LEFT JOIN xstage_media_sources x ON x.media_id=m.id
@@ -761,17 +764,30 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
             try:
                 media_row=db.execute("SELECT * FROM xstage_media WHERE id=?",
                                     (paths[0]["media_id"],)).fetchone()
-                source_paths=[Path(row["source_path"]) for row in paths if row["source_path"]]
+                candidates={}
+                changed=False
+                for row in paths:
+                    if not row["source_path"]:
+                        continue
+                    source=Path(row["source_path"])
+                    try:
+                        current=source.stat()
+                        if current.st_size!=row["source_bytes"] or current.st_mtime_ns!=row["source_mtime_ns"]:
+                            changed=True
+                            continue
+                        if source.is_file():
+                            candidates[source]=True
+                    except OSError:
+                        continue
+                # Legacy SOURCE copies are read-only fallback, never created.
                 if media_row["stored_path"]:
                     legacy=Path(workspace)/media_row["stored_path"]
                     if legacy.is_file():
-                        source_paths.append(legacy)
+                        candidates[legacy]=True
                 # Prefer sources with complete NCN triplets, not the first
                 # duplicate source path that may lack its own sidecars.
                 ranked=[]
-                for source in dict.fromkeys(source_paths):
-                    if not source.is_file():
-                        continue
+                for source in candidates:
                     comps=companion_candidates(source)
                     score=(int(bool(comps.get(".lyr") and comps.get(".cur")))*4+
                            int(bool(comps.get(".lrc")))*3+
@@ -780,9 +796,14 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                     ranked.append((score,source,comps))
                 ranked.sort(key=lambda x:x[0],reverse=True)
                 if not ranked:
-                    totals["missing_sources"]+=1
-                    outcome="missing-source"
-                    note="ไม่พบไฟล์เพลงต้นฉบับในพาธที่ลงทะเบียนไว้"
+                    if changed:
+                        totals["changed_sources"]+=1
+                        outcome="changed-source"
+                        note="เพลงต้นฉบับเปลี่ยนไปตั้งแต่ลงทะเบียน · ต้องนำเข้าไฟล์หลักใหม่"
+                    else:
+                        totals["missing_sources"]+=1
+                        outcome="missing-source"
+                        note="ไม่พบไฟล์เพลงต้นฉบับในพาธที่ลงทะเบียนไว้"
                 else:
                     for _,source,comps in ranked:
                         event_path=source
@@ -818,13 +839,15 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                                 break
                             if comps.get(".lyr"):
                                 save_draft(db,song,comps[".lyr"],"CUR missing or unrecognized")
-                                totals["draft_lyrics"]+=1
+                                if outcome!="untimed-lyrics":
+                                    totals["draft_lyrics"]+=1
                                 outcome="untimed-lyrics"
                                 note="บันทึกข้อความ LYR แล้ว แต่ยังไม่มีเวลาปาดสี"
                                 # Try other registered sources before deciding
                                 # this song cannot be recovered completely.
                                 continue
-                            outcome="no-lyrics"
+                            if outcome not in ("untimed-lyrics","lyrics-error"):
+                                outcome="no-lyrics"
                         except (OSError,ValueError,TypeError,UnicodeError,KeyError) as e:
                             note=str(e)[:350]
                             outcome="lyrics-error"
