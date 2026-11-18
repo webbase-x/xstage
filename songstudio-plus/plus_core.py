@@ -182,11 +182,12 @@ def source_for_build(workspace, db, media):
 
 
 def companion_candidates(media):
-    """O(1) companion path probes per song, never list a huge MIDI folder.
+    """Find exact-code NCN companions without scanning entire song buckets.
 
-    Previously calling iterdir() on a 10,000-file bucket for EVERY MIDI was
-    quadratic and could appear frozen. Windows handles casing natively; for
-    portable fixtures probe common lower/upper extension spellings explicitly.
+    Handles common split layouts such as Song/Lyrics/Cursor and the
+    equivalent Songs/Lyric/CUR spellings. A companion must share BOTH the
+    same parent collection and the same relative bucket/code, never simply
+    a filename match from a different import source.
     """
     p=Path(media)
     result={".lyr":None,".cur":None,".lrc":None}
@@ -198,17 +199,35 @@ def companion_candidates(media):
         return None
     for ext in result:
         result[ext]=probe(p.parent,p.stem,ext)
-    if p.suffix.lower() in MIDI_EXT:
+    if p.suffix.lower() in MIDI_EXT and not all(
+            result[ext] for ext in (".lyr",".cur")):
+        context=None
         found=ncn_reader.describe(p)
         if found and found[1]=="song":
             root,_,subdir,_=found
-            for ext,role in ((".lyr","Lyrics"),(".cur","Cursor")):
+            context=(root,subdir)
+        else:
+            # "Songs"/"Midi" folders also occur in NCN collection exports.
+            # No directory listing or broad recursive search per song.
+            for ancestor in p.parents:
+                if ancestor.name.casefold() in ("song","songs","mid","midi"):
+                    context=(ancestor.parent,p.parent.relative_to(ancestor))
+                    break
+        if context:
+            root,subdir=context
+            for ext,aliases in (
+                (".lyr",("Lyrics","Lyric","Lyr")),
+                (".cur",("Cursor","Cursors","Cur")),
+            ):
                 if result[ext]:
                     continue
-                for folder_name in (role,role.lower(),role.upper()):
-                    match=probe(root/folder_name/subdir,p.stem,ext)
-                    if match:
-                        result[ext]=match
+                for alias in aliases:
+                    for folder_name in (alias,alias.lower(),alias.upper()):
+                        match=probe(root/folder_name/subdir,p.stem,ext)
+                        if match:
+                            result[ext]=match
+                            break
+                    if result[ext]:
                         break
     return result
 
