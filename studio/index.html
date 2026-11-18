@@ -422,8 +422,22 @@
             <select id="json-pro-format" class="field"><option value="original">ต้นฉบับ · คัดลอกทุกไบต์</option><option value="m4a">แปลงเป็น M4A (AAC)</option><option value="mp3">แปลงเป็น MP3</option><option value="wav">แปลงเป็น WAV</option><option value="flac">แปลงเป็น FLAC</option><option value="ogg">แปลงเป็น OGG</option></select>
             <div class="form-2"><div><label for="json-pro-code-style">รูปแบบรหัสชื่อไฟล์</label><select id="json-pro-code-style" class="field"><option value="numeric" selected>ตัวเลข 00001</option><option value="source">ใช้รหัสต้นฉบับเมื่อถูกต้องและไม่ซ้ำ</option><option value="letters">ตัวอักษร A–Z</option><option value="alphanumeric">ตัวเลขและตัวอักษร A–Z</option></select></div><div><label for="json-pro-code-length">จำนวนหลักรหัส (1–12)</label><input id="json-pro-code-length" class="field" type="number" min="1" max="12" step="1" value="5"></div></div>
             <p class="hint">รหัสเพลง = ชื่อไฟล์เพลง = ชื่อไฟล์ Lyrics JSON (ไม่รวมนามสกุล) · ส่งออกตามโครงสร้าง XStageSong แยกประเภทไฟล์: MIDI/MID/{SONG,LYRICS}, AUDIO/MP3/{SONG,LYRICS}, VIDEO/MP4/{SONG,LYRICS}; KAR และ XSK เป็นไฟล์เดี่ยวไม่สร้าง JSON ซ้ำ · ใช้รหัสคู่ไฟล์ตรงกัน พร้อม current.json และ Catalog · ตรวจ SHA-256 กันซ้ำเฉพาะเพลงที่ทำ · ไม่เขียนทับไฟล์เดิม · ตรวจเวลาจากต้นฉบับก่อนสร้าง ไม่บังคับว่าต้องมี JSON เดิม</p>
-            <div class="toolbar"><button id="json-pro-start" type="button" class="button primary">ตกลง</button></div>
-            <pre id="json-pro-report" class="xsk-pro-output" role="status" aria-live="polite">พร้อมสร้าง Lyrics JSON</pre>
+            <div class="toolbar"><button id="json-pro-start" type="button" class="button primary">สร้างต่อจากคลังเดิม</button><button id="json-pro-retry" type="button" class="button ghost">ลองใหม่เฉพาะ ERR</button></div>
+            <p class="hint">รุ่นใหม่ใช้ Catalog และ Lyrics JSON ที่สำเร็จจากรุ่นเก่าต่อทันที · ไม่ลบหรือเริ่มสร้างไฟล์ที่สำเร็จแล้วใหม่ · บันทึกเหตุผล ERR/ข้ามซ้ำแยกไว้ในโฟลเดอร์ DB ของ XStageSong สำหรับทบทวนครั้งต่อไป</p>
+            <pre id="json-pro-report" class="xsk-pro-output" role="status" aria-live="polite">พร้อมสร้าง Lyrics JSON ต่อจากคลังเดิม</pre>
+            <details id="json-pro-review-panel" class="xsk-legacy-tools">
+              <summary>ทบทวนไฟล์ที่ข้าม / ERR / ผิดพลาด</summary>
+              <div class="toolbar">
+                <label for="json-pro-review-filter">แสดงรายการ</label>
+                <select id="json-pro-review-filter" class="field" style="max-width:220px"><option value="error">ผิดพลาด (ERR)</option><option value="duplicate">ข้ามซ้ำ</option><option value="completed">สร้างสำเร็จ / มีอยู่แล้ว</option><option value="all">ทั้งหมด</option></select>
+                <button id="json-pro-review-refresh" type="button" class="button ghost">แสดงผลทบทวน</button>
+              </div>
+              <p id="json-pro-review-summary" class="hint" role="status">รายการจากรุ่นก่อนจะนำเข้าประวัติเมื่อสั่ง “สร้างต่อจากคลังเดิม” ครั้งแรก</p>
+              <div class="table-scroll" role="region" aria-label="ผลทบทวน Lyrics JSON" tabindex="0">
+                <table class="song-table"><thead><tr><th>ชื่อไฟล์</th><th>ผลตรวจ</th><th>สาเหตุ</th></tr></thead><tbody id="json-pro-review-rows"><tr><td colspan="3" class="empty-row">กดแสดงผลทบทวน</td></tr></tbody></table>
+              </div>
+              <div class="toolbar"><button id="json-pro-review-prev" type="button" class="button ghost">ก่อนหน้า</button><span id="json-pro-review-page" class="hint">—</span><button id="json-pro-review-next" type="button" class="button ghost">ถัดไป</button></div>
+            </details>
           </article>
         </section>
 
