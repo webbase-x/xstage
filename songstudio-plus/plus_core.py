@@ -682,7 +682,7 @@ def destination_for(workspace,song,ext):
 def build_song(workspace,song_id):
     init(workspace)
     with WRITE_LOCK,connect(workspace) as db:
-        pair=db.execute("""SELECT s.*,m.sha256,m.extension,m.stored_path,m.bytes
+        pair=db.execute("""SELECT s.*,m.id AS source_media_id,m.sha256,m.extension,m.stored_path,m.bytes
           FROM xstage_songs s JOIN xstage_media m ON m.id=s.media_id WHERE s.id=?""",
           (song_id,)).fetchone()
         if not pair: raise ValueError("ไม่พบเพลง")
@@ -691,9 +691,11 @@ def build_song(workspace,song_id):
         if not version: raise ValueError("เพลงนี้ยังไม่มีเนื้อร้องพร้อมเวลา · ยังสร้าง Karaoke ไม่ได้")
         lines=get_version_lines(db,version["id"])
         meta=metadata_bytes(pair,version,lines)
-        media_file=root_folder(workspace)/pair["stored_path"]
-        if not media_file.is_file() or digest(media_file)!=pair["sha256"]:
-            raise ValueError("ไฟล์สื่อต้นฉบับในคลังไม่ถูกต้องหรือถูกแก้ไข")
+        # Do not require or make a second original-file copy. Resolve the
+        # saved source reference, including legacy preview SOURCE archives.
+        lookup=db.execute("SELECT * FROM xstage_media WHERE id=?",
+                          (pair["source_media_id"],)).fetchone()
+        media_file=source_for_build(workspace,db,lookup)
         dest=destination_for(workspace,pair,pair["extension"])
         dest.parent.mkdir(parents=True,exist_ok=True)
         previous=db.execute("SELECT * FROM xstage_exports WHERE song_id=?",(song_id,)).fetchone()
@@ -705,19 +707,34 @@ def build_song(workspace,song_id):
         os.close(fd)
         stage=Path(name)
         try:
+            # Hash the original bytes in the SAME streaming pass that writes
+            # the X-file. No pre-hash + copy + readback triplication.
+            output_digest=hashlib.sha256()
+            media_digest=hashlib.sha256()
             with stage.open("wb") as out,media_file.open("rb") as src:
-                out.write(HEADER.pack(MAGIC,FORMAT_VERSION,len(meta),
-                                      pair["bytes"],bytes.fromhex(pair["sha256"]),metadata_sha))
+                header=HEADER.pack(MAGIC,FORMAT_VERSION,len(meta),
+                                   pair["bytes"],bytes.fromhex(pair["sha256"]),metadata_sha)
+                out.write(header)
                 out.write(meta)
-                shutil.copyfileobj(src,out,1024*1024)
-                out.flush();os.fsync(out.fileno())
-            info=inspect_xfile(stage,full_verify=True)
+                output_digest.update(header)
+                output_digest.update(meta)
+                transferred=0
+                for block in iter(lambda:src.read(1024*1024),b""):
+                    transferred+=len(block)
+                    media_digest.update(block)
+                    output_digest.update(block)
+                    out.write(block)
+                out.flush()
+                os.fsync(out.fileno())
+            if transferred!=pair["bytes"] or media_digest.hexdigest()!=pair["sha256"]:
+                raise ValueError("ไฟล์ต้นฉบับเปลี่ยนหลังนำเข้า · ต้องนำเข้าใหม่ก่อนส่งออก")
+            info=inspect_xfile(stage,full_verify=False)
             if info["media_sha256"]!=pair["sha256"]:
-                raise ValueError("สื่อในไฟล์ X-Stage ไม่ตรงกับต้นฉบับ")
+                raise ValueError("สื่อในไฟล์ X-Stage ไม่ตรงกับทะเบียน")
             if dest.exists() and (not previous or digest(dest)!=previous["sha256"]):
                 raise ValueError("ปลายทางมีไฟล์ที่ไม่ตรงกับทะเบียน · ไม่เขียนทับ")
             os.replace(stage,dest)
-            output_sha=digest(dest)
+            output_sha=output_digest.hexdigest()
             db.execute("""INSERT INTO xstage_exports
               (song_id,version_id,output_path,sha256,created_at) VALUES (?,?,?,?,?)
               ON CONFLICT(song_id) DO UPDATE SET version_id=excluded.version_id,
