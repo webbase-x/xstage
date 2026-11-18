@@ -2712,7 +2712,7 @@
          state==='success'?(errors || pending ? '⚠ ตรวจเสร็จแล้ว · ยังมี ERR ต้องแก้ไข' : '✓ สร้าง Lyrics JSON เสร็จแล้ว'):
          state==='cancelled'?'หยุดงานแล้ว · ผลลัพธ์ที่สำเร็จบันทึกใน Catalog':
          'สร้าง Lyrics JSON มีข้อผิดพลาด')+
-        '\nตรวจพบไฟล์ '+fmtNum(job.scannedFiles||0)+
+        '\n'+(job.result?.retryErrorsOnly?'ตรวจรายการ ERR ':'ตรวจพบไฟล์ ')+fmtNum(job.scannedFiles||0)+
         ' · พบชุดเพลง '+fmtNum(found)+
         ' · ตรวจแล้ว '+fmtNum(done)+(total?' / '+fmtNum(total):'')+
         ' · สร้าง '+fmtNum(created)+' · ข้ามซ้ำ '+fmtNum(skipped)+
@@ -2720,7 +2720,7 @@
         ' · ข้าม ERR เดิม '+fmtNum(deferred)+
         ' · ERR ค้างทบทวน '+(pending===null?'ตรวจหลังจบงาน':fmtNum(pending))+
         '\n'+(job.result?.message||job.detail||job.stage||'')+
-        (issueList.length?'\\nสาเหตุที่ต้องตรวจสอบ:\\n'+issueList.join('\\n'):'');
+        (issueList.length?'\nสาเหตุที่ต้องตรวจสอบ:\n'+issueList.join('\n'):'');
     }
     if(job.kind==='xsk-stream'){
       const discovered=Number(job.discovered||0),scanned=Number(job.scannedFiles||0);

@@ -21,6 +21,11 @@ import re
 import unicodedata
 
 MIDI_SUFFIXES = (".mid", ".midi")
+# Observed on legacy NCN collections: these markers are not proof of MIDI.
+LEGACY_SMF_PREFIXES = frozenset((
+    b"TECH", b"MTdd", b"eThd", b"#$%&", b"#nu$", b"-4Hd",
+))
+STANDARD_SMF_PREFIXES = frozenset((b"MThd", b"NCN1", b"Lock", b"Good"))
 TEXT_SUFFIXES = (".lyr", ".lrc")
 CANDIDATE_COMPONENTS = {"song", "lyrics", "cursor"}
 
@@ -210,21 +215,42 @@ def _varlen(source: bytes, pos: int, end: int):
     raise ValueError("MIDI delta-time ยาวเกินมาตรฐาน")
 
 
+def _valid_substituted_smf(data: bytes) -> bool:
+    """Validate real SMF geometry before accepting an observed legacy marker."""
+    if len(data) < 26:
+        return False
+    length = struct.unpack_from(">I", data, 4)[0]
+    if not 6 <= length <= 1024 or 8 + length + 8 > len(data):
+        return False
+    fmt, tracks, division = struct.unpack_from(">HHH", data, 8)
+    if fmt not in (0, 1) or not 1 <= tracks <= 1024:
+        return False
+    if fmt == 0 and tracks != 1:
+        return False
+    if division == 0 or division & 0x8000:
+        return False
+    offset = 8 + length
+    if data[offset:offset+4] != b"MTrk":
+        return False
+    track_size = struct.unpack_from(">I", data, offset+4)[0]
+    return 4 <= track_size <= len(data) - offset - 8
+
+
 def midi_events(midi: Path, *, include_duration=False, raw_data=None):
     """Extract tempo and text metadata, preserving absolute tick positions."""
     data = Path(midi).read_bytes() if raw_data is None else raw_data
-    # Some legacy karaoke MIDI files use "Lock" or "Good" in place of
-    # MThd and include a proprietary copyright/provenance text appendix.
-    # Read actual MIDI events and tempo without modifying the source or
-    # fabricating cues. The complete header and track structure below must
-    # still validate; unknown signatures are never guessed or searched for.
+    # Accept known legacy magic substitutions only after full header/track
+    # validation. Never guess timings, decrypt, or modify the source file.
     if len(data) < 14:
         raise ValueError("ไฟล์ MIDI สั้นเกินไปหรือส่วนหัวไม่สมบูรณ์")
     signature = data[:4]
-    if signature not in (b"MThd", b"NCN1", b"Lock", b"Good"):
+    alternative = signature not in STANDARD_SMF_PREFIXES
+    if alternative and (signature not in LEGACY_SMF_PREFIXES
+                        or not _valid_substituted_smf(data)):
         found = signature.hex(" ").upper()
         raise ValueError(
-            f"ไฟล์ MIDI ไม่ใช่รูปแบบ MThd/NCN1/Lock/Good (ส่วนหัวจริง: {found})"
+            f"ส่วนหัว MIDI {found} ไม่ใช่ SMF มาตรฐานหรือไม่มีโครงสร้าง "
+            "MThd/MTrk ที่ตรวจสอบได้ · อาจเป็นไฟล์เข้ารหัสหรือรูปแบบเฉพาะ"
         )
     length = struct.unpack_from(">I", data, 4)[0]
     if length < 6 or len(data) < 8 + length:
@@ -234,7 +260,7 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
         raise ValueError("MIDI format 2 มีหลายไทม์ไลน์ ไม่รองรับการแปลง Cursor")
     if division & 0x8000:
         raise ValueError("MIDI แบบ SMPTE timing ไม่รองรับการแปลง Cursor")
-    if division == 0 or n_tracks > 1024:
+    if division == 0 or not 1 <= n_tracks <= 1024:
         raise ValueError("MIDI timing หรือจำนวน track ไม่ถูกต้อง")
     offset = 8 + length
     max_tick = 0
@@ -251,6 +277,7 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
         tick = 0
         running = None
         order = 0
+        found_eot = False
         while pos < end:
             delta, pos = _varlen(data, pos, end)
             tick += delta
@@ -284,6 +311,7 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
                         decoded = payload.decode("latin-1", errors="replace")
                     texts.append((tick, track_index, order, tag, decoded))
                 if tag == 0x2f:
+                    found_eot = True
                     break
             elif opcode in (0xf0, 0xf7):
                 count_bytes, pos = _varlen(data, pos, end)
@@ -301,6 +329,8 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
             if pos > end:
                 raise ValueError("MIDI event เกินขอบเขต track")
             order += 1
+        if alternative and not found_eot:
+            raise ValueError("ส่วนหัว MIDI พิเศษไม่มี End of Track ครบตามมาตรฐาน")
         max_tick = max(max_tick, tick)
         offset = end
     # When multiple tracks specify a tempo at the same tick, choose the

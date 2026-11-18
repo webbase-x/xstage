@@ -116,6 +116,61 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual(repeat["created"], 0)
         self.assertEqual(repeat["skipped"], 1)
 
+    def test_observed_midi_header_normalizes_only_output(self):
+        stream = load("json_source_stream")
+        ncn = load("ncn_lyrics")
+        self.mp3.unlink()
+        self.lrc.rename(self.source / "04095.lrc")
+        track = bytes.fromhex("00 FF 2F 00")
+        standard = (b"MThd" + (6).to_bytes(4, "big")
+                    + bytes.fromhex("00 00 00 01 01 E0")
+                    + b"MTrk" + len(track).to_bytes(4, "big") + track)
+        midi = self.source / "04095.mid"
+        original = b"TECH" + standard[4:]
+        midi.write_bytes(original)
+        result = self.run_export(ncn=ncn, source_stream=stream.stream)
+        self.assertEqual((result["created"], result["errors"]), (1, 0), result)
+        record = export.existing_records(self.dest / "XStageSong")[0]
+        output = export.safe_media_path(self.dest / "XStageSong", record["audio"]["path"], "audio")
+        self.assertEqual(output.read_bytes(), standard)
+        self.assertEqual(midi.read_bytes(), original)
+        self.assertEqual(record["sourceIdentity"]["sha256"], hashlib.sha256(original).hexdigest())
+        repeat = self.run_export(ncn=ncn, source_stream=stream.stream)
+        self.assertEqual((repeat["created"], repeat["resumed"]), (0, 1), repeat)
+
+    def test_observed_midi_transcode_uses_temporary_playable_copy(self):
+        stream = load("json_source_stream")
+        ncn = load("ncn_lyrics")
+        self.mp3.unlink()
+        self.lrc.rename(self.source / "24422.lrc")
+        track = bytes.fromhex("00 FF 2F 00")
+        standard = (b"MThd" + (6).to_bytes(4, "big")
+                    + bytes.fromhex("00 00 00 01 01 E0")
+                    + b"MTrk" + len(track).to_bytes(4, "big") + track)
+        midi = self.source / "24422.mid"
+        midi.write_bytes(b"MTdd" + standard[4:])
+        converted = []
+        def convert(inp, out, fmt):
+            converted.append((Path(inp).read_bytes(), fmt))
+            Path(out).write_bytes(b"ID3" + b"A" * 3000)
+        result = self.run_export(fmt="mp3", ncn=ncn, source_stream=stream.stream,
+                                 convert=convert)
+        self.assertEqual((result["created"], result["errors"]), (1, 0), result)
+        self.assertEqual(converted, [(standard, "mp3")])
+        self.assertTrue(midi.read_bytes().startswith(b"MTdd"))
+        self.assertFalse(any(self.dest.rglob(".verified-midi-*")))
+
+    def test_invalid_legacy_header_remains_err(self):
+        stream = load("json_source_stream")
+        ncn = load("ncn_lyrics")
+        self.mp3.unlink()
+        self.lrc.rename(self.source / "33017.lrc")
+        (self.source / "33017.mid").write_bytes(b"#$%&" + bytes(128))
+        result = self.run_export(ncn=ncn, source_stream=stream.stream)
+        self.assertEqual((result["created"], result["errors"], result["pendingErrors"]), (0, 1, 1))
+        self.assertIn("23 24 25 26", result["issues"][0]["reason"])
+        self.assertFalse((self.dest / "XStageSong" / "current.json").exists())
+
     def test_stream_keeps_existing_mp3_lrc_compatibility(self):
         stream = load("json_source_stream")
         result = self.run_export(source_stream=stream.stream)
@@ -595,6 +650,12 @@ class JsonProTests(unittest.TestCase):
         self.assertEqual((retry["created"], retry["errors"], retry["deferred"],
                           retry["pendingErrors"], retry["total"]), (0, 1, 0, 1, 1))
         self.assertIn("ERR ค้างทบทวน 1", retry["message"])
+        # Retry progress must report the real count, not "0 files found".
+        scans = []
+        self.run_export(ncn=Ncn(), source_stream=stream.stream,
+                        retry_errors_only=True,
+                        scan_progress=lambda phase, found, total: scans.append((phase, found, total)))
+        self.assertIn(("discover", 1, 1), scans)
         self.assertEqual(len(export.existing_records(self.dest / "XStageSong")), 1)
 
 

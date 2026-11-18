@@ -365,6 +365,25 @@ class NcnSourceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "track"):
             ncn.ncn_document(ncn.resolve_companions(mid))
 
+    def test_observed_legacy_headers_require_real_midi_tracks(self):
+        mid, lyr, cur = self.make_ncn("0004D", "0", lyric="กข")
+        original = mid.read_bytes()
+        for marker in (b"TECH", b"MTdd", b"eThd", b"#$%&", b"#nu$", b"-4Hd"):
+            with self.subTest(marker=marker):
+                modified = marker + original[4:]
+                mid.write_bytes(modified)
+                document = ncn.ncn_document(ncn.resolve_companions(mid))
+                self.assertEqual(document["lines"][0]["text"], "กข")
+                self.assertAlmostEqual(
+                    document["lines"][0]["characters"][1]["startTime"], .25)
+                self.assertEqual(mid.read_bytes(), modified)
+        mid.write_bytes(b"TECH" + bytes(70))
+        with self.assertRaisesRegex(ValueError, "MTrk"):
+            ncn.ncn_document(ncn.resolve_companions(mid))
+        mid.write_bytes(b"NOPE" + original[4:])
+        with self.assertRaisesRegex(ValueError, "4E 4F 50 45"):
+            ncn.ncn_document(ncn.resolve_companions(mid))
+
     def test_unknown_midi_header_is_reported_not_guessed(self):
         mid, lyr, cur = self.make_ncn("00048", "0", lyric="กข")
         mid.write_bytes(b"NOPE" + mid.read_bytes()[4:])

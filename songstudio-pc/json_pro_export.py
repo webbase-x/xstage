@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import tempfile
 import time
 from pathlib import Path
 
@@ -21,6 +22,7 @@ MEDIA_EXT = {".mid", ".midi", ".kar", ".mp3", ".m4a", ".wav", ".aac",
 AUDIO_FORMATS = {"original", "m4a", "mp3", "wav", "flac", "ogg"}
 CHECKPOINT_SIZE = 1024
 CHECKPOINT_INTERVAL_SECONDS = 60
+MIDI_FORMATS = {".mid", ".midi", ".kar"}
 
 
 def _review_module():
@@ -39,6 +41,42 @@ def _fingerprint(path):
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _normalized_midi_fingerprint(path):
+    """Expected hash of the playable copy without changing source bytes."""
+    digest = hashlib.sha256()
+    with path.open("rb") as reader:
+        if len(reader.read(4)) != 4:
+            raise ValueError("MIDI ส่วนหัวไม่สมบูรณ์")
+        digest.update(b"MThd")
+        for block in iter(lambda: reader.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _verified_copy(media, target, source_hash, *, normalize=False, cancelled=None):
+    """Stage a copy and verify original SHA-256. Preserve all input files."""
+    digest = hashlib.sha256()
+    first = True
+    with media.open("rb") as reader, target.open("xb") as writer:
+        while True:
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("ยกเลิกการคัดลอกไฟล์ต้นฉบับ")
+            block = reader.read(1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+            if normalize and first:
+                if len(block) < 4:
+                    raise ValueError("MIDI ส่วนหัวไม่สมบูรณ์")
+                block = b"MThd" + block[4:]
+            writer.write(block)
+            first = False
+        writer.flush()
+        os.fsync(writer.fileno())
+    if digest.hexdigest() != source_hash:
+        raise ValueError("ตรวจ SHA-256 ระหว่างคัดลอกต้นฉบับไม่ผ่าน")
 
 
 def _lyrics_digest(doc):
@@ -372,6 +410,17 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                                   status="duplicate", reason="เนื้อร้องและไฟล์เพลงซ้ำกับ Catalog ที่ยืนยันแล้ว",
                                   identity=identity)
                     continue
+                # Only normalize playable copies of MIDI sources with a real
+                # validated SMF body. Never rewrite protected source files.
+                normalize_header = False
+                if media.suffix.lower() in MIDI_FORMATS:
+                    with media.open("rb") as reader:
+                        header = reader.read(4)
+                    if header != b"MThd":
+                        if ncn is None or not callable(getattr(ncn, "midi_events", None)):
+                            raise ValueError("ไม่พบตัวตรวจ MIDI รูปแบบพิเศษใน PC Engine")
+                        ncn.midi_events(media)
+                        normalize_header = True
                 # Allocate after fingerprint deduplication; existing songs never change.
                 code = _next_code(used_codes, code_style, code_length, source_code, code_counters)
                 doc["songCode"] = code
@@ -403,11 +452,14 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 # Recover an orphaned but verified pair if the process exited
                 # after committing files and before the journal append.
                 already_published_files = final_audio.exists() or (final_lyrics is not None and final_lyrics.exists())
+                recovery_hash = (_normalized_midi_fingerprint(media)
+                                 if already_published_files and normalize_header
+                                 and output_format == "original" else source_hash)
                 if already_published_files and not (
-                        _can_recover_pair(media, final_audio, final_lyrics, source_hash,
+                        _can_recover_pair(media, final_audio, final_lyrics, recovery_hash,
                                           doc, output_format) if final_lyrics is not None
                         else (final_audio.is_file() and not final_audio.is_symlink()
-                              and _fingerprint(final_audio) == source_hash)):
+                              and _fingerprint(final_audio) == recovery_hash)):
                     raise FileExistsError(
                         "ผลลัพธ์เก่าไม่ครบหรือไม่ตรงข้อมูล · ไม่เขียนทับไฟล์เดิม")
                 if not already_published_files:
@@ -424,26 +476,23 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                         temp_lyrics.unlink(missing_ok=True)
                     try:
                         if output_format == "original":
-                            # Verify the exact bytes during copying instead of
-                            # reading the whole destination for a third time.
-                            copy_hash = hashlib.sha256()
-                            with media.open("rb") as reader, temp_audio.open("xb") as writer:
-                                while True:
-                                    if cancelled is not None and cancelled.is_set():
-                                        raise RuntimeError("ยกเลิกการคัดลอกไฟล์ต้นฉบับ")
-                                    block = reader.read(1024 * 1024)
-                                    if not block:
-                                        break
-                                    copy_hash.update(block)
-                                    writer.write(block)
-                                writer.flush()
-                                os.fsync(writer.fileno())
-                            if copy_hash.hexdigest() != source_hash:
-                                raise ValueError("ตรวจ SHA-256 ระหว่างคัดลอกต้นฉบับไม่ผ่าน")
+                            _verified_copy(media, temp_audio, source_hash,
+                                           normalize=normalize_header,
+                                           cancelled=cancelled)
                         else:
                             if convert is None:
                                 raise ValueError("ไม่พบตัวแปลงเสียงของ PC Engine")
-                            convert(media, temp_audio, output_format)
+                            if normalize_header:
+                                # FluidSynth/FFmpeg require standard MThd.
+                                # Use a short-lived validated source copy.
+                                with tempfile.TemporaryDirectory(
+                                        prefix=".verified-midi-", dir=str(temp_audio.parent)) as scratch:
+                                    playable = Path(scratch) / media.name
+                                    _verified_copy(media, playable, source_hash,
+                                                   normalize=True, cancelled=cancelled)
+                                    convert(playable, temp_audio, output_format)
+                            else:
+                                convert(media, temp_audio, output_format)
                             if not temp_audio.is_file() or temp_audio.stat().st_size < 1000:
                                 raise ValueError("ไฟล์เสียงหลังแปลงไม่สมบูรณ์")
                         if temp_lyrics is not None:

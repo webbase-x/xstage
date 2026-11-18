@@ -149,6 +149,10 @@ def retry_stream(source_folder, destination_folder, *, output_format, ncn=None,
         for name in sources:
             if cancelled is not None and cancelled.is_set():
                 raise RuntimeError("ยกเลิกการทบทวน ERR")
+            report["fileCount"] += 1
+            if progress is not None and (report["fileCount"] % 32 == 0
+                                         or report["fileCount"] == len(sources)):
+                progress("discover", report["fileCount"], len(sources))
             media = Path(name)
             if not media.is_relative_to(source) or not media.is_file() or media.is_symlink():
                 report["incompleteCount"] += 1
@@ -156,7 +160,6 @@ def retry_stream(source_folder, destination_folder, *, output_format, ncn=None,
                     report["incomplete"].append({"name": media.name, "reason": "ไม่พบไฟล์ต้นฉบับ"})
                 continue
             row, reason = module._source_row(source, media)
-            report["fileCount"] += 1
             if row is None:
                 report["incompleteCount"] += 1
                 if len(report["incomplete"]) < 50:
