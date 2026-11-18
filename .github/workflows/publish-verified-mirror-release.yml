@@ -1,0 +1,65 @@
+name: Publish verified Mirror TV release artifact
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-verified-mirror-release.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: xstage-mirror-tv-v0.2.13-build115
+      APK: X-Stage-Mirror-TV-v0.2.13-build115.apk
+      SOURCE: 01e115eebc833ec1eb8cdf06c2e6267f317e02f6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Mirror-TV-signed-release-build115
+          path: dist
+          run-id: 44214497124
+          github-token: ${{ github.token }}
+      - name: Publish verified build and activate updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c SHA256SUMS.txt
+          test -s X-Stage-Mirror-TV-GPLv3-source.tar.gz
+          sdk=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$sdk" verify --verbose --print-certs "$APK" > cert.txt
+          signer=$(PYTHONPATH=../xstage-mirror-tv python3 -c 'from pathlib import Path; from verify_apk_signer import signer_sha256; print(signer_sha256(Path("cert.txt").read_text()))')
+          test "$signer" = "$(jq -er '.signer_sha256' ../mirror-tv/test-latest.json)"
+          "$(dirname "$sdk")/aapt" dump badging "$APK" > badging.txt
+          grep -F "package: name='com.webbasex.xstagemirror.tv' versionCode='115' versionName='0.2.13'" badging.txt
+          cd ..
+          git fetch origin main
+          git switch -C main origin/main
+          git diff --quiet "$SOURCE" HEAD -- xstage-mirror-tv
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            if ! git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null; then
+              git tag "$TAG" HEAD
+              git push origin "refs/tags/$TAG"
+            fi
+            gh release create "$TAG" "dist/$APK" dist/X-Stage-Mirror-TV-GPLv3-source.tar.gz dist/SHA256SUMS.txt --verify-tag --title "X-Stage Mirror TV v0.2.13 (Build 115)" --notes "Signed Android TV APK with corresponding GPLv3 source. Built from $SOURCE."
+          fi
+          mkdir verify
+          gh release download "$TAG" --dir verify
+          (cd verify && sha256sum -c ../dist/SHA256SUMS.txt)
+          hash=$(sha256sum "dist/$APK" | cut -d' ' -f1)
+          target=mirror-tv/latest.json
+          jq -e '(.available != true or .build <= 115)' "$target" >/dev/null
+          jq -n --arg file "$APK" --arg sha "$hash" --arg signer "$signer" --arg url "https://github.com/webbase-x/xstage/releases/download/$TAG/$APK" '{available:true,package:"com.webbasex.xstagemirror.tv",version:"0.2.13",build:115,file:$file,sha256:$sha,signing_mode:"persistent",signer_sha256:$signer,download_url:$url}' > "$target"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$target"
+          if ! git diff --cached --quiet; then
+            git commit -m "release: activate verified Mirror TV Build 115"
+            git push origin HEAD:main
+          fi
