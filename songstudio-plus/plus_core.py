@@ -345,20 +345,42 @@ def parse_lrc(path):
             "sourceFormat":"LRC"}
 
 def document_for(path, companions):
+    """Prefer measured NCN CUR, recover via timed LRC or embedded KAR.
+
+    A damaged CUR should not block a valid LRC or embedded MIDI lyric track.
+    A partial NCN remains available when no complete timed alternative exists.
+    Never infer original CUR timestamps from audio notes.
+    """
     p=Path(path)
-    if (companions.get(".lyr") and companions.get(".cur")
-            and p.suffix.lower() in MIDI_EXT):
-        return ncn_reader.ncn_document({
-            "midi":str(p),"lyrics":str(companions[".lyr"]),
-            "cursor":str(companions[".cur"]),
-            "missing":[],"code":p.stem})
+    is_midi=p.suffix.lower() in MIDI_EXT
+    partial=None
+    original_error=None
+    if is_midi and companions.get(".lyr") and companions.get(".cur"):
+        try:
+            document=ncn_reader.ncn_document({
+                "midi":str(p),"lyrics":str(companions[".lyr"]),
+                "cursor":str(companions[".cur"]),
+                "missing":[],"code":p.stem})
+            if (document.get("metadata") or {}).get("timingComplete",True):
+                return document
+            partial=document
+        except (ValueError,OSError) as exc:
+            original_error=exc
     if companions.get(".lrc"):
-        return parse_lrc(companions[".lrc"])
-    if p.suffix.lower() in MIDI_EXT:
+        try:
+            return parse_lrc(companions[".lrc"])
+        except (ValueError,OSError,UnicodeError) as exc:
+            if original_error is None:
+                original_error=exc
+    if is_midi:
         try:
             return ncn_reader.kar_document(p,p.stem)
-        except ValueError:
-            return None
+        except (ValueError,OSError):
+            pass
+    if partial:
+        return partial
+    if original_error is not None:
+        raise ValueError(str(original_error))
     return None
 
 def valid_lines(doc):
@@ -600,8 +622,7 @@ def import_folder(workspace,source,progress=None,cancel=None):
                         parsed=valid_lines(doc) if doc else None
                         if parsed:
                             _,new=insert_version(db,song,media,doc,None,
-                                "NCN" if comps.get(".lyr") and comps.get(".cur") else
-                                "LRC" if comps.get(".lrc") else "KAR")
+                                doc.get("sourceFormat") or "NCN")
                             meta=doc.get("metadata") or {}
                             partial=meta.get("timingComplete",True) is False
                             if new and partial:
