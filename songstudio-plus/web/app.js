@@ -62,8 +62,9 @@
     text("stat-pending",number(result.songs_without_lyrics));
     const estimated=number(result.songs_estimated_timing);
     text("issues-summary",number(result.songs_without_lyrics)+
-      " เพลงยังไม่มี Lyrics Version พร้อมเวลา · อีก "+estimated+
-      " เพลงมีเวลาปาดสีบางส่วนที่ประมาณขึ้น · ตรวจข้อมูล LYR/CUR และรายการนำเข้าที่ผิดพลาดได้ด้านล่าง");
+      " เพลงยังไม่พร้อมส่งออก · มี CUR ไม่ครบ "+number(result.songs_partial_lyrics)+
+      " เพลง · เก็บเนื้อร้องรอ Timing "+number(result.songs_draft_lyrics)+
+      " เพลง · เวลาประมาณ "+estimated+" เพลง · ตรวจรายการตามสาเหตุได้ด้านล่าง");
   }
   async function refreshSongs(){
     if(!state.ready)return;
@@ -92,9 +93,13 @@
     for(const song of state.songs){
       const row=document.createElement("tr");
       const format=song.extension.toUpperCase();
-      const ready=Boolean(song.version_id);
+      const ready=Boolean(song.version_id&&song.timing_status!=="incomplete");
+      const available=Boolean(song.version_id);
+      const timingLabel=ready? song.timing_status:
+        song.timing_status==="incomplete"?"เนื้อร้องบางส่วน · CUR ไม่ครบ":
+        song.draft_reason?"เก็บเนื้อร้องแล้ว · รอ Timing":"ยังไม่พบเนื้อร้องพร้อมเวลา";
       const columns=[String(song.code).padStart(8,"0"),song.title||song.original_code,
-          format,ready? song.timing_status:"ไม่มีข้อมูลเวลา",
+          format,timingLabel,
           song.output_path?"สร้างแล้ว":"—"];
       columns.forEach((value,index)=>{
         const cell=document.createElement("td");
@@ -109,7 +114,7 @@
         row.append(cell);
       });
       const action=document.createElement("td");
-      if(ready){
+      if(available){
         const button=document.createElement("button");
         button.type="button";button.className="view-link";
         button.textContent="ดูเนื้อร้อง";
@@ -133,7 +138,7 @@
       div.textContent=song.title||song.original_code;
       const small=document.createElement("small");
       small.textContent=String(song.code).padStart(8,"0")+" · "+
-        format+" · "+(ready?(song.timing_status||"มีเนื้อร้อง"):"ยังไม่มี Lyrics/Timing");
+        format+" · "+timingLabel;
       div.append(small);label.append(check,div);build.append(label);
     }
     if(previous)select.value=previous;
@@ -301,7 +306,10 @@
       const p=job.progress||{};
       text("progress-detail",job.kind==="import"?
           "ไฟล์ใหม่ "+number(p.files_new)+" · ไฟล์ซ้ำ "+number(p.media_duplicates)+
-          " · เนื้อร้องใหม่ "+number(p.lyrics_new)+" · ผิดพลาด "+number(p.failures)+
+          " · เนื้อร้องพร้อมเวลา "+number(p.lyrics_new)+
+          " · CUR ไม่ครบ "+number(p.partial_lyrics)+
+          " · เก็บเนื้อร้องรอเวลา "+number(p.draft_lyrics)+
+          " · ผิดพลาดจริง "+number(p.failures)+
           " · Hash เดิม "+number(p.hash_cache_hits)+" · "+number(p.files_per_second)+" ไฟล์/วินาที":
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
       text("progress-count",number(p.files_seen||p.done||0)+" รายการ");
@@ -343,7 +351,10 @@
         const header=document.createElement("strong");
         header.textContent=item.source_name+" · "+(
           item.outcome==="error"?"ตรวจไฟล์ผิดพลาด":
-          item.outcome==="timing-incomplete"?"Timing ไม่ครบ":"อ่านเนื้อร้องผิดพลาด");
+          item.outcome==="timing-incomplete"?"Timing ไม่ครบ":
+          item.outcome==="partial-lyrics"?"บันทึกเนื้อร้องบางส่วน":
+          item.outcome==="untimed-lyrics"?"บันทึกข้อความแล้ว รอ CUR":
+          item.outcome==="missing-lyr"?"ไม่พบไฟล์ LYR":"อ่านเนื้อร้องผิดพลาด");
         const detail=document.createElement("p");
         detail.textContent=item.message||"ไม่พบรายละเอียดข้อผิดพลาด";
         line.append(header,detail);
