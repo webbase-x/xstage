@@ -1,11 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="X-Stage Mirror Android PC">
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1b4d50"/><stop offset="1" stop-color="#0e1d30"/></linearGradient></defs>
-<rect width="128" height="128" rx="29" fill="url(#bg)"/>
-<rect x="23" y="33" width="89" height="63" rx="9" fill="#102632" stroke="#84ecbb" stroke-width="5"/>
-<path d="M63 97v9h14v-9m-25 11h40" stroke="#b4d5dc" stroke-width="5" stroke-linecap="round"/>
-<rect x="12" y="51" width="37" height="57" rx="8" fill="#14372d" stroke="#d4f9e0" stroke-width="4"/>
-<path d="M21 61h19M24 58l-4-5m17 5l4-5M22 67h16v19H22z" fill="#86efb4" stroke="#86efb4" stroke-width="2"/>
-<circle cx="28" cy="63" r="1.5" fill="#123b31"/><circle cx="34" cy="63" r="1.5" fill="#123b31"/>
-<path d="M63 57c11-11 26-11 37 0M68 65c7-7 20-7 27 0M73 73c4-4 12-4 16 0" fill="none" stroke="#9cf5c2" stroke-width="4" stroke-linecap="round"/>
-<circle cx="81" cy="81" r="4" fill="#9cf5c2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="X-Stage Mirror Android PC robot">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#164f5e"/><stop offset="1" stop-color="#0b182d"/></linearGradient><linearGradient id="robot" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#b2f895"/><stop offset="1" stop-color="#73d8ac"/></linearGradient></defs>
+<rect width="128" height="128" rx="28" fill="url(#bg)"/>
+<rect x="13" y="21" width="102" height="77" rx="13" fill="#102a3b" stroke="#8fdbe7" stroke-width="3"/>
+<path d="M43 14l7 12m35-12l-7 12" fill="none" stroke="#b2f895" stroke-width="4" stroke-linecap="round"/>
+<path d="M35 47a29 29 0 0 1 58 0v4H35z" fill="url(#robot)"/>
+<circle cx="51" cy="39" r="3.2" fill="#163d43"/><circle cx="77" cy="39" r="3.2" fill="#163d43"/>
+<rect x="35" y="54" width="58" height="33" rx="5" fill="url(#robot)"/>
+<path d="M30 59v25M98 59v25" stroke="#8fd5a7" stroke-width="10" stroke-linecap="round"/>
+<path d="M49 87v10M79 87v10" stroke="#95edab" stroke-width="10" stroke-linecap="round"/>
+<path d="M43 111h42" stroke="#90e4ec" stroke-width="5" stroke-linecap="round"/>
 </svg>

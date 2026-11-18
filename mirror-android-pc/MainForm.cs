@@ -9,7 +9,7 @@ namespace XStageMirrorAndroidPC;
 
 public sealed class MainForm : Form
 {
-    private const string AppVersion = "v1.0.0 · Build 1001";
+    private const string AppVersion = "v1.0.1 · Build 1002";
     private const string PreviewFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-android-pc-preview-latest.json";
     private static readonly Color Base = Color.FromArgb(12, 19, 36);
@@ -25,26 +25,45 @@ public sealed class MainForm : Form
     private readonly Label _connectedDevices = new();
     private readonly System.Windows.Forms.Timer _receiverPoll = new() { Interval = 5000 };
     private bool _closing;
+    private readonly MirrorAutoUpdateManager _autoUpdates;
 
     public MainForm()
     {
         Text = "X-Stage Mirror Android PC • " + ReceiverIdentity.DisplayName;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(720, 600);
-        Size = new Size(960, 780);
+        FormBorderStyle = FormBorderStyle.None;
+        WindowState = FormWindowState.Maximized;
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Base;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
         MakeInterface();
-        Shown += async (_, _) =>
+        _autoUpdates = new MirrorAutoUpdateManager(
+            message =>
+            {
+                if (_closing || IsDisposed || !IsHandleCreated) return;
+                try { BeginInvoke(new Action(() => { if (!_closing && !IsDisposed) _status.Text = message; })); }
+                catch (InvalidOperationException) { }
+            },
+            () =>
+            {
+                if (_closing || IsDisposed || !IsHandleCreated) return;
+                try { BeginInvoke(new Action(() => { if (!_closing && !IsDisposed) Close(); })); }
+                catch (InvalidOperationException) { }
+            });
+        Shown += (_, _) =>
         {
             CheckLocalEnvironment();
+            OpenReceiver();
             CheckWindowsReceiverSession();
             _receiverPoll.Start();
-            await CheckUpdatesAsync();
+            _ = _autoUpdates.CheckAsync();
         };
-        _receiverPoll.Tick += (_, _) => CheckWindowsReceiverSession();
+        _receiverPoll.Tick += (_, _) =>
+        {
+            CheckWindowsReceiverSession();
+            _ = _autoUpdates.CheckAsync();
+        };
         FormClosing += (_, _) => { _closing = true; _receiverPoll.Stop(); };
     }
 
@@ -87,110 +106,95 @@ public sealed class MainForm : Form
 
     private void MakeInterface()
     {
-        var view = new Panel { Dock = DockStyle.Fill, BackColor = Base, AutoScroll = true };
+        // The same calm, full-screen welcome hierarchy used by Mirror iOS PC.
+        // Windows owns the native Miracast renderer; we do not fake a video surface.
+        var view = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(12, 26, 44) };
         Controls.Add(view);
-        var top = PanelCard(42, 52, 32);
-        top.BackColor = Base;
-        top.Padding = new Padding(Px(4), 0, Px(4), 0);
-        top.Controls.Add(Label("X-STAGE  /  MIRROR ANDROID PC", 14, true, Muted), 0, 0);
-        top.Controls.Add(Label(ReceiverIdentity.DisplayName, 26, true, Accent), 0, 1);
-        top.Controls.Add(Label("สำหรับ Android / Miracast  •  Windows 10/11 x64  •  " + AppVersion, 10, false, Muted), 0, 2);
-
-        var receiver = PanelCard(45, 54, 42, 60, 52, 48, 52);
-        receiver.Controls.Add(Label("ตัวรับภาพ Android ผ่าน Windows", 16, true), 0, 0);
-        _computer.TextAlign = ContentAlignment.MiddleLeft;
-        _computer.Dock = DockStyle.Fill;
-        _computer.ForeColor = Accent;
-        _computer.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-        receiver.Controls.Add(_computer, 0, 1);
-        _status.Dock = DockStyle.Fill;
-        _status.ForeColor = Muted;
-        _status.Font = new Font("Segoe UI", 11, FontStyle.Bold);
-        receiver.Controls.Add(_status, 0, 2);
-        _details.Dock = DockStyle.Fill;
-        _details.Font = new Font("Segoe UI", 10);
+        var logo = new PictureBox
+        {
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Color.Transparent,
+            AccessibleName = "X-Stage Mirror Android PC"
+        };
+        using (var stream = typeof(MainForm).Assembly.GetManifestResourceStream("XStageMirrorAndroidPC.logo.png"))
+        {
+            if (stream is not null)
+            {
+                using var original = Image.FromStream(stream);
+                logo.Image = new Bitmap(original);
+            }
+        }
+        var title = Label("X-Stage Mirror PC", 51, true);
+        var number = Label("No." + ReceiverIdentity.Number.ToString("D4"), 90, true, Accent);
+        var version = Label("MIRROR ANDROID PC     " + AppVersion, 15, false, Muted);
+        var receiverName = Label("ชื่อจอ Windows: " + Environment.MachineName, 22, true);
+        var help = Label("Smart View / Screen Cast → " + Environment.MachineName +
+            "   ·   No. คือรหัส X-Stage ไม่ใช่ชื่ออุปกรณ์ที่ Android ค้นหา", 11, false, Muted);
+        _status.TextAlign = ContentAlignment.MiddleCenter;
+        _status.Font = new Font("Segoe UI", 18);
+        _status.ForeColor = Color.White;
+        _details.TextAlign = ContentAlignment.MiddleCenter;
+        _details.Font = new Font("Segoe UI", 12);
         _details.ForeColor = Muted;
-        receiver.Controls.Add(_details, 0, 3);
-        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
-        _openReceiver.Text = "▶  เปิด Windows Wireless Display";
+        var minimize = Button("—", false);
+        minimize.AccessibleName = "ย่อหน้าต่าง";
+        minimize.Click += (_, _) => WindowState = FormWindowState.Minimized;
+        var close = Button("×", false);
+        close.AccessibleName = "ปิดแอป";
+        close.BackColor = Color.FromArgb(57, 39, 55);
+        close.Click += (_, _) =>
+        {
+            if (MessageBox.Show(this, "ปิด X-Stage Mirror Android PC หรือไม่?",
+                "ปิดแอป", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+                Close();
+        };
+        var settings = Button("ตั้งค่า", false);
+        settings.Click += (_, _) => OpenSettings("ms-settings:project");
+        _openReceiver.Text = "เปิดตัวรับ";
+        _openReceiver.BackColor = CardColor;
+        _openReceiver.ForeColor = Color.White;
         _openReceiver.FlatStyle = FlatStyle.Flat;
         _openReceiver.FlatAppearance.BorderSize = 0;
-        _openReceiver.Dock = DockStyle.Fill;
-        _openReceiver.Margin = new Padding(4);
-        _openReceiver.BackColor = Accent;
-        _openReceiver.ForeColor = Base;
-        _openReceiver.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+        _openReceiver.Font = new Font("Segoe UI", 12, FontStyle.Bold);
         _openReceiver.Click += (_, _) => OpenReceiver();
-        var projection = Button("⚙  ตั้งค่ารับภาพ Windows", false);
-        projection.Click += (_, _) => OpenSettings("ms-settings:project");
-        actions.Controls.Add(_openReceiver, 0, 0);
-        actions.Controls.Add(projection, 1, 0);
-        receiver.Controls.Add(actions, 0, 4);
-        var other = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        other.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        other.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        var optional = Button("ติดตั้ง/ตรวจ Wireless Display", false);
-        optional.Click += (_, _) => OpenSettings("ms-settings:optionalfeatures");
-        var diagnosis = Button("ตรวจสอบความพร้อม", false);
-        diagnosis.Click += (_, _) => ShowDiagnostics();
-        other.Controls.Add(optional, 0, 0);
-        other.Controls.Add(diagnosis, 1, 0);
-        receiver.Controls.Add(other, 0, 5);
-        receiver.Controls.Add(Label("Android ต้องค้นหาชื่อ Windows ด้านบน · เลข No. ใช้ระบุ X-Stage บน PC (ไม่ใช่ชื่อ Miracast)", 10, false, Muted), 0, 6);
-
-        var sessions = PanelCard(46, 53, 78, 46);
-        sessions.Controls.Add(Label("อุปกรณ์เชื่อมต่อ / Connected devices", 16, true), 0, 0);
-        _nativeSession.Dock = DockStyle.Fill;
-        _nativeSession.ForeColor = Accent;
-        _nativeSession.Font = new Font("Segoe UI", 11, FontStyle.Bold);
-        sessions.Controls.Add(_nativeSession, 0, 1);
-        _connectedDevices.Dock = DockStyle.Fill;
-        _connectedDevices.ForeColor = Muted;
-        _connectedDevices.Font = new Font("Segoe UI", 11);
-        sessions.Controls.Add(_connectedDevices, 0, 2);
-        sessions.Controls.Add(Label("Windows ควบคุมรายชื่อผู้ส่งจริงในหน้าต่าง Wireless Display · X-Stage ไม่เดาชื่ออุปกรณ์", 10, false, Muted), 0, 3);
-
-        var steps = PanelCard(37, 53, 53, 54);
-        steps.Controls.Add(Label("วิธีเชื่อมต่อที่ถูกต้อง", 15, true), 0, 0);
-        steps.Controls.Add(Label("1. เปิด Windows Wireless Display และอนุญาตการฉายภาพบนเครื่องนี้", 11), 0, 1);
-        steps.Controls.Add(Label("2. เปิด Smart View / Screen Cast / Miracast บน Android ที่รองรับ", 11), 0, 2);
-        steps.Controls.Add(Label("3. เลือกชื่อ PC แล้วอนุญาตบน Windows เมื่อระบบถาม", 11), 0, 3);
-
-        var bottom = PanelCard(34, 48, 48);
-        bottom.Controls.Add(Label("รุ่นและอัปเดต", 14, true), 0, 0);
-        _update.Dock = DockStyle.Fill; _update.ForeColor = Muted;
-        _update.Text = "ตรวจสอบรุ่นล่าสุดเมื่อมีอินเทอร์เน็ต";
-        bottom.Controls.Add(_update, 0, 1);
-        var checkUpdate = Button("↻  ตรวจสอบรุ่นใหม่", false);
-        checkUpdate.Click += async (_, _) => await CheckUpdatesAsync(showMessage: true);
-        bottom.Controls.Add(checkUpdate, 0, 2);
-
-        var cards = new (Control view, int height)[] {
-            (top, 140), (receiver, 400), (sessions, 265), (steps, 237), (bottom, 174)
-        };
-        foreach (var (card, _) in cards) view.Controls.Add(card);
-        void ResizeCards()
+        foreach (var control in new Control[]
         {
-            var vw = view.ClientSize.Width;
-            var width = Math.Min(Px(1020), Math.Max(Px(610), vw - Px(40)));
-            var left = vw >= width ? (vw - width) / 2 : Px(20);
-            var y = Px(16);
-            view.SuspendLayout();
-            try
-            {
-                foreach (var (card, height) in cards)
-                {
-                    card.SetBounds(left, y, width, Px(height));
-                    y += Px(height) + Px(16);
-                }
-                view.AutoScrollMinSize = new Size(width + Px(40), y + Px(12));
-            }
-            finally { view.ResumeLayout(); }
+            logo, title, number, version, receiverName, _status, _details,
+            help, settings, _openReceiver, minimize, close
+        })
+        {
+            view.Controls.Add(control);
         }
-        view.Resize += (_, _) => ResizeCards();
-        ResizeCards();
+        void Place()
+        {
+            if (view.IsDisposed) return;
+            var w = Math.Max(640, view.ClientSize.Width);
+            var h = Math.Max(480, view.ClientSize.Height);
+            var logoSize = Math.Clamp((int)Math.Min(w * 0.18, h * 0.17), 70, 160);
+            var logoTop = Math.Max(75, (int)(h * 0.11));
+            logo.SetBounds(Math.Max(0, (view.ClientSize.Width - logoSize) / 2), logoTop, logoSize, logoSize);
+            var titleTop = Math.Max(logoTop + logoSize + 7, (int)(h * 0.34));
+            var numberTop = Math.Max(titleTop + (int)(h * 0.10) + 5, (int)(h * 0.48));
+            void Center(Control control, int top, int height)
+                => control.SetBounds(12, top, Math.Max(0, view.ClientSize.Width - 24), height);
+            Center(title, titleTop, (int)(h * 0.10));
+            Center(number, numberTop, (int)(h * 0.17));
+            Center(version, numberTop + (int)(h * 0.17) + 5, 34);
+            Center(receiverName, numberTop + (int)(h * 0.17) + 45, 54);
+            Center(_status, numberTop + (int)(h * 0.17) + 105, 48);
+            Center(_details, numberTop + (int)(h * 0.17) + 151, 65);
+            Center(help, Math.Max(numberTop + (int)(h * 0.17) + 218, h - 64), 38);
+            settings.SetBounds(20, 22, 90, 44);
+            _openReceiver.SetBounds(118, 22, 130, 44);
+            minimize.SetBounds(Math.Max(0, view.ClientSize.Width - 136), 22, 52, 44);
+            close.SetBounds(Math.Max(0, view.ClientSize.Width - 76), 22, 52, 44);
+            title.Font = new Font("Segoe UI", Math.Clamp(w / 29f, 27, 60), FontStyle.Bold);
+            number.Font = new Font("Segoe UI", Math.Clamp(Math.Min(w / 13f, h / 5.5f), 44, 112), FontStyle.Bold);
+            receiverName.Font = new Font("Segoe UI", Math.Clamp(w / 65f, 14, 26), FontStyle.Bold);
+        }
+        view.Resize += (_, _) => Place();
+        Place();
     }
 
     private void CheckLocalEnvironment()
@@ -228,7 +232,7 @@ public sealed class MainForm : Form
                 Process.Start(new ProcessStartInfo("explorer.exe",
                     @"shell:AppsFolder\Microsoft.PPIProjection_cw5n1h2txyewy!App")
                     { UseShellExecute = true });
-            _status.Text = "ส่งคำสั่งเปิดตัวรับแล้ว • ตรวจในหน้าต่าง Wireless Display ของ Windows";
+            _status.Text = "ตัวรับ Windows เปิดแล้ว · รอ Android เชื่อมต่อ";
         }
         catch (Exception ex)
         {
@@ -289,32 +293,4 @@ public sealed class MainForm : Form
         MessageBox.Show(this, text.ToString(), "ตรวจสอบอุปกรณ์", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
-    private async Task CheckUpdatesAsync(bool showMessage = false)
-    {
-        try
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-            using var response = await client.GetAsync(PreviewFeed);
-            response.EnsureSuccessStatusCode();
-            using var manifest = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var obj = manifest.RootElement;
-            var version = obj.TryGetProperty("version", out var v) ? v.GetString() : null;
-            int build = obj.TryGetProperty("build", out var b) && b.TryGetInt32(out var x) ? x : 0;
-            bool available = obj.TryGetProperty("available", out var av) && av.ValueKind == JsonValueKind.True;
-            var newer = available && (Version.TryParse(version, out var remote)
-                && (remote > new Version(1, 0, 0) || (remote == new Version(1, 0, 0) && build > 1001)));
-            _update.Text = newer ? "มีรุ่นใหม่: v" + version + " Build " + build :
-                "กำลังใช้ " + AppVersion + " · ไม่พบรุ่นใหม่";
-            if (!newer && !showMessage) return;
-            if (MessageBox.Show(this, newer ? "พบรุ่นใหม่บน X-Stage Apps\nเปิดเว็บไซต์ดาวน์โหลดหรือไม่?" : _update.Text,
-                "ตรวจสอบอัปเดต", newer ? MessageBoxButtons.YesNo : MessageBoxButtons.OK,
-                MessageBoxIcon.Information) == DialogResult.Yes && newer)
-                Process.Start(new ProcessStartInfo(
-                    "https://webbase-x.github.io/xstage/?app=mirror-android-pc") { UseShellExecute = true });
-        }
-        catch
-        {
-            if (!_closing && !IsDisposed) _update.Text = "ตรวจสอบออนไลน์ไม่ได้ · รับภาพผ่าน Windows แบบออฟไลน์ได้";
-        }
-    }
 }

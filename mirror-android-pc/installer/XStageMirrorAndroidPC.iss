@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror Android PC"
-#define MyAppVersion "1.0.0"
-#define MyAppBuild "1001"
+#define MyAppVersion "1.0.1"
+#define MyAppBuild "1002"
 
 [Setup]
 SourceDir=..\..
@@ -33,14 +33,14 @@ RestartApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional shortcuts:"
 
 [Files]
 Source: "mirror-android-pc\out\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\X-Stage Mirror Android PC"; Filename: "{app}\XStageMirrorAndroidPC.exe"
-Name: "{autodesktop}\X-Stage Mirror Android PC"; Filename: "{app}\XStageMirrorAndroidPC.exe"; Tasks: desktopicon
+Name: "{autodesktop}\X-Stage Mirror Android PC"; Filename: "{app}\XStageMirrorAndroidPC.exe"
 
 [Run]
-Filename: "{app}\XStageMirrorAndroidPC.exe"; Description: "Launch X-Stage Mirror Android PC"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\XStageMirrorAndroidPC.exe"; Description: "Launch X-Stage Mirror Android PC"; Flags: nowait postinstall

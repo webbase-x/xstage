@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'mirror-android-pc/**'
+      - 'assets/app-icons/mirror-android-pc.svg'
       - '.github/workflows/build-xstage-mirror-android-pc.yml'
 
 permissions:
@@ -15,11 +16,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  icon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate Android robot Windows icon and welcome logo
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0 CairoSVG==2.7.1
+          python mirror-android-pc/generate_icon.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Mirror-Android-PC-ICON
+          path: |
+            mirror-android-pc/app.ico
+            mirror-android-pc/logo.png
+          if-no-files-found: error
   build:
+    needs: icon
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Mirror-Android-PC-ICON
+          path: mirror-android-pc
+      - name: Validate branded Windows icon and embedded logo
+        shell: pwsh
+        run: |
+          foreach ($asset in @('mirror-android-pc/app.ico','mirror-android-pc/logo.png')) {
+            if (-not (Test-Path $asset -PathType Leaf) -or (Get-Item $asset).Length -lt 1024) {
+              throw "Missing Android icon asset: $asset"
+            }
+          }
       - name: Install .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -53,7 +87,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
           & $compiler 'mirror-android-pc/installer/XStageMirrorAndroidPC.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
-          $name = 'X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-Setup.exe'
+          $name = 'X-Stage-Mirror-Android-PC-v1.0.1-build1002-win-x64-Setup.exe'
           $exe = "mirror-android-pc/installer/output/$name"
           if (-not (Test-Path $exe -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $exe).Length -lt 5000000) { throw 'Setup EXE unexpectedly small' }
@@ -65,7 +99,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $filename = 'X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-PORTABLE.zip'
+          $filename = 'X-Stage-Mirror-Android-PC-v1.0.1-build1002-win-x64-PORTABLE.zip'
           Compress-Archive -Path 'mirror-android-pc/out/*' -DestinationPath $filename -CompressionLevel Optimal -Force
           if ((Get-Item $filename).Length -lt 5000000) { throw 'Portable ZIP unexpectedly small' }
           $sha = (Get-FileHash $filename -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -77,9 +111,9 @@ jobs:
         with:
           name: X-Stage-Mirror-Android-PC-Windows-CANDIDATE
           path: |
-            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-Setup.exe
-            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-Setup.exe.sha256
-            X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-PORTABLE.zip
-            X-Stage-Mirror-Android-PC-v1.0.0-build1001-win-x64-PORTABLE.zip.sha256
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.1-build1002-win-x64-Setup.exe
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.1-build1002-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-Android-PC-v1.0.1-build1002-win-x64-PORTABLE.zip
+            X-Stage-Mirror-Android-PC-v1.0.1-build1002-win-x64-PORTABLE.zip.sha256
           if-no-files-found: error
           retention-days: 30

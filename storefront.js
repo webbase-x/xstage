@@ -136,7 +136,7 @@
       title:"X-Stage Mirror Android PC",category:"WINDOWS · MIRACAST",
       subtitle:"รับภาพ Android ผ่าน Wireless Display บน Windows 10/11",
       description:"แอป Windows แยกสำหรับ Android ใช้ตัวรับ Wireless Display ของ Windows และแสดง X-Stage Mirror PC No.XXXX สำหรับระบุเครื่อง พร้อมชื่อ PC จริงที่ผู้ใช้ Android ต้องค้นหา และแสดงสถานะตัวรับที่ตรวจสอบได้",
-      features:["แสดงเลข No.XXXX ประจำ Windows ร่วมกับแอป iOS PC","แสดงชื่อเครื่อง Windows จริงเพื่อให้ Android ค้นหาถูก","เปิด Windows Wireless Display พร้อมเครื่องมือตรวจสอบและตั้งค่า","รายชื่อผู้ส่งเชื่อมต่อจริงอยู่ในหน้าต่าง Wireless Display ของ Windows ไม่แสดงข้อมูลที่อ่านไม่ได้","ไฟล์ติดตั้งรวม .NET Runtime; ไม่มีการโหลดส่วนประกอบแอปเพิ่ม"],
+      features:["ไอคอนหุ่น Android บนหน้าแรกและโปรแกรม Windows","UX/UI เต็มจอเหมือน X-Stage Mirror iOS PC พร้อมเลข No.XXXX","แสดงชื่อ Windows จริงที่ Android ต้องเลือก","เปิดตัวรับ Windows Wireless Display เมื่อเริ่มแอป","ตรวจอัปเดต ดาวน์โหลดและตรวจ SHA-256 ก่อนติดตั้ง","Setup EXE รวม .NET Runtime ไม่ต้องติดตั้งส่วนประกอบแอปเพิ่ม"],
       hero:"รับภาพ Android บนจอ PC",blurb:"ใช้ Miracast ที่ Windows รองรับ",preview:"MIRROR ANDROID PC · MIRACAST",
       type:"manifest",manifest:"./downloads/mirror-android-pc-preview-latest.json",
       candidate:{label:"ตรวจผล Build Android PC",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-mirror-android-pc.yml"},
