@@ -329,6 +329,43 @@ def classify(rows, existing, selected_groups=None):
     return result
 
 
+def assign_target_codes(records, destination_rows):
+    """Resolve numeric collisions only in the import projection, never alter source.
+
+    Content identity remains stable across machines; an import from machine B
+    with code 00001 must not overwrite unrelated 00001 from machine A.
+    """
+    used = {}
+    for row in destination_rows:
+        code = str(row.get("code") or "").casefold()
+        if code:
+            used.setdefault(code, row)
+    result = []
+    for original in records:
+        row = dict(original)
+        code = str(row.get("code") or "")
+        occupying = used.get(code.casefold())
+        if occupying is not None:
+            same = ((occupying.get("sourceRegistry") or {}).get("songId")
+                    == (row.get("sourceRegistry") or {}).get("songId"))
+            if not same:
+                width = max(5, min(12, len(code)))
+                # Numeric destination codes are local aliases, not Song IDs.
+                number = 1
+                while str(number).zfill(width).casefold() in used:
+                    number += 1
+                    if number > 999999999999:
+                        raise ValueError("รหัสเพลงปลายทางไม่เพียงพอ")
+                next_code = str(number).zfill(width)
+                row["originalCode"] = code
+                row["code"] = next_code
+                code = next_code
+        if code:
+            used[code.casefold()] = row
+        result.append(row)
+    return result
+
+
 def log_import(target_root, target, source_root, rows, status, detail=""):
     if target not in ("pc", "drive") or not isinstance(status, str) or len(status) > 64:
         raise ValueError("ปลายทางหรือสถานะนำเข้าไม่ถูกต้อง")
