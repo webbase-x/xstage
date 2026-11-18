@@ -779,6 +779,9 @@ class DuplicateMediaRegistry:
             return {
                 "processed": len(completed), "companionFiles": moved_companions,
                 "operation": operation, "files": completed[:50],
+                # Full verified list is consumed by Engine for persistent
+                # duplicate-registry reconciliation (UI still has a 50-row cap).
+                "processedPaths": [item["from"] for item in completed],
                 "message": (f"{'ย้าย' if operation == 'move' else 'ส่งเข้าถังรีไซเคิล'}"
                             f"เพลง {len(completed):,} และไฟล์ประกอบ {moved_companions:,} ไฟล์"
                             " · เก็บไฟล์หลักที่เลือกไว้ทุกกลุ่ม"),
