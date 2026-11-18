@@ -78,6 +78,24 @@ class NcnLineEndRegression(unittest.TestCase):
         self.assertTrue(doc["lines"][0]["endTimeEstimated"])
         self.assertEqual(len(plus_core.valid_lines(doc)), 2)
 
+    def test_nick_extreme_legacy_midi_signatures_keep_original_bytes(self):
+        """Lock/Good from the library are real SMF layouts with extra tails."""
+        with tempfile.TemporaryDirectory() as d:
+            for signature in (b"Lock", b"Good", b"TECH", b"NCN1"):
+                with self.subTest(signature=signature):
+                    source = Path(d) / (signature.decode("ascii") + ".mid")
+                    original = signature + _midi_20_seconds()[4:] + b"legacy trailer"
+                    source.write_bytes(original)
+                    division, tempos, events, duration = ncn_reader.midi_events(
+                        source, include_duration=True)
+                    self.assertEqual(division, 480)
+                    self.assertGreater(duration, 0)
+                    self.assertEqual(source.read_bytes(), original)
+            bad = Path(d) / "unknown.mid"
+            bad.write_bytes(b"NOPE" + _midi_20_seconds()[4:])
+            with self.assertRaisesRegex(ValueError, "4E 4F 50 45"):
+                ncn_reader.midi_events(bad)
+
     def test_last_line_default_four_seconds_when_no_late_cue(self):
         doc = ncn_reader._timed_lines_to_json([
             {"text": "AB", "startTime": 1., "characters": [
