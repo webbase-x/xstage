@@ -394,33 +394,43 @@
       if(result.path)$(target).value=result.path;
     }catch(error){toast("เปิดหน้าต่างเลือกไฟล์ไม่สำเร็จ: "+error.message,true);}
   }
+  function renderIssuePage(){
+    const list=$("issues-list");
+    list.replaceChildren();
+    const size=visibleRows();
+    const offset=state.issueOffset;
+    const rows=state.issueRows.slice(offset,offset+size);
+    if(!rows.length){
+      const empty=document.createElement("p");
+      empty.className="empty-small";
+      empty.textContent="ไม่มีรายการผิดพลาดที่บันทึกไว้";
+      list.append(empty);
+    }
+    for(const item of rows){
+      const line=document.createElement("div");line.className="issue-item";
+      const header=document.createElement("strong");
+      header.textContent=item.source_name+" · "+(
+        item.outcome==="error"?"ตรวจไฟล์ผิดพลาด":
+        item.outcome==="timing-incomplete"?"Timing ไม่ครบ":
+        item.outcome==="partial-lyrics"?"บันทึกเนื้อร้องบางส่วน":
+        item.outcome==="untimed-lyrics"?"บันทึกข้อความแล้ว รอ CUR":
+        item.outcome==="missing-lyr"?"ไม่พบไฟล์ LYR":"อ่านเนื้อร้องผิดพลาด");
+      const detail=document.createElement("p");
+      detail.textContent=item.message||"ไม่พบรายละเอียดข้อผิดพลาด";
+      line.append(header,detail);list.append(line);
+    }
+    text("issues-page-info",number(offset+(rows.length?1:0))+"–"+
+      number(offset+rows.length)+" / "+number(state.issueRows.length)+" รายการล่าสุด");
+    $("issues-prev").disabled=offset<=0;
+    $("issues-next").disabled=offset+size>=state.issueRows.length;
+  }
   async function loadImportIssues(){
-    const container=$("issues-list");
-    container.replaceChildren();
     try{
       const result=await api("/api/import-issues");
-      const rows=result.rows||[];
-      if(!rows.length){
-        const empty=document.createElement("p");
-        empty.className="empty-small";
-        empty.textContent="ยังไม่พบรายการอ่านเนื้อร้องผิดพลาดที่บันทึกไว้";
-        container.append(empty);return;
-      }
-      for(const item of rows){
-        const line=document.createElement("div");line.className="issue-item";
-        const header=document.createElement("strong");
-        header.textContent=item.source_name+" · "+(
-          item.outcome==="error"?"ตรวจไฟล์ผิดพลาด":
-          item.outcome==="timing-incomplete"?"Timing ไม่ครบ":
-          item.outcome==="partial-lyrics"?"บันทึกเนื้อร้องบางส่วน":
-          item.outcome==="untimed-lyrics"?"บันทึกข้อความแล้ว รอ CUR":
-          item.outcome==="missing-lyr"?"ไม่พบไฟล์ LYR":"อ่านเนื้อร้องผิดพลาด");
-        const detail=document.createElement("p");
-        detail.textContent=item.message||"ไม่พบรายละเอียดข้อผิดพลาด";
-        line.append(header,detail);
-        container.append(line);
-      }
-      toast("พบ "+number(rows.length)+" รายการที่ต้องตรวจสอบ");
+      state.issueRows=result.rows||[];
+      state.issueOffset=0;
+      renderIssuePage();
+      $("issues-dialog").showModal();
     }catch(error){toast(error.message,true);}
   }
   const riskCategories={
@@ -617,6 +627,13 @@
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",()=>view(button.dataset.view));
     $("issues-load").addEventListener("click",()=>void loadImportIssues());
+    $("issues-close").addEventListener("click",()=>$("issues-dialog").close());
+    $("issues-prev").addEventListener("click",()=>{
+      state.issueOffset=Math.max(0,state.issueOffset-visibleRows());renderIssuePage();
+    });
+    $("issues-next").addEventListener("click",()=>{
+      state.issueOffset+=visibleRows();renderIssuePage();
+    });
     $("risk-scan").addEventListener("click",()=>void startJob("swipe-audit",{}));
     for(const button of document.querySelectorAll("[data-risk-filter]"))
       button.addEventListener("click",()=>riskFilterChanged(button.dataset.riskFilter));
