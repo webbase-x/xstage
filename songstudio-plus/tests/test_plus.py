@@ -65,6 +65,8 @@ class PlusTests(unittest.TestCase):
         self.assertIn('id="stat-ready"',html)
         self.assertIn('id="stat-pending"',html)
         self.assertIn('id="issues-load"',html)
+        self.assertIn('id="recover-lyrics"',html)
+        self.assertIn('id="stat-with-text"',html)
 
     def test_schema_all_tables_prefixed_and_separate_from_legacy(self):
         with plus.connect(self.workspace) as db:
@@ -250,6 +252,7 @@ class PlusTests(unittest.TestCase):
         self.assertIsNone(info["version_id"])
         self.assertTrue(info["draft_reason"])
         self.assertEqual(plus.stats(self.workspace)["songs_draft_lyrics"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_text"],1)
         with plus.connect(self.workspace) as db:
             raw=db.execute("SELECT raw_text FROM xstage_lyric_drafts").fetchone()[0]
         self.assertIn("ทดสอบเนื้อร้อง",raw)
@@ -459,6 +462,35 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(lines[1][0]["text"],"Next")
         # Each cursor position is 1/48 second at 120 BPM and division=480.
         self.assertAlmostEqual(lines[1][0]["start_time"],7/48,places=3)
+
+    def test_recovery_does_not_attach_lyrics_to_changed_media(self):
+        from unittest.mock import patch
+        song=self.put("NCN/Song/0/00809.mid",midi())
+        plus.import_folder(self.workspace,self.src)
+        self.put("NCN/Lyrics/0/00809.lyr",
+                 "เพลง\nศิลปิน\nC\n\nNick\n".encode("cp874"))
+        self.put("NCN/Cursor/0/00809.cur",struct.pack("<5H",0,1,2,3,4))
+        raw=bytearray(song.read_bytes())
+        raw[-5]=raw[-5]^1
+        song.write_bytes(bytes(raw))
+        with patch.object(plus,"digest",side_effect=AssertionError("No media SHA in recovery")):
+            repair=plus.recover_existing_lyrics(self.workspace)
+        self.assertEqual(repair["recovered_ready"],0)
+        self.assertEqual(repair["changed_sources"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],0)
+
+    def test_recovery_is_not_an_extra_lyrics_version_on_rerun(self):
+        self.put("NCN/Song/0/00552.mid",midi())
+        plus.import_folder(self.workspace,self.src)
+        self.put("NCN/Lyrics/0/00552.lyr",
+                 "ชื่อเพลง\nศิลปิน\nC\n\nNick\n".encode("cp874"))
+        self.put("NCN/Cursor/0/00552.cur",struct.pack("<5H",0,1,2,3,4))
+        first=plus.recover_existing_lyrics(self.workspace)
+        self.assertEqual(first["recovered_ready"],1)
+        before=plus.stats(self.workspace)["lyrics_versions"]
+        second=plus.recover_existing_lyrics(self.workspace)
+        self.assertEqual(second["total"],0)
+        self.assertEqual(plus.stats(self.workspace)["lyrics_versions"],before)
 
     def test_missing_lyrics_not_claimed_as_karaoke(self):
         self.put("no-lyrics.mp3",b"audio"*200)
