@@ -474,3 +474,41 @@ def duplicate_page(root, target="pc", offset=0, limit=50):
     return {"total": total, "offset": offset,
             "items": [{"path": a, "status": b, "reason": c, "sha256": d}
                       for a, b, c, d in items]}
+
+
+def reconcile_duplicate_actions(registry_root, source_root, operated_paths, *,
+                                target="pc", operation="move"):
+    """Update review indexes AFTER the verified file move/recycle succeeds.
+
+    This does not guess from song numbers or delete historical import events.
+    Paths must be within the exact approved source library and must no longer
+    exist at their old location; other machines' records are left untouched.
+    """
+    if target not in ("pc", "drive") or operation not in ("move", "recycle"):
+        raise ValueError("สถานะการจัดการรายการซ้ำไม่ถูกต้อง")
+    source = Path(source_root).expanduser().resolve()
+    root = Path(registry_root).expanduser().resolve()
+    if not source.is_dir() or source.is_symlink() or not root.is_dir() or root.is_symlink():
+        return 0
+    resolved_paths = set()
+    for raw in operated_paths:
+        candidate = Path(raw).expanduser().resolve()
+        if candidate.is_relative_to(source) and candidate != source and not candidate.exists():
+            resolved_paths.add(candidate.relative_to(source).as_posix())
+    if not resolved_paths:
+        return 0
+    with closing(connect(root)) as db:
+        modified = 0
+        for rel in sorted(resolved_paths):
+            cur = db.execute("""UPDATE duplicate_review SET
+                status=?,detail=?,updated_at=? WHERE source_path=? AND target=?
+                AND status IN ('duplicate','conflict')""",
+                ("resolved_" + operation, "ไฟล์เดิมได้รับการย้าย/ลบหลังตรวจไฟล์และยืนยัน",
+                 time.time(), rel, target))
+            modified += cur.rowcount
+            if root == source:
+                # Keep import_events as an immutable audit trail. The source
+                # file is no longer available in this bundle.
+                db.execute("DELETE FROM entries WHERE path=?", (rel,))
+        db.commit()
+        return modified
