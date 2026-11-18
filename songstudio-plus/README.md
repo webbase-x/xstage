@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.1
+# X-Stage Song Studio Plus — Technical Preview v0.1.2
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
