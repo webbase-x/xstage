@@ -95,6 +95,12 @@ jobs:
           "SONGSTUDIO_READY_DIR=X-Stage-Song-Studio-PC-Ready-$suffix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "SONGSTUDIO_READY_TAG=song-studio-pc-ready-$suffix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Using Ready package $suffix from build script"
+      - name: Verify Song Studio release identity before packaging
+        shell: pwsh
+        run: |
+          python scripts/verify_songstudio_version_contract.py
+          if ($LASTEXITCODE -ne 0) { throw "Song Studio Ready version contract mismatch" }
+
       - name: Prepare app icon renderer (build runner only)
         shell: powershell
         run: |
