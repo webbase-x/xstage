@@ -684,3 +684,86 @@ def inspect_xfile(path,full_verify=False):
         return {"version":version,"media_sha256":media_hash.hex(),
                 "metadata_bytes":metadata_length,"media_bytes":media_length,
                 "verified_media":bool(full_verify)}
+
+
+def decode_metadata(payload):
+    """Read the documented Plus binary lyric records without a JSON sidecar.
+
+    This method is suitable as the portable reference decoder for future
+    Windows/Web/Android players; all offsets and counts are bounds checked.
+    """
+    from math import isfinite
+    raw=memoryview(payload)
+    cursor=0
+    def take(n):
+        nonlocal cursor
+        if n<0 or n>len(raw)-cursor:
+            raise ValueError("โครงสร้าง metadata ภายใน X-Stage ไม่ครบ")
+        block=raw[cursor:cursor+n]
+        cursor+=n
+        return block
+    def scalar(fmt):
+        size=struct.calcsize(fmt)
+        return struct.unpack(fmt,take(size))[0]
+    def read_text():
+        length=scalar("<I")
+        if length>1024*1024:
+            raise ValueError("ข้อมูลข้อความ XMID ยาวเกินกำหนด")
+        return bytes(take(length)).decode("utf-8","strict")
+    song_id,code,version_id,title,artist,status=(read_text() for _ in range(6))
+    line_count=scalar("<I")
+    if line_count>100000:
+        raise ValueError("จำนวนบรรทัด XMID เกินกำหนด")
+    lines=[]
+    for _ in range(line_count):
+        start,end=struct.unpack("<dd",take(16))
+        lyric=read_text()
+        timing=read_text()
+        if not all(isfinite(v) for v in (start,end)) or not 0<=start<end:
+            raise ValueError("เวลาบรรทัด XMID ไม่ถูกต้อง")
+        cue_count=scalar("<I")
+        if cue_count>100000:
+            raise ValueError("จำนวนจุดปาดสีเกินกำหนด")
+        cues=[]
+        for _ in range(cue_count):
+            at,duration=struct.unpack("<dd",take(16))
+            glyph=read_text()
+            if not all(isfinite(v) for v in (at,duration)) or not start-.001<=at<=end+.001 or duration<0:
+                raise ValueError("เวลาปาดสี XMID ไม่ถูกต้อง")
+            cues.append({"startTime":at,"duration":duration,"text":glyph})
+        if any(a["startTime"]>b["startTime"] for a,b in zip(cues,cues[1:])):
+            raise ValueError("ตำแหน่งปาดสี XMID ย้อนกลับ")
+        lines.append({"text":lyric,"startTime":start,"endTime":end,
+                      "timingStatus":timing,"cues":cues})
+    if cursor!=len(raw):
+        raise ValueError("พบข้อมูล XMID เกินจากโครงสร้างที่กำหนด")
+    return {"songId":song_id,"code":code,"lyricsVersionId":version_id,
+            "title":title,"artist":artist,"timingStatus":status,"lines":lines}
+
+def read_xfile(path,verify_media=False):
+    """Return metadata and offset without materializing the media payload."""
+    p=Path(path)
+    with p.open("rb") as source:
+        block=source.read(HEADER.size)
+        if len(block)!=HEADER.size:
+            raise ValueError("ไฟล์ X-Stage ไม่ครบส่วนหัว")
+        magic,version,metadata_length,media_length,media_sha,meta_sha=HEADER.unpack(block)
+        if magic!=MAGIC or version!=FORMAT_VERSION:
+            raise ValueError("รูปแบบ X-Stage ไม่รองรับ")
+        if metadata_length>32*1024*1024 or media_length>SIZE_LIMIT:
+            raise ValueError("ส่วนข้อมูลใหญ่เกินขอบเขต")
+        if p.stat().st_size!=HEADER.size+metadata_length+media_length:
+            raise ValueError("ขนาดไฟล์จริงไม่ตรงกับส่วนหัว")
+        payload=source.read(metadata_length)
+        if hashlib.sha256(payload).digest()!=meta_sha:
+            raise ValueError("ข้อมูลเนื้อร้องใน XMID ถูกเปลี่ยนแปลง")
+        lyrics=decode_metadata(payload)
+        if verify_media:
+            h=hashlib.sha256()
+            for chunk in iter(lambda:source.read(1024*1024),b""):
+                h.update(chunk)
+            if h.digest()!=media_sha:
+                raise ValueError("สื่อของไฟล์ XMID ไม่ตรงกับ SHA-256")
+        return {**lyrics,"mediaOffset":HEADER.size+metadata_length,
+                "mediaBytes":media_length,"mediaSha256":media_sha.hex(),
+                "verifiedMedia":bool(verify_media)}
