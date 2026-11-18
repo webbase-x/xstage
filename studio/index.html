@@ -462,7 +462,7 @@
 
         <section id="tab-lyric-head-tail" class="tab">
           <div class="section-top"><div><div class="eyebrow">SMART BATCH LYRICS CORRECTION</div>
-            <h2>แก้ไข Lyrics JSON · หัว 2 บรรทัด / ท้าย 2 บรรทัด</h2>
+            <h2>แก้ไข Lyrics JSON · ค้นคำและแทนที่ทั้งบรรทัดแบบกลุ่ม</h2>
             <p>จัดกลุ่มข้อความซ้ำหลักหมื่นเพลง · ยึดเวลาเดิมของอักษรที่ไม่เปลี่ยน · ข้ามไฟล์ผิดปกติพร้อมรายงาน · สำรองและ Undo ทั้งชุด · ไม่แก้ MID/LYR/CUR ต้นฉบับ</p></div>
             <span class="chip">LOCAL LIBRARY ONLY</span>
           </div>
@@ -492,14 +492,14 @@
               <button type="button" class="button ghost" data-lyric-position="second" aria-pressed="false">บรรทัดที่ 2</button>
               <button type="button" class="button ghost" data-lyric-position="penultimate" aria-pressed="false">รองสุดท้าย</button>
               <button type="button" class="button ghost" data-lyric-position="last" aria-pressed="false">สุดท้าย</button>
-              <button type="button" class="button ghost" data-lyric-position="all" aria-pressed="false">ทุกบรรทัด (ตามคำค้น)</button>
+              <button type="button" class="button ghost" data-lyric-position="all" aria-pressed="false">ทุกบรรทัด (ค้นคำ เช่น Nick)</button>
             </div>
             <div class="lyric-group-filter">
               <label for="lyric-group-search">ค้นหาเพื่อแทนที่ · ค้นหาวลีในบรรทัดที่ต้องการแก้</label>
-              <input id="lyric-group-search" type="search" class="field" placeholder="เช่น รัก เธอ · ต้องพบคำเรียงตามนี้ในบรรทัดเดียว" disabled>
+              <input id="lyric-group-search" type="search" class="field" placeholder="เช่น Nick · ค้นทุกบรรทัดและจัดกลุ่มตามข้อความเต็ม" disabled>
               <label class="lyric-group-repeats"><input id="lyric-group-repeats" type="checkbox" checked disabled> เฉพาะกลุ่มที่ซ้ำในคลังตั้งแต่ 2 เพลง</label>
             </div>
-            <p class="hint">ค้นหาตามลำดับคำที่พิมพ์ โดยทุกคำต้องเรียงติดกันในบรรทัดเดียวกัน (ยืดหยุ่นช่องว่าง) · แสดงเฉพาะกลุ่มข้อความที่ตรงคำค้น · เมื่อยืนยันจะแทนที่ทั้งบรรทัดที่เลือก ไม่แก้บรรทัดอื่น</p>
+            <p class="hint">กด “ทุกบรรทัด” แล้วค้น Nick: “.....nick.....” 10 เพลง, “Nick ......” 5 เพลง, “By nick >>>” 20 เพลง จะแสดงเป็น 3 กลุ่มแยกกัน (ตัวเลขเป็นเพียงตัวอย่าง) · เลือกหลายกลุ่มแล้วแทนที่ด้วยข้อความเดียวกันทั้งบรรทัด ไม่ใช่แทนเฉพาะคำ Nick · เวลาปาดสีปรับแยกตามเพลงและไม่แก้เวลาบรรทัดอื่น</p>
             <div class="lyric-group-actions">
               <button id="lyric-group-select-page" class="button ghost" type="button" disabled>☑ เลือกทั้งหมดในหน้านี้</button>
               <button id="lyric-group-select-matching" class="button ghost" type="button" disabled>☑ เลือกตามตัวกรอง (สูงสุด 1,000)</button>
@@ -532,7 +532,7 @@
             <div class="lyric-group-actions">
               <button id="lyric-group-apply" type="button" class="button primary" disabled>✓ ตรวจแล้ว แทนที่ทุกกลุ่มที่เลือก</button>
             </div>
-            <p id="lyric-group-preview-status" class="hint">หลังแก้ไขจะบันทึก Lyrics JSON พร้อมเวลาไฮไลต์ทีละอักษรที่ประมาณจากช่วงเดิม · ไม่แก้ MIDI และไม่อัปโหลด Google Drive อัตโนมัติ</p>
+            <p id="lyric-group-preview-status" class="hint">Timing Lock รายเพลง: รักษาเวลาเริ่ม/จบของบรรทัดและเวลาของบรรทัดอื่นทั้งหมด · การแทนข้อความยาวต่างกันจะประมาณจังหวะปาดสีใหม่เฉพาะในบรรทัดนั้นจากเวลาเดิมของเพลงนั้น · ต้องพรีวิวตรวจจังหวะก่อนส่งออกเป็นเพลงจริง · ไม่แก้ MIDI และไม่อัปโหลด Drive อัตโนมัติ</p>
           </article>
         </section>
 
