@@ -206,6 +206,8 @@ def parse_lrc(path):
         if end<=line["startTime"]:
             raise ValueError("เวลา LRC ย้อนกลับหรือทับซ้อนกัน")
         line["endTime"]=end
+        if i+1==len(lines):
+            line["endTimeEstimated"]=True
     return {"lines":lines, "metadata":{"timingComplete":True},
             "sourceFormat":"LRC"}
 
@@ -245,7 +247,18 @@ def valid_lines(doc):
             cues.append((str(cue["text"]),at,duration))
         if any(cues[i][1]>cues[i+1][1] for i in range(len(cues)-1)):
             raise ValueError("เวลาปาดสีเรียงย้อนหลัง")
-        result.append((text,start,end,cues,"original" if cues else "estimated"))
+        original_cues=bool(cues)
+        if not cues:
+            # A plain timed LRC has line boundaries but not measured
+            # syllable cues. Interpolate a visible sweep, explicitly marked
+            # as ESTIMATED; never pass it off as measured from audio or CUR.
+            units=glyphs(text)
+            positions=[start+(end-start)*i/len(units) for i in range(len(units))]
+            cues=[(glyph,round(at,6),
+                   round((positions[i+1] if i+1<len(positions) else end)-at,6))
+                  for i,(glyph,at) in enumerate(zip(units,positions))]
+        status="original" if original_cues and not line.get("endTimeEstimated") else "estimated"
+        result.append((text,start,end,cues,status))
     return result
 
 def content_sha(lines):
