@@ -93,17 +93,27 @@ _file_names.cache_clear = _file_names_at_stamp.cache_clear
 
 
 def _find_companion_file(folder: Path, code: str, suffix: str) -> Path | None:
-    """Prefer O(1) exact-code paths; never trust a potentially stale listing.
+    """Resolve by exact code and preserve original filename casing on Windows.
 
-    On Windows, filename lookup is case-insensitive even when the source NCN
-    uses upper-case .LYR/.CUR. Newly copied companions are found immediately.
+    The directory cache avoids repeated scans in huge NCN collections. If
+    companion files are copied after a prior lookup, an O(1) direct probe
+    detects them and a fresh listing returns the spelling stored on disk.
     """
+    key = (code + suffix).casefold()
+    cached = _file_names(folder).get(key)
+    if cached is not None and cached.is_file() and not cached.is_symlink():
+        return cached
     for extension in (suffix, suffix.upper()):
         candidate = folder / (code + extension)
-        if candidate.is_file() and not candidate.is_symlink():
-            return candidate
-    candidate = _file_names(folder).get((code + suffix).casefold())
-    if candidate is not None and candidate.is_file() and not candidate.is_symlink():
+        if not candidate.is_file() or candidate.is_symlink():
+            continue
+        try:
+            for item in folder.iterdir():
+                if (item.name.casefold() == key and item.is_file()
+                        and not item.is_symlink()):
+                    return item
+        except OSError:
+            pass
         return candidate
     return None
 
