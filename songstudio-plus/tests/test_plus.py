@@ -256,6 +256,18 @@ class PlusTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"เนื้อร้อง"):
             plus.build_song(self.workspace,info["id"])
 
+    def test_mirrored_ncn_folder_aliases_are_recognized(self):
+        self.put("Collection/Songs/0/00321.mid",midi())
+        self.put("Collection/Lyric/0/00321.lyr",
+                 "เพลงหลายโฟลเดอร์\nศิลปินทดสอบ\nC\n\nNick\n".encode("cp874"))
+        self.put("Collection/CUR/0/00321.CUR",
+                 struct.pack("<5H",0,1,2,3,4))
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["failures"],0)
+        self.assertEqual(result["lyrics_new"],1)
+        self.assertEqual(plus.songs(self.workspace)[0]["title"],"เพลงหลายโฟลเดอร์")
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
+
     def test_reimport_same_lyrics_skips_sidecar_parsing(self):
         from unittest.mock import patch
         song=self.put("NCN/Song/0/00105.mid",midi())
