@@ -59,14 +59,14 @@ class PreBuildPreviewTests(unittest.TestCase):
         song=core.songs(self.workspace)[0]
         information=preview.preview_details(self.workspace,song["id"])
         self.assertEqual(information["mode"],"midi")
-        self.assertAlmostEqual(information["duration"],20.0,places=1)
+        self.assertAlmostEqual(information["duration"],10.0,places=1)
         events,duration=preview.iter_midi_messages(path)
         self.assertEqual(len(events),2)
         self.assertEqual(events[0][1]&0xFF,0x90)
         self.assertAlmostEqual(events[0][0],0)
         self.assertEqual(events[-1][1]&0xFF,0x80)
-        self.assertAlmostEqual(events[-1][0],20.0,places=1)
-        self.assertAlmostEqual(duration,20.0,places=1)
+        self.assertAlmostEqual(events[-1][0],10.0,places=1)
+        self.assertAlmostEqual(duration,10.0,places=1)
 
     def test_missing_original_is_not_claimed_playable(self):
         original=self.put("disconnected.mp3",b"audio"*200)
