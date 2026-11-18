@@ -78,6 +78,13 @@ jobs:
           fi
       - name: Build Android APK
         run: gradle -p apps-portal clean assembleDebug assembleRelease --stacktrace
+      - name: Verify test APK before uploading
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=apps-portal/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
+          sha256sum "$apk" >> "$GITHUB_STEP_SUMMARY"
       - name: Publish test APK as CI artifact
         uses: actions/upload-artifact@v4
         with:
