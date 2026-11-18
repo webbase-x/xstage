@@ -382,7 +382,7 @@ def assign_target_codes(records, destination_rows):
     for original in destination_rows:
         reg = original.get("sourceRegistry") or {}
         key = (reg.get("bundleId"), reg.get("mediaSha256"),
-               (original.get("audio") or {}).get("path"))
+               str((original.get("audio") or {}).get("path") or "").casefold())
         if all(key):
             destination_by_source.setdefault(key, []).append(original)
     for original in records:
@@ -391,7 +391,7 @@ def assign_target_codes(records, destination_rows):
         prior = destination_by_id.get(str(row.get("webSongId") or ""))
         reg = row.get("sourceRegistry") or {}
         source_key = (reg.get("bundleId"), reg.get("mediaSha256"),
-                      (row.get("audio") or {}).get("path"))
+                      str((row.get("audio") or {}).get("path") or "").casefold())
         source_matches = destination_by_source.get(source_key, []) if all(source_key) else []
         if prior is None and len(source_matches) == 1:
             former = source_matches[0]
