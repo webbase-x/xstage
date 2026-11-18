@@ -2670,13 +2670,13 @@
          state==='success'?'✓ สร้าง Lyrics JSON เสร็จแล้ว':
          state==='cancelled'?'หยุดงานแล้ว · ผลลัพธ์ที่สำเร็จบันทึกใน Catalog':
          'สร้าง Lyrics JSON มีข้อผิดพลาด')+
-        '\\nตรวจพบไฟล์ '+fmtNum(job.scannedFiles||0)+
+        '\nตรวจพบไฟล์ '+fmtNum(job.scannedFiles||0)+
         ' · พบชุดเพลง '+fmtNum(found)+
         ' · ตรวจแล้ว '+fmtNum(done)+(total?' / '+fmtNum(total):'')+
         ' · สร้าง '+fmtNum(created)+' · ข้ามซ้ำ '+fmtNum(skipped)+
         ' · ผิดพลาด '+fmtNum(errors)+' · ใช้ผลเดิม '+fmtNum(resumed)+
         ' · ERR ค้างทบทวน '+fmtNum(deferred)+
-        '\\n'+(job.result?.message||job.detail||job.stage||'')+
+        '\n'+(job.result?.message||job.detail||job.stage||'')+
         (issueList.length?'\\nสาเหตุที่ต้องตรวจสอบ:\\n'+issueList.join('\\n'):'');
     }
     if(job.kind==='xsk-stream'){
