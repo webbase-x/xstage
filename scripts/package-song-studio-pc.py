@@ -32,6 +32,7 @@ FILES = {
 "songstudio-pc/xsk_package.py": "xsk_package.py",
     "songstudio-pc/xsk_stream.py": "xsk_stream.py",
     "songstudio-pc/xsk_review.py": "xsk_review.py",
+    "songstudio-pc/song_registry.py": "song_registry.py",
     "songstudio-pc/xsk_keys.py": "xsk_keys.py",
     "songstudio-pc/pro_license.py": "pro_license.py",
     "songstudio-pc/pc_ready_updates.py": "pc_ready_updates.py",
