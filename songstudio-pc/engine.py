@@ -1777,6 +1777,11 @@ def build_xsk(rows, mode, options, *, progressive=False):
                 update(f"บรรจุ XSK2 ไม่เข้ารหัส รายการ {index:,}" +
                        (f"/{len(rows):,}" if not progressive else "") + f": {title}")
                 package.seal(source, doc, code, title, artist, target=output)
+                # The portable source registry is separate from the Karaoke DB.
+                # This entry is reusable on another computer without re-scanning MIDI.
+                verified_xsk = package.open_package(output)
+                _module("song_registry.py", "xstage_song_registry").register_xsk(
+                    root, output, verified_xsk)
                 review.store_verified(review_db, output, source_digest, code)
                 review.record(review_db, source, source_root, signature_value=stamp,
                               status="completed", digest=source_digest,
