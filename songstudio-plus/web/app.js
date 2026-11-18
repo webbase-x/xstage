@@ -49,7 +49,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Plus บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","lyrics-find","media-attach","build-start","source-browse","lrc-browse"]){
+    for(const id of ["import-start","recover-lyrics","lyrics-find","media-attach","build-start","source-browse","lrc-browse"]){
       $(id).disabled=!enabled;
     }
   }
@@ -281,7 +281,8 @@
   }
   async function startJob(kind,payload){
     try{
-      const result=await api(kind==="import"?"/api/import":"/api/build",payload);
+      const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":"/api/build";
+      const result=await api(endpoint,payload);
       state.activeJob=result.job;
       toast("เริ่มงานแล้ว ระบบประมวลผลต่อเนื่อง");
       await refreshJobs();
@@ -297,11 +298,12 @@
       $("cancel-job").hidden=!state.activeJob;
       $("build-start").disabled=!state.ready||!state.selectedSongs.size||Boolean(state.activeJob);
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
+      $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
       if(!job)return;
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
       text("activity-title",job.kind==="import"?"นำเข้าและตรวจ SHA-256":
-          "สร้างไฟล์ X-Stage Plus");
+          job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":"สร้างไฟล์ X-Stage Plus");
       text("activity-subtitle",job.message||"");
       const p=job.progress||{};
       text("progress-detail",job.kind==="import"?
@@ -311,8 +313,13 @@
           " · เก็บเนื้อร้องรอเวลา "+number(p.draft_lyrics)+
           " · ผิดพลาดจริง "+number(p.failures)+
           " · Hash เดิม "+number(p.hash_cache_hits)+" · "+number(p.files_per_second)+" ไฟล์/วินาที":
+          job.kind==="recover"?
+          "กู้คืนพร้อมใช้ "+number(p.recovered_ready)+" · CUR ไม่ครบ "+number(p.partial_lyrics)+
+          " · LYR รอเวลา "+number(p.draft_lyrics)+" · ไม่พบต้นฉบับ "+number(p.missing_sources)+
+          " · อ่านผิดพลาด "+number(p.failures):
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
-      text("progress-count",number(p.files_seen||p.done||0)+" รายการ");
+      text("progress-count",number(p.processed||p.files_seen||p.done||0)+
+        (job.kind==="recover"?" / "+number(p.total):"")+" รายการ");
       const progressBar=$("progress-fill");
       progressBar.classList.toggle("indeterminate",job.status==="running");
       progressBar.style.width=job.status==="completed"?"100%":job.status==="running"?"32%":"0%";
@@ -322,7 +329,7 @@
         if(job.status==="completed"||job.status==="failed"){
           await refreshStatus();
           if(state.view!=="import")await refreshSongs();
-          toast(job.status==="completed"?"งาน "+(job.kind==="import"?"นำเข้า":"สร้างไฟล์")+" เสร็จแล้ว":
+          toast(job.status==="completed"?"งาน "+(job.kind==="import"?"นำเข้า":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":"สร้างไฟล์")+" เสร็จแล้ว":
             job.error||"งานล้มเหลว",job.status==="failed");
         }
       }
@@ -373,6 +380,13 @@
       const folder=$("source-folder").value.trim();
       if(!folder)return toast("กรุณาระบุโฟลเดอร์ต้นทาง",true);
       void startJob("import",{folder});
+    });
+    $("recover-lyrics").addEventListener("click",async()=>{
+      if(!await confirmTask("ตรวจซ่อมเนื้อร้องที่ลงทะเบียนไว้",
+        "ตรวจเฉพาะเพลงที่ยังขาดเวลาปาดสีใน SQLite จากพาธต้นฉบับเดิม\n"+
+        "ไม่คำนวณ SHA-256 เพลงใหม่ ไม่ลบหรือคัดลอกไฟล์ต้นฉบับ\n"+
+        "รักษาเนื้อร้องสมบูรณ์และเวอร์ชันที่คุณแก้ไขเองไว้"))return;
+      void startJob("recover",{});
     });
     $("lyrics-find").addEventListener("click",()=>void searchGroups());
     $("lyrics-search").addEventListener("keydown",event=>{
