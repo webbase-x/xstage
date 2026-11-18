@@ -526,8 +526,10 @@ def import_folder(workspace,source,progress=None,cancel=None):
                                     (str(meta["title"])[:255],
                                      str(meta.get("artist") or "")[:255],song_id))
                             if comps.get(".lyr") and partial:
+                                # Partial timed lines and untimed remainder
+                                # belong to the SAME song; do not double
+                                # count them as two separate problem songs.
                                 save_draft(db,song,comps[".lyr"],"CUR timing incomplete")
-                                totals["draft_lyrics"]+=1
                             elif not partial:
                                 db.execute("DELETE FROM xstage_lyric_drafts WHERE song_id=?",(song_id,))
                         elif comps.get(".lyr"):
