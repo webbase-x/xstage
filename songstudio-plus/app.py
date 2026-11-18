@@ -20,12 +20,14 @@ from pathlib import Path
 
 import plus_core as core
 import risk_audit as risks
+import preview_player as preview
 
 class State:
     def __init__(self,workspace):
         self.workspace=Path(workspace).expanduser().resolve()
         core.init(self.workspace)
         risks.init(self.workspace)
+        self.midi_preview=preview.MidiPreview()
         self.jobs={}
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
@@ -107,6 +109,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             self.handle_get()
+        except PermissionError as e:
+            self.send_json(403,{"error":str(e)})
         except (ValueError,OSError,KeyError,TypeError) as e:
             self.send_json(400,{"error":str(e)})
         except Exception:
@@ -132,6 +136,15 @@ class Handler(BaseHTTPRequestHandler):
                 int(q.get("limit",[100])[0]),int(q.get("offset",[0])[0])));return
         if path=="/api/swipe-history":
             self.send_json(200,risks.history(self.state.workspace));return
+        if path=="/api/preview":
+            self.send_json(200,preview.preview_details(
+                self.state.workspace,q.get("song_id",[""])[0]));return
+        if path=="/api/preview/midi/status":
+            self.send_json(200,self.state.midi_preview.state());return
+        if path=="/api/preview/media":
+            if q.get("token",[""])[0]!=self.state.token:
+                raise PermissionError("ไม่มีสิทธิ์อ่านไฟล์เพลง")
+            self.stream_preview_media(q.get("song_id",[""])[0]);return
         if path=="/api/songs":
             self.send_json(200,{"rows":core.songs(self.state.workspace,
                 q.get("q",[""])[0],q.get("limit",[80])[0],q.get("offset",[0])[0])});return
@@ -178,6 +191,74 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(404,{"error":"ไม่พบหน้าที่เรียก"})
 
+    def stream_preview_media(self,song_id):
+        """Protected source-media GET with proper HTTP Range for HTML seek.
+
+        Always resolve from the registered SQLite media ID, never a user-supplied
+        filename; the original remains untouched and no media copy is created.
+        """
+        info,source=preview.source_info(self.state.workspace,song_id)
+        ext=source.suffix.lower()
+        if ext not in preview.AUDIO_EXT:
+            raise ValueError("ไฟล์นี้ต้องใช้ MIDI Synthesizer ไม่ใช่ HTML Media")
+        types={
+            ".mp3":"audio/mpeg",".m4a":"audio/mp4",".wav":"audio/wav",
+            ".flac":"audio/flac",".mp4":"video/mp4",
+            ".webm":"video/webm",".mkv":"video/x-matroska",
+            ".mov":"video/quicktime"
+        }
+        size=source.stat().st_size
+        if size<=0:raise ValueError("ไฟล์เพลงต้นฉบับว่าง")
+        incoming=self.headers.get("Range")
+        status=200
+        start=0
+        stop=size-1
+        if incoming:
+            import re
+            matched=re.fullmatch(r"bytes=(\d*)-(\d*)",incoming.strip())
+            if not matched or not any(matched.groups()):
+                self.send_response(416)
+                self.send_header("Content-Range",f"bytes */{size}")
+                self.send_header("Content-Length","0")
+                self.end_headers()
+                return
+            first,last=matched.groups()
+            if not first:
+                suffix=min(size,int(last))
+                start=size-suffix
+            else:
+                start=int(first)
+                if last:stop=min(stop,int(last))
+            if start>stop or start>=size:
+                self.send_response(416)
+                self.send_header("Content-Range",f"bytes */{size}")
+                self.send_header("Content-Length","0")
+                self.end_headers()
+                return
+            status=206
+        self.send_response(status)
+        self.send_header("Content-Type",types[ext])
+        self.send_header("Accept-Ranges","bytes")
+        self.send_header("Cache-Control","no-store")
+        self.send_header("Cross-Origin-Resource-Policy","same-origin")
+        self.send_header("X-Content-Type-Options","nosniff")
+        if status==206:
+            self.send_header("Content-Range",f"bytes {start}-{stop}/{size}")
+        self.send_header("Content-Length",str(stop-start+1))
+        self.end_headers()
+        try:
+            with source.open("rb") as media:
+                media.seek(start)
+                remaining=stop-start+1
+                while remaining>0:
+                    block=media.read(min(1024*1024,remaining))
+                    if not block:break
+                    self.wfile.write(block)
+                    remaining-=len(block)
+        except (BrokenPipeError,ConnectionResetError):
+            # HTML media readers cancel older Range requests while seeking.
+            return
+
     def static_file(self,name):
         if name not in ("index.html","app.js","style.css","icon.svg"):
             self.send_json(404,{"error":"ไม่พบไฟล์"});return
@@ -218,6 +299,18 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/swipe/open-source":
                 result=risks.open_original(self.state.workspace,
                     body.get("song_id",""),body.get("version_id",""))
+            elif path=="/api/preview/midi/play":
+                result=self.state.midi_preview.play(
+                    self.state.workspace,body.get("song_id",""),body.get("seek",0))
+            elif path=="/api/preview/midi/pause":
+                result=self.state.midi_preview.pause()
+            elif path=="/api/preview/midi/stop":
+                self.state.midi_preview.stop()
+                result={"stopped":True}
+            elif path=="/api/preview/review":
+                result=risks.review(self.state.workspace,
+                    body.get("song_id",""),body.get("version_id",""),
+                    body.get("action",""),body.get("note",""))
             elif path=="/api/edit/plan":
                 result=core.plan_edit(self.state.workspace,body.get("q",""),body.get("keys",[]))
             elif path=="/api/edit/apply":
