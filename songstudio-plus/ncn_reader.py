@@ -434,7 +434,26 @@ def ncn_document(companions):
     if not positions:
         raise ValueError("NCN .CUR ไม่มีตำแหน่งเวลาที่อ่านได้")
 
+    # Converted NCN libraries sometimes store UTF-8 LYR while keeping
+    # historical CUR offsets indexed by CP874 bytes. Decode the text and
+    # restore the original CP874 byte granularity ONLY when the CUR entry
+    # count supports it; never silently synthesize missing CUR positions.
     body = list(rows[4:])
+    try:
+        utf8_text=source_bytes.decode("utf-8-sig")
+        if any(ord(char)>127 for char in utf8_text):
+            utf8_rows=utf8_text.replace("\r\n","\n").replace("\r","\n").split("\n")
+            cp874_body=[line.encode("cp874") for line in utf8_rows[4:]]
+            def count_positions(items):
+                return sum(1+len(item) for item in items if item.strip())
+            original_total=count_positions(body)
+            legacy_total=count_positions(cp874_body)
+            if legacy_total!=original_total and (
+                 abs(len(positions)-legacy_total)<=abs(len(positions)-original_total)):
+                body=cp874_body
+                warnings.append("UTF-8 Lyrics ใช้ CUR ตามจำนวนไบต์ CP874 ดั้งเดิม")
+    except (UnicodeError,ValueError):
+        pass
     while body and not body[-1].strip(b" \x00\x1a"):
         body.pop()
     removed_footers = 0
