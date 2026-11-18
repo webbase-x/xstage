@@ -1,0 +1,84 @@
+name: X-Stage Song Studio Plus · Tests and Windows Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "songstudio-plus/**"
+      - ".github/workflows/test-songstudio-plus.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xstage-songstudio-plus-main
+  cancel-in-progress: true
+
+jobs:
+  core-and-web:
+    name: SQLite, NCN, X-media and UI checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile standalone app
+        run: python -m compileall -q songstudio-plus
+      - name: Test SHA-256, NCN, versioned lyrics, undo and embedded file
+        run: python -m unittest discover -s songstudio-plus/tests -p "test_*.py" -v
+      - name: JavaScript syntax check
+        run: node --check songstudio-plus/web/app.js
+      - name: Static app and security surface contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0,"songstudio-plus")
+          import app
+          assert app.Handler.server_version.startswith("XStageSongStudioPlus")
+          page=Path("songstudio-plus/web/index.html").read_text(encoding="utf-8")
+          for token in ['data-view="import"','data-view="lyrics"','data-view="media"','data-view="build"','data-view="library"']:
+              assert token in page,token
+          assert "Lyrics JSON" not in page
+          assert ".xsk" not in page.lower()
+          print("PASS: new standalone five-menu app contract")
+          PY
+
+  windows-preview:
+    name: Build portable Windows EXE (preview only)
+    needs: core-and-web
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install isolated EXE builder
+        run: python -m pip install "pyinstaller>=6,<7"
+      - name: Build standalone EXE with embedded web frontend
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "X-Stage-Song-Studio-Plus-v0.1.0-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" songstudio-plus/app.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
+          if (!(Test-Path "dist/X-Stage-Song-Studio-Plus-v0.1.0-preview.exe")) { throw "EXE not produced" }
+      - name: Verify EXE hash and package preview
+        shell: pwsh
+        run: |
+          $exe="dist/X-Stage-Song-Studio-Plus-v0.1.0-preview.exe"
+          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "X-Stage Song Studio Plus v0.1.0 Technical Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
+          "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
+          "Local-only SQLite Engine. XMID/X-media player integration pending. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
+          Write-Host "EXE SHA-256 $hash"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Song-Studio-Plus-v0.1.0-Windows-Preview
+          path: |
+            dist/X-Stage-Song-Studio-Plus-v0.1.0-preview.exe
+            dist/README-Preview.txt
+          retention-days: 14
+          if-no-files-found: error
