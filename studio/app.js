@@ -3727,7 +3727,58 @@
   $('dup-move').addEventListener('click', () => {void duplicateApply('move');});
   $('dup-recycle').addEventListener('click', () => {void duplicateApply('recycle');});
 
-  async function startJsonPro() {
+  let jsonReviewOffset=0, jsonReviewTotal=0;
+  const JSON_REVIEW_PAGE_SIZE=50;
+  async function loadJsonReview(offset=0) {
+    const body=$('json-pro-review-rows');
+    const source=$('json-pro-source').value.trim();
+    const destination=$('json-pro-destination').value.trim();
+    if(!source || !destination) return message('เลือกต้นทางและปลายทางก่อนทบทวนผล');
+    try {
+      await saveInputs(['json-pro-source','json-pro-destination']);
+      const filter=$('json-pro-review-filter').value;
+      const format=$('json-pro-format').value;
+      $('json-pro-review-summary').textContent='กำลังอ่านประวัติจากคลัง XStageSong เดิม…';
+      const result=await api('/api/json-pro/review?status='+encodeURIComponent(filter)+
+        '&format='+encodeURIComponent(format)+'&offset='+Number(offset));
+      jsonReviewOffset=result.offset||0;
+      jsonReviewTotal=result.total||0;
+      body.replaceChildren();
+      for(const item of result.items||[]) {
+        const row=document.createElement('tr');
+        const name=document.createElement('td');
+        name.textContent=item.name||'ไฟล์';
+        name.title=item.path||'';
+        const status=document.createElement('td');
+        status.textContent=item.status==='error'?'ERR / ผิดพลาด':
+          item.status==='duplicate'?'ข้ามซ้ำ':'สำเร็จ / มีอยู่แล้ว';
+        const reason=document.createElement('td');
+        reason.textContent=item.reason||'บันทึกผลสำเร็จใน Catalog แล้ว';
+        row.append(name,status,reason);
+        body.append(row);
+      }
+      if(!body.children.length) {
+        const row=document.createElement('tr'), cell=document.createElement('td');
+        cell.colSpan=3;cell.className='empty-row';
+        cell.textContent='ยังไม่มีประวัติสำหรับตัวกรองนี้ · เริ่มสร้างต่อจากคลังเดิมเพื่อรวบรวมรายการของรุ่นเก่า';
+        row.append(cell);body.append(row);
+      }
+      $('json-pro-review-summary').textContent=
+        'ประวัติที่บันทึกแล้ว · สำเร็จ/มีอยู่ '+fmtNum(result.counts?.completed||0)+
+        ' · ข้ามซ้ำ '+fmtNum(result.counts?.duplicate||0)+
+        ' · ERR '+fmtNum(result.counts?.error||0)+
+        ' · ไม่ลบหรือแก้เพลงต้นฉบับ';
+      $('json-pro-review-page').textContent=jsonReviewTotal
+        ? fmtNum(jsonReviewOffset+1)+'–'+fmtNum(Math.min(jsonReviewTotal,jsonReviewOffset+JSON_REVIEW_PAGE_SIZE))+
+          ' / '+fmtNum(jsonReviewTotal) : '0 รายการ';
+      $('json-pro-review-prev').disabled=jsonReviewOffset===0;
+      $('json-pro-review-next').disabled=jsonReviewOffset+JSON_REVIEW_PAGE_SIZE>=jsonReviewTotal;
+    } catch(error) {
+      $('json-pro-review-summary').textContent='อ่านประวัติไม่สำเร็จ: '+error.message;
+      message(error.message);
+    }
+  }
+  async function startJsonPro(retryErrorsOnly=false) {
     if(!canLaunch('json-pro-export') || !proEnabled)
       return message('เมนู Lyrics JSON ต้องเปิดใช้ Pro และไม่มีงานแก้ไขคลังเพลงอื่นทำงานอยู่');
     const source=$('json-pro-source').value.trim();
@@ -3743,9 +3794,19 @@
     // by filename code and starts conversion on the first complete song.
     await saveInputs(['json-pro-source','json-pro-destination']);
     await saveInputs(['json-pro-code-style','json-pro-code-length']);
-    $('json-pro-report').textContent=
-      'กำลังส่งงานให้ PC Engine · จะเริ่มค้นหาไฟล์ในงานพื้นหลังทันที ไม่สแกนซ้ำ';
-    const started=await run('json-pro-export',{format,code_style,code_length:String(code_length)});
+    if(retryErrorsOnly) {
+      try {
+        const check=await api('/api/json-pro/review?status=error&format='+
+          encodeURIComponent(format)+'&offset=0');
+        if(!check.counts?.error) return message('ไม่มี ERR ที่บันทึกไว้ · หากเป็นงานจากรุ่นเก่า ให้กด “สร้างต่อจากคลังเดิม” เพื่อรวบรวมรายการก่อน');
+      } catch(error) {return message(error.message);}
+    }
+    $('json-pro-report').textContent=retryErrorsOnly
+      ? 'กำลังส่งงานตรวจซ้ำเฉพาะ ERR ที่บันทึกไว้ · ไม่สแกนเพลงที่สำเร็จแล้ว'
+      : 'กำลังส่งงานสร้างต่อจาก Catalog เดิม · จะไม่สร้างเพลงที่สำเร็จแล้วซ้ำ';
+    const started=retryErrorsOnly
+      ? await run('json-pro-export',{format,code_style,code_length:String(code_length),retry_errors_only:true})
+      : await run('json-pro-export',{format,code_style,code_length:String(code_length)});
     if(!started){
       $('json-pro-report').textContent=
         'PC Engine ไม่รับงาน · ตรวจข้อความด้านบนและงานที่กำลังทำก่อนหน้า';
@@ -3756,6 +3817,11 @@
       'ไม่รอตรวจทุกไฟล์ · ผลลัพธ์แต่ละเพลงตรวจแล้วจึงบันทึก';
   }
   $('json-pro-start').addEventListener('click',()=>{void startJsonPro();});
+  $('json-pro-retry').addEventListener('click',()=>{void startJsonPro(true);});
+  $('json-pro-review-refresh').addEventListener('click',()=>{void loadJsonReview(0);});
+  $('json-pro-review-filter').addEventListener('change',()=>{void loadJsonReview(0);});
+  $('json-pro-review-prev').addEventListener('click',()=>{void loadJsonReview(Math.max(0,jsonReviewOffset-JSON_REVIEW_PAGE_SIZE));});
+  $('json-pro-review-next').addEventListener('click',()=>{void loadJsonReview(jsonReviewOffset+JSON_REVIEW_PAGE_SIZE);});
   // Inspect on "ตกลง" only, not while users are still choosing folders.
   $('upload-inspect').addEventListener('click',()=>{void inspectUploadFolder();});
   $('pc-export-inspect').addEventListener('click',()=>{void inspectPCExport();});
