@@ -565,7 +565,7 @@
         const summary=document.createElement('div');summary.className='lyric-group-example';
         const examples=(group.examples||[]).map(x=>x.code+' '+x.title).join(' · ');
         summary.textContent=group.label+' · '+group.text+' · '+
-          fmtNum(group.count)+' เพลง'+(examples?' · ตัวอย่าง '+examples:'');
+          fmtNum(group.count)+' บรรทัด'+(examples?' · ตัวอย่าง '+examples:'');
         panel.append(summary);
       }
       if(phraseSelected.size>data.length){
@@ -574,8 +574,8 @@
         panel.append(more);
       }
       $('lyric-group-preview-status').textContent=
-        'ค้นหาวลีเรียงตามลำดับภายในบรรทัดที่จะเปลี่ยน · แทนที่ทั้งบรรทัดที่เลือก · '+
-        'สำรองก่อนแก้ · หลังยืนยันรายการที่ยังไม่แก้ยังแสดงอยู่';
+        'แทนที่ทั้งบรรทัดสำหรับทุกกลุ่มที่เลือก · เก็บ Timing แยกตามเพลง · '+
+        'ไม่เปลี่ยนเวลาเริ่ม/จบของบรรทัดและบรรทัดข้างเคียง · สำรองก่อนแก้';
     }catch(error){
       if(seq!==phraseSelectionSeq)return;
       phrasePlan=null;
