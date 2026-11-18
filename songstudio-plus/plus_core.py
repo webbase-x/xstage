@@ -482,7 +482,7 @@ def import_folder(workspace,source,progress=None,cancel=None):
                         cached_lyrics["companion_stamp"]==stamp and
                         cached_lyrics["outcome"] in ("new-lyrics","same-lyrics","no-lyrics") and
                         (has_version or cached_lyrics["outcome"]=="no-lyrics")):
-                    outcome="same-lyrics" if has_version else "no-lyrics"
+                    outcome=("no-lyrics" if cached_lyrics["outcome"]=="no-lyrics" else "same-lyrics")
                 else:
                     try:
                         doc=document_for(path,comps)
@@ -597,7 +597,7 @@ def stats(workspace):
         counts["songs_draft_lyrics"]=db.execute(
             """SELECT COUNT(*) FROM xstage_lyric_drafts d
                WHERE NOT EXISTS (SELECT 1 FROM xstage_lyric_versions v
-                  WHERE v.song_id=d.song_id AND v.is_current=1 AND v.timing_status!='incomplete')"""
+                  WHERE v.song_id=d.song_id AND v.is_current=1)"""
         ).fetchone()[0]
         counts["songs_without_lyrics"]=max(0,counts["songs"]-counts["songs_with_lyrics"])
         counts["songs_estimated_timing"]=db.execute(
@@ -627,9 +627,11 @@ def songs(workspace,query="",limit=80,offset=0):
     term="%"+str(query)[:100].strip()+"%"
     with connect(workspace) as db:
         items=db.execute("""SELECT s.id,s.code,s.title,s.artist,s.original_code,m.extension,
-            m.sha256,v.id AS version_id,v.timing_status,e.output_path
+            m.sha256,v.id AS version_id,v.timing_status,
+            d.reason AS draft_reason,e.output_path
             FROM xstage_songs s JOIN xstage_media m ON m.id=s.media_id
             LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
+            LEFT JOIN xstage_lyric_drafts d ON d.song_id=s.id
             LEFT JOIN xstage_exports e ON e.song_id=s.id
             WHERE s.title LIKE ? OR s.artist LIKE ? OR s.original_code LIKE ?
             ORDER BY s.code DESC LIMIT ? OFFSET ?""",
@@ -761,6 +763,7 @@ def replace_groups(workspace,query,keys,replacement,expected_lines):
                  title,artist,created_at,is_current)
                 VALUES (?,?,?,NULL,'edit',?,?,?,?,0)""",
                 (version,song_id,canonical,
+                 "incomplete" if prior["timing_status"]=="incomplete" else
                  "estimated" if any(x[4]=="estimated" for x in revised) else "preserved",
                  prior["title"],prior["artist"],now()))
                 for pos,(text,start,end,remapped,status) in enumerate(revised):
