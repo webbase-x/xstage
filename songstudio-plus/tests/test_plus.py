@@ -238,26 +238,22 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(plus.stats(self.workspace)["songs_draft_lyrics"],0)
         self.assertIsNone(plus.songs(self.workspace)[0].get("draft_reason"))
 
-    def test_missing_cur_saves_lyr_text_without_fake_timing(self):
-        song=self.put("NCN/Song/0/07777.mid",midi())
+    def test_incomplete_ncn_triplet_skipped_before_hash_and_registration(self):
+        from unittest.mock import patch
+        self.put("NCN/Song/0/07777.mid",midi())
         self.put("NCN/Lyrics/0/07777.lyr",
                  "ชื่อเพลง\nชื่อศิลปิน\nC\n\nทดสอบเนื้อร้อง\n".encode("cp874"))
-        result=plus.import_folder(self.workspace,self.src)
+        with patch.object(plus,"digest",side_effect=AssertionError("No SHA for skipped NCN")):
+            result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["files_new"],0)
+        self.assertEqual(result["skipped_ncn"],1)
         self.assertEqual(result["failures"],0)
-        self.assertEqual(result["draft_lyrics"],1)
-        self.assertEqual(result["lyrics_new"],0)
-        info=plus.songs(self.workspace)[0]
-        self.assertEqual(info["title"],"ชื่อเพลง")
-        self.assertEqual(info["artist"],"ชื่อศิลปิน")
-        self.assertIsNone(info["version_id"])
-        self.assertTrue(info["draft_reason"])
-        self.assertEqual(plus.stats(self.workspace)["songs_draft_lyrics"],1)
-        self.assertEqual(plus.stats(self.workspace)["songs_with_text"],1)
+        self.assertEqual(plus.stats(self.workspace)["songs"],0)
         with plus.connect(self.workspace) as db:
-            raw=db.execute("SELECT raw_text FROM xstage_lyric_drafts").fetchone()[0]
-        self.assertIn("ทดสอบเนื้อร้อง",raw)
-        with self.assertRaisesRegex(ValueError,"เนื้อร้อง"):
-            plus.build_song(self.workspace,info["id"])
+            entry=db.execute("SELECT outcome,message FROM xstage_import_items").fetchone()
+        self.assertEqual(entry["outcome"],"skipped-ncn-incomplete")
+        self.assertIn("CUR",entry["message"])
+
 
     def test_mirrored_ncn_folder_aliases_are_recognized(self):
         self.put("Collection/Songs/0/00321.mid",midi())
@@ -399,13 +395,13 @@ class PlusTests(unittest.TestCase):
 
     def test_one_click_recovery_reads_existing_lyrics_without_media_hash(self):
         from unittest.mock import patch
-        self.put("NCN/Song/0/01681.mid",midi())
+        self.put("Loose/0/01681.mid",midi())
         first=plus.import_folder(self.workspace,self.src)
         self.assertEqual(first["files_new"],1)
         self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],0)
-        self.put("NCN/Lyrics/0/01681.lyr",
+        self.put("Loose/Lyrics/0/01681.lyr",
                  "กู้เนื้อร้อง\nนักร้อง\nC\n\nNick\n".encode("cp874"))
-        self.put("NCN/Cursor/0/01681.cur",struct.pack("<5H",0,1,2,3,4))
+        self.put("Loose/Cursor/0/01681.cur",struct.pack("<5H",0,1,2,3,4))
         with patch.object(plus,"digest",side_effect=AssertionError("Media must not be rehashed")):
             repaired=plus.recover_existing_lyrics(self.workspace)
         self.assertEqual(repaired["total"],1)
@@ -465,11 +461,11 @@ class PlusTests(unittest.TestCase):
 
     def test_recovery_does_not_attach_lyrics_to_changed_media(self):
         from unittest.mock import patch
-        song=self.put("NCN/Song/0/00809.mid",midi())
+        song=self.put("Loose/0/00809.mid",midi())
         plus.import_folder(self.workspace,self.src)
-        self.put("NCN/Lyrics/0/00809.lyr",
+        self.put("Loose/Lyrics/0/00809.lyr",
                  "เพลง\nศิลปิน\nC\n\nNick\n".encode("cp874"))
-        self.put("NCN/Cursor/0/00809.cur",struct.pack("<5H",0,1,2,3,4))
+        self.put("Loose/Cursor/0/00809.cur",struct.pack("<5H",0,1,2,3,4))
         raw=bytearray(song.read_bytes())
         raw[-5]=raw[-5]^1
         song.write_bytes(bytes(raw))
@@ -480,11 +476,11 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],0)
 
     def test_recovery_is_not_an_extra_lyrics_version_on_rerun(self):
-        self.put("NCN/Song/0/00552.mid",midi())
+        self.put("Loose/0/00552.mid",midi())
         plus.import_folder(self.workspace,self.src)
-        self.put("NCN/Lyrics/0/00552.lyr",
+        self.put("Loose/Lyrics/0/00552.lyr",
                  "ชื่อเพลง\nศิลปิน\nC\n\nNick\n".encode("cp874"))
-        self.put("NCN/Cursor/0/00552.cur",struct.pack("<5H",0,1,2,3,4))
+        self.put("Loose/Cursor/0/00552.cur",struct.pack("<5H",0,1,2,3,4))
         first=plus.recover_existing_lyrics(self.workspace)
         self.assertEqual(first["recovered_ready"],1)
         before=plus.stats(self.workspace)["lyrics_versions"]
@@ -504,7 +500,7 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
 
     def test_new_sidecar_folders_are_detected_without_restarting(self):
-        self.put("Collection/Song/0/06012.mid",midi())
+        self.put("Collection/0/06012.mid",midi())
         result=plus.import_folder(self.workspace,self.src)
         self.assertEqual(result["lyrics_new"],0)
         self.put("Collection/Lyrics/0/06012.lyr",
@@ -514,6 +510,27 @@ class PlusTests(unittest.TestCase):
         repaired=plus.recover_existing_lyrics(self.workspace)
         self.assertEqual(repaired["recovered_ready"],1)
         self.assertEqual(plus.stats(self.workspace)["songs_with_text"],1)
+
+    def test_all_ncn_missing_triplet_skips_without_song_id(self):
+        from unittest.mock import patch
+        self.put("NCN/Song/0/00798.mid",midi())
+        with patch.object(plus,"digest",side_effect=AssertionError("No hash needed")):
+            run=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(run["skipped_ncn"],1)
+        self.assertEqual(run["files_new"],0)
+        self.assertEqual(plus.stats(self.workspace)["songs"],0)
+        with plus.connect(self.workspace) as db:
+            row=db.execute("SELECT outcome,message FROM xstage_import_items").fetchone()
+        self.assertEqual(row["outcome"],"skipped-ncn-incomplete")
+        self.assertIn("LYR",row["message"])
+        self.assertIn("CUR",row["message"])
+
+    def test_non_ncn_audio_without_sidecars_still_registers(self):
+        self.put("Music/001.mp3",b"audio"*250)
+        run=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(run["files_new"],1)
+        self.assertEqual(run["skipped_ncn"],0)
+        self.assertEqual(plus.stats(self.workspace)["songs"],1)
 
     def test_missing_lyrics_not_claimed_as_karaoke(self):
         self.put("no-lyrics.mp3",b"audio"*200)
