@@ -717,6 +717,158 @@ def import_folder(workspace,source,progress=None,cancel=None):
         db.commit()
     return {"batch":batch,**totals,"cancelled":bool(cancel and cancel.is_set())}
 
+
+def recover_existing_lyrics(workspace,progress=None,cancel=None):
+    """Re-evaluate pending registered songs without hashing or copying media.
+
+    Only songs that currently lack a complete timed version are queued.
+    Inspect their original registered source paths, preferring a source with
+    actual companion files. All lyric updates are versioned; complete and
+    user-edited versions remain untouched. No source file mutations.
+    """
+    init(workspace)
+    totals={"processed":0,"total":0,"recovered_ready":0,
+            "partial_lyrics":0,"draft_lyrics":0,
+            "missing_sources":0,"failures":0}
+    batch=uuid.uuid4().hex
+    with WRITE_LOCK,connect(workspace) as db:
+        entries=db.execute("""SELECT s.id AS song_id,s.code,m.id AS media_id,
+            m.sha256,m.stored_path,x.source_path
+            FROM xstage_songs s
+            JOIN xstage_media m ON m.id=s.media_id
+            LEFT JOIN xstage_media_sources x ON x.media_id=m.id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM xstage_lyric_versions v
+                WHERE v.song_id=s.id AND v.is_current=1
+                  AND v.timing_status!='incomplete')
+            ORDER BY s.code,x.last_seen DESC""").fetchall()
+        collected=defaultdict(list)
+        for entry in entries:
+            collected[entry["song_id"]].append(dict(entry))
+        totals["total"]=len(collected)
+        db.execute("""INSERT INTO xstage_import_batches
+            (id,source_root,created_at,status)
+            VALUES (?,?,?,'running')""",
+            (batch,"Registered media paths — lyrics recovery",now()))
+        db.commit()
+        for song_id,paths in collected.items():
+            if cancel and cancel.is_set():
+                break
+            event_path=None
+            outcome="no-lyrics"
+            note=""
+            db.execute("SAVEPOINT lyrics_recovery")
+            try:
+                media_row=db.execute("SELECT * FROM xstage_media WHERE id=?",
+                                    (paths[0]["media_id"],)).fetchone()
+                source_paths=[Path(row["source_path"]) for row in paths if row["source_path"]]
+                if media_row["stored_path"]:
+                    legacy=Path(workspace)/media_row["stored_path"]
+                    if legacy.is_file():
+                        source_paths.append(legacy)
+                # Prefer sources with complete NCN triplets, not the first
+                # duplicate source path that may lack its own sidecars.
+                ranked=[]
+                for source in dict.fromkeys(source_paths):
+                    if not source.is_file():
+                        continue
+                    comps=companion_candidates(source)
+                    score=(int(bool(comps.get(".lyr") and comps.get(".cur")))*4+
+                           int(bool(comps.get(".lrc")))*3+
+                           int(bool(comps.get(".lyr")))*2+
+                           int(bool(comps.get(".cur"))))
+                    ranked.append((score,source,comps))
+                ranked.sort(key=lambda x:x[0],reverse=True)
+                if not ranked:
+                    totals["missing_sources"]+=1
+                    outcome="missing-source"
+                    note="ไม่พบไฟล์เพลงต้นฉบับในพาธที่ลงทะเบียนไว้"
+                else:
+                    for _,source,comps in ranked:
+                        event_path=source
+                        try:
+                            doc=document_for(source,comps)
+                            lines=valid_lines(doc) if doc else None
+                            song=db.execute("SELECT * FROM xstage_songs WHERE id=?",
+                                            (song_id,)).fetchone()
+                            if lines:
+                                version,created=insert_version(
+                                    db,song,media_row,doc,None,
+                                    doc.get("sourceFormat") or "NCN")
+                                meta=doc.get("metadata") or {}
+                                active=db.execute(
+                                    """SELECT timing_status FROM xstage_lyric_versions
+                                       WHERE song_id=? AND is_current=1""",
+                                    (song_id,)).fetchone()
+                                if active and active["timing_status"]!="incomplete":
+                                    totals["recovered_ready"]+=1
+                                    outcome="recovered-lyrics"
+                                    db.execute("DELETE FROM xstage_lyric_drafts WHERE song_id=?",
+                                               (song_id,))
+                                else:
+                                    totals["partial_lyrics"]+=1
+                                    outcome="partial-lyrics"
+                                    note="อ่าน CUR ได้บางส่วน · คงเนื้อร้องไว้ตรวจเวลา"
+                                    if comps.get(".lyr"):
+                                        save_draft(db,song,comps[".lyr"],note)
+                                if song["title"]==song["original_code"] and meta.get("title"):
+                                    db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
+                                      (str(meta["title"])[:255],
+                                       str(meta.get("artist") or "")[:255],song_id))
+                                break
+                            if comps.get(".lyr"):
+                                save_draft(db,song,comps[".lyr"],"CUR missing or unrecognized")
+                                totals["draft_lyrics"]+=1
+                                outcome="untimed-lyrics"
+                                note="บันทึกข้อความ LYR แล้ว แต่ยังไม่มีเวลาปาดสี"
+                                # Try other registered sources before deciding
+                                # this song cannot be recovered completely.
+                                continue
+                            outcome="no-lyrics"
+                        except (OSError,ValueError,TypeError,UnicodeError,KeyError) as e:
+                            note=str(e)[:350]
+                            outcome="lyrics-error"
+                            if comps.get(".lyr"):
+                                try:
+                                    save_draft(db,song,comps[".lyr"],note)
+                                    totals["draft_lyrics"]+=1
+                                except (OSError,ValueError,UnicodeError):
+                                    pass
+                            continue
+                    if outcome=="lyrics-error":
+                        totals["failures"]+=1
+                db.execute("""INSERT OR REPLACE INTO xstage_import_items
+                   (batch_id,source_path,source_name,media_sha256,song_id,
+                    outcome,message,created_at) VALUES (?,?,?,?,?,?,?,?)""",
+                   (batch,str(event_path or paths[0]["source_path"] or ""),
+                    Path(event_path).name if event_path else "",
+                    paths[0]["sha256"],song_id,outcome,note,now()))
+                db.execute("RELEASE SAVEPOINT lyrics_recovery")
+            except (OSError,ValueError,TypeError,sqlite3.DatabaseError) as err:
+                db.execute("ROLLBACK TO SAVEPOINT lyrics_recovery")
+                db.execute("RELEASE SAVEPOINT lyrics_recovery")
+                totals["failures"]+=1
+                db.execute("""INSERT OR REPLACE INTO xstage_import_items
+                   (batch_id,source_path,source_name,media_sha256,song_id,
+                    outcome,message,created_at) VALUES (?,?,?,?,?,?,?,?)""",
+                   (batch,str(event_path or paths[0]["source_path"] or ""),
+                    "",paths[0]["sha256"],song_id,"error",str(err)[:350],now()))
+            totals["processed"]+=1
+            if totals["processed"]%64==0:
+                db.execute("""UPDATE xstage_import_batches SET files_seen=?,lyrics_new=?,
+                        failures=? WHERE id=?""",
+                        (totals["processed"],totals["recovered_ready"],totals["failures"],batch))
+                db.commit()
+            if progress:
+                progress(dict(totals),event_path.name if event_path else str(song_id))
+        db.execute("""UPDATE xstage_import_batches SET files_seen=?,lyrics_new=?,
+            failures=?,status=?,completed_at=? WHERE id=?""",
+            (totals["processed"],totals["recovered_ready"],totals["failures"],
+             "cancelled" if cancel and cancel.is_set() else "completed",now(),batch))
+        db.commit()
+    return {"batch":batch,**totals,"cancelled":bool(cancel and cancel.is_set())}
+
+
 def stats(workspace):
     init(workspace)
     with connect(workspace) as db:
