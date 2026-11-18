@@ -38,7 +38,7 @@ Name: "thai"; MessagesFile: "compiler:Languages\Thai.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "..\source\dist\XStageKaraoke\*"; DestDir: "{tmp}\xstage-v1079"; Flags: recursesubdirs createallsubdirs ignoreversion deleteafterinstall
+Source: "..\source\dist\XStageKaraoke\*"; DestDir: "{tmp}\xstage-v1080"; Flags: recursesubdirs createallsubdirs ignoreversion deleteafterinstall
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -48,7 +48,7 @@ var
 begin
   if CurStep <> ssPostInstall then
     Exit;
-  ScriptPath := ExpandConstant('{tmp}\xstage-v1079\install_to_D.ps1');
+  ScriptPath := ExpandConstant('{tmp}\xstage-v1080\install_to_D.ps1');
   if not FileExists(ScriptPath) then
     RaiseException('Installer package is incomplete: install_to_D.ps1 is missing.');
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
