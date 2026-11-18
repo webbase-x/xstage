@@ -292,7 +292,7 @@ class LyricHeadTailTests(unittest.TestCase):
                 lines = ["intro", "another intro", old_text,
                          "the following line", "outro", "the end"]
                 lrc_text = "".join(
-                    f"[00:{(index + 1) * 2:02d}.00]{line}\\n"
+                    f"[00:{(index + 1) * 2:02d}.00]{line}\n"
                     for index, line in enumerate(lines))
                 lyric = export.save_lyrics(self.root, audio, lrc_text, code)
                 document = json.loads(lyric.read_text(encoding="utf-8"))
