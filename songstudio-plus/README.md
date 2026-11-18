@@ -54,12 +54,22 @@ Source data is kept on the PC; no cloud upload in Plus.
 The integer output code comes from the destination catalog, not the source
 filename. Original filenames and paths are retained in SQLite.
 
-## Two independent SHA-256 deduplication layers
+## SHA-256 checks ONLY the primary music/media files
 
-- Media: SHA-256 of exact original media bytes. Same hash means skip copying
-  the media again even if filenames differ.
-- Lyrics: fingerprint LYR/CUR/LRC sources and digest decoded lyric lines and
-  timing. Same media with different lyrics is stored as a new version.
+- The importer's **file SHA-256** is calculated solely from the original
+  MID/KAR/MP3/M4A/MP4/WAV/... media file. Never SHA-256 a .LYR, .CUR or .LRC.
+- Companion-file changes use source path, file size and modification timestamp
+  to avoid unnecessary re-parsing. New/changed companions are decoded; the
+  **already-parsed lyric content** is fingerprinted in memory only to preserve
+  separate SQLite versions. This is not a second file SHA-256 scan.
+- When NCN CUR runs short, save all lines with verified time positions as an
+  **incomplete** version plus the complete raw LYR text as a **draft**. Neither
+  becomes eligible for XMID export until timing is complete.
+- When LYR exists without CUR, store the title, artist and original text
+  in SQLite as a draft. Distinguish missing sidecars, incomplete time cues and
+  genuine parser errors in the import report.
+- Existing Song IDs, media SHA-256 records, and old lyric versions are
+  retained. Import the same source folder again to retry earlier misses safely.
 
 SHA-256 of MP3 and M4A is not an identity of the underlying musical work.
 Matching titles do not prove byte-identity either. The preview never deletes
