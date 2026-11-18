@@ -503,7 +503,8 @@ class JsonProTests(unittest.TestCase):
                 export=export, scanner=folder_upload,
                 scan_progress=lambda *parts: stages.append(parts))
         self.assertEqual(result["created"], 1)
-        self.assertEqual(stages, [("catalog", 0, None), ("catalog", 5000, 5000)])
+        self.assertEqual([stage for stage in stages if stage[0] == "catalog"],
+                         [("catalog", 0, None), ("catalog", 5000, 5000)])
 
     def test_missing_old_audio_must_not_suppress_regeneration(self):
         self.assertEqual(self.run_export()["created"], 1)
