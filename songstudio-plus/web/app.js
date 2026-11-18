@@ -295,7 +295,8 @@
       const p=job.progress||{};
       text("progress-detail",job.kind==="import"?
           "ไฟล์ใหม่ "+number(p.files_new)+" · ไฟล์ซ้ำ "+number(p.media_duplicates)+
-          " · เนื้อร้องใหม่ "+number(p.lyrics_new)+" · ผิดพลาด "+number(p.failures):
+          " · เนื้อร้องใหม่ "+number(p.lyrics_new)+" · ผิดพลาด "+number(p.failures)+
+          " · Hash เดิม "+number(p.hash_cache_hits)+" · "+number(p.files_per_second)+" ไฟล์/วินาที":
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
       text("progress-count",number(p.files_seen||p.done||0)+" รายการ");
       const progressBar=$("progress-fill");
