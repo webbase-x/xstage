@@ -71,7 +71,11 @@ class PlusTests(unittest.TestCase):
         rows=plus.songs(self.workspace)
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["code"],1)
-        self.assertEqual(len(list((self.workspace/"SOURCE").rglob("*.mp3"))),1)
+        self.assertEqual(len(list((self.workspace/"SOURCE").rglob("*.mp3"))),0)
+        with plus.connect(self.workspace) as db:
+            sources=db.execute("SELECT source_path FROM xstage_media_sources").fetchall()
+        self.assertEqual(len(sources),2)
+        self.assertIn(str(one.resolve()),{x["source_path"] for x in sources})
 
     def test_rerun_import_does_not_duplicate_media_or_lyrics(self):
         path=self.put("track.mp3",b"MP3-CONTENT"*500)
@@ -82,6 +86,8 @@ class PlusTests(unittest.TestCase):
         after=plus.stats(self.workspace)
         self.assertEqual(result["files_new"],0)
         self.assertEqual(result["lyrics_new"],0)
+        self.assertEqual(result["hash_cache_hits"],1)
+        self.assertEqual(result["bytes_hashed"],0)
         self.assertEqual({k:before[k] for k in ("songs","media","lyrics")},
                          {k:after[k] for k in ("songs","media","lyrics")})
 
@@ -196,6 +202,26 @@ class PlusTests(unittest.TestCase):
         self.assertIsNone(item["version_id"])
         with self.assertRaisesRegex(ValueError,"เนื้อร้อง"):
             plus.build_song(self.workspace,item["id"])
+
+    def test_missing_original_after_import_cannot_export_without_source(self):
+        path=self.put("offline.mp3",b"AUDIO-TEST"*100)
+        self.lrc(path)
+        plus.import_folder(self.workspace,self.src)
+        song=plus.songs(self.workspace)[0]
+        path.unlink()
+        with self.assertRaisesRegex(ValueError,"ไม่พบไฟล์เพลงต้นฉบับ"):
+            plus.build_song(self.workspace,song["id"])
+        self.assertFalse((self.workspace/"SOURCE").exists())
+
+    def test_build_detects_changed_source_without_clobber(self):
+        path=self.put("changed.mp3",b"data"*500)
+        self.lrc(path)
+        plus.import_folder(self.workspace,self.src)
+        song=plus.songs(self.workspace)[0]
+        path.write_bytes(b"DATA"*500)
+        with self.assertRaisesRegex(ValueError,"ต้นฉบับเปลี่ยน"):
+            plus.build_song(self.workspace,song["id"])
+        self.assertEqual(list(self.workspace.rglob("*.xmp3")),[])
 
     def test_sha256_changes_when_source_file_changes(self):
         path=self.put("00001.mp3",b"A"*1000)
