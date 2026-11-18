@@ -53,6 +53,42 @@ class MultiComputerImportTests(unittest.TestCase):
         registry.register_xsk(folder, target, verified)
         return folder, target
 
+    def test_reimport_from_same_machine_after_lyrics_edit_is_update_not_duplicate(self):
+        folder = self.root / "SourceA" / "XStageSong"
+        audio = folder / "audio" / "0" / "00001.m4a"
+        lyrics = folder / "lyrics" / "0" / "00001.json"
+        audio.parent.mkdir(parents=True)
+        lyrics.parent.mkdir(parents=True)
+        audio.write_bytes(b"recorded sound" * 300)
+        lyrics.write_text(json.dumps({"schemaVersion": 1,
+            "lines": [{"startTime": 1, "endTime": 3, "text": "เนื้อร้องเดิม"}]},
+            ensure_ascii=False), encoding="utf-8")
+        record = {"webSongId": "legacy-a-1", "code": "00001", "bucket": "0",
+                  "title": "เพลงทดสอบ", "artist": "ศิลปินทดสอบ",
+                  "audio": {"path": "audio/0/00001.m4a"},
+                  "lyrics": {"path": "lyrics/0/00001.json"},
+                  "sourceFormat": "M4A"}
+        export.publish_batch(folder, [record])
+        first = pc.publish(folder, str(self.destination), export, groups=GROUPS)
+        self.assertEqual(first["songCount"], 1)
+        library = self.destination / "XStageSong"
+        first_database = json.loads((library / "DB" / "songs-portable.json").read_text(encoding="utf-8"))
+        first_id = first_database["songs"][0]["webSongId"]
+        lyrics.write_text(json.dumps({"schemaVersion": 1,
+            "lines": [{"startTime": 1.25, "endTime": 3, "text": "เนื้อร้องแก้ไข"}]},
+            ensure_ascii=False), encoding="utf-8")
+        plan = pc.inspect(folder, str(self.destination), export, groups=GROUPS)
+        self.assertEqual(plan["groups"]["updated"], 1)
+        self.assertEqual(plan["groups"]["conflict"], 0)
+        second = pc.publish(folder, str(self.destination), export, groups=GROUPS)
+        self.assertEqual(second["songCount"], 1)
+        second_database = json.loads((library / "DB" / "songs-portable.json").read_text(encoding="utf-8"))
+        self.assertEqual(second_database["songs"][0]["webSongId"], first_id)
+        self.assertEqual(len(list(library.rglob("*.m4a"))), 1)
+        third = pc.publish(folder, str(self.destination), export, groups=GROUPS)
+        self.assertEqual(third["songCount"], 1)
+        self.assertEqual(third["copied"], 0)
+
     def test_same_song_from_different_computers_is_detected_without_copy(self):
         one, file_a = self.source("A")
         first = pc.publish(one, str(self.destination), export, groups=GROUPS)
