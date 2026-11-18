@@ -92,3 +92,219 @@
 .lyric-draft-summary{margin-top:24px;border-top:1px solid #465b75;padding:18px 8px}
 .lyric-draft-summary strong{color:#a7ecde;font-size:13px}
 .lyric-draft-summary pre{font:13px/1.9 "Leelawadee UI","Segoe UI",Tahoma,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;color:#d3e4ee;background:#101f36;border:1px solid #31435c;border-radius:12px;padding:16px;max-height:420px;overflow-y:auto}
+
+
+/* v0.1.6 | Fixed-screen studio workspace. Pagination replaces long scrolling
+   lists; neither window edges nor sidebar need a visible scrollbar. */
+html,body{width:100%;height:100%;overflow:hidden}
+@media (min-width:901px){
+  .app{height:100dvh;min-height:0;grid-template-columns:248px minmax(0,1fr);overflow:hidden}
+  .sidebar{height:100%;min-height:0;padding:13px 12px 10px;overflow:hidden}
+  .brand{padding:2px 7px 14px}
+  .brand-icon{width:42px;height:42px}
+  .brand-icon img{width:36px;height:36px}
+  .brand-copy strong{font-size:17px}
+  .side-heading{padding:0 12px 6px}
+  .side-nav{gap:3px;min-height:0}
+  .nav-link{padding:7px;gap:9px}
+  .nav-icon{width:30px;height:30px;border-radius:8px}
+  .nav-link>span:last-child{font-size:12px}
+  .nav-link small{font-size:9px}
+  .side-bottom{padding:6px 5px 0}
+  .engine-indicator{padding:9px}
+  .side-version{padding:8px 2px 0}
+  .main{height:100dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .topbar{flex:0 0 52px;height:52px;padding:0 20px}
+  .content{width:100%;max-width:none;min-height:0;flex:1;display:flex;flex-direction:column;overflow:hidden;padding:12px clamp(14px,1.6vw,30px) 10px}
+  .view{display:none;height:100%;min-height:0;min-width:0}
+  .view.is-visible{display:flex;flex-direction:column;gap:9px}
+  .footer{display:none}
+  .page-eyebrow{margin:0;font-size:9px;line-height:1.2;flex:none}
+  .page-intro{flex:none;margin:0;min-height:54px;align-items:center}
+  .page-intro h1{font-size:clamp(22px,1.8vw,32px);margin:0 0 3px}
+  .page-intro p{font-size:11px;line-height:1.45;margin:0;max-width:1000px}
+  .section-symbol{font-size:38px}
+  .panel{padding:13px 16px;min-width:0;min-height:0}
+  .panel-head{margin-bottom:9px;align-items:center}
+  .panel-head h2{font-size:15px}
+  .panel .label-top{font-size:9px}
+  .field-label{margin:8px 0 5px;font-size:11px}
+  .field-hint{margin:5px 0;font-size:10px;line-height:1.45}
+  .input-wrap{min-height:38px}
+  .input-wrap input{font-size:12px;padding:8px 0}
+  .primary-btn{padding:9px 12px;min-height:36px;font-size:12px;gap:8px}
+  .quiet-btn{padding:7px 10px;font-size:11px}
+  .hero{min-height:77px;height:77px;flex:0 0 77px;display:block;border-radius:14px}
+  .hero-copy{padding:9px 20px}
+  .hero-copy h1{font-size:27px;margin:0 0 2px;line-height:1.13}
+  .hero-copy h1 br{display:none}
+  .hero-copy h1 .gradient-text:before{content:" · "}
+  .hero-copy p{font-size:11px;line-height:1.5;max-width:none;margin:0}
+  .hero-pill,.hero-trust,.hero-art{display:none}
+  .stat-grid{margin:0;gap:7px;flex:none;grid-template-columns:repeat(7,minmax(0,1fr))}
+  .stat{padding:9px 10px;gap:0;border-radius:12px;min-width:0}
+  .stat>span{font-size:10px;line-height:1.2}
+  .stat strong{font-size:24px;letter-spacing:-.03em;line-height:1.25;padding:2px 0}
+  .stat small{font-size:9px;line-height:1.2}
+  #view-import>.two-col{flex:1;min-height:0;gap:9px;grid-template-columns:minmax(0,1.13fr) minmax(0,.87fr)}
+  .feature-panel,.progress-panel{height:100%;min-height:0}
+  .feature-panel .panel-head{margin-bottom:5px}
+  .feature-panel>.field-hint{margin:6px 0}
+  .feature-panel .divider-inline,.feature-panel .step-list{display:none}
+  .feature-panel .recover-action{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px;margin-top:8px}
+  .feature-panel .recover-action strong{font-size:11px}
+  .feature-panel .recover-action small{font-size:10px;line-height:1.3}
+  .progress-panel .progress-symbol{display:none}
+  .progress-panel h3,.progress-panel>p{text-align:left;font-size:12px;margin-bottom:8px}
+  .progress-panel>p{line-height:1.45}
+  .progress-panel .progress-track{margin-top:auto}
+  .progress-numbers{flex-wrap:wrap;gap:7px;font-size:10px}
+  .issues-panel{flex:none;margin:0;padding:7px 13px;display:flex;gap:12px;align-items:center;min-height:44px}
+  .issues-panel .panel-head{margin:0;flex:0 0 auto}
+  .issues-panel .label-top{display:none}
+  .issues-panel h2{font-size:12px}
+  .issues-panel .field-hint{margin:0;font-size:10px;line-height:1.35}
+  .issues-launch-hint,.tip-panel{display:none}
+  #view-lyrics>.panel:first-of-type{flex:none;padding:12px}
+  #view-lyrics>.panel:first-of-type .field-hint{display:none}
+  #view-lyrics>.lyrics-layout,#view-build>.two-col{flex:1;min-height:0;gap:10px}
+  #view-lyrics>.lyrics-layout>.panel,#view-build>.two-col>.panel{height:100%;display:flex;flex-direction:column;min-height:0}
+  .group-list,.build-list{flex:1;min-height:0;max-height:none;overflow:hidden;display:grid;align-content:start;gap:6px}
+  .group-row,.build-row{padding:8px 11px;min-height:0}
+  .group-row .group-text,.build-row .song-text{font-size:11px}
+  .notice{margin:8px 0;padding:9px}
+  textarea{min-height:56px;padding:10px;line-height:1.45}
+  .selection-summary{padding:8px;margin-bottom:6px}
+  #view-media .media-editor{flex:1;max-width:none;width:100%}
+  #view-build .build-art{margin:7px auto}
+  #view-build .build-art>span{width:75px;height:75px;border-radius:18px;font-size:43px}
+  #view-library>.panel{flex:1;min-height:0;display:flex;flex-direction:column}
+  .table-scroll{flex:1;min-height:0;overflow:hidden}
+  .table-scroll table{min-width:0;table-layout:fixed}
+  .table-scroll td{padding:9px 8px;font-size:11px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .table-scroll th{padding:10px 8px;font-size:10px}
+  .table-scroll td small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .table-scroll th:nth-child(1){width:11%}
+  .table-scroll th:nth-child(2){width:39%}
+  .table-scroll th:nth-child(3){width:9%}
+  .table-scroll th:nth-child(4){width:23%}
+  .table-scroll th:nth-child(5){width:9%}
+  .table-scroll th:nth-child(6){width:9%}
+  .list-pagination,.risk-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;margin-top:8px;font-size:11px;color:#a9bdd7}
+  .list-pagination .toolbar,.risk-pagination .toolbar{margin:0}
+  #view-risks>.risk-summary-panel{flex:none;padding:11px 16px}
+  #view-risks>.risk-summary-panel .panel-head{margin-bottom:8px}
+  #view-risks>.risk-list-panel{flex:1;min-height:0;display:flex;flex-direction:column}
+  .risk-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+  .risk-stat-grid>div{border:1px solid #2d4762;border-radius:10px;background:#162740;padding:8px 13px;display:grid;gap:1px}
+  .risk-stat-grid span{color:#adc6db;font-size:11px}
+  .risk-stat-grid strong{font:700 24px "Segoe UI";color:#ddf4fd}
+  .risk-stat-grid small{font-size:9px;color:#7e9bb5}
+  .risk-audit-status{font-size:10px;margin:6px 0 0;color:#95b7cf}
+  .risk-filters{margin:0;gap:5px}
+  .risk-filter{padding:6px 8px;font-size:10px}
+  .risk-filter.selected{background:#2a556b;color:#cafff6;border-color:#6fc6c2}
+  .risk-list-panel .panel-head{flex-wrap:wrap}
+  .risk-rows{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+  .risk-record{border:1px solid #2f415b;background:#111f35;border-radius:10px;min-height:0;flex:1;display:flex;align-items:center;justify-content:space-between;padding:7px 12px;gap:12px}
+  .risk-record-main{min-width:0;flex:1}
+  .risk-song-name{font-size:12px;color:#ebf9ff;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .risk-song-meta{margin:1px 0;font-size:10px;color:#92a9c6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .risk-proof{margin:0;font-size:10px;color:#adc3da;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .risk-detail-button{flex:none;white-space:nowrap}
+  .risk-footnote{font-size:10px;color:#88a2bd;line-height:1.35;margin:4px 0 0}
+  .risk-empty{margin:auto;text-align:center;color:#9fb3cd}
+}
+@media (min-width:901px) and (max-width:1600px){
+  .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .stat{padding:7px 10px}
+  .stat strong{font-size:20px}
+  .stat>span{font-size:9px}
+  .stat small{font-size:9px}
+}
+@media (min-width:901px) and (max-height:790px){
+  .hero{display:none}
+  .stat-grid{margin:0}
+  .feature-panel .field-hint{display:none}
+  .feature-panel .recover-action{padding:8px}
+  .feature-panel .recover-action small{display:none}
+  .page-intro{min-height:42px}
+  .page-intro h1{font-size:23px}
+  .page-intro p{font-size:10px;line-height:1.3}
+  .panel-head{margin-bottom:6px}
+  #view-lyrics>.panel:first-of-type{padding:9px 12px}
+  .group-row,.build-row{padding:6px 9px}
+  #view-risks>.risk-summary-panel{padding:8px 12px}
+  .risk-stat-grid>div{padding:5px 9px}
+  .risk-stat-grid strong{font-size:20px}
+  .risk-audit-status{margin-top:4px}
+}
+@media (min-width:901px) and (max-height:650px){
+  .topbar{flex-basis:44px;height:44px}
+  .content{padding:7px 12px}
+  .panel{padding:9px 11px}
+  .stat{padding:4px 8px}
+  .stat strong{font-size:19px}
+  .stat small{font-size:8px}
+  .issues-panel{min-height:36px;padding:5px}
+  .issues-panel .field-hint{font-size:9px}
+  .side-bottom{display:none}
+}
+/* Modal content pages are navigated by arrow buttons; no overlong sidebars. */
+.risk-dialog,.issues-dialog{color:#edf3ff;background:#141f34;border:1px solid #3c5172;border-radius:17px;padding:18px 20px;width:min(800px,calc(100vw - 36px));max-width:800px;max-height:82dvh;overflow:hidden;box-shadow:0 36px 85px #000c}
+.risk-dialog{height:min(560px,82dvh);display:none;flex-direction:column;gap:8px}
+.risk-dialog[open]{display:flex}
+.issues-dialog{height:min(540px,82dvh);display:none;flex-direction:column;gap:10px}
+.issues-dialog[open]{display:flex}
+.risk-dialog::backdrop,.issues-dialog::backdrop{background:#030715c9;backdrop-filter:blur(5px)}
+.risk-dialog .modal-head,.issues-dialog .modal-head{margin:0;flex:none}
+.risk-dialog .field-hint{margin:1px 0;flex:none}
+.risk-evidence-box{background:#0e1a2e;border:1px solid #304762;border-radius:13px;padding:13px;flex:1;min-height:0;display:flex;flex-direction:column}
+#risk-evidence-content{flex:1;min-height:0;overflow:hidden}
+.risk-evidence-title{font-size:15px;color:#b1f4e6}
+.risk-evidence-meta{font-size:11px;color:#9fb7d3}
+.risk-evidence-lyrics{font-size:15px;color:#eff8ff;margin:8px 0}
+.risk-evidence-description{color:#adc8db;font-size:12px;line-height:1.5;margin:0;overflow-wrap:anywhere}
+.risk-dialog textarea{flex:none;resize:none;min-height:54px;max-height:66px}
+.risk-dialog .field-label{margin:0;font-size:11px}
+.risk-modal-actions{flex:none;display:flex;flex-wrap:wrap;gap:6px}
+.risk-modal-actions button{flex:1;min-width:112px}
+.risk-modal-actions #risk-confirmed{border-color:#a66a52;color:#ffd5bc}
+.risk-modal-actions #risk-passed{border-color:#438779;color:#b9f7e7}
+.issues-dialog .issues-list{flex:1;min-height:0;max-height:none;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+.issues-dialog .issue-item{flex:1;min-height:0;padding:9px 12px}
+.issues-dialog .issue-item p{line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.issues-dialog .list-pagination{margin-top:0}
+@media(max-width:900px){
+  .app{height:100dvh;overflow:hidden}
+  .main{display:flex;flex-direction:column;min-height:0;height:calc(100dvh - 120px);overflow:hidden}
+  .content{display:flex;flex:1;min-height:0;overflow:hidden}
+  .view.is-visible{display:flex;flex-direction:column;gap:10px;min-height:0}
+  .footer,.tip-panel{display:none}
+  .page-intro{margin:0;min-height:0}
+  .page-intro h1{font-size:22px}
+  .page-intro p{font-size:11px;line-height:1.3}
+  .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));margin:0}
+  .stat{padding:6px}
+  .stat strong{font-size:19px}
+  #view-import .hero{display:none}
+  #view-import .two-col{flex:1;min-height:0;gap:9px}
+  .panel{padding:12px}
+  .group-list,.build-list,.table-scroll{min-height:0;max-height:none;overflow:hidden}
+  #view-lyrics .lyrics-layout,#view-build .two-col{flex:1;min-height:0}
+  .risk-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .risk-stat-grid>div{padding:7px;background:#162740;border-radius:9px}
+  .risk-stat-grid span,.risk-stat-grid small{font-size:10px}
+  .risk-stat-grid strong{font-size:23px}
+  .risk-rows{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+  .risk-record{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#17253c;border-radius:10px;padding:7px}
+  .risk-record-main{min-width:0;flex:1}
+  .risk-song-name,.risk-song-meta,.risk-proof{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:1px 0;font-size:11px}
+  .risk-footnote{font-size:10px}
+  .list-pagination,.risk-pagination{display:flex;justify-content:space-between;align-items:center;gap:5px;font-size:10px}
+  .risk-dialog,.issues-dialog{max-height:84dvh}
+}
+/* Scrolling is reserved for native select menus and keyboard-accessible
+   lyric details; scrollbar chrome stays hidden without cutting off text. */
+.group-list,.build-list,.table-scroll,.risk-rows,.issues-list{scrollbar-width:none}
+.group-list::-webkit-scrollbar,.build-list::-webkit-scrollbar,.table-scroll::-webkit-scrollbar,.risk-rows::-webkit-scrollbar,.issues-list::-webkit-scrollbar{display:none}
