@@ -2574,8 +2574,8 @@ def execute_job(action, options, started):
                     update(f"เผยแพร่ฐาน Drive ชุดที่ {batch} · รวม {total:,} เพลง"),
                     on_row=lambda done, total, skipped:
                     update(f"ตรวจเพลงและซิงค์ {done + skipped:,}/{total + skipped:,}", done + skipped))
-                registry.log_import(source, "drive", source, selected, "published",
-                                    "ผลการเผยแพร่ลง Google Drive ดูที่ผลซิงค์")
+                registry.log_import(source, "drive", source, selected, "attempted",
+                                    "เผยแพร่ผ่าน Drive · ดูจำนวนสำเร็จ/ขัดแย้งในผลซิงค์")
             else:
                 synced = {"newSongs": 0, "updatedSongs": 0, "duplicates": 0,
                           "conflicts": 0, "notReady": 0, "totalSongs": len(remote),
@@ -3772,7 +3772,8 @@ class Handler(BaseHTTPRequestHandler):
                     PREFS.get("import_source_folder") or PREFS["workspace"])
                 rows = registry.source_rows(source, _song_export_module())
                 remote = _module("online_publish.py", "xstage_online_publish").OnlinePublisher(
-                    GOOGLE).read_code_registry()["songs"]
+                    GOOGLE).read_code_registry(
+                        allow_missing_root=(query.get("create_new", ["0"])[0] == "1"))["songs"]
                 projected = registry.assign_target_codes(rows, remote)
                 groups = [g for g in query.get("groups", ["new,variant,updated"])[0].split(",") if g]
                 plan = registry.classify(projected, remote, groups)
