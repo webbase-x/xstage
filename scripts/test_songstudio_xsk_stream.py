@@ -184,6 +184,49 @@ class XskStreamTests(unittest.TestCase):
         finally:
             engine.NOTES.pop(str(source), None)
 
+    def test_xsk_review_persists_and_retries_only_unready_across_app_restart(self):
+        engine = load("engine")
+        export = load("song_export")
+        review = load("xsk_review")
+        complete = self.midi(self.source, "04201", b"A")
+        waiting = self.midi(self.source, "04202", b"B")
+        waiting.with_suffix(".lrc").unlink()
+        options = {"source": str(self.source), "xsk_folder": str(self.output),
+                   "code_style": "numeric", "code_length": "5"}
+        engine.CANCEL.clear()
+        def convert():
+            with stream.source_batches(self.source, self.output, cancelled=engine.CANCEL,
+                                       batch_size=1) as rows:
+                return engine.build_xsk(rows, "original", options, progressive=True)
+
+        first = convert()
+        self.assertEqual((first["created"], first["notReady"], first["errors"]), (1, 1, 0))
+        library = export.songs_root(self.output)
+        first_review = review.page(library, self.source, status="not_ready")
+        self.assertEqual(first_review["total"], 1)
+        self.assertEqual(first_review["items"][0]["name"], waiting.name)
+        self.assertIn("ไม่มีเนื้อร้อง", first_review["items"][0]["reason"])
+        self.assertTrue((library / "DB" / "xsk-review.sqlite3").is_file())
+
+        # A later Ready version reuses existing XSK2 and defers unchanged
+        # failed sources, rather than decoding or overwriting those songs.
+        second = convert()
+        self.assertEqual((second["created"], second["resumed"], second["deferred"]), (0, 1, 1))
+        self.assertEqual(len(list(library.rglob("*.xsk"))), 1)
+
+        waiting.with_suffix(".lrc").write_text(
+            "[ti:เพลงใหม่พร้อมใช้]\\n[ar:ศิลปินใหม่]\\n[00:02.00]เนื้อร้องใหม่",
+            encoding="utf-8")
+        pending, total = review.pending_rows(library, self.source)
+        self.assertEqual(total, 1)
+        retry = engine.build_xsk(pending, "original",
+                                 {**options, "retry_issues_only": True}, progressive=True)
+        self.assertEqual((retry["created"], retry["errors"], retry["notReady"]), (1, 0, 0))
+        self.assertEqual(review.page(library, self.source, status="not_ready")["total"], 0)
+        self.assertEqual(len(list(library.rglob("*.xsk"))), 2)
+        self.assertTrue(complete.is_file())
+        self.assertTrue(waiting.is_file())
+
     def test_real_xsk_sealing_roundtrip_and_dedup(self):
         import sys
         # XSK2 must not create or require a Windows DPAPI key.
