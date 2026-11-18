@@ -9,7 +9,7 @@ from functools import lru_cache
 import json
 from pathlib import Path
 from .lyrics import Lyrics, LyricLine
-from .xmedia_reader import XMEDIA_EXT, inspect_xmedia
+from .xmedia_reader import XMEDIA_EXT, inspect_xmedia, media_kind
 
 FORMAT = "xstage-pc-local-current"
 CATALOG = "xstage-pc-local-catalog"
@@ -122,11 +122,14 @@ def catalog_rows(selected, *, cancelled=None):
                     raise ValueError("Lyrics JSON ไม่ถูกต้อง: " + lyric_file.name)
                 first = " ".join(str(line.get("text") or "") for line in doc["lines"][:8])[:512]
             ext = path.suffix.casefold()
+            kind = (media_kind(path) if ext in XMEDIA_EXT else
+                    "MIDI" if ext in {".mid", ".midi", ".kar"} else
+                    "VIDEO" if ext in {".mp4", ".avi", ".mpg", ".mpeg", ".wmv", ".mkv", ".mov", ".webm", ".dat", ".vob", ".flv"} else
+                    "AUDIO")
             rows.append({"path": str(path), "code": str((embedded or {}).get("songCode") or source.get("code") or ""),
                          "title": str((embedded or {}).get("title") or source.get("title") or path.stem),
                          "artist": str((embedded or {}).get("artist") or source.get("artist") or ""),
-                         "kind": "MIDI" if ext in {".mid", ".midi", ".kar", ".xmid"} else
-                                 "VIDEO" if ext in {".mp4", ".avi", ".mov", ".mkv", ".xmp4", ".xavi", ".xmov", ".xmkv"} else "AUDIO",
+                         "kind": kind,
                          "format": ext[1:].upper(), "playable": 1,
                          "first_lyric": first, "source_catalog": "XStageSong PC"})
     if len(rows) != pointer.get("songCount"):
