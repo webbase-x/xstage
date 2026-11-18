@@ -49,7 +49,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Plus บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","lyrics-find","media-attach","build-start"]){
+    for(const id of ["import-start","lyrics-find","media-attach","build-start","source-browse","lrc-browse"]){
       $(id).disabled=!enabled;
     }
   }
@@ -312,7 +312,15 @@
       }
     }catch(error){setReady(false);}
   }
+  async function openPicker(kind,target){
+    try{
+      const result=await api("/api/pick",{kind});
+      if(result.path)$(target).value=result.path;
+    }catch(error){toast("เปิดหน้าต่างเลือกไฟล์ไม่สำเร็จ: "+error.message,true);}
+  }
   function bind(){
+    $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
+    $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",()=>view(button.dataset.view));
     $("import-start").addEventListener("click",()=>{
