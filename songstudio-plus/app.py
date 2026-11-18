@@ -136,13 +136,27 @@ class Handler(BaseHTTPRequestHandler):
             with core.connect(self.state.workspace) as db:
                 version=db.execute("""SELECT v.* FROM xstage_lyric_versions v
                     WHERE v.song_id=? AND v.is_current=1""",(song_id,)).fetchone()
-                if not version: raise ValueError("เพลงยังไม่มีเนื้อร้องที่จัดเวลาแล้ว")
-                lines=core.get_version_lines(db,version["id"])
-                self.send_json(200,{"version":dict(version),
-                  "lines":[{"position":line["position"],"text":line["text"],
-                            "start":line["start_time"],"end":line["end_time"],
-                            "timing":line["timing_status"],"cues":cues}
-                           for line,cues in lines]})
+                draft=db.execute("""SELECT * FROM xstage_lyric_drafts
+                    WHERE song_id=?""",(song_id,)).fetchone()
+                if not version and not draft:
+                    raise ValueError("ไม่พบเนื้อร้องของเพลงนี้ใน SQLite")
+                if version:
+                    lines=core.get_version_lines(db,version["id"])
+                    payload={"version":dict(version),
+                     "lines":[{"position":line["position"],"text":line["text"],
+                               "start":line["start_time"],"end":line["end_time"],
+                               "timing":line["timing_status"],"cues":cues}
+                              for line,cues in lines]}
+                else:
+                    payload={"version":{"timing_status":"untimed","title":draft["title"],
+                                        "artist":draft["artist"]},
+                     "lines":[{"position":i,"text":line,"start":None,"end":None,
+                               "timing":"untimed","cues":[]}
+                              for i,line in enumerate(draft["raw_text"].splitlines()) if line.strip()]}
+                if draft:
+                    payload["draft"]={"text":draft["raw_text"],
+                                      "reason":draft["reason"]}
+                self.send_json(200,payload)
                 return
         if path=="/api/inspect":
             name=q.get("file",[""])[0]
