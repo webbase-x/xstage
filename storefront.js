@@ -83,6 +83,17 @@
       note:"ตัวติดตั้ง Setup EXE สำหรับ Windows รวมส่วนประกอบพร้อมใช้และทางลัดพร้อมไอคอน รุ่นก่อนที่ยังไม่มีตัวติดตั้งจะดาวน์โหลดเป็น ZIP แบบพกพา",
       fallback:"ยังยืนยันไฟล์ดาวน์โหลด Song Studio PC ไม่ได้"
     },
+    "studio-plus":{
+      title:"X-Stage Song Studio Plus",category:"WINDOWS · NEW MUSIC STUDIO",
+      subtitle:"แอปใหม่แยกจาก Song Studio เดิม · SQLite-first",
+      description:"โปรแกรมใหม่สำหรับจัดคลังเพลงคาราโอเกะจากหลายเครื่อง ตรวจ SHA-256 ของไฟล์สื่อก่อนอ่านเนื้อร้อง สร้าง SQLite กลาง แก้เนื้อร้องแบบกลุ่ม และส่งออก X-media พร้อม Timing ในไฟล์เดียว",
+      features:["นำเข้า NCN และสื่อเพลงจากหลายชุด โดยใช้ SHA-256 ลดสำเนาซ้ำ","ฐาน SQLite แยก Song ID, Media SHA-256 และ Lyrics Version","ค้นคำ แก้ข้อความทั้งบรรทัดหลายกลุ่ม พร้อมรักษา Timing รายเพลงและ Undo","สร้างไฟล์ X-Media แบบไบนารีพร้อมเนื้อร้องฝังในไฟล์เดียว"],
+      hero:"เพลงเป็นระเบียบในสตูดิโอใหม่",blurb:"หนึ่งคลัง SQLite · สื่อไม่ซ้ำ · เนื้อร้องหลายเวอร์ชัน",preview:"SONG STUDIO PLUS · SQLITE FIRST",
+      type:"manifest",manifest:"./downloads/song-studio-plus-latest.json",
+      secondary:{label:"ชมหน้าตา Studio Plus (UI Preview)",url:"./songstudio-plus/web/"},
+      note:"v0.1.0 Technical Preview เท่านั้น · EXE ทดสอบใน GitHub Actions ยังไม่ได้ลงลายเซ็นดิจิทัล และระบบ Karaoke PC/Web/APK ยังเล่นไฟล์ X-Media รุ่นใหม่ไม่ได้ ห้ามใช้กับคลังหลักโดยยังไม่สำรองข้อมูล",
+      fallback:"Technical Preview · ยังไม่มี EXE รุ่นลงลายเซ็นพร้อมใช้งานจริง"
+    },
     "studio-web":{
       title:"X-Stage Song Studio Web",category:"WEB · MUSIC TOOLS",
       subtitle:"ทำงานกับ MIDI และเนื้อร้องผ่านเบราว์เซอร์",
