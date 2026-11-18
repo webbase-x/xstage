@@ -308,6 +308,12 @@ def iter_source(root):
                 yield p
 
 def import_folder(workspace,source,progress=None,cancel=None):
+    """Incremental import: hash and index original media, NEVER copy it.
+
+    Reuses one SQLite connection and commits in batches, not one full
+    journal-mode negotiation and several connections per song. Every file
+    has its own SAVEPOINT, so a corrupt LYR/CUR cannot poison the batch.
+    """
     root=clean_path(source)
     target=root_folder(workspace)
     if root==target or target in root.parents or root in target.parents:
@@ -315,52 +321,79 @@ def import_folder(workspace,source,progress=None,cancel=None):
     init(target)
     batch=uuid.uuid4().hex
     totals={"files_seen":0,"files_new":0,"media_duplicates":0,
-            "lyrics_new":0,"failures":0}
-    with WRITE_LOCK, connect(target) as db:
+            "lyrics_new":0,"failures":0,"hash_cache_hits":0,"bytes_hashed":0}
+    with WRITE_LOCK,connect(target) as db:
         db.execute("""INSERT INTO xstage_import_batches
             (id,source_root,created_at,status) VALUES (?,?,?,'running')""",
             (batch,str(root),now()))
-    for path in iter_source(root):
-        if cancel and cancel.is_set(): break
-        totals["files_seen"]+=1
-        outcome="error"; message=""; song_id=None; h=None
-        try:
-            before=path.stat()
-            if not 0<=before.st_size<SIZE_LIMIT:
-                raise ValueError("ขนาดไฟล์ไม่อยู่ในช่วงที่รองรับ")
-            h=digest(path)
-            after=path.stat()
-            if (after.st_size,after.st_mtime_ns)!=(before.st_size,before.st_mtime_ns):
-                raise ValueError("ไฟล์ต้นทางเปลี่ยนระหว่างคำนวณ SHA-256")
-            comps=companion_candidates(path)
-            with WRITE_LOCK, connect(target) as db:
+        db.commit()
+        for path in iter_source(root):
+            if cancel and cancel.is_set():
+                break
+            totals["files_seen"]+=1
+            original_path=str(path.resolve())
+            outcome="error"
+            message=""
+            song_id=None
+            h=None
+            savepoint=False
+            try:
+                before=path.stat()
+                if not 0<=before.st_size<SIZE_LIMIT:
+                    raise ValueError("ขนาดไฟล์ไม่อยู่ในช่วงที่รองรับ")
+                cached=db.execute("""SELECT verified_sha256 FROM xstage_media_sources
+                    WHERE source_path=? AND bytes=? AND mtime_ns=?""",
+                    (original_path,before.st_size,before.st_mtime_ns)).fetchone()
+                if cached:
+                    h=cached["verified_sha256"]
+                    totals["hash_cache_hits"]+=1
+                else:
+                    h=digest(path)
+                    totals["bytes_hashed"]+=before.st_size
+                after=path.stat()
+                if (after.st_size,after.st_mtime_ns)!=(before.st_size,before.st_mtime_ns):
+                    raise ValueError("ไฟล์เพลงต้นฉบับเปลี่ยนระหว่างตรวจ SHA-256")
+                # Compute companions only AFTER media hash deduplication.
+                comps=companion_candidates(path)
+                db.execute("SAVEPOINT plus_media_item")
+                savepoint=True
                 media=db.execute("SELECT * FROM xstage_media WHERE sha256=?",(h,)).fetchone()
                 if media:
                     totals["media_duplicates"]+=1
                     outcome="media-duplicate"
                     song=db.execute("SELECT * FROM xstage_songs WHERE media_id=?",(media["id"],)).fetchone()
                 else:
-                    stored=media_location(target,h,path.suffix.lower())
-                    safe_store(path,stored,h)
                     media_id=uuid.uuid4().hex
+                    # Empty stored_path means zero import-time copying. Prior
+                    # previews with SOURCE/... continue to work unchanged.
                     db.execute("""INSERT INTO xstage_media
                       (id,sha256,extension,bytes,stored_path,first_filename,created_at)
                       VALUES (?,?,?,?,?,?,?)""",
-                      (media_id,h,path.suffix.lower(),before.st_size,
-                       str(stored.relative_to(target)),path.name,now()))
-                    title=path.stem
-                    artist=""
+                      (media_id,h,path.suffix.lower(),before.st_size,"",path.name,now()))
                     song_id=uuid.uuid4().hex
                     seq=db.execute("SELECT COALESCE(MAX(code),0)+1 FROM xstage_songs").fetchone()[0]
                     db.execute("""INSERT INTO xstage_songs
                      (id,code,media_id,title,artist,original_code,created_at)
                      VALUES (?,?,?,?,?,?,?)""",
-                     (song_id,seq,media_id,title,artist,path.stem,now()))
+                     (song_id,seq,media_id,path.stem,"",path.stem,now()))
                     totals["files_new"]+=1
                     song=db.execute("SELECT * FROM xstage_songs WHERE id=?",(song_id,)).fetchone()
                     media=db.execute("SELECT * FROM xstage_media WHERE id=?",(media_id,)).fetchone()
                     outcome="new-media"
+                if not song:
+                    raise ValueError("ทะเบียนเพลงที่ตรงกับสื่อนี้ไม่สมบูรณ์")
                 song_id=song["id"]
+                # The same path may be reused for a different song after
+                # replacement: keep the latest verified media relationship.
+                db.execute("""INSERT INTO xstage_media_sources
+                    (source_path,media_id,bytes,mtime_ns,verified_sha256,last_seen)
+                    VALUES (?,?,?,?,?,?)
+                    ON CONFLICT(source_path) DO UPDATE SET
+                    media_id=excluded.media_id,bytes=excluded.bytes,
+                    mtime_ns=excluded.mtime_ns,
+                    verified_sha256=excluded.verified_sha256,
+                    last_seen=excluded.last_seen""",
+                    (original_path,media["id"],before.st_size,before.st_mtime_ns,h,now()))
                 parts=[]
                 for ext in (".lyr",".cur",".lrc"):
                     companion=comps.get(ext)
@@ -368,12 +401,9 @@ def import_folder(workspace,source,progress=None,cancel=None):
                         parts.append(ext.encode()+b"\x00"+digest(companion).encode())
                 source_sig=binary_digest(*parts) if parts else None
                 if source_sig and db.execute("""SELECT 1 FROM xstage_lyric_versions
-                     WHERE song_id=? AND source_sha256=?""",(song_id,source_sig)).fetchone():
+                    WHERE song_id=? AND source_sha256=?""",(song_id,source_sig)).fetchone():
                     outcome="same-lyrics"
                 else:
-                    # A bad or partial lyric companion MUST NOT roll back a
-                    # verified media record. Keep the source once, log the
-                    # lyric problem and permit fixing LYR/CUR on the next scan.
                     try:
                         doc=document_for(path,comps)
                         parsed=valid_lines(doc) if doc else None
@@ -387,8 +417,8 @@ def import_folder(workspace,source,progress=None,cancel=None):
                                 meta=doc.get("metadata") or {}
                                 if song["title"]==song["original_code"] and meta.get("title"):
                                     db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
-                                               (str(meta["title"])[:255],
-                                                str(meta.get("artist") or "")[:255],song_id))
+                                       (str(meta["title"])[:255],
+                                        str(meta.get("artist") or "")[:255],song_id))
                         elif doc:
                             message="เนื้อร้องหรือ CUR ยังจับเวลาไม่ครบ · เก็บสื่อไว้รอตรวจ"
                             outcome="timing-incomplete"
@@ -396,26 +426,38 @@ def import_folder(workspace,source,progress=None,cancel=None):
                         outcome="lyrics-error"
                         totals["failures"]+=1
                         message=str(lyric_error)[:350]
-                db.execute("""INSERT OR REPLACE INTO xstage_import_items
-                (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
-                VALUES (?,?,?,?,?,?,?,?)""",
-                (batch,str(path),path.name,h,song_id,outcome,message,now()))
-        except (OSError,ValueError,TypeError,sqlite3.DatabaseError) as exc:
-            totals["failures"]+=1
-            message=str(exc)[:350]
-            with WRITE_LOCK,connect(target) as db:
-                db.execute("""INSERT OR REPLACE INTO xstage_import_items
-                (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
-                VALUES (?,?,?,?,?,?,?,?)""",
-                (batch,str(path),path.name,h,None,"error",message,now()))
-        with WRITE_LOCK,connect(target) as db:
-            db.execute("""UPDATE xstage_import_batches SET
-             files_seen=?,files_new=?,media_duplicates=?,lyrics_new=?,failures=?
-             WHERE id=?""",(*totals.values(),batch))
-        if progress: progress(dict(totals),path.name)
-    with WRITE_LOCK,connect(target) as db:
-        db.execute("UPDATE xstage_import_batches SET status=?,completed_at=? WHERE id=?",
-                   ("cancelled" if cancel and cancel.is_set() else "completed",now(),batch))
+                db.execute("""INSERT INTO xstage_import_items
+                 (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
+                 VALUES (?,?,?,?,?,?,?,?)""",
+                 (batch,original_path,path.name,h,song_id,outcome,message,now()))
+                db.execute("RELEASE SAVEPOINT plus_media_item")
+                savepoint=False
+            except (OSError,ValueError,TypeError,sqlite3.DatabaseError) as exc:
+                if savepoint:
+                    db.execute("ROLLBACK TO SAVEPOINT plus_media_item")
+                    db.execute("RELEASE SAVEPOINT plus_media_item")
+                totals["failures"]+=1
+                message=str(exc)[:350]
+                db.execute("""INSERT INTO xstage_import_items
+                 (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
+                 VALUES (?,?,?,?,?,?,?,?)""",
+                 (batch,original_path,path.name,h,None,"error",message,now()))
+            if totals["files_seen"]%64==0:
+                db.execute("""UPDATE xstage_import_batches SET
+                    files_seen=?,files_new=?,media_duplicates=?,lyrics_new=?,failures=?
+                    WHERE id=?""",
+                    (totals["files_seen"],totals["files_new"],totals["media_duplicates"],
+                     totals["lyrics_new"],totals["failures"],batch))
+                db.commit()
+            if progress:
+                progress(dict(totals),path.name)
+        db.execute("""UPDATE xstage_import_batches SET
+            files_seen=?,files_new=?,media_duplicates=?,lyrics_new=?,failures=?,
+            status=?,completed_at=? WHERE id=?""",
+            (totals["files_seen"],totals["files_new"],totals["media_duplicates"],
+             totals["lyrics_new"],totals["failures"],
+             "cancelled" if cancel and cancel.is_set() else "completed",now(),batch))
+        db.commit()
     return {"batch":batch,**totals,"cancelled":bool(cancel and cancel.is_set())}
 
 def stats(workspace):
