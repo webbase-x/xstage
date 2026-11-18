@@ -61,7 +61,7 @@
           <article class="panel feature-panel">
             <div class="panel-head"><div><span class="label-top">START HERE</span><h2>นำเข้าเพลงจากโฟลเดอร์</h2></div><span class="count-pill">01 / 05</span></div>
             <label class="field-label" for="source-folder">โฟลเดอร์ต้นทาง (PC / USB / HDD)</label>
-            <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เช่น D:\NCN หรือ E:\My Music"></div>
+            <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เช่น D:\NCN หรือ E:\My Music"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
             <p class="field-hint">ค้นหาโฟลเดอร์ย่อยอัตโนมัติ รองรับ MID, KAR, MP3, M4A, WAV, FLAC, MP4, MKV และ WEBM</p>
             <button class="primary-btn full" id="import-start" type="button">เริ่มตรวจ SHA-256 และนำเข้า <span>↗</span></button>
             <div class="divider-inline"><span>ตรวจสอบแบบปลอดภัย</span></div>
@@ -113,7 +113,7 @@
           <label class="field-label" for="media-song">เลือกเพลงที่นำเข้าแล้ว</label>
           <select id="media-song"><option value="">เลือกเพลง</option></select>
           <label class="field-label" for="media-lrc">พาธไฟล์เนื้อร้อง .LRC (มีเวลา)</label>
-          <div class="input-wrap"><span class="folder-glyph">▤</span><input id="media-lrc" placeholder="D:\Lyrics\00001.lrc" spellcheck="false"></div>
+          <div class="input-wrap"><span class="folder-glyph">▤</span><input id="media-lrc" placeholder="D:\Lyrics\00001.lrc" spellcheck="false"><button id="lrc-browse" class="browse-btn" type="button">เลือกไฟล์</button></div>
           <button type="button" class="primary-btn" id="media-attach">บันทึกเนื้อร้องลง SQLite <span>↗</span></button>
           <p class="field-hint" id="media-feedback">ระบบเก็บเนื้อร้องใน SQLite โดยไม่แก้ไฟล์เสียงหรือวิดีโอต้นฉบับ</p>
         </article>
