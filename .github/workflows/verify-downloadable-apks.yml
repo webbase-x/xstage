@@ -30,6 +30,10 @@ jobs:
           fi
           filename=$(jq -er '.file | select(test("^[A-Za-z0-9._-]+\\.apk$"))' "$FEED")
           url=$(jq -r '.direct_download_url // .download_url // empty' "$FEED")
+          if [[ -z "$url" && "$FEED" == mirror-tv/latest.json ]]; then
+            tag=$(jq -er '"xstage-mirror-tv-v" + .version + "-build" + (.build | tostring)' "$FEED")
+            url="https://github.com/webbase-x/xstage/releases/download/$tag/$filename"
+          fi
           url=${url:-https://webbase-x.github.io/xstage/downloads/$filename}
           case "$url" in
             https://webbase-x.github.io/xstage/downloads/*|https://github.com/webbase-x/xstage/releases/download/*) ;;
