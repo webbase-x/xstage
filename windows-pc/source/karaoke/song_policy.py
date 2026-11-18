@@ -3,7 +3,7 @@ import math
 import ntpath
 from pathlib import Path
 import wave
-from .library import MIDI_EXT,VIDEO_EXT,SUPPORTED,SearchCancelled,canonical
+from .library import MIDI_EXT,VIDEO_EXT,XMEDIA_EXT,SUPPORTED,SearchCancelled,canonical
 from .ingest import Inspector,bounded
 from .lyrics import parse_lrc,decode_text
 from .name_duplicates import identity,musical_key
@@ -19,6 +19,7 @@ def check_cancel(cancelled):
 def available_parts(path,inspector=None):
     inspector=inspector or Inspector();path=Path(path)
     parts={'media':path}
+    if path.suffix.lower() in XMEDIA_EXT:return parts
     if path.suffix.lower() in MIDI_EXT- {'.emk', '.xsk'}:
         for role,file in zip(('lyrics','cursor'),inspector.ncn_pair(path)):
             if file.is_file():parts[role]=file
@@ -40,7 +41,7 @@ def assess(path,record=None,cancelled=None,inspector=None,probe=None,crosscheck_
             return result('invalid','ไม่พบไฟล์เพลง')
         file_size=path.stat().st_size
         if file_size==0:return result('invalid','ไฟล์เพลงว่าง')
-        if path.suffix.lower() in MIDI_EXT - {'.xsk'} and file_size>64*1024*1024:return result('review','MIDI/EMK ใหญ่เกินขอบเขตตัวตรวจ')
+        if path.suffix.lower() in MIDI_EXT - {'.xsk'} - XMEDIA_EXT and file_size>64*1024*1024:return result('review','MIDI/EMK ใหญ่เกินขอบเขตตัวตรวจ')
         inspector.capture_for_quality=True
         try:parsed,warnings=inspector.inspect(path);capsule=getattr(inspector,'last_quality',None)
         finally:inspector.capture_for_quality=False
@@ -56,7 +57,28 @@ def assess(path,record=None,cancelled=None,inspector=None,probe=None,crosscheck_
             for key,value in record.items():
                 if value not in ('',None) and not key.startswith('_'):data[key]=value
         duration=0.;lines=[];ext=path.suffix.lower();parts=available_parts(path,inspector)
-        if ext in MIDI_EXT:
+        if ext in XMEDIA_EXT:
+            from .xmedia_reader import inspect_xmedia, materialize_media
+            from .lyrics import timed_json_lyrics
+            info=inspect_xmedia(path)
+            lines=timed_json_lyrics(info['document']).lines
+            if info['kind']=='MIDI':
+                from .smf import load_midi
+                song=capsule['song'] if capsule else load_midi(path);duration=song.duration
+                if not (song.has_notes if hasattr(song,'has_notes') else any(event.data[0]&0xf0==0x90 and len(event.data)>2 and event.data[2]>0 for event in song.events)):
+                    return result('invalid','ไม่มีโน้ตที่ส่งเสียงใน MIDI')
+            else:
+                import tempfile
+                with tempfile.TemporaryDirectory(prefix='xstage-xmedia-policy-') as temp:
+                    effective,_=materialize_media(path,Path(temp))
+                    if probe is None:
+                        from .media_probe import probe as decoder
+                    else:decoder=probe
+                    checked=decoder(effective,cancelled)
+                    if checked.get('status')!='valid':
+                        return result(checked.get('status','review'),checked.get('reason','ยังยืนยันการเปิดสื่อไม่ได้'))
+                    duration=float(checked.get('duration',0))
+        elif ext in MIDI_EXT:
             from .smf import load_midi
             song=capsule['song'] if capsule else load_midi(path);duration=song.duration
             if not (song.has_notes if hasattr(song,'has_notes') else any(event.data[0]&0xf0==0x90 and len(event.data)>2 and event.data[2]>0 for event in song.events)):return result('invalid','ไม่มีโน้ตที่ส่งเสียงใน MIDI')
