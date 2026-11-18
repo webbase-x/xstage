@@ -444,6 +444,8 @@ def portable_catalog(destination, rows, generation):
             "title": str(row.get("title") or ""),
             "artist": str(row.get("artist") or ""),
             "sourceFormat": row.get("sourceFormat"),
+            "originalCode": row.get("originalCode"),
+            "sourceRegistry": row.get("sourceRegistry") or {},
             "audio": {"path": audio_path.as_posix()},
             "lyrics": {"path": lyric_path.as_posix()} if lyric_path else None,
         })
