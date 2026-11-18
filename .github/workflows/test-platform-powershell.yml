@@ -71,7 +71,8 @@ jobs:
             if ($ready.installer_file -notlike '*-Setup.exe') {
               throw 'Ready installer file must be a Setup EXE'
             }
-            if ([string]$ready.installer_sha256 -notmatch '^[a-f0-9]{64}') {
+            $installerSha = [string]$ready.installer_sha256
+            if ($installerSha.Length -ne 64 -or $installerSha -match '[^a-f0-9]') {
               throw 'Ready installer metadata must include a trusted SHA-256'
             }
           }
