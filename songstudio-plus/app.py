@@ -140,12 +140,12 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/api/inspect":
             name=q.get("file",[""])[0]
             output=(self.state.workspace/name).resolve()
-            if not output.is_relative_to(self.state.workspace) or
-                    not output.is_file():
+            if (not output.is_relative_to(self.state.workspace) or
+                    not output.is_file()):
                 raise ValueError("ไฟล์อยู่นอกคลัง")
             self.send_json(200,core.inspect_xfile(output,False));return
-        if path=="/" or path.startswith("/web/"):
-            self.static_file("index.html" if path=="/" else path.removeprefix("/web/"))
+        if path=="/" or path in ("/app.js","/style.css","/icon.svg") or path.startswith("/web/"):
+            self.static_file("index.html" if path=="/" else path.removeprefix("/web/").removeprefix("/"))
             return
         self.send_json(404,{"error":"ไม่พบหน้าที่เรียก"})
 
@@ -197,8 +197,8 @@ class Handler(BaseHTTPRequestHandler):
                 result={"version":vid,"created":created,"timing_status":"estimated"}
             elif path=="/api/build":
                 ids=body.get("song_ids",[])
-                if not isinstance(ids,list) or not 1<=len(ids)<=5000 or
-                    any(not isinstance(x,str) for x in ids):
+                if (not isinstance(ids,list) or not 1<=len(ids)<=5000 or
+                    any(not isinstance(x,str) for x in ids)):
                     raise ValueError("เลือกเพลง 1–5,000 เพลงต่อชุด")
                 def run_build(progress,cancel):
                     total={"done":0,"built":0,"skipped":0,"failed":0,"errors":[]}
