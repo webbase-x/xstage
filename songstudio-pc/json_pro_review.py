@@ -14,7 +14,8 @@ from pathlib import Path
 
 
 def canonical(path):
-    return str(Path(path).resolve()).casefold()
+    name = str(Path(path).resolve())
+    return name.casefold() if os.name == "nt" else name
 
 
 def signature(files):
