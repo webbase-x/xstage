@@ -11,6 +11,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from contextlib import closing
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -84,7 +85,7 @@ class MultiComputerImportTests(unittest.TestCase):
         self.assertEqual(len({row["code"] for row in portable["songs"]}), 2)
         self.assertTrue(all(row.get("sourceRegistry", {}).get("songId")
                             for row in portable["songs"]))
-        with sqlite3.connect(dest / "DB" / "songs.sqlite3") as db:
+        with closing(sqlite3.connect(dest / "DB" / "songs.sqlite3")) as db:
             self.assertEqual(db.execute("PRAGMA quick_check").fetchone()[0], "ok")
         third = pc.publish(second_root, str(self.destination), export, groups=GROUPS)
         self.assertEqual(third["copied"], 0)
