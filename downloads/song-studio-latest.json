@@ -9,10 +9,10 @@
   "installer_available": true,
   "installer_file": "X-Stage-Song-Studio-PC-v0.3.68-build368-win-x64-Setup.exe",
   "installer_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.68-build368/X-Stage-Song-Studio-PC-v0.3.68-build368-win-x64-Setup.exe",
-  "installer_sha256": "38e205dcb754bcee4106ff1370d71c138cc6a6cd029a1e9badfbbf471c5e2fd9",
+  "installer_sha256": "3a7384323b99ddc1ae907f5aa778c07cf3fb5e0d4f1abfc4908b285c2ba3f866",
   "archive_file": "X-Stage-Song-Studio-PC-Ready-v0.3.68-build368.zip",
   "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pc-ready-v0.3.68-build368/X-Stage-Song-Studio-PC-Ready-v0.3.68-build368.zip",
   "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pc-ready-v0.3.68-build368",
-  "sha256": "6f5bc734e0625f943d9c8f805c3da27643d7ff31db669a1876436d9ec39c9776",
+  "sha256": "f9f78a40d6393f2745a1a2390a1c77776b778e3067aaece45bb38c5d3709b3d2",
   "notes": "Build 368: Setup EXE with embedded icon and matching Windows Taskbar identity. Removed waiting-to-create count. Verified offline installer and portable ZIP."
 }
