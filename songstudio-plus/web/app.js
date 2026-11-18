@@ -5,7 +5,9 @@
                  songs:[],selectedSongs:new Set(),latestEdit:null,activeJob:null,
                  jobSignature:"",toastTimer:null,riskFilter:"structural",
                  riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
-                 riskHistory:[],riskSelected:null,riskEvidenceIndex:0};
+                 riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
+                 songOffset:0,songHasNext:false,groupOffset:0,groupHasNext:false,
+                 selectedGroupInfo:new Map(),issueRows:[],issueOffset:0};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 build:"สร้างไฟล์ X-Stage",library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
@@ -39,7 +41,10 @@
     for(const button of document.querySelectorAll("[data-view]"))
       button.classList.toggle("active",button.dataset.view===name);
     text("breadcrumb",labels[name]);
-    if(name==="library"||name==="build"||name==="media")void refreshSongs();
+    if(name==="library"||name==="build"||name==="media"){
+      state.songOffset=0;
+      void refreshSongs();
+    }
     if(name==="import")void refreshStatus();
     if(name==="risks")void loadRisks();
     if(name==="lyrics"&&$("lyrics-search").value.trim())void searchGroups();
@@ -70,11 +75,17 @@
       " เพลง · เก็บเนื้อร้องรอ Timing "+number(result.songs_draft_lyrics)+
       " เพลง · เวลาประมาณ "+estimated+" เพลง · ตรวจรายการตามสาเหตุได้ด้านล่าง");
   }
+  const visibleRows=()=>window.innerHeight<=680?4:window.innerHeight<=850?5:6;
   async function refreshSongs(){
     if(!state.ready)return;
     const q=state.view==="library"?$("library-search").value.trim():"";
-    const data=await api("/api/songs?q="+encodeURIComponent(q)+"&limit=80");
-    state.songs=data.rows||[];
+    const pageSize=visibleRows();
+    const inMedia=state.view==="media";
+    const data=await api("/api/songs?q="+encodeURIComponent(q)+
+      "&limit="+(inMedia?80:pageSize+1)+
+      "&offset="+(inMedia?0:state.songOffset));
+    state.songHasNext=!inMedia&&(data.rows||[]).length>pageSize;
+    state.songs=inMedia?(data.rows||[]):(data.rows||[]).slice(0,pageSize);
     renderSongs();
   }
   function renderSongs(){
@@ -147,12 +158,19 @@
     }
     if(previous)select.value=previous;
     updateBuildSelection();
+    const pageSize=visibleRows();
+    const label="หน้า "+number(Math.floor(state.songOffset/pageSize)+1)+
+       " · "+(state.songs.length?number(state.songOffset+1)+"–"+
+       number(state.songOffset+state.songs.length):"ไม่มีรายการ");
+    text("library-page-info",label);
+    text("build-page-info",label);
+    $("library-prev").disabled=state.songOffset===0;
+    $("build-prev").disabled=state.songOffset===0;
+    $("library-next").disabled=!state.songHasNext;
+    $("build-next").disabled=!state.songHasNext;
   }
   function updateBuildSelection(){
-    const present=new Set(state.songs.map(song=>song.id));
-    for(const id of state.selectedSongs){
-      if(!present.has(id))state.selectedSongs.delete(id);
-    }
+    // Preserve selected song IDs when moving between pages.
     text("build-count",number(state.selectedSongs.size)+" เพลง");
     $("build-start").disabled=!state.ready||state.selectedSongs.size===0||Boolean(state.activeJob);
   }
@@ -183,20 +201,30 @@
       $("lyrics-dialog").showModal();
     }catch(error){toast(error.message,true);}
   }
-  async function searchGroups(){
+  async function searchGroups(reset=true){
     if(!state.ready)return;
     const q=$("lyrics-search").value.trim();
-    state.selectedGroups.clear();
+    if(reset){
+      state.groupOffset=0;
+      state.selectedGroups.clear();
+      state.selectedGroupInfo.clear();
+    }
     state.groups=[];
     if(!q){text("groups-count","0 กลุ่ม");renderGroups();return;}
     try{
-      const data=await api("/api/groups?q="+encodeURIComponent(q)+"&limit=100");
-      state.groups=data.rows||[];
+      const limit=visibleRows();
+      const data=await api("/api/groups?q="+encodeURIComponent(q)+
+        "&limit="+(limit+1)+"&offset="+state.groupOffset);
+      state.groupHasNext=(data.rows||[]).length>limit;
+      state.groups=(data.rows||[]).slice(0,limit);
       renderGroups();
     }catch(error){toast(error.message,true);}
   }
   function renderGroups(){
-    text("groups-count",number(state.groups.length)+" กลุ่ม");
+    text("groups-count",number(state.groups.length)+" กลุ่มในหน้านี้");
+    text("groups-page-info","หน้า "+number(Math.floor(state.groupOffset/visibleRows())+1));
+    $("groups-prev").disabled=state.groupOffset<=0;
+    $("groups-next").disabled=!state.groupHasNext;
     const panel=$("group-list");panel.replaceChildren();
     if(!state.groups.length){
       const empty=document.createElement("p");empty.className="empty-small";
@@ -209,8 +237,13 @@
       const checkbox=document.createElement("input");checkbox.type="checkbox";
       checkbox.checked=state.selectedGroups.has(entry.group_key);
       checkbox.addEventListener("change",()=>{
-        if(checkbox.checked)state.selectedGroups.add(entry.group_key);
-        else state.selectedGroups.delete(entry.group_key);
+        if(checkbox.checked){
+          state.selectedGroups.add(entry.group_key);
+          state.selectedGroupInfo.set(entry.group_key,entry);
+        }else{
+          state.selectedGroups.delete(entry.group_key);
+          state.selectedGroupInfo.delete(entry.group_key);
+        }
         updateSelectedGroups();
       });
       const middle=document.createElement("div");middle.className="group-text";
@@ -225,7 +258,7 @@
     updateSelectedGroups();
   }
   function updateSelectedGroups(){
-    const chosen=state.groups.filter(g=>state.selectedGroups.has(g.group_key));
+    const chosen=Array.from(state.selectedGroupInfo.values());
     const lines=chosen.reduce((acc,x)=>acc+Number(x.lines),0);
     text("selected-summary",chosen.length?
       "เลือก "+number(chosen.length)+" กลุ่ม · "+number(lines)+" บรรทัด"+
@@ -632,11 +665,14 @@
     });
     $("lyrics-replacement").addEventListener("input",updateSelectedGroups);
     $("groups-all").addEventListener("click",()=>{
-      for(const group of state.groups)state.selectedGroups.add(group.group_key);
+      for(const group of state.groups){
+        state.selectedGroups.add(group.group_key);
+        state.selectedGroupInfo.set(group.group_key,group);
+      }
       renderGroups();
     });
     $("groups-clear").addEventListener("click",()=>{
-      state.selectedGroups.clear();renderGroups();
+      state.selectedGroups.clear();state.selectedGroupInfo.clear();renderGroups();
     });
     $("lyrics-apply").addEventListener("click",()=>void applyLyrics());
     $("lyrics-undo").addEventListener("click",()=>void undoLyrics());
@@ -652,9 +688,34 @@
       if(!state.selectedSongs.size)return;
       void startJob("build",{song_ids:Array.from(state.selectedSongs)});
     });
-    $("library-find").addEventListener("click",()=>void refreshSongs());
+    $("library-prev").addEventListener("click",()=>{
+      state.songOffset=Math.max(0,state.songOffset-visibleRows());
+      void refreshSongs();
+    });
+    $("library-next").addEventListener("click",()=>{
+      state.songOffset+=visibleRows();void refreshSongs();
+    });
+    $("build-prev").addEventListener("click",()=>{
+      state.songOffset=Math.max(0,state.songOffset-visibleRows());
+      void refreshSongs();
+    });
+    $("build-next").addEventListener("click",()=>{
+      state.songOffset+=visibleRows();void refreshSongs();
+    });
+    $("groups-prev").addEventListener("click",()=>{
+      state.groupOffset=Math.max(0,state.groupOffset-visibleRows());
+      void searchGroups(false);
+    });
+    $("groups-next").addEventListener("click",()=>{
+      state.groupOffset+=visibleRows();void searchGroups(false);
+    });
+    $("library-find").addEventListener("click",()=>{
+      state.songOffset=0;void refreshSongs();
+    });
     $("library-search").addEventListener("keydown",event=>{
-      if(event.key==="Enter")void refreshSongs();
+      if(event.key==="Enter"){
+        state.songOffset=0;void refreshSongs();
+      }
     });
     $("cancel-job").addEventListener("click",async()=>{
       if(!state.activeJob)return;
