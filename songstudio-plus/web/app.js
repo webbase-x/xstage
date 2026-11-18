@@ -13,7 +13,7 @@
                  previewSelected:null,previewPlaying:false,previewHeard:false,
                  previewTime:0,previewDuration:0,previewRaf:null,
                  previewLastPaint:0,previewMidiSample:0,previewMidiAt:0,
-                 previewPolling:false,previewMidiPoll:null};
+                 previewPolling:false,previewMidiPoll:null,previewSeeking:false};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
@@ -42,7 +42,11 @@
   }
   function view(name){
     if(!labels[name])return;
-    if(state.view==="preview"&&name!=="preview")void stopPreviewPlayback();
+    if(state.view==="preview"&&name!=="preview"){
+      void stopPreviewPlayback();
+      state.previewSelected=null;
+      state.previewPlaying=false;
+    }
     state.view=name;
     for(const element of document.querySelectorAll(".view"))
       element.classList.toggle("is-visible",element.id==="view-"+name);
@@ -747,7 +751,8 @@
     $("preview-pause").disabled=!selected||!state.previewPlaying;
     $("preview-seek").disabled=!selected||state.previewDuration<=0;
     $("preview-seek").max=String(Math.max(0,state.previewDuration));
-    $("preview-seek").value=String(Math.min(state.previewDuration,state.previewTime));
+    if(!state.previewSeeking)
+      $("preview-seek").value=String(Math.min(state.previewDuration,state.previewTime));
     $("preview-pass").disabled=!canReview;
     $("preview-fail").disabled=!canReview;
     $("preview-needs").disabled=!selected||!detail.version_id;
@@ -941,7 +946,16 @@
     });
     $("preview-play").addEventListener("click",()=>void playPreview());
     $("preview-pause").addEventListener("click",()=>void pausePreview());
-    $("preview-seek").addEventListener("change",event=>void seekPreview(event.target.value));
+    $("preview-seek").addEventListener("pointerdown",()=>{state.previewSeeking=true;});
+    $("preview-seek").addEventListener("input",event=>{
+      if(state.previewSeeking)
+        text("preview-clock",previewFormatSeconds(Number(event.target.value))+
+          " / "+previewFormatSeconds(state.previewDuration));
+    });
+    $("preview-seek").addEventListener("change",event=>{
+      state.previewSeeking=false;void seekPreview(event.target.value);
+    });
+    $("preview-seek").addEventListener("pointerup",()=>{state.previewSeeking=false;});
     for(const type of ["audio","video"]){
       const media=$("preview-"+type);
       media.addEventListener("loadedmetadata",()=>{
