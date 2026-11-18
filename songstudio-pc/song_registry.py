@@ -349,6 +349,7 @@ def classify(rows, existing, selected_groups=None):
         result["total"] += 1
         if category == "conflict":
             result["conflicts"].append({"code": row.get("code"), "title": row.get("title"),
+                                        "path": (row.get("audio") or {}).get("path"),
                                         "reason": "รหัสหรือ Song ID ชนกับเพลงอื่น"})
         elif category == "duplicate":
             result["duplicates"].append({"code": row.get("code"), "title": row.get("title"),
