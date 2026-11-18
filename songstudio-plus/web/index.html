@@ -52,10 +52,12 @@
           </div>
         </div>
         <div class="stat-grid" id="stat-grid">
-          <article class="stat"><span>เพลงในคลัง</span><strong id="stat-songs">—</strong><small>Song IDs</small></article>
+          <article class="stat"><span>เพลงในคลัง</span><strong id="stat-songs">—</strong><small>Song IDs ที่ลงทะเบียน</small></article>
+          <article class="stat"><span>เพลงมีเนื้อร้องพร้อมเวลา</span><strong id="stat-ready">—</strong><small>พร้อมสร้างไฟล์ X-Stage</small></article>
+          <article class="stat stat-attention"><span>เพลงยังไม่มีเนื้อร้องพร้อมเวลา</span><strong id="stat-pending">—</strong><small>ต้องตรวจข้อมูลประกอบ</small></article>
           <article class="stat"><span>สื่อไม่ซ้ำ</span><strong id="stat-media">—</strong><small>SHA-256 Registry</small></article>
-          <article class="stat"><span>ชุดเนื้อร้อง</span><strong id="stat-lyrics">—</strong><small>Lyrics Versions</small></article>
-          <article class="stat"><span>ไฟล์ X-Stage</span><strong id="stat-exports">—</strong><small>Embedded Outputs</small></article>
+          <article class="stat"><span>ชุดเนื้อร้องทุกเวอร์ชัน</span><strong id="stat-lyrics">—</strong><small>Lyrics Versions (ไม่ใช่จำนวนเพลง)</small></article>
+          <article class="stat"><span>ไฟล์ X-Stage ที่สร้างแล้ว</span><strong id="stat-exports">—</strong><small>Embedded Outputs</small></article>
         </div>
         <div class="two-col">
           <article class="panel feature-panel">
@@ -77,6 +79,14 @@
             <button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดงานหลังไฟล์ปัจจุบัน</button>
           </article>
         </div>
+        <section class="panel issues-panel" aria-labelledby="issues-title">
+          <div class="panel-head">
+            <div><span class="label-top">IMPORT DIAGNOSTICS</span><h2 id="issues-title">รายการที่นำเข้าไม่สมบูรณ์</h2></div>
+            <button class="quiet-btn" type="button" id="issues-load">ตรวจสอบรายการผิดพลาด</button>
+          </div>
+          <p class="field-hint" id="issues-summary">เพลงที่ยังไม่มีเนื้อร้องอาจเกิดจากไม่มีไฟล์ LYR/CUR หรือมี Timing ที่อ่านไม่ได้ ไม่จำเป็นต้องเป็นไฟล์เพลงเสีย</p>
+          <div id="issues-list" class="issues-list" role="region" aria-label="รายละเอียดรายการนำเข้าที่ต้องตรวจสอบ"></div>
+        </section>
         <div class="panel tip-panel"><span class="tip-icon">✦</span><div><strong>นำเข้าหลายเครื่องได้ ไม่ต้องเปลี่ยนชื่อไฟล์ก่อน</strong><p>ชื่อไฟล์ต้นฉบับซ้ำกันไม่เป็นปัญหา ระบบใช้ SHA-256 แยกไฟล์และเก็บเนื้อร้องต่างเวอร์ชัน · ตอนส่งออกต้องเข้าถึงไฟล์ต้นฉบับได้</p></div></div>
       </section>
       <section class="view" id="view-lyrics" aria-labelledby="lyrics-title">
