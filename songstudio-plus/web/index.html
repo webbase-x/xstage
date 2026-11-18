@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1023">
+<meta name="description" content="X-Stage Song Studio Plus · SQLite-first embedded karaoke production studio">
+<title>X-Stage Song Studio Plus</title>
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./style.css">
+<script src="./app.js" defer></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="#import" aria-label="X-Stage Song Studio Plus">
+      <span class="brand-icon"><img src="./icon.svg" alt=""></span>
+      <span class="brand-copy"><strong>X-STAGE</strong><small>SONG STUDIO <em>PLUS</em></small></span>
+    </a>
+    <div class="side-heading">STUDIO WORKSPACE</div>
+    <nav class="side-nav" aria-label="เมนูหลัก">
+      <button class="nav-link active" data-view="import" type="button"><span class="nav-icon">01</span><span>นำเข้าเพลง<small>NCN · SHA-256 · SQLite</small></span></button>
+      <button class="nav-link" data-view="lyrics" type="button"><span class="nav-icon">02</span><span>แก้ไขเนื้อร้อง<small>ค้นคำ · กลุ่ม · Timing</small></span></button>
+      <button class="nav-link" data-view="media" type="button"><span class="nav-icon">03</span><span>เสียงและวิดีโอ<small>เพิ่มเนื้อร้องที่มีเวลา</small></span></button>
+      <button class="nav-link" data-view="build" type="button"><span class="nav-icon">04</span><span>สร้างไฟล์ X-Stage<small>XMID · XMP3 · XM4A · XMP4</small></span></button>
+      <button class="nav-link" data-view="library" type="button"><span class="nav-icon">05</span><span>คลังเพลง<small>ค้นหา · ตรวจสอบ · เวอร์ชัน</small></span></button>
+    </nav>
+    <div class="side-bottom">
+      <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
+      <div class="side-version">X-Stage Song Studio Plus <span>v0.1.0 · Preview</span></div>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="breadcrumb">X-STAGE <span>/</span> STUDIO PLUS <span>/</span> <strong id="breadcrumb">นำเข้าเพลง</strong></div>
+      <div class="top-actions"><span class="chip chip-soft" id="workspace-chip">LOCAL WORKSPACE</span><span class="avatar">X<span>+</span></span></div>
+    </header>
+    <div class="content">
+      <section class="view is-visible" id="view-import" aria-labelledby="import-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> YOUR MUSIC, FULLY ORGANIZED</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="hero-pill"><span class="small-dot"></span> NEW GENERATION KARAOKE STUDIO</span>
+            <h1 id="import-title">เพลงของคุณ<br><span class="gradient-text">เป็นระเบียบในที่เดียว</span></h1>
+            <p>เลือกโฟลเดอร์ต้นทางครั้งเดียว ระบบตรวจ SHA-256 ของไฟล์เพลงก่อน แล้วบันทึกข้อมูลและเนื้อร้องที่จำเป็นลง SQLite โดยไม่แก้ไฟล์เดิม</p>
+            <div class="hero-trust"><span>✓ ไม่ลบต้นฉบับ</span><span>✓ ตัดสื่อซ้ำ</span><span>✓ ทำต่อได้</span></div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="vinyl-disc"><div class="vinyl-inner"><span>+</span></div></div>
+            <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+            <div class="audio-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="stat-grid" id="stat-grid">
+          <article class="stat"><span>เพลงในคลัง</span><strong id="stat-songs">—</strong><small>Song IDs</small></article>
+          <article class="stat"><span>สื่อไม่ซ้ำ</span><strong id="stat-media">—</strong><small>SHA-256 Registry</small></article>
+          <article class="stat"><span>ชุดเนื้อร้อง</span><strong id="stat-lyrics">—</strong><small>Lyrics Versions</small></article>
+          <article class="stat"><span>ไฟล์ X-Stage</span><strong id="stat-exports">—</strong><small>Embedded Outputs</small></article>
+        </div>
+        <div class="two-col">
+          <article class="panel feature-panel">
+            <div class="panel-head"><div><span class="label-top">START HERE</span><h2>นำเข้าเพลงจากโฟลเดอร์</h2></div><span class="count-pill">01 / 05</span></div>
+            <label class="field-label" for="source-folder">โฟลเดอร์ต้นทาง (PC / USB / HDD)</label>
+            <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เช่น D:\NCN หรือ E:\My Music"></div>
+            <p class="field-hint">ค้นหาโฟลเดอร์ย่อยอัตโนมัติ รองรับ MID, KAR, MP3, M4A, WAV, FLAC, MP4, MKV และ WEBM</p>
+            <button class="primary-btn full" id="import-start" type="button">เริ่มตรวจ SHA-256 และนำเข้า <span>↗</span></button>
+            <div class="divider-inline"><span>ตรวจสอบแบบปลอดภัย</span></div>
+            <div class="step-list"><div><b>01</b><span>SHA-256 ของไฟล์สื่อก่อน</span><span class="step-check">✓</span></div><div><b>02</b><span>เทียบ Hash ใน SQLite</span><span class="step-check">✓</span></div><div><b>03</b><span>ดึง LYR/CUR เฉพาะที่จำเป็น</span><span class="step-check">✓</span></div></div>
+          </article>
+          <article class="panel progress-panel">
+            <div class="panel-head"><div><span class="label-top">LIVE ACTIVITY</span><h2>สถานะการทำงาน</h2></div><span class="status-badge" id="activity-status">พร้อมทำงาน</span></div>
+            <div class="progress-symbol">↻</div>
+            <h3 id="activity-title">พร้อมเริ่มงานใหม่</h3>
+            <p id="activity-subtitle">รายการจะเริ่มประมวลผลเป็นชุด ไม่จำเป็นต้องรอสแกนทุกไฟล์ก่อน</p>
+            <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+            <div class="progress-numbers"><span id="progress-detail">ยังไม่มีงาน</span><span id="progress-count">—</span></div>
+            <button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดงานหลังไฟล์ปัจจุบัน</button>
+          </article>
+        </div>
+        <div class="panel tip-panel"><span class="tip-icon">✦</span><div><strong>นำเข้าหลายเครื่องได้ ไม่ต้องเปลี่ยนชื่อไฟล์ก่อน</strong><p>ชื่อไฟล์ต้นฉบับซ้ำกันไม่เป็นปัญหา ระบบใช้ SHA-256 แยกไฟล์จริง และเก็บเนื้อร้องต่างเวอร์ชันโดยไม่คัดลอกสื่อซ้ำ</p></div></div>
+      </section>
+      <section class="view" id="view-lyrics" aria-labelledby="lyrics-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> SMART LYRICS EDITOR</div>
+        <div class="page-intro"><div><h1 id="lyrics-title">แก้ไขเนื้อร้อง<span class="gradient-text">ทั้งกลุ่ม</span></h1><p>ค้นหาคำในทุกบรรทัด จัดกลุ่มข้อความที่เหมือนกัน แล้วแทนที่ได้หลายกลุ่มพร้อมกัน โดยเก็บการปาดสีแยกรายเพลง</p></div><span class="section-symbol">Aa</span></div>
+        <article class="panel">
+          <div class="panel-head"><div><span class="label-top">SEARCH ACROSS YOUR LIBRARY</span><h2>ค้นหาคำหรือวลี</h2></div><span class="count-pill">TIMING LOCK</span></div>
+          <div class="search-combo"><div class="input-wrap"><span class="search-icon">⌕</span><input id="lyrics-search" type="search" placeholder="เช่น Nick, โดย, รัก..." autocomplete="off"></div><button class="primary-btn" id="lyrics-find">ค้นหา</button></div>
+          <p class="field-hint">ระบบค้นหาบรรทัดที่มีคำนี้ แล้วแยกเป็นกลุ่มตามข้อความทั้งบรรทัด แม้มีเพียงหนึ่งเพลง</p>
+        </article>
+        <div class="two-col lyrics-layout">
+          <article class="panel">
+            <div class="panel-head"><div><span class="label-top">MATCHING LINES</span><h2>กลุ่มข้อความที่พบ</h2></div><span class="count-pill" id="groups-count">0 กลุ่ม</span></div>
+            <div class="toolbar"><button class="quiet-btn" id="groups-all" type="button">เลือกทั้งหมดที่แสดง</button><button class="quiet-btn" id="groups-clear" type="button">ล้างการเลือก</button></div>
+            <div class="group-list" id="group-list"><p class="empty-small">ค้นคำเพื่อแสดงกลุ่มบรรทัด</p></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><span class="label-top">BATCH REPLACE</span><h2>แทนที่ข้อความทั้งบรรทัด</h2></div></div>
+            <div class="selection-summary" id="selected-summary">ยังไม่ได้เลือกกลุ่มข้อความ</div>
+            <label class="field-label" for="lyrics-replacement">ข้อความใหม่สำหรับทุกกลุ่มที่เลือก</label>
+            <textarea id="lyrics-replacement" rows="3" maxlength="400" placeholder="เช่น X-Stage Karaoke"></textarea>
+            <div class="notice"><span>⌁</span><p>ล็อกเวลาเริ่ม–จบของแต่ละบรรทัด รักษาจุดปาดเดิมเมื่อเป็นไปได้ หากต้องประมาณเวลา ระบบจะแสดงสถานะ Estimated</p></div>
+            <button class="primary-btn full" id="lyrics-apply" type="button" disabled>ตรวจสอบและแทนที่ทั้งกลุ่ม <span>↗</span></button>
+            <button class="quiet-btn full" id="lyrics-undo" type="button" disabled>↶ ย้อนคืนการแก้ไขล่าสุด</button>
+            <p class="field-hint" id="edit-feedback"></p>
+          </article>
+        </div>
+      </section>
+      <section class="view" id="view-media" aria-labelledby="media-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> AUDIO & VIDEO LYRICS</div>
+        <div class="page-intro"><div><h1 id="media-title">เสียงและวิดีโอ<span class="gradient-text">พร้อมเนื้อร้อง</span></h1><p>ผูกเนื้อร้องแบบมีเวลาจากไฟล์ LRC เข้ากับเพลงเสียงหรือวิดีโอที่ลงทะเบียนแล้ว โดยไม่ต้องสร้างไฟล์ JSON แยก</p></div><span class="section-symbol">♫</span></div>
+        <article class="panel media-editor">
+          <div class="notice info"><span>ⓘ</span><p><strong>ความสามารถในรุ่นเริ่มต้น</strong> รองรับการแนบ LRC ที่มีเวลาอยู่แล้ว การถอดเสียงด้วย AI และการจับเวลารายพยางค์อัตโนมัติยังไม่เปิดใช้ จึงไม่สร้างเวลาโดยอ้างว่าเป็นต้นฉบับ</p></div>
+          <label class="field-label" for="media-song">เลือกเพลงที่นำเข้าแล้ว</label>
+          <select id="media-song"><option value="">เลือกเพลง</option></select>
+          <label class="field-label" for="media-lrc">พาธไฟล์เนื้อร้อง .LRC (มีเวลา)</label>
+          <div class="input-wrap"><span class="folder-glyph">▤</span><input id="media-lrc" placeholder="D:\Lyrics\00001.lrc" spellcheck="false"></div>
+          <button type="button" class="primary-btn" id="media-attach">บันทึกเนื้อร้องลง SQLite <span>↗</span></button>
+          <p class="field-hint" id="media-feedback">ระบบเก็บเนื้อร้องใน SQLite โดยไม่แก้ไฟล์เสียงหรือวิดีโอต้นฉบับ</p>
+        </article>
+      </section>
+      <section class="view" id="view-build" aria-labelledby="build-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> EMBEDDED KARAOKE FILES</div>
+        <div class="page-intro"><div><h1 id="build-title">หนึ่งเพลง <span class="gradient-text">หนึ่งไฟล์ X-Stage</span></h1><p>นำสื่อดั้งเดิมและเนื้อร้องพร้อมเวลาจาก SQLite รวมไว้ในไฟล์เดียว โดยไม่แปลงเสียงหรือวิดีโอซ้ำ</p></div><span class="section-symbol">X</span></div>
+        <div class="two-col">
+          <article class="panel">
+            <div class="panel-head"><div><span class="label-top">CHOOSE SONGS</span><h2>เลือกเพลงสำหรับสร้างไฟล์</h2></div><span class="count-pill" id="build-count">0 เพลง</span></div>
+            <div class="toolbar"><button class="quiet-btn" id="build-all" type="button">เลือกทุกเพลงที่พร้อมในหน้านี้</button><button class="quiet-btn" id="build-clear" type="button">ยกเลิกทั้งหมด</button></div>
+            <div class="build-list" id="build-list"><p class="empty-small">ยังไม่มีเพลงในคลัง</p></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><span class="label-top">EXPORT ENGINE</span><h2>สร้างไฟล์พร้อมเนื้อร้อง</h2></div></div>
+            <div class="format-chip-list"><span>.XMID</span><span>.XMP3</span><span>.XM4A</span><span>.XMP4</span><span>+ MORE</span></div>
+            <div class="build-art"><span>X<span class="spark">✦</span></span><p>Embedded Lyrics<br>&amp; Timing</p></div>
+            <div class="notice"><span>◈</span><p>รุ่นนี้สร้างไฟล์ X-Stage Plus แบบไบนารีที่มีสื่อและเนื้อร้องในตัว พร้อมตัวตรวจความถูกต้องของไฟล์ การเล่นพร้อมเสียงจริงต้องใช้ Player ที่รองรับรูปแบบใหม่นี้</p></div>
+            <button class="primary-btn full" id="build-start" type="button" disabled>สร้างไฟล์ที่เลือก <span>↗</span></button>
+            <p class="field-hint" id="build-feedback"></p>
+          </article>
+        </div>
+      </section>
+      <section class="view" id="view-library" aria-labelledby="library-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> MUSIC LIBRARY</div>
+        <div class="page-intro"><div><h1 id="library-title">คลังเพลง <span class="gradient-text">SQLite</span></h1><p>ค้นหาเพลง ชื่อศิลปิน รหัสต้นทาง และตรวจสอบสถานะเนื้อร้องหรือไฟล์ที่สร้างแล้ว</p></div><span class="section-symbol">▦</span></div>
+        <article class="panel">
+          <div class="search-combo"><div class="input-wrap"><span class="search-icon">⌕</span><input id="library-search" type="search" placeholder="ค้นหาชื่อเพลง ศิลปิน หรือรหัสเดิม"></div><button class="primary-btn" id="library-find">ค้นหา</button></div>
+          <div class="table-scroll"><table><thead><tr><th>รหัสใหม่</th><th>ชื่อเพลง / ศิลปิน</th><th>ชนิด</th><th>เนื้อร้อง</th><th>ไฟล์ X</th><th></th></tr></thead><tbody id="library-rows"><tr><td colspan="6" class="empty-cell">ยังไม่มีเพลงในคลัง</td></tr></tbody></table></div>
+          <p class="field-hint">รายการเพลงบนหน้านี้แสดงครั้งละไม่เกิน 80 เพลง เพื่อรักษาความเร็วของโปรแกรม</p>
+        </article>
+      </section>
+      <footer class="footer"><span>© X-Stage Song Studio Plus</span><span>PRIVATE · LOCAL FIRST · ORIGINAL MEDIA SAFE</span></footer>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog id="confirm-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-icon">!</div><h2 id="confirm-title">ยืนยันการแก้ไข</h2><p id="confirm-text"></p><div class="dialog-actions"><button value="cancel" class="quiet-btn" type="submit">ยกเลิก</button><button value="yes" class="primary-btn" type="submit">ยืนยัน</button></div></form></dialog>
+<dialog id="lyrics-dialog" class="lyrics-dialog"><div class="modal-head"><h2 id="lyrics-modal-title">เนื้อร้องและ Timing</h2><button class="quiet-btn" id="lyrics-close">✕ ปิด</button></div><div id="lyrics-modal-lines"></div></dialog>
+</body>
+</html>
