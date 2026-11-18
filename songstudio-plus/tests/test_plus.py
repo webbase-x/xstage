@@ -62,6 +62,9 @@ class PlusTests(unittest.TestCase):
         self.assertIn("font-family:\"Segoe UI\"",css)
         self.assertNotIn("fonts.googleapis.com",css)
         self.assertIn("zoom-hint",html)
+        self.assertIn('id="stat-ready"',html)
+        self.assertIn('id="stat-pending"',html)
+        self.assertIn('id="issues-load"',html)
 
     def test_schema_all_tables_prefixed_and_separate_from_legacy(self):
         with plus.connect(self.workspace) as db:
@@ -82,6 +85,10 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(report["songs"],1)
         self.assertEqual(report["media"],1)
         self.assertEqual(report["lyrics"],2)
+        self.assertEqual(report["songs_with_lyrics"],1)
+        self.assertEqual(report["songs_without_lyrics"],0)
+        self.assertEqual(report["lyrics_versions"],2)
+        self.assertEqual(report["songs_estimated_timing"],1)
         rows=plus.songs(self.workspace)
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["code"],1)
@@ -208,6 +215,10 @@ class PlusTests(unittest.TestCase):
             outcome=db.execute(
                 "SELECT outcome FROM xstage_import_items ORDER BY id DESC LIMIT 1").fetchone()[0]
         self.assertEqual(outcome,"lyrics-error")
+        issues=plus.import_issues(self.workspace)
+        self.assertEqual(len(issues),1)
+        self.assertEqual(issues[0]["outcome"],"lyrics-error")
+        self.assertEqual(plus.stats(self.workspace)["songs_without_lyrics"],1)
 
     def test_missing_lyrics_not_claimed_as_karaoke(self):
         self.put("no-lyrics.mp3",b"audio"*200)
