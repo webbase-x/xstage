@@ -514,5 +514,5 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
             "unsupported": inspection.get("unsupportedCount", len(inspection["unsupported"])),
             "total": examined, "output": str(root), "issues": issues[:50],
             "message": (f"ส่งออก Lyrics JSON สำเร็จ {created} เพลง · ข้ามซ้ำ/มีแล้ว {skipped}"
-                        f" · ต่อจากรุ่นเดิม {resumed} · ERR ค้างทบทวน {deferred} · ผิดพลาดใหม่ {errors} · ไม่ครบ {inspection.get('incompleteCount', len(inspection['incomplete']))}"
+                        f" · ต่อจากรุ่นเดิม {resumed} · ERR ค้างทบทวน {deferred} · ผิดพลาดในรอบนี้ {errors} · ไม่ครบ {inspection.get('incompleteCount', len(inspection['incomplete']))}"
                         f" · ปลายทาง {root}")}
