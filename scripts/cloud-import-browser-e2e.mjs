@@ -221,6 +221,12 @@ try{
   // Android TV/TrueID browsers must never be forced into a GitHub popup.
   const mirrorFeed=JSON.parse(fs.readFileSync(path.join(root,'mirror-tv/test-latest.json'),'utf8'));
   const mirrorName=mirrorFeed.file;
+  // Force the fallback branch for this scenario. Production Mirror TV may be
+  // newer and use its verified GitHub Release URL; that is tested elsewhere.
+  await page.route('**/mirror-tv/latest.json',route=>route.fulfill({
+    status:200,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'},
+    body:JSON.stringify({available:false,channel:'production'})
+  }));
   await page.route('**/mirror-tv/test-latest.json',route=>route.fulfill({
     status:200,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'},
     body:JSON.stringify({...mirrorFeed,direct_download_available:true,
@@ -239,6 +245,7 @@ try{
   const quick=page.locator('[data-download-app="mirror-tv"]');
   assert.equal(await quick.getAttribute('hidden'),null,'Mirror TV card must display a direct APK action');
   await page.unroute('**/mirror-tv/test-latest.json');
+  await page.unroute('**/mirror-tv/latest.json');
   console.log('PASS: TrueID/Android TV same-origin APK navigation and visible card download');
 
   await page.goto('http://127.0.0.1:'+port+'/karaoke.html',{waitUntil:'domcontentloaded'});
