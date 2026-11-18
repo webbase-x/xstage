@@ -22,9 +22,10 @@
       <button class="nav-link active" data-view="import" type="button"><span class="nav-icon">01</span><span>นำเข้าเพลง<small>NCN · SHA-256 · SQLite</small></span></button>
       <button class="nav-link" data-view="lyrics" type="button"><span class="nav-icon">02</span><span>แก้ไขเนื้อร้อง<small>ค้นคำ · กลุ่ม · Timing</small></span></button>
       <button class="nav-link" data-view="media" type="button"><span class="nav-icon">03</span><span>เสียงและวิดีโอ<small>เพิ่มเนื้อร้องที่มีเวลา</small></span></button>
-      <button class="nav-link" data-view="build" type="button"><span class="nav-icon">04</span><span>สร้างไฟล์ X-Stage<small>XMID · XMP3 · XM4A · XMP4</small></span></button>
-      <button class="nav-link" data-view="library" type="button"><span class="nav-icon">05</span><span>คลังเพลง<small>ค้นหา · ตรวจสอบ · เวอร์ชัน</small></span></button>
-      <button class="nav-link" data-view="risks" type="button"><span class="nav-icon">06</span><span>ประวัติเสี่ยงปาดเนื้อ<small>หลักฐานจริง · ทดลองเปิด · บันทึกผล</small></span></button>
+      <button class="nav-link" data-view="preview" type="button"><span class="nav-icon">04</span><span>ทดสอบก่อนสร้าง<small>เสียงจริง · เนื้อร้อง · ปาดสี</small></span></button>
+      <button class="nav-link" data-view="build" type="button"><span class="nav-icon">05</span><span>สร้างไฟล์ X-Stage<small>XMID · XMP3 · XM4A · XMP4</small></span></button>
+      <button class="nav-link" data-view="library" type="button"><span class="nav-icon">06</span><span>คลังเพลง<small>ค้นหา · ตรวจสอบ · เวอร์ชัน</small></span></button>
+      <button class="nav-link" data-view="risks" type="button"><span class="nav-icon">07</span><span>ประวัติเสี่ยงปาดเนื้อ<small>หลักฐานจริง · ทดลองเปิด · บันทึกผล</small></span></button>
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
@@ -134,6 +135,59 @@
           <button type="button" class="primary-btn" id="media-attach">บันทึกเนื้อร้องลง SQLite <span>↗</span></button>
           <p class="field-hint" id="media-feedback">ระบบเก็บเนื้อร้องใน SQLite โดยไม่แก้ไฟล์เสียงหรือวิดีโอต้นฉบับ</p>
         </article>
+      </section>
+
+      <section class="view" id="view-preview" aria-labelledby="preview-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> PRE-BUILD KARAOKE TEST · ORIGINAL MEDIA</div>
+        <div class="page-intro">
+          <div><h1 id="preview-title">ทดสอบเพลง <span class="gradient-text">ก่อนสร้าง .x...</span></h1>
+          <p>ฟังเพลงต้นฉบับจริงพร้อมเนื้อร้องและจุดปาดสีจาก SQLite · ไม่คัดลอกไฟล์ · ไม่สร้าง .x... · บันทึกผลตรวจตามที่ได้ยินจริง</p></div>
+          <span class="section-symbol">▶</span>
+        </div>
+        <div class="preview-layout">
+          <article class="panel preview-browser">
+            <div class="panel-head"><div><span class="label-top">01 · SELECT TRACK</span><h2>เลือกเพลงทดสอบ</h2></div></div>
+            <div class="input-wrap"><span class="folder-glyph">⌕</span><input id="preview-search" placeholder="ชื่อเพลง · ศิลปิน · รหัสเพลง" autocomplete="off" spellcheck="false"><button type="button" class="browse-btn" id="preview-find">ค้นหา</button></div>
+            <div id="preview-songs" class="preview-songs"><p class="empty-small">เลือกเพลงจากรายการในคลัง</p></div>
+            <div class="list-pagination">
+              <span id="preview-page">หน้า 1</span>
+              <div class="toolbar"><button id="preview-prev" class="quiet-btn" type="button">‹ ก่อนหน้า</button><button id="preview-next" class="quiet-btn" type="button">ถัดไป ›</button></div>
+            </div>
+          </article>
+          <article class="panel preview-stage">
+            <div class="panel-head">
+              <div><span class="label-top">02 · LIVE ORIGINAL PLAYBACK</span><h2 id="preview-song-title">ยังไม่ได้เลือกเพลง</h2></div>
+              <span class="status-badge" id="preview-media-mode">พร้อมทดสอบ</span>
+            </div>
+            <div class="preview-visual">
+              <video id="preview-video" preload="metadata" playsinline hidden></video>
+              <div class="preview-cover" id="preview-cover"><span class="preview-disc">♫</span><small id="preview-song-artist">เลือกเพลงด้านซ้ายเพื่อเริ่มทดลองเปิด</small></div>
+              <div class="preview-swipe" aria-live="off">
+                <div class="preview-karaoke-line" id="preview-current-line">♪  เนื้อร้องและเวลาปาดสีจากฐาน SQLite</div>
+                <div class="preview-karaoke-next" id="preview-next-line">เมื่อเล่นเพลง ระบบจะแสดงจุดปาดตามเวลา</div>
+              </div>
+            </div>
+            <audio id="preview-audio" preload="metadata"></audio>
+            <div class="preview-transport">
+              <button id="preview-play" class="primary-btn" type="button" disabled>▶ เล่นเพลง</button>
+              <button id="preview-pause" class="quiet-btn" type="button" disabled>Ⅱ หยุดชั่วคราว</button>
+              <label class="preview-time" for="preview-seek" id="preview-clock">00:00 / 00:00</label>
+              <input id="preview-seek" type="range" min="0" max="100" step="0.1" value="0" disabled aria-label="เลื่อนตำแหน่งเพลง">
+            </div>
+            <p class="preview-warning" id="preview-warning">ตัวปาดสีที่แสดงไม่ใช่ผลตรวจยืนยัน · ต้องฟังเสียงจริงและเทียบคำด้วยตนเอง</p>
+            <div class="preview-review">
+              <label for="preview-note" class="field-label">ผลทดสอบการปาดสีจากการฟังจริง</label>
+              <textarea id="preview-note" rows="2" maxlength="800" placeholder="เช่น บรรทัดที่ 2 ปาดช้าไปประมาณ 0.3 วินาที" disabled></textarea>
+              <div class="preview-review-actions">
+                <button id="preview-pass" class="quiet-btn" type="button" disabled>✓ ฟังแล้วตรง</button>
+                <button id="preview-fail" class="quiet-btn" type="button" disabled>! พบปาดผิดจริง</button>
+                <button id="preview-needs" class="quiet-btn" type="button" disabled>ยังต้องตรวจ</button>
+                <button id="preview-to-build" class="primary-btn" type="button" disabled>ไปสร้าง .x... ↗</button>
+              </div>
+              <p class="field-hint" id="preview-review-status">ยังไม่มีผลทดสอบ</p>
+            </div>
+          </article>
+        </div>
       </section>
       <section class="view" id="view-build" aria-labelledby="build-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> EMBEDDED KARAOKE FILES</div>
