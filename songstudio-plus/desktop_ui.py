@@ -36,7 +36,7 @@ def run_desktop(server,url,workspace,icon_path):
     port=validate_local(url)
     set_windows_identity()
     from PySide6.QtCore import QUrl
-    from PySide6.QtGui import QDesktopServices, QIcon
+    from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QShortcut
     from PySide6.QtWidgets import QApplication,QMainWindow
     from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
     from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -77,7 +77,26 @@ def run_desktop(server,url,workspace,icon_path):
             self.page=RestrictedPage(profile,self.web)
             self.web.setPage(self.page)
             self.setCentralWidget(self.web)
+            # Large Windows desktops (including 2K/4K monitors) otherwise
+            # render the original 14px web UI too small. Users can override
+            # the default with familiar Ctrl+Plus / Ctrl+Minus / Ctrl+0.
+            self.default_zoom=1.20
+            self.web.setZoomFactor(self.default_zoom)
+            self.shortcuts=[]
+            for key,callback in (
+                ("Ctrl++",lambda:self.change_zoom(+0.10)),
+                ("Ctrl+=",lambda:self.change_zoom(+0.10)),
+                ("Ctrl+-",lambda:self.change_zoom(-0.10)),
+                ("Ctrl+0",lambda:self.web.setZoomFactor(self.default_zoom)),
+            ):
+                shortcut=QShortcut(QKeySequence(key),self)
+                shortcut.activated.connect(callback)
+                self.shortcuts.append(shortcut)
             self.web.load(QUrl(url))
+
+        def change_zoom(self,step):
+            self.web.setZoomFactor(
+                max(0.90,min(1.80,round(self.web.zoomFactor()+step,2))))
 
         def closeEvent(self,event):
             event.accept()
