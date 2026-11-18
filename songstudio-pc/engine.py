@@ -2591,6 +2591,22 @@ def execute_job(action, options, started):
             assigned = registry.assign_target_codes(source_records, remote)
             plan = registry.classify(assigned, remote, options.get("groups"))
             selected = plan["selected"]
+            duplicate_paths = {row.get("path") for row in plan["duplicates"]}
+            conflict_paths = {row.get("path") for row in plan["conflicts"]}
+            duplicated_rows = [
+                row for row in assigned if
+                (row.get("audio") or {}).get("path") in duplicate_paths]
+            conflicting_rows = [
+                row for row in assigned if
+                (row.get("audio") or {}).get("path") in conflict_paths]
+            if duplicated_rows:
+                registry.log_import(
+                    source, "drive", source, duplicated_rows, "duplicate",
+                    "เพลงนี้มีในฐาน Drive อยู่แล้ว · ข้ามการอัปโหลดซ้ำ")
+            if conflicting_rows:
+                registry.log_import(
+                    source, "drive", source, conflicting_rows, "conflict",
+                    "รหัสหรือ Song ID ชน · รอตรวจไม่แก้รายการเดิมบน Drive")
             log(f"XStageSong หลายเครื่อง: พบ {len(source_records):,} · เลือก {len(selected):,}"
                 f" · ซ้ำ {plan['counts']['duplicate']:,}"
                 f" · รหัสขัดแย้ง {plan['counts']['conflict']:,}")
