@@ -12,6 +12,7 @@ import importlib.util
 import mimetypes
 import os
 import secrets
+import sqlite3
 import shutil
 import subprocess
 import sys
@@ -2231,6 +2232,31 @@ def execute_job(action, options, started):
                 cancelled=worker_cancel(),
                 progress=lambda done, total, name: update(
                     f"จัดการไฟล์ซ้ำ {done:,}/{total:,} · {name}", done))
+            processed_paths = result.pop("processedPaths", [])
+            if processed_paths:
+                try:
+                    registry = _module("song_registry.py", "xstage_song_registry")
+                    export = _song_export_module()
+                    imported_root = export.songs_root(
+                        worker_prefs().get("import_source_folder") or
+                        worker_prefs()["workspace"])
+                    resolved_count = registry.reconcile_duplicate_actions(
+                        imported_root, imported_root, processed_paths,
+                        target="drive", operation=options.get("operation"))
+                    selected_pc = worker_prefs().get("pc_export_folder")
+                    if selected_pc:
+                        pc_mod = _module("pc_library_export.py", "xstage_pc_export")
+                        pc_root = pc_mod.destination_root(selected_pc)
+                        resolved_count += registry.reconcile_duplicate_actions(
+                            pc_root, imported_root, processed_paths,
+                            target="pc", operation=options.get("operation"))
+                    result["registryResolved"] = resolved_count
+                    log(f"อัปเดตสถานะประวัติเพลงซ้ำหลังย้าย/ลบแล้ว {resolved_count} รายการ")
+                except (OSError, ValueError, RuntimeError, sqlite3.Error) as exc:
+                    # The media operation already succeeded; never claim to
+                    # undo it or retry a dangerous file move automatically.
+                    log("WARN บันทึกสถานะฐานเพลงซ้ำไม่สำเร็จ กรุณาตรวจฐาน: " + str(exc))
+                    result["registryReconcileWarning"] = str(exc)
             update(result["message"], result["processed"])
         elif action == "scan":
             full = options.get("full") is True
