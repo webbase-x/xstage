@@ -489,9 +489,15 @@ class JsonProTests(unittest.TestCase):
             for i in range(5000)
         ]
         stages = []
+        real_check = export.record_is_complete
+
+        def verify_only_new(root, record):
+            if str(record.get("webSongId") or "").startswith("legacy-"):
+                raise AssertionError("Unrelated old files must be checked only on duplicate match")
+            return real_check(root, record)
+
         with (patch.object(export, "existing_records", return_value=old),
-              patch.object(export, "record_is_complete", side_effect=AssertionError(
-                  "Unrelated old files must be checked only on duplicate match"))):
+              patch.object(export, "record_is_complete", side_effect=verify_only_new)):
             result = pro.export_folder(
                 str(self.source), str(self.dest), output_format="original",
                 export=export, scanner=folder_upload,
@@ -507,7 +513,12 @@ class JsonProTests(unittest.TestCase):
         result = self.run_export()
         self.assertEqual(result["created"], 1)
         self.assertEqual(result["skipped"], 0)
-        self.assertEqual(len(export.existing_records(root)), 2)
+        # SHA-based song identity is stable: the corrected row replaces the
+        # dangling catalog reference instead of duplicating its song ID.
+        repaired = export.existing_records(root)
+        self.assertEqual(len(repaired), 1)
+        self.assertTrue(export.record_is_complete(root, repaired[0]))
+        self.assertNotEqual(repaired[0]["audio"]["path"], previous["audio"]["path"])
 
     def test_new_ready_resumes_legacy_catalog_without_decoding_old_lyrics(self):
         self.assertEqual(self.run_export()["created"], 1)
