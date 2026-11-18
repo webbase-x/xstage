@@ -184,6 +184,29 @@ class Handler(BaseHTTPRequestHandler):
                     body.get("replacement",""),body.get("expected_lines",-1))
             elif path=="/api/edit/undo":
                 result=core.undo_edit(self.state.workspace,body.get("batch",""))
+            elif path=="/api/pick":
+                kind=body.get("kind")
+                if kind not in ("folder","lrc"):
+                    raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
+                # A desktop dialog is explicitly invoked only on user click.
+                # It cannot be accessed remotely: server binds loopback only.
+                import tkinter as tk
+                from tkinter import filedialog
+                window=tk.Tk()
+                window.withdraw()
+                try:
+                    window.attributes("-topmost",True)
+                    if kind=="folder":
+                        chosen=filedialog.askdirectory(
+                            title="เลือกโฟลเดอร์เพลงต้นฉบับ",parent=window)
+                    else:
+                        chosen=filedialog.askopenfilename(
+                            title="เลือกไฟล์เนื้อร้องที่มีเวลา",
+                            filetypes=[("Timed Lyrics","*.lrc"),("ทุกไฟล์","*.*")],
+                            parent=window)
+                finally:
+                    window.destroy()
+                result={"path":chosen or ""}
             elif path=="/api/attach-lrc":
                 song_id=body.get("song_id","")
                 lrc_path=Path(body.get("path","")).expanduser().resolve(strict=True)
