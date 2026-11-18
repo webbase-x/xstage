@@ -2499,7 +2499,8 @@
     try {
       await saveInputs(['drive-import-source']);
       const groups=encodeURIComponent(selectedImportGroups('drive').join(','));
-      const result=await api('/api/drive-import/inspect?groups='+groups);
+      const result=await api('/api/drive-import/inspect?groups='+groups+
+        '&create_new='+($('drive-import-allow-new').checked?'1':'0'));
       $('drive-import-report').textContent='ต้นทาง '+result.source+
         '\nเลือก '+fmtNum(result.songs)+' จาก '+fmtNum(result.candidateSongs)+' เพลง'+
         '\n'+Object.entries(result.groups||{}).map(([kind,n])=>kind+' '+fmtNum(n)).join(' · ')+
