@@ -183,7 +183,7 @@ try{
   assert.equal(new Set(logoSources).size,storefrontCount,'each X-Stage application must have a distinct icon asset');
 
   await page.locator('#device-advice-title').waitFor();
-  assert.equal(await page.locator('[data-device-app]').count(),10,'all ten apps expose device compatibility');
+  assert.equal(await page.locator('[data-device-app]').count(),storefrontCount,'all current apps expose device compatibility');
   const iphoneGuidance=await page.evaluate(()=>{
     const api=window.XStageDeviceGuide;
     const p=api.detect({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',platform:'iPhone'});
@@ -246,7 +246,7 @@ try{
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='6');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
   assert.equal(await page.locator('#cloud-import-fonts').textContent(),'1');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'3',
     'Two unreviewed videos must not silently become embedded karaoke');
@@ -258,14 +258,14 @@ try{
   await page.locator('#cloud-import-video-album').fill('อัลบั้มทดสอบ');
   await page.locator('#cloud-import-video-mode').selectOption('embedded');
   await page.click('#cloud-import-video-save');
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='3');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
   await videoPick.selectOption(await videoPick.locator('option',{hasText:'A500.avi'}).getAttribute('value'));
   await page.locator('#cloud-import-video-title').fill('วิดีโอ AVI ไม่มีเนื้อร้องฝัง');
   await page.locator('#cloud-import-video-artist').fill('นักร้อง AVI');
   await page.locator('#cloud-import-video-mode').selectOption('timed');
   await page.locator('#cloud-import-video-lrc').fill(['[00:00.10]ทดสอบเสียงและภาพ AVI','[00:00.60]สร้าง LRC จากเวลาจริง'].join(String.fromCharCode(10)));
   await page.click('#cloud-import-video-save');
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
   await page.check('#cloud-import-allow-create');
   await page.click('#cloud-import-start');
@@ -339,7 +339,7 @@ try{
   fs.writeFileSync(path.join(dir,'K300.mp3'),k300);
   fs.writeFileSync(path.join(dir,'K300.lrc'),'[00:01.00]เพลงที่หยุดกลางทาง\n');
   await page.locator('#cloud-import-input').setInputFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='6');
   await page.click('#cloud-import-start');
   await page.locator('#cloud-import-pause:not([disabled])').waitFor();
   await page.click('#cloud-import-pause');
