@@ -305,6 +305,95 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(issues[0]["outcome"],"lyrics-error")
         self.assertEqual(plus.stats(self.workspace)["songs_without_lyrics"],1)
 
+    def test_import_prefers_complete_cur_over_new_incomplete_data(self):
+        self.put("NCN/Song/0/08721.mid",midi())
+        self.put("NCN/Lyrics/0/08721.lyr",
+                 "ชื่อเพลง\nผู้ร้อง\nC\n\nNick\nAnother\n".encode("cp874"))
+        cur=self.put("NCN/Cursor/0/08721.cur",struct.pack("<13H",*range(13)))
+        first=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(first["lyrics_new"],1)
+        previous=plus.songs(self.workspace)[0]
+        self.assertNotEqual(previous["timing_status"],"incomplete")
+        cur.write_bytes(struct.pack("<5H",0,1,2,3,4))
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["partial_lyrics"],1)
+        active=plus.songs(self.workspace)[0]
+        self.assertEqual(active["version_id"],previous["version_id"])
+        self.assertNotEqual(active["timing_status"],"incomplete")
+        with plus.connect(self.workspace) as db:
+            versions=list(db.execute("SELECT id,timing_status,is_current FROM xstage_lyric_versions"))
+        self.assertEqual(len(versions),2)
+        self.assertEqual(len([x for x in versions if x["is_current"]]),1)
+        self.assertEqual(len([x for x in versions if x["timing_status"]=="incomplete"]),1)
+        self.assertTrue(plus.build_song(self.workspace,active["id"]))
+
+    def test_repair_previous_partial_current_without_deleting_versions(self):
+        self.put("NCN/Song/0/00124.mid",midi())
+        self.put("NCN/Lyrics/0/00124.lyr",
+                 "เพลง\nศิลปิน\nC\n\nNick\nAnother\n".encode("cp874"))
+        cursor=self.put("NCN/Cursor/0/00124.cur",struct.pack("<5H",0,1,2,3,4))
+        plus.import_folder(self.workspace,self.src)
+        old=plus.songs(self.workspace)[0]
+        self.assertEqual(old["timing_status"],"incomplete")
+        cursor.write_bytes(struct.pack("<13H",*range(13)))
+        plus.import_folder(self.workspace,self.src)
+        ready=plus.songs(self.workspace)[0]
+        self.assertNotEqual(ready["timing_status"],"incomplete")
+        with plus.connect(self.workspace) as db:
+            db.execute("UPDATE xstage_lyric_versions SET is_current=0 WHERE song_id=?",
+                       (ready["id"],))
+            db.execute("""UPDATE xstage_lyric_versions SET is_current=1
+                          WHERE id=?""",(old["version_id"],))
+            db.execute("DELETE FROM xstage_migrations WHERE key='plus-lyrics-quality-v1'")
+        result=plus.stats(self.workspace)
+        self.assertEqual(result["songs_with_lyrics"],1)
+        self.assertEqual(plus.songs(self.workspace)[0]["version_id"],ready["version_id"])
+        self.assertEqual(result["lyrics_versions"],2)
+
+    def test_folder_without_song_component_finds_matching_lyr_cur(self):
+        self.put("LooseCollection/0/00425.mid",midi())
+        self.put("LooseCollection/Lyrics/0/00425.lyr",
+                 "เพลงตัวอย่าง\nผู้ร้อง\nC\n\nNick\n".encode("cp874"))
+        self.put("LooseCollection/Cursor/0/00425.cur",struct.pack("<5H",0,1,2,3,4))
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["lyrics_new"],1)
+        self.assertEqual(result["failures"],0)
+        self.assertEqual(plus.stats(self.workspace)["songs_with_lyrics"],1)
+
+    def test_damaged_cur_uses_valid_lrc_in_same_song_folder(self):
+        path=self.put("Song/0/00142.mid",midi())
+        self.put("Lyrics/0/00142.lyr",
+                 "หัวเพลง\nศิลปิน\nC\n\nNick\n".encode("cp874"))
+        self.put("Cursor/0/00142.cur",b"badCUR")
+        self.lrc(path,"[00:01.00]Hello\n[00:03.00]World\n")
+        result=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(result["failures"],0)
+        self.assertEqual(result["lyrics_new"],1)
+        with plus.connect(self.workspace) as db:
+            record=db.execute("""SELECT origin,timing_status FROM xstage_lyric_versions
+                                 WHERE is_current=1""").fetchone()
+        self.assertEqual(record["origin"],"LRC")
+        self.assertEqual(record["timing_status"],"estimated")
+        self.assertTrue(plus.build_song(self.workspace,plus.songs(self.workspace)[0]["id"]))
+
+    def test_repeated_import_does_not_replace_user_edited_lyrics(self):
+        self.put("Song/0/00981.mid",midi())
+        self.put("Lyrics/0/00981.lyr",
+                 "ชื่อเพลง\nศิลปิน\nC\n\nNick\n".encode("cp874"))
+        self.put("Cursor/0/00981.cur",struct.pack("<5H",0,1,2,3,4))
+        plus.import_folder(self.workspace,self.src)
+        group=plus.groups(self.workspace,"Nick")
+        before=plus.plan_edit(self.workspace,"Nick",[group[0]["group_key"]])
+        plus.replace_groups(self.workspace,"Nick",[group[0]["group_key"]],
+                            "Updated lyric",before["lines"])
+        edited=plus.songs(self.workspace)[0]["version_id"]
+        plus.import_folder(self.workspace,self.src)
+        self.assertEqual(plus.songs(self.workspace)[0]["version_id"],edited)
+        with plus.connect(self.workspace) as db:
+            row=db.execute("SELECT origin FROM xstage_lyric_versions WHERE id=?",
+                           (edited,)).fetchone()
+        self.assertEqual(row["origin"],"edit")
+
     def test_missing_lyrics_not_claimed_as_karaoke(self):
         self.put("no-lyrics.mp3",b"audio"*200)
         plus.import_folder(self.workspace,self.src)
