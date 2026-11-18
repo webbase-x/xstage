@@ -259,13 +259,21 @@ def main(argv=None):
     parser=argparse.ArgumentParser()
     parser.add_argument("--workspace",default=str(Path.home()/"Documents"/"XStageSongPlus"))
     parser.add_argument("--port",type=int,default=0)
-    parser.add_argument("--no-browser",action="store_true")
+    parser.add_argument("--no-browser",action="store_true",
+                        help="headless local API for automated checks")
+    parser.add_argument("--browser",action="store_true",
+                        help="explicitly open browser instead of Windows desktop")
     options=parser.parse_args(argv)
     state=State(options.workspace)
     handler=type("PlusHandler",(Handler,),{"state":state})
     with ThreadingHTTPServer(("127.0.0.1",options.port),handler) as server:
         url=f"http://127.0.0.1:{server.server_port}/"
         print("X-Stage Song Studio Plus",url,flush=True)
+        if sys.platform=="win32" and not options.browser and not options.no_browser:
+            from desktop_ui import run_desktop
+            bundle=Path(getattr(sys,"_MEIPASS",Path(__file__).parent))
+            icon=bundle/"app-plus.ico"
+            return run_desktop(server,url,state.workspace,icon)
         if not options.no_browser:
             webbrowser.open(url)
         try:server.serve_forever(poll_interval=0.3)
