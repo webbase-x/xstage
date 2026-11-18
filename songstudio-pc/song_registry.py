@@ -323,6 +323,16 @@ def classify(rows, existing, selected_groups=None):
             elif oldreg.get("contentSha256") == reg.get("contentSha256") and (
                     oldreg.get("lyricsSha256") == reg.get("lyricsSha256")):
                 category = "duplicate"
+            elif (oldreg.get("bundleId") and
+                  oldreg.get("bundleId") == reg.get("bundleId") and
+                  oldreg.get("mediaSha256") and
+                  oldreg.get("mediaSha256") == reg.get("mediaSha256") and
+                  (prior.get("audio") or {}).get("path") ==
+                  (row.get("audio") or {}).get("path")):
+                # Same independently created source bundle and same unchanged
+                # media file: a revised timed JSON is a NEW VERSION, not a
+                # second playable song with the same path.
+                category = "updated"
             else:
                 category = "conflict"
         elif siblings:
@@ -364,10 +374,33 @@ def assign_target_codes(records, destination_rows):
         if stable_id:
             destination_by_id.setdefault(stable_id, row)
     result = []
+    # An unchanged audio source may receive a new content-derived Song ID
+    # after its timed lyrics are edited. Preserve the karaoke catalog identity
+    # only for the same source bundle + identical media checksum + same
+    # relative media path. Different machines with 00001.mid remain distinct.
+    destination_by_source = {}
+    for original in destination_rows:
+        reg = original.get("sourceRegistry") or {}
+        key = (reg.get("bundleId"), reg.get("mediaSha256"),
+               (original.get("audio") or {}).get("path"))
+        if all(key):
+            destination_by_source.setdefault(key, []).append(original)
     for original in records:
         row = dict(original)
         code = str(row.get("code") or "")
         prior = destination_by_id.get(str(row.get("webSongId") or ""))
+        reg = row.get("sourceRegistry") or {}
+        source_key = (reg.get("bundleId"), reg.get("mediaSha256"),
+                      (row.get("audio") or {}).get("path"))
+        source_matches = destination_by_source.get(source_key, []) if all(source_key) else []
+        if prior is None and len(source_matches) == 1:
+            former = source_matches[0]
+            if former.get("webSongId"):
+                row["sourceRegistry"] = {
+                    **reg, "revisedSongId": reg.get("songId"),
+                    "songId": (former.get("sourceRegistry") or {}).get("songId")}
+                row["webSongId"] = former["webSongId"]
+                prior = former
         if prior and ((prior.get("sourceRegistry") or {}).get("songId") ==
                       (row.get("sourceRegistry") or {}).get("songId")):
             # Previous import may have assigned an alias. Reuse it forever,
