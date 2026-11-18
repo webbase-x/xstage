@@ -319,6 +319,7 @@ def classify(rows, existing, selected_groups=None):
                 category = ("duplicate" if old_fmt == fmt
                             and prior.get("title") == row.get("title")
                             and prior.get("artist") == row.get("artist")
+                            and oldreg.get("lyricsSha256") == reg.get("lyricsSha256")
                             else "updated")
             elif oldreg.get("contentSha256") == reg.get("contentSha256") and (
                     oldreg.get("lyricsSha256") == reg.get("lyricsSha256")):
