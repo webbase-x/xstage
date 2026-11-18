@@ -357,11 +357,22 @@ def tick_to_seconds(tick, division, map_tuple):
 
 def _timed_lines_to_json(lines, code, format_name, metadata=None):
     for n, line in enumerate(lines):
-        next_time = lines[n+1]["startTime"] if n+1 < len(lines) else line["startTime"]+4
-        line["endTime"] = round(max(line["startTime"]+.05, next_time), 3)
-        if n+1 == len(lines):
-            # The legacy last-line +4s boundary is an estimate, not a CUR cue.
+        chars = line.get("characters") or []
+        # Nick/NCN CUR gives real onset times for each source character. Never
+        # close a line before its last measured cue: doing so produced invalid
+        # Plus SQLite rows and silently rejected otherwise complete NCN songs.
+        latest_cue = max((float(c["startTime"]) for c in chars),
+                         default=float(line["startTime"]))
+        is_last = n + 1 == len(lines)
+        nominal_end = (float(lines[n+1]["startTime"]) if not is_last
+                       else float(line["startTime"]) + 4.0)
+        # An overlapping line or an unusually long final phrase cannot
+        # borrow an invented endpoint from CUR. Only extend the boundary
+        # enough to keep *measured* character onsets inside their own line.
+        if is_last or latest_cue >= nominal_end:
             line["endTimeEstimated"] = True
+        line["endTime"] = round(max(float(line["startTime"]) + .05,
+                                    nominal_end, latest_cue + .05), 3)
         # X-Stage Karaoke PC/Web consumes syllables[start,duration,text].
         # NCN CUR byte cues and KAR MIDI meta-event cues are already timed;
         # carry them through rather than letting the stage interpolate an
