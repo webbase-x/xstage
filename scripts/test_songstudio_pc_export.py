@@ -159,6 +159,31 @@ class PCExportTests(unittest.TestCase):
         self.assertEqual((count, errors, warnings), (1, 0, []))
         self.assertEqual(lib.records[0]["path"], rows[0]["path"])
 
+    def test_native_sqlite_prefers_current_lyrics_when_audio_path_is_shared(self):
+        bridge = load_module("songstudio-pc/pc_sqlite_bridge.py", "xstage_test_bridge")
+        library = self.destination / "XStageSong"
+        audio = library / "AUDIO" / "0" / "00001.m4a"
+        audio.parent.mkdir(parents=True, exist_ok=True)
+        audio.write_bytes(b"media" * 1000)
+        lyric_dir = library / "LYRICS" / "0"
+        lyric_dir.mkdir(parents=True, exist_ok=True)
+        for idx, title in ((1, "เนื้อร้องเก่า"), (2, "เนื้อร้องใหม่")):
+            (lyric_dir / f"rev-{idx}.json").write_text(json.dumps(
+                {"schemaVersion": 1, "lines": [
+                    {"startTime": idx, "text": title}]},
+                ensure_ascii=False), encoding="utf-8")
+        def version(idx):
+            return {"webSongId": f"version-{idx}", "code": "00001",
+                    "audio": {"path": "AUDIO/0/00001.m4a"},
+                    "lyrics": {"path": f"LYRICS/0/rev-{idx}.json"}}
+        old, latest = version(1), version(2)
+        rows = bridge.catalog_rows(library, [latest, old],
+                                   preferred_ids={"version-2"})
+        self.assertEqual(len(rows), 1)
+        self.assertIn("เนื้อร้องใหม่", rows[0]["first_lyric"])
+        with self.assertRaisesRegex(ValueError, "ซ้ำ"):
+            bridge.catalog_rows(library, [old, latest])
+
     def test_revised_lyrics_are_versioned_and_play_latest_without_overwrite(self):
         import sys
         sys.path.insert(0, str(ROOT / "windows-pc" / "source"))
