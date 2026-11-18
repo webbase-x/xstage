@@ -308,15 +308,16 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                         skipped += 1
                         resumed += 1
                         continue
-                    if previous_status == "error":
-                        # Keep unresolved ERR visible until an explicit retry.
+                    if previous_status == "error" and previous_identity != "retryable":
+                        # Known source-data errors are queued for user review.
+                        # Filesystem/IO failures are automatically retried.
                         deferred += 1
                         continue
                 # Fast legacy resume: a verified output in the old Catalog is
                 # retained. Compare media SHA to avoid skipping an edited song
                 # merely because its filename or size matches.
                 legacy = legacy_by_source.get(export.canonical_source_path(media))
-                if (not retry_errors_only and legacy
+                if (not retry_errors_only and previous is None and legacy
                         and media.stat().st_size == legacy[1]
                         and _fingerprint(media) == legacy[0]):
                     skipped += 1
@@ -455,7 +456,8 @@ def export_folder(source_folder, destination_folder, *, output_format, export, s
                 review.record(db, media=media, source_root=source_root,
                               output_format=output_format,
                               source_signature=source_signature,
-                              status="error", reason=str(exc)[:500])
+                              status="error", reason=str(exc)[:500],
+                              identity="retryable" if isinstance(exc, (OSError, RuntimeError)) else "")
                 if len(issues) < 50:
                     issues.append({"name": item["name"], "reason": str(exc)[:200]})
             finally:
