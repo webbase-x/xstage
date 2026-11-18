@@ -122,6 +122,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200,core.stats(self.state.workspace));return
         if path=="/api/jobs":
             self.send_json(200,{"jobs":self.state.jobs_snapshot()});return
+        if path=="/api/import-issues":
+            self.send_json(200,{"rows":core.import_issues(self.state.workspace,80)});return
         if path=="/api/songs":
             self.send_json(200,{"rows":core.songs(self.state.workspace,
                 q.get("q",[""])[0],q.get("limit",[80])[0],q.get("offset",[0])[0])});return
