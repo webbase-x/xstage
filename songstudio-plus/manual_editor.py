@@ -136,7 +136,7 @@ def _normalize_lines(lines):
     for i,item in enumerate(lines):
         if not isinstance(item,dict):
             raise ValueError("โครงสร้างเนื้อร้องไม่ถูกต้อง")
-        raw=str(item.get("text") or "").rstrip("\\r\\n")
+        raw=str(item.get("text") or "").rstrip("\r\n")
         if not raw.strip():
             continue
         if len(raw)>400 or "\x00" in raw or "\n" in raw or "\r" in raw:
