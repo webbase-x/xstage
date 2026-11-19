@@ -1,7 +1,0 @@
-{
-  "name": "X-Stage Song Studio Web",
-  "version": "1.0.0",
-  "build": 1,
-  "channel": "web",
-  "note": "Initial independent build metadata for Song Studio Web; separate from Karaoke Online and PC."
-}

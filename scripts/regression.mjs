@@ -81,17 +81,16 @@ assert.match(read('android-tv/app/build.gradle'),
   /XSTAGE_WEB_URL", quoteBuildConfig\("https:\/\/webbase-x\.github\.io\/xstage\/karaoke\.html"\)/,
   'new Android Karaoke APKs must launch the dedicated player URL');
 assert.match(storefront,/\.\/*karaoke\.html/,'karaoke web must remain reachable after the homepage change');
-for(const slug of ['karaoke-web','karaoke-pc','studio-pc','studio-plus','studio-web','karaoke-android','mirror-tv','mirror-ios-pc','mirror-android-pc','file-share']){
+for(const slug of ['karaoke-web','karaoke-pc','studio-pro','karaoke-android','mirror-tv','mirror-ios-pc','mirror-android-pc','file-share']){
   assert.ok(storefront.includes('href="?app='+slug+'"'),'storefront must expose detail route for '+slug);
   assert.ok(storefront.includes('data-app="'+slug+'"'),'storefront must show card for '+slug);
 }
-assert.ok(storefrontScript.includes('downloads/song-studio-latest.json')&&storefrontScript.includes('downloads/windows-pc-latest.json'),'desktop download status must come from published manifest');
+assert.ok(storefrontScript.includes('downloads/song-studio-pro-latest.json')&&storefrontScript.includes('downloads/windows-pc-latest.json'),'desktop download status must come from published manifest');
 assert.ok(storefrontScript.includes('downloads/android-tv-latest.json')&&storefrontScript.includes('mirror-tv/latest.json'),'TV download status must come from published manifest');
 assert.ok(!storefront.includes('rel="manifest"'),'storefront must not restore retired karaoke PWA registration');
 
 const uniqueApps=[
   ['karaoke-pc','assets/app-icons/karaoke-pc.svg','KARAOKE PC'],
-  ['studio-web','studio/web-app-icon.svg','STUDIO WEB'],
   ['karaoke-android','assets/app-icons/karaoke-android.svg','KARAOKE TV'],
   ['mirror-tv','assets/app-icons/mirror-tv.svg','MIRROR TV'],
   ['file-share','assets/app-icons/file-share.svg','FILE SHARE']
@@ -103,18 +102,14 @@ for(const [slug,path,label] of uniqueApps){
   assert.ok(card&&card.includes(path.replace(/^assets\//,'./assets/').replace(/^studio\//,'./studio/')),
     'App collection must display its own logo for '+slug);
 }
-assert.ok(read('studio/web.html').includes('web-app-icon.svg?v=1108'),'Song Studio Web must use its own favicon and header mark');
-assert.ok(read('studio/web.webmanifest').includes('./web-app-icon.svg'),'Song Studio Web install manifest must not reuse PC icon');
-assert.ok(read('studio/web.webmanifest').includes('./web-icon-192.png')&&read('studio/web.webmanifest').includes('./web-icon-512.png'),'Song Studio Web must install with its distinct raster icon sizes');
-assert.ok(storefront.includes('assets/xstage-apps-apple-touch-icon.png'),'X-Stage Apps iOS home-screen artwork must be distinct from Karaoke');
-assert.ok(read('studio/web.html').includes('web-apple-touch-icon.png'),'Song Studio Web iOS home-screen artwork must be separate from PC');
-assert.ok(read('mirror-tv/index.html').includes('mirror-tv-apple-touch-icon.png'),'Mirror TV pairing guide must show its own iOS bookmark art');
-for(const asset of ['assets/xstage-apps-apple-touch-icon.png','studio/web-apple-touch-icon.png','studio/web-icon-192.png','studio/web-icon-512.png','assets/app-icons/mirror-tv-apple-touch-icon.png']){
-  const data=fs.readFileSync(new URL('../'+asset,import.meta.url));
-  assert.ok(data.byteLength>1024 && data[0]===137 && data[1]===80,'Expected real generated PNG for '+asset);
+assert.ok(storefront.includes('songstudio-plus/web/icon.svg'),'Song Studio Pro card must show its own distinct icon');
+assert.ok(storefront.includes('data-app="studio-pro"')&&!storefront.includes('data-app="studio-pc"'),'only Pro app card is allowed');
+assert.ok(storefront.includes('assets/xstage-apps-apple-touch-icon.png'),'X-Stage Apps iOS artwork must remain');
+assert.ok(read('mirror-tv/index.html').includes('mirror-tv-apple-touch-icon.png'),'Mirror TV pairing guide keeps separate artwork');
+for(const asset of ['assets/xstage-apps-apple-touch-icon.png','assets/app-icons/mirror-tv-apple-touch-icon.png']){
+ const data=fs.readFileSync(new URL('../'+asset,import.meta.url));
+ assert.ok(data.byteLength>1024&&data[0]===137&&data[1]===80,'Expected generated PNG '+asset);
 }
-
-assert.ok(read('studio/index.html').includes('./app-icon.svg'),'Song Studio PC retains its separate native branding');
 assert.ok(read('.github/workflows/build-windows-pc.yml').includes('scripts/build_karaoke_pc_icon.py'),'Windows candidate must generate distinct PC icon before bundling');
 assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stage Mirror TV cast icon'),'Mirror TV native launcher must have a separate cast identity');
 assert.ok(read('mirror-tv/index.html').includes('../assets/app-icons/mirror-tv.svg'),'Mirror pairing guide must show its own icon');
@@ -151,9 +146,9 @@ assert.equal(deviceGuide.forApp(iphone,'karaoke-android').level,'other','iOS mus
 assert.equal(deviceGuide.forApp(windows,'karaoke-pc').level,'supported','Windows should recommend Karaoke PC');
 assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Android TV should recommend Mirror receiver');
 assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
-assert.ok(deviceGuide.forApp(iphone,'studio-pc').fallback.includes('studio-web'),'iOS Studio PC recommendation must suggest Studio Web');
+assert.equal(deviceGuide.forApp(iphone,'studio-pro').level,'other','Song Studio Pro must require Windows x64');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
-assert.equal((storefront.match(/data-device-app=/g)||[]).length,11,'all eleven cards need device-compatibility hints');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,9,'all nine cards need device-compatibility hints');
 assert.ok(/storefront-device\.js\?brand=[1-9]\d*/.test(storefront) && storefront.indexOf('storefront-device.js') < storefront.indexOf('storefront.js'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
 assert.ok(storefront.includes('data-download-app="mirror-ios-pc"')&&storefront.includes('data-download-app="mirror-android-pc"'),'both standalone Windows mirror apps must have separate download actions');
@@ -185,9 +180,7 @@ const expectedPlatformCards={
   'apps-portal':'android',
   'karaoke-web':'website',
   'karaoke-pc':'windows',
-  'studio-pc':'windows',
-  'studio-plus':'windows',
-  'studio-web':'website',
+  'studio-pro':'windows',
   'karaoke-android':'android',
   'mirror-ios-pc':'windows',
   'mirror-android-pc':'windows',
@@ -195,7 +188,7 @@ const expectedPlatformCards={
   'file-share':'android'
 };
 const platformCards=[...storefront.matchAll(/<article class="app-card[^"]*" data-app="([^"]+)" data-category="([^"]+)" data-platform="([^"]+)" data-name="/g)];
-assert.equal(platformCards.length,11,'all catalog apps must declare a platform');
+assert.equal(platformCards.length,9,'all catalog apps must declare a platform');
 for(const card of platformCards){
   assert.equal(card[3],expectedPlatformCards[card[1]],'wrong platform classification: '+card[1]);
 }
@@ -795,40 +788,11 @@ assert.equal(windowsSourceManifest.windows_build_verified,false,'Windows unverif
 assert.equal(windowsSourceManifest.installer_published,false,'Windows source ZIP is not a published installer');
 assert.equal(windowsSourceManifest.status,'SOURCE_IMPORTED_NOT_A_WINDOWS_RELEASE',
   'Windows manifest must distinguish imported source from an unverified installer');
-const studioReady=JSON.parse(read('downloads/song-studio-latest.json'));
-const studioPreview=JSON.parse(read('downloads/song-studio-source-preview-latest.json'));
-assert.match(studioReady.version,/^\d+\.\d+\.\d+$/,'Song Studio PC Ready must declare a semantic version');
-assert.ok(Number.isInteger(studioReady.build)&&studioReady.build>=325,
-  'Song Studio PC Ready must not regress below verified build 325');
-assert.ok(studioReady.archive_file.includes('v'+studioReady.version+'-build'+studioReady.build),
-  'Song Studio release filename must match its own metadata, not a stale hard-coded release');
-assert.equal(studioReady.package_type,'portable_zip');
-if(studioReady.installer_available){
-  assert.match(studioReady.installer_file,/^X-Stage-Song-Studio-PC-v[0-9]+\.[0-9]+\.[0-9]+-build[0-9]+-win-x64-Setup\.exe$/,'Published Song Studio installer filename must be well formed');
-  assert.match(studioReady.installer_sha256,/^[a-f0-9]{64}$/,'Published installer must include SHA-256');
-  assert.ok(studioReady.installer_url.endsWith('/'+studioReady.installer_file),'Installer URL and filename must match');
-}
-assert.match(studioReady.sha256,/^[a-f0-9]{64}$/,'Ready ZIP must pin the GitHub Release digest');
-assert.equal(studioPreview.channel,'source-preview');
-assert.match(studioPreview.version,/^\d+\.\d+\.\d+$/,'Song Studio Source Preview must declare a semantic version');
-assert.ok(Number.isInteger(studioPreview.build)&&studioPreview.build>=205,
-  'Song Studio Source Preview build must not regress below Build 205');
-assert.equal(studioPreview.source_available,false,'Public source-only ZIP distribution must be disabled');
-assert.equal(studioPreview.source_archive,null,'Public source metadata must not advertise direct source download');
-assert.ok(!read('.github/workflows/build-songstudio-pc-source.yml').includes('upload-artifact') &&
-          !read('.github/workflows/build-songstudio-pc-source.yml').includes('git add downloads/'),
-  'Source preview workflow must never upload or commit public source bundles');
-assert.ok(!read('.github/workflows/package-pc-source-cmd.yml').includes('upload-artifact'),
-  'Windows CMD source ZIP workflow must no longer publish public source archives');
-assert.equal(studioPreview.installer_available,false);
-const studioLegacy=read('songstudio-pc/Start-Song-Studio.ps1');
-const studioBuilder=read('scripts/build_songstudio_ready.ps1');
-const pythonSha='42a6995f5badcde341d8cf28b1479dc62d97c6cb153aee694eeeef09b56b9f70';
-assert.ok(studioLegacy.includes(pythonSha)&&studioLegacy.includes('Get-FileHash -LiteralPath $Zip -Algorithm SHA256')&&
-          studioLegacy.indexOf('Verifying official Python')<studioLegacy.indexOf('Expand-Archive -LiteralPath $Zip -DestinationPath $PyDir'),
-          'Source launcher must hash-check the official Python embed ZIP before extraction');
-assert.ok(studioBuilder.includes(pythonSha)&&studioBuilder.includes('CheckSHA $PyZip $PythonSHA256'),
-          'Ready build must validate pinned Python archive prior to packaging');
+const proRelease=JSON.parse(read('downloads/song-studio-pro-latest.json'));
+assert.equal(proRelease.name,'X-Stage Song Studio Pro','only Pro release feed may be advertised');
+assert.equal(proRelease.version,'0.1.11');
+assert.equal(proRelease.available,false,'Windows Pro EXE must not be advertised without a verified downloadable artifact');
+assert.ok(storefrontScript.includes('song-studio-pro-latest.json'));
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
 
 // An empty new Drive must never retain orphaned songs from IndexedDB or

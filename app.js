@@ -1208,8 +1208,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       ui.songTotal.textContent='0 เพลง';
       ui.resultCount.textContent='ยังไม่มีคลัง XStageSong';
       ui.libraryState.textContent='เชื่อม Google Drive แล้ว · ยังไม่มีคลังเพลงออนไลน์';
-      setStatus('บัญชี Google พร้อมแล้ว · ใช้ X-Stage Song Studio สร้าง XStageSong และอัปโหลดเพลงครั้งแรก','success');
-      setSharedLibraryGate(true,'ยังไม่มี XStageSong ในบัญชีนี้ · อัปโหลดด้วย Song Studio หรือเลือกคลังที่แชร์');
+      setStatus('บัญชี Google พร้อมแล้ว · ใช้ X-Stage Song Studio Pro สร้าง XStageSong และอัปโหลดเพลงครั้งแรก','success');
+      setSharedLibraryGate(true,'ยังไม่มี XStageSong ในบัญชีนี้ · อัปโหลดด้วย Song Studio Pro หรือเลือกคลังที่แชร์');
       return;
     }
     setSharedLibraryGate(false);
@@ -1276,7 +1276,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · ยังไม่มี DB เพลงที่เข้าถึงได้';
       hideCatalogLoading();
       setAndroidTvStageAccess(true,account.sub);
-      setStatus('เชื่อม Google Drive แล้ว · ยังไม่พบ current.json ที่เข้าถึงได้ · สร้าง DB/อัปโหลดเพลงผ่าน X-Stage Song Studio','success');
+      setStatus('เชื่อม Google Drive แล้ว · ยังไม่พบ current.json ที่เข้าถึงได้ · สร้าง DB/อัปโหลดเพลงผ่าน X-Stage Song Studio Pro','success');
       return;
     }
     if(pointers.length!==1)throw Error('พบ current.json หลายรายการ · ไม่เลือกฐานเพลงโดยคาดเดา');

@@ -182,7 +182,7 @@ try{
   await page.locator('[data-filter="all"]').click();
   await page.locator('.app-card[data-app="studio-pc"] .app-detail-link').click();
   await page.locator('#app-detail:not([hidden])').waitFor();
-  assert.equal(await page.locator('#detail-title').textContent(),'X-Stage Song Studio PC');
+  assert.equal(await page.locator('#detail-title').textContent(),'X-Stage Song Studio Pro');
   // The Linux CI machine must see a Windows-only compatibility warning rather than
   // a misleading "install here" label; the verified ZIP link remains accessible.
   const windowsDownload=page.locator('#detail-actions .detail-action.primary[href$=".zip"],#detail-actions .detail-action.primary[href$=".exe"]').first();
