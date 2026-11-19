@@ -14,7 +14,7 @@ import plus_core as core
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS xstage_manual_reviews (
  song_id TEXT PRIMARY KEY REFERENCES xstage_songs(id),
- version_id TEXT, decision TEXT NOT NULL CHECK(decision IN ('skip','approved')),
+ version_id TEXT, decision TEXT NOT NULL CHECK(decision IN ('skip','approved','pending')),
  updated_at TEXT NOT NULL
 );
 """
@@ -34,6 +34,7 @@ BASE = """
 
 def _status_expr():
     return """CASE
+      WHEN COALESCE(r.decision,'')='pending' THEN 'incomplete'
       WHEN v.id IS NULL AND d.song_id IS NOT NULL THEN 'untimed'
       WHEN v.id IS NULL THEN 'missing'
       WHEN v.timing_status='incomplete' THEN 'incomplete'
@@ -138,7 +139,7 @@ def _normalize_lines(lines):
         raw=str(item.get("text") or "").strip()
         if not raw:
             continue
-        if len(raw)>400 or "\\x00" in raw or "\\n" in raw or "\\r" in raw:
+        if len(raw)>400 or "\x00" in raw or "\n" in raw or "\r" in raw:
             raise ValueError(f"บรรทัด {i+1}: ข้อความเกิน 400 อักขระหรือมีอักขระต้องห้าม")
         total+=len(raw)
         if total>50000:
@@ -226,9 +227,59 @@ def save(workspace,song_id,base_version,lines):
              ON CONFLICT(song_id) DO UPDATE SET raw_text=excluded.raw_text,
              reason=excluded.reason,updated_at=excluded.updated_at""",
              (song_id,"manual",row["title"],row["artist"],
-              "\\n".join(draft),"Manual timing incomplete",core.now()))
-        db.execute("DELETE FROM xstage_manual_reviews WHERE song_id=?",(song_id,))
+              "\n".join(draft),"Manual timing incomplete",core.now()))
+        db.execute("""INSERT INTO xstage_manual_reviews
+          (song_id,version_id,decision,updated_at) VALUES (?,?,?,?)
+          ON CONFLICT(song_id) DO UPDATE SET version_id=excluded.version_id,
+          decision=excluded.decision,updated_at=excluded.updated_at""",
+          (song_id,version,"pending",core.now()))
     return {"version_id":version,"complete":complete,
             "saved_lines":len(parsed),"total_lines":len(draft),
             "message":("บันทึกครบแล้ว · รอฟังยืนยันก่อนสร้าง .X"
                        if complete else "เก็บเนื้อร้องที่มีเวลาบางส่วนและฉบับร่างแล้ว · ยังสร้าง .X ไม่ได้")}
+
+def detail(workspace,song_id):
+    """Return all source lines, including untimed draft tail, for manual repair."""
+    init(workspace)
+    with core.connect(workspace) as db:
+        song=db.execute("""SELECT s.id,s.code,s.title,s.artist,
+                  v.id AS version_id,v.timing_status,
+                  COALESCE(r.decision,'') AS decision
+             FROM xstage_songs s
+             LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
+             LEFT JOIN xstage_manual_reviews r ON r.song_id=s.id
+              AND COALESCE(r.version_id,'')=COALESCE(v.id,'')
+             WHERE s.id=?""",(song_id,)).fetchone()
+        if song is None:
+            raise ValueError("ไม่พบเพลงในฐานข้อมูล")
+        source=[]
+        if song["version_id"]:
+            for line,cues in core.get_version_lines(db,song["version_id"]):
+                source.append({
+                  "text":line["text"],"start":line["start_time"],
+                  "end":line["end_time"],
+                  "segments":[c["text"] for c in cues],
+                  "starts":[c["start_time"] for c in cues],
+                  "timing":line["timing_status"],
+                })
+        draft=db.execute("""SELECT raw_text,reason FROM xstage_lyric_drafts
+                 WHERE song_id=?""",(song_id,)).fetchone()
+        if draft:
+            draft_lines=[x for x in draft["raw_text"].splitlines() if x.strip()]
+            # The partial CUR version normally contains a timed prefix of LYR.
+            # Match by order AND content, and use full LYR draft as canonical
+            # body only if the prefix alignment is exact.
+            prefix=all(i<len(draft_lines) and
+                       source[i]["text"]==draft_lines[i]
+                       for i in range(min(len(source),len(draft_lines))))
+            if prefix and len(draft_lines)>len(source):
+                source += [{"text":x,"start":None,"end":None,
+                            "segments":[],"starts":[],"timing":"untimed"}
+                           for x in draft_lines[len(source):]]
+            elif not source:
+                source=[{"text":x,"start":None,"end":None,
+                         "segments":[],"starts":[],"timing":"untimed"}
+                        for x in draft_lines]
+        return {"song":dict(song),"lines":source,
+                "draft_reason":draft["reason"] if draft else None,
+                "has_lyrics":bool(source)}
