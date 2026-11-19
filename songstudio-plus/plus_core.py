@@ -1233,13 +1233,24 @@ def remap_cues(old_text,new_text,start,end,cues):
 
 
 def get_version_lines(db,version_id):
-    result=[]
-    for line in db.execute("SELECT * FROM xstage_lyric_lines WHERE version_id=? ORDER BY position",
-                           (version_id,)):
-        cues=[dict(x) for x in db.execute("""SELECT text,start_time,duration
-                  FROM xstage_lyric_cues WHERE line_id=? ORDER BY position""",(line["id"],))]
-        result.append((dict(line),cues))
-    return result
+    """Read one song with two ordered queries, not one query per lyric line.
+
+    This avoids thousands of round trips to SQLite for bulk repairs of a
+    large library while preserving the original cue ordering and fields.
+    """
+    lines=[dict(row) for row in db.execute(
+        "SELECT * FROM xstage_lyric_lines WHERE version_id=? ORDER BY position",
+        (version_id,))]
+    if not lines:
+        return []
+    cues_by_line=defaultdict(list)
+    for row in db.execute("""SELECT c.line_id,c.text,c.start_time,c.duration
+          FROM xstage_lyric_cues c JOIN xstage_lyric_lines l ON l.id=c.line_id
+          WHERE l.version_id=? ORDER BY l.position,c.position""",(version_id,)):
+        cues_by_line[row["line_id"]].append({
+            "text":row["text"],"start_time":row["start_time"],
+            "duration":row["duration"]})
+    return [(line,cues_by_line[line["id"]]) for line in lines]
 
 class _EditCancelled(Exception):
     pass
