@@ -70,9 +70,9 @@ class State:
                     job["message"]="ยกเลิกงานแล้ว" if job["cancel"].is_set() else "เสร็จเรียบร้อย"
             except Exception as e:
                 with self.lock:
-                    job["status"]="failed"
+                    job["status"]="cancelled" if job["cancel"].is_set() else "failed"
                     job["error"]=str(e)[:1200]
-                    job["message"]="ดำเนินการไม่สำเร็จ"
+                    job["message"]="ยกเลิกและคืนค่าแล้ว" if job["cancel"].is_set() else "ดำเนินการไม่สำเร็จ"
         threading.Thread(target=runner,daemon=True,name="Plus-"+kind).start()
         return {"job":job_id}
 
@@ -385,9 +385,16 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/edit/plan":
                 result=core.plan_edit(self.state.workspace,body.get("q",""),body.get("keys",[]))
             elif path=="/api/edit/apply":
-                result=core.replace_groups(self.state.workspace,
-                    body.get("q",""),body.get("keys",[]),
-                    body.get("replacement",""),body.get("expected_lines",-1))
+                query=body.get("q","")
+                keys=body.get("keys",[])
+                replacement=body.get("replacement","")
+                expected=body.get("expected_lines",-1)
+                if (not isinstance(keys,list) or not 1<=len(keys)<=1000 or
+                        any(not isinstance(k,str) for k in keys)):
+                    raise ValueError("กรุณาเลือกกลุ่มข้อความที่ต้องการแก้")
+                result=self.state.start_job("lyrics-edit",lambda progress,cancel:
+                    core.replace_groups(self.state.workspace,query,keys,
+                                        replacement,expected,progress,cancel))
             elif path=="/api/edit/undo":
                 result=core.undo_edit(self.state.workspace,body.get("batch",""))
             elif path=="/api/pick":
