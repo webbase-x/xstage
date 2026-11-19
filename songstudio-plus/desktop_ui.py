@@ -84,7 +84,7 @@ def run_desktop(server,url,workspace,icon_path,state=None):
     set_windows_identity()
     from PySide6.QtCore import QUrl, QTimer
     from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QShortcut
-    from PySide6.QtWidgets import QApplication,QMainWindow
+    from PySide6.QtWidgets import QApplication,QMainWindow,QMessageBox
     from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
     from PySide6.QtWebEngineWidgets import QWebEngineView
 
@@ -147,6 +147,7 @@ def run_desktop(server,url,workspace,icon_path,state=None):
                 ("Ctrl+=",lambda:self.change_zoom(+0.10)),
                 ("Ctrl+-",lambda:self.change_zoom(-0.10)),
                 ("Ctrl+0",lambda:self.web.setZoomFactor(self.default_zoom)),
+                ("Ctrl+Shift+L",self.open_log),
             ):
                 shortcut=QShortcut(QKeySequence(key),self)
                 shortcut.activated.connect(callback)
@@ -154,6 +155,16 @@ def run_desktop(server,url,workspace,icon_path,state=None):
         def change_zoom(self,step):
             self.web.setZoomFactor(
                 max(0.90,min(1.80,round(self.web.zoomFactor()+step,2))))
+
+        def open_log(self):
+            if state is None:return
+            try:
+                state.log_path.touch(exist_ok=True)
+                os.startfile(str(state.log_path))
+                state.diagnostic("log.opened",source="desktop-shortcut")
+            except Exception as exc:
+                state.diagnostic("log.open.error",source="desktop-shortcut",
+                                 error=str(exc)[:1000])
 
         def closeEvent(self,event):
             event.accept()
@@ -182,9 +193,31 @@ def run_desktop(server,url,workspace,icon_path,state=None):
         window.web.loadProgress.connect(
             lambda value:state.diagnostic("web.load.progress",value=int(value))
             if state is not None and int(value) in (25,50,75,100) else None)
-        window.web.loadFinished.connect(
-            lambda ok:state.diagnostic("web.load.finished",ok=bool(ok),url=url)
-            if state is not None else None)
+        def on_load_finished(ok):
+            if state is not None:
+                state.diagnostic("web.load.finished",ok=bool(ok),url=url)
+            if not ok:
+                if state is not None:
+                    state.diagnostic("web.core.check",bound=False,reason="load-failed")
+                QMessageBox.warning(
+                    window,"X-Stage Song Studio Pro",
+                    "โหลดหน้าต่างโปรแกรมไม่สำเร็จ\n"
+                    "กด Ctrl+Shift+L เพื่อเปิด Log วิเคราะห์")
+                return
+            def core_checked(bound):
+                healthy=bool(bound)
+                if state is not None:
+                    state.diagnostic("web.core.check",bound=healthy)
+                if not healthy:
+                    QMessageBox.warning(
+                        window,"X-Stage Song Studio Pro",
+                        "หน้าโปรแกรมแสดงผลแล้ว แต่ JavaScript Core ยังไม่พร้อม\n"
+                        "กด Ctrl+Shift+L เพื่อเปิด Log วิเคราะห์")
+            QTimer.singleShot(
+                1200,
+                lambda:window.web.page().runJavaScript(
+                    "Boolean(globalThis.__XSTAGE_CORE_BOUND__)",core_checked))
+        window.web.loadFinished.connect(on_load_finished)
         try:
             window.web.renderProcessTerminated.connect(
                 lambda status,code:state.diagnostic(
