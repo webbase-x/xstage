@@ -130,10 +130,10 @@
             <div class="selection-summary" id="selected-summary">ยังไม่ได้เลือกกลุ่มข้อความ</div>
             <label class="field-label" for="lyrics-replacement">ข้อความใหม่สำหรับทุกกลุ่มที่เลือก</label>
             <textarea id="lyrics-replacement" rows="3" maxlength="400" placeholder="เช่น X-Stage Karaoke"></textarea>
-            <div class="notice"><span>⌁</span><p>ล็อกเวลาเริ่ม–จบของแต่ละบรรทัด รักษาจุดปาดเดิมเมื่อเป็นไปได้ หากต้องประมาณเวลา ระบบจะแสดงสถานะ Estimated</p></div>
+            <div class="notice"><span>⌁</span><p>แทนที่ข้อความทั้งบรรทัดของกลุ่มที่เลือก โดยรักษาเวลาเริ่ม–จบเดิมไว้ ถ้าจุดปาดจากไฟล์ NCN ไม่สอดคล้อง ระบบยังบันทึกข้อความใหม่และทำเครื่องหมาย <strong>รอตรวจปาดสีในเมนู 05</strong> ไม่ยกเลิกงานทั้งชุด</p></div>
             <button class="primary-btn full" id="lyrics-apply" type="button" disabled>ตรวจสอบและแทนที่ทั้งกลุ่ม <span>↗</span></button>
-            <button class="quiet-btn full" id="lyrics-undo" type="button" disabled>↶ ย้อนคืนการแก้ไขล่าสุด</button>
-            <p class="field-hint" id="edit-feedback"></p>
+            <div class="toolbar"><button class="quiet-btn" id="lyrics-cancel" type="button" hidden>ยกเลิกและคืนค่าทั้งชุด</button><button class="quiet-btn" id="lyrics-undo" type="button" disabled>↶ ย้อนคืนการแก้ไขล่าสุด</button></div>
+            <p class="field-hint" id="edit-feedback" aria-live="polite">เลือกรายการและกดตรวจสอบ · งานขนาดใหญ่จะแสดงจำนวนเพลงที่ดำเนินการแล้ว</p>
           </article>
         </div>
       </section>
