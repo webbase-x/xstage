@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import {createRequire} from 'node:module';
-const require=createRequire(import.meta.url);
-const timeline=require('../songstudio-plus/web/timeline-core.js');
+await import('../songstudio-plus/web/timeline-core.js');
+const timeline=globalThis.XStageCueTimeline;
 
 const phrase={start:10,end:20,starts:[10,12,14.5,17]};
 const win=timeline.range(phrase,0,240,1);
