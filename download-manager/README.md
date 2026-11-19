@@ -12,7 +12,7 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - History: %LOCALAPPDATA%/X-Stage/Download Manager/downloads.json
 - Partials: .xstage-downloads/[id]/ in the destination, removed upon completion.
 - Thai desktop interface showing progress, speed, size, status and errors.
-- Standalone self-contained EXE and installer produced by GitHub Actions.
+- Self-contained Windows runtime packaged into **one Setup EXE** published through GitHub Releases; no Portable ZIP is offered.
 
 ## Not included yet
 - Chrome/Edge browser interception extension.
@@ -24,6 +24,6 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 1. Install .NET 8 SDK and Python Pillow on Windows.
 2. Run: python download-manager/generate_icon.py
 3. Run: dotnet publish download-manager/XStageDownloadManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
-4. For an installer, use the GitHub Actions workflow.
+4. For the only publicly offered download, use the verified Windows Setup EXE from GitHub Releases. The workflow publishes no ZIP asset.
 
-The Preview is not a signed or real-machine-tested stable release. Do not advertise a public EXE until the workflow completes successfully. Downloads without server Range support restart from zero when interrupted.
+The Preview is not code-signed or fully tested on a real Windows PC. Only show the direct EXE download after GitHub Release publication and SHA-256 verification. Downloads without server Range support restart from zero when interrupted.

@@ -15,7 +15,13 @@ assert.ok(storefront.includes('"download-manager":{'));
 assert.ok(storefront.includes('downloads/download-manager-preview-latest.json'));
 const feed = JSON.parse(read('downloads/download-manager-preview-latest.json'));
 assert.equal(feed.name, 'X-Stage Download Manager');
-assert.equal(feed.available, false, 'Never offer an unverified preview as a stable download');
+if (feed.available === true) {
+  assert.match(feed.sha256, /^[a-f0-9]{64}$/i, 'published EXE needs a SHA-256');
+  assert.equal(feed.file, 'X-Stage-Download-Manager-v0.1.0-build1-win-x64-Setup.exe');
+  assert.equal(feed.download_url, 'https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.1.0-build1-preview/'+feed.file);
+} else {
+  assert.equal(feed.available, false, 'an unpublished build must remain unavailable');
+}
 assert.equal(feed.channel, 'preview');
 const module = { exports: {} };
 new Function('module',deviceSrc)(module);

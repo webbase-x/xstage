@@ -152,7 +152,13 @@ assert.equal((storefront.match(/data-device-app=/g)||[]).length,(storefront.matc
 assert.equal(deviceGuide.forApp(windows,'download-manager').level,'supported','Download Manager is supported on Windows');
 assert.equal(deviceGuide.forApp(iphone,'download-manager').level,'other','Download Manager is not an iOS app');
 assert.ok(storefront.includes('data-app="download-manager"') && storefrontScript.includes('download-manager-preview-latest.json'),'new Download Manager card and manifest must remain discoverable');
-assert.equal(JSON.parse(read('downloads/download-manager-preview-latest.json')).available,false,'do not claim an unverified Windows executable');
+const downloadManagerRelease=JSON.parse(read('downloads/download-manager-preview-latest.json'));
+assert.equal(downloadManagerRelease.channel,'preview','Download Manager must remain labelled preview');
+if(downloadManagerRelease.available===true){
+  assert.match(downloadManagerRelease.sha256,/^[a-f0-9]{64}$/,'published Windows EXE must have SHA-256');
+  assert.match(downloadManagerRelease.file,/^X-Stage-Download-Manager-v\d+\.\d+\.\d+-build\d+-win-x64-Setup\.exe$/,'only installer EXE is allowed');
+  assert.equal(downloadManagerRelease.download_url,'https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v'+downloadManagerRelease.version+'-build'+downloadManagerRelease.build+'-preview/'+downloadManagerRelease.file,'EXE must be published to verified GitHub Release');
+}else assert.equal(downloadManagerRelease.available,false,'an unpublished Windows EXE must stay hidden');
 assert.ok(/storefront-device\.js\?brand=[1-9]\d*/.test(storefront) && storefront.indexOf('storefront-device.js') < storefront.indexOf('storefront.js'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
 assert.ok(storefront.includes('data-download-app="mirror-ios-pc"')&&storefront.includes('data-download-app="mirror-android-pc"'),'both standalone Windows mirror apps must have separate download actions');
