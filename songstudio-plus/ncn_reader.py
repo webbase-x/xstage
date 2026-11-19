@@ -468,14 +468,22 @@ def ncn_document(companions):
     while body and not body[-1].strip(b" \x00\x1a"):
         body.pop()
     removed_footers = 0
-    footer = re.compile(r"^(?:nick[\s_-]*karaoke(?:\s+professional)?|นิค[\s_-]*คาราโอเกะ)$", re.I)
+    # Vendor credits in real Nick/eXtreme NCN collections can be decorated
+    # with dots (e.g. ".....เต่า คาราโอเกะ......"). Never remove an internal
+    # credit or an actual lyric with its own CUR positions.
+    footer = re.compile(
+        r"^(?:nick[\s_-]*karaoke(?:\s+professional)?|"
+        r"นิค[\s_-]*คาราโอเกะ|เต่า[\s_-]*คาราโอเกะ)$", re.I)
+    decorations = " \t.\\u2026\\u00b7\\u2022*_-~=<>[]()"
     def needed(lines):
         return sum(1 + len(part) for part in lines if part.strip())
-    # Some old collections append an untimed Nick Karaoke credit. Strip only
-    # when there are not enough CUR entries: a *timed* credit is real lyrics.
+    # Only discard a recognizable *final* vendor-only credit if all preceding
+    # lines have real CUR entries. Otherwise a short/damaged cursor remains
+    # incomplete; never mislabel missing real lyrics as fully synchronized.
     while body and len(positions) < needed(body):
         candidate = body[-1].strip(b" \x00\x1a").decode("cp874", errors="replace")
-        if not footer.fullmatch(candidate):
+        candidate = candidate.strip(decorations)
+        if not footer.fullmatch(candidate) or len(positions) < needed(body[:-1]):
             break
         body.pop()
         removed_footers += 1
