@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import {createRequire} from 'node:module';
-const require=createRequire(import.meta.url);
 class NodeStub{
   constructor(tag="div"){
     this.tagName=tag.toUpperCase();this.children=[];this.dataset={};
@@ -35,8 +33,8 @@ class NodeStub{
   }
 }
 globalThis.document={createElement:name=>new NodeStub(name)};
-require('../songstudio-plus/web/timeline-core.js');
-require('../songstudio-plus/web/timeline-ui.js');
+await import('../songstudio-plus/web/timeline-core.js');
+await import('../songstudio-plus/web/timeline-ui.js');
 const ids=["manual-timeline-zoom-in","manual-timeline-zoom-out",
   "manual-timeline-follow","manual-timeline-track","manual-timeline-ruler",
   "manual-timeline-cues","manual-timeline-highlight","manual-timeline-playhead"];
