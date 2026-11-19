@@ -19,7 +19,8 @@
                  manualLines:[],manualDuration:0,manualTime:0,manualPlaying:false,
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
                  manualMidiAt:0,manualCueUndo:new Map(),manualDirty:false,manualFindings:[],manualOnlyIssues:false,
-                 manualLayout:{menu:false,queue:false,stage:false,focus:false}};
+                 manualLayout:{menu:false,queue:false,stage:false,focus:false},
+                 updateTarget:null,updateInstallIntent:false,updateBusy:false};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
@@ -374,6 +375,75 @@
       await refreshStatus();await refreshSongs();
     }catch(error){toast(error.message,true);}
   }
+
+  async function refreshSummary(){
+    if(!state.ready)return;
+    const button=$("refresh-summary");
+    button.disabled=true;
+    try{
+      await refreshStatus();
+      await refreshJobs();
+      text("summary-refreshed","รีเฟรชข้อมูลจาก SQLite แล้ว · "+new Date().toLocaleTimeString("th-TH"));
+      toast("รีเฟรชยอดสรุปสำเร็จ");
+    }catch(error){
+      text("summary-refreshed","รีเฟรชไม่สำเร็จ: "+error.message);
+      toast(error.message,true);
+    }finally{button.disabled=false;}
+  }
+  async function checkProUpdate(silent=false){
+    if(!state.ready)return;
+    const button=$("pro-update-check");
+    button.disabled=true;
+    if(!silent)text("pro-update-status","กำลังตรวจอัปเดตที่เผยแพร่และยืนยัน SHA-256...");
+    try{
+      const result=await api("/api/update/check");
+      state.updateTarget=result;
+      text("pro-update-version","v"+result.current_version);
+      const ready=await api("/api/update/ready");
+      const available=Boolean(result.newer);
+      text("pro-update-status",available?
+        "พบ v"+result.version+" · ตรวจสอบจาก Release ทางการแล้ว · "+
+        (ready.ready&&ready.version===result.version?
+          "ดาวน์โหลดไว้แล้ว พร้อมติดตั้ง":"กดปุ่มเดียวเพื่อดาวน์โหลดและติดตั้ง"):
+        "ใช้งาน v"+result.current_version+" · ยังไม่มีรุ่นใหม่ที่เผยแพร่");
+      $("pro-update-install").disabled=!available||state.updateBusy;
+    }catch(error){
+      state.updateTarget=null;
+      $("pro-update-install").disabled=true;
+      text("pro-update-status","ยังตรวจอัปเดตไม่ได้: "+error.message+
+        " · โปรแกรมปัจจุบันยังใช้งานได้");
+      if(!silent)toast(error.message,true);
+    }finally{button.disabled=false;}
+  }
+  async function beginProUpdate(){
+    if(state.updateBusy||!state.updateTarget?.newer)return;
+    if(!await confirmTask("ติดตั้ง Song Studio Pro รุ่นใหม่",
+      "ดาวน์โหลด EXE จาก GitHub ตรวจ SHA-256 แล้วเปลี่ยนโปรแกรมทันที\n"+
+      "ถ้านำเข้าเพลงอยู่ จะหยุดหลังไฟล์ปัจจุบัน บันทึก Checkpoint แล้วเปิดรุ่นใหม่มาทำต่อ\n"+
+      "ยืนยันให้ดาวน์โหลดและติดตั้งหรือไม่?"))return;
+    state.updateBusy=true;
+    $("pro-update-install").disabled=true;
+    try{
+      const ready=await api("/api/update/ready");
+      if(ready.ready&&ready.version===state.updateTarget.version){
+        await api("/api/update/install",{});
+        text("pro-update-status","กำลังปิดโปรแกรมเก่า ติดตั้ง EXE และเปิดกลับมาทำต่อ...");
+        toast("ระบบกำลังเปิดโปรแกรมรุ่นใหม่");
+      }else{
+        state.updateInstallIntent=true;
+        text("pro-update-status","กำลังดาวน์โหลด v"+state.updateTarget.version+
+          " · โปรแกรมจะติดตั้งและเปิดใหม่หลัง SHA-256 ผ่าน");
+        const job=await api("/api/update/download",{});
+        state.activeJob=job.job;
+        await refreshJobs();
+      }
+    }catch(error){
+      state.updateInstallIntent=false;state.updateBusy=false;
+      $("pro-update-install").disabled=false;
+      text("pro-update-status","อัปเดตไม่สำเร็จ · "+error.message);
+      toast(error.message,true);
+    }
+  }
   async function startJob(kind,payload){
     try{
       const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":kind==="swipe-audit"?"/api/swipe/scan":"/api/build";
@@ -398,18 +468,25 @@
       if(!job)return;
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
-      text("activity-title",job.kind==="import"?"นำเข้าและตรวจ SHA-256":
+      text("activity-title",job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
+          job.kind==="import"?"นำเข้าและตรวจ SHA-256":
           job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":
-           job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อจาก SQLite":"สร้างไฟล์ X-Stage Plus");
+           job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อจาก SQLite":"สร้างไฟล์ X-Stage Pro");
       text("activity-subtitle",job.message||"");
       const p=job.progress||{};
-      text("progress-detail",job.kind==="import"?
+      text("progress-detail",job.kind==="update"?
+          "ดาวน์โหลด "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
+          (p.total?" / "+number((p.total/1048576)>>0)+" MB":"")+
+          " · ตรวจ SHA-256 ก่อนติดตั้ง":
+          job.kind==="import"?
           "ไฟล์ใหม่ "+number(p.files_new)+" · ไฟล์ซ้ำ "+number(p.media_duplicates)+
           " · เนื้อร้องพร้อมเวลา "+number(p.lyrics_new)+
           " · CUR ไม่ครบ "+number(p.partial_lyrics)+
           " · เก็บเนื้อร้องรอเวลา "+number(p.draft_lyrics)+
           " · ผิดพลาดจริง "+number(p.failures)+
-          " · Hash เดิม "+number(p.hash_cache_hits)+" · "+number(p.files_per_second)+" ไฟล์/วินาที":
+          " · Hash เดิม "+number(p.hash_cache_hits)+
+          " · จุดเดิมที่ข้าม "+number(p.resumed_files)+
+          " · "+number(p.files_per_second)+" ไฟล์/วินาที":
           job.kind==="recover"?
           "กู้คืนพร้อมใช้ "+number(p.recovered_ready)+" · CUR ไม่ครบ "+number(p.partial_lyrics)+
           " · LYR รอเวลา "+number(p.draft_lyrics)+" · ไม่พบต้นฉบับ "+number(p.missing_sources)+
@@ -420,11 +497,21 @@
           " · เวลาประมาณ "+number(p.estimated_songs)+
           " · CUR ไม่ครบ "+number(p.blocked_songs):
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
-      text("progress-count",number(p.processed||p.files_seen||p.done||0)+
+      text("progress-count",job.kind==="update"?
+        number(p.downloaded_bytes||0)+" ไบต์":
+        number(p.processed||p.files_seen||p.done||0)+
         (job.kind==="recover"||job.kind==="swipe-audit"?" / "+number(p.total):"")+" รายการ");
+      if(job.kind==="import"){
+        text("import-resume-status",(p.resume?"ทำต่อจาก Checkpoint เดิม":
+          "นำเข้าใหม่")+
+          " · บันทึกเป็นช่วงทุก 16 ไฟล์ · ข้ามไฟล์เดิมที่ไม่เปลี่ยน "+
+          number(p.resumed_files)+" เพลง");
+      }
       const progressBar=$("progress-fill");
-      progressBar.classList.toggle("indeterminate",job.status==="running");
-      progressBar.style.width=job.status==="completed"?"100%":job.status==="running"?"32%":"0%";
+      const downloaded=job.kind==="update"&&p.total>0;
+      progressBar.classList.toggle("indeterminate",job.status==="running"&&!downloaded);
+      progressBar.style.width=job.status==="completed"?"100%":
+        downloaded?Math.min(100,100*(p.done||0)/p.total).toFixed(1)+"%":"0%";
       const signature=job.id+":"+job.status;
       if(state.jobSignature!==signature){
         state.jobSignature=signature;
@@ -432,8 +519,26 @@
           await refreshStatus();
           if(state.view==="risks")await loadRisks();
           else if(state.view!=="import")await refreshSongs();
-          toast(job.status==="completed"?"งาน "+(job.kind==="import"?"นำเข้า":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
+          toast(job.status==="completed"?"งาน "+(job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
             job.error||"งานล้มเหลว",job.status==="failed");
+          if(job.kind==="update"){
+            if(job.status==="completed"&&state.updateInstallIntent){
+              state.updateInstallIntent=false;
+              try{
+                await api("/api/update/install",{});
+                text("pro-update-status","ตรวจ SHA-256 ผ่าน · กำลังปิดและเปิด Pro รุ่นใหม่");
+                toast("กำลังติดตั้งอัปเดตและเปิดทำงานต่อ");
+              }catch(error){
+                state.updateBusy=false;
+                text("pro-update-status","ติดตั้งไม่สำเร็จ: "+error.message);
+                toast(error.message,true);
+              }
+            }else if(job.status==="failed"||job.status==="cancelled"){
+              state.updateInstallIntent=false;state.updateBusy=false;
+              text("pro-update-status","ดาวน์โหลดอัปเดตไม่สำเร็จ · "+(job.error||job.message));
+              $("pro-update-install").disabled=false;
+            }
+          }
         }
       }
     }catch(error){setReady(false);}
@@ -1796,6 +1901,9 @@
       $("risk-dialog").close();
       void openLyrics({id:song.song_id,title:song.title});
     });
+    $("refresh-summary").addEventListener("click",()=>void refreshSummary());
+    $("pro-update-check").addEventListener("click",()=>void checkProUpdate());
+    $("pro-update-install").addEventListener("click",()=>void beginProUpdate());
     $("import-start").addEventListener("click",()=>{
       const folder=$("source-folder").value.trim();
       if(!folder)return toast("กรุณาระบุโฟลเดอร์ต้นทาง",true);
@@ -1924,11 +2032,21 @@
       if(state.view==="risks")await loadRisks();
       await refreshStatus();
       await refreshJobs();
+      try{
+        const resume=await api("/api/import/resume");
+        if(resume.resume){
+          $("source-folder").value=resume.resume.source_root;
+          text("import-resume-status",resume.resume.status==="interrupted"?
+            "พบงานนำเข้าที่หยุดกะทันหัน · เปิดกลับมาแล้วระบบจะทำต่อจาก Checkpoint โดยอัตโนมัติ":
+            "มีรายการหยุดไว้ก่อนหน้า · กดนำเข้าโฟลเดอร์เดิมเพื่อทำต่อ");
+        }
+      }catch{/* status optional if older engine */}
+      void checkProUpdate(true);
       setInterval(()=>{void refreshJobs();},1600);
     }catch{
       setReady(false);
       text("activity-title","โปรดเปิดแอปบน Windows");
-      text("activity-subtitle","หน้านี้เป็นตัวอย่างหน้าตาโปรแกรม · การใช้งาน SQLite ต้องเปิดผ่านตัวติดตั้ง Song Studio Plus PC");
+      text("activity-subtitle","หน้านี้เป็นตัวอย่างหน้าตาโปรแกรม · การใช้งาน SQLite ต้องเปิดผ่านโปรแกรม Song Studio Pro Windows");
     }
   }
   void init();
