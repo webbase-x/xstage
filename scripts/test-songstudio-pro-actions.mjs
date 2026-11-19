@@ -8,6 +8,7 @@ const timeline=read('songstudio-plus/web/timeline-ui.js');
 const server=read('songstudio-plus/app.py');
 const desktop=read('songstudio-plus/desktop_ui.py');
 const picker=read('songstudio-plus/windows_picker.py');
+const core=read('songstudio-plus/plus_core.py');
 const sources=[js,timeline].join('\n');
 const buttons=[...html.matchAll(/<button\b[^>]*\bid="([^"]+)"/g)].map(match=>match[1]);
 assert.equal(buttons.length,new Set(buttons).size,'duplicate button id');
@@ -93,6 +94,15 @@ assert.ok(!readyControls.includes('diagnostic-open-log'),
  'Program log control must remain available even when engine-ready controls are disabled');
 assert.ok(server.includes('notepad.exe')&&desktop.includes('Ctrl+Shift+L'),
  'Diagnostic log must open independently through Notepad and a native shortcut');
+assert.ok(js.includes('async function api(path,payload,timeoutMs=12000)'),
+ 'Interactive API calls require a default timeout');
+assert.ok(js.includes('api("/api/pick",{kind,current:$(target).value.trim()},0)'),
+ 'Windows picker may wait for explicit user interaction');
+const connectBlock=core.slice(core.indexOf('@contextmanager\ndef connect'),core.indexOf('SCHEMA ='));
+assert.ok(!connectBlock.includes('journal_mode=WAL'),
+ 'Normal SQLite connections must not renegotiate WAL during imports');
+assert.ok(core.includes('_INITIALIZED = set()')&&core.includes('PRAGMA journal_mode=WAL'),
+ 'SQLite WAL must be configured once during workspace initialization');
 assert.ok(server.includes('song-studio-pro.log')&&server.includes('def diagnostic('),
  'Persistent diagnostic log is required');
 assert.ok(js.indexOf('bind();') < js.indexOf('new globalThis.XStageCueTimelineUI'),
