@@ -7,7 +7,7 @@ const js=read('songstudio-plus/web/app.js');
 const timeline=read('songstudio-plus/web/timeline-ui.js');
 const server=read('songstudio-plus/app.py');
 const desktop=read('songstudio-plus/desktop_ui.py');
-const picker=read('songstudio-plus/native_picker.py');
+const picker=read('songstudio-plus/windows_picker.py');
 const sources=[js,timeline].join('\n');
 const buttons=[...html.matchAll(/<button\b[^>]*\bid="([^"]+)"/g)].map(match=>match[1]);
 assert.equal(buttons.length,new Set(buttons).size,'duplicate button id');
@@ -21,6 +21,7 @@ for(const [name,call] of [
   ['source-browse','openPicker("folder","source-folder")'],
   ['lrc-browse','openPicker("lrc","media-lrc")'],
   ['source-open','openLocalFolder("source")'],
+  ['diagnostic-open-log','/api/open-log'],
   ['workspace-open','openLocalFolder("workspace")'],
   ['pro-update-check','checkProUpdate()'],
   ['pro-update-install','beginProUpdate()'],
@@ -42,7 +43,7 @@ for(const [name,call] of [
   assert.ok(js.includes(call),'button action is missing: '+name+' '+call);
 }
 for(const route of [
-  '/api/pick','/api/open-folder','/api/import','/api/jobs',
+  '/api/pick','/api/open-folder','/api/open-log','/api/diagnostic','/api/import','/api/jobs',
   '/api/status','/api/recover-lyrics','/api/edit/apply',
   '/api/edit/undo','/api/preview','/api/attach-lrc',
   '/api/manual/save','/api/manual/approve','/api/manual/skip',
@@ -52,25 +53,24 @@ for(const route of [
 assert.ok(!server.includes('import tkinter as tk'),
  'Native Windows app must never open tkinter in the HTTP worker thread');
 assert.ok(server.includes('self.state.native_picker('),
- 'Picker must use GUI-thread bridge');
-assert.ok(picker.includes('QFileDialog(self.parent_window)'),
- 'Picker must be owned by the application window');
-assert.ok(picker.includes('QFileDialog.Option.DontUseNativeDialog'),
- 'Use embedded Qt picker to avoid hidden Windows native dialogs');
-assert.ok(picker.includes('QFileDialog.FileMode.Directory'),
- 'Folder picker mode missing');
-assert.ok(picker.includes('QFileDialog.FileMode.ExistingFile'),
- 'LRC file picker mode missing');
-assert.ok(picker.includes('dialog.exec()'),
- 'Picker must display a modal dialog');
-assert.ok(picker.includes('Qt.ConnectionType.QueuedConnection'),
- 'Picker must be dispatched to GUI thread');
-assert.ok(desktop.includes('state.native_picker=picker.pick'));
-const uiLoad=desktop.indexOf('window.web.load(QUrl(url))');
-assert.ok(uiLoad>0,'Desktop UI must explicitly load localhost');
-assert.ok(desktop.indexOf('state.native_picker=picker.pick') < uiLoad,
- 'Folder picker must be registered before the web UI loads');
-assert.ok(desktop.indexOf('worker.start()') < uiLoad,
- 'Local PC Engine must start before QWebEngineView loads localhost');
+ 'Picker API must call the registered Windows picker backend');
+assert.ok(server.includes('import windows_picker'),
+ 'Windows picker backend must be registered by the local engine');
+assert.ok(picker.includes('System.Windows.Forms.FolderBrowserDialog'),
+ 'Folder selection must use Windows Forms directly');
+assert.ok(picker.includes('System.Windows.Forms.OpenFileDialog'),
+ 'LRC selection must use a Windows file dialog directly');
+assert.ok(picker.includes('"powershell.exe","-NoProfile","-STA"'),
+ 'Windows picker must run PowerShell in STA mode');
+assert.ok(desktop.includes('def run_browser_host('),
+ 'Windows browser host is required');
+assert.ok(server.includes('run_browser_host(server,url'),
+ 'Default Windows UI must use the browser host');
+assert.ok(desktop.includes('QDesktopServices.openUrl(QUrl(url))'),
+ 'Browser host must open localhost with the Windows default browser');
+assert.ok(desktop.indexOf('worker.start()') < desktop.indexOf('QTimer.singleShot(100,open_ui)'),
+ 'Local PC Engine must start before the Windows browser is opened');
+assert.ok(server.includes('song-studio-pro.log')&&server.includes('def diagnostic('),
+ 'Persistent diagnostic log is required');
 assert.ok(!js.includes('state.ready=true;'), 'Do not fake engine state');
-console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs and GUI-thread pickers');
+console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, browser host and diagnostic log');
