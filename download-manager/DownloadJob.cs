@@ -1,0 +1,24 @@
+using System.Text.Json.Serialization;
+
+namespace XStageDownloadManager;
+
+public sealed class DownloadJob
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Url { get; set; } = "";
+    public string Name { get; set; } = "download";
+    public string Folder { get; set; } = "";
+    public string Status { get; set; } = "Queued";
+    public string Error { get; set; } = "";
+    public string CompletedPath { get; set; } = "";
+    public long TotalBytes { get; set; } = -1;
+    public long DownloadedBytes;
+    public bool SupportsRanges { get; set; }
+    public string ETag { get; set; } = "";
+    public DateTimeOffset? LastModified { get; set; }
+    public int Parts { get; set; } = 4;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+    [JsonIgnore] public long PreviousBytes;
+    [JsonIgnore] public double SpeedBytesPerSecond;
+    [JsonIgnore] public CancellationTokenSource? Cancellation;
+}

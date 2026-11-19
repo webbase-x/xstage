@@ -30,6 +30,7 @@
     "apps-portal":{target:"มือถือและแท็บเล็ต Android, Android TV / Google TV ที่มี WebView และเบราว์เซอร์",fallback:["karaoke-web"]},
     "karaoke-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน iPhone, iPad, Android, Windows หรือ Mac",fallback:[]},
     "karaoke-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["karaoke-web"]},
+    "download-manager":{target:"Windows 10/11 x64 สำหรับดาวน์โหลดไฟล์ HTTP/HTTPS",fallback:["karaoke-web"]},
     "studio-pro":{target:"คอมพิวเตอร์ Windows 10/11 x64 (EXE Pro Preview)",fallback:["karaoke-web"]},
     "karaoke-android":{target:"Android TV, Google TV หรือแท็บเล็ต Android (APK สำหรับติดตั้งเอง)",fallback:["karaoke-web"]},
     "file-share":{target:"โทรศัพท์ แท็บเล็ต Android 6+ หรือ Android TV ที่รองรับสำหรับติดตั้ง APK; เครื่องอื่นใช้เว็บเบราว์เซอร์",fallback:["karaoke-web"]},
@@ -46,7 +47,7 @@
     if(web){
       return {level:"supported",text:"เปิดเว็บไซต์บนอุปกรณ์นี้ได้",target:info.target,fallback:info.fallback};
     }
-    if(id==="karaoke-pc"||id==="studio-pro"||id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc"){
+    if(id==="karaoke-pc"||id==="studio-pro"||id==="download-manager"||id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc"){
       return {level:kind==="windows"?"supported":kind==="unknown"?"unknown":"other",
         text:kind==="windows"?"ใช้งานบน Windows นี้ได้ หากเป็นรุ่น x64 และตรงตามข้อกำหนด":kind==="unknown"?"ตรวจสอบว่าเป็น Windows x64 ก่อนติดตั้ง":"รุ่นนี้ติดตั้งได้บน Windows x64 เท่านั้น",
         target:info.target,fallback:info.fallback};

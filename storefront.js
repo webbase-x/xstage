@@ -73,6 +73,17 @@
       note:"ดาวน์โหลดได้ต่อเมื่อโครงการเผยแพร่ตัวติดตั้ง Windows ที่ตรวจสอบแล้วเท่านั้น หากยังไม่มี กรุณาดูประกาศที่ GitHub Releases",
       fallback:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน"
     },
+    "download-manager":{
+      title:"X-Stage Download Manager",category:"WINDOWS · DOWNLOADS",
+      subtitle:"แอปช่วยดาวน์โหลดไฟล์สำหรับ Windows พร้อมคิวและดาวน์โหลดต่อ",
+      description:"โปรแกรม Windows แยกจาก Karaoke และ Mirror สร้างขึ้นใหม่โดยศึกษาแนวทางการทำงานของ IDM รองรับการเพิ่มลิงก์ HTTP/HTTPS ดาวน์โหลดหลายส่วนเมื่อเซิร์ฟเวอร์อนุญาต หยุดและดาวน์โหลดต่อ จัดคิว และบันทึกประวัติในเครื่อง",
+      features:["วางลิงก์หรือป้อน URL ดาวน์โหลดได้โดยตรง รองรับหลายลิงก์","ดาวน์โหลดพร้อมกัน 2 ไฟล์ และแบ่งสูงสุด 4 ส่วนต่อไฟล์เมื่อรองรับ HTTP Range","พัก / ดาวน์โหลดต่อ / ลองใหม่ โดยตรวจสอบช่วงข้อมูลเพื่อป้องกันไฟล์เสีย","เลือกโฟลเดอร์ บันทึกประวัติและเปิดไฟล์ที่ดาวน์โหลดเสร็จ","Windows EXE พร้อม runtime ในตัว; รุ่น Preview ยังไม่เชื่อมกับส่วนขยายเบราว์เซอร์"],
+      hero:"ดาวน์โหลดอย่างเป็นระบบ",blurb:"หลายส่วน · หยุดและทำต่อ · ไม่สูญหายจากคิว",preview:"DOWNLOAD MANAGER · WINDOWS",
+      type:"manifest",manifest:"./downloads/download-manager-preview-latest.json",
+      candidate:{label:"ดู Windows Preview ใน GitHub Actions",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-download-manager.yml"},
+      note:"Preview v0.1.0 Build 1 · ยังไม่ใช่รุ่นเสถียรที่ลงลายเซ็นหรือตรวจสอบบนเครื่องจริง ระบบดักจับไฟล์จาก Chrome/Edge และการจับวิดีโอออนไลน์ยังไม่รวมในรุ่นนี้",
+      fallback:"กำลังสร้างตัวติดตั้ง Windows Preview"
+    },
     "studio-pro":{
       title:"X-Stage Song Studio Pro",category:"WINDOWS · MUSIC PRODUCTION",
       subtitle:"สตูดิโอคาราโอเกะหนึ่งเดียวสำหรับ Windows",
@@ -193,6 +204,21 @@
   }
   function getRelease(id,data){
     if(!data||typeof data!=="object")throw Error("invalid release data");
+    if(id==="download-manager"){
+      const version=String(data.version||"");
+      const build=data.build;
+      const file="X-Stage-Download-Manager-v"+version+"-build"+build+"-win-x64-Setup.exe";
+      const expected="https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v"+
+        version+"-build"+build+"-preview/"+file;
+      const valid=data.available===true&&data.channel==="preview"&&
+        /^\d+\.\d+\.\d+$/.test(version)&&Number.isSafeInteger(build)&&build>0&&
+        data.file===file&&SHA256.test(data.sha256||"")&&data.download_url===expected;
+      const url=valid?verifiedReleaseUrl(expected,".exe"):"";
+      return url?{available:true,url,status:"Setup EXE Preview v"+version+" · Build "+build,
+        kind:"download",version,build,preview:true,installer:true}:
+        {available:false,url:"",status:"Windows Preview v"+(version||"0.1.0")+
+          " · ยังไม่มีไฟล์ติดตั้งที่ตรวจสอบแล้ว",kind:"pending",version,build};
+    }
     if(id==="studio-pro"){
       const url=data.available===true&&SHA256.test(data.sha256||"")?
         verifiedReleaseUrl(data.download_url,".exe"):"";
@@ -393,7 +419,8 @@
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
-      const label=id==="studio-pro"?"ดาวน์โหลด Song Studio Pro EXE ↗":
+      const label=id==="download-manager"?"ดาวน์โหลด X-Stage Download Manager Setup EXE ↗":
+        id==="studio-pro"?"ดาวน์โหลด Song Studio Pro EXE ↗":
         (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?(state.installer?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":"ดาวน์โหลด ZIP รุ่นทดสอบ ↗"):
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
@@ -458,7 +485,7 @@
       preview.appendChild(cardArt.firstElementChild.cloneNode(true));
     }else{
       const img=document.createElement("img");
-      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pro":"./songstudio-plus/web/icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
+      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","download-manager":"./assets/app-icons/download-manager.svg","studio-pro":"./songstudio-plus/web/icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
       img.alt="";
       preview.appendChild(img);
     }

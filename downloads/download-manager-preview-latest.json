@@ -1,0 +1,11 @@
+{
+  "name": "X-Stage Download Manager",
+  "version": "0.1.0",
+  "build": 1,
+  "channel": "preview",
+  "available": false,
+  "file": null,
+  "sha256": null,
+  "download_url": null,
+  "note": "Windows CI preview build pending verification; no signed stable release has been published."
+}

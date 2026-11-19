@@ -148,7 +148,11 @@ assert.equal(deviceGuide.forApp(androidTv,'mirror-tv').level,'supported','Androi
 assert.equal(deviceGuide.forApp(androidPhone,'karaoke-android').level,'unknown','Android phone must not be advertised as TV/tablet compatible');
 assert.equal(deviceGuide.forApp(iphone,'studio-pro').level,'other','Song Studio Pro must require Windows x64');
 assert.ok(storefront.includes('id="device-advice-title"')&&storefront.includes('id="detail-device-info"'),'storefront must have contextual guidance on catalog and detail');
-assert.equal((storefront.match(/data-device-app=/g)||[]).length,9,'all nine cards need device-compatibility hints');
+assert.equal((storefront.match(/data-device-app=/g)||[]).length,(storefront.match(/<article class="app-card[^>]* data-app=/g)||[]).length,'all catalog cards need device-compatibility hints');
+assert.equal(deviceGuide.forApp(windows,'download-manager').level,'supported','Download Manager is supported on Windows');
+assert.equal(deviceGuide.forApp(iphone,'download-manager').level,'other','Download Manager is not an iOS app');
+assert.ok(storefront.includes('data-app="download-manager"') && storefrontScript.includes('download-manager-preview-latest.json'),'new Download Manager card and manifest must remain discoverable');
+assert.equal(JSON.parse(read('downloads/download-manager-preview-latest.json')).available,false,'do not claim an unverified Windows executable');
 assert.ok(/storefront-device\.js\?brand=[1-9]\d*/.test(storefront) && storefront.indexOf('storefront-device.js') < storefront.indexOf('storefront.js'),'device guidance must be loaded before storefront controller');
 assert.ok(storefrontScript.includes('mirror-tv/test-latest.json'),'storefront may discover strictly separated Mirror test feed');
 assert.ok(storefront.includes('data-download-app="mirror-ios-pc"')&&storefront.includes('data-download-app="mirror-android-pc"'),'both standalone Windows mirror apps must have separate download actions');
@@ -180,6 +184,7 @@ const expectedPlatformCards={
   'apps-portal':'android',
   'karaoke-web':'website',
   'karaoke-pc':'windows',
+  'download-manager':'windows',
   'studio-pro':'windows',
   'karaoke-android':'android',
   'mirror-ios-pc':'windows',
@@ -188,7 +193,7 @@ const expectedPlatformCards={
   'file-share':'android'
 };
 const platformCards=[...storefront.matchAll(/<article class="app-card[^"]*" data-app="([^"]+)" data-category="([^"]+)" data-platform="([^"]+)" data-name="/g)];
-assert.equal(platformCards.length,9,'all catalog apps must declare a platform');
+assert.equal(platformCards.length,Object.keys(expectedPlatformCards).length,'all catalog apps must declare a platform');
 for(const card of platformCards){
   assert.equal(card[3],expectedPlatformCards[card[1]],'wrong platform classification: '+card[1]);
 }
