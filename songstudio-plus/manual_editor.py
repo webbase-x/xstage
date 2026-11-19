@@ -250,6 +250,11 @@ def inspect_cue_issues(lines):
     def add(kind,rule,index,found,advice):
         items.append({"category":kind,"rule":rule,"line_position":index,
                       "found":found,"suggestion":advice})
+    if not lines:
+        add("missing","NO_LYRICS",-1,
+            "เพลงนี้ยังไม่มีข้อความเนื้อร้องในฐานข้อมูล",
+            "เพิ่มเนื้อร้องหรือวางข้อความ แล้วจับเวลาจากเสียงต้นฉบับ")
+        return items
     for index,line in enumerate(lines):
         raw=str(line.get("text") or "")
         if not raw.strip():
@@ -352,6 +357,41 @@ def detail(workspace,song_id):
                          "segments":[],"starts":[],"timing":"untimed"}
                         for x in draft_lines]
         findings=inspect_cue_issues(source)
+        # Include structural duration/overlap evidence from the existing
+        # risk inspector as well. Unlike timing guesses, this is grounded in
+        # the immutable SQLite cue rows for the selected lyric version.
+        if song["version_id"]:
+            import risk_audit
+            version=db.execute(
+                "SELECT * FROM xstage_lyric_versions WHERE id=?",
+                (song["version_id"],)).fetchone()
+            timed_pairs=core.get_version_lines(db,song["version_id"])
+            guidance={
+                "CUE_OVERLAP":"ตรวจเวลาจุดปาดที่ทับกัน แล้วจับเวลาคำตามเสียงต้นฉบับ",
+                "CUE_OUTSIDE_LINE":"แก้ช่วงเวลาเริ่ม–จบหรือจุดปาดให้อยู่ในช่วงบรรทัด",
+                "CUE_TIME_REVERSES":"จับเวลาปาดตามลำดับที่ได้ยินใหม่",
+                "CUE_TEXT_DIFFERS":"แบ่งคำใหม่ให้ข้อความตรงกับเนื้อร้องทุกอักขระ",
+                "NO_SWEEP_CUES":"จับจุดเริ่มปาดของคำที่ยังไม่มี",
+                "INVALID_LINE_RANGE":"ตรวจเวลาเริ่ม–จบจากเพลงต้นฉบับ",
+                "INCOMPLETE_CUR":"ตรวจบรรทัดและ CUR ที่ขาด ไม่สร้างเวลาแทนต้นฉบับ",
+                "EMPTY_TIMED_VERSION":"เพิ่มเนื้อร้องและจับเวลาปาดใหม่",
+                "ESTIMATED_SWEEP":"ฟังจริงก่อนยืนยันว่าเวลาปาดถูก",
+            }
+            seen={(x["line_position"],x["rule"]) for x in findings}
+            for recorded in risk_audit.analyze(version,timed_pairs):
+                key=(recorded["line_position"],recorded["rule"])
+                if key in seen:
+                    continue
+                findings.append({
+                    "category":("missing" if recorded["category"]=="blocked"
+                                else recorded["category"]),
+                    "rule":recorded["rule"],
+                    "line_position":recorded["line_position"],
+                    "found":recorded["evidence"],
+                    "suggestion":guidance.get(recorded["rule"],
+                        "ตรวจเนื้อร้องและจังหวะปาดกับเพลงจริง")
+                })
+                seen.add(key)
         return {"song":dict(song),"lines":source,
                 "findings":findings,
                 "draft_reason":draft["reason"] if draft else None,
