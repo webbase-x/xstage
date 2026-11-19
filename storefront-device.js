@@ -30,9 +30,7 @@
     "apps-portal":{target:"มือถือและแท็บเล็ต Android, Android TV / Google TV ที่มี WebView และเบราว์เซอร์",fallback:["karaoke-web"]},
     "karaoke-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน iPhone, iPad, Android, Windows หรือ Mac",fallback:[]},
     "karaoke-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["karaoke-web"]},
-    "studio-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["studio-web"]},
-    "studio-plus":{target:"คอมพิวเตอร์ Windows 10/11 x64 (Preview EXE ยังไม่ลงนาม)",fallback:["studio-web"]},
-    "studio-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน Windows, Mac, iPhone, iPad หรือ Android",fallback:[]},
+    "studio-pro":{target:"คอมพิวเตอร์ Windows 10/11 x64 (EXE Pro Preview)",fallback:["karaoke-web"]},
     "karaoke-android":{target:"Android TV, Google TV หรือแท็บเล็ต Android (APK สำหรับติดตั้งเอง)",fallback:["karaoke-web"]},
     "file-share":{target:"โทรศัพท์ แท็บเล็ต Android 6+ หรือ Android TV ที่รองรับสำหรับติดตั้ง APK; เครื่องอื่นใช้เว็บเบราว์เซอร์",fallback:["karaoke-web"]},
     "mirror-pc":{target:"Windows 10/11 x64 โดย iOS ใช้ AirPlay และ Android ต้องรองรับ Miracast พร้อม Windows Wireless Display",fallback:["mirror-tv"]},
@@ -44,11 +42,11 @@
     const p=profile||{kind:"unknown",label:NAME.unknown};
     const info=catalog[id];
     if(!info)return {level:"unknown",text:"ยังไม่ทราบแพลตฟอร์มที่รองรับ",target:"",fallback:[]};
-    const kind=p.kind,web=(id==="karaoke-web"||id==="studio-web");
+    const kind=p.kind,web=id==="karaoke-web";
     if(web){
       return {level:"supported",text:"เปิดเว็บไซต์บนอุปกรณ์นี้ได้",target:info.target,fallback:info.fallback};
     }
-    if(id==="karaoke-pc"||id==="studio-pc"||id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc"){
+    if(id==="karaoke-pc"||id==="studio-pro"||id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc"){
       return {level:kind==="windows"?"supported":kind==="unknown"?"unknown":"other",
         text:kind==="windows"?"ใช้งานบน Windows นี้ได้ หากเป็นรุ่น x64 และตรงตามข้อกำหนด":kind==="unknown"?"ตรวจสอบว่าเป็น Windows x64 ก่อนติดตั้ง":"รุ่นนี้ติดตั้งได้บน Windows x64 เท่านั้น",
         target:info.target,fallback:info.fallback};
@@ -79,9 +77,9 @@
   }
   function overview(profile){
     const kind=profile.kind;
-    if(kind==="ios")return "แนะนำ Karaoke Online และ Song Studio Web บนอุปกรณ์นี้ ส่วน APK ต้องติดตั้งบน Android TV/Google TV และโปรแกรม PC ต้องใช้ Windows x64";
+    if(kind==="ios")return "แนะนำ Karaoke Online บนอุปกรณ์นี้ ส่วน APK ต้องติดตั้งบน Android TV/Google TV และโปรแกรม PC ต้องใช้ Windows x64";
     if(kind==="windows")return "ใช้งานแอปเว็บและโปรแกรม PC บนอุปกรณ์นี้ได้ ส่วน Karaoke Android และ Mirror TV ต้องติดตั้งบน Android TV/Google TV หรือแท็บเล็ตที่รองรับ";
-    if(kind==="mac"||kind==="linux")return "แนะนำ Karaoke Online และ Song Studio Web บนเบราว์เซอร์ โปรแกรม PC ต้องใช้ Windows x64 และ APK ต้องใช้อุปกรณ์ Android ที่รองรับ";
+    if(kind==="mac"||kind==="linux")return "แนะนำ Karaoke Online บนเบราว์เซอร์ โปรแกรม PC ต้องใช้ Windows x64 และ APK ต้องใช้อุปกรณ์ Android ที่รองรับ";
     if(kind==="android_phone")return "แนะนำแอป Web สำหรับโทรศัพท์นี้ แอป Karaoke Android เหมาะกับแท็บเล็ตหรือ Android TV มากกว่า และ Mirror TV เป็นตัวรับสำหรับทีวี";
     if(kind==="android_tv")return "แนะนำ Karaoke Android และ Mirror TV บนทีวีนี้ โปรแกรม PC ต้องใช้ Windows x64 ส่วนแอป Web ขึ้นกับความสามารถของเบราว์เซอร์ทีวี";
     if(kind==="android_tablet")return "แนะนำ Karaoke Android หรือแอป Web บนแท็บเล็ตนี้ ส่วน Mirror TV เป็นแอปตัวรับสำหรับ Android TV/Google TV";

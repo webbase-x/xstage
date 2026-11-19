@@ -17,6 +17,12 @@ const feed=JSON.parse(read('downloads/apps-portal-latest.json'));
 for(const [name,src] of Object.entries({storefront,portal,config,device})){
   assert.doesNotThrow(()=>new vm.Script(src,{filename:name+'.js'}),name+' is not valid JavaScript');
 }
+assert(html.includes('data-app="studio-pro"') && !html.includes('data-app="studio-pc"') &&
+ !html.includes('data-app="studio-web"') && !html.includes('data-app="studio-plus"'),
+ 'only Song Studio Pro may be shown');
+assert(storefront.includes('"studio-pro":{') &&
+ !storefront.includes('"studio-pc":{') && !storefront.includes('"studio-web":{'),
+ 'retired Studio definitions must not remain');
 assert(html.indexOf('data-app="apps-portal"')>0,'Portal Android card missing');
 assert(html.indexOf('data-app="apps-portal"')<html.indexOf('data-app="karaoke-web"'),'Portal Android must be first card');
 assert.match(html,/id="portal-login"/,'Google Login button missing');

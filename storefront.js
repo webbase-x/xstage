@@ -32,7 +32,7 @@
     message.textContent=support.text;
     target.textContent="อุปกรณ์ที่แนะนำ: "+support.target;
     alternatives.replaceChildren();
-    const names={"karaoke-web":"Karaoke Online","studio-web":"Song Studio Web"};
+    const names={"karaoke-web":"Karaoke Online","studio-pro":"Song Studio Pro"};
     if(support.level!=="supported"){
       for(const alt of support.fallback){
         if(alt===id||!appInfo[alt])continue;
@@ -73,35 +73,17 @@
       note:"ดาวน์โหลดได้ต่อเมื่อโครงการเผยแพร่ตัวติดตั้ง Windows ที่ตรวจสอบแล้วเท่านั้น หากยังไม่มี กรุณาดูประกาศที่ GitHub Releases",
       fallback:"ยังไม่มีตัวติดตั้ง Windows ที่ยืนยัน"
     },
-    "studio-pc":{
-      title:"X-Stage Song Studio PC",category:"WINDOWS · MUSIC TOOLS",
-      subtitle:"เครื่องมือเตรียมเพลงและเนื้อร้องบน Windows",
-      description:"เครื่องมือจัดการเพลงสำหรับ PC ตั้งแต่ตรวจเพลงซ้ำ แปลง MIDI เป็น XSK หรือ Lyrics JSON จัดการเนื้อร้อง ไปจนถึงส่งออกคลังเพลงให้ระบบคาราโอเกะ X-Stage",
-      features:["ตรวจเพลงซ้ำจากข้อมูลไฟล์จริง","สร้าง MIDI to .XSK และ MIDI to Lyrics JSON","จัดการและตรวจแก้เนื้อร้องแบบกลุ่ม","ส่งออกไฟล์เพลงและฐานข้อมูลสำหรับระบบคาราโอเกะ"],
-      hero:"สร้างและจัดการเพลงในที่เดียว",blurb:"เปลี่ยนไฟล์ต้นทางเป็นเพลงพร้อมขึ้นเวที",preview:"SONG STUDIO PC · MUSIC WORKFLOW",
-      type:"manifest",manifest:"./downloads/song-studio-latest.json",
-      note:"ตัวติดตั้ง Setup EXE สำหรับ Windows รวมส่วนประกอบพร้อมใช้และทางลัดพร้อมไอคอน รุ่นก่อนที่ยังไม่มีตัวติดตั้งจะดาวน์โหลดเป็น ZIP แบบพกพา",
-      fallback:"ยังยืนยันไฟล์ดาวน์โหลด Song Studio PC ไม่ได้"
-    },
-    "studio-plus":{
-      title:"X-Stage Song Studio Plus",category:"WINDOWS · NEW MUSIC STUDIO",
-      subtitle:"แอปใหม่แยกจาก Song Studio เดิม · SQLite-first",
-      description:"โปรแกรมใหม่สำหรับจัดคลังเพลงคาราโอเกะจากหลายเครื่อง ตรวจ SHA-256 ของไฟล์สื่อก่อนอ่านเนื้อร้อง สร้าง SQLite กลาง แก้เนื้อร้องแบบกลุ่ม และส่งออก X-media พร้อม Timing ในไฟล์เดียว",
-      features:["นำเข้า NCN และสื่อเพลงจากหลายชุด โดยใช้ SHA-256 ลดสำเนาซ้ำ","ฐาน SQLite แยก Song ID, Media SHA-256 และ Lyrics Version","ค้นคำ แก้ข้อความทั้งบรรทัดหลายกลุ่ม พร้อมรักษา Timing รายเพลงและ Undo","สร้างไฟล์ X-Media แบบไบนารีพร้อมเนื้อร้องฝังในไฟล์เดียว"],
-      hero:"เพลงเป็นระเบียบในสตูดิโอใหม่",blurb:"หนึ่งคลัง SQLite · สื่อไม่ซ้ำ · เนื้อร้องหลายเวอร์ชัน",preview:"SONG STUDIO PLUS · SQLITE FIRST",
-      type:"manifest",manifest:"./downloads/song-studio-plus-latest.json",
-      secondary:{label:"ชมหน้าตา Studio Plus (UI Preview)",url:"./songstudio-plus/web/"},
-      note:"v0.1.0 Technical Preview เท่านั้น · EXE ทดสอบใน GitHub Actions ยังไม่ได้ลงลายเซ็นดิจิทัล และระบบ Karaoke PC/Web/APK ยังเล่นไฟล์ X-Media รุ่นใหม่ไม่ได้ ห้ามใช้กับคลังหลักโดยยังไม่สำรองข้อมูล",
-      fallback:"Technical Preview · ยังไม่มี EXE รุ่นลงลายเซ็นพร้อมใช้งานจริง"
-    },
-    "studio-web":{
-      title:"X-Stage Song Studio Web",category:"WEB · MUSIC TOOLS",
-      subtitle:"ทำงานกับ MIDI และเนื้อร้องผ่านเบราว์เซอร์",
-      description:"เครื่องมือเตรียมไฟล์เพลงและเนื้อร้องในเว็บ ช่วยตรวจและทดลองฟังไฟล์จากอุปกรณ์ รองรับการเลือกไฟล์ MIDI/KAR/NCN และ SoundFont ตามความสามารถของเบราว์เซอร์",
-      features:["เลือกเพลงและโฟลเดอร์จากเครื่อง","ตรวจ MIDI/KAR/NCN ก่อนเตรียมไฟล์","ทดลองฟังและทำงานกับ SoundFont บนเว็บ","ส่งออกไฟล์ผลลัพธ์จากงานที่รองรับ โดยไม่จำเป็นต้องอัปโหลดไฟล์ต้นฉบับ"],
-      hero:"สตูดิโอที่เปิดใช้ได้ทันที",blurb:"เครื่องมือเพลงในเบราว์เซอร์ของคุณ",preview:"SONG STUDIO WEB · MUSIC TOOLS",
-      type:"web",url:"./studio/web.html",secondary:{label:"เปิด Web Control ของ Song Studio",url:"./studio/"},
-      note:"การประมวลผลและการรองรับโค้ดเสียงขึ้นกับเบราว์เซอร์และอุปกรณ์ งานบางชนิดต้องใช้ PC Engine"
+    "studio-pro":{
+      title:"X-Stage Song Studio Pro",category:"WINDOWS · MUSIC PRODUCTION",
+      subtitle:"สตูดิโอคาราโอเกะหนึ่งเดียวสำหรับ Windows",
+      description:"จัดคลังเพลง NCN และสื่อเสียง/วิดีโอผ่าน SQLite แยกต้นฉบับจากประวัติเนื้อร้อง ตรวจจุดผิดปกติและจับเวลาปาดสีจากเพลงจริง",
+      features:["นำเข้า NCN, MIDI, เสียงและวิดีโอ โดยเก็บ Media SHA-256 และ Lyrics Version","ตรวจจุดผิดปกติในเนื้อร้องและเวลาปาด พร้อมแนะนำบรรทัดให้แก้","คลิกเลือกช่วงคำแล้วกดจับเวลาปาดตามเสียงจริง คืนเวลาได้","ตรวจตัวอย่างก่อนสร้าง XMID, XMP3, XM4A หรือ XMP4","ใช้คลังเพลง SQLite เดิมโดยไม่ลบข้อมูล"],
+      hero:"หนึ่งสตูดิโอ จัดเพลงและปาดเนื้อร้อง",blurb:"เลือกช่วงข้อความ · ฟังเพลง · จับเวลา · ตรวจแก้ · สร้าง .X",preview:"SONG STUDIO PRO · SQLITE & LYRIC SWIPE",
+      type:"manifest",manifest:"./downloads/song-studio-pro-latest.json",
+      secondary:{label:"ชมหน้าตา Song Studio Pro",url:"./songstudio-plus/web/"},
+      candidate:{label:"ดาวน์โหลด Windows Preview จากผล Build",url:"https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml"},
+      note:"Pro v0.1.11 Preview สำหรับ Windows x64 · EXE ยังไม่ลงลายเซ็น Code Signing และระบบคาราโอเกะต้องรองรับ X-Media สำหรับเล่นไฟล์ .X",
+      fallback:"Pro Preview · ตรวจไฟล์ EXE ใน GitHub Actions"
     },
     "karaoke-android":{
       title:"X-Stage Karaoke Android",category:"ANDROID TV · TABLET",
@@ -211,12 +193,11 @@
   }
   function getRelease(id,data){
     if(!data||typeof data!=="object")throw Error("invalid release data");
-    if(id==="studio-pc"){
-      const installerUrl=data.available===true && data.installer_available===true && SHA256.test(data.installer_sha256||"")
-        ? verifiedReleaseUrl(data.installer_url,".exe") : "";
-      const url=installerUrl || (data.available===true && SHA256.test(data.sha256||"") ? verifiedReleaseUrl(data.download_url,".zip") : "");
-      return url?{available:true,url:url,status:(installerUrl?"Setup EXE":"ZIP")+" รุ่น "+String(data.version||"ล่าสุด")+" · ทดลองใช้งาน",kind:"download",version:String(data.version||""),installer:!!installerUrl}:
-        {available:false,url:"",status:"ยังไม่มี ZIP รุ่นที่ตรวจสอบได้",kind:"pending"};
+    if(id==="studio-pro"){
+      const url=data.available===true&&SHA256.test(data.sha256||"")?
+        verifiedReleaseUrl(data.download_url,".exe"):"";
+      return url?{available:true,url,status:"EXE Pro v"+data.version+" · Preview",kind:"download",version:String(data.version||"")}:
+        {available:false,url:"",status:"Pro v"+String(data.version||"ล่าสุด")+" · Windows Preview",kind:"pending",version:String(data.version||"")};
     }
     if(id==="apps-portal"){
       const version=String(data.version||"");
@@ -412,7 +393,7 @@
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
-      const label=id==="studio-pc"?(state.installer?"ดาวน์โหลด Setup EXE พร้อมไอคอน ↗":"ดาวน์โหลด ZIP สำหรับ Windows ↗"):
+      const label=id==="studio-pro"?"ดาวน์โหลด Song Studio Pro EXE ↗":
         (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?(state.installer?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":"ดาวน์โหลด ZIP รุ่นทดสอบ ↗"):
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
@@ -425,7 +406,7 @@
       pending.setAttribute("aria-disabled","true");
       pending.textContent="ยังไม่เปิดดาวน์โหลด";
       container.appendChild(pending);
-      if(id!=="studio-pc")container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
+      if(id!=="studio-pro")container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
       if(info.candidate){
         container.appendChild(createAction(info.candidate.label+" ↗",info.candidate.url,"secondary",true));
       }
@@ -477,7 +458,7 @@
       preview.appendChild(cardArt.firstElementChild.cloneNode(true));
     }else{
       const img=document.createElement("img");
-      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pc":"./studio/app-icon.svg","studio-web":"./studio/web-app-icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
+      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","studio-pro":"./songstudio-plus/web/icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
       img.alt="";
       preview.appendChild(img);
     }
@@ -487,7 +468,8 @@
     return true;
   }
   function routeToCurrent(){
-    const id=new URLSearchParams(location.search).get("app");
+    const requested=new URLSearchParams(location.search).get("app");
+    const id=["studio-pc","studio-web","studio-plus"].includes(requested)?"studio-pro":requested;
     if(id && (!portalNative||id!=="apps-portal") && renderDetail(id)){
       home.hidden=true;detail.hidden=false;
       window.scrollTo({top:0,behavior:"instant"});
@@ -557,7 +539,7 @@
   }
   for(const [id,url] of Object.entries({
     'karaoke-web':'./version.json',
-    'studio-web':'./studio/web-version.json'
+
   })){
     fetch(url,{cache:'no-store',credentials:'omit'})
       .then(response=>response.ok?response.json():null)
