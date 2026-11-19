@@ -160,7 +160,7 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             if state is None:return
             try:
                 state.log_path.touch(exist_ok=True)
-                os.startfile(str(state.log_path))
+                __import__("subprocess").Popen(["notepad.exe",str(state.log_path)],creationflags=getattr(__import__("subprocess"),"CREATE_NO_WINDOW",0),close_fds=True)
                 state.diagnostic("log.opened",source="desktop-shortcut")
             except Exception as exc:
                 state.diagnostic("log.open.error",source="desktop-shortcut",
