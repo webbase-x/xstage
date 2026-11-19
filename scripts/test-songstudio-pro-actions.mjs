@@ -66,5 +66,7 @@ assert.ok(picker.includes('dialog.exec()'),
 assert.ok(picker.includes('Qt.ConnectionType.QueuedConnection'),
  'Picker must be dispatched to GUI thread');
 assert.ok(desktop.includes('state.native_picker=picker.pick'));
+assert.ok(desktop.indexOf('worker.start()') < desktop.indexOf('window=MainWindow()'),
+ 'Local PC Engine must start before QWebEngineView loads localhost');
 assert.ok(!js.includes('state.ready=true;'), 'Do not fake engine state');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs and GUI-thread pickers');
