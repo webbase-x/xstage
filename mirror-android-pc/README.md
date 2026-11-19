@@ -1,6 +1,12 @@
 # X-Stage Mirror Android PC
 
-Version 1.0.1 · Build 1002 · Windows 10/11 x64 · Preview
+Version 1.0.3 · Build 1004 · Windows 10/11 x64 · Preview
+
+## Build 1004
+
+The welcome-screen version/build is taken from the compiled assembly.
+Windows Wireless Display launch is shown only as a requested action, not
+as a verified Miracast video connection. Hardware verification remains required.
 
 Miracast receiver launcher with the same full-screen welcome UX as X-Stage Mirror iOS PC. The storefront icon, Windows EXE icon and welcome logo all use a distinctive green Android robot. A persistent X-Stage No.XXXX is shared with Mirror iOS PC; the real Windows hostname is displayed so Android senders can find the correct Miracast receiver.
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Net.NetworkInformation;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
@@ -9,7 +10,13 @@ namespace XStageMirrorAndroidPC;
 
 public sealed class MainForm : Form
 {
-    private const string AppVersion = "v1.0.1 · Build 1002";
+    private static readonly string AppVersion = GetVersionText();
+    private static string GetVersionText()
+    {
+        var v = typeof(MainForm).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
+        var p = v?.Split('.');
+        return p is { Length: 4 } ? $"v{p[0]}.{p[1]}.{p[2]} · Build {p[3]}" : "ไม่ทราบเวอร์ชัน EXE";
+    }
     private const string PreviewFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-android-pc-preview-latest.json";
     private static readonly Color Base = Color.FromArgb(12, 19, 36);
@@ -232,7 +239,8 @@ public sealed class MainForm : Form
                 Process.Start(new ProcessStartInfo("explorer.exe",
                     @"shell:AppsFolder\Microsoft.PPIProjection_cw5n1h2txyewy!App")
                     { UseShellExecute = true });
-            _status.Text = "ตัวรับ Windows เปิดแล้ว · รอ Android เชื่อมต่อ";
+            // Launching Windows Connect is not proof of a successful Miracast session.
+            _status.Text = "ส่งคำสั่งเปิด Wireless Display แล้ว · ตรวจหน้าต่าง Windows";
         }
         catch (Exception ex)
         {
