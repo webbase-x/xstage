@@ -2,7 +2,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const state = {token:null,ready:false,view:"import",groups:[],selectedGroups:new Set(),
-                 songs:[],selectedSongs:new Set(),latestEdit:null,activeJob:null,
+                 songs:[],selectedSongs:new Set(),allReadySelected:false,excludedSongs:new Set(),
+                 readyTotal:0,latestEdit:null,activeJob:null,
                  jobSignature:"",toastTimer:null,riskFilter:"structural",
                  riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
@@ -13,9 +14,13 @@
                  previewSelected:null,previewPlaying:false,previewHeard:false,
                  previewTime:0,previewDuration:0,previewRaf:null,
                  previewLastPaint:0,previewMidiSample:0,previewMidiAt:0,
-                 previewPolling:false,previewMidiPoll:null,previewSeeking:false};
+                 previewPolling:false,previewMidiPoll:null,previewSeeking:false,
+                 manualOffset:0,manualTotal:0,manualRows:[],manualSelected:null,
+                 manualLines:[],manualDuration:0,manualTime:0,manualPlaying:false,
+                 manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
+                 manualMidiAt:0};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
-                preview:"ทดสอบก่อนสร้าง .x...",build:"สร้างไฟล์ X-Stage",
+                preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
   function text(id,value){const node=$(id);if(node)node.textContent=value;}
@@ -42,6 +47,7 @@
   }
   function view(name){
     if(!labels[name])return;
+    if(state.view==="manual"&&name!=="manual")void manualStop();
     if(state.view==="preview"&&name!=="preview"){
       void stopPreviewPlayback();
       state.previewSelected=null;
@@ -59,6 +65,7 @@
     }
     if(name==="import")void refreshStatus();
     if(name==="preview")void loadPreviewSongs();
+    if(name==="manual")void loadManualQueue();
     if(name==="risks")void loadRisks();
     if(name==="lyrics"&&$("lyrics-search").value.trim())void searchGroups();
     document.title=labels[name]+" · X-Stage Song Studio Plus";
@@ -70,7 +77,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Plus บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","lrc-browse"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","lrc-browse","manual-find"]){
       $(id).disabled=!enabled;
     }
   }
@@ -121,9 +128,10 @@
     for(const song of state.songs){
       const row=document.createElement("tr");
       const format=song.extension.toUpperCase();
-      const ready=Boolean(song.version_id&&song.timing_status!=="incomplete");
+      const ready=song.manual_status==="ready";
       const available=Boolean(song.version_id||song.draft_reason);
-      const timingLabel=ready? song.timing_status:
+      const timingLabel=song.manual_status==="review"?"รอการยืนยัน / แก้ไข":
+        ready? song.timing_status:
         song.timing_status==="incomplete"?"เนื้อร้องบางส่วน · CUR ไม่ครบ":
         song.draft_reason?"เก็บเนื้อร้องแล้ว · รอ Timing":"ยังไม่พบเนื้อร้องพร้อมเวลา";
       const columns=[String(song.code).padStart(8,"0"),song.title||song.original_code,
@@ -155,11 +163,17 @@
       const label=document.createElement("label");
       label.className="build-row";
       const check=document.createElement("input");check.type="checkbox";
-      check.checked=state.selectedSongs.has(song.id);
+      check.checked=ready&&(state.allReadySelected?
+        !state.excludedSongs.has(song.id):state.selectedSongs.has(song.id));
       check.disabled=!ready;
       check.addEventListener("change",()=>{
-        if(check.checked)state.selectedSongs.add(song.id);
-        else state.selectedSongs.delete(song.id);
+        if(state.allReadySelected){
+          if(check.checked)state.excludedSongs.delete(song.id);
+          else state.excludedSongs.add(song.id);
+        }else{
+          if(check.checked)state.selectedSongs.add(song.id);
+          else state.selectedSongs.delete(song.id);
+        }
         updateBuildSelection();
       });
       const div=document.createElement("div");div.className="song-text";
@@ -184,8 +198,11 @@
   }
   function updateBuildSelection(){
     // Preserve selected song IDs when moving between pages.
-    text("build-count",number(state.selectedSongs.size)+" เพลง");
-    $("build-start").disabled=!state.ready||state.selectedSongs.size===0||Boolean(state.activeJob);
+    const count=state.allReadySelected?
+      Math.max(0,state.readyTotal-state.excludedSongs.size):state.selectedSongs.size;
+    text("build-count",number(count)+" เพลง"+
+      (state.allReadySelected?" (ทั้งคลัง)":""));
+    $("build-start").disabled=!state.ready||count===0||Boolean(state.activeJob);
   }
   function renderLyricPage(){
     const entries=state.lyricShowDraft?state.lyricDraft:state.lyricTimed;
@@ -1055,16 +1072,40 @@
     $("lyrics-apply").addEventListener("click",()=>void applyLyrics());
     $("lyrics-undo").addEventListener("click",()=>void undoLyrics());
     $("media-attach").addEventListener("click",()=>void attachLrc());
-    $("build-all").addEventListener("click",()=>{
-      for(const song of state.songs)if(song.version_id)state.selectedSongs.add(song.id);
+    $("build-all").addEventListener("click",async()=>{
+      try{
+        const result=await api("/api/build/eligible");
+        state.allReadySelected=true;state.readyTotal=result.ready_total||0;
+        state.excludedSongs.clear();state.selectedSongs.clear();
+        renderSongs();toast("เลือกเพลงที่พร้อมสร้างจากทุกหน้าแล้ว");
+      }catch(error){toast(error.message,true);}
+    });
+    $("build-page-all").addEventListener("click",()=>{
+      for(const song of state.songs)if(song.manual_status==="ready"){
+        if(state.allReadySelected)state.excludedSongs.delete(song.id);
+        else state.selectedSongs.add(song.id);
+      }
       renderSongs();
     });
     $("build-clear").addEventListener("click",()=>{
-      state.selectedSongs.clear();renderSongs();
+      state.allReadySelected=false;state.readyTotal=0;
+      state.excludedSongs.clear();state.selectedSongs.clear();renderSongs();
+    });
+    $("build-page-clear").addEventListener("click",()=>{
+      for(const song of state.songs){
+        if(state.allReadySelected&&song.manual_status==="ready")
+          state.excludedSongs.add(song.id);
+        else state.selectedSongs.delete(song.id);
+      }
+      renderSongs();
     });
     $("build-start").addEventListener("click",()=>{
-      if(!state.selectedSongs.size)return;
-      void startJob("build",{song_ids:Array.from(state.selectedSongs)});
+      const count=state.allReadySelected?
+        state.readyTotal-state.excludedSongs.size:state.selectedSongs.size;
+      if(count<=0)return;
+      void startJob("build",state.allReadySelected?
+        {all_ready:true,excluded:[...state.excludedSongs]}:
+        {song_ids:[...state.selectedSongs]});
     });
     $("library-prev").addEventListener("click",()=>{
       state.songOffset=Math.max(0,state.songOffset-visibleRows());
@@ -1122,6 +1163,7 @@
       setReady(true);
       text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
       if(state.view==="preview")await loadPreviewSongs();
+      if(state.view==="manual")await loadManualQueue();
       if(state.view==="risks")await loadRisks();
       await refreshStatus();
       await refreshJobs();
