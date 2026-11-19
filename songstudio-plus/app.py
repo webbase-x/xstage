@@ -73,7 +73,8 @@ class State:
         self.diagnostic("job.start",kind=kind,job=job_id)
         job={"id":job_id,"kind":kind,"status":"running","progress":{},
              "message":"กำลังเตรียมงาน","error":None,"result":None,
-             "cancel":threading.Event(),"started_at":time.monotonic()}
+             "cancel":threading.Event(),"started_at":time.monotonic(),
+             "updated_at":time.time(),"revision":0}
         with self.lock:
             running=[x for x in self.jobs.values() if x["status"]=="running"]
             if running and kind=="update" and all(x["kind"]!="update" for x in running):
@@ -93,12 +94,16 @@ class State:
                     job["result"]=result
                     job["status"]="cancelled" if job["cancel"].is_set() else "completed"
                     job["message"]="ยกเลิกงานแล้ว" if job["cancel"].is_set() else "เสร็จเรียบร้อย"
+                    job["updated_at"]=time.time()
+                    job["revision"]=int(job.get("revision",0))+1
                 self.diagnostic("job.finish",kind=kind,job=job_id,status=job["status"])
             except Exception as e:
                 with self.lock:
                     job["status"]="cancelled" if job["cancel"].is_set() else "failed"
                     job["error"]=str(e)[:1200]
                     job["message"]="ยกเลิกและคืนค่าแล้ว" if job["cancel"].is_set() else "ดำเนินการไม่สำเร็จ"
+                    job["updated_at"]=time.time()
+                    job["revision"]=int(job.get("revision",0))+1
                 self.diagnostic("job.error",kind=kind,job=job_id,
                                 status=job["status"],error=str(e)[:1200])
         threading.Thread(target=runner,daemon=True,name="Plus-"+kind).start()
@@ -112,11 +117,18 @@ class State:
             summary["files_per_second"]=round(items/elapsed,1)
             job["progress"]=summary
             job["message"]=str(message)[:240]
+            job["updated_at"]=time.time()
+            job["revision"]=int(job.get("revision",0))+1
 
     def jobs_snapshot(self):
+        now_epoch=time.time()
         with self.lock:
-            return [{k:v for k,v in job.items() if k not in ("cancel","started_at")}
-                    for job in list(self.jobs.values())[-10:]][::-1]
+            rows=[]
+            for job in list(self.jobs.values())[-10:][::-1]:
+                item={k:v for k,v in job.items() if k not in ("cancel","started_at")}
+                item["progress_age"]=round(max(0.0,now_epoch-float(job.get("updated_at",now_epoch))),3)
+                rows.append(item)
+            return rows
     def request_restart(self):
         with self.lock:
             for job in self.jobs.values():
