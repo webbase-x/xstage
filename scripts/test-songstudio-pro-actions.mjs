@@ -84,6 +84,15 @@ assert.ok(desktop.includes('Ctrl+Shift+L')&&desktop.includes('web.core.check'),
  'Desktop shell must provide a native log shortcut and JS core health check');
 assert.ok(js.includes('__XSTAGE_CORE_BOUND__'),
  'Web UI must expose successful core button binding to the desktop wrapper');
+assert.ok(js.includes('jobsRefreshing:false')&&js.includes('if(!state.ready||state.jobsRefreshing)return'),
+ 'Job polling must not overlap across repeated imports');
+assert.ok(js.includes('ui.post_job_refresh.error')&&!js.includes('}catch(error){setReady(false);}'),
+ 'Post-job refresh failures must not disconnect the Local Engine');
+const readyControls=js.match(/for\(const id of \[(.*?)\]\)\{/s)?.[1]||"";
+assert.ok(!readyControls.includes('diagnostic-open-log'),
+ 'Program log control must remain available even when engine-ready controls are disabled');
+assert.ok(server.includes('notepad.exe')&&desktop.includes('Ctrl+Shift+L'),
+ 'Diagnostic log must open independently through Notepad and a native shortcut');
 assert.ok(server.includes('song-studio-pro.log')&&server.includes('def diagnostic('),
  'Persistent diagnostic log is required');
 assert.ok(js.indexOf('bind();') < js.indexOf('new globalThis.XStageCueTimelineUI'),
