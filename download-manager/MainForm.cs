@@ -9,6 +9,7 @@ public sealed class MainForm : Form
     private readonly DownloadEngine _engine = new();
     private readonly TextBox _url = new();
     private readonly TextBox _folder = new();
+    private readonly ComboBox _parts = new();
     private readonly DataGridView _grid = new();
     private readonly Label _summary = new();
     private readonly Label _details = new();
@@ -16,7 +17,7 @@ public sealed class MainForm : Form
 
     public MainForm(string[] args)
     {
-        Text = "X-Stage Download Manager · v0.1.0 Build 1";
+        Text = "X-Stage Download Manager · v0.1.1 Build 2";
         MinimumSize = new Size(900, 565);
         Size = new Size(1220, 735);
         StartPosition = FormStartPosition.CenterScreen;
@@ -25,6 +26,17 @@ public sealed class MainForm : Form
         Font = new Font("Segoe UI", 10);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         CreateLayout();
+        _parts.Items.AddRange(new object[] { "1", "2", "4", "8", "16", "32" });
+        _parts.SelectedItem = _engine.DefaultParts.ToString();
+        _parts.SelectedIndexChanged += (_, _) =>
+        {
+            if (_parts.SelectedItem is string value && int.TryParse(value, out var count))
+            {
+                try { _engine.SetDefaultParts(count); }
+                catch (IOException ex) { MessageBox.Show(this, ex.Message, "บันทึกการตั้งค่าไม่ได้"); }
+                catch (UnauthorizedAccessException ex) { MessageBox.Show(this, ex.Message, "บันทึกการตั้งค่าไม่ได้"); }
+            }
+        };
         _folder.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
         _timer.Tick += (_, _) => RefreshRows();
@@ -54,7 +66,7 @@ public sealed class MainForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.1.0 · Build 1",
+            Text = "DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.1.1 · Build 2",
             AutoSize = true, ForeColor = Color.FromArgb(212, 230, 252),
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             Location = new Point(28, 65), BackColor = Color.Transparent
@@ -63,15 +75,16 @@ public sealed class MainForm : Form
 
         var entry = new TableLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 122, Padding = new Padding(20, 11, 20, 9),
-            BackColor = Color.White, ColumnCount = 4, RowCount = 2
+            Dock = DockStyle.Top, Height = 172, Padding = new Padding(20, 11, 20, 9),
+            BackColor = Color.White, ColumnCount = 4, RowCount = 3
         };
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 133));
-        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 33));
+        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 33));
+        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
         entry.Controls.Add(MakeLabel("ลิงก์ไฟล์"), 0, 0);
         entry.Controls.Add(MakeLabel("บันทึกที่"), 0, 1);
         SetupText(_url, "วาง URL ดาวน์โหลดไฟล์ HTTP/HTTPS");
@@ -107,6 +120,19 @@ public sealed class MainForm : Form
             ForeColor = Color.FromArgb(114, 127, 151), Font = new Font("Segoe UI", 8)
         };
         entry.Controls.Add(hint, 2, 1);
+        entry.Controls.Add(MakeLabel("จำนวนส่วน"), 0, 2);
+        _parts.DropDownStyle = ComboBoxStyle.DropDownList;
+        _parts.Dock = DockStyle.Fill;
+        _parts.Margin = new Padding(3, 8, 6, 7);
+        _parts.Font = new Font("Segoe UI", 11);
+        _parts.AccessibleName = "จำนวนการเชื่อมต่อแบ่งโหลดต่อหนึ่งไฟล์";
+        entry.Controls.Add(_parts, 1, 2);
+        entry.Controls.Add(new Label
+        {
+            Text = "1–32 ส่วน", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(92, 110, 134), Font = new Font("Segoe UI", 8)
+        }, 2, 2);
+        entry.Controls.Add(MakeButton("ใช้กับรายการ", false, (_, _) => ApplyPartsToSelected()), 3, 2);
         Controls.Add(entry);
 
         var toolbar = new FlowLayoutPanel
@@ -166,7 +192,7 @@ public sealed class MainForm : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Progress", HeaderText = "ความคืบหน้า", Width = 185 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Speed", HeaderText = "ความเร็ว", Width = 114 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "สถานะ", Width = 130 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Parts", HeaderText = "การเชื่อมต่อ", Width = 115 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Parts", HeaderText = "จำนวนส่วนจริง", Width = 130 });
         _grid.CellPainting += PaintProgress;
         _grid.SelectionChanged += (_, _) => UpdateDetails();
         _grid.CellDoubleClick += (_, _) => OpenSelected();
@@ -252,7 +278,7 @@ public sealed class MainForm : Form
         var invalid = new List<string>();
         foreach (var url in urls)
         {
-            try { _engine.Add(url, _folder.Text.Trim()); }
+            try { _engine.Add(url, _folder.Text.Trim(), int.Parse((string)_parts.SelectedItem!)); }
             catch (Exception ex) { invalid.Add(url + ": " + ex.Message); }
         }
         _url.Clear();
@@ -261,6 +287,40 @@ public sealed class MainForm : Form
             MessageBox.Show(this, "ลิงก์ที่ไม่สามารถเพิ่มได้:\n" +
                 string.Join("\n", invalid.Take(5)), "ตรวจสอบ URL",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+
+    private void ApplyPartsToSelected()
+    {
+        var job = Selected();
+        if (job is null)
+        {
+            MessageBox.Show(this, "เลือกไฟล์ที่ต้องการเปลี่ยนจำนวนส่วนก่อน", "จำนวนส่วน");
+            return;
+        }
+        if (job.Status is "Running" or "Queued")
+        {
+            MessageBox.Show(this, "กดหยุดชั่วคราวและรอให้รายการหยุดสนิทก่อนเปลี่ยนจำนวนส่วน", "กำลังดาวน์โหลด");
+            return;
+        }
+        if (job.Status == "Completed")
+        {
+            MessageBox.Show(this, "ไฟล์ดาวน์โหลดเสร็จแล้ว เลือกจำนวนส่วนสำหรับไฟล์ใหม่ได้", "ดาวน์โหลดสำเร็จ");
+            return;
+        }
+        var parts = int.Parse((string)_parts.SelectedItem!);
+        if (job.Parts == parts) return;
+        if (Interlocked.Read(ref job.DownloadedBytes) > 0 &&
+            MessageBox.Show(this,
+                "การเปลี่ยนจำนวนส่วนจะลบเฉพาะชิ้นส่วนชั่วคราวของไฟล์นี้และเริ่มดาวน์โหลดใหม่จาก 0%\nไฟล์ที่ดาวน์โหลดเสร็จจะไม่ถูกลบ\nดำเนินการต่อหรือไม่?",
+                "ยืนยันการเปลี่ยนจำนวนส่วน", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        try
+        {
+            if (!_engine.SetJobParts(job, parts))
+                MessageBox.Show(this, "รายการยังทำงานอยู่หรือไม่สามารถเปลี่ยนจำนวนส่วนได้", "ไม่สามารถเปลี่ยน");
+            RefreshRows();
+        }
+        catch (IOException ex) { MessageBox.Show(this, ex.Message, "เปลี่ยนจำนวนส่วนไม่สำเร็จ"); }
+        catch (UnauthorizedAccessException ex) { MessageBox.Show(this, ex.Message, "เปลี่ยนจำนวนส่วนไม่สำเร็จ"); }
     }
 
     private DownloadJob? Selected()
@@ -335,8 +395,9 @@ public sealed class MainForm : Form
                 "Paused" => "หยุดชั่วคราว", "Completed" => "สำเร็จ",
                 "Failed" => "เกิดข้อผิดพลาด", _ => job.Status
             };
-            row.Cells["Parts"].Value = job.SupportsRanges
-                ? "สูงสุด " + Math.Min(8, job.Parts) + " ส่วน" : "ไฟล์เดียว";
+            row.Cells["Parts"].Value = job.SegmentsUsed > 0
+                ? job.SegmentsUsed + " / " + job.Parts + " ส่วน"
+                : "ตั้งไว้ " + job.Parts + " ส่วน";
         }
         var active = jobs.Count(j => j.Status == "Running");
         var completed = jobs.Count(j => j.Status == "Completed");
@@ -350,7 +411,7 @@ public sealed class MainForm : Form
         var job = Selected();
         if (job is null)
         {
-            _details.Text = "ใส่ลิงก์ไฟล์เพื่อเริ่มดาวน์โหลด · รองรับการทำต่อเฉพาะเซิร์ฟเวอร์ที่ส่ง HTTP Range ถูกต้อง";
+            _details.Text = "เลือกระดับ 1–32 ส่วนสำหรับงานใหม่ · หากเปลี่ยนรายการเดิมให้หยุดก่อน · เซิร์ฟเวอร์อาจจำกัดจำนวนส่วน";
             return;
         }
         _details.Text = job.Status == "Failed"

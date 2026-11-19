@@ -17,6 +17,8 @@ public sealed class DownloadJob
     public string ETag { get; set; } = "";
     public DateTimeOffset? LastModified { get; set; }
     public int Parts { get; set; } = 4;
+    // Number of actual range slices used for this job, persisted across restarts.
+    public int SegmentsUsed { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     [JsonIgnore] public long PreviousBytes;
     [JsonIgnore] public double SpeedBytesPerSecond;

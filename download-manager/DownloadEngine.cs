@@ -11,7 +11,7 @@ public sealed class DownloadEngine
     private static readonly HttpClient Http = new(new SocketsHttpHandler
     {
         AutomaticDecompression = DecompressionMethods.None,
-        MaxConnectionsPerServer = 16,
+        MaxConnectionsPerServer = 64,
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     }) { Timeout = Timeout.InfiniteTimeSpan };
 
@@ -20,6 +20,9 @@ public sealed class DownloadEngine
     private readonly ConcurrentDictionary<string, byte> _active = new();
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, IncludeFields = true };
     private readonly string _index;
+    private readonly string _settings;
+    public static readonly int[] AllowedParts = { 1, 2, 4, 8, 16, 32 };
+    public int DefaultParts { get; private set; } = 4;
     public List<DownloadJob> Jobs { get; }
 
     public DownloadEngine()
@@ -28,11 +31,20 @@ public sealed class DownloadEngine
             "X-Stage", "Download Manager");
         Directory.CreateDirectory(data);
         _index = Path.Combine(data, "downloads.json");
+        _settings = Path.Combine(data, "settings.json");
+        try
+        {
+            var configured = JsonSerializer.Deserialize<int>(File.ReadAllText(_settings));
+            if (AllowedParts.Contains(configured)) DefaultParts = configured;
+        }
+        catch (IOException) { }
+        catch (JsonException) { }
         Jobs = Load();
         foreach (var job in Jobs)
         {
             if (job.Status is "Running" or "Queued") job.Status = "Paused";
             job.Cancellation = null;
+            if (!AllowedParts.Contains(job.Parts)) job.Parts = 4;
             job.PreviousBytes = job.DownloadedBytes;
         }
         Save();
@@ -79,12 +91,51 @@ public sealed class DownloadEngine
         return false;
     }
 
-    public DownloadJob Add(string url, string folder)
+    public void SetDefaultParts(int parts)
+    {
+        ValidateParts(parts);
+        DefaultParts = parts;
+        File.WriteAllText(_settings, JsonSerializer.Serialize(parts));
+    }
+
+    private static void ValidateParts(int parts)
+    {
+        if (!AllowedParts.Contains(parts))
+            throw new ArgumentOutOfRangeException(nameof(parts), "จำนวนส่วนต้องเป็น 1, 2, 4, 8, 16 หรือ 32");
+    }
+
+    // Changing segment geometry requires discarding old partials, never mixing different byte ranges.
+    // An active download must first be paused and fully stopped.
+    public bool SetJobParts(DownloadJob job, int parts)
+    {
+        ValidateParts(parts);
+        if (job.Status == "Completed" || _active.ContainsKey(job.Id)) return false;
+        if (!Jobs.Contains(job)) return false;
+        if (job.Parts == parts) return true;
+        var work = WorkDir(job);
+        if (Directory.Exists(work)) Directory.Delete(work, true);
+        job.Parts = parts;
+        job.SegmentsUsed = 0;
+        job.TotalBytes = -1;
+        job.SupportsRanges = false;
+        job.ETag = "";
+        job.LastModified = null;
+        job.DownloadedBytes = 0;
+        job.PreviousBytes = 0;
+        job.Error = "";
+        job.Status = "Paused";
+        Save();
+        return true;
+    }
+
+    public DownloadJob Add(string url, string folder, int? parts = null)
     {
         if (!TryParseUrl(url, out var uri) || uri is null)
             throw new ArgumentException("รองรับลิงก์ HTTP/HTTPS ที่ถูกต้องเท่านั้น");
+        var selectedParts = parts ?? DefaultParts;
+        ValidateParts(selectedParts);
         var name = CleanName(Uri.UnescapeDataString(uri.AbsolutePath.Split('/').LastOrDefault() ?? ""));
-        var job = new DownloadJob { Url = uri.ToString(), Name = name, Folder = folder };
+        var job = new DownloadJob { Url = uri.ToString(), Name = name, Folder = folder, Parts = selectedParts };
         Jobs.Insert(0, job);
         Save();
         Start(job);
@@ -221,7 +272,10 @@ public sealed class DownloadEngine
         if (probe.Ranges && probe.Total > 0)
             await ParallelDownloadAsync(job, work, ct);
         else
+        {
+            job.SegmentsUsed = 1;
             await SingleDownloadAsync(job, work, ct);
+        }
         ct.ThrowIfCancellationRequested();
 
         var destination = UniqueOutput(job.Folder, job.Name);
@@ -260,8 +314,9 @@ public sealed class DownloadEngine
 
     private static int SegmentCount(long size, int parts)
     {
-        if (size < 1024 * 1024) return 1;
-        return (int)Math.Clamp(Math.Min(parts, size / (1024 * 1024)), 1, 8);
+        // Keep each request at least 256 KiB where possible; tiny files need fewer parts.
+        if (size < 256 * 1024) return 1;
+        return (int)Math.Clamp(Math.Min(Math.Clamp(parts, 1, 32), size / (256 * 1024)), 1, 32);
     }
 
     private static string PartPath(string work, int index) => Path.Combine(work, index.ToString("D2") + ".part");
@@ -269,6 +324,13 @@ public sealed class DownloadEngine
     private static async Task ParallelDownloadAsync(DownloadJob job, string work, CancellationToken ct)
     {
         var count = SegmentCount(job.TotalBytes, job.Parts);
+        // Save the actual geometry with the job so resumption never reuses a segment
+        // written for different byte boundaries. Older jobs default to zero (unknown).
+        if (job.SegmentsUsed > 0 && job.SegmentsUsed != count)
+        {
+            foreach (var path in Directory.GetFiles(work, "*.part")) File.Delete(path);
+        }
+        job.SegmentsUsed = count;
         long existingTotal = 0;
         for (int i = 0; i < count; i++)
         {
