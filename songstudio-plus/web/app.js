@@ -2262,7 +2262,9 @@
       }catch{/* status optional if older engine */}
       void checkProUpdate(true);
       setInterval(()=>{void refreshJobs();},1600);
-    }catch{
+    }catch(error){
+      console.error("[XSTAGE] session.init.failed",
+        error?.stack||error?.message||String(error));
       setReady(false);
       text("activity-title","ยังไม่เชื่อมต่อ PC Engine");
       text("activity-subtitle","หากเปิดจากเว็บสาธารณะ ให้เปิดไฟล์ EXE บน Windows · ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ");
