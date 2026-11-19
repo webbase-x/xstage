@@ -325,7 +325,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
     def static_file(self,name):
-        if name not in ("index.html","app.js","style.css","icon.svg"):
+        if name not in ("index.html","app.js","style.css","icon.svg",
+                        "timeline-core.js","timeline-ui.js"):
             self.send_json(404,{"error":"ไม่พบไฟล์"});return
         bundle=Path(getattr(sys,"_MEIPASS",Path(__file__).parent))
         folder=bundle/"web"
