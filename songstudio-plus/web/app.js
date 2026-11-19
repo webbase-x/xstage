@@ -21,6 +21,7 @@
                  manualMidiAt:0,manualCueUndo:new Map(),manualDirty:false,manualFindings:[],manualOnlyIssues:false,
                  manualLayout:{menu:false,queue:false,stage:false,focus:false},
                  updateTarget:null,updateInstallIntent:false,updateBusy:false};
+  let manualTimeline=null;
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
@@ -1274,6 +1275,7 @@
     $("manual-seek").value=String(Math.max(0,Math.min(state.manualDuration,state.manualTime)));
     text("manual-clock",previewFormatSeconds(state.manualTime)+" / "+
       previewFormatSeconds(state.manualDuration));
+    manualTimeline?.tick();
     $("manual-approve").disabled=!selected||!state.manualHeard||state.manualDirty||
       !state.manualSelected?.song?.version_id||
       state.manualSelected?.song?.timing_status==="incomplete";
@@ -1352,6 +1354,7 @@
     if(select.options.length)
       select.value=String(Math.min(previous,select.options.length-1));
     manualSetSelectedCueVisual();
+    manualTimeline?.render();
   }
   function manualSetSelectedCueVisual(){
     const lineIndex=Number($("manual-line-index").value)||0;
@@ -1361,6 +1364,7 @@
       chip.classList.toggle("is-selected",Number(card?.dataset.manualLine)===lineIndex&&
         Number(chip.dataset.cue)===cueIndex);
     }
+    manualTimeline?.selection();
   }
   function manualDraftState(){
     state.manualDirty=true;
@@ -1395,7 +1399,7 @@
       words.placeholder="เนื้อร้องบรรทัดนี้";
       words.setAttribute("aria-label","เนื้อร้องบรรทัด "+(index+1));
       words.addEventListener("input",()=>{
-        line.text=words.value;manualDraftState();
+        line.text=words.value;manualDraftState();manualTimeline?.render();
         const option=$("manual-line-index").options[index];
         if(option)option.textContent=(index+1)+" · "+(line.text||"ยังไม่มีข้อความ").slice(0,60);
       });
@@ -1405,7 +1409,7 @@
         input.type="number";input.min="0";input.step="0.001";
         input.placeholder=label;
         input.value=manualLineNumber(line[property]);
-        input.addEventListener("input",()=>{line[property]=input.value;manualDraftState();});
+        input.addEventListener("input",()=>{line[property]=input.value;manualDraftState();manualTimeline?.render();});
         times.append(input);
       }
       const cueStrip=document.createElement("div");
@@ -1460,7 +1464,7 @@
       starts.value=manualStartTimes(line).join(",");
       starts.addEventListener("change",()=>{
         line.starts=starts.value?starts.value.split(",").map(s=>s.trim()):[];
-        manualDraftState();manualDrawKaraoke();
+        manualDraftState();manualDrawKaraoke();manualTimeline?.render();
       });
       const details=document.createElement("details");
       details.className="manual-advanced-times";
@@ -1490,6 +1494,7 @@
     state.manualSelected=null;state.manualPreview=null;state.manualTime=0;
     state.manualDuration=0;state.manualHeard=false;state.manualDirty=false;
     state.manualCueUndo.clear();
+    manualTimeline?.reset();
     try{
       const details=await api("/api/manual/detail?song_id="+encodeURIComponent(id));
       state.manualSelected=details;
@@ -1571,7 +1576,7 @@
       state.manualTime=Math.min(state.manualDuration,
         state.manualMidiSample+(performance.now()-state.manualMidiAt)/1000);
     }else state.manualTime=manualCurrentMedia().currentTime||0;
-    manualControls();manualDrawKaraoke();
+    manualControls();manualDrawKaraoke();manualTimeline?.tick();
   }
   async function manualPlay(){
     if(!state.manualPreview)return;
@@ -1777,10 +1782,10 @@
       $("manual-paste").value="";manualDraftState();manualRenderLines();
     });
     $("manual-line-index").addEventListener("change",()=>{
-      manualRefreshCues();manualDrawKaraoke();
+      manualRefreshCues();manualDrawKaraoke();manualTimeline?.render();
     });
     $("manual-cue-index").addEventListener("change",()=>{
-      manualSetSelectedCueVisual();manualDrawKaraoke();
+      manualSetSelectedCueVisual();manualDrawKaraoke();manualTimeline?.selection();
     });
     $("manual-play").addEventListener("click",()=>void manualPlay());
     $("manual-pause").addEventListener("click",()=>void manualPause());
@@ -1796,7 +1801,7 @@
       player.addEventListener("loadedmetadata",()=>{
         if(state.manualPreview?.mode!==mode)return;
         state.manualDuration=Number.isFinite(player.duration)?player.duration:0;
-        manualControls();
+        manualControls();manualTimeline?.render();
       });
       player.addEventListener("ended",()=>{
         state.manualPlaying=false;state.manualTime=state.manualDuration;
@@ -2020,6 +2025,28 @@
     });
   }
   async function init(){
+    manualTimeline=new globalThis.XStageCueTimelineUI({
+      el:$,text,selected:()=>state.manualSelected,
+      line:()=>manualSelectedLine(),
+      lineIndex:()=>Number($("manual-line-index").value)||0,
+      cueIndex:()=>Number($("manual-cue-index").value)||0,
+      segments:manualSegments,starts:manualStartTimes,
+      time:()=>state.manualTime,duration:()=>state.manualDuration,
+      playing:()=>state.manualPlaying,canPlay:()=>Boolean(state.manualPreview),
+      selectCue:index=>{
+        $("manual-cue-index").value=String(index);
+        manualSetSelectedCueVisual();
+      },
+      seek:time=>void manualSeek(time),
+      previewTime:time=>{state.manualTime=time;},
+      preview:manualDrawKaraoke,
+      capture:()=>manualMark("cue"),
+      changed:before=>{
+        const index=Number($("manual-line-index").value)||0;
+        if(!state.manualCueUndo.has(index))state.manualCueUndo.set(index,before);
+        manualDraftState();manualRenderLines();
+      }
+    });
     bind();
     view(location.hash.slice(1) in labels?location.hash.slice(1):"import");
     try{
