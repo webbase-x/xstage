@@ -1092,9 +1092,16 @@
       const title=document.createElement("strong");
       const prefix=issue.line_position>=0?"บรรทัด "+(issue.line_position+1)+" · ":"ทั้งเพลง · ";
       title.textContent=prefix+issue.found;
+      const excerpt=state.manualLines[issue.line_position]?.text;
+      if(excerpt){
+        const quote=document.createElement("small");
+        quote.className="manual-finding-excerpt";
+        quote.textContent="ข้อความที่ตรวจ: “"+String(excerpt).slice(0,110)+"”";
+        message.append(title,quote);
+      }else message.append(title);
       const recommend=document.createElement("small");
       recommend.textContent="แนะนำ: "+issue.suggestion;
-      message.append(title,recommend);
+      message.append(recommend);
       button.append(tag,message);
       if(issue.line_position>=0){
         const jump=document.createElement("span");
