@@ -360,7 +360,13 @@ class Handler(BaseHTTPRequestHandler):
         folder=bundle/"web"
         if not folder.is_dir():
             folder=Path(__file__).parent/"web"
-        payload=(folder/name).read_bytes()
+        try:
+            payload=(folder/name).read_bytes()
+            if name in ("index.html","app.js","timeline-core.js","timeline-ui.js"):
+                self.state.diagnostic("asset.served",name=name,bytes=len(payload))
+        except OSError as exc:
+            self.state.diagnostic("asset.error",name=name,error=str(exc)[:1000])
+            raise
         kind=mimetypes.guess_type(name)[0] or "application/octet-stream"
         self.send_response(200)
         self.send_header("Content-Type",kind+("; charset=utf-8" if kind.startswith("text/") or "javascript" in kind else ""))
