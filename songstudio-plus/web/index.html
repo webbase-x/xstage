@@ -23,13 +23,14 @@
       <button class="nav-link" data-view="lyrics" type="button"><span class="nav-icon">02</span><span>แก้ไขเนื้อร้อง<small>ค้นคำ · กลุ่ม · Timing</small></span></button>
       <button class="nav-link" data-view="media" type="button"><span class="nav-icon">03</span><span>เสียงและวิดีโอ<small>เพิ่มเนื้อร้องที่มีเวลา</small></span></button>
       <button class="nav-link" data-view="preview" type="button"><span class="nav-icon">04</span><span>ทดสอบก่อนสร้าง<small>เสียงจริง · เนื้อร้อง · ปาดสี</small></span></button>
-      <button class="nav-link" data-view="build" type="button"><span class="nav-icon">05</span><span>สร้างไฟล์ X-Stage<small>XMID · XMP3 · XM4A · XMP4</small></span></button>
-      <button class="nav-link" data-view="library" type="button"><span class="nav-icon">06</span><span>คลังเพลง<small>ค้นหา · ตรวจสอบ · เวอร์ชัน</small></span></button>
-      <button class="nav-link" data-view="risks" type="button"><span class="nav-icon">07</span><span>ประวัติเสี่ยงปาดเนื้อ<small>หลักฐานจริง · ทดลองเปิด · บันทึกผล</small></span></button>
+      <button class="nav-link" data-view="manual" type="button"><span class="nav-icon">05</span><span>ตรวจและปาดเนื้อร้อง<small>ปาดใหม่ · บันทึก · ข้าม</small></span></button>
+      <button class="nav-link" data-view="build" type="button"><span class="nav-icon">06</span><span>สร้างไฟล์ X-Stage<small>XMID · XMP3 · XM4A · XMP4</small></span></button>
+      <button class="nav-link" data-view="library" type="button"><span class="nav-icon">07</span><span>คลังเพลง<small>ค้นหา · ตรวจสอบ · เวอร์ชัน</small></span></button>
+      <button class="nav-link" data-view="risks" type="button"><span class="nav-icon">08</span><span>ประวัติเสี่ยงปาดเนื้อ<small>หลักฐานจริง · ทดลองเปิด · บันทึกผล</small></span></button>
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
-      <div class="side-version">X-Stage Song Studio Plus <span>v0.1.6 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
+      <div class="side-version">X-Stage Song Studio Plus <span>v0.1.9 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
     </div>
   </aside>
   <main class="main">
@@ -64,7 +65,7 @@
         </div>
         <div class="two-col">
           <article class="panel feature-panel">
-            <div class="panel-head"><div><span class="label-top">START HERE</span><h2>นำเข้าเพลงจากโฟลเดอร์</h2></div><span class="count-pill">01 / 07</span></div>
+            <div class="panel-head"><div><span class="label-top">START HERE</span><h2>นำเข้าเพลงจากโฟลเดอร์</h2></div><span class="count-pill">01 / 08</span></div>
             <label class="field-label" for="source-folder">โฟลเดอร์ต้นทาง (PC / USB / HDD)</label>
             <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เช่น D:\NCN หรือ E:\My Music"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
             <p class="field-hint">ค้นหาโฟลเดอร์ย่อยอัตโนมัติ รองรับ MID, KAR, MP3, M4A, WAV, FLAC, MP4, MKV และ WEBM</p>
@@ -189,13 +190,82 @@
           </article>
         </div>
       </section>
+
+      <section class="view" id="view-manual" aria-labelledby="manual-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> MANUAL KARAOKE TIMING WORKSPACE</div>
+        <div class="page-intro"><div><h1 id="manual-title">ตรวจและ<span class="gradient-text">ปาดเนื้อร้อง</span></h1>
+          <p>แก้ไขเฉพาะเพลงที่มีข้อมูลขาดหรือปาดไม่ครบ หรือเลือกดูทุกเพลงก็ได้ เก็บข้อความและเวลาที่ได้จากต้นฉบับไว้ ปาดใหม่เฉพาะตำแหน่งที่ต้องแก้</p></div>
+          <span class="section-symbol">♫</span></div>
+        <div class="two-col manual-workspace">
+          <article class="panel manual-queue">
+            <div class="panel-head"><div><span class="label-top">05 · SONG REVIEW QUEUE</span><h2>รายการเพลงที่ต้องจัดการ</h2></div><span class="count-pill" id="manual-total">—</span></div>
+            <div class="search-combo"><input id="manual-search" placeholder="ค้นหารหัสเพลง / ชื่อเพลง / ศิลปิน"><button id="manual-find" class="quiet-btn" type="button">ค้นหา</button></div>
+            <label class="field-label" for="manual-filter">สถานะการตรวจ</label>
+            <select id="manual-filter">
+              <option value="pending">ต้องตรวจหรือแก้ไข</option>
+              <option value="missing">ไม่มีเนื้อร้อง / ไม่มีเวลา</option>
+              <option value="incomplete">เนื้อร้องหรือเวลาปาดไม่ครบ</option>
+              <option value="review">รอการยืนยัน</option>
+              <option value="skipped">ข้ามไว้</option>
+              <option value="all">ทุกเพลง รวมเพลงสมบูรณ์</option>
+            </select>
+            <div class="preview-songs" id="manual-song-list"><p class="empty-small">กำลังอ่านรายการ...</p></div>
+            <div class="list-pagination"><span id="manual-page-label">หน้า 1</span>
+              <div class="toolbar"><button class="quiet-btn" id="manual-prev" type="button">‹ ก่อนหน้า</button>
+              <button class="quiet-btn" id="manual-next" type="button">ถัดไป ›</button></div>
+            </div>
+          </article>
+          <article class="panel manual-editor">
+            <div class="panel-head"><div><span class="label-top">LYRIC / SWIPE EDITOR</span><h2 id="manual-song-title">เลือกเพลงด้านซ้าย</h2></div>
+              <span class="status-badge" id="manual-edit-status">ยังไม่เลือก</span></div>
+            <div class="manual-stage">
+              <video id="manual-video" preload="metadata" playsinline hidden></video>
+              <div id="manual-stage-text" class="manual-stage-text">
+                <div id="manual-current-line">♪ เลือกเพลงเพื่อแก้ไขเนื้อร้องและปาดสี</div>
+                <small id="manual-next-line">แสดงผลตามเวลาที่บันทึกจริง ไม่เดาเวลาเอง</small>
+              </div>
+            </div>
+            <audio id="manual-audio" preload="metadata"></audio>
+            <div class="preview-transport">
+              <button class="primary-btn" id="manual-play" type="button" disabled>▶ เล่นจริง</button>
+              <button class="quiet-btn" id="manual-pause" type="button" disabled>Ⅱ หยุด</button>
+              <span id="manual-clock" class="preview-time">00:00 / 00:00</span>
+              <input id="manual-seek" type="range" min="0" max="0" step="0.05" value="0" disabled aria-label="เลื่อนเวลาเพลง">
+            </div>
+            <p class="field-hint" id="manual-warning">เลือกเพลงก่อนใช้เครื่องมือปาดสี</p>
+            <div class="manual-commands">
+              <button class="quiet-btn" id="manual-add-line" type="button" disabled>+ เพิ่มบรรทัด</button>
+              <button class="quiet-btn" id="manual-mark-start" type="button" disabled>จับเวลาเริ่มบรรทัด</button>
+              <button class="quiet-btn" id="manual-mark-cue" type="button" disabled>จับเวลาปาดคำที่เลือก</button>
+              <button class="quiet-btn" id="manual-mark-end" type="button" disabled>จับเวลาจบบรรทัด</button>
+            </div>
+            <div class="manual-commands">
+              <label class="field-label" for="manual-line-index">บรรทัดที่กำลังแก้</label>
+              <select id="manual-line-index" aria-label="เลือกบรรทัดเนื้อร้อง"></select>
+              <label class="field-label" for="manual-cue-index">คำที่กำลังปาด</label>
+              <select id="manual-cue-index" aria-label="เลือกคำที่จะปาด"></select>
+            </div>
+            <p class="field-hint">ในแต่ละบรรทัด สามารถแก้ข้อความ แบ่งคำด้วยเครื่องหมาย | และระบุเวลาเริ่มแต่ละคำ (คั่นด้วยจุลภาค) หรือกดจับเวลาขณะเล่นเพลงจริง</p>
+            <div class="manual-line-list" id="manual-line-list"></div>
+            <label class="field-label" for="manual-paste">เพิ่มเนื้อร้องหลายบรรทัด (ยังไม่มีเวลา)</label>
+            <textarea id="manual-paste" rows="2" placeholder="วางข้อความเนื้อร้อง บรรทัดละหนึ่งวรรค"></textarea>
+            <div class="toolbar"><button id="manual-paste-add" class="quiet-btn" type="button" disabled>เพิ่มข้อความเป็นบรรทัดใหม่</button></div>
+            <div class="manual-actions">
+              <button id="manual-save" class="primary-btn" type="button" disabled>บันทึกเนื้อร้องและเวลา</button>
+              <button id="manual-skip" class="quiet-btn" type="button" disabled>ข้ามเพลงนี้</button>
+              <button id="manual-approve" class="quiet-btn" type="button" disabled>✓ ยืนยันพร้อมสร้าง .X</button>
+            </div>
+            <p id="manual-feedback" class="field-hint">ทุกการแก้ไขจัดเก็บเป็นเวอร์ชันใน SQLite และไม่แตะไฟล์ต้นฉบับ</p>
+          </article>
+        </div>
+      </section>
       <section class="view" id="view-build" aria-labelledby="build-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> EMBEDDED KARAOKE FILES</div>
         <div class="page-intro"><div><h1 id="build-title">หนึ่งเพลง <span class="gradient-text">หนึ่งไฟล์ X-Stage</span></h1><p>นำสื่อดั้งเดิมและเนื้อร้องพร้อมเวลาจาก SQLite รวมไว้ในไฟล์เดียว โดยไม่แปลงเสียงหรือวิดีโอซ้ำ</p></div><span class="section-symbol">X</span></div>
         <div class="two-col">
           <article class="panel">
             <div class="panel-head"><div><span class="label-top">CHOOSE SONGS</span><h2>เลือกเพลงสำหรับสร้างไฟล์</h2></div><span class="count-pill" id="build-count">0 เพลง</span></div>
-            <div class="toolbar"><button class="quiet-btn" id="build-all" type="button">เลือกทุกเพลงที่พร้อมในหน้านี้</button><button class="quiet-btn" id="build-clear" type="button">ยกเลิกทั้งหมด</button></div>
+            <div class="toolbar"><button class="quiet-btn" id="build-all" type="button">เลือกทั้งหมด (ทุกหน้า)</button><button class="quiet-btn" id="build-page-all" type="button">เลือกทั้งหมดหน้านี้</button><button class="quiet-btn" id="build-clear" type="button">ยกเลิกทั้งหมด</button><button class="quiet-btn" id="build-page-clear" type="button">ยกเลิกหน้านี้</button></div>
             <div class="build-list" id="build-list"><p class="empty-small">ยังไม่มีเพลงในคลัง</p></div>
             <div class="list-pagination"><span id="build-page-info">หน้า 1</span><div class="toolbar"><button id="build-prev" class="quiet-btn" type="button">‹ ก่อนหน้า</button><button id="build-next" class="quiet-btn" type="button">ถัดไป ›</button></div></div>
           </article>
@@ -205,7 +275,7 @@
             <div class="build-art"><span>X<span class="spark">✦</span></span><p>Embedded Lyrics<br>&amp; Timing</p></div>
             <div class="notice"><span>◈</span><p>รุ่นนี้สร้างไฟล์ X-Stage Plus แบบไบนารีที่มีสื่อและเนื้อร้องในตัว พร้อมตัวตรวจความถูกต้องของไฟล์ การเล่นพร้อมเสียงจริงต้องใช้ Player ที่รองรับรูปแบบใหม่นี้</p></div>
             <button class="primary-btn full" id="build-start" type="button" disabled>สร้างไฟล์ที่เลือก <span>↗</span></button>
-            <p class="field-hint" id="build-feedback"></p>
+            <p class="field-hint" id="build-feedback">เพลงเนื้อร้องสมบูรณ์จากต้นฉบับพร้อมสร้างได้ ไม่ต้องปาดใหม่ ส่วนเพลงที่แก้เองหรือเวลาประมาณต้องยืนยันก่อนสร้าง</p>
           </article>
         </div>
       </section>
