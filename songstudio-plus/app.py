@@ -401,8 +401,8 @@ def _registered_windows_documents():
         return None
     try:
         import winreg
-        key = (r"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer"
-               r"\\User Shell Folders")
+        key = (r"Software\Microsoft\Windows\CurrentVersion\Explorer"
+               r"\User Shell Folders")
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as entry:
             location, _ = winreg.QueryValueEx(entry, "Personal")
         return Path(os.path.expandvars(location)).expanduser()
@@ -490,11 +490,11 @@ def main(argv=None):
             if options.workspace is not None or (choice/"DB"/"xstage_plus.sqlite3").is_file():
                 break
     if state is None:
-        details = "\\n".join(failures[-3:]) or "No usable local user-data folder"
+        details = "\n".join(failures[-3:]) or "No usable local user-data folder"
         _startup_failure(
-            "ไม่สามารถเปิดฐานข้อมูล X-Stage Song Studio Plus ได้\\n"
-            "โปรดตรวจสอบตำแหน่งโฟลเดอร์และสิทธิ์การเขียน\\n"
-            "สามารถระบุพาธอื่นด้วย --workspace\\n\\n" + details)
+            "ไม่สามารถเปิดฐานข้อมูล X-Stage Song Studio Plus ได้\n"
+            "โปรดตรวจสอบตำแหน่งโฟลเดอร์และสิทธิ์การเขียน\n"
+            "สามารถระบุพาธอื่นด้วย --workspace\n\n" + details)
         return 1
     handler=type("PlusHandler",(Handler,),{"state":state})
     with ThreadingHTTPServer(("127.0.0.1",options.port),handler) as server:
