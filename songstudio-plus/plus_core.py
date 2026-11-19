@@ -1224,7 +1224,9 @@ def remap_cues(old_text,new_text,start,end,cues):
                 for i in range(size)]
     else:
         pieces=units
-    status=("preserved" if source_matches and len(units)==size else "estimated")
+    # Text was replaced. CUR onsets remain real, but matching words to
+    # those onsets still requires listening; never auto-approve.
+    status="estimated"
     return [(piece,round(at,6),
              round(max(0,(measured[i+1] if i+1<size else end)-at),6))
             for i,(piece,at) in enumerate(zip(pieces,measured))],status
@@ -1291,6 +1293,9 @@ def replace_groups(workspace,query,keys,replacement,expected_lines,progress=None
         total=len(ordered_edits)
         needs_review=0
         estimated=0
+        padded_lines=0
+        combined_lines=0
+        silent_slots=0
         done_lines=0
         if progress:
             progress({"done":0,"total":total,"changed_lines":0,
@@ -1314,6 +1319,12 @@ def replace_groups(workspace,query,keys,replacement,expected_lines,progress=None
                         needs_review+=1
                     elif status=="estimated":
                         estimated+=1
+                        units=len(glyphs(text))
+                        if units<len(cues):
+                            padded_lines+=1
+                            silent_slots+=len(cues)-units
+                        elif units>len(cues):
+                            combined_lines+=1
                 else:
                     remapped=[(x["text"],x["start_time"],x["duration"]) for x in cues]
                 revised.append((text,line["start_time"],line["end_time"],remapped,status))
@@ -1352,13 +1363,18 @@ def replace_groups(workspace,query,keys,replacement,expected_lines,progress=None
                 progress({"done":completed,"total":total,
                           "changed_lines":done_lines,
                           "needs_review_lines":needs_review,
-                          "estimated_lines":estimated},
+                          "estimated_lines":estimated,
+                          "padded_lines":padded_lines,
+                          "combined_lines":combined_lines,
+                          "silent_slots":silent_slots},
                          "แก้ไขแล้ว "+str(completed)+"/"+str(total)+" เพลง")
         if cancel is not None and cancel.is_set():
             raise _EditCancelled("ผู้ใช้ยกเลิก · คืนค่าธุรกรรมทั้งหมด")
         return {"batch":batch,"changed_songs":len(edits),
                 "changed_lines":sum(map(len,edits.values())),
-                "needs_review_lines":needs_review,"estimated_lines":estimated}
+                "needs_review_lines":needs_review,"estimated_lines":estimated,
+                "padded_lines":padded_lines,
+                "combined_lines":combined_lines,"silent_slots":silent_slots}
 
 def undo_edit(workspace,batch):
     with WRITE_LOCK,connect(workspace) as db:
@@ -1395,9 +1411,12 @@ def metadata_bytes(song,version,lines):
         stream.extend(packed_text(line["text"]))
         stream.extend(packed_text(line["timing_status"]))
         stream.extend(struct.pack("<I",len(cues)))
-        for c in cues:
+        visible_count=len(display_cues(line["text"],cues))
+        for i,c in enumerate(cues):
             stream.extend(struct.pack("<dd",c["start_time"],c["duration"]))
-            stream.extend(packed_text(c["text"]))
+            # Preserve every measured cursor slot in the X container, but
+            # serialize the internal tail-padding as silent (zero text).
+            stream.extend(packed_text(c["text"] if i<visible_count else ""))
     return bytes(stream)
 
 def destination_for(workspace,song,ext):
