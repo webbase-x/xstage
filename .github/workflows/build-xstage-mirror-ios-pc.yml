@@ -121,7 +121,7 @@ jobs:
       - name: Upload compiled control EXE (engine not included)
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1013-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1014-COMPILED-ONLY
           path: mirror-ios-pc/out/XStageMirrorIOSPC.exe
           if-no-files-found: error
           retention-days: 30
@@ -139,7 +139,7 @@ jobs:
       - name: Download exactly the compiled X-Stage control executable
         uses: actions/download-artifact@v4
         with:
-          name: X-Stage-Mirror-iOS-PC-EXE-Build1013-COMPILED-ONLY
+          name: X-Stage-Mirror-iOS-PC-EXE-Build1014-COMPILED-ONLY
           path: mirror-ios-pc/out
       - name: Check Windows executable prerequisite
         shell: pwsh
@@ -150,6 +150,8 @@ jobs:
 
       - name: Download and validate the PINNED UxPlay portable Windows engine
         shell: pwsh
+        env:
+          UPSTREAM_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           # The upstream x64 asset is intentionally named uxplay-windows.zip
@@ -160,6 +162,10 @@ jobs:
           $pinnedSha256 = '9d3a51c15fc9db857351195e7eb7bbb21700d9ae25d936a54bcf8536b62cca18'
           $expectedUrl = "https://github.com/$repo/releases/download/$tag/$assetName"
           $headers = @{ 'User-Agent' = 'XStageMirrorIOSPC-CI'; 'Accept' = 'application/vnd.github+json' }
+          # Authenticated API requests avoid the low shared runner IP rate limit.
+          if (-not [string]::IsNullOrWhiteSpace($env:UPSTREAM_GITHUB_API_TOKEN)) {
+            $headers['Authorization'] = "Bearer $env:UPSTREAM_GITHUB_API_TOKEN"
+          }
           $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag"
           if ($release.tag_name -cne $tag) {
             throw "Unexpected upstream release tag: $($release.tag_name)"
@@ -283,13 +289,13 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
           & $compiler 'mirror-ios-pc/installer/XStageMirrorIOSPC.iss'
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
-          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.12-build1013-win-x64-Setup.exe'
+          $file = 'mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.13-build1014-win-x64-Setup.exe'
           if (-not (Test-Path $file -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $file).Length -lt 10000000) { throw 'Setup EXE unexpectedly small' }
           python scripts/verify_songstudio_exe_icon.py $file
           if ($LASTEXITCODE -ne 0) { throw 'Installer EXE missing branded icon' }
           $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  X-Stage-Mirror-iOS-PC-v1.0.12-build1013-win-x64-Setup.exe" |
+          "$hash  X-Stage-Mirror-iOS-PC-v1.0.13-build1014-win-x64-Setup.exe" |
             Set-Content -Encoding ascii "$file.sha256"
           Write-Host "Offline Setup EXE SHA-256: $hash"
 
@@ -297,7 +303,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $file = 'X-Stage-Mirror-iOS-PC-v1.0.12-build1013-win-x64-CANDIDATE.zip'
+          $file = 'X-Stage-Mirror-iOS-PC-v1.0.13-build1014-win-x64-CANDIDATE.zip'
           $source = Resolve-Path 'mirror-ios-pc/out'
           Compress-Archive -Path (Join-Path $source '*') -DestinationPath $file -CompressionLevel Optimal -Force
           if ((Get-Item $file).Length -lt 3000000) { throw 'Incomplete portable candidate ZIP' }
@@ -311,9 +317,9 @@ jobs:
         with:
           name: X-Stage-Mirror-iOS-PC-Windows-CANDIDATE
           path: |
-            X-Stage-Mirror-iOS-PC-v1.0.12-build1013-win-x64-CANDIDATE.zip
-            X-Stage-Mirror-iOS-PC-v1.0.12-build1013-win-x64-CANDIDATE.zip.sha256
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.12-build1013-win-x64-Setup.exe
-            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.12-build1013-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-iOS-PC-v1.0.13-build1014-win-x64-CANDIDATE.zip
+            X-Stage-Mirror-iOS-PC-v1.0.13-build1014-win-x64-CANDIDATE.zip.sha256
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.13-build1014-win-x64-Setup.exe
+            mirror-ios-pc/installer/output/X-Stage-Mirror-iOS-PC-v1.0.13-build1014-win-x64-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 30
