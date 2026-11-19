@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v4
       - name: Prepare .NET 8
@@ -53,6 +53,77 @@ jobs:
           if (-not (Test-Path download-manager/out/XStageDownloadManager.exe)) { throw 'Windows EXE missing' }
           python download-manager/verify_exe_icon.py download-manager/out/XStageDownloadManager.exe
           if ($LASTEXITCODE -ne 0) { throw 'EXE must contain its application icon' }
+      - name: Bundle pinned yt-dlp, Deno, and FFmpeg without runtime installers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $tools = 'download-manager/out/tools'
+          $staging = Join-Path $env:RUNNER_TEMP 'xstage-media-dependencies'
+          New-Item -ItemType Directory -Force -Path $tools, $staging | Out-Null
+          $packages = @(
+            @{
+              Key='ytdlp'; Filename='yt-dlp.exe'
+              Url='https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp.exe'
+              Sha256='f5389d3698ecde4ef06f4e6b1ce0294fe9ac1396228c8990b8d3416d6d177a7d'
+            },
+            @{
+              Key='deno'; Filename='deno-windows-x64.zip'
+              Url='https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip'
+              Sha256='cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf'
+            },
+            @{
+              Key='ffmpeg'; Filename='ffmpeg-windows-x64.zip'
+              Url='https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-11-16-23-35/ffmpeg-N-128970-g11337618b2-win64-gpl.zip'
+              Sha256='66789a599f9b6606036f29980ee054abe75201f18a24ca24c623a78c9be3f7c0'
+            }
+          )
+          foreach ($item in $packages) {
+            $dest = Join-Path $staging $item.Filename
+            Write-Host "Fetching pinned official dependency $($item.Key)"
+            Invoke-WebRequest -Uri $item.Url -OutFile $dest -MaximumRedirection 6
+            if (-not (Test-Path $dest)) { throw "Download failed for $($item.Key)" }
+            $actual = (Get-FileHash -Algorithm SHA256 $dest).Hash.ToLowerInvariant()
+            if ($actual -cne $item.Sha256) {
+              throw "Supply chain SHA-256 verification failed for $($item.Key). Expected $($item.Sha256), got $actual"
+            }
+            if ($item.Key -eq 'ytdlp') {
+              Copy-Item $dest (Join-Path $tools 'yt-dlp.exe')
+            } else {
+              $expanded = Join-Path $staging ('extracted-' + $item.Key)
+              Expand-Archive -Path $dest -DestinationPath $expanded -Force
+              foreach ($exe in @($(if ($item.Key -eq 'deno') { 'deno.exe' } else { 'ffmpeg.exe'; 'ffprobe.exe' }))) {
+                $source = Get-ChildItem -Path $expanded -File -Recurse -Filter $exe | Select-Object -First 1
+                if (-not $source) { throw "$exe missing from pinned $($item.Key) archive" }
+                Copy-Item $source.FullName (Join-Path $tools $exe)
+              }
+            }
+          }
+          @'
+          X-Stage Download Manager third-party notices
+
+          yt-dlp 2026.10.26 | Unlicense | https://github.com/yt-dlp/yt-dlp/tree/2026.10.26
+          Deno 2.9.8 | MIT | https://github.com/denoland/deno/tree/v2.9.8
+          FFmpeg N-128970-g11337618b2 | GPL build supplied by yt-dlp/FFmpeg-Builds
+          FFmpeg build scripts, matching source revision and notices:
+          https://github.com/yt-dlp/FFmpeg-Builds/tree/autobuild-2026-11-16-23-35
+          https://github.com/FFmpeg/FFmpeg/tree/11337618b2
+          https://www.gnu.org/licenses/gpl-3.0.html
+
+          These are separate, independently maintained subprocess executables.
+          The user is responsible for rights and website terms when downloading media.
+          No DRM circumvention or extraction of private/paid content is provided.
+          '@ | Set-Content -Path (Join-Path $tools 'THIRD-PARTY-NOTICES.txt') -Encoding UTF8
+          foreach ($exe in @('yt-dlp.exe','deno.exe','ffmpeg.exe','ffprobe.exe')) {
+            if (-not (Test-Path (Join-Path $tools $exe) -PathType Leaf)) { throw "$exe missing in portable installer payload" }
+          }
+          & (Join-Path $tools 'yt-dlp.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'yt-dlp smoke test failed' }
+          & (Join-Path $tools 'deno.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled Deno smoke test failed' }
+          & (Join-Path $tools 'ffmpeg.exe') -version
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg smoke test failed' }
+          Write-Host 'Bundled verified video tools; no dependencies will be downloaded when the user installs.'
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -66,7 +137,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup 6 missing' }
           & $compiler download-manager/installer/XStageDownloadManager.iss
           if ($LASTEXITCODE -ne 0) { throw 'Setup build failed' }
-          $setup = 'download-manager/installer/output/X-Stage-Download-Manager-v0.1.1-build2-win-x64-Setup.exe'
+          $setup = 'download-manager/installer/output/X-Stage-Download-Manager-v0.2.0-build3-win-x64-Setup.exe'
           if (-not (Test-Path $setup -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer suspiciously small' }
           $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
@@ -75,8 +146,8 @@ jobs:
       - name: Upload Windows installer EXE only
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Download-Manager-v0.1.1-build2-Windows-EXE-ONLY
-          path: download-manager/installer/output/X-Stage-Download-Manager-v0.1.1-build2-win-x64-Setup.exe
+          name: X-Stage-Download-Manager-v0.2.0-build3-Windows-EXE-ONLY
+          path: download-manager/installer/output/X-Stage-Download-Manager-v0.2.0-build3-win-x64-Setup.exe
           if-no-files-found: error
           retention-days: 30
       - name: Publish verified EXE-only GitHub prerelease
@@ -86,8 +157,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'xstage-download-manager-v0.1.1-build2-preview'
-          $file = 'X-Stage-Download-Manager-v0.1.1-build2-win-x64-Setup.exe'
+          $tag = 'xstage-download-manager-v0.2.0-build3-preview'
+          $file = 'X-Stage-Download-Manager-v0.2.0-build3-win-x64-Setup.exe'
           $setup = "download-manager/installer/output/$file"
           $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
           $size = (Get-Item $setup).Length
@@ -96,8 +167,8 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             throw 'Release tag already exists: bump the application version before republishing.'
           }
-          $notes = "Windows 10/11 x64 Preview. Installer EXE only; no ZIP supplied as a custom release asset. SHA-256: $hash. Size: $size bytes. Not code-signed or tested on all Windows devices. No browser interception yet."
-          gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v0.1.1 Build 2 (Windows Preview)' --notes $notes --prerelease
+          $notes = "Windows 10/11 x64 Preview. Installer EXE only, with pinned SHA-256 verified yt-dlp, Deno and FFmpeg included. Supports public YouTube, TikTok, Facebook/Instagram Reels, quality selection and MP3, plus original HTTP Range file downloads. No DRM or private content bypass. SHA-256: $hash. Size: $size bytes. Not code-signed or tested on all Windows devices. No browser interception."
+          gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v0.2.0 Build 3 (Windows Preview)' --notes $notes --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publish failed' }
           # Download published asset and compare bytes, not just release metadata.
           $verifyDir = Join-Path $env:RUNNER_TEMP 'xstage-release-verify'
