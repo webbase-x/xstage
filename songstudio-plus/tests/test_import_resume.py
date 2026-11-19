@@ -30,9 +30,15 @@ class ImportResumeTests(unittest.TestCase):
         for i in range(35):
             self.make(f"{i:05}.mid",midi()+bytes([i]))
         stop=threading.Event()
-        def callback(totals,_):
-            if totals["files_seen"]>=19:stop.set()
-        first=core.import_folder(self.workspace,self.source,callback,stop)
+        digest=core.digest
+        seen=[0]
+        def stop_after_n(path):
+            output=digest(path)
+            seen[0]+=1
+            if seen[0]>=19:stop.set()
+            return output
+        with patch.object(core,"digest",side_effect=stop_after_n):
+            first=core.import_folder(self.workspace,self.source,cancel=stop)
         self.assertTrue(first["cancelled"])
         self.assertEqual(first["files_seen"],19)
         prior=core.interrupted_import(self.workspace)
