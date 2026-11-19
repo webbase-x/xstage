@@ -85,7 +85,6 @@ def run_desktop(server,url,workspace,icon_path,state=None):
     from PySide6.QtCore import QUrl, QTimer
     from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QShortcut
     from PySide6.QtWidgets import QApplication,QMainWindow
-    from native_picker import NativeFilePicker
     from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
     from PySide6.QtWebEngineWidgets import QWebEngineView
 
@@ -103,6 +102,10 @@ def run_desktop(server,url,workspace,icon_path,state=None):
     profile=QWebEngineProfile("XStageSongStudioPro",app)
     profile.setPersistentStoragePath(str(storage/"Storage"))
     profile.setCachePath(str(storage/"Cache"))
+    # Always load the packaged JS/CSS from the current EXE. Old cached assets
+    # can otherwise make the UI appear while button handlers come from an
+    # earlier build.
+    profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
 
     class RestrictedPage(QWebEnginePage):
         def acceptNavigationRequest(self,target,navigation_type,is_main_frame):
@@ -116,6 +119,11 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             return False
         def createWindow(self,window_type):
             return None
+        def javaScriptConsoleMessage(self,level,message,line,source):
+            if state is not None:
+                state.diagnostic("web.console",
+                    level=str(level),message=str(message)[:1600],
+                    line=int(line),source=str(source)[:500])
 
     class MainWindow(QMainWindow):
         def __init__(self):
@@ -152,17 +160,15 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             app.quit()
 
     window=None
-    picker=None
     worker=None
     native_icons=[]
     try:
         # Build the native window first, but do NOT load localhost yet.
         window=MainWindow()
 
-        picker=NativeFilePicker(window)
-        # Register the GUI-thread picker before the web UI can call /api/pick.
-        if state is not None:
-            state.native_picker=picker.pick
+        # state.native_picker is registered by app.py with the Windows-native
+        # FolderBrowserDialog/OpenFileDialog backend. Do not overwrite it with
+        # a Qt picker here.
 
         # Start the loopback engine before QWebEngineView requests localhost.
         worker=Thread(target=server.serve_forever,
@@ -170,7 +176,27 @@ def run_desktop(server,url,workspace,icon_path,state=None):
                       daemon=True,name="studio-pro-local-engine")
         worker.start()
 
+        # Record WebView lifecycle so a visible-but-dead UI can be diagnosed.
+        window.web.loadStarted.connect(
+            lambda:state.diagnostic("web.load.started",url=url) if state is not None else None)
+        window.web.loadProgress.connect(
+            lambda value:state.diagnostic("web.load.progress",value=int(value))
+            if state is not None and int(value) in (25,50,75,100) else None)
+        window.web.loadFinished.connect(
+            lambda ok:state.diagnostic("web.load.finished",ok=bool(ok),url=url)
+            if state is not None else None)
+        try:
+            window.web.renderProcessTerminated.connect(
+                lambda status,code:state.diagnostic(
+                    "web.render.terminated",status=str(status),code=int(code))
+                if state is not None else None)
+        except AttributeError:
+            pass
+
         # Only now expose the UI: /api/session and /api/pick are both ready.
+        if state is not None:
+            state.diagnostic("web.load.request",url=url,
+                             picker_ready=bool(state.native_picker))
         window.web.load(QUrl(url))
 
         # The update helper waits for this process to exit before replacing the
