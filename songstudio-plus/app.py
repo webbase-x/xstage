@@ -52,10 +52,10 @@ class State:
         with self.lock:
             running=[x for x in self.jobs.values() if x["status"]=="running"]
             if running and kind=="update" and all(x["kind"]!="update" for x in running):
-                # An update may supersede a large import: request a safe stop
-                # after its current file. Source media/SQLite remain intact.
-                for existing in running:
-                    existing["cancel"].set()
+                # Downloading a verified EXE touches UPDATES only, not SQLite:
+                # let import continue while it downloads. The install action
+                # requests a safe stop after the current imported file.
+                pass
             elif running:
                 raise ValueError("มีงานกำลังทำอยู่ กรุณารอให้เสร็จก่อนเริ่มงานถัดไป")
             self.jobs[job_id]=job
@@ -107,9 +107,14 @@ class State:
                          j["result"].get("batch")]
         # A deliberate updater restart may resume this exact import. This
         # executes only after the import runner has committed all checkpoints.
-        for job in interrupted:
-            core.prepare_import_for_restart(
-                self.workspace,job["result"]["batch"])
+        try:
+            for job in interrupted:
+                core.prepare_import_for_restart(
+                    self.workspace,job["result"]["batch"])
+        except (OSError,sqlite3.DatabaseError):
+            # Keep the old process alive until its resume state is durable.
+            with self.lock:self._restart_prepared=False
+            return False
         return True
 
 class Handler(BaseHTTPRequestHandler):
