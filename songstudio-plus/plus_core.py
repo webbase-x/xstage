@@ -244,28 +244,33 @@ def _repair_historical_lyrics(db):
 def init(workspace):
     path=db_path(workspace).resolve()
     key=str(path)
-    if key in _INITIALIZED:
-        return path
-    with _INIT_LOCK:
-        if key in _INITIALIZED:
-            return path
-        path.parent.mkdir(parents=True,exist_ok=True)
-        # Configure WAL exactly once per process/workspace before normal
-        # request traffic starts. Afterwards read connections never issue
-        # PRAGMA journal_mode while the import writer is active.
-        db=sqlite3.connect(path,timeout=10)
-        try:
-            db.row_factory=sqlite3.Row
-            db.execute("PRAGMA foreign_keys=ON")
-            db.execute("PRAGMA busy_timeout=10000")
-            db.execute("PRAGMA journal_mode=WAL")
-            db.execute("PRAGMA synchronous=NORMAL")
-            with db:
-                db.executescript(SCHEMA)
-                _repair_historical_lyrics(db)
-        finally:
-            db.close()
-        _INITIALIZED.add(key)
+    first_time=key not in _INITIALIZED
+    if first_time:
+        with _INIT_LOCK:
+            if key not in _INITIALIZED:
+                path.parent.mkdir(parents=True,exist_ok=True)
+                # Configure WAL exactly once per process/workspace before normal
+                # request traffic starts. Afterwards read connections never issue
+                # PRAGMA journal_mode while the import writer is active.
+                db=sqlite3.connect(path,timeout=10)
+                try:
+                    db.row_factory=sqlite3.Row
+                    db.execute("PRAGMA foreign_keys=ON")
+                    db.execute("PRAGMA busy_timeout=10000")
+                    db.execute("PRAGMA journal_mode=WAL")
+                    db.execute("PRAGMA synchronous=NORMAL")
+                    with db:
+                        db.executescript(SCHEMA)
+                        _repair_historical_lyrics(db)
+                finally:
+                    db.close()
+                _INITIALIZED.add(key)
+                return path
+    # Keep migration repair observable after initialization. This is normally
+    # a single marker SELECT and does not renegotiate WAL. It also repairs an
+    # older incomplete current lyric pointer if the migration marker is absent.
+    with connect(workspace) as db:
+        _repair_historical_lyrics(db)
     return path
 
 def source_for_build(workspace, db, media):
