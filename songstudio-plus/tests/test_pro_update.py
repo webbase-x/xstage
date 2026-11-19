@@ -85,9 +85,13 @@ class UpdaterTests(unittest.TestCase):
         state.start_job("import",import_job)
         self.assertTrue(entered.wait(3))
         state.start_job("update",lambda progress,cancel:{"downloaded":True})
-        self.assertTrue(any(job["cancel"].is_set() for job in
-                            state.jobs.values() if job["kind"]=="import"))
+        self.assertFalse(any(job["cancel"].is_set() for job in
+                             state.jobs.values() if job["kind"]=="import"),
+                         "downloading must not interrupt an active import")
         state.request_restart()
+        self.assertTrue(any(job["cancel"].is_set() for job in
+                            state.jobs.values() if job["kind"]=="import"),
+                        "install stops safely after current file")
         deadline=time.monotonic()+5
         while time.monotonic()<deadline and not state.ready_to_exit():
             time.sleep(.015)
