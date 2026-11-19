@@ -7,6 +7,10 @@ public sealed class DownloadJob
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Url { get; set; } = "";
     public string Name { get; set; } = "download";
+    public string Kind { get; set; } = "File";
+    public string VideoQuality { get; set; } = "Best";
+    public double VideoPercent { get; set; }
+    [JsonIgnore] public string VideoPhase = "";
     public string Folder { get; set; } = "";
     public string Status { get; set; } = "Queued";
     public string Error { get; set; } = "";

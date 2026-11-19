@@ -10,6 +10,7 @@ public sealed class MainForm : Form
     private readonly TextBox _url = new();
     private readonly TextBox _folder = new();
     private readonly ComboBox _parts = new();
+    private readonly ComboBox _videoQuality = new();
     private readonly DataGridView _grid = new();
     private readonly Label _summary = new();
     private readonly Label _details = new();
@@ -17,8 +18,8 @@ public sealed class MainForm : Form
 
     public MainForm(string[] args)
     {
-        Text = "X-Stage Download Manager · v0.1.1 Build 2";
-        MinimumSize = new Size(900, 565);
+        Text = "X-Stage Download Manager · v0.2.0 Build 3";
+        MinimumSize = new Size(930, 650);
         Size = new Size(1220, 735);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(244, 246, 250);
@@ -37,6 +38,11 @@ public sealed class MainForm : Form
                 catch (UnauthorizedAccessException ex) { MessageBox.Show(this, ex.Message, "บันทึกการตั้งค่าไม่ได้"); }
             }
         };
+        _videoQuality.Items.AddRange(new object[]
+        {
+            "ดีที่สุด (ภาพและเสียง)", "1080p", "720p", "480p", "MP3 (เสียงอย่างเดียว)"
+        });
+        _videoQuality.SelectedIndex = 0;
         _folder.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
         _timer.Tick += (_, _) => RefreshRows();
@@ -66,7 +72,7 @@ public sealed class MainForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.1.1 · Build 2",
+            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.0 · Build 3",
             AutoSize = true, ForeColor = Color.FromArgb(212, 230, 252),
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             Location = new Point(28, 65), BackColor = Color.Transparent
@@ -75,19 +81,17 @@ public sealed class MainForm : Form
 
         var entry = new TableLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 172, Padding = new Padding(20, 11, 20, 9),
-            BackColor = Color.White, ColumnCount = 4, RowCount = 3
+            Dock = DockStyle.Top, Height = 214, Padding = new Padding(20, 11, 20, 9),
+            BackColor = Color.White, ColumnCount = 4, RowCount = 4
         };
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 133));
-        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 33));
-        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 33));
-        entry.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
-        entry.Controls.Add(MakeLabel("ลิงก์ไฟล์"), 0, 0);
+        for (int i = 0; i < 4; i++) entry.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+        entry.Controls.Add(MakeLabel("ลิงก์ / วิดีโอ"), 0, 0);
         entry.Controls.Add(MakeLabel("บันทึกที่"), 0, 1);
-        SetupText(_url, "วาง URL ดาวน์โหลดไฟล์ HTTP/HTTPS");
+        SetupText(_url, "วางลิงก์ YouTube, TikTok, Facebook Reels หรือ URL ไฟล์ทั่วไป");
         SetupText(_folder, "เลือกโฟลเดอร์สำหรับบันทึกไฟล์");
         _url.KeyDown += (_, e) =>
         {
@@ -133,6 +137,23 @@ public sealed class MainForm : Form
             ForeColor = Color.FromArgb(92, 110, 134), Font = new Font("Segoe UI", 8)
         }, 2, 2);
         entry.Controls.Add(MakeButton("ใช้กับรายการ", false, (_, _) => ApplyPartsToSelected()), 3, 2);
+        entry.Controls.Add(MakeLabel("วิดีโอ"), 0, 3);
+        _videoQuality.Dock = DockStyle.Fill;
+        _videoQuality.DropDownStyle = ComboBoxStyle.DropDownList;
+        _videoQuality.Margin = new Padding(3, 8, 6, 7);
+        _videoQuality.Font = new Font("Segoe UI", 11);
+        _videoQuality.AccessibleName = "เลือกระดับคุณภาพวิดีโอหรือเสียง MP3";
+        entry.Controls.Add(_videoQuality, 1, 3);
+        entry.Controls.Add(new Label
+        {
+            Text = "อัตโนมัติ", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(92, 110, 134), Font = new Font("Segoe UI", 8)
+        }, 2, 3);
+        entry.Controls.Add(new Label
+        {
+            Text = "YT · TikTok · FB", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(54, 76, 111), Font = new Font("Segoe UI", 8, FontStyle.Bold)
+        }, 3, 3);
         Controls.Add(entry);
 
         var toolbar = new FlowLayoutPanel
@@ -278,7 +299,7 @@ public sealed class MainForm : Form
         var invalid = new List<string>();
         foreach (var url in urls)
         {
-            try { _engine.Add(url, _folder.Text.Trim(), int.Parse((string)_parts.SelectedItem!)); }
+            try { _engine.Add(url, _folder.Text.Trim(), int.Parse((string)_parts.SelectedItem!), SelectedQuality()); }
             catch (Exception ex) { invalid.Add(url + ": " + ex.Message); }
         }
         _url.Clear();
@@ -288,6 +309,11 @@ public sealed class MainForm : Form
                 string.Join("\n", invalid.Take(5)), "ตรวจสอบ URL",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
+
+    private string SelectedQuality() => _videoQuality.SelectedIndex switch
+    {
+        1 => "1080", 2 => "720", 3 => "480", 4 => "AudioMP3", _ => "Best"
+    };
 
     private void ApplyPartsToSelected()
     {
@@ -384,20 +410,25 @@ public sealed class MainForm : Form
             speedTotal += job.SpeedBytesPerSecond;
             row.Cells["File"].Value = job.Name;
             row.Cells["Size"].Value = job.TotalBytes < 0 ? "ไม่ทราบ" : FormatBytes(job.TotalBytes);
-            row.Cells["Progress"].Value = job.TotalBytes > 0
-                ? (100.0 * current / job.TotalBytes).ToString("0.0") + "%"
-                : (current > 0 ? FormatBytes(current) : "—");
+            row.Cells["Progress"].Value = job.Kind == "Video"
+                ? job.VideoPercent.ToString("0.0") + "%"
+                : job.TotalBytes > 0
+                    ? (100.0 * current / job.TotalBytes).ToString("0.0") + "%"
+                    : (current > 0 ? FormatBytes(current) : "—");
             row.Cells["Speed"].Value = job.Status == "Running"
                 ? FormatBytes((long)job.SpeedBytesPerSecond) + "/s" : "—";
             row.Cells["Status"].Value = job.Status switch
             {
-                "Running" => "กำลังดาวน์โหลด", "Queued" => "รอคิว",
+                "Running" => job.Kind == "Video" && job.VideoPhase.Length > 0
+                    ? job.VideoPhase : "กำลังดาวน์โหลด", "Queued" => "รอคิว",
                 "Paused" => "หยุดชั่วคราว", "Completed" => "สำเร็จ",
                 "Failed" => "เกิดข้อผิดพลาด", _ => job.Status
             };
-            row.Cells["Parts"].Value = job.SegmentsUsed > 0
-                ? job.SegmentsUsed + " / " + job.Parts + " ส่วน"
-                : "ตั้งไว้ " + job.Parts + " ส่วน";
+            row.Cells["Parts"].Value = job.Kind == "Video"
+                ? "สูงสุด " + job.Parts + " ช่วง"
+                : job.SegmentsUsed > 0
+                    ? job.SegmentsUsed + " / " + job.Parts + " ส่วน"
+                    : "ตั้งไว้ " + job.Parts + " ส่วน";
         }
         var active = jobs.Count(j => j.Status == "Running");
         var completed = jobs.Count(j => j.Status == "Completed");
@@ -411,12 +442,14 @@ public sealed class MainForm : Form
         var job = Selected();
         if (job is null)
         {
-            _details.Text = "เลือกระดับ 1–32 ส่วนสำหรับงานใหม่ · หากเปลี่ยนรายการเดิมให้หยุดก่อน · เซิร์ฟเวอร์อาจจำกัดจำนวนส่วน";
+            _details.Text = "วางลิงก์ YouTube / TikTok / Facebook Reels · เลือกคุณภาพหรือ MP3 · รองรับไฟล์ทั่วไปเช่นเดิม";
             return;
         }
         _details.Text = job.Status == "Failed"
             ? $"ข้อผิดพลาด: {job.Error}   ·   กด เริ่ม / ต่อ เพื่อลองอีกครั้ง"
-            : $"{job.Url}   ·   บันทึกที่ {job.Folder}";
+            : job.Kind == "Video"
+                ? $"{SocialVideoDownloader.Platform(job.Url)} · คุณภาพ {job.VideoQuality} · {job.Url} · บันทึกที่ {job.Folder}"
+                : $"{job.Url}   ·   บันทึกที่ {job.Folder}";
     }
 
     private void PaintProgress(object? sender, DataGridViewCellPaintingEventArgs e)
@@ -424,10 +457,12 @@ public sealed class MainForm : Form
         if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["Progress"].Index) return;
         e.PaintBackground(e.CellBounds, true);
         var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
-        if (job is not null && job.TotalBytes > 0)
+        if (job is not null && (job.TotalBytes > 0 || job.Kind == "Video"))
         {
-            var progress = Math.Clamp(Interlocked.Read(ref job.DownloadedBytes) /
-                (double)job.TotalBytes, 0, 1);
+            var progress = job.Kind == "Video"
+                ? Math.Clamp(job.VideoPercent / 100.0, 0, 1)
+                : Math.Clamp(Interlocked.Read(ref job.DownloadedBytes) /
+                    (double)job.TotalBytes, 0, 1);
             var rectangle = new Rectangle(e.CellBounds.X + 9, e.CellBounds.Y + 10,
                 Math.Max(1, e.CellBounds.Width - 18), 20);
             using var bg = new SolidBrush(Color.FromArgb(229, 236, 245));

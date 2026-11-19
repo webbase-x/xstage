@@ -75,13 +75,13 @@
     },
     "download-manager":{
       title:"X-Stage Download Manager",category:"WINDOWS · DOWNLOADS",
-      subtitle:"แอปช่วยดาวน์โหลดไฟล์สำหรับ Windows พร้อมคิวและดาวน์โหลดต่อ",
-      description:"โปรแกรม Windows แยกจาก Karaoke และ Mirror สร้างขึ้นใหม่โดยศึกษาแนวทางการทำงานของ IDM รองรับการเพิ่มลิงก์ HTTP/HTTPS ดาวน์โหลดหลายส่วนเมื่อเซิร์ฟเวอร์อนุญาต หยุดและดาวน์โหลดต่อ จัดคิว และบันทึกประวัติในเครื่อง",
-      features:["วางลิงก์หรือป้อน URL ดาวน์โหลดได้โดยตรง รองรับหลายลิงก์","ดาวน์โหลดพร้อมกัน 2 ไฟล์ กำหนด 1, 2, 4, 8, 16 หรือ 32 ส่วนต่อไฟล์ได้เมื่อเซิร์ฟเวอร์รองรับ HTTP Range","พัก / ดาวน์โหลดต่อ / ลองใหม่ โดยตรวจสอบช่วงข้อมูลเพื่อป้องกันไฟล์เสีย","เลือกโฟลเดอร์ บันทึกประวัติและเปิดไฟล์ที่ดาวน์โหลดเสร็จ","Windows EXE พร้อม runtime ในตัว; รุ่น Preview ยังไม่เชื่อมกับส่วนขยายเบราว์เซอร์"],
+      subtitle:"ดาวน์โหลดไฟล์และวิดีโอ YouTube · TikTok · Facebook Reels บน Windows",
+      description:"ตัวจัดการดาวน์โหลด Windows รองรับไฟล์ HTTP/HTTPS หลายส่วน 1–32 ช่วง พร้อมโหมดวิดีโอสำหรับ YouTube, TikTok และ Facebook/Instagram Reels ที่เข้าถึงได้สาธารณะ เลือกคุณภาพ 1080p/720p/480p หรือ MP3 ได้ ใช้ FFmpeg รวมภาพและเสียงโดยรวมเครื่องมือในไฟล์ติดตั้งแล้ว",
+      features:["วางลิงก์ YouTube, Shorts, TikTok, Facebook Reels และ Instagram Reels พร้อมตรวจจับโหมดวิดีโออัตโนมัติ","เลือกภาพพร้อมเสียงดีที่สุด / 1080p / 720p / 480p หรือแยกเสียงเป็น MP3 (เมื่อแหล่งรองรับ)","รวมภาพและเสียงด้วย FFmpeg และใช้ Deno สำหรับ YouTube โดยเครื่องมือรวมมากับ Setup EXE","ไฟล์ทั่วไปดาวน์โหลดหลายส่วน 1–32 ช่วง พร้อมพักและดาวน์โหลดต่อได้เมื่อเซิร์ฟเวอร์รองรับ","ดาวน์โหลดวิดีโอสาธารณะที่ได้รับอนุญาตเท่านั้น ไม่รองรับ DRM หรือโพสต์ส่วนตัว"],
       hero:"ดาวน์โหลดอย่างเป็นระบบ",blurb:"หลายส่วน · หยุดและทำต่อ · ไม่สูญหายจากคิว",preview:"DOWNLOAD MANAGER · WINDOWS",
       type:"manifest",manifest:"./downloads/download-manager-preview-latest.json",
       candidate:{label:"ดู Windows Preview ใน GitHub Actions",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-download-manager.yml"},
-      note:"Preview v0.1.1 Build 2 · ยังไม่ใช่รุ่นเสถียรที่ลงลายเซ็นหรือตรวจสอบบนเครื่องจริง ระบบดักจับไฟล์จาก Chrome/Edge และการจับวิดีโอออนไลน์ยังไม่รวมในรุ่นนี้",
+      note:"Preview v0.2.0 Build 3 · ดาวน์โหลดวิดีโอสาธารณะผ่าน yt-dlp (ไม่รองรับ DRM/โพสต์ส่วนตัว) · ยังไม่ลงลายเซ็น Windows และยังไม่ได้ทดสอบจริงครบทุกแพลตฟอร์ม · ยังไม่มีส่วนขยาย Chrome/Edge",
       fallback:"กำลังสร้างตัวติดตั้ง Windows Preview"
     },
     "studio-pro":{

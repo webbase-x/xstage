@@ -11,6 +11,34 @@ var folder = Path.Combine(Path.GetTempPath(), "xstage-dm-test-" + Guid.NewGuid()
 Directory.CreateDirectory(folder);
 try
 {
+    // Verify strict hostname matching; reject lookalike domains and file URLs.
+    var videoHosts = new[]
+    {
+        "https://www.youtube.com/watch?v=test1234", "https://youtu.be/test1234",
+        "https://www.tiktok.com/@someone/video/123", "https://vt.tiktok.com/abc",
+        "https://www.facebook.com/reel/123", "https://fb.watch/abc",
+        "https://www.instagram.com/reel/abc"
+    };
+    foreach (var uri in videoHosts)
+        if (!SocialVideoDownloader.IsVideoUrl(uri))
+            throw new Exception("Social video domain not recognized: " + uri);
+    foreach (var uri in new[] {
+        "https://youtube.com.attacker.invalid/video", "https://evil-tiktok.com/video",
+        "https://facebook.com.evil.example/reel/1", "https://user:pass@youtube.com/watch?v=1",
+        "file:///C:/secret" })
+        if (SocialVideoDownloader.IsVideoUrl(uri))
+            throw new Exception("Unsafe or deceptive social URL incorrectly accepted: " + uri);
+    var video = new DownloadJob { Url = videoHosts[0], Folder = folder, Parts = 16, VideoQuality = "1080" };
+    var videoArgs = SocialVideoDownloader.BuildArguments(video, Path.Combine(folder, ".temp"), Path.Combine(folder, "tools")).ToArray();
+    if (!videoArgs.Contains("--no-playlist") || !videoArgs.Contains("--ignore-config") ||
+        !videoArgs.Contains("--no-plugin-dirs") ||
+        !videoArgs.Contains("--no-simulate") || !videoArgs.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
+        !videoArgs.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
+        throw new Exception("Video arguments must isolate config, enforce video quality and use bundled Deno.");
+    video.VideoQuality = "AudioMP3";
+    var mp3Args = SocialVideoDownloader.BuildArguments(video, folder, folder);
+    if (!mp3Args.Contains("--audio-format") || !mp3Args.Contains("mp3"))
+        throw new Exception("MP3 extraction args missing.");
     var manager = new DownloadEngine();
     if (DownloadEngine.TryParseUrl("file:///C:/Windows/system.ini", out _) ||
         DownloadEngine.TryParseUrl("ftp://localhost/file", out _) ||
