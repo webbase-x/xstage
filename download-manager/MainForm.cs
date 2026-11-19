@@ -18,6 +18,7 @@ public sealed class MainForm : Form
     private bool _checkingUpdates;
     private readonly Font _finishedFileFont = new("Segoe UI", 10, FontStyle.Bold | FontStyle.Underline);
     private readonly Font _normalFileFont = new("Segoe UI", 10, FontStyle.Regular);
+    private readonly CancellationTokenSource _browserStop = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 800 };
 
     public MainForm(string[] args)
@@ -51,9 +52,30 @@ public sealed class MainForm : Form
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
         _timer.Tick += (_, _) => RefreshRows();
         _timer.Start();
-        FormClosing += (_, _) => { _timer.Stop(); _engine.PauseAll(); _engine.Save(); };
+        FormClosing += (_, _) =>
+        {
+            _browserStop.Cancel();
+            _timer.Stop();
+            _engine.PauseAll();
+            _engine.Save();
+        };
         FormClosed += (_, _) => { _finishedFileFont.Dispose(); _normalFileFont.Dispose(); };
-        Shown += async (_, _) => await CheckForUpdatesAsync(false);
+        Shown += async (_, _) =>
+        {
+            StartBrowserHandoff();
+            if (args.Length >= 2 && args[0] == "--enqueue" &&
+                DownloadEngine.TryParseUrl(args[1], out _))
+            {
+                try
+                {
+                    _engine.Add(args[1], _folder.Text, _engine.DefaultParts, SelectedQuality());
+                    _url.Clear();
+                    RefreshRows();
+                }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "รับงานจากเบราว์เซอร์ไม่สำเร็จ"); }
+            }
+            await CheckForUpdatesAsync(false);
+        };
         RefreshRows();
     }
 
@@ -178,6 +200,7 @@ public sealed class MainForm : Form
         toolbar.Controls.Add(MakeTool("Ⅱ  หยุดทั้งหมด", (_, _) => _engine.PauseAll()));
         toolbar.Controls.Add(MakeTool("⌕  เปิดไฟล์ / โฟลเดอร์", (_, _) => OpenSelected()));
         toolbar.Controls.Add(MakeTool("⟳  ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true)));
+        toolbar.Controls.Add(MakeTool("🌐  เชื่อม Chrome / Edge", (_, _) => SetupBrowserIntegration()));
         toolbar.Controls.Add(MakeTool("✕  ลบรายการ", (_, _) =>
         {
             var job = Selected();
@@ -392,6 +415,99 @@ public sealed class MainForm : Form
         if (job is null) return;
         action(job);
         RefreshRows();
+    }
+
+    private void StartBrowserHandoff()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await NativeMessagingBridge.ListenAsync(url =>
+                {
+                    var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    try
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                _engine.Add(url, _folder.Text, _engine.DefaultParts, SelectedQuality());
+                                RefreshRows();
+                                completion.TrySetResult(true);
+                            }
+                            catch (Exception)
+                            {
+                                completion.TrySetResult(false);
+                            }
+                        }));
+                    }
+                    catch (InvalidOperationException) { completion.TrySetResult(false); }
+                    catch (ObjectDisposedException) { completion.TrySetResult(false); }
+                    return completion.Task;
+                }, _browserStop.Token);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (!IsDisposed && IsHandleCreated)
+                    BeginInvoke(new Action(() => _details.Text = "เชื่อมต่อเบราว์เซอร์ในเครื่องไม่ได้: " + ex.Message));
+            }
+        });
+    }
+
+    private void SetupBrowserIntegration()
+    {
+        var extensionFolder = BrowserIntegration.ExtensionFolder;
+        if (!Directory.Exists(extensionFolder))
+        {
+            MessageBox.Show(this, "ไม่พบชุดส่วนขยายเบราว์เซอร์ กรุณาติดตั้ง X-Stage Download Manager รุ่นเต็ม",
+                "เชื่อมต่อเบราว์เซอร์", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dialog = new Form
+        {
+            Text = "เชื่อม Chrome / Microsoft Edge", Width = 590, Height = 310,
+            StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false, BackColor = Color.White
+        };
+        var instructions = new Label
+        {
+            Left = 20, Top = 15, Width = 540, Height = 113,
+            Text = "1. เปิด chrome://extensions หรือ edge://extensions\\n" +
+                   "2. เปิดโหมดผู้พัฒนา (Developer mode) แล้วกด Load unpacked\\n" +
+                   "3. เลือกโฟลเดอร์ส่วนขยายของ X-Stage ด้านล่าง\\n" +
+                   "4. คัดลอก Extension ID (อักษร a–p 32 ตัว) มาวางในช่อง แล้วกดเชื่อมต่อ",
+            Font = new Font("Segoe UI", 10), ForeColor = Color.FromArgb(35, 55, 83)
+        };
+        var openFolder = new Button { Left = 20, Top = 131, Width = 260, Height = 36,
+            Text = "เปิดโฟลเดอร์ส่วนขยาย", BackColor = Color.FromArgb(231, 239, 250) };
+        openFolder.Click += (_, _) =>
+            Process.Start(new ProcessStartInfo(extensionFolder) { UseShellExecute = true });
+        var copyFolder = new Button { Left = 292, Top = 131, Width = 265, Height = 36,
+            Text = "คัดลอกตำแหน่งโฟลเดอร์", BackColor = Color.FromArgb(231, 239, 250) };
+        copyFolder.Click += (_, _) => Clipboard.SetText(extensionFolder);
+        var id = new TextBox { Left = 20, Top = 186, Width = 385, Font = new Font("Segoe UI", 11),
+            PlaceholderText = "วาง Extension ID จากหน้าเบราว์เซอร์" };
+        var register = new Button { Left = 417, Top = 183, Width = 140, Height = 35,
+            Text = "เชื่อมต่อ", DialogResult = DialogResult.OK,
+            BackColor = Color.FromArgb(0, 111, 221), ForeColor = Color.White };
+        dialog.Controls.AddRange(new Control[] { instructions, openFolder, copyFolder, id, register });
+        dialog.AcceptButton = register;
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            BrowserIntegration.Register(id.Text);
+            MessageBox.Show(this,
+                "ลงทะเบียนส่วนขยาย Chrome / Edge สำเร็จ\\n" +
+                "ในส่วนขยาย ให้เปิดการรับดาวน์โหลดอัตโนมัติเฉพาะเมื่อต้องการใช้งาน\\n" +
+                "ส่วนขยายจะไม่ยกเลิกงานในเบราว์เซอร์หากแอปไม่รับงาน",
+                "พร้อมใช้งาน", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            MessageBox.Show(this, ex.Message, "เชื่อมต่อไม่สำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private async Task CheckForUpdatesAsync(bool manual)
