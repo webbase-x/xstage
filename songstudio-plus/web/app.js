@@ -1245,20 +1245,29 @@
     state.manualHeard=false;
     $("manual-approve").disabled=true;
     text("manual-edit-status","ยังไม่บันทึกการแก้ไข");
+    manualRefreshLiveFindings();
   }
   function manualRenderLines(){
     const list=$("manual-line-list");list.replaceChildren();
+    const activeIndex=Number($("manual-line-index").value)||0;
+    const issueLines=new Set(manualGetFindings().filter(f=>
+      f.line_position>=0).map(f=>f.line_position));
     state.manualLines.forEach((line,index)=>{
+      if(state.manualOnlyIssues&&!issueLines.has(index))return;
       const card=document.createElement("div");card.className="manual-line-card";
+      card.dataset.manualLine=String(index);
+      card.classList.toggle("is-expanded",index===activeIndex);
+      card.classList.toggle("manual-line-active",index===activeIndex);
       const top=document.createElement("div");top.className="manual-line-top";
       const num=document.createElement("strong");num.textContent="บรรทัด "+(index+1);
+      const excerpt=document.createElement("span");excerpt.className="manual-line-preview";
+      excerpt.textContent=line.text||"ยังไม่มีข้อความ";
+      excerpt.title=line.text||"";
+      const issueTag=document.createElement("span");issueTag.className="manual-line-issue";
       const choose=document.createElement("button");
       choose.type="button";choose.className="quiet-btn";choose.textContent="เลือกบรรทัด";
-      choose.addEventListener("click",()=>{
-        $("manual-line-index").value=String(index);manualRefreshCues();
-        manualDrawKaraoke();
-      });
-      top.append(num,choose);
+      choose.addEventListener("click",()=>manualFocusLine(index));
+      top.append(num,excerpt,issueTag,choose);
       const words=document.createElement("input");words.type="text";
       words.value=line.text||"";words.maxLength=400;
       words.placeholder="เนื้อร้องบรรทัดนี้";
@@ -1299,6 +1308,7 @@
       list.append(card);
     });
     manualRefreshSelectors();manualControls();manualDrawKaraoke();
+    manualRenderFindings();
   }
   async function manualOpenSong(id){
     await manualStop();
@@ -1308,6 +1318,11 @@
       const details=await api("/api/manual/detail?song_id="+encodeURIComponent(id));
       state.manualSelected=details;
       state.manualLines=details.lines||[];
+      state.manualFindings=details.findings||manualCheckDraft(state.manualLines);
+      state.manualOnlyIssues=false;
+      $("manual-only-issues").setAttribute("aria-pressed","false");
+      $("manual-only-issues").textContent="แสดงเฉพาะบรรทัดที่ต้องตรวจ";
+      $("manual-line-index").value="0";
       text("manual-song-title",String(details.song.code).padStart(8,"0")+
         " · "+details.song.title);
       text("manual-edit-status",details.song.timing_status||"ยังไม่มีเวลา");
@@ -1328,7 +1343,9 @@
         text("manual-warning","เปิดเสียงต้นฉบับไม่ได้: "+error.message+
           " · ยังแก้ไขข้อความและเวลาได้ แต่ไม่ยืนยันการปาดสี");
       }
-      manualRenderLines();await loadManualQueue();
+      manualRenderLines();
+      $("manual-edit-scroll").scrollTop=0;
+      await loadManualQueue();
     }catch(error){toast(error.message,true);}
   }
   function manualCurrentMedia(){
@@ -1472,7 +1489,7 @@
       });
       await manualStop();
       state.manualSelected=null;state.manualPreview=null;
-      state.manualLines=[];manualRenderLines();
+      state.manualLines=[];state.manualFindings=[];manualRenderLines();
       text("manual-song-title","เลือกเพลงด้านซ้าย");
       text("manual-edit-status","ข้ามแล้ว");
       await loadManualQueue();toast("ข้ามรายการแล้ว ข้อมูลต้นฉบับยังอยู่");
@@ -1497,6 +1514,38 @@
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",()=>view(button.dataset.view));
+
+    for(const [id,key] of [
+      ["manual-toggle-menu","menu"],["manual-toggle-queue","queue"],
+      ["manual-toggle-stage","stage"],["manual-focus","focus"]
+    ]){
+      $(id).addEventListener("click",()=>{
+        if(key==="menu"&&state.manualLayout.focus){
+          state.manualLayout.focus=false;state.manualLayout.menu=false;
+        }else if(key==="queue"&&state.manualLayout.focus){
+          state.manualLayout.focus=false;state.manualLayout.queue=false;
+        }else state.manualLayout[key]=!state.manualLayout[key];
+        manualApplyLayout();
+      });
+    }
+    $("manual-diagnostic-filter").addEventListener("change",manualRenderFindings);
+    $("manual-only-issues").addEventListener("click",()=>{
+      state.manualOnlyIssues=!state.manualOnlyIssues;
+      $("manual-only-issues").setAttribute("aria-pressed",String(state.manualOnlyIssues));
+      $("manual-only-issues").textContent=state.manualOnlyIssues?
+        "แสดงทุกบรรทัด":"แสดงเฉพาะบรรทัดที่ต้องตรวจ";
+      manualRenderLines();
+    });
+    document.addEventListener("keydown",event=>{
+      if(state.view!=="manual")return;
+      if(event.key==="Escape"&&state.manualLayout.focus){
+        state.manualLayout.focus=false;manualApplyLayout();return;
+      }
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="s"&&
+          !$("manual-save").disabled){
+        event.preventDefault();void manualSave();
+      }
+    });
 
     $("manual-find").addEventListener("click",()=>{
       state.manualOffset=0;void loadManualQueue();
