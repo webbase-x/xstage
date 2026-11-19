@@ -34,6 +34,8 @@ BASE = """
 
 def _status_expr():
     return """CASE
+      WHEN COALESCE(r.decision,'')='pending' AND
+        v.id IS NOT NULL AND v.timing_status!='incomplete' THEN 'review'
       WHEN COALESCE(r.decision,'')='pending' THEN 'incomplete'
       WHEN v.id IS NULL AND d.song_id IS NOT NULL THEN 'untimed'
       WHEN v.id IS NULL THEN 'missing'
@@ -302,7 +304,7 @@ def annotate_rows(workspace,rows):
         decision=decision[1] if decision and (
             decision[0] or None)==(r.get("version_id") or None) else ""
         if decision=="pending":
-            status="incomplete"
+            status="review" if r.get("version_id") and r.get("timing_status")!="incomplete" else "incomplete"
         elif not r.get("version_id"):
             status="untimed" if r.get("draft_reason") else "missing"
         elif r.get("timing_status")=="incomplete":
