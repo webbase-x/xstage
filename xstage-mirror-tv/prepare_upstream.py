@@ -21,8 +21,8 @@ if ROOT is None or not (ROOT / "LICENSE").is_file():
 APP = ROOT / "app"
 PKG = "com.webbasex.xstagemirror.tv"
 NAME = "X-Stage Mirror TV"
-VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.14")
-BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "116")
+VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.15")
+BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "117")
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) or not BUILD.isdecimal() or int(BUILD) <= 0:
     raise SystemExit("Invalid Mirror TV release version/build")
 

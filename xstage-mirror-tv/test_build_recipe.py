@@ -139,8 +139,13 @@ assert 'BackHandler(enabled = editingName)' in receiver_home
 assert 'onFinished = { editingName = false }' in receiver_home
 assert 'onFinished()' in editor
 video_player = (app / "src/main/kotlin/app/airshow/tv/renderer/AirPlayVideoPlayer.kt").read_text()
-assert 'BUFFERING_TIMEOUT_MS = 18_000L' in video_player
+assert 'VOD_BUFFERING_TIMEOUT_MS = 18_000L' in video_player
+assert 'LIVE_BUFFERING_TIMEOUT_MS = 12_000L' in video_player
+assert 'LIVE_MAX_RECOVERIES = 3' in video_player
+assert 'current.seekToDefaultPosition()' in video_player
+assert 'current.isCurrentMediaItemLive || lastKnownLive' in video_player
 assert 'current.stop()' in video_player and 'current.prepare()' in video_player
+assert 'consecutiveRecoveries = 0' in video_player
 assert 'mainHandler.removeCallbacks(_stallWatchdog)' in video_player
 assert "checkMirrorUpdateNow" in settings
 assert "ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)" in settings
@@ -202,7 +207,7 @@ assert 'json.optString("channel") != "test-preview"' in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 116' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 117' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
