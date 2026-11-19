@@ -1191,11 +1191,11 @@ def glyphs(text):
     return result
 
 def remap_cues(old_text,new_text,start,end,cues):
-    """Keep verifiable cue timing or save text with timing explicitly incomplete.
+    """Remap changed lyrics onto measured CUR onsets; never invent timestamps.
 
-    Historical NCN contains lines whose text/cue segmentation does not agree.
-    That MUST NOT prevent correcting the lyric in SQLite, nor justify
-    fabricating new CUR times. These rows go to Menu 05 to be reviewed.
+    Short new lyrics: fill surplus cursor slots with silent > placeholders.
+    Long new lyrics: sweep several graphemes together at one old onset.
+    The true lyric text stays clean; all timing remains unverified until heard.
     """
     units=glyphs(new_text)
     if not units:
@@ -1207,29 +1207,40 @@ def remap_cues(old_text,new_text,start,end,cues):
         original="".join(str(x["text"]) for x in cues)
         source_matches=(original==old_text and len(cues)==len(glyphs(old_text)))
         times_valid=(math.isfinite(start) and math.isfinite(end) and
-            start<end and
+            start<end and len(measured)<=4000 and
             all(math.isfinite(at) and start-.001<=at<end for at in measured) and
             all(measured[i]<=measured[i+1] for i in range(len(measured)-1)))
     except (TypeError,ValueError,OverflowError):
         return [],"incomplete"
-    if not source_matches or not times_valid:
+    if not times_valid:
         return [],"incomplete"
-    if len(units)==len(measured):
-        times=measured
-        status="preserved"
+    size=len(measured)
+    if len(units)<size:
+        # > is an internal silent cursor slot, not visible lyric text.
+        pieces=units+[">"]*(size-len(units))
+    elif len(units)>size:
+        # Combined swipe: multiple adjacent characters at an original onset.
+        pieces=["".join(units[i*len(units)//size:(i+1)*len(units)//size])
+                for i in range(size)]
     else:
-        # A changed length cannot preserve one-to-one CUR positions.
-        # Interpolation is explicitly ESTIMATED, never marked original.
-        track=measured+[end]
-        length=len(measured)
-        times=[]
-        for i in range(len(units)):
-            x=i*length/len(units)
-            at=min(int(x),length-1)
-            times.append(track[at]+(track[at+1]-track[at])*(x-at))
-        status="estimated"
-    return [(unit,round(at,6),round(max(0,(times[i+1] if i+1<len(times) else end)-at),6))
-            for i,(unit,at) in enumerate(zip(units,times))],status
+        pieces=units
+    status=("preserved" if source_matches and len(units)==size else "estimated")
+    return [(piece,round(at,6),
+             round(max(0,(measured[i+1] if i+1<size else end)-at),6))
+            for i,(piece,at) in enumerate(zip(pieces,measured))],status
+
+
+def display_cues(line_text,cues):
+    """Hide only internal extra trailing > slots while preserving real >."""
+    merged="".join(str(c["text"]) for c in cues)
+    text=str(line_text)
+    if merged.startswith(text):
+        suffix=merged[len(text):]
+        if suffix and all(v==">" for v in suffix) and len(suffix)<=len(cues):
+            visible=len(cues)-len(suffix)
+            if visible>=1 and all(str(c["text"])==">" for c in cues[visible:]):
+                return cues[:visible]
+    return cues
 
 
 def get_version_lines(db,version_id):
