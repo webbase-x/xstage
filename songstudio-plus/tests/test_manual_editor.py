@@ -82,6 +82,24 @@ class ManualKaraokeTests(unittest.TestCase):
         self.assertEqual(edit.queue(self.workspace)["total"],1)
         self.assertEqual(edit.detail(self.workspace,sid)["lines"][0]["text"],"text")
 
+    def test_manual_version_is_never_overwritten_by_automatic_import(self):
+        song_id=self.song["id"]
+        saved=edit.save(self.workspace,song_id,None,[
+            {"text":"Text","start":2,"end":4,
+             "segments":["Te","xt"],"starts":[2,3]},
+        ])
+        old=saved["version_id"]
+        with core.connect(self.workspace) as db:
+            db.execute("""INSERT INTO xstage_lyric_versions
+               (id,song_id,content_sha256,source_sha256,origin,timing_status,
+                title,artist,created_at,is_current)
+               VALUES (?,?,?,NULL,'NCN','original','test','',?,0)""",
+               ("original-version",song_id,"another-original-sha",core.now()))
+            self.assertFalse(core._prefer_version(db,song_id,"original-version"))
+            active=db.execute("""SELECT id FROM xstage_lyric_versions
+              WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()[0]
+            self.assertEqual(active,old)
+
     def test_reject_fabricated_or_mismatched_timing(self):
         sid=self.song["id"]
         with self.assertRaisesRegex(ValueError,"จำนวนคำกับเวลาปาด"):
