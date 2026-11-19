@@ -96,6 +96,70 @@ class NcnLineEndRegression(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "4E 4F 50 45"):
                 ncn_reader.midi_events(bad)
 
+    @staticmethod
+    def _write_decorated_ncn(root, count, credit=".....เต่า คาราโอเกะ......"):
+        """A timed internal brand and a separate untimed closing brand."""
+        root = Path(root)
+        midi = root / "00123.mid"
+        lyr = root / "00123.lyr"
+        cur = root / "00123.cur"
+        midi.write_bytes(_midi_20_seconds())
+        raw_lines = ["ABC", "...เต่า คาราโอเกะ...", "DEF", credit]
+        lyr.write_bytes(
+            ("Title\\nArtist\\nC\\n.\\n" + "\\n".join(raw_lines) + "\\n")
+            .encode("cp874")
+        )
+        cur.write_bytes(struct.pack("<" + "H" * count, *range(count)))
+        real_cues = sum(1 + len(s.encode("cp874")) for s in raw_lines[:-1])
+        all_cues = real_cues + 1 + len(credit.encode("cp874"))
+        return midi, lyr, cur, real_cues, all_cues
+
+    def test_real_style_tao_karaoke_footer_is_not_a_false_partial(self):
+        with tempfile.TemporaryDirectory() as d:
+            _, _, _, real_cues, _ = self._write_decorated_ncn(d, 40)
+            # The actual CUR may contain padding, but not enough entries
+            # for the trailing untimed vendor-only credit.
+            self.assertLess(real_cues, 40)
+            doc = ncn_reader.ncn_document({
+                "midi": str(Path(d) / "00123.mid"),
+                "lyrics": str(Path(d) / "00123.lyr"),
+                "cursor": str(Path(d) / "00123.cur"),
+                "code": "00123", "missing": [],
+            })
+            self.assertEqual([x["text"] for x in doc["lines"]],
+                             ["ABC", "...เต่า คาราโอเกะ...", "DEF"])
+            self.assertTrue(doc["metadata"]["timingComplete"])
+            self.assertEqual(doc["metadata"]["removedUntimedFooterLines"], 1)
+            self.assertEqual(doc["metadata"]["unusedCursorValues"], 40-real_cues)
+            self.assertEqual(len(plus_core.valid_lines(doc)), 3)
+
+    def test_credit_cannot_hide_a_truncated_actual_lyric(self):
+        with tempfile.TemporaryDirectory() as d:
+            _, _, _, real_cues, _ = self._write_decorated_ncn(d, 5)
+            self.assertLess(5, real_cues)
+            doc = ncn_reader.ncn_document({
+                "midi": str(Path(d) / "00123.mid"),
+                "lyrics": str(Path(d) / "00123.lyr"),
+                "cursor": str(Path(d) / "00123.cur"),
+                "code": "00123", "missing": [],
+            })
+            self.assertFalse(doc["metadata"]["timingComplete"])
+            self.assertEqual(doc["metadata"]["removedUntimedFooterLines"], 0)
+
+    def test_timed_final_credit_must_remain_in_lyrics(self):
+        with tempfile.TemporaryDirectory() as d:
+            _, _, _, _, all_cues = self._write_decorated_ncn(d, 55)
+            self.assertLess(all_cues, 55)
+            doc = ncn_reader.ncn_document({
+                "midi": str(Path(d) / "00123.mid"),
+                "lyrics": str(Path(d) / "00123.lyr"),
+                "cursor": str(Path(d) / "00123.cur"),
+                "code": "00123", "missing": [],
+            })
+            self.assertEqual(doc["lines"][-1]["text"],
+                             ".....เต่า คาราโอเกะ......")
+            self.assertEqual(doc["metadata"]["removedUntimedFooterLines"], 0)
+
     def test_last_line_default_four_seconds_when_no_late_cue(self):
         doc = ncn_reader._timed_lines_to_json([
             {"text": "AB", "startTime": 1., "characters": [
