@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Pro",
-  "version": "0.1.19",
+  "version": "0.1.22",
   "channel": "preview",
   "available": true,
   "windows_artifact_build": true,
@@ -9,9 +9,9 @@
   "player_compatible": false,
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Verified Pro Desktop Standalone Preview. Uses PySide6 QtWebEngine, Windows-native folder picker, resilient core control binding, and program-wide WebView diagnostics. EXE is unsigned.",
-  "file": "X-Stage-Song-Studio-Pro-v0.1.19-preview.exe",
-  "sha256": "382f943fe1b50f3707aae1f6ca4732c5661b317c7ab12aa77f67b1dc77ebbad4",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.19-preview/X-Stage-Song-Studio-Pro-v0.1.19-preview.exe",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.19-preview"
+  "status": "Verified Pro Desktop Standalone Preview. Adds automatic startup update notification with one-click verified update/install while retaining responsive controls and SQLite safeguards. EXE is unsigned.",
+  "file": "X-Stage-Song-Studio-Pro-v0.1.22-preview.exe",
+  "sha256": "8bcc6e9907f1fd33de8f66f75c9d3176087b37df7e3bbe7c8a496bed9a93bad3",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.22-preview/X-Stage-Song-Studio-Pro-v0.1.22-preview.exe",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.22-preview"
 }
