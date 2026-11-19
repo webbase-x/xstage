@@ -38,8 +38,18 @@
   <main class="main">
     <header class="topbar">
       <div class="breadcrumb">X-STAGE <span>/</span> STUDIO PLUS <span>/</span> <strong id="breadcrumb">นำเข้าเพลง</strong></div>
-      <div class="top-actions"><button type="button" class="quiet-btn" id="settings-open" title="ตั้งค่าและเครื่องมือระบบ">⚙ ตั้งค่า</button><button type="button" class="quiet-btn workspace-open-btn" id="workspace-open" title="เปิดโฟลเดอร์ฐานข้อมูลและคลังเพลงใน Windows Explorer">▤ เปิดคลังเพลง</button><span class="chip chip-soft" id="workspace-chip">LOCAL WORKSPACE</span><span class="avatar">X<span>+</span></span></div>
+      <div class="top-actions"><button type="button" class="update-quick-btn" id="pro-update-quick" hidden>↑ อัปเดต</button><button type="button" class="quiet-btn" id="settings-open" title="ตั้งค่าและเครื่องมือระบบ">⚙ ตั้งค่า</button><button type="button" class="quiet-btn workspace-open-btn" id="workspace-open" title="เปิดโฟลเดอร์ฐานข้อมูลและคลังเพลงใน Windows Explorer">▤ เปิดคลังเพลง</button><span class="chip chip-soft" id="workspace-chip">LOCAL WORKSPACE</span><span class="avatar">X<span>+</span></span></div>
     </header>
+    <div class="update-notice" id="pro-update-notice" hidden role="status" aria-live="polite">
+      <div class="update-notice-copy">
+        <strong id="pro-update-notice-title">มี X-Stage Song Studio Pro รุ่นใหม่</strong>
+        <span id="pro-update-notice-text">พร้อมดาวน์โหลด ตรวจ SHA-256 ติดตั้ง และเปิดใหม่</span>
+      </div>
+      <div class="update-notice-actions">
+        <button id="pro-update-notice-install" class="primary-btn" type="button">อัปเดตทันที</button>
+        <button id="pro-update-notice-dismiss" class="quiet-btn" type="button">ภายหลัง</button>
+      </div>
+    </div>
     <div class="content">
       <section class="view is-visible" id="view-import" aria-labelledby="import-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> YOUR MUSIC, FULLY ORGANIZED</div>
