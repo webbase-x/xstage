@@ -1545,7 +1545,9 @@
       o.line.end!==""&&Number.isFinite(Number(o.line.start))&&
       Number.isFinite(Number(o.line.end))&&Number(o.line.end)>Number(o.line.start));
     let index=Number($("manual-line-index").value)||0;
-    if(timed.length){
+    // While manually editing (paused), keep the selected line on screen;
+    // during actual playback follow the audible line instead.
+    if(timed.length&&state.manualPlaying){
       const playing=timed.find(o=>state.manualTime>=Number(o.line.start)&&
         state.manualTime<Number(o.line.end));
       const upcoming=timed.find(o=>Number(o.line.start)>state.manualTime);
