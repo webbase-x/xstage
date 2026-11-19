@@ -1,0 +1,78 @@
+name: Build X-Stage Download Manager Windows Preview
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'download-manager/**'
+      - '.github/workflows/build-xstage-download-manager.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xstage-download-manager-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate X-Stage app icon
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to install Pillow' }
+          python download-manager/generate_icon.py
+          if ($LASTEXITCODE -ne 0) { throw 'Icon creation failed' }
+          if (-not (Test-Path download-manager/app.ico)) { throw 'Windows ICO missing' }
+      - name: Build Windows x64 self-contained EXE
+        shell: pwsh
+        run: |
+          dotnet publish download-manager/XStageDownloadManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o download-manager/out
+          if ($LASTEXITCODE -ne 0) { throw 'Download Manager build failed' }
+          if (-not (Test-Path download-manager/out/XStageDownloadManager.exe)) { throw 'Windows EXE missing' }
+          python scripts/verify_songstudio_exe_icon.py download-manager/out/XStageDownloadManager.exe
+          if ($LASTEXITCODE -ne 0) { throw 'EXE must contain its application icon' }
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+      - name: Package Setup EXE and portable ZIP
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup 6 missing' }
+          & $compiler download-manager/installer/XStageDownloadManager.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Setup build failed' }
+          $setup = 'download-manager/installer/output/X-Stage-Download-Manager-v0.1.0-build1-win-x64-Setup.exe'
+          if (-not (Test-Path $setup)) { throw 'Setup EXE missing' }
+          if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer suspiciously small' }
+          $zip = 'X-Stage-Download-Manager-v0.1.0-build1-win-x64-PORTABLE.zip'
+          Compress-Archive -Path 'download-manager/out/*' -DestinationPath $zip -CompressionLevel Optimal -Force
+          foreach ($file in @($setup,$zip)) {
+            $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLowerInvariant()
+            "$hash  $([System.IO.Path]::GetFileName($file))" | Set-Content -Encoding ascii "$file.sha256"
+            Write-Host "Verified $file SHA-256 $hash"
+          }
+      - name: Upload Windows Preview (not stable release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Download-Manager-v0.1.0-build1-Windows-PREVIEW
+          path: |
+            download-manager/installer/output/X-Stage-Download-Manager-v0.1.0-build1-win-x64-Setup.exe
+            download-manager/installer/output/X-Stage-Download-Manager-v0.1.0-build1-win-x64-Setup.exe.sha256
+            X-Stage-Download-Manager-v0.1.0-build1-win-x64-PORTABLE.zip
+            X-Stage-Download-Manager-v0.1.0-build1-win-x64-PORTABLE.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
