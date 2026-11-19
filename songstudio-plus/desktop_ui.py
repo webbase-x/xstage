@@ -202,8 +202,8 @@ def run_browser_host(server,url,workspace,icon_path,state=None):
     continue to work while the browser tab is open.
     """
     set_windows_identity()
-    from PySide6.QtCore import QUrl,QTimer
-    from PySide6.QtGui import QAction,QDesktopServices,QIcon
+    from PySide6.QtCore import QTimer
+    from PySide6.QtGui import QAction,QIcon
     from PySide6.QtWidgets import QApplication,QMenu,QSystemTrayIcon
 
     app=QApplication.instance() or QApplication([])
@@ -240,7 +240,7 @@ def run_browser_host(server,url,workspace,icon_path,state=None):
 
     def open_ui():
         if state is not None: state.diagnostic("ui.open.request")
-        QDesktopServices.openUrl(QUrl(url))
+        os.startfile(url)
 
     def open_log():
         if state is None:return
