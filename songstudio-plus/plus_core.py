@@ -582,6 +582,25 @@ def iter_source(root):
             if p.suffix.lower() in MEDIA_EXT and not p.is_symlink() and p.is_file():
                 yield p
 
+def prepare_import_for_restart(workspace,batch_id):
+    """Mark an intentionally paused import resumable by the next Pro process.
+
+    Used only after the previous import worker has stopped and its SQLite
+    transaction and checkpoint have committed. User-initiated cancel by itself
+    stays cancelled, not auto-resumed.
+    """
+    if not batch_id:
+        return False
+    with WRITE_LOCK,connect(workspace) as db:
+        cur=db.execute("""UPDATE xstage_import_resume_state
+            SET status='interrupted',updated_at=?
+            WHERE batch_id=? AND status='cancelled'""",(now(),batch_id))
+        if cur.rowcount:
+            db.execute("""UPDATE xstage_import_batches SET status='interrupted'
+                WHERE id=? AND status='cancelled'""",(batch_id,))
+        return bool(cur.rowcount)
+
+
 def interrupted_import(workspace):
     """Latest recoverable import. A previous crash cannot leave 'running' forever."""
     with connect(workspace) as db:
