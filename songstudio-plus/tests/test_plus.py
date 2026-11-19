@@ -159,6 +159,68 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(plus.undo_edit(self.workspace,result["batch"])["restored_songs"],3)
         self.assertEqual(len(plus.groups(self.workspace,"Nick")),3)
 
+    def test_batch_replacement_succeeds_even_if_original_cue_text_is_misaligned(self):
+        """Real legacy NCN-like mismatch must not roll back the entire selection."""
+        import threading
+        for index in range(3):
+            path=self.put(f"corrupt_{index}.mp3",bytes([index+15])*1200)
+            self.lrc(path,f"[00:02.00]Nick Footer {index}\\n[00:08.00]Keep\\n")
+        plus.import_folder(self.workspace,self.src)
+        selections=plus.groups(self.workspace,"Nick")
+        self.assertEqual(len(selections),3)
+        keys=[x["group_key"] for x in selections]
+        with plus.connect(self.workspace) as db:
+            matched=list(plus.chosen_rows(db,"Nick",keys))
+            self.assertEqual(len(matched),3)
+            # Same behavior as a malformed legacy NCN CUR: cue segments
+            # exist but do not reconstruct the original line exactly.
+            db.execute("UPDATE xstage_lyric_cues SET text='BROKEN' WHERE id=("
+                "SELECT id FROM xstage_lyric_cues WHERE line_id=? ORDER BY position LIMIT 1)",
+                (matched[0]["id"],))
+            # Another song has zero individual cursor positions.
+            db.execute("DELETE FROM xstage_lyric_cues WHERE line_id=?",
+                       (matched[1]["id"],))
+        stages=[]
+        outcome=plus.replace_groups(self.workspace,"Nick",keys,
+             "X-Stage Karaoke",3,lambda progress,message: stages.append(progress),None)
+        self.assertEqual(outcome["changed_lines"],3)
+        self.assertEqual(outcome["changed_songs"],3)
+        self.assertEqual(outcome["needs_review_lines"],2)
+        self.assertTrue(stages and stages[-1]["done"]==3)
+        with plus.connect(self.workspace) as db:
+            for row in matched:
+                current=db.execute("""SELECT * FROM xstage_lyric_versions
+                    WHERE song_id=? AND is_current=1""",
+                    (row["song_id"],)).fetchone()
+                lyrics=plus.get_version_lines(db,current["id"])
+                self.assertEqual(lyrics[0][0]["text"],"X-Stage Karaoke")
+                self.assertEqual(lyrics[0][0]["start_time"],row["start_time"])
+                self.assertEqual(lyrics[0][0]["end_time"],row["end_time"])
+                if row in matched[:2]:
+                    self.assertEqual(current["timing_status"],"incomplete")
+                    self.assertEqual(lyrics[0][0]["timing_status"],"incomplete")
+                    self.assertEqual(lyrics[0][1],[])
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM xstage_edit_changes WHERE batch_id=?",
+                (outcome["batch"],)).fetchone()[0],3)
+        self.assertEqual(plus.undo_edit(self.workspace,outcome["batch"])["restored_songs"],3)
+        self.assertEqual(plus.plan_edit(self.workspace,"Nick",keys)["lines"],3)
+
+    def test_cancelled_group_edit_rolls_back_all_songs(self):
+        import threading
+        path=self.put("rollback.mp3",b"ROLLBACK"*100)
+        self.lrc(path,"[00:02.00]Nick Example\\n[00:07.00]Keep\\n")
+        plus.import_folder(self.workspace,self.src)
+        keys=[row["group_key"] for row in plus.groups(self.workspace,"Nick")]
+        cancelled=threading.Event()
+        cancelled.set()
+        with self.assertRaisesRegex(Exception,"ยกเลิก"):
+            plus.replace_groups(self.workspace,"Nick",keys,
+                                "X-Stage Karaoke",1,cancel=cancelled)
+        self.assertEqual(plus.plan_edit(self.workspace,"Nick",keys)["lines"],1)
+        with plus.connect(self.workspace) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM xstage_edit_batches").fetchone()[0],0)
+
     def test_xmedia_binary_stores_source_and_lyrics_without_sidecar(self):
         path=self.put("001.mp3",b"FAKE-MEDIA-TEST"*999)
         self.lrc(path)
