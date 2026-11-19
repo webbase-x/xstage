@@ -240,6 +240,75 @@ def save(workspace,song_id,base_version,lines):
             "message":("บันทึกครบแล้ว · รอฟังยืนยันก่อนสร้าง .X"
                        if complete else "เก็บเนื้อร้องที่มีเวลาบางส่วนและฉบับร่างแล้ว · ยังสร้าง .X ไม่ได้")}
 
+def inspect_cue_issues(lines):
+    """Evidence and review advice only. Does not infer correct lyrics or times.
+
+    Checks explicit text/cue alignment and recorded numeric time invariants.
+    Unverified estimated timing is a listening prompt, never a confirmed fault.
+    """
+    items=[]
+    def add(kind,rule,index,found,advice):
+        items.append({"category":kind,"rule":rule,"line_position":index,
+                      "found":found,"suggestion":advice})
+    for index,line in enumerate(lines):
+        raw=str(line.get("text") or "")
+        if not raw.strip():
+            continue
+        start=line.get("start")
+        end=line.get("end")
+        segments=line.get("segments") or []
+        timestamps=line.get("starts") or []
+        if start is None or end is None or start=="" or end=="":
+            add("missing","LINE_UNTIMED",index,
+                "มีเนื้อร้องแต่ยังไม่มีเวลาเริ่มหรือจบ",
+                "ฟังต้นฉบับแล้วกดจับเวลาเริ่มและจบบรรทัดนี้")
+            continue
+        try:
+            start,end=float(start),float(end)
+        except (ValueError,TypeError):
+            add("structural","LINE_TIME_INVALID",index,
+                "เวลาเริ่มหรือเวลาจบไม่ใช่ตัวเลข",
+                "แก้เวลาเป็นวินาทีจากเพลงต้นฉบับ")
+            continue
+        if not all(math.isfinite(v) for v in (start,end)) or start<0 or end<=start:
+            add("structural","LINE_RANGE_INVALID",index,
+                "เวลาจบบรรทัดไม่มากกว่าเวลาเริ่ม หรือค่าเวลาไม่ถูกต้อง",
+                "ตรวจเวลาเริ่มและเวลาจบจากเสียงจริง")
+            continue
+        if not segments or not timestamps:
+            add("missing","CUES_MISSING",index,
+                "มีเนื้อร้องและช่วงเวลา แต่ยังไม่มีจุดปาดคำ",
+                "แบ่งคำด้วย | แล้วกดจับเวลาต้นแต่ละคำขณะเล่นจริง")
+            continue
+        if len(segments)!=len(timestamps) or any(v in ("",None) for v in timestamps):
+            add("missing","CUES_PARTIAL",index,
+                f"มี {len(segments)} ช่วงข้อความ แต่เวลาเริ่มปาดครบเพียง {sum(v not in ('',None) for v in timestamps)} จุด",
+                "เลือกคำที่ยังขาดเวลาแล้วกดจับเวลาปาดคำ หรือกรอกเวลาที่ตรวจจากเสียงจริง")
+            continue
+        if "".join(str(v) for v in segments)!=raw:
+            add("structural","CUES_TEXT_MISMATCH",index,
+                "ข้อความจากจุดปาดต่อกันแล้วไม่ตรงกับเนื้อร้อง",
+                "แก้ข้อความหรือแบ่งคำใหม่โดยรักษาช่องว่าง สระ และวรรณยุกต์ให้ครบ")
+        try:
+            values=[float(v) for v in timestamps]
+        except (TypeError,ValueError):
+            add("structural","CUE_TIME_INVALID",index,
+                "มีเวลาปาดที่ไม่ใช่ตัวเลข",
+                "กรอกเวลาเริ่มปาดของแต่ละคำเป็นวินาทีที่ตรวจได้จริง")
+            continue
+        if (any(not math.isfinite(v) for v in values) or
+                values[0]<start-.001 or values[-1]>=end or
+                any(values[j]<values[j-1] for j in range(1,len(values)))):
+            add("structural","CUES_TIME_OUT_OF_RANGE",index,
+                "เวลาปาดอยู่นอกบรรทัดหรือเรียงย้อนหลัง",
+                "เลื่อนฟังท่อนนี้แล้วจับเวลาปาดแต่ละคำใหม่")
+        if line.get("timing")=="estimated":
+            add("unverified","ESTIMATED_TIMING",index,
+                "เวลาบรรทัดนี้เป็นค่าประมาณ ยังไม่ใช่หลักฐานว่าปาดผิด",
+                "ทดลองฟังและดูการปาดสี หากตรงแล้วจึงกดยืนยัน")
+    return items
+
+
 def detail(workspace,song_id):
     """Return all source lines, including untimed draft tail, for manual repair."""
     init(workspace)
@@ -282,7 +351,9 @@ def detail(workspace,song_id):
                 source=[{"text":x,"start":None,"end":None,
                          "segments":[],"starts":[],"timing":"untimed"}
                         for x in draft_lines]
+        findings=inspect_cue_issues(source)
         return {"song":dict(song),"lines":source,
+                "findings":findings,
                 "draft_reason":draft["reason"] if draft else None,
                 "has_lyrics":bool(source)}
 
