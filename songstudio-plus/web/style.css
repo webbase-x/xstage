@@ -538,3 +538,63 @@ html,body{width:100%;height:100%;overflow:hidden}
 #view-manual .manual-advanced-times>input{margin:4px 0 7px}
 #view-manual .manual-cue-undo{margin-left:auto}
 #view-manual .manual-line-card:not(.is-expanded)>.manual-cue-strip,#view-manual .manual-line-card:not(.is-expanded)>.manual-advanced-times{display:none}
+
+
+/* Menu 05 · real-time, drag-adjustable karaoke cue timeline (no fake waveform). */
+#view-manual .manual-timeline-panel{
+  flex:0 0 auto;min-width:0;padding:8px 10px 7px;border:1px solid #345c72;
+  border-radius:12px;background:linear-gradient(180deg,#14283e,#0e1a2d);
+}
+.manual-timeline-heading{display:flex;align-items:center;justify-content:space-between;gap:9px;min-width:0}
+.manual-timeline-heading>div:first-child{min-width:0;display:grid;gap:2px}
+.manual-timeline-heading strong{font-size:12px;color:#e4f4ff;white-space:nowrap}
+.manual-timeline-heading small{max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aac6d8;font-size:10px}
+.manual-timeline-tools{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.manual-timeline-tools .quiet-btn{font-size:10px;padding:5px 7px;min-height:27px}
+.timeline-live{display:inline-block;border:1px solid #5ab99e;color:#b5ffe7;
+ border-radius:5px;padding:1px 5px;margin-left:5px;font-size:9px;letter-spacing:.06em}
+.manual-timeline-ruler{height:21px;position:relative;margin:8px 24px 0}
+.manual-timeline-tick{position:absolute;transform:translateX(-50%);top:1px;font-size:9px;
+ color:#9eb7d0;white-space:nowrap;user-select:none}
+.manual-timeline-tick:first-child{transform:translateX(0)}
+.manual-timeline-tick:last-child{transform:translateX(-100%)}
+.manual-timeline-track{height:88px;margin:0 24px 4px;border:1px solid #46627e;border-radius:8px;
+ position:relative;cursor:crosshair;overflow:visible;background:
+ linear-gradient(0deg,transparent 49%,rgba(135,175,216,.13) 50%,transparent 51%),
+ repeating-linear-gradient(90deg,rgba(132,176,211,.12) 0 1px,transparent 1px calc(100% / 12)),#101e32}
+.manual-timeline-track:focus-visible{outline:2px solid #72e4dd}
+.manual-timeline-highlight{position:absolute;top:0;bottom:0;border-left:2px solid #6ce4d6;
+ background:rgba(58,209,175,.09);pointer-events:none;z-index:1}
+.manual-timeline-highlight[hidden],.manual-timeline-playhead[hidden]{display:none}
+.manual-timeline-playhead{position:absolute;top:0;bottom:0;width:2px;background:#ffdf8b;
+ box-shadow:0 0 0 1px #142237,0 0 9px rgba(255,216,126,.75);z-index:6;pointer-events:none}
+.manual-timeline-playhead:before{content:"";position:absolute;top:-6px;left:-4px;
+ border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #ffdf8b}
+.manual-timeline-cues{position:absolute;inset:0;z-index:3;pointer-events:none}
+.manual-timeline-marker{position:absolute;top:9px;transform:translateX(-50%);
+ min-width:52px;max-width:102px;padding:5px 6px;background:#1f3854;
+ color:#e8f5fc;border:1px solid #70a0b7;border-radius:7px;cursor:ew-resize;
+ touch-action:none;user-select:none;pointer-events:auto;display:grid;gap:2px;
+ text-align:center;box-shadow:0 2px 4px #0006}
+.manual-timeline-marker:nth-child(even){top:42px}
+.manual-timeline-marker:hover,.manual-timeline-marker:focus-visible{background:#2c5269;
+ border-color:#92e7d5;outline:1px solid #92e7d5;z-index:6}
+.manual-timeline-marker.is-selected{border-color:#5cf3d1;background:#215f64;color:white;z-index:7}
+.manual-timeline-marker-text{max-width:95px;white-space:nowrap;text-overflow:ellipsis;
+ overflow:hidden;font:600 11px/1.25 "Segoe UI",sans-serif}
+.manual-timeline-marker-time{font:10px/1.1 "Segoe UI",sans-serif;color:#c6dae7}
+.manual-timeline-footer{display:flex;justify-content:space-between;gap:12px;align-items:center;
+ color:#a8cfdb;font-size:10px}
+#manual-timeline-position{flex:none;color:#f0d693;font-variant-numeric:tabular-nums;font-weight:700}
+.manual-timeline-tip{margin:3px 0 0!important;line-height:1.4;font-size:10px;color:#a5bbcb}
+@media(max-width:1100px){
+ .manual-timeline-heading{flex-wrap:wrap}
+ .manual-timeline-heading>div:first-child{flex:1 1 180px}
+ .manual-timeline-tools{flex:1 1 auto}
+}
+@media(max-height:730px){
+ #view-manual .manual-timeline-panel{padding:6px 8px}
+ .manual-timeline-track{height:69px}
+ .manual-timeline-marker:nth-child(even){top:29px}
+ .manual-timeline-tip{display:none}
+}
