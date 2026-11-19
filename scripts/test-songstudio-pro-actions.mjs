@@ -66,8 +66,8 @@ assert.ok(desktop.includes('def run_browser_host('),
  'Windows browser host is required');
 assert.ok(server.includes('run_browser_host(server,url'),
  'Default Windows UI must use the browser host');
-assert.ok(desktop.includes('QDesktopServices.openUrl(QUrl(url))'),
- 'Browser host must open localhost with the Windows default browser');
+assert.ok(desktop.includes('os.startfile(url)'),
+ 'Browser host must open localhost through the Windows shell');
 assert.ok(desktop.indexOf('worker.start()') < desktop.indexOf('QTimer.singleShot(100,open_ui)'),
  'Local PC Engine must start before the Windows browser is opened');
 assert.ok(server.includes('song-studio-pro.log')&&server.includes('def diagnostic('),
