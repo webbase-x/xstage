@@ -136,8 +136,8 @@ def _normalize_lines(lines):
     for i,item in enumerate(lines):
         if not isinstance(item,dict):
             raise ValueError("โครงสร้างเนื้อร้องไม่ถูกต้อง")
-        raw=str(item.get("text") or "").strip()
-        if not raw:
+        raw=str(item.get("text") or "").rstrip("\\r\\n")
+        if not raw.strip():
             continue
         if len(raw)>400 or "\x00" in raw or "\n" in raw or "\r" in raw:
             raise ValueError(f"บรรทัด {i+1}: ข้อความเกิน 400 อักขระหรือมีอักขระต้องห้าม")
@@ -283,3 +283,44 @@ def detail(workspace,song_id):
         return {"song":dict(song),"lines":source,
                 "draft_reason":draft["reason"] if draft else None,
                 "has_lyrics":bool(source)}
+
+def annotate_rows(workspace,rows):
+    """Add readiness and review labels to existing paginated catalog rows."""
+    if not rows:
+        return rows
+    init(workspace)
+    ids=[r["id"] for r in rows]
+    args=",".join("?" for _ in ids)
+    with core.connect(workspace) as db:
+        records=db.execute("""SELECT song_id,version_id,decision
+            FROM xstage_manual_reviews WHERE song_id IN ("""+args+")",ids)
+        flags={r["song_id"]:(r["version_id"],r["decision"]) for r in records}
+    out=[]
+    for row in rows:
+        r=dict(row)
+        decision=flags.get(r["id"])
+        decision=decision[1] if decision and (
+            decision[0] or None)==(r.get("version_id") or None) else ""
+        if decision=="pending":
+            status="incomplete"
+        elif not r.get("version_id"):
+            status="untimed" if r.get("draft_reason") else "missing"
+        elif r.get("timing_status")=="incomplete":
+            status="incomplete"
+        elif r.get("timing_status")=="estimated" and decision!="approved":
+            status="review"
+        else:
+            status="ready"
+        r["manual_status"]=status
+        r["manual_decision"]=decision
+        out.append(r)
+    return out
+
+
+def ready_count(workspace):
+    """Return a count without transferring a giant catalog to the browser."""
+    init(workspace)
+    with core.connect(workspace) as db:
+        return db.execute("""SELECT COUNT(*) """+BASE+"""
+          WHERE v.id IS NOT NULL AND v.timing_status!='incomplete'
+            AND """+_status_expr()+"""='ready'""").fetchone()[0]
