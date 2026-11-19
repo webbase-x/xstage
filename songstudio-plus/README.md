@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.7
+# X-Stage Song Studio Plus — Technical Preview v0.1.8
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -82,6 +82,28 @@ names) is supported without legacy ANSI path encoding.
 Use `--workspace "D:\\XStageSongPlus"` only to select an explicit existing or
 new workspace. A failed explicit path is reported in a Windows dialog rather
 than silently falling back to a new empty song database.
+
+## v0.1.8 NCN original-lyric recovery
+
+Fixes false `partial-lyrics` on NCN MID + LYR + CUR when a trailing
+**untimed decorative karaoke vendor credit** occupies the final LYR row,
+while all preceding rows have measured CUR entries. The decision requires
+both a recognized vendor-only footer and enough original CUR entries for
+**every** preceding row. Any timed middle-of-song credits remain untouched.
+A short CUR that also truncates real lyric rows still stays `incomplete`.
+No cursor event times are invented.
+
+Real-world diagnostic (private customer files, **not** committed): song
+`068008138` has 59 preceding lines requiring 1,439 CUR entries, followed
+by an untimed decorative vendor footer, and 1,446 CUR values (7 surplus).
+The original MIDI contains 11 tracks. No real song files were copied to
+this repository.
+
+If a previous Plus import marked a song `บันทึกเนื้อร้องบางส่วน`, run
+**ตรวจซ่อมเนื้อร้องและเวลาปาดสี** (Lyrics recovery), or re-import the same
+original song folder, to create a complete new SQLite lyric version. The
+older version and any manual edits are preserved. Inspect the actual timing
+in the pre-build player before creating an XMID.
 
 ## Start
 
