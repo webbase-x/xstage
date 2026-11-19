@@ -291,8 +291,13 @@ def inspect_cue_issues(lines):
                 "เลือกคำที่ยังขาดเวลาแล้วกดจับเวลาปาดคำ หรือกรอกเวลาที่ตรวจจากเสียงจริง")
             continue
         if "".join(str(v) for v in segments)!=raw:
+            cue_text="".join(str(v) for v in segments)
+            at=next((j for j,(a,b) in enumerate(zip(raw,cue_text)) if a!=b),
+                    min(len(raw),len(cue_text)))
             add("structural","CUES_TEXT_MISMATCH",index,
-                "ข้อความจากจุดปาดต่อกันแล้วไม่ตรงกับเนื้อร้อง",
+                f"ข้อความเริ่มต่างกันบริเวณอักขระที่ {at+1}: "
+                f"เนื้อร้อง «{raw[max(0,at-8):at+26]}» · "
+                f"จุดปาด «{cue_text[max(0,at-8):at+26]}»",
                 "แก้ข้อความหรือแบ่งคำใหม่โดยรักษาช่องว่าง สระ และวรรณยุกต์ให้ครบ")
         try:
             values=[float(v) for v in timestamps]
