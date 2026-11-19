@@ -1317,6 +1317,10 @@
     manualRenderFindings();
   }
   async function manualOpenSong(id){
+    if(state.manualDirty&&state.manualSelected?.song?.id!==id){
+      if(!await confirmTask("ยังไม่ได้บันทึกการแก้ไข",
+        "หากเปลี่ยนเพลงตอนนี้ การแก้ไขที่ยังไม่บันทึกจะหายไป · ต้องการเปลี่ยนเพลงหรือไม่?"))return;
+    }
     await manualStop();
     state.manualSelected=null;state.manualPreview=null;state.manualTime=0;
     state.manualDuration=0;state.manualHeard=false;state.manualDirty=false;
@@ -1490,6 +1494,8 @@
   async function manualSkip(){
     const details=state.manualSelected;
     if(!details)return;
+    if(state.manualDirty&&!await confirmTask("ข้ามโดยไม่บันทึก",
+        "มีการแก้เนื้อร้องที่ยังไม่บันทึก · หากข้าม เพลงนี้จะเก็บฉบับเดิมเท่านั้น"))return;
     try{
       await api("/api/manual/skip",{
         song_id:details.song.id,version_id:details.song.version_id
@@ -1520,7 +1526,14 @@
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
-      button.addEventListener("click",()=>view(button.dataset.view));
+      button.addEventListener("click",async()=>{
+        if(state.view==="manual"&&state.manualDirty&&button.dataset.view!=="manual"){
+          if(!await confirmTask("มีการแก้ไขที่ยังไม่บันทึก",
+            "ออกจากเมนู 05 โดยไม่บันทึกหรือไม่?"))return;
+          state.manualDirty=false;
+        }
+        view(button.dataset.view);
+      });
 
     for(const [id,key] of [
       ["manual-toggle-menu","menu"],["manual-toggle-queue","queue"],
