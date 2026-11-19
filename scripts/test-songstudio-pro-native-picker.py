@@ -45,23 +45,25 @@ with tempfile.TemporaryDirectory() as base:
     lyric=folder/"เนื้อร้องภาษาไทย.lrc"
     lyric.write_text("lyrics",encoding="utf-8")
     called=[]
-    def choose_dir(parent,title,initial,options):
-        called.append(("folder",threading.get_ident(),initial))
-        assert Path(initial).is_dir()
-        return str(folder)
-    def choose_file(parent,title,initial,filter):
-        called.append(("lrc",threading.get_ident(),initial))
-        assert Path(initial)==folder
-        return str(lyric),"ไฟล์เนื้อร้อง LRC (*.lrc)"
-    with patch.object(QFileDialog,"getExistingDirectory",side_effect=choose_dir),\
-         patch.object(QFileDialog,"getOpenFileName",side_effect=choose_file):
+    def accept_folder(dialog):
+        called.append(("folder",threading.get_ident(),dialog.directory().absolutePath()))
+        assert dialog.fileMode()==QFileDialog.FileMode.Directory
+        return QFileDialog.DialogCode.Accepted
+    def accept_file(dialog):
+        called.append(("lrc",threading.get_ident(),dialog.directory().absolutePath()))
+        assert dialog.fileMode()==QFileDialog.FileMode.ExistingFile
+        return QFileDialog.DialogCode.Accepted
+    with patch.object(QFileDialog,"exec",autospec=True,side_effect=accept_folder),\\
+         patch.object(QFileDialog,"selectedFiles",autospec=True,return_value=[str(folder)]):
         selected=call_in_worker("folder",str(folder))
         assert selected=={"path":str(folder),"cancelled":False},selected
+    with patch.object(QFileDialog,"exec",autospec=True,side_effect=accept_file),\\
+         patch.object(QFileDialog,"selectedFiles",autospec=True,return_value=[str(lyric)]):
         selection=call_in_worker("lrc",str(folder))
         assert selection=={"path":str(lyric),"cancelled":False},selection
     assert [call[0] for call in called]==["folder","lrc"]
     assert all(call[1]==gui_thread for call in called), "Qt dialogs must run on GUI thread"
-    with patch.object(QFileDialog,"getExistingDirectory",return_value=""):
+    with patch.object(QFileDialog,"exec",autospec=True,return_value=QFileDialog.DialogCode.Rejected):
         cancelled=call_in_worker("folder",str(folder))
         assert cancelled["cancelled"] and not cancelled["path"]
     try:picker.pick("invalid")
