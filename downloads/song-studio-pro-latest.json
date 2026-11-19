@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Pro",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "channel": "preview",
   "available": true,
   "windows_artifact_build": true,
@@ -10,8 +10,8 @@
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
   "status": "Verified Pro Windows Preview from GitHub Release. EXE is unsigned; X-media player compatibility is still pending.",
-  "file": "X-Stage-Song-Studio-Pro-v0.1.11-preview.exe",
-  "sha256": "3c248cdb9bfc52236a91306022ce653bf73adcf68baf2e01b9725d05dcc8b4dd",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.11-preview/X-Stage-Song-Studio-Pro-v0.1.11-preview.exe",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.11-preview"
+  "file": "X-Stage-Song-Studio-Pro-v0.1.12-preview.exe",
+  "sha256": "6a4c278ffbd2fcdbd00c6446752a1dbe7ab89937c26d6ce416d6d4557e7a8fb1",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.12-preview/X-Stage-Song-Studio-Pro-v0.1.12-preview.exe",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.12-preview"
 }
