@@ -1839,6 +1839,14 @@
       }
     });
     $("source-open").addEventListener("click",()=>void openLocalFolder("source"));
+    $("settings-open").addEventListener("click",()=>{
+      $("settings-dialog").showModal();
+      void diagnostic("ui.settings.open");
+    });
+    $("settings-close").addEventListener("click",()=>$("settings-dialog").close());
+    $("settings-dialog").addEventListener("cancel",event=>{
+      event.preventDefault();$("settings-dialog").close();
+    });
     $("diagnostic-open-log").addEventListener("click",async()=>{
       try{
         await api("/api/open-log",{});
