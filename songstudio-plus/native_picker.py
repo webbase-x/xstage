@@ -33,16 +33,29 @@ class NativeFilePicker(QObject):
                 initial=self.last_directory
             if not initial or not initial.is_dir():
                 initial=Path.home()
+            # Use an explicit, modal Qt dialog rather than the static Windows
+            # native picker. On some QtWebEngine/Windows hosts the native shell
+            # dialog opens behind the maximized window or never appears.
+            # An owned Qt dialog is reliably shown on the GUI thread.
+            dialog=QFileDialog(self.parent_window)
+            dialog.setOption(QFileDialog.Option.DontUseNativeDialog,True)
+            dialog.setDirectory(str(initial))
+            dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+            dialog.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint,True)
             if kind=="folder":
-                chosen=QFileDialog.getExistingDirectory(
-                    self.parent_window,"เลือกโฟลเดอร์เพลงต้นฉบับ",
-                    str(initial),QFileDialog.Option.ShowDirsOnly)
+                dialog.setWindowTitle("เลือกโฟลเดอร์เพลงต้นฉบับ")
+                dialog.setFileMode(QFileDialog.FileMode.Directory)
+                dialog.setOption(QFileDialog.Option.ShowDirsOnly,True)
             elif kind=="lrc":
-                chosen,_=QFileDialog.getOpenFileName(
-                    self.parent_window,"เลือกไฟล์เนื้อร้อง .LRC",
-                    str(initial),"ไฟล์เนื้อร้อง LRC (*.lrc);;ไฟล์ทั้งหมด (*)")
+                dialog.setWindowTitle("เลือกไฟล์เนื้อร้อง .LRC")
+                dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+                dialog.setNameFilter("ไฟล์เนื้อร้อง LRC (*.lrc);;ไฟล์ทั้งหมด (*)")
             else:
                 raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
+            dialog.show()
+            dialog.raise_()
+            dialog.activateWindow()
+            chosen=dialog.selectedFiles()[0] if dialog.exec()==QFileDialog.DialogCode.Accepted and dialog.selectedFiles() else ""
             if chosen:
                 selected=Path(chosen)
                 self.last_directory=selected if selected.is_dir() else selected.parent
