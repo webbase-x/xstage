@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.8
+# X-Stage Song Studio Plus — Technical Preview v0.1.9
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -104,6 +104,36 @@ If a previous Plus import marked a song `บันทึกเนื้อร้
 original song folder, to create a complete new SQLite lyric version. The
 older version and any manual edits are preserved. Inspect the actual timing
 in the pre-build player before creating an XMID.
+
+## v0.1.9 — Menu 05: ตรวจและปาดเนื้อร้อง
+
+An additional **08-menu** layout has Menu 05 for manual karaoke correction
+and moves Build to Menu 06. It supports every cataloged song, including
+complete lyrics (which need no re-swipe), incomplete CUR timings, untimed LYR
+drafts, and songs with no lyrics. The original media files are immutable.
+
+- Search and filter missing/untimed, partial, awaiting confirmation, skipped,
+  and all songs. Each item has an explicit state and a separately saved review.
+- Play the source MIDI using the local Windows MIDI mapper, or play registered
+  audio/video through byte-range loopback streaming. The karaoke display uses
+  measured or explicitly entered cue start times, never interpolated onsets.
+- Edit lyric text, break it into exact segments, adjust line start/end and
+  per-segment starts, capture start/cue/end while listening, or paste a new
+  untimed lyric draft. **Save** creates a new SQLite lyric version or partial
+  draft, **Skip** records a review decision, and **Approve** authorizes the
+  current fully timed version after listening. Incomplete or draft-only work
+  is never tagged as ready.
+- Original complete NCN files are ready without rewriting their lyrics.
+  Estimated/manual timings enter the "awaiting confirmation" queue.
+- Menu 06 has four selection actions: all eligible songs (whole catalog),
+  only this page, clear all, and clear only this page. The bulk all-ready
+  selection is a server-side catalog predicate, not an in-browser list of
+  hundreds of thousands of checkboxes. Ineligible songs remain visible
+  but cannot be included in export.
+
+The preview EXE is for further testing on real Windows MIDI synthesizers;
+the new binary X-container still requires a compatible karaoke player.
+
 
 ## Start
 
