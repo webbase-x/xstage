@@ -1,10 +1,10 @@
 "use strict";
 const HOST = "com.xstage.download_manager";
 const isWebUrl = value => /^https?:\/\/[^ ]+$/i.test(value || "");
-async function handOff(url) {
+async function handOff(url, automatic = false) {
   if (!isWebUrl(url)) return false;
   try {
-    const response = await chrome.runtime.sendNativeMessage(HOST, { type: "enqueue", url });
+    const response = await chrome.runtime.sendNativeMessage(HOST, { type: "enqueue", url, source: automatic ? "auto" : "manual" });
     return response?.ok === true;
   } catch (error) {
     console.warn("X-Stage app is not connected; browser download stays untouched", String(error));
@@ -26,7 +26,7 @@ chrome.downloads.onCreated.addListener(async item => {
   const before = await chrome.downloads.search({ id: item.id });
   if (!before.some(x => x.state === "in_progress")) return;
   // Cancel the original only after the desktop application ACKNOWLEDGES the job.
-  if (!(await handOff(url))) return;
+  if (!(await handOff(url, true))) return;
   const latest = await chrome.downloads.search({ id: item.id });
   if (latest.some(x => x.state === "in_progress")) {
     try { await chrome.downloads.cancel(item.id); }

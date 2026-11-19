@@ -96,6 +96,10 @@ try
         throw new Exception("32 HTTP ranges were not used for a sufficiently large file.");
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(maxParts.CompletedPath)))
         throw new Exception("32-connection merge corrupted the output.");
+    if (!await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "range/test-file.bin") ||
+        !await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "plain/test-file.bin") ||
+        await BrowserCaptureProbe.IsUnauthenticatedFileAsync("https://www.youtube.com/watch?v=123"))
+        throw new Exception("Browser capture must probe accessible direct files without cookies.");
     var plain = manager.Add(server.Url + "plain/test%20file.bin", folder);
     await WaitFor(() => plain.Status is "Completed" or "Failed");
     if (plain.Status != "Completed") throw new Exception("Single stream failed: " + plain.Error);

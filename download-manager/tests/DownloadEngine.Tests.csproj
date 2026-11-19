@@ -13,5 +13,6 @@
     <Compile Include="../UpdateChecker.cs" Link="UpdateChecker.cs" />
     <Compile Include="../BrowserIntegration.cs" Link="BrowserIntegration.cs" />
     <Compile Include="../NativeMessagingBridge.cs" Link="NativeMessagingBridge.cs" />
+    <Compile Include="../BrowserCaptureProbe.cs" Link="BrowserCaptureProbe.cs" />
   </ItemGroup>
 </Project>

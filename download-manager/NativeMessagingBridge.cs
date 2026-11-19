@@ -107,7 +107,12 @@ internal static class NativeMessagingBridge
             }
             var url = type == "enqueue" && root.TryGetProperty("url", out var u) &&
                 u.ValueKind == JsonValueKind.String ? u.GetString() : null;
-            bool accepted = !string.IsNullOrWhiteSpace(url) && HandOffAsync(url).GetAwaiter().GetResult();
+            var automatic = type == "enqueue" && root.TryGetProperty("source", out var source) &&
+                            source.ValueKind == JsonValueKind.String && source.GetString() == "auto";
+            bool canCapture = !automatic || url is not null &&
+                BrowserCaptureProbe.IsUnauthenticatedFileAsync(url).GetAwaiter().GetResult();
+            bool accepted = canCapture && !string.IsNullOrWhiteSpace(url) &&
+                            HandOffAsync(url).GetAwaiter().GetResult();
             WriteResponse(output, new { ok = accepted });
         }
         catch (Exception ex) when (ex is IOException or JsonException or EndOfStreamException or InvalidOperationException)
