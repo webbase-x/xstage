@@ -33,7 +33,7 @@ assert.ok(html.includes('X-Stage Song Studio Pro'),'Pro card must use the new br
 assert.ok(source.includes('X-Stage Song Studio Pro'),'Desktop web shell brand must match');
 assert.ok(js.includes('manual-cue-token')&&js.includes('manual-advanced-times')&&
  js.includes('manualCueUndo'),'New cue editor must be connected');
-assert.ok(workflow.includes('X-Stage-Song-Studio-Pro-v0.1.14-preview.exe'),
+assert.ok(workflow.includes('X-Stage-Song-Studio-Pro-v0.1.15-preview.exe'),
  'Windows Preview must build only the Pro EXE');
 assert.ok(!fs.existsSync(new URL('../songstudio-pc',import.meta.url)),
  'Retired native PC source must not be present on current branch');
