@@ -1,5 +1,15 @@
 "use strict";
 (() => {
+  console.info("[XSTAGE] app.js loaded");
+  window.addEventListener("error",event=>{
+    console.error("[XSTAGE] window.error",event.message||"unknown",
+      event.filename||"",event.lineno||0,event.colno||0);
+  });
+  window.addEventListener("unhandledrejection",event=>{
+    const reason=event.reason instanceof Error?
+      (event.reason.stack||event.reason.message):String(event.reason||"unknown");
+    console.error("[XSTAGE] unhandledrejection",reason);
+  });
   const $ = id => document.getElementById(id);
   const state = {token:null,ready:false,view:"import",groups:[],selectedGroups:new Set(),
                  songs:[],selectedSongs:new Set(),allReadySelected:false,excludedSongs:new Set(),
@@ -87,7 +97,8 @@
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
     for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","diagnostic-open-log","workspace-open","lrc-browse","manual-find"]){
-      $(id).disabled=!enabled;
+      const control=$(id);
+      if(control)control.disabled=!enabled;
     }
   }
   async function refreshStatus(){
@@ -2191,30 +2202,44 @@
     });
   }
   async function init(){
-    manualTimeline=new globalThis.XStageCueTimelineUI({
-      el:$,text,selected:()=>state.manualSelected,
-      line:()=>manualSelectedLine(),
-      lineIndex:()=>Number($("manual-line-index").value)||0,
-      cueIndex:()=>Number($("manual-cue-index").value)||0,
-      segments:manualSegments,starts:manualStartTimes,
-      time:()=>state.manualTime,duration:()=>state.manualDuration,
-      playing:()=>state.manualPlaying,canPlay:()=>Boolean(state.manualPreview),
-      selectCue:index=>{
-        $("manual-cue-index").value=String(index);
-        manualSetSelectedCueVisual();
-      },
-      seek:time=>void manualSeek(time),
-      previewTime:time=>{state.manualTime=time;},
-      preview:manualDrawKaraoke,
-      capture:()=>manualMark("cue"),
-      changed:before=>{
-        const index=Number($("manual-line-index").value)||0;
-        if(!state.manualCueUndo.has(index))state.manualCueUndo.set(index,before);
-        manualDraftState();manualRenderLines();
-      }
-    });
+    console.info("[XSTAGE] init.begin");
+    // Core navigation and buttons must be usable even if an optional module
+    // such as the cue timeline fails to initialize.
     bind();
     view(location.hash.slice(1) in labels?location.hash.slice(1):"import");
+    console.info("[XSTAGE] core.bind.ready");
+
+    try{
+      if(typeof globalThis.XStageCueTimelineUI!=="function")
+        throw new Error("XStageCueTimelineUI is unavailable");
+      manualTimeline=new globalThis.XStageCueTimelineUI({
+        el:$,text,selected:()=>state.manualSelected,
+        line:()=>manualSelectedLine(),
+        lineIndex:()=>Number($("manual-line-index").value)||0,
+        cueIndex:()=>Number($("manual-cue-index").value)||0,
+        segments:manualSegments,starts:manualStartTimes,
+        time:()=>state.manualTime,duration:()=>state.manualDuration,
+        playing:()=>state.manualPlaying,canPlay:()=>Boolean(state.manualPreview),
+        selectCue:index=>{
+          $("manual-cue-index").value=String(index);
+          manualSetSelectedCueVisual();
+        },
+        seek:time=>void manualSeek(time),
+        previewTime:time=>{state.manualTime=time;},
+        preview:manualDrawKaraoke,
+        capture:()=>manualMark("cue"),
+        changed:before=>{
+          const index=Number($("manual-line-index").value)||0;
+          if(!state.manualCueUndo.has(index))state.manualCueUndo.set(index,before);
+          manualDraftState();manualRenderLines();
+        }
+      });
+      console.info("[XSTAGE] timeline.ready");
+    }catch(error){
+      manualTimeline=null;
+      console.error("[XSTAGE] timeline.init.failed",
+        error?.stack||error?.message||String(error));
+    }
     try{
       const session=await api("/api/session");
       state.token=session.token;
