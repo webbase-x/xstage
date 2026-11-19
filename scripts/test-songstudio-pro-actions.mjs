@@ -14,6 +14,10 @@ assert.equal(buttons.length,new Set(buttons).size,'duplicate button id');
 assert.ok(buttons.length>=79,'all menus should retain original interactive buttons');
 const missing=buttons.filter(id=>!sources.includes('"'+id+'"'));
 assert.deepEqual(missing,[],'all named controls must be referenced in the action code');
+const htmlIds=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]));
+const listenerIds=[...js.matchAll(/\$\("([^"]+)"\)\.addEventListener/g)].map(match=>match[1]);
+assert.deepEqual([...new Set(listenerIds.filter(id=>!htmlIds.has(id)))],[],
+ 'every JavaScript event target must exist in the HTML');
 for(const page of ['import','lyrics','media','preview','manual','build','library','risks']){
   assert.ok(html.includes('data-view="'+page+'"'),'missing menu '+page);
 }
@@ -83,4 +87,4 @@ assert.ok(js.indexOf('bind();') < js.indexOf('new globalThis.XStageCueTimelineUI
 assert.ok(js.includes('timeline.init.failed'),
  'Optional timeline failure must be logged without killing the core UI');
 assert.ok(!js.includes('state.ready=true;'), 'Do not fake engine state');
-console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, browser host and diagnostic log');
+console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');
