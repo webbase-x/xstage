@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 _SCRIPT=r"""
@@ -17,6 +18,15 @@ Add-Type -AssemblyName System.Windows.Forms
 [System.Windows.Forms.Application]::EnableVisualStyles()
 $kind=$env:XSTAGE_PICKER_KIND
 $current=$env:XSTAGE_PICKER_CURRENT
+$owner=New-Object System.Windows.Forms.Form
+$owner.ShowInTaskbar=$false
+$owner.TopMost=$true
+$owner.Opacity=0
+$owner.Width=1
+$owner.Height=1
+$owner.StartPosition='CenterScreen'
+$null=$owner.Show()
+$owner.Activate()
 if ($kind -eq 'folder') {
     $dlg=New-Object System.Windows.Forms.FolderBrowserDialog
     $dlg.Description='เลือกโฟลเดอร์เพลงต้นฉบับ'
@@ -24,7 +34,7 @@ if ($kind -eq 'folder') {
     if ($current -and (Test-Path -LiteralPath $current -PathType Container)) {
         $dlg.SelectedPath=$current
     }
-    $result=$dlg.ShowDialog()
+    $result=$dlg.ShowDialog($owner)
     if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
         [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
         [Console]::Write($dlg.SelectedPath)
@@ -52,8 +62,11 @@ elseif ($kind -eq 'lrc') {
 }
 else {
     [Console]::Error.Write('invalid picker kind')
+    $owner.Dispose()
     exit 2
 }
+$owner.Close()
+$owner.Dispose()
 """
 
 def pick(kind,current="",log=None):
@@ -65,6 +78,7 @@ def pick(kind,current="",log=None):
     env=os.environ.copy()
     env["XSTAGE_PICKER_KIND"]=kind
     env["XSTAGE_PICKER_CURRENT"]=current
+    started=time.monotonic()
     if log:
         log("picker.launch",kind=kind,current=current)
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0)
@@ -75,11 +89,12 @@ def pick(kind,current="",log=None):
             env=env,capture_output=True,text=True,encoding="utf-8",
             errors="replace",timeout=300,creationflags=flags,check=False)
     except subprocess.TimeoutExpired as exc:
-        if log: log("picker.timeout",kind=kind)
+        if log: log("picker.timeout",kind=kind,elapsed=round(time.monotonic()-started,3))
         raise TimeoutError("หน้าต่างเลือกโฟลเดอร์ไม่ตอบสนองภายใน 5 นาที") from exc
     if run.returncode!=0:
         error=(run.stderr or run.stdout or "Windows Picker failed").strip()
-        if log: log("picker.error",kind=kind,code=run.returncode,error=error[:800])
+        if log: log("picker.error",kind=kind,code=run.returncode,
+                    elapsed=round(time.monotonic()-started,3),error=error[:800])
         raise RuntimeError("เปิดหน้าต่างเลือกโฟลเดอร์ของ Windows ไม่สำเร็จ: "+error[:500])
     chosen=(run.stdout or "").strip().lstrip("\ufeff")
     if chosen:
@@ -90,5 +105,6 @@ def pick(kind,current="",log=None):
         if kind=="lrc" and not p.is_file():
             if log: log("picker.invalid_result",kind=kind,path=chosen)
             raise RuntimeError("Windows ส่งพาธไฟล์ที่ไม่พบกลับมา")
-    if log: log("picker.result",kind=kind,cancelled=not bool(chosen),path=chosen)
+    if log: log("picker.result",kind=kind,cancelled=not bool(chosen),path=chosen,
+                elapsed=round(time.monotonic()-started,3))
     return {"path":chosen,"cancelled":not bool(chosen)}
