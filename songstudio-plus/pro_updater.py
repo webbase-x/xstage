@@ -71,7 +71,9 @@ def ready_file(workspace):
         target=validate(ready)
         p=directory/target["filename"]
         if not p.is_file() or not p.is_file() or p.stat().st_size<1024*1024:return None
-        if hashlib.file_digest(p.open("rb"),"sha256").hexdigest()!=target["sha256"]:
+        with p.open("rb") as stream:
+            digest=hashlib.file_digest(stream,"sha256").hexdigest()
+        if digest!=target["sha256"]:
             return None
         return {**target,"path":str(p)}
     except (OSError,ValueError,KeyError,TypeError):
