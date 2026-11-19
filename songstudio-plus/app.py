@@ -8,6 +8,7 @@ import argparse
 import json
 import mimetypes
 import os
+import sqlite3
 import secrets
 import sys
 import time
@@ -390,16 +391,111 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self.send_json(500,{"error":"คำสั่งล้มเหลว โปรดตรวจสอบรายงานโปรแกรม"})
 
+def _registered_windows_documents():
+    """Use the Windows Documents known location, including OneDrive redirection.
+
+    The folder can have a Thai (or any Unicode) name. Do not encode it with
+    an ANSI code page or assume it is \\Users\\name\\Documents.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
+        key = (r"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer"
+               r"\\User Shell Folders")
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as entry:
+            location, _ = winreg.QueryValueEx(entry, "Personal")
+        return Path(os.path.expandvars(location)).expanduser()
+    except (OSError, ValueError, ImportError, TypeError):
+        return None
+
+
+def workspace_candidates(*, home=None, env=None, platform=None, documents=None):
+    """Prefer a previously used workspace; otherwise choose a real user folder.
+
+    Never assume the literal Documents subdirectory exists. Windows permits
+    Unicode paths; the failure is often a stale or redirected user profile.
+    No source media, existing database, or old workspace is moved.
+    """
+    home = Path.home() if home is None else Path(home)
+    env = os.environ if env is None else env
+    platform = sys.platform if platform is None else platform
+    if documents is None and platform == "win32":
+        documents = _registered_windows_documents()
+    candidates = []
+    def add(path):
+        if path is None:
+            return
+        path = Path(path).expanduser()
+        if path not in candidates:
+            candidates.append(path)
+
+    previous = []
+    for parent in (documents, home / "Documents"):
+        if parent is None:
+            continue
+        original = Path(parent) / "XStageSongPlus"
+        if original.is_dir():
+            previous.append(original)
+    for path in previous:
+        add(path)
+    if platform == "win32":
+        for key in ("LOCALAPPDATA", "APPDATA"):
+            base = env.get(key)
+            if base and Path(base).is_dir():
+                add(Path(base) / "XStageSongPlus")
+        if home.is_dir():
+            add(home / "XStageSongPlus")
+    else:
+        add(home / "Documents" / "XStageSongPlus")
+    return candidates
+
+
+def _startup_failure(message):
+    """A GUI error instead of a PyInstaller 'Unhandled exception in script'."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                None, str(message), "X-Stage Song Studio Plus", 0x10)
+            return
+        except (OSError, AttributeError):
+            pass
+    print(message, file=sys.stderr)
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser()
-    parser.add_argument("--workspace",default=str(Path.home()/"Documents"/"XStageSongPlus"))
+    parser.add_argument("--workspace",default=None,
+                        help="explicit SQLite workspace; do not relocate it")
+
     parser.add_argument("--port",type=int,default=0)
     parser.add_argument("--no-browser",action="store_true",
                         help="headless local API for automated checks")
     parser.add_argument("--browser",action="store_true",
                         help="explicitly open browser instead of Windows desktop")
     options=parser.parse_args(argv)
-    state=State(options.workspace)
+    choices = ([Path(options.workspace)] if options.workspace is not None
+               else workspace_candidates())
+    state = None
+    failures = []
+    for choice in choices:
+        try:
+            state = State(choice)
+            break
+        except (OSError, sqlite3.Error) as exc:
+            failures.append(f"{choice}: {exc}")
+            # If this workspace already holds a database, never silently
+            # switch to a fresh empty library on another path.
+            if options.workspace is not None or (choice/"DB"/"xstage_plus.sqlite3").is_file():
+                break
+    if state is None:
+        details = "\\n".join(failures[-3:]) or "No usable local user-data folder"
+        _startup_failure(
+            "ไม่สามารถเปิดฐานข้อมูล X-Stage Song Studio Plus ได้\\n"
+            "โปรดตรวจสอบตำแหน่งโฟลเดอร์และสิทธิ์การเขียน\\n"
+            "สามารถระบุพาธอื่นด้วย --workspace\\n\\n" + details)
+        return 1
     handler=type("PlusHandler",(Handler,),{"state":state})
     with ThreadingHTTPServer(("127.0.0.1",options.port),handler) as server:
         url=f"http://127.0.0.1:{server.server_port}/"
