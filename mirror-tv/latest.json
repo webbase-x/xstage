@@ -1,10 +1,10 @@
 {
   "available": true,
   "package": "com.webbasex.xstagemirror.tv",
-  "version": "0.2.14",
-  "build": 116,
-  "file": "X-Stage-Mirror-TV-v0.2.14-build116.apk",
-  "sha256": "b7ec3f8067b4b51a234326456d5ca5a21fae00c57ffe12b74f12318d60f12008",
+  "version": "0.2.15",
+  "build": 117,
+  "file": "X-Stage-Mirror-TV-v0.2.15-build117.apk",
+  "sha256": "8f9af9fab80a463010cece284ca9b0c67238850ee27025c7ba2a6ea969552824",
   "signing_mode": "persistent",
   "signer_sha256": "1dd8553727b1a94616410310955c9eb28b7b3ced091f1d658516de4c79a6eea0"
 }
