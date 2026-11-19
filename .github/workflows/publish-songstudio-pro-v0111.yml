@@ -44,7 +44,7 @@ jobs:
               raise SystemExit("Pro EXE is missing or unexpectedly small")
           digest=hashlib.file_digest(path.open("rb"),"sha256").hexdigest()
           notes=Path("dist/README-Preview.txt").read_text(encoding="utf-8-sig")
-          expected=re.search(r"SHA-256:\\s*([a-fA-F0-9]{64})",notes)
+          expected=re.search(r"SHA-256:\s*([a-fA-F0-9]{64})",notes)
           if not expected or expected.group(1).lower()!=digest:
               raise SystemExit("EXE SHA-256 differs from Windows Build metadata")
           Path("dist/X-Stage-Song-Studio-Pro-v0.1.11-preview.exe.sha256").write_text(
