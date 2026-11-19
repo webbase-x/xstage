@@ -39,7 +39,7 @@ public sealed class MainForm : Form
         header.Paint += (_, e) =>
         {
             using var gradient = new LinearGradientBrush(header.ClientRectangle,
-                Color.FromArgb(12, 38, 79), Color.FromArgb(28, 105, 184), 0);
+                Color.FromArgb(12, 38, 79), Color.FromArgb(28, 105, 184), 0f);
             e.Graphics.FillRectangle(gradient, header.ClientRectangle);
             using var circle = new SolidBrush(Color.FromArgb(58, 178, 234));
             e.Graphics.FillEllipse(circle, header.Width - 132, -90, 235, 235);
