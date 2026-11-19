@@ -345,10 +345,10 @@
         text("edit-feedback","ไม่พบบรรทัดที่ต้องแก้ไข");return;
       }
       const approved=await confirmTask("ยืนยันแทนที่เนื้อร้อง",
-        "กลุ่มที่เลือก: "+number(plan.groups)+"\\n"+
-        "บรรทัดที่จะเปลี่ยน: "+number(plan.lines)+"\\n"+
-        "เพลงที่เกี่ยวข้อง: "+number(plan.songs)+"\\n\\n"+
-        "ข้อความใหม่ทั้งบรรทัด:\\n"+replacement+"\\n\\n"+
+        "กลุ่มที่เลือก: "+number(plan.groups)+"\n"+
+        "บรรทัดที่จะเปลี่ยน: "+number(plan.lines)+"\n"+
+        "เพลงที่เกี่ยวข้อง: "+number(plan.songs)+"\n\n"+
+        "ข้อความใหม่ทั้งบรรทัด:\n"+replacement+"\n\n"+
         "เวลาปาดที่เดิมไม่สอดคล้อง จะบันทึกข้อความใหม่และส่งให้เมนู 05 ตรวจ"+
         " · หากยกเลิกระหว่างทำงาน ระบบจะคืนค่า SQLite ทั้งชุด");
       if(!approved){
