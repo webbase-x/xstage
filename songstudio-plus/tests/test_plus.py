@@ -164,7 +164,7 @@ class PlusTests(unittest.TestCase):
         import threading
         for index in range(3):
             path=self.put(f"corrupt_{index}.mp3",bytes([index+15])*1200)
-            self.lrc(path,f"[00:02.00]Nick Footer {index}\\n[00:08.00]Keep\\n")
+            self.lrc(path,f"[00:02.00]Nick Footer {index}\n[00:08.00]Keep\n")
         plus.import_folder(self.workspace,self.src)
         selections=plus.groups(self.workspace,"Nick")
         self.assertEqual(len(selections),3)
@@ -209,7 +209,7 @@ class PlusTests(unittest.TestCase):
     def test_cancelled_group_edit_rolls_back_all_songs(self):
         import threading
         path=self.put("rollback.mp3",b"ROLLBACK"*100)
-        self.lrc(path,"[00:02.00]Nick Example\\n[00:07.00]Keep\\n")
+        self.lrc(path,"[00:02.00]Nick Example\n[00:07.00]Keep\n")
         plus.import_folder(self.workspace,self.src)
         keys=[row["group_key"] for row in plus.groups(self.workspace,"Nick")]
         cancelled=threading.Event()
