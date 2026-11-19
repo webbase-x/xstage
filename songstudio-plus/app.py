@@ -231,7 +231,8 @@ class Handler(BaseHTTPRequestHandler):
                     payload={"version":dict(version),
                      "lines":[{"position":line["position"],"text":line["text"],
                                "start":line["start_time"],"end":line["end_time"],
-                               "timing":line["timing_status"],"cues":cues}
+                               "timing":line["timing_status"],
+                               "cues":core.display_cues(line["text"],cues)}
                               for line,cues in lines]}
                 else:
                     payload={"version":{"timing_status":"untimed","title":draft["title"],
