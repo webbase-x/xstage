@@ -8,6 +8,7 @@ on:
       - "scripts/test-songstudio-pro-timeline*.mjs"
       - "scripts/test-songstudio-pro-actions.mjs"
       - "scripts/test-songstudio-pro-portal.mjs"
+      - "scripts/test-songstudio-pro-native-picker.py"
       - ".github/workflows/test-songstudio-pro.yml"
   workflow_dispatch:
 
