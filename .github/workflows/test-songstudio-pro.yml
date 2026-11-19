@@ -56,8 +56,7 @@ jobs:
         run: |
           node --check songstudio-plus/web/app.js
           node --check storefront.js
-          node scripts/portal-contract-test.mjs
-          node scripts/startup-updates-test.mjs
+          node scripts/test-songstudio-pro-portal.mjs
       - name: Static app and security surface contract
         run: |
           python - <<'PY'
