@@ -30,7 +30,7 @@ jobs:
       - name: Generate X-Stage app icon
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check Pillow==11.3.0
+          python -m pip install --disable-pip-version-check Pillow==11.3.0 pefile==2024.8.26
           if ($LASTEXITCODE -ne 0) { throw 'Failed to install Pillow' }
           python download-manager/generate_icon.py
           if ($LASTEXITCODE -ne 0) { throw 'Icon creation failed' }
@@ -41,7 +41,7 @@ jobs:
           dotnet publish download-manager/XStageDownloadManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o download-manager/out
           if ($LASTEXITCODE -ne 0) { throw 'Download Manager build failed' }
           if (-not (Test-Path download-manager/out/XStageDownloadManager.exe)) { throw 'Windows EXE missing' }
-          python scripts/verify_songstudio_exe_icon.py download-manager/out/XStageDownloadManager.exe
+          python download-manager/verify_exe_icon.py download-manager/out/XStageDownloadManager.exe
           if ($LASTEXITCODE -ne 0) { throw 'EXE must contain its application icon' }
       - name: Install Inno Setup
         shell: pwsh
