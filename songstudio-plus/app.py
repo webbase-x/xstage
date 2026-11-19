@@ -23,6 +23,7 @@ import plus_core as core
 import risk_audit as risks
 import preview_player as preview
 import manual_editor as manual
+import pro_updater as updater
 
 class State:
     def __init__(self,workspace):
@@ -34,6 +35,13 @@ class State:
         self.jobs={}
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
+        self.exit_requested=threading.Event()
+        self.resume_info=core.interrupted_import(self.workspace)
+        if self.resume_info and self.resume_info["status"]=="interrupted":
+            folder=Path(self.resume_info["source_root"])
+            if folder.is_dir():
+                self.start_job("import",lambda progress,cancel:
+                    core.import_folder(self.workspace,str(folder),progress,cancel))
 
     def start_job(self,kind,operation):
         job_id=secrets.token_hex(10)
@@ -74,6 +82,15 @@ class State:
         with self.lock:
             return [{k:v for k,v in job.items() if k not in ("cancel","started_at")}
                     for job in list(self.jobs.values())[-10:]][::-1]
+    def request_restart(self):
+        with self.lock:
+            for job in self.jobs.values():
+                if job["status"]=="running": job["cancel"].set()
+            self.exit_requested.set()
+    def ready_to_exit(self):
+        with self.lock:
+            return self.exit_requested.is_set() and not any(
+                j["status"]=="running" for j in self.jobs.values())
 
 class Handler(BaseHTTPRequestHandler):
     state=None
@@ -124,11 +141,19 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.11",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.12",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
             self.send_json(200,core.stats(self.state.workspace));return
+        if path=="/api/import/resume":
+            self.send_json(200,{"resume":self.state.resume_info});return
+        if path=="/api/update/check":
+            self.send_json(200,updater.check());return
+        if path=="/api/update/ready":
+            ready=updater.ready_file(self.state.workspace)
+            self.send_json(200,{"ready":bool(ready),
+                                "version":ready["version"] if ready else None});return
         if path=="/api/jobs":
             self.send_json(200,{"jobs":self.state.jobs_snapshot()});return
         if path=="/api/import-issues":
@@ -301,6 +326,12 @@ class Handler(BaseHTTPRequestHandler):
                 source=body.get("folder","")
                 result=self.state.start_job("import",lambda progress,cancel:
                     core.import_folder(self.state.workspace,source,progress,cancel))
+            elif path=="/api/update/download":
+                result=self.state.start_job("update",lambda progress,cancel:
+                    updater.download(self.state.workspace,updater.check(),progress,cancel))
+            elif path=="/api/update/install":
+                result=updater.install_and_restart(self.state.workspace)
+                self.state.request_restart()
             elif path=="/api/recover-lyrics":
                 result=self.state.start_job("recover",lambda progress,cancel:
                     core.recover_existing_lyrics(self.state.workspace,progress,cancel))
