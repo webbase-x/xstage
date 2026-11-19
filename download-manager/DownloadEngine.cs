@@ -128,14 +128,22 @@ public sealed class DownloadEngine
         return true;
     }
 
-    public DownloadJob Add(string url, string folder, int? parts = null)
+    public DownloadJob Add(string url, string folder, int? parts = null, string videoQuality = "Best")
     {
         if (!TryParseUrl(url, out var uri) || uri is null)
             throw new ArgumentException("รองรับลิงก์ HTTP/HTTPS ที่ถูกต้องเท่านั้น");
         var selectedParts = parts ?? DefaultParts;
         ValidateParts(selectedParts);
-        var name = CleanName(Uri.UnescapeDataString(uri.AbsolutePath.Split('/').LastOrDefault() ?? ""));
-        var job = new DownloadJob { Url = uri.ToString(), Name = name, Folder = folder, Parts = selectedParts };
+        var video = SocialVideoDownloader.IsVideoUrl(uri.ToString());
+        if (video && !SocialVideoDownloader.AllowedQualities.Contains(videoQuality))
+            throw new ArgumentException("กรุณาเลือกคุณภาพวิดีโอที่รองรับ");
+        var name = video ? SocialVideoDownloader.Platform(uri.ToString()) + " video" :
+            CleanName(Uri.UnescapeDataString(uri.AbsolutePath.Split('/').LastOrDefault() ?? ""));
+        var job = new DownloadJob
+        {
+            Url = uri.ToString(), Name = name, Folder = folder, Parts = selectedParts,
+            Kind = video ? "Video" : "File", VideoQuality = video ? videoQuality : "Best"
+        };
         Jobs.Insert(0, job);
         Save();
         Start(job);
@@ -247,6 +255,11 @@ public sealed class DownloadEngine
     {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(job.Folder);
+        if (SocialVideoDownloader.IsVideoUrl(job.Url))
+        {
+            await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct);
+            return;
+        }
         var probe = await ProbeAsync(job, ct);
         var work = WorkDir(job);
         if (job.Name.Equals("download", StringComparison.OrdinalIgnoreCase) &&
