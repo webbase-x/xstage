@@ -106,7 +106,7 @@ class NcnLineEndRegression(unittest.TestCase):
         midi.write_bytes(_midi_20_seconds())
         raw_lines = ["ABC", "...เต่า คาราโอเกะ...", "DEF", credit]
         lyr.write_bytes(
-            ("Title\\nArtist\\nC\\n.\\n" + "\\n".join(raw_lines) + "\\n")
+            ("Title\nArtist\nC\n.\n" + "\n".join(raw_lines) + "\n")
             .encode("cp874")
         )
         cur.write_bytes(struct.pack("<" + "H" * count, *range(count)))
@@ -148,8 +148,8 @@ class NcnLineEndRegression(unittest.TestCase):
 
     def test_timed_final_credit_must_remain_in_lyrics(self):
         with tempfile.TemporaryDirectory() as d:
-            _, _, _, _, all_cues = self._write_decorated_ncn(d, 55)
-            self.assertLess(all_cues, 55)
+            _, _, _, _, all_cues = self._write_decorated_ncn(d, 58)
+            self.assertLess(all_cues, 58)
             doc = ncn_reader.ncn_document({
                 "midi": str(Path(d) / "00123.mid"),
                 "lyrics": str(Path(d) / "00123.lyr"),
