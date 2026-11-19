@@ -2207,6 +2207,7 @@
     // such as the cue timeline fails to initialize.
     bind();
     view(location.hash.slice(1) in labels?location.hash.slice(1):"import");
+    globalThis.__XSTAGE_CORE_BOUND__=true;
     console.info("[XSTAGE] core.bind.ready");
 
     try{
