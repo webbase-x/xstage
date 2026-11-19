@@ -13,6 +13,8 @@ assert.ok(html.includes('data-download-app="download-manager"'));
 assert.ok(html.includes('data-platform="windows"'));
 assert.ok(html.includes('assets/app-icons/download-manager.svg'));
 assert.ok(storefront.includes('"download-manager":{'));
+assert.ok(storefront.includes('Facebook Reels') && storefront.includes('TikTok'));
+assert.ok(html.includes('youtube tiktok facebook reels'));
 assert.ok(storefront.includes('downloads/download-manager-preview-latest.json'));
 const feed = JSON.parse(read('downloads/download-manager-preview-latest.json'));
 assert.equal(feed.name, 'X-Stage Download Manager');
