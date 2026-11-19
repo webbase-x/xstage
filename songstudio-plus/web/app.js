@@ -31,7 +31,7 @@
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
                  manualMidiAt:0,manualCueUndo:new Map(),manualDirty:false,manualFindings:[],manualOnlyIssues:false,
                  manualLayout:{menu:false,queue:false,stage:false,focus:false},
-                 updateTarget:null,updateInstallIntent:false,updateBusy:false,jobsRefreshing:false,lastJobRevision:-1,lastJobPaint:0};
+                 updateTarget:null,updateInstallIntent:false,updateBusy:false,updateNoticeDismissed:false,updateNoticeShown:false,jobsRefreshing:false,lastJobRevision:-1,lastJobPaint:0};
   let manualTimeline=null;
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
@@ -440,6 +440,30 @@
       toast(error.message,true);
     }finally{button.disabled=false;}
   }
+  function renderProUpdateNotice(result,ready={}){
+    const available=Boolean(result?.newer);
+    const quick=$("pro-update-quick");
+    const notice=$("pro-update-notice");
+    const install=$("pro-update-notice-install");
+    quick.hidden=!available;
+    if(!available){
+      notice.hidden=true;
+      install.disabled=true;
+      return;
+    }
+    quick.textContent="↑ อัปเดต v"+result.version;
+    install.disabled=state.updateBusy;
+    text("pro-update-notice-title","มี X-Stage Song Studio Pro v"+result.version);
+    text("pro-update-notice-text",
+      ready.ready&&ready.version===result.version?
+        "ดาวน์โหลดและตรวจ SHA-256 แล้ว · พร้อมติดตั้งและเปิดใหม่":
+        "มีรุ่นใหม่กว่าที่ใช้อยู่ · กดอัปเดตเพื่อดาวน์โหลด ตรวจ SHA-256 ติดตั้ง และเปิดใหม่");
+    if(!state.updateNoticeDismissed)notice.hidden=false;
+    if(!state.updateNoticeShown){
+      state.updateNoticeShown=true;
+      toast("พบ X-Stage Song Studio Pro v"+result.version+" · พร้อมอัปเดต");
+    }
+  }
   async function checkProUpdate(silent=false){
     if(!state.ready)return;
     const button=$("pro-update-check");
@@ -457,9 +481,12 @@
           "ดาวน์โหลดไว้แล้ว พร้อมติดตั้ง":"กดปุ่มเดียวเพื่อดาวน์โหลดและติดตั้ง"):
         "ใช้งาน v"+result.current_version+" · ยังไม่มีรุ่นใหม่ที่เผยแพร่");
       $("pro-update-install").disabled=!available||state.updateBusy;
+      renderProUpdateNotice(result,ready);
     }catch(error){
       state.updateTarget=null;
       $("pro-update-install").disabled=true;
+      $("pro-update-quick").hidden=true;
+      $("pro-update-notice").hidden=true;
       text("pro-update-status","ยังตรวจอัปเดตไม่ได้: "+error.message+
         " · โปรแกรมปัจจุบันยังใช้งานได้");
       if(!silent)toast(error.message,true);
@@ -473,6 +500,10 @@
       "ยืนยันให้ดาวน์โหลดและติดตั้งหรือไม่?"))return;
     state.updateBusy=true;
     $("pro-update-install").disabled=true;
+    $("pro-update-notice-install").disabled=true;
+    $("pro-update-quick").disabled=true;
+    $("pro-update-notice").hidden=false;
+    text("pro-update-notice-text","กำลังเตรียมอัปเดต · โปรแกรมจะตรวจ SHA-256 ก่อนติดตั้ง");
     try{
       const ready=await api("/api/update/ready");
       if(ready.ready&&ready.version===state.updateTarget.version){
@@ -490,7 +521,10 @@
     }catch(error){
       state.updateInstallIntent=false;state.updateBusy=false;
       $("pro-update-install").disabled=false;
+      $("pro-update-notice-install").disabled=false;
+      $("pro-update-quick").disabled=false;
       text("pro-update-status","อัปเดตไม่สำเร็จ · "+error.message);
+      text("pro-update-notice-text","อัปเดตไม่สำเร็จ · "+error.message);
       toast(error.message,true);
     }
   }
@@ -2117,6 +2151,12 @@
     $("refresh-summary").addEventListener("click",()=>void refreshSummary());
     $("pro-update-check").addEventListener("click",()=>void checkProUpdate());
     $("pro-update-install").addEventListener("click",()=>void beginProUpdate());
+    $("pro-update-quick").addEventListener("click",()=>void beginProUpdate());
+    $("pro-update-notice-install").addEventListener("click",()=>void beginProUpdate());
+    $("pro-update-notice-dismiss").addEventListener("click",()=>{
+      state.updateNoticeDismissed=true;
+      $("pro-update-notice").hidden=true;
+    });
     $("import-start").addEventListener("click",()=>{
       $("source-folder").dispatchEvent(new Event("change"));
       const folder=$("source-folder").value.trim();
