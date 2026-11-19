@@ -16,6 +16,8 @@ public sealed class MainForm : Form
     private readonly Label _details = new();
     private readonly Label _updateStatus = new();
     private bool _checkingUpdates;
+    private readonly Font _finishedFileFont = new("Segoe UI", 10, FontStyle.Bold | FontStyle.Underline);
+    private readonly Font _normalFileFont = new("Segoe UI", 10, FontStyle.Regular);
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 800 };
 
     public MainForm(string[] args)
@@ -50,6 +52,7 @@ public sealed class MainForm : Form
         _timer.Tick += (_, _) => RefreshRows();
         _timer.Start();
         FormClosing += (_, _) => { _timer.Stop(); _engine.PauseAll(); _engine.Save(); };
+        FormClosed += (_, _) => { _finishedFileFont.Dispose(); _normalFileFont.Dispose(); };
         Shown += async (_, _) => await CheckForUpdatesAsync(false);
         RefreshRows();
     }
@@ -436,11 +439,11 @@ public sealed class MainForm : Form
 
     private void ShowCompletedMenu(DownloadJob job, Rectangle cellBounds)
     {
-        using var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip();
+        menu.Closed += (_, _) => menu.Dispose();
         menu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job));
         menu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
         menu.Show(_grid, new Point(cellBounds.Left + 12, cellBounds.Bottom));
-        // Menu lifetime is managed by its owner once the popup closes.
         menu.AutoClose = true;
     }
 
@@ -520,8 +523,8 @@ public sealed class MainForm : Form
             row.Cells["File"].Value = job.Status == "Completed" ? "✓  " + job.Name : job.Name;
             row.Cells["File"].Style.ForeColor = job.Status == "Completed"
                 ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
-            row.Cells["File"].Style.Font = new Font("Segoe UI", 10,
-                job.Status == "Completed" ? FontStyle.Bold | FontStyle.Underline : FontStyle.Regular);
+            row.Cells["File"].Style.Font = job.Status == "Completed"
+                ? _finishedFileFont : _normalFileFont;
             row.Cells["Status"].Style.ForeColor = job.Status == "Completed"
                 ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
             row.Cells["Size"].Value = job.TotalBytes < 0 ? "ไม่ทราบ" : FormatBytes(job.TotalBytes);
@@ -582,9 +585,29 @@ public sealed class MainForm : Form
                 Math.Max(1, e.CellBounds.Width - 18), 20);
             using var bg = new SolidBrush(Color.FromArgb(229, 236, 245));
             using var fg = new SolidBrush(Color.FromArgb(32, 133, 222));
+            using var complete = new SolidBrush(Color.FromArgb(17, 157, 104));
             e.Graphics.FillRectangle(bg, rectangle);
-            e.Graphics.FillRectangle(fg, rectangle.X, rectangle.Y,
-                (int)Math.Round(rectangle.Width * progress), rectangle.Height);
+            var segments = job.SegmentDownloadedBytes;
+            var segmentCount = job.SegmentsUsed;
+            if (job.Kind != "Video" && segmentCount > 1 && job.TotalBytes > 0 &&
+                segments.Length == segmentCount && segmentCount <= 32)
+            {
+                for (int i = 0; i < segmentCount; i++)
+                {
+                    long segmentSize = job.TotalBytes * (i + 1) / segmentCount -
+                                       job.TotalBytes * i / segmentCount;
+                    var partProgress = segmentSize <= 0 ? 0 :
+                        Math.Clamp(Interlocked.Read(ref segments[i]) / (double)segmentSize, 0, 1);
+                    var startX = rectangle.X + i * rectangle.Width / segmentCount;
+                    var endX = rectangle.X + (i + 1) * rectangle.Width / segmentCount;
+                    var width = Math.Max(1, endX - startX - (segmentCount > 1 ? 1 : 0));
+                    e.Graphics.FillRectangle(partProgress >= 1 ? complete : fg,
+                        startX, rectangle.Y, (int)Math.Round(width * partProgress), rectangle.Height);
+                }
+            }
+            else
+                e.Graphics.FillRectangle(job.Status == "Completed" ? complete : fg,
+                    rectangle.X, rectangle.Y, (int)Math.Round(rectangle.Width * progress), rectangle.Height);
             TextRenderer.DrawText(e.Graphics, (progress * 100).ToString("0.0") + "%",
                 new Font("Segoe UI", 8, FontStyle.Bold), rectangle,
                 progress > .52 ? Color.White : Color.FromArgb(25, 70, 117),

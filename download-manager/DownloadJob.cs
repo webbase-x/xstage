@@ -24,6 +24,8 @@ public sealed class DownloadJob
     // Number of actual range slices used for this job, persisted across restarts.
     public int SegmentsUsed { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+    // In-memory byte counters updated by each HTTP Range worker; no fake segment progress.
+    [JsonIgnore] public long[] SegmentDownloadedBytes = Array.Empty<long>();
     [JsonIgnore] public long PreviousBytes;
     [JsonIgnore] public double SpeedBytesPerSecond;
     [JsonIgnore] public CancellationTokenSource? Cancellation;
