@@ -508,3 +508,19 @@ html,body{width:100%;height:100%;overflow:hidden}
   .manual-layout-toolbar{min-height:28px}
   .manual-diagnostic-list{max-height:82px}
 }
+
+
+/* Compact row navigation: one expanded editing card; other lines stay visible. */
+#view-manual .manual-line-card:not(.is-expanded)>input,
+#view-manual .manual-line-card:not(.is-expanded)>.manual-times,
+#view-manual .manual-line-card:not(.is-expanded)>small{display:none}
+#view-manual .manual-line-card:not(.is-expanded){padding:7px 10px;min-height:39px}
+#view-manual .manual-line-card.is-expanded{background:#1b2e47}
+#view-manual .manual-line-card .manual-line-top{min-width:0;justify-content:flex-start}
+#view-manual .manual-line-card .manual-line-top>strong{white-space:nowrap;font-size:11px}
+#view-manual .manual-line-preview{flex:1;display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c1d5e5;font-size:12px}
+#view-manual .manual-line-card.is-expanded .manual-line-preview{display:none}
+#view-manual .manual-line-issue{font-size:10px;white-space:nowrap;color:#ebbd86}
+#view-manual .manual-line-top>.quiet-btn{margin-left:auto;white-space:nowrap}
+#view-manual .manual-line-card.is-expanded .manual-line-top>.quiet-btn{border-color:#5aafaa}
+#view-manual .manual-no-issues{border:1px dashed #4d6178;border-radius:10px;padding:10px;text-align:center}
