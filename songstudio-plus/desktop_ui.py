@@ -153,26 +153,33 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             event.accept()
             app.quit()
 
-    window=MainWindow()
-
-    picker=NativeFilePicker(window)
-    # State owns the server-side callable. QObject belongs to the GUI thread;
-    # invoking it only emits a queued signal, not a cross-thread GUI call.
-    if state is not None:
-        state.native_picker=picker.pick
-    # The update helper waits for this process to exit before replacing the
-    # managed EXE. Finish/cancel the active SQLite job first, then quit Qt.
-    exit_timer=QTimer(window)
-    if state is not None:
-        exit_timer.timeout.connect(lambda:app.quit() if state.ready_to_exit() else None)
-        exit_timer.start(250)
-    # Server is ready before the embedded view requests localhost.
+    # Start the loopback engine BEFORE QWebEngineView loads localhost.
+    # Previously MainWindow() called web.load() first, creating a race where
+    # the UI could open from cache while /api/session was still unreachable.
     worker=Thread(target=server.serve_forever,
                   kwargs={"poll_interval":0.2},
                   daemon=True,name="studio-pro-local-engine")
     worker.start()
+
+    window=None
+    picker=None
     native_icons=[]
     try:
+        window=MainWindow()
+
+        picker=NativeFilePicker(window)
+        # State owns the server-side callable. QObject belongs to the GUI thread;
+        # invoking it only emits a queued signal, not a cross-thread GUI call.
+        if state is not None:
+            state.native_picker=picker.pick
+
+        # The update helper waits for this process to exit before replacing the
+        # managed EXE. Finish/cancel the active SQLite job first, then quit Qt.
+        exit_timer=QTimer(window)
+        if state is not None:
+            exit_timer.timeout.connect(lambda:app.quit() if state.ready_to_exit() else None)
+            exit_timer.start(250)
+
         window.showMaximized()
         # Handle becomes available only after the native top-level HWND
         # exists; explicitly assign its taskbar and Alt-Tab images.
