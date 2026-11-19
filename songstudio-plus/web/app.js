@@ -2341,6 +2341,9 @@
       setReady(true);
       text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
       void diagnostic("ui.session.ready",{version:session.version});
+      // Update check is independent from SQLite summary work. Start it early
+      // so a new release is visible immediately after the desktop connects.
+      void checkProUpdate(true);
       if(state.view==="preview")await loadPreviewSongs();
       if(state.view==="manual")await loadManualQueue();
       if(state.view==="risks")await loadRisks();
@@ -2355,7 +2358,6 @@
             "มีรายการหยุดไว้ก่อนหน้า · กดนำเข้าโฟลเดอร์เดิมเพื่อทำต่อ");
         }
       }catch{/* status optional if older engine */}
-      void checkProUpdate(true);
       startJobPolling();
     }catch(error){
       console.error("[XSTAGE] session.init.failed",
@@ -2372,6 +2374,7 @@
           state.token=session.token;
           setReady(true);
           text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
+          void checkProUpdate(true);
           await refreshStatus();
           await refreshJobs();
           startJobPolling();
