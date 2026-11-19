@@ -198,15 +198,20 @@ public sealed class DownloadEngine
         Directory.CreateDirectory(job.Folder);
         var probe = await ProbeAsync(job, ct);
         var work = WorkDir(job);
-        if (!job.Name.Equals("download", StringComparison.OrdinalIgnoreCase) || probe.SuggestedName == "download")
-        {
-            // Retain the user's existing filename, if present.
-        }
-        else job.Name = probe.SuggestedName;
-        var sourceChanged = job.TotalBytes > -1 && probe.Total > -1 && job.TotalBytes != probe.Total
+        if (job.Name.Equals("download", StringComparison.OrdinalIgnoreCase) &&
+            probe.SuggestedName != "download") job.Name = probe.SuggestedName;
+        var partialExists = job.SupportsRanges && Directory.Exists(work) &&
+            Directory.EnumerateFiles(work, "*.part").Any();
+        var strongTagMatches = !string.IsNullOrEmpty(job.ETag) &&
+            !job.ETag.StartsWith("W/", StringComparison.OrdinalIgnoreCase) &&
+            job.ETag == probe.ETag;
+        var dateMatches = job.LastModified.HasValue && job.LastModified == probe.LastModified;
+        // Resuming unvalidated bytes may silently mix content from different file versions.
+        var sourceChanged = (job.TotalBytes > -1 && probe.Total > -1 && job.TotalBytes != probe.Total)
             || (!string.IsNullOrEmpty(job.ETag) && !string.IsNullOrEmpty(probe.ETag) && job.ETag != probe.ETag)
             || (job.LastModified.HasValue && probe.LastModified.HasValue && job.LastModified != probe.LastModified)
-            || (job.SupportsRanges && !probe.Ranges);
+            || (job.SupportsRanges && !probe.Ranges)
+            || (partialExists && !(strongTagMatches || dateMatches));
         if (sourceChanged && Directory.Exists(work)) Directory.Delete(work, true);
         Directory.CreateDirectory(work);
         job.TotalBytes = probe.Total;
@@ -305,7 +310,7 @@ public sealed class DownloadEngine
             req.Headers.TryAddWithoutValidation("If-Range", job.LastModified.Value.ToString("R"));
         using var res = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         var r = res.Content.Headers.ContentRange;
-        if (res.StatusCode != HttpStatusCode.PartialContent || r?.From != begin + saved || r.To != end)
+        if (res.StatusCode != HttpStatusCode.PartialContent || r?.From != begin + saved || r.To != end || r.Length != job.TotalBytes)
             throw new IOException("เซิร์ฟเวอร์ไม่รองรับช่วงข้อมูลเดิมอย่างถูกต้อง โปรดลองใหม่");
         await using var output = new FileStream(file, FileMode.Append, FileAccess.Write,
             FileShare.Read, 131072, FileOptions.Asynchronous);
