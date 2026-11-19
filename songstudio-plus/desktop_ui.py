@@ -192,3 +192,89 @@ def run_desktop(server,url,workspace,icon_path,state=None):
         server.shutdown()
         if worker is not None:
             worker.join(timeout=5)
+
+
+def run_browser_host(server,url,workspace,icon_path,state=None):
+    """Run only the local engine host; open the UI in Windows' default browser.
+
+    No QWebEngineView is created.  The process stays available from the Windows
+    notification area so localhost APIs, import jobs, updates and diagnostics
+    continue to work while the browser tab is open.
+    """
+    set_windows_identity()
+    from PySide6.QtCore import QUrl,QTimer
+    from PySide6.QtGui import QAction,QDesktopServices,QIcon
+    from PySide6.QtWidgets import QApplication,QMenu,QSystemTrayIcon
+
+    app=QApplication.instance() or QApplication([])
+    app.setApplicationName("X-Stage Song Studio Pro")
+    app.setOrganizationName("X-Stage")
+    app.setQuitOnLastWindowClosed(False)
+
+    preferred=Path(icon_path)
+    fallback=Path(__file__).resolve().parent/"web"/"icon.svg"
+    icon_file=preferred if preferred.is_file() else fallback
+    icon=QIcon(str(icon_file)) if icon_file.is_file() else QIcon()
+    if not icon.isNull():
+        app.setWindowIcon(icon)
+
+    worker=Thread(target=server.serve_forever,
+                  kwargs={"poll_interval":0.2},
+                  daemon=True,name="studio-pro-local-engine")
+    worker.start()
+    if state is not None:
+        state.diagnostic("engine.started",port=server.server_port,
+                         ui="windows-default-browser")
+
+    tray=QSystemTrayIcon(icon,app)
+    tray.setToolTip("X-Stage Song Studio Pro · Local Engine")
+    menu=QMenu()
+    open_action=QAction("เปิด X-Stage Song Studio Pro",menu)
+    log_action=QAction("เปิด Log วิเคราะห์",menu)
+    exit_action=QAction("ปิดโปรแกรม",menu)
+    menu.addAction(open_action)
+    menu.addAction(log_action)
+    menu.addSeparator()
+    menu.addAction(exit_action)
+    tray.setContextMenu(menu)
+
+    def open_ui():
+        if state is not None: state.diagnostic("ui.open.request")
+        QDesktopServices.openUrl(QUrl(url))
+
+    def open_log():
+        if state is None:return
+        try:
+            state.log_path.touch(exist_ok=True)
+            os.startfile(str(state.log_path))
+            state.diagnostic("log.opened",source="tray")
+        except Exception as exc:
+            state.diagnostic("log.open.error",error=str(exc)[:1000])
+
+    open_action.triggered.connect(open_ui)
+    log_action.triggered.connect(open_log)
+    tray.activated.connect(
+        lambda reason:open_ui() if reason==QSystemTrayIcon.ActivationReason.DoubleClick else None)
+
+    def request_exit():
+        if state is not None:
+            state.diagnostic("app.exit.request",source="tray")
+        app.quit()
+    exit_action.triggered.connect(request_exit)
+
+    exit_timer=QTimer()
+    if state is not None:
+        exit_timer.timeout.connect(
+            lambda:app.quit() if state.ready_to_exit() else None)
+        exit_timer.start(250)
+
+    tray.show()
+    QTimer.singleShot(100,open_ui)
+    try:
+        return app.exec()
+    finally:
+        tray.hide()
+        if state is not None:
+            state.diagnostic("engine.stopping")
+        server.shutdown()
+        worker.join(timeout=5)
