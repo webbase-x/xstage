@@ -175,7 +175,8 @@ def _prefer_version(db,song_id,version_id):
                          WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
     if current and current["id"]==candidate["id"]:
         return True
-    if current and (current["origin"]=="edit" or current["timing_status"]=="verified"):
+    if current and (current["origin"] in ("edit","manual") or
+                    current["timing_status"]=="verified"):
         return False
     new_rank=_quality(candidate["timing_status"])
     old_rank=_quality(current["timing_status"]) if current else -1
