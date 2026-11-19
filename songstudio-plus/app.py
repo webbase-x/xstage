@@ -35,7 +35,13 @@ class State:
         self.jobs={}
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
-        self.native_picker=None  # supplied by the Qt GUI thread, never Tk
+        self.native_picker=None
+        self._log_lock=threading.RLock()
+        self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
+        self.log_path.parent.mkdir(parents=True,exist_ok=True)
+        self.diagnostic("state.ready",version="0.1.18",
+                        platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
+                        workspace=str(self.workspace))
         self.exit_requested=threading.Event()
         self._restart_prepared=False
         self.resume_info=core.interrupted_import(self.workspace)
@@ -45,8 +51,25 @@ class State:
                 self.start_job("import",lambda progress,cancel:
                     core.import_folder(self.workspace,str(folder),progress,cancel))
 
+    def diagnostic(self,event,**details):
+        """Append a compact UTF-8 diagnostic line for startup/import analysis."""
+        try:
+            payload={"time":time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                     "event":str(event),**details}
+            line=json.dumps(payload,ensure_ascii=False,default=str)
+            with self._log_lock:
+                if self.log_path.is_file() and self.log_path.stat().st_size>5*1024*1024:
+                    old=self.log_path.with_suffix(".previous.log")
+                    old.unlink(missing_ok=True)
+                    self.log_path.replace(old)
+                with self.log_path.open("a",encoding="utf-8") as stream:
+                    stream.write(line+"\n")
+        except Exception:
+            pass
+
     def start_job(self,kind,operation):
         job_id=secrets.token_hex(10)
+        self.diagnostic("job.start",kind=kind,job=job_id)
         job={"id":job_id,"kind":kind,"status":"running","progress":{},
              "message":"กำลังเตรียมงาน","error":None,"result":None,
              "cancel":threading.Event(),"started_at":time.monotonic()}
@@ -69,11 +92,14 @@ class State:
                     job["result"]=result
                     job["status"]="cancelled" if job["cancel"].is_set() else "completed"
                     job["message"]="ยกเลิกงานแล้ว" if job["cancel"].is_set() else "เสร็จเรียบร้อย"
+                self.diagnostic("job.finish",kind=kind,job=job_id,status=job["status"])
             except Exception as e:
                 with self.lock:
                     job["status"]="cancelled" if job["cancel"].is_set() else "failed"
                     job["error"]=str(e)[:1200]
                     job["message"]="ยกเลิกและคืนค่าแล้ว" if job["cancel"].is_set() else "ดำเนินการไม่สำเร็จ"
+                self.diagnostic("job.error",kind=kind,job=job_id,
+                                status=job["status"],error=str(e)[:1200])
         threading.Thread(target=runner,daemon=True,name="Plus-"+kind).start()
         return {"job":job_id}
 
@@ -167,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.17",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.18",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
@@ -352,6 +378,8 @@ class Handler(BaseHTTPRequestHandler):
             path=urllib.parse.urlsplit(self.path).path
             if path=="/api/import":
                 source=body.get("folder","")
+                self.state.diagnostic("import.request",folder=source,
+                                      exists=Path(source).is_dir() if isinstance(source,str) else False)
                 result=self.state.start_job("import",lambda progress,cancel:
                     core.import_folder(self.state.workspace,source,progress,cancel))
             elif path=="/api/update/download":
@@ -405,12 +433,29 @@ class Handler(BaseHTTPRequestHandler):
                 if kind not in ("folder","lrc"):
                     raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
                 if not self.state.native_picker:
-                    raise ValueError(
-                        "หน้าต่างเลือกโฟลเดอร์ใช้ได้ในแอป Windows เท่านั้น "
-                        "หากเปิดโหมดเว็บ กรุณาพิมพ์เส้นทางโฟลเดอร์ลงในช่อง")
-                # The Qt GUI receives a queued request and owns QFileDialog.
-                # This HTTP worker only waits for the selected Unicode path.
-                result=self.state.native_picker(kind,body.get("current",""))
+                    self.state.diagnostic("picker.unavailable",kind=kind)
+                    raise ValueError("Windows Picker ยังไม่พร้อม กรุณาเปิด Log วิเคราะห์")
+                self.state.diagnostic("picker.request",kind=kind,
+                                      current=body.get("current",""))
+                try:
+                    result=self.state.native_picker(kind,body.get("current",""))
+                except Exception as exc:
+                    self.state.diagnostic("picker.exception",kind=kind,error=str(exc)[:1000])
+                    raise
+            elif path=="/api/diagnostic":
+                event=str(body.get("event","ui.event"))[:80]
+                detail=body.get("detail",{})
+                if not isinstance(detail,dict): detail={"value":str(detail)[:500]}
+                safe={str(k)[:80]:str(v)[:800] for k,v in list(detail.items())[:20]}
+                self.state.diagnostic(event,**safe)
+                result={"logged":True}
+            elif path=="/api/open-log":
+                self.state.log_path.touch(exist_ok=True)
+                if sys.platform!="win32":
+                    raise ValueError("เปิด Log อัตโนมัติได้เฉพาะ Windows")
+                os.startfile(str(self.state.log_path))
+                self.state.diagnostic("log.opened")
+                result={"opened":True,"path":str(self.state.log_path)}
             elif path=="/api/open-folder":
                 scope=body.get("scope")
                 if scope=="workspace":
@@ -583,7 +628,9 @@ def main(argv=None):
     parser.add_argument("--no-browser",action="store_true",
                         help="headless local API for automated checks")
     parser.add_argument("--browser",action="store_true",
-                        help="explicitly open browser instead of Windows desktop")
+                        help="open the UI in the Windows default browser (default on Windows)")
+    parser.add_argument("--embedded",action="store_true",
+                        help="legacy embedded Qt WebEngine UI for troubleshooting")
     options=parser.parse_args(argv)
     choices = ([Path(options.workspace)] if options.workspace is not None
                else workspace_candidates())
@@ -606,16 +653,30 @@ def main(argv=None):
             "โปรดตรวจสอบตำแหน่งโฟลเดอร์และสิทธิ์การเขียน\n"
             "สามารถระบุพาธอื่นด้วย --workspace\n\n" + details)
         return 1
+    if sys.platform=="win32":
+        try:
+            import windows_picker
+            state.native_picker=lambda kind,current="":windows_picker.pick(
+                kind,current,state.diagnostic)
+            state.diagnostic("picker.backend.ready",backend="WindowsForms-PowerShell-STA")
+        except Exception as exc:
+            state.diagnostic("picker.backend.error",error=str(exc)[:1000])
     handler=type("PlusHandler",(Handler,),{"state":state})
     with ThreadingHTTPServer(("127.0.0.1",options.port),handler) as server:
         url=f"http://127.0.0.1:{server.server_port}/"
         print("X-Stage Song Studio Pro",url,flush=True)
-        if sys.platform=="win32" and not options.browser and not options.no_browser:
-            from desktop_ui import run_desktop
+        if sys.platform=="win32" and not options.no_browser:
             bundle=Path(getattr(sys,"_MEIPASS",Path(__file__).parent))
             icon=bundle/"app-plus.ico"
-            return run_desktop(server,url,state.workspace,icon,state)
+            if options.embedded:
+                from desktop_ui import run_desktop
+                state.diagnostic("ui.mode",mode="embedded-qt")
+                return run_desktop(server,url,state.workspace,icon,state)
+            from desktop_ui import run_browser_host
+            state.diagnostic("ui.mode",mode="windows-default-browser")
+            return run_browser_host(server,url,state.workspace,icon,state)
         if not options.no_browser:
+            state.diagnostic("ui.mode",mode="system-browser")
             webbrowser.open(url)
         def quit_when_installed():
             while not state.exit_requested.wait(0.3):pass
