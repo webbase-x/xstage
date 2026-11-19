@@ -90,7 +90,7 @@ class ManualKaraokeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"ตรงกับเนื้อร้อง"):
             edit.save(self.workspace,sid,None,[{"text":"hello",
                 "start":1,"end":2,"segments":["other"],"starts":[1]}])
-        with self.assertRaisesRegex(ValueError,"เวอร์ชัน"):
+        with self.assertRaisesRegex(ValueError,"แก้ไขในหน้าต่างอื่น"):
             edit.save(self.workspace,sid,"old-revision",[
                 {"text":"hello","start":None,"end":None,"segments":[],"starts":[]}])
         self.assertEqual(edit.queue(self.workspace)["total"],1)
