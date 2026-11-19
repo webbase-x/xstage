@@ -35,6 +35,7 @@ class State:
         self.jobs={}
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
+        self.native_picker=None  # supplied by the Qt GUI thread, never Tk
         self.exit_requested=threading.Event()
         self._restart_prepared=False
         self.resume_info=core.interrupted_import(self.workspace)
@@ -403,25 +404,30 @@ class Handler(BaseHTTPRequestHandler):
                 kind=body.get("kind")
                 if kind not in ("folder","lrc"):
                     raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
-                # A desktop dialog is explicitly invoked only on user click.
-                # It cannot be accessed remotely: server binds loopback only.
-                import tkinter as tk
-                from tkinter import filedialog
-                window=tk.Tk()
-                window.withdraw()
-                try:
-                    window.attributes("-topmost",True)
-                    if kind=="folder":
-                        chosen=filedialog.askdirectory(
-                            title="เลือกโฟลเดอร์เพลงต้นฉบับ",parent=window)
-                    else:
-                        chosen=filedialog.askopenfilename(
-                            title="เลือกไฟล์เนื้อร้องที่มีเวลา",
-                            filetypes=[("Timed Lyrics","*.lrc"),("ทุกไฟล์","*.*")],
-                            parent=window)
-                finally:
-                    window.destroy()
-                result={"path":chosen or ""}
+                if not self.state.native_picker:
+                    raise ValueError(
+                        "หน้าต่างเลือกโฟลเดอร์ใช้ได้ในแอป Windows เท่านั้น "
+                        "หากเปิดโหมดเว็บ กรุณาพิมพ์เส้นทางโฟลเดอร์ลงในช่อง")
+                # The Qt GUI receives a queued request and owns QFileDialog.
+                # This HTTP worker only waits for the selected Unicode path.
+                result=self.state.native_picker(kind,body.get("current",""))
+            elif path=="/api/open-folder":
+                scope=body.get("scope")
+                if scope=="workspace":
+                    folder=self.state.workspace
+                elif scope=="source":
+                    supplied=body.get("path")
+                    if not isinstance(supplied,str) or not supplied.strip():
+                        raise ValueError("กรุณาเลือกหรือพิมพ์โฟลเดอร์ก่อน")
+                    folder=Path(supplied.strip()).expanduser()
+                else:
+                    raise ValueError("ประเภทโฟลเดอร์ไม่ถูกต้อง")
+                if not folder.is_dir():
+                    raise ValueError("ไม่พบโฟลเดอร์นี้ กรุณาตรวจสอบพาธหรือไดรฟ์")
+                if sys.platform!="win32":
+                    raise ValueError("เปิด Explorer ได้เฉพาะ Windows")
+                os.startfile(str(folder.resolve()))
+                result={"opened":True,"folder":str(folder.resolve())}
             elif path=="/api/attach-lrc":
                 song_id=body.get("song_id","")
                 lrc_path=Path(body.get("path","")).expanduser().resolve(strict=True)
@@ -487,7 +493,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json(404,{"error":"ไม่พบคำสั่ง"});return
             self.send_json(200,result)
-        except (ValueError,TypeError,KeyError,json.JSONDecodeError) as e:
+        except (ValueError,TypeError,KeyError,OSError,TimeoutError,
+                RuntimeError,json.JSONDecodeError) as e:
             self.send_json(400,{"error":str(e)})
         except PermissionError as e:
             self.send_json(403,{"error":str(e)})
