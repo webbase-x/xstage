@@ -138,6 +138,14 @@ jobs:
           & (Join-Path $tools 'ffmpeg.exe') -version
           if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg smoke test failed' }
           Write-Host 'Bundled verified video tools; no dependencies will be downloaded when the user installs.'
+      - name: Validate and bundle optional Chrome/Edge extension
+        shell: pwsh
+        run: |
+          node --check download-manager/browser-extension/background.js
+          node --check download-manager/browser-extension/popup.js
+          node -e "const m=require('./download-manager/browser-extension/manifest.json'); if (m.manifest_version!==3 || !m.permissions.includes('nativeMessaging')) process.exit(1)"
+          Copy-Item -Path download-manager/browser-extension -Destination download-manager/out/browser-extension -Recurse -Force
+          if (-not (Test-Path download-manager/out/browser-extension/manifest.json)) { throw 'Browser extension missing in Setup payload' }
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -151,7 +159,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup 6 missing' }
           & $compiler download-manager/installer/XStageDownloadManager.iss
           if ($LASTEXITCODE -ne 0) { throw 'Setup build failed' }
-          $setup = 'download-manager/installer/output/X-Stage-Download-Manager-v0.2.0-build3-win-x64-Setup.exe'
+          $setup = 'download-manager/installer/output/X-Stage-Download-Manager-v0.2.1-build4-win-x64-Setup.exe'
           if (-not (Test-Path $setup -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer suspiciously small' }
           $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
@@ -182,7 +190,7 @@ jobs:
             throw 'Release tag already exists: bump the application version before republishing.'
           }
           $notes = "Windows 10/11 x64 Preview. Installer EXE only, with pinned SHA-256 verified yt-dlp, Deno and FFmpeg included. Supports public YouTube, TikTok, Facebook/Instagram Reels, quality selection and MP3, plus original HTTP Range file downloads. No DRM or private content bypass. SHA-256: $hash. Size: $size bytes. Not code-signed or tested on all Windows devices. No browser interception."
-          gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v0.2.0 Build 3 (Windows Preview)' --notes $notes --prerelease
+          gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v0.2.1 Build 4 (Windows Preview)' --notes $notes --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publish failed' }
           # Download published asset and compare bytes, not just release metadata.
           $verifyDir = Join-Path $env:RUNNER_TEMP 'xstage-release-verify'

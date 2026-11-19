@@ -40,6 +40,7 @@ public static class UpdateChecker
         var version = field("version");
         if (!Version.TryParse(version, out _) || !Regex.IsMatch(version, @"^\d+\.\d+\.\d+$")) return null;
         if (!obj.TryGetProperty("build", out var buildElement) ||
+            buildElement.ValueKind != JsonValueKind.Number ||
             !buildElement.TryGetInt32(out var build) || build < 1) return null;
         var file = $"X-Stage-Download-Manager-v{version}-build{build}-win-x64-Setup.exe";
         var expected = $"https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v{version}-build{build}-preview/{file}";
@@ -47,6 +48,7 @@ public static class UpdateChecker
         var hash = field("sha256");
         if (!Regex.IsMatch(hash, @"^[a-fA-F0-9]{64}$")) return null;
         if (!obj.TryGetProperty("size_bytes", out var sizeElement) ||
+            sizeElement.ValueKind != JsonValueKind.Number ||
             !sizeElement.TryGetInt64(out var size) || size < 1024) return null;
         return new DownloadManagerRelease(version, build, file, expected, hash.ToLowerInvariant(), size);
     }
