@@ -31,7 +31,7 @@
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
                  manualMidiAt:0,manualCueUndo:new Map(),manualDirty:false,manualFindings:[],manualOnlyIssues:false,
                  manualLayout:{menu:false,queue:false,stage:false,focus:false},
-                 updateTarget:null,updateInstallIntent:false,updateBusy:false,jobsRefreshing:false};
+                 updateTarget:null,updateInstallIntent:false,updateBusy:false,jobsRefreshing:false,lastJobRevision:-1,lastJobPaint:0};
   let manualTimeline=null;
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
@@ -46,18 +46,31 @@
     clearTimeout(state.toastTimer);
     state.toastTimer=setTimeout(()=>node.classList.remove("show"),4600);
   }
-  async function api(path,payload){
+  async function api(path,payload,timeoutMs=0){
     const options={cache:"no-store",headers:{}};
+    let timer=null;
+    if(timeoutMs>0){
+      const controller=new AbortController();
+      options.signal=controller.signal;
+      timer=setTimeout(()=>controller.abort(),timeoutMs);
+    }
     if(payload!==undefined){
       options.method="POST";
       options.headers={"Content-Type":"application/json","X-XStage-Token":state.token};
       options.body=JSON.stringify(payload);
     }
-    const response=await fetch(path,options);
-    let result;
-    try{result=await response.json();}catch{throw new Error("บริการภายในเครื่องไม่ตอบกลับ");}
-    if(!response.ok)throw new Error(result.error||"คำสั่งไม่สำเร็จ");
-    return result;
+    try{
+      const response=await fetch(path,options);
+      let result;
+      try{result=await response.json();}catch{throw new Error("บริการภายในเครื่องไม่ตอบกลับ");}
+      if(!response.ok)throw new Error(result.error||"คำสั่งไม่สำเร็จ");
+      return result;
+    }catch(error){
+      if(error?.name==="AbortError")throw new Error("หมดเวลารอ Local Engine");
+      throw error;
+    }finally{
+      if(timer)clearTimeout(timer);
+    }
   }
   async function diagnostic(event,detail={}){
     if(!state.token)return;
@@ -494,10 +507,14 @@
     if(!state.ready||state.jobsRefreshing)return;
     state.jobsRefreshing=true;
     try{
-      const result=await api("/api/jobs");
+      const result=await api("/api/jobs",undefined,4000);
       const jobs=result.jobs||[];
       const job=jobs.find(x=>x.status==="running")||jobs[0];
       state.activeJob=jobs.find(x=>x.status==="running")?.id||null;
+      if(job){
+        state.lastJobPaint=Date.now();
+        state.lastJobRevision=Number(job.revision??state.lastJobRevision);
+      }
       $("cancel-job").hidden=!state.activeJob;
       updateBuildSelection();
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
@@ -644,8 +661,12 @@
       console.error("[XSTAGE] refreshJobs failed",
         error?.stack||error?.message||String(error));
       void diagnostic("ui.jobs.refresh.error",{error:error?.message||String(error)});
+      if(state.activeJob){
+        text("activity-status","กำลังทำงาน · รออัปเดตหน้าจอ");
+        text("activity-subtitle","Backend ยังทำงานอยู่ แต่รอบอ่านสถานะล่าสุดไม่ตอบกลับ · ระบบจะลองใหม่อัตโนมัติ");
+      }
       // A jobs/status refresh failure is not proof that the Local Engine died.
-      // Keep controls usable; the session reconnect loop handles a real engine loss.
+      // Keep controls usable; the next poll retries automatically.
     }finally{
       state.jobsRefreshing=false;
     }
@@ -2225,6 +2246,15 @@
       state.lyricOffset=0;renderLyricPage();
     });
   }
+  function startJobPolling(){
+    if(globalThis.__XSTAGE_JOB_POLL_TIMER__)clearTimeout(globalThis.__XSTAGE_JOB_POLL_TIMER__);
+    const tick=async()=>{
+      await refreshJobs();
+      globalThis.__XSTAGE_JOB_POLL_TIMER__=setTimeout(tick,1200);
+    };
+    globalThis.__XSTAGE_FORCE_JOB_REFRESH__=()=>void refreshJobs();
+    globalThis.__XSTAGE_JOB_POLL_TIMER__=setTimeout(tick,800);
+  }
   async function init(){
     console.info("[XSTAGE] init.begin");
     // Core navigation and buttons must be usable even if an optional module
@@ -2286,7 +2316,7 @@
         }
       }catch{/* status optional if older engine */}
       void checkProUpdate(true);
-      setInterval(()=>{void refreshJobs();},1600);
+      startJobPolling();
     }catch(error){
       console.error("[XSTAGE] session.init.failed",
         error?.stack||error?.message||String(error));
@@ -2304,7 +2334,7 @@
           text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
           await refreshStatus();
           await refreshJobs();
-          setInterval(()=>{void refreshJobs();},1600);
+          startJobPolling();
           clearInterval(reconnect);
         }catch{/* PC engine not yet available */}
       },3000);
