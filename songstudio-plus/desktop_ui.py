@@ -233,6 +233,14 @@ def run_desktop(server,url,workspace,icon_path,state=None):
                              picker_ready=bool(state.native_picker))
         window.web.load(QUrl(url))
 
+        # Native watchdog: Qt drives a lightweight refresh hook as a fallback
+        # when Chromium timer throttling or one stalled fetch pauses JS polling.
+        job_watchdog=QTimer(window)
+        job_watchdog.timeout.connect(
+            lambda:window.web.page().runJavaScript(
+                "if(typeof globalThis.__XSTAGE_FORCE_JOB_REFRESH__==='function'){globalThis.__XSTAGE_FORCE_JOB_REFRESH__();}"))
+        job_watchdog.start(2500)
+
         # The update helper waits for this process to exit before replacing the
         # managed EXE. Finish/cancel the active SQLite job first, then quit Qt.
         exit_timer=QTimer(window)
