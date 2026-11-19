@@ -60,19 +60,36 @@ internal static class NativeMessagingBridge
     {
         if (!DownloadEngine.TryParseUrl(url, out _) || url.Length > MaxMessageBytes) return false;
         if (await SendToRunningAppAsync(url)) return true;
-        // If the application is closed, launch the installed GUI. It will
-        // enqueue --enqueue URLs on startup and then start its IPC listener.
+        // Serialize simultaneous native-host launches. ACK is only sent after
+        // the actual GUI accepted the URL through its named pipe.
         try
         {
-            var start = new ProcessStartInfo(Environment.ProcessPath ?? Application.ExecutablePath)
+            using var launchGate = new Mutex(false, @"Local\XStageDownloadManagerStartGate");
+            if (!launchGate.WaitOne(TimeSpan.FromSeconds(3))) return false;
+            try
             {
-                UseShellExecute = false
-            };
-            start.ArgumentList.Add("--enqueue");
-            start.ArgumentList.Add(url);
-            return Process.Start(start) != null;
+                if (await SendToRunningAppAsync(url)) return true;
+                if (!Mutex.TryOpenExisting(@"Local\XStageDownloadManagerDesktop", out var desktopMutex))
+                {
+                    var start = new ProcessStartInfo(Environment.ProcessPath ?? Application.ExecutablePath)
+                    {
+                        UseShellExecute = false
+                    };
+                    if (Process.Start(start) is null) return false;
+                }
+                else desktopMutex.Dispose();
+            }
+            finally { launchGate.ReleaseMutex(); }
+
+            for (int attempt = 0; attempt < 18; attempt++)
+            {
+                if (await SendToRunningAppAsync(url, 350)) return true;
+                await Task.Delay(200);
+            }
+            return false;
         }
-        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or
+                                   InvalidOperationException or UnauthorizedAccessException)
         {
             return false;
         }
