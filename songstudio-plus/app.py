@@ -36,6 +36,7 @@ class State:
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
         self.exit_requested=threading.Event()
+        self._restart_prepared=False
         self.resume_info=core.interrupted_import(self.workspace)
         if self.resume_info and self.resume_info["status"]=="interrupted":
             folder=Path(self.resume_info["source_root"])
@@ -49,7 +50,13 @@ class State:
              "message":"กำลังเตรียมงาน","error":None,"result":None,
              "cancel":threading.Event(),"started_at":time.monotonic()}
         with self.lock:
-            if any(x["status"]=="running" for x in self.jobs.values()):
+            running=[x for x in self.jobs.values() if x["status"]=="running"]
+            if running and kind=="update" and all(x["kind"]!="update" for x in running):
+                # An update may supersede a large import: request a safe stop
+                # after its current file. Source media/SQLite remain intact.
+                for existing in running:
+                    existing["cancel"].set()
+            elif running:
                 raise ValueError("มีงานกำลังทำอยู่ กรุณารอให้เสร็จก่อนเริ่มงานถัดไป")
             self.jobs[job_id]=job
         def runner():
@@ -89,8 +96,21 @@ class State:
             self.exit_requested.set()
     def ready_to_exit(self):
         with self.lock:
-            return self.exit_requested.is_set() and not any(
+            ready=self.exit_requested.is_set() and not any(
                 j["status"]=="running" for j in self.jobs.values())
+            if not ready or self._restart_prepared:
+                return ready
+            self._restart_prepared=True
+            interrupted=[j for j in self.jobs.values()
+                         if j["kind"]=="import" and j["status"]=="cancelled"
+                         and isinstance(j.get("result"),dict) and
+                         j["result"].get("batch")]
+        # A deliberate updater restart may resume this exact import. This
+        # executes only after the import runner has committed all checkpoints.
+        for job in interrupted:
+            core.prepare_import_for_restart(
+                self.workspace,job["result"]["batch"])
+        return True
 
 class Handler(BaseHTTPRequestHandler):
     state=None
