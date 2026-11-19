@@ -54,6 +54,7 @@ def preview_details(workspace,song_id):
             pairs=core.get_version_lines(db,row["version_id"])
             lines=[]
             for line,cues in pairs:
+                cues=core.display_cues(line["text"],cues)
                 lines.append({
                     "position":line["position"],"text":line["text"],
                     "start":line["start_time"],"end":line["end_time"],
