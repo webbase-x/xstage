@@ -53,9 +53,18 @@ assert.ok(!server.includes('import tkinter as tk'),
  'Native Windows app must never open tkinter in the HTTP worker thread');
 assert.ok(server.includes('self.state.native_picker('),
  'Picker must use GUI-thread bridge');
-assert.ok(picker.includes('QFileDialog.getExistingDirectory'));
-assert.ok(picker.includes('QFileDialog.getOpenFileName'));
-assert.ok(picker.includes('Qt.ConnectionType.QueuedConnection'));
+assert.ok(picker.includes('QFileDialog(self.parent_window)'),
+ 'Picker must be owned by the application window');
+assert.ok(picker.includes('QFileDialog.Option.DontUseNativeDialog'),
+ 'Use embedded Qt picker to avoid hidden Windows native dialogs');
+assert.ok(picker.includes('QFileDialog.FileMode.Directory'),
+ 'Folder picker mode missing');
+assert.ok(picker.includes('QFileDialog.FileMode.ExistingFile'),
+ 'LRC file picker mode missing');
+assert.ok(picker.includes('dialog.exec()'),
+ 'Picker must display a modal dialog');
+assert.ok(picker.includes('Qt.ConnectionType.QueuedConnection'),
+ 'Picker must be dispatched to GUI thread');
 assert.ok(desktop.includes('state.native_picker=picker.pick'));
 assert.ok(!js.includes('state.ready=true;'), 'Do not fake engine state');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs and GUI-thread pickers');
