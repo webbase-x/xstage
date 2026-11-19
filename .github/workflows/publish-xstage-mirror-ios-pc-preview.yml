@@ -26,13 +26,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - name: Checkout exact source revision from passed Windows build
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          token: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
           persist-credentials: true
 
       - name: Download complete candidate ZIP (not the GUI-only EXE)
