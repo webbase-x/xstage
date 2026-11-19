@@ -1,5 +1,6 @@
 package app.airshow.tv.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -45,6 +46,8 @@ internal fun XStageReceiverHome(
     val serverName by viewModel.pref(Prefs.SERVER_NAME).collectAsState()
     var editingName by remember { mutableStateOf(false) }
 
+    // Back closes the rename editor without showing app-exit confirmation.
+    BackHandler(enabled = editingName) { editingName = false }
     LaunchedEffect(connections) {
         if (connections > 0) editingName = false
     }
@@ -162,7 +165,7 @@ internal fun XStageReceiverHome(
                 color = Color(0xFF142A47)
             ) {
                 Box(Modifier.padding(16.dp)) {
-                    ReceiverNameEditor(viewModel, canEdit = true)
+                    ReceiverNameEditor(viewModel, canEdit = true, onFinished = { editingName = false })
                 }
             }
         }

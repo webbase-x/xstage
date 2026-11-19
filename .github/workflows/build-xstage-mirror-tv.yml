@@ -42,7 +42,7 @@ jobs:
       - name: Validate Mirror TV UI recipe and regression syntax before signing
         shell: bash
         run: |
-          python3 -m py_compile xstage-mirror-tv/prepare_upstream.py xstage-mirror-tv/test_build_recipe.py xstage-mirror-tv/verify_apk_signer.py
+          python3 -m py_compile xstage-mirror-tv/prepare_upstream.py xstage-mirror-tv/test_build_recipe.py xstage-mirror-tv/video_playback_recovery.py xstage-mirror-tv/verify_apk_signer.py
           python3 xstage-mirror-tv/verify_apk_signer.py --self-test
           node --check scripts/regression.mjs
           python3 - <<'PY'
@@ -52,8 +52,8 @@ jobs:
           assert "onDone = { saveName() }" in editor
           assert "fieldBringIntoView.bringIntoView()" in editor
           assert "left = saveFocus" in editor and "right = cancelFocus" in editor
-          assert 'VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.12")' in recipe
-          assert 'BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "114")' in recipe
+          assert 'VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.14")' in recipe
+          assert 'BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "116")' in recipe
           assert "right = tabFocus[index + 1]" in recipe
           assert "right = choiceFocus[index + 1]" in recipe
           print("PASS: Mirror TV UI source and remote focus preflight")

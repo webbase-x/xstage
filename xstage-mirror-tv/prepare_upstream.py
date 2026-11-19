@@ -21,8 +21,8 @@ if ROOT is None or not (ROOT / "LICENSE").is_file():
 APP = ROOT / "app"
 PKG = "com.webbasex.xstagemirror.tv"
 NAME = "X-Stage Mirror TV"
-VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.12")
-BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "114")
+VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.14")
+BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "116")
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) or not BUILD.isdecimal() or int(BUILD) <= 0:
     raise SystemExit("Invalid Mirror TV release version/build")
 
@@ -167,7 +167,7 @@ screen = overview.read_text(encoding="utf-8")
 video_back = '        BackHandler { viewModel.stopVideoPlayback() }\n'
 if screen.count(video_back) != 1:
     raise RuntimeError("Expected one upstream video-back handler")
-screen = screen.replace(video_back, '')
+# Keep Video Back local to video playback rather than closing the TV receiver.
 screen = screen.replace(
     'if (justStarted && !audioOnly && !videoPlaybackActive && autoFullscreen && pin == null)',
     'if (justStarted && !audioOnly && !videoPlaybackActive && pin == null)')
@@ -226,6 +226,12 @@ private fun FullscreenVideo(
     }
 }
 ''' + screen[end:]
+# Subpages consume the remote Back key before the Activity exit handler.
+subpage_marker = '    val videoScreen = videoPlaybackActive || videoSessionPending\n'
+if screen.count(subpage_marker) != 1:
+    raise RuntimeError("Expected one MainScreen video state marker")
+screen = screen.replace(subpage_marker, subpage_marker +
+    '    BackHandler(enabled = tab != Tab.OVERVIEW && !videoScreen) { tab = Tab.OVERVIEW }\n')
 if 'viewModel::startServer' in screen or 'viewModel::stopServer' in screen:
     raise RuntimeError("Unexpected manual receiver control remains in primary UI")
 overview.write_text(screen, encoding="utf-8")
@@ -439,6 +445,9 @@ subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "performan
 subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "auto_quality_tuning.py"),
                 str(ROOT)], check=True)
 
+# Correct stalled AirPlay VOD/HLS independently of real-time screen mirroring.
+subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "video_playback_recovery.py"),
+                str(ROOT)], check=True)
 # Preserve original attribution and build a distinctive launcher/TV banner.
 font_paths = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",

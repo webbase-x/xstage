@@ -133,7 +133,15 @@ assert 'viewModel.stopServer()' in activity and 'finish()' in activity
 assert 'if (svc.serverState.value == AirPlayService.ServerState.STOPPED && hasLocalNetwork())' in activity
 assert 'viewModel.pref(Prefs.AUTO_START).value &&' not in activity
 assert 'BackHandler { fullscreen = false }' not in ui
-assert 'BackHandler { viewModel.stopVideoPlayback() }' not in ui
+assert 'BackHandler { viewModel.stopVideoPlayback() }' in ui
+assert 'BackHandler(enabled = tab != Tab.OVERVIEW && !videoScreen)' in ui
+assert 'BackHandler(enabled = editingName)' in receiver_home
+assert 'onFinished = { editingName = false }' in receiver_home
+assert 'onFinished()' in editor
+video_player = (app / "src/main/kotlin/app/airshow/tv/renderer/AirPlayVideoPlayer.kt").read_text()
+assert 'BUFFERING_TIMEOUT_MS = 18_000L' in video_player
+assert 'current.stop()' in video_player and 'current.prepare()' in video_player
+assert 'mainHandler.removeCallbacks(_stallWatchdog)' in video_player
 assert "checkMirrorUpdateNow" in settings
 assert "ReceiverNameEditor(viewModel, canEdit = activeConnections == 0)" in settings
 assert 'label = stringResource(R.string.setting_server_name)' not in settings
@@ -194,7 +202,7 @@ assert 'json.optString("channel") != "test-preview"' in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 114' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 116' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()

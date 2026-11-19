@@ -3,7 +3,11 @@
 An independently branded GPLv3 Android TV AirPlay receiver for iPhone and iPad.
 No iOS app, accounts, or internet cloud service required for casting on the local network.
 
-## Mirror TV receiver — v0.2.11 (Build 113)
+## Mirror TV receiver — v0.2.14 (Build 116)
+
+- A stalled AirPlay video/HLS load gets one bounded retry after 18 seconds; on another timeout it closes video playback with a message instead of loading indefinitely. Screen mirroring is independent and remains running.
+- Remote Back closes the rename editor or returns from Settings to the home view; Save and Cancel close the rename editor. During video playback Back leaves only the video player. App-exit confirmation is for the home screen.
+- Physical iPhone/TrueID validation is still needed.
 
 - On opening the APK, the AirPlay receiver starts automatically when local networking is available. The previous auto-start preference no longer blocks startup.
 - The main screen displays the receiver name, a compact **Version / Build** line sourced from Android BuildConfig, readiness/connection status and a concise iPhone/iPad instruction. Debug logs, a QR setup guide and manual start/stop/exit buttons do not clutter the home screen.

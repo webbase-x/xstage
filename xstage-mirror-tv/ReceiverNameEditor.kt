@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
  * not obscure a modal dialog. Directional focus follows the visible controls.
  */
 @Composable
-internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
+internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean, onFinished: () -> Unit = {}) {
     val fullName by viewModel.pref(Prefs.SERVER_NAME).collectAsState()
     // Keep the input visible without requiring an extra click.
     val editOpen = true
@@ -58,6 +58,7 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
         viewModel.set(Prefs.SERVER_NAME, namePreview)
         keyboard?.hide()
         openFocus.requestFocus()
+        onFinished()
     }
 
     // On TV, opening a keyboard on initial render obscures the field.
@@ -193,6 +194,7 @@ internal fun ReceiverNameEditor(viewModel: MainViewModel, canEdit: Boolean) {
                                 keyboard?.hide()
                                 suffixDraft = ReceiverNamePolicy.suffixOf(fullName)
                                 openFocus.requestFocus()
+                                onFinished()
                             },
                             border = BorderStroke(
                                 if (cancelFocused) 3.dp else 1.dp,
