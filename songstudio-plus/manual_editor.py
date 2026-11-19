@@ -336,6 +336,7 @@ def detail(workspace,song_id):
         source=[]
         if song["version_id"]:
             for line,cues in core.get_version_lines(db,song["version_id"]):
+                cues=core.display_cues(line["text"],cues)
                 source.append({
                   "text":line["text"],"start":line["start_time"],
                   "end":line["end_time"],
