@@ -186,9 +186,9 @@ public sealed class MainForm : Form
 
         var toolbar = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 61, Padding = new Padding(18, 10, 0, 8),
-            WrapContents = false, BackColor = Color.FromArgb(250, 251, 253),
-            AutoScroll = true
+            Dock = DockStyle.Top, Height = 104, Padding = new Padding(18, 10, 0, 8),
+            WrapContents = true, BackColor = Color.FromArgb(250, 251, 253),
+            AutoScroll = false
         };
         toolbar.Controls.Add(MakeTool("▶  เริ่ม / ต่อ", (_, _) => SelectedAction(j => _engine.Start(j))));
         toolbar.Controls.Add(MakeTool("Ⅱ  หยุดชั่วคราว", (_, _) => SelectedAction(_engine.Pause)));
@@ -638,6 +638,8 @@ public sealed class MainForm : Form
             row.Cells["File"].Value = job.Status == "Completed" ? "✓  " + job.Name : job.Name;
             row.Cells["File"].Style.ForeColor = job.Status == "Completed"
                 ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
+            row.Cells["File"].Style.SelectionForeColor = job.Status == "Completed"
+                ? Color.FromArgb(16, 132, 81) : Color.FromArgb(24, 66, 116);
             row.Cells["File"].Style.Font = job.Status == "Completed"
                 ? _finishedFileFont : _normalFileFont;
             row.Cells["Status"].Style.ForeColor = job.Status == "Completed"
