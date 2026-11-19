@@ -8,6 +8,7 @@
 <title>X-Stage Song Studio Pro</title>
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./style.css">
+<script src="./timeline-core.js" defer></script>
 <script src="./app.js" defer></script>
 </head>
 <body>
@@ -250,6 +251,28 @@
               <span id="manual-clock" class="preview-time">00:00 / 00:00</span>
               <input id="manual-seek" type="range" min="0" max="0" step="0.05" value="0" disabled aria-label="เลื่อนเวลาเพลง">
             </div>
+
+            <section class="manual-timeline-panel" aria-label="ไทม์ไลน์ปาดสีที่แสดงผลทันที">
+              <div class="manual-timeline-heading">
+                <div><strong>ไทม์ไลน์ปาดสี <span class="timeline-live">LIVE</span></strong><small id="manual-timeline-line">เลือกเพลงและบรรทัดที่จะปาด</small></div>
+                <div class="manual-timeline-tools" role="group" aria-label="ปรับไทม์ไลน์">
+                  <button id="manual-timeline-zoom-in" class="quiet-btn" type="button" title="ซูมเข้า" disabled>＋ ซูมเข้า</button>
+                  <button id="manual-timeline-zoom-out" class="quiet-btn" type="button" title="ซูมออก" disabled>－ ซูมออก</button>
+                  <button id="manual-timeline-follow" class="quiet-btn" type="button" title="ย้ายไทม์ไลน์ไปที่ตำแหน่งเล่นจริง" disabled>◎ ตามเวลาเล่น</button>
+                </div>
+              </div>
+              <div id="manual-timeline-ruler" class="manual-timeline-ruler" aria-hidden="true"></div>
+              <div id="manual-timeline-track" class="manual-timeline-track" role="group" aria-label="ตำแหน่งปาดสีรายคำ ลากจุดเวลาเพื่อปรับ">
+                <div id="manual-timeline-highlight" class="manual-timeline-highlight" aria-hidden="true"></div>
+                <div id="manual-timeline-playhead" class="manual-timeline-playhead" aria-hidden="true"></div>
+                <div id="manual-timeline-cues" class="manual-timeline-cues"></div>
+              </div>
+              <div class="manual-timeline-footer">
+                <span id="manual-timeline-status">ยังไม่มีจุดปาด — เลือกคำแล้วกดจับเวลาขณะเล่นเพลง</span>
+                <span id="manual-timeline-position">00:00.000</span>
+              </div>
+              <p class="field-hint manual-timeline-tip">ลากหมุดเวลาเพื่อปรับจุดปาด · คลิกพื้นที่ว่างเพื่อเลื่อนฟัง · Space จับเวลาคำที่เลือก · ผลปาดสีด้านบนเปลี่ยนทันที (ยังไม่บันทึกจนกดบันทึก)</p>
+            </section>
             <div class="manual-edit-scroll" id="manual-edit-scroll">
             <p class="field-hint" id="manual-warning">เลือกเพลงก่อนใช้เครื่องมือปาดสี</p>
             <section class="manual-diagnostic-panel" aria-label="จุดที่ควรตรวจแก้">
