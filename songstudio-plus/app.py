@@ -573,9 +573,16 @@ def main(argv=None):
             from desktop_ui import run_desktop
             bundle=Path(getattr(sys,"_MEIPASS",Path(__file__).parent))
             icon=bundle/"app-plus.ico"
-            return run_desktop(server,url,state.workspace,icon)
+            return run_desktop(server,url,state.workspace,icon,state)
         if not options.no_browser:
             webbrowser.open(url)
+        def quit_when_installed():
+            while not state.exit_requested.wait(0.3):pass
+            while not state.ready_to_exit():
+                time.sleep(.2)
+            server.shutdown()
+        threading.Thread(target=quit_when_installed,daemon=True,
+                         name="studio-pro-update-shutdown").start()
         try:server.serve_forever(poll_interval=0.3)
         except KeyboardInterrupt:pass
 
