@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.9
+# X-Stage Song Studio Plus — Technical Preview v0.1.10
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -133,6 +133,34 @@ drafts, and songs with no lyrics. The original media files are immutable.
 
 The preview EXE is for further testing on real Windows MIDI synthesizers;
 the new binary X-container still requires a compatible karaoke player.
+
+
+## v0.1.10 — Focus workspace and evidence-led corrections
+
+Menu 05 is now editor-first at standard Windows resolutions. Four immediate
+layout controls let the user hide the primary sidebar, hide the song queue,
+expand/collapse the karaoke display, or enter a full-width edit focus mode.
+This only changes UI layout, not playback/source state. Escape exits focus.
+
+The scrolling middle area holds a compact evidence panel and one expanded
+lyric line at a time; the other lines remain visible as collapsed navigation
+rows. Playback, seek, and Save / Skip / Approve remain outside the lyric
+scroller. A short-window layout preserves the controls; the list is scrollable
+inside the editor instead of pushing Save below the window.
+
+Detected findings display **observed issue, affected line and suggested
+manual next step**, with a click-to-edit action, and are organized as:
+- Structural mismatch (cue text differs from lyrics, invalid or reversed
+  timestamps, overlap, cue duration beyond the line)
+- Missing information (no lyrics, missing line times, missing/partial cues,
+  incomplete source CUR)
+- Unverified timing (estimates requiring listening, **not** proof of error)
+
+No lyric correction or timing is invented automatically. The backend also
+reuses the existing evidence-based xstage_swipe analyzer for saved versions.
+As the user edits, the UI refreshes the visible checks without silently
+saving. Ctrl+S saves; leaving a dirty manual editor requires confirmation.
+Manual timing approval requires saving and listening to the current version.
 
 
 ## Start
