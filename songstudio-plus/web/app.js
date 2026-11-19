@@ -82,7 +82,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","lrc-browse","manual-find"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find"]){
       $(id).disabled=!enabled;
     }
   }
@@ -612,10 +612,48 @@
     }catch(error){setReady(false);}
   }
   async function openPicker(kind,target){
+    const button=$(kind==="folder"?"source-browse":"lrc-browse");
+    button.disabled=true;
+    if(kind==="folder")text("folder-picker-status","กำลังเปิดหน้าต่างเลือกโฟลเดอร์ของ Windows...");
     try{
-      const result=await api("/api/pick",{kind});
-      if(result.path)$(target).value=result.path;
-    }catch(error){toast("เปิดหน้าต่างเลือกไฟล์ไม่สำเร็จ: "+error.message,true);}
+      const result=await api("/api/pick",{kind,current:$(target).value.trim()});
+      if(result.path){
+        $(target).value=result.path;
+        $(target).dispatchEvent(new Event("input",{bubbles:true}));
+        if(kind==="folder"){
+          text("folder-picker-status","เลือกโฟลเดอร์แล้ว: "+result.path);
+          toast("เลือกโฟลเดอร์สำเร็จ");
+        }else{
+          text("media-feedback","เลือกไฟล์ LRC แล้ว: "+result.path);
+        }
+      }else if(kind==="folder"){
+        text("folder-picker-status","ยกเลิกการเลือก · โฟลเดอร์เดิมยังอยู่");
+      }
+    }catch(error){
+      const label=kind==="folder"?"โฟลเดอร์":"ไฟล์ LRC";
+      const msg="เลือก"+label+"ไม่สำเร็จ: "+error.message;
+      if(kind==="folder")text("folder-picker-status",msg);
+      else text("media-feedback",msg);
+      toast(msg,true);
+    }finally{
+      button.disabled=!state.ready;
+    }
+  }
+  async function openLocalFolder(scope){
+    const button=$(scope==="workspace"?"workspace-open":"source-open");
+    button.disabled=true;
+    try{
+      const result=await api("/api/open-folder",{
+        scope,path:scope==="source"?$("source-folder").value.trim():undefined
+      });
+      if(result.opened){
+        if(scope==="source")text("folder-picker-status","เปิด Explorer: "+result.folder);
+        toast("เปิดโฟลเดอร์ใน Windows Explorer แล้ว");
+      }
+    }catch(error){
+      if(scope==="source")text("folder-picker-status",error.message);
+      toast("เปิดโฟลเดอร์ไม่ได้: "+error.message,true);
+    }finally{button.disabled=!state.ready;}
   }
   function renderIssuePage(){
     const list=$("issues-list");
@@ -1771,6 +1809,8 @@
 
   function bind(){
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
+    $("source-open").addEventListener("click",()=>void openLocalFolder("source"));
+    $("workspace-open").addEventListener("click",()=>void openLocalFolder("workspace"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",async()=>{
