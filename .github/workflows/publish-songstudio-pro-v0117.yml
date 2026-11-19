@@ -44,12 +44,12 @@ jobs:
           with path.open("rb") as stream:
               digest=hashlib.file_digest(stream,"sha256").hexdigest()
           notes=Path("dist/README-Preview.txt").read_text(encoding="utf-8-sig")
-          expected=re.search(r"SHA-256:\\s*([a-fA-F0-9]{64})",notes)
+          expected=re.search(r"SHA-256:\s*([a-fA-F0-9]{64})",notes)
           if not expected or expected.group(1).lower()!=digest:
               raise SystemExit("EXE SHA-256 differs from Windows Build metadata")
           Path("dist/X-Stage-Song-Studio-Pro-v0.1.17-preview.exe.sha256").write_text(
-              digest+"  "+path.name+"\\n",encoding="utf-8")
-          Path("dist/release-sha256.txt").write_text(digest+"\\n",encoding="ascii")
+              digest+"  "+path.name+"\n",encoding="utf-8")
+          Path("dist/release-sha256.txt").write_text(digest+"\n",encoding="ascii")
           print("PASS: Pro EXE verified",path.stat().st_size,digest)
           PY
       - name: Publish verified unsigned Pro Preview
@@ -91,7 +91,7 @@ jobs:
               "release_url":"https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.17-preview",
               "status":"Verified Pro Windows Preview. Fixes Local PC Engine startup order and Import Song folder controls. EXE is unsigned.",
           })
-          feed.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+          feed.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
           print("PASS: published verified Pro feed",sha)
           PY
           git config user.name "github-actions[bot]"
