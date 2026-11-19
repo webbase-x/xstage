@@ -1,0 +1,89 @@
+name: Retire legacy Song Studio PC releases once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/retire-legacy-songstudio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: retire-legacy-songstudio-pc-releases
+  cancel-in-progress: false
+
+jobs:
+  retire-legacy-pc-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Delete ONLY retired Song Studio PC releases and their tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+
+          repo=os.environ["GH_REPO"]
+          # Strict prefix and semantic-version guard. Never touch Pro, Karaoke,
+          # Mirror, other releases, source commits, or user databases.
+          legacy=re.compile(r"^song-studio-pc-(?:ready|core-preview)-v\d+\.\d+\.\d+-build\d+$")
+          def api(path,method="GET"):
+              proc=subprocess.run(["gh","api","-X",method,path],
+                  text=True,capture_output=True)
+              if proc.returncode:
+                  raise RuntimeError(f"GitHub API {method} {path}: {proc.stderr[-500:]}")
+              return json.loads(proc.stdout) if method=="GET" and proc.stdout else None
+
+          matches=[]
+          page=1
+          while True:
+              entries=api(f"repos/{repo}/releases?per_page=100&page={page}")
+              if not isinstance(entries,list):
+                  raise RuntimeError("Unexpected GitHub release-list response")
+              for entry in entries:
+                  tag=entry.get("tag_name","")
+                  if legacy.fullmatch(tag):
+                      matches.append((entry["id"],tag))
+              if len(entries)<100:
+                  break
+              page+=1
+              if page>100:
+                  raise RuntimeError("Release pagination exceeded safety bound")
+          print("Precisely matching retired PC releases:",len(matches),flush=True)
+          if len(matches)>1000:
+              raise RuntimeError("Unexpectedly large deletion set")
+          failures=[]
+          for release_id,tag in matches:
+              print("Retiring",release_id,tag,flush=True)
+              try:
+                  api(f"repos/{repo}/releases/{release_id}",method="DELETE")
+              except RuntimeError as error:
+                  failures.append(str(error));continue
+              try:
+                  api(f"repos/{repo}/git/refs/tags/{tag}",method="DELETE")
+              except RuntimeError as error:
+                  # A tag may already have been deleted; do not hide real failures.
+                  print("Tag deletion warning:",error,flush=True)
+          if failures:
+              raise RuntimeError("Could not retire all old releases:\n" + "\n".join(failures))
+          # Verify again using new listing to rule out a false-success claim.
+          remain=[]
+          page=1
+          while True:
+              entries=api(f"repos/{repo}/releases?per_page=100&page={page}")
+              remain.extend(e["tag_name"] for e in entries if legacy.fullmatch(e.get("tag_name","")))
+              if len(entries)<100:
+                  break
+              page+=1
+          if remain:
+              raise RuntimeError("Legacy PC releases remain after retire: "+str(remain))
+          print("PASS: retired",len(matches),"legacy Song Studio PC releases, no Pro/other app release touched.")
+          PY
