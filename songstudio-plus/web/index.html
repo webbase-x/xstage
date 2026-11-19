@@ -38,7 +38,7 @@
   <main class="main">
     <header class="topbar">
       <div class="breadcrumb">X-STAGE <span>/</span> STUDIO PLUS <span>/</span> <strong id="breadcrumb">นำเข้าเพลง</strong></div>
-      <div class="top-actions"><button type="button" class="quiet-btn workspace-open-btn" id="workspace-open" title="เปิดโฟลเดอร์ฐานข้อมูลและคลังเพลงใน Windows Explorer">▤ เปิดคลังเพลง</button><span class="chip chip-soft" id="workspace-chip">LOCAL WORKSPACE</span><span class="avatar">X<span>+</span></span></div>
+      <div class="top-actions"><button type="button" class="quiet-btn" id="settings-open" title="ตั้งค่าและเครื่องมือระบบ">⚙ ตั้งค่า</button><button type="button" class="quiet-btn workspace-open-btn" id="workspace-open" title="เปิดโฟลเดอร์ฐานข้อมูลและคลังเพลงใน Windows Explorer">▤ เปิดคลังเพลง</button><span class="chip chip-soft" id="workspace-chip">LOCAL WORKSPACE</span><span class="avatar">X<span>+</span></span></div>
     </header>
     <div class="content">
       <section class="view is-visible" id="view-import" aria-labelledby="import-title">
@@ -70,7 +70,7 @@
             <div class="panel-head"><div><span class="label-top">START HERE</span><h2>นำเข้าเพลงจากโฟลเดอร์</h2></div><span class="count-pill">01 / 08</span></div>
             <label class="field-label" for="source-folder">โฟลเดอร์ต้นทาง (PC / USB / HDD)</label>
             <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เช่น D:\NCN หรือ E:\My Music"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
-            <div class="toolbar folder-actions"><button id="source-open" class="quiet-btn" type="button">↗ เปิดโฟลเดอร์ใน Explorer</button><button id="diagnostic-open-log" class="quiet-btn" type="button">เปิด Log วิเคราะห์</button><span class="field-hint" id="folder-picker-status" aria-live="polite">เลือกโฟลเดอร์ด้วย Windows โดยตรง หรือวางพาธภาษาไทยได้</span></div>
+            <div class="toolbar folder-actions"><button id="source-open" class="quiet-btn" type="button">↗ เปิดโฟลเดอร์ใน Explorer</button><span class="field-hint" id="folder-picker-status" aria-live="polite">เลือกโฟลเดอร์ด้วย Windows โดยตรง หรือวางพาธภาษาไทยได้</span></div>
             <p class="field-hint">ค้นหาโฟลเดอร์ย่อยอัตโนมัติ รองรับ MID, KAR, MP3, M4A, WAV, FLAC, MP4, MKV และ WEBM</p>
             <button class="primary-btn full" id="import-start" type="button">ตรวจ SHA-256 และลงทะเบียน SQLite <span>↗</span></button>
             <div class="recover-action">
@@ -397,6 +397,17 @@
   </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog id="settings-dialog" class="confirm-dialog settings-dialog">
+  <div>
+    <div class="modal-head"><div><span class="label-top">SYSTEM & DIAGNOSTICS</span><h2>ตั้งค่าและระบบ</h2></div><button id="settings-close" class="quiet-btn" type="button">✕ ปิด</button></div>
+    <p>เครื่องมือระดับโปรแกรมสำหรับตรวจสอบ Local Engine, ฐานข้อมูล, การเลือกไฟล์/โฟลเดอร์ และข้อผิดพลาดจากทุกเมนู</p>
+    <div class="panel" style="padding:18px;margin-top:16px">
+      <div class="panel-head" style="margin-bottom:10px"><div><span class="label-top">PROGRAM LOG</span><h3>Log วิเคราะห์ทั้งโปรแกรม</h3></div></div>
+      <p class="field-hint">บันทึกเหตุการณ์ของ X-Stage Song Studio Pro ทั้งโปรแกรม ไม่จำกัดเฉพาะการนำเข้าเพลง เช่น การเริ่ม Local Engine, เปิด UI, เลือกโฟลเดอร์, งานนำเข้า และข้อผิดพลาดสำคัญ</p>
+      <div class="toolbar" style="margin:0"><button id="diagnostic-open-log" class="primary-btn" type="button">เปิด Log วิเคราะห์</button></div>
+    </div>
+  </div>
+</dialog>
 <dialog id="confirm-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-icon">!</div><h2 id="confirm-title">ยืนยันการแก้ไข</h2><p id="confirm-text"></p><div class="dialog-actions"><button value="cancel" class="quiet-btn" type="submit">ยกเลิก</button><button value="yes" class="primary-btn" type="submit">ยืนยัน</button></div></form></dialog>
 <dialog id="issues-dialog" class="issues-dialog">
   <div class="modal-head"><div><span class="label-top">IMPORT DIAGNOSTICS</span><h2>ประวัติการนำเข้าที่ต้องตรวจสอบ</h2></div><button id="issues-close" class="quiet-btn" type="button">✕ ปิด</button></div>
