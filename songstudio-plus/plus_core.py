@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import time
 import re
@@ -1268,6 +1269,7 @@ def replace_groups(workspace,query,keys,replacement,expected_lines,progress=None
         total=len(ordered_edits)
         needs_review=0
         estimated=0
+        done_lines=0
         if progress:
             progress({"done":0,"total":total,"changed_lines":0,
                       "needs_review_lines":0,"estimated_lines":0},
@@ -1323,9 +1325,10 @@ def replace_groups(workspace,query,keys,replacement,expected_lines,progress=None
             db.execute("""INSERT INTO xstage_edit_changes
               (batch_id,song_id,before_version,after_version) VALUES (?,?,?,?)""",
               (batch,song_id,prior["id"],version))
+            done_lines+=len(positions)
             if progress and (completed==total or completed%8==0):
                 progress({"done":completed,"total":total,
-                          "changed_lines":sum(len(x) for _,x in ordered_edits[:completed]),
+                          "changed_lines":done_lines,
                           "needs_review_lines":needs_review,
                           "estimated_lines":estimated},
                          "แก้ไขแล้ว "+str(completed)+"/"+str(total)+" เพลง")
