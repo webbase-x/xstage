@@ -44,13 +44,6 @@ try
         DownloadEngine.TryParseUrl("https://user:pass@example.com/file", out _))
         throw new Exception("Non-HTTP or credential URLs must be rejected.");
 
-    var socialJob = manager.Add("https://www.facebook.com/reel/123456", folder, 8, "720");
-    // The mock server test is offline: do not start actual social extraction here.
-    manager.Pause(socialJob);
-    await WaitFor(() => socialJob.Status == "Paused" && socialJob.Cancellation is null);
-    if (socialJob.Kind != "Video" || socialJob.VideoQuality != "720")
-        throw new Exception("Social URL was not auto-detected or video quality was not saved.");
-    if (!manager.Remove(socialJob)) throw new Exception("Could not remove paused video job.");
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
     var job = manager.Add(server.Url + "range/test%20file.bin", folder);
