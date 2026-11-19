@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from urllib.parse import urlsplit
 
 
@@ -82,9 +82,9 @@ def _destroy_taskbar_icons(handles):
 def run_desktop(server,url,workspace,icon_path,state=None):
     port=validate_local(url)
     set_windows_identity()
-    from PySide6.QtCore import QUrl, QTimer
+    from PySide6.QtCore import QObject, Qt, QUrl, QTimer, Signal, Slot
     from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QShortcut
-    from PySide6.QtWidgets import QApplication,QMainWindow
+    from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow
     from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
     from PySide6.QtWebEngineWidgets import QWebEngineView
 
@@ -153,6 +153,66 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             app.quit()
 
     window=MainWindow()
+
+    class NativeFilePicker(QObject):
+        """Queue native dialogs on the Qt GUI thread; the API request runs in
+        a different HTTP worker. Never construct Tk windows in that worker.
+        """
+        requested=Signal(object)
+
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.parent_window=parent
+            self.last_directory=None
+            self.requested.connect(self._on_request,
+                                   Qt.ConnectionType.QueuedConnection)
+
+        @Slot(object)
+        def _on_request(self, message):
+            try:
+                kind=message["kind"]
+                current=message.get("current") or ""
+                initial=Path(current).expanduser() if current else None
+                if initial and initial.is_file():
+                    initial=initial.parent
+                if not initial or not initial.is_dir():
+                    initial=self.last_directory
+                if not initial or not initial.is_dir():
+                    initial=Path.home()
+                if kind=="folder":
+                    chosen=QFileDialog.getExistingDirectory(
+                        self.parent_window,"เลือกโฟลเดอร์เพลงต้นฉบับ",
+                        str(initial),QFileDialog.Option.ShowDirsOnly)
+                elif kind=="lrc":
+                    chosen,_=QFileDialog.getOpenFileName(
+                        self.parent_window,"เลือกไฟล์เนื้อร้อง .LRC",
+                        str(initial),"ไฟล์เนื้อร้อง LRC (*.lrc);;ไฟล์ทั้งหมด (*)")
+                else:
+                    raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
+                if chosen:
+                    selected=Path(chosen)
+                    self.last_directory=selected if selected.is_dir() else selected.parent
+                message["result"]={"path":chosen or "",
+                                   "cancelled":not bool(chosen)}
+            except Exception as exc:
+                message["error"]=str(exc) or type(exc).__name__
+            finally:
+                message["done"].set()
+
+        def pick(self,kind,current=""):
+            request={"kind":kind,"current":str(current or ""),"done":Event()}
+            self.requested.emit(request)
+            if not request["done"].wait(300):
+                raise TimeoutError("หน้าต่างเลือกโฟลเดอร์ไม่ตอบสนอง กรุณาลองใหม่")
+            if "error" in request:
+                raise RuntimeError("เลือกไฟล์หรือโฟลเดอร์ไม่สำเร็จ: "+request["error"])
+            return request["result"]
+
+    picker=NativeFilePicker(window)
+    # State owns the server-side callable. QObject belongs to the GUI thread;
+    # invoking it only emits a queued signal, not a cross-thread GUI call.
+    if state is not None:
+        state.native_picker=picker.pick
     # The update helper waits for this process to exit before replacing the
     # managed EXE. Finish/cancel the active SQLite job first, then quit Qt.
     exit_timer=QTimer(window)
@@ -172,6 +232,8 @@ def run_desktop(server,url,workspace,icon_path,state=None):
         native_icons=_apply_taskbar_icon(window,icon_file)
         return app.exec()
     finally:
+        if state is not None:
+            state.native_picker=None
         _destroy_taskbar_icons(native_icons)
         server.shutdown()
         worker.join(timeout=5)
