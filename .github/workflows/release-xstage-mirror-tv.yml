@@ -32,6 +32,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release(mirror-tv): publish v0.2.14 build 116')
     runs-on: ubuntu-latest
+    # Keep this release bound to the updated v0.2.14 source regression tests.
     timeout-minutes: 120
     env:
       XSTAGE_MIRROR_VERSION: ${{ inputs.version || '0.2.14' }}

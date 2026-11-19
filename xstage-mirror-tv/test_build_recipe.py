@@ -29,7 +29,7 @@ assert 'viewModel.set(Prefs.SERVER_NAME, namePreview)' in editor
 assert 'enabled = canEdit' in editor
 receiver_home = (app / "src/main/kotlin/app/airshow/tv/ui/XStageReceiverHome.kt").read_text()
 assert 'XStageReceiverHome(' in ui
-assert 'ReceiverNameEditor(viewModel, canEdit = true)' in receiver_home
+assert 'ReceiverNameEditor(viewModel, canEdit = true, onFinished = { editingName = false })' in receiver_home
 assert 'text = serverName,' in receiver_home
 assert 'text = "พร้อมรับภาพ"' not in receiver_home  # status comes from actual running state
 assert 'state == ServerState.RUNNING -> "พร้อมรับภาพ"' in receiver_home
