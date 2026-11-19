@@ -156,11 +156,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200,manual.detail(
                 self.state.workspace,q.get("song_id",[""])[0]));return
         if path=="/api/build/eligible":
-            self.send_json(200,{"song_ids":manual.approved_build_ids(
+            self.send_json(200,{"ready_total":manual.ready_count(
                 self.state.workspace)});return
         if path=="/api/songs":
-            self.send_json(200,{"rows":core.songs(self.state.workspace,
-                q.get("q",[""])[0],q.get("limit",[80])[0],q.get("offset",[0])[0])});return
+            rows=core.songs(self.state.workspace,
+                q.get("q",[""])[0],q.get("limit",[80])[0],q.get("offset",[0])[0])
+            self.send_json(200,{"rows":manual.annotate_rows(
+                self.state.workspace,rows)});return
         if path=="/api/groups":
             self.send_json(200,{"rows":core.groups(self.state.workspace,
                 q.get("q",[""])[0],min(int(q.get("limit",[100])[0]),500),
@@ -377,16 +379,27 @@ class Handler(BaseHTTPRequestHandler):
                 result=manual.approve(self.state.workspace,
                     body.get("song_id",""),body.get("version_id"))
             elif path=="/api/build":
+                all_ready=body.get("all_ready") is True
+                excluded=body.get("excluded",[])
                 ids=body.get("song_ids",[])
-                if (not isinstance(ids,list) or not 1<=len(ids)<=5000 or
-                    any(not isinstance(x,str) for x in ids)):
+                if all_ready:
+                    if not isinstance(excluded,list) or len(excluded)>500000 or any(
+                            not isinstance(x,str) for x in excluded):
+                        raise ValueError("รายการยกเว้นไม่ถูกต้อง")
+                    ids=manual.approved_build_ids(self.state.workspace,excluded)
+                elif (not isinstance(ids,list) or not 1<=len(ids)<=5000 or
+                        any(not isinstance(x,str) for x in ids)):
                     raise ValueError("เลือกเพลง 1–5,000 เพลงต่อชุด")
                 eligible=set(manual.approved_build_ids(self.state.workspace))
                 if any(song_id not in eligible for song_id in ids):
                     raise ValueError("มีเพลงที่ยังไม่พร้อมสร้างหรือยังรอการยืนยัน กรุณาตรวจและปาดเนื้อร้องก่อน")
+                # Explicit selections are de-duplicated. The all-ready mode
+                # is a catalog query, not a giant browser-side checkbox list.
+                ids=list(dict.fromkeys(ids))
                 def run_build(progress,cancel):
-                    total={"done":0,"built":0,"skipped":0,"failed":0,"errors":[]}
-                    for song_id in dict.fromkeys(ids):
+                    total={"done":0,"total":len(ids),"built":0,"skipped":0,
+                           "failed":0,"errors":[]}
+                    for song_id in ids:
                         if cancel.is_set():break
                         try:
                             info=core.build_song(self.state.workspace,song_id)
