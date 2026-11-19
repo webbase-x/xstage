@@ -33,8 +33,15 @@ assert.ok(html.includes('X-Stage Song Studio Pro'),'Pro card must use the new br
 assert.ok(source.includes('X-Stage Song Studio Pro'),'Desktop web shell brand must match');
 assert.ok(js.includes('manual-cue-token')&&js.includes('manual-advanced-times')&&
  js.includes('manualCueUndo'),'New cue editor must be connected');
-assert.ok(workflow.includes('X-Stage-Song-Studio-Pro-v0.1.15-preview.exe'),
- 'Windows Preview must build only the Pro EXE');
+const proExeMatch=workflow.match(/--name "((?:X-Stage-Song-Studio-Pro)-v\\d+\\.\\d+\\.\\d+-preview)"/);
+assert.ok(proExeMatch,'Windows Preview must build only the Pro EXE');
+const proExe=proExeMatch[1]+'.exe';
+assert.ok(workflow.includes('dist/'+proExe),
+ 'Windows Preview must verify the same Pro EXE that it builds');
+assert.ok(workflow.includes('dist/'+proExe+'\\n'),
+ 'Windows Preview must upload the same Pro EXE as its artifact');
+assert.ok(!/--name "(?!X-Stage-Song-Studio-Pro-)[^"]+"/.test(workflow),
+ 'Windows Preview must not build another Studio executable');
 assert.ok(!fs.existsSync(new URL('../songstudio-pc',import.meta.url)),
  'Retired native PC source must not be present on current branch');
 assert.ok(!fs.existsSync(new URL('../studio',import.meta.url)),
