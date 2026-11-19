@@ -30,7 +30,7 @@
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
-      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.11 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
+      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.12 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
     </div>
   </aside>
   <main class="main">
@@ -84,9 +84,20 @@
             <p id="activity-subtitle">อ่านไฟล์ต้นฉบับเฉพาะเท่าที่จำเป็น บันทึก SQLite เป็นชุด โดยไม่คัดลอกไฟล์เพลง</p>
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <div class="progress-numbers"><span id="progress-detail">ยังไม่มีงาน</span><span id="progress-count">—</span></div>
-            <button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดงานหลังไฟล์ปัจจุบัน</button>
+            <p id="import-resume-status" class="field-hint" aria-live="polite">โปรแกรมบันทึก Checkpoint ลง SQLite ระหว่างนำเข้า เพื่อเปิดกลับมาทำต่อได้</p>
+            <div class="toolbar"><button type="button" class="quiet-btn" id="refresh-summary">↻ รีเฟรชยอดสรุปและงาน</button><button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดหลังไฟล์ปัจจุบัน</button></div>
+            <p id="summary-refreshed" class="field-hint">ยอดสรุปจาก SQLite · ไม่ต้องเริ่มนำเข้าใหม่เพื่อรีเฟรช</p>
           </article>
         </div>
+        <section class="panel pro-update-panel" aria-labelledby="pro-update-title">
+          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.12</span></div>
+          <p class="field-hint" id="pro-update-status" aria-live="polite">ตรวจรุ่นใหม่จากหน้า X-Stage Apps และ SHA-256 ก่อนติดตั้ง · คลังเพลงและประวัติเนื้อร้องไม่ถูกลบ</p>
+          <div class="toolbar">
+            <button id="pro-update-check" class="quiet-btn" type="button">↻ ตรวจสอบอัปเดต</button>
+            <button id="pro-update-install" class="primary-btn" type="button" disabled>ดาวน์โหลด ติดตั้ง แล้วเปิดใหม่ทันที</button>
+          </div>
+          <p class="field-hint">เมื่อมีงานนำเข้า ระบบจะขอหยุดหลังไฟล์ปัจจุบัน บันทึก Checkpoint ก่อนเปลี่ยน EXE แล้วเปิดกลับมาทำต่ออัตโนมัติ · ต้องเชื่อมต่ออินเทอร์เน็ต</p>
+        </section>
         <section class="panel issues-panel" aria-labelledby="issues-title">
           <div class="panel-head">
             <div><span class="label-top">IMPORT DIAGNOSTICS</span><h2 id="issues-title">รายการที่นำเข้าไม่สมบูรณ์</h2></div>
