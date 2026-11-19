@@ -100,6 +100,43 @@ class ManualKaraokeTests(unittest.TestCase):
               WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()[0]
             self.assertEqual(active,old)
 
+    def test_diagnostics_suggest_fixes_only_for_observed_problems(self):
+        rows=[
+            {"text":"รักเธอ","start":None,"end":None,"segments":[],"starts":[]},
+            {"text":"hello","start":1.0,"end":3.0,"segments":["hel","lo"],
+             "starts":[1.0]},
+            {"text":"abcd","start":3.0,"end":4.0,"segments":["ab","xd"],
+             "starts":[3.1,3.5]},
+            {"text":"ok","start":4.0,"end":7.0,"segments":["o","k"],
+             "starts":[4.1,5.0],"timing":"estimated"},
+        ]
+        found=edit.inspect_cue_issues(rows)
+        self.assertIn(("missing","LINE_UNTIMED",0),
+            [(x["category"],x["rule"],x["line_position"]) for x in found])
+        self.assertIn(("missing","CUES_PARTIAL",1),
+            [(x["category"],x["rule"],x["line_position"]) for x in found])
+        self.assertIn(("structural","CUES_TEXT_MISMATCH",2),
+            [(x["category"],x["rule"],x["line_position"]) for x in found])
+        self.assertIn(("unverified","ESTIMATED_TIMING",3),
+            [(x["category"],x["rule"],x["line_position"]) for x in found])
+        self.assertFalse(any(x["category"]=="structural" and x["line_position"]==3
+                             for x in found))
+        self.assertTrue(all(x["found"] and x["suggestion"] for x in found))
+
+    def test_detail_exposes_missing_lyric_recommendations(self):
+        details=edit.detail(self.workspace,self.song["id"])
+        self.assertFalse(details["has_lyrics"])
+        self.assertEqual(details["findings"][0]["rule"],"NO_LYRICS")
+        saved=edit.save(self.workspace,self.song["id"],None,[
+            {"text":"ทดสอบ","start":1.0,"end":3.0,
+             "segments":["ทด","สอบ"],"starts":[1.0,2.0]},
+        ])
+        details=edit.detail(self.workspace,self.song["id"])
+        self.assertTrue(details["has_lyrics"])
+        self.assertTrue(any(x["category"]=="unverified"
+                            for x in details["findings"]))
+        self.assertEqual(details["song"]["version_id"],saved["version_id"])
+
     def test_reject_fabricated_or_mismatched_timing(self):
         sid=self.song["id"]
         with self.assertRaisesRegex(ValueError,"จำนวนคำกับเวลาปาด"):
