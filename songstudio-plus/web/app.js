@@ -3,7 +3,8 @@
   const $ = id => document.getElementById(id);
   const state = {token:null,ready:false,view:"import",groups:[],selectedGroups:new Set(),
                  songs:[],selectedSongs:new Set(),allReadySelected:false,excludedSongs:new Set(),
-                 readyTotal:0,latestEdit:null,activeJob:null,
+                 readyTotal:0,latestEdit:null,lyricsEditJob:null,
+                 lyricsEditActive:false,activeJob:null,
                  jobSignature:"",toastTimer:null,riskFilter:"structural",
                  riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
@@ -316,7 +317,9 @@
       "เลือก "+number(chosen.length)+" กลุ่ม · "+number(lines)+" บรรทัด"+
       " · แทนที่ข้อความทั้งบรรทัด (ไม่ใช่แทนเฉพาะคำค้น)":
       "ยังไม่ได้เลือกกลุ่มข้อความ");
-    $("lyrics-apply").disabled=!state.ready||!chosen.length||!$("lyrics-replacement").value.trim();
+    $("lyrics-apply").disabled=!state.ready||state.lyricsEditActive||
+      !chosen.length||!$("lyrics-replacement").value.trim();
+    $("lyrics-undo").disabled=state.lyricsEditActive||!state.latestEdit;
   }
   async function confirmTask(title,message){
     const modal=$("confirm-dialog");text("confirm-title",title);text("confirm-text",message);
@@ -327,30 +330,46 @@
     });
   }
   async function applyLyrics(){
+    if(state.lyricsEditActive)return;
     const q=$("lyrics-search").value.trim();
     const replacement=$("lyrics-replacement").value.trim();
     const keys=Array.from(state.selectedGroups);
-    if(!keys.length||!q||!replacement){toast("กรุณาค้นคำ เลือกกลุ่ม และใส่ข้อความใหม่",true);return;}
+    if(!keys.length||!q||!replacement){
+      toast("กรุณาค้นคำ เลือกกลุ่ม และใส่ข้อความใหม่",true);return;
+    }
+    $("lyrics-apply").disabled=true;
+    text("edit-feedback","กำลังตรวจจำนวนเพลงและบรรทัดที่เลือก...");
     try{
       const plan=await api("/api/edit/plan",{q,keys});
-      if(!plan.lines){toast("ไม่มีรายการที่ต้องเปลี่ยน");return;}
+      if(!plan.lines){
+        text("edit-feedback","ไม่พบบรรทัดที่ต้องแก้ไข");return;
+      }
       const approved=await confirmTask("ยืนยันแทนที่เนื้อร้อง",
-        "กลุ่มที่เลือก: "+number(plan.groups)+"\n"+
-        "บรรทัดที่จะเปลี่ยน: "+number(plan.lines)+"\n"+
-        "เพลงที่เกี่ยวข้อง: "+number(plan.songs)+"\n\n"+
-        "ข้อความใหม่ทั้งบรรทัด:\n"+replacement+"\n\n"+
-        "รักษาเวลาเริ่ม–จบแยกตามเพลง ระบบจะทำเครื่องหมาย Estimated เมื่อปรับจังหวะปาดสี");
-      if(!approved)return;
-      const output=await api("/api/edit/apply",{q,keys,replacement,expected_lines:plan.lines});
-      if(output.batch){state.latestEdit=output.batch;$("lyrics-undo").disabled=false;}
-      text("edit-feedback","แก้ไขแล้ว "+number(output.changed_lines)+" บรรทัดใน "+
-        number(output.changed_songs)+" เพลง · สามารถ Undo การแก้ไขชุดล่าสุด");
-      state.selectedGroups.clear();
-      await searchGroups();await refreshStatus();
-      toast("บันทึกเนื้อร้องใหม่ลง SQLite สำเร็จ");
-    }catch(error){toast(error.message,true);}
+        "กลุ่มที่เลือก: "+number(plan.groups)+"\\n"+
+        "บรรทัดที่จะเปลี่ยน: "+number(plan.lines)+"\\n"+
+        "เพลงที่เกี่ยวข้อง: "+number(plan.songs)+"\\n\\n"+
+        "ข้อความใหม่ทั้งบรรทัด:\\n"+replacement+"\\n\\n"+
+        "เวลาปาดที่เดิมไม่สอดคล้อง จะบันทึกข้อความใหม่และส่งให้เมนู 05 ตรวจ"+
+        " · หากยกเลิกระหว่างทำงาน ระบบจะคืนค่า SQLite ทั้งชุด");
+      if(!approved){
+        text("edit-feedback","ยกเลิกก่อนเริ่มแก้ไข · ยังไม่มีข้อมูลเปลี่ยน");return;
+      }
+      const result=await api("/api/edit/apply",{
+        q,keys,replacement,expected_lines:plan.lines
+      });
+      state.lyricsEditActive=true;
+      state.lyricsEditJob=result.job;
+      $("lyrics-cancel").hidden=false;
+      text("edit-feedback","เริ่มแทนที่ "+number(plan.lines)+" บรรทัดใน "+
+        number(plan.songs)+" เพลง · บันทึกสำเร็จเมื่อจบทั้งชุดเท่านั้น");
+      await refreshJobs();
+    }catch(error){
+      text("edit-feedback","แทนที่ไม่สำเร็จ: "+error.message);
+      toast(error.message,true);
+    }finally{updateSelectedGroups();}
   }
   async function undoLyrics(){
+    if(state.lyricsEditActive)return;
     if(!state.latestEdit)return;
     if(!await confirmTask("ย้อนคืนการแก้ไข","คืนค่าเนื้อร้องทั้งชุดล่าสุด โดยไม่เปลี่ยนไฟล์ต้นฉบับ?"))return;
     try{
@@ -469,13 +488,47 @@
       if(!job)return;
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
-      text("activity-title",job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
+      text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
+          job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
           job.kind==="import"?"นำเข้าและตรวจ SHA-256":
           job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":
            job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อจาก SQLite":"สร้างไฟล์ X-Stage Pro");
       text("activity-subtitle",job.message||"");
       const p=job.progress||{};
-      text("progress-detail",job.kind==="update"?
+      if(job.kind==="lyrics-edit"){
+        state.lyricsEditJob=job.id;
+        state.lyricsEditActive=job.status==="running";
+        $("lyrics-cancel").hidden=job.status!=="running";
+        $("lyrics-cancel").disabled=job.status!=="running";
+        updateSelectedGroups();
+        if(job.status==="running"){
+          text("edit-feedback","กำลังแทนที่ "+number(p.done)+" / "+
+            number(p.total)+" เพลง · ตรวจจุดปาดที่ต้องแก้ต่อ "+
+            number(p.needs_review_lines)+" บรรทัด · ยกเลิกได้โดยไม่บันทึกบางส่วน");
+        }else if(job.status==="completed"){
+          const output=job.result||{};
+          if(output.batch){
+            state.latestEdit=output.batch;
+            state.selectedGroups.clear();
+            state.selectedGroupInfo.clear();
+            $("lyrics-undo").disabled=false;
+          }
+          text("edit-feedback","บันทึกสำเร็จ "+number(output.changed_lines)+
+            " บรรทัดใน "+number(output.changed_songs)+
+            " เพลง · จุดปาดไม่สอดคล้องและรอตรวจในเมนู 05 "+
+            number(output.needs_review_lines)+" บรรทัด"+
+            (output.batch?" · กดย้อนคืนได้":""));
+        }else{
+          text("edit-feedback",job.status==="cancelled"?
+            "ยกเลิกแล้ว · ฐานข้อมูลคืนค่าเดิมทั้งชุด":
+            "แทนที่ไม่สำเร็จ ฐานข้อมูลยังไม่เปลี่ยน: "+(job.error||job.message));
+        }
+      }
+      text("progress-detail",job.kind==="lyrics-edit"?
+          "แทนที่เนื้อร้อง "+number(p.done)+" / "+number(p.total)+
+          " เพลง · รอตรวจปาดสี "+number(p.needs_review_lines)+
+          " บรรทัด · เวลาประมาณ "+number(p.estimated_lines)+" บรรทัด":
+          job.kind==="update"?
           "ดาวน์โหลด "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
           (p.total?" / "+number((p.total/1048576)>>0)+" MB":"")+
           " · ตรวจ SHA-256 ก่อนติดตั้ง":
@@ -498,7 +551,9 @@
           " · เวลาประมาณ "+number(p.estimated_songs)+
           " · CUR ไม่ครบ "+number(p.blocked_songs):
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
-      text("progress-count",job.kind==="update"?
+      text("progress-count",job.kind==="lyrics-edit"?
+        number(p.done)+" / "+number(p.total)+" เพลง":
+        job.kind==="update"?
         number(p.downloaded_bytes||0)+" ไบต์":
         number(p.processed||p.files_seen||p.done||0)+
         (job.kind==="recover"||job.kind==="swipe-audit"?" / "+number(p.total):"")+" รายการ");
@@ -509,7 +564,7 @@
           number(p.resumed_files)+" เพลง");
       }
       const progressBar=$("progress-fill");
-      const downloaded=job.kind==="update"&&p.total>0;
+      const downloaded=(job.kind==="update"||job.kind==="lyrics-edit")&&p.total>0;
       progressBar.classList.toggle("indeterminate",job.status==="running"&&!downloaded);
       progressBar.style.width=job.status==="completed"?"100%":
         downloaded?Math.min(100,100*(p.done||0)/p.total).toFixed(1)+"%":"0%";
@@ -520,7 +575,9 @@
           await refreshStatus();
           if(state.view==="risks")await loadRisks();
           else if(state.view!=="import")await refreshSongs();
-          toast(job.status==="completed"?"งาน "+(job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
+          if(job.kind==="lyrics-edit"&&job.status==="completed"&&state.view==="lyrics")
+            await searchGroups();
+          toast(job.status==="completed"?"งาน "+(job.kind==="lyrics-edit"?"แทนที่เนื้อร้อง":job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
             job.error||"งานล้มเหลว",job.status==="failed");
           if(job.kind==="update"){
             if(job.status==="completed"&&state.updateInstallIntent){
@@ -1942,6 +1999,16 @@
       state.selectedGroups.clear();state.selectedGroupInfo.clear();renderGroups();
     });
     $("lyrics-apply").addEventListener("click",()=>void applyLyrics());
+    $("lyrics-cancel").addEventListener("click",async()=>{
+      if(!state.lyricsEditJob||!state.lyricsEditActive)return;
+      if(!await confirmTask("ยกเลิกการแทนที่ทั้งชุด",
+        "ยกเลิกการแทนที่ขณะนี้และคืนข้อมูลใน SQLite ทั้งชุดหรือไม่?"))return;
+      try{
+        await api("/api/job/cancel",{job:state.lyricsEditJob});
+        $("lyrics-cancel").disabled=true;
+        text("edit-feedback","กำลังยกเลิกและคืนค่าทั้งชุด...");
+      }catch(error){toast(error.message,true);}
+    });
     $("lyrics-undo").addEventListener("click",()=>void undoLyrics());
     $("media-attach").addEventListener("click",()=>void attachLrc());
     $("build-all").addEventListener("click",async()=>{
