@@ -21,3 +21,6 @@ Build: dotnet publish mirror-android-pc/XStageMirrorAndroidPC.csproj -c Release 
 CI: .github/workflows/build-xstage-mirror-android-pc.yml followed by .github/workflows/publish-xstage-mirror-android-pc-preview.yml.
 
 Physical Android/Windows Miracast casting is not yet hardware-certified.
+
+Preview publication uses the repository's configured release publishing identity,
+then verifies Setup and portable SHA-256 before activating the update feed.
