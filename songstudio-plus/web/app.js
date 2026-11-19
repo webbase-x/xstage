@@ -349,7 +349,9 @@
         "บรรทัดที่จะเปลี่ยน: "+number(plan.lines)+"\n"+
         "เพลงที่เกี่ยวข้อง: "+number(plan.songs)+"\n\n"+
         "ข้อความใหม่ทั้งบรรทัด:\n"+replacement+"\n\n"+
-        "เวลาปาดที่เดิมไม่สอดคล้อง จะบันทึกข้อความใหม่และส่งให้เมนู 05 ตรวจ"+
+        "ข้อความสั้นกว่าจุดปาดเดิม จะเติม > ในช่อง CUR ภายใน"+
+        " · ข้อความยาวกว่า CUR จะปาดควบหลายอักขระ"+
+        " · คงเวลา CUR เดิมและให้เมนู 05 ฟังตรวจ"+
         " · หากยกเลิกระหว่างทำงาน ระบบจะคืนค่า SQLite ทั้งชุด");
       if(!approved){
         text("edit-feedback","ยกเลิกก่อนเริ่มแก้ไข · ยังไม่มีข้อมูลเปลี่ยน");return;
@@ -503,8 +505,10 @@
         updateSelectedGroups();
         if(job.status==="running"){
           text("edit-feedback","กำลังแทนที่ "+number(p.done)+" / "+
-            number(p.total)+" เพลง · ตรวจจุดปาดที่ต้องแก้ต่อ "+
-            number(p.needs_review_lines)+" บรรทัด · ยกเลิกได้โดยไม่บันทึกบางส่วน");
+            number(p.total)+" เพลง · เติม > "+number(p.silent_slots)+
+            " จุด · ปาดควบ "+number(p.combined_lines)+
+            " บรรทัด · ต้องจับเวลาต่อ "+number(p.needs_review_lines)+
+            " บรรทัด · ยังไม่บันทึกจนกว่าจะเสร็จทั้งชุด");
         }else if(job.status==="completed"){
           const output=job.result||{};
           if(output.batch){
@@ -515,8 +519,12 @@
           }
           text("edit-feedback","บันทึกสำเร็จ "+number(output.changed_lines)+
             " บรรทัดใน "+number(output.changed_songs)+
-            " เพลง · จุดปาดไม่สอดคล้องและรอตรวจในเมนู 05 "+
+            " เพลง · เติม > ใน CUR "+number(output.silent_slots)+
+            " จุด ("+number(output.padded_lines)+" บรรทัด)"+
+            " · ปาดควบ "+number(output.combined_lines)+
+            " บรรทัด · รอแก้เวลาในเมนู 05 "+
             number(output.needs_review_lines)+" บรรทัด"+
+            " · เวลาเดิมที่จับคู่ใหม่ต้องฟังยืนยัน"+
             (output.batch?" · กดย้อนคืนได้":""));
         }else{
           text("edit-feedback",job.status==="cancelled"?
@@ -526,8 +534,10 @@
       }
       text("progress-detail",job.kind==="lyrics-edit"?
           "แทนที่เนื้อร้อง "+number(p.done)+" / "+number(p.total)+
-          " เพลง · รอตรวจปาดสี "+number(p.needs_review_lines)+
-          " บรรทัด · เวลาประมาณ "+number(p.estimated_lines)+" บรรทัด":
+          " เพลง · เติม > "+number(p.silent_slots)+" จุด"+
+          " · ปาดควบ "+number(p.combined_lines)+" บรรทัด"+
+          " · ไม่มี CUR "+number(p.needs_review_lines)+" บรรทัด"+
+          " · รอฟังตรวจ "+number(p.estimated_lines)+" บรรทัด":
           job.kind==="update"?
           "ดาวน์โหลด "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
           (p.total?" / "+number((p.total/1048576)>>0)+" MB":"")+
