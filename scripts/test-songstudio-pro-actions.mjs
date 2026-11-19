@@ -80,6 +80,10 @@ assert.ok(desktop.includes('javaScriptConsoleMessage'),
  'Desktop shell must capture JavaScript console failures');
 assert.ok(desktop.includes('web.load.finished')&&desktop.includes('web.render.terminated'),
  'Desktop shell must log WebView load and renderer failures');
+assert.ok(desktop.includes('Ctrl+Shift+L')&&desktop.includes('web.core.check'),
+ 'Desktop shell must provide a native log shortcut and JS core health check');
+assert.ok(js.includes('__XSTAGE_CORE_BOUND__'),
+ 'Web UI must expose successful core button binding to the desktop wrapper');
 assert.ok(server.includes('song-studio-pro.log')&&server.includes('def diagnostic('),
  'Persistent diagnostic log is required');
 assert.ok(js.indexOf('bind();') < js.indexOf('new globalThis.XStageCueTimelineUI'),
