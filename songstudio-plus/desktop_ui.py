@@ -143,8 +143,6 @@ def run_desktop(server,url,workspace,icon_path,state=None):
                 shortcut=QShortcut(QKeySequence(key),self)
                 shortcut.activated.connect(callback)
                 self.shortcuts.append(shortcut)
-            self.web.load(QUrl(url))
-
         def change_zoom(self,step):
             self.web.setZoomFactor(
                 max(0.90,min(1.80,round(self.web.zoomFactor()+step,2))))
@@ -153,25 +151,27 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             event.accept()
             app.quit()
 
-    # Start the loopback engine BEFORE QWebEngineView loads localhost.
-    # Previously MainWindow() called web.load() first, creating a race where
-    # the UI could open from cache while /api/session was still unreachable.
-    worker=Thread(target=server.serve_forever,
-                  kwargs={"poll_interval":0.2},
-                  daemon=True,name="studio-pro-local-engine")
-    worker.start()
-
     window=None
     picker=None
+    worker=None
     native_icons=[]
     try:
+        # Build the native window first, but do NOT load localhost yet.
         window=MainWindow()
 
         picker=NativeFilePicker(window)
-        # State owns the server-side callable. QObject belongs to the GUI thread;
-        # invoking it only emits a queued signal, not a cross-thread GUI call.
+        # Register the GUI-thread picker before the web UI can call /api/pick.
         if state is not None:
             state.native_picker=picker.pick
+
+        # Start the loopback engine before QWebEngineView requests localhost.
+        worker=Thread(target=server.serve_forever,
+                      kwargs={"poll_interval":0.2},
+                      daemon=True,name="studio-pro-local-engine")
+        worker.start()
+
+        # Only now expose the UI: /api/session and /api/pick are both ready.
+        window.web.load(QUrl(url))
 
         # The update helper waits for this process to exit before replacing the
         # managed EXE. Finish/cancel the active SQLite job first, then quit Qt.
@@ -190,4 +190,5 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             state.native_picker=None
         _destroy_taskbar_icons(native_icons)
         server.shutdown()
-        worker.join(timeout=5)
+        if worker is not None:
+            worker.join(timeout=5)
