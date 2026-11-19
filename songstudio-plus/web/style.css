@@ -391,3 +391,31 @@ html,body{width:100%;height:100%;overflow:hidden}
 
 /* Author display:flex must not override the HTML hidden attribute. */
 #preview-video[hidden],#preview-cover[hidden]{display:none!important}
+
+
+/* Song Studio Plus · 05 timing repair workspace. Keeps controls inside screen. */
+.manual-workspace{grid-template-columns:minmax(260px,.83fr) minmax(0,1.45fr);align-items:start}
+.manual-queue,.manual-editor{min-width:0}
+.manual-queue .preview-songs{max-height:480px;overflow:auto}
+.manual-queue select{width:100%;min-width:0;border:1px solid var(--stroke);border-radius:10px;background:var(--panel-2);padding:10px;color:var(--text);margin:8px 0 14px}
+.manual-queue .search-combo input{width:100%;min-width:0;flex:1;background:var(--panel-2);border:1px solid var(--stroke);border-radius:10px;padding:10px}
+.manual-editor .manual-stage{position:relative;border-radius:14px;overflow:hidden;background:radial-gradient(circle at center,#29335c,#090e20);min-height:170px;display:flex;align-items:center;justify-content:center}
+.manual-editor .manual-stage video{width:100%;max-height:230px;display:block;object-fit:contain}
+.manual-editor .manual-stage video[hidden]{display:none}
+.manual-editor .manual-stage-text{position:absolute;bottom:10px;left:10px;right:10px;text-align:center;font-size:21px;font-weight:700;color:white;text-shadow:0 2px 5px #000}
+.manual-editor .manual-stage-text small{display:block;margin-top:8px;font-size:14px;color:#d9def6}
+.manual-commands,.manual-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.manual-commands select{min-width:120px;flex:1;max-width:260px;border:1px solid var(--stroke);background:var(--panel-2);border-radius:10px;color:var(--text);padding:9px}
+.manual-line-list{display:grid;gap:10px;max-height:370px;overflow:auto;padding:3px;margin:12px 0}
+.manual-line-card{min-width:0;display:grid;gap:8px;padding:12px;border:1px solid var(--stroke);background:var(--panel-2);border-radius:12px}
+.manual-line-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.manual-line-card input,.manual-editor textarea{width:100%;max-width:100%;min-width:0;border-radius:9px;border:1px solid var(--stroke);background:var(--panel);padding:10px;color:var(--text)}
+.manual-line-card input:focus{outline:2px solid var(--aqua)}
+.manual-line-card .manual-times{display:flex;gap:8px;min-width:0}
+.manual-line-card .manual-times input{width:50%}
+.manual-line-card small{color:var(--muted)}
+.manual-editor .preview-transport{flex-wrap:wrap;gap:8px}
+.manual-editor #manual-seek{flex:1;min-width:90px}
+.manual-editor .manual-actions .primary-btn{flex:1;min-width:180px}
+.manual-editor .manual-actions .quiet-btn{flex:1;min-width:125px}
+@media(max-width:1100px){.manual-workspace{grid-template-columns:minmax(0,1fr)}.manual-queue .preview-songs{max-height:260px}}
