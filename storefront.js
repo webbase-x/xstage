@@ -335,7 +335,8 @@
       quick.hidden=!available;
       if(available){
         quick.href=states[id].url;
-        quick.textContent=(id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?
+        quick.textContent=id==="download-manager"?"⬇ ดาวน์โหลด Setup EXE v"+states[id].version+" (Build "+states[id].build+")":
+          (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?
           ("⬇ ดาวน์โหลด "+(states[id].installer?"Setup EXE":"ZIP")+" v"+states[id].version+" (Build "+states[id].build+")") :
           (id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
         if(states[id].url.startsWith("./")){
