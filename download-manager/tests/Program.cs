@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using XStageDownloadManager;
 
-var bytes = new byte[5 * 1024 * 1024];
+var bytes = new byte[9 * 1024 * 1024];
 for (int i = 0; i < bytes.Length; i++) bytes[i] = (byte)(i % 251);
 using var server = new FileServer(bytes);
 var folder = Path.Combine(Path.GetTempPath(), "xstage-dm-test-" + Guid.NewGuid().ToString("N"));
@@ -17,19 +17,35 @@ try
         DownloadEngine.TryParseUrl("https://user:pass@example.com/file", out _))
         throw new Exception("Non-HTTP or credential URLs must be rejected.");
 
+    manager.SetDefaultParts(8);
+    if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
     var job = manager.Add(server.Url + "range/test%20file.bin", folder);
+    if (job.Parts != 8) throw new Exception("New job must inherit default segment count.");
+    if (manager.SetJobParts(job, 16)) throw new Exception("Active downloads must not be resegmented.");
     await WaitFor(() => job.Status == "Running" && Interlocked.Read(ref job.DownloadedBytes) >= 65536);
     manager.Pause(job);
     await WaitFor(() => job.Status == "Paused" && job.Cancellation is null);
     if (Interlocked.Read(ref job.DownloadedBytes) <= 0)
         throw new Exception("Test must leave partial downloaded bytes");
+    if (!manager.SetJobParts(job, 16))
+        throw new Exception("Paused download must accept a new segment count.");
+    if (job.Parts != 16 || job.SegmentsUsed != 0 || Interlocked.Read(ref job.DownloadedBytes) != 0)
+        throw new Exception("Repartition must reset temporary pieces and progress.");
     manager.Start(job);
     await WaitFor(() => job.Status is "Completed" or "Failed");
     if (job.Status != "Completed") throw new Exception("Range resume failed: " + job.Error);
     if (!job.SupportsRanges) throw new Exception("HTTP Range was not detected");
+    if (job.SegmentsUsed != 16) throw new Exception("Requested 16 ranges must be used for a sufficiently large file.");
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(job.CompletedPath)))
         throw new Exception("Range resume produced incorrect bytes");
 
+    var maxParts = manager.Add(server.Url + "range/32-connections.bin", folder, 32);
+    await WaitFor(() => maxParts.Status is "Completed" or "Failed");
+    if (maxParts.Status != "Completed") throw new Exception("32-connection download failed: " + maxParts.Error);
+    if (maxParts.SegmentsUsed != 32)
+        throw new Exception("32 HTTP ranges were not used for a sufficiently large file.");
+    if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(maxParts.CompletedPath)))
+        throw new Exception("32-connection merge corrupted the output.");
     var plain = manager.Add(server.Url + "plain/test%20file.bin", folder);
     await WaitFor(() => plain.Status is "Completed" or "Failed");
     if (plain.Status != "Completed") throw new Exception("Single stream failed: " + plain.Error);
@@ -40,7 +56,9 @@ try
         throw new Exception("Existing output must not be overwritten");
     if (!manager.Remove(job) || !File.Exists(job.CompletedPath))
         throw new Exception("Removing history must not delete completed files");
-    Console.WriteLine("PASS: HTTP 206 segmented download, pause/resume, byte-for-byte SHA content, HTTP 200 fallback, filename collision and safe removal.");
+    if (new DownloadEngine().DefaultParts != 8)
+        throw new Exception("Default segment count must persist across restarts.");
+    Console.WriteLine("PASS: configurable 1/8/16/32 segments, paused-job resegmentation, 32-range merge, byte-for-byte equality, HTTP 200 fallback, settings persistence and safe removal.");
 }
 finally
 {
