@@ -18,7 +18,7 @@
                  manualOffset:0,manualTotal:0,manualRows:[],manualSelected:null,
                  manualLines:[],manualDuration:0,manualTime:0,manualPlaying:false,
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
-                 manualMidiAt:0,manualFindings:[],manualOnlyIssues:false,
+                 manualMidiAt:0,manualDirty:false,manualFindings:[],manualOnlyIssues:false,
                  manualLayout:{menu:false,queue:false,stage:false,focus:false}};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
@@ -1162,10 +1162,9 @@
     $("manual-seek").value=String(Math.max(0,Math.min(state.manualDuration,state.manualTime)));
     text("manual-clock",previewFormatSeconds(state.manualTime)+" / "+
       previewFormatSeconds(state.manualDuration));
-    $("manual-approve").disabled=!selected||!state.manualHeard||
+    $("manual-approve").disabled=!selected||!state.manualHeard||state.manualDirty||
       !state.manualSelected?.song?.version_id||
-      state.manualSelected?.song?.timing_status==="incomplete"||
-      state.manualSelected?.song?.decision==="pending";
+      state.manualSelected?.song?.timing_status==="incomplete";
   }
   async function loadManualQueue(){
     if(!state.ready)return;
@@ -1242,6 +1241,7 @@
       select.value=String(Math.min(previous,select.options.length-1));
   }
   function manualDraftState(){
+    state.manualDirty=true;
     state.manualHeard=false;
     $("manual-approve").disabled=true;
     text("manual-edit-status","ยังไม่บันทึกการแก้ไข");
@@ -1307,16 +1307,23 @@
       card.append(top,words,times,segments,starts,footer);
       list.append(card);
     });
+    if(state.manualOnlyIssues&&!list.children.length){
+      const hint=document.createElement("p");
+      hint.className="manual-no-issues empty-small";
+      hint.textContent="ไม่พบบรรทัดที่ต้องตรวจจากข้อมูลขณะนี้ · กดแสดงทุกบรรทัดได้";
+      list.append(hint);
+    }
     manualRefreshSelectors();manualControls();manualDrawKaraoke();
     manualRenderFindings();
   }
   async function manualOpenSong(id){
     await manualStop();
     state.manualSelected=null;state.manualPreview=null;state.manualTime=0;
-    state.manualDuration=0;state.manualHeard=false;
+    state.manualDuration=0;state.manualHeard=false;state.manualDirty=false;
     try{
       const details=await api("/api/manual/detail?song_id="+encodeURIComponent(id));
       state.manualSelected=details;
+      state.manualDirty=false;
       state.manualLines=details.lines||[];
       state.manualFindings=details.findings||manualCheckDraft(state.manualLines);
       state.manualOnlyIssues=false;
@@ -1489,7 +1496,7 @@
       });
       await manualStop();
       state.manualSelected=null;state.manualPreview=null;
-      state.manualLines=[];state.manualFindings=[];manualRenderLines();
+      state.manualLines=[];state.manualDirty=false;state.manualFindings=[];manualRenderLines();
       text("manual-song-title","เลือกเพลงด้านซ้าย");
       text("manual-edit-status","ข้ามแล้ว");
       await loadManualQueue();toast("ข้ามรายการแล้ว ข้อมูลต้นฉบับยังอยู่");
