@@ -9,6 +9,7 @@ assert.doesNotThrow(() => new vm.Script(storefront));
 assert.doesNotThrow(() => new vm.Script(deviceSrc));
 assert.ok(html.includes('data-app="download-manager"'));
 assert.ok(html.includes('data-device-app="download-manager"'));
+assert.ok(html.includes('data-download-app="download-manager"'));
 assert.ok(html.includes('data-platform="windows"'));
 assert.ok(html.includes('assets/app-icons/download-manager.svg'));
 assert.ok(storefront.includes('"download-manager":{'));
@@ -17,8 +18,8 @@ const feed = JSON.parse(read('downloads/download-manager-preview-latest.json'));
 assert.equal(feed.name, 'X-Stage Download Manager');
 if (feed.available === true) {
   assert.match(feed.sha256, /^[a-f0-9]{64}$/i, 'published EXE needs a SHA-256');
-  assert.equal(feed.file, 'X-Stage-Download-Manager-v0.1.0-build1-win-x64-Setup.exe');
-  assert.equal(feed.download_url, 'https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.1.0-build1-preview/'+feed.file);
+  assert.match(feed.file, /^X-Stage-Download-Manager-v\d+\.\d+\.\d+-build\d+-win-x64-Setup\.exe$/);
+  assert.equal(feed.download_url, 'https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v'+feed.version+'-build'+feed.build+'-preview/'+feed.file);
 } else {
   assert.equal(feed.available, false, 'an unpublished build must remain unavailable');
 }
