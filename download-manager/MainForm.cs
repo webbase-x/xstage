@@ -443,7 +443,6 @@ public sealed class MainForm : Form
                         }));
                     }
                     catch (InvalidOperationException) { completion.TrySetResult(false); }
-                    catch (ObjectDisposedException) { completion.TrySetResult(false); }
                     return completion.Task;
                 }, _browserStop.Token);
             }
