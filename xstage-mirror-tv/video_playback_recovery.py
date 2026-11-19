@@ -107,7 +107,12 @@ replace_once("""    private val _listener = object : Player.Listener {
     private val _listener = object : Player.Listener {
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
             Log.w(TAG, "AirPlay video error: " + error.errorCodeName, error)
-            _recoverOrFinish("player error: " + error.errorCodeName)
+            // Avoid stop/prepare re-entry during ExoPlayer listener dispatch.
+            val failingPlayer = player
+            mainHandler.post {
+                if (failingPlayer != null && player === failingPlayer)
+                    _recoverOrFinish("player error: " + error.errorCodeName)
+            }
         }
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_READY) {
@@ -117,7 +122,18 @@ replace_once("""    private val _listener = object : Player.Listener {
             }
             if (state == Player.STATE_BUFFERING && bufferingSinceMs == 0L)
                 bufferingSinceMs = SystemClock.elapsedRealtime()
-            if (state == Player.STATE_ENDED) onEnded?.invoke()
+            if (state == Player.STATE_ENDED) {
+                if (lastKnownLive || player?.isCurrentMediaItemLive == true) {
+                    // Sliding live playlists can end after a temporary manifest gap.
+                    val endedPlayer = player
+                    mainHandler.post {
+                        if (endedPlayer != null && player === endedPlayer)
+                            _recoverOrFinish("live playlist ended")
+                    }
+                } else {
+                    onEnded?.invoke()
+                }
+            }
         }
 """)
 replace_once("""        player = p

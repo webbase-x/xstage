@@ -3,7 +3,14 @@
 An independently branded GPLv3 Android TV AirPlay receiver for iPhone and iPad.
 No iOS app, accounts, or internet cloud service required for casting on the local network.
 
-## Mirror TV receiver — v0.2.15 (Build 117)
+## Mirror TV receiver — v0.2.16 (Build 118)
+
+- Live AirPlay HLS errors now retry outside the Media3 error callback, avoiding re-entrant stop/prepare calls. Unexpected live-playlist END triggers bounded source recovery at the live edge rather than ending the receiver immediately.
+- Normal completed video-on-demand continues to close without retry. The independent screen mirroring pipeline remains unchanged.
+- An actual iPhone / TrueID TV live-stream hardware test remains required.
+
+### Previous v0.2.15 (Build 117)
+
 
 - AirPlay live HLS recovery: distinguish a live stream from on-demand video after the media timeline is known. If the live stream buffers for 12 seconds, restart just its ExoPlayer source and seek to the live edge (never reuse an expired DVR-window position). Limit to 3 consecutive retries; reset the counter only after sustained stable playback. On failure show a message rather than trapping the user in a spinner.
 - Video-on-demand retains its 18-second timeout and one bounded retry. Mirrored phone-screen video is decoded by a different pipeline and is not restarted by the HLS recovery mechanism.

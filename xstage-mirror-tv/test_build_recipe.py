@@ -142,6 +142,8 @@ video_player = (app / "src/main/kotlin/app/airshow/tv/renderer/AirPlayVideoPlaye
 assert 'VOD_BUFFERING_TIMEOUT_MS = 18_000L' in video_player
 assert 'LIVE_BUFFERING_TIMEOUT_MS = 12_000L' in video_player
 assert 'LIVE_MAX_RECOVERIES = 3' in video_player
+assert '_recoverOrFinish("live playlist ended")' in video_player
+assert 'if (failingPlayer != null && player === failingPlayer)' in video_player
 assert 'current.seekToDefaultPosition()' in video_player
 assert 'current.isCurrentMediaItemLive || lastKnownLive' in video_player
 assert 'current.stop()' in video_player and 'current.prepare()' in video_player
@@ -207,7 +209,7 @@ assert 'json.optString("channel") != "test-preview"' in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 117' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 118' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
