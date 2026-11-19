@@ -420,7 +420,7 @@
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && state.url){
-      const label=id==="download-manager"?"ดาวน์โหลด X-Stage Download Manager Setup EXE ↗":
+      const label=id==="download-manager"?"ดาวน์โหลด Setup EXE v"+state.version+" (Build "+state.build+") ↗":
         id==="studio-pro"?"ดาวน์โหลด Song Studio Pro EXE ↗":
         (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?(state.installer?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":"ดาวน์โหลด ZIP รุ่นทดสอบ ↗"):
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
@@ -460,7 +460,7 @@
     detailElements.description.textContent=info.description;
     detailElements.showcaseTitle.textContent=info.hero;
     detailElements.showcaseCopy.textContent=info.blurb;
-    detailElements.note.textContent=info.note+(state.kind==="pending"?" · "+state.status:"")+
+    detailElements.note.textContent=info.note+(id==="download-manager"&&(!state.available||state.version!=="0.2.0"||state.build!==3)?" · ขณะนี้ลิงก์ดาวน์โหลดยังเป็นรุ่นเก่า v"+(state.version||"0.1.1")+" Build "+(state.build||2)+" ที่ยังไม่มีโหมดดาวน์โหลดวิดีโอ · รุ่น v0.2.0 Build 3 ผ่านการสร้างแล้วแต่ยังรอสิทธิ์เผยแพร่ EXE บน GitHub":"")+(state.kind==="pending"?" · "+state.status:"")+
       (state.test?" · Mirror TV รุ่นทดสอบลงนามด้วยกุญแจ Debug ของ CI; การติดตั้งทับรุ่นก่อนหรือการอัปเดตอัตโนมัติอาจใช้ไม่ได้ ต้องถอนการติดตั้งก่อนหากลายเซ็นไม่ตรงกัน":"")+
       (state.preview?" · Karaoke PC EXE เป็นรุ่นทดลองที่ผ่าน CI แต่ยังไม่มีลายเซ็นผู้เผยแพร่ที่เชื่อถือได้ และยังไม่ได้ทดสอบติดตั้งด้วยตนเองครบทุกเครื่อง Windows SmartScreen อาจเตือน และไม่ควรใช้เป็นการอัปเดตอัตโนมัติของรุ่นทางการ":"");
     renderDeviceInfo(id);
