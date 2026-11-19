@@ -24,12 +24,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          token: ${{ secrets.XSTAGE_MIRROR_PUBLISH_TOKEN || github.token }}
           persist-credentials: true
 
       - name: Download Windows self-contained Setup and Portable ZIP
