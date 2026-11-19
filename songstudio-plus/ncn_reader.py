@@ -474,7 +474,7 @@ def ncn_document(companions):
     footer = re.compile(
         r"^(?:nick[\s_-]*karaoke(?:\s+professional)?|"
         r"นิค[\s_-]*คาราโอเกะ|เต่า[\s_-]*คาราโอเกะ)$", re.I)
-    decorations = " \t.\\u2026\\u00b7\\u2022*_-~=<>[]()"
+    decorations = " \t.…·•*_-~=<>[]()"
     def needed(lines):
         return sum(1 + len(part) for part in lines if part.strip())
     # Only discard a recognizable *final* vendor-only credit if all preceding
