@@ -101,7 +101,10 @@ def analyze(version,lines):
             result.append(_finding("structural","NO_SWEEP_CUES",line,
                  f"บรรทัด {line['position']+1} มีข้อความ {len(line['text'])} อักขระ แต่จุดปาดสี = 0"))
         if cues:
-            merged=unicodedata.normalize("NFC","".join(str(c["text"]) for c in cues))
+            # Internal trailing > fills unused original CUR slots. Only the
+            # visible text is compared; numeric timing still checks all cues.
+            shown=core.display_cues(line["text"],cues)
+            merged=unicodedata.normalize("NFC","".join(str(c["text"]) for c in shown))
             target=unicodedata.normalize("NFC",line["text"])
             if merged!=target:
                 result.append(_finding("structural","CUE_TEXT_DIFFERS",line,
