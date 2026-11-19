@@ -41,7 +41,7 @@ public static class SocialVideoDownloader
         if (!DownloadEngine.AllowedParts.Contains(job.Parts)) throw new ArgumentException("จำนวนส่วนไม่ถูกต้อง");
         var args = new List<string>
         {
-            "--ignore-config", "--no-playlist", "--no-simulate", "--no-mtime", "--newline", "--no-colors",
+            "--ignore-config", "--no-plugin-dirs", "--no-playlist", "--no-simulate", "--no-mtime", "--newline", "--no-colors",
             "--continue", "--windows-filenames",
             "--paths", "home:" + job.Folder,
             "--paths", "temp:" + work,
@@ -93,6 +93,7 @@ public static class SocialVideoDownloader
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
+        info.Environment["YTDLP_NO_PLUGINS"] = "1";
         foreach (var arg in BuildArguments(job, work, tools)) info.ArgumentList.Add(arg);
 
         using var process = new Process { StartInfo = info };

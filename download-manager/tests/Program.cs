@@ -31,6 +31,7 @@ try
     var video = new DownloadJob { Url = videoHosts[0], Folder = folder, Parts = 16, VideoQuality = "1080" };
     var videoArgs = SocialVideoDownloader.BuildArguments(video, Path.Combine(folder, ".temp"), Path.Combine(folder, "tools")).ToArray();
     if (!videoArgs.Contains("--no-playlist") || !videoArgs.Contains("--ignore-config") ||
+        !videoArgs.Contains("--no-plugin-dirs") ||
         !videoArgs.Contains("--no-simulate") || !videoArgs.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
         !videoArgs.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
         throw new Exception("Video arguments must isolate config, enforce video quality and use bundled Deno.");

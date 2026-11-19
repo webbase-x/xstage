@@ -114,6 +114,20 @@ jobs:
           The user is responsible for rights and website terms when downloading media.
           No DRM circumvention or extraction of private/paid content is provided.
           '@ | Set-Content -Path (Join-Path $tools 'THIRD-PARTY-NOTICES.txt') -Encoding UTF8
+          $licenseDir = Join-Path $tools 'licenses'
+          New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
+          $licenses = @(
+            @{ Filename='yt-dlp-UNLICENSE.txt'; Url='https://raw.githubusercontent.com/yt-dlp/yt-dlp/2026.10.26/LICENSE' },
+            @{ Filename='Deno-MIT.txt'; Url='https://raw.githubusercontent.com/denoland/deno/v2.9.8/LICENSE.md' },
+            @{ Filename='FFmpeg-GPLv3.txt'; Url='https://raw.githubusercontent.com/FFmpeg/FFmpeg/11337618b2/COPYING.GPLv3' }
+          )
+          foreach ($license in $licenses) {
+            $dest = Join-Path $licenseDir $license.Filename
+            Invoke-WebRequest -Uri $license.Url -OutFile $dest
+            if (-not (Test-Path $dest) -or (Get-Item $dest).Length -lt 500) {
+              throw "Required license text missing: $($license.Filename)"
+            }
+          }
           foreach ($exe in @('yt-dlp.exe','deno.exe','ffmpeg.exe','ffprobe.exe')) {
             if (-not (Test-Path (Join-Path $tools $exe) -PathType Leaf)) { throw "$exe missing in portable installer payload" }
           }
