@@ -109,7 +109,7 @@ jobs:
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.18-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" songstudio-plus/app.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.18-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
           if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.18-preview.exe")) { throw "EXE not produced" }
       - name: Verify EXE hash and package preview
@@ -117,9 +117,9 @@ jobs:
         run: |
           $exe="dist/X-Stage-Song-Studio-Pro-v0.1.18-preview.exe"
           $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-          "X-Stage Song Studio Pro v0.1.18 Native Windows Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
+          "X-Stage Song Studio Pro v0.1.18 Windows Browser Host Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
-          "Local-only SQLite Engine. Original media prebuild preview (WinMM MIDI) included. X-container player integration pending. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
+          "Local-only SQLite Engine. Default UI opens in the Windows browser; folder selection uses the Windows picker backend; embedded Qt UI remains troubleshooting-only. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           Write-Host "EXE SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
