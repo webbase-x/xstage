@@ -493,11 +493,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json(404,{"error":"ไม่พบคำสั่ง"});return
             self.send_json(200,result)
+        except PermissionError as e:
+            self.send_json(403,{"error":str(e)})
         except (ValueError,TypeError,KeyError,OSError,TimeoutError,
                 RuntimeError,json.JSONDecodeError) as e:
             self.send_json(400,{"error":str(e)})
-        except PermissionError as e:
-            self.send_json(403,{"error":str(e)})
         except Exception:
             self.send_json(500,{"error":"คำสั่งล้มเหลว โปรดตรวจสอบรายงานโปรแกรม"})
 
