@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 import re
 import shutil
 import sqlite3
@@ -111,6 +112,17 @@ CREATE TABLE IF NOT EXISTS xstage_import_items(
  source_path TEXT NOT NULL, source_name TEXT NOT NULL, media_sha256 TEXT,
  song_id TEXT REFERENCES xstage_songs(id), outcome TEXT NOT NULL, message TEXT,
  created_at TEXT NOT NULL, UNIQUE(batch_id,source_path));
+CREATE TABLE IF NOT EXISTS xstage_import_resume_state(
+ batch_id TEXT PRIMARY KEY REFERENCES xstage_import_batches(id),
+ source_root TEXT NOT NULL, counters_json TEXT NOT NULL,
+ status TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS xstage_import_resume_root
+ ON xstage_import_resume_state(source_root,status,updated_at);
+CREATE TABLE IF NOT EXISTS xstage_import_file_checkpoints(
+ batch_id TEXT NOT NULL REFERENCES xstage_import_batches(id),
+ source_path TEXT NOT NULL, bytes INTEGER NOT NULL, mtime_ns INTEGER NOT NULL,
+ companion_stamp TEXT NOT NULL, outcome TEXT NOT NULL,
+ counters_delta TEXT NOT NULL, PRIMARY KEY(batch_id,source_path));
 CREATE TABLE IF NOT EXISTS xstage_lyric_scan_cache(
  source_path TEXT PRIMARY KEY, media_sha256 TEXT NOT NULL,
  companion_stamp TEXT NOT NULL, outcome TEXT NOT NULL,
@@ -570,6 +582,21 @@ def iter_source(root):
             if p.suffix.lower() in MEDIA_EXT and not p.is_symlink() and p.is_file():
                 yield p
 
+def interrupted_import(workspace):
+    """Latest recoverable import. A previous crash cannot leave 'running' forever."""
+    with connect(workspace) as db:
+        db.execute("""UPDATE xstage_import_resume_state SET status='interrupted',
+          updated_at=? WHERE status='running'""",(now(),))
+        db.execute("""UPDATE xstage_import_batches SET status='interrupted'
+          WHERE id IN (SELECT batch_id FROM xstage_import_resume_state
+          WHERE status='interrupted') AND status='running'""")
+        row=db.execute("""SELECT r.batch_id,r.source_root,r.status,r.counters_json,
+            r.updated_at FROM xstage_import_resume_state r
+            WHERE r.status IN ('interrupted','cancelled')
+            ORDER BY r.updated_at DESC LIMIT 1""").fetchone()
+        return dict(row) if row else None
+
+
 def import_folder(workspace,source,progress=None,cancel=None):
     """Incremental import: hash and index original media, NEVER copy it.
 
@@ -582,20 +609,94 @@ def import_folder(workspace,source,progress=None,cancel=None):
     if root==target or target in root.parents or root in target.parents:
         raise ValueError("ต้นทางและคลัง Plus ต้องไม่อยู่ภายในกัน เพื่อป้องกันสแกนไฟล์วนซ้ำ")
     init(target)
-    batch=uuid.uuid4().hex
     totals={"files_seen":0,"files_new":0,"media_duplicates":0,
             "lyrics_new":0,"partial_lyrics":0,"draft_lyrics":0,
             "skipped_ncn":0,"failures":0,"hash_cache_hits":0,"bytes_hashed":0}
     with WRITE_LOCK,connect(target) as db:
-        db.execute("""INSERT INTO xstage_import_batches
-            (id,source_root,created_at,status) VALUES (?,?,?,'running')""",
-            (batch,str(root),now()))
+        prior=db.execute("""SELECT * FROM xstage_import_resume_state
+            WHERE source_root=? AND status IN ('interrupted','cancelled','running')
+            ORDER BY updated_at DESC LIMIT 1""",(str(root),)).fetchone()
+        resumed=prior is not None
+        if resumed:
+            batch=prior["batch_id"]
+            totals.update(json.loads(prior["counters_json"]))
+            db.execute("""UPDATE xstage_import_resume_state
+                SET status='running',updated_at=? WHERE batch_id=?""",(now(),batch))
+            db.execute("""UPDATE xstage_import_batches SET status='running'
+                WHERE id=?""",(batch,))
+        else:
+            batch=uuid.uuid4().hex
+            db.execute("""INSERT INTO xstage_import_batches
+                (id,source_root,created_at,status) VALUES (?,?,?,'running')""",
+                (batch,str(root),now()))
+            db.execute("""INSERT INTO xstage_import_resume_state
+                (batch_id,source_root,counters_json,status,updated_at)
+                VALUES (?,?,?,'running',?)""",
+                (batch,str(root),json.dumps(totals),now()))
         db.commit()
+        def store_resume(status):
+            db.execute("""UPDATE xstage_import_resume_state SET
+                counters_json=?,status=?,updated_at=? WHERE batch_id=?""",
+                (json.dumps(totals,separators=(",",":")),status,now(),batch))
+            db.execute("""UPDATE xstage_import_batches SET
+                files_seen=?,files_new=?,media_duplicates=?,lyrics_new=?,
+                failures=?,status=?,completed_at=? WHERE id=?""",
+                (totals["files_seen"],totals["files_new"],
+                 totals["media_duplicates"],totals["lyrics_new"],
+                 totals["failures"],status,now() if status!="running" else None,batch))
+            db.commit()
+        def checkpoint(path,original_path,stat,stamp,outcome,before_totals):
+            if stat is None:
+                stat=path.stat() if path.exists() else None
+            if stat is None:
+                return
+            delta={key:totals[key]-before_totals.get(key,0)
+                   for key in totals if totals[key]!=before_totals.get(key,0)}
+            db.execute("""INSERT INTO xstage_import_file_checkpoints
+                (batch_id,source_path,bytes,mtime_ns,companion_stamp,
+                 outcome,counters_delta) VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT(batch_id,source_path) DO UPDATE SET
+                bytes=excluded.bytes,mtime_ns=excluded.mtime_ns,
+                companion_stamp=excluded.companion_stamp,outcome=excluded.outcome,
+                counters_delta=excluded.counters_delta""",
+                (batch,original_path,stat.st_size,stat.st_mtime_ns,
+                 stamp,outcome,json.dumps(delta,separators=(",",":"))))
+        last_progress=0.0
+        resumed_count=0
         for path in iter_source(root):
             if cancel and cancel.is_set():
                 break
-            totals["files_seen"]+=1
             original_path=str(path.resolve())
+            # Resume is a metadata checkpoint, never a blind skip by filename.
+            # Changing the media file or any accompanying LYR/CUR/LRC re-opens it.
+            try:
+                source_stat=path.stat()
+                comps=companion_candidates(path)
+                stamp=companion_stamp(comps)
+            except OSError:
+                source_stat=None
+                comps={".lyr":None,".cur":None,".lrc":None}
+                stamp=""
+            previous=db.execute("""SELECT * FROM xstage_import_file_checkpoints
+                WHERE batch_id=? AND source_path=?""",(batch,original_path)).fetchone()
+            if previous is not None and source_stat is not None and (
+                  previous["bytes"]==source_stat.st_size and
+                  previous["mtime_ns"]==source_stat.st_mtime_ns and
+                  previous["companion_stamp"]==stamp and
+                  previous["outcome"] not in ("error","lyrics-error")):
+                resumed_count+=1
+                if progress and time.monotonic()-last_progress>.25:
+                    progress({**totals,"resumed_files":resumed_count,"resume":resumed},
+                             "ทำต่อ · ข้ามไฟล์ที่บันทึกครบแล้ว "+path.name)
+                    last_progress=time.monotonic()
+                continue
+            if previous is not None:
+                for field,value in json.loads(previous["counters_delta"]).items():
+                    totals[field]=max(0,totals[field]-value)
+                db.execute("""DELETE FROM xstage_import_file_checkpoints
+                    WHERE batch_id=? AND source_path=?""",(batch,original_path))
+            previous_totals=totals.copy()
+            totals["files_seen"]+=1
             outcome="error"
             message=""
             song_id=None
@@ -604,23 +705,26 @@ def import_folder(workspace,source,progress=None,cancel=None):
             try:
                 # Validate NCN triplet before hashing; skip unpaired tracks
                 # and preserve any existing SQLite entries untouched.
-                comps=companion_candidates(path)
                 if is_ncn_media(path,comps):
                     missing=ncn_missing_companions(comps)
                     if missing:
                         totals["skipped_ncn"]+=1
                         outcome="skipped-ncn-incomplete"
                         message="ข้าม NCN: "+", ".join(missing)+" ไม่มีหรือว่าง"
-                        db.execute("""INSERT INTO xstage_import_items
+                        db.execute("""INSERT OR REPLACE INTO xstage_import_items
                          (batch_id,source_path,source_name,media_sha256,song_id,
                           outcome,message,created_at)
                          VALUES (?,?,?,?,?,?,?,?)""",
                          (batch,original_path,path.name,None,None,outcome,message,now()))
-                        if totals["files_seen"]%64==0:
-                            db.commit()
-                        if progress: progress(dict(totals),path.name)
+                        checkpoint(path,original_path,source_stat,stamp,
+                                   "skipped-ncn-incomplete",previous_totals)
+                        if totals["files_seen"]%16==0: store_resume("running")
+                        if progress and time.monotonic()-last_progress>.25:
+                            progress({**totals,"resumed_files":resumed_count,"resume":resumed},
+                                     path.name)
+                            last_progress=time.monotonic()
                         continue
-                before=path.stat()
+                before=source_stat or path.stat()
                 if not 0<=before.st_size<SIZE_LIMIT:
                     raise ValueError("ขนาดไฟล์ไม่อยู่ในช่วงที่รองรับ")
                 cached=db.execute("""SELECT verified_sha256 FROM xstage_media_sources
@@ -680,7 +784,6 @@ def import_folder(workspace,source,progress=None,cancel=None):
                 # stat-only stamp avoids re-parsing unchanged successful
                 # sources; new/changed companions are decoded and compared
                 # through the SQLite lyric-version table.
-                stamp=companion_stamp(comps)
                 cached_lyrics=db.execute("""SELECT * FROM xstage_lyric_scan_cache
                     WHERE source_path=?""",(original_path,)).fetchone()
                 has_version=db.execute("""SELECT 1 FROM xstage_lyric_versions
@@ -757,7 +860,7 @@ def import_folder(workspace,source,progress=None,cancel=None):
                                 totals["draft_lyrics"]+=1
                             except (OSError,ValueError,UnicodeError):
                                 pass
-                db.execute("""INSERT INTO xstage_import_items
+                db.execute("""INSERT OR REPLACE INTO xstage_import_items
                  (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
                  VALUES (?,?,?,?,?,?,?,?)""",
                  (batch,original_path,path.name,h,song_id,outcome,message,now()))
@@ -769,27 +872,22 @@ def import_folder(workspace,source,progress=None,cancel=None):
                     db.execute("RELEASE SAVEPOINT plus_media_item")
                 totals["failures"]+=1
                 message=str(exc)[:350]
-                db.execute("""INSERT INTO xstage_import_items
+                db.execute("""INSERT OR REPLACE INTO xstage_import_items
                  (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
                  VALUES (?,?,?,?,?,?,?,?)""",
                  (batch,original_path,path.name,h,None,"error",message,now()))
-            if totals["files_seen"]%64==0:
-                db.execute("""UPDATE xstage_import_batches SET
-                    files_seen=?,files_new=?,media_duplicates=?,lyrics_new=?,failures=?
-                    WHERE id=?""",
-                    (totals["files_seen"],totals["files_new"],totals["media_duplicates"],
-                     totals["lyrics_new"],totals["failures"],batch))
-                db.commit()
-            if progress:
-                progress(dict(totals),path.name)
-        db.execute("""UPDATE xstage_import_batches SET
-            files_seen=?,files_new=?,media_duplicates=?,lyrics_new=?,failures=?,
-            status=?,completed_at=? WHERE id=?""",
-            (totals["files_seen"],totals["files_new"],totals["media_duplicates"],
-             totals["lyrics_new"],totals["failures"],
-             "cancelled" if cancel and cancel.is_set() else "completed",now(),batch))
-        db.commit()
-    return {"batch":batch,**totals,"cancelled":bool(cancel and cancel.is_set())}
+            checkpoint(path,original_path,source_stat,stamp,outcome,previous_totals)
+            if totals["files_seen"]%16==0:store_resume("running")
+            if progress and time.monotonic()-last_progress>.25:
+                progress({**totals,"resumed_files":resumed_count,"resume":resumed},
+                         path.name)
+                last_progress=time.monotonic()
+        final_status="cancelled" if cancel and cancel.is_set() else "completed"
+        store_resume(final_status)
+        if progress:progress({**totals,"resumed_files":resumed_count,
+                              "resume":resumed},final_status)
+    return {"batch":batch,**totals,"resumed_files":resumed_count,
+            "resumed":resumed,"cancelled":bool(cancel and cancel.is_set())}
 
 
 def recover_existing_lyrics(workspace,progress=None,cancel=None):
