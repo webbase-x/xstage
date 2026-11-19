@@ -114,23 +114,23 @@ jobs:
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.19-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.20-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
-          if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.19-preview.exe")) { throw "EXE not produced" }
+          if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.20-preview.exe")) { throw "EXE not produced" }
       - name: Verify EXE hash and package preview
         shell: pwsh
         run: |
-          $exe="dist/X-Stage-Song-Studio-Pro-v0.1.19-preview.exe"
+          $exe="dist/X-Stage-Song-Studio-Pro-v0.1.20-preview.exe"
           $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-          "X-Stage Song Studio Pro v0.1.19 Desktop Standalone Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
+          "X-Stage Song Studio Pro v0.1.20 Desktop Standalone Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
-          "Desktop Standalone using PySide6 QtWebEngine with local-only SQLite Engine. Default launch stays inside the X-Stage app window; Windows-native folder picker and program diagnostics are included. System browser is troubleshooting-only. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
+          "Desktop Standalone using PySide6 QtWebEngine with local-only SQLite Engine. Supports repeated imports in one session, non-overlapping job polling, foreground Windows-native folder picker, and diagnostic log via Settings or Ctrl+Shift+L. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           Write-Host "EXE SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.19-Windows-Preview
+          name: X-Stage-Song-Studio-Pro-v0.1.20-Windows-Preview
           path: |
-            dist/X-Stage-Song-Studio-Pro-v0.1.19-preview.exe
+            dist/X-Stage-Song-Studio-Pro-v0.1.20-preview.exe
             dist/README-Preview.txt
           retention-days: 14
           if-no-files-found: error
