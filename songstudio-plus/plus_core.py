@@ -34,6 +34,8 @@ FORMAT_VERSION = 1
 HEADER = struct.Struct("<8sIQQ32s32s")
 SIZE_LIMIT = 2 * 1024 * 1024 * 1024 * 1024
 WRITE_LOCK = threading.RLock()
+_INIT_LOCK = threading.RLock()
+_INITIALIZED = set()
 
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
@@ -73,11 +75,13 @@ def db_path(workspace):
 def connect(workspace):
     path = db_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
-    c = sqlite3.connect(path, timeout=25)
+    # WAL is configured once by init(). Do not renegotiate journal mode on
+    # every UI read while the importer is writing; that can wait on locks and
+    # make unrelated buttons appear frozen.
+    c = sqlite3.connect(path, timeout=5)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys=ON")
-    c.execute("PRAGMA busy_timeout=25000")
-    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA busy_timeout=5000")
     try:
         with c:
             yield c
@@ -238,11 +242,31 @@ def _repair_historical_lyrics(db):
                ("plus-lyrics-quality-v1",now()))
 
 def init(workspace):
-    with WRITE_LOCK:
-        with connect(workspace) as db:
-            db.executescript(SCHEMA)
-            _repair_historical_lyrics(db)
-    return db_path(workspace)
+    path=db_path(workspace).resolve()
+    key=str(path)
+    if key in _INITIALIZED:
+        return path
+    with _INIT_LOCK:
+        if key in _INITIALIZED:
+            return path
+        path.parent.mkdir(parents=True,exist_ok=True)
+        # Configure WAL exactly once per process/workspace before normal
+        # request traffic starts. Afterwards read connections never issue
+        # PRAGMA journal_mode while the import writer is active.
+        db=sqlite3.connect(path,timeout=10)
+        try:
+            db.row_factory=sqlite3.Row
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("PRAGMA busy_timeout=10000")
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA synchronous=NORMAL")
+            with db:
+                db.executescript(SCHEMA)
+                _repair_historical_lyrics(db)
+        finally:
+            db.close()
+        _INITIALIZED.add(key)
+    return path
 
 def source_for_build(workspace, db, media):
     """Resolve a verified source without copying it on import.
