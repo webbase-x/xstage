@@ -18,7 +18,8 @@
                  manualOffset:0,manualTotal:0,manualRows:[],manualSelected:null,
                  manualLines:[],manualDuration:0,manualTime:0,manualPlaying:false,
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
-                 manualMidiAt:0};
+                 manualMidiAt:0,manualFindings:[],manualOnlyIssues:false,
+                 manualLayout:{menu:false,queue:false,stage:false,focus:false}};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
@@ -66,6 +67,7 @@
     if(name==="import")void refreshStatus();
     if(name==="preview")void loadPreviewSongs();
     if(name==="manual")void loadManualQueue();
+    manualApplyLayout();
     if(name==="risks")void loadRisks();
     if(name==="lyrics"&&$("lyrics-search").value.trim())void searchGroups();
     document.title=labels[name]+" · X-Stage Song Studio Plus";
@@ -942,6 +944,195 @@
     view("build");
     updateBuildSelection();
     toast("เลือก "+track.title+" เข้ารายการสร้าง .x... แล้ว");
+  }
+
+
+  // UI layout modes never modify source lyrics, playback position, or selection.
+  function manualApplyLayout(){
+    const active=state.view==="manual",layout=state.manualLayout;
+    const focused=active&&layout.focus;
+    const app=document.querySelector(".app");
+    const manual=$("view-manual");
+    app.classList.toggle("manual-editor-menu-hidden",
+      active&&(focused||layout.menu));
+    manual.classList.toggle("manual-editor-queue-hidden",
+      active&&(focused||layout.queue));
+    manual.classList.toggle("manual-editor-stage-expanded",
+      active&&!focused&&layout.stage);
+    manual.classList.toggle("manual-editor-focused",focused);
+    for(const [id,pressed,yes,no] of [
+      ["manual-toggle-menu",focused||layout.menu,"☰ แสดงเมนูหลัก","☰ ซ่อนเมนูหลัก"],
+      ["manual-toggle-queue",focused||layout.queue,"▣ แสดงรายการเพลง","▣ ซ่อนรายการเพลง"],
+      ["manual-toggle-stage",layout.stage,"▤ ย่อจอคาราโอเกะ","⛶ ขยายจอคาราโอเกะ"],
+      ["manual-focus",focused,"↙ กลับมุมมองปกติ","↗ โหมดแก้ไขเต็มพื้นที่"]
+    ]){
+      const node=$(id);if(!node)continue;
+      node.setAttribute("aria-pressed",String(Boolean(pressed)));
+      node.textContent=pressed?yes:no;
+    }
+    text("manual-layout-state",focused?
+      "โหมดแก้ไขเต็มพื้นที่ · คลิกอีกครั้งเพื่อกลับ":"ปรับพื้นที่ได้โดยไม่ลบข้อมูลหรือหยุดเพลง");
+  }
+  const manualIssueRank={structural:0,missing:1,unverified:2};
+  const manualIssueText={structural:"พบผิดโครงสร้าง",missing:"ข้อมูลขาด",
+    unverified:"รอฟังยืนยัน"};
+  function manualCheckDraft(lines){
+    const findings=[];
+    const add=(category,rule,line_position,found,suggestion)=>findings.push({
+      category,rule,line_position,found,suggestion
+    });
+    if(!lines.length){
+      add("missing","NO_LYRICS",-1,"ไม่มีเนื้อร้องในรายการนี้",
+        "เพิ่มบรรทัดหรือวางเนื้อร้องก่อน แล้วค่อยจับเวลาจากเพลงต้นฉบับ");
+      return findings;
+    }
+    lines.forEach((line,index)=>{
+      const raw=String(line.text||"");
+      if(!raw.trim())return;
+      if(line.start===null||line.start===undefined||line.start===""||
+         line.end===null||line.end===undefined||line.end===""){
+        add("missing","LINE_UNTIMED",index,
+          "บรรทัดนี้ไม่มีเวลาเริ่มหรือจบครบ",
+          "ฟังเพลงต้นฉบับแล้วจับเวลาเริ่มและจบบรรทัด");
+        return;
+      }
+      const start=Number(line.start),end=Number(line.end);
+      if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start){
+        add("structural","LINE_RANGE_INVALID",index,
+          "เวลาจบบรรทัดไม่มากกว่าเวลาเริ่ม หรือค่าเวลาไม่ถูกต้อง",
+          "ตรวจและแก้เวลาเริ่ม–จบให้ตรงจากเพลงต้นฉบับ");
+        return;
+      }
+      const segments=manualSegments(line),times=manualStartTimes(line);
+      if(!segments.length||!times.length){
+        add("missing","CUES_MISSING",index,
+          "มีบรรทัดพร้อมเวลา แต่ยังไม่มีจุดปาดคำ",
+          "แบ่งคำด้วยเครื่องหมาย | แล้วจับเวลาเริ่มปาดแต่ละคำขณะเล่นจริง");
+        return;
+      }
+      if(segments.length!==times.length||
+         times.some(v=>v===null||v===undefined||v==="")){
+        add("missing","CUES_PARTIAL",index,
+          "จุดปาดคำยังไม่ครบทุกช่วงข้อความ",
+          "เลือกคำที่ยังขาดเวลาแล้วจับเวลาปาดจากเสียงจริง");
+        return;
+      }
+      if(segments.join("")!==raw)
+        add("structural","CUES_TEXT_MISMATCH",index,
+          "ข้อความจากจุดปาดไม่ตรงกับเนื้อร้องทั้งบรรทัด",
+          "แบ่งคำใหม่ให้รวมแล้วตรงข้อความเดิม รวมช่องว่างและสระวรรณยุกต์");
+      const values=times.map(Number);
+      if(values.some(v=>!Number.isFinite(v))||values[0]<start-0.001||
+         values[values.length-1]>=end||
+         values.some((v,k)=>k>0&&v<values[k-1]))
+        add("structural","CUES_TIME_OUT_OF_RANGE",index,
+          "เวลาปาดอยู่นอกช่วงของบรรทัดหรือย้อนลำดับ",
+          "เลื่อนกลับไปฟังและจับเวลาปาดแต่ละคำใหม่");
+      if(line.timing==="estimated")
+        add("unverified","ESTIMATED_TIMING",index,
+          "เวลาบรรทัดนี้เป็นค่าประมาณ ยังไม่ยืนยันว่าผิดจริง",
+          "ทดลองฟังกับเพลงแล้วตรวจตำแหน่งปาด ก่อนกดยืนยัน");
+    });
+    return findings;
+  }
+  function manualGetFindings(){
+    if(!state.manualSelected)return [];
+    return state.manualFindings||[];
+  }
+  function manualFocusLine(index){
+    if(!state.manualSelected||index<0||index>=state.manualLines.length)return;
+    if(state.manualOnlyIssues){
+      state.manualOnlyIssues=false;
+      $("manual-only-issues").setAttribute("aria-pressed","false");
+      $("manual-only-issues").textContent="แสดงเฉพาะบรรทัดที่ต้องตรวจ";
+    }
+    $("manual-line-index").value=String(index);
+    manualRenderLines();
+    const card=$("manual-line-list").querySelector('[data-manual-line="'+index+'"]');
+    if(card){
+      card.scrollIntoView({block:"nearest",behavior:"smooth"});
+      const edit=card.querySelector('input[type="text"]');
+      if(edit)edit.focus({preventScroll:true});
+    }
+    const line=state.manualLines[index];
+    if(line?.start!==null&&line?.start!==""&&Number.isFinite(Number(line.start))){
+      void manualSeek(Number(line.start));
+    }
+  }
+  function manualRenderFindings(){
+    const findings=manualGetFindings().slice().sort((a,b)=>
+      (manualIssueRank[a.category]??3)-(manualIssueRank[b.category]??3)||
+      a.line_position-b.line_position);
+    const summary={structural:0,missing:0,unverified:0};
+    findings.forEach(f=>{if(f.category in summary)summary[f.category]++;});
+    text("manual-diagnostic-summary",
+      "พบผิดโครงสร้าง "+number(summary.structural)+
+      " · ข้อมูลขาด "+number(summary.missing)+
+      " · ต้องฟังยืนยัน "+number(summary.unverified));
+    const select=$("manual-diagnostic-filter"),target=$("manual-diagnostic-list");
+    const selected=select?.value||"all";
+    const view=selected==="all"?findings:findings.filter(f=>f.category===selected);
+    target.replaceChildren();
+    if(!view.length){
+      const node=document.createElement("p");node.className="empty-small";
+      node.textContent=state.manualSelected?
+        (findings.length?"ไม่มีจุดที่ตรงกับตัวกรองนี้":
+          "ไม่พบข้อมูลผิดโครงสร้างจากตัวตรวจ · ยังต้องฟังจริงเพื่อยืนยัน"):
+        "เลือกเพลงเพื่อดูผลการตรวจ";
+      target.append(node);
+    }
+    for(const issue of view.slice(0,36)){
+      const button=document.createElement("button");
+      button.type="button";button.className="manual-finding is-"+issue.category;
+      const tag=document.createElement("span");
+      tag.className="manual-finding-tag";
+      tag.textContent=manualIssueText[issue.category]||"ตรวจสอบ";
+      const message=document.createElement("span");
+      message.className="manual-finding-message";
+      const title=document.createElement("strong");
+      const prefix=issue.line_position>=0?"บรรทัด "+(issue.line_position+1)+" · ":"ทั้งเพลง · ";
+      title.textContent=prefix+issue.found;
+      const recommend=document.createElement("small");
+      recommend.textContent="แนะนำ: "+issue.suggestion;
+      message.append(title,recommend);
+      button.append(tag,message);
+      if(issue.line_position>=0){
+        const jump=document.createElement("span");
+        jump.className="manual-finding-jump";jump.textContent="เปิดแก้ ›";
+        button.append(jump);
+        button.addEventListener("click",()=>manualFocusLine(issue.line_position));
+      }else button.addEventListener("click",()=>{
+        if(state.manualLines.length)manualFocusLine(0);
+        else $("manual-add-line").focus();
+      });
+      target.append(button);
+    }
+    if(view.length>36){
+      const more=document.createElement("p");more.className="field-hint";
+      more.textContent="แสดง 36 จุดแรกจาก "+number(view.length)+
+        " จุด · ใช้ตัวกรองหรือเลือกบรรทัดเพื่อดูส่วนที่เหลือ";
+      target.append(more);
+    }
+    const severityByLine=new Map();
+    for(const issue of findings){
+      if(issue.line_position<0)continue;
+      const old=severityByLine.get(issue.line_position);
+      if(!old||(manualIssueRank[issue.category]??3)<(manualIssueRank[old]??3))
+        severityByLine.set(issue.line_position,issue.category);
+    }
+    for(const card of $("manual-line-list").children){
+      if(!card.dataset?.manualLine)continue;
+      const severity=severityByLine.get(Number(card.dataset.manualLine));
+      for(const level of ["structural","missing","unverified"])
+        card.classList.toggle("manual-suspect-"+level,severity===level);
+      const marker=card.querySelector(".manual-line-issue");
+      if(marker)marker.textContent=severity?manualIssueText[severity]:"";
+    }
+  }
+  function manualRefreshLiveFindings(){
+    if(!state.manualSelected)return;
+    state.manualFindings=manualCheckDraft(state.manualLines);
+    manualRenderFindings();
   }
 
   // Menu 05 uses measured or manually captured timestamps only.
