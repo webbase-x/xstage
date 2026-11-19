@@ -168,19 +168,21 @@ jobs:
       - name: Upload Windows installer EXE only
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Download-Manager-v0.2.0-build3-Windows-EXE-ONLY
-          path: download-manager/installer/output/X-Stage-Download-Manager-v0.2.0-build3-win-x64-Setup.exe
+          name: X-Stage-Download-Manager-v0.2.1-build4-Windows-EXE-ONLY
+          path: download-manager/installer/output/X-Stage-Download-Manager-v0.2.1-build4-win-x64-Setup.exe
           if-no-files-found: error
           retention-days: 30
       - name: Publish verified EXE-only GitHub prerelease
+        id: release
+        continue-on-error: true
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.XSTAGE_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'xstage-download-manager-v0.2.0-build3-preview'
-          $file = 'X-Stage-Download-Manager-v0.2.0-build3-win-x64-Setup.exe'
+          $tag = 'xstage-download-manager-v0.2.1-build4-preview'
+          $file = 'X-Stage-Download-Manager-v0.2.1-build4-win-x64-Setup.exe'
           $setup = "download-manager/installer/output/$file"
           $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
           $size = (Get-Item $setup).Length
@@ -203,3 +205,9 @@ jobs:
           if ($actual -cne $hash) { throw "Published checksum mismatch: $actual vs $hash" }
           Write-Host "VERIFIED PUBLIC EXE $file SHA-256 $hash ($size bytes)"
           Write-Host "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$file"
+      - name: Report GitHub Releases publication denial without mislabeling CI artifact
+        if: github.ref == 'refs/heads/main' && steps.release.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Write-Warning "Setup EXE was built and uploaded only as a GitHub Actions artifact. GitHub Releases publishing was denied or failed."
+          "EXE build passed, but the public direct-download GitHub Release was NOT published. Do not update the X-Stage public manifest until a verified release asset exists." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
