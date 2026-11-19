@@ -66,7 +66,11 @@ assert.ok(picker.includes('dialog.exec()'),
 assert.ok(picker.includes('Qt.ConnectionType.QueuedConnection'),
  'Picker must be dispatched to GUI thread');
 assert.ok(desktop.includes('state.native_picker=picker.pick'));
-assert.ok(desktop.indexOf('worker.start()') < desktop.indexOf('window=MainWindow()'),
+const uiLoad=desktop.indexOf('window.web.load(QUrl(url))');
+assert.ok(uiLoad>0,'Desktop UI must explicitly load localhost');
+assert.ok(desktop.indexOf('state.native_picker=picker.pick') < uiLoad,
+ 'Folder picker must be registered before the web UI loads');
+assert.ok(desktop.indexOf('worker.start()') < uiLoad,
  'Local PC Engine must start before QWebEngineView loads localhost');
 assert.ok(!js.includes('state.ready=true;'), 'Do not fake engine state');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs and GUI-thread pickers');
