@@ -8,6 +8,7 @@ internal sealed class AirPlaySessionTransitions
     private HashSet<string>? _candidate;
     private HashSet<string>? _hiddenAt;
     private int _samples;
+    private int _emptyPeerSamples;
 
     internal bool ShouldHide(string[] connections, bool showing)
     {
@@ -45,9 +46,20 @@ internal sealed class AirPlaySessionTransitions
         return false;
     }
 
+    internal bool ConfirmNoPeers(bool sawPeerDuringVideo, bool showing, int peerCount)
+    {
+        if (!sawPeerDuringVideo || !showing || peerCount != 0)
+        {
+            _emptyPeerSamples = 0;
+            return false;
+        }
+        return ++_emptyPeerSamples >= 2;
+    }
+
     internal void MarkHidden(string[] connections)
     {
         _hiddenAt = new HashSet<string>(connections, StringComparer.OrdinalIgnoreCase);
+        _emptyPeerSamples = 0;
         _known = new HashSet<string>(_hiddenAt, StringComparer.OrdinalIgnoreCase);
         _candidate = null;
         _samples = 0;
@@ -59,6 +71,7 @@ internal sealed class AirPlaySessionTransitions
     internal void MarkVisible(string[] connections)
     {
         _hiddenAt = null;
+        _emptyPeerSamples = 0;
         _known = new HashSet<string>(connections, StringComparer.OrdinalIgnoreCase);
         _candidate = null;
         _samples = 0;
@@ -68,6 +81,7 @@ internal sealed class AirPlaySessionTransitions
     {
         _known.Clear();
         _hiddenAt = null;
+        _emptyPeerSamples = 0;
         _candidate = null;
         _samples = 0;
     }

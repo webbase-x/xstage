@@ -75,7 +75,14 @@ internal static class Program
         hide.Invoke(state, new object[] { new[] { control } });
         if (HasNew(control) || !HasNew(control, newVideo))
             throw new InvalidOperationException("Old control socket is not a new video session");
-        Console.WriteLine("PASS: video TCP closed despite AirPlay control socket still connected");
+        var confirm = type.GetMethod("ConfirmNoPeers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        bool Confirm(bool seen, bool showing, int peers) =>
+            (bool)confirm.Invoke(state, new object[] { seen, showing, peers })!;
+        if (Confirm(true, true, 0) || !Confirm(true, true, 0))
+            throw new InvalidOperationException("Empty peer samples need confirmation");
+        if (Confirm(true, true, 1) || Confirm(true, true, 0) || !Confirm(true, true, 0))
+            throw new InvalidOperationException("Returning peers must reset empty-peer samples");
+        Console.WriteLine("PASS: socket transitions and intermittent peer observation");
     }
 
     private sealed class StaticHandler(byte[] payload) : HttpMessageHandler

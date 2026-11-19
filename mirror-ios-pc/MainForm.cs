@@ -4,6 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -18,7 +19,13 @@ namespace XStageMirrorIOSPC;
 /// </summary>
 public sealed class MainForm : Form
 {
-    private const string VersionText = "v1.0.11 · Build 1012";
+    private static readonly string VersionText = GetVersionText();
+    private static string GetVersionText()
+    {
+        var v = typeof(MainForm).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
+        var p = v?.Split('.');
+        return p is { Length: 4 } ? $"v{p[0]}.{p[1]}.{p[2]} · Build {p[3]}" : "ไม่ทราบเวอร์ชัน EXE";
+    }
     private const string UpdateFeed =
         "https://webbase-x.github.io/xstage/downloads/mirror-ios-pc-preview-latest.json";
     private static readonly Color Night = Color.FromArgb(8, 15, 28);
@@ -383,7 +390,9 @@ public sealed class MainForm : Form
                 _sawPeerDuringVideo = true;
             bool lostVideoSocket = _sawPeerDuringVideo &&
                 _sessions.ShouldHide(probe.Connections, showing);
-            bool noPeers = _sawPeerDuringVideo && probe.PeerAddresses.Length == 0;
+            // Debounce a single empty netstat sample to avoid hiding live video.
+            bool noPeers = _sessions.ConfirmNoPeers(
+                _sawPeerDuringVideo, showing, probe.PeerAddresses.Length);
             if (lostVideoSocket || noPeers)
             {
                 _sawPeerDuringVideo = false;

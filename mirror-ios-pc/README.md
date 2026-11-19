@@ -1,6 +1,15 @@
 # X-Stage Mirror iOS PC
 
-**v1.0.11 · Build 1012 · Windows 10/11 x64 · Preview**
+**v1.0.13 · Build 1014 · Windows 10/11 x64 · Preview**
+
+## Receiver monitoring changes in Build 1014
+
+- Uses assembly FileVersion to display exact installed version/build.
+- Requires two consecutive empty TCP peer samples before hiding a visible
+  stream; momentary polling losses no longer imply a disconnect.
+- Retains the native UxPlay/GStreamer renderer and disconnect flags.
+  Unit regression tests cover the polling transitions; real device tests
+  on Windows and iPhone are still required.
 
 The Windows iOS AirPlay receiver is now a **full-screen kiosk-style screen receiver**. It starts automatically when opened, without a start button or navigation through settings.
 
