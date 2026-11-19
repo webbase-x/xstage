@@ -49,6 +49,10 @@
     if(!response.ok)throw new Error(result.error||"คำสั่งไม่สำเร็จ");
     return result;
   }
+  async function diagnostic(event,detail={}){
+    if(!state.token)return;
+    try{await api("/api/diagnostic",{event,detail});}catch{/* diagnostics must never block UI */}
+  }
   function view(name){
     if(!labels[name])return;
     if(state.view==="manual"&&name!=="manual")void manualStop();
@@ -82,7 +86,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","diagnostic-open-log","workspace-open","lrc-browse","manual-find"]){
       $(id).disabled=!enabled;
     }
   }
@@ -613,6 +617,7 @@
   }
   async function openPicker(kind,target){
     const button=$(kind==="folder"?"source-browse":"lrc-browse");
+    void diagnostic("ui.picker.click",{kind,current:$(target).value.trim()});
     button.disabled=true;
     if(kind==="folder")text("folder-picker-status","กำลังเปิดหน้าต่างเลือกโฟลเดอร์ของ Windows...");
     try{
@@ -622,16 +627,19 @@
         $(target).dispatchEvent(new Event("input",{bubbles:true}));
         if(kind==="folder"){
           text("folder-picker-status","เลือกโฟลเดอร์แล้ว: "+result.path);
+          void diagnostic("ui.picker.selected",{kind,path:result.path});
           toast("เลือกโฟลเดอร์สำเร็จ");
         }else{
           text("media-feedback","เลือกไฟล์ LRC แล้ว: "+result.path);
         }
       }else if(kind==="folder"){
+        void diagnostic("ui.picker.cancelled",{kind});
         text("folder-picker-status","ยกเลิกการเลือก · โฟลเดอร์เดิมยังอยู่");
       }
     }catch(error){
       const label=kind==="folder"?"โฟลเดอร์":"ไฟล์ LRC";
       const msg="เลือก"+label+"ไม่สำเร็จ: "+error.message;
+      void diagnostic("ui.picker.error",{kind,error:error.message});
       if(kind==="folder")text("folder-picker-status",msg);
       else text("media-feedback",msg);
       toast(msg,true);
@@ -1831,6 +1839,12 @@
       }
     });
     $("source-open").addEventListener("click",()=>void openLocalFolder("source"));
+    $("diagnostic-open-log").addEventListener("click",async()=>{
+      try{
+        await api("/api/open-log",{});
+        toast("เปิด Log วิเคราะห์แล้ว");
+      }catch(error){toast("เปิด Log ไม่สำเร็จ: "+error.message,true);}
+    });
     $("workspace-open").addEventListener("click",()=>void openLocalFolder("workspace"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
@@ -2045,6 +2059,7 @@
       if(!folder)return toast("กรุณาระบุโฟลเดอร์ต้นทาง",true);
       if(!state.ready)return toast("PC Engine ไม่เชื่อมต่อ · เปิดผ่านไฟล์ EXE บน Windows",true);
       if(state.activeJob)return toast("มีงานกำลังประมวลผลอยู่",true);
+      void diagnostic("ui.import.click",{folder});
       void startJob("import",{folder});
     });
     $("recover-lyrics").addEventListener("click",async()=>{
@@ -2197,6 +2212,7 @@
       state.token=session.token;
       setReady(true);
       text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
+      void diagnostic("ui.session.ready",{version:session.version});
       if(state.view==="preview")await loadPreviewSongs();
       if(state.view==="manual")await loadManualQueue();
       if(state.view==="risks")await loadRisks();
