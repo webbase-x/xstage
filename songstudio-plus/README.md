@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.6
+# X-Stage Song Studio Plus — Technical Preview v0.1.7
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -68,6 +68,20 @@ The Windows application sets both its EXE icon and the native HWND small/
 large icons used by taskbar and Alt+Tab. Workspace views occupy the available
 window height; song lists and lyrics/risk details use numbered pages instead
 of long scrollbars. Use Ctrl+Plus / Ctrl+Minus / Ctrl+0 for zoom.
+
+## Windows startup fix in v0.1.7
+
+The app no longer assumes that `%USERPROFILE%\\Documents` exists.
+Existing workspaces in the real Windows Documents location (including
+OneDrive redirects) or the old `~/Documents/XStageSongPlus` are preferred
+and are never moved or replaced. A new installation uses the writable
+`%LOCALAPPDATA%\\XStageSongPlus` workspace, with roaming profile and home
+directory alternatives if needed. Windows Unicode (including Thai profile
+names) is supported without legacy ANSI path encoding.
+
+Use `--workspace "D:\\XStageSongPlus"` only to select an explicit existing or
+new workspace. A failed explicit path is reported in a Windows dialog rather
+than silently falling back to a new empty song database.
 
 ## Start
 
