@@ -2,7 +2,7 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.0 · Build 3** (Windows 10/11 x64).
+**Preview v0.2.1 · Build 4** (Windows 10/11 x64).
 
 ## Features
 - Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker.
@@ -20,10 +20,14 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - History: %LOCALAPPDATA%/X-Stage/Download Manager/downloads.json
 - Partials: .xstage-downloads/[id]/ in the destination, removed upon completion.
 - Thai desktop interface showing progress, speed, size, status and errors.
+- Per-segment progress bar shows actual bytes received in each HTTP range, not cosmetic stripes; social video downloads use unified progress.
+- Completed entries turn green. Click a finished filename to open its file or containing folder.
+- Startup checks and a **ตรวจสอบอัปเดต** button query the verified X-Stage release manifest. A newer version prompts before opening the canonical Setup EXE link; no silent installation.
+- Optional Chrome/Edge connector is bundled in the installer, loaded and paired by the user; auto-capture is OFF by default. Context-menu handoff is available.
 - Self-contained Windows runtime packaged into **one Setup EXE** published through GitHub Releases; no Portable ZIP is offered.
 
 ## Not included yet
-- Chrome/Edge browser interception extension.
+- Chrome/Edge interception is available only after users install and enable the optional browser extension.
 - DRM/protected streams, login-only or private posts, age-gated/subscriber-only content, paywall bypass, or torrent protocol.
 - Live streaming capture and authenticated browser sessions.
 - Scheduled downloads and speed limits.
@@ -50,3 +54,19 @@ Platform layouts and extractors change, so the app cannot guarantee access to ev
 ### Third-party notices
 
 Bundled binaries are maintained independently: [yt-dlp 2026.10.26](https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26), [Deno 2.9.8](https://github.com/denoland/deno/releases/tag/v2.9.8) and [yt-dlp/FFmpeg-Builds 2026-11-16](https://github.com/yt-dlp/FFmpeg-Builds/releases/tag/autobuild-2026-11-16-23-35). The installer includes a THIRD-PARTY-NOTICES file and corresponding source links. FFmpeg binary is a GPL build; yt-dlp and Deno have separate licenses. No IDM binaries/code are used.
+
+## Browser integration (optional)
+
+1. Open **เชื่อม Chrome / Edge** in X-Stage Download Manager.
+2. Open chrome://extensions (Chrome) or edge://extensions (Edge), enable **Developer mode**, and choose **Load unpacked**.
+3. Select the directory shown by the app: <installation directory>/browser-extension.
+4. Copy the extension ID from the browser extension page into the app and click **เชื่อมต่อ**. The app registers a per-user Windows Native Messaging host for Chrome and Edge; no local HTTP port or remote server is exposed.
+5. Open the extension popup to check the connection. Enable automatic capture only when wanted. You can also right-click a link and choose **ดาวน์โหลดด้วย X-Stage**.
+
+For automatic handoff, the app probes anonymous direct-file access before acknowledging the job. The browser's original download is cancelled only after the desktop app accepts the URL. If the host is unavailable, the source requires browser credentials, or the source is HTML, the original browser download remains untouched. Private files, login-only downloads, and DRM media are not intercepted.
+
+## Update notifications
+
+On startup, X-Stage checks release metadata over HTTPS with a short timeout. **ตรวจสอบอัปเดต** repeats the check. A valid update must have a matching version/build, SHA-256, size and canonical GitHub Releases .exe URL. Builds alone do not count as published updates. An unavailable or outdated release feed does not interrupt downloads; installation is always user-confirmed.
+
+**Publication note:** The Windows build publishes an Actions artifact containing only a Setup EXE. Publishing a direct .exe through GitHub Releases depends on repository token write permissions; the portal points only to an already verified release until a newer EXE has actually been published.
