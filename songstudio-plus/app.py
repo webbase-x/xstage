@@ -22,12 +22,14 @@ from pathlib import Path
 import plus_core as core
 import risk_audit as risks
 import preview_player as preview
+import manual_editor as manual
 
 class State:
     def __init__(self,workspace):
         self.workspace=Path(workspace).expanduser().resolve()
         core.init(self.workspace)
         risks.init(self.workspace)
+        manual.init(self.workspace)
         self.midi_preview=preview.MidiPreview()
         self.jobs={}
         self.lock=threading.RLock()
@@ -146,6 +148,16 @@ class Handler(BaseHTTPRequestHandler):
             if q.get("token",[""])[0]!=self.state.token:
                 raise PermissionError("ไม่มีสิทธิ์อ่านไฟล์เพลง")
             self.stream_preview_media(q.get("song_id",[""])[0]);return
+        if path=="/api/manual/queue":
+            self.send_json(200,manual.queue(self.state.workspace,
+                q.get("q",[""])[0],q.get("filter",["pending"])[0],
+                q.get("offset",[0])[0],q.get("limit",[6])[0]));return
+        if path=="/api/manual/detail":
+            self.send_json(200,manual.detail(
+                self.state.workspace,q.get("song_id",[""])[0]));return
+        if path=="/api/build/eligible":
+            self.send_json(200,{"song_ids":manual.approved_build_ids(
+                self.state.workspace)});return
         if path=="/api/songs":
             self.send_json(200,{"rows":core.songs(self.state.workspace,
                 q.get("q",[""])[0],q.get("limit",[80])[0],q.get("offset",[0])[0])});return
@@ -354,11 +366,24 @@ class Handler(BaseHTTPRequestHandler):
                     if not song: raise ValueError("ไม่พบเพลง")
                     vid,created=core.insert_version(db,song,None,document,None,"LRC")
                 result={"version":vid,"created":created,"timing_status":"estimated"}
+            elif path=="/api/manual/save":
+                result=manual.save(self.state.workspace,
+                    body.get("song_id",""),body.get("version_id"),
+                    body.get("lines"))
+            elif path=="/api/manual/skip":
+                result=manual.skip(self.state.workspace,
+                    body.get("song_id",""),body.get("version_id"))
+            elif path=="/api/manual/approve":
+                result=manual.approve(self.state.workspace,
+                    body.get("song_id",""),body.get("version_id"))
             elif path=="/api/build":
                 ids=body.get("song_ids",[])
                 if (not isinstance(ids,list) or not 1<=len(ids)<=5000 or
                     any(not isinstance(x,str) for x in ids)):
                     raise ValueError("เลือกเพลง 1–5,000 เพลงต่อชุด")
+                eligible=set(manual.approved_build_ids(self.state.workspace))
+                if any(song_id not in eligible for song_id in ids):
+                    raise ValueError("มีเพลงที่ยังไม่พร้อมสร้างหรือยังรอการยืนยัน กรุณาตรวจและปาดเนื้อร้องก่อน")
                 def run_build(progress,cancel):
                     total={"done":0,"built":0,"skipped":0,"failed":0,"errors":[]}
                     for song_id in dict.fromkeys(ids):
