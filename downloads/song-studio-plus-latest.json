@@ -1,13 +1,13 @@
 {
-  "name": "X-Stage Song Studio Plus",
-  "version": "0.1.6",
+  "name": "X-Stage Song Studio Pro",
+  "version": "0.1.11",
   "channel": "technical-preview",
   "available": false,
   "windows_artifact_build": true,
   "code_signed": false,
   "format": "embedded-xmedia-v1",
   "player_compatible": false,
-  "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-plus.yml",
+  "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Native Windows Technical Preview: source references only, NO original media backup/copy, unsigned EXE in GitHub Actions, not production"
+  "status": "Pro Windows Preview: pending verified Windows artifact. No original media copies, no code signing. Compatible with existing XStageSongPlus SQLite workspace."
 }

@@ -18,7 +18,7 @@
                  manualOffset:0,manualTotal:0,manualRows:[],manualSelected:null,
                  manualLines:[],manualDuration:0,manualTime:0,manualPlaying:false,
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
-                 manualMidiAt:0,manualDirty:false,manualFindings:[],manualOnlyIssues:false,
+                 manualMidiAt:0,manualCueUndo:new Map(),manualDirty:false,manualFindings:[],manualOnlyIssues:false,
                  manualLayout:{menu:false,queue:false,stage:false,focus:false}};
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
@@ -70,13 +70,13 @@
     manualApplyLayout();
     if(name==="risks")void loadRisks();
     if(name==="lyrics"&&$("lyrics-search").value.trim())void searchGroups();
-    document.title=labels[name]+" · X-Stage Song Studio Plus";
+    document.title=labels[name]+" · X-Stage Song Studio Pro";
     history.replaceState(null,"","#"+name);
   }
   function setReady(enabled){
     state.ready=enabled;
     text("engine-name",enabled?"Local Engine พร้อมใช้":"ยังไม่เชื่อมต่อ PC Engine");
-    text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Plus บน PC");
+    text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
     for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","lrc-browse","manual-find"]){
@@ -1246,6 +1246,16 @@
     });
     if(select.options.length)
       select.value=String(Math.min(previous,select.options.length-1));
+    manualSetSelectedCueVisual();
+  }
+  function manualSetSelectedCueVisual(){
+    const lineIndex=Number($("manual-line-index").value)||0;
+    const cueIndex=Number($("manual-cue-index").value)||0;
+    for(const chip of $("manual-line-list").querySelectorAll(".manual-cue-token")){
+      const card=chip.closest("[data-manual-line]");
+      chip.classList.toggle("is-selected",Number(card?.dataset.manualLine)===lineIndex&&
+        Number(chip.dataset.cue)===cueIndex);
+    }
   }
   function manualDraftState(){
     state.manualDirty=true;
@@ -1293,6 +1303,43 @@
         input.addEventListener("input",()=>{line[property]=input.value;manualDraftState();});
         times.append(input);
       }
+      const cueStrip=document.createElement("div");
+      cueStrip.className="manual-cue-strip";
+      cueStrip.setAttribute("role","group");
+      cueStrip.setAttribute("aria-label","เลือกช่วงข้อความเพื่อปาด");
+      const cueLabel=document.createElement("small");
+      cueLabel.textContent="เลือกช่วงข้อความ แล้วกดจับเวลา:";
+      cueStrip.append(cueLabel);
+      for(const [cueIndex,segment] of manualSegments(line).entries()){
+        const item=document.createElement("button");
+        item.type="button";item.className="manual-cue-token";
+        const measured=manualStartTimes(line)[cueIndex];
+        item.textContent=segment+" · "+(measured===""||measured==null?
+          "ยังไม่จับเวลา":Number(measured).toFixed(2)+" วิ.");
+        item.dataset.cue=String(cueIndex);
+        item.setAttribute("aria-label","ช่วง "+(cueIndex+1)+" "+segment+" เวลา "+
+          (measured===""||measured==null?"ยังไม่มี":measured+" วินาที"));
+        item.addEventListener("click",()=>{
+          $("manual-line-index").value=String(index);
+          manualRefreshCues();
+          $("manual-cue-index").value=String(cueIndex);
+          manualSetSelectedCueVisual();
+          manualDrawKaraoke();
+        });
+        cueStrip.append(item);
+      }
+      const rollback=document.createElement("button");
+      rollback.type="button";rollback.className="quiet-btn manual-cue-undo";
+      rollback.textContent="↶ คืนเวลาก่อนแก้";
+      rollback.disabled=!state.manualCueUndo.has(index);
+      rollback.addEventListener("click",()=>{
+        const previous=state.manualCueUndo.get(index);
+        if(!previous)return;
+        line.starts=previous.slice();
+        state.manualCueUndo.delete(index);
+        manualDraftState();manualRenderLines();
+      });
+      cueStrip.append(rollback);
       const segments=document.createElement("input");
       segments.type="text";segments.placeholder="แบ่งคำ เช่น รัก|เธอ|เสมอ";
       segments.value=manualSegments(line).join("|");
@@ -1300,6 +1347,7 @@
         const old=manualSegments(line).join("|");
         line.segments=segments.value?segments.value.split("|"):[];
         if(old!==segments.value)line.starts=[];
+        state.manualCueUndo.delete(index);
         manualRefreshCues();manualDraftState();manualRenderLines();
       });
       const starts=document.createElement("input");
@@ -1309,9 +1357,14 @@
         line.starts=starts.value?starts.value.split(",").map(s=>s.trim()):[];
         manualDraftState();manualDrawKaraoke();
       });
+      const details=document.createElement("details");
+      details.className="manual-advanced-times";
+      const summary=document.createElement("summary");
+      summary.textContent="ข้อมูลเวลาขั้นสูง · แบ่งช่วงด้วย | และระบุเวลาเป็นวินาที";
       const footer=document.createElement("small");
-      footer.textContent="แบ่งคำต้องต่อกันแล้วตรงกับข้อความเดิมทุกตัว เวลาที่ไม่ทราบปล่อยว่างได้";
-      card.append(top,words,times,segments,starts,footer);
+      footer.textContent="ข้อมูลตัวเลขใช้แก้เฉพาะกรณีจำเป็น · เวลาที่ไม่ทราบปล่อยว่างได้";
+      details.append(summary,segments,starts,footer);
+      card.append(top,words,times,cueStrip,details);
       list.append(card);
     });
     if(state.manualOnlyIssues&&!list.children.length){
@@ -1331,6 +1384,7 @@
     await manualStop();
     state.manualSelected=null;state.manualPreview=null;state.manualTime=0;
     state.manualDuration=0;state.manualHeard=false;state.manualDirty=false;
+    state.manualCueUndo.clear();
     try{
       const details=await api("/api/manual/detail?song_id="+encodeURIComponent(id));
       state.manualSelected=details;
@@ -1474,9 +1528,16 @@
       const pos=Number($("manual-cue-index").value)||0;
       if(pos>=manualSegments(line).length)
         return toast("ต้องแบ่งคำสำหรับปาดสีของบรรทัดนี้ก่อน",true);
+      const lineIndex=Number($("manual-line-index").value)||0;
       if(!Array.isArray(line.starts))line.starts=[];
+      if(!state.manualCueUndo.has(lineIndex))
+        state.manualCueUndo.set(lineIndex,line.starts.slice());
       while(line.starts.length<manualSegments(line).length)line.starts.push("");
       line.starts[pos]=Number(state.manualTime.toFixed(3));
+      manualDraftState();manualRenderLines();
+      $("manual-cue-index").value=String(Math.min(pos+1,manualSegments(line).length-1));
+      manualSetSelectedCueVisual();
+      return;
     }
     manualDraftState();manualRenderLines();
   }
@@ -1568,6 +1629,11 @@
       if(event.key==="Escape"&&state.manualLayout.focus){
         state.manualLayout.focus=false;manualApplyLayout();return;
       }
+      if(event.code==="Space"&&!event.repeat&&!event.altKey&&!event.ctrlKey&&
+        !event.metaKey&&state.manualPlaying&&state.manualSelected&&![
+          "INPUT","TEXTAREA","SELECT","BUTTON"].includes(document.activeElement?.tagName)){
+        event.preventDefault();manualMark("cue");return;
+      }
       if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="s"&&
           !$("manual-save").disabled){
         event.preventDefault();void manualSave();
@@ -1608,7 +1674,9 @@
     $("manual-line-index").addEventListener("change",()=>{
       manualRefreshCues();manualDrawKaraoke();
     });
-    $("manual-cue-index").addEventListener("change",manualDrawKaraoke);
+    $("manual-cue-index").addEventListener("change",()=>{
+      manualSetSelectedCueVisual();manualDrawKaraoke();
+    });
     $("manual-play").addEventListener("click",()=>void manualPlay());
     $("manual-pause").addEventListener("click",()=>void manualPause());
     $("manual-seek").addEventListener("change",e=>void manualSeek(e.target.value));

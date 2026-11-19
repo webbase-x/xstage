@@ -1,4 +1,4 @@
-# X-Stage Song Studio Plus — Technical Preview v0.1.10
+# X-Stage Song Studio Pro — Technical Preview v0.1.11
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -298,3 +298,7 @@ cannot open a Plus container simply by renaming it.
 
 All changes are isolated to songstudio-plus/ apart from adding the entry in
 the existing app portal. Old Song Studio and Karaoke remain unchanged.
+
+## Pro v0.1.11 · Unified application
+
+Only Pro is publicly listed. Old PC and Web applications have been retired from the app catalog and dedicated automatic builds. The existing internal `songstudio-plus` code path and `%LOCALAPPDATA%/XStageSongPlus` workspace are intentionally retained for **database backward compatibility**, not as separate applications. Pro never deletes media or old SQLite versions. The new cue editor shows clickable timed segments, captures real current playback positions, provides a one-step cue-timing undo, and hides raw numeric comma-separated times under an advanced disclosure.

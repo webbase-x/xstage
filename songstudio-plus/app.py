@@ -1,4 +1,4 @@
-"""Local-only HTTP host for X-Stage Song Studio Plus.
+"""Local-only HTTP host for X-Stage Song Studio Pro.
 
 Runs on loopback, never exposes filesystem or SQLite over LAN.
 """
@@ -77,7 +77,7 @@ class State:
 
 class Handler(BaseHTTPRequestHandler):
     state=None
-    server_version="XStageSongStudioPlus/0.1"
+    server_version="XStageSongStudioPro/0.1"
     def log_message(self,format,*args):
         # Avoid printing private local paths in access logs.
         return
@@ -124,7 +124,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.10",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.11",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
@@ -495,7 +495,7 @@ def _startup_failure(message):
         try:
             import ctypes
             ctypes.windll.user32.MessageBoxW(
-                None, str(message), "X-Stage Song Studio Plus", 0x10)
+                None, str(message), "X-Stage Song Studio Pro", 0x10)
             return
         except (OSError, AttributeError):
             pass
@@ -530,14 +530,14 @@ def main(argv=None):
     if state is None:
         details = "\n".join(failures[-3:]) or "No usable local user-data folder"
         _startup_failure(
-            "ไม่สามารถเปิดฐานข้อมูล X-Stage Song Studio Plus ได้\n"
+            "ไม่สามารถเปิดฐานข้อมูล X-Stage Song Studio Pro ได้\n"
             "โปรดตรวจสอบตำแหน่งโฟลเดอร์และสิทธิ์การเขียน\n"
             "สามารถระบุพาธอื่นด้วย --workspace\n\n" + details)
         return 1
     handler=type("PlusHandler",(Handler,),{"state":state})
     with ThreadingHTTPServer(("127.0.0.1",options.port),handler) as server:
         url=f"http://127.0.0.1:{server.server_port}/"
-        print("X-Stage Song Studio Plus",url,flush=True)
+        print("X-Stage Song Studio Pro",url,flush=True)
         if sys.platform=="win32" and not options.browser and not options.no_browser:
             from desktop_ui import run_desktop
             bundle=Path(getattr(sys,"_MEIPASS",Path(__file__).parent))

@@ -1,4 +1,4 @@
-"""Windows-native Song Studio Plus desktop shell.
+"""Windows-native Song Studio Pro desktop shell.
 
 Uses embedded Qt WebEngine: one real app window with taskbar icon, rather
 than opening Edge/Chrome. The existing SQLite and loopback-only HTTP engine
@@ -16,7 +16,7 @@ def validate_local(url):
     address=urlsplit(url)
     if (address.scheme!="http" or address.hostname!="127.0.0.1" or
             not address.port or address.username or address.password):
-        raise ValueError("Song Studio Plus ต้องเปิด UI จาก localhost ของตัวเองเท่านั้น")
+        raise ValueError("Song Studio Pro ต้องเปิด UI จาก localhost ของตัวเองเท่านั้น")
     return address.port
 
 
@@ -27,7 +27,7 @@ def set_windows_identity():
     set_id=ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID
     set_id.argtypes=[ctypes.c_wchar_p]
     set_id.restype=ctypes.c_long
-    result=set_id("XStage.SongStudio.Plus")
+    result=set_id("XStage.SongStudio.Pro")
     if result<0:
         raise OSError(result,"Cannot set Windows taskbar identity")
 
@@ -89,7 +89,7 @@ def run_desktop(server,url,workspace,icon_path):
     from PySide6.QtWebEngineWidgets import QWebEngineView
 
     app=QApplication.instance() or QApplication([])
-    app.setApplicationName("X-Stage Song Studio Plus")
+    app.setApplicationName("X-Stage Song Studio Pro")
     app.setOrganizationName("X-Stage")
     preferred=Path(icon_path)
     fallback=Path(__file__).resolve().parent/"web"/"icon.svg"
@@ -99,7 +99,7 @@ def run_desktop(server,url,workspace,icon_path):
         app.setWindowIcon(icon)
     storage=Path(workspace)/"QT"
     storage.mkdir(parents=True,exist_ok=True)
-    profile=QWebEngineProfile("XStageSongStudioPlus",app)
+    profile=QWebEngineProfile("XStageSongStudioPro",app)
     profile.setPersistentStoragePath(str(storage/"Storage"))
     profile.setCachePath(str(storage/"Cache"))
 
@@ -119,7 +119,7 @@ def run_desktop(server,url,workspace,icon_path):
     class MainWindow(QMainWindow):
         def __init__(self):
             super().__init__()
-            self.setWindowTitle("X-Stage Song Studio Plus · Windows")
+            self.setWindowTitle("X-Stage Song Studio Pro · Windows")
             self.setWindowIcon(icon)
             self.resize(1360,850)
             self.setMinimumSize(930,620)
