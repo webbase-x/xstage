@@ -29,10 +29,10 @@ try
         if (SocialVideoDownloader.IsVideoUrl(uri))
             throw new Exception("Unsafe or deceptive social URL incorrectly accepted: " + uri);
     var video = new DownloadJob { Url = videoHosts[0], Folder = folder, Parts = 16, VideoQuality = "1080" };
-    var args = SocialVideoDownloader.BuildArguments(video, Path.Combine(folder, ".temp"), Path.Combine(folder, "tools")).ToArray();
-    if (!args.Contains("--no-playlist") || !args.Contains("--ignore-config") ||
-        !args.Contains("--no-simulate") || !args.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
-        !args.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
+    var videoArgs = SocialVideoDownloader.BuildArguments(video, Path.Combine(folder, ".temp"), Path.Combine(folder, "tools")).ToArray();
+    if (!videoArgs.Contains("--no-playlist") || !videoArgs.Contains("--ignore-config") ||
+        !videoArgs.Contains("--no-simulate") || !videoArgs.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
+        !videoArgs.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
         throw new Exception("Video arguments must isolate config, enforce video quality and use bundled Deno.");
     video.VideoQuality = "AudioMP3";
     var mp3Args = SocialVideoDownloader.BuildArguments(video, folder, folder);
