@@ -100,36 +100,32 @@ jobs:
           python-version: "3.13"
       - name: Install isolated EXE builder
         run: python -m pip install "pyinstaller>=6,<7" "pillow>=11,<13" "PySide6>=6.8,<7"
-      - name: Check picker test Python syntax
-        run: python -m py_compile scripts/test-songstudio-pro-native-picker.py
-      - name: Test native Qt folder/file picker with Thai Unicode paths
+      - name: Test Windows-native picker backend with Thai Unicode paths
         shell: pwsh
         run: |
-          $env:QT_QPA_PLATFORM="offscreen"
-          python scripts/test-songstudio-pro-native-picker.py
-          if ($LASTEXITCODE -ne 0) { throw "Native Qt picker regression failed" }
-          Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+          python songstudio-plus/tests/test_windows_picker.py
+          if ($LASTEXITCODE -ne 0) { throw "Windows picker backend regression failed" }
       - name: Build standalone EXE with embedded web frontend
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.17-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" songstudio-plus/app.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.18-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
-          if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.17-preview.exe")) { throw "EXE not produced" }
+          if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.18-preview.exe")) { throw "EXE not produced" }
       - name: Verify EXE hash and package preview
         shell: pwsh
         run: |
-          $exe="dist/X-Stage-Song-Studio-Pro-v0.1.17-preview.exe"
+          $exe="dist/X-Stage-Song-Studio-Pro-v0.1.18-preview.exe"
           $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-          "X-Stage Song Studio Pro v0.1.17 Native Windows Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
+          "X-Stage Song Studio Pro v0.1.18 Native Windows Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           "Local-only SQLite Engine. Original media prebuild preview (WinMM MIDI) included. X-container player integration pending. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           Write-Host "EXE SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.17-Windows-Preview
+          name: X-Stage-Song-Studio-Pro-v0.1.18-Windows-Preview
           path: |
-            dist/X-Stage-Song-Studio-Pro-v0.1.17-preview.exe
+            dist/X-Stage-Song-Studio-Pro-v0.1.18-preview.exe
             dist/README-Preview.txt
           retention-days: 14
           if-no-files-found: error
