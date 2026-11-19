@@ -68,6 +68,7 @@ jobs:
           node scripts/test-songstudio-pro-timeline-ui.mjs
           node --check storefront.js
           node scripts/test-songstudio-pro-portal.mjs
+          node scripts/test-songstudio-pro-actions.mjs
       - name: Static app and security surface contract
         run: |
           python - <<'PY'
@@ -96,6 +97,13 @@ jobs:
           python-version: "3.13"
       - name: Install isolated EXE builder
         run: python -m pip install "pyinstaller>=6,<7" "pillow>=11,<13" "PySide6>=6.8,<7"
+      - name: Test native Qt folder/file picker with Thai Unicode paths
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM="offscreen"
+          python scripts/test-songstudio-pro-native-picker.py
+          if ($LASTEXITCODE -ne 0) { throw "Native Qt picker regression failed" }
+          Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
       - name: Build standalone EXE with embedded web frontend
         shell: pwsh
         run: |
