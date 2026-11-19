@@ -46,7 +46,7 @@
     clearTimeout(state.toastTimer);
     state.toastTimer=setTimeout(()=>node.classList.remove("show"),4600);
   }
-  async function api(path,payload,timeoutMs=0){
+  async function api(path,payload,timeoutMs=12000){
     const options={cache:"no-store",headers:{}};
     let timer=null;
     if(timeoutMs>0){
@@ -677,7 +677,7 @@
     button.disabled=true;
     if(kind==="folder")text("folder-picker-status","กำลังเปิดหน้าต่างเลือกโฟลเดอร์ของ Windows...");
     try{
-      const result=await api("/api/pick",{kind,current:$(target).value.trim()});
+      const result=await api("/api/pick",{kind,current:$(target).value.trim()},0);
       if(result.path){
         $(target).value=result.path;
         $(target).dispatchEvent(new Event("input",{bubbles:true}));
