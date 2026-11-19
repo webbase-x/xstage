@@ -9,6 +9,7 @@ import json
 import mimetypes
 import os
 import sqlite3
+import subprocess
 import secrets
 import sys
 import time
@@ -459,8 +460,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.state.log_path.touch(exist_ok=True)
                 if sys.platform!="win32":
                     raise ValueError("เปิด Log อัตโนมัติได้เฉพาะ Windows")
-                os.startfile(str(self.state.log_path))
-                self.state.diagnostic("log.opened")
+                subprocess.Popen(["notepad.exe",str(self.state.log_path)],
+                    creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0),
+                    close_fds=True)
+                self.state.diagnostic("log.opened",source="api")
                 result={"opened":True,"path":str(self.state.log_path)}
             elif path=="/api/open-folder":
                 scope=body.get("scope")
