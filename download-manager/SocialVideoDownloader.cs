@@ -41,7 +41,7 @@ public static class SocialVideoDownloader
         if (!DownloadEngine.AllowedParts.Contains(job.Parts)) throw new ArgumentException("จำนวนส่วนไม่ถูกต้อง");
         var args = new List<string>
         {
-            "--ignore-config", "--no-playlist", "--no-mtime", "--newline", "--no-colors",
+            "--ignore-config", "--no-playlist", "--no-simulate", "--no-mtime", "--newline", "--no-colors",
             "--continue", "--windows-filenames",
             "--paths", "home:" + job.Folder,
             "--paths", "temp:" + work,
@@ -81,7 +81,7 @@ public static class SocialVideoDownloader
         Directory.CreateDirectory(work);
         job.VideoPhase = "กำลังอ่านข้อมูลวิดีโอ";
         job.VideoPercent = 0;
-        job.SegmentsUsed = job.Parts;
+        job.SegmentsUsed = 0; // -N sets a maximum fragment concurrency, not a guaranteed number of HTTP byte ranges
 
         var info = new ProcessStartInfo(ytDlp)
         {
