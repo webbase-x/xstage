@@ -194,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.19",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.20",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
