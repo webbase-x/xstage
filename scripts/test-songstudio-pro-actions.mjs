@@ -62,15 +62,25 @@ assert.ok(picker.includes('System.Windows.Forms.OpenFileDialog'),
  'LRC selection must use a Windows file dialog directly');
 assert.ok(picker.includes('"powershell.exe","-NoProfile","-STA"'),
  'Windows picker must run PowerShell in STA mode');
-assert.ok(desktop.includes('def run_browser_host('),
- 'Windows browser host is required');
-assert.ok(server.includes('run_browser_host(server,url'),
- 'Default Windows UI must use the browser host');
-assert.ok(desktop.includes('os.startfile(url)'),
- 'Browser host must open localhost through the Windows shell');
-assert.ok(desktop.indexOf('worker.start()') < desktop.indexOf('QTimer.singleShot(100,open_ui)'),
- 'Local PC Engine must start before the Windows browser is opened');
+assert.ok(desktop.includes('def run_desktop('),
+ 'Windows desktop shell is required');
+assert.ok(server.includes('run_desktop(server,url'),
+ 'Default Windows UI must use the standalone desktop shell');
+assert.ok(server.includes('if options.browser:')&&server.includes('run_browser_host(server,url'),
+ 'System browser must remain troubleshooting-only');
+assert.ok(desktop.includes('window.web.load(QUrl(url))'),
+ 'Standalone desktop must load its localhost UI inside Qt WebEngine');
+assert.ok(desktop.indexOf('worker.start()') < desktop.indexOf('window.web.load(QUrl(url))'),
+ 'Local PC Engine must start before the embedded desktop UI loads');
+assert.ok(desktop.includes('javaScriptConsoleMessage'),
+ 'Desktop shell must capture JavaScript console failures');
+assert.ok(desktop.includes('web.load.finished')&&desktop.includes('web.render.terminated'),
+ 'Desktop shell must log WebView load and renderer failures');
 assert.ok(server.includes('song-studio-pro.log')&&server.includes('def diagnostic('),
  'Persistent diagnostic log is required');
+assert.ok(js.indexOf('bind();') < js.indexOf('new globalThis.XStageCueTimelineUI'),
+ 'Core buttons must bind before optional cue timeline initialization');
+assert.ok(js.includes('timeline.init.failed'),
+ 'Optional timeline failure must be logged without killing the core UI');
 assert.ok(!js.includes('state.ready=true;'), 'Do not fake engine state');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, browser host and diagnostic log');
