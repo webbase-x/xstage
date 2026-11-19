@@ -474,9 +474,9 @@ public sealed class MainForm : Form
         var instructions = new Label
         {
             Left = 20, Top = 15, Width = 540, Height = 113,
-            Text = "1. เปิด chrome://extensions หรือ edge://extensions\\n" +
-                   "2. เปิดโหมดผู้พัฒนา (Developer mode) แล้วกด Load unpacked\\n" +
-                   "3. เลือกโฟลเดอร์ส่วนขยายของ X-Stage ด้านล่าง\\n" +
+            Text = "1. เปิด chrome://extensions หรือ edge://extensions\n" +
+                   "2. เปิดโหมดผู้พัฒนา (Developer mode) แล้วกด Load unpacked\n" +
+                   "3. เลือกโฟลเดอร์ส่วนขยายของ X-Stage ด้านล่าง\n" +
                    "4. คัดลอก Extension ID (อักษร a–p 32 ตัว) มาวางในช่อง แล้วกดเชื่อมต่อ",
             Font = new Font("Segoe UI", 10), ForeColor = Color.FromArgb(35, 55, 83)
         };
@@ -499,8 +499,8 @@ public sealed class MainForm : Form
         {
             BrowserIntegration.Register(id.Text);
             MessageBox.Show(this,
-                "ลงทะเบียนส่วนขยาย Chrome / Edge สำเร็จ\\n" +
-                "ในส่วนขยาย ให้เปิดการรับดาวน์โหลดอัตโนมัติเฉพาะเมื่อต้องการใช้งาน\\n" +
+                "ลงทะเบียนส่วนขยาย Chrome / Edge สำเร็จ\n" +
+                "ในส่วนขยาย ให้เปิดการรับดาวน์โหลดอัตโนมัติเฉพาะเมื่อต้องการใช้งาน\n" +
                 "ส่วนขยายจะไม่ยกเลิกงานในเบราว์เซอร์หากแอปไม่รับงาน",
                 "พร้อมใช้งาน", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -535,9 +535,9 @@ public sealed class MainForm : Form
             }
             _updateStatus.Text = $"มีอัปเดต v{release.Version} · Build {release.Build} — กดตรวจสอบอัปเดตเพื่อดาวน์โหลด";
             if (MessageBox.Show(this,
-                $"พบ X-Stage Download Manager v{release.Version} Build {release.Build}\\n" +
-                $"ขนาดไฟล์ประมาณ {release.Size / 1024.0 / 1024.0:0.0} MB\\n" +
-                "เปิดลิงก์ติดตั้ง EXE จาก GitHub Releases หรือไม่?\\n" +
+                $"พบ X-Stage Download Manager v{release.Version} Build {release.Build}\n" +
+                $"ขนาดไฟล์ประมาณ {release.Size / 1024.0 / 1024.0:0.0} MB\n" +
+                "เปิดลิงก์ติดตั้ง EXE จาก GitHub Releases หรือไม่?\n" +
                 "โปรแกรมจะไม่ติดตั้งทับหรือปิดงานดาวน์โหลดโดยอัตโนมัติ",
                 "พบอัปเดตใหม่", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
                 Process.Start(new ProcessStartInfo(release.Url) { UseShellExecute = true });
