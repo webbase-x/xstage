@@ -40,14 +40,20 @@ jobs:
                          "manual-mark-cue","manual-toggle-menu","manual-toggle-queue",
                          "manual-toggle-stage","manual-focus","manual-diagnostic-list",
                          "manual-diagnostic-summary","manual-only-issues",
-                         "manual-edit-scroll","build-page-all","build-page-clear",
+                         "manual-edit-scroll","manual-timeline-track",
+                         "manual-timeline-ruler","manual-timeline-playhead",
+                         "manual-timeline-cues","manual-timeline-zoom-in",
+                         "manual-timeline-zoom-out","manual-timeline-follow",
+                         "build-page-all","build-page-clear",
                          "build-all","build-clear"):
               assert needle in html, needle
           for needle in ("loadManualQueue()","manualSave()","manualSkip()",
                          "manualApprove()","manualRenderFindings()","manualFocusLine(",
                          "manualApplyLayout()","manualCheckDraft(","manualDraftState()",
                          "manual-cue-token","manual-advanced-times",
-                         "manualOnlyIssues","allReadySelected","excludedSongs"):
+                         "manualOnlyIssues","XStageCueTimelineUI",
+                         "manualTimeline?.render()","allReadySelected",
+                         "excludedSongs"):
               assert needle in js, needle
           assert "xstage_manual_reviews" in backend
           print("PASS: manual lyric editor and global/page selection UI contracts")
@@ -55,6 +61,10 @@ jobs:
       - name: JavaScript syntax check
         run: |
           node --check songstudio-plus/web/app.js
+          node --check songstudio-plus/web/timeline-core.js
+          node --check songstudio-plus/web/timeline-ui.js
+          node scripts/test-songstudio-pro-timeline.mjs
+          node scripts/test-songstudio-pro-timeline-ui.mjs
           node --check storefront.js
           node scripts/test-songstudio-pro-portal.mjs
       - name: Static app and security surface contract
