@@ -30,6 +30,9 @@ for(const [name,call] of [
   ['workspace-open','openLocalFolder("workspace")'],
   ['pro-update-check','checkProUpdate()'],
   ['pro-update-install','beginProUpdate()'],
+  ['pro-update-quick','beginProUpdate()'],
+  ['pro-update-notice-install','beginProUpdate()'],
+  ['pro-update-notice-dismiss','updateNoticeDismissed=true'],
   ['import-start','startJob("import"'],
   ['recover-lyrics','startJob("recover"'],
   ['lyrics-apply','applyLyrics()'],
@@ -94,6 +97,11 @@ assert.ok(!readyControls.includes('diagnostic-open-log'),
  'Program log control must remain available even when engine-ready controls are disabled');
 assert.ok(server.includes('notepad.exe')&&desktop.includes('Ctrl+Shift+L'),
  'Diagnostic log must open independently through Notepad and a native shortcut');
+assert.ok(html.includes('id="pro-update-notice"')&&html.includes('id="pro-update-quick"'),
+ 'Startup update notification and quick action must exist');
+assert.ok(js.includes('renderProUpdateNotice(result,ready)')&&
+          js.includes('void checkProUpdate(true);'),
+ 'Verified update check must run automatically after Local Engine connect');
 assert.ok(js.includes('async function api(path,payload,timeoutMs=12000)'),
  'Interactive API calls require a default timeout');
 assert.ok(js.includes('api("/api/pick",{kind,current:$(target).value.trim()},0)'),
