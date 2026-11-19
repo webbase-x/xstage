@@ -75,13 +75,13 @@
     },
     "download-manager":{
       title:"X-Stage Download Manager",category:"WINDOWS · DOWNLOADS",
-      subtitle:"ดาวน์โหลดไฟล์และวิดีโอ YouTube · TikTok · Facebook Reels บน Windows",
+      subtitle:"ดาวน์โหลดไฟล์และวิดีโอ · เชื่อม Chrome/Edge · ตรวจอัปเดตอัตโนมัติ",
       description:"ตัวจัดการดาวน์โหลด Windows รองรับไฟล์ HTTP/HTTPS หลายส่วน 1–32 ช่วง พร้อมโหมดวิดีโอสำหรับ YouTube, TikTok และ Facebook/Instagram Reels ที่เข้าถึงได้สาธารณะ เลือกคุณภาพ 1080p/720p/480p หรือ MP3 ได้ ใช้ FFmpeg รวมภาพและเสียงโดยรวมเครื่องมือในไฟล์ติดตั้งแล้ว",
-      features:["วางลิงก์ YouTube, Shorts, TikTok, Facebook Reels และ Instagram Reels พร้อมตรวจจับโหมดวิดีโออัตโนมัติ","เลือกภาพพร้อมเสียงดีที่สุด / 1080p / 720p / 480p หรือแยกเสียงเป็น MP3 (เมื่อแหล่งรองรับ)","รวมภาพและเสียงด้วย FFmpeg และใช้ Deno สำหรับ YouTube โดยเครื่องมือรวมมากับ Setup EXE","ไฟล์ทั่วไปดาวน์โหลดหลายส่วน 1–32 ช่วง พร้อมพักและดาวน์โหลดต่อได้เมื่อเซิร์ฟเวอร์รองรับ","ดาวน์โหลดวิดีโอสาธารณะที่ได้รับอนุญาตเท่านั้น ไม่รองรับ DRM หรือโพสต์ส่วนตัว"],
+      features:["วางลิงก์ YouTube, Shorts, TikTok, Facebook Reels และ Instagram Reels เลือกคุณภาพวิดีโอหรือ MP3 เมื่อแหล่งรองรับ","ไฟล์ทั่วไปแบ่งโหลดได้ 1, 2, 4, 8, 16, 32 ส่วน พร้อมแถบแสดงความคืบหน้าแต่ละช่วงจริง","ดาวน์โหลดเสร็จชื่อไฟล์เปลี่ยนสี คลิกเพื่อเปิดไฟล์หรือโฟลเดอร์ปลายทาง","ตรวจอัปเดตเมื่อเปิดโปรแกรม และมีปุ่มตรวจสอบเอง พร้อมถามก่อนดาวน์โหลดรุ่นใหม่","ส่วนขยาย Chrome/Edge แบบเปิดใช้เอง รับลิงก์จากเบราว์เซอร์โดยไม่ยกเลิกงานเดิมหากแอปไม่พร้อม","รวม yt-dlp, FFmpeg และ Deno กับไฟล์ติดตั้ง EXE เดียว ไม่ต้องติดตั้งเพิ่ม"],
       hero:"ดาวน์โหลดอย่างเป็นระบบ",blurb:"หลายส่วน · หยุดและทำต่อ · ไม่สูญหายจากคิว",preview:"DOWNLOAD MANAGER · WINDOWS",
       type:"manifest",manifest:"./downloads/download-manager-preview-latest.json",
       candidate:{label:"ดู Windows Preview ใน GitHub Actions",url:"https://github.com/webbase-x/xstage/actions/workflows/build-xstage-download-manager.yml"},
-      note:"Preview v0.2.0 Build 3 · ดาวน์โหลดวิดีโอสาธารณะผ่าน yt-dlp (ไม่รองรับ DRM/โพสต์ส่วนตัว) · ยังไม่ลงลายเซ็น Windows และยังไม่ได้ทดสอบจริงครบทุกแพลตฟอร์ม · ยังไม่มีส่วนขยาย Chrome/Edge",
+      note:"Preview v0.2.1 Build 4 · ส่วนขยาย Chrome/Edge ต้องเปิดใช้งานและจับคู่จากในแอปก่อน · ดาวน์โหลดเฉพาะไฟล์ที่เข้าถึงได้โดยชอบและไม่ข้าม DRM · Windows ยังไม่ได้ลงลายเซ็น Code Signing และยังไม่ได้ทดสอบเบราว์เซอร์จริงครบทุกเครื่อง",
       fallback:"กำลังสร้างตัวติดตั้ง Windows Preview"
     },
     "studio-pro":{

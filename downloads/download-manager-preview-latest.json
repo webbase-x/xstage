@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.1.1",
-  "build": 2,
+  "version": "0.2.1",
+  "build": 4,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.1.1-build2-win-x64-Setup.exe",
-  "sha256": "cf951e28eba880f9d6a64d76484a1318e56a3ae56056189e2a376227500b869b",
-  "size_bytes": 65764034,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.1.1-build2-preview/X-Stage-Download-Manager-v0.1.1-build2-win-x64-Setup.exe",
-  "note": "Verified Windows Setup EXE only. Configurable 1/2/4/8/16/32 segments with HTTP Range and safe pause/reconfigure. Published checksum verified by GitHub Actions. Unsigned preview; not a tested stable release."
+  "file": "X-Stage-Download-Manager-v0.2.1-build4-win-x64-Setup.exe",
+  "sha256": "55113aaa02af11132c1d181ac367a80aba0961a42d2a8f0c55b190e59ad46d65",
+  "size_bytes": 213848131,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.1-build4-preview/X-Stage-Download-Manager-v0.2.1-build4-win-x64-Setup.exe",
+  "note": "Verified public Windows Setup EXE; SHA-256 compared after GitHub Release download. Startup/manual update checks, per-range progress, finished-file actions and opt-in Chrome/Edge MV3 integration; bundled yt-dlp/FFmpeg/Deno. Unsigned preview."
 }
