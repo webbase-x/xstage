@@ -185,7 +185,9 @@ class PlusTests(unittest.TestCase):
              "X-Stage Karaoke",3,lambda progress,message: stages.append(progress),None)
         self.assertEqual(outcome["changed_lines"],3)
         self.assertEqual(outcome["changed_songs"],3)
-        self.assertEqual(outcome["needs_review_lines"],2)
+        self.assertEqual(outcome["needs_review_lines"],1)
+        self.assertEqual(outcome["combined_lines"],2)
+        self.assertEqual(outcome["padded_lines"],0)
         self.assertTrue(stages and stages[-1]["done"]==3)
         with plus.connect(self.workspace) as db:
             for row in matched:
@@ -196,15 +198,76 @@ class PlusTests(unittest.TestCase):
                 self.assertEqual(lyrics[0][0]["text"],"X-Stage Karaoke")
                 self.assertEqual(lyrics[0][0]["start_time"],row["start_time"])
                 self.assertEqual(lyrics[0][0]["end_time"],row["end_time"])
-                if row in matched[:2]:
+                if row==matched[1]:
                     self.assertEqual(current["timing_status"],"incomplete")
                     self.assertEqual(lyrics[0][0]["timing_status"],"incomplete")
                     self.assertEqual(lyrics[0][1],[])
+                else:
+                    self.assertEqual(lyrics[0][0]["timing_status"],"estimated")
+                    self.assertEqual("".join(cue["text"] for cue in
+                        plus.display_cues(lyrics[0][0]["text"],lyrics[0][1])),
+                        "X-Stage Karaoke")
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM xstage_edit_changes WHERE batch_id=?",
                 (outcome["batch"],)).fetchone()[0],3)
         self.assertEqual(plus.undo_edit(self.workspace,outcome["batch"])["restored_songs"],3)
         self.assertEqual(plus.plan_edit(self.workspace,"Nick",keys)["lines"],3)
+
+    def test_replacement_pads_cursor_slots_and_combines_swipe_without_new_times(self):
+        def source(values,text):
+            return [{"text":ch,"start_time":at,"duration":.5}
+                    for ch,at in zip(text,values)]
+        original="By Nick >>>"
+        measured=[1.0+i*.25 for i in range(len(original))]
+        cues=source(measured,original)
+        changed,status=plus.remap_cues(original,"X-Stage",1.,5.,cues)
+        self.assertEqual(status,"estimated")
+        self.assertEqual(len(changed),len(cues))
+        self.assertEqual([v[1] for v in changed],measured)
+        self.assertEqual([v[0] for v in changed][len(plus.glyphs("X-Stage")):],
+                         [">"]*(len(cues)-len(plus.glyphs("X-Stage"))))
+        serialized=[{"text":v[0],"start_time":v[1],"duration":v[2]} for v in changed]
+        self.assertEqual("".join(c["text"] for c in
+                                 plus.display_cues("X-Stage",serialized)),"X-Stage")
+        # Existing literal > characters are never removed from visible text.
+        self.assertEqual(len(plus.display_cues(original,cues)),len(cues))
+        self.assertEqual(len(plus.display_cues("X>>",[
+            {"text":"X"},{"text":">"},{"text":">"},{"text":">"}])),3)
+        # The X container retains all measured positions but makes the
+        # added cursor placeholders nonprinting.
+        line={"text":"X-Stage","start_time":1.,"end_time":5.,
+              "timing_status":"estimated"}
+        blob=plus.metadata_bytes({"id":"song","code":1},
+                {"id":"version","title":"Title","artist":"Artist",
+                 "timing_status":"estimated"},[(line,serialized)])
+        packed=plus.decode_metadata(blob)["lines"][0]
+        self.assertEqual(packed["text"],"X-Stage")
+        self.assertEqual(len(packed["cues"]),len(cues))
+        self.assertEqual("".join(x["text"] for x in packed["cues"]),"X-Stage")
+        self.assertEqual([x["startTime"] for x in packed["cues"]],measured)
+
+        old="Nick"
+        few=[{"text":v,"start_time":t,"duration":.5}
+             for v,t in zip(old,(1.0,2.0,3.0,4.0))]
+        grouped,status=plus.remap_cues(old,"X-Stage Karaoke",1.,6.,few)
+        self.assertEqual(status,"estimated")
+        self.assertEqual(len(grouped),len(few))
+        self.assertEqual([x[1] for x in grouped],[1.,2.,3.,4.])
+        self.assertEqual("".join(x[0] for x in grouped),"X-Stage Karaoke")
+        self.assertTrue(any(len(x[0])>1 for x in grouped))
+        # A combining Thai vowel/mark is kept with its base letter.
+        thai,status=plus.remap_cues(old,"ก้",1.,6.,few)
+        self.assertEqual(thai[0][0],"ก้")
+        self.assertEqual([x[0] for x in thai[1:]], [">",">",">"])
+        corrupted=[{**v,"text":"BROKEN"} for v in few]
+        recovered,status=plus.remap_cues(old,"ข้อความใหม่",1.,6.,corrupted)
+        self.assertNotEqual(status,"incomplete")
+        self.assertEqual([x[1] for x in recovered],[1.,2.,3.,4.])
+        self.assertEqual(plus.remap_cues(old,"new",1.,6.,[]),
+                         ([],"incomplete"))
+        reversed_times=[{**v,"start_time":5-i} for i,v in enumerate(few)]
+        self.assertEqual(plus.remap_cues(old,"new",1.,6.,reversed_times),
+                         ([],"incomplete"))
 
     def test_cancelled_group_edit_rolls_back_all_songs(self):
         import threading
