@@ -79,10 +79,10 @@ def _destroy_taskbar_icons(handles):
     for handle in handles:
         user32.DestroyIcon(handle)
 
-def run_desktop(server,url,workspace,icon_path):
+def run_desktop(server,url,workspace,icon_path,state=None):
     port=validate_local(url)
     set_windows_identity()
-    from PySide6.QtCore import QUrl
+    from PySide6.QtCore import QUrl, QTimer
     from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QShortcut
     from PySide6.QtWidgets import QApplication,QMainWindow
     from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
@@ -153,6 +153,12 @@ def run_desktop(server,url,workspace,icon_path):
             app.quit()
 
     window=MainWindow()
+    # The update helper waits for this process to exit before replacing the
+    # managed EXE. Finish/cancel the active SQLite job first, then quit Qt.
+    exit_timer=QTimer(window)
+    if state is not None:
+        exit_timer.timeout.connect(lambda:app.quit() if state.ready_to_exit() else None)
+        exit_timer.start(250)
     # Server is ready before the embedded view requests localhost.
     worker=Thread(target=server.serve_forever,
                   kwargs={"poll_interval":0.2},
