@@ -20,7 +20,8 @@ class UpdaterTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.workspace=Path(self.tmp.name)
+        self.root=Path(self.tmp.name)
+        self.workspace=self.root/"workspace"
         core.init(self.workspace)
 
     def manifest(self,hash=None):
@@ -63,7 +64,7 @@ class UpdaterTests(unittest.TestCase):
                           "tampering must block any automatic install")
 
     def test_user_cancelled_import_only_auto_resumes_for_program_restart(self):
-        source=self.workspace/"Source";source.mkdir()
+        source=self.root/"Source";source.mkdir()
         (source/"00001.mp3").write_bytes(b"AUDIO")
         stop=threading.Event();stop.set()
         prior=core.import_folder(self.workspace,source,cancel=stop)
