@@ -1190,18 +1190,35 @@ def glyphs(text):
     return result
 
 def remap_cues(old_text,new_text,start,end,cues):
+    """Keep verifiable cue timing or save text with timing explicitly incomplete.
+
+    Historical NCN contains lines whose text/cue segmentation does not agree.
+    That MUST NOT prevent correcting the lyric in SQLite, nor justify
+    fabricating new CUR times. These rows go to Menu 05 to be reviewed.
+    """
     units=glyphs(new_text)
-    if not units: raise ValueError("ข้อความแทนที่ว่าง")
-    measured=[float(x["start_time"]) for x in cues]
-    if cues and ("".join(x["text"] for x in cues)!=old_text or
-                 len(cues)!=len(glyphs(old_text))):
-        raise ValueError("รูปแบบเวลาปาดสีต้นฉบับไม่สอดคล้องกับข้อความ · ข้ามเพลง")
-    if measured and any(measured[i]>measured[i+1] for i in range(len(measured)-1)):
-        raise ValueError("เวลา CUR ไม่เรียงลำดับ")
-    if measured and len(units)==len(measured):
+    if not units:
+        raise ValueError("ข้อความแทนที่ว่าง")
+    if not cues:
+        return [],"incomplete"
+    try:
+        measured=[float(x["start_time"]) for x in cues]
+        original="".join(str(x["text"]) for x in cues)
+        source_matches=(original==old_text and len(cues)==len(glyphs(old_text)))
+        times_valid=(math.isfinite(start) and math.isfinite(end) and
+            start<end and
+            all(math.isfinite(at) and start-.001<=at<end for at in measured) and
+            all(measured[i]<=measured[i+1] for i in range(len(measured)-1)))
+    except (TypeError,ValueError,OverflowError):
+        return [],"incomplete"
+    if not source_matches or not times_valid:
+        return [],"incomplete"
+    if len(units)==len(measured):
         times=measured
         status="preserved"
-    elif measured:
+    else:
+        # A changed length cannot preserve one-to-one CUR positions.
+        # Interpolation is explicitly ESTIMATED, never marked original.
         track=measured+[end]
         length=len(measured)
         times=[]
@@ -1210,13 +1227,9 @@ def remap_cues(old_text,new_text,start,end,cues):
             at=min(int(x),length-1)
             times.append(track[at]+(track[at+1]-track[at])*(x-at))
         status="estimated"
-    else:
-        times=[start+(end-start)*i/len(units) for i in range(len(units))]
-        status="estimated"
-    if any(not start-.001<=v<=end+.001 for v in times):
-        raise ValueError("เวลาปาดสีใหม่อยู่นอกบรรทัด")
     return [(unit,round(at,6),round(max(0,(times[i+1] if i+1<len(times) else end)-at),6))
             for i,(unit,at) in enumerate(zip(units,times))],status
+
 
 def get_version_lines(db,version_id):
     result=[]
@@ -1227,7 +1240,11 @@ def get_version_lines(db,version_id):
         result.append((dict(line),cues))
     return result
 
-def replace_groups(workspace,query,keys,replacement,expected_lines):
+class _EditCancelled(Exception):
+    pass
+
+
+def replace_groups(workspace,query,keys,replacement,expected_lines,progress=None,cancel=None):
     replacement=unicodedata.normalize("NFC",str(replacement).strip())
     if not replacement or len(replacement)>400 or any(c in replacement for c in "\r\n\0"):
         raise ValueError("ข้อความใหม่ต้องเป็นหนึ่งบรรทัด ไม่เกิน 400 อักขระ")
@@ -1247,7 +1264,17 @@ def replace_groups(workspace,query,keys,replacement,expected_lines):
          (id,created_at,search,replacement,changed_lines,status)
          VALUES (?,?,?,?,?,'committed')""",(batch,now(),query,replacement,
             sum(len(e) for e in edits.values())))
-        for song_id,positions in edits.items():
+        ordered_edits=list(edits.items())
+        total=len(ordered_edits)
+        needs_review=0
+        estimated=0
+        if progress:
+            progress({"done":0,"total":total,"changed_lines":0,
+                      "needs_review_lines":0,"estimated_lines":0},
+                     "เตรียมแก้ไขเนื้อร้อง "+str(total)+" เพลง")
+        for completed,(song_id,positions) in enumerate(ordered_edits,1):
+            if cancel is not None and cancel.is_set():
+                raise _EditCancelled("ผู้ใช้ยกเลิก · คืนค่าธุรกรรมทั้งหมด")
             prior=db.execute("""SELECT * FROM xstage_lyric_versions
                WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
             previous=get_version_lines(db,prior["id"])
@@ -1259,6 +1286,10 @@ def replace_groups(workspace,query,keys,replacement,expected_lines):
                     text=replacement
                     remapped,status=remap_cues(line["text"],text,
                         line["start_time"],line["end_time"],cues)
+                    if status=="incomplete":
+                        needs_review+=1
+                    elif status=="estimated":
+                        estimated+=1
                 else:
                     remapped=[(x["text"],x["start_time"],x["duration"]) for x in cues]
                 revised.append((text,line["start_time"],line["end_time"],remapped,status))
@@ -1274,7 +1305,8 @@ def replace_groups(workspace,query,keys,replacement,expected_lines):
                  title,artist,created_at,is_current)
                 VALUES (?,?,?,NULL,'edit',?,?,?,?,0)""",
                 (version,song_id,canonical,
-                 "incomplete" if prior["timing_status"]=="incomplete" else
+                 "incomplete" if prior["timing_status"]=="incomplete" or
+                     any(x[4]=="incomplete" for x in revised) else
                  "estimated" if any(x[4]=="estimated" for x in revised) else "preserved",
                  prior["title"],prior["artist"],now()))
                 for pos,(text,start,end,remapped,status) in enumerate(revised):
@@ -1291,8 +1323,17 @@ def replace_groups(workspace,query,keys,replacement,expected_lines):
             db.execute("""INSERT INTO xstage_edit_changes
               (batch_id,song_id,before_version,after_version) VALUES (?,?,?,?)""",
               (batch,song_id,prior["id"],version))
+            if progress and (completed==total or completed%8==0):
+                progress({"done":completed,"total":total,
+                          "changed_lines":sum(len(x) for _,x in ordered_edits[:completed]),
+                          "needs_review_lines":needs_review,
+                          "estimated_lines":estimated},
+                         "แก้ไขแล้ว "+str(completed)+"/"+str(total)+" เพลง")
+        if cancel is not None and cancel.is_set():
+            raise _EditCancelled("ผู้ใช้ยกเลิก · คืนค่าธุรกรรมทั้งหมด")
         return {"batch":batch,"changed_songs":len(edits),
-                "changed_lines":sum(map(len,edits.values()))}
+                "changed_lines":sum(map(len,edits.values())),
+                "needs_review_lines":needs_review,"estimated_lines":estimated}
 
 def undo_edit(workspace,batch):
     with WRITE_LOCK,connect(workspace) as db:
