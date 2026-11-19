@@ -31,7 +31,7 @@
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
                  manualMidiAt:0,manualCueUndo:new Map(),manualDirty:false,manualFindings:[],manualOnlyIssues:false,
                  manualLayout:{menu:false,queue:false,stage:false,focus:false},
-                 updateTarget:null,updateInstallIntent:false,updateBusy:false};
+                 updateTarget:null,updateInstallIntent:false,updateBusy:false,jobsRefreshing:false};
   let manualTimeline=null;
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
@@ -96,7 +96,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","diagnostic-open-log","workspace-open","lrc-browse","manual-find"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
     }
@@ -491,7 +491,8 @@
     }catch(error){toast(error.message,true);}
   }
   async function refreshJobs(){
-    if(!state.ready)return;
+    if(!state.ready||state.jobsRefreshing)return;
+    state.jobsRefreshing=true;
     try{
       const result=await api("/api/jobs");
       const jobs=result.jobs||[];
@@ -502,6 +503,13 @@
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
       $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
+      if(!state.activeJob&&job&&job.kind==="import"&&
+          ["completed","failed","cancelled"].includes(job.status)){
+        void diagnostic("ui.import.idle",{
+          status:job.status,job:job.id,
+          nextImportEnabled:!$("import-start").disabled
+        });
+      }
       if(!job)return;
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
@@ -596,10 +604,18 @@
       const signature=job.id+":"+job.status;
       if(state.jobSignature!==signature){
         state.jobSignature=signature;
-        if(job.status==="completed"||job.status==="failed"){
-          await refreshStatus();
-          if(state.view==="risks")await loadRisks();
-          else if(state.view!=="import")await refreshSongs();
+        if(job.status==="completed"||job.status==="failed"||job.status==="cancelled"){
+          try{
+            await refreshStatus();
+            if(state.view==="risks")await loadRisks();
+            else if(state.view!=="import")await refreshSongs();
+          }catch(error){
+            console.error("[XSTAGE] post-job refresh failed",
+              error?.stack||error?.message||String(error));
+            void diagnostic("ui.post_job_refresh.error",{
+              kind:job.kind,status:job.status,error:error?.message||String(error)
+            });
+          }
           if(job.kind==="lyrics-edit"&&job.status==="completed"&&state.view==="lyrics")
             await searchGroups();
           toast(job.status==="completed"?"งาน "+(job.kind==="lyrics-edit"?"แทนที่เนื้อร้อง":job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
@@ -624,7 +640,15 @@
           }
         }
       }
-    }catch(error){setReady(false);}
+    }catch(error){
+      console.error("[XSTAGE] refreshJobs failed",
+        error?.stack||error?.message||String(error));
+      void diagnostic("ui.jobs.refresh.error",{error:error?.message||String(error)});
+      // A jobs/status refresh failure is not proof that the Local Engine died.
+      // Keep controls usable; the session reconnect loop handles a real engine loss.
+    }finally{
+      state.jobsRefreshing=false;
+    }
   }
   async function openPicker(kind,target){
     const button=$(kind==="folder"?"source-browse":"lrc-browse");
