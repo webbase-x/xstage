@@ -39,6 +39,28 @@ try
     var mp3Args = SocialVideoDownloader.BuildArguments(video, folder, folder);
     if (!mp3Args.Contains("--audio-format") || !mp3Args.Contains("mp3"))
         throw new Exception("MP3 extraction args missing.");
+
+    // Update checks must compare semantic versions and ignore unsigned/unverified feeds.
+    var filename = "X-Stage-Download-Manager-v0.2.2-build5-win-x64-Setup.exe";
+    var json = System.Text.Json.JsonSerializer.Serialize(new
+    {
+        available = true, channel = "preview", version = "0.2.2", build = 5,
+        file = filename, sha256 = new string('a', 64), size_bytes = 250_000_000L,
+        download_url = "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.2-build5-preview/" + filename
+    });
+    if (UpdateChecker.Parse(json) is not { Version: "0.2.2", Build: 5 } ||
+        !UpdateChecker.IsNewer("0.2.2", 5) || UpdateChecker.IsNewer("0.1.1", 2) ||
+        UpdateChecker.IsNewer("0.2.1", 4))
+        throw new Exception("EXE-only manifest and version comparison failed.");
+    if (UpdateChecker.Parse(json.Replace("github.com", "untrusted.test")) is not null ||
+        UpdateChecker.Parse(json.Replace(new string('a', 64), "bad")) is not null)
+        throw new Exception("Untrusted update feeds must be rejected.");
+    var sampleId = new string('a', 32);
+    if (!BrowserIntegration.IsValidExtensionId(sampleId) ||
+        BrowserIntegration.IsValidExtensionId(new string('z', 32)) ||
+        !BrowserIntegration.BuildNativeHostManifest(@"C:\Test\XStageDownloadManager.exe", new[] { sampleId })
+            .Contains("chrome-extension://" + sampleId + "/", StringComparison.Ordinal))
+        throw new Exception("Native Chrome/Edge extension IDs and allowed origins failed.");
     var manager = new DownloadEngine();
     if (DownloadEngine.TryParseUrl("file:///C:/Windows/system.ini", out _) ||
         DownloadEngine.TryParseUrl("ftp://localhost/file", out _) ||
@@ -74,6 +96,10 @@ try
         throw new Exception("32 HTTP ranges were not used for a sufficiently large file.");
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(maxParts.CompletedPath)))
         throw new Exception("32-connection merge corrupted the output.");
+    if (!await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "range/test-file.bin") ||
+        !await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "plain/test-file.bin") ||
+        await BrowserCaptureProbe.IsUnauthenticatedFileAsync("https://www.youtube.com/watch?v=123"))
+        throw new Exception("Browser capture must probe accessible direct files without cookies.");
     var plain = manager.Add(server.Url + "plain/test%20file.bin", folder);
     await WaitFor(() => plain.Status is "Completed" or "Failed");
     if (plain.Status != "Completed") throw new Exception("Single stream failed: " + plain.Error);

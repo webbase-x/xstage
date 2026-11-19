@@ -14,11 +14,16 @@ public sealed class MainForm : Form
     private readonly DataGridView _grid = new();
     private readonly Label _summary = new();
     private readonly Label _details = new();
+    private readonly Label _updateStatus = new();
+    private bool _checkingUpdates;
+    private readonly Font _finishedFileFont = new("Segoe UI", 10, FontStyle.Bold | FontStyle.Underline);
+    private readonly Font _normalFileFont = new("Segoe UI", 10, FontStyle.Regular);
+    private readonly CancellationTokenSource _browserStop = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 800 };
 
     public MainForm(string[] args)
     {
-        Text = "X-Stage Download Manager · v0.2.0 Build 3";
+        Text = "X-Stage Download Manager · v0.2.1 Build 4";
         MinimumSize = new Size(930, 650);
         Size = new Size(1220, 735);
         StartPosition = FormStartPosition.CenterScreen;
@@ -47,7 +52,30 @@ public sealed class MainForm : Form
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
         _timer.Tick += (_, _) => RefreshRows();
         _timer.Start();
-        FormClosing += (_, _) => { _timer.Stop(); _engine.PauseAll(); _engine.Save(); };
+        FormClosing += (_, _) =>
+        {
+            _browserStop.Cancel();
+            _timer.Stop();
+            _engine.PauseAll();
+            _engine.Save();
+        };
+        FormClosed += (_, _) => { _finishedFileFont.Dispose(); _normalFileFont.Dispose(); };
+        Shown += async (_, _) =>
+        {
+            StartBrowserHandoff();
+            if (args.Length >= 2 && args[0] == "--enqueue" &&
+                DownloadEngine.TryParseUrl(args[1], out _))
+            {
+                try
+                {
+                    _engine.Add(args[1], _folder.Text, _engine.DefaultParts, SelectedQuality());
+                    _url.Clear();
+                    RefreshRows();
+                }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "รับงานจากเบราว์เซอร์ไม่สำเร็จ"); }
+            }
+            await CheckForUpdatesAsync(false);
+        };
         RefreshRows();
     }
 
@@ -72,7 +100,7 @@ public sealed class MainForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.0 · Build 3",
+            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.1 · Build 4",
             AutoSize = true, ForeColor = Color.FromArgb(212, 230, 252),
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             Location = new Point(28, 65), BackColor = Color.Transparent
@@ -158,9 +186,9 @@ public sealed class MainForm : Form
 
         var toolbar = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 61, Padding = new Padding(18, 10, 0, 8),
-            WrapContents = false, BackColor = Color.FromArgb(250, 251, 253),
-            AutoScroll = true
+            Dock = DockStyle.Top, Height = 104, Padding = new Padding(18, 10, 0, 8),
+            WrapContents = true, BackColor = Color.FromArgb(250, 251, 253),
+            AutoScroll = false
         };
         toolbar.Controls.Add(MakeTool("▶  เริ่ม / ต่อ", (_, _) => SelectedAction(j => _engine.Start(j))));
         toolbar.Controls.Add(MakeTool("Ⅱ  หยุดชั่วคราว", (_, _) => SelectedAction(_engine.Pause)));
@@ -171,6 +199,8 @@ public sealed class MainForm : Form
         }));
         toolbar.Controls.Add(MakeTool("Ⅱ  หยุดทั้งหมด", (_, _) => _engine.PauseAll()));
         toolbar.Controls.Add(MakeTool("⌕  เปิดไฟล์ / โฟลเดอร์", (_, _) => OpenSelected()));
+        toolbar.Controls.Add(MakeTool("⟳  ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true)));
+        toolbar.Controls.Add(MakeTool("🌐  เชื่อม Chrome / Edge", (_, _) => SetupBrowserIntegration()));
         toolbar.Controls.Add(MakeTool("✕  ลบรายการ", (_, _) =>
         {
             var job = Selected();
@@ -216,17 +246,35 @@ public sealed class MainForm : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Parts", HeaderText = "จำนวนส่วนจริง", Width = 130 });
         _grid.CellPainting += PaintProgress;
         _grid.SelectionChanged += (_, _) => UpdateDetails();
-        _grid.CellDoubleClick += (_, _) => OpenSelected();
+        _grid.CellClick += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index) return;
+            var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
+            if (job is not null && job.Status == "Completed")
+                ShowCompletedMenu(job, _grid.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false));
+        };
+        _grid.CellMouseEnter += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index) return;
+            var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
+            _grid.Cursor = job?.Status == "Completed" ? Cursors.Hand : Cursors.Default;
+        };
+        _grid.CellMouseLeave += (_, _) => _grid.Cursor = Cursors.Default;
+        _grid.CellDoubleClick += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex != _grid.Columns["File"].Index) OpenSelected();
+        };
         Controls.Add(_grid);
         _grid.BringToFront();
 
         var footer = new TableLayoutPanel
         {
-            Dock = DockStyle.Bottom, Height = 72,
+            Dock = DockStyle.Bottom, Height = 98,
             BackColor = Color.FromArgb(231, 238, 247), Padding = new Padding(22, 7, 22, 9),
-            ColumnCount = 1, RowCount = 2
+            ColumnCount = 1, RowCount = 3
         };
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
+        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
+        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _summary.Dock = DockStyle.Fill;
         _summary.Font = new Font("Segoe UI", 10, FontStyle.Bold);
@@ -237,6 +285,11 @@ public sealed class MainForm : Form
         _details.AutoEllipsis = true;
         footer.Controls.Add(_summary, 0, 0);
         footer.Controls.Add(_details, 0, 1);
+        _updateStatus.Dock = DockStyle.Fill;
+        _updateStatus.ForeColor = Color.FromArgb(41, 92, 156);
+        _updateStatus.Font = new Font("Segoe UI", 8, FontStyle.Bold);
+        _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.1 · Build 4";
+        footer.Controls.Add(_updateStatus, 0, 2);
         Controls.Add(footer);
     }
 
@@ -364,6 +417,180 @@ public sealed class MainForm : Form
         RefreshRows();
     }
 
+    private void StartBrowserHandoff()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await NativeMessagingBridge.ListenAsync(url =>
+                {
+                    var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    try
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                _engine.Add(url, _folder.Text, _engine.DefaultParts, SelectedQuality());
+                                RefreshRows();
+                                completion.TrySetResult(true);
+                            }
+                            catch (Exception)
+                            {
+                                completion.TrySetResult(false);
+                            }
+                        }));
+                    }
+                    catch (InvalidOperationException) { completion.TrySetResult(false); }
+                    return completion.Task;
+                }, _browserStop.Token);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (!IsDisposed && IsHandleCreated)
+                    BeginInvoke(new Action(() => _details.Text = "เชื่อมต่อเบราว์เซอร์ในเครื่องไม่ได้: " + ex.Message));
+            }
+        });
+    }
+
+    private void SetupBrowserIntegration()
+    {
+        var extensionFolder = BrowserIntegration.ExtensionFolder;
+        if (!Directory.Exists(extensionFolder))
+        {
+            MessageBox.Show(this, "ไม่พบชุดส่วนขยายเบราว์เซอร์ กรุณาติดตั้ง X-Stage Download Manager รุ่นเต็ม",
+                "เชื่อมต่อเบราว์เซอร์", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dialog = new Form
+        {
+            Text = "เชื่อม Chrome / Microsoft Edge", Width = 590, Height = 310,
+            StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false, BackColor = Color.White
+        };
+        var instructions = new Label
+        {
+            Left = 20, Top = 15, Width = 540, Height = 113,
+            Text = "1. เปิด chrome://extensions หรือ edge://extensions\n" +
+                   "2. เปิดโหมดผู้พัฒนา (Developer mode) แล้วกด Load unpacked\n" +
+                   "3. เลือกโฟลเดอร์ส่วนขยายของ X-Stage ด้านล่าง\n" +
+                   "4. คัดลอก Extension ID (อักษร a–p 32 ตัว) มาวางในช่อง แล้วกดเชื่อมต่อ",
+            Font = new Font("Segoe UI", 10), ForeColor = Color.FromArgb(35, 55, 83)
+        };
+        var openFolder = new Button { Left = 20, Top = 131, Width = 260, Height = 36,
+            Text = "เปิดโฟลเดอร์ส่วนขยาย", BackColor = Color.FromArgb(231, 239, 250) };
+        openFolder.Click += (_, _) =>
+            Process.Start(new ProcessStartInfo(extensionFolder) { UseShellExecute = true });
+        var copyFolder = new Button { Left = 292, Top = 131, Width = 265, Height = 36,
+            Text = "คัดลอกตำแหน่งโฟลเดอร์", BackColor = Color.FromArgb(231, 239, 250) };
+        copyFolder.Click += (_, _) => Clipboard.SetText(extensionFolder);
+        var id = new TextBox { Left = 20, Top = 186, Width = 385, Font = new Font("Segoe UI", 11),
+            PlaceholderText = "วาง Extension ID จากหน้าเบราว์เซอร์" };
+        var register = new Button { Left = 417, Top = 183, Width = 140, Height = 35,
+            Text = "เชื่อมต่อ", DialogResult = DialogResult.OK,
+            BackColor = Color.FromArgb(0, 111, 221), ForeColor = Color.White };
+        dialog.Controls.AddRange(new Control[] { instructions, openFolder, copyFolder, id, register });
+        dialog.AcceptButton = register;
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            BrowserIntegration.Register(id.Text);
+            MessageBox.Show(this,
+                "ลงทะเบียนส่วนขยาย Chrome / Edge สำเร็จ\n" +
+                "ในส่วนขยาย ให้เปิดการรับดาวน์โหลดอัตโนมัติเฉพาะเมื่อต้องการใช้งาน\n" +
+                "ส่วนขยายจะไม่ยกเลิกงานในเบราว์เซอร์หากแอปไม่รับงาน",
+                "พร้อมใช้งาน", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            MessageBox.Show(this, ex.Message, "เชื่อมต่อไม่สำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task CheckForUpdatesAsync(bool manual)
+    {
+        if (_checkingUpdates || IsDisposed) return;
+        _checkingUpdates = true;
+        _updateStatus.Text = "กำลังตรวจสอบอัปเดต...";
+        try
+        {
+            var release = await UpdateChecker.CheckAsync();
+            if (IsDisposed) return;
+            if (release is null)
+            {
+                _updateStatus.Text = "ไม่พบไฟล์อัปเดตที่ผ่านการตรวจสอบบนช่องทาง Preview";
+                if (manual) MessageBox.Show(this, "ยังไม่พบรุ่นอัปเดตที่เผยแพร่และตรวจสอบแล้ว",
+                    "ตรวจสอบอัปเดต", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (!UpdateChecker.IsNewer(release.Version, release.Build))
+            {
+                _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.1 · Build 4 — ไม่มีรุ่นใหม่กว่า";
+                if (manual) MessageBox.Show(this, "โปรแกรมเป็นรุ่นล่าสุด หรือใหม่กว่ารุ่นที่เผยแพร่แล้ว",
+                    "ตรวจสอบอัปเดต", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            _updateStatus.Text = $"มีอัปเดต v{release.Version} · Build {release.Build} — กดตรวจสอบอัปเดตเพื่อดาวน์โหลด";
+            if (MessageBox.Show(this,
+                $"พบ X-Stage Download Manager v{release.Version} Build {release.Build}\n" +
+                $"ขนาดไฟล์ประมาณ {release.Size / 1024.0 / 1024.0:0.0} MB\n" +
+                "เปิดลิงก์ติดตั้ง EXE จาก GitHub Releases หรือไม่?\n" +
+                "โปรแกรมจะไม่ติดตั้งทับหรือปิดงานดาวน์โหลดโดยอัตโนมัติ",
+                "พบอัปเดตใหม่", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(release.Url) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or
+                                     System.Text.Json.JsonException or IOException)
+        {
+            if (IsDisposed) return;
+            _updateStatus.Text = "ตรวจสอบอัปเดตไม่ได้ (สามารถดาวน์โหลดไฟล์ต่อได้ตามปกติ)";
+            if (manual) MessageBox.Show(this, ex.Message, "ตรวจสอบอัปเดตไม่สำเร็จ",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally { _checkingUpdates = false; }
+    }
+
+    private void ShowCompletedMenu(DownloadJob job, Rectangle cellBounds)
+    {
+        var menu = new ContextMenuStrip();
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job));
+        menu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
+        menu.Show(_grid, new Point(cellBounds.Left + 12, cellBounds.Bottom));
+        menu.AutoClose = true;
+    }
+
+    private void OpenCompletedFile(DownloadJob job)
+    {
+        try
+        {
+            if (File.Exists(job.CompletedPath))
+                Process.Start(new ProcessStartInfo(job.CompletedPath) { UseShellExecute = true });
+            else MessageBox.Show(this, "ไม่พบไฟล์ที่ดาวน์โหลดเสร็จแล้ว", "เปิดไฟล์");
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "เปิดไฟล์ไม่สำเร็จ"); }
+    }
+
+    private void OpenCompletedFolder(DownloadJob job)
+    {
+        try
+        {
+            if (File.Exists(job.CompletedPath))
+            {
+                var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
+                info.ArgumentList.Add("/select,");
+                info.ArgumentList.Add(job.CompletedPath);
+                Process.Start(info);
+            }
+            else if (Directory.Exists(job.Folder))
+                Process.Start(new ProcessStartInfo(job.Folder) { UseShellExecute = true });
+            else MessageBox.Show(this, "ไม่พบโฟลเดอร์ปลายทาง", "เปิดโฟลเดอร์");
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "เปิดโฟลเดอร์ไม่สำเร็จ"); }
+    }
+
     private void OpenSelected()
     {
         var job = Selected();
@@ -408,7 +635,15 @@ public sealed class MainForm : Form
             job.SpeedBytesPerSecond = job.Status == "Running" ? diff / (_timer.Interval / 1000.0) : 0;
             job.PreviousBytes = current;
             speedTotal += job.SpeedBytesPerSecond;
-            row.Cells["File"].Value = job.Name;
+            row.Cells["File"].Value = job.Status == "Completed" ? "✓  " + job.Name : job.Name;
+            row.Cells["File"].Style.ForeColor = job.Status == "Completed"
+                ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
+            row.Cells["File"].Style.SelectionForeColor = job.Status == "Completed"
+                ? Color.FromArgb(16, 132, 81) : Color.FromArgb(24, 66, 116);
+            row.Cells["File"].Style.Font = job.Status == "Completed"
+                ? _finishedFileFont : _normalFileFont;
+            row.Cells["Status"].Style.ForeColor = job.Status == "Completed"
+                ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
             row.Cells["Size"].Value = job.TotalBytes < 0 ? "ไม่ทราบ" : FormatBytes(job.TotalBytes);
             row.Cells["Progress"].Value = job.Kind == "Video"
                 ? job.VideoPercent.ToString("0.0") + "%"
@@ -467,9 +702,29 @@ public sealed class MainForm : Form
                 Math.Max(1, e.CellBounds.Width - 18), 20);
             using var bg = new SolidBrush(Color.FromArgb(229, 236, 245));
             using var fg = new SolidBrush(Color.FromArgb(32, 133, 222));
+            using var complete = new SolidBrush(Color.FromArgb(17, 157, 104));
             e.Graphics.FillRectangle(bg, rectangle);
-            e.Graphics.FillRectangle(fg, rectangle.X, rectangle.Y,
-                (int)Math.Round(rectangle.Width * progress), rectangle.Height);
+            var segments = job.SegmentDownloadedBytes;
+            var segmentCount = job.SegmentsUsed;
+            if (job.Kind != "Video" && segmentCount > 1 && job.TotalBytes > 0 &&
+                segments.Length == segmentCount && segmentCount <= 32)
+            {
+                for (int i = 0; i < segmentCount; i++)
+                {
+                    long segmentSize = job.TotalBytes * (i + 1) / segmentCount -
+                                       job.TotalBytes * i / segmentCount;
+                    var partProgress = segmentSize <= 0 ? 0 :
+                        Math.Clamp(Interlocked.Read(ref segments[i]) / (double)segmentSize, 0, 1);
+                    var startX = rectangle.X + i * rectangle.Width / segmentCount;
+                    var endX = rectangle.X + (i + 1) * rectangle.Width / segmentCount;
+                    var width = Math.Max(1, endX - startX - (segmentCount > 1 ? 1 : 0));
+                    e.Graphics.FillRectangle(partProgress >= 1 ? complete : fg,
+                        startX, rectangle.Y, (int)Math.Round(width * partProgress), rectangle.Height);
+                }
+            }
+            else
+                e.Graphics.FillRectangle(job.Status == "Completed" ? complete : fg,
+                    rectangle.X, rectangle.Y, (int)Math.Round(rectangle.Width * progress), rectangle.Height);
             TextRenderer.DrawText(e.Graphics, (progress * 100).ToString("0.0") + "%",
                 new Font("Segoe UI", 8, FontStyle.Bold), rectangle,
                 progress > .52 ? Color.White : Color.FromArgb(25, 70, 117),

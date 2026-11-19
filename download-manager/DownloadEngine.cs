@@ -116,6 +116,7 @@ public sealed class DownloadEngine
         if (Directory.Exists(work)) Directory.Delete(work, true);
         job.Parts = parts;
         job.SegmentsUsed = 0;
+        job.SegmentDownloadedBytes = Array.Empty<long>();
         job.TotalBytes = -1;
         job.SupportsRanges = false;
         job.ETag = "";
@@ -344,6 +345,7 @@ public sealed class DownloadEngine
             foreach (var path in Directory.GetFiles(work, "*.part")) File.Delete(path);
         }
         job.SegmentsUsed = count;
+        job.SegmentDownloadedBytes = new long[count];
         long existingTotal = 0;
         for (int i = 0; i < count; i++)
         {
@@ -352,7 +354,12 @@ public sealed class DownloadEngine
             var path = PartPath(work, i);
             if (File.Exists(path) && new FileInfo(path).Length > end - begin + 1)
                 File.Delete(path);
-            if (File.Exists(path)) existingTotal += new FileInfo(path).Length;
+            if (File.Exists(path))
+            {
+                var bytes = new FileInfo(path).Length;
+                job.SegmentDownloadedBytes[i] = bytes;
+                existingTotal += bytes;
+            }
         }
         // If the parallelism setting changed, remove stale parts to avoid corrupt merges.
         if (Directory.GetFiles(work, "*.part").Any(f =>
@@ -367,12 +374,12 @@ public sealed class DownloadEngine
         {
             var begin = job.TotalBytes * i / count;
             var end = job.TotalBytes * (i + 1) / count - 1;
-            return DownloadPartAsync(job, PartPath(work, i), begin, end, ct);
+            return DownloadPartAsync(job, PartPath(work, i), begin, end, i, ct);
         }));
     }
 
     private static async Task DownloadPartAsync(DownloadJob job, string file,
-        long begin, long end, CancellationToken ct)
+        long begin, long end, int segmentIndex, CancellationToken ct)
     {
         var saved = File.Exists(file) ? new FileInfo(file).Length : 0;
         var expected = end - begin + 1;
@@ -397,6 +404,7 @@ public sealed class DownloadEngine
             var got = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), ct);
             if (got == 0) throw new EndOfStreamException("การรับข้อมูลจากเซิร์ฟเวอร์หยุดก่อนครบไฟล์");
             await output.WriteAsync(buffer.AsMemory(0, got), ct);
+            Interlocked.Add(ref job.SegmentDownloadedBytes[segmentIndex], got);
             Interlocked.Add(ref job.DownloadedBytes, got);
             remaining -= got;
         }
@@ -406,6 +414,7 @@ public sealed class DownloadEngine
     {
         // A server without HTTP Range cannot be safely resumed from the middle.
         var path = Path.Combine(work, "whole.part");
+        job.SegmentDownloadedBytes = Array.Empty<long>();
         Interlocked.Exchange(ref job.DownloadedBytes, 0);
         using var req = Request(HttpMethod.Get, job.Url);
         using var res = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
