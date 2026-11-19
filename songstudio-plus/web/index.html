@@ -196,6 +196,13 @@
         <div class="page-intro"><div><h1 id="manual-title">ตรวจและ<span class="gradient-text">ปาดเนื้อร้อง</span></h1>
           <p>แก้ไขเฉพาะเพลงที่มีข้อมูลขาดหรือปาดไม่ครบ หรือเลือกดูทุกเพลงก็ได้ เก็บข้อความและเวลาที่ได้จากต้นฉบับไว้ ปาดใหม่เฉพาะตำแหน่งที่ต้องแก้</p></div>
           <span class="section-symbol">♫</span></div>
+        <div class="manual-layout-toolbar" role="group" aria-label="ปรับพื้นที่แก้ไข">
+          <button id="manual-toggle-menu" class="quiet-btn" type="button" aria-pressed="false">☰ ซ่อนเมนูหลัก</button>
+          <button id="manual-toggle-queue" class="quiet-btn" type="button" aria-pressed="false">▣ ซ่อนรายการเพลง</button>
+          <button id="manual-toggle-stage" class="quiet-btn" type="button" aria-pressed="false">⛶ ขยายจอคาราโอเกะ</button>
+          <button id="manual-focus" class="quiet-btn" type="button" aria-pressed="false">↗ โหมดแก้ไขเต็มพื้นที่</button>
+          <span id="manual-layout-state" class="field-hint">ซ่อนแถบเพื่อเพิ่มพื้นที่แก้ไข โดยไม่หยุดเพลงที่กำลังเล่น</span>
+        </div>
         <div class="two-col manual-workspace">
           <article class="panel manual-queue">
             <div class="panel-head"><div><span class="label-top">05 · SONG REVIEW QUEUE</span><h2>รายการเพลงที่ต้องจัดการ</h2></div><span class="count-pill" id="manual-total">—</span></div>
@@ -215,7 +222,7 @@
               <button class="quiet-btn" id="manual-next" type="button">ถัดไป ›</button></div>
             </div>
           </article>
-          <article class="panel manual-editor">
+          <article class="panel manual-editor" aria-label="พื้นที่แก้ไขและปาดสี">
             <div class="panel-head"><div><span class="label-top">LYRIC / SWIPE EDITOR</span><h2 id="manual-song-title">เลือกเพลงด้านซ้าย</h2></div>
               <span class="status-badge" id="manual-edit-status">ยังไม่เลือก</span></div>
             <div class="manual-stage">
@@ -232,7 +239,23 @@
               <span id="manual-clock" class="preview-time">00:00 / 00:00</span>
               <input id="manual-seek" type="range" min="0" max="0" step="0.05" value="0" disabled aria-label="เลื่อนเวลาเพลง">
             </div>
+            <div class="manual-edit-scroll" id="manual-edit-scroll">
             <p class="field-hint" id="manual-warning">เลือกเพลงก่อนใช้เครื่องมือปาดสี</p>
+            <section class="manual-diagnostic-panel" aria-label="จุดที่ควรตรวจแก้">
+              <div class="manual-diagnostic-heading">
+                <div><strong>จุดที่ควรตรวจแก้</strong><small id="manual-diagnostic-summary">เลือกเพลงเพื่อวิเคราะห์ข้อความและเวลา</small></div>
+                <select id="manual-diagnostic-filter" aria-label="ประเภทของจุดที่ควรตรวจแก้">
+                  <option value="all">ทุกสถานะ</option>
+                  <option value="structural">พบผิดโครงสร้าง</option>
+                  <option value="missing">ข้อมูลขาด</option>
+                  <option value="unverified">รอฟังยืนยัน</option>
+                </select>
+              </div>
+              <p class="manual-diagnostic-note">วิเคราะห์จากข้อมูลเนื้อร้องและเวลาใน SQLite ไม่ได้ยืนยันว่าคำร้องผิดจากเสียงจริง · คลิกข้อเสนอแนะเพื่อแก้บรรทัดนั้น</p>
+              <div id="manual-diagnostic-list" class="manual-diagnostic-list" aria-live="polite">
+                <p class="empty-small">ยังไม่เลือกเพลง</p>
+              </div>
+            </section>
             <div class="manual-commands">
               <button class="quiet-btn" id="manual-add-line" type="button" disabled>+ เพิ่มบรรทัด</button>
               <button class="quiet-btn" id="manual-mark-start" type="button" disabled>จับเวลาเริ่มบรรทัด</button>
@@ -246,10 +269,12 @@
               <select id="manual-cue-index" aria-label="เลือกคำที่จะปาด"></select>
             </div>
             <p class="field-hint">ในแต่ละบรรทัด สามารถแก้ข้อความ แบ่งคำด้วยเครื่องหมาย | และระบุเวลาเริ่มแต่ละคำ (คั่นด้วยจุลภาค) หรือกดจับเวลาขณะเล่นเพลงจริง</p>
+            <div class="manual-line-heading"><strong>แก้เนื้อร้องและเวลารายบรรทัด</strong><button class="quiet-btn" id="manual-only-issues" type="button" aria-pressed="false">แสดงเฉพาะบรรทัดที่ต้องตรวจ</button></div>
             <div class="manual-line-list" id="manual-line-list"></div>
             <label class="field-label" for="manual-paste">เพิ่มเนื้อร้องหลายบรรทัด (ยังไม่มีเวลา)</label>
             <textarea id="manual-paste" rows="2" placeholder="วางข้อความเนื้อร้อง บรรทัดละหนึ่งวรรค"></textarea>
             <div class="toolbar"><button id="manual-paste-add" class="quiet-btn" type="button" disabled>เพิ่มข้อความเป็นบรรทัดใหม่</button></div>
+            </div>
             <div class="manual-actions">
               <button id="manual-save" class="primary-btn" type="button" disabled>บันทึกเนื้อร้องและเวลา</button>
               <button id="manual-skip" class="quiet-btn" type="button" disabled>ข้ามเพลงนี้</button>
