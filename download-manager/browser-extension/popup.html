@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font:14px "Segoe UI",sans-serif;min-width:295px;max-width:330px;margin:0;padding:19px;background:#f6f9fd;color:#19314f}
+h1{font-size:18px;margin:0 0 14px}p{line-height:1.55;margin:11px 0;color:#465c75}
+label{display:flex;gap:10px;align-items:center;background:white;border:1px solid #dae4f0;border-radius:12px;padding:12px}
+input{width:18px;height:18px;accent-color:#1077cf}#status{font-weight:600;font-size:12px;margin-top:12px}
+small{display:block;color:#617084;margin-top:11px;line-height:1.5}
+button{background:#176cc3;border:0;border-radius:9px;color:white;padding:10px 14px;margin-top:12px;cursor:pointer}
+</style></head>
+<body>
+<h1>X-Stage Download Manager</h1>
+<label><input type="checkbox" id="enabled"><span>รับงานดาวน์โหลดจาก Chrome/Edge อัตโนมัติ</span></label>
+<p id="status">กำลังตรวจสอบการเชื่อมต่อ...</p>
+<button id="check" type="button">ตรวจสอบการเชื่อมต่อ</button>
+<small>ปิดไว้เป็นค่าเริ่มต้น ใช้คลิกขวา “ดาวน์โหลดด้วย X-Stage” เพื่อส่งลิงก์เองได้ โดยเบราว์เซอร์จะยกเลิกงานเดิมก็ต่อเมื่อแอปรับงานสำเร็จ</small>
+<script src="popup.js"></script>
+</body></html>

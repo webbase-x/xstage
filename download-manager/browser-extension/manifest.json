@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "X-Stage Download Manager Connector",
+  "version": "0.2.1",
+  "description": "Opt-in Chrome/Edge download handoff to the installed X-Stage Windows application.",
+  "permissions": [
+    "downloads",
+    "nativeMessaging",
+    "storage",
+    "contextMenus"
+  ],
+  "minimum_chrome_version": "109",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "X-Stage Download Manager",
+    "default_popup": "popup.html"
+  }
+}
