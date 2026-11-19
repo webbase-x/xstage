@@ -302,3 +302,7 @@ the existing app portal. Old Song Studio and Karaoke remain unchanged.
 ## Pro v0.1.11 · Unified application
 
 Only Pro is publicly listed. Old PC and Web applications have been retired from the app catalog and dedicated automatic builds. The existing internal `songstudio-plus` code path and `%LOCALAPPDATA%/XStageSongPlus` workspace are intentionally retained for **database backward compatibility**, not as separate applications. Pro never deletes media or old SQLite versions. The new cue editor shows clickable timed segments, captures real current playback positions, provides a one-step cue-timing undo, and hides raw numeric comma-separated times under an advanced disclosure.
+
+## v0.1.13 · Batch lyric replacement fix
+
+Menu 02 no longer rejects a whole batch simply because one NCN lyric line has mismatched or absent CUR cues. It preserves the corrected lyric text and each line's original boundaries, records the resulting version as **incomplete** when measured cue segments cannot be safely matched, and routes those lines to Menu 05 for manual timing. Group edits containing many thousands of lines run as a progress-reported, cancellable SQLite transaction. Cancel/failure rolls back the entire group; a completed batch retains Undo. The embedded frontend now serves `timeline-core.js` and `timeline-ui.js` as local scripts for Menu 05.
