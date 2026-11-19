@@ -1,0 +1,234 @@
+"""Manual karaoke lyric repair and build approval without inventing CUR timing.
+
+All edits are versioned in the existing xstage_ SQLite catalog. An edited
+song is only build-ready in the UI after an explicit approval of that exact
+lyric version. Draft text is kept for edits not yet completely timed.
+"""
+from __future__ import annotations
+
+import math
+import uuid
+from pathlib import Path
+import plus_core as core
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS xstage_manual_reviews (
+ song_id TEXT PRIMARY KEY REFERENCES xstage_songs(id),
+ version_id TEXT, decision TEXT NOT NULL CHECK(decision IN ('skip','approved')),
+ updated_at TEXT NOT NULL
+);
+"""
+
+def init(workspace):
+    with core.WRITE_LOCK, core.connect(workspace) as db:
+        db.executescript(SCHEMA)
+
+BASE = """
+ FROM xstage_songs s JOIN xstage_media m ON m.id=s.media_id
+ LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
+ LEFT JOIN xstage_lyric_drafts d ON d.song_id=s.id
+ LEFT JOIN xstage_manual_reviews r ON r.song_id=s.id
+  AND COALESCE(r.version_id,'')=COALESCE(v.id,'')
+ LEFT JOIN xstage_exports e ON e.song_id=s.id
+"""
+
+def _status_expr():
+    return """CASE
+      WHEN v.id IS NULL AND d.song_id IS NOT NULL THEN 'untimed'
+      WHEN v.id IS NULL THEN 'missing'
+      WHEN v.timing_status='incomplete' THEN 'incomplete'
+      WHEN v.timing_status='estimated'
+        AND COALESCE(r.decision,'')!='approved' THEN 'review'
+      ELSE 'ready' END"""
+
+def queue(workspace, query="", filter="pending", offset=0, limit=6):
+    init(workspace)
+    if filter not in ("pending","all","skipped","missing","incomplete","review"):
+        raise ValueError("ตัวกรองรายการไม่ถูกต้อง")
+    limit=max(1,min(int(limit),50))
+    offset=max(0,int(offset))
+    term="%"+str(query).strip()[:100]+"%"
+    status=_status_expr()
+    select="""SELECT s.id,s.code,s.title,s.artist,s.original_code,
+       m.extension,v.id AS version_id,v.timing_status,d.reason AS draft_reason,
+       COALESCE(r.decision,'') AS decision,e.output_path,
+       """+status+" AS review_status "+BASE
+    conditions=""" WHERE (s.title LIKE ? OR s.artist LIKE ? OR s.original_code LIKE ?)
+    """
+    params=[term,term,term]
+    if filter=="pending":
+        conditions+=" AND ("+status+")!='ready' AND COALESCE(r.decision,'')!='skip'"
+    elif filter=="skipped":
+        conditions+=" AND r.decision='skip'"
+    elif filter!="all":
+        if filter=="missing":
+            conditions+=" AND ("+status+") IN ('missing','untimed')"
+        else:
+            conditions+=" AND ("+status+")=?"
+            params.append(filter)
+        conditions+=" AND COALESCE(r.decision,'')!='skip'"
+    with core.connect(workspace) as db:
+        rows=db.execute(select+conditions+" ORDER BY s.code DESC LIMIT ? OFFSET ?",
+                        params+[limit,offset]).fetchall()
+        count=db.execute("SELECT COUNT(*) "+BASE+conditions,params).fetchone()[0]
+    return {"rows":[dict(x) for x in rows], "total":count,"offset":offset,
+            "limit":limit}
+
+def approved_build_ids(workspace,exclude=None):
+    """Query entire ready catalog, not only the current UI page."""
+    init(workspace)
+    excluded=set(exclude or ())
+    if len(excluded)>300000 or any(not isinstance(v,str) for v in excluded):
+        raise ValueError("รายการยกเว้นไม่ถูกต้อง")
+    with core.connect(workspace) as db:
+        rows=db.execute("""SELECT s.id """+BASE+"""
+            WHERE v.id IS NOT NULL AND v.timing_status!='incomplete'
+              AND """+_status_expr()+"""='ready' ORDER BY s.code""").fetchall()
+    return [x[0] for x in rows if x[0] not in excluded]
+
+def skip(workspace,song_id,version_id):
+    init(workspace)
+    with core.WRITE_LOCK,core.connect(workspace) as db:
+        current=db.execute("""SELECT s.id,v.id AS version_id FROM xstage_songs s
+          LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
+          WHERE s.id=?""",(song_id,)).fetchone()
+        if not current or (current["version_id"] or None)!=(version_id or None):
+            raise ValueError("เพลงหรือเวอร์ชันเปลี่ยนไป กรุณาโหลดรายการอีกครั้ง")
+        db.execute("""INSERT INTO xstage_manual_reviews
+          (song_id,version_id,decision,updated_at) VALUES (?,?,?,?)
+          ON CONFLICT(song_id) DO UPDATE SET version_id=excluded.version_id,
+          decision=excluded.decision,updated_at=excluded.updated_at""",
+          (song_id,version_id,"skip",core.now()))
+    return {"skipped":True}
+
+def approve(workspace,song_id,version_id):
+    init(workspace)
+    with core.WRITE_LOCK,core.connect(workspace) as db:
+        row=db.execute("""SELECT id,timing_status FROM xstage_lyric_versions
+                 WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
+        if not row or row["id"]!=version_id or row["timing_status"]=="incomplete":
+            raise ValueError("เนื้อร้องยังไม่ครบหรือเปลี่ยนเวอร์ชันแล้ว")
+        db.execute("""INSERT INTO xstage_manual_reviews
+          (song_id,version_id,decision,updated_at) VALUES (?,?,?,?)
+          ON CONFLICT(song_id) DO UPDATE SET version_id=excluded.version_id,
+          decision=excluded.decision,updated_at=excluded.updated_at""",
+          (song_id,version_id,"approved",core.now()))
+    return {"approved":True,"version_id":version_id}
+
+def _number(value,label):
+    if isinstance(value,bool):
+        raise ValueError(label+" ไม่ใช่ตัวเลขเวลา")
+    try: num=float(value)
+    except (ValueError,TypeError): raise ValueError(label+" ต้องเป็นตัวเลข")
+    if not math.isfinite(num) or not 0<=num<=86400:
+        raise ValueError(label+" ต้องอยู่ในช่วง 0–86400 วินาที")
+    return round(num,5)
+
+def _normalize_lines(lines):
+    """Only source/manual onset values may become cues; no interpolation."""
+    if not isinstance(lines,list) or not 1<=len(lines)<=400:
+        raise ValueError("กรุณาป้อนเนื้อร้อง 1–400 บรรทัด")
+    saved=[]
+    draft=[]
+    total=0
+    ready=True
+    for i,item in enumerate(lines):
+        if not isinstance(item,dict):
+            raise ValueError("โครงสร้างเนื้อร้องไม่ถูกต้อง")
+        raw=str(item.get("text") or "").strip()
+        if not raw:
+            continue
+        if len(raw)>400 or "\\x00" in raw or "\\n" in raw or "\\r" in raw:
+            raise ValueError(f"บรรทัด {i+1}: ข้อความเกิน 400 อักขระหรือมีอักขระต้องห้าม")
+        total+=len(raw)
+        if total>50000:
+            raise ValueError("เนื้อร้องรวมยาวเกินขอบเขต")
+        draft.append(raw)
+        start=item.get("start")
+        end=item.get("end")
+        segments=item.get("segments") or []
+        starts=item.get("starts") or []
+        if start in (None,"") or end in (None,"") or not starts:
+            ready=False
+            continue
+        start=_number(start,f"เริ่มบรรทัด {i+1}")
+        end=_number(end,f"จบบรรทัด {i+1}")
+        if end<=start:
+            raise ValueError(f"บรรทัด {i+1}: เวลาจบต้องมากกว่าเวลาเริ่ม")
+        if not isinstance(segments,list) or not isinstance(starts,list):
+            raise ValueError(f"บรรทัด {i+1}: รูปแบบการแบ่งคำและเวลาไม่ถูกต้อง")
+        if len(segments)!=len(starts) or not 1<=len(starts)<=400:
+            raise ValueError(f"บรรทัด {i+1}: จำนวนคำกับเวลาปาดไม่เท่ากัน")
+        if any(not isinstance(s,str) or not s or len(s)>400 for s in segments):
+            raise ValueError(f"บรรทัด {i+1}: มีคำว่างหรือคำยาวผิดปกติ")
+        if "".join(segments)!=raw:
+            raise ValueError(f"บรรทัด {i+1}: ข้อความที่แบ่งคำต้องตรงกับเนื้อร้องทุกตัว")
+        times=[_number(t,f"เวลาคำ {k+1} บรรทัด {i+1}") for k,t in enumerate(starts)]
+        if times[0]<start-0.001 or times[-1]>=end or any(
+                times[k]<times[k-1] for k in range(1,len(times))):
+            raise ValueError(f"บรรทัด {i+1}: เวลาปาดไม่อยู่ในช่วงเริ่ม–จบหรือเรียงย้อนหลัง")
+        cues=[(segment,at,round(max(0,(times[k+1] if k+1<len(times) else end)-at),5))
+              for k,(segment,at) in enumerate(zip(segments,times))]
+        saved.append((raw,start,end,cues,"estimated"))
+    if not draft:
+        raise ValueError("กรุณาพิมพ์เนื้อร้องอย่างน้อยหนึ่งบรรทัด")
+    return saved, draft, ready and len(saved)==len(draft)
+
+def save(workspace,song_id,base_version,lines):
+    """Optimistic version check, separate complete/manual vs partial draft."""
+    init(workspace)
+    parsed,draft,complete=_normalize_lines(lines)
+    with core.WRITE_LOCK,core.connect(workspace) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row=db.execute("""SELECT s.*,v.id AS active_version
+                    FROM xstage_songs s LEFT JOIN xstage_lyric_versions v
+                    ON v.song_id=s.id AND v.is_current=1 WHERE s.id=?""",
+                    (song_id,)).fetchone()
+        if not row:
+            raise ValueError("ไม่พบเพลงในคลัง")
+        if (row["active_version"] or None)!=(base_version or None):
+            raise ValueError("เพลงนี้ถูกแก้ไขในหน้าต่างอื่น กรุณาโหลดใหม่ก่อนบันทึก")
+        if parsed:
+            version=uuid.uuid4().hex
+            signature=core.content_sha(parsed)
+            previous=db.execute("""SELECT id FROM xstage_lyric_versions
+                WHERE song_id=? AND content_sha256=?""",(song_id,signature)).fetchone()
+            if previous:
+                version=previous["id"]
+            else:
+                db.execute("""INSERT INTO xstage_lyric_versions
+                 (id,song_id,content_sha256,source_sha256,origin,timing_status,
+                  title,artist,created_at,is_current)
+                 VALUES (?,?,?,NULL,'manual',?,?,?,?,0)""",
+                 (version,song_id,signature,
+                  "estimated" if complete else "incomplete",
+                  row["title"],row["artist"],core.now()))
+                for i,(txt,start,end,cues,_) in enumerate(parsed):
+                    cur=db.execute("""INSERT INTO xstage_lyric_lines
+                       (version_id,position,text,normalized_text,start_time,
+                        end_time,timing_status) VALUES (?,?,?,?,?,?,?)""",
+                        (version,i,txt,core.norm(txt),start,end,"estimated"))
+                    for k,(part,at,duration) in enumerate(cues):
+                        db.execute("""INSERT INTO xstage_lyric_cues
+                         (line_id,position,text,start_time,duration)
+                         VALUES (?,?,?,?,?)""",
+                         (cur.lastrowid,k,part,at,duration))
+            db.execute("UPDATE xstage_lyric_versions SET is_current=0 WHERE song_id=?",(song_id,))
+            db.execute("UPDATE xstage_lyric_versions SET is_current=1 WHERE id=?",(version,))
+        else:
+            version=row["active_version"]
+        if complete:
+            db.execute("DELETE FROM xstage_lyric_drafts WHERE song_id=?",(song_id,))
+        else:
+            db.execute("""INSERT INTO xstage_lyric_drafts
+             (song_id,source_path,title,artist,raw_text,reason,updated_at)
+             VALUES (?,?,?,?,?,?,?)
+             ON CONFLICT(song_id) DO UPDATE SET raw_text=excluded.raw_text,
+             reason=excluded.reason,updated_at=excluded.updated_at""",
+             (song_id,"manual",row["title"],row["artist"],
+              "\\n".join(draft),"Manual timing incomplete",core.now()))
+        db.execute("DELETE FROM xstage_manual_reviews WHERE song_id=?",(song_id,))
+    return {"version_id":version,"complete":complete,
+            "saved_lines":len(parsed),"total_lines":len(draft),
+            "message":("บันทึกครบแล้ว · รอฟังยืนยันก่อนสร้าง .X"
+                       if complete else "เก็บเนื้อร้องที่มีเวลาบางส่วนและฉบับร่างแล้ว · ยังสร้าง .X ไม่ได้")}
