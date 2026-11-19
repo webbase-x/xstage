@@ -171,7 +171,7 @@ PySide6 (bundled in the Windows Preview EXE):
     python songstudio-plus/app.py --workspace "D:\XStageSongPlus"
 
 Windows Preview EXE is built by:
-https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-plus.yml
+https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml
 
 The Windows EXE opens its own embedded desktop window, not Chrome or Edge.
 The internal API remains loopback-only at 127.0.0.1 on a random port.

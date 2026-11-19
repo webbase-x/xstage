@@ -156,7 +156,7 @@ def run_desktop(server,url,workspace,icon_path):
     # Server is ready before the embedded view requests localhost.
     worker=Thread(target=server.serve_forever,
                   kwargs={"poll_interval":0.2},
-                  daemon=True,name="studio-plus-local-engine")
+                  daemon=True,name="studio-pro-local-engine")
     worker.start()
     native_icons=[]
     try:

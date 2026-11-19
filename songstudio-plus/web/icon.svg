@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="X-Stage Song Studio Plus">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="X-Stage Song Studio Pro">
 <defs>
   <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#101f43"/><stop offset="1" stop-color="#423871"/></linearGradient>
   <linearGradient id="x" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a6fff0"/><stop offset=".5" stop-color="#60cbec"/><stop offset="1" stop-color="#a28cff"/></linearGradient>
@@ -11,7 +11,8 @@
 <circle cx="128" cy="128" r="69" fill="none" stroke="#668bbb" stroke-opacity=".3" stroke-width="1.5"/>
 <circle cx="128" cy="128" r="55" fill="none" stroke="#668bbb" stroke-opacity=".35" stroke-width="1.5"/>
 <path d="M78 72h27l22 34 22-34h27l-35 55 38 58h-29l-24-39-25 39H72l39-58Z" fill="url(#x)"/>
-<path d="M194 47v22m-11-11h22" stroke="#9af9ea" stroke-width="7" stroke-linecap="round"/>
+<rect x="177" y="39" width="54" height="33" rx="13" fill="#153e59" stroke="#83e8dc" stroke-width="2"/>
+<text x="204" y="62" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="800" fill="#b0fff0">PRO</text>
 <path d="M47 199h162" stroke="#83d8e9" stroke-opacity=".3" stroke-width="3" stroke-linecap="round"/>
 <circle cx="128" cy="128" r="7" fill="#0e1b37" stroke="#bbffff" stroke-width="2"/>
 </svg>
