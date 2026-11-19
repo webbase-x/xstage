@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: publish-songstudio-pro-v0111
+  group: publish-songstudio-pro-v0112
   cancel-in-progress: false
 
 jobs:
@@ -41,7 +41,8 @@ jobs:
           path=Path("dist/X-Stage-Song-Studio-Pro-v0.1.12-preview.exe")
           if not path.is_file() or path.stat().st_size<1024*1024:
               raise SystemExit("Pro EXE is missing or unexpectedly small")
-          digest=hashlib.file_digest(path.open("rb"),"sha256").hexdigest()
+          with path.open("rb") as stream:
+              digest=hashlib.file_digest(stream,"sha256").hexdigest()
           notes=Path("dist/README-Preview.txt").read_text(encoding="utf-8-sig")
           expected=re.search(r"SHA-256:\s*([a-fA-F0-9]{64})",notes)
           if not expected or expected.group(1).lower()!=digest:
@@ -81,6 +82,7 @@ jobs:
           name="X-Stage-Song-Studio-Pro-v0.1.12-preview.exe"
           sha=Path("dist/release-sha256.txt").read_text().strip()
           data.update({
+              "version":"0.1.12",
               "available":True,
               "channel":"preview",
               "code_signed":False,
