@@ -1809,6 +1809,27 @@
 
   function bind(){
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
+    // Windows Explorer's "Copy as path" wraps paths in quotes; accept those too.
+    const sourceField=$("source-folder");
+    const normalizeSource=()=>{
+      const raw=sourceField.value.trim();
+      const clean=raw.replace(/^[\x22\x27]+|[\x22\x27]+$/g,"").trim();
+      if(clean!==raw)sourceField.value=clean;
+      if(clean)text("folder-picker-status","พาธที่ระบุ: "+clean+" · กดเริ่มนำเข้าเพื่อตรวจไฟล์");
+      return clean;
+    };
+    sourceField.addEventListener("change",normalizeSource);
+    sourceField.addEventListener("paste",()=>setTimeout(normalizeSource,0));
+    sourceField.addEventListener("keydown",event=>{
+      if(event.key==="Enter"){
+        event.preventDefault();
+        const folder=normalizeSource();
+        if(!folder)return toast("กรุณาระบุโฟลเดอร์ต้นทาง",true);
+        if(!state.ready)return toast("PC Engine ไม่เชื่อมต่อ · เปิดผ่านไฟล์ EXE บน Windows",true);
+        if(state.activeJob)return toast("มีงานกำลังประมวลผลอยู่",true);
+        void startJob("import",{folder});
+      }
+    });
     $("source-open").addEventListener("click",()=>void openLocalFolder("source"));
     $("workspace-open").addEventListener("click",()=>void openLocalFolder("workspace"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
@@ -2019,8 +2040,11 @@
     $("pro-update-check").addEventListener("click",()=>void checkProUpdate());
     $("pro-update-install").addEventListener("click",()=>void beginProUpdate());
     $("import-start").addEventListener("click",()=>{
+      $("source-folder").dispatchEvent(new Event("change"));
       const folder=$("source-folder").value.trim();
       if(!folder)return toast("กรุณาระบุโฟลเดอร์ต้นทาง",true);
+      if(!state.ready)return toast("PC Engine ไม่เชื่อมต่อ · เปิดผ่านไฟล์ EXE บน Windows",true);
+      if(state.activeJob)return toast("มีงานกำลังประมวลผลอยู่",true);
       void startJob("import",{folder});
     });
     $("recover-lyrics").addEventListener("click",async()=>{
@@ -2191,8 +2215,23 @@
       setInterval(()=>{void refreshJobs();},1600);
     }catch{
       setReady(false);
-      text("activity-title","โปรดเปิดแอปบน Windows");
-      text("activity-subtitle","หน้านี้เป็นตัวอย่างหน้าตาโปรแกรม · การใช้งาน SQLite ต้องเปิดผ่านโปรแกรม Song Studio Pro Windows");
+      text("activity-title","ยังไม่เชื่อมต่อ PC Engine");
+      text("activity-subtitle","หากเปิดจากเว็บสาธารณะ ให้เปิดไฟล์ EXE บน Windows · ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ");
+      // A transient localhost startup failure must not leave every command disabled forever.
+      const reconnect=setInterval(async()=>{
+        if(state.ready){clearInterval(reconnect);return;}
+        try{
+          const session=await api("/api/session");
+          if(!session?.token)return;
+          state.token=session.token;
+          setReady(true);
+          text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
+          await refreshStatus();
+          await refreshJobs();
+          setInterval(()=>{void refreshJobs();},1600);
+          clearInterval(reconnect);
+        }catch{/* PC engine not yet available */}
+      },3000);
     }
   }
   void init();
