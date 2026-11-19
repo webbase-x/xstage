@@ -53,11 +53,11 @@ with tempfile.TemporaryDirectory() as base:
         called.append(("lrc",threading.get_ident(),dialog.directory().absolutePath()))
         assert dialog.fileMode()==QFileDialog.FileMode.ExistingFile
         return QFileDialog.DialogCode.Accepted
-    with patch.object(QFileDialog,"exec",autospec=True,side_effect=accept_folder),\
+    with patch.object(QFileDialog,"exec",new=accept_folder),\
          patch.object(QFileDialog,"selectedFiles",autospec=True,return_value=[str(folder)]):
         selected=call_in_worker("folder",str(folder))
         assert selected=={"path":str(folder),"cancelled":False},selected
-    with patch.object(QFileDialog,"exec",autospec=True,side_effect=accept_file),\
+    with patch.object(QFileDialog,"exec",new=accept_file),\
          patch.object(QFileDialog,"selectedFiles",autospec=True,return_value=[str(lyric)]):
         selection=call_in_worker("lrc",str(folder))
         assert selection=={"path":str(lyric),"cancelled":False},selection
