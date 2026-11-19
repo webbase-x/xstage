@@ -7,6 +7,7 @@ continue to run in a worker thread. No browser extension or plugin needed.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 from threading import Thread
 from urllib.parse import urlsplit
@@ -160,7 +161,7 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             if state is None:return
             try:
                 state.log_path.touch(exist_ok=True)
-                __import__("subprocess").Popen(["notepad.exe",str(state.log_path)],creationflags=getattr(__import__("subprocess"),"CREATE_NO_WINDOW",0),close_fds=True)
+                subprocess.Popen(["notepad.exe",str(state.log_path)],creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0),close_fds=True)
                 state.diagnostic("log.opened",source="desktop-shortcut")
             except Exception as exc:
                 state.diagnostic("log.open.error",source="desktop-shortcut",
