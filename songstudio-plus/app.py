@@ -39,7 +39,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.18",
+        self.diagnostic("state.ready",version="0.1.19",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -193,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.18",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.19",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
@@ -628,9 +628,7 @@ def main(argv=None):
     parser.add_argument("--no-browser",action="store_true",
                         help="headless local API for automated checks")
     parser.add_argument("--browser",action="store_true",
-                        help="open the UI in the Windows default browser (default on Windows)")
-    parser.add_argument("--embedded",action="store_true",
-                        help="legacy embedded Qt WebEngine UI for troubleshooting")
+                        help="troubleshooting only: open UI in the Windows default browser")
     options=parser.parse_args(argv)
     choices = ([Path(options.workspace)] if options.workspace is not None
                else workspace_candidates())
@@ -668,13 +666,13 @@ def main(argv=None):
         if sys.platform=="win32" and not options.no_browser:
             bundle=Path(getattr(sys,"_MEIPASS",Path(__file__).parent))
             icon=bundle/"app-plus.ico"
-            if options.embedded:
-                from desktop_ui import run_desktop
-                state.diagnostic("ui.mode",mode="embedded-qt")
-                return run_desktop(server,url,state.workspace,icon,state)
-            from desktop_ui import run_browser_host
-            state.diagnostic("ui.mode",mode="windows-default-browser")
-            return run_browser_host(server,url,state.workspace,icon,state)
+            if options.browser:
+                from desktop_ui import run_browser_host
+                state.diagnostic("ui.mode",mode="windows-default-browser-troubleshooting")
+                return run_browser_host(server,url,state.workspace,icon,state)
+            from desktop_ui import run_desktop
+            state.diagnostic("ui.mode",mode="desktop-standalone-qtwebengine")
+            return run_desktop(server,url,state.workspace,icon,state)
         if not options.no_browser:
             state.diagnostic("ui.mode",mode="system-browser")
             webbrowser.open(url)
