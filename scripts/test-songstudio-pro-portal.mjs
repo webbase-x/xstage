@@ -38,7 +38,7 @@ assert.ok(proExeMatch,'Windows Preview must build only the Pro EXE');
 const proExe=proExeMatch[1]+'.exe';
 assert.ok(workflow.includes('dist/'+proExe),
  'Windows Preview must verify the same Pro EXE that it builds');
-assert.ok(workflow.includes('dist/'+proExe),
+assert.ok(workflow.includes('path: |')&&workflow.includes('dist/'+proExe),
  'Windows Preview must upload the same Pro EXE as its artifact');
 assert.ok(!/--name "(?!X-Stage-Song-Studio-Pro-)[^"]+"/.test(workflow),
  'Windows Preview must not build another Studio executable');
