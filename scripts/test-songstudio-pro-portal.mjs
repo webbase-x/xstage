@@ -10,7 +10,7 @@ const source=read('songstudio-plus/web/index.html');
 const js=read('songstudio-plus/web/app.js');
 const data=JSON.parse(read('downloads/song-studio-pro-latest.json'));
 assert.equal(data.name,'X-Stage Song Studio Pro');
-assert.match(data.version,/^\\d+\\.\\d+\\.\\d+$/,'public feed must have a valid version');
+assert.match(data.version,/^\d+\.\d+\.\d+$/,'public feed must have a valid version');
 if(data.available){
   assert.match(data.sha256,/^[a-f0-9]{64}$/i,'published EXE requires SHA-256');
   assert.ok(data.download_url.startsWith(
