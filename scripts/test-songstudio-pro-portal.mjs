@@ -11,7 +11,15 @@ const js=read('songstudio-plus/web/app.js');
 const data=JSON.parse(read('downloads/song-studio-pro-latest.json'));
 assert.equal(data.name,'X-Stage Song Studio Pro');
 assert.equal(data.version,'0.1.11');
-assert.equal(data.available,false,'Do not claim an EXE exists without a verified release');
+if(data.available){
+  assert.match(data.sha256,/^[a-f0-9]{64}$/i,'published EXE requires SHA-256');
+  assert.ok(data.download_url.startsWith(
+    'https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v'),
+    'published EXE must come from the verified Pro GitHub release');
+  assert.ok(data.download_url.endsWith('.exe'),'Windows Pro release must be an EXE');
+}else{
+  assert.ok(!data.download_url,'unavailable Pro release cannot advertise a download');
+}
 assert.equal((html.match(/data-app="studio-pro"/g)||[]).length,1,'Pro must be the sole Song Studio app card');
 for(const name of ['studio-pc','studio-plus','studio-web']){
   assert.ok(!html.includes('data-app="'+name+'"'),'Legacy studio card still visible: '+name);
