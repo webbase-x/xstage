@@ -184,6 +184,7 @@ const expectedPlatformCards={
   'apps-portal':'android',
   'karaoke-web':'website',
   'karaoke-pc':'windows',
+  'download-manager':'windows',
   'studio-pro':'windows',
   'karaoke-android':'android',
   'mirror-ios-pc':'windows',
@@ -192,7 +193,7 @@ const expectedPlatformCards={
   'file-share':'android'
 };
 const platformCards=[...storefront.matchAll(/<article class="app-card[^"]*" data-app="([^"]+)" data-category="([^"]+)" data-platform="([^"]+)" data-name="/g)];
-assert.equal(platformCards.length,9,'all catalog apps must declare a platform');
+assert.equal(platformCards.length,Object.keys(expectedPlatformCards).length,'all catalog apps must declare a platform');
 for(const card of platformCards){
   assert.equal(card[3],expectedPlatformCards[card[1]],'wrong platform classification: '+card[1]);
 }
