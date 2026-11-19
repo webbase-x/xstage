@@ -1306,6 +1306,70 @@
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))
       button.addEventListener("click",()=>view(button.dataset.view));
+
+    $("manual-find").addEventListener("click",()=>{
+      state.manualOffset=0;void loadManualQueue();
+    });
+    $("manual-search").addEventListener("keydown",event=>{
+      if(event.key==="Enter"){state.manualOffset=0;void loadManualQueue();}
+    });
+    $("manual-filter").addEventListener("change",()=>{
+      state.manualOffset=0;void loadManualQueue();
+    });
+    $("manual-prev").addEventListener("click",()=>{
+      state.manualOffset=Math.max(0,state.manualOffset-visibleRows());
+      void loadManualQueue();
+    });
+    $("manual-next").addEventListener("click",()=>{
+      state.manualOffset+=visibleRows();void loadManualQueue();
+    });
+    $("manual-add-line").addEventListener("click",()=>{
+      state.manualLines.push({text:"",start:null,end:null,segments:[],starts:[],timing:"untimed"});
+      manualDraftState();manualRenderLines();
+      $("manual-line-index").value=String(state.manualLines.length-1);
+      manualRefreshCues();
+    });
+    $("manual-paste-add").addEventListener("click",()=>{
+      const items=$("manual-paste").value.split(/\r?\n/).filter(s=>s.trim());
+      if(!items.length)return toast("ยังไม่ได้วางเนื้อร้อง",true);
+      if(state.manualLines.length+items.length>400)
+        return toast("จำนวนบรรทัดเกิน 400",true);
+      for(const s of items)
+        state.manualLines.push({text:s,start:null,end:null,segments:[],starts:[],timing:"untimed"});
+      $("manual-paste").value="";manualDraftState();manualRenderLines();
+    });
+    $("manual-line-index").addEventListener("change",()=>{
+      manualRefreshCues();manualDrawKaraoke();
+    });
+    $("manual-cue-index").addEventListener("change",manualDrawKaraoke);
+    $("manual-play").addEventListener("click",()=>void manualPlay());
+    $("manual-pause").addEventListener("click",()=>void manualPause());
+    $("manual-seek").addEventListener("change",e=>void manualSeek(e.target.value));
+    $("manual-mark-start").addEventListener("click",()=>manualMark("start"));
+    $("manual-mark-cue").addEventListener("click",()=>manualMark("cue"));
+    $("manual-mark-end").addEventListener("click",()=>manualMark("end"));
+    $("manual-save").addEventListener("click",()=>void manualSave());
+    $("manual-skip").addEventListener("click",()=>void manualSkip());
+    $("manual-approve").addEventListener("click",()=>void manualApprove());
+    for(const mode of ["audio","video"]){
+      const player=$("manual-"+mode);
+      player.addEventListener("loadedmetadata",()=>{
+        if(state.manualPreview?.mode!==mode)return;
+        state.manualDuration=Number.isFinite(player.duration)?player.duration:0;
+        manualControls();
+      });
+      player.addEventListener("ended",()=>{
+        state.manualPlaying=false;state.manualTime=state.manualDuration;
+        manualControls();manualDrawKaraoke();
+      });
+      player.addEventListener("error",()=>{
+        if(state.manualPreview?.mode!==mode)return;
+        state.manualPlaying=false;
+        text("manual-warning","ตัวเล่นไม่รองรับรูปแบบต้นฉบับ · ไม่ยืนยันการปาดสี");
+        manualControls();
+      });
+    }
+
     $("preview-find").addEventListener("click",()=>{
       state.previewOffset=0;void loadPreviewSongs();
     });
