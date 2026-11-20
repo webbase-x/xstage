@@ -831,7 +831,9 @@ public sealed partial class MainForm : Form
         _summary.Text = $"กำลังดาวน์โหลด {active}  ·  เสร็จแล้ว {completed}  ·  ทั้งหมด {jobs.Length} รายการ" +
                         $"  ·  แสดง {visible.Count} รายการ  ·  ความเร็วรวม {FormatBytes((long)speedTotal)}/s";
         UpdateDetails();
-        _engine.Save();
+        _engine.SaveProgressIfDue();
+        if (_engine.LastStorageError.Length > 0)
+            _updateStatus.Text = _engine.LastStorageError;
     }
 
     private void UpdateDetails()
