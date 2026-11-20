@@ -13,6 +13,7 @@ public sealed class TransferSlotQueue
 {
     private sealed class Waiter
     {
+        public required string Id;
         public required string Host;
         public required int Priority;
         public required long Sequence;
@@ -65,7 +66,7 @@ public sealed class TransferSlotQueue
         }
     }
 
-    public async Task<IDisposable> EnterAsync(string host, int priority, CancellationToken token)
+    public async Task<IDisposable> EnterAsync(string id, string host, int priority, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(host))
@@ -74,7 +75,7 @@ public sealed class TransferSlotQueue
             throw new ArgumentOutOfRangeException(nameof(priority));
         var waiter = new Waiter
         {
-            Host = host, Priority = priority,
+            Id = id, Host = host, Priority = priority,
             Sequence = Interlocked.Increment(ref _sequence),
             EnqueuedAt = Environment.TickCount64,
             Completion = new TaskCompletionSource<IDisposable>(
@@ -93,6 +94,18 @@ public sealed class TransferSlotQueue
             token.ThrowIfCancellationRequested();
         }
         return lease;
+    }
+
+    public void Reprioritize(string id, int priority)
+    {
+        if (priority is < 0 or > 2)
+            throw new ArgumentOutOfRangeException(nameof(priority));
+        lock (_mutex)
+        {
+            foreach (var waiter in _waiting.Where(w => w.Id == id))
+                waiter.Priority = priority;
+            Dispatch();
+        }
     }
 
     private void Cancel(Waiter waiter, CancellationToken token)
