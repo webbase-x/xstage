@@ -30,6 +30,9 @@ if ($source.TrimEnd('\') -ieq $target.TrimEnd('\') -or
     $target.StartsWith($source.TrimEnd('\')+'\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Extract this package into a separate folder, then install.'
 }
+$isProgramFiles = $target.StartsWith(([IO.Path]::GetFullPath($env:ProgramFiles)).TrimEnd('\')+'\', [StringComparison]::OrdinalIgnoreCase)
+# Keep user-writable data out of the protected Program Files tree.
+$dataDirectory = if ($isProgramFiles) { Join-Path $env:LOCALAPPDATA 'X-Stage\Karaoke PC\Data' } else { Join-Path $target 'Data' }
 $app = Join-Path $target 'App'
 $code = Join-Path $target 'Source'
 $program = Join-Path $app 'XStageKaraoke.exe'
@@ -124,7 +127,7 @@ $updatePlan = @(Get-XStageUpdatePlan -Target $target -Copies $copies)
 $programBackup = Backup-XStageUpdate -Target $target -Plan $updatePlan
 Write-Host ('Program backup verified: ' + $programBackup)
 try {
-foreach ($directory in @($target,$app,$code,(Join-Path $target 'Data'),(Join-Path $target 'Records'),(Join-Path $target 'SoundFx'))) {
+foreach ($directory in @($target,$app,$code,$dataDirectory)) {
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
 }
 # Merge application files only. Never delete or replace Data or source songs.
@@ -144,12 +147,13 @@ $launcher = @'
 setlocal
 cd /d "%~dp0"
 if exist "%~dp0App\XStageKaraoke.exe" (
-  start "" "%~dp0App\XStageKaraoke.exe" --data-dir "%~dp0Data"
+  start "" "%~dp0App\XStageKaraoke.exe" --data-dir "__DATA_DIR__"
   exit /b
 )
-python "%~dp0Source\main.py" --data-dir "%~dp0Data"
+python "%~dp0Source\main.py" --data-dir "__DATA_DIR__"
 if errorlevel 1 pause
 '@
+$launcher = $launcher.Replace('__DATA_DIR__', $dataDirectory)
 [IO.File]::WriteAllText((Join-Path $target 'Start-Karaoke.cmd'), $launcher, [Text.Encoding]::ASCII)
 [IO.File]::WriteAllText((Join-Path $target 'X-Stage Karaoke PC.cmd'), $launcher, [Text.Encoding]::ASCII)
 $oldCmd = Join-Path $target 'X-Stage Karaoke.cmd'
@@ -175,7 +179,7 @@ try {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut((Join-Path $target 'X-Stage Karaoke PC.lnk'))
     $shortcut.TargetPath = Join-Path $app 'XStageKaraoke.exe'
-    $shortcut.Arguments = '--data-dir "' + (Join-Path $target 'Data') + '"'
+    $shortcut.Arguments = '--data-dir "' + $dataDirectory + '"'
     $shortcut.WorkingDirectory = $target
     $shortcut.IconLocation = (Join-Path $app 'assets\xstage.ico') + ',0'
     $shortcut.Description = 'X-Stage Karaoke PC'
@@ -199,5 +203,5 @@ try {
     throw $failure
 }
 Write-Host ('Installed: ' + $target)
-if ($RunSetup) { Start-Process -FilePath $program -WorkingDirectory $target -ArgumentList @('--setup','--data-dir',('"'+(Join-Path $target 'Data')+'"')) }
+if ($RunSetup) { Start-Process -FilePath $program -WorkingDirectory $target -ArgumentList @('--setup','--data-dir',('"'+$dataDirectory+'"')) }
 Write-Host 'Open X-Stage Karaoke PC.lnk. First run imports the existing catalog in the background.'
