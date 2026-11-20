@@ -31,7 +31,7 @@ class PcBrandingRegression(unittest.TestCase):
             self.assertIn('Uninstallable=yes', installer)
             self.assertIn(r'DestDir: "{app}\_internal"', installer)
             self.assertIn(r'DestDir: "{app}"', installer)
-            self.assertIn(r'{localappdata}\\X-Stage\\Karaoke PC\\Data', installer)
+            self.assertIn(r'{localappdata}\X-Stage\Karaoke PC\Data', installer)
             # No blanket dist/* copy or scripts that create Source/ on users' PCs.
             self.assertNotIn(r'DestDir: "{tmp}\\xstage-', installer)
             self.assertNotIn('install_to_D.ps1', installer)
