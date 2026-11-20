@@ -693,6 +693,16 @@ try
         throw new Exception("Renaming default queue must migrate unnamed legacy jobs durably.");
 
 
+    // Legacy records may carry whitespace around queue labels. The queue picker
+    // must show one canonical label, matching rename and assignment semantics.
+    var spacedQueueJob = manager.Add(server.Url + "range/spaced-queue.bin", folder, 1);
+    manager.Pause(spacedQueueJob);
+    spacedQueueJob.QueueName = "  คิวเริ่มต้นใหม่  ";
+    manager.Save();
+    if (manager.GetQueueNames().Count(n => n == "คิวเริ่มต้นใหม่") != 1 ||
+        manager.GetQueueNames().Any(n => n != n.Trim()))
+        throw new Exception("Queue list must trim and deduplicate legacy labels.");
+
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
     var job = manager.Add(server.Url + "range/test%20file.bin", folder);
