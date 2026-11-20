@@ -225,7 +225,7 @@ public sealed class MainForm : Form
         toolbar.Controls.Add(MakeTool("Ⅱ  หยุดทั้งหมด", (_, _) => _engine.PauseAll()));
         toolbar.Controls.Add(MakeTool("⌕  เปิดไฟล์ / โฟลเดอร์", (_, _) => OpenSelected()));
         toolbar.Controls.Add(MakeTool("⟳  ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true)));
-        toolbar.Controls.Add(MakeTool("🌐  รับดาวน์โหลดจากเบราว์เซอร์", (_, _) => SetupBrowserIntegration()));
+        toolbar.Controls.Add(MakeTool("🌐  ดาวน์โหลดอัตโนมัติ", (_, _) => SetupBrowserIntegration()));
         toolbar.Controls.Add(MakeTool("✕  ลบรายการ", (_, _) =>
         {
             var job = Selected();
@@ -509,20 +509,20 @@ public sealed class MainForm : Form
         if (!Directory.Exists(extensionFolder))
         {
             MessageBox.Show(this, "ไม่พบชุดส่วนขยายเบราว์เซอร์ กรุณาติดตั้ง X-Stage Download Manager รุ่นเต็ม",
-                "รับดาวน์โหลดจากเบราว์เซอร์", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                "ดาวน์โหลดอัตโนมัติ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
         using var dialog = new Form
         {
-            Text = "ตั้งค่ารับลิงก์ดาวน์โหลดจาก Chrome / Edge", Width = 590, Height = 340,
+            Text = "ตั้งค่าดาวน์โหลดอัตโนมัติจาก Chrome / Edge", Width = 590, Height = 340,
             StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false, BackColor = Color.White
         };
         var instructions = new Label
         {
             Left = 20, Top = 15, Width = 540, Height = 140,
-            Text = "รับลิงก์ดาวน์โหลดจาก Chrome หรือ Edge เข้ามาใน X-Stage โดยตรง\n" +
+            Text = "ตั้งค่าดาวน์โหลดอัตโนมัติ: ส่งลิงก์จาก Chrome / Edge เข้า X-Stage\n" +
                    "1. เปิด chrome://extensions หรือ edge://extensions\n" +
                    "2. เปิดโหมดผู้พัฒนา (Developer mode) แล้วกด Load unpacked\n" +
                    "3. เลือกโฟลเดอร์ส่วนขยายของ X-Stage ด้านล่าง\n" +
@@ -548,14 +548,14 @@ public sealed class MainForm : Form
         {
             BrowserIntegration.Register(id.Text);
             MessageBox.Show(this,
-                "พร้อมรับลิงก์ดาวน์โหลดจาก Chrome / Edge\n" +
+                "ตั้งค่ารับดาวน์โหลดอัตโนมัติจาก Chrome / Edge สำเร็จ\n" +
                 "ในส่วนขยาย ให้เปิดการรับดาวน์โหลดอัตโนมัติเฉพาะเมื่อต้องการใช้งาน\n" +
                 "ส่วนขยายจะไม่ยกเลิกงานในเบราว์เซอร์หากแอปไม่รับงาน",
                 "พร้อมใช้งาน", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            MessageBox.Show(this, ex.Message, "ตั้งค่ารับลิงก์ไม่สำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, ex.Message, "ตั้งค่าดาวน์โหลดอัตโนมัติไม่สำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
