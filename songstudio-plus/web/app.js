@@ -562,6 +562,11 @@
       if(!latest.newer){
         state.updateBusy=false;
         text("pro-update-status","ใช้งานรุ่นล่าสุด v"+latest.current_version+" อยู่แล้ว");
+        $("pro-update-install").disabled=true;
+        $("pro-update-notice-install").disabled=true;
+        $("pro-update-quick").disabled=true;
+        $("pro-update-quick").hidden=true;
+        $("pro-update-notice").hidden=true;
         return;
       }
       text("pro-update-status","ตรวจพบรุ่นล่าสุด v"+latest.version+" · อัปเดตข้ามรุ่นได้ทันที");
@@ -732,7 +737,7 @@
       progressBar.classList.toggle("indeterminate",job.status==="running"&&!downloaded);
       progressBar.style.width=job.status==="completed"?"100%":
         downloaded?Math.min(100,100*(p.done||p.downloaded_bytes||0)/p.total).toFixed(1)+"%":
-        job.status==="running"?"35%":"0%";
+        (job.status==="running"&&job.kind!=="update")?"35%":"0%";
       const signature=job.id+":"+job.status;
       if(state.jobSignature!==signature){
         state.jobSignature=signature;
@@ -770,8 +775,17 @@
               }
             }else if(job.status==="failed"||job.status==="cancelled"){
               state.updateInstallIntent=false;state.updateBusy=false;
-              text("pro-update-status","ดาวน์โหลดอัปเดตไม่สำเร็จ · "+(job.error||job.message));
-              $("pro-update-install").disabled=false;
+              const problem=job.error||job.message||"ไม่ทราบสาเหตุ";
+              text("pro-update-status","ดาวน์โหลดอัปเดตไม่สำเร็จ · "+problem);
+              text("pro-update-notice-text","ดาวน์โหลดไม่สำเร็จ: "+problem+
+                " · กดอัปเดตอีกครั้ง หรือใช้ปุ่มดาวน์โหลด EXE โดยตรง");
+              // Restore ALL update buttons: the old UI left the top banner
+              // disabled forever after a failed background update job.
+              const retry=Boolean(state.updateTarget?.newer);
+              $("pro-update-install").disabled=!retry;
+              $("pro-update-notice-install").disabled=!retry;
+              $("pro-update-quick").disabled=!retry;
+              $("pro-update-quick").hidden=!retry;
             }
           }
         }
