@@ -123,6 +123,58 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(len(songs),2)
         self.assertEqual(len({x["code"] for x in songs}),2)
 
+    def test_lyric_search_separates_current_lines_from_song_metadata(self):
+        path=self.put("english.mp3",b"MP3-ENGLISH"*1200)
+        self.lrc(path,"[00:01.00]Some real lyrics\n[00:05.00]Love line\n")
+        plus.import_folder(self.workspace,self.src)
+        song=plus.songs(self.workspace)[0]
+        with plus.connect(self.workspace) as db:
+            db.execute("""UPDATE xstage_songs SET title=?,artist=? WHERE id=?""",
+                ("Karaoke Evening","XSTAGE Artist",song["id"]))
+        result=plus.search_context(self.workspace,"kArAoKe")
+        self.assertEqual(len(result["songs"]),1)
+        self.assertEqual(result["songs"][0]["title"],"Karaoke Evening")
+        self.assertTrue(result["songs"][0]["has_current_lyrics"])
+        self.assertEqual(plus.groups(self.workspace,"karaoke"),[],
+                         "A song-title match must never be an editable lyric group")
+        self.assertEqual(len(plus.groups(self.workspace,"love")),1)
+        with self.assertRaises(ValueError):
+            plus.plan_edit(self.workspace,"karaoke",["karaoke evening"])
+        result_artist=plus.search_context(self.workspace,"xstage")
+        self.assertEqual(len(result_artist["songs"]),1)
+        self.assertEqual(plus.search_context(self.workspace,"%")["songs"],[],
+                         "Wildcard input must be treated as literal")
+
+    def test_lyric_search_finds_untimed_drafts_without_bulk_replacing(self):
+        self.put("unfinished.mp3",b"MP3-UNFINISHED"*1000)
+        plus.import_folder(self.workspace,self.src)
+        song=plus.songs(self.workspace)[0]
+        with plus.connect(self.workspace) as db:
+            db.execute("""INSERT INTO xstage_lyric_drafts
+                (song_id,source_path,title,artist,raw_text,reason,updated_at)
+                VALUES (?,?,?,?,?,?,?)""",
+                (song["id"],"missing.lyr","Untimed","Singer",
+                 "ข้อความรอเวลา Karaoke นะครับ","waiting-cur",plus.now()))
+        result=plus.search_context(self.workspace,"karaoke")
+        self.assertEqual(result["songs"],[])
+        self.assertEqual(len(result["drafts"]),1)
+        self.assertEqual(result["drafts"][0]["id"],song["id"])
+        self.assertEqual(plus.groups(self.workspace,"karaoke"),[],
+                         "Untimed draft content is not an editable timed group")
+
+    def test_settings_exposes_real_update_actions_and_distinct_search_results(self):
+        root=Path(__file__).resolve().parents[1]
+        html=(root/"web"/"index.html").read_text(encoding="utf-8")
+        js=(root/"web"/"app.js").read_text(encoding="utf-8")
+        for control in ("settings-update-check","settings-update-install",
+                        "settings-update-direct","lyrics-search-context",
+                        "lyrics-search-context-results","lyrics-search-feedback"):
+            self.assertIn('id="'+control+'"',html)
+            self.assertIn('"'+control+'"',js)
+        self.assertIn('api("/api/lyrics/search-context',js)
+        self.assertIn('api("/api/groups',js)
+        self.assertIn('syncSettingsUpdate()',js)
+
     def test_group_replace_and_undo_preserve_independent_line_bounds(self):
         old=["[00:02.00].....nick.....\n[00:06.00]Keep A\n",
              "[00:09.00]Nick ......\n[00:15.00]Keep B\n",
