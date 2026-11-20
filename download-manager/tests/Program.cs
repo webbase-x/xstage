@@ -243,6 +243,65 @@ try
         throw new Exception("32 HTTP ranges were not used for a sufficiently large file.");
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(maxParts.CompletedPath)))
         throw new Exception("32-connection merge corrupted the output.");
+    // CDN redirects often use UUID filenames with no extension. The
+    // Content-Disposition filename is authoritative, regardless of URL name.
+    const string opaqueId = "5aef5bed-774f-4423-b75d-78e1f2b9a60e";
+    var githubAsset = manager.Add(server.Url + "range/" + opaqueId + "?sp=token", folder, 8);
+    await WaitFor(() => githubAsset.Status is "Completed" or "Failed");
+    if (githubAsset.Status != "Completed" ||
+        githubAsset.Name != "X-Stage-Song-Studio-Pro-v0.1.22-preview.exe" ||
+        Path.GetFileName(githubAsset.CompletedPath) != githubAsset.Name ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(githubAsset.CompletedPath)))
+        throw new Exception("Content-Disposition filename must override opaque GitHub UUID URL.");
+
+    // RFC 5987 filename* should preserve Thai characters and a real extension.
+    var thaiNameJob = manager.Add(server.Url + "range/thaifileuuid", folder, 8);
+    await WaitFor(() => thaiNameJob.Status is "Completed" or "Failed");
+    if (thaiNameJob.Status != "Completed" ||
+        thaiNameJob.Name != "ทดสอบ.pdf" ||
+        !File.Exists(thaiNameJob.CompletedPath))
+        throw new Exception("filename*=UTF-8 Thai filename was not decoded.");
+
+    // If no name is provided, an explicit media type can restore the extension.
+    var mimeJob = manager.Add(server.Url + "plain/mimeopaqueuuid", folder, 8);
+    await WaitFor(() => mimeJob.Status is "Completed" or "Failed");
+    if (mimeJob.Status != "Completed" || mimeJob.Name != "mimeopaqueuuid.pdf" ||
+        !File.Exists(mimeJob.CompletedPath))
+        throw new Exception("Known response MIME should provide a missing extension.");
+
+    // With generic application/octet-stream, use only a strong file signature.
+    var legacyPath = Path.Combine(folder, "older-uuid");
+    var peBytes = new byte[256];
+    peBytes[0] = (byte)'M'; peBytes[1] = (byte)'Z';
+    peBytes[0x3c] = 0x80;
+    peBytes[0x80] = (byte)'P'; peBytes[0x81] = (byte)'E';
+    await File.WriteAllBytesAsync(legacyPath, peBytes);
+    var legacy = new DownloadJob
+    {
+        Name = "older-uuid", CompletedPath = legacyPath,
+        Folder = folder, Kind = "File", Status = "Completed"
+    };
+    if (!DownloadFileNaming.TryRepairCompletedFile(legacy) ||
+        !legacy.CompletedPath.EndsWith("older-uuid.exe", StringComparison.Ordinal) ||
+        legacy.Name != "older-uuid.exe" ||
+        !File.Exists(legacy.CompletedPath) || File.Exists(legacyPath))
+        throw new Exception("Completed unsigned legacy PE file must recover EXE extension.");
+
+    var unknownPath = Path.Combine(folder, "unknown-uuid");
+    await File.WriteAllBytesAsync(unknownPath, new byte[] { 1, 2, 3, 4 });
+    var unknown = new DownloadJob
+    {
+        Name = "unknown-uuid", CompletedPath = unknownPath,
+        Folder = folder, Kind = "File", Status = "Completed"
+    };
+    if (DownloadFileNaming.TryRepairCompletedFile(unknown) ||
+        !File.Exists(unknownPath) || unknown.Name != "unknown-uuid")
+        throw new Exception("Unknown file must never get a guessed extension.");
+
+    if (!DownloadFileNaming.CleanName(new string('x', 175) + ".exe").EndsWith(".exe",
+            StringComparison.Ordinal))
+        throw new Exception("Long file names must retain their extension.");
+
     // An interrupted EXE transfer must resume from a verified-length partial,
     // rather than discard 200 MB and start from zero on every network drop.
     var updaterSha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
@@ -364,8 +423,16 @@ sealed class FileServer : IDisposable
                     code = "206 Partial Content";
                 }
                 var length = end - begin + 1;
+                var contentType = path.StartsWith("/plain/mimeopaqueuuid")
+                    ? "application/pdf" : "application/octet-stream";
+                var attachment = path.StartsWith("/range/5aef5bed-")
+                    ? "Content-Disposition: attachment; filename=\\\"X-Stage-Song-Studio-Pro-v0.1.22-preview.exe\\\"\r\n"
+                    : path.StartsWith("/range/thaifileuuid")
+                        ? "Content-Disposition: attachment; filename*=UTF-8''%E0%B8%97%E0%B8%94%E0%B8%AA%E0%B8%AD%E0%B8%9A.pdf\r\n"
+                        : "";
                 var response = "HTTP/1.1 " + code + "\r\n" +
-                    "Content-Type: application/octet-stream\r\n" +
+                    "Content-Type: " + contentType + "\r\n" +
+                    attachment +
                     "Content-Length: " + length + "\r\n" +
                     "ETag: \"xstage-test-v1\"\r\n" +
                     "Last-Modified: Wed, 21 Oct 2015 07:28:00 GMT\r\n" +
