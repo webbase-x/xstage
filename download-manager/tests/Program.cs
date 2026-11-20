@@ -639,7 +639,7 @@ try
     if (!rejectedLongQueue || queueJob.QueueName != "คิวเอกสาร")
         throw new Exception("Invalid queue names must not mutate existing assignments.");
     var rejectedControlQueue = false;
-    try { manager.SetJobQueue(queueJob, "queue\\ninvalid".Replace("\\n", "\n")); }
+    try { manager.SetJobQueue(queueJob, "queue" + (char)10 + "invalid"); }
     catch (ArgumentException) { rejectedControlQueue = true; }
     if (!rejectedControlQueue || queueJob.QueueName != "คิวเอกสาร")
         throw new Exception("Control characters must not mutate queue assignments.");
