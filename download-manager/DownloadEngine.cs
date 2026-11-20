@@ -27,6 +27,7 @@ public sealed class DownloadEngine
     public string DatabasePath => _state.DatabasePath;
     public static readonly int[] AllowedParts = { 1, 2, 4, 8, 16, 32 };
     public int DefaultParts { get; private set; } = 4;
+    public int MaxRetryCount { get; private set; } = DownloadRetryPolicy.DefaultAttempts;
     public List<DownloadJob> Jobs { get; }
 
     public DownloadEngine(string? dataDirectory = null)
@@ -48,6 +49,7 @@ public sealed class DownloadEngine
         catch (IOException) { }
         catch (JsonException) { }
         DefaultParts = _state.ReadDefaultParts(legacyParts);
+        MaxRetryCount = _state.ReadRetryLimit();
         Jobs = _state.LoadOrMigrate(_index);
         _state.SaveDefaultParts(DefaultParts);
         foreach (var job in Jobs)
@@ -127,6 +129,16 @@ public sealed class DownloadEngine
         ValidateParts(parts);
         DefaultParts = parts;
         _state.SaveDefaultParts(parts);
+    }
+
+    public void SetRetryLimit(int attempts)
+    {
+        if (attempts < DownloadRetryPolicy.MinAttempts ||
+            attempts > DownloadRetryPolicy.MaxAttempts)
+            throw new ArgumentOutOfRangeException(nameof(attempts),
+                "จำนวนครั้งลองใหม่ต้องอยู่ระหว่าง 1 ถึง 10");
+        _state.SaveRetryLimit(attempts);
+        MaxRetryCount = attempts;
     }
 
     private static void ValidateParts(int parts)
@@ -323,22 +335,66 @@ public sealed class DownloadEngine
         return request;
     }
 
-    private static async Task<ProbeInfo> ProbeAsync(DownloadJob job, CancellationToken ct)
+    private async Task<ProbeInfo> ProbeAsync(DownloadJob job, CancellationToken ct)
     {
-        using var req = Request(HttpMethod.Get, job.Url);
-        req.Headers.Range = new RangeHeaderValue(0, 0);
-        using var response = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
-        var range = response.Content.Headers.ContentRange;
-        var supported = response.StatusCode == HttpStatusCode.PartialContent &&
-            range?.HasLength == true && range.From == 0 && range.To == 0;
-        var length = supported ? range!.Length!.Value : response.Content.Headers.ContentLength ?? -1;
-        return new ProbeInfo(supported, length, response.Headers.ETag?.ToString() ?? "",
-            response.Content.Headers.LastModified,
-            DownloadFileNaming.Resolve(job.Url, response));
+        Exception? last = null;
+        for (var attempt = 1; attempt <= MaxRetryCount; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            TimeSpan? retryAfter = null;
+            using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
+            try
+            {
+                job.TransferPhase = attempt == 1 ? "กำลังตรวจสอบเซิร์ฟเวอร์"
+                    : $"กำลังตรวจสอบใหม่ ({attempt}/{MaxRetryCount})";
+                using var req = Request(HttpMethod.Get, job.Url);
+                req.Headers.Range = new RangeHeaderValue(0, 0);
+                using var response = await Http.SendAsync(req,
+                    HttpCompletionOption.ResponseHeadersRead, idle.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    retryAfter = DownloadRetryPolicy.RetryAfter(response.Headers);
+                    response.EnsureSuccessStatusCode();
+                }
+                var range = response.Content.Headers.ContentRange;
+                var supported = response.StatusCode == HttpStatusCode.PartialContent &&
+                    range?.HasLength == true && range.From == 0 && range.To == 0;
+                if (response.StatusCode == HttpStatusCode.PartialContent && !supported)
+                    throw new UnsafeHttpRangeException("Probe Range 0-0 ไม่ถูกต้อง");
+                var length = supported ? range!.Length!.Value
+                    : response.Content.Headers.ContentLength ?? -1;
+                job.TransferPhase = "";
+                return new ProbeInfo(supported, length,
+                    response.Headers.ETag?.ToString() ?? "",
+                    response.Content.Headers.LastModified,
+                    DownloadFileNaming.Resolve(job.Url, response));
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode.HasValue &&
+                !DownloadRetryPolicy.IsTransientStatus(ex.StatusCode.Value))
+            {
+                throw new IOException("เซิร์ฟเวอร์ปฏิเสธลิงก์ดาวน์โหลด HTTP " +
+                    (int)ex.StatusCode.Value + " (ไม่ลองใหม่)", ex);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                last = new IOException("ตรวจสอบเซิร์ฟเวอร์ไม่ตอบกลับภายใน 45 วินาที");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException)
+            {
+                last = ex;
+                if (ex is UnsafeHttpRangeException) throw;
+            }
+
+            if (attempt == MaxRetryCount) break;
+            job.TransferPhase = $"ตรวจสอบไม่สำเร็จ — จะลองใหม่ ({attempt}/{MaxRetryCount})";
+            await DownloadRetryPolicy.DelayAsync(attempt, retryAfter, ct);
+        }
+        throw new IOException("ตรวจสอบลิงก์ดาวน์โหลดไม่สำเร็จหลังลอง " +
+            MaxRetryCount + " ครั้ง: " + last?.Message, last);
     }
 
-    private static async Task DownloadAsync(DownloadJob job, CancellationToken ct)
+    private async Task DownloadAsync(DownloadJob job, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(job.Folder);
@@ -371,7 +427,24 @@ public sealed class DownloadEngine
         job.ETag = probe.ETag;
         job.LastModified = probe.LastModified;
         if (probe.Ranges && probe.Total > 0)
-            await ParallelDownloadAsync(job, work, ct);
+        {
+            try
+            {
+                await ParallelDownloadAsync(job, work, ct);
+            }
+            catch (UnsafeHttpRangeException)
+            {
+                // The server changed or ignored Range after the initial probe.
+                // Never append 200/incorrect 206 bytes to old partials.
+                foreach (var part in Directory.GetFiles(work, "*.part"))
+                    File.Delete(part);
+                job.SupportsRanges = false;
+                job.SegmentsUsed = 1;
+                job.SegmentDownloadedBytes = Array.Empty<long>();
+                job.TransferPhase = "เซิร์ฟเวอร์ไม่รองรับการแบ่งส่วน — โหลดแบบสตรีมเดียว";
+                await SingleDownloadAsync(job, work, ct);
+            }
+        }
         else
         {
             job.SegmentsUsed = 1;
@@ -412,6 +485,7 @@ public sealed class DownloadEngine
         File.Move(merged, destination);
         job.Name = Path.GetFileName(destination);
         job.CompletedPath = destination;
+        job.TransferPhase = "";
         if (job.TotalBytes < 0) job.TotalBytes = new FileInfo(destination).Length;
         Interlocked.Exchange(ref job.DownloadedBytes, job.TotalBytes);
         try { Directory.Delete(work, true); } catch (IOException) { }
@@ -426,7 +500,7 @@ public sealed class DownloadEngine
 
     private static string PartPath(string work, int index) => Path.Combine(work, index.ToString("D2") + ".part");
 
-    private static async Task ParallelDownloadAsync(DownloadJob job, string work, CancellationToken ct)
+    private async Task ParallelDownloadAsync(DownloadJob job, string work, CancellationToken ct)
     {
         var count = SegmentCount(job.TotalBytes, job.Parts);
         // Save the actual geometry with the job so resumption never reuses a segment
@@ -461,71 +535,187 @@ public sealed class DownloadEngine
             existingTotal = 0;
         }
         Interlocked.Exchange(ref job.DownloadedBytes, existingTotal);
-        await Task.WhenAll(Enumerable.Range(0, count).Select(i =>
+        var tasks = Enumerable.Range(0, count).Select(i =>
         {
             var begin = job.TotalBytes * i / count;
             var end = job.TotalBytes * (i + 1) / count - 1;
             return DownloadPartAsync(job, PartPath(work, i), begin, end, i, ct);
-        }));
+        }).ToArray();
+        try { await Task.WhenAll(tasks); }
+        catch
+        {
+            if (tasks.Any(task => task.Exception?.Flatten().InnerExceptions
+                    .Any(error => error is UnsafeHttpRangeException) == true))
+                throw new UnsafeHttpRangeException(
+                    "เซิร์ฟเวอร์ส่งข้อมูล Range ไม่ตรงกับที่ร้องขอ");
+            throw;
+        }
     }
 
-    private static async Task DownloadPartAsync(DownloadJob job, string file,
+    private async Task DownloadPartAsync(DownloadJob job, string file,
         long begin, long end, int segmentIndex, CancellationToken ct)
     {
-        var saved = File.Exists(file) ? new FileInfo(file).Length : 0;
         var expected = end - begin + 1;
-        if (saved == expected) return;
-        using var req = Request(HttpMethod.Get, job.Url);
-        req.Headers.Range = new RangeHeaderValue(begin + saved, end);
-        if (!string.IsNullOrEmpty(job.ETag) && !job.ETag.StartsWith("W/", StringComparison.OrdinalIgnoreCase))
-            req.Headers.TryAddWithoutValidation("If-Range", job.ETag);
-        else if (job.LastModified.HasValue)
-            req.Headers.TryAddWithoutValidation("If-Range", job.LastModified.Value.ToString("R"));
-        using var res = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-        var r = res.Content.Headers.ContentRange;
-        if (res.StatusCode != HttpStatusCode.PartialContent || r?.From != begin + saved || r.To != end || r.Length != job.TotalBytes)
-            throw new IOException("เซิร์ฟเวอร์ไม่รองรับช่วงข้อมูลเดิมอย่างถูกต้อง โปรดลองใหม่");
-        await using var output = new FileStream(file, FileMode.Append, FileAccess.Write,
-            FileShare.Read, 131072, FileOptions.Asynchronous);
-        await using var input = await res.Content.ReadAsStreamAsync(ct);
-        var buffer = new byte[131072];
-        var remaining = expected - saved;
-        while (remaining > 0)
+        Exception? last = null;
+        for (int attempt = 1; attempt <= MaxRetryCount; attempt++)
         {
-            var got = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), ct);
-            if (got == 0) throw new EndOfStreamException("การรับข้อมูลจากเซิร์ฟเวอร์หยุดก่อนครบไฟล์");
-            await output.WriteAsync(buffer.AsMemory(0, got), ct);
-            Interlocked.Add(ref job.SegmentDownloadedBytes[segmentIndex], got);
-            Interlocked.Add(ref job.DownloadedBytes, got);
-            remaining -= got;
+            ct.ThrowIfCancellationRequested();
+            var saved = File.Exists(file) ? new FileInfo(file).Length : 0;
+            if (saved == expected) return;
+            if (saved > expected)
+                throw new IOException("ข้อมูล Chunk ที่บันทึกไว้เกินช่วงที่คาดไว้");
+            TimeSpan? retryAfter = null;
+            using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
+            try
+            {
+                using var req = Request(HttpMethod.Get, job.Url);
+                req.Headers.Range = new RangeHeaderValue(begin + saved, end);
+                if (!string.IsNullOrEmpty(job.ETag) &&
+                    !job.ETag.StartsWith("W/", StringComparison.OrdinalIgnoreCase))
+                    req.Headers.TryAddWithoutValidation("If-Range", job.ETag);
+                else if (job.LastModified.HasValue)
+                    req.Headers.TryAddWithoutValidation("If-Range",
+                        job.LastModified.Value.ToString("R"));
+
+                using var response = await Http.SendAsync(req,
+                    HttpCompletionOption.ResponseHeadersRead, idle.Token);
+                if (response.StatusCode != HttpStatusCode.PartialContent)
+                {
+                    if (DownloadRetryPolicy.IsTransientStatus(response.StatusCode))
+                    {
+                        retryAfter = DownloadRetryPolicy.RetryAfter(response.Headers);
+                        throw new HttpRequestException("HTTP " + (int)response.StatusCode,
+                            null, response.StatusCode);
+                    }
+                    if (response.StatusCode == HttpStatusCode.OK)
+                        throw new UnsafeHttpRangeException("เซิร์ฟเวอร์ไม่ยอมรับ Range แล้ว (HTTP 200)");
+                    response.EnsureSuccessStatusCode();
+                    throw new UnsafeHttpRangeException("เซิร์ฟเวอร์ไม่ตอบกลับ HTTP 206");
+                }
+                var range = response.Content.Headers.ContentRange;
+                if (range?.From != begin + saved || range.To != end ||
+                    range.Length != job.TotalBytes)
+                    throw new UnsafeHttpRangeException(
+                        "ช่วงข้อมูล 206 หรือขนาดไฟล์ไม่ตรงกับที่ร้องขอ");
+                var remaining = expected - saved;
+                if (response.Content.Headers.ContentLength is long n && n != remaining)
+                    throw new UnsafeHttpRangeException("Content-Length ของ Chunk ไม่ตรง");
+
+                await using var output = new FileStream(file, FileMode.Append,
+                    FileAccess.Write, FileShare.Read, 131072, FileOptions.Asynchronous);
+                await using var input = await response.Content.ReadAsStreamAsync(idle.Token);
+                var buffer = new byte[131072];
+                while (remaining > 0)
+                {
+                    var read = await input.ReadAsync(
+                        buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), idle.Token);
+                    if (read == 0)
+                        throw new EndOfStreamException("ข้อมูลช่วงดาวน์โหลดหยุดก่อนครบ");
+                    await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                    Interlocked.Add(ref job.SegmentDownloadedBytes[segmentIndex], read);
+                    Interlocked.Add(ref job.DownloadedBytes, read);
+                    remaining -= read;
+                    idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
+                }
+                await output.FlushAsync(ct);
+                job.TransferPhase = "";
+                return;
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode.HasValue &&
+                !DownloadRetryPolicy.IsTransientStatus(ex.StatusCode.Value))
+            {
+                throw new IOException("Chunk ถูกเซิร์ฟเวอร์ปฏิเสธ HTTP " +
+                    (int)ex.StatusCode.Value + " (ไม่ลองใหม่)", ex);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                last = new IOException("Chunk ไม่มีข้อมูลใหม่เกิน 45 วินาที");
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException &&
+                                       ex is not UnsafeHttpRangeException)
+            {
+                last = ex;
+            }
+
+            if (attempt == MaxRetryCount) break;
+            job.TransferPhase = $"Chunk {segmentIndex + 1} หลุด — ต่อใหม่ ({attempt}/{MaxRetryCount})";
+            await DownloadRetryPolicy.DelayAsync(attempt, retryAfter, ct);
         }
+        throw new IOException("Chunk " + (segmentIndex + 1) + " ไม่สำเร็จหลัง " +
+            MaxRetryCount + " ครั้ง: " + last?.Message, last);
     }
 
-    private static async Task SingleDownloadAsync(DownloadJob job, string work, CancellationToken ct)
+    private async Task SingleDownloadAsync(DownloadJob job, string work, CancellationToken ct)
     {
-        // A server without HTTP Range cannot be safely resumed from the middle.
+        // Non-range servers cannot resume from the middle. Retry creates a
+        // fresh temporary stream each time, never appending corrupt bytes.
         var path = Path.Combine(work, "whole.part");
         job.SegmentDownloadedBytes = Array.Empty<long>();
-        Interlocked.Exchange(ref job.DownloadedBytes, 0);
-        using var req = Request(HttpMethod.Get, job.Url);
-        using var res = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-        res.EnsureSuccessStatusCode();
-        if (res.StatusCode != HttpStatusCode.OK)
-            throw new IOException("การดาวน์โหลดแบบไฟล์เดียวต้องได้รับ HTTP 200");
-        // A full GET response may add a filename that was absent from the
-        // initial one-byte Range probe. Preserve it before final assembly.
-        job.Name = DownloadFileNaming.Resolve(job.Url, res);
-        if (job.TotalBytes < 0) job.TotalBytes = res.Content.Headers.ContentLength ?? -1;
-        await using var output = new FileStream(path, FileMode.Create, FileAccess.Write,
-            FileShare.Read, 131072, FileOptions.Asynchronous);
-        await using var input = await res.Content.ReadAsStreamAsync(ct);
-        var buffer = new byte[131072];
-        int got;
-        while ((got = await input.ReadAsync(buffer, ct)) > 0)
+        Exception? last = null;
+        for (var attempt = 1; attempt <= MaxRetryCount; attempt++)
         {
-            await output.WriteAsync(buffer.AsMemory(0, got), ct);
-            Interlocked.Add(ref job.DownloadedBytes, got);
-        }
-    }
+            ct.ThrowIfCancellationRequested();
+            TimeSpan? retryAfter = null;
+            using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
+            try
+            {
+                Interlocked.Exchange(ref job.DownloadedBytes, 0);
+                using var req = Request(HttpMethod.Get, job.Url);
+                using var res = await Http.SendAsync(req,
+                    HttpCompletionOption.ResponseHeadersRead, idle.Token);
+                if (DownloadRetryPolicy.IsTransientStatus(res.StatusCode))
+                {
+                    retryAfter = DownloadRetryPolicy.RetryAfter(res.Headers);
+                    throw new HttpRequestException("HTTP " + (int)res.StatusCode,
+                        null, res.StatusCode);
+                }
+                res.EnsureSuccessStatusCode();
+                if (res.StatusCode != HttpStatusCode.OK)
+                    throw new IOException("สตรีมเดียวต้องได้รับ HTTP 200");
+                job.Name = DownloadFileNaming.Resolve(job.Url, res);
+                if (res.Content.Headers.ContentLength is long announced && announced > 0)
+                    job.TotalBytes = announced;
 
+                await using var output = new FileStream(path, FileMode.Create,
+                    FileAccess.Write, FileShare.Read, 131072, FileOptions.Asynchronous);
+                await using var input = await res.Content.ReadAsStreamAsync(idle.Token);
+                var buffer = new byte[131072];
+                int read;
+                while ((read = await input.ReadAsync(buffer, idle.Token)) > 0)
+                {
+                    await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                    Interlocked.Add(ref job.DownloadedBytes, read);
+                    idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
+                }
+                await output.FlushAsync(ct);
+                if (job.TotalBytes >= 0 &&
+                    new FileInfo(path).Length != job.TotalBytes)
+                    throw new IOException("สตรีมเดียวได้รับข้อมูลไม่ครบตามขนาดจากเซิร์ฟเวอร์");
+                job.TransferPhase = "";
+                return;
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode.HasValue &&
+                !DownloadRetryPolicy.IsTransientStatus(ex.StatusCode.Value))
+            {
+                throw new IOException("เว็บไซต์ปฏิเสธดาวน์โหลด HTTP " +
+                    (int)ex.StatusCode.Value + " (ไม่ลองใหม่)", ex);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                last = new IOException("ไม่พบข้อมูลใหม่จากเซิร์ฟเวอร์เกิน 45 วินาที");
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException)
+            {
+                last = ex;
+            }
+
+            if (attempt == MaxRetryCount) break;
+            job.TransferPhase = $"สตรีมสะดุด — เริ่มใหม่ ({attempt}/{MaxRetryCount})";
+            await DownloadRetryPolicy.DelayAsync(attempt, retryAfter, ct);
+        }
+        throw new IOException("ดาวน์โหลดสตรีมเดียวไม่สำเร็จหลัง " +
+            MaxRetryCount + " ครั้ง: " + last?.Message, last);
+    }
 }
