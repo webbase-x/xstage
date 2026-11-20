@@ -797,7 +797,7 @@ function getFileId(data) {
 function playable(song) {
   // XSK2 is a complete, self-describing media+lyrics package on Drive.
   // Old catalog pairs remain supported without migration.
-  return !!(getFileId(song?.xsk) ||
+  return !!(getFileId(song?.xmid) || getFileId(song?.xsk) ||
     (getFileId(song?.midi) && song?.sourceFormat==='KAR') ||
     (getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))));
 }
@@ -2000,9 +2000,10 @@ function setStageVisualScale(value){
 }
 async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=false){
   const soundFontGeneration=state.xskSoundFontGeneration||0;
-  const fileId=getFileId(song?.xsk);
+  const isXmid=!!getFileId(song?.xmid);
+  const fileId=getFileId(isXmid?song?.xmid:song?.xsk);
   if(!fileId)throw Error('ไม่พบไฟล์ XSK2 ในฐานเพลง');
-  if(!window.XStageXsk?.openPackage || !window.XStageBrowserMidi)
+  if(!(isXmid?window.XStageXmid:window.XStageXsk)?.openPackage || !window.XStageBrowserMidi)
     throw Error('ตัวเล่น XSK2 หรือ MIDI ยังไม่พร้อม กรุณาอัปเดตเว็บ');
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังโหลด XSK2 และ SoundFont จาก Google Drive…');
@@ -2013,7 +2014,7 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังตรวจและแยก XSK2 ในหน่วยความจำ…');
-  const unpacked=await window.XStageXsk.openPackage(packed);
+  const unpacked=await (isXmid?window.XStageXmid:window.XStageXsk).openPackage(packed);
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   // Never play a different song under a stale catalog title/code.
   if(String(song.code||'')!==unpacked.code ||
@@ -2134,10 +2135,10 @@ async function prepareQueuedSong(song,token,signal){
   if(!monitor)return null;
   const pressure=monitor.plan(memoryResources());
   if(pressure.heapPressure||pressure.nativePressure)return null;
-  if(getFileId(song.xsk)){
+  if(getFileId(song.xsk)||getFileId(song.xmid)){
     // The pack and the uncompressed WAV both count against available space.
     const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
-    if(!Number(song.xsk.size)||Number(song.xsk.size)>maxPacked)return null;
+    if(!Number((song.xmid||song.xsk).size)||Number(song.xsk.size)>maxPacked)return null;
     const result=await prepareXskPlayback(song,token,signal,()=>{},true);
     if(!result||!monitor.canHold(result.blob.size,memoryResources()))return null;
     return {...result,bytes:result.blob.size};
@@ -2267,7 +2268,7 @@ async function preloadFirstQueueSong(song,token){
 function prefetchMedleyNext(){
   if(!state.medley||!state.token||state.loading)return;
   const song=nextMedleyCandidate(),token=state.token;
-  if(!song||song.midi||song.xsk||state.medleyCache?.song===song||
+  if(!song||song.midi||song.xsk||song.xmid||state.medleyCache?.song===song||
      state.medleyPrefetch?.song===song)return;
   const policy=window.XStageMemory;
   if(!policy||!Number(song.audio?.size)||
@@ -2535,7 +2536,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       // XSK2 prepared fully or in progress while queued: consume its
       // verified audio directly, without duplicating download/render.
       ({blob:audio,lyrics}=readyPrepared);
-    }else if(getFileId(song.xsk)){
+    }else if(getFileId(song.xsk)||getFileId(song.xmid)){
       const ready=await boundedPlaybackTask(
         prepareXskPlayback(song,token,controller.signal,message=>{
           if(request===state.requestId)setPlayStatus(message);
