@@ -518,6 +518,56 @@ try
         throw new Exception("32 HTTP ranges were not used for a sufficiently large file.");
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(maxParts.CompletedPath)))
         throw new Exception("32-connection merge corrupted the output.");
+    // A raw GitHub Actions CDN URL only reveals an opaque artifact storage key.
+    // A readable Content-Disposition must win; otherwise use an explicitly
+    // descriptive fallback rather than inventing the artifact's original title.
+    const string actionsCdn =
+        "https://productionresults19.blob.core.windows.net/actions-results/job-123/" +
+        "artifacts/e1fc3003c714e6d6e2fd0bc1e9f6865cf491f3ab";
+    using (var noName = new HttpResponseMessage(HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(Array.Empty<byte>()),
+        RequestMessage = new HttpRequestMessage(HttpMethod.Get, actionsCdn)
+    })
+    {
+        noName.Content.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("application/zip");
+        if (DownloadFileNaming.Resolve(actionsCdn, noName) !=
+            "GitHub-Actions-Artifact-e1fc3003.zip")
+            throw new Exception("Opaque GitHub Actions storage key must have a readable .zip fallback.");
+
+        noName.Content.Headers.ContentDisposition =
+            new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment")
+            {
+                FileName = "งานสร้าง-XStage-รุ่นล่าสุด.zip"
+            };
+        if (DownloadFileNaming.Resolve(actionsCdn, noName) != "งานสร้าง-XStage-รุ่นล่าสุด.zip")
+            throw new Exception("Human-readable Content-Disposition must override Actions CDN UUID.");
+
+        noName.Content.Headers.ContentDisposition.FileName =
+            "e1fc3003c714e6d6e2fd0bc1e9f6865cf491f3ab.zip";
+        if (DownloadFileNaming.Resolve(actionsCdn, noName) !=
+            "GitHub-Actions-Artifact-e1fc3003.zip")
+            throw new Exception("Opaque Content-Disposition must not hide readable artifact fallback.");
+    }
+    using (var namedOrigin = new HttpResponseMessage(HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(Array.Empty<byte>()),
+        RequestMessage = new HttpRequestMessage(HttpMethod.Get,
+            "https://example.com/media/b816293394e55bcf1b0a10ce78e2a370")
+    })
+    {
+        namedOrigin.Content.Headers.ContentDisposition =
+            new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment")
+            {
+                FileName = "e1fc3003c714e6d6e2fd0bc1e9f6865cf491f3ab.zip"
+            };
+        if (DownloadFileNaming.Resolve(
+            "https://example.com/media/รายงานประจำปี.zip", namedOrigin) !=
+            "รายงานประจำปี.zip")
+            throw new Exception("Readable original URL must override opaque server disposition name.");
+    }
+
     // CDN redirects often use UUID filenames with no extension. The
     // Content-Disposition filename is authoritative, regardless of URL name.
     const string opaqueId = "5aef5bed-774f-4423-b75d-78e1f2b9a60e";
@@ -528,6 +578,24 @@ try
         Path.GetFileName(githubAsset.CompletedPath) != githubAsset.Name ||
         !bytes.SequenceEqual(await File.ReadAllBytesAsync(githubAsset.CompletedPath)))
         throw new Exception("Content-Disposition filename must override opaque GitHub UUID URL.");
+    var originalGithubPath = githubAsset.CompletedPath;
+    var renamedPath = manager.RenameCompletedFile(githubAsset, "ไฟล์ทดสอบที่เปลี่ยนชื่อ");
+    if (Path.GetFileName(renamedPath) != "ไฟล์ทดสอบที่เปลี่ยนชื่อ.exe" ||
+        !File.Exists(renamedPath) || File.Exists(originalGithubPath) ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(renamedPath)))
+        throw new Exception("Rename must update the real file and keep the original extension.");
+    var invalidExtensionBlocked = false;
+    try { manager.RenameCompletedFile(githubAsset, "ไฟล์ใหม่.txt"); }
+    catch (ArgumentException) { invalidExtensionBlocked = true; }
+    if (!invalidExtensionBlocked || !File.Exists(renamedPath))
+        throw new Exception("Rename must reject a changed file type and preserve original data.");
+    await File.WriteAllBytesAsync(Path.Combine(folder, "ชื่อไฟล์ซ้ำ.exe"), new byte[] { 11, 22 });
+    var uniqueRename = manager.RenameCompletedFile(githubAsset, "ชื่อไฟล์ซ้ำ.exe");
+    if (Path.GetFileName(uniqueRename) != "ชื่อไฟล์ซ้ำ (1).exe" ||
+        !File.Exists(uniqueRename) ||
+        !(await File.ReadAllBytesAsync(Path.Combine(folder, "ชื่อไฟล์ซ้ำ.exe")))
+            .SequenceEqual(new byte[] { 11, 22 }))
+        throw new Exception("Filename collision during rename must never overwrite another file.");
 
     // RFC 5987 filename* should preserve Thai characters and a real extension.
     var thaiNameJob = manager.Add(server.Url + "range/thaifileuuid", folder, 8);
