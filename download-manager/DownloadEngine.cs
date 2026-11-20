@@ -63,7 +63,10 @@ public sealed class DownloadEngine
         _state.SaveDefaultParts(DefaultParts);
         foreach (var job in Jobs)
         {
+            job.InterruptedOnStartup = job.Status is "Running" or "Queued" ||
+                (job.ResumeAfterRestart && job.Status == "Paused");
             if (job.Status is "Running" or "Queued") job.Status = "Paused";
+            job.ResumeAfterRestart = false;
             // Build 4 could download the MKV correctly, then falsely report
             // failure because the Thai/Unicode final pathname was corrupted.
             // That specific failure occurred only after yt-dlp returned 0.
@@ -308,6 +311,8 @@ public sealed class DownloadEngine
                 return;
             }
         }
+        job.ResumeAfterRestart = false;
+        job.InterruptedOnStartup = false;
         job.Status = "Queued";
         job.Error = "";
         var cts = new CancellationTokenSource();
@@ -398,6 +403,8 @@ public sealed class DownloadEngine
     {
         if (job.Status is not ("Running" or "Queued")) return;
         job.Status = "Paused";
+        job.ResumeAfterRestart = false;
+        job.InterruptedOnStartup = false;
         try { job.Cancellation?.Cancel(); } catch (ObjectDisposedException) { }
         Save();
     }
@@ -405,6 +412,34 @@ public sealed class DownloadEngine
     public void PauseAll()
     {
         foreach (var job in Jobs.ToArray()) Pause(job);
+    }
+
+    // Only previously active jobs are eligible for consent-based recovery.
+    public void PauseAllForShutdown()
+    {
+        var toRecover = Jobs.Where(job => job.Status is "Running" or "Queued").ToArray();
+        foreach (var job in toRecover) Pause(job);
+        foreach (var job in toRecover)
+            if (job.Status == "Paused") job.ResumeAfterRestart = true;
+        Save();
+    }
+
+    public int InterruptedJobCount =>
+        Jobs.Count(job => job.InterruptedOnStartup && job.Status == "Paused");
+
+    public void RecoverInterruptedJobs(bool resume)
+    {
+        var interrupted = Jobs.Where(job => job.InterruptedOnStartup &&
+            job.Status == "Paused").ToArray();
+        foreach (var job in interrupted)
+        {
+            job.InterruptedOnStartup = false;
+            job.ResumeAfterRestart = false;
+        }
+        Save();
+        if (resume)
+            foreach (var job in interrupted)
+                Start(job);
     }
 
     public bool Remove(DownloadJob job)
