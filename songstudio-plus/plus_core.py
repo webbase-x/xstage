@@ -144,8 +144,6 @@ CREATE TABLE IF NOT EXISTS xstage_lyric_versions(
  UNIQUE(song_id,content_sha256));
 CREATE UNIQUE INDEX IF NOT EXISTS xstage_current_lyric
  ON xstage_lyric_versions(song_id) WHERE is_current=1;
-CREATE INDEX IF NOT EXISTS xstage_lyric_source
- ON xstage_lyric_versions(song_id,source_sha256);
 CREATE TABLE IF NOT EXISTS xstage_lyric_lines(
  id INTEGER PRIMARY KEY, version_id TEXT NOT NULL REFERENCES xstage_lyric_versions(id),
  position INTEGER NOT NULL, text TEXT NOT NULL, normalized_text TEXT NOT NULL,
