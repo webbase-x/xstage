@@ -152,6 +152,36 @@ try
         !videoArgs.Contains("--no-simulate") || !videoArgs.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
         !videoArgs.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
         throw new Exception("Video arguments must isolate config, enforce video quality and use bundled Deno.");
+    // yt-dlp's --print implies --quiet; --progress must explicitly restore
+    // live reporting for the embedded UI in both Windows redirected streams.
+    if (!videoArgs.Contains("--progress") ||
+        !videoArgs.Contains("--newline") ||
+        !videoArgs.Contains("--progress-template"))
+        throw new Exception("Video progress must be enabled even when --print suppresses default output.");
+
+    if (!SocialVideoDownloader.TryParseProgress(
+            "xstage-progress: 25.0%|2048|8192|NA",
+            out var firstPercent, out var firstBytes, out var firstTotal) ||
+        firstPercent != 25.0 || firstBytes != 2048 || firstTotal != 8192)
+        throw new Exception("Video progress template percent, bytes and total not parsed correctly.");
+
+    if (!SocialVideoDownloader.TryParseProgress(
+            "xstage-progress:N/A|2048|NA|8192",
+            out var fallbackPercent, out _, out _) ||
+        fallbackPercent != 25.0)
+        throw new Exception("Video percent must fall back to received bytes / estimated total.");
+
+    if (!SocialVideoDownloader.TryParseProgress(
+            "[download] xstage-progress: \\x1b[0;94m 37.5%\\x1b[0m|3000|8000|NA".Replace(
+                "\\x1b", "\\u001b"),
+            out var ansiPercent, out _, out _) ||
+        ansiPercent != 37.5)
+        throw new Exception("Video progress parser should ignore terminal color codes.");
+
+    if (SocialVideoDownloader.TryParseProgress("[download] Downloading webpage...",
+            out _, out _, out _))
+        throw new Exception("Video progress parser must not treat non-progress log lines as measurements.");
+
     // Social downloads should expose a phase instead of staying at fake
     // "0.0% downloading", and network retries must terminate predictably.
     if (!videoArgs.Contains("--socket-timeout") ||
