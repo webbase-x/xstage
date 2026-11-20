@@ -680,6 +680,18 @@ try
         throw new Exception("Queue rename must not silently merge queues.");
     if (manager.RenameQueue("คิวไม่มี", "คิวใหม่") != 0)
         throw new Exception("Renaming a missing queue must not create one.");
+    // Older records can have no queue name. The UI displays these as "ทั่วไป".
+    // Renaming that queue must include the legacy records and persist the result.
+    var unnamedJob = manager.Add(server.Url + "range/legacy-queue.bin", folder, 1);
+    manager.Pause(unnamedJob);
+    unnamedJob.QueueName = "";
+    manager.Save();
+    if (manager.RenameQueue("ทั่วไป", "คิวเริ่มต้นใหม่") < 1 ||
+        unnamedJob.QueueName != "คิวเริ่มต้นใหม่" ||
+        new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == unnamedJob.Id)
+            .QueueName != "คิวเริ่มต้นใหม่")
+        throw new Exception("Renaming default queue must migrate unnamed legacy jobs durably.");
+
 
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
