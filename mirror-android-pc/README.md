@@ -1,6 +1,12 @@
 # X-Stage Mirror Android PC
 
-Version 1.0.7 · Build 1008 · Windows 10/11 x64 · Preview
+Version 1.0.8 · Build 1009 · Windows 10/11 x64 · Preview
+
+## Build 1009 — reliable setup outcome and readiness
+
+The Windows installer helper now validates the exact `Installed` capability state (never a substring match), checks whether a Wi-Fi adapter is really present **after** Windows Update driver attempts, and reports a meaningful unsupported hardware/driver error when Windows still has none. Setup does not misleadingly report success just because DISM exited.
+
+The welcome screen shows active stages and an elapsed timer; after several minutes it describes Windows Update waiting instead of appearing frozen. The app suspends its own application-upgrade checks during Windows servicing so installer hand-off cannot interrupt prerequisite repair. Only a confirmed native Wireless Display window plus an enabled Wi-Fi adapter yields the "ready to receive" message. If an actual Windows native receiver is found later, stale repair errors are cleared. No File Explorer fallback. A CI regression check covers these invariants.
 
 ## Build 1008 — fix File Explorer opened instead of receiver
 

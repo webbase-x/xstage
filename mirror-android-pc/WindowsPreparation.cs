@@ -42,7 +42,7 @@ internal static class WindowsPreparation
             var needsRestart = false;
             if (!installed)
             {
-                Report("3/4", "กำลังดาวน์โหลดและติดตั้ง Wireless Display ผ่าน Windows");
+                Report("3/4", "กำลังดาวน์โหลดและติดตั้ง Wireless Display จาก Windows Update · อาจใช้เวลาหลายนาที");
                 var exitCode = await RunAsync(Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.System), "dism.exe"),
                     "/Online /Add-Capability /CapabilityName:" + Capability + " /NoRestart");
@@ -57,17 +57,23 @@ internal static class WindowsPreparation
 
             if (!HasWirelessAdapter())
             {
-                Report("4/4", "กำลังค้นหาไดรเวอร์ Wi-Fi ที่ตรงรุ่นจาก Windows Update");
+                Report("4/4", "กำลังค้นหาไดรเวอร์เครือข่ายที่ตรงรุ่นจาก Windows Update");
                 needsRestart |= await Task.Run(() => InstallNetworkDrivers(Report));
             }
-            else Report("4/4", "พบอะแดปเตอร์ Wi-Fi · ไม่เปลี่ยนไดรเวอร์ที่ใช้งานอยู่");
+            else Report("4/4", "ตรวจพบอะแดปเตอร์ Wi-Fi · ไม่ติดตั้งไดรเวอร์โดยไม่จำเป็น");
 
             if (needsRestart)
             {
-                Report("RESTART", "ติดตั้งเสร็จแล้ว · ต้องรีสตาร์ต Windows ก่อนใช้งาน");
+                Report("RESTART", "ต้องรีสตาร์ต Windows เพื่อใช้ฟีเจอร์หรือไดรเวอร์ที่เพิ่งติดตั้ง");
                 return 3010;
             }
-            Report("DONE", "ตรวจส่วนประกอบเรียบร้อย · กำลังเปิดตัวรับภาพ");
+            // A completed DISM or driver transaction is not enough to claim
+            // hardware readiness. Miracast still needs a usable Wi-Fi adapter.
+            if (!HasWirelessAdapter())
+                throw new InvalidOperationException(
+                    "ไม่พบอะแดปเตอร์ Wi-Fi หลังค้นหาไดรเวอร์ Windows Update แล้ว " +
+                    "เครื่องอาจไม่มีฮาร์ดแวร์ Wi-Fi Direct หรือไม่มีไดรเวอร์ตรงรุ่น");
+            Report("DONE", "ติดตั้งส่วนประกอบสำเร็จ · กำลังตรวจหน้าต่างตัวรับ Miracast");
             return 0;
         }
         catch (Exception ex)
@@ -101,7 +107,9 @@ internal static class WindowsPreparation
         var error = (await errors).Trim();
         if (proc.ExitCode != 0)
             throw new InvalidOperationException("ตรวจ Windows Capability ไม่สำเร็จ: " + error);
-        return text.Contains("Installed", StringComparison.OrdinalIgnoreCase);
+        // Compare the exact state: "Uninstalled" must NEVER be accepted as Installed.
+        return text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Any(line => line.Trim().Equals("Installed", StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task<int> RunAsync(string program, string arguments)

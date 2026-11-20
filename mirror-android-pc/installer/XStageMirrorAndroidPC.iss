@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Mirror Android PC"
-#define MyAppVersion "1.0.7"
-#define MyAppBuild "1008"
+#define MyAppVersion "1.0.8"
+#define MyAppBuild "1009"
 
 [Setup]
 SourceDir=..\..

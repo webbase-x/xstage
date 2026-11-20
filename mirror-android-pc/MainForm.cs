@@ -126,13 +126,13 @@ public sealed class MainForm : Form
             _poll.Start();
             if (WindowsPreparation.HasWirelessAdapter()) OpenReceiver();
             else _ = PrepareWindowsFeatureAsync();
-            _ = _autoUpdates.CheckAsync();
         };
         _poll.Tick += (_, _) =>
         {
             PollPreparation();
             CheckWindowsReceiverSession();
-            _ = _autoUpdates.CheckAsync();
+            if (!_installingWindowsFeature && _connectProcessRunning && _wifiAvailable)
+                _ = _autoUpdates.CheckAsync();
         };
         FormClosing += (_, _) =>
         {
@@ -298,6 +298,7 @@ public sealed class MainForm : Form
             _receiverWindow = title;
             _missedWindows = 0;
             _launchRetries = 0;
+            if (_wifiAvailable) _repairFailure = "";
             if (!_nativePresented && NativeMiracastWindow.ShowOnTop(handle))
             {
                 _nativePresented = true;
@@ -329,8 +330,8 @@ public sealed class MainForm : Form
     {
         if (_connectProcessRunning)
             _receiverStatus = _wifiAvailable
-                ? "พร้อมรับภาพ · เลือก " + Environment.MachineName + " จาก Android"
-                : "เปิดตัวรับแล้ว แต่ยังไม่พบ Wi-Fi ที่พร้อมใช้งาน";
+                ? "พร้อมรับภาพผ่าน Windows Wireless Display · เลือก " + Environment.MachineName
+                : "พบตัวรับ Windows แต่ยังไม่พร้อม: โปรดเปิด Wi-Fi ที่เครื่องรับ";
         else if (!_wifiAvailable)
             _receiverStatus = "ไม่พบ Wi-Fi ที่เปิดใช้งาน · กด F1 เพื่อตรวจสอบ";
         else if (_launchRetries >= 3)
@@ -350,7 +351,8 @@ public sealed class MainForm : Form
             : !string.IsNullOrEmpty(_repairFailure) ? _repairFailure
             : updating ? _updateNotice! : _receiverStatus;
         if (_status.Text != message) _status.Text = message;
-        var foreground = _connectProcessRunning || updating || _installingWindowsFeature;
+        var foreground = (_connectProcessRunning && _wifiAvailable) ||
+            updating || _installingWindowsFeature;
         var color = foreground ? Frost : Warning;
         if (_status.ForeColor != color) _status.ForeColor = color;
     }
@@ -364,6 +366,7 @@ public sealed class MainForm : Form
             _receiverWindow = existingTitle;
             _launchRetries = 0;
             _lastLaunchError = "";
+            if (_wifiAvailable) _repairFailure = "";
             if (!_nativePresented && NativeMiracastWindow.ShowOnTop(existing))
             {
                 _nativePresented = true;
@@ -442,7 +445,9 @@ public sealed class MainForm : Form
         var passed = DateTime.UtcNow - _repairStartedUtc;
         _network.Text = "กำลังดำเนินการ " + ((int)passed.TotalMinutes).ToString("D2") +
             ":" + passed.Seconds.ToString("D2") +
-            " · Windows Update อาจต้องใช้อินเทอร์เน็ต";
+            (passed.TotalMinutes >= 4
+                ? " · ใช้เวลานานกว่าปกติ: Windows Update/เครือข่ายอาจกำลังรอ"
+                : " · กำลังติดต่อระบบติดตั้งของ Windows");
         RenderStatus();
         if (_repairProcess is null) return;
         try
@@ -478,7 +483,7 @@ public sealed class MainForm : Form
         else
         {
             _launchRetries = 3;
-            _repairFailure = result + " · คลิกสถานะเพื่อลองใหม่";
+            _repairFailure = result + " · คลิกข้อความเพื่อตรวจสอบ/ลองใหม่";
             _status.Text = _repairFailure;
             _status.ForeColor = Warning;
         }

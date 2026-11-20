@@ -65,6 +65,12 @@ jobs:
           python scripts/verify_mirror_android_launch.py
           if ($LASTEXITCODE -ne 0) { throw 'Miracast launcher regression test failed' }
 
+      - name: Test Windows provisioning and receiver readiness lifecycle
+        shell: pwsh
+        run: |
+          python scripts/verify_mirror_android_readiness.py
+          if ($LASTEXITCODE -ne 0) { throw 'Receiver readiness regression checks failed' }
+
       - name: Compile self-contained Windows Miracast launcher
         shell: pwsh
         run: |
@@ -95,7 +101,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
           & $compiler 'mirror-android-pc/installer/XStageMirrorAndroidPC.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
-          $name = 'X-Stage-Mirror-Android-PC-v1.0.7-build1008-win-x64-Setup.exe'
+          $name = 'X-Stage-Mirror-Android-PC-v1.0.8-build1009-win-x64-Setup.exe'
           $exe = "mirror-android-pc/installer/output/$name"
           if (-not (Test-Path $exe -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $exe).Length -lt 5000000) { throw 'Setup EXE unexpectedly small' }
@@ -109,7 +115,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $filename = 'X-Stage-Mirror-Android-PC-v1.0.7-build1008-win-x64-PORTABLE.zip'
+          $filename = 'X-Stage-Mirror-Android-PC-v1.0.8-build1009-win-x64-PORTABLE.zip'
           Compress-Archive -Path 'mirror-android-pc/out/*' -DestinationPath $filename -CompressionLevel Optimal -Force
           if ((Get-Item $filename).Length -lt 5000000) { throw 'Portable ZIP unexpectedly small' }
           $sha = (Get-FileHash $filename -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -121,9 +127,9 @@ jobs:
         with:
           name: X-Stage-Mirror-Android-PC-Windows-CANDIDATE
           path: |
-            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.7-build1008-win-x64-Setup.exe
-            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.7-build1008-win-x64-Setup.exe.sha256
-            X-Stage-Mirror-Android-PC-v1.0.7-build1008-win-x64-PORTABLE.zip
-            X-Stage-Mirror-Android-PC-v1.0.7-build1008-win-x64-PORTABLE.zip.sha256
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.8-build1009-win-x64-Setup.exe
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.8-build1009-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-Android-PC-v1.0.8-build1009-win-x64-PORTABLE.zip
+            X-Stage-Mirror-Android-PC-v1.0.8-build1009-win-x64-PORTABLE.zip.sha256
           if-no-files-found: error
           retention-days: 30
