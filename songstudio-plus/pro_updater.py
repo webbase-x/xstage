@@ -175,6 +175,14 @@ def download(workspace,info,progress=None,cancel=None):
         if _hash_file(destination)==target["sha256"]:
             _write_ready(root,target)
             return {**target,"path":str(destination)}
+    # A previous run may have transferred the entire EXE and crashed before
+    # the rename/checksum pointer. Avoid HTTP 416 on that already-complete file.
+    if partial.is_file() and partial.stat().st_size>=1024*1024:
+        if _hash_file(partial)==target["sha256"]:
+            os.replace(partial,destination)
+            marker.unlink(missing_ok=True)
+            _write_ready(root,target)
+            return {**target,"path":str(destination)}
 
     last_error=None
     for attempt in range(1,DOWNLOAD_RETRIES+1):
