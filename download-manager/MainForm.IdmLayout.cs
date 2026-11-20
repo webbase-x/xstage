@@ -93,6 +93,7 @@ public sealed partial class MainForm
             Action("ลบประวัติที่ดาวน์โหลดสำเร็จ", (_, _) => ClearCompletedHistory())));
         menu.Items.Add(Menu("การดาวน์โหลด",
             Action("ดาวน์โหลดอัตโนมัติ (Chrome / Edge)", (_, _) => SetupBrowserIntegration()),
+            Action("กำหนดจำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
             Action("ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true))));
         menu.Items.Add(Menu("มุมมอง",
             Action("แสดงทั้งหมด", (_, _) => SelectCategory("all")),
@@ -492,6 +493,53 @@ public sealed partial class MainForm
             parts.Any(part => !DownloadEngine.TryParseUrl(part, out _)))
             return "";
         return string.Join(Environment.NewLine, parts);
+    }
+
+    private void ConfigureNetworkRetry()
+    {
+        using var dialog = new Form
+        {
+            Text = "ตั้งค่าความเสถียรเครือข่าย",
+            Width = 430, Height = 225,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = Color.White
+        };
+        var caption = new Label
+        {
+            Text = "จำนวนครั้งที่ลองใหม่อัตโนมัติต่อ Chunk / ไฟล์ (1–10)",
+            Left = 22, Top = 19, Width = 365, Height = 31
+        };
+        var spinner = new NumericUpDown
+        {
+            Left = 22, Top = 54, Width = 365, Minimum = 1, Maximum = 10,
+            Value = _engine.MaxRetryCount
+        };
+        var note = new Label
+        {
+            Text = "เน็ตหลุดหรือเซิร์ฟเวอร์ตอบ 429/503 จะลองใหม่แบบหน่วงเวลา\nChunk ที่ได้รับครบแล้วจะไม่ถูกดาวน์โหลดซ้ำ",
+            Left = 22, Top = 91, Width = 372, Height = 47,
+            ForeColor = Color.FromArgb(81, 102, 125)
+        };
+        var save = new Button
+        {
+            Text = "บันทึก", Left = 283, Top = 145, Width = 106, Height = 33,
+            DialogResult = DialogResult.OK
+        };
+        dialog.Controls.AddRange(new Control[] { caption, spinner, note, save });
+        dialog.AcceptButton = save;
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            _engine.SetRetryLimit((int)spinner.Value);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or
+                                   Microsoft.Data.Sqlite.SqliteException)
+        {
+            MessageBox.Show(this, ex.Message, "บันทึกค่าลองใหม่ไม่สำเร็จ",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void ShowAddUrlFromClipboard()
