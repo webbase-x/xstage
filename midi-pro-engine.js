@@ -1,5 +1,5 @@
 /* X-Stage Karaoke Online — optional professional GM SoundFont engine.
- * SpessaSynth 4.2.15 (Apache-2.0) is bundled locally by GitHub Actions.
+ * SpessaSynth 4.4.8 (Apache-2.0) is bundled locally by GitHub Actions.
  * Falls back to the existing renderer when assets or worklets are unavailable.
  * No Google Drive tokens or song files are sent to a third-party server.
  */
@@ -7,7 +7,8 @@
 'use strict';
 const MODULE='vendor/spessasynth/engine.mjs';
 const WORKLET='vendor/spessasynth/spessasynth_processor.min.js';
-let modulePromise=null;
+let modulePromise=null,preloadPromise=null;
+const MAX_WORKLET_BYTES=8*1024*1024;
 const registeredWorklets=new WeakMap();
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 function available(){
@@ -19,6 +20,32 @@ async function load(){
     modulePromise=null;throw error;
   });
   return modulePromise;
+}
+
+// Warm the locally hosted, public synthesizer assets before MIDI playback.
+// Browser HTTP cache handles persistence; never cache Google Drive media or
+// authorization headers. This does not install native DLLs on the user's PC.
+async function preload({onStatus=()=>{}}={}){
+  if(!available())throw Error('AudioWorklet ไม่พร้อมใช้งานบนเบราว์เซอร์นี้');
+  if(preloadPromise)return preloadPromise;
+  preloadPromise=(async()=>{
+    onStatus('กำลังเตรียมเครื่องเสียง MIDI คุณภาพสูง (ดาวน์โหลดครั้งแรกและใช้แคชเบราว์เซอร์)…');
+    const [engine,response]=await Promise.all([
+      load(),
+      fetch(WORKLET,{cache:'force-cache',credentials:'same-origin'})
+    ]);
+    if(typeof engine.WorkletSynthesizer!=='function')
+      throw Error('ชุดไฟล์เครื่องเสียง SpessaSynth ไม่ครบ');
+    if(!response.ok)throw Error('ดาวน์โหลด AudioWorklet ไม่สำเร็จ (HTTP '+response.status+')');
+    const hintedSize=Number(response.headers.get('Content-Length')||0);
+    if(hintedSize>MAX_WORKLET_BYTES)throw Error('เครื่องเสียง MIDI มีขนาดผิดปกติ');
+    const data=await response.arrayBuffer();
+    if(!data.byteLength||data.byteLength>MAX_WORKLET_BYTES)
+      throw Error('ข้อมูล AudioWorklet ไม่ครบหรือขนาดผิดปกติ');
+    onStatus('เครื่องเสียง MIDI คุณภาพสูงพร้อมใช้');
+    return true;
+  })().catch(error=>{preloadPromise=null;throw error;});
+  return preloadPromise;
 }
 async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   if(!available())throw Error('เบราว์เซอร์ไม่รองรับ AudioWorklet');
@@ -168,5 +195,5 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     dispose
   };
 }
-scope.XStageProMidi={available,prepare};
+scope.XStageProMidi={available,preload,prepare};
 })(typeof window!=='undefined'?window:globalThis);
