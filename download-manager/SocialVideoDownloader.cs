@@ -42,6 +42,36 @@ public static class SocialVideoDownloader
         return "Facebook Reels";
     }
 
+    // HTTP Range segment count is unrelated to yt-dlp fragment parallelism.
+    // Very high video concurrency can cause 403/429 and slower transfers.
+    public static int VideoFragmentConcurrency(int chosenParts) => Math.Clamp(chosenParts, 1, 4);
+
+    public static bool IsYtDlpError(string line) =>
+        line.Contains("ERROR:", StringComparison.OrdinalIgnoreCase) ||
+        line.StartsWith("ERROR ", StringComparison.OrdinalIgnoreCase) ||
+        line.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase) ||
+        line.Contains("HTTP Error 429", StringComparison.OrdinalIgnoreCase);
+
+    public static string ExplainFailure(string details, int exitCode)
+    {
+        if (details.Contains("Requested format is not available", StringComparison.OrdinalIgnoreCase))
+            return "ไม่พบรูปแบบหรือความละเอียดที่เลือก โปรดเลือกคุณภาพดีที่สุดหรือต่ำลง";
+        if (details.Contains("HTTP Error 429", StringComparison.OrdinalIgnoreCase) ||
+            details.Contains("Too Many Requests", StringComparison.OrdinalIgnoreCase))
+            return "เว็บไซต์จำกัดจำนวนคำขอชั่วคราว (HTTP 429) ลองใหม่ภายหลัง";
+        if (details.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase))
+            return "เว็บไซต์ปฏิเสธคำขอดาวน์โหลด (HTTP 403) อาจมีข้อจำกัดการเข้าถึง";
+        if (details.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase) ||
+            details.Contains("login required", StringComparison.OrdinalIgnoreCase) ||
+            details.Contains("This video is private", StringComparison.OrdinalIgnoreCase))
+            return "วิดีโอนี้ต้องยืนยันตัวตนหรือมีข้อจำกัดการเข้าถึง";
+        if (details.Contains("Video unavailable", StringComparison.OrdinalIgnoreCase))
+            return "วิดีโอนี้ไม่พร้อมให้เข้าถึง";
+        if (details.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase))
+            return "รูปแบบลิงก์นี้ยังไม่รองรับ";
+        return "ดาวน์โหลดวิดีโอไม่สำเร็จ (รหัส " + exitCode + ")";
+    }
+
     public static IReadOnlyList<string> BuildArguments(DownloadJob job, string work, string tools)
     {
         if (!IsVideoUrl(job.Url)) throw new ArgumentException("ลิงก์นี้ไม่ใช่แพลตฟอร์มวิดีโอที่รองรับ");
@@ -68,7 +98,7 @@ public static class SocialVideoDownloader
             "--progress-template", "download:xstage-progress:%(progress._percent_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s",
             "--ffmpeg-location", tools,
             "--js-runtimes", "deno:" + Path.Combine(tools, "deno.exe"),
-            "-N", job.Parts.ToString(CultureInfo.InvariantCulture),
+            "-N", VideoFragmentConcurrency(job.Parts).ToString(CultureInfo.InvariantCulture),
         };
         if (job.OutputFormat == "mp3" || job.VideoQuality == "AudioMP3")
         {
@@ -201,6 +231,11 @@ public static class SocialVideoDownloader
         void OnStdout(string line)
         {
             RecordLine(line);
+            if (IsYtDlpError(line))
+            {
+                errors.Enqueue(line.Trim());
+                while (errors.Count > 12) errors.Dequeue();
+            }
             var phase = DescribeOutputPhase(line);
             if (phase is not null)
             {
@@ -312,8 +347,13 @@ public static class SocialVideoDownloader
         if (process.ExitCode != 0)
         {
             var tail = string.Join(" | ", errors);
-            throw new IOException("ดาวน์โหลดวิดีโอไม่สำเร็จ" +
-                (tail.Length > 0 ? ": " + (tail.Length > 320 ? tail[^320..] : tail) : " (รหัส " + process.ExitCode + ")") +
+            var reason = ExplainFailure(tail, process.ExitCode);
+            var safeTail = System.Text.RegularExpressions.Regex.Replace(
+                tail, @"https?://[^\s]+", "[URL]",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            throw new IOException(reason +
+                (safeTail.Length > 0 ? " · รายละเอียด: " +
+                    (safeTail.Length > 220 ? safeTail[^220..] : safeTail) : "") +
                 " · บันทึก: " + logFile);
         }
         string fullPath;
