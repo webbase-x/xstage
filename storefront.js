@@ -2,7 +2,6 @@
 // Storefront only. It never initializes a karaoke player or accesses private Drive data.
 (function(){
   const REPO="https://github.com/webbase-x/xstage";
-  const RELEASES=REPO+"/releases";
   const SHA256=/^[a-f0-9]{64}$/i;
   const deviceGuide=window.XStageDeviceGuide;
   const currentDevice=deviceGuide?deviceGuide.detect(navigator):{kind:"unknown",label:"อุปกรณ์นี้"};
@@ -202,6 +201,22 @@
       return url.href;
     }catch{return "";}
   }
+  // Only installable files are exposed by the public X-Stage download portal.
+  function isInstallableDownload(url){
+    if(!url)return false;
+    try{return /\.(?:exe|apk)$/i.test(new URL(url,location.href).pathname);}
+    catch{return false;}
+  }
+  function attachDownloadIcon(link,id){
+    const src=document.querySelector('[data-app="'+id+'"] .app-art img')?.getAttribute("src");
+    if(!src||!isInstallableDownload(link.href))return;
+    const icon=document.createElement("img");
+    icon.className="binary-download-icon";
+    icon.src=src;
+    icon.width=23;icon.height=23;icon.alt="";
+    icon.setAttribute("aria-hidden","true");
+    link.prepend(icon);
+  }
   function getRelease(id,data){
     if(!data||typeof data!=="object")throw Error("invalid release data");
     if(id==="download-manager"){
@@ -267,21 +282,19 @@
         id==="mirror-android-pc"?"xstage-mirror-android-pc-v":"xstage-mirror-pc-v";
       const prefix=namePrefix+version+"-build"+build+"-win-x64-";
       const installer=data.file===prefix+"Setup.exe";
-      const portable=data.file===prefix+(id==="mirror-android-pc"?"PORTABLE.zip":"CANDIDATE.zip");
       const valid=data.available===true&&/^\d+\.\d+\.\d+$/.test(version)&&
-        Number.isSafeInteger(build)&&build>0&&SHA256.test(data.sha256||"")&&
-        (installer||portable);
+        Number.isSafeInteger(build)&&build>0&&SHA256.test(data.sha256||"")&&installer;
       const expectedUrl=preview?
         "https://github.com/webbase-x/xstage/releases/download/"+tagPrefix+
         version+"-build"+build+"-preview/"+data.file:null;
       const url=valid&&(!preview||data.download_url===expectedUrl)?
-        verifiedReleaseUrl(data.download_url,installer?".exe":".zip"):"";
+        verifiedReleaseUrl(data.download_url,".exe"):"";
       return url?{
         available:true,url,
-        status:(installer?"Setup EXE":"Portable ZIP")+" v"+version+" · Build "+build+
+        status:"Setup EXE v"+version+" · Build "+build+
           (preview?" · รุ่นทดสอบ":" · รุ่นล่าสุด"),
-        kind:"download",version,build,preview,installer
-      }:{available:false,url:"",status:"ยังไม่มีตัวติดตั้งที่ตรวจสอบแล้ว",kind:"pending"};
+        kind:"download",version,build,preview,installer:true
+      }:{available:false,url:"",status:"ยังไม่มีตัวติดตั้ง EXE ที่ตรวจสอบแล้ว",kind:"pending"};
     }
     if(id==="file-share"){
       const version=String(data.version||"");
@@ -331,14 +344,15 @@
     el.classList.toggle("pending",!states[id].available);
     const quick=document.querySelector('[data-download-app="'+id+'"]');
     if(quick){
-      const available=states[id].available&&!!states[id].url;
+      const available=states[id].available&&isInstallableDownload(states[id].url);
       quick.hidden=!available;
       if(available){
         quick.href=states[id].url;
         quick.textContent=id==="download-manager"?"⬇ ดาวน์โหลด Setup EXE v"+states[id].version+" (Build "+states[id].build+")":
           (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?
-          ("⬇ ดาวน์โหลด "+(states[id].installer?"Setup EXE":"ZIP")+" v"+states[id].version+" (Build "+states[id].build+")") :
+          ("⬇ ดาวน์โหลด Setup EXE v"+states[id].version+" (Build "+states[id].build+")") :
           (id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
+        attachDownloadIcon(quick,id);
         if(states[id].url.startsWith("./")){
           quick.setAttribute("download",states[id].url.split("/").at(-1));
           quick.removeAttribute("target");
@@ -405,13 +419,14 @@
     }
     updateCardStatus(id);
   }
-  function createAction(label,url,kind,external){
+  function createAction(label,url,kind,external,id=""){
     const a=document.createElement("a");
     a.className="detail-action "+kind;
     a.textContent=label;
     a.href=url;
     if(external){a.target="_blank";a.rel="noopener noreferrer";}
     if(!external&&/\.apk$/i.test(url))a.setAttribute("download",url.split("/").at(-1));
+    if(id)attachDownloadIcon(a,id);
     return a;
   }
   function renderActions(id){
@@ -419,29 +434,29 @@
     container.replaceChildren();
     if(info.type==="web"){
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
-    }else if(state.available && state.url){
+    }else if(state.available && isInstallableDownload(state.url)){
       const label=id==="download-manager"?"ดาวน์โหลด Setup EXE v"+state.version+" (Build "+state.build+") ↗":
         id==="studio-pro"?"ดาวน์โหลด Song Studio Pro EXE ↗":
-        (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?(state.installer?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":"ดาวน์โหลด ZIP รุ่นทดสอบ ↗"):
+        (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
       const support=suitability(id);
       const adjusted=support.level==="other"?"ไฟล์สำหรับอุปกรณ์ที่รองรับ ↗":label;
-      container.appendChild(createAction(adjusted,state.url,"primary",!state.url.startsWith("./")));
+      container.appendChild(createAction(adjusted,state.url,"primary",!state.url.startsWith("./"),id));
     }else{
       const pending=document.createElement("span");
       pending.className="detail-action disabled";
       pending.setAttribute("aria-disabled","true");
       pending.textContent="ยังไม่เปิดดาวน์โหลด";
       container.appendChild(pending);
-      if(id!=="studio-pro")container.appendChild(createAction("ดูประกาศรุ่นบน GitHub ↗",RELEASES,"secondary",true));
-      if(info.candidate){
-        container.appendChild(createAction(info.candidate.label+" ↗",info.candidate.url,"secondary",true));
+      // Do not route end users to Actions artifacts, source ZIPs or release lists.
+      if(info.candidate?.url.startsWith("?app=")){
+        container.appendChild(createAction(info.candidate.label+" ↗",info.candidate.url,"secondary",false));
       }
     }
     if(id==="mirror-tv"&&state.test){
       if(state.direct&&state.releaseUrl){
-        container.appendChild(createAction("สำรอง: ดาวน์โหลดจาก GitHub ↗",state.releaseUrl,"secondary",true));
+        if(isInstallableDownload(state.releaseUrl))container.appendChild(createAction("สำรอง: ดาวน์โหลดจาก GitHub ↗",state.releaseUrl,"secondary",true,id));
       }
     }
     if(info.secondary){
