@@ -91,10 +91,10 @@ function scan(files){
     const sig=relative.toLocaleLowerCase('en-US')+'|'+file.size+'|'+(file.lastModified||0);
     if(seen.has(sig))continue;seen.add(sig);
     const extension=ext(file.name);
-    if(extension==='xsk'){
-      if(file.size<33||file.size>152*1024*1024)
+    if(extension==='xsk'||extension==='xmid'){
+      if(file.size<(extension==='xmid'?92:33)||file.size>(extension==='xmid'?96:152)*1024*1024)
         blocked.push({key:relative,reason:'XSK ขนาดผิดปกติหรือใหญ่เกินขอบเขต'});
-      else xsks.push({file,relative,code:file.name.replace(/\.xsk$/i,''),kind:'XSK'});
+      else xsks.push({file,relative,code:file.name.replace(/\.(?:xsk|xmid)$/i,''),kind:extension.toUpperCase()});
       continue;
     }
     if(extension==='xskkey'){
