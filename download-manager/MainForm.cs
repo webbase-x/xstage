@@ -25,7 +25,7 @@ public sealed class MainForm : Form
 
     public MainForm(string[] args)
     {
-        Text = "X-Stage Download Manager · v0.2.3 Build 6";
+        Text = "X-Stage Download Manager · v0.2.4 Build 7";
         MinimumSize = new Size(930, 650);
         Size = new Size(1220, 785);
         StartPosition = FormStartPosition.CenterScreen;
@@ -106,7 +106,7 @@ public sealed class MainForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.3 · Build 6",
+            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.4 · Build 7",
             AutoSize = true, ForeColor = Color.FromArgb(212, 230, 252),
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             Location = new Point(28, 65), BackColor = Color.Transparent
@@ -306,7 +306,7 @@ public sealed class MainForm : Form
         _updateStatus.Dock = DockStyle.Fill;
         _updateStatus.ForeColor = Color.FromArgb(41, 92, 156);
         _updateStatus.Font = new Font("Segoe UI", 8, FontStyle.Bold);
-        _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.3 · Build 6";
+        _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.4 · Build 7";
         footer.Controls.Add(_updateStatus, 0, 2);
         Controls.Add(footer);
     }
