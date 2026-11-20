@@ -19,9 +19,19 @@ CREATE TABLE IF NOT EXISTS xstage_manual_reviews (
 );
 """
 
+_INITIALIZED = set()
+
 def init(workspace):
-    with core.WRITE_LOCK, core.connect(workspace) as db:
-        db.executescript(SCHEMA)
+    """Install review schema once; read-only UI actions never need DDL locks."""
+    key=str(core.db_path(workspace).resolve())
+    if key in _INITIALIZED:
+        return
+    with core.WRITE_LOCK:
+        if key in _INITIALIZED:
+            return
+        with core.connect(workspace) as db:
+            db.executescript(SCHEMA)
+        _INITIALIZED.add(key)
 
 BASE = """
  FROM xstage_songs s JOIN xstage_media m ON m.id=s.media_id
