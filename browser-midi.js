@@ -331,7 +331,20 @@ function parseFont(data){
   }
   return {b,d,chunks,samples,find,cache:new Map(),cacheBytes:0};
 }
+// A chord can request the same SF2 sample from many simultaneous notes.
+// Decode each sample once, then share the pending Promise across those notes.
+const pendingSampleBuffers=new WeakMap();
 async function sampleBuffer(font,index,context){
+  if(font.cache.has(index))return font.cache.get(index);
+  let pending=pendingSampleBuffers.get(font);
+  if(!pending){pending=new Map();pendingSampleBuffers.set(font,pending);}
+  if(pending.has(index))return pending.get(index);
+  const task=decodeSampleBuffer(font,index,context);
+  pending.set(index,task);
+  try{return await task;}
+  finally{if(pending.get(index)===task)pending.delete(index);}
+}
+async function decodeSampleBuffer(font,index,context){
   if(font.cache.has(index))return font.cache.get(index);
   const sample=font.samples[index],chunk=font.chunks.get('smpl');
   if(!sample||!sample.rate||sample.rate>192000)fail('SoundFont sample header ผิด');
