@@ -642,7 +642,7 @@
     $("settings-update-check").disabled=true;
     if(!silent)text("pro-update-status","กำลังตรวจอัปเดตที่เผยแพร่และยืนยัน SHA-256...");
     try{
-      const result=await api("/api/update/check");
+      const result=await api("/api/update/check",undefined,55000);
       state.updateTarget=result;
       text("pro-update-version","v"+result.current_version);
       const ready=await api("/api/update/ready");
@@ -684,7 +684,7 @@
     try{
       // A release may have been published since startup. Re-check when
       // clicked and jump directly to the newest verified version.
-      const latest=await api("/api/update/check",undefined,30000);
+      const latest=await api("/api/update/check",undefined,55000);
       state.updateTarget=latest;
       if(!latest.newer){
         state.updateBusy=false;
