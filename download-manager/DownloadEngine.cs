@@ -47,6 +47,9 @@ public sealed class DownloadEngine
             // failure because the Thai/Unicode final pathname was corrupted.
             // That specific failure occurred only after yt-dlp returned 0.
             SocialVideoDownloader.TryRecoverLegacyCompletedJob(job);
+            // Recover completed extensionless downloads from earlier builds
+            // using only known file signatures; never guess for unknown data.
+            DownloadFileNaming.TryRepairCompletedFile(job);
             job.Cancellation = null;
             if (!AllowedParts.Contains(job.Parts)) job.Parts = 4;
             job.PreviousBytes = job.DownloadedBytes;
@@ -145,7 +148,7 @@ public sealed class DownloadEngine
         if (video && !SocialVideoDownloader.AllowedOutputFormats.Contains(outputFormat))
             throw new ArgumentException("กรุณาเลือกรูปแบบปลายทาง MP4 / MKV / WEBM / MP3");
         var name = video ? SocialVideoDownloader.Platform(uri.ToString()) + " video" :
-            CleanName(Uri.UnescapeDataString(uri.AbsolutePath.Split('/').LastOrDefault() ?? ""));
+            DownloadFileNaming.UrlFileName(uri.ToString());
         var job = new DownloadJob
         {
             Url = uri.ToString(), Name = name, Folder = folder, Parts = selectedParts,
@@ -253,10 +256,9 @@ public sealed class DownloadEngine
         var supported = response.StatusCode == HttpStatusCode.PartialContent &&
             range?.HasLength == true && range.From == 0 && range.To == 0;
         var length = supported ? range!.Length!.Value : response.Content.Headers.ContentLength ?? -1;
-        var rawName = response.Content.Headers.ContentDisposition?.FileNameStar ??
-            response.Content.Headers.ContentDisposition?.FileName ?? "";
         return new ProbeInfo(supported, length, response.Headers.ETag?.ToString() ?? "",
-            response.Content.Headers.LastModified, CleanName(rawName));
+            response.Content.Headers.LastModified,
+            DownloadFileNaming.Resolve(job.Url, response));
     }
 
     private static async Task DownloadAsync(DownloadJob job, CancellationToken ct)
@@ -270,8 +272,9 @@ public sealed class DownloadEngine
         }
         var probe = await ProbeAsync(job, ct);
         var work = WorkDir(job);
-        if (job.Name.Equals("download", StringComparison.OrdinalIgnoreCase) &&
-            probe.SuggestedName != "download") job.Name = probe.SuggestedName;
+        // The final HTTP response may have Content-Disposition with the real
+        // name even when the requested URL is a CDN UUID without extension.
+        job.Name = probe.SuggestedName;
         var partialExists = job.SupportsRanges && Directory.Exists(work) &&
             Directory.EnumerateFiles(work, "*.part").Any();
         var strongTagMatches = !string.IsNullOrEmpty(job.ETag) &&
@@ -299,7 +302,6 @@ public sealed class DownloadEngine
         }
         ct.ThrowIfCancellationRequested();
 
-        var destination = UniqueOutput(job.Folder, job.Name);
         var merged = Path.Combine(work, "ready.tmp");
         if (File.Exists(merged)) File.Delete(merged);
         await using (var output = new FileStream(merged, FileMode.CreateNew, FileAccess.Write,
@@ -326,7 +328,12 @@ public sealed class DownloadEngine
         if (job.TotalBytes >= 0 && new FileInfo(merged).Length != job.TotalBytes)
             throw new IOException("ขนาดไฟล์ที่ประกอบไม่ตรงกับข้อมูลจากเซิร์ฟเวอร์");
         ct.ThrowIfCancellationRequested();
+        // Inspect the assembled file only if the server supplied no extension;
+        // this is important for GitHub release-assets URLs with opaque UUIDs.
+        job.Name = DownloadFileNaming.EnsureExtension(job.Name, merged);
+        var destination = DownloadFileNaming.UniqueOutput(job.Folder, job.Name);
         File.Move(merged, destination);
+        job.Name = Path.GetFileName(destination);
         job.CompletedPath = destination;
         if (job.TotalBytes < 0) job.TotalBytes = new FileInfo(destination).Length;
         Interlocked.Exchange(ref job.DownloadedBytes, job.TotalBytes);
@@ -428,6 +435,9 @@ public sealed class DownloadEngine
         res.EnsureSuccessStatusCode();
         if (res.StatusCode != HttpStatusCode.OK)
             throw new IOException("การดาวน์โหลดแบบไฟล์เดียวต้องได้รับ HTTP 200");
+        // A full GET response may add a filename that was absent from the
+        // initial one-byte Range probe. Preserve it before final assembly.
+        job.Name = DownloadFileNaming.Resolve(job.Url, res);
         if (job.TotalBytes < 0) job.TotalBytes = res.Content.Headers.ContentLength ?? -1;
         await using var output = new FileStream(path, FileMode.Create, FileAccess.Write,
             FileShare.Read, 131072, FileOptions.Asynchronous);
@@ -441,28 +451,4 @@ public sealed class DownloadEngine
         }
     }
 
-    private static string CleanName(string input)
-    {
-        var name = input.Trim().Trim('"').Replace('\\', '/').Split('/').Last().Trim();
-        foreach (var ch in Path.GetInvalidFileNameChars()) name = name.Replace(ch, '_');
-        foreach (var ch in "<>:\"/\\|?*") name = name.Replace(ch, '_'); // Windows filename rules
-        name = name.Trim().TrimEnd('.');
-        if (name is "" or "." or "..") name = "download";
-        if (name.Length > 160) name = name[..160];
-        var reserved = Path.GetFileNameWithoutExtension(name).ToUpperInvariant();
-        if (new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "LPT1", "LPT2" }.Contains(reserved))
-            name = "_" + name;
-        return name;
-    }
-
-    private static string UniqueOutput(string directory, string file)
-    {
-        var clean = CleanName(file);
-        var baseName = Path.GetFileNameWithoutExtension(clean);
-        var ext = Path.GetExtension(clean);
-        var result = Path.Combine(directory, clean);
-        for (int n = 1; File.Exists(result); n++)
-            result = Path.Combine(directory, baseName + " (" + n + ")" + ext);
-        return result;
-    }
 }
