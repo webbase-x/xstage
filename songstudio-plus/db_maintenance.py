@@ -13,6 +13,7 @@ import plus_core as core
 ISSUE_OUTCOMES = (
     "error", "lyrics-error", "timing-incomplete", "partial-lyrics",
     "untimed-lyrics", "missing-lyr", "skipped-ncn-incomplete",
+    "missing-source", "changed-source",
 )
 RETAIN_COMPLETED = 4
 
