@@ -49,8 +49,50 @@ try {
     }
     $file = [string]$meta.installer_file
     $expectedFile = "X-Stage-Karaoke-PC-Windows-v$($meta.version)-build$($meta.build)"
-    if ($file -notin @("$expectedFile.exe", "$expectedFile.msi") -or
-        $file -notmatch '^X-Stage-Karaoke-PC-Windows-v[0-9.]+-build[0-9]+\.(exe|msi)$') {
+    if ($file -notin @("X-StageKaraoke.exe", "$expectedFile.exe", "$expectedFile.msi") -or
+        $file -notmatch '^(X-StageKaraoke\.exe|X-Stage-Karaoke-PC-Windows-v[0-9.]+-build[0-9]+\.(exe|msi))) {
+        throw 'ข้อมูลชื่อไฟล์ Windows Installer ไม่ตรงกับรุ่นที่ประกาศ'
+    }
+    $expected = [string]$meta.sha256
+    if ($expected -notmatch '^[0-9a-fA-F]{64}$') {
+        throw 'ไม่มี SHA-256 ที่ถูกต้องสำหรับตรวจสอบ Windows Installer'
+    }
+    Write-Host "พบ X-Stage Karaoke PC v$latest (Build $newBuild)"
+    if (-not $Install) {
+        Write-Host 'เรียกสคริปต์ด้วย -Install เพื่อดาวน์โหลดและเปิดตัวติดตั้ง'
+        exit 0
+    }
+
+    $uri = 'https://webbase-x.github.io/xstage/downloads/' + [uri]::EscapeDataString($file)
+    $downloadDirectory = Join-Path $env:LOCALAPPDATA 'XStageKaraoke\Updates'
+    New-Item -ItemType Directory -Force -Path $downloadDirectory | Out-Null
+    $destination = Join-Path $downloadDirectory $file
+    # Never launch an existing cached installer before checking its integrity.
+    if ((Test-Path $destination -PathType Leaf) -and
+        (Get-FileHash -Path $destination -Algorithm SHA256).Hash -ine $expected) {
+        Remove-Item $destination -Force
+    }
+    if (-not (Test-Path $destination -PathType Leaf)) {
+        $tempFile = "$destination.download"
+        try {
+            Invoke-WebRequest -Uri $uri -OutFile $tempFile -TimeoutSec 180
+            $actual = (Get-FileHash -Path $tempFile -Algorithm SHA256).Hash
+            if ($actual -ine $expected) { throw 'ไฟล์อัปเดตไม่ผ่านการตรวจสอบ SHA-256' }
+            Move-Item -LiteralPath $tempFile -Destination $destination -Force
+        } finally {
+            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+    $actual = (Get-FileHash -Path $destination -Algorithm SHA256).Hash
+    if ($actual -ine $expected) { throw 'ไฟล์อัปเดตที่ดาวน์โหลดไม่ตรงกับ SHA-256' }
+    Write-Host 'ตรวจ SHA-256 ผ่าน · กำลังเปิดตัวติดตั้ง Windows'
+    # The installer itself may request UAC/close the running app. Never bypass.
+    Start-Process -FilePath $destination -ErrorAction Stop
+} catch {
+    Write-Error ("ตรวจสอบหรือดาวน์โหลดอัปเดตไม่สำเร็จ: " + $_.Exception.Message)
+    exit 1
+}
+) {
         throw 'ข้อมูลชื่อไฟล์ Windows Installer ไม่ตรงกับรุ่นที่ประกาศ'
     }
     $expected = [string]$meta.sha256
