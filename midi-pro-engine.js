@@ -99,8 +99,15 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
               ?override:note.program;
             const state=ch+':'+note.bank+':'+program;
             if(applied[ch]!==state){
-              synth.controllerChange(ch,0,clamp(note.bank,0,127));
-              synth.programChange(ch,program);applied[ch]=state;
+              // Match the PC's restrained reverb/chorus; channel 10 must
+              // remain percussion, not be reassigned to a melodic bank.
+              synth.controllerChange(ch,91,40);
+              synth.controllerChange(ch,93,12);
+              if(ch!==9){
+                synth.controllerChange(ch,0,clamp(note.bank,0,127));
+                synth.programChange(ch,program);
+              }
+              applied[ch]=state;
             }
             const velocity=clamp(Math.round(note.velocity*clamp(note.level,.1,1)),1,127);
             synth.noteOn(ch,pitch,velocity);
