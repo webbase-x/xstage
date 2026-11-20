@@ -24,9 +24,9 @@ VERSION="0.1.26"
 MANIFEST_URL="https://webbase-x.github.io/xstage/downloads/song-studio-pro-latest.json"
 RAW_MANIFEST_URL="https://raw.githubusercontent.com/webbase-x/xstage/main/downloads/song-studio-pro-latest.json"
 RELEASE=re.compile(
-    r"^https://github\\.com/webbase-x/xstage/releases/download/"
-    r"song-studio-pro-v(\\d+\\.\\d+\\.\\d+)-preview/"
-    r"(X-Stage-Song-Studio-Pro-v\\1-preview\\.exe)$")
+    r"^https://github\.com/webbase-x/xstage/releases/download/"
+    r"song-studio-pro-v(\d+\.\d+\.\d+)-preview/"
+    r"(X-Stage-Song-Studio-Pro-v\1-preview\.exe)$")
 MAX_FILE=600*1024*1024
 CHUNK=1024*1024
 DOWNLOAD_RETRIES=5
@@ -35,7 +35,7 @@ DOWNLOAD_HOSTS={"github.com","release-assets.githubusercontent.com",
 
 
 def version_tuple(s):
-    if not re.fullmatch(r"\\d+\\.\\d+\\.\\d+",str(s)):
+    if not re.fullmatch(r"\d+\.\d+\.\d+",str(s)):
         raise ValueError("เลขรุ่นไม่ถูกต้อง")
     return tuple(map(int,str(s).split(".")))
 
@@ -201,7 +201,7 @@ def download(workspace,info,progress=None,cancel=None):
                     raise ValueError("ขนาดข้อมูลจาก GitHub ไม่ถูกต้อง")
                 if offset and status==206:
                     cr=response.headers.get("Content-Range","")
-                    match=re.fullmatch(r"bytes (\\d+)-(\\d+)/(\\d+|\\*)",cr)
+                    match=re.fullmatch(r"bytes (\d+)-(\d+)/(\d+|\*)",cr)
                     if not match or int(match.group(1))!=offset:
                         raise ValueError("GitHub ตอบช่วงข้อมูลไม่ตรงกับไฟล์ที่โหลดค้าง")
                     total=int(match.group(3)) if match.group(3)!="*" else 0
