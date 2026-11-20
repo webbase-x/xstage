@@ -162,6 +162,8 @@ jobs:
           $setup = 'download-manager/installer/output/X-Stage-Download-Manager-v0.2.1-build4-win-x64-Setup.exe'
           if (-not (Test-Path $setup -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer suspiciously small' }
+          python scripts/verify_songstudio_exe_icon.py $setup
+          if ($LASTEXITCODE -ne 0) { throw 'Setup EXE missing embedded application icon' }
           $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
           if ($hash -notmatch '^[a-f0-9]{64}$') { throw 'Invalid installer checksum' }
           Write-Host "Installer EXE SHA-256: $hash"
