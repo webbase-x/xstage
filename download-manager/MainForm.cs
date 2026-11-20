@@ -67,12 +67,23 @@ public sealed partial class MainForm : Form
         {
             _browserStop.Cancel();
             _timer.Stop();
-            _engine.PauseAll();
+            _engine.PauseAllForShutdown();
             _engine.Save();
         };
         FormClosed += (_, _) => { _finishedFileFont.Dispose(); _normalFileFont.Dispose(); };
         Shown += async (_, _) =>
         {
+            if (_engine.InterruptedJobCount > 0)
+            {
+                var count = _engine.InterruptedJobCount;
+                var answer = MessageBox.Show(this,
+                    $"พบงานดาวน์โหลดที่ถูกขัดจังหวะ {count} รายการ\n" +
+                    "ต้องการดาวน์โหลดต่อจากข้อมูลที่บันทึกไว้หรือไม่?\n" +
+                    "เลือก ไม่ เพื่อเก็บรายการไว้ในสถานะหยุดชั่วคราว",
+                    "กู้คืนงานดาวน์โหลด", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                _engine.RecoverInterruptedJobs(answer == DialogResult.Yes);
+                RefreshRows();
+            }
             StartBrowserHandoff();
             if (args.Length >= 2 && args[0] == "--enqueue" &&
                 DownloadEngine.TryParseUrl(args[1], out _))
