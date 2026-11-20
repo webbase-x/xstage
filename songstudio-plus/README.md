@@ -343,3 +343,12 @@ Menu 01 chooses folders using a queued Qt `QFileDialog` on the main GUI thread r
 - User-initiated **ล้างประวัติงานเสร็จแล้ว** trims disposable import rows, completed-only resume records, orphan lyric scan caches, the old unused `xstage_lyric_source` index, and detailed findings from completed swipe audits older than the two most recent. Audit run summaries and *every human review* remain. All song/media/source, lyric text/cues/versions, drafts, exports, manual edit/undo history and incomplete import jobs remain.
 - Database filename size alone is not proof of duplicate songs: large `xstage_lyric_cues` and `xstage_lyric_search` indexes may be essential. Only an in-app table-space report from the user's actual SQLite identifies which data consume the space.
 - Explicit **คืนพื้นที่ไฟล์ SQLite** invokes guarded `VACUUM` separately with a disk-space precondition (at least 2 times database bytes free); cleanup alone frees pages internally but may not shrink the .sqlite3 file. Make a verified copy while the app is closed before applying maintenance to valuable databases.
+
+## v0.1.26 — Latest-only verified updater and no-flash controls
+
+- Updating from ANY older X-Stage Song Studio Pro version jumps directly to the highest published/verified release. The update button rechecks the feed at click time; it never downloads intermediate versions.
+- To avoid stale GitHub Pages CDN metadata, the updater reads both the public Pages feed and the same repository's GitHub raw feed. Each candidate is constrained to the official X-Stage Song Studio Pro Release URL and a 64-digit SHA-256.
+- Windows standalone EXE downloads now retain a version+checksum-bound `.partial` file, resume using validated HTTP Content-Range, retry transient network errors, and verify the COMPLETE file before renaming/installation. Interrupted transfers are NEVER executable.
+- On HTTP 403/404/network failures, the interface displays the underlying reason in the job status/log and provides **ดาวน์โหลด EXE โดยตรง** to open the official GitHub Release as a manual fallback.
+- Repeated job polling no longer writes unchanged DOM text or forces identical job redraws. Navigation click animation, button hover movement and pulsing progress opacity are disabled to prevent Qt WebEngine flicker while preserving accessible keyboard-focus outlines.
+- Existing song SQLite and source media remain untouched by the updater. The Windows preview EXE is not code-signed.
