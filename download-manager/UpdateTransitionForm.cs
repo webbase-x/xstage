@@ -88,7 +88,6 @@ public sealed class UpdateTransitionForm : Form
                     BeginInvoke(new Action(Close));
             }
             catch (InvalidOperationException) { }
-            catch (ObjectDisposedException) { }
         });
     }
 
