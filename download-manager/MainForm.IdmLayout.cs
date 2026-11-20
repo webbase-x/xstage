@@ -72,8 +72,10 @@ public sealed partial class MainForm
             item.DropDownItems.AddRange(children);
             return item;
         }
+        var newUrl = Action("＋ เพิ่ม URL (Ctrl+N)", (_, _) => ShowInputPanel(true));
+        newUrl.ShortcutKeys = Keys.Control | Keys.N;
         menu.Items.Add(Menu("งาน",
-            Action("＋ เพิ่ม URL (Ctrl+N)", (_, _) => ShowInputPanel(true)),
+            newUrl,
             Action("▶ เริ่ม / ต่อ", (_, _) => SelectedAction(_engine.Start)),
             Action("Ⅱ หยุดชั่วคราว", (_, _) => SelectedAction(_engine.Pause)),
             Action("↻ เริ่มงานที่ยังไม่เสร็จทั้งหมด", (_, _) => StartIncomplete()),
@@ -128,7 +130,7 @@ public sealed partial class MainForm
                 TextImageRelation = TextImageRelation.ImageAboveText,
                 ImageAlign = ContentAlignment.MiddleCenter,
                 TextAlign = ContentAlignment.BottomCenter,
-                AutoSize = false, Size = new Size(96, 69),
+                AutoSize = false, Size = new Size(label.Length > 14 ? 136 : 96, 69),
                 Margin = new Padding(0, 0, 3, 0), Padding = new Padding(3),
                 ToolTipText = tooltip, ForeColor = Color.White
             };
@@ -281,6 +283,7 @@ public sealed partial class MainForm
         var split = new SplitContainer
         {
             Dock = DockStyle.Fill, Orientation = Orientation.Vertical,
+            Size = new Size(1000, 600), // ensure min-panel sizes before assigning splitter
             FixedPanel = FixedPanel.Panel1, SplitterWidth = 5,
             Panel1MinSize = 150, Panel2MinSize = 360,
             SplitterDistance = 212, BackColor = Color.FromArgb(62, 73, 90)
@@ -496,6 +499,8 @@ public sealed partial class MainForm
     private static string CategoryOf(DownloadJob job)
     {
         var ext = Path.GetExtension(job.Name).ToLowerInvariant();
+        if (job.Kind == "Video" && (job.OutputFormat == "mp3" ||
+            job.VideoQuality == "AudioMP3")) return "music";
         if (job.Kind == "Video" || ext is ".mp4" or ".mkv" or ".webm" or ".avi" or ".mov" or ".flv")
             return "video";
         if (ext is ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" or ".m4a")
