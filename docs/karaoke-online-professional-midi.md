@@ -14,6 +14,24 @@ The engine runs in an **AudioWorklet**, keeps MIDI events as MIDI, and does not
 convert a whole song to WAV. The existing player remains responsible for
 Google Drive access, lyrics timing, seek, tempo, queue, and transport controls.
 
+## Why this is not a BASSMIDI DLL download
+
+BASSMIDI is a native add-on for BASS; Windows DLLs cannot run inside a
+web page. Automatically downloading and executing DLLs from a website is
+not permitted by modern browser security models and is not part of this
+implementation. The Windows **X-Stage Karaoke PC** may use BASSMIDI
+natively; the Online app uses a browser-native SoundFont synthesizer.
+
+For the Online app, the **public SpessaSynth ESM and AudioWorklet assets**
+are preloaded on first MIDI/XMID play while the song is being retrieved.
+Normal browser HTTP caching allows subsequent loads to reuse those files.
+The browser decides when to evict the cache; this is **not** a persistent
+offline installer. The app does not install any OS driver or executable.
+
+Private Google Drive media, user SoundFonts and authorization tokens are
+not persisted by this preloader. The existing in-memory SoundFont cache
+stays scoped to the authenticated session.
+
 ## Deployment
 
 The repository contains source integration in `midi-pro-engine.js` and a
