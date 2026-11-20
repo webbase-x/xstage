@@ -149,13 +149,16 @@ def check():
             errors.append(str(exc)[:180])
     try:
         release=_read_release_api()
-        # If an official manifest claims a newer release than GitHub's listing,
-        # the release API may be paginated/stale. Only prefer a version with
-        # verified digest when that exact release appears in the API.
-        for candidate in candidates:
-            if (candidate["version"]==release["version"] and
-                    candidate["sha256"]!=release["sha256"]):
-                raise ValueError("SHA-256 ในเว็บไซต์ไม่ตรงกับ GitHub Release")
+        # The API includes the published EXE asset and server-side digest.
+        # A Pages manifest can appear before its EXE is published, or retain
+        # a stale SHA. Reject such candidates rather than advertising a
+        # version with no downloadable verified binary.
+        candidates=[
+            candidate for candidate in candidates
+            if (version_tuple(candidate["version"])<version_tuple(release["version"])
+                or (candidate["version"]==release["version"] and
+                    candidate["sha256"]==release["sha256"]))
+        ]
         candidates.append(release)
     except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError) as exc:
         errors.append(str(exc)[:180])
