@@ -11,10 +11,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../DownloadEngine.cs" Link="DownloadEngine.cs" />
+    <Compile Include="../DownloadPerformance.cs" Link="DownloadPerformance.cs" />
     <Compile Include="../DownloadRetryPolicy.cs" Link="DownloadRetryPolicy.cs" />
     <Compile Include="../DownloadStateStore.cs" Link="DownloadStateStore.cs" />
     <Compile Include="../MainForm.cs" Link="MainForm.cs" />
     <Compile Include="../MainForm.IdmLayout.cs" Link="MainForm.IdmLayout.cs" />
+    <Compile Include="../MainForm.Performance.cs" Link="MainForm.Performance.cs" />
     <Compile Include="../DownloadFileNaming.cs" Link="DownloadFileNaming.cs" />
     <Compile Include="../DownloadJob.cs" Link="DownloadJob.cs" />
     <Compile Include="../DownloadTableSort.cs" Link="DownloadTableSort.cs" />
