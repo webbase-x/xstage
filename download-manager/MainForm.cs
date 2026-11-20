@@ -719,8 +719,23 @@ public sealed partial class MainForm : Form
     {
         if (IsDisposed || _grid.IsDisposed) return;
         var jobs = _engine.Jobs.ToArray();
+
+        // Calculate current transfer rates before numeric sorting so the
+        // Speed and ETA column headers sort on the live underlying values.
+        double speedTotal = 0;
+        foreach (var job in jobs)
+        {
+            var current = Interlocked.Read(ref job.DownloadedBytes);
+            var diff = Math.Max(0L, current - job.PreviousBytes);
+            job.SpeedBytesPerSecond = job.Status == "Running"
+                ? diff / (_timer.Interval / 1000.0) : 0;
+            job.PreviousBytes = current;
+            speedTotal += job.SpeedBytesPerSecond;
+        }
+
         var selectedId = Selected()?.Id;
-        var visible = jobs.Where(InSelectedCategory).ToList();
+        var visible = DownloadTableSort.Sort(jobs.Where(InSelectedCategory),
+            _sortColumn, _sortDescending, jobs);
         var listChanged = _grid.Rows.Count != visible.Count ||
             visible.Where((job, index) => index < _grid.Rows.Count &&
                 !Equals(_grid.Rows[index].Tag, job.Id)).Any();
@@ -749,17 +764,6 @@ public sealed partial class MainForm : Form
             finally { _grid.ResumeLayout(true); }
         }
 
-        double speedTotal = 0;
-        foreach (var job in jobs)
-        {
-            var current = Interlocked.Read(ref job.DownloadedBytes);
-            var diff = Math.Max(0L, current - job.PreviousBytes);
-            job.SpeedBytesPerSecond = job.Status == "Running"
-                ? diff / (_timer.Interval / 1000.0) : 0;
-            job.PreviousBytes = current;
-            speedTotal += job.SpeedBytesPerSecond;
-        }
-
         foreach (var (job, index) in visible.Select((job, index) => (job, index)))
         {
             var row = _grid.Rows[index];
@@ -770,6 +774,8 @@ public sealed partial class MainForm : Form
             row.Cells["File"].Style.SelectionForeColor = Color.White;
             row.Cells["File"].Style.Font = job.Status == "Completed"
                 ? _finishedFileFont : _normalFileFont;
+            row.Cells["FileType"].Value = DownloadTableSort.FileType(job);
+            row.Cells["FileType"].ToolTipText = "ชนิดไฟล์: " + DownloadTableSort.FileType(job);
             row.Cells["Queue"].Value = (Array.IndexOf(jobs, job) + 1).ToString("00");
             row.Cells["Size"].Value = job.TotalBytes < 0 ? "ไม่ทราบ" : FormatBytes(job.TotalBytes);
             row.Cells["Progress"].Value = ProgressPresentation.IsComplete(job) ||
