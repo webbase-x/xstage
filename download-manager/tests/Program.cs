@@ -645,6 +645,17 @@ try
         throw new Exception("Control characters must not mutate queue assignments.");
 
 
+    // Priority updates must persist across SQLite reopen without changing queue membership.
+    var previousQueueName = queueJob.QueueName;
+    manager.SetJobPriority(queueJob, 2);
+    var reopenedPriority = new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == queueJob.Id);
+    if (queueJob.Priority != 2 || reopenedPriority.Priority != 2 ||
+        reopenedPriority.QueueName != previousQueueName)
+        throw new Exception("Priority updates must survive SQLite reopen without changing queue assignments.");
+    manager.SetJobPriority(queueJob, 1);
+    if (new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == queueJob.Id).Priority != 1)
+        throw new Exception("Restored job priority must persist after SQLite reopen.");
+
     // Queue grouping is case-insensitive, but assignments remain per-job and
     // may not be changed through a foreign engine instance.
     var secondQueueJob = manager.Add(server.Url + "range/queue-second.bin", folder, 1);
