@@ -1,0 +1,111 @@
+name: Publish X-Stage Song Studio Pro v0.1.24 Windows Preview
+
+on:
+  workflow_run:
+    workflows: ["X-Stage Song Studio Pro · Tests and Windows Preview"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-songstudio-pro-v0124
+  cancel-in-progress: false
+
+jobs:
+  release-verified-pro:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == 'webbase-x/xstage' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Download verified Windows preview from successful Pro Build
+        uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Song-Studio-Pro-v0.1.24-Windows-Preview
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: dist
+      - name: Download independent SHA-256 build evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Song-Studio-Pro-v0.1.24-Windows-Preview-Metadata
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: dist
+      - name: Verify release binary identity and SHA-256 before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import re
+          path=Path("dist/X-Stage-Song-Studio-Pro-v0.1.24-preview.exe")
+          if not path.is_file() or path.stat().st_size<1024*1024:
+              raise SystemExit("Pro EXE is missing or unexpectedly small")
+          with path.open("rb") as stream:
+              digest=hashlib.file_digest(stream,"sha256").hexdigest()
+          notes=Path("dist/README-Preview.txt").read_text(encoding="utf-8-sig")
+          expected=re.search(r"SHA-256:\s*([a-fA-F0-9]{64})",notes)
+          if not expected or expected.group(1).lower()!=digest:
+              raise SystemExit("EXE SHA-256 differs from Windows Build metadata")
+          Path("dist/X-Stage-Song-Studio-Pro-v0.1.24-preview.exe.sha256").write_text(
+              digest+"  "+path.name+"\n",encoding="utf-8")
+          Path("dist/release-sha256.txt").write_text(digest+"\n",encoding="ascii")
+          print("PASS: Pro EXE verified",path.stat().st_size,digest)
+          PY
+      - name: Publish verified unsigned Pro Preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="song-studio-pro-v0.1.24-preview"
+          exe="dist/X-Stage-Song-Studio-Pro-v0.1.24-preview.exe"
+          checksum="$exe.sha256"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$exe" "$checksum" --clobber
+          else
+            gh release create "$tag" "$exe" "$checksum" \
+              --title "X-Stage Song Studio Pro v0.1.24 Windows Preview" \
+              --prerelease --target "${{ github.event.workflow_run.head_sha }}" \
+              --notes "Windows x64 preview from verified GitHub Actions Build ${{ github.event.workflow_run.id }}. Desktop Standalone: checks the verified release feed immediately after Local Engine connects, shows an in-app update notice and quick update button, then downloads, verifies SHA-256, installs, and restarts through the existing safe updater. SHA-256 is published alongside the EXE. Not code-signed."
+          fi
+      - name: Publish verified public manifest for X-Stage Apps
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          feed=Path("downloads/song-studio-pro-latest.json")
+          data=json.loads(feed.read_text(encoding="utf-8"))
+          assert data["name"]=="X-Stage Song Studio Pro"
+          name="X-Stage-Song-Studio-Pro-v0.1.24-preview.exe"
+          sha=Path("dist/release-sha256.txt").read_text().strip()
+          data.update({
+              "version":"0.1.24",
+              "available":True,
+              "channel":"preview",
+              "code_signed":False,
+              "file":name,
+              "sha256":sha,
+              "download_url":"https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.24-preview/"+name,
+              "release_url":"https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.24-preview",
+              "status":"Verified Pro Desktop Standalone Preview. Adds detailed per-table SQLite dbstat audit, safe cleanup of completed import state, stale sweep audit findings and orphan caches, plus guarded explicit VACUUM. Preserves song data and reviews. EXE is unsigned.",
+          })
+          feed.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+          print("PASS: published verified Pro feed",sha)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/song-studio-pro-latest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "release(songstudio-pro): publish verified Pro v0.1.24 unsigned Preview manifest"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
