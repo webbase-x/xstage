@@ -447,6 +447,8 @@ public sealed partial class MainForm : Form
         _completedMenu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
             job.Status == "Completed" && File.Exists(job.CompletedPath);
         _completedMenu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
+        _completedMenu.Items.Add("เปลี่ยนชื่อไฟล์ (F2)", null, (_, _) => RenameCompletedJob(job))
+            .Enabled = job.Status == "Completed" && File.Exists(job.CompletedPath);
         if (job.Kind == "Video")
         {
             var downloadAgain = new ToolStripMenuItem(
@@ -663,6 +665,64 @@ public sealed partial class MainForm : Form
                                    System.ComponentModel.Win32Exception)
         {
             MessageBox.Show(this, ex.Message, "เปิดบันทึกไม่สำเร็จ");
+        }
+    }
+
+    private void RenameCompletedJob(DownloadJob job)
+    {
+        if (job.Status != "Completed" || !File.Exists(job.CompletedPath)) return;
+        using var dialog = new Form
+        {
+            Text = "เปลี่ยนชื่อไฟล์ที่ดาวน์โหลดแล้ว",
+            Width = 565, Height = 216, MinimumSize = new Size(500, 216),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false, MinimizeBox = false, BackColor = Color.White,
+            Font = new Font("Segoe UI", 10)
+        };
+        var label = new Label
+        {
+            Text = "ชื่อไฟล์ (คงนามสกุลเดิมเพื่อให้เปิดไฟล์ได้ถูกต้อง)",
+            Left = 20, Top = 17, Width = 510, Height = 27
+        };
+        var input = new TextBox
+        {
+            Text = job.Name, Left = 20, Top = 54, Width = 510, Height = 30
+        };
+        input.SelectionStart = 0;
+        input.SelectionLength = Math.Max(0,
+            job.Name.Length - Path.GetExtension(job.Name).Length);
+        var hint = new Label
+        {
+            Text = "ระบบเปลี่ยนชื่อไฟล์ในโฟลเดอร์จริง และบันทึกประวัติให้ตรงกัน\nหากมีชื่อซ้ำจะเพิ่ม (1), (2) โดยไม่เขียนทับไฟล์เดิม",
+            Left = 20, Top = 91, Width = 510, Height = 41,
+            ForeColor = Color.FromArgb(76, 101, 128)
+        };
+        var cancel = new Button
+        {
+            Text = "ยกเลิก", Left = 314, Top = 137, Width = 96, Height = 32,
+            DialogResult = DialogResult.Cancel
+        };
+        var ok = new Button
+        {
+            Text = "บันทึกชื่อใหม่", Left = 417, Top = 137, Width = 113, Height = 32,
+            DialogResult = DialogResult.OK
+        };
+        dialog.Controls.AddRange(new Control[] { label, input, hint, cancel, ok });
+        dialog.AcceptButton = ok;
+        dialog.CancelButton = cancel;
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var path = _engine.RenameCompletedFile(job, input.Text);
+            RefreshRows();
+            _details.Text = "เปลี่ยนชื่อไฟล์สำเร็จ: " + Path.GetFileName(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                   ArgumentException or InvalidOperationException)
+        {
+            MessageBox.Show(this, ex.Message, "เปลี่ยนชื่อไฟล์ไม่สำเร็จ",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
