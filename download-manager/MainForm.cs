@@ -447,6 +447,22 @@ public sealed partial class MainForm : Form
         _completedMenu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
             job.Status == "Completed" && File.Exists(job.CompletedPath);
         _completedMenu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
+        var priority = new ToolStripMenuItem("ลำดับความสำคัญ");
+        foreach (var (title, value) in new[] {
+            ("สูง", 0), ("ปกติ", 1), ("ต่ำ", 2)
+        })
+        {
+            var choice = new ToolStripMenuItem(title)
+            {
+                Checked = job.Priority == value
+            };
+            choice.Click += (_, _) => SetPriority(job, value);
+            priority.DropDownItems.Add(choice);
+        }
+        _completedMenu.Items.Add(priority);
+        _completedMenu.Items.Add("จำกัดความเร็ว HTTP รายไฟล์...", null,
+            (_, _) => ConfigureFileSpeed(job));
+
         _completedMenu.Items.Add("เปลี่ยนชื่อไฟล์ (F2)", null, (_, _) => RenameCompletedJob(job))
             .Enabled = job.Status == "Completed" && File.Exists(job.CompletedPath);
         if (job.Kind == "Video")
@@ -789,6 +805,9 @@ public sealed partial class MainForm : Form
             var diff = Math.Max(0L, current - job.PreviousBytes);
             job.SpeedBytesPerSecond = job.Status == "Running"
                 ? diff / (_timer.Interval / 1000.0) : 0;
+            job.SmoothedSpeedBytesPerSecond = TransferRateMath.Smooth(
+                job.SmoothedSpeedBytesPerSecond, job.SpeedBytesPerSecond,
+                job.Status == "Running");
             job.PreviousBytes = current;
             speedTotal += job.SpeedBytesPerSecond;
         }
@@ -843,7 +862,7 @@ public sealed partial class MainForm : Form
                     ? ProgressPresentation.PercentLabel(job)
                     : (current > 0 ? FormatBytes(current) : "—");
             row.Cells["Speed"].Value = job.Status == "Running"
-                ? FormatBytes((long)job.SpeedBytesPerSecond) + "/s" : "—";
+                ? FormatBytes((long)job.SmoothedSpeedBytesPerSecond) + "/s" : "—";
             row.Cells["ETA"].Value = EtaLabel(job);
             row.Cells["Added"].Value = job.CreatedAt.ToLocalTime().ToString("dd/MM/yy HH:mm");
             row.Cells["Status"].ToolTipText = job.Status == "Failed" ? job.Error :
@@ -874,6 +893,10 @@ public sealed partial class MainForm : Form
                 : job.SegmentsUsed > 0
                     ? job.SegmentsUsed + " / " + job.Parts + " ส่วน"
                     : "ตั้งไว้ " + job.Parts + " ส่วน";
+            row.Cells["Queue"].ToolTipText = job.Priority switch
+            {
+                0 => "ความสำคัญสูง", 2 => "ความสำคัญต่ำ", _ => "ความสำคัญปกติ"
+            };
             row.Cells["Description"].Value = job.Kind == "Video"
                 ? SocialVideoDownloader.Platform(job.Url) + " · " +
                   job.OutputFormat.ToUpperInvariant() + " · " + job.VideoQuality
