@@ -579,6 +579,17 @@ try
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(job.CompletedPath)))
         throw new Exception("Range resume produced incorrect bytes");
 
+    // One-part Range transfers must remain byte-identical and never be
+    // inflated to the default eight-way configuration. Together with the
+    // eight-way resume and 32-way test below this covers 1/8/32 settings.
+    var singlePart = manager.Add(server.Url + "range/one-connection.bin", folder, 1);
+    await WaitFor(() => singlePart.Status is "Completed" or "Failed");
+    if (singlePart.Status != "Completed" || singlePart.Parts != 1 ||
+        singlePart.SegmentsUsed != 1 ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(singlePart.CompletedPath)))
+        throw new Exception("One-part HTTP Range download produced incorrect bytes or segment count: " +
+                            singlePart.Error);
+
     var maxParts = manager.Add(server.Url + "range/32-connections.bin", folder, 32);
     await WaitFor(() => maxParts.Status is "Completed" or "Failed");
     if (maxParts.Status != "Completed") throw new Exception("32-connection download failed: " + maxParts.Error);
