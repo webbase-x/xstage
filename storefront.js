@@ -92,7 +92,7 @@
       type:"manifest",manifest:"./downloads/song-studio-pro-latest.json",
       secondary:{label:"ชมหน้าตา Song Studio Pro",url:"./songstudio-plus/web/"},
       candidate:{label:"ดาวน์โหลด Windows Preview จากผล Build",url:"https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml"},
-      note:"Pro v0.1.11 Preview สำหรับ Windows x64 · EXE ยังไม่ลงลายเซ็น Code Signing และระบบคาราโอเกะต้องรองรับ X-Media สำหรับเล่นไฟล์ .X",
+      note:"Pro Preview สำหรับ Windows x64 · EXE ยังไม่ลงลายเซ็น Code Signing และระบบคาราโอเกะต้องรองรับ X-Media สำหรับเล่นไฟล์ .X",
       fallback:"Pro Preview · ตรวจไฟล์ EXE ใน GitHub Actions"
     },
     "karaoke-android":{
@@ -348,9 +348,15 @@
       quick.hidden=!available;
       if(available){
         quick.href=states[id].url;
-        quick.textContent=id==="download-manager"?"⬇ ดาวน์โหลด Setup EXE v"+states[id].version+" (Build "+states[id].build+")":
-          (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?
-          ("⬇ ดาวน์โหลด Setup EXE v"+states[id].version+" (Build "+states[id].build+")") :
+        // Derive the platform label from the verified binary extension.
+        // Never show an APK label for a Windows EXE (Song Studio Pro/Karaoke PC).
+        const isWindowsExe=/\.exe$/i.test(new URL(states[id].url,location.href).pathname);
+        quick.textContent=isWindowsExe?
+          (id==="studio-pro"?"⬇ ดาวน์โหลด Song Studio Pro EXE v"+states[id].version+" · Preview":
+          id==="download-manager"||id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc"?
+          "⬇ ดาวน์โหลด Setup EXE v"+states[id].version+
+            (Number.isSafeInteger(states[id].build)?" (Build "+states[id].build+")":""):
+          "⬇ ดาวน์โหลด EXE สำหรับ Windows"):
           (id==="mirror-tv"&&states[id].direct?"⬇ ดาวน์โหลด APK สำหรับ TV":"⬇ ดาวน์โหลด APK รุ่นทดสอบ");
         attachDownloadIcon(quick,id);
         if(states[id].url.startsWith("./")){
