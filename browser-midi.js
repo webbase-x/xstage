@@ -493,7 +493,8 @@ async function refreshFonts(auth){
         const files=await listFolder(audio.id,auth.token);
         for(const f of files.filter(x=>/\.sf[23]$/i.test(x.name)&&
           x.mimeType!=='application/vnd.google-apps.folder'))
-          choices.push(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
+          {const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
+           option.dataset.size=String(Number(f.size)||0);choices.push(option);}
       }else{
         // Old library still readable; new uploads always use flat AUDIO.
         const old=categories.find(x=>x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
@@ -501,7 +502,8 @@ async function refreshFonts(auth){
           for(const dir of (await listFolder(old.id,auth.token)).filter(x=>
             x.mimeType==='application/vnd.google-apps.folder'&&['SF2','SF3'].includes(x.name.toUpperCase())))
             for(const f of (await listFolder(dir.id,auth.token)).filter(x=>/\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder'))
-              choices.push(new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id));
+              {const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
+               option.dataset.size=String(Number(f.size)||0);choices.push(option);}
         }
       }
       if(sequence!==fontRefreshSequence)return;
@@ -543,6 +545,18 @@ async function selectedFont(token,signal){
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(!selected)return null;
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
+  // The Drive file list already contains exact sizes. Reject an oversized
+  // SF2/SF3 *before* downloading it or allocating large decoded samples.
+  // Falling back to the built-in MIDI synthesizer keeps playback functional.
+  const option=$('xstage-soundfont-select')?.selectedOptions?.[0];
+  const listedSize=Number(option?.dataset?.size||0);
+  const hinted=Number(scope.navigator?.deviceMemory||4);
+  const sizeLimit=Math.min(MAX_FONT,(hinted<=2?64:hinted<=4?128:256)*1048576);
+  if(listedSize>sizeLimit){
+    fontWarning='SoundFont '+Math.round(listedSize/1048576)+' MB ใหญ่เกินงบ RAM · ใช้เสียง MIDI พื้นฐานเพื่อเริ่มเล่นโดยไม่ต้องดาวน์โหลดไฟล์ใหญ่';
+    fontStatusChanged();
+    return null;
+  }
   const id=selected,sub=context.sub;
   if(fontCache?.id===id&&fontCache?.sub===sub)return fontCache.bytes;
   if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
