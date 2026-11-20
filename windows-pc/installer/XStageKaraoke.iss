@@ -41,12 +41,10 @@ Name: "{localappdata}\X-Stage\Karaoke PC\Data"
 [Files]
 Source: "..\source\dist\XStageKaraoke\XStageKaraoke.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\source\dist\XStageKaraoke\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Keep only the launcher icon for shortcut branding, not the source asset tree.
-Source: "..\source\assets\xstage.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; IconFilename: "{app}\xstage.ico"
-Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; IconFilename: "{app}\xstage.ico"; Tasks: desktopicon
+Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"
+Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "สร้างทางลัดบน Desktop"; GroupDescription: "ทางลัดเพิ่มเติม:"
