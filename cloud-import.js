@@ -515,17 +515,32 @@ class Importer {
     this.dom.blocked.textContent=this.plan.blocked.length.toLocaleString('th-TH');
     const samples=this.plan.blocked.slice(0,7).map(x=>x.key+' · '+x.reason);
     this.dom.examples.textContent=samples.join('\n')+(this.plan.blocked.length>7?'\nและอีก '+(this.plan.blocked.length-7)+' ชุด':'');
+    const recognized=this.plan.songs.length+this.plan.midis.length+
+      this.plan.xsks.length+this.plan.fonts.length;
+    const ignored=Math.max(0,this.plan.files-recognized-this.plan.blocked.length);
+    if(!recognized){
+      const extensions=[...new Set(files.map(entry=>
+        core.ext((entry.file||entry).name||'')).filter(Boolean))].slice(0,12);
+      const details='ไม่พบไฟล์เพลงที่ระบบรองรับจาก '+files.length+' ไฟล์'+
+        (extensions.length?' · ประเภทไฟล์: '+extensions.join(', '):'')+
+        ' · XMID ต้องเป็นไฟล์ .xmid ที่สร้างจาก Song Studio Pro';
+      this.dom.examples.textContent=[details,...samples].join('\n');
+      this.dom.detail.textContent=details;
+    }else if(ignored){
+      this.dom.examples.textContent=[...samples,
+        'ข้ามไฟล์ที่ไม่ได้อยู่ในรูปแบบที่รองรับ '+ignored+' ไฟล์'].join('\n');
+    }
     this.updateVideoStats();
     this.progress(0,1);
-    this.status('ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์');
-    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.fonts.length});
+    this.status(recognized?'ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์':'ไม่พบเพลงพร้อมนำเข้า · โปรดตรวจชนิดไฟล์หรือรีโหลดหน้าเว็บเพื่อรับตัวอ่าน XMID ล่าสุด');
+    await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length});
     this.refreshButtons();
   }
   async save(extra={}){
     const auth=this.session();
     if(!auth?.sub)return;
     const data={version:1,label:this.dom.source.textContent,updatedAt:Date.now(),
-      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0),
+      count:(this.plan?.songs.length||0)+(this.plan?.midis.length||0)+(this.plan?.xsks.length||0),
       fonts:this.plan?.fonts.length||0,videoEdits:this.videoEditor?.exportEdits()||[],...extra};
     if(this.folderHandle)data.handle=this.folderHandle;
     this.saved=data;await checkpoint(auth.sub,data);
@@ -582,6 +597,10 @@ class Importer {
   }
   async performStart(){
     if(this.running||!this.plan)return;
+    if(!this.plan.songs.length&&!this.plan.midis.length&&!this.plan.xsks.length&&!this.plan.fonts.length){
+      this.status('ไม่มีไฟล์ที่พร้อมนำเข้า · กรุณาเลือกโฟลเดอร์ใหม่หรืออัปเดตหน้าเว็บ');
+      return;
+    }
     const auth=this.session();
     if(!auth?.token||!auth.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
     if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
