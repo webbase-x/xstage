@@ -633,6 +633,22 @@ try
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(job.CompletedPath)))
         throw new Exception("Range resume produced incorrect bytes");
 
+    // A genuine adapter outage uses the same cancel-safe workers as Pause,
+    // but only the outage flag authorizes automatic continuation.
+    var networkJob = manager.Add(server.Url + "range/network-recovery.bin", folder, 8);
+    await WaitFor(() => networkJob.Status == "Running" &&
+        Interlocked.Read(ref networkJob.DownloadedBytes) >= 65536);
+    manager.PauseForNetworkOutage();
+    await WaitFor(() => networkJob.Status == "Paused" && networkJob.Cancellation is null);
+    if (!networkJob.ResumeWhenNetworkReturns)
+        throw new Exception("Network interruption must preserve automatic recovery intent.");
+    manager.TryResumeNetworkInterrupted();
+    await WaitFor(() => networkJob.Status is "Completed" or "Failed");
+    if (networkJob.Status != "Completed" ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(networkJob.CompletedPath)))
+        throw new Exception("Network restoration must preserve verified original bytes: " +
+            networkJob.Error);
+
     // One-part Range transfers must remain byte-identical and never be
     // inflated to the default eight-way configuration. Together with the
     // eight-way resume and 32-way test below this covers 1/8/32 settings.
