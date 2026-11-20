@@ -33,6 +33,7 @@ public sealed class DownloadJob
     public bool SupportsRanges { get; set; }
     public string ETag { get; set; } = "";
     public DateTimeOffset? LastModified { get; set; }
+    public string QueueName { get; set; } = "ทั่วไป"; // Durable named queue grouping
     public int Priority { get; set; } = 1; // 0 high, 1 normal, 2 low
     public int FileSpeedLimitKib { get; set; } = 0; // 0 = unlimited
     public int Parts { get; set; } = 4;
