@@ -645,6 +645,23 @@ try
         throw new Exception("Control characters must not mutate queue assignments.");
 
 
+    // Queue grouping is case-insensitive, but assignments remain per-job and
+    // may not be changed through a foreign engine instance.
+    var secondQueueJob = manager.Add(server.Url + "range/queue-second.bin", folder, 1);
+    manager.Pause(secondQueueJob);
+    manager.SetJobQueue(secondQueueJob, "คิวเอกสาร");
+    if (manager.GetQueueNames().Count(n => n == "คิวเอกสาร") != 1)
+        throw new Exception("Jobs sharing a queue must not create duplicate queue names.");
+    manager.SetJobQueue(secondQueueJob, "คิวอื่น");
+    if (queueJob.QueueName != "คิวเอกสาร" ||
+        new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == queueJob.Id).QueueName != "คิวเอกสาร")
+        throw new Exception("Moving a job must not change another queue assignment.");
+    var rejectedForeignJob = false;
+    try { manager.SetJobQueue(new DownloadJob { Id = queueJob.Id }, "คิวปลอม"); }
+    catch (ArgumentException) { rejectedForeignJob = true; }
+    if (!rejectedForeignJob)
+        throw new Exception("Foreign job objects must not mutate persisted queues.");
+
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
     var job = manager.Add(server.Url + "range/test%20file.bin", folder);
