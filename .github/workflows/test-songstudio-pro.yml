@@ -1,6 +1,14 @@
 name: X-Stage Song Studio Pro · Tests and Windows Preview
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "songstudio-plus/**"
+      - "scripts/test-songstudio-pro-timeline*.mjs"
+      - "scripts/test-songstudio-pro-actions.mjs"
+      - "scripts/test-songstudio-pro-portal.mjs"
+      - ".github/workflows/test-songstudio-pro.yml"
   push:
     branches: [main]
     paths:
