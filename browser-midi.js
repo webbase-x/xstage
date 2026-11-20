@@ -605,7 +605,81 @@ async function selectedFont(token,signal){
   try{return await task;}
   finally{if(fontLoadPromise?.promise===task)fontLoadPromise=null;}
 }
-scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,
+// Fast native-clock MIDI playback: no whole-song OfflineAudioContext/WAV render.
+// Used only with the built-in synthesizer; selected SoundFonts retain full rendering.
+function silentClock(duration){
+  const rate=8000,frames=Math.ceil((duration+.1)*rate);
+  const buf=new ArrayBuffer(44+frames*2),v=new DataView(buf);
+  const w=(p,t)=>{for(let i=0;i<t.length;i++)v.setUint8(p+i,t.charCodeAt(i));};
+  w(0,'RIFF');v.setUint32(4,36+frames*2,true);w(8,'WAVE');w(12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);
+  v.setUint16(32,2,true);v.setUint16(34,16,true);
+  w(36,'data');v.setUint32(40,frames*2,true);
+  return new Blob([buf],{type:'audio/wav'});
+}
+function playRealtime(player,source,{signal,onStatus}={}){
+  if(typeof AudioContext==='undefined'&&typeof webkitAudioContext==='undefined')
+    fail('เบราว์เซอร์ไม่รองรับการสร้างเสียง MIDI แบบเรียลไทม์');
+  const song=parseMidi(source),Ctor=scope.AudioContext||scope.webkitAudioContext;
+  const ctx=new Ctor(),master=ctx.createGain();
+  master.gain.value=.14;master.connect(ctx.destination);
+  const notes=song.notes.slice().sort((a,b)=>a.start-b.start);
+  let cursor=0,disposed=false,timer=null,voices=[];
+  const reset=()=>{
+    for(const voice of voices){try{voice.stop();}catch{}try{voice.disconnect();}catch{}}
+    voices=[];
+    const at=Number(player.currentTime)||0;
+    let lo=0,hi=notes.length;
+    while(lo<hi){const mid=(lo+hi)>>1;if(notes[mid].start<at-.04)lo=mid+1;else hi=mid;}
+    cursor=lo;
+  };
+  const schedule=()=>{
+    if(disposed||signal?.aborted)return;
+    if(player.paused||player.ended)return;
+    const now=Number(player.currentTime)||0,rate=Math.max(.25,Number(player.playbackRate)||1);
+    const horizon=now+rate*.42;
+    for(;cursor<notes.length&&notes[cursor].start<horizon;cursor++){
+      const n=notes[cursor];
+      if(n.start<now-.08)continue;
+      const start=ctx.currentTime+Math.max(.01,(n.start-now)/rate);
+      const duration=Math.max(.05,(n.end-n.start)/rate);
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      const pitch=n.key;
+      osc.type=n.channel===9?'square':n.program>=80?'sawtooth':n.program>=40?'triangle':'sine';
+      osc.frequency.setValueAtTime(440*Math.pow(2,(pitch-69)/12),start);
+      const vol=Math.min(.42,Math.pow(n.velocity/127,1.5)*Math.max(.1,n.level)*.28);
+      gain.gain.setValueAtTime(.00001,start);
+      gain.gain.linearRampToValueAtTime(Math.max(.0001,vol),start+.015);
+      gain.gain.setValueAtTime(Math.max(.0001,vol),start+Math.max(.02,duration-.07));
+      gain.gain.exponentialRampToValueAtTime(.00001,start+duration);
+      osc.connect(gain);gain.connect(master);osc.start(start);osc.stop(start+duration+.01);
+      osc.onended=()=>{try{osc.disconnect();gain.disconnect();}catch{}
+        voices=voices.filter(x=>x!==osc);};
+      voices.push(osc);
+    }
+  };
+  const play=()=>{if(disposed)return;ctx.resume().catch(()=>{});
+    reset();schedule();if(timer===null)timer=setInterval(schedule,90);};
+  const pause=()=>{if(timer!==null){clearInterval(timer);timer=null;}reset();};
+  const ended=()=>pause();
+  const seek=()=>{pause();if(!player.paused)play();};
+  player.addEventListener('play',play);
+  player.addEventListener('pause',pause);
+  player.addEventListener('ended',ended);
+  player.addEventListener('seeking',seek);
+  player.addEventListener('ratechange',seek);
+  const dispose=()=>{
+    if(disposed)return;disposed=true;pause();
+    for(const [event,listener] of [['play',play],['pause',pause],['ended',ended],
+      ['seeking',seek],['ratechange',seek]])player.removeEventListener(event,listener);
+    ctx.close().catch(()=>{});
+  };
+  signal?.addEventListener('abort',dispose,{once:true});
+  onStatus?.('พร้อมเล่น MIDI แบบเรียลไทม์');
+  return {dispose,duration:song.duration};
+}
+scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,silentClock,playRealtime,
   reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);
