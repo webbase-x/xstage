@@ -149,6 +149,16 @@ try {
   assert.equal(paginationRequests,2);
 } finally { ctx.fetch=originalFetch; }
 
+const importUi=read('cloud-import.js');
+assert.ok(importUi.includes('input[data-import-group],input[data-import-item]')&&
+  importUi.includes('checkbox.dataset.importItem=entry.key'),
+  'Expanded folders must support selecting individual import entries');
+assert.ok(importUi.includes('this.chosenItems.has(entry.key)')&&
+  importUi.includes('const selectedObjects=new Set('),
+  'Checkbox state must control the actual upload queue, not only the UI');
+assert.ok(importUi.includes('group.entries.slice(0,pageSize)')&&
+  importUi.includes('this.dom.selectionList.scrollTop=scrollTop'),
+  'Folder expansion must limit DOM rows and preserve scroll position');
 assert.ok(!read('cloud-import.js').includes('localStorage.setItem('),
   'Never persist Drive bearer tokens or upload session URLs in localStorage');
 console.log('PASS: WEB upload DOM, Drive resumable chunks, MD5 dedup, catalog safety and auth isolation');
