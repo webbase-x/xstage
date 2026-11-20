@@ -9,6 +9,7 @@ namespace XStageDownloadManager;
 public static class SocialVideoDownloader
 {
     public static readonly string[] AllowedQualities = { "Best", "1080", "720", "480", "AudioMP3" };
+    public static readonly string[] AllowedOutputFormats = { "mp4", "mkv", "webm", "mp3" };
 
     public static bool IsVideoUrl(string url)
     {
@@ -38,6 +39,7 @@ public static class SocialVideoDownloader
     {
         if (!IsVideoUrl(job.Url)) throw new ArgumentException("ลิงก์นี้ไม่ใช่แพลตฟอร์มวิดีโอที่รองรับ");
         if (!AllowedQualities.Contains(job.VideoQuality)) throw new ArgumentException("รูปแบบวิดีโอไม่ถูกต้อง");
+        if (!AllowedOutputFormats.Contains(job.OutputFormat)) throw new ArgumentException("นามสกุลปลายทางไม่ถูกต้อง");
         if (!DownloadEngine.AllowedParts.Contains(job.Parts)) throw new ArgumentException("จำนวนส่วนไม่ถูกต้อง");
         var args = new List<string>
         {
@@ -56,7 +58,7 @@ public static class SocialVideoDownloader
             "--js-runtimes", "deno:" + Path.Combine(tools, "deno.exe"),
             "-N", job.Parts.ToString(CultureInfo.InvariantCulture),
         };
-        if (job.VideoQuality == "AudioMP3")
+        if (job.OutputFormat == "mp3" || job.VideoQuality == "AudioMP3")
         {
             args.AddRange(new[] { "-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "0" });
         }
@@ -64,7 +66,10 @@ public static class SocialVideoDownloader
         {
             string format = job.VideoQuality == "Best" ? "bv*+ba/b" :
                 $"bv*[height<={job.VideoQuality}]+ba/b[height<={job.VideoQuality}]";
-            args.AddRange(new[] { "-f", format, "--merge-output-format", "mp4/mkv" });
+            // Merge into a flexible intermediate and use FFmpeg to convert
+            // to the requested container. Merely renaming the extension is unsafe.
+            args.AddRange(new[] { "-f", format, "--merge-output-format", "mkv",
+                                  "--recode-video", job.OutputFormat });
         }
         args.Add(job.Url);
         return args;
@@ -178,10 +183,13 @@ public static class SocialVideoDownloader
             // When a UTF-8 path is damaged on Windows stdout, the correct
             // yt-dlp output can still be recognized by its unique video ID.
             // Only do this AFTER yt-dlp exits successfully.
-            var recovered = FindCompletedYouTubeOutput(job.Url, job.Folder, job.VideoQuality);
+            var recovered = FindCompletedYouTubeOutput(job.Url, job.Folder, job.VideoQuality, job.OutputFormat);
             if (recovered is null) throw;
             fullPath = recovered;
         }
+        var expectedExtension = job.VideoQuality == "AudioMP3" ? ".mp3" : "." + job.OutputFormat;
+        if (!Path.GetExtension(fullPath).Equals(expectedExtension, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("ไฟล์ปลายทางไม่ตรงรูปแบบที่เลือก (" + expectedExtension + ")");
         job.Name = Path.GetFileName(fullPath);
         job.CompletedPath = fullPath;
         job.TotalBytes = new FileInfo(fullPath).Length;
@@ -198,7 +206,7 @@ public static class SocialVideoDownloader
     // post-download path-check failure. yt-dlp's naming template always places
     // [YouTubeId] immediately before the media extension. Never search loosely
     // by title or choose arbitrarily among multiple matching files.
-    public static string? FindCompletedYouTubeOutput(string url, string folder, string quality = "Best")
+    public static string? FindCompletedYouTubeOutput(string url, string folder, string quality = "Best", string? outputFormat = null)
     {
         if (!IsVideoUrl(url) || !Directory.Exists(folder)) return null;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
@@ -224,9 +232,9 @@ public static class SocialVideoDownloader
             id.Any(ch => !char.IsAsciiLetterOrDigit(ch) && ch is not ('_' or '-')))
             return null;
 
-        var allowed = quality == "AudioMP3"
-            ? new[] { ".mp3" }
-            : new[] { ".mkv", ".mp4", ".webm" };
+        var allowed = quality == "AudioMP3" ? new[] { ".mp3" }
+            : outputFormat is "mp4" or "mkv" or "webm" or "mp3"
+                ? new[] { "." + outputFormat } : new[] { ".mkv", ".mp4", ".webm" };
         var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
             .Where(file =>
                 allowed.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase) &&
