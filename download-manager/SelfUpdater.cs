@@ -246,36 +246,76 @@ public static class SelfUpdater
             throw new IOException("ไฟล์อัปเดตที่ตรวจสอบแล้วไม่อยู่ในตำแหน่งที่คาดหวัง");
 
         Directory.CreateDirectory(UpdateFolder);
-        var helper = Path.Combine(UpdateFolder, "xstage-update-helper-" + Guid.NewGuid().ToString("N") + ".exe");
-        // Wait for the helper's update window to be visible. The old app
-        // must not close until the next UI is already on-screen.
-        var readyEventName = "Local\\XStageDownloadReady_" + Guid.NewGuid().ToString("N");
-        using var readyEvent = new EventWaitHandle(
-            false, EventResetMode.ManualReset, readyEventName);
-        File.Copy(appExe, helper);
-        try
+        // Executables in an application-data updates directory can be held by
+        // antivirus scanning or denied by folder policies. A separate,
+        // unique temp directory is an alternative, not a security bypass:
+        // if Windows blocks both locations, report the real error and do not
+        // request users to disable their protection.
+        var helperLocations = new[] {
+            UpdateFolder,
+            Path.Combine(Path.GetTempPath(), "X-Stage", "Download Manager")
+        }.Distinct(StringComparer.OrdinalIgnoreCase);
+        Exception? lastError = null;
+        foreach (var location in helperLocations)
         {
-            var info = new ProcessStartInfo(helper)
+            var helper = Path.Combine(location,
+                "xstage-update-helper-" + Guid.NewGuid().ToString("N") + ".exe");
+            try
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = UpdateFolder
-            };
-            foreach (var arg in new[] {
-                "--apply-verified-update", Environment.ProcessId.ToString(),
-                verifiedSetup, appExe, release.Sha256, release.Size.ToString(),
-                release.Version, release.Build.ToString(), readyEventName
-            }) info.ArgumentList.Add(arg);
-            using var process = Process.Start(info);
-            if (process is null) throw new IOException("ไม่สามารถเริ่มกระบวนการติดตั้งอัปเดต");
-            if (!readyEvent.WaitOne(TimeSpan.FromSeconds(12)))
-                throw new IOException("หน้าต่างอัปเดตใหม่ไม่พร้อม จึงเก็บแอปเดิมไว้ ไม่ปิดโปรแกรม");
+                Directory.CreateDirectory(location);
+                // Wait for the helper UI before letting the old app close.
+                var readyEventName = "Local\\XStageDownloadReady_" + Guid.NewGuid().ToString("N");
+                using var readyEvent = new EventWaitHandle(
+                    false, EventResetMode.ManualReset, readyEventName);
+                // Transient locks from security scanning often disappear quickly.
+                for (var attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        File.Copy(appExe, helper, overwrite: false);
+                        break;
+                    }
+                    catch (IOException) when (attempt < 2)
+                    {
+                        Thread.Sleep(350 * (attempt + 1));
+                    }
+                    catch (UnauthorizedAccessException) when (attempt < 2)
+                    {
+                        Thread.Sleep(350 * (attempt + 1));
+                    }
+                }
+                var info = new ProcessStartInfo(helper)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = location
+                };
+                foreach (var arg in new[] {
+                    "--apply-verified-update", Environment.ProcessId.ToString(),
+                    verifiedSetup, appExe, release.Sha256, release.Size.ToString(),
+                    release.Version, release.Build.ToString(), readyEventName
+                }) info.ArgumentList.Add(arg);
+                using var process = Process.Start(info);
+                if (process is null)
+                    throw new IOException("ไม่สามารถเริ่มกระบวนการติดตั้งอัปเดต");
+                if (!readyEvent.WaitOne(TimeSpan.FromSeconds(12)))
+                    throw new IOException("หน้าต่างอัปเดตใหม่ไม่พร้อม จึงเก็บแอปเดิมไว้ ไม่ปิดโปรแกรม");
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                       System.ComponentModel.Win32Exception)
+            {
+                lastError = ex;
+                LogDownload("Update helper failed in " + location + ": " + ex.Message);
+                try { File.Delete(helper); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
-        catch
-        {
-            try { File.Delete(helper); } catch (IOException) { }
-            throw;
-        }
+        throw new IOException(
+            "Windows ไม่อนุญาตให้สร้างหรือเปิดตัวช่วยอัปเดตในโฟลเดอร์ที่ทดสอบ " +
+            "โปรดตรวจสอบสิทธิ์และ Windows Security โดยไม่ต้องปิดระบบป้องกัน " +
+            "รายละเอียด: " + DownloadLogPath, lastError);
     }
 
 
