@@ -89,6 +89,30 @@ def approved_build_ids(workspace,exclude=None):
               AND """+_status_expr()+"""='ready' ORDER BY s.code""").fetchall()
     return [x[0] for x in rows if x[0] not in excluded]
 
+
+def approved_selected_ids(workspace, song_ids):
+    """Check only explicit selected IDs; avoid loading the entire song catalog.
+
+    The all-ready workflow uses approved_build_ids() once. Explicit builds
+    need a small membership query, even when SQLite stores 100k+ songs.
+    """
+    requested=list(dict.fromkeys(song_ids))
+    if len(requested)>5000 or any(not isinstance(s,str) for s in requested):
+        raise ValueError("รายการเพลงที่เลือกไม่ถูกต้อง")
+    if not requested:
+        return set()
+    init(workspace)
+    ready=set()
+    with core.connect(workspace) as db:
+        for start in range(0,len(requested),400):
+            part=requested[start:start+400]
+            matches=db.execute("""SELECT s.id """+BASE+"""
+                WHERE s.id IN ("""+",".join("?" for _ in part)+""")
+                  AND v.id IS NOT NULL AND v.timing_status!='incomplete'
+                  AND """+_status_expr()+"""='ready'""",part)
+            ready.update(row[0] for row in matches)
+    return ready
+
 def skip(workspace,song_id,version_id):
     init(workspace)
     with core.WRITE_LOCK,core.connect(workspace) as db:
