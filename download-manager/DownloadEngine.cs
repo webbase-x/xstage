@@ -47,6 +47,17 @@ public sealed class DownloadEngine
             // failure because the Thai/Unicode final pathname was corrupted.
             // That specific failure occurred only after yt-dlp returned 0.
             SocialVideoDownloader.TryRecoverLegacyCompletedJob(job);
+            // A user-supplied real-world Build 14 MP4 had ftyp/mdat but no
+            // moov atom. Do not perpetuate a false Completed state on restart.
+            if (job.Kind == "Video" && job.Status == "Completed" &&
+                Path.GetExtension(job.CompletedPath).Equals(".mp4", StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(job.CompletedPath) &&
+                !MediaIntegrity.HasCompleteMp4Boxes(job.CompletedPath))
+            {
+                job.Status = "Failed";
+                job.VideoPercent = 0;
+                job.Error = "ไฟล์ MP4 ไม่สมบูรณ์ (ไม่มี moov atom) กด เริ่ม / ต่อ เพื่อดาวน์โหลด/แปลงใหม่";
+            }
             // Recover completed extensionless downloads from earlier builds
             // using only known file signatures; never guess for unknown data.
             DownloadFileNaming.TryRepairCompletedFile(job);
@@ -164,6 +175,40 @@ public sealed class DownloadEngine
     public void Start(DownloadJob job)
     {
         if (job.Status == "Completed" || !_active.TryAdd(job.Id, 0)) return;
+        // Keep the damaged file as a backup, but remove its original name
+        // so yt-dlp cannot mistake it for a valid completed download.
+        if (job.Kind == "Video" && job.CompletedPath.Length > 0 &&
+            Path.GetExtension(job.CompletedPath).Equals(".mp4", StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(job.CompletedPath) &&
+            !MediaIntegrity.HasCompleteMp4Boxes(job.CompletedPath))
+        {
+            try
+            {
+                var backupFolder = WorkDir(job);
+                Directory.CreateDirectory(backupFolder);
+                var backup = Path.Combine(backupFolder,
+                    "invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + "-" +
+                    Path.GetFileName(job.CompletedPath) + ".broken");
+                File.Move(job.CompletedPath, backup);
+                job.CompletedPath = "";
+            }
+            catch (IOException ex)
+            {
+                _active.TryRemove(job.Id, out _);
+                job.Status = "Failed";
+                job.Error = "ไม่สามารถเก็บไฟล์ MP4 ที่เสียไว้ก่อนลองใหม่: " + ex.Message;
+                Save();
+                return;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _active.TryRemove(job.Id, out _);
+                job.Status = "Failed";
+                job.Error = "ไม่สามารถเก็บไฟล์ MP4 ที่เสียไว้ก่อนลองใหม่: " + ex.Message;
+                Save();
+                return;
+            }
+        }
         job.Status = "Queued";
         job.Error = "";
         var cts = new CancellationTokenSource();
