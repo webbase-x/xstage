@@ -91,8 +91,8 @@
       hero:"หนึ่งสตูดิโอ จัดเพลงและปาดเนื้อร้อง",blurb:"เลือกช่วงข้อความ · ฟังเพลง · จับเวลา · ตรวจแก้ · สร้าง .X",preview:"SONG STUDIO PRO · SQLITE & LYRIC SWIPE",
       type:"manifest",manifest:"./downloads/song-studio-pro-latest.json",
       secondary:{label:"ชมหน้าตา Song Studio Pro",url:"./songstudio-plus/web/"},
-      candidate:{label:"ดาวน์โหลด Windows Preview จากผล Build",url:"https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml"},
-      note:"Pro Preview สำหรับ Windows x64 · EXE ยังไม่ลงลายเซ็น Code Signing และระบบคาราโอเกะต้องรองรับ X-Media สำหรับเล่นไฟล์ .X",
+      candidate:{label:"ดาวน์โหลดตัวติดตั้ง Windows จากผล Build",url:"https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml"},
+      note:"Pro Preview สำหรับ Windows x64 · ติดตั้งใน Program Files · EXE ยังไม่ลงลายเซ็น Code Signing และระบบคาราโอเกะต้องรองรับ X-Media สำหรับเล่นไฟล์ .X",
       fallback:"Pro Preview · ตรวจไฟล์ EXE ใน GitHub Actions"
     },
     "karaoke-android":{
@@ -352,7 +352,7 @@
         // Never show an APK label for a Windows EXE (Song Studio Pro/Karaoke PC).
         const isWindowsExe=/\.exe$/i.test(new URL(states[id].url,location.href).pathname);
         quick.textContent=isWindowsExe?
-          (id==="studio-pro"?"⬇ ดาวน์โหลด Song Studio Pro EXE v"+states[id].version+" · Preview":
+          (id==="studio-pro"?"⬇ ดาวน์โหลด Song Studio Pro Setup EXE v"+states[id].version+" · Preview":
           id==="download-manager"||id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc"?
           "⬇ ดาวน์โหลด Setup EXE v"+states[id].version+
             (Number.isSafeInteger(states[id].build)?" (Build "+states[id].build+")":""):
@@ -442,7 +442,7 @@
       container.appendChild(createAction("เข้าสู่เว็บไซต์ ↗",info.url,"primary",false));
     }else if(state.available && isInstallableDownload(state.url)){
       const label=id==="download-manager"?"ดาวน์โหลด Setup EXE v"+state.version+" (Build "+state.build+") ↗":
-        id==="studio-pro"?"ดาวน์โหลด Song Studio Pro EXE ↗":
+        id==="studio-pro"?"ดาวน์โหลดตัวติดตั้ง Song Studio Pro ↗":
         (id==="mirror-pc"||id==="mirror-ios-pc"||id==="mirror-android-pc")?"ดาวน์โหลด Setup EXE พร้อมใช้ ↗":
         id==="karaoke-pc"?"ดาวน์โหลดตัวติดตั้ง Windows EXE ↗":
         id==="karaoke-android"||id==="file-share"?"ดาวน์โหลด APK รุ่นทดสอบ ↗":"ดาวน์โหลด APK ↗";
