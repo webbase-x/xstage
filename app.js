@@ -2010,7 +2010,8 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   onStatus('กำลังโหลด XMID/XSK2 และ SoundFont จาก Google Drive…');
   const [response,fontBytes]=await Promise.all([
     privateFile(fileId,token,{signal}),
-    window.XStageBrowserMidi.selectedFont(token,signal)
+    window.XStageBrowserMidi.fontStatus?.().selectedId
+      ?window.XStageBrowserMidi.selectedFont(token,signal):Promise.resolve(null)
   ]);
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
@@ -2549,7 +2550,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       setPlayStatus('กำลังโหลด MIDI และ SoundFont จาก Google Drive…');
       const [midiResponse,fontBytes]=await Promise.all([
         privateFile(song.midi.fileId,token,{signal:controller.signal}),
-        window.XStageBrowserMidi.selectedFont(token,controller.signal)
+        window.XStageBrowserMidi.fontStatus?.().selectedId
+          ?window.XStageBrowserMidi.selectedFont(token,controller.signal):Promise.resolve(null)
       ]);
       if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
       const midiBytes=new Uint8Array(await midiResponse.arrayBuffer());
