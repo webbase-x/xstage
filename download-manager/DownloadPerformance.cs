@@ -18,7 +18,6 @@ public sealed class TransferSlotQueue
         public required long Sequence;
         public required long EnqueuedAt;
         public required TaskCompletionSource<IDisposable> Completion;
-        public CancellationTokenRegistration Registration;
     }
 
     private sealed class Slot : IDisposable
@@ -66,7 +65,7 @@ public sealed class TransferSlotQueue
         }
     }
 
-    public Task<IDisposable> EnterAsync(string host, int priority, CancellationToken token)
+    public async Task<IDisposable> EnterAsync(string host, int priority, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(host))
@@ -84,10 +83,16 @@ public sealed class TransferSlotQueue
         lock (_mutex)
         {
             _waiting.Add(waiter);
-            waiter.Registration = token.Register(() => Cancel(waiter, token));
             Dispatch();
         }
-        return waiter.Completion.Task;
+        using var registration = token.Register(() => Cancel(waiter, token));
+        var lease = await waiter.Completion.Task.ConfigureAwait(false);
+        if (token.IsCancellationRequested)
+        {
+            lease.Dispose();
+            token.ThrowIfCancellationRequested();
+        }
+        return lease;
     }
 
     private void Cancel(Waiter waiter, CancellationToken token)
@@ -100,7 +105,6 @@ public sealed class TransferSlotQueue
                 Dispatch();
             }
         }
-        waiter.Registration.Dispose();
     }
 
     private void Dispatch()
