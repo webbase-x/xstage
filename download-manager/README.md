@@ -2,7 +2,7 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.5 · Build 8** (Windows 10/11 x64).
+**Preview v0.2.6 · Build 9** (Windows 10/11 x64).
 
 ## Features
 - Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker.
@@ -23,7 +23,7 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - UTF-8 console decoding and independent post-download path receipt for Thai/Unicode filenames.
 - The toolbar opens an explicit Open file / Open folder choice; incomplete/failed entries can still open their destination folder.
 - Per-segment progress bar shows actual bytes received in each HTTP range, not cosmetic stripes; social video downloads use unified progress.
-- Completed entries turn green. Click a finished filename to open its file or containing folder.
+- Completed entries show a continuous full-width solid green 100.0% progress bar regardless of stale HTTP segment measurements; non-finalized jobs are capped at displayed 99.9% until final verification/FFmpeg merge finishes. Click a finished filename to open its file or containing folder.
 - Startup and manual update checks use the verified X-Stage Release manifest. After user approval, the app downloads the EXE itself, checks exact size and SHA-256, closes and installs in silent mode using a detached helper, then relaunches only after successful installation. Failed verification never runs the installer. Active transfers are paused and their resumable state is saved.
 - Optional Chrome/Edge connector is bundled in the installer, loaded and paired by the user; auto-capture is OFF by default. Context-menu handoff is available.
 - Self-contained Windows runtime packaged into **one Setup EXE** published through GitHub Releases; no Portable ZIP is offered. The x64 application now installs in `C:\\Program Files\\X-Stage\\Download Manager` (Inno `{autopf}`), requires Windows administrator permission at install/update, and always relaunches the Program Files executable after successful migration. A legacy per-user installation is uninstalled only after the new executable passes verification. Download history and preferences remain in `%LOCALAPPDATA%` rather than Program Files. The Setup EXE is currently unsigned, so Windows may show an unknown-publisher UAC prompt.
