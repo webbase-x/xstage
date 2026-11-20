@@ -2740,9 +2740,18 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       }
       state.liveMidiSource=liveMidiBytes;
       midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
-      state.liveMidiPlayback=professional
-        ?professional.attach(player,midiOptions)
-        :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,midiOptions);
+      try{
+        state.liveMidiPlayback=professional
+          ?professional.attach(player,midiOptions)
+          :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,midiOptions);
+      }catch(error){
+        professional?.dispose();
+        if(!professional)throw error;
+        console.warn('Professional MIDI start failed:',error);
+        setPlayStatus('เริ่มตัวเล่นคุณภาพสูงไม่สำเร็จ · เปลี่ยนไปใช้ MIDI สำรอง');
+        state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(
+          player,liveMidiBytes,midiOptions);
+      }
     }else{
       if(midiTransport.active)midiTransport.clear();
       player.src=url;
