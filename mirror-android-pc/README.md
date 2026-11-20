@@ -1,6 +1,10 @@
 # X-Stage Mirror Android PC
 
-Version 1.0.6 · Build 1007 · Windows 10/11 x64 · Preview
+Version 1.0.7 · Build 1008 · Windows 10/11 x64 · Preview
+
+## Build 1008 — fix File Explorer opened instead of receiver
+
+The Windows 11 fallback previously executed `explorer.exe shell:AppsFolder\Microsoft.PPIProjection_cw5n1h2txyewy!App`. On installations where this identity is missing or renamed it can open File Explorer (e.g. Documents), leaving the X-Stage splash screen behind. Build 1008 removes that fallback. It launches Connect.exe directly only if present or invokes the Windows COM ApplicationActivationManager for the Wireless Display and legacy Connect AppUserModelIDs. It checks HRESULT, does not open any folder, does not claim a session is connected, and triggers the existing Windows prerequisite repair/error flow when the receiver is unavailable. A CI regression test prevents reintroducing Explorer.
 
 ## Build 1007 — automatic Windows prerequisites with visible stages
 

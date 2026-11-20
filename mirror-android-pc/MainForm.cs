@@ -334,7 +334,7 @@ public sealed class MainForm : Form
         else if (!_wifiAvailable)
             _receiverStatus = "ไม่พบ Wi-Fi ที่เปิดใช้งาน · กด F1 เพื่อตรวจสอบ";
         else if (_launchRetries >= 3)
-            _receiverStatus = "เปิดตัวรับ Windows ไม่สำเร็จ · คลิกเพื่อจัดเตรียมระบบ";
+            _receiverStatus = "เปิดตัวรับ Windows ไม่สำเร็จ · คลิกเพื่อตรวจสอบและแก้ไข";
         else if (_launchRequested)
             _receiverStatus = "กำลังเปิดตัวรับ Windows Wireless Display…";
         else
@@ -363,6 +363,7 @@ public sealed class MainForm : Form
             _connectProcessRunning = true;
             _receiverWindow = existingTitle;
             _launchRetries = 0;
+            _lastLaunchError = "";
             if (!_nativePresented && NativeMiracastWindow.ShowOnTop(existing))
             {
                 _nativePresented = true;
@@ -372,26 +373,13 @@ public sealed class MainForm : Form
             return;
         }
         if (DateTime.UtcNow - _lastLaunchUtc < TimeSpan.FromSeconds(8))
-            return; // No duplicate launches, even when invoked via F5.
+            return; // Do not launch duplicates when polling or pressing F5.
         _lastLaunchUtc = DateTime.UtcNow;
         _launchRetries++;
-        try
-        {
-            var connect = Path.Combine(Environment.GetFolderPath(
-                Environment.SpecialFolder.Windows), "System32", "Connect.exe");
-            using var process = File.Exists(connect)
-                ? Process.Start(new ProcessStartInfo(connect) { UseShellExecute = true })
-                : Process.Start(new ProcessStartInfo("explorer.exe",
-                    @"shell:AppsFolder\Microsoft.PPIProjection_cw5n1h2txyewy!App")
-                { UseShellExecute = true });
-            _launchRequested = process is not null;
-            _lastLaunchError = _launchRequested ? "" : "Windows ไม่รับคำสั่งเปิดตัวรับ";
-        }
-        catch (Exception ex)
-        {
-            _launchRequested = false;
-            _lastLaunchError = ex.Message;
-        }
+        _launchRequested = MiracastAppLauncher.TryStart(out var error);
+        _lastLaunchError = _launchRequested ? "" : error;
+        // COM activation is a request, NOT proof that a receiver window exists.
+        // PollWindow will confirm whether Windows actually brought up the receiver.
         UpdateReceiverStatus();
     }
 
@@ -520,6 +508,7 @@ public sealed class MainForm : Form
             .AppendLine("โปรเซส Connect: " + (_connectProcessRunning ? "กำลังทำงาน" : "ยังไม่พบ"))
             .AppendLine("หน้าต่างตัวรับ: " + _receiverWindow)
             .AppendLine("คำสั่งเปิดตัวรับ: " + (string.IsNullOrEmpty(_lastLaunchError) ? "ไม่มีข้อผิดพลาดที่บันทึก" : _lastLaunchError))
+            .AppendLine("วิธีเปิดแอป: Windows ApplicationActivationManager (ไม่เรียก explorer.exe)")
             .AppendLine("เตรียมระบบ: " + (_installingWindowsFeature ? _repairMessage : _repairFailure))
             .AppendLine("แสดงหน้าต่างรับภาพ: " + (_nativePresented ? "เปิดอยู่" : "ยังไม่ยืนยัน"))
             .AppendLine()
