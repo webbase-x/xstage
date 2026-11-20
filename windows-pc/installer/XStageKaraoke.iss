@@ -42,6 +42,10 @@ Name: "{localappdata}\X-Stage\Karaoke PC\Data"
 Source: "..\source\dist\XStageKaraoke\XStageKaraoke.exe"; DestDir: "{app}"; DestName: "{#AppExe}"; Flags: ignoreversion
 Source: "..\source\dist\XStageKaraoke\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; The BASS runtime lives beside the app, not inside PyInstaller _internal.
+; Ship the verified x64 libraries produced by Setup-Audio.ps1 with the installer.
+Source: "..\source\dist\XStageKaraoke\native\x64\*"; DestDir: "{app}\native\x64"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 [Icons]
 Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"
 Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; Tasks: desktopicon
