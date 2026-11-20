@@ -286,6 +286,40 @@ public sealed class DownloadStateStore
         }
     }
 
+    public int ReadRetryLimit(int fallback = DownloadRetryPolicy.DefaultAttempts)
+    {
+        lock (_gate)
+        {
+            using var db = Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText =
+                "SELECT value FROM xstage_download_settings WHERE key='retry_limit';";
+            var text = cmd.ExecuteScalar()?.ToString();
+            return int.TryParse(text, out var count) &&
+                count >= DownloadRetryPolicy.MinAttempts &&
+                count <= DownloadRetryPolicy.MaxAttempts ? count : fallback;
+        }
+    }
+
+    public void SaveRetryLimit(int limit)
+    {
+        if (limit < DownloadRetryPolicy.MinAttempts ||
+            limit > DownloadRetryPolicy.MaxAttempts)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+        lock (_gate)
+        {
+            using var db = Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO xstage_download_settings(key,value)
+                VALUES('retry_limit',$limit)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """;
+            cmd.Parameters.AddWithValue("$limit", limit.ToString());
+            cmd.ExecuteNonQuery();
+        }
+    }
+
     public (string Mode, long Jobs, long Chunks) Inspect()
     {
         lock (_gate)
