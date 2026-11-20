@@ -461,6 +461,13 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
   if(fontCache?.parsed===font)fontStatusChanged();
   return rendered;
 }
+// Small GPL-2.0 General MIDI bank from the pretty-midi project.
+// Used only when the listener has not chosen a private SoundFont.
+// Original: https://github.com/craffel/pretty-midi/blob/main/pretty_midi/TimGM6mb.sf2
+// Source/license: https://github.com/craffel/pretty-midi and TimGM6mb GPL-2.0.
+const BUILTIN_GM_ID='builtin:TimGM6mb';
+const BUILTIN_GM_URL='https://raw.githubusercontent.com/craffel/pretty-midi/main/pretty_midi/TimGM6mb.sf2';
+const BUILTIN_GM_MAX_BYTES=8*1048576;
 let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 let fontLoadPromise=null, fontWarning='';
 function fontStatus(){
@@ -494,9 +501,12 @@ async function refreshFonts(auth){
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
     const sub=auth?.sub||'',rootId=auth?.rootId||'';
-    const choices=[new Option('เสียงสังเคราะห์พื้นฐาน (คุณภาพต่ำ — แนะนำ SoundFont)','')];
+    const choices=[
+      new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID),
+      new Option('เสียงสังเคราะห์พื้นฐาน (คุณภาพต่ำ)','')
+    ];
     if(!auth?.token||!rootId){
-      if(sequence===fontRefreshSequence){selected='';fontCache=null;select.replaceChildren(...choices);}
+      if(sequence===fontRefreshSequence){selected=BUILTIN_GM_ID;fontCache=null;select.replaceChildren(...choices);select.value=selected;}
       return;
     }
     try{
@@ -526,7 +536,7 @@ async function refreshFonts(auth){
       select.replaceChildren(...choices);
       const hinted=Number(scope.navigator?.deviceMemory||4);
       const maxMB=(hinted<=2?64:hinted<=4?128:256)*1048576;
-      const eligible=choices.slice(1).filter(option=>
+      const eligible=choices.slice(2).filter(option=>
         Number(option.dataset.size)>0&&Number(option.dataset.size)<=Math.min(MAX_FONT,maxMB));
       // A selected GM bank sounds like actual instruments; the old
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
@@ -537,11 +547,10 @@ async function refreshFonts(auth){
         const diff=quality(b)-quality(a);
         return diff||Number(a.dataset.size)-Number(b.dataset.size);
       })[0];
-      select.value=autoChoice?.value||'';
+      // Preserve a user's explicit "basic" choice, but default to sampled GM.
+      select.value=autoChoice?.value||(saved===''?BUILTIN_GM_ID:BUILTIN_GM_ID);
       selected=select.value;
-      fontWarning=selected?'':choices.length>1
-        ?'ไม่มี SoundFont ที่เหมาะกับหน่วยความจำ · เลือกชุดเสียงขนาดเล็กเพื่อให้เสียงสมจริง'
-        :'ยังไม่มี SoundFont ในคลัง Google Drive · โหมดเสียงพื้นฐานเป็นเพียงเสียงสังเคราะห์ ไม่เหมือนเครื่องดนตรีจริง';
+      fontWarning='';
       fontStatusChanged();
       // Save automatic choice so subsequent sessions retain the same bank.
       if(autoChoice){try{localStorage.setItem(storageKey,selected);}catch{}}
@@ -585,6 +594,37 @@ async function selectedFont(token,signal){
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(!selected)return null;
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
+  if(selected===BUILTIN_GM_ID){
+    const id=BUILTIN_GM_ID,sub=context.sub;
+    if(fontCache?.id===id&&fontCache.sub===sub)return fontCache.bytes;
+    if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
+      return fontLoadPromise.promise;
+    const task=(async()=>{
+      try{
+        const response=await fetch(BUILTIN_GM_URL,{cache:'force-cache',signal});
+        if(!response.ok)fail('โหลดชุดเสียง GM เริ่มต้นไม่สำเร็จ HTTP '+response.status);
+        const length=Number(response.headers.get('Content-Length')||0);
+        if(length>BUILTIN_GM_MAX_BYTES)fail('ชุดเสียง GM เริ่มต้นใหญ่เกินขอบเขต');
+        const bytes=new Uint8Array(await response.arrayBuffer());
+        if(bytes.length<100000||bytes.length>BUILTIN_GM_MAX_BYTES)
+          fail('ขนาดไฟล์เสียง GM ไม่ถูกต้อง');
+        const parsed=parseFont(bytes);
+        if(selected!==id||context?.token!==token||context?.sub!==sub)
+          throw new DOMException('เปลี่ยนบัญชีหรือชุดเสียง','AbortError');
+        fontCache={id,sub,bytes,parsed,label:'TimGM6mb · General MIDI'};
+        fontWarning='';fontStatusChanged();
+        return bytes;
+      }catch(error){
+        if(error?.name==='AbortError')throw error;
+        fontWarning='โหลด GM SoundFont เริ่มต้นไม่สำเร็จ · เสียงอาจคล้ายเกม โปรดเลือก SoundFont จาก Google Drive: '+error.message;
+        fontStatusChanged();
+        return null;
+      }
+    })();
+    fontLoadPromise={id,sub,promise:task};
+    try{return await task;}
+    finally{if(fontLoadPromise?.promise===task)fontLoadPromise=null;}
+  }
   // The Drive file list already contains exact sizes. Reject an oversized
   // SF2/SF3 *before* downloading it or allocating large decoded samples.
   // Falling back to the built-in MIDI synthesizer keeps playback functional.
