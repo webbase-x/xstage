@@ -27,9 +27,17 @@ assert.ok(midi.includes("font.cacheBytes+weight>limit")&&
 assert.ok(midi.includes("fontStatusChanged()")&&
   midi.includes("xstage:font-memory"),
   'SoundFont loaded/sample-change events must update UI');
+assert.ok(midi.includes('BUILTIN_GM_ID')&&
+  midi.includes('TimGM6mb.sf2')&&
+  midi.includes('selected===BUILTIN_GM_ID')&&
+  midi.includes('parseFont(bytes)'),
+  'Without a private SoundFont, the player must use a real GM sample bank');
+assert.ok(midi.includes('Number(option.dataset.size)')&&
+  midi.includes('gmCandidates'),
+  'Only compatible GM banks should be selected automatically from private Drive');
 assert.ok(midi.includes("native?.lowMemory"),
   'Do not allocate a large font when Android reports low system RAM');
-assert.ok(app.includes("state.activeBlobBytes=audio.size||0")&&
+assert.ok(app.includes("state.activeBlobBytes=audio?.size||0")&&
   app.includes("state.activeVideoBytes=data.size"),
   'Active audio and separate video must count against queue memory budget');
 assert.ok(app.includes("state.medleyCache=null;")&&
