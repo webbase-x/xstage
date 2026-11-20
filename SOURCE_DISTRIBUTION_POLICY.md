@@ -2,7 +2,7 @@
 
 ## Public users
 
-The public X-Stage Apps website provides Web apps and verified binary / runtime distributions (Windows EXE where tested, Song Studio PC Ready ZIP, Android test APKs) with accurate release-channel notices. Public downloads must never use a source-only ZIP as a substitute for a tested executable or installer.
+The public X-Stage Apps website displays installable downloads **only** as SHA-256-verified Windows `.exe` and Android `.apk` files, with honest release-channel notices. If a verified binary is unavailable, its download button stays hidden or disabled; do not link end users to source ZIPs, portable ZIPs, GitHub Actions artifacts, or unverified installers as a replacement. Browser-based apps may still be opened from the website. Each download button shows the application's own artwork. The binary itself must carry a branded application/launcher icon (Windows PE icon resources and Android launcher resources). This is a storefront distribution policy, not a prohibition on legally required source availability.
 
 ## Restricted developer source
 
