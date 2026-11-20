@@ -58,3 +58,35 @@
 #cloud-import-video-preview{max-width:100%;width:100%;max-height:320px;object-fit:contain;background:#000;border-radius:8px}
 .cloud-import-video-hint{white-space:pre-wrap;color:#f9d798!important}
 @media(max-width:600px){.cloud-import-video-choice,.cloud-import-video-fields{grid-template-columns:1fr}}
+
+/* Compact import workflow: scan, select, import, close. */
+.cloud-import-dialog{max-width:min(720px,96vw);max-height:92dvh}
+.cloud-import-header{align-items:center}
+.cloud-import-lead{margin:12px 0 8px}
+.cloud-import-dialog button[hidden],.cloud-import-dialog [hidden]{display:none!important}
+.cloud-import-stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.cloud-import-stats>div{padding:10px 4px}
+.cloud-import-selection{border:1px solid #315d75;border-radius:12px;background:#0b2033;margin:12px 0}
+.cloud-import-selection-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #274a60}
+.cloud-import-selection-head strong{font-size:.86rem}
+.cloud-import-selection-head>div{display:flex;gap:5px}
+.cloud-import-selection-head button{min-height:32px;padding:5px 9px;font-size:.73rem}
+.cloud-import-selection-list{max-height:min(250px,34dvh);overflow:auto;overscroll-behavior:contain;padding:5px}
+.cloud-import-selection-item{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:9px;align-items:center;border-radius:7px;padding:9px 11px;cursor:pointer;font-size:.83rem}
+.cloud-import-selection-item:hover{background:#15364b}
+.cloud-import-selection-item:has(input:checked){background:#123847}
+.cloud-import-selection-item input{accent-color:#42dfba;width:18px;height:18px;margin:0}
+.cloud-import-selection-item span{overflow-wrap:anywhere;min-width:0}
+.cloud-import-selection-item small{font-size:.69rem;color:#82c7d4;margin:0}
+.cloud-import-footer{position:sticky;bottom:-1px;background:#09182b;padding:12px 0 2px;z-index:2;align-items:center}
+.cloud-import-footer #cloud-import-start{flex:1;min-width:175px}
+.cloud-import-footer #cloud-import-done{background:#172b3d;color:#e4f3f8}
+.cloud-import-detail{max-height:66px;overflow:auto;font-size:.72rem}
+.cloud-import-dialog:has(.cloud-import-selection:not([hidden])) .cloud-import-lead{display:none}
+@media(max-width:540px){
+ .cloud-import-dialog{width:98vw}
+ .cloud-import-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .cloud-import-selection-head{flex-wrap:wrap}
+ .cloud-import-footer #cloud-import-start{flex:1 1 100%}
+ .cloud-import-footer #cloud-import-done{flex:1}
+}
