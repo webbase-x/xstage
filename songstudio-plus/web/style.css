@@ -720,3 +720,27 @@ html,body{width:100%;height:100%;overflow:hidden}
   #view-import .issues-panel{flex-wrap:wrap;gap:8px}
   #view-import .recover-action{grid-template-columns:minmax(0,1fr)}
 }
+
+/* v0.1.26: Chromium/QWebEngine repaint protection.
+   Fixed-position controls never slide, fade, or resize on a click;
+   real status updates remain visible but skip repeated DOM assignments. */
+.view,.view.is-visible{animation:none!important}
+.primary-btn,.nav-link,.quiet-btn,.browse-btn,.update-quick-btn,
+button,[role="button"]{
+  -webkit-tap-highlight-color:transparent;
+  backface-visibility:hidden;
+  transition:background-color .12s ease,border-color .12s ease,color .12s ease!important;
+}
+button:hover,button:active,.primary-btn:hover:not(:disabled),
+.primary-btn:active:not(:disabled){
+  transform:none!important;
+  filter:none!important;
+}
+button:focus:not(:focus-visible){outline:none}
+button:focus-visible{outline:2px solid #70dacc;outline-offset:2px}
+.progress-fill.indeterminate{
+  animation:none!important;
+  transform:none!important;
+  opacity:1!important;
+  transition:width .18s linear;
+}
