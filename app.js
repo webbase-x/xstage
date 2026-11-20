@@ -2717,13 +2717,32 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if($('midi-instrument'))$('midi-instrument').value='';
     if(midiKeyValue){midiKeyValue.value='0';$('midi-transpose-label').textContent='0';}
     if(liveMidiBytes){
-      state.liveMidiSource=liveMidiBytes;
-      midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
-      state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
+      const midiOptions={
         fontBytes:liveFontBytes,onStatus:setPlayStatus,
         getTranspose:()=>Number(document.getElementById('midi-transpose')?.value||0),
         getProgram:()=>{const value=$('midi-instrument')?.value;return value===''?null:Number(value);}
-      });
+      };
+      let professional=null;
+      if(liveFontBytes&&window.XStageProMidi?.available?.()){
+        try{
+          professional=await window.XStageProMidi.prepare(liveMidiBytes,liveFontBytes,{
+            signal:controller.signal,
+            onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
+          });
+        }catch(error){
+          if(controller.signal.aborted)throw error;
+          console.warn('SpessaSynth unavailable, using built-in MIDI engine:',error);
+          setPlayStatus('ตัวเล่น MIDI คุณภาพสูงยังไม่พร้อม · ใช้ SoundFont ผ่านตัวเล่นสำรอง');
+        }
+      }
+      if(controller.signal.aborted||request!==state.requestId){
+        professional?.dispose();return;
+      }
+      state.liveMidiSource=liveMidiBytes;
+      midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
+      state.liveMidiPlayback=professional
+        ?professional.attach(player,midiOptions)
+        :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,midiOptions);
     }else{
       if(midiTransport.active)midiTransport.clear();
       player.src=url;
