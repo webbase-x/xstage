@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Download Manager"
-#define MyAppVersion "0.2.4"
-#define MyAppBuild "7"
+#define MyAppVersion "0.2.5"
+#define MyAppBuild "8"
 
 [Setup]
 SourceDir=..\..
@@ -10,9 +10,11 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} v{#MyAppVersion} (Build {#MyAppBuild})
 AppPublisher=X-Stage
 AppPublisherURL=https://webbase-x.github.io/xstage/
-DefaultDirName={localappdata}\Programs\X-Stage\Download Manager
+DefaultDirName={autopf}\X-Stage\Download Manager
 DefaultGroupName=X-Stage
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
+UsePreviousAppDir=no
+DisableDirPage=yes
 UninstallDisplayIcon={app}\XStageDownloadManager.exe
 OutputDir=download-manager\installer\output
 OutputBaseFilename=X-Stage-Download-Manager-v{#MyAppVersion}-build{#MyAppBuild}-win-x64-Setup
