@@ -687,6 +687,14 @@ public sealed class MainForm : Form
         _completedMenu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
             job.Status == "Completed" && File.Exists(job.CompletedPath);
         _completedMenu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
+        if (job.Kind == "Video")
+        {
+            var downloadAgain = new ToolStripMenuItem(
+                "ดาวน์โหลดวิดีโอใหม่ / เปลี่ยนคุณภาพและรูปแบบไฟล์",
+                null, (_, _) => RedownloadVideo(job));
+            downloadAgain.Enabled = job.Status is not ("Running" or "Queued");
+            _completedMenu.Items.Insert(0, downloadAgain);
+        }
         if (job.Status == "Failed")
         {
             _completedMenu.Items.Insert(0, new ToolStripMenuItem(
@@ -701,6 +709,165 @@ public sealed class MainForm : Form
     {
         PrepareCompletedMenu(job);
         _completedMenu.Show(_grid, new Point(cellBounds.Left + 12, cellBounds.Bottom));
+    }
+
+    private void RedownloadVideo(DownloadJob source)
+    {
+        if (source.Kind != "Video") return;
+        if (source.Status is "Running" or "Queued")
+        {
+            MessageBox.Show(this, "กรุณาหยุดงานเดิมก่อนดาวน์โหลดใหม่",
+                "ดาวน์โหลดวิดีโอใหม่", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new Form
+        {
+            Text = "ดาวน์โหลดวิดีโอใหม่ · เลือกคุณสมบัติ",
+            Width = 680, Height = 440,
+            MinimumSize = new Size(600, 410),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = Color.White,
+            Font = new Font("Segoe UI", 10)
+        };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 7,
+            Padding = new Padding(20, 15, 20, 14)
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+        foreach (var height in new[] { 55, 49, 49, 49, 49, 62, 55 })
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        var heading = new Label
+        {
+            Text = "ดาวน์โหลดใหม่: " + source.Name,
+            Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true, Font = new Font("Segoe UI", 11, FontStyle.Bold)
+        };
+        layout.Controls.Add(heading, 0, 0);
+        layout.SetColumnSpan(heading, 3);
+
+        static Label Caption(string label) => new()
+        {
+            Text = label, Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Color.FromArgb(55, 75, 100)
+        };
+        static ComboBox Choice(params string[] options)
+        {
+            var box = new ComboBox
+            {
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Margin = new Padding(3, 7, 8, 8)
+            };
+            box.Items.AddRange(options);
+            return box;
+        }
+        var quality = Choice("ดีที่สุด (ภาพและเสียง)", "1080p", "720p", "480p");
+        quality.SelectedIndex = source.VideoQuality switch
+        {
+            "1080" => 1, "720" => 2, "480" => 3, _ => 0
+        };
+        layout.Controls.Add(Caption("คุณภาพวิดีโอ"), 0, 1);
+        layout.Controls.Add(quality, 1, 1);
+        layout.SetColumnSpan(quality, 2);
+
+        var format = Choice("MP4 (แนะนำ)", "MKV", "WEBM", "MP3 (เสียงอย่างเดียว)");
+        format.SelectedIndex = source.OutputFormat switch
+        {
+            "mkv" => 1, "webm" => 2, "mp3" => 3, _ => 0
+        };
+        format.SelectedIndexChanged += (_, _) => quality.Enabled = format.SelectedIndex != 3;
+        quality.Enabled = format.SelectedIndex != 3;
+        layout.Controls.Add(Caption("รูปแบบไฟล์"), 0, 2);
+        layout.Controls.Add(format, 1, 2);
+        layout.SetColumnSpan(format, 2);
+
+        var parts = Choice("1", "2", "4", "8", "16", "32");
+        parts.SelectedItem = source.Parts.ToString();
+        if (parts.SelectedIndex < 0) parts.SelectedItem = "4";
+        layout.Controls.Add(Caption("จำนวนส่วน"), 0, 3);
+        layout.Controls.Add(parts, 1, 3);
+        layout.SetColumnSpan(parts, 2);
+
+        var folder = new TextBox
+        {
+            Text = source.Folder, Dock = DockStyle.Fill,
+            Margin = new Padding(3, 9, 6, 9)
+        };
+        var browse = new Button
+        {
+            Text = "เลือก...", Dock = DockStyle.Fill,
+            Margin = new Padding(2, 6, 2, 6)
+        };
+        browse.Click += (_, _) =>
+        {
+            using var picker = new FolderBrowserDialog
+            {
+                Description = "เลือกโฟลเดอร์สำหรับวิดีโอที่ดาวน์โหลดใหม่",
+                SelectedPath = Directory.Exists(folder.Text) ? folder.Text : source.Folder
+            };
+            if (picker.ShowDialog(dialog) == DialogResult.OK)
+                folder.Text = picker.SelectedPath;
+        };
+        layout.Controls.Add(Caption("บันทึกที่"), 0, 4);
+        layout.Controls.Add(folder, 1, 4);
+        layout.Controls.Add(browse, 2, 4);
+
+        var note = new Label
+        {
+            Text = "สร้างรายการดาวน์โหลดใหม่ โดยไม่ลบไฟล์หรือเปลี่ยนประวัติรายการเดิม\nแม้เลือกคุณภาพและชนิดไฟล์เดิม ก็จะบันทึกเป็นไฟล์อีกชุด",
+            Dock = DockStyle.Fill, ForeColor = Color.FromArgb(70, 98, 127),
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        layout.Controls.Add(note, 0, 5);
+        layout.SetColumnSpan(note, 3);
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false
+        };
+        var ok = new Button { Text = "เริ่มดาวน์โหลดใหม่", Width = 160,
+            Height = 38, DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "ยกเลิก", Width = 92, Height = 38,
+            DialogResult = DialogResult.Cancel };
+        actions.Controls.Add(ok);
+        actions.Controls.Add(cancel);
+        layout.Controls.Add(actions, 0, 6);
+        layout.SetColumnSpan(actions, 3);
+        dialog.Controls.Add(layout);
+        dialog.AcceptButton = ok;
+        dialog.CancelButton = cancel;
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var selectedQuality = quality.SelectedIndex switch
+        {
+            1 => "1080", 2 => "720", 3 => "480", _ => "Best"
+        };
+        var selectedFormat = format.SelectedIndex switch
+        {
+            1 => "mkv", 2 => "webm", 3 => "mp3", _ => "mp4"
+        };
+        try
+        {
+            var newJob = _engine.AddVideoAgain(source, selectedQuality, selectedFormat,
+                folder.Text, int.Parse((string)parts.SelectedItem!));
+            RefreshRows();
+            _details.Text = "เพิ่มงานดาวน์โหลดใหม่แล้ว: " + newJob.Url +
+                            " · " + newJob.OutputFormat.ToUpperInvariant();
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or
+                                   UnauthorizedAccessException or InvalidOperationException)
+        {
+            MessageBox.Show(this, ex.Message, "ดาวน์โหลดวิดีโอใหม่ไม่สำเร็จ",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private static string VideoLogPath(DownloadJob job) => Path.Combine(
