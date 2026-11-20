@@ -306,7 +306,7 @@
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
-        <button id="cloud-import-scan" type="button" disabled>ตรวจสอบอีกครั้ง</button>
+        <button id="cloud-import-scan" type="button" disabled hidden>ตรวจสอบอีกครั้ง</button>
         <input id="cloud-import-input" type="file" webkitdirectory directory multiple hidden>
       </div>
       <div id="cloud-import-source" class="cloud-import-source">ยังไม่ได้เลือกโฟลเดอร์</div>
@@ -316,6 +316,13 @@
         <div><b id="cloud-import-fonts">0</b><span>SoundFont</span></div>
         <div><b id="cloud-import-blocked">0</b><span>ชุดที่ไม่พร้อม</span></div>
       </div>
+      <section class="cloud-import-selection" id="cloud-import-selection" hidden aria-label="เลือกรายการเพลงที่จะนำเข้า">
+        <div class="cloud-import-selection-head"><strong>รายการที่จะนำเข้า <span id="cloud-import-selection-count">0</span></strong>
+          <div><button id="cloud-import-select-all" type="button">เลือกทั้งหมด</button>
+          <button id="cloud-import-select-none" type="button">ไม่เลือก</button></div>
+        </div>
+        <div id="cloud-import-selection-list" class="cloud-import-selection-list" role="group" aria-label="รายการเพลงที่เลือกได้"></div>
+      </section>
       <div id="cloud-import-examples" class="cloud-import-examples" aria-live="polite"></div>
       <section id="cloud-import-video-editor" class="cloud-import-video-editor" hidden aria-labelledby="cloud-import-video-heading">
         <h3 id="cloud-import-video-heading">ข้อมูลวิดีโอคาราโอเกะก่อนนำเข้า</h3>
@@ -361,10 +368,11 @@
       <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
       <p id="cloud-import-detail" class="cloud-import-detail">รองรับ XMID จาก Song Studio Pro, XSK2, MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV เก็บไฟล์ต้นฉบับไว้ใน Drive และสร้าง MP4 สำหรับเว็บเมื่อเบราว์เซอร์เล่นต้นฉบับไม่ได้ (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · รูปแบบที่เล่นต้นฉบับโดยตรงได้ขึ้นกับ Codec/เบราว์เซอร์ · วิดีโอไม่มีเนื้อร้องต้องใส่ LRC พร้อมเวลาจริง</p>
       <footer class="cloud-import-footer">
-        <button id="cloud-import-start" type="button" disabled>เริ่มตรวจซ้ำและอัปโหลด</button>
+        <button id="cloud-import-start" type="button" disabled>นำเข้ารายการที่เลือก</button>
         <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
         <button id="cloud-import-resume" type="button" disabled>ทำต่อ</button>
-        <button id="cloud-import-cancel" type="button" disabled>ยกเลิก (เก็บจุดทำต่อ)</button>
+        <button id="cloud-import-cancel" type="button" disabled hidden>ยกเลิก (เก็บจุดทำต่อ)</button>
+        <button id="cloud-import-done" type="button">ปิดหน้าต่าง</button>
       </footer>
       <small>ปิดแท็บหรือเครื่องระหว่างงานจะหยุดอัปโหลดเอง เมื่อเปิดใหม่ให้กดทำต่อหรือเลือกโฟลเดอร์เดิม · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
     </div>
@@ -391,14 +399,14 @@ document.addEventListener('DOMContentLoaded',function(){
 </script>
 <script src="config.js?v=1119"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="cloud-import-core.js?v=1122" defer></script>
+  <script src="cloud-import-core.js?v=1123" defer></script>
   <script src="xsk-browser.js?v=1119" defer></script>
   <script src="xmid-browser.js?v=1122" defer></script>
   <script src="memory-budget.js?v=1119" defer></script>
   <script src="browser-midi.js?v=1119" defer></script>
   <script src="video-metadata-editor.js?v=1119" defer></script>
   <script src="video-transcode.js?v=1119" defer></script>
-  <script src="cloud-import.js?v=1122" defer></script>
+  <script src="cloud-import.js?v=1123" defer></script>
   <script src="tv-refresh.js?v=1119" defer></script>
   <script src="app.js?v=1122-xmid" defer></script><script src="pc-extensions.js?v=1119" defer></script>
   <script src="native-audio-meter.js?v=1119" defer></script>
