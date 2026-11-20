@@ -2,7 +2,7 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.7 · Build 10** (Windows 10/11 x64).
+**Preview v0.2.8 · Build 11** (Windows 10/11 x64).
 
 ## Features
 - Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker. The video quality and MP4/MKV/WEBM/MP3 rows appear only for supported social-media video links, and collapse completely for ordinary file URLs.
@@ -69,6 +69,6 @@ For automatic handoff, the app probes anonymous direct-file access before acknow
 
 ## Update notifications
 
-On startup, X-Stage checks release metadata over HTTPS with a short timeout. **ตรวจสอบอัปเดต** repeats the check. A valid update must have a matching version/build, SHA-256, size and canonical GitHub Releases .exe URL. After confirmation the app downloads the Setup EXE directly with progress, verifies SHA-256 and byte size, and starts a detached copy of the app to wait for shutdown. That helper installs silently and restarts the installed app only after successful installation and file-version validation. Failed checks leave the existing app running. No installer is launched from an unverified download. Existing download jobs are paused and saved before exit.
+On startup, X-Stage checks release metadata over HTTPS with a short timeout. **ตรวจสอบอัปเดต** repeats the check. A valid update must have a matching version/build, SHA-256, size and canonical GitHub Releases .exe URL. After confirmation the app downloads the Setup EXE with persistent `.partial` resume, bounded retry and transparent HTTP error logging, verifies SHA-256 and byte size, and starts a detached copy of the app to wait for shutdown. That helper installs silently and restarts the installed app only after successful installation and file-version validation. Failed checks leave the existing app running. Failed downloads keep partial bytes for HTTP Range resume and offer the official GitHub Release link, with details recorded in `%LOCALAPPDATA%/X-Stage/Download Manager/updates/update-download.log`. No installer is launched from an unverified download. Existing download jobs are paused and saved before exit.
 
 **Publication note:** The Windows build publishes an Actions artifact containing only a Setup EXE. Publishing a direct .exe through GitHub Releases depends on repository token write permissions; the portal points only to an already verified release until a newer EXE has actually been published.
