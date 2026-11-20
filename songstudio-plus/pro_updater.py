@@ -138,34 +138,24 @@ def _read_release_api():
 
 
 def check():
-    # Each feed is only a candidate, never a required dependency. A temporarily
-    # unpublished/stale Pages JSON must not invalidate the real GitHub Release.
-    candidates=[]
+    # Prefer the GitHub Release asset itself: its SHA-256 digest proves the
+    # binary is already published. This also avoids three serial slow network
+    # probes and fixes the Pages "available=false" release-publication race.
     errors=[]
-    for url in (MANIFEST_URL,RAW_MANIFEST_URL):
-        try:
-            candidates.append(_read_feed(url))
-        except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError) as exc:
-            errors.append(str(exc)[:180])
     try:
-        release=_read_release_api()
-        # The API includes the published EXE asset and server-side digest.
-        # A Pages manifest can appear before its EXE is published, or retain
-        # a stale SHA. Reject such candidates rather than advertising a
-        # version with no downloadable verified binary.
-        candidates=[
-            candidate for candidate in candidates
-            if (version_tuple(candidate["version"])<version_tuple(release["version"])
-                or (candidate["version"]==release["version"] and
-                    candidate["sha256"]==release["sha256"]))
-        ]
-        candidates.append(release)
+        target=_read_release_api()
     except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError) as exc:
-        errors.append(str(exc)[:180])
-    if not candidates:
-        raise OSError("ตรวจสอบรุ่นล่าสุดไม่ได้จาก GitHub Releases และเว็บไซต์: "+
-                      " | ".join(errors))
-    target=max(candidates,key=lambda row:version_tuple(row["version"]))
+        errors.append("GitHub Release: "+str(exc)[:180])
+        candidates=[]
+        for url in (RAW_MANIFEST_URL,MANIFEST_URL):
+            try:
+                candidates.append(_read_feed(url))
+            except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError) as e:
+                errors.append(str(e)[:180])
+        if not candidates:
+            raise OSError("ตรวจสอบรุ่นล่าสุดไม่ได้จาก GitHub Releases และเว็บไซต์: "+
+                          " | ".join(errors))
+        target=max(candidates,key=lambda row:version_tuple(row["version"]))
     target["current_version"]=VERSION
     target["newer"]=version_tuple(target["version"])>version_tuple(VERSION)
     return target
