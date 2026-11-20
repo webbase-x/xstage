@@ -919,3 +919,11 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
 #video-original-toggle:disabled{opacity:.6;cursor:default}
 #video-original-toggle:focus-visible{outline:2px solid #60e4d5;outline-offset:3px}
 @media(max-width:700px){#video-original-toggle{top:99px;right:7px;padding:6px 7px;font-size:.64rem}}
+
+/* MIDI synth controls are shown only for MIDI/XMID playback. */
+#midi-transpose-control,#midi-instrument-control{display:inline-flex;align-items:center;gap:5px;max-width:100%}
+#midi-transpose-control[hidden],#midi-instrument-control[hidden]{display:none!important}
+#midi-transpose-control button{min-width:30px;min-height:30px;border-radius:8px;border:1px solid #397693;background:#163f58;color:#fff;cursor:pointer}
+#midi-transpose-label{min-width:24px;text-align:center;font-weight:700;white-space:nowrap}
+#midi-instrument{max-width:118px;font:inherit;background:#102e48;color:#fff;border:1px solid #3a7894;border-radius:6px;padding:5px}
+@media(max-width:650px){#midi-transpose-control,#midi-instrument-control{font-size:.72rem}#midi-instrument{max-width:100px}}
