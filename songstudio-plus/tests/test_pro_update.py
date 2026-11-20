@@ -30,7 +30,7 @@ class UpdaterTests(unittest.TestCase):
             "available":True,"version":"0.1.13",
             "download_url":"https://github.com/webbase-x/xstage/releases/download/"
               "song-studio-pro-v0.1.13-preview/"
-              "X-Stage-Song-Studio-Pro-v0.1.13-preview.exe",
+              "X-Stage-Song-Studio-Pro-v0.1.13-win-x64-Setup.exe",
             "sha256":hash or "a"*64,
         }
 
@@ -55,11 +55,11 @@ class UpdaterTests(unittest.TestCase):
         location=self.workspace/"UPDATES"
         location.mkdir()
         target=self.manifest(sha)
-        (location/"X-Stage-Song-Studio-Pro-v0.1.13-preview.exe").write_bytes(content)
+        (location/"X-Stage-Song-Studio-Pro-v0.1.13-win-x64-Setup.exe").write_bytes(content)
         (location/"ready.json").write_text(json.dumps(target),encoding="utf-8")
         ready=update.ready_file(self.workspace)
         self.assertEqual(ready["sha256"],sha)
-        (location/"X-Stage-Song-Studio-Pro-v0.1.13-preview.exe").write_bytes(b"MZ"+b"CORRUPT"*160000)
+        (location/"X-Stage-Song-Studio-Pro-v0.1.13-win-x64-Setup.exe").write_bytes(b"MZ"+b"CORRUPT"*160000)
         self.assertIsNone(update.ready_file(self.workspace),
                           "tampering must block any automatic install")
 
