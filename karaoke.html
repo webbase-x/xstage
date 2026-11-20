@@ -22,7 +22,7 @@
   if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
-  <link rel="stylesheet" href="style.css?v=1119">
+  <link rel="stylesheet" href="style.css?v=1131-midi">
   <link rel="stylesheet" href="xstage-ux.css?v=1119-tvrefresh1">
   <link rel="stylesheet" href="cloud-import.css?v=1126">
 <script id="xstage-official-logo-loader">(function(){
@@ -206,6 +206,20 @@
                 <label class="volume-control"><span aria-hidden="true">◖))</span><span class="sr-only">ระดับเสียง</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="ระดับเสียง"></label>
                 <span id="stage-volume-value" class="transport-volume-value">80%</span>
                 <label class="speed-control" id="midi-transpose-control" hidden>คีย์ MIDI <button type="button" id="midi-key-down" aria-label="ลดคีย์หนึ่งครึ่งเสียง">−</button> <output id="midi-transpose-label">0</output> <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์หนึ่งครึ่งเสียง">+</button><input id="midi-transpose" type="hidden" value="0"></label>
+                <label class="speed-control" id="midi-instrument-control" hidden>เครื่องดนตรี
+                  <select id="midi-instrument" aria-label="เครื่องดนตรี MIDI">
+                    <option value="">ตามเพลง MIDI</option>
+                    <option value="0">Piano</option>
+                    <option value="24">Guitar</option>
+                    <option value="32">Bass</option>
+                    <option value="40">Violin</option>
+                    <option value="48">Strings</option>
+                    <option value="56">Trumpet</option>
+                    <option value="73">Flute</option>
+                    <option value="80">Synth Lead</option>
+                    <option value="88">Synth Pad</option>
+                  </select>
+                </label>
                 <label class="speed-control">ความเร็ว <select id="speed" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
                 <label class="repeat-control"><input id="repeat" type="checkbox"> วนเพลง</label>
               </div>
@@ -404,12 +418,12 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="xsk-browser.js?v=1119" defer></script>
   <script src="xmid-browser.js?v=1122" defer></script>
   <script src="memory-budget.js?v=1119" defer></script>
-  <script src="browser-midi.js?v=1130-synth" defer></script>
+  <script src="browser-midi.js?v=1131-midi" defer></script>
   <script src="video-metadata-editor.js?v=1119" defer></script>
   <script src="video-transcode.js?v=1119" defer></script>
   <script src="cloud-import.js?v=1126" defer></script>
   <script src="tv-refresh.js?v=1119" defer></script>
-  <script src="app.js?v=1130-synth" defer></script><script src="pc-extensions.js?v=1119" defer></script>
+  <script src="app.js?v=1131-midi" defer></script><script src="pc-extensions.js?v=1119" defer></script>
   <script src="native-audio-meter.js?v=1119" defer></script>
   <script src="stage-controls.js?v=1119" defer></script>
   <script src="mobile-layout.js?v=1119" defer></script>
