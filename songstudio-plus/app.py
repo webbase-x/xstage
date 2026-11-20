@@ -45,7 +45,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.28",
+        self.diagnostic("state.ready",version="0.1.29",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -263,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.28",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.29",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
@@ -312,6 +312,10 @@ class Handler(BaseHTTPRequestHandler):
                 q.get("q",[""])[0],q.get("limit",[80])[0],q.get("offset",[0])[0])
             self.send_json(200,{"rows":manual.annotate_rows(
                 self.state.workspace,rows)});return
+        if path=="/api/lyrics/search-context":
+            self.send_json(200,core.search_context(
+                self.state.workspace,q.get("q",[""])[0],
+                int(q.get("limit",[12])[0])));return
         if path=="/api/groups":
             self.send_json(200,{"rows":core.groups(self.state.workspace,
                 q.get("q",[""])[0],min(int(q.get("limit",[100])[0]),500),
