@@ -323,9 +323,6 @@ public sealed class MainForm : Form
         var entry = _inputLayout;
         if (entry is null) return;
         bool showVideo = SocialVideoDownloader.InputContainsVideo(_url.Text);
-        if (_videoOptionControls.Length > 0 &&
-            _videoOptionControls.All(control => control.Visible == showVideo))
-            return;
         entry.SuspendLayout();
         foreach (var control in _videoOptionControls) control.Visible = showVideo;
         for (int row = 0; row < 5; row++)
