@@ -27,6 +27,8 @@ public sealed class DownloadJob
     public bool SupportsRanges { get; set; }
     public string ETag { get; set; } = "";
     public DateTimeOffset? LastModified { get; set; }
+    public int Priority { get; set; } = 1; // 0 high, 1 normal, 2 low
+    public int FileSpeedLimitKib { get; set; } = 0; // 0 = unlimited
     public int Parts { get; set; } = 4;
     // Number of actual range slices used for this job, persisted across restarts.
     public int SegmentsUsed { get; set; }
@@ -35,5 +37,6 @@ public sealed class DownloadJob
     [JsonIgnore] public long[] SegmentDownloadedBytes = Array.Empty<long>();
     [JsonIgnore] public long PreviousBytes;
     [JsonIgnore] public double SpeedBytesPerSecond;
+    [JsonIgnore] public double SmoothedSpeedBytesPerSecond;
     [JsonIgnore] public CancellationTokenSource? Cancellation;
 }
