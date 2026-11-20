@@ -1,4 +1,4 @@
-name: Vendor SpessaSynth MIDI AudioWorklet (pinned)
+name: Vendor SpessaSynth 4.4 MIDI AudioWorklet (pinned)
 on:
   workflow_dispatch:
   push:
@@ -25,8 +25,8 @@ jobs:
           set -euo pipefail
           temp="$(mktemp -d)"
           cd "$temp"
-          printf '{"private":true,"type":"module"}\n' > package.json
-          npm install --no-audit --no-fund spessasynth_lib@4.2.15 esbuild@0.25.12
+          printf '{"private":true,"type":"module","overrides":{"spessasynth_core":"4.4.10"}}\n' > package.json
+          npm install --no-audit --no-fund spessasynth_lib@4.4.8 spessasynth_core@4.4.10 esbuild@0.25.12
           test -s node_modules/spessasynth_lib/dist/index.js
           test -s node_modules/spessasynth_lib/dist/spessasynth_processor.min.js
           mkdir -p "$GITHUB_WORKSPACE/vendor/spessasynth"
