@@ -52,6 +52,10 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   if(!fontBytes?.byteLength)throw Error('ต้องเลือก SoundFont ก่อนใช้งานตัวเล่นคุณภาพสูง');
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังเตรียม SpessaSynth AudioWorklet…');
+  // The professional engine must be completely fetched before its worklet
+  // is registered. Earlier asynchronous prewarming overlaps the Drive load.
+  await preload({onStatus});
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   const [{WorkletSynthesizer},parsed]=await Promise.all([
     load(),Promise.resolve(scope.XStageBrowserMidi.parseMidi(source))
   ]);
