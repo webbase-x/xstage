@@ -43,6 +43,10 @@ public sealed class DownloadEngine
         foreach (var job in Jobs)
         {
             if (job.Status is "Running" or "Queued") job.Status = "Paused";
+            // Build 4 could download the MKV correctly, then falsely report
+            // failure because the Thai/Unicode final pathname was corrupted.
+            // That specific failure occurred only after yt-dlp returned 0.
+            SocialVideoDownloader.TryRecoverLegacyCompletedJob(job);
             job.Cancellation = null;
             if (!AllowedParts.Contains(job.Parts)) job.Parts = 4;
             job.PreviousBytes = job.DownloadedBytes;
