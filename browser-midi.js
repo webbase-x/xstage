@@ -638,6 +638,7 @@ function playRealtime(player,source,{signal,onStatus}={}){
     if(disposed||signal?.aborted)return;
     if(player.paused||player.ended)return;
     const now=Number(player.currentTime)||0,rate=Math.max(.25,Number(player.playbackRate)||1);
+    master.gain.value=.14*Math.max(0,Math.min(1,Number(player.volume)||0));
     const horizon=now+rate*.42;
     for(;cursor<notes.length&&notes[cursor].start<horizon;cursor++){
       const n=notes[cursor];
@@ -680,6 +681,7 @@ function playRealtime(player,source,{signal,onStatus}={}){
   return {dispose,duration:song.duration};
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,silentClock,playRealtime,
+  supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
   reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);
