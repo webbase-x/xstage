@@ -404,6 +404,19 @@ public sealed class DownloadEngine
 
     public void Pause(DownloadJob job)
     {
+        if (job.Status == "Paused")
+        {
+            // Manual Stop while offline explicitly opts out of automatic recovery.
+            if (job.ResumeWhenNetworkReturns || job.ResumeAfterRestart ||
+                job.InterruptedOnStartup)
+            {
+                job.ResumeWhenNetworkReturns = false;
+                job.ResumeAfterRestart = false;
+                job.InterruptedOnStartup = false;
+                Save();
+            }
+            return;
+        }
         if (job.Status is not ("Running" or "Queued")) return;
         job.Status = "Paused";
         job.ResumeAfterRestart = false;
