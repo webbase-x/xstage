@@ -611,6 +611,14 @@ try
         DownloadEngine.TryParseUrl("https://user:pass@example.com/file", out _))
         throw new Exception("Non-HTTP or credential URLs must be rejected.");
 
+    var queueUi = File.ReadAllText(Path.Combine("download-manager", "MainForm.cs"));
+    var queueDialog = File.ReadAllText(Path.Combine("download-manager", "MainForm.Performance.cs"));
+    if (!queueUi.Contains("CreateJobQueue(job)") ||
+        !queueUi.Contains("AssignJobQueue(job, queueName)") ||
+        !queueDialog.Contains("_engine.SetJobQueue(job, queueName)") ||
+        !queueDialog.Contains("MaxLength = 64"))
+        throw new Exception("Named queue context menu and durable assignment UI missing.");
+
     var queueJob = manager.Add(server.Url + "range/queue-test.bin", folder, 1);
     manager.Pause(queueJob);
     manager.SetJobQueue(queueJob, "ไฟล์เร่งด่วน");
