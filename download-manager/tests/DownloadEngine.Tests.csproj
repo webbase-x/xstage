@@ -12,6 +12,7 @@
     <Compile Include="../MainForm.IdmLayout.cs" Link="MainForm.IdmLayout.cs" />
     <Compile Include="../DownloadFileNaming.cs" Link="DownloadFileNaming.cs" />
     <Compile Include="../DownloadJob.cs" Link="DownloadJob.cs" />
+    <Compile Include="../DownloadTableSort.cs" Link="DownloadTableSort.cs" />
     <Compile Include="../ProgressPresentation.cs" Link="ProgressPresentation.cs" />
     <Compile Include="../SocialVideoDownloader.cs" Link="SocialVideoDownloader.cs" />
     <Compile Include="../MediaIntegrity.cs" Link="MediaIntegrity.cs" />
