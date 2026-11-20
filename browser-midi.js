@@ -607,7 +607,7 @@ async function selectedFont(token,signal){
 }
 // Fast native-clock MIDI playback: no whole-song OfflineAudioContext/WAV render.
 // Used only with the built-in synthesizer; selected SoundFonts retain full rendering.
-function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose=()=>0}={}){
+function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose=()=>0,getProgram=()=>null}={}){
   const Ctor=scope.AudioContext||scope.webkitAudioContext;
   if(!Ctor)fail('เบราว์เซอร์ไม่รองรับ Web Audio MIDI Synthesizer');
   const song=parseMidi(source),ctx=new Ctor();
@@ -639,7 +639,9 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
     const duration=Math.max(.055,(n.end-n.start)/rate);
     const shift=Math.max(-12,Math.min(12,Math.trunc(Number(getTranspose())||0)));
     const pitch=n.channel===9?n.key:Math.max(0,Math.min(127,n.key+shift));
-    const regions=font?font.find(n.bank,n.program,pitch,n.velocity).slice(0,4):[null];
+    const override=getProgram(),program=n.channel===9?n.program:
+      Number.isInteger(override)&&override>=0&&override<=127?override:n.program;
+    const regions=font?font.find(n.bank,program,pitch,n.velocity).slice(0,4):[null];
     if(!regions.length)return; // Invalid presets never create incorrect notes.
     for(const region of regions){
       let buffer=null;
@@ -671,7 +673,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
         }
       }else{
         src=ctx.createOscillator();
-        src.type=n.channel===9?'square':n.program>=80?'sawtooth':n.program>=40?'triangle':'sine';
+        src.type=n.channel===9?'square':program>=80?'sawtooth':program>=40?'triangle':'sine';
         src.frequency.value=440*Math.pow(2,(pitch-69)/12);
       }
       src.connect(gain);register(src,gain);
