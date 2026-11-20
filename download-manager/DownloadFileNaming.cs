@@ -95,7 +95,16 @@ public static class DownloadFileNaming
             selected = sourceName != "download" ? sourceName : redirectName;
 
         var type = response.Content.Headers.ContentType?.MediaType;
-        return WithKnownExtension(selected, type);
+        var named = WithKnownExtension(selected, type);
+        if (Path.HasExtension(named)) return named;
+
+        // A server can supply filename="report" (no suffix) with generic
+        // application/octet-stream although the original URL was report.pdf.
+        // Keep the authoritative base name, but borrow the source extension.
+        var sourceExtension = Path.GetExtension(sourceName);
+        if (sourceExtension.Length is > 1 and <= 16)
+            return CleanName(named + sourceExtension);
+        return named;
     }
 
     public static string UrlFileName(string url)
