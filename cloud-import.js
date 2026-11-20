@@ -617,7 +617,9 @@ class Importer {
       }
       fragment.append(wrapper);
     }
+    const scrollTop=this.dom.selectionList.scrollTop;
     this.dom.selectionList.replaceChildren(fragment);
+    this.dom.selectionList.scrollTop=scrollTop;
     this.renderSelectionCount();
   }
   refreshButtons(){
