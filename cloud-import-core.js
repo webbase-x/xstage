@@ -93,7 +93,7 @@ function scan(files){
     const extension=ext(file.name);
     if(extension==='xsk'||extension==='xmid'){
       if(file.size<(extension==='xmid'?92:33)||file.size>(extension==='xmid'?96:152)*1024*1024)
-        blocked.push({key:relative,reason:'XSK ขนาดผิดปกติหรือใหญ่เกินขอบเขต'});
+        blocked.push({key:relative,reason:extension.toUpperCase()+' ขนาดผิดปกติหรือใหญ่เกินขอบเขต'});
       else xsks.push({file,relative,code:file.name.replace(/\.(?:xsk|xmid)$/i,''),kind:extension.toUpperCase()});
       continue;
     }
