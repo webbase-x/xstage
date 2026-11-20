@@ -4,9 +4,6 @@ name: Release X-Stage Mirror TV signed APK
 # Do not auto-run (and fail) on normal source pushes when secrets are absent.
 # Public test builds are published by build-xstage-mirror-tv.yml instead.
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/release-xstage-mirror-tv.yml']
   workflow_dispatch:
     inputs:
       version:
@@ -30,7 +27,7 @@ concurrency:
 jobs:
   release:
     if: >-
-      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release(mirror-tv): publish v0.2.16 build 118')
+      github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Keep this release bound to the v0.2.16 live-playback regression tests.
     timeout-minutes: 120
