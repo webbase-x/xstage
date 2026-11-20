@@ -109,9 +109,31 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
+    }
+  }
+  const gb = n => (Number(n||0)/(1024**3)).toFixed(2)+" GB";
+  async function checkDatabaseHealth(){
+    try{
+      const r=await api("/api/db/health",undefined,30000);
+      text("db-health-summary",
+        "SQLite "+gb(r.database_bytes)+" · WAL "+gb(r.wal_bytes)+
+        " · พื้นที่นำกลับมาใช้ในฐานได้ "+gb(r.reusable_bytes)+
+        " · เพลง "+number(r.counts.songs)+
+        " · ต้นทาง "+number(r.counts.sources)+
+        " · เนื้อร้อง "+number(r.counts.lyrics_versions)+
+        " · ประวัตินำเข้า "+number(r.counts.import_items)+
+        " · Checkpoint "+number(r.counts.checkpoints)+
+        " · งานเสร็จ "+number(r.completed_batches)+
+        " · งานทำต่อได้ "+number(r.resumable_batches)+
+        " · ปัญหาคงค้าง "+number(r.issue_rows));
+      $("db-history-clean").disabled=Boolean(state.activeJob)||!state.ready;
+      $("db-compact").disabled=Boolean(state.activeJob)||!state.ready;
+    }catch(e){
+      text("db-health-summary","ตรวจ SQLite ไม่สำเร็จ: "+e.message);
+      toast(e.message,true);
     }
   }
   async function refreshStatus(){
@@ -530,7 +552,9 @@
   }
   async function startJob(kind,payload){
     try{
-      const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":kind==="swipe-audit"?"/api/swipe/scan":"/api/build";
+      const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":
+        kind==="swipe-audit"?"/api/swipe/scan":kind==="db-clean"?"/api/db/cleanup":
+        kind==="db-compact"?"/api/db/compact":"/api/build";
       const result=await api(endpoint,payload);
       state.activeJob=result.job;
       toast("เริ่มงานแล้ว ระบบประมวลผลต่อเนื่อง");
@@ -554,6 +578,9 @@
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
       $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
+      $("db-health-check").disabled=!state.ready||Boolean(state.activeJob);
+      $("db-history-clean").disabled=!state.ready||Boolean(state.activeJob);
+      $("db-compact").disabled=!state.ready||Boolean(state.activeJob);
       if(!state.activeJob&&job&&job.kind==="import"&&
           ["completed","failed","cancelled"].includes(job.status)){
         void diagnostic("ui.import.idle",{
@@ -567,6 +594,8 @@
       text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
           job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
           job.kind==="import"?"นำเข้าและตรวจ SHA-256":
+          job.kind==="db-clean"?"ล้างประวัติงาน SQLite ที่เสร็จแล้ว":
+          job.kind==="db-compact"?"คืนพื้นที่ไฟล์ฐานข้อมูล SQLite":
           job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":
            job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อจาก SQLite":"สร้างไฟล์ X-Stage Pro");
       text("activity-subtitle",job.message||"");
@@ -625,6 +654,13 @@
           " · Hash เดิม "+number(p.hash_cache_hits)+
           " · จุดเดิมที่ข้าม "+number(p.resumed_files)+
           " · "+number(p.files_per_second)+" ไฟล์/วินาที":
+          job.kind==="db-clean"?
+          "ตรวจแล้ว "+number(p.processed)+" / "+number(p.total)+
+          " งาน · ลบ Checkpoint "+number(p.checkpoints_removed)+
+          " · ลบประวัติซ้ำ "+number(p.success_logs_removed)+
+          " · ลบชุดเก่า "+number(p.old_batches_removed):
+          job.kind==="db-compact"?
+          "กำลังจัดระเบียบข้อมูลและคืนพื้นที่ที่ว่างใน SQLite":
           job.kind==="recover"?
           "กู้คืนพร้อมใช้ "+number(p.recovered_ready)+" · CUR ไม่ครบ "+number(p.partial_lyrics)+
           " · LYR รอเวลา "+number(p.draft_lyrics)+" · ไม่พบต้นฉบับ "+number(p.missing_sources)+
@@ -667,9 +703,11 @@
               kind:job.kind,status:job.status,error:error?.message||String(error)
             });
           }
+          if((job.kind==="db-clean"||job.kind==="db-compact")&&job.status==="completed")
+            await checkDatabaseHealth();
           if(job.kind==="lyrics-edit"&&job.status==="completed"&&state.view==="lyrics")
             await searchGroups();
-          toast(job.status==="completed"?"งาน "+(job.kind==="lyrics-edit"?"แทนที่เนื้อร้อง":job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
+          toast(job.status==="completed"?"งาน "+(job.kind==="lyrics-edit"?"แทนที่เนื้อร้อง":job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="db-clean"?"ล้างประวัติ SQLite":job.kind==="db-compact"?"ย่อ SQLite":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
             job.error||"งานล้มเหลว",job.status==="failed");
           if(job.kind==="update"){
             if(job.status==="completed"&&state.updateInstallIntent){
@@ -2107,6 +2145,23 @@
     $("preview-needs").addEventListener("click",()=>void recordPreviewOutcome("needs-review"));
     $("preview-to-build").addEventListener("click",previewToBuild);
     $("issues-load").addEventListener("click",()=>void loadImportIssues());
+    $("db-health-check").addEventListener("click",()=>void checkDatabaseHealth());
+    $("db-history-clean").addEventListener("click",async()=>{
+      if(state.activeJob)return toast("กรุณารองานปัจจุบันให้เสร็จก่อน",true);
+      if(!await confirmTask("ล้างประวัติ SQLite ที่ไม่จำเป็น",
+        "เก็บรายงานปัญหาใน 4 งานล่าสุด ล้าง Checkpoint ของงานเสร็จ และลบประวัติเก่า\n"+
+        "ไม่ลบเพลง ต้นฉบับ เนื้อร้อง เวอร์ชันที่แก้ไข หรือสถานะงานค้าง\n"+
+        "การล้างข้อมูลยังไม่ลดขนาดไฟล์จนกว่าจะสั่งคืนพื้นที่"))return;
+      void startJob("db-clean",{});
+    });
+    $("db-compact").addEventListener("click",async()=>{
+      if(state.activeJob)return toast("กรุณารองานปัจจุบันให้เสร็จก่อน",true);
+      if(!await confirmTask("คืนพื้นที่ไฟล์ SQLite",
+        "ระบบจะใช้ VACUUM ย่อ SQLite โดยต้องมีพื้นที่ว่างอย่างน้อย 2 เท่าของขนาดฐาน\n"+
+        "ควรสำรองฐานข้อมูลขณะปิดแอปก่อนดำเนินการ\n"+
+        "ห้ามปิดเครื่องระหว่างดำเนินการ และไม่แก้ไฟล์ต้นฉบับ"))return;
+      void startJob("db-compact",{});
+    });
     $("issues-close").addEventListener("click",()=>$("issues-dialog").close());
     $("issues-prev").addEventListener("click",()=>{
       state.issueOffset=Math.max(0,state.issueOffset-visibleRows());renderIssuePage();
