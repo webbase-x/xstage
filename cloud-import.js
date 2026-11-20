@@ -35,7 +35,7 @@ function pathFor(code,kind,role,name){
   const bucket=/^[0-9A-Z]/.test(id)?id[0]:'_';
   const video=['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(suffix);
   if(suffix==='sf2'||suffix==='sf3')return ['SOUNDFONT',suffix.toUpperCase(),name];
-  if(suffix==='xsk')return ['MIDI','XSK',bucket,name];
+  if(suffix==='xsk'||suffix==='xmid')return ['MIDI',suffix.toUpperCase(),bucket,name];
   if(suffix==='kar')return ['MIDI','KAR',bucket,name];
   if(suffix==='mid'||suffix==='midi')
     return ['MIDI','MID','SONG',bucket,name];
@@ -593,8 +593,10 @@ class Importer {
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
     drive.signal=()=>this.controller.signal;
     try{
-      if(this.plan.xsks.length&&!scope.XStageXsk)
+      if(this.plan.xsks.some(x=>x.kind==='XSK')&&!scope.XStageXsk)
         fail('ยังไม่โหลดตัวอ่าน XSK2 ของเบราว์เซอร์');
+      if(this.plan.xsks.some(x=>x.kind==='XMID')&&!scope.XStageXmid)
+        fail('ยังไม่โหลดตัวอ่าน XMID ของเบราว์เซอร์');
       this.status('กำลังตรวจคลัง XStageSong และ current.json บน Google Drive…');
       const rootQuery="'root' in parents and name='XStageSong' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
@@ -709,15 +711,16 @@ class Importer {
             // Keep the original XSK2 on Drive. Read only its timed JSON
             // metadata now. Extract and SHA-256-verify the MIDI at play time,
             // or progressively for the first song waiting in the queue.
-            const opened=await scope.XStageXsk.inspectMetadata(item.file);
+            const isXmid=item.kind==='XMID';
+            const opened=await (isXmid?scope.XStageXmid:scope.XStageXsk).inspectMetadata(item.file);
             const code=opened.code,identity=core.songIdentity(opened.document,code);
             if(!identity.identityComplete)
               throw Error('XSK: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
             const xskHash=await core.hashBlob(item.file,()=>this.check());
-            const ident='browser/xsk/'+xskHash;
+            const ident='browser/'+(isXmid?'xmid':'xsk')+'/'+xskHash;
             const candidates=byCode.get(code.toLowerCase())||[];
             if(rows.has(ident)||candidates.some(x=>
-              String(x.xsk?.md5Checksum||'').toLowerCase()===xskHash)){
+              String((isXmid?x.xmid:x.xsk)?.md5Checksum||'').toLowerCase()===xskHash)){
               this.stats.duplicates++;finished++;
               show('ข้าม XSK ซ้ำ MD5: '+code);continue;
             }
@@ -725,12 +728,12 @@ class Importer {
               this.stats.conflicts++;finished++;
               show('รหัส XSK ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;
             }
-            const name=safeName(code)+'-'+xskHash.slice(0,16)+'.xsk';
-            const packed=await uploadMedia(item.file,code,pathFor(code,'xsk','',name).slice(0,-1),name,
+            const name=safeName(code)+'-'+xskHash.slice(0,16)+(isXmid?'.xmid':'.xsk');
+            const packed=await uploadMedia(item.file,code,pathFor(code,isXmid?'xmid':'xsk','',name).slice(0,-1),name,
               'application/octet-stream',xskHash,0,1);
             const record={webSongId:ident,code,title:identity.title,
-              artist:identity.artist,sourceFormat:'XSK',lyricsMode:'timed',
-              xsk:packed};
+              artist:identity.artist,sourceFormat:isXmid?'XMID':'XSK',lyricsMode:'timed',
+              ...(isXmid?{xmid:packed}:{xsk:packed})};
             rows.set(ident,record);addMaps(record);
             revisions.push(record);this.stats.newSongs++;
             if(revisions.length>=25)await publish();
