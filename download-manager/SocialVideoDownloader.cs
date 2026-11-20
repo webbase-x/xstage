@@ -233,8 +233,11 @@ public static class SocialVideoDownloader
             RecordLine(line);
             if (IsYtDlpError(line))
             {
-                errors.Enqueue(line.Trim());
-                while (errors.Count > 12) errors.Dequeue();
+                lock (errors)
+                {
+                    errors.Enqueue(line.Trim());
+                    while (errors.Count > 12) errors.Dequeue();
+                }
             }
             var phase = DescribeOutputPhase(line);
             if (phase is not null)
@@ -283,8 +286,11 @@ public static class SocialVideoDownloader
         {
             if (string.IsNullOrWhiteSpace(line)) return;
             RecordLine(line);
-            errors.Enqueue(line.Trim());
-            while (errors.Count > 12) errors.Dequeue();
+            lock (errors)
+            {
+                errors.Enqueue(line.Trim());
+                while (errors.Count > 12) errors.Dequeue();
+            }
         }
 
         using var watchStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -346,7 +352,8 @@ public static class SocialVideoDownloader
             throw new IOException(watchdogError + " · ตรวจสอบบันทึก: " + logFile);
         if (process.ExitCode != 0)
         {
-            var tail = string.Join(" | ", errors);
+            string tail;
+            lock (errors) tail = string.Join(" | ", errors);
             var reason = ExplainFailure(tail, process.ExitCode);
             var safeTail = System.Text.RegularExpressions.Regex.Replace(
                 tail, @"https?://[^\s]+", "[URL]",
