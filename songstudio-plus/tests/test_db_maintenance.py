@@ -41,6 +41,25 @@ class MaintenanceTests(unittest.TestCase):
         self.assertEqual(after["counts"]["songs"],1)
         self.assertEqual(after["counts"]["media"],1)
 
+    def test_second_import_does_not_rewrite_unchanged_source_or_success_logs(self):
+        core.import_folder(self.workspace,self.root)
+        with core.connect(self.workspace) as db:
+            old=db.execute("""SELECT verified_sha256,last_seen
+                FROM xstage_media_sources WHERE source_path=?""",
+                (str(self.media.resolve()),)).fetchone()
+            old_source=tuple(old)
+        second=core.import_folder(self.workspace,self.root)
+        self.assertEqual(second["files_new"],0)
+        self.assertEqual(second["media_duplicates"],1)
+        self.assertEqual(second["hash_cache_hits"],1)
+        with core.connect(self.workspace) as db:
+            source=tuple(db.execute("""SELECT verified_sha256,last_seen
+                FROM xstage_media_sources WHERE source_path=?""",
+                (str(self.media.resolve()),)).fetchone())
+            self.assertEqual(source,old_source)
+            self.assertEqual(db.execute("SELECT count(*) FROM xstage_import_items").fetchone()[0],0)
+            self.assertEqual(db.execute("SELECT count(*) FROM xstage_import_file_checkpoints").fetchone()[0],0)
+
     def test_cancelled_job_survives_maintenance_and_resumes(self):
         flag=threading.Event()
         flag.set()
