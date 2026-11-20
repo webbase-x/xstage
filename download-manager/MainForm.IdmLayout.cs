@@ -94,6 +94,7 @@ public sealed partial class MainForm
         menu.Items.Add(Menu("การดาวน์โหลด",
             Action("ดาวน์โหลดอัตโนมัติ (Chrome / Edge)", (_, _) => SetupBrowserIntegration()),
             Action("กำหนดจำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
+            Action("ประสิทธิภาพและจำนวนงานพร้อมกัน...", (_, _) => ConfigurePerformance()),
             Action("ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true))));
         menu.Items.Add(Menu("มุมมอง",
             Action("แสดงทั้งหมด", (_, _) => SelectCategory("all")),
