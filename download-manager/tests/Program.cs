@@ -178,6 +178,38 @@ try
     if (!unsupportedFormatRejected) throw new Exception("Unknown output extension must be rejected.");
     video.OutputFormat = "mp4";
 
+    // Redownload must allow changing quality/container while preserving the
+    // original completed video. The new yt-dlp output name is unique even
+    // when the user chooses exactly the same format as the old download.
+    var oldCopy = new DownloadJob
+    {
+        Url = video.Url, Folder = folder, Kind = "Video",
+        VideoQuality = "Best", OutputFormat = "mp4", Parts = 32,
+        Id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    };
+    var newCopy = new DownloadJob
+    {
+        Url = oldCopy.Url, Folder = oldCopy.Folder, Kind = "Video",
+        VideoQuality = "720", OutputFormat = "mkv", Parts = 8,
+        IsRedownload = true, Id = "0123456789abcdef0123456789abcdef"
+    };
+    var originalArgs = SocialVideoDownloader.BuildArguments(oldCopy, folder, folder).ToArray();
+    var againArgs = SocialVideoDownloader.BuildArguments(newCopy, folder, folder).ToArray();
+    var firstTemplate = originalArgs[Array.IndexOf(originalArgs, "-o") + 1];
+    var newTemplate = againArgs[Array.IndexOf(againArgs, "-o") + 1];
+    if (firstTemplate.Contains("(again-", StringComparison.Ordinal) ||
+        !newTemplate.Contains("(again-01234567)", StringComparison.Ordinal) ||
+        newTemplate == firstTemplate ||
+        !newTemplate.EndsWith(" [%(id)s].%(ext)s", StringComparison.Ordinal) ||
+        !againArgs.Contains("bv*[height<=720]+ba/b[height<=720]"))
+        throw new Exception("Video redownload must use selected quality and an independent output filename.");
+    newCopy.OutputFormat = "mp3";
+    if (!SocialVideoDownloader.BuildArguments(newCopy, folder, folder).Contains("--audio-format"))
+        throw new Exception("Redownload must support MP3 audio-only output without affecting the old item.");
+    if (oldCopy.OutputFormat != "mp4" || oldCopy.VideoQuality != "Best" ||
+        oldCopy.IsRedownload)
+        throw new Exception("Redownload must not change original media properties.");
+
     // Regression for the user's actual 6.1 MB corrupt MP4: ftyp + mdat,
     // moov absent. It MUST never become a green 100% completed download.
     var brokenMp4 = Path.Combine(folder, "regression-incomplete-moov.mp4");
