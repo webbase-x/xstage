@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -23,6 +24,10 @@ class ManualKaraokeTests(unittest.TestCase):
         self.assertEqual(summary["files_new"],1)
         self.song=core.songs(self.workspace)[0]
         edit.init(self.workspace)
+
+    def test_initialized_review_schema_does_not_reissue_ddl_on_ui_reads(self):
+        with patch.object(core,"connect",side_effect=AssertionError("redundant DDL")):
+            edit.init(self.workspace)
 
     def tearDown(self):
         self.temp.cleanup()
