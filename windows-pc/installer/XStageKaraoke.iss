@@ -11,7 +11,8 @@ AppName=X-Stage Karaoke PC
 AppVersion={#AppVersion}
 AppVerName=X-Stage Karaoke PC v{#AppVersion} (Build {#BuildNumber})
 AppPublisher=X-Stage Karaoke PC
-DefaultDirName={autopf}\X-Stage
+DefaultDirName={autopf}\X-Stage\Karaoke PC
+UsePreviousAppDir=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 Uninstallable=no
@@ -28,9 +29,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 SetupLogging=yes
 DisableWelcomePage=no
 ShowLanguageDialog=no
-; This installer stages the verified release in a temporary directory
-; and invokes the existing transactional installer, which owns the
-; destination and preserves Data/ user files.
+; Install Karaoke PC in its own application directory. Never install in
+; the shared X-Stage root, which contains other desktop applications.
+; The transactional installer preserves user data in LocalAppData.
 AllowNoIcons=yes
 
 [Languages]
