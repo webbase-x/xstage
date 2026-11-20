@@ -144,9 +144,11 @@ console.log('PASS: self-contained MIDI parsing, NCN LYR/CUR timing, 16-channel m
 // Regression: the primary MIDI player must schedule real notes without building
 // any WAV. The HTML transport clock is supplied by the app's MIDI transport.
 const scheduledNotes=[];
+let liveCompressor=null,masterSignal=null;
 class LiveGain {
-  constructor(){this.gain={value:1,setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}};}
-  connect(){}disconnect(){}
+  constructor(){this.gain={value:1,setValueAtTime(value){this.value=value;},linearRampToValueAtTime(value){this.value=value;},exponentialRampToValueAtTime(value){this.value=value;}};}
+  connect(node){if(node?.threshold)masterSignal=this;}
+  disconnect(){}
 }
 class LiveSource {
   constructor(){this.frequency={value:440,setValueAtTime(value){this.value=value;}};
@@ -159,6 +161,12 @@ context.AudioContext=class {
   constructor(){this.currentTime=1;this.destination={};this.state='running';}
   createGain(){return new LiveGain();}
   createOscillator(){return new LiveSource();}
+  createDynamicsCompressor(){
+    const setting=()=>({value:0});
+    liveCompressor={threshold:setting(),knee:setting(),ratio:setting(),
+      attack:setting(),release:setting(),connect(){},disconnect(){}};
+    return liveCompressor;
+  }
   resume(){return Promise.resolve();}
 };
 context.setInterval=()=>1;
@@ -174,6 +182,10 @@ const transport={
 };
 let semitones=0;
 const synth=runtime.playRealtime(transport,file,{getTranspose:()=>semitones});
+assert.ok(liveCompressor,'Live MIDI must use one final compressor/limiter');
+assert.ok(liveCompressor.threshold.value<=-12,'Limiter threshold must protect headroom');
+assert.ok(liveCompressor.ratio.value>=8,'Limiter needs a high compression ratio');
+assert.ok(masterSignal.gain.value<=.3,'The master gain must leave mixing headroom');
 assert.ok(scheduledNotes.length>0,'Live MIDI must schedule a note without OfflineAudioContext');
 const first=scheduledNotes.at(-1).pitch;
 semitones=12;
