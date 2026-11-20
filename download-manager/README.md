@@ -2,10 +2,10 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.8 · Build 11** (Windows 10/11 x64).
+**Preview v0.2.9 · Build 12** (Windows 10/11 x64).
 
 ## Features
-- Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker. The video quality and MP4/MKV/WEBM/MP3 rows appear only for supported social-media video links, and collapse completely for ordinary file URLs.
+- Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker. Resolve the final file name from HTTP Content-Disposition (including UTF-8 filename*), original URL, response MIME type, or a verified file signature when the CDN uses an opaque UUID. Completed extensionless downloads from older builds are safely renamed on next startup only if the existing file type is unambiguous; never overwrite originals. The video quality and MP4/MKV/WEBM/MP3 rows appear only for supported social-media video links, and collapse completely for ordinary file URLs.
 - **Social video links:** YouTube, YouTube Shorts, TikTok, Facebook Reels/videos, Instagram Reels (publicly accessible posts only).
 - Choose best video quality or 1080p/720p/480p separately from the output container: **MP4 (default)**, MKV, WEBM or MP3 (audio only). FFmpeg converts the actual media; renaming the extension is never used. Conversion may take longer and can fail for unsupported source codecs.
 - The installer bundles pinned official yt-dlp, FFmpeg/ffprobe and Deno executables, each checked against a release SHA-256 during Windows CI. No downloads or extra installation of tools are required after installing the one Setup EXE.
