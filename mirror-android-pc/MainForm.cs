@@ -32,7 +32,7 @@ public sealed class MainForm : Form
         "Windows PC: " + Environment.MachineName + "   ·   Android: Smart View / Screen Cast", 16, false, Soft);
     private readonly Button _minimize = MakeWindowButton("—", "ย่อหน้าต่าง", Color.FromArgb(30, 54, 79));
     private readonly Button _closeButton = MakeWindowButton("×", "ปิดแอป", Color.FromArgb(57, 39, 55));
-    private readonly System.Windows.Forms.Timer _poll = new() { Interval = 5000 };
+    private readonly System.Windows.Forms.Timer _poll = new() { Interval = 1200 };
     private readonly MirrorAutoUpdateManager _autoUpdates;
 
     private string _receiverStatus = "กำลังเตรียมตัวรับ Miracast";
@@ -44,6 +44,12 @@ public sealed class MainForm : Form
     private bool _connectProcessRunning;
     private bool _launchRequested;
     private bool _closing;
+    private bool _nativePresented;
+    private int _missedWindows;
+    private int _launchRetries;
+    private DateTime _lastLaunchUtc = DateTime.MinValue;
+    private bool _installingWindowsFeature;
+    private string _lastLaunchError = "";
 
     public MainForm()
     {
@@ -72,7 +78,7 @@ public sealed class MainForm : Form
         _closeButton.Click += (_, _) => ConfirmClose();
         _status.Cursor = Cursors.Hand;
         _status.AccessibleName = "สถานะตัวรับ Miracast กดเพื่อดูการวินิจฉัย";
-        _status.Click += (_, _) => ShowDiagnostics();
+        _status.Click += async (_, _) => { if (_launchRetries >= 3) await PrepareWindowsFeatureAsync(); else ShowDiagnostics(); };
 
         Controls.AddRange([_logo, _title, _number, _version, _status, _network,
             _minimize, _closeButton]);
@@ -184,6 +190,8 @@ public sealed class MainForm : Form
     private ContextMenuStrip BuildContextMenu()
     {
         var menu = new ContextMenuStrip();
+        menu.Items.Add("จัดเตรียมตัวรับ Wireless Display ของ Windows", null,
+            async (_, _) => await PrepareWindowsFeatureAsync());
         menu.Items.Add("เปิดตัวรับ Windows Wireless Display  (F5)", null, (_, _) => OpenReceiver());
         menu.Items.Add("ตั้งค่าการฉายภาพไปยังพีซี  (F6)", null,
             (_, _) => OpenSettings("ms-settings:project"));
@@ -274,78 +282,154 @@ public sealed class MainForm : Form
 
     private void CheckWindowsReceiverSession()
     {
-        if (_closing || IsDisposed) return;
-        try
+        if (_closing || IsDisposed || _installingWindowsFeature) return;
+        if (NativeMiracastWindow.TryFind(out var handle, out var title))
         {
-            _connectProcessRunning = false;
-            _receiverWindow = "ยังไม่พบหน้าต่าง Connect (Windows รุ่นใหม่อาจใช้ชื่ออื่น)";
-            foreach (var process in Process.GetProcessesByName("Connect"))
+            _connectProcessRunning = true;
+            _receiverWindow = title;
+            _missedWindows = 0;
+            _launchRetries = 0;
+            if (!_nativePresented && NativeMiracastWindow.ShowOnTop(handle))
             {
-                using (process)
-                {
-                    if (process.HasExited) continue;
-                    _connectProcessRunning = true;
-                    if (!string.IsNullOrWhiteSpace(process.MainWindowTitle))
-                        _receiverWindow = process.MainWindowTitle;
-                }
+                _nativePresented = true;
+                // Never leave our full-screen splash in front of the Miracast video.
+                WindowState = FormWindowState.Minimized;
             }
         }
-        catch (Exception ex)
+        else
         {
             _connectProcessRunning = false;
-            _receiverWindow = "อ่านสถานะ Connect ไม่ได้: " + ex.Message;
+            _receiverWindow = "ไม่พบหน้าต่าง Wireless Display ที่เปิดอยู่";
+            // Ignore one missed poll during Windows compositor transitions.
+            if (_nativePresented && ++_missedWindows >= 2)
+            {
+                _nativePresented = false;
+                WindowState = FormWindowState.Maximized;
+                Activate();
+            }
+            if (_launchRetries < 3 &&
+                DateTime.UtcNow - _lastLaunchUtc > TimeSpan.FromSeconds(12))
+                OpenReceiver();
         }
         UpdateReceiverStatus();
     }
 
     private void UpdateReceiverStatus()
     {
-        if (!_wifiAvailable)
-            _receiverStatus = "ไม่พบ Wi-Fi ที่เปิดใช้งาน · กด F1 เพื่อช่วยตรวจสอบ";
-        else if (_connectProcessRunning)
-            _receiverStatus = "Windows Connect เปิดอยู่ · รอ Android ส่งภาพ";
-        else if (!_connectExecutableAvailable)
-            _receiverStatus = "ตรวจสอบ Windows Wireless Display · กด F1 ดูวิธีตั้งค่า";
+        if (_connectProcessRunning)
+            _receiverStatus = "ตัวรับ Windows เปิดอยู่ · เลือกชื่อ PC จาก Android เพื่อส่งภาพ";
+        else if (!_wifiAvailable)
+            _receiverStatus = "ไม่พบ Wi-Fi ที่เปิดใช้งาน · กด F1 เพื่อตรวจสอบ";
+        else if (_launchRetries >= 3)
+            _receiverStatus = "เปิดตัวรับ Windows ไม่สำเร็จ · คลิกเพื่อจัดเตรียมระบบ";
         else if (_launchRequested)
-            _receiverStatus = "เรียกตัวรับ Windows แล้ว · รอ Android ส่งภาพ";
+            _receiverStatus = "กำลังเปิดตัวรับ Windows Wireless Display…";
         else
-            _receiverStatus = "พร้อมเปิดตัวรับ Windows Wireless Display";
+            _receiverStatus = "กำลังเตรียมตัวรับ Miracast…";
         RenderStatus();
     }
 
     private void RenderStatus()
     {
-        var showUpdate = _updateNotice is not null && DateTime.UtcNow < _updateNoticeUntil;
-        _status.Text = showUpdate ? _updateNotice! : _receiverStatus;
-        _status.ForeColor = showUpdate || (_wifiAvailable &&
-            (_connectProcessRunning || _connectExecutableAvailable))
-            ? Frost : Warning;
+        var updating = _updateNotice is not null && DateTime.UtcNow < _updateNoticeUntil;
+        var message = _installingWindowsFeature ? "Windows กำลังจัดเตรียม Wireless Display…"
+            : updating ? _updateNotice! : _receiverStatus;
+        if (_status.Text != message) _status.Text = message;
+        var foreground = _connectProcessRunning || updating || _installingWindowsFeature;
+        var color = foreground ? Frost : Warning;
+        if (_status.ForeColor != color) _status.ForeColor = color;
     }
 
     private void OpenReceiver()
     {
+        if (_closing || IsDisposed || _installingWindowsFeature) return;
+        if (NativeMiracastWindow.TryFind(out var existing, out var existingTitle))
+        {
+            _connectProcessRunning = true;
+            _receiverWindow = existingTitle;
+            _launchRetries = 0;
+            if (!_nativePresented && NativeMiracastWindow.ShowOnTop(existing))
+            {
+                _nativePresented = true;
+                WindowState = FormWindowState.Minimized;
+            }
+            UpdateReceiverStatus();
+            return;
+        }
+        if (DateTime.UtcNow - _lastLaunchUtc < TimeSpan.FromSeconds(8))
+            return; // No duplicate launches, even when invoked via F5.
+        _lastLaunchUtc = DateTime.UtcNow;
+        _launchRetries++;
         try
         {
-            var path = Path.Combine(Environment.GetFolderPath(
+            var connect = Path.Combine(Environment.GetFolderPath(
                 Environment.SpecialFolder.Windows), "System32", "Connect.exe");
-            Process? launched;
-            if (File.Exists(path))
-                launched = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-            else
-                launched = Process.Start(new ProcessStartInfo("explorer.exe",
+            using var process = File.Exists(connect)
+                ? Process.Start(new ProcessStartInfo(connect) { UseShellExecute = true })
+                : Process.Start(new ProcessStartInfo("explorer.exe",
                     @"shell:AppsFolder\Microsoft.PPIProjection_cw5n1h2txyewy!App")
                 { UseShellExecute = true });
-            _launchRequested = launched is not null;
-            launched?.Dispose();
-            UpdateReceiverStatus();
+            _launchRequested = process is not null;
+            _lastLaunchError = _launchRequested ? "" : "Windows ไม่รับคำสั่งเปิดตัวรับ";
         }
         catch (Exception ex)
         {
             _launchRequested = false;
-            UpdateReceiverStatus();
-            MessageBox.Show(this, "Windows เปิด Wireless Display ไม่ได้:\n" + ex.Message +
-                "\nตรวจสอบ Optional Features และการรองรับ Miracast ของอุปกรณ์",
+            _lastLaunchError = ex.Message;
+        }
+        UpdateReceiverStatus();
+    }
+
+    private async Task PrepareWindowsFeatureAsync()
+    {
+        if (_closing || _installingWindowsFeature) return;
+        if (MessageBox.Show(this,
+            "ต้องใช้ Windows Wireless Display และไดรเวอร์ Wi-Fi Direct/Miracast\n\n" +
+            "อนุญาตให้ Windows ติดตั้งฟีเจอร์ Wireless Display หรือไม่?\n" +
+            "อาจต้องยืนยัน UAC และเชื่อมต่อ Windows Update",
+            "จัดเตรียมตัวรับ Windows", MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question) != DialogResult.Yes) return;
+        _installingWindowsFeature = true;
+        RenderStatus();
+        try
+        {
+            var dism = Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.Windows), "System32", "dism.exe");
+            using var process = Process.Start(new ProcessStartInfo(dism,
+                "/Online /Add-Capability /CapabilityName:App.WirelessDisplay.Connect~~~~0.0.1.0 /NoRestart")
+                { UseShellExecute = true, Verb = "runas" })
+                ?? throw new InvalidOperationException("Windows ไม่เริ่มติดตั้งฟีเจอร์");
+            await process.WaitForExitAsync();
+            if (_closing || IsDisposed) return;
+            if (process.ExitCode != 0 && process.ExitCode != 3010)
+                throw new InvalidOperationException("Windows ติดตั้งไม่สำเร็จ: รหัส " + process.ExitCode);
+            if (process.ExitCode == 3010)
+                MessageBox.Show(this, "Windows ต้องรีสตาร์ตก่อนใช้งาน Wireless Display",
+                    "X-Stage Mirror Android PC", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _launchRetries = 0;
+            _lastLaunchUtc = DateTime.MinValue;
+            _launchRequested = false;
+            CheckLocalEnvironment();
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            _lastLaunchError = "Windows ไม่ได้รับอนุญาตให้ติดตั้ง (UAC)";
+        }
+        catch (Exception ex)
+        {
+            _lastLaunchError = ex.Message;
+            MessageBox.Show(this, "จัดเตรียม Wireless Display ไม่สำเร็จ:\n" + ex.Message +
+                "\nอาจต้องเปิด Windows Update หรืออัปเดตไดรเวอร์จากผู้ผลิต",
                 "X-Stage Mirror Android PC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _installingWindowsFeature = false;
+            if (!_closing && !IsDisposed)
+            {
+                OpenReceiver();
+                UpdateReceiverStatus();
+            }
         }
     }
 
@@ -372,10 +456,14 @@ public sealed class MainForm : Form
             .AppendLine("Connect.exe: " + (_connectExecutableAvailable ? "พบไฟล์" : "ยังไม่พบ"))
             .AppendLine("โปรเซส Connect: " + (_connectProcessRunning ? "กำลังทำงาน" : "ยังไม่พบ"))
             .AppendLine("หน้าต่างตัวรับ: " + _receiverWindow)
+            .AppendLine("คำสั่งเปิดตัวรับ: " + (string.IsNullOrEmpty(_lastLaunchError) ? "ไม่มีข้อผิดพลาดที่บันทึก" : _lastLaunchError))
+            .AppendLine("แสดงหน้าต่างรับภาพ: " + (_nativePresented ? "เปิดอยู่" : "ยังไม่ยืนยัน"))
             .AppendLine()
             .AppendLine("บน Android เปิด Smart View / Screen Cast และเลือกชื่อ Windows PC ข้างต้น")
             .AppendLine("No.XXXX เป็นเลขประจำแอป X-Stage ไม่ใช่ชื่อ Miracast ที่โทรศัพท์ค้นหา")
             .AppendLine("Windows Wireless Display เป็นผู้แสดงภาพและจัดการสิทธิ์เชื่อมต่อ")
+            .AppendLine("เมื่อฝั่งส่งยกเลิก Windows จะล้างภาพของเซสชันเอง")
+            .AppendLine("หากหน้าต่างตัวรับปิด X-Stage จะเรียกเปิดใหม่โดยอัตโนมัติ")
             .AppendLine("การพบโปรเซส Connect ไม่ได้ยืนยันว่ามีอุปกรณ์ส่งเชื่อมต่อแล้ว")
             .AppendLine("Google Cast อย่างเดียวไม่สามารถเชื่อมกับ Miracast ได้โดยตรง")
             .AppendLine()

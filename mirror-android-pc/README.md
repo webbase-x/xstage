@@ -1,8 +1,14 @@
 # X-Stage Mirror Android PC
 
-Version 1.0.4 · Build 1005 · Windows 10/11 x64 · Preview
+Version 1.0.5 · Build 1006 · Windows 10/11 x64 · Preview
 
-## Build 1005
+## Build 1006 — native Windows receiver hand-off
+
+The app starts the Windows Miracast receiver automatically, waits for a verified native window, then raises that window and minimizes the X-Stage welcome so it cannot obstruct video. If Windows closes the receiver, X-Stage restores the welcome and retries a bounded number of times. The source can disconnect and the Windows-owned receiver clears its stream; this is not an X-Stage video decoder or independent session disconnect detector.
+
+A recovery action inside X-Stage can invoke Windows DISM to add the Wireless Display optional feature with administrator approval. Windows Update or a restart can be necessary. Neither Miracast Wi-Fi Direct drivers nor Windows projection permissions are bypassed. The file build does not guarantee compatibility with all Windows/Android hardware, and physical mirroring/disconnect behavior is not yet tested.
+
+
 
 The welcome-screen version/build is taken from the compiled assembly.
 Windows Wireless Display launch is shown only as a requested action, not
