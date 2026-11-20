@@ -703,10 +703,9 @@ public sealed class MainForm : Form
             row.Cells["Status"].Style.ForeColor = job.Status == "Completed"
                 ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
             row.Cells["Size"].Value = job.TotalBytes < 0 ? "ไม่ทราบ" : FormatBytes(job.TotalBytes);
-            row.Cells["Progress"].Value = job.Kind == "Video"
-                ? job.VideoPercent.ToString("0.0") + "%"
-                : job.TotalBytes > 0
-                    ? (100.0 * current / job.TotalBytes).ToString("0.0") + "%"
+            row.Cells["Progress"].Value = ProgressPresentation.IsComplete(job) ||
+                job.Kind == "Video" || job.TotalBytes > 0
+                    ? ProgressPresentation.PercentLabel(job)
                     : (current > 0 ? FormatBytes(current) : "—");
             row.Cells["Speed"].Value = job.Status == "Running"
                 ? FormatBytes((long)job.SpeedBytesPerSecond) + "/s" : "—";
@@ -750,18 +749,25 @@ public sealed class MainForm : Form
         if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["Progress"].Index) return;
         e.PaintBackground(e.CellBounds, true);
         var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
-        if (job is not null && (job.TotalBytes > 0 || job.Kind == "Video"))
+        if (job is not null && (job.TotalBytes > 0 || job.Kind == "Video" ||
+                                ProgressPresentation.IsComplete(job)))
         {
-            var progress = job.Kind == "Video"
-                ? Math.Clamp(job.VideoPercent / 100.0, 0, 1)
-                : Math.Clamp(Interlocked.Read(ref job.DownloadedBytes) /
-                    (double)job.TotalBytes, 0, 1);
+            var completeJob = ProgressPresentation.IsComplete(job);
+            var progress = ProgressPresentation.FillFraction(job);
             var rectangle = new Rectangle(e.CellBounds.X + 9, e.CellBounds.Y + 10,
                 Math.Max(1, e.CellBounds.Width - 18), 20);
             using var bg = new SolidBrush(Color.FromArgb(229, 236, 245));
             using var fg = new SolidBrush(Color.FromArgb(32, 133, 222));
             using var complete = new SolidBrush(Color.FromArgb(17, 157, 104));
             e.Graphics.FillRectangle(bg, rectangle);
+            // Completed always has one continuous green bar, even when
+            // temporary HTTP segment counters still contain gaps/old values.
+            if (completeJob)
+            {
+                e.Graphics.FillRectangle(complete, rectangle);
+            }
+            else
+            {
             var segments = job.SegmentDownloadedBytes;
             var segmentCount = job.SegmentsUsed;
             if (job.Kind != "Video" && segmentCount > 1 && job.TotalBytes > 0 &&
@@ -781,11 +787,13 @@ public sealed class MainForm : Form
                 }
             }
             else
-                e.Graphics.FillRectangle(job.Status == "Completed" ? complete : fg,
-                    rectangle.X, rectangle.Y, (int)Math.Round(rectangle.Width * progress), rectangle.Height);
-            TextRenderer.DrawText(e.Graphics, (progress * 100).ToString("0.0") + "%",
-                new Font("Segoe UI", 8, FontStyle.Bold), rectangle,
-                progress > .52 ? Color.White : Color.FromArgb(25, 70, 117),
+                e.Graphics.FillRectangle(fg, rectangle.X, rectangle.Y,
+                    (int)Math.Round(rectangle.Width * progress), rectangle.Height);
+            }
+            using var progressFont = new Font("Segoe UI", 8, FontStyle.Bold);
+            TextRenderer.DrawText(e.Graphics, ProgressPresentation.PercentLabel(job),
+                progressFont, rectangle,
+                completeJob || progress > .52 ? Color.White : Color.FromArgb(25, 70, 117),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
         else
