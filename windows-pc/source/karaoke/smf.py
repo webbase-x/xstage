@@ -87,8 +87,19 @@ def read_vlq(stream):
 
 
 def load_midi(path: Path) -> MidiSong:
-    if path.suffix.lower() != ".xsk" and path.stat().st_size > 64 * 1024 * 1024:
+    if path.suffix.lower() not in (".xsk", ".xmid") and path.stat().st_size > 64 * 1024 * 1024:
         raise ValueError("ไฟล์ MIDI ใหญ่เกิน 64 MB")
+    if path.suffix.lower() == ".xmid":
+        from .xmid_reader import read_xmid
+        from .lyrics import LyricLine, Lyrics
+        payload, doc = read_xmid(path)
+        song = parse_midi(payload, legacy=True)
+        song.lyrics = Lyrics([LyricLine(float(line["startTime"]), line["text"],
+                          [(float(cue["startTime"]), cue["text"]) for cue in line["cues"]])
+                          for line in doc["lines"]])
+        song.title = doc["title"] or song.title
+        song.artist = doc["artist"] or song.artist
+        return song
     if path.suffix.lower() == '.xsk':
         from .xsk_reader import read_xsk
         from .lyrics import LyricLine, Lyrics
