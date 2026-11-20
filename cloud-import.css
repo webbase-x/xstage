@@ -100,3 +100,16 @@
  .cloud-import-selection-item{grid-template-columns:22px minmax(0,1fr);gap:5px 9px}
  .cloud-import-selection-item small{grid-column:2;text-align:left;font-size:.72rem}
 }
+
+/* Expandable folders: compact by default and bounded file rows on demand. */
+.cloud-import-folder{border-bottom:1px solid rgba(93,158,184,.18)}
+.cloud-import-folder:last-child{border-bottom:0}
+.cloud-import-folder .cloud-import-selection-item{cursor:default}
+.cloud-import-folder-toggle{background:none!important;border:0!important;box-shadow:none!important;min-height:36px!important;padding:5px 2px!important;text-align:left;font-size:.9rem!important;color:#e8fbff!important;white-space:normal}
+.cloud-import-folder-toggle:hover{text-decoration:underline}
+.cloud-import-folder-toggle:focus-visible{outline:2px solid #59e9d0;outline-offset:2px}
+.cloud-import-folder-files{padding:0 8px 9px 37px;max-height:270px;overflow:auto;overscroll-behavior:contain}
+.cloud-import-file-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 8px;font-size:.77rem;border-bottom:1px solid rgba(91,153,174,.13)}
+.cloud-import-file-row span{min-width:0;overflow-wrap:anywhere}
+.cloud-import-file-row small{flex:none;white-space:nowrap;color:#94cadb}
+.cloud-import-dialog .cloud-import-show-more{display:block;margin:8px 0;width:100%;background:#163d50;font-size:.75rem}
