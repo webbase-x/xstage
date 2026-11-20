@@ -2,7 +2,7 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.1 · Build 4** (Windows 10/11 x64).
+**Preview v0.2.2 · Build 5** (Windows 10/11 x64).
 
 ## Features
 - Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker.
@@ -20,6 +20,8 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - History: %LOCALAPPDATA%/X-Stage/Download Manager/downloads.json
 - Partials: .xstage-downloads/[id]/ in the destination, removed upon completion.
 - Thai desktop interface showing progress, speed, size, status and errors.
+- UTF-8 console decoding and independent post-download path receipt for Thai/Unicode filenames.
+- The toolbar opens an explicit Open file / Open folder choice; incomplete/failed entries can still open their destination folder.
 - Per-segment progress bar shows actual bytes received in each HTTP range, not cosmetic stripes; social video downloads use unified progress.
 - Completed entries turn green. Click a finished filename to open its file or containing folder.
 - Startup checks and a **ตรวจสอบอัปเดต** button query the verified X-Stage release manifest. A newer version prompts before opening the canonical Setup EXE link; no silent installation.
