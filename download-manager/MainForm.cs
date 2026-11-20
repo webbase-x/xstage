@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 namespace XStageDownloadManager;
 
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
     private readonly DownloadEngine _engine = new();
     private readonly TextBox _url = new();
@@ -28,14 +28,14 @@ public sealed class MainForm : Form
     public MainForm(string[] args)
     {
         Text = "X-Stage Download Manager · v0.2.13 Build 16";
-        MinimumSize = new Size(930, 650);
-        Size = new Size(1220, 785);
+        MinimumSize = new Size(880, 590);
+        Size = new Size(1250, 780);
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(244, 246, 250);
+        BackColor = Color.FromArgb(23, 26, 34);
         ForeColor = Color.FromArgb(23, 34, 55);
         Font = new Font("Segoe UI", 10);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        CreateLayout();
+        CreateIdmLayout();
         FormClosed += (_, _) => _completedMenu.Dispose();
         _parts.Items.AddRange(new object[] { "1", "2", "4", "8", "16", "32" });
         _parts.SelectedItem = _engine.DefaultParts.ToString();
@@ -60,6 +60,7 @@ public sealed class MainForm : Form
         _url.TextChanged += (_, _) => UpdateVideoOptionVisibility();
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
         UpdateVideoOptionVisibility();
+        if (_url.Text.Length > 0) ShowInputPanel(true);
         _timer.Tick += (_, _) => RefreshRows();
         _timer.Start();
         FormClosing += (_, _) =>
@@ -87,234 +88,6 @@ public sealed class MainForm : Form
             await CheckForUpdatesAsync(false);
         };
         RefreshRows();
-    }
-
-    private void CreateLayout()
-    {
-        var header = new Panel { Dock = DockStyle.Top, Height = 101 };
-        header.Paint += (_, e) =>
-        {
-            using var gradient = new LinearGradientBrush(header.ClientRectangle,
-                Color.FromArgb(12, 38, 79), Color.FromArgb(28, 105, 184), 0f);
-            e.Graphics.FillRectangle(gradient, header.ClientRectangle);
-            using var circle = new SolidBrush(Color.FromArgb(58, 178, 234));
-            e.Graphics.FillEllipse(circle, header.Width - 132, -90, 235, 235);
-            using var circle2 = new SolidBrush(Color.FromArgb(35, 106, 200));
-            e.Graphics.FillEllipse(circle2, header.Width - 308, 40, 188, 188);
-        };
-        header.Controls.Add(new Label
-        {
-            Text = "X-STAGE   DOWNLOAD MANAGER", AutoSize = true,
-            ForeColor = Color.White, Font = new Font("Segoe UI", 20, FontStyle.Bold),
-            Location = new Point(25, 17), BackColor = Color.Transparent
-        });
-        header.Controls.Add(new Label
-        {
-            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.13 · Build 16",
-            AutoSize = true, ForeColor = Color.FromArgb(212, 230, 252),
-            Font = new Font("Segoe UI", 9, FontStyle.Regular),
-            Location = new Point(28, 65), BackColor = Color.Transparent
-        });
-        Controls.Add(header);
-
-        var entry = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top, Height = 268, Padding = new Padding(20, 11, 20, 9),
-            BackColor = Color.White, ColumnCount = 4, RowCount = 5
-        };
-        entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
-        entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-        entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 133));
-        for (int i = 0; i < 5; i++) entry.RowStyles.Add(new RowStyle(SizeType.Percent, 20));
-        entry.Controls.Add(MakeLabel("ลิงก์ / วิดีโอ"), 0, 0);
-        entry.Controls.Add(MakeLabel("บันทึกที่"), 0, 1);
-        SetupText(_url, "วางลิงก์ YouTube, TikTok, Facebook Reels หรือ URL ไฟล์ทั่วไป");
-        SetupText(_folder, "เลือกโฟลเดอร์สำหรับบันทึกไฟล์");
-        _url.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; AddUrls(); }
-        };
-        entry.Controls.Add(_url, 1, 0);
-        entry.Controls.Add(_folder, 1, 1);
-        var paste = MakeButton("วางลิงก์", false, (_, _) =>
-        {
-            try { if (Clipboard.ContainsText()) _url.Text = Clipboard.GetText(); }
-            catch { MessageBox.Show("อ่านคลิปบอร์ดไม่ได้", "X-Stage", MessageBoxButtons.OK, MessageBoxIcon.Information); }
-        });
-        var add = MakeButton("＋ ดาวน์โหลด", true, (_, _) => AddUrls());
-        var browse = MakeButton("เลือกโฟลเดอร์", false, (_, _) =>
-        {
-            using var dialog = new FolderBrowserDialog
-            {
-                Description = "เลือกตำแหน่งเก็บไฟล์ที่ดาวน์โหลด",
-                SelectedPath = Directory.Exists(_folder.Text) ? _folder.Text :
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            };
-            if (dialog.ShowDialog(this) == DialogResult.OK) _folder.Text = dialog.SelectedPath;
-        });
-        entry.Controls.Add(paste, 2, 0);
-        entry.Controls.Add(add, 3, 0);
-        entry.Controls.Add(browse, 3, 1);
-        var hint = new Label
-        {
-            Text = "HTTPS / HTTP", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(114, 127, 151), Font = new Font("Segoe UI", 8)
-        };
-        entry.Controls.Add(hint, 2, 1);
-        entry.Controls.Add(MakeLabel("จำนวนส่วน"), 0, 2);
-        _parts.DropDownStyle = ComboBoxStyle.DropDownList;
-        _parts.Dock = DockStyle.Fill;
-        _parts.Margin = new Padding(3, 8, 6, 7);
-        _parts.Font = new Font("Segoe UI", 11);
-        _parts.AccessibleName = "จำนวนการเชื่อมต่อแบ่งโหลดต่อหนึ่งไฟล์";
-        entry.Controls.Add(_parts, 1, 2);
-        entry.Controls.Add(new Label
-        {
-            Text = "1–32 ส่วน", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(92, 110, 134), Font = new Font("Segoe UI", 8)
-        }, 2, 2);
-        entry.Controls.Add(MakeButton("ใช้กับรายการ", false, (_, _) => ApplyPartsToSelected()), 3, 2);
-        entry.Controls.Add(MakeLabel("วิดีโอ"), 0, 3);
-        _videoQuality.Dock = DockStyle.Fill;
-        _videoQuality.DropDownStyle = ComboBoxStyle.DropDownList;
-        _videoQuality.Margin = new Padding(3, 8, 6, 7);
-        _videoQuality.Font = new Font("Segoe UI", 11);
-        _videoQuality.AccessibleName = "เลือกระดับคุณภาพวิดีโอ";
-        entry.Controls.Add(_videoQuality, 1, 3);
-        entry.Controls.Add(new Label
-        {
-            Text = "อัตโนมัติ", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(92, 110, 134), Font = new Font("Segoe UI", 8)
-        }, 2, 3);
-        entry.Controls.Add(new Label
-        {
-            Text = "YT · TikTok · FB", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(54, 76, 111), Font = new Font("Segoe UI", 8, FontStyle.Bold)
-        }, 3, 3);
-        entry.Controls.Add(MakeLabel("รูปแบบไฟล์"), 0, 4);
-        _outputFormat.Dock = DockStyle.Fill;
-        _outputFormat.DropDownStyle = ComboBoxStyle.DropDownList;
-        _outputFormat.Margin = new Padding(3, 8, 6, 7);
-        _outputFormat.Font = new Font("Segoe UI", 11);
-        _outputFormat.AccessibleName = "เลือกรูปแบบไฟล์ปลายทาง ค่าเริ่มต้น MP4";
-        entry.Controls.Add(_outputFormat, 1, 4);
-        entry.Controls.Add(new Label
-        {
-            Text = "MP4 แนะนำ", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(17, 128, 90), Font = new Font("Segoe UI", 8, FontStyle.Bold)
-        }, 2, 4);
-        _inputLayout = entry;
-        _videoOptionControls = entry.Controls.Cast<Control>()
-            .Where(control => entry.GetPositionFromControl(control).Row >= 3).ToArray();
-        Controls.Add(entry);
-
-        var toolbar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top, Height = 104, Padding = new Padding(18, 10, 0, 8),
-            WrapContents = true, BackColor = Color.FromArgb(250, 251, 253),
-            AutoScroll = false
-        };
-        toolbar.Controls.Add(MakeTool("▶  เริ่ม / ต่อ", (_, _) => SelectedAction(j => _engine.Start(j))));
-        toolbar.Controls.Add(MakeTool("Ⅱ  หยุดชั่วคราว", (_, _) => SelectedAction(_engine.Pause)));
-        toolbar.Controls.Add(MakeTool("⟳  เริ่มทั้งหมด", (_, _) =>
-        {
-            foreach (var j in _engine.Jobs.ToArray())
-                if (j.Status is "Paused" or "Failed") _engine.Start(j);
-        }));
-        toolbar.Controls.Add(MakeTool("Ⅱ  หยุดทั้งหมด", (_, _) => _engine.PauseAll()));
-        toolbar.Controls.Add(MakeTool("⟳  ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true)));
-        toolbar.Controls.Add(MakeTool("🌐  ดาวน์โหลดอัตโนมัติ", (_, _) => SetupBrowserIntegration()));
-        toolbar.Controls.Add(MakeTool("✕  ลบรายการ", (_, _) =>
-        {
-            var job = Selected();
-            if (job is null) return;
-            if (MessageBox.Show(this, "ลบรายการนี้จากประวัติหรือไม่?\nไฟล์ที่ดาวน์โหลดเสร็จจะไม่ถูกลบ",
-                "ยืนยัน", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            if (!_engine.Remove(job))
-                MessageBox.Show(this, "หยุดการดาวน์โหลดแล้ว กรุณารอให้หยุดสนิทและกดลบอีกครั้ง",
-                    "กำลังหยุด", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            RefreshRows();
-        }));
-        Controls.Add(toolbar);
-
-        _grid.Dock = DockStyle.Fill;
-        _grid.Margin = Padding.Empty;
-        _grid.BackgroundColor = Color.White;
-        _grid.BorderStyle = BorderStyle.None;
-        _grid.ColumnHeadersHeight = 44;
-        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        _grid.EnableHeadersVisualStyles = false;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(236, 243, 250);
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(37, 60, 93);
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        _grid.DefaultCellStyle.BackColor = Color.White;
-        _grid.DefaultCellStyle.ForeColor = Color.FromArgb(31, 42, 60);
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(224, 240, 255);
-        _grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(24, 66, 116);
-        _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 253);
-        _grid.RowTemplate.Height = 41;
-        _grid.RowHeadersVisible = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.MultiSelect = false;
-        _grid.ReadOnly = true;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.AllowUserToResizeRows = false;
-        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "File", HeaderText = "ชื่อไฟล์", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, MinimumWidth = 150 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Size", HeaderText = "ขนาด", Width = 94 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Progress", HeaderText = "ความคืบหน้า", Width = 185 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Speed", HeaderText = "ความเร็ว", Width = 114 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "สถานะ", Width = 130 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Parts", HeaderText = "จำนวนส่วนจริง", Width = 130 });
-        _grid.CellPainting += PaintProgress;
-        _grid.SelectionChanged += (_, _) => UpdateDetails();
-        _grid.CellClick += (_, e) =>
-        {
-            if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index) return;
-            var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
-            if (job is not null)
-                ShowCompletedMenu(job, _grid.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false));
-        };
-        _grid.CellMouseEnter += (_, e) =>
-        {
-            if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index) return;
-            var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
-            _grid.Cursor = job is not null ? Cursors.Hand : Cursors.Default;
-        };
-        _grid.CellMouseLeave += (_, _) => _grid.Cursor = Cursors.Default;
-        _grid.CellDoubleClick += (_, e) =>
-        {
-            if (e.RowIndex >= 0 && e.ColumnIndex != _grid.Columns["File"].Index) OpenSelected();
-        };
-        Controls.Add(_grid);
-        _grid.BringToFront();
-
-        var footer = new TableLayoutPanel
-        {
-            Dock = DockStyle.Bottom, Height = 98,
-            BackColor = Color.FromArgb(231, 238, 247), Padding = new Padding(22, 7, 22, 9),
-            ColumnCount = 1, RowCount = 3
-        };
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
-        footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        _summary.Dock = DockStyle.Fill;
-        _summary.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        _summary.ForeColor = Color.FromArgb(24, 63, 113);
-        _details.Dock = DockStyle.Fill;
-        _details.ForeColor = Color.FromArgb(81, 102, 127);
-        _details.Font = new Font("Segoe UI", 9);
-        _details.AutoEllipsis = true;
-        footer.Controls.Add(_summary, 0, 0);
-        footer.Controls.Add(_details, 0, 1);
-        _updateStatus.Dock = DockStyle.Fill;
-        _updateStatus.ForeColor = Color.FromArgb(41, 92, 156);
-        _updateStatus.Font = new Font("Segoe UI", 8, FontStyle.Bold);
-        _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.13 · Build 16";
-        footer.Controls.Add(_updateStatus, 0, 2);
-        Controls.Add(footer);
     }
 
     private void UpdateVideoOptionVisibility()
@@ -362,21 +135,6 @@ public sealed class MainForm : Form
             Cursor = Cursors.Hand
         };
         button.FlatAppearance.BorderSize = 0;
-        button.Click += handler;
-        return button;
-    }
-
-    private static Button MakeTool(string text, EventHandler handler)
-    {
-        var button = new Button
-        {
-            Text = text, Height = 37, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowOnly,
-            Margin = new Padding(3, 0, 7, 0), Padding = new Padding(10, 0, 10, 0),
-            FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            BackColor = Color.White, ForeColor = Color.FromArgb(39, 66, 100),
-            Cursor = Cursors.Hand
-        };
-        button.FlatAppearance.BorderColor = Color.FromArgb(213, 225, 239);
         button.Click += handler;
         return button;
     }
