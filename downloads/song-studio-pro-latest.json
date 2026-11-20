@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Pro",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "channel": "preview",
   "available": true,
   "windows_artifact_build": true,
@@ -9,9 +9,9 @@
   "player_compatible": false,
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Verified Pro Desktop Standalone Preview. Adds automatic startup update notification with one-click verified update/install while retaining responsive controls and SQLite safeguards. EXE is unsigned.",
-  "file": "X-Stage-Song-Studio-Pro-v0.1.22-preview.exe",
-  "sha256": "8bcc6e9907f1fd33de8f66f75c9d3176087b37df7e3bbe7c8a496bed9a93bad3",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.22-preview/X-Stage-Song-Studio-Pro-v0.1.22-preview.exe",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.22-preview"
+  "status": "Verified Pro Desktop Standalone Preview. Adds SHA-256 deduplication protection, resumable imports, bounded completed import history, SQLite storage health, optional cleanup and guarded compaction. EXE is unsigned.",
+  "file": "X-Stage-Song-Studio-Pro-v0.1.23-preview.exe",
+  "sha256": "a790363dcb97ace8644bca8e2f204d6ac100234564c36b8115c786dd1620f328",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.23-preview/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.23-preview"
 }
