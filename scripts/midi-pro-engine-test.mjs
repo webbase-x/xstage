@@ -6,7 +6,7 @@ const source=fs.readFileSync(new URL('../midi-pro-engine.js',import.meta.url),'u
   .replace("import('./'+MODULE)","Promise.resolve(contextModule)");
 assert.ok(source.includes('spessasynth_processor.min.js'),'Professional synth must load locally');
 assert.ok(!source.includes('https://'),'Private MIDI playback must not fetch remote scripts');
-let received=[],stops=0,destroyed=0,modules=[],outputs=[],compressors=[];
+let received=[],stops=0,destroyed=0,modules=[],outputs=[],compressors=[],publicAssetFetches=0;
 class Param{constructor(){this.value=0;}}
 class FakeNode{constructor(){this.gain=new Param();this.threshold=new Param();
   this.knee=new Param();this.ratio=new Param();this.attack=new Param();this.release=new Param();}
@@ -40,10 +40,21 @@ const scope={AudioContext:FakeAudioContext,AudioWorkletNode:class {},
     channelVolume:100,channelExpression:80,pan:48
   }]})}};
 const sandbox={window:scope,contextModule:{WorkletSynthesizer:FakeSynth},Uint8Array,
+  fetch:async (resource,options)=>{
+    publicAssetFetches++;
+    assert.equal(resource,'vendor/spessasynth/spessasynth_processor.min.js');
+    assert.equal(options.cache,'force-cache');
+    assert.equal(options.credentials,'same-origin');
+    return {ok:true,status:200,headers:{get:()=>null},
+      arrayBuffer:async()=>new Uint8Array(1024).buffer};
+  },
   ArrayBuffer,DOMException,Number,Math,Promise,console,setInterval:fn=>(interval=fn,1),
   clearInterval:()=>{interval=null;}};
 vm.runInNewContext(source,sandbox,{filename:'midi-pro-engine.js'});
 assert.equal(scope.XStageProMidi.available(),true);
+await Promise.all([scope.XStageProMidi.preload(),scope.XStageProMidi.preload()]);
+assert.equal(publicAssetFetches,1,'The public worklet must be preloaded once per browser session');
+
 const ready=await scope.XStageProMidi.prepare(new Uint8Array([0]),
   new Uint8Array([1,2,3]));
 assert.ok(modules[0].includes('spessasynth_processor.min.js'));
