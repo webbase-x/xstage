@@ -11,14 +11,15 @@ namespace XStageDownloadManager;
 /// </summary>
 public static class SelfUpdater
 {
+    // Download the actual release bytes without decompression; a transformed
+    // response would make the published SHA-256 and Content-Length invalid.
     private static readonly HttpClient Client = new(new HttpClientHandler
     {
-        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-        AllowAutoRedirect = true
+        AutomaticDecompression = DecompressionMethods.None,
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 6
     }) { Timeout = Timeout.InfiniteTimeSpan };
 
-    // Match the 64-bit Inno Setup {autopf} destination. Do not run the
-    // obsolete per-user EXE after migrating to an all-users installation.
     public static string InstalledProgramFilesExe => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
         "X-Stage", "Download Manager", "XStageDownloadManager.exe");
@@ -26,6 +27,20 @@ public static class SelfUpdater
     private static string UpdateFolder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "X-Stage", "Download Manager", "updates");
+
+    public static string DownloadLogPath => Path.Combine(UpdateFolder, "update-download.log");
+
+    private static void LogDownload(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(UpdateFolder);
+            File.AppendAllText(DownloadLogPath,
+                DateTimeOffset.Now.ToString("O") + " " + message + Environment.NewLine);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
 
     public static async Task<string> DownloadVerifiedAsync(
         DownloadManagerRelease release, IProgress<double>? progress = null,
@@ -42,62 +57,171 @@ public static class SelfUpdater
 
         Directory.CreateDirectory(UpdateFolder);
         var destination = Path.Combine(UpdateFolder, expectedName);
+        LogDownload($"Starting v{release.Version} Build {release.Build}; expected bytes={release.Size}; file={expectedName}");
+        // GitHub Releases is the ONLY source for production update bytes.
+        return await DownloadAndVerifyPayloadAsync(new Uri(expectedUrl), destination,
+            release.Sha256, release.Size, progress, cancellation);
+    }
+
+    // Internal so the integration tests can exercise the same byte-for-byte
+    // resume logic with a deterministic local HTTP Range server.
+    internal static async Task<string> DownloadAndVerifyPayloadAsync(
+        Uri source, string destination, string expectedSha, long expectedSize,
+        IProgress<double>? progress = null, CancellationToken cancellation = default)
+    {
+        if (expectedSize < 1 || expectedSha.Length != 64 ||
+            !expectedSha.All(Uri.IsHexDigit))
+            throw new IOException("ข้อมูลตรวจสอบไฟล์อัปเดตไม่ถูกต้อง");
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
         if (File.Exists(destination))
         {
-            if (await VerifyFileAsync(destination, release.Sha256, release.Size, cancellation))
+            if (await VerifyFileAsync(destination, expectedSha, expectedSize, cancellation))
             {
                 progress?.Report(100);
                 return destination;
             }
+            // Never run an old or corrupted installer merely because it has
+            // the right name.
             File.Delete(destination);
         }
 
         var partial = destination + ".partial";
-        try
+        Exception? lastError = null;
+        for (var attempt = 1; attempt <= 4; attempt++)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, expectedUrl);
-            request.Headers.UserAgent.ParseAdd("XStageDownloadManager/Updater");
-            using var response = await Client.SendAsync(
-                request, HttpCompletionOption.ResponseHeadersRead, cancellation);
-            response.EnsureSuccessStatusCode();
-            if (response.Content.Headers.ContentLength is long reportedSize &&
-                reportedSize != release.Size)
-                throw new IOException("ขนาดไฟล์ติดตั้งไม่ตรงกับข้อมูลอัปเดต");
-
-            await using (var source = await response.Content.ReadAsStreamAsync(cancellation))
-            await using (var output = new FileStream(partial, FileMode.Create, FileAccess.Write,
-                             FileShare.None, 131072, FileOptions.Asynchronous))
-            using (var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            cancellation.ThrowIfCancellationRequested();
+            try
             {
-                var buffer = new byte[131072];
-                long total = 0;
-                int read;
-                while ((read = await source.ReadAsync(buffer, cancellation)) != 0)
+                long resumeFrom = File.Exists(partial) ? new FileInfo(partial).Length : 0;
+                if (resumeFrom > expectedSize)
                 {
-                    total += read;
-                    if (total > release.Size)
-                        throw new IOException("ไฟล์ติดตั้งใหญ่กว่าที่เผยแพร่ไว้");
-                    digest.AppendData(buffer, 0, read);
-                    await output.WriteAsync(buffer.AsMemory(0, read), cancellation);
-                    progress?.Report(100.0 * total / release.Size);
+                    File.Delete(partial);
+                    resumeFrom = 0;
                 }
-                await output.FlushAsync(cancellation);
-                var actualHash = Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant();
-                if (total != release.Size ||
-                    !string.Equals(actualHash, release.Sha256, StringComparison.OrdinalIgnoreCase))
-                    throw new IOException("ตรวจสอบ SHA-256/ขนาดไฟล์อัปเดตไม่ผ่าน — ไม่ติดตั้งไฟล์นี้");
+                if (resumeFrom == expectedSize)
+                {
+                    if (await VerifyFileAsync(partial, expectedSha, expectedSize, cancellation))
+                    {
+                        File.Move(partial, destination, true);
+                        progress?.Report(100);
+                        LogDownload("PASS existing complete partial SHA-256");
+                        return destination;
+                    }
+                    File.Delete(partial);
+                    resumeFrom = 0;
+                }
+
+                LogDownload($"HTTP attempt {attempt}/4; resuming at byte {resumeFrom} of {expectedSize}");
+                using var inactivity = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+                inactivity.CancelAfter(TimeSpan.FromSeconds(60));
+                using var request = new HttpRequestMessage(HttpMethod.Get, source);
+                request.Headers.UserAgent.ParseAdd("XStageDownloadManager/AutoUpdate");
+                if (resumeFrom > 0)
+                    request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(resumeFrom, null);
+
+                using var response = await Client.SendAsync(
+                    request, HttpCompletionOption.ResponseHeadersRead, inactivity.Token);
+
+                // Follow only HTTPS and the official GitHub release/CDN hosts.
+                // Do not install bytes returned by an unrelated redirect.
+                if (source.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    var final = response.RequestMessage?.RequestUri;
+                    if (final is null || final.Scheme != Uri.UriSchemeHttps ||
+                        !(final.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+                          final.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase)))
+                        throw new IOException("แหล่งดาวน์โหลดเปลี่ยนไปยังเว็บไซต์ที่ไม่ใช่ GitHub");
+                }
+
+                if (!response.IsSuccessStatusCode)
+                    throw new HttpRequestException(
+                        "เซิร์ฟเวอร์ดาวน์โหลดตอบกลับ HTTP " + (int)response.StatusCode +
+                        " (" + response.ReasonPhrase + ")",
+                        null, response.StatusCode);
+
+                var contentType = response.Content.Headers.ContentType?.MediaType;
+                if (contentType is "text/html" or "application/json" or "text/plain")
+                    throw new IOException("ได้รับข้อมูลหน้าเว็บแทนไฟล์ติดตั้ง EXE");
+
+                var append = resumeFrom > 0 && response.StatusCode == HttpStatusCode.PartialContent;
+                if (response.StatusCode == HttpStatusCode.PartialContent)
+                {
+                    var cr = response.Content.Headers.ContentRange;
+                    var from = append ? resumeFrom : 0;
+                    if (cr?.From != from || cr.Length != expectedSize)
+                        throw new IOException("เซิร์ฟเวอร์ส่งตำแหน่งข้อมูล Range ไม่ถูกต้อง");
+                }
+                else if (response.StatusCode != HttpStatusCode.OK)
+                    throw new IOException("เซิร์ฟเวอร์ไม่ได้ส่งไฟล์ติดตั้งแบบ HTTP 200 หรือ 206");
+
+                // A server may ignore Range and return 200. Restart from 0
+                // instead of appending a complete response to a partial file.
+                long start = append ? resumeFrom : 0;
+                var remaining = expectedSize - start;
+                if (response.Content.Headers.ContentLength is long contentLength &&
+                    contentLength != remaining)
+                    throw new IOException($"ขนาดข้อมูลที่ได้รับไม่ตรง: {contentLength} แทน {remaining} ไบต์");
+
+                await using (var input = await response.Content.ReadAsStreamAsync(inactivity.Token))
+                await using (var output = new FileStream(partial,
+                    append ? FileMode.OpenOrCreate : FileMode.Create,
+                    FileAccess.Write, FileShare.None, 131072, FileOptions.Asynchronous))
+                {
+                    if (append) output.Position = resumeFrom;
+                    var buffer = new byte[131072];
+                    long received = start;
+                    int count;
+                    while ((count = await input.ReadAsync(buffer, inactivity.Token)) > 0)
+                    {
+                        received += count;
+                        if (received > expectedSize)
+                            throw new IOException("ไฟล์อัปเดตที่ได้รับมีขนาดเกินข้อมูลจาก Release");
+                        await output.WriteAsync(buffer.AsMemory(0, count), inactivity.Token);
+                        progress?.Report(Math.Min(99.9, received * 100.0 / expectedSize));
+                        inactivity.CancelAfter(TimeSpan.FromSeconds(60));
+                    }
+                    await output.FlushAsync(cancellation);
+                    if (received != expectedSize)
+                        throw new IOException($"ดาวน์โหลดไม่ครบ: {received:N0}/{expectedSize:N0} ไบต์");
+                }
+
+                if (!await VerifyFileAsync(partial, expectedSha, expectedSize, cancellation))
+                {
+                    File.Delete(partial);
+                    throw new IOException("SHA-256 ไม่ตรงกับไฟล์ที่ GitHub เผยแพร่ ลบไฟล์ผิดพลาดและลองใหม่");
+                }
+                File.Move(partial, destination, true);
+                progress?.Report(100);
+                LogDownload("PASS downloaded size and SHA-256; path=" + destination);
+                return destination;
             }
-            File.Move(partial, destination, true);
-            progress?.Report(100);
-            return destination;
+            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+            {
+                lastError = new IOException("ไม่มีข้อมูลตอบกลับจากเซิร์ฟเวอร์ภายใน 60 วินาที");
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException)
+            {
+                lastError = ex;
+            }
+
+            cancellation.ThrowIfCancellationRequested();
+            LogDownload($"FAILED attempt {attempt}/4; partial bytes=" +
+                (File.Exists(partial) ? new FileInfo(partial).Length : 0) +
+                "; reason=" + lastError?.Message);
+
+            // Permanent HTTP failures should show immediately; do not retry
+            // repeatedly on a deleted release, revoked authorization, etc.
+            if (lastError is HttpRequestException http &&
+                http.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized
+                    or HttpStatusCode.NotFound or HttpStatusCode.Gone)
+                break;
+            if (attempt < 4)
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(8, 1 << (attempt - 1))), cancellation);
         }
-        catch
-        {
-            try { if (File.Exists(partial)) File.Delete(partial); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-            throw;
-        }
+        throw new IOException(
+            "ดาวน์โหลดอัปเดตไม่สำเร็จหลังพยายามต่อไฟล์และลองใหม่: " +
+            (lastError?.Message ?? "ไม่ทราบสาเหตุ") +
+            Environment.NewLine + "บันทึกข้อผิดพลาด: " + DownloadLogPath, lastError);
     }
 
     private static async Task<bool> VerifyFileAsync(
