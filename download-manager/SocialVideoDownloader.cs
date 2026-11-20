@@ -42,12 +42,15 @@ public static class SocialVideoDownloader
         var args = new List<string>
         {
             "--ignore-config", "--no-plugin-dirs", "--no-playlist", "--no-simulate", "--no-mtime", "--newline", "--no-colors",
-            "--continue", "--windows-filenames",
+            "--continue", "--windows-filenames", "--encoding", "utf-8",
             "--paths", "home:" + job.Folder,
             "--paths", "temp:" + work,
             "-o", "%(title).150B [%(id)s].%(ext)s",
             "--print", "before_dl:xstage-title:%(title)s",
             "--print", "after_move:xstage-path:%(filepath)s",
+            // Keep an independent final-path receipt. Console output on Thai
+            // Windows can otherwise replace Unicode filename bytes.
+            "--print-to-file", "after_move:%(filepath)s", Path.Combine(work, "xstage-completed-path.txt"),
             "--progress-template", "download:xstage-progress:%(progress._percent_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s",
             "--ffmpeg-location", tools,
             "--js-runtimes", "deno:" + Path.Combine(tools, "deno.exe"),
@@ -79,6 +82,9 @@ public static class SocialVideoDownloader
 
         Directory.CreateDirectory(job.Folder);
         Directory.CreateDirectory(work);
+        var receiptPath = Path.Combine(work, "xstage-completed-path.txt");
+        // Never treat an earlier attempt's receipt as a successful download.
+        if (File.Exists(receiptPath)) File.Delete(receiptPath);
         job.VideoPhase = "กำลังอ่านข้อมูลวิดีโอ";
         job.VideoPercent = 0;
         job.SegmentsUsed = 0; // -N sets a maximum fragment concurrency, not a guaranteed number of HTTP byte ranges
@@ -94,6 +100,8 @@ public static class SocialVideoDownloader
             StandardErrorEncoding = Encoding.UTF8
         };
         info.Environment["YTDLP_NO_PLUGINS"] = "1";
+        info.Environment["PYTHONIOENCODING"] = "utf-8";
+        info.Environment["PYTHONUTF8"] = "1";
         foreach (var arg in BuildArguments(job, work, tools)) info.ArgumentList.Add(arg);
 
         using var process = new Process { StartInfo = info };
@@ -126,7 +134,7 @@ public static class SocialVideoDownloader
                 job.VideoPhase = "กำลังดาวน์โหลดวิดีโอ";
             }
             else if (line.StartsWith("xstage-path:", StringComparison.Ordinal))
-                finalPath = line["xstage-path:".Length..].Trim();
+                finalPath = line["xstage-path:".Length..].TrimEnd('\r', '\n');
             else if (line.StartsWith("xstage-progress:", StringComparison.Ordinal))
             {
                 var progress = line["xstage-progress:".Length..].Split('|');
@@ -163,11 +171,7 @@ public static class SocialVideoDownloader
             throw new IOException("ดาวน์โหลดวิดีโอไม่สำเร็จ" +
                 (tail.Length > 0 ? ": " + (tail.Length > 320 ? tail[^320..] : tail) : " (รหัส " + process.ExitCode + ")"));
         }
-        if (string.IsNullOrWhiteSpace(finalPath)) throw new IOException("โปรแกรมวิดีโอไม่ส่งตำแหน่งไฟล์ที่บันทึกเสร็จ");
-        var fullPath = Path.GetFullPath(finalPath);
-        var folderPath = Path.GetFullPath(job.Folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (!fullPath.StartsWith(folderPath, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
-            throw new IOException("ไม่พบไฟล์วิดีโอในโฟลเดอร์ปลายทางที่เลือก");
+        var fullPath = VerifyCompletedPath(job.Folder, finalPath, receiptPath);
         job.CompletedPath = fullPath;
         job.TotalBytes = new FileInfo(fullPath).Length;
         Interlocked.Exchange(ref job.DownloadedBytes, job.TotalBytes);
@@ -176,5 +180,35 @@ public static class SocialVideoDownloader
         try { Directory.Delete(work, true); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    // Never mark an unrelated pre-existing file as complete. Only trust the
+    // exact recorded output path when it belongs to the chosen destination.
+    public static string VerifyCompletedPath(string folder, string? stdoutPath, string? receiptPath)
+    {
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(stdoutPath)) candidates.Add(stdoutPath);
+        if (!string.IsNullOrWhiteSpace(receiptPath) && File.Exists(receiptPath))
+            candidates.AddRange(File.ReadAllLines(receiptPath, Encoding.UTF8)
+                .Where(path => !string.IsNullOrWhiteSpace(path)));
+
+        var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                   + Path.DirectorySeparatorChar;
+        foreach (var raw in candidates.AsEnumerable().Reverse())
+        {
+            try
+            {
+                var path = raw.TrimEnd('\r', '\n');
+                var resolved = Path.GetFullPath(
+                    Path.IsPathFullyQualified(path) ? path : Path.Combine(folder, path));
+                if (resolved.StartsWith(root, StringComparison.OrdinalIgnoreCase) && File.Exists(resolved))
+                    return resolved;
+            }
+            catch (ArgumentException) { /* Invalid console bytes: try the other receipt. */ }
+            catch (NotSupportedException) { }
+        }
+        throw new IOException(candidates.Count == 0
+            ? "โปรแกรมดาวน์โหลดไม่ส่งตำแหน่งไฟล์ที่บันทึกเสร็จ กรุณาตรวจสอบบันทึกข้อผิดพลาด"
+            : "ไม่พบไฟล์วิดีโอตามตำแหน่งที่โปรแกรมดาวน์โหลดรายงาน โปรดตรวจสอบโฟลเดอร์ปลายทางและลองอีกครั้ง");
     }
 }
