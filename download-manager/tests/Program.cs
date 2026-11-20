@@ -243,6 +243,35 @@ try
         throw new Exception("32 HTTP ranges were not used for a sufficiently large file.");
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(maxParts.CompletedPath)))
         throw new Exception("32-connection merge corrupted the output.");
+    // An interrupted EXE transfer must resume from a verified-length partial,
+    // rather than discard 200 MB and start from zero on every network drop.
+    var updaterSha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    var updateTarget = Path.Combine(folder, "integration-update-setup.exe");
+    await File.WriteAllBytesAsync(updateTarget + ".partial",
+        bytes.AsMemory(0, 1024 * 1024).ToArray());
+    var updatedFile = await SelfUpdater.DownloadAndVerifyPayloadAsync(
+        new Uri(server.Url + "range/update-setup.exe"), updateTarget, updaterSha, bytes.Length);
+    if (updatedFile != updateTarget || !File.Exists(updatedFile) ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(updatedFile)) ||
+        File.Exists(updateTarget + ".partial"))
+        throw new Exception("Updater HTTP 206 Range resume and SHA-256 verification failed.");
+
+    // Some CDNs ignore Range. 200 must replace the partial file, not append it.
+    var noRangeTarget = Path.Combine(folder, "integration-update-plain.exe");
+    await File.WriteAllBytesAsync(noRangeTarget + ".partial", bytes.AsMemory(0, 300000).ToArray());
+    await SelfUpdater.DownloadAndVerifyPayloadAsync(
+        new Uri(server.Url + "plain/update.exe"), noRangeTarget, updaterSha, bytes.Length);
+    if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(noRangeTarget)))
+        throw new Exception("Updater must restart from byte zero when server ignores Range.");
+
+    // Simulate a disconnection on the first attempt. The updater should keep
+    // .partial and recover using Range on its internal retry.
+    var unstableTarget = Path.Combine(folder, "integration-update-retry.exe");
+    await SelfUpdater.DownloadAndVerifyPayloadAsync(
+        new Uri(server.Url + "unstable/setup.exe"), unstableTarget, updaterSha, bytes.Length);
+    if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(unstableTarget)))
+        throw new Exception("Updater must survive a dropped CDN stream and retry.");
+
     if (!await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "range/test-file.bin") ||
         !await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "plain/test-file.bin") ||
         await BrowserCaptureProbe.IsUnauthenticatedFileAsync("https://www.youtube.com/watch?v=123"))
@@ -259,7 +288,7 @@ try
         throw new Exception("Removing history must not delete completed files");
     if (new DownloadEngine().DefaultParts != 8)
         throw new Exception("Default segment count must persist across restarts.");
-    Console.WriteLine("PASS: configurable 1/8/16/32 segments, paused-job resegmentation, 32-range merge, byte-for-byte equality, HTTP 200 fallback, settings persistence and safe removal.");
+    Console.WriteLine("PASS: HTTP Range segments, verified EXE update resume, dropped-stream retry, SHA-256 verification, HTTP 200 fallback, settings persistence and safe removal.");
 }
 finally
 {
@@ -281,6 +310,7 @@ sealed class FileServer : IDisposable
     private readonly byte[] _data;
     private readonly TcpListener _listener;
     private readonly CancellationTokenSource _cts = new();
+    private int _interruptedOnce;
     public string Url { get; }
     public FileServer(byte[] data)
     {
@@ -320,7 +350,9 @@ sealed class FileServer : IDisposable
                     var split = line.IndexOf(':');
                     if (split > 0) headers[line[..split].Trim()] = line[(split + 1)..].Trim();
                 }
-                var supportsRange = path.StartsWith("/range/");
+                var supportsRange = path.StartsWith("/range/") || path.StartsWith("/unstable/");
+                var interrupt = path.StartsWith("/unstable/") &&
+                    Interlocked.Exchange(ref _interruptedOnce, 1) == 0;
                 var begin = 0;
                 var end = _data.Length - 1;
                 var code = "200 OK";
@@ -346,6 +378,7 @@ sealed class FileServer : IDisposable
                     var chunk = Math.Min(8192, end - offset + 1);
                     await stream.WriteAsync(_data.AsMemory(offset, chunk));
                     offset += chunk;
+                    if (interrupt && offset >= 160 * 1024) break;
                     await Task.Delay(2);
                 }
             }
