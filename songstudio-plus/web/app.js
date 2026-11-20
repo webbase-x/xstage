@@ -21,6 +21,7 @@
                  songOffset:0,songHasNext:false,groupOffset:0,groupHasNext:false,
                  selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
                  lyricSearchRun:0,groupSearchRunning:false,lyricContextHits:0,
+                 lyricContextFailed:false,
                  lyricTimed:[],lyricDraft:[],lyricOffset:0,lyricShowDraft:false,
                  previewOffset:0,previewSongs:[],previewHasNext:false,
                  previewSelected:null,previewPlaying:false,previewHeard:false,
@@ -381,6 +382,7 @@
       state.selectedGroups.clear();
       state.selectedGroupInfo.clear();
       state.lyricContextHits=0;
+      state.lyricContextFailed=false;
       $("lyrics-search-context").hidden=true;
     }
     state.groups=[];
@@ -407,6 +409,8 @@
         })
         .catch(error=>{
           if(requestId!==state.lyricSearchRun)return;
+          state.lyricContextFailed=true;
+          $("lyrics-search-context-results").replaceChildren();
           text("lyrics-search-context-title","ค้นชื่อเพลงและข้อความ LYR ไม่สำเร็จ: "+error.message);
           $("lyrics-search-context").hidden=false;
         }):Promise.resolve();
@@ -440,6 +444,8 @@
               " กลุ่มในหน้านี้ · เลือกกลุ่มเพื่อแทนที่ได้":
             state.lyricContextHits?
               "ไม่พบ “"+q+"” ในบรรทัดเนื้อร้องปัจจุบัน แต่พบในชื่อเพลง/ศิลปินหรือ LYR รอเวลา · เลือกดูรายละเอียดด้านบน":
+            state.lyricContextFailed?
+              "ไม่พบในเนื้อร้องปัจจุบัน แต่ยังตรวจชื่อเพลง/LYR ไม่สำเร็จ · โปรดลองค้นอีกครั้ง":
               "ไม่พบ “"+q+"” ในเนื้อร้องเวอร์ชันปัจจุบันหรือชื่อเพลง/LYR ที่ค้น · ลองใช้คำบางส่วนหรือค้นในเมนูคลังเพลง");
         }
       }
@@ -2446,6 +2452,7 @@
       state.groupSearchRunning=false;
       state.groups=[];state.groupHasNext=false;state.selectedGroups.clear();
       state.selectedGroupInfo.clear();state.lyricContextHits=0;
+      state.lyricContextFailed=false;
       $("lyrics-search-context").hidden=true;
       $("lyrics-find").disabled=!state.ready;
       text("lyrics-search-feedback","คำค้นเปลี่ยนแล้ว · กดค้นหาเพื่ออ่านผลใหม่จาก SQLite");
