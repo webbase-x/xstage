@@ -63,10 +63,20 @@ RULES = {
 }
 
 
+_INITIALIZED = set()
+
 def init(workspace):
+    """Create evidence tables once, not on every risk-page refresh."""
+    key=str(core.db_path(workspace).resolve())
+    if key in _INITIALIZED:
+        return
     core.init(workspace)
-    with core.WRITE_LOCK, core.connect(workspace) as db:
-        db.executescript(DDL)
+    with core.WRITE_LOCK:
+        if key in _INITIALIZED:
+            return
+        with core.connect(workspace) as db:
+            db.executescript(DDL)
+        _INITIALIZED.add(key)
 
 
 def _finding(category,rule,line=None,detail=""):
