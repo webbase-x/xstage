@@ -384,7 +384,7 @@ class Importer {
         if(input.checked)this.chosenItems.add(entry.key);
         else this.chosenItems.delete(entry.key);
       }
-      this.renderSelectionCount();this.refreshButtons();
+      this.renderSelection();this.refreshButtons();
     });
     this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
     this.dom.open?.addEventListener('click',()=>this.open());
@@ -476,6 +476,7 @@ class Importer {
     return found;
   }
   importGroups(){
+    if(this.groupCache)return this.groupCache;
     const groups=new Map();
     for(const entry of this.selectableItems()){
       const files=this.importFileList(entry.item);
@@ -496,10 +497,11 @@ class Importer {
       group.bytes+=files.reduce((sum,file)=>sum+file.file.size,0);
       group.fileCount+=files.length;
     }
-    return [...groups.values()].sort((a,b)=>{
+    this.groupCache=[...groups.values()].sort((a,b)=>{
       const score=g=>g.key.startsWith('folder:')?0:g.key==='root'?1:2;
       return score(a)-score(b)||a.label.localeCompare(b.label,'en',{numeric:true});
     });
+    return this.groupCache;
   }
   importSize(bytes){
     if(!Number.isFinite(bytes)||bytes<0)return '0 B';
@@ -633,6 +635,7 @@ class Importer {
     this.selected=files;this.folderHandle=handle;
     this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
+    this.groupCache=null;
     this.chosenItems=new Set();
     this.renderSelection();
     this.videoEditor?.setPlan(this.plan,this.saved?.videoEdits);
@@ -790,13 +793,19 @@ class Importer {
         if(a&&l)byPair.set(a.toLowerCase()+':'+l.toLowerCase(),row);
       }
       for(const row of rows.values())addMaps(row);
-      const work=[...this.plan.fonts.map(x=>({...x,isFont:true})),
-        ...this.plan.songs.filter(x=>!x.video||this.videoEditor?.get(x))
+      // Filter the original scan objects before copying their work metadata.
+      // This stays O(n) for very large music libraries (no per-file list search).
+      const selectedObjects=new Set(this.selectableItems()
+        .filter(entry=>this.chosenItems.has(entry.key)).map(entry=>entry.item));
+      const work=[...this.plan.fonts.filter(x=>selectedObjects.has(x))
+          .map(x=>({...x,isFont:true})),
+        ...this.plan.songs.filter(x=>selectedObjects.has(x)&&
+          (!x.video||this.videoEditor?.get(x)))
           .map(x=>({...x,isFont:false,isMidi:false})),
-        ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true})),
-        ...this.plan.xsks.map(x=>({...x,isFont:false,isMidi:false,isXsk:true}))].filter(item=>
-          this.chosenItems.has(this.selectableItems().find(entry=>
-            this.itemKey(entry.item)===this.itemKey(item))?.key));
+        ...this.plan.midis.filter(x=>selectedObjects.has(x))
+          .map(x=>({...x,isFont:false,isMidi:true})),
+        ...this.plan.xsks.filter(x=>selectedObjects.has(x))
+          .map(x=>({...x,isFont:false,isMidi:false,isXsk:true}))];
       const pendingVideos=this.videoEditor?.pendingCount()||0;
       if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
         ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
