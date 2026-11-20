@@ -530,15 +530,15 @@ try
         throw new Exception("Installer must request UAC and use Program Files, not a previous per-user directory.");
 
     // Update checks must compare semantic versions and ignore unsigned/unverified feeds.
-    var filename = "X-Stage-Download-Manager-v0.2.19-build22-win-x64-Setup.exe";
+    var filename = "X-Stage-Download-Manager-v0.2.20-build23-win-x64-Setup.exe";
     var json = System.Text.Json.JsonSerializer.Serialize(new
     {
-        available = true, channel = "preview", version = "0.2.19", build = 22,
+        available = true, channel = "preview", version = "0.2.20", build = 23,
         file = filename, sha256 = new string('a', 64), size_bytes = 250_000_000L,
-        download_url = "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.19-build22-preview/" + filename
+        download_url = "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.20-build23-preview/" + filename
     });
-    if (UpdateChecker.Parse(json) is not { Version: "0.2.19", Build: 22 } ||
-        !UpdateChecker.IsNewer("0.2.19", 22) || UpdateChecker.IsNewer("0.1.1", 2) ||
+    if (UpdateChecker.Parse(json) is not { Version: "0.2.20", Build: 23 } ||
+        !UpdateChecker.IsNewer("0.2.20", 23) || UpdateChecker.IsNewer("0.1.1", 2) ||
         UpdateChecker.IsNewer("0.2.1", 4))
         throw new Exception("EXE-only manifest and version comparison failed.");
     if (UpdateChecker.Parse(json.Replace("github.com", "untrusted.test")) is not null ||
