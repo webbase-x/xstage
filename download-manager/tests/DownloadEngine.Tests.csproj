@@ -7,7 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="../DownloadEngine.cs" Link="DownloadEngine.cs" />
+    <Compile Include="../DownloadStateStore.cs" Link="DownloadStateStore.cs" />
     <Compile Include="../MainForm.cs" Link="MainForm.cs" />
     <Compile Include="../MainForm.IdmLayout.cs" Link="MainForm.IdmLayout.cs" />
     <Compile Include="../DownloadFileNaming.cs" Link="DownloadFileNaming.cs" />
