@@ -9,8 +9,8 @@
     <AssemblyName>XStageDownloadManager</AssemblyName>
     <RootNamespace>XStageDownloadManager</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>0.2.18</Version>
-    <FileVersion>0.2.18.21</FileVersion>
+    <Version>0.2.19</Version>
+    <FileVersion>0.2.19.22</FileVersion>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
