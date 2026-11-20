@@ -24,7 +24,7 @@ public sealed class MainForm : Form
 
     public MainForm(string[] args)
     {
-        Text = "X-Stage Download Manager · v0.2.2 Build 5";
+        Text = "X-Stage Download Manager · v0.2.3 Build 6";
         MinimumSize = new Size(930, 650);
         Size = new Size(1220, 735);
         StartPosition = FormStartPosition.CenterScreen;
@@ -102,7 +102,7 @@ public sealed class MainForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.2 · Build 5",
+            Text = "VIDEO • DOWNLOAD • RESUME • QUEUE     |     Windows PC · v0.2.3 · Build 6",
             AutoSize = true, ForeColor = Color.FromArgb(212, 230, 252),
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             Location = new Point(28, 65), BackColor = Color.Transparent
@@ -290,7 +290,7 @@ public sealed class MainForm : Form
         _updateStatus.Dock = DockStyle.Fill;
         _updateStatus.ForeColor = Color.FromArgb(41, 92, 156);
         _updateStatus.Font = new Font("Segoe UI", 8, FontStyle.Bold);
-        _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.2 · Build 5";
+        _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.3 · Build 6";
         footer.Controls.Add(_updateStatus, 0, 2);
         Controls.Add(footer);
     }
@@ -529,7 +529,7 @@ public sealed class MainForm : Form
             }
             if (!UpdateChecker.IsNewer(release.Version, release.Build))
             {
-                _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.2 · Build 5 — ไม่มีรุ่นใหม่กว่า";
+                _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.3 · Build 6 — ไม่มีรุ่นใหม่กว่า";
                 if (manual) MessageBox.Show(this, "โปรแกรมเป็นรุ่นล่าสุด หรือใหม่กว่ารุ่นที่เผยแพร่แล้ว",
                     "ตรวจสอบอัปเดต", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
