@@ -744,3 +744,45 @@ button:focus-visible{outline:2px solid #70dacc;outline-offset:2px}
   opacity:1!important;
   transition:width .18s linear;
 }
+
+/* v0.1.29: searchable lyric context without conflating metadata with
+   replaceable current lyric groups. Settings now includes update controls. */
+.settings-dialog{
+  width:min(760px,calc(100vw - 24px));
+  max-width:min(760px,calc(100vw - 24px));
+  max-height:min(88vh,920px);
+  overflow-y:auto;
+  scrollbar-width:thin;
+}
+.settings-update-panel{padding:16px;margin-top:15px}
+.settings-update-panel .panel-head{margin-bottom:10px}
+.settings-update-panel .toolbar{margin:10px 0}
+.settings-update-panel .toolbar button{flex:1 1 155px}
+.lyrics-search-context{
+  border:1px solid #31526a;
+  border-radius:12px;
+  background:#12283b;
+  padding:11px 13px;
+  margin-top:9px;
+  min-width:0;
+}
+.lyrics-search-context[hidden]{display:none!important}
+.lyrics-search-context>strong{display:block;font-size:12px;color:#c1f5f1;margin-bottom:7px}
+.lyrics-search-context>small{display:block;font-size:10px;line-height:1.6;color:#99b2c9;margin-top:7px}
+.lyrics-search-context-results{display:flex;gap:6px;max-height:142px;overflow:auto;flex-wrap:wrap;align-content:start}
+.lyric-search-hit{
+  display:flex;flex-direction:column;gap:4px;
+  flex:1 1 235px;min-width:0;max-width:100%;
+  border:1px solid #3c5b73;border-radius:9px;
+  padding:7px 11px;background:#1b3249;color:#e4f2fd;
+  text-align:left;transition:none;
+}
+.lyric-search-hit strong{font-size:11px;overflow-wrap:anywhere}
+.lyric-search-hit small{font-size:10px;color:#a8cadc;line-height:1.5;overflow-wrap:anywhere}
+button.lyric-search-hit:hover{background:#24506b;border-color:#6dc3d1}
+@media(max-width:690px){
+  .settings-dialog{width:calc(100vw - 20px);max-height:90vh;padding:16px}
+  .settings-update-panel .toolbar{flex-direction:column}
+  .settings-update-panel .toolbar button{width:100%}
+  .lyrics-search-context-results{max-height:105px}
+}
