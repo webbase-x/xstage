@@ -927,3 +927,11 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
 #midi-transpose-label{min-width:24px;text-align:center;font-weight:700;white-space:nowrap}
 #midi-instrument{max-width:118px;font:inherit;background:#102e48;color:#fff;border:1px solid #3a7894;border-radius:6px;padding:5px}
 @media(max-width:650px){#midi-transpose-control,#midi-instrument-control{font-size:.72rem}#midi-instrument{max-width:100px}}
+
+/* Public browser-side MIDI renderer status; never expose private file paths. */
+.xstage-midi-engine-status{
+  display:inline-block;max-width:min(100%,540px);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;font-size:.7rem;
+  margin:2px 0;color:#9dc7dc;opacity:.86;line-height:1.3
+}
+.xstage-midi-engine-status[hidden]{display:none!important}
