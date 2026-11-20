@@ -78,6 +78,12 @@ public static class SocialVideoDownloader
         if (!AllowedQualities.Contains(job.VideoQuality)) throw new ArgumentException("รูปแบบวิดีโอไม่ถูกต้อง");
         if (!AllowedOutputFormats.Contains(job.OutputFormat)) throw new ArgumentException("นามสกุลปลายทางไม่ถูกต้อง");
         if (!DownloadEngine.AllowedParts.Contains(job.Parts)) throw new ArgumentException("จำนวนส่วนไม่ถูกต้อง");
+        // Keep the YouTube ID immediately before the extension for reliable
+        // Unicode-path recovery. A separate-copy job inserts an 8-digit marker
+        // before [id], so yt-dlp cannot skip a previously downloaded video.
+        var outputPattern = job.IsRedownload
+            ? "%(title).135B (again-" + job.Id[..8] + ") [%(id)s].%(ext)s"
+            : "%(title).150B [%(id)s].%(ext)s";
         var args = new List<string>
         {
             "--ignore-config", "--no-plugin-dirs", "--no-playlist", "--no-simulate", "--no-mtime", "--newline", "--no-colors",
@@ -89,7 +95,7 @@ public static class SocialVideoDownloader
             "--retry-sleep", "fragment:linear=1:4:1",
             "--paths", "home:" + job.Folder,
             "--paths", "temp:" + work,
-            "-o", "%(title).150B [%(id)s].%(ext)s",
+            "-o", outputPattern,
             "--print", "before_dl:xstage-title:%(title)s",
             "--print", "after_move:xstage-path:%(filepath)s",
             // Keep an independent final-path receipt. Console output on Thai
