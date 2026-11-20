@@ -17,6 +17,7 @@ public sealed class DownloadJob
 
     public double VideoPercent { get; set; }
     [JsonIgnore] public string VideoPhase = "";
+    [JsonIgnore] public string TransferPhase = "";
     public string Folder { get; set; } = "";
     public string Status { get; set; } = "Queued";
     public string Error { get; set; } = "";
