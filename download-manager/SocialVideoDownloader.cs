@@ -108,10 +108,13 @@ public static class SocialVideoDownloader
         {
             string format = job.VideoQuality == "Best" ? "bv*+ba/b" :
                 $"bv*[height<={job.VideoQuality}]+ba/b[height<={job.VideoQuality}]";
-            // Merge into a flexible intermediate and use FFmpeg to convert
-            // to the requested container. Merely renaming the extension is unsafe.
-            args.AddRange(new[] { "-f", format, "--merge-output-format", "mkv",
-                                  "--recode-video", job.OutputFormat });
+            // The previously used --recode-video mp4 could leave a partial
+            // MP4 (ftyp + mdat but no moov) that was wrongly marked complete.
+            // Keep a playable source and perform the final MP4 conversion
+            // separately with FFprobe verification before exposing the file.
+            args.AddRange(new[] { "-f", format, "--merge-output-format", "mkv" });
+            if (job.OutputFormat == "webm")
+                args.AddRange(new[] { "--recode-video", "webm" });
         }
         args.Add(job.Url);
         return args;
@@ -374,9 +377,18 @@ public static class SocialVideoDownloader
             if (recovered is null) throw;
             fullPath = recovered;
         }
+        if (job.OutputFormat == "mp4" && job.VideoQuality != "AudioMP3")
+        {
+            job.VideoPhase = "กำลังตรวจสอบและสร้างไฟล์ MP4 ที่เล่นได้";
+            fullPath = await MediaIntegrity.FinishMp4Async(fullPath, job.Folder, work, tools,
+                ct, phase => job.VideoPhase = phase);
+        }
         var expectedExtension = job.VideoQuality == "AudioMP3" ? ".mp3" : "." + job.OutputFormat;
         if (!Path.GetExtension(fullPath).Equals(expectedExtension, StringComparison.OrdinalIgnoreCase))
             throw new IOException("ไฟล์ปลายทางไม่ตรงรูปแบบที่เลือก (" + expectedExtension + ")");
+        job.VideoPhase = "กำลังตรวจสอบความสมบูรณ์ของไฟล์";
+        await MediaIntegrity.VerifyAsync(fullPath, Path.Combine(tools, "ffprobe.exe"),
+            expectedExtension == ".mp3", ct);
         job.Name = Path.GetFileName(fullPath);
         job.CompletedPath = fullPath;
         job.TotalBytes = new FileInfo(fullPath).Length;
