@@ -186,6 +186,33 @@ public sealed class DownloadEngine
         }
     }
 
+    // Rename a logical queue in one durable checkpoint, without touching job bytes
+    // or transfer state. Restore every assignment if SQLite persistence fails.
+    public int RenameQueue(string oldName, string newName)
+    {
+        var source = oldName?.Trim();
+        var target = newName?.Trim();
+        if (string.IsNullOrWhiteSpace(source) || source.Length > 64 ||
+            source.Any(char.IsControl) || string.IsNullOrWhiteSpace(target) ||
+            target.Length > 64 || target.Any(char.IsControl))
+            throw new ArgumentException("Queue names must be 1–64 printable characters.");
+        var affected = Jobs.Where(j => string.Equals(j.QueueName, source,
+            StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (affected.Length == 0) return 0;
+        if (Jobs.Any(j => !affected.Contains(j) &&
+            string.Equals(j.QueueName, target, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Destination queue already exists.", nameof(newName));
+        var originals = affected.Select(j => j.QueueName).ToArray();
+        for (var i = 0; i < affected.Length; i++) affected[i].QueueName = target;
+        Save();
+        if (LastStorageError.Length > 0)
+        {
+            for (var i = 0; i < affected.Length; i++) affected[i].QueueName = originals[i];
+            throw new IOException(LastStorageError);
+        }
+        return affected.Length;
+    }
+
     public IReadOnlyList<string> GetQueueNames() => Jobs
         .Select(j => string.IsNullOrWhiteSpace(j.QueueName) ? "ทั่วไป" : j.QueueName)
         .Distinct(StringComparer.OrdinalIgnoreCase)
