@@ -18,7 +18,7 @@ const ui = {
 };
 const state = {
   token: '', tokenExpiresAt:0, accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
-  queue: [], history: [], current: null, lyrics: null, objectUrl: '', liveMidiPlayback:null,
+  queue: [], history: [], current: null, lyrics: null, objectUrl: '', liveMidiPlayback:null, liveMidiSource:null,
   requestId: 0, controller: null, authId: 0, loading: false,
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
@@ -1613,7 +1613,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   const oldToken = state.token;
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
-  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
   player.pause(); player.removeAttribute('src'); player.load();
   resetSongVideo();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
@@ -2308,10 +2308,28 @@ function scheduleQueuePreload(){
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(next,state.token);},350);
 }
 window.addEventListener('xstage:soundfont-change',()=>{
-  // Rendered MIDI depends on the chosen SF. Drop queued WAVs to avoid an
-  // old-soundfont track; preserve catalog/lyrics and the playing song.
-  state.xskSoundFontGeneration=(state.xskSoundFontGeneration||0)+1;
+  // Keep the playing song and its transport clock. Switch the active synth
+  // after the newly selected SoundFont has loaded; stale requests are ignored.
+  const generation=state.xskSoundFontGeneration=(state.xskSoundFontGeneration||0)+1;
   releaseQueuePreload();
+  if(state.liveMidiPlayback&&state.liveMidiSource&&state.token){
+    const token=state.token,source=state.liveMidiSource;
+    setPlayStatus('กำลังเปลี่ยน SoundFont โดยไม่หยุดเวลาเพลง…');
+    void (async()=>{
+      try{
+        const fontBytes=await window.XStageBrowserMidi.selectedFont(token);
+        if(generation!==state.xskSoundFontGeneration||token!==state.token||
+           source!==state.liveMidiSource||!midiTransport.active)return;
+        state.liveMidiPlayback?.dispose();
+        state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,source,{
+          fontBytes,onStatus:setPlayStatus,
+          getTranspose:()=>Number($('midi-transpose')?.value||0),
+          getProgram:()=>{const value=$('midi-instrument')?.value;
+            return value===''?null:Number(value);}
+        });
+      }catch(error){setPlayStatus('เปลี่ยน SoundFont ไม่สำเร็จ: '+error.message);}
+    })();
+  }
   scheduleQueuePreload();
 });
 window.addEventListener('xstage:font-memory',()=>{
@@ -2425,7 +2443,7 @@ function releaseFinishedMedia(){
   // Drop the completed/aborted track's media objects, but preserve its
   // identity in history until playSong starts the next one.
   try{player.pause();}catch{}
-  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
   if(state.objectUrl){
     URL.revokeObjectURL(state.objectUrl);
     state.objectUrl='';
@@ -2697,6 +2715,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if($('midi-instrument'))$('midi-instrument').value='';
     if(midiKeyValue){midiKeyValue.value='0';$('midi-transpose-label').textContent='0';}
     if(liveMidiBytes){
+      state.liveMidiSource=liveMidiBytes;
       midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
       state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
         fontBytes:liveFontBytes,onStatus:setPlayStatus,
