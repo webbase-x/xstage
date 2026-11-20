@@ -139,3 +139,49 @@ assert.equal(oscillatorNodes.length,beforeMute,'Muted MIDI channel must not rend
 await runtime.render(file,{channelVolumes:[0]});
 assert.equal(oscillatorNodes.length,beforeMute,'Zero MIDI channel gain must not render audio');
 console.log('PASS: self-contained MIDI parsing, NCN LYR/CUR timing, 16-channel mute and transpose');
+
+
+// Regression: the primary MIDI player must schedule real notes without building
+// any WAV. The HTML transport clock is supplied by the app's MIDI transport.
+const scheduledNotes=[];
+class LiveGain {
+  constructor(){this.gain={value:1,setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}};}
+  connect(){}disconnect(){}
+}
+class LiveSource {
+  constructor(){this.frequency={value:440,setValueAtTime(value){this.value=value;}};
+    this.playbackRate={value:1};}
+  connect(){}disconnect(){}
+  start(when){scheduledNotes.push({when,pitch:this.frequency.value,source:this});}
+  stop(){} 
+}
+context.AudioContext=class {
+  constructor(){this.currentTime=1;this.destination={};this.state='running';}
+  createGain(){return new LiveGain();}
+  createOscillator(){return new LiveSource();}
+  resume(){return Promise.resolve();}
+};
+context.setInterval=()=>1;
+context.clearInterval=()=>{};
+assert.equal(runtime.supportsRealtime(),true);
+assert.equal(runtime.unlockAudio(),true);
+const listeners=new Map();
+const transport={
+  currentTime:0,paused:false,ended:false,volume:.8,muted:false,playbackRate:1,
+  addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,[]);
+    listeners.get(name).push(fn);},
+  removeEventListener(name,fn){listeners.set(name,(listeners.get(name)||[]).filter(x=>x!==fn));}
+};
+let semitones=0;
+const synth=runtime.playRealtime(transport,file,{getTranspose:()=>semitones});
+assert.ok(scheduledNotes.length>0,'Live MIDI must schedule a note without OfflineAudioContext');
+const first=scheduledNotes.at(-1).pitch;
+semitones=12;
+for(const cb of listeners.get('xstage-midi-transpose')||[])cb();
+assert.ok(scheduledNotes.at(-1).pitch>first*1.99,
+  'Changing the live key must raise the next note by one octave');
+synth.dispose();
+assert.equal(listeners.get('play')?.length,0,'Live MIDI listeners must be removed on disposal');
+assert.equal(typeof runtime.silentClock,'undefined',
+  'The bundled MIDI synthesizer must not expose a synthetic WAV clock');
+console.log('PASS: real-time MIDI note scheduling, key shift and cleanup without WAV clock');
