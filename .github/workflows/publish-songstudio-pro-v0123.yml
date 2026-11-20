@@ -30,6 +30,13 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: dist
+      - name: Download independent SHA-256 build evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: X-Stage-Song-Studio-Pro-v0.1.23-Windows-Preview-Metadata
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: dist
       - name: Verify release binary identity and SHA-256 before publishing
         shell: bash
         run: |
