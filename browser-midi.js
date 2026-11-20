@@ -627,6 +627,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const notes=song.notes.slice().sort((a,b)=>a.start-b.start);
   let cursor=0,disposed=false,timer=null,voices=[],revision=0;
   const regionCache=new Map();
+  let missingPresetWarning=false;
   const stopVoices=()=>{
     for(const voice of voices){try{voice.stop();}catch{}try{voice.disconnect();}catch{}}
     voices=[];
@@ -659,7 +660,11 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
         font.find(n.bank,program,pitch,n.velocity).slice(0,4));
       regions=regionCache.get(regionKey);
     }
-    if(!regions.length)return; // Invalid presets never create incorrect notes.
+    if(!regions.length){
+      regions=[null]; // A partial SoundFont should not make the song silent.
+      if(!missingPresetWarning){missingPresetWarning=true;
+        onStatus?.('SoundFont ไม่มีเครื่องดนตรีบางช่อง · ใช้เสียง MIDI พื้นฐานแทนเฉพาะช่องนั้น');}
+    }
     for(const region of regions){
       let buffer=null;
       if(region){
