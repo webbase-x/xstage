@@ -272,7 +272,7 @@ assert.ok(receiverEditor.includes('onDone = { saveName() }')&&
           !receiverEditor.includes('AlertDialog('),
           'Mirror receiver name must stay visible and save on keyboard Enter');
 const receiverHome=read('xstage-mirror-tv/XStageReceiverHome.kt');
-assert.ok(receiverHome.includes('ReceiverNameEditor(viewModel, canEdit = true)')&&
+assert.ok(receiverHome.includes('ReceiverNameEditor(viewModel, canEdit = true, onFinished = { editingName = false })')&&
           receiverHome.includes('text = serverName,')&&
           receiverHome.includes('if (mirroringActive && connections > 0)')&&
           receiverHome.includes('onSettings: () -> Unit')&&
