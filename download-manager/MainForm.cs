@@ -12,6 +12,7 @@ public sealed class MainForm : Form
     private readonly ComboBox _parts = new();
     private readonly ComboBox _videoQuality = new();
     private readonly DataGridView _grid = new();
+    private readonly ContextMenuStrip _completedMenu = new();
     private readonly Label _summary = new();
     private readonly Label _details = new();
     private readonly Label _updateStatus = new();
@@ -32,6 +33,7 @@ public sealed class MainForm : Form
         Font = new Font("Segoe UI", 10);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         CreateLayout();
+        FormClosed += (_, _) => _completedMenu.Dispose();
         _parts.Items.AddRange(new object[] { "1", "2", "4", "8", "16", "32" });
         _parts.SelectedItem = _engine.DefaultParts.ToString();
         _parts.SelectedIndexChanged += (_, _) =>
@@ -257,7 +259,7 @@ public sealed class MainForm : Form
         {
             if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index) return;
             var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
-            _grid.Cursor = job?.Status == "Completed" ? Cursors.Hand : Cursors.Default;
+            _grid.Cursor = job is not null ? Cursors.Hand : Cursors.Default;
         };
         _grid.CellMouseLeave += (_, _) => _grid.Cursor = Cursors.Default;
         _grid.CellDoubleClick += (_, e) =>
@@ -552,15 +554,22 @@ public sealed class MainForm : Form
         finally { _checkingUpdates = false; }
     }
 
+    private void PrepareCompletedMenu(DownloadJob job)
+    {
+        // Reuse the menu for the lifetime of the form. Disposing it from its
+        // Closed event caused the System.Windows.Forms.ContextMenuStrip crash.
+        if (_completedMenu.Visible) _completedMenu.Close();
+        _completedMenu.Items.Clear();
+        _completedMenu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
+            job.Status == "Completed" && File.Exists(job.CompletedPath);
+        _completedMenu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
+        _completedMenu.AutoClose = true;
+    }
+
     private void ShowCompletedMenu(DownloadJob job, Rectangle cellBounds)
     {
-        var menu = new ContextMenuStrip();
-        menu.Closed += (_, _) => menu.Dispose();
-        menu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
-            job.Status == "Completed" && File.Exists(job.CompletedPath);
-        menu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
-        menu.Show(_grid, new Point(cellBounds.Left + 12, cellBounds.Bottom));
-        menu.AutoClose = true;
+        PrepareCompletedMenu(job);
+        _completedMenu.Show(_grid, new Point(cellBounds.Left + 12, cellBounds.Bottom));
     }
 
     private void OpenCompletedFile(DownloadJob job)
@@ -608,12 +617,8 @@ public sealed class MainForm : Form
         }
         // Do not silently launch a completed file: let the user choose.
         // A failed/incomplete download can still open its destination folder.
-        var menu = new ContextMenuStrip();
-        menu.Closed += (_, _) => menu.Dispose();
-        menu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
-            job.Status == "Completed" && File.Exists(job.CompletedPath);
-        menu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
-        menu.Show(Cursor.Position);
+        PrepareCompletedMenu(job);
+        _completedMenu.Show(Cursor.Position);
     }
 
     private void RefreshRows()
