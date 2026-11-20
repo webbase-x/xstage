@@ -228,7 +228,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $version = '0.2.20'
-          $build = 22
+          $build = 23
           $name = "X-Stage-Download-Manager-v$version-build$build-win-x64-Setup.exe"
           $tag = "xstage-download-manager-v$version-build$build-preview"
           $setup = "download-manager/installer/output/$name"
