@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Pro",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "channel": "preview",
   "available": true,
   "windows_artifact_build": true,
@@ -9,9 +9,9 @@
   "player_compatible": false,
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Verified Pro Desktop Standalone Preview. Adds SHA-256 deduplication protection, resumable imports, bounded completed import history, SQLite storage health, optional cleanup and guarded compaction. EXE is unsigned.",
-  "file": "X-Stage-Song-Studio-Pro-v0.1.23-preview.exe",
-  "sha256": "a790363dcb97ace8644bca8e2f204d6ac100234564c36b8115c786dd1620f328",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.23-preview/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.23-preview"
+  "status": "Verified Pro Desktop Standalone Preview. Adds detailed per-table SQLite dbstat audit, safe cleanup of completed import state, stale sweep audit findings and orphan caches, plus guarded explicit VACUUM. Preserves song data and reviews. EXE is unsigned.",
+  "file": "X-Stage-Song-Studio-Pro-v0.1.24-preview.exe",
+  "sha256": "3a6c095f1c8bef4edc0175b898bb45cf1e7caf7d166688edcc55d09a92b75c36",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.24-preview/X-Stage-Song-Studio-Pro-v0.1.24-preview.exe",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.24-preview"
 }
