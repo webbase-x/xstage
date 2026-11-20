@@ -292,6 +292,52 @@ public sealed class DownloadEngine
         });
     }
 
+    /// <summary>
+    /// Rename a verified completed file on disk and in SQLite together.
+    /// Keep its real extension, never overwrite a sibling, never escape the
+    /// selected folder, and refuse changes to a running/partial transfer.
+    /// </summary>
+    public string RenameCompletedFile(DownloadJob job, string newName)
+    {
+        if (!Jobs.Contains(job) || job.Status != "Completed" ||
+            _active.ContainsKey(job.Id))
+            throw new InvalidOperationException("เปลี่ยนชื่อได้เฉพาะไฟล์ที่ดาวน์โหลดสำเร็จและไม่มีงานค้าง");
+        var oldPath = Path.GetFullPath(job.CompletedPath);
+        var folder = Path.GetFullPath(job.Folder).TrimEnd(Path.DirectorySeparatorChar);
+        if (!string.Equals(Path.GetDirectoryName(oldPath)?.TrimEnd(Path.DirectorySeparatorChar),
+                           folder, StringComparison.OrdinalIgnoreCase) || !File.Exists(oldPath))
+            throw new IOException("ไม่พบไฟล์ที่ดาวน์โหลดในโฟลเดอร์ปลายทาง");
+        if (string.IsNullOrWhiteSpace(newName) ||
+            newName.IndexOfAny(new[] { '/', '\\', ':' }) >= 0)
+            throw new ArgumentException("กรุณาระบุชื่อไฟล์เท่านั้น ไม่ใส่เส้นทาง");
+        var clean = DownloadFileNaming.CleanName(newName);
+        var oldExtension = Path.GetExtension(oldPath);
+        var requestedExtension = Path.GetExtension(clean);
+        if (requestedExtension.Length > 0 &&
+            !requestedExtension.Equals(oldExtension, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("เปลี่ยนชื่อได้ แต่ไม่สามารถเปลี่ยนนามสกุลไฟล์จริง");
+        if (requestedExtension.Length == 0) clean += oldExtension;
+        clean = DownloadFileNaming.CleanName(clean);
+        var destination = Path.Combine(folder, clean);
+        if (string.Equals(oldPath, destination, StringComparison.OrdinalIgnoreCase))
+            return oldPath;
+        destination = DownloadFileNaming.UniqueOutput(folder, clean);
+        var originalName = job.Name;
+        File.Move(oldPath, destination);
+        job.Name = Path.GetFileName(destination);
+        job.CompletedPath = destination;
+        Save();
+        if (LastStorageError.Length > 0)
+        {
+            job.Name = originalName;
+            job.CompletedPath = oldPath;
+            try { File.Move(destination, oldPath); }
+            catch (IOException) { }
+            throw new IOException("บันทึกชื่อไฟล์ในฐานข้อมูลไม่สำเร็จ: " + LastStorageError);
+        }
+        return destination;
+    }
+
     public void Pause(DownloadJob job)
     {
         if (job.Status is not ("Running" or "Queued")) return;
