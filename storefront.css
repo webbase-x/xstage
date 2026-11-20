@@ -436,3 +436,22 @@ html{scroll-padding-top:calc(96px + var(--xstage-status-safe-top))}
 }
 .app-card .app-card-download,.detail-action{gap:9px}
 @media(max-width:445px){.binary-download-icon{width:20px;height:20px;min-width:20px}}
+
+
+/* App developer credit appears beneath the main footer navigation. */
+.footer-developer-credit{
+  display:flex;align-items:center;justify-content:center;
+  flex-wrap:wrap;column-gap:8px;row-gap:3px;
+  margin-top:17px;padding-top:15px;
+  border-top:1px solid #dce3ef;
+  color:#5c6b85;font-size:12px;line-height:1.65;text-align:center;
+}
+.footer-developer-credit strong{color:#253e6b;font-weight:800}
+.footer-credit-label{font-weight:650}
+@media(max-width:760px){
+  .footer-developer-credit{flex-direction:column;gap:2px;font-size:12px}
+}
+@media(prefers-color-scheme:dark){
+  .footer-developer-credit{border-color:#353f61;color:#b9c6e4}
+  .footer-developer-credit strong{color:#f2f5ff}
+}
