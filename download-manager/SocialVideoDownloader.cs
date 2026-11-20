@@ -86,7 +86,10 @@ public static class SocialVideoDownloader
             : "%(title).150B [%(id)s].%(ext)s";
         var args = new List<string>
         {
-            "--ignore-config", "--no-plugin-dirs", "--no-playlist", "--no-simulate", "--no-mtime", "--newline", "--no-colors",
+            // --print implicitly enables yt-dlp's quiet mode. Force live
+            // download progress back on or the Windows UI remains at 0.0%.
+            "--ignore-config", "--no-plugin-dirs", "--no-playlist", "--no-simulate", "--no-mtime",
+            "--progress", "--newline", "--no-colors",
             "--continue", "--windows-filenames", "--encoding", "utf-8",
             // Bound network retry time rather than waiting indefinitely.
             "--socket-timeout", "20", "--retries", "3",
@@ -124,6 +127,43 @@ public static class SocialVideoDownloader
         }
         args.Add(job.Url);
         return args;
+    }
+
+    // Pure parser, shared by stdout/stderr readers and regression tests.
+    // For versions where the formatted percent is N/A, fall back to a real
+    // downloaded-byte ratio; never fabricate a percentage from elapsed time.
+    public static bool TryParseProgress(
+        string line, out double percent, out long downloadedBytes, out long totalBytes)
+    {
+        percent = double.NaN;
+        downloadedBytes = -1;
+        totalBytes = -1;
+        const string prefix = "xstage-progress:";
+        var position = line.IndexOf(prefix, StringComparison.Ordinal);
+        if (position < 0) return false;
+        var fields = line[(position + prefix.Length)..].Split('|');
+        if (fields.Length < 2) return false;
+
+        var numericPercent = System.Text.RegularExpressions.Regex.Replace(
+            fields[0], @"\x1B\[[0-9;]*[A-Za-z]", "").Trim().TrimEnd('%').Trim();
+        if (double.TryParse(numericPercent, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var parsed) && double.IsFinite(parsed))
+            percent = Math.Clamp(parsed, 0, 100);
+
+        if (long.TryParse(fields[1].Trim(), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var bytes))
+            downloadedBytes = Math.Max(0, bytes);
+        if (fields.Length > 2 &&
+            long.TryParse(fields[2].Trim(), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var total) && total > 0)
+            totalBytes = total;
+        else if (fields.Length > 3 &&
+                 long.TryParse(fields[3].Trim(), NumberStyles.Integer,
+                     CultureInfo.InvariantCulture, out var estimate) && estimate > 0)
+            totalBytes = estimate;
+        if (double.IsNaN(percent) && downloadedBytes >= 0 && totalBytes > 0)
+            percent = Math.Clamp(100.0 * downloadedBytes / totalBytes, 0, 100);
+        return double.IsFinite(percent) || downloadedBytes >= 0;
     }
 
     // Describe real yt-dlp work even before the first downloaded byte.
@@ -266,16 +306,12 @@ public static class SocialVideoDownloader
             }
             else if (line.StartsWith("xstage-path:", StringComparison.Ordinal))
                 finalPath = line["xstage-path:".Length..].TrimEnd('\r', '\n');
-            else if (line.StartsWith("xstage-progress:", StringComparison.Ordinal))
+            else if (TryParseProgress(line, out var percent, out var bytes, out var total))
             {
-                var progress = line["xstage-progress:".Length..].Split('|');
-                if (progress.Length > 0 &&
-                    double.TryParse(progress[0].Trim().TrimEnd('%'), NumberStyles.Float,
-                        CultureInfo.InvariantCulture, out var percent))
-                    job.VideoPercent = Math.Clamp(percent, 0, 100);
-                if (progress.Length > 1 && long.TryParse(progress[1], out var bytes))
+                if (double.IsFinite(percent))
+                    job.VideoPercent = Math.Clamp(percent, 0, 99.9);
+                if (bytes >= 0)
                 {
-                    bytes = Math.Max(0, bytes);
                     if (bytes != Interlocked.Read(ref previousReportedBytes))
                     {
                         Interlocked.Exchange(ref previousReportedBytes, bytes);
@@ -284,21 +320,23 @@ public static class SocialVideoDownloader
                     Interlocked.Exchange(ref job.DownloadedBytes, bytes);
                     if (bytes > 0) job.VideoPhase = "กำลังดาวน์โหลดวิดีโอ";
                 }
-                if (progress.Length > 2 && long.TryParse(progress[2], out var total))
-                    job.TotalBytes = total;
-                else if (progress.Length > 3 && long.TryParse(progress[3], out var estimate))
-                    job.TotalBytes = estimate;
+                if (total > 0) job.TotalBytes = total;
             }
 
         }
         void OnStderr(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return;
-            RecordLine(line);
-            lock (errors)
+            // yt-dlp may write progress to either redirected stream depending
+            // on its version and output mode. Parse both using one handler.
+            OnStdout(line);
+            if (!IsYtDlpError(line))
             {
-                errors.Enqueue(line.Trim());
-                while (errors.Count > 12) errors.Dequeue();
+                lock (errors)
+                {
+                    errors.Enqueue(line.Trim());
+                    while (errors.Count > 12) errors.Dequeue();
+                }
             }
         }
 
