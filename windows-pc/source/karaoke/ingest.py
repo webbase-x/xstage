@@ -114,7 +114,10 @@ class Inspector:
                     rich.add(key)
         if ext in MIDI_EXT:
             xsk_doc = None
-            if ext == '.xsk':
+            if ext == ".xmid":
+                from .xmid_reader import read_xmid
+                data, xsk_doc = read_xmid(path)
+            elif ext == '.xsk':
                 from .xsk_reader import read_xsk
                 data, xsk_doc = read_xsk(path)
             else:
@@ -131,12 +134,14 @@ class Inspector:
             raw, cursor = assets.get('LYRIC_DATA'), assets.get('CURSOR_DATA', assets.get('CUR_DATA'))
             if xsk_doc is not None:
                 from .lyrics import Lyrics, LyricLine
-                song.lyrics = Lyrics([LyricLine(float(line['startTime']), line['text'])
-                                      for line in xsk_doc['lines']], int(xsk_doc.get('audioOffsetMs') or 0))
-                record['format'] = 'XSK'
+                song.lyrics = Lyrics([LyricLine(float(line['startTime']), line['text'],
+                          [(float(cue['startTime']), cue['text']) for cue in line.get('cues', [])]
+                          if ext == '.xmid' else [])
+                          for line in xsk_doc['lines']], int(xsk_doc.get('audioOffsetMs') or 0))
+                record['format'] = 'XMID' if ext == '.xmid' else 'XSK'
                 metadata({'title': xsk_doc.get('title'), 'artist': xsk_doc.get('artist'),
                           'first_lyric': ' '.join(line['text'] for line in xsk_doc['lines'][:8])[:512]})
-            if ext not in ('.emk', '.xsk'):
+            if ext not in ('.emk', '.xsk', '.xmid'):
                 lyr, cur = self.ncn_pair(path)
                 if lyr.is_file():
                     try:
@@ -221,7 +226,7 @@ class Inspector:
         # Audio/video AND MIDI/KAR with same-code .json: show authoring
         # metadata from Song Studio even when the MIDI itself has no @T tags.
         # XSK has its own sealed identity and must remain authoritative.
-        if ext != ".xsk":
+        if ext not in (".xsk", ".xmid"):
             from .lyrics import json_sidecar, read_timed_json
             companion = json_sidecar(path) if not self.sibling(path.with_suffix('.lrc')).is_file() else None
             if companion is not None:
