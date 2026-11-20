@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.2",
-  "build": 5,
+  "version": "0.2.5",
+  "build": 8,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.2-build5-win-x64-Setup.exe",
-  "sha256": "6e5b33bb5561e4e3412ce680eb2dd6f896880619157025d97e0f65ef3b3cdffa",
-  "size_bytes": 213825061,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.2-build5-preview/X-Stage-Download-Manager-v0.2.2-build5-win-x64-Setup.exe",
-  "note": "Verified Windows Setup EXE with Unicode-path fix, open file/folder choices and bundled yt-dlp/FFmpeg/Deno. Unsigned preview."
+  "file": "X-Stage-Download-Manager-v0.2.5-build8-win-x64-Setup.exe",
+  "sha256": "d308c669dede6eb602783ee5730f6192895c5fba724a3c609d0abfacde550301",
+  "size_bytes": 213839809,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.5-build8-preview/X-Stage-Download-Manager-v0.2.5-build8-win-x64-Setup.exe",
+  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
 }
