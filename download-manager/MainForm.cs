@@ -563,6 +563,7 @@ public sealed class MainForm : Form
     {
         if (_checkingUpdates || IsDisposed) return;
         _checkingUpdates = true;
+        DownloadManagerRelease? candidate = null;
         _updateStatus.Text = "กำลังตรวจสอบอัปเดต...";
         try
         {
@@ -575,6 +576,7 @@ public sealed class MainForm : Form
                     "ตรวจสอบอัปเดต", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
+            candidate = release;
             if (!UpdateChecker.IsNewer(release.Version, release.Build))
             {
                 _updateStatus.Text = $"รุ่นที่ติดตั้ง v{UpdateChecker.CurrentVersion} · Build {UpdateChecker.CurrentBuild} — ไม่มีรุ่นใหม่กว่า";
@@ -617,9 +619,21 @@ public sealed class MainForm : Form
                                      UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             if (IsDisposed) return;
-            _updateStatus.Text = "อัปเดตไม่สำเร็จ — แอปเดิมและงานดาวน์โหลดยังใช้ได้";
-            MessageBox.Show(this, ex.Message, "ติดตั้งอัปเดตไม่สำเร็จ",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _updateStatus.Text = "อัปเดตไม่สำเร็จ: " + ex.Message.Split('\n')[0];
+            var message = ex.Message +
+                "\n\nแอปเดิมยังใช้งานได้ ไม่ติดตั้งไฟล์ที่ตรวจสอบไม่ผ่าน" +
+                "\nไฟล์บันทึก: " + SelfUpdater.DownloadLogPath;
+            if (candidate is not null)
+            {
+                if (MessageBox.Show(this,
+                    message + "\n\nต้องการเปิดหน้าดาวน์โหลด EXE อย่างเป็นทางการผ่านเบราว์เซอร์หรือไม่?",
+                    "ดาวน์โหลดและตรวจ SHA-256 ไม่สำเร็จ", MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning) == DialogResult.Yes)
+                    Process.Start(new ProcessStartInfo(candidate.Url) { UseShellExecute = true });
+            }
+            else
+                MessageBox.Show(this, message, "ตรวจสอบอัปเดตไม่สำเร็จ",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally { _checkingUpdates = false; }
     }
