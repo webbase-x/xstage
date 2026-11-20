@@ -109,12 +109,32 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
     }
   }
   const gb = n => (Number(n||0)/(1024**3)).toFixed(2)+" GB";
+  function renderDatabaseAudit(result){
+    if(!result)return;
+    const bytes=n=>(Number(n||0)/(1024**2)).toFixed(2)+" MB";
+    const rows=(result.table_space||[]).map((item,i)=>
+      (i+1)+". "+item.table+" · "+bytes(item.bytes)+
+      " (ตาราง "+bytes(item.table_bytes)+" + ดัชนี "+bytes(item.index_bytes)+") "+
+      " · "+(item.category==="keep"?"ต้องเก็บ":
+      item.category==="temporary"?"ชั่วคราว":
+      item.category==="derived"?"ผลตรวจที่สร้างใหม่ได้":
+      item.category==="cache"?"แคชช่วยความเร็ว":"ยังไม่จัดประเภท"));
+    text("db-audit-detail",
+      "ผลตรวจโครงสร้าง: "+String(result.quick_check)+
+      " · วัดพื้นที่ด้วย dbstat: "+(result.dbstat_available?"ได้":"ไม่ได้ใน SQLite รุ่นนี้")+
+      "\nSQLite "+bytes(result.database_bytes)+
+      " · WAL "+bytes(result.wal_bytes)+
+      " · พื้นที่ในฐานที่นำกลับมาใช้ได้ "+bytes(result.reusable_bytes)+
+      "\n\n"+(rows.length?rows.join("\n"):"ไม่พบข้อมูลพื้นที่รายตาราง")+
+      (result.unknown_tables?.length?
+       "\n\nไม่ลบตารางที่ยังไม่ทราบหน้าที่: "+result.unknown_tables.join(", "):""));
+  }
   async function checkDatabaseHealth(){
     try{
       const r=await api("/api/db/health",undefined,30000);
@@ -129,6 +149,7 @@
         " · งานเสร็จ "+number(r.completed_batches)+
         " · งานทำต่อได้ "+number(r.resumable_batches)+
         " · ปัญหาคงค้าง "+number(r.issue_rows));
+      $("db-detail-audit").disabled=Boolean(state.activeJob)||!state.ready;
       $("db-history-clean").disabled=Boolean(state.activeJob)||!state.ready;
       $("db-compact").disabled=Boolean(state.activeJob)||!state.ready;
     }catch(e){
@@ -553,7 +574,8 @@
   async function startJob(kind,payload){
     try{
       const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":
-        kind==="swipe-audit"?"/api/swipe/scan":kind==="db-clean"?"/api/db/cleanup":
+        kind==="swipe-audit"?"/api/swipe/scan":kind==="db-audit"?"/api/db/audit":
+        kind==="db-clean"?"/api/db/cleanup":
         kind==="db-compact"?"/api/db/compact":"/api/build";
       const result=await api(endpoint,payload);
       state.activeJob=result.job;
@@ -579,6 +601,7 @@
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
       $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
       $("db-health-check").disabled=!state.ready||Boolean(state.activeJob);
+      $("db-detail-audit").disabled=!state.ready||Boolean(state.activeJob);
       $("db-history-clean").disabled=!state.ready||Boolean(state.activeJob);
       $("db-compact").disabled=!state.ready||Boolean(state.activeJob);
       if(!state.activeJob&&job&&job.kind==="import"&&
@@ -594,6 +617,7 @@
       text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
           job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
           job.kind==="import"?"นำเข้าและตรวจ SHA-256":
+          job.kind==="db-audit"?"ตรวจพื้นที่และความสมบูรณ์ของ SQLite":
           job.kind==="db-clean"?"ล้างประวัติงาน SQLite ที่เสร็จแล้ว":
           job.kind==="db-compact"?"คืนพื้นที่ไฟล์ฐานข้อมูล SQLite":
           job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":
@@ -654,6 +678,9 @@
           " · Hash เดิม "+number(p.hash_cache_hits)+
           " · จุดเดิมที่ข้าม "+number(p.resumed_files)+
           " · "+number(p.files_per_second)+" ไฟล์/วินาที":
+          job.kind==="db-audit"?
+          "ตรวจฐานและดัชนี "+number(p.processed)+" / "+number(p.total)+
+          " ขั้นตอน":
           job.kind==="db-clean"?
           "ตรวจแล้ว "+number(p.processed)+" / "+number(p.total)+
           " งาน · ลบ Checkpoint "+number(p.checkpoints_removed)+
@@ -705,9 +732,11 @@
           }
           if((job.kind==="db-clean"||job.kind==="db-compact")&&job.status==="completed")
             await checkDatabaseHealth();
+          if(job.kind==="db-audit"&&job.status==="completed")
+            renderDatabaseAudit(job.result);
           if(job.kind==="lyrics-edit"&&job.status==="completed"&&state.view==="lyrics")
             await searchGroups();
-          toast(job.status==="completed"?"งาน "+(job.kind==="lyrics-edit"?"แทนที่เนื้อร้อง":job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="db-clean"?"ล้างประวัติ SQLite":job.kind==="db-compact"?"ย่อ SQLite":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
+          toast(job.status==="completed"?"งาน "+(job.kind==="lyrics-edit"?"แทนที่เนื้อร้อง":job.kind==="import"?"นำเข้า":job.kind==="update"?"ดาวน์โหลดอัปเดต":job.kind==="db-audit"?"ตรวจ SQLite":job.kind==="db-clean"?"ล้างประวัติ SQLite":job.kind==="db-compact"?"ย่อ SQLite":job.kind==="recover"?"ตรวจซ่อมเนื้อร้อง":job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อ":"สร้างไฟล์")+" เสร็จแล้ว":
             job.error||"งานล้มเหลว",job.status==="failed");
           if(job.kind==="update"){
             if(job.status==="completed"&&state.updateInstallIntent){
@@ -2146,10 +2175,12 @@
     $("preview-to-build").addEventListener("click",previewToBuild);
     $("issues-load").addEventListener("click",()=>void loadImportIssues());
     $("db-health-check").addEventListener("click",()=>void checkDatabaseHealth());
+    $("db-detail-audit").addEventListener("click",()=>void startJob("db-audit",{}));
     $("db-history-clean").addEventListener("click",async()=>{
       if(state.activeJob)return toast("กรุณารองานปัจจุบันให้เสร็จก่อน",true);
       if(!await confirmTask("ล้างประวัติ SQLite ที่ไม่จำเป็น",
-        "เก็บรายงานปัญหาใน 4 งานล่าสุด ล้าง Checkpoint ของงานเสร็จ และลบประวัติเก่า\n"+
+        "เก็บปัญหาใน 4 งานล่าสุดและผลตรวจปาดสีละเอียด 2 รอบล่าสุด\n"+
+        "ล้าง Checkpoint งานเสร็จ ประวัติเก่า แคชไม่มีเจ้าของ และดัชนีที่ไม่ใช้\n"+
         "ไม่ลบเพลง ต้นฉบับ เนื้อร้อง เวอร์ชันที่แก้ไข หรือสถานะงานค้าง\n"+
         "การล้างข้อมูลยังไม่ลดขนาดไฟล์จนกว่าจะสั่งคืนพื้นที่"))return;
       void startJob("db-clean",{});
