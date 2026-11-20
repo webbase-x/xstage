@@ -607,10 +607,20 @@ async function selectedFont(token,signal){
 }
 // Fast native-clock MIDI playback: no whole-song OfflineAudioContext/WAV render.
 // Used only with the built-in synthesizer; selected SoundFonts retain full rendering.
+let sharedLiveContext=null;
+function unlockAudio(){
+  const Ctor=scope.AudioContext||scope.webkitAudioContext;
+  if(!Ctor)return false;
+  if(!sharedLiveContext||sharedLiveContext.state==='closed')sharedLiveContext=new Ctor();
+  void sharedLiveContext.resume().catch(()=>{});
+  return true;
+}
 function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose=()=>0,getProgram=()=>null}={}){
   const Ctor=scope.AudioContext||scope.webkitAudioContext;
   if(!Ctor)fail('เบราว์เซอร์ไม่รองรับ Web Audio MIDI Synthesizer');
-  const song=parseMidi(source),ctx=new Ctor();
+  const song=parseMidi(source),ctx=sharedLiveContext&&sharedLiveContext.state!=='closed'?
+    sharedLiveContext:new Ctor();
+  sharedLiveContext=ctx;
   const font=fontBytes?(fontCache?.bytes===fontBytes&&fontCache.parsed?
     fontCache.parsed:parseFont(fontBytes)):null;
   const master=ctx.createGain();master.gain.value=.55;master.connect(ctx.destination);
@@ -711,14 +721,14 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const dispose=()=>{
     if(disposed)return;disposed=true;pause();
     for(const [event,fn] of listeners)player.removeEventListener(event,fn);
-    ctx.close().catch(()=>{});
+    try{master.disconnect();}catch{}
   };
   signal?.addEventListener('abort',dispose,{once:true});
   if(!player.paused)play();
   onStatus?.(font?'SoundFont พร้อมสังเคราะห์ MIDI แบบเรียลไทม์':'MIDI พร้อมเล่นโดยไม่แปลงเป็น WAV');
   return {dispose,duration:song.duration};
 }
-scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,
+scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,unlockAudio,
   supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
   reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
