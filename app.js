@@ -2592,6 +2592,8 @@ function togglePlayback(){
 }
 
 async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt=0,autoplay=true}={}) {
+  // Capture the user gesture before asynchronous Drive/SF2 downloads.
+  if(autoplay)try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
   if (!playable(song)) {
