@@ -18,7 +18,7 @@ def manifest(version,contents=b"MZ"+b"good"*300000):
             "version":version,
             "download_url":"https://github.com/webbase-x/xstage/releases/download/"
                 "song-studio-pro-v"+version+"-preview/"
-                "X-Stage-Song-Studio-Pro-v"+version+"-preview.exe",
+                "X-Stage-Song-Studio-Pro-v"+version+"-win-x64-Setup.exe",
             "sha256":hashlib.sha256(contents).hexdigest()}
 
 
@@ -68,7 +68,7 @@ class LatestUpdateTests(unittest.TestCase):
             "tag_name":"song-studio-pro-v0.1.27-preview",
             "draft":False,
             "assets":[{
-                "name":"X-Stage-Song-Studio-Pro-v0.1.27-preview.exe",
+                "name":"X-Stage-Song-Studio-Pro-v0.1.27-win-x64-Setup.exe",
                 "browser_download_url":item["download_url"],
                 "digest":"sha256:"+item["sha256"],
                 "size":225446806,"state":"uploaded",
@@ -82,13 +82,13 @@ class LatestUpdateTests(unittest.TestCase):
         self.assertEqual(release["sha256"],item["sha256"])
 
     def test_unavailable_manifests_fall_back_to_verified_github_release(self):
-        release=updater.validate(manifest("0.1.31"))
+        release=updater.validate(manifest("0.1.32"))
         release["feed"]="api.github.com"
         with patch.object(updater,"_read_feed",side_effect=
                           ValueError("ยังไม่มีไฟล์ Song Studio Pro ที่ยืนยันแล้ว")), \
              patch.object(updater,"_read_release_api",return_value=release):
             result=updater.check()
-        self.assertEqual(result["version"],"0.1.31")
+        self.assertEqual(result["version"],"0.1.32")
         self.assertTrue(result["newer"])
 
     def test_manifest_newer_than_uploaded_release_is_not_advertised(self):
@@ -145,7 +145,7 @@ class LatestUpdateTests(unittest.TestCase):
 
     def test_mismatched_range_cannot_corrupt_resume(self):
         content=b"MZ"+b"x"*(2*1024*1024)
-        partial=self.workspace/"UPDATES"/"X-Stage-Song-Studio-Pro-v0.1.99-preview.exe.partial"
+        partial=self.workspace/"UPDATES"/"X-Stage-Song-Studio-Pro-v0.1.99-win-x64-Setup.exe.partial"
         partial.parent.mkdir(parents=True)
         partial.write_bytes(content[:1024*1024])
         marker=partial.with_name(partial.name+".json")
