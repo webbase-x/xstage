@@ -31,7 +31,7 @@ jobs:
     outputs:
       ready: ${{ steps.verify.outputs.ready }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: verify
         shell: bash
         run: |
@@ -51,7 +51,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Verify imported source and release identity
         shell: pwsh
@@ -66,7 +66,7 @@ jobs:
             throw 'Windows source or continuous medley files are missing.'
           }
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           architecture: 'x64'
