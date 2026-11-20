@@ -88,6 +88,25 @@ try
         !videoArgs.Contains("--extractor-retries") ||
         !videoArgs.Contains("--retry-sleep"))
         throw new Exception("Bounded yt-dlp network retries and socket timeout missing.");
+    // 32 HTTP byte ranges are useful for direct files, but using 32 yt-dlp
+    // fragments concurrently risks HTTP 403/429 on social video CDNs.
+    var streamOptionIndex = Array.IndexOf(videoArgs, "-N");
+    if (streamOptionIndex < 0 || streamOptionIndex + 1 >= videoArgs.Length ||
+        videoArgs[streamOptionIndex + 1] != "4" ||
+        SocialVideoDownloader.VideoFragmentConcurrency(32) != 4 ||
+        SocialVideoDownloader.VideoFragmentConcurrency(2) != 2)
+        throw new Exception("Social video concurrency must cap at 4 independent of HTTP segment count.");
+    if (!SocialVideoDownloader.IsYtDlpError("ERROR: HTTP Error 403: Forbidden") ||
+        !SocialVideoDownloader.IsYtDlpError("ERROR: Requested format is not available") ||
+        SocialVideoDownloader.IsYtDlpError("[download] Destination: video.mp4") ||
+        !SocialVideoDownloader.ExplainFailure("ERROR: HTTP Error 403", 1).Contains("403") ||
+        !SocialVideoDownloader.ExplainFailure("ERROR: HTTP Error 429", 1).Contains("429") ||
+        !SocialVideoDownloader.ExplainFailure("ERROR: Requested format is not available", 1)
+            .Contains("ความละเอียด") ||
+        !SocialVideoDownloader.ExplainFailure("ERROR: Sign in to confirm", 1)
+            .Contains("ยืนยันตัวตน"))
+        throw new Exception("Video failures from yt-dlp stdout/stderr must explain access and format errors.");
+
     if (SocialVideoDownloader.DescribeOutputPhase("[youtube] Downloading webpage") !=
             "กำลังอ่านข้อมูลวิดีโอจากเว็บไซต์" ||
         SocialVideoDownloader.DescribeOutputPhase("[download] Destination: song.f137.mp4") !=
