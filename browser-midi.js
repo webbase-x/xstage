@@ -1,6 +1,6 @@
 /* X-Stage browser MIDI renderer. No external executable, CDN or third-party script required.
  * Renders SMF/KAR to a seekable WAV with Web Audio. SF2 PCM and SF3 Ogg sample banks
- * are read from the owner's private Drive only after explicit SoundFont selection.
+ * may come from the owner's private Drive, or the explicitly credited small GPL GM default.
  * This is a bounded compatibility renderer, not a bit-exact FluidSynth replacement. */
 (function(scope){
 'use strict';
@@ -542,13 +542,13 @@ async function refreshFonts(auth){
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
       // Prefer the user's saved bank, then a complete-looking GM/GS bank.
       const savedChoice=eligible.find(option=>option.value===saved);
-      const autoChoice=savedChoice||eligible.slice().sort((a,b)=>{
-        const quality=option=>/general.?midi|generaluser|fluidr3|timgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text)?1:0;
-        const diff=quality(b)-quality(a);
-        return diff||Number(a.dataset.size)-Number(b.dataset.size);
-      })[0];
-      // Preserve a user's explicit "basic" choice, but default to sampled GM.
-      select.value=autoChoice?.value||(saved===''?BUILTIN_GM_ID:BUILTIN_GM_ID);
+      const gmCandidates=eligible.filter(option=>
+        /general.?midi|generaluser|fluidr3|timgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text));
+      const autoChoice=savedChoice||gmCandidates.slice().sort((a,b)=>
+        Number(a.dataset.size)-Number(b.dataset.size))[0];
+      // Use the bundled-source GM reference rather than guessing that an
+      // unrelated instrument-only SF2 can play a complete karaoke arrangement.
+      select.value=autoChoice?.value||BUILTIN_GM_ID;
       selected=select.value;
       fontWarning='';
       fontStatusChanged();
@@ -574,7 +574,7 @@ async function refreshFonts(auth){
       select.replaceChildren(...choices);
       const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
       option.disabled=true;select.append(option);
-      selected='';fontCache=null;fontStatusChanged();
+      selected=BUILTIN_GM_ID;fontCache=null;select.value=selected;fontStatusChanged();
     }
   })();
   fontRefreshPromise=pending;
