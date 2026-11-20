@@ -39,6 +39,19 @@ var folder = Path.Combine(Path.GetTempPath(), "xstage-dm-test-" + Guid.NewGuid()
 Directory.CreateDirectory(folder);
 try
 {
+    // Retry policy is selective. Auth and missing resources must not be
+    // retried; rate limits and network failures should have bounded backoff.
+    if (!DownloadRetryPolicy.IsTransientStatus(HttpStatusCode.RequestTimeout) ||
+        !DownloadRetryPolicy.IsTransientStatus(HttpStatusCode.TooManyRequests) ||
+        !DownloadRetryPolicy.IsTransientStatus(HttpStatusCode.ServiceUnavailable) ||
+        DownloadRetryPolicy.IsTransientStatus(HttpStatusCode.NotFound) ||
+        DownloadRetryPolicy.IsTransientStatus(HttpStatusCode.Forbidden) ||
+        DownloadRetryPolicy.Backoff(1) != TimeSpan.FromSeconds(1) ||
+        DownloadRetryPolicy.Backoff(4) != TimeSpan.FromSeconds(8) ||
+        DownloadRetryPolicy.Backoff(9) != TimeSpan.FromSeconds(30) ||
+        DownloadRetryPolicy.Backoff(1, TimeSpan.FromSeconds(20)) != TimeSpan.FromSeconds(20))
+        throw new Exception("Transient and permanent HTTP retry behavior must be bounded.");
+
     // SQLite migration and crash recovery: imported legacy JSON must remain
     // untouched, every job/chunk checkpoint must commit atomically, and a
     // second startup must never re-import deleted history.
@@ -597,6 +610,32 @@ try
         !await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "plain/test-file.bin") ||
         await BrowserCaptureProbe.IsUnauthenticatedFileAsync("https://www.youtube.com/watch?v=123"))
         throw new Exception("Browser capture must probe accessible direct files without cookies.");
+    manager.SetRetryLimit(7);
+    if (new DownloadEngine(isolatedEngineData).MaxRetryCount != 7)
+        throw new Exception("User-configured retry limit must persist in SQLite.");
+    var flaky = manager.Add(server.Url + "flaky-range/disconnected.bin", folder, 8);
+    await WaitFor(() => flaky.Status is "Completed" or "Failed");
+    if (flaky.Status != "Completed" ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(flaky.CompletedPath)))
+        throw new Exception("Interrupted Range chunk did not resume from its saved byte offset: " +
+                            flaky.Error);
+    var toggle = manager.Add(server.Url + "range-toggle/disabled.bin", folder, 8);
+    await WaitFor(() => toggle.Status is "Completed" or "Failed");
+    if (toggle.Status != "Completed" || toggle.SupportsRanges ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(toggle.CompletedPath)))
+        throw new Exception("Server ignoring Range after probe must safely fall back to HTTP 200: " +
+                            toggle.Error);
+    var busy = manager.Add(server.Url + "busy-once/retry.bin", folder, 4);
+    await WaitFor(() => busy.Status is "Completed" or "Failed");
+    if (busy.Status != "Completed" ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(busy.CompletedPath)))
+        throw new Exception("HTTP 503 Retry-After retry failed: " + busy.Error);
+    var flakySingle = manager.Add(server.Url + "flaky-single/retry.bin", folder);
+    await WaitFor(() => flakySingle.Status is "Completed" or "Failed");
+    if (flakySingle.Status != "Completed" ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(flakySingle.CompletedPath)))
+        throw new Exception("Non-Range transfer must retry safely from byte zero: " +
+                            flakySingle.Error);
     var plain = manager.Add(server.Url + "plain/test%20file.bin", folder);
     await WaitFor(() => plain.Status is "Completed" or "Failed");
     if (plain.Status != "Completed") throw new Exception("Single stream failed: " + plain.Error);
@@ -632,6 +671,9 @@ sealed class FileServer : IDisposable
     private readonly TcpListener _listener;
     private readonly CancellationTokenSource _cts = new();
     private int _interruptedOnce;
+    private int _flakyRangeOnce;
+    private int _flakySingleOnce;
+    private int _busyOnce;
     public string Url { get; }
     public FileServer(byte[] data)
     {
@@ -671,9 +713,29 @@ sealed class FileServer : IDisposable
                     var split = line.IndexOf(':');
                     if (split > 0) headers[line[..split].Trim()] = line[(split + 1)..].Trim();
                 }
-                var supportsRange = path.StartsWith("/range/") || path.StartsWith("/unstable/");
+                if (path.StartsWith("/busy-once/") &&
+                    Interlocked.Exchange(ref _busyOnce, 1) == 0)
+                {
+                    await stream.WriteAsync(Encoding.ASCII.GetBytes(
+                        "HTTP/1.1 503 Service Unavailable\r\n" +
+                        "Retry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
+                    return;
+                }
+                var supportsRange = path.StartsWith("/range/") ||
+                    path.StartsWith("/unstable/") ||
+                    path.StartsWith("/flaky-range/") ||
+                    path.StartsWith("/busy-once/");
+                if (path.StartsWith("/range-toggle/"))
+                    supportsRange = headers.TryGetValue("Range", out var probeRange) &&
+                        probeRange == "bytes=0-0";
                 var interrupt = path.StartsWith("/unstable/") &&
                     Interlocked.Exchange(ref _interruptedOnce, 1) == 0;
+                var flakyRange = path.StartsWith("/flaky-range/") &&
+                    headers.TryGetValue("Range", out var rangeValue) &&
+                    rangeValue != "bytes=0-0" &&
+                    Interlocked.Exchange(ref _flakyRangeOnce, 1) == 0;
+                var flakySingle = path.StartsWith("/flaky-single/") &&
+                    Interlocked.Exchange(ref _flakySingleOnce, 1) == 0;
                 var begin = 0;
                 var end = _data.Length - 1;
                 var code = "200 OK";
@@ -707,7 +769,8 @@ sealed class FileServer : IDisposable
                     var chunk = Math.Min(8192, end - offset + 1);
                     await stream.WriteAsync(_data.AsMemory(offset, chunk));
                     offset += chunk;
-                    if (interrupt && offset >= 160 * 1024) break;
+                    if ((interrupt || flakyRange || flakySingle) &&
+                        offset - begin >= 160 * 1024) break;
                     await Task.Delay(2);
                 }
             }
