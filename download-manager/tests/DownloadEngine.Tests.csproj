@@ -12,6 +12,7 @@
     <Compile Include="../DownloadJob.cs" Link="DownloadJob.cs" />
     <Compile Include="../ProgressPresentation.cs" Link="ProgressPresentation.cs" />
     <Compile Include="../SocialVideoDownloader.cs" Link="SocialVideoDownloader.cs" />
+    <Compile Include="../MediaIntegrity.cs" Link="MediaIntegrity.cs" />
     <Compile Include="../UpdateChecker.cs" Link="UpdateChecker.cs" />
     <Compile Include="../SelfUpdater.cs" Link="SelfUpdater.cs" />
     <Compile Include="../BrowserIntegration.cs" Link="BrowserIntegration.cs" />
