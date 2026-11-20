@@ -133,7 +133,7 @@ public sealed class DownloadEngine
         return true;
     }
 
-    public DownloadJob Add(string url, string folder, int? parts = null, string videoQuality = "Best")
+    public DownloadJob Add(string url, string folder, int? parts = null, string videoQuality = "Best", string outputFormat = "mp4")
     {
         if (!TryParseUrl(url, out var uri) || uri is null)
             throw new ArgumentException("รองรับลิงก์ HTTP/HTTPS ที่ถูกต้องเท่านั้น");
@@ -142,12 +142,15 @@ public sealed class DownloadEngine
         var video = SocialVideoDownloader.IsVideoUrl(uri.ToString());
         if (video && !SocialVideoDownloader.AllowedQualities.Contains(videoQuality))
             throw new ArgumentException("กรุณาเลือกคุณภาพวิดีโอที่รองรับ");
+        if (video && !SocialVideoDownloader.AllowedOutputFormats.Contains(outputFormat))
+            throw new ArgumentException("กรุณาเลือกรูปแบบปลายทาง MP4 / MKV / WEBM / MP3");
         var name = video ? SocialVideoDownloader.Platform(uri.ToString()) + " video" :
             CleanName(Uri.UnescapeDataString(uri.AbsolutePath.Split('/').LastOrDefault() ?? ""));
         var job = new DownloadJob
         {
             Url = uri.ToString(), Name = name, Folder = folder, Parts = selectedParts,
-            Kind = video ? "Video" : "File", VideoQuality = video ? videoQuality : "Best"
+            Kind = video ? "Video" : "File", VideoQuality = video ? videoQuality : "Best",
+            OutputFormat = video ? outputFormat : "mp4"
         };
         Jobs.Insert(0, job);
         Save();
