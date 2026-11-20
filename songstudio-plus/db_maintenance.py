@@ -187,7 +187,9 @@ def cleanup_history(workspace, progress=None, cancel=None, retain_completed=RETA
         return {"cancelled": True, "before": before}
     counts = {"completed": 0, "old_batches_removed": 0,
               "checkpoints_removed": 0, "success_logs_removed": 0,
-              "old_logs_removed": 0}
+              "old_logs_removed": 0, "completed_resume_removed": 0,
+              "orphan_cache_removed": 0, "old_audit_findings_removed": 0,
+              "old_audit_runs_trimmed": 0, "unused_index_removed": 0}
     with core.WRITE_LOCK, core.connect(workspace) as db:
         finished = [row[0] for row in db.execute("""SELECT id
             FROM xstage_import_batches WHERE status='completed'
@@ -221,6 +223,46 @@ def cleanup_history(workspace, progress=None, cancel=None, retain_completed=RETA
                               **counts}, "ล้างเฉพาะประวัติงานที่เสร็จแล้ว")
             if cancel and cancel.is_set():
                 raise InterruptedError("ยกเลิกการจัดการประวัติ SQLite")
+            # Completed resume states serve no future continuation and have
+            # no UI references. Retain all running/interrupted/cancelled ones.
+            cur = db.execute("""DELETE FROM xstage_import_resume_state
+                WHERE status='completed'""")
+            counts["completed_resume_removed"] += max(0, cur.rowcount)
+            # Parsing cache entries whose media source no longer exists do not
+            # avoid any future work; do not touch live source cache entries.
+            cur = db.execute("""DELETE FROM xstage_lyric_scan_cache
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM xstage_media_sources AS src
+                  WHERE src.source_path=xstage_lyric_scan_cache.source_path
+                )""")
+            counts["orphan_cache_removed"] += max(0, cur.rowcount)
+            # Only the most recent completed audit's detailed findings are
+            # used by the risk UI. Retain TWO full scans for safe comparison.
+            # The small summary of every scan remains in history; all manual
+            # listening reviews and active/running scans remain untouched.
+            audit_exists = db.execute("""SELECT 1 FROM sqlite_master
+                WHERE type='table' AND name='xstage_swipe_audit_runs'""").fetchone()
+            if audit_exists:
+                old_runs = [row[0] for row in db.execute("""SELECT id
+                    FROM xstage_swipe_audit_runs
+                    WHERE status='completed'
+                    ORDER BY finished_at DESC, started_at DESC, id DESC
+                    LIMIT -1 OFFSET 2""")]
+                for old_run in old_runs:
+                    if cancel and cancel.is_set():
+                        raise InterruptedError("ยกเลิกการจัดการประวัติ SQLite")
+                    cur = db.execute("""DELETE FROM xstage_swipe_findings
+                        WHERE run_id=?""", (old_run,))
+                    counts["old_audit_findings_removed"] += max(cur.rowcount,0)
+                    counts["old_audit_runs_trimmed"] += 1
+            # The xstage_lyric_source index was never referenced by any
+            # runtime query. It is not a UNIQUE constraint. Other indexes
+            # (especially normalized text, cue positions, FK lookups) stay.
+            existed = db.execute("""SELECT 1 FROM sqlite_master WHERE
+                type='index' AND name='xstage_lyric_source'""").fetchone()
+            if existed:
+                db.execute("DROP INDEX IF EXISTS xstage_lyric_source")
+                counts["unused_index_removed"] = 1
             db.commit()
         except Exception:
             db.rollback()
