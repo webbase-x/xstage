@@ -64,9 +64,11 @@ public sealed class DownloadEngine
         foreach (var job in Jobs)
         {
             job.InterruptedOnStartup = job.Status is "Running" or "Queued" ||
-                (job.ResumeAfterRestart && job.Status == "Paused");
+                ((job.ResumeAfterRestart || job.ResumeWhenNetworkReturns) && job.Status == "Paused");
             if (job.Status is "Running" or "Queued") job.Status = "Paused";
-            job.ResumeAfterRestart = false;
+            // Preserve intent if the process closes before recovery consent.
+            job.ResumeAfterRestart = job.InterruptedOnStartup;
+            job.ResumeWhenNetworkReturns = false;
             // Build 4 could download the MKV correctly, then falsely report
             // failure because the Thai/Unicode final pathname was corrupted.
             // That specific failure occurred only after yt-dlp returned 0.
@@ -312,6 +314,7 @@ public sealed class DownloadEngine
             }
         }
         job.ResumeAfterRestart = false;
+        job.ResumeWhenNetworkReturns = false;
         job.InterruptedOnStartup = false;
         job.Status = "Queued";
         job.Error = "";
@@ -404,6 +407,7 @@ public sealed class DownloadEngine
         if (job.Status is not ("Running" or "Queued")) return;
         job.Status = "Paused";
         job.ResumeAfterRestart = false;
+        job.ResumeWhenNetworkReturns = false;
         job.InterruptedOnStartup = false;
         try { job.Cancellation?.Cancel(); } catch (ObjectDisposedException) { }
         Save();
@@ -435,11 +439,34 @@ public sealed class DownloadEngine
         {
             job.InterruptedOnStartup = false;
             job.ResumeAfterRestart = false;
+            job.ResumeWhenNetworkReturns = false;
         }
         Save();
         if (resume)
             foreach (var job in interrupted)
                 Start(job);
+    }
+
+    // Network recovery never includes items the user explicitly paused.
+    // Wait for canceled workers to relinquish their slot before restarting.
+    public void PauseForNetworkOutage()
+    {
+        var interrupted = Jobs.Where(job => job.Status is "Running" or "Queued").ToArray();
+        foreach (var job in interrupted) Pause(job);
+        foreach (var job in interrupted)
+            if (job.Status == "Paused") job.ResumeWhenNetworkReturns = true;
+        if (interrupted.Length > 0) Save();
+    }
+
+    public void TryResumeNetworkInterrupted()
+    {
+        var ready = Jobs.Where(job => job.ResumeWhenNetworkReturns &&
+            job.Status == "Paused" && !_active.ContainsKey(job.Id)).ToArray();
+        foreach (var job in ready)
+        {
+            job.ResumeWhenNetworkReturns = false;
+            Start(job);
+        }
     }
 
     public bool Remove(DownloadJob job)
