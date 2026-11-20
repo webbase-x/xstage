@@ -67,20 +67,20 @@
     accountLastFocus=null;
   }
   function setAccountView(view){
-    if(!Object.hasOwn(accountViews,view))view="overview";
+    if(!Object.prototype.hasOwnProperty.call(accountViews,view))view="overview";
     accountView=view;
     Object.entries(accountViews).forEach(([key,node])=>{if(node)node.hidden=key!==view;});
     const headings={overview:"บัญชี X-Stage",personal:"ข้อมูลส่วนตัว",
       history:"ประวัติการดาวน์โหลด",reviews:"คะแนนและความคิดเห็น"};
     message($("portal-account-title"),headings[view]);
     accountBack.setAttribute("aria-label",view==="overview"?"ปิดหน้าบัญชี":"กลับไปหน้าบัญชี");
-    $("portal-account-scroll")?.scrollTo({top:0,behavior:"instant"});
+    if($("portal-account-scroll"))$("portal-account-scroll").scrollTop=0;
     if(view==="history")void loadHistory();
     if(view==="reviews")void loadMyReviews();
   }
   function openAccountScreen(view="overview"){
     if(!user)return;
-    accountLastFocus=document.activeElement;
+    accountLastFocus=profileToggle;
     closeProfileMenu();
     accountScreen.hidden=false;
     document.body.classList.add("portal-account-open");
