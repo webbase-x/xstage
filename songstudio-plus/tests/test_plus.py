@@ -138,8 +138,9 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(plus.groups(self.workspace,"karaoke"),[],
                          "A song-title match must never be an editable lyric group")
         self.assertEqual(len(plus.groups(self.workspace,"love")),1)
-        with self.assertRaises(ValueError):
-            plus.plan_edit(self.workspace,"karaoke",["karaoke evening"])
+        self.assertEqual(
+            plus.plan_edit(self.workspace,"karaoke",["karaoke evening"])["lines"],0,
+            "A metadata-only key must never select lyrics for replacement")
         result_artist=plus.search_context(self.workspace,"xstage")
         self.assertEqual(len(result_artist["songs"]),1)
         self.assertEqual(plus.search_context(self.workspace,"%")["songs"],[],
