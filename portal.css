@@ -155,3 +155,5 @@ body.portal-account-open{overflow:hidden}
  .portal-account-shell .portal-download-event{align-items:flex-start}
 }
 @media(prefers-reduced-motion:reduce){.portal-account-screen *{scroll-behavior:auto!important}}
+
+.portal-account-row-icon svg{width:21px;height:21px;display:block}
