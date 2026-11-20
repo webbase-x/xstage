@@ -46,6 +46,18 @@ Source: "..\source\dist\XStageKaraoke\_internal\*"; DestDir: "{app}\_internal"; 
 ; Ship the verified x64 libraries produced by Setup-Audio.ps1 with the installer.
 Source: "..\source\dist\XStageKaraoke\native\x64\*"; DestDir: "{app}\native\x64"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Runtime support scripts invoked by existing application menus (not development tools).
+Source: "..\source\dist\XStageKaraoke\Setup-Dependencies.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\Setup-Audio.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Dependency-Common.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Probe-Native.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Repair-Dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Repair-XStage-WiFi.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Setup-System-EQ.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Open-APO-Device.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Install-EqualizerAPO.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\tools\Installer-Safety.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+
 [Icons]
 Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"
 Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; Tasks: desktopicon
