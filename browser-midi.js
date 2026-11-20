@@ -657,8 +657,16 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   let cursor=0,disposed=false,timer=null,voices=[],revision=0;
   const regionCache=new Map();
   let missingPresetWarning=false;
+  const fadeOutVoice=voice=>{
+    try{
+      const at=ctx.currentTime;
+      voice.gain.gain.cancelScheduledValues?.(at);
+      voice.gain.gain.setTargetAtTime?.(.00001,at,.006);
+      voice.src.stop(at+.035);
+    }catch{try{voice.src.stop();}catch{}}
+  };
   const stopVoices=()=>{
-    for(const voice of voices){try{voice.stop();}catch{}try{voice.disconnect();}catch{}}
+    for(const voice of voices)fadeOutVoice(voice);
     voices=[];
   };
   const reset=()=>{
@@ -669,10 +677,10 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
     cursor=lo;
   };
   const register=(src,gain)=>{
-    voices.push(src);
+    const voice={src,gain};voices.push(voice);
     src.onended=()=>{
       try{src.disconnect();gain.disconnect();}catch{}
-      const at=voices.indexOf(src);if(at>=0)voices.splice(at,1);
+      const at=voices.indexOf(voice);if(at>=0)voices.splice(at,1);
     };
   };
   const scheduleNote=async(n,now,rate,generation)=>{
@@ -737,11 +745,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
       }
       // Preserve rhythm over unlimited polyphony: retire oldest voices
       // before allocating another active oscillator/sample source.
-      while(voices.length>=MAX_VOICES){
-        const oldest=voices.shift();
-        try{oldest.stop();}catch{}
-        try{oldest.disconnect();}catch{}
-      }
+      while(voices.length>=MAX_VOICES)fadeOutVoice(voices.shift());
       src.connect(gain);register(src,gain);
       src.start(onset);src.stop(onset+duration+.015);
     }
