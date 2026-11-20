@@ -561,6 +561,7 @@ const midiTransport={
     if(!this.active||this.paused)return;
     const now=this.time();
     if(now>=this.duration){
+      if(this.loop){this.seek(0);return;}
       this.position=this.duration;this.paused=true;this.ended=true;
       clearInterval(this.interval);this.interval=null;
       this.emit('timeupdate');this.emit('ended');
@@ -623,6 +624,7 @@ const player=new Proxy(nativePlayer,{
       if(prop==='playbackRate'){midiTransport.position=midiTransport.time();midiTransport.rate=Number(value)||1;midiTransport.startedAt=performance.now();midiTransport.emit('ratechange');return true;}
       if(prop==='loop'){midiTransport.loop=!!value;return true;}
     }
+    if(prop==='src'&&midiTransport.active)midiTransport.clear();
     return Reflect.set(target,prop,value,target);
   }
 });
@@ -2114,11 +2116,12 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
        estimatedWorkingBytes>(lowMemory?128:256)*1024*1024)
       return null; // The song remains playable on demand when its turn arrives.
   }
-  if(!fontBytes&&window.XStageBrowserMidi?.supportsRealtime?.()){
-    if(prefetch)return null; // Fast MIDI needs no expensive whole-song pre-render.
-    const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
-    onStatus('MIDI พร้อมเล่นทันที · ใช้เสียงพื้นฐานแบบเรียลไทม์');
-    return {song,token,blob:null,lyrics:unpacked.document,liveMidi:midiBytes};
+  if(window.XStageBrowserMidi?.supportsRealtime?.()){
+    if(prefetch)return null; // Live playback needs no offline pre-render.
+    window.XStageBrowserMidi.parseMidi(midiBytes);
+    onStatus('MIDI/SoundFont พร้อมเล่นแบบเรียลไทม์');
+    return {song,token,blob:null,lyrics:unpacked.document,
+      liveMidi:midiBytes,liveFont:fontBytes};
   }
   onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ให้พร้อมเล่น…');
   const rendered=await window.XStageBrowserMidi.render(midiBytes,{
@@ -2621,7 +2624,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       }
     }
     const readyPrepared=prepared||pendingPrepared;
-    let embeddedKaraokeLyrics=null,liveMidiBytes=null;
+    let embeddedKaraokeLyrics=null,liveMidiBytes=null,liveFontBytes=null;
     const loadMedia=async()=>{
       if(!getFileId(song.midi))return privateFile(song.audio.fileId,token,
         {signal:controller.signal}).then(r=>r.blob());
@@ -2638,9 +2641,9 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
         embeddedKaraokeLyrics=window.XStageBrowserMidi.midiLyrics(parsed,song.code);
       }
-      if(!fontBytes&&window.XStageBrowserMidi.supportsRealtime?.()){
+      if(window.XStageBrowserMidi.supportsRealtime?.()){
         const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
-        liveMidiBytes=midiBytes;
+        liveMidiBytes=midiBytes;liveFontBytes=fontBytes;
         return null;
       }
       const rendered=await window.XStageBrowserMidi.render(midiBytes,{
@@ -2655,12 +2658,14 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       // verified audio directly, without duplicating download/render.
       ({blob:audio,lyrics}=readyPrepared);
       liveMidiBytes=readyPrepared.liveMidi||null;
+      liveFontBytes=readyPrepared.liveFont||null;
     }else if(getFileId(song.xsk)||getFileId(song.xmid)){
       const ready=await boundedPlaybackTask(
         prepareXskPlayback(song,token,controller.signal,message=>{
           if(request===state.requestId)setPlayStatus(message);
         }),120,'โหลดหรือแยก XSK2 จาก Google Drive นานเกินไป',controller);
       audio=ready.blob;lyrics=ready.lyrics;liveMidiBytes=ready.liveMidi||null;
+      liveFontBytes=ready.liveFont||null;
     }else{
       [audio,lyrics]=await boundedPlaybackTask(Promise.all([
         loadMedia(),
@@ -2672,7 +2677,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     }
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token){controller.abort();return;}
-    if (!audio.size)throw Error('ไฟล์เสียงว่างเปล่า');
+    if(!liveMidiBytes&&!audio?.size)throw Error('ไฟล์เสียง/MIDI ว่างเปล่า');
     const url=liveMidiBytes?'':URL.createObjectURL(audio);
     if (remember && state.current)state.history.push(state.current);
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
@@ -2689,8 +2694,14 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     if(liveMidiBytes){
       midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
-      state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{onStatus:setPlayStatus});
-    }else player.src=url;
+      state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
+        fontBytes:liveFontBytes,onStatus:setPlayStatus,
+        getTranspose:()=>Number(document.getElementById('midi-transpose')?.value||0)
+      });
+    }else{
+      if(midiTransport.active)midiTransport.clear();
+      player.src=url;
+    }
     try{
       if('preservesPitch' in player)player.preservesPitch=true;
       if('mozPreservesPitch' in player)player.mozPreservesPitch=true;
