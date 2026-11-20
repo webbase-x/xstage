@@ -2227,8 +2227,7 @@ async function prepareQueuedSong(song,token,signal){
   const pressure=monitor.plan(memoryResources());
   if(pressure.heapPressure||pressure.nativePressure)return null;
   if(getFileId(song.xsk)||getFileId(song.xmid)){
-    if(window.XStageBrowserMidi?.supportsRealtime?.()&&
-       !window.XStageBrowserMidi.fontStatus?.().selectedId)return null;
+    if(window.XStageBrowserMidi?.supportsRealtime?.())return null;
     // The pack and the uncompressed WAV both count against available space.
     const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
     if(!Number((song.xmid||song.xsk).size)||Number((song.xmid||song.xsk).size)>maxPacked)return null;
@@ -2237,8 +2236,7 @@ async function prepareQueuedSong(song,token,signal){
     return {...result,bytes:result.blob.size};
   }
   if(getFileId(song.midi)){
-    if(window.XStageBrowserMidi?.supportsRealtime?.()&&
-       !window.XStageBrowserMidi.fontStatus?.().selectedId)return null;
+    if(window.XStageBrowserMidi?.supportsRealtime?.())return null;
     const sourceSize=Number(song.midi.size);
     if(!sourceSize||sourceSize>12*monitor.MiB||
        !monitor.canHold(sourceSize*2,memoryResources()))return null;
@@ -2517,6 +2515,7 @@ function clearIdleStage(message){
   state.medleyPrefetch=null;
   state.medleyUpcoming=null;
   releaseQueuePreload();
+  if(midiKeyControl)midiKeyControl.hidden=true;
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
   ui.stageCode.textContent='—';
@@ -2692,6 +2691,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     ui.stageCode.textContent=song.code||'—';
     if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
+    if(midiKeyControl)midiKeyControl.hidden=!liveMidiBytes;
+    if(midiKeyValue){midiKeyValue.value='0';$('midi-transpose-label').textContent='0';}
     if(liveMidiBytes){
       midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
       state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
@@ -3720,6 +3721,16 @@ ui.restartCurrent.addEventListener('click',restartCurrentSong);
 function playPrevious(){const old=state.history.pop();renderQueue();if(old)playSong(old,{remember:false});}
 ui.previous.addEventListener('click',playPrevious);
 ui.next.addEventListener('click',playNext);
+const midiKeyControl=$('midi-transpose-control'),midiKeyValue=$('midi-transpose');
+function setMidiKey(delta){
+  if(!state.liveMidiPlayback||!midiKeyValue)return;
+  const value=Math.max(-12,Math.min(12,Number(midiKeyValue.value||0)+delta));
+  midiKeyValue.value=String(value);
+  $('midi-transpose-label').textContent=value>0?'+'+value:String(value);
+  nativePlayer.dispatchEvent(new Event('xstage-midi-transpose'));
+}
+$('midi-key-down')?.addEventListener('click',()=>setMidiKey(-1));
+$('midi-key-up')?.addEventListener('click',()=>setMidiKey(1));
 ui.speed.addEventListener('change',()=>{player.playbackRate=Number(ui.speed.value);saveUiPrefs({speed:Number(ui.speed.value)});});
 ui.volume.addEventListener('input',()=>{player.volume=Number(ui.volume.value)/100;saveUiPrefs({volume:Number(ui.volume.value)});});
 ui.repeat.addEventListener('change',()=>{player.loop=ui.repeat.checked;saveUiPrefs({repeat:ui.repeat.checked});});
