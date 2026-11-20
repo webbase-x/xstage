@@ -178,8 +178,9 @@ public static class SocialVideoDownloader
             // When a UTF-8 path is damaged on Windows stdout, the correct
             // yt-dlp output can still be recognized by its unique video ID.
             // Only do this AFTER yt-dlp exits successfully.
-            fullPath = FindCompletedYouTubeOutput(job.Url, job.Folder, job.VideoQuality)
-                ?? throw;
+            var recovered = FindCompletedYouTubeOutput(job.Url, job.Folder, job.VideoQuality);
+            if (recovered is null) throw;
+            fullPath = recovered;
         }
         job.Name = Path.GetFileName(fullPath);
         job.CompletedPath = fullPath;
