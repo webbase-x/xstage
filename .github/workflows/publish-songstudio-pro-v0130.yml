@@ -2,7 +2,7 @@ name: Publish X-Stage Song Studio Pro v0.1.31 Windows Setup
 
 on:
   workflow_run:
-    workflows: ["X-Stage Song Studio Pro · Tests and Windows Setup"]
+    workflows: ["X-Stage Song Studio Pro · Tests and Windows Preview"]
     types: [completed]
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
         with:
           ref: main
           persist-credentials: true
-      - name: Download verified Windows preview from successful Pro Build
+      - name: Download verified Windows Setup from successful Pro Build
         uses: actions/download-artifact@v4
         with:
           name: X-Stage-Song-Studio-Pro-v0.1.31-Windows-Setup
