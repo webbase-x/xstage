@@ -707,6 +707,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
     ctx.close().catch(()=>{});
   };
   signal?.addEventListener('abort',dispose,{once:true});
+  if(!player.paused)play();
   onStatus?.(font?'SoundFont พร้อมสังเคราะห์ MIDI แบบเรียลไทม์':'MIDI พร้อมเล่นโดยไม่แปลงเป็น WAV');
   return {dispose,duration:song.duration};
 }
