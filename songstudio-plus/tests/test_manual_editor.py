@@ -60,9 +60,16 @@ class ManualKaraokeTests(unittest.TestCase):
         self.assertEqual(edit.queue(self.workspace)["rows"][0]["review_status"],"review")
         self.assertEqual(edit.ready_count(self.workspace),0)
         self.assertEqual(edit.approved_build_ids(self.workspace),[])
+        self.assertEqual(edit.approved_selected_ids(self.workspace,[song_id]),set())
         edit.approve(self.workspace,song_id,complete["version_id"])
         self.assertEqual(edit.ready_count(self.workspace),1)
         self.assertEqual(edit.approved_build_ids(self.workspace),[song_id])
+        self.assertEqual(edit.approved_selected_ids(self.workspace,[song_id]),{song_id})
+        # Multi-chunk explicit validation never needs to materialize the
+        # complete karaoke catalog, and preserves each requested selection.
+        large_selection=["missing-"+str(i) for i in range(405)]+[song_id,song_id]
+        self.assertEqual(edit.approved_selected_ids(self.workspace,large_selection),
+                         {song_id})
         self.assertEqual(edit.approved_build_ids(self.workspace,exclude=[song_id]),[])
         self.assertEqual(edit.annotate_rows(self.workspace,core.songs(self.workspace))[0]["manual_status"],"ready")
         self.assertEqual(edit.queue(self.workspace)["total"],0)
