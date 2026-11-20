@@ -33,12 +33,12 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   const unlocked=scope.XStageBrowserMidi?.liveAudioContext?.();
   const ownsContext=!unlocked;
   const ctx=unlocked||new Ctor({latencyHint:'playback'});
-  let synth=null,master=null,limiter=null,disposed=false;
+  let synth=null,master=null,tone=null,limiter=null,disposed=false;
   const dispose=()=>{
     if(disposed)return;disposed=true;
     try{synth?.stopAll(true);}catch{}
     try{synth?.destroy();}catch{}
-    try{master?.disconnect();limiter?.disconnect();}catch{}
+    try{master?.disconnect();tone?.disconnect();limiter?.disconnect();}catch{}
     if(ownsContext)void ctx.close().catch(()=>{});
   };
   try{
@@ -51,19 +51,29 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     catch(error){registeredWorklets.delete(ctx);throw error;}
     if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
     synth=new WorkletSynthesizer(ctx);
+    // The older .52 master followed by -12 dB / 9:1 compression lost
+    // several dB of level and flattened kick/snare attacks. Keep sensible
+    // headroom but avoid squeezing every transient.
+    const OUTPUT_GAIN=.92;
     master=ctx.createGain();
-    master.gain.value=.52;
+    master.gain.value=OUTPUT_GAIN;
+    if(typeof ctx.createBiquadFilter==='function'){
+      tone=ctx.createBiquadFilter();
+      tone.type='lowshelf';tone.frequency.value=145;tone.gain.value=1.5;
+    }
     limiter=ctx.createDynamicsCompressor();
-    limiter.threshold.value=-12;limiter.knee.value=8;
-    limiter.ratio.value=9;limiter.attack.value=.003;limiter.release.value=.14;
+    limiter.threshold.value=-6;limiter.knee.value=5;
+    limiter.ratio.value=5;limiter.attack.value=.004;limiter.release.value=.13;
     synth.connect(master);
-    master.connect(limiter);limiter.connect(ctx.destination);
+    if(tone){master.connect(tone);tone.connect(limiter);}
+    else master.connect(limiter);
+    limiter.connect(ctx.destination);
     const bank=fontBytes.buffer.slice(fontBytes.byteOffset,
       fontBytes.byteOffset+fontBytes.byteLength);
     await synth.soundBankManager.addSoundBank(bank,'X-Stage GM');
     await synth.isReady;
     if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
-    onStatus('SpessaSynth + SoundFont พร้อมเล่น');
+    onStatus('SpessaSynth · เสียง GM เต็มรูปแบบ พร้อมเล่น');
   }catch(error){dispose();throw error;}
   return {
     attach(player,{getTranspose=()=>0,getProgram=()=>null}={}){
@@ -72,6 +82,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       ]).sort((a,b)=>a.time-b.time||Number(a.on)-Number(b.on));
       let cursor=0,timer=null,generation=0,playing=false;
       const applied=new Array(16).fill(null);
+      const controls=Array.from({length:16},()=>({volume:-1,expression:-1,pan:-1}));
       const reset=()=>{
         generation++;
         synth.stopAll(true);
@@ -82,12 +93,13 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           if(events[mid].time<now-.015)left=mid+1;else right=mid;
         }
         cursor=left;applied.fill(null);
+        for(const state of controls){state.volume=-1;state.expression=-1;state.pan=-1;}
       };
       const step=()=>{
         if(disposed||signal?.aborted||player.paused||player.ended)return;
         const now=Number(player.currentTime)||0;
         const speed=clamp(Number(player.playbackRate)||1,.25,2);
-        master.gain.value=(player.muted?0:clamp(Number(player.volume)||0,0,1))*.52;
+        master.gain.value=(player.muted?0:clamp(Number(player.volume)||0,0,1))*.92;
         const horizon=now+.025*speed;
         while(cursor<events.length&&events[cursor].time<=horizon){
           const event=events[cursor++],note=event.note,ch=note.channel;
@@ -109,8 +121,23 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
               }
               applied[ch]=state;
             }
-            const velocity=clamp(Math.round(note.velocity*clamp(note.level,.1,1)),1,127);
-            synth.noteOn(ch,pitch,velocity);
+            // BASSMIDI on PC consumes the MIDI velocity and CC7/CC11 as
+            // separate messages. Reconstruct them rather than folding CCs
+            // into velocity, which thins the sound and changes timbre.
+            const volume=clamp(Math.round(note.channelVolume??100),0,127);
+            const expression=clamp(Math.round(note.channelExpression??127),0,127);
+            const pan=clamp(Math.round(note.pan??64),0,127);
+            const stateCC=controls[ch];
+            if(stateCC.volume!==volume){
+              synth.controllerChange(ch,7,volume);stateCC.volume=volume;
+            }
+            if(stateCC.expression!==expression){
+              synth.controllerChange(ch,11,expression);stateCC.expression=expression;
+            }
+            if(stateCC.pan!==pan){
+              synth.controllerChange(ch,10,pan);stateCC.pan=pan;
+            }
+            synth.noteOn(ch,pitch,clamp(Math.round(note.velocity),1,127));
           }else synth.noteOff(ch,pitch);
         }
       };
