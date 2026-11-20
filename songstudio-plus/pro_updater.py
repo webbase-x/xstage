@@ -20,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-VERSION="0.1.27"
+VERSION="0.1.28"
 MANIFEST_URL="https://webbase-x.github.io/xstage/downloads/song-studio-pro-latest.json"
 RAW_MANIFEST_URL="https://raw.githubusercontent.com/webbase-x/xstage/main/downloads/song-studio-pro-latest.json"
 RELEASE=re.compile(
@@ -82,7 +82,64 @@ def _read_feed(url):
     return target
 
 
+def _read_release_api():
+    """Use the verified digest published for the actual EXE on GitHub Releases.
+
+    GitHub Pages may briefly return 'available: false' or a stale manifest
+    during release publication. The GitHub asset digest is authoritative and
+    avoids showing a false 'no verified EXE' failure for a published binary.
+    """
+    url="https://api.github.com/repos/webbase-x/xstage/releases?per_page=100"
+    req=urllib.request.Request(url,headers={
+        "User-Agent":"XStageSongStudioPro/"+VERSION,
+        "Accept":"application/vnd.github+json",
+        "Cache-Control":"no-cache"})
+    with urllib.request.urlopen(req,timeout=12) as response:
+        final=urllib.parse.urlsplit(response.geturl())
+        if final.scheme!="https" or final.hostname!="api.github.com":
+            raise ValueError("GitHub Releases API เปลี่ยนไปยังเว็บไซต์อื่น")
+        raw=response.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024:
+        raise ValueError("GitHub Releases ส่งข้อมูลขนาดผิดปกติ")
+    releases=json.loads(raw.decode("utf-8-sig"))
+    if not isinstance(releases,list):
+        raise ValueError("รูปแบบรายการ GitHub Releases ไม่ถูกต้อง")
+    verified=[]
+    for release in releases:
+        if not isinstance(release,dict) or release.get("draft"):
+            continue
+        tag=str(release.get("tag_name",""))
+        match=re.fullmatch(r"song-studio-pro-v(\d+\.\d+\.\d+)-preview",tag)
+        if not match:
+            continue
+        version=match.group(1)
+        for asset in release.get("assets") or []:
+            if not isinstance(asset,dict) or asset.get("state") not in (None,"uploaded"):
+                continue
+            expected="X-Stage-Song-Studio-Pro-v"+version+"-preview.exe"
+            if asset.get("name")!=expected:
+                continue
+            size=asset.get("size")
+            digest=str(asset.get("digest") or "").lower()
+            if (not isinstance(size,int) or not 1024*1024<=size<=MAX_FILE
+                    or not re.fullmatch(r"sha256:[a-f0-9]{64}",digest)):
+                continue
+            try:
+                info=validate({"name":"X-Stage Song Studio Pro","available":True,
+                  "version":version,"download_url":asset.get("browser_download_url"),
+                  "sha256":digest.split(":",1)[1]})
+            except (ValueError,TypeError):
+                continue
+            info["feed"]="api.github.com"
+            verified.append(info)
+    if not verified:
+        raise ValueError("GitHub Releases API ยังไม่มีไฟล์ Song Studio Pro ที่ยืนยัน SHA-256")
+    return max(verified,key=lambda item:version_tuple(item["version"]))
+
+
 def check():
+    # Each feed is only a candidate, never a required dependency. A temporarily
+    # unpublished/stale Pages JSON must not invalidate the real GitHub Release.
     candidates=[]
     errors=[]
     for url in (MANIFEST_URL,RAW_MANIFEST_URL):
@@ -90,11 +147,21 @@ def check():
             candidates.append(_read_feed(url))
         except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError) as exc:
             errors.append(str(exc)[:180])
+    try:
+        release=_read_release_api()
+        # If an official manifest claims a newer release than GitHub's listing,
+        # the release API may be paginated/stale. Only prefer a version with
+        # verified digest when that exact release appears in the API.
+        for candidate in candidates:
+            if (candidate["version"]==release["version"] and
+                    candidate["sha256"]!=release["sha256"]):
+                raise ValueError("SHA-256 ในเว็บไซต์ไม่ตรงกับ GitHub Release")
+        candidates.append(release)
+    except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError) as exc:
+        errors.append(str(exc)[:180])
     if not candidates:
-        raise OSError("เชื่อมต่อข้อมูลรุ่นล่าสุดไม่ได้ (Pages และ GitHub): "+
+        raise OSError("ตรวจสอบรุ่นล่าสุดไม่ได้จาก GitHub Releases และเว็บไซต์: "+
                       " | ".join(errors))
-    # Direct upgrade: choose the HIGHEST published verified EXE version,
-    # not the next version after the one currently installed.
     target=max(candidates,key=lambda row:version_tuple(row["version"]))
     target["current_version"]=VERSION
     target["newer"]=version_tuple(target["version"])>version_tuple(VERSION)
