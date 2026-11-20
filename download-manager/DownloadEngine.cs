@@ -217,7 +217,7 @@ public sealed class DownloadEngine
     }
 
     public IReadOnlyList<string> GetQueueNames() => Jobs
-        .Select(j => string.IsNullOrWhiteSpace(j.QueueName) ? "ทั่วไป" : j.QueueName)
+        .Select(j => string.IsNullOrWhiteSpace(j.QueueName) ? "ทั่วไป" : j.QueueName.Trim())
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
         .ToArray();
