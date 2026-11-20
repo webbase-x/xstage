@@ -2610,7 +2610,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     player.src=url;
     if(liveMidiBytes){
-      state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes);
+      state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{onStatus:setPlayStatus});
     }
     try{
       if('preservesPitch' in player)player.preservesPitch=true;
