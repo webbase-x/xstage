@@ -77,3 +77,81 @@
  .portal-account .portal-avatar{flex-basis:34px;width:34px;height:34px}
  .portal-account .portal-profile-menu{left:auto;right:0}
 }
+
+/* Account center: iOS-style grouping with X-Stage identity and real Google data. */
+body.portal-account-open{overflow:hidden}
+.portal-account-screen[hidden],.portal-account-view[hidden],.portal-account-row-count[hidden]{display:none!important}
+.portal-account-screen{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:20px;background:rgba(16,22,40,.55);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.portal-account-shell{--account-label:#6f7380;--account-line:#e6e6eb;display:flex;flex-direction:column;overflow:hidden;width:min(720px,100%);max-height:100%;height:min(890px,calc(100dvh - 40px));border-radius:28px;background:#f2f2f7;color:#15151b;box-shadow:0 35px 100px #09132e4d;color-scheme:light}
+.portal-account-topbar{position:relative;z-index:1;display:grid;grid-template-columns:48px minmax(0,1fr) 48px;align-items:center;gap:8px;padding:20px 24px 14px;min-height:82px;background:#f2f2f7}
+.portal-account-topbar h1{font-size:20px;line-height:1.3;letter-spacing:-.5px;text-align:center;font-weight:800;margin:0}
+.portal-account-back{display:grid;place-items:center;width:46px;height:46px;border:1px solid #ced0d9;border-radius:50%;background:#fff;color:#17171b;font-family:Arial,sans-serif;font-size:39px;line-height:1;padding:0 0 6px}
+.portal-account-back:hover{background:#e2e8f6}
+.portal-account-scroll{min-height:0;flex:1;overflow:auto;overscroll-behavior:contain;padding:3px clamp(18px,5vw,44px) calc(35px + env(safe-area-inset-bottom,0px));scrollbar-gutter:stable}
+.portal-account-identity{text-align:center;display:flex;flex-direction:column;align-items:center;padding:20px 0 32px}
+.portal-account-large-avatar{display:grid;place-items:center;width:116px;height:116px;overflow:hidden;border-radius:50%;background:linear-gradient(145deg,#2b6bdf,#6b55d7);color:white;font-size:36px;font-weight:800;box-shadow:0 9px 24px #24417129}
+.portal-account-large-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.portal-account-large-avatar img[hidden],.portal-account-large-avatar span[hidden]{display:none!important}
+.portal-account-identity h2{font-size:clamp(27px,5vw,35px);font-weight:840;letter-spacing:-1.1px;line-height:1.24;margin:18px 0 4px;overflow-wrap:anywhere}
+.portal-account-identity p{color:var(--account-label);font-size:clamp(15px,3.2vw,18px);margin:0;overflow-wrap:anywhere}
+.portal-account-provider{display:inline-block;margin-top:10px;border-radius:100px;padding:5px 12px;background:#e3eafd;color:#31599f;font-size:11px;font-weight:750}
+.portal-account-group{margin:0 0 24px;background:#fff;border-radius:19px;overflow:hidden;box-shadow:0 1px 1px #14152c05}
+.portal-account-row{display:flex;gap:14px;align-items:center;width:100%;min-height:75px;text-align:left;padding:14px 18px;border:0;background:transparent;color:inherit;text-decoration:none;font:inherit;cursor:pointer}
+.portal-account-row+.portal-account-row{border-top:1px solid var(--account-line)}
+.portal-account-row:hover,.portal-account-row:focus-visible{background:#f0f5ff}
+.portal-account-row-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border-radius:11px;background:#e8edf6;color:#526785;font-family:Arial,sans-serif;font-size:22px;font-weight:800}
+.portal-account-row-copy{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.portal-account-row-copy strong{font-size:15px;font-weight:760;line-height:1.4}
+.portal-account-row-copy small{font-size:12px;color:var(--account-label);line-height:1.55;overflow-wrap:anywhere}
+.portal-account-chevron{flex:none;color:#9ca0aa;font-size:29px;line-height:1}
+.portal-account-row-count{flex:none;background:#e8edf9;color:#295eaf;border-radius:9px;padding:4px 8px;font-size:12px;font-weight:800}
+.portal-account-signout{display:block;width:100%;background:#fff;color:#b8324c;border:0;border-radius:16px;padding:16px;font-size:14px;font-weight:760;min-height:53px}
+.portal-account-signout:hover{background:#fff0f3}
+.portal-account-footnote{font-size:11px;line-height:1.7;color:var(--account-label);text-align:center;max-width:440px;margin:15px auto 0}
+.portal-account-detail{padding-top:20px}
+.portal-account-detail h2{font-size:clamp(23px,4vw,30px);letter-spacing:-.7px;margin:0 0 6px}
+.portal-account-detail-intro{color:var(--account-label);font-size:13px;line-height:1.75;margin:0 0 24px}
+.portal-account-fields{padding:2px 19px}
+.portal-account-field{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 3px;font-size:14px}
+.portal-account-field+.portal-account-field{border-top:1px solid var(--account-line)}
+.portal-account-field span{color:var(--account-label);flex:none}
+.portal-account-field strong{text-align:right;overflow-wrap:anywhere;font-weight:730}
+.portal-account-external{display:inline-flex;color:#0068cf;background:#fff;border-radius:12px;padding:12px 16px;font-size:13px;font-weight:750}
+.portal-account-shell .portal-list{margin:0;gap:10px}
+.portal-account-shell .portal-muted{font-size:12px;color:var(--account-label);line-height:1.5}
+.portal-account-shell .portal-event{background:#fff;color:#232632;border-color:#e6e7ee}
+.portal-account-shell .portal-download-event,.portal-account-shell .portal-my-review{display:flex;gap:12px;align-items:center;justify-content:flex-start;border-radius:16px;padding:14px;min-width:0;flex-wrap:wrap}
+.portal-account-app-icon{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;background:#e5eaf7;border-radius:12px;color:#2765b8;overflow:hidden;font-weight:800}
+.portal-account-app-icon img{width:100%;height:100%;object-fit:contain}
+.portal-download-meta{display:flex;flex:1 1 170px;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
+.portal-download-meta strong{font-size:14px;line-height:1.45}
+.portal-download-state{width:max-content;max-width:100%;font-size:11px;color:#456ba0;background:#edf3fc;padding:4px 9px;border-radius:20px;font-weight:750}
+.portal-download-state.is-confirmed{background:#e6f6ed;color:#1b7652}
+.portal-account-shell .portal-small-button{white-space:normal;font-size:11px;min-height:36px;padding:8px 11px}
+.portal-account-shell .portal-clear-history{justify-self:start;margin-top:7px}
+.portal-account-shell .portal-danger{color:#b8324c;border-color:#e6bdc7}
+.portal-account-shell .portal-admin{margin-top:20px}
+.portal-account-shell .portal-my-review{text-decoration:none;flex-wrap:nowrap}
+.portal-my-review:hover{border-color:#b2c7ed!important;background:#fafdff!important}
+.portal-review-excerpt{white-space:pre-wrap;overflow-wrap:anywhere;color:#6d6d76;font-size:12px;line-height:1.55}
+.portal-account-shell .portal-stars{font-size:14px;color:#c48a22}
+.portal-account-menu-open{background:#176bd8!important;color:#fff!important;border-color:#176bd8!important}
+.portal-account-menu-open:hover{background:#1159b5!important}
+@media(max-width:600px){
+ .portal-account-screen{display:block;padding:0;backdrop-filter:none}
+ .portal-account-shell{border-radius:0;width:100%;height:100dvh;max-height:none;box-shadow:none}
+ .portal-account-topbar{padding:calc(10px + env(safe-area-inset-top,0px)) 16px 9px;min-height:calc(66px + env(safe-area-inset-top,0px));grid-template-columns:44px minmax(0,1fr) 44px}
+ .portal-account-topbar h1{font-size:18px}
+ .portal-account-back{width:42px;height:42px;font-size:34px}
+ .portal-account-scroll{padding:0 17px calc(30px + env(safe-area-inset-bottom,0px));scrollbar-gutter:auto}
+ .portal-account-identity{padding:18px 0 27px}
+ .portal-account-large-avatar{width:104px;height:104px}
+ .portal-account-identity h2{margin-top:17px}
+ .portal-account-row{gap:11px;padding:12px 14px;min-height:70px}
+ .portal-account-row-icon{width:35px;height:35px;flex-basis:35px}
+ .portal-account-row-copy strong{font-size:14px}
+ .portal-account-row-copy small{font-size:11px}
+ .portal-account-detail{padding-top:13px}
+ .portal-account-shell .portal-download-event{align-items:flex-start}
+}
+@media(prefers-reduced-motion:reduce){.portal-account-screen *{scroll-behavior:auto!important}}
