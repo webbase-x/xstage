@@ -172,12 +172,18 @@ public sealed class DownloadEngine
     {
         if (!Jobs.Contains(job))
             throw new ArgumentException("Unknown job.", nameof(job));
-        if (string.IsNullOrWhiteSpace(queueName) || queueName.Length > 64 ||
-            queueName.Any(char.IsControl))
+        var normalized = queueName?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 64 ||
+            normalized.Any(char.IsControl))
             throw new ArgumentException("Queue name must be 1–64 printable characters.", nameof(queueName));
-        job.QueueName = queueName.Trim();
+        var previous = job.QueueName;
+        job.QueueName = normalized;
         Save();
-        if (LastStorageError.Length > 0) throw new IOException(LastStorageError);
+        if (LastStorageError.Length > 0)
+        {
+            job.QueueName = previous;
+            throw new IOException(LastStorageError);
+        }
     }
 
     public IReadOnlyList<string> GetQueueNames() => Jobs
