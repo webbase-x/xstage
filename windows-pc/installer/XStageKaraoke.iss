@@ -10,7 +10,7 @@ AppName=X-Stage Karaoke PC
 AppVersion={#AppVersion}
 AppVerName=X-Stage Karaoke PC v{#AppVersion} (Build {#BuildNumber})
 AppPublisher=X-Stage
-DefaultDirName={autopf}\X-Stage\Karaoke PC
+DefaultDirName={autopf}\X-Stage\XStageKaraoke
 UsePreviousAppDir=no
 DisableDirPage=yes
 DefaultGroupName=X-Stage
@@ -39,17 +39,17 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "{localappdata}\X-Stage\Karaoke PC\Data"
 
 [Files]
-Source: "..\source\dist\XStageKaraoke\XStageKaraoke.exe"; DestDir: "{app}\App"; Flags: ignoreversion
-Source: "..\source\dist\XStageKaraoke\_internal\*"; DestDir: "{app}\App\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\source\dist\XStageKaraoke\XStageKaraoke.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Keep only the launcher icon for shortcut branding, not the source asset tree.
-Source: "..\source\assets\xstage.ico"; DestDir: "{app}\App"; Flags: ignoreversion
+Source: "..\source\assets\xstage.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\App\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}\App"; IconFilename: "{app}\App\xstage.ico"
-Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\App\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}\App"; IconFilename: "{app}\App\xstage.ico"; Tasks: desktopicon
+Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; IconFilename: "{app}\xstage.ico"
+Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; IconFilename: "{app}\xstage.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "สร้างทางลัดบน Desktop"; GroupDescription: "ทางลัดเพิ่มเติม:"
 
 [Run]
-Filename: "{app}\App\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; Description: "เปิด X-Stage Karaoke PC"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; Description: "เปิด X-Stage Karaoke PC"; Flags: nowait postinstall skipifsilent
