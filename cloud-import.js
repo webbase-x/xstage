@@ -389,12 +389,19 @@ class Importer {
     });
     this.dom.selectionList?.addEventListener('change',event=>{
       const input=event.target;
-      if(!input?.matches?.('input[data-import-group]'))return;
-      const group=this.importGroups().find(group=>group.key===input.dataset.importGroup);
-      if(!group)return;
-      for(const entry of group.entries){
-        if(input.checked)this.chosenItems.add(entry.key);
-        else this.chosenItems.delete(entry.key);
+      if(!input?.matches?.('input[data-import-group],input[data-import-item]'))return;
+      if(input.dataset.importItem!==undefined){
+        // A song may be a MIDI + lyrics + timing bundle. Select the whole
+        // validated entry to avoid importing incomplete songs.
+        if(input.checked)this.chosenItems.add(input.dataset.importItem);
+        else this.chosenItems.delete(input.dataset.importItem);
+      }else{
+        const group=this.importGroups().find(group=>group.key===input.dataset.importGroup);
+        if(!group)return;
+        for(const entry of group.entries){
+          if(input.checked)this.chosenItems.add(entry.key);
+          else this.chosenItems.delete(entry.key);
+        }
       }
       this.renderSelection();this.refreshButtons();
     });
@@ -571,38 +578,42 @@ class Importer {
       row.append(check,toggle,type);
       wrapper.append(row);
       if(expanded){
-        const detail=document.createElement('div');
-        detail.className='cloud-import-folder-files';
+        const detailContainer=document.createElement('div');
+        detailContainer.className='cloud-import-folder-files';
         // Only create visible rows. Large music folders may have 100,000+ files.
         const pageSize=this.groupPageSizes.get(group.key)||80;
-        const records=[];
-        for(const entry of group.entries){
-          for(const data of this.importFileList(entry.item)){
-            records.push({file:data.file,relative:data.relative});
-            if(records.length>=pageSize+1)break;
-          }
-          if(records.length>=pageSize+1)break;
+        // Show individual selectable import entries. For NCN or media+lyrics
+        // sets, one entry remains atomic so that its required sidecars travel
+        // together. Only the visible slice creates DOM nodes.
+        const visible=group.entries.slice(0,pageSize);
+        for(const entry of visible){
+          const files=this.importFileList(entry.item);
+          const row=document.createElement('label');
+          row.className='cloud-import-file-row cloud-import-file-choice';
+          const checkbox=document.createElement('input');
+          checkbox.type='checkbox';
+          checkbox.dataset.importItem=entry.key;
+          checkbox.checked=this.chosenItems.has(entry.key);
+          checkbox.disabled=this.running;
+          const label=document.createElement('span');
+          const main=files[0];
+          label.textContent=main?.file.name||entry.label||'รายการเพลง';
+          label.title=files.map(f=>f.relative).join('\\n');
+          const detail=document.createElement('small');
+          const size=files.reduce((sum,f)=>sum+f.file.size,0);
+          detail.textContent=(files.length>1?files.length+' ไฟล์ · ':'')+
+            this.importSize(size);
+          row.append(checkbox,label,detail);
+          detailContainer.append(row);
         }
-        const visible=records.slice(0,pageSize);
-        for(const data of visible){
-          const fileRow=document.createElement('div');
-          fileRow.className='cloud-import-file-row';
-          const name=document.createElement('span');
-          name.textContent=data.relative.split(/[\\/]/).pop()||data.file.name;
-          name.title=data.relative;
-          const size=document.createElement('small');
-          size.textContent=this.importSize(data.file.size);
-          fileRow.append(name,size);
-          detail.append(fileRow);
-        }
-        if(group.fileCount>pageSize){
+        if(group.entries.length>pageSize){
           const more=document.createElement('button');
           more.type='button';more.className='cloud-import-show-more';
           more.dataset.importMore=group.key;
-          more.textContent='แสดงอีก '+Math.min(80,group.fileCount-pageSize).toLocaleString('th-TH')+' ไฟล์';
-          detail.append(more);
+          more.textContent='แสดงอีก '+Math.min(80,group.entries.length-pageSize).toLocaleString('th-TH')+' รายการ';
+          detailContainer.append(more);
         }
-        wrapper.append(detail);
+        wrapper.append(detailContainer);
       }
       fragment.append(wrapper);
     }
