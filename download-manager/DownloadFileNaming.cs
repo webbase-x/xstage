@@ -71,6 +71,39 @@ public static class DownloadFileNaming
         return name;
     }
 
+    // Signed CDN links frequently have random storage keys instead of real
+    // user-facing names. Never present those keys as if they were the
+    // original artifact title. Real, readable server metadata always wins.
+    public static bool IsOpaqueName(string fileName)
+    {
+        var value = CleanName(fileName);
+        var stem = Path.GetFileNameWithoutExtension(value);
+        if (Guid.TryParse(stem, out _)) return true;
+        return (stem.Length >= 20 && stem.All(Uri.IsHexDigit)) ||
+            (stem.Length >= 10 && stem.All(char.IsAsciiDigit));
+    }
+
+    public static bool IsGitHubActionsStorage(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+        var host = uri.Host;
+        return (host.StartsWith("productionresults", StringComparison.OrdinalIgnoreCase) ||
+                host.StartsWith("pipelinesactions", StringComparison.OrdinalIgnoreCase)) &&
+            host.EndsWith(".blob.core.windows.net", StringComparison.OrdinalIgnoreCase) &&
+            uri.AbsolutePath.Contains("/actions-results/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string FriendlyOpaqueName(string sourceUrl, string fileName)
+    {
+        var clean = CleanName(fileName);
+        if (!IsOpaqueName(clean) || !IsGitHubActionsStorage(sourceUrl))
+            return clean;
+        var original = Path.GetFileNameWithoutExtension(clean);
+        var shortId = original.Replace("-", "", StringComparison.Ordinal);
+        if (shortId.Length > 8) shortId = shortId[..8];
+        return CleanName("GitHub-Actions-Artifact-" + shortId + Path.GetExtension(clean));
+    }
+
     /// <summary>
     /// Content-Disposition (RFC 5987 filename* before filename) wins over
     /// both requested and redirected URL paths. The origin's named path wins
@@ -78,32 +111,45 @@ public static class DownloadFileNaming
     /// </summary>
     public static string Resolve(string sourceUrl, HttpResponseMessage response)
     {
-        string rawName = response.Content.Headers.ContentDisposition?.FileNameStar ??
-                         response.Content.Headers.ContentDisposition?.FileName ?? "";
+        var disposition = response.Content.Headers.ContentDisposition;
+        var rawName = disposition?.FileNameStar ?? disposition?.FileName ?? "";
         var dispositionName = CleanName(rawName);
         var sourceName = UrlFileName(sourceUrl);
-        var redirectName = UrlFileName(response.RequestMessage?.RequestUri?.ToString() ?? "");
+        var finalUrl = response.RequestMessage?.RequestUri?.ToString() ?? sourceUrl;
+        var redirectName = UrlFileName(finalUrl);
 
+        // Prefer an explicit meaningful Content-Disposition filename, then a
+        // human-readable original URL, then the redirected URL. A generated
+        // storage UUID should never supersede a known real filename.
         string selected;
-        if (dispositionName != "download")
+        if (dispositionName != "download" && !IsOpaqueName(dispositionName))
             selected = dispositionName;
-        else if (Path.HasExtension(sourceName))
+        else if (sourceName != "download" && !IsOpaqueName(sourceName))
             selected = sourceName;
-        else if (Path.HasExtension(redirectName))
+        else if (redirectName != "download" && !IsOpaqueName(redirectName))
             selected = redirectName;
+        else if (dispositionName != "download")
+            selected = dispositionName;
+        else if (sourceName != "download")
+            selected = sourceName;
         else
-            selected = sourceName != "download" ? sourceName : redirectName;
+            selected = redirectName;
 
         var type = response.Content.Headers.ContentType?.MediaType;
         var named = WithKnownExtension(selected, type);
-        if (Path.HasExtension(named)) return named;
+        if (!Path.HasExtension(named))
+        {
+            // Preserve a legitimate source file's suffix when an otherwise
+            // authoritative filename is extensionless (e.g. report + .pdf).
+            var sourceExtension = Path.GetExtension(sourceName);
+            if (sourceExtension.Length is > 1 and <= 16)
+                named = CleanName(named + sourceExtension);
+        }
 
-        // A server can supply filename="report" (no suffix) with generic
-        // application/octet-stream although the original URL was report.pdf.
-        // Keep the authoritative base name, but borrow the source extension.
-        var sourceExtension = Path.GetExtension(sourceName);
-        if (sourceExtension.Length is > 1 and <= 16)
-            return CleanName(named + sourceExtension);
+        // Raw GitHub Actions CDN URLs do not contain the artifact's original
+        // title. Use a clear, deterministic label, not a false guessed title.
+        if (IsGitHubActionsStorage(sourceUrl) || IsGitHubActionsStorage(finalUrl))
+            return FriendlyOpaqueName(IsGitHubActionsStorage(sourceUrl) ? sourceUrl : finalUrl, named);
         return named;
     }
 
