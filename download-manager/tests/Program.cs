@@ -35,6 +35,32 @@ try
         !videoArgs.Contains("--no-simulate") || !videoArgs.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
         !videoArgs.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
         throw new Exception("Video arguments must isolate config, enforce video quality and use bundled Deno.");
+    // Container selection is independent of resolution. MP4 is the default;
+    // yt-dlp/FFmpeg must actually convert instead of renaming an MKV extension.
+    if (video.OutputFormat != "mp4" || !videoArgs.Contains("--recode-video") ||
+        !videoArgs.Contains("mp4") || !videoArgs.Contains("--merge-output-format"))
+        throw new Exception("MP4 output must be the default and perform actual FFmpeg conversion.");
+    foreach (var outputFormat in new[] { "mkv", "webm", "mp4" })
+    {
+        video.OutputFormat = outputFormat;
+        var containerArgs = SocialVideoDownloader.BuildArguments(video, folder, folder).ToArray();
+        var pos = Array.IndexOf(containerArgs, "--recode-video");
+        if (pos < 0 || pos + 1 >= containerArgs.Length || containerArgs[pos + 1] != outputFormat)
+            throw new Exception("Requested video container not sent to FFmpeg: " + outputFormat);
+    }
+    video.OutputFormat = "mp3";
+    var audioOutputArgs = SocialVideoDownloader.BuildArguments(video, folder, folder);
+    if (!audioOutputArgs.Contains("--extract-audio") && !audioOutputArgs.Contains("-x") ||
+        !audioOutputArgs.Contains("--audio-format") || !audioOutputArgs.Contains("mp3"))
+        throw new Exception("MP3 output must extract audio using FFmpeg.");
+    video.OutputFormat = "mp4";
+    var unsupportedFormatRejected = false;
+    video.OutputFormat = "exe";
+    try { SocialVideoDownloader.BuildArguments(video, folder, folder); }
+    catch (ArgumentException) { unsupportedFormatRejected = true; }
+    if (!unsupportedFormatRejected) throw new Exception("Unknown output extension must be rejected.");
+    video.OutputFormat = "mp4";
+
     // Thai and other Unicode output names must be resolved from the exact
     // post-download yt-dlp receipt instead of guessing from a corrupt console.
     if (!videoArgs.Contains("--encoding") || !videoArgs.Contains("utf-8") ||
