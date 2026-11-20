@@ -113,6 +113,28 @@ jobs:
           choco install innosetup --yes --no-progress --limit-output
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed: $LASTEXITCODE" }
 
+      - name: Verify bundled BASS runtime before packaging
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $native = 'windows-pc/source/dist/XStageKaraoke/native/x64'
+          foreach ($name in @('bass.dll', 'bassmidi.dll', 'bass_fx.dll')) {
+            $file = Join-Path $native $name
+            if (-not (Test-Path $file -PathType Leaf)) {
+              throw "Installer would be missing $name at native/x64. Refusing to package."
+            }
+            $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $file).Path)
+            if ($bytes.Length -lt 512 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+              throw "Invalid native x64 library: $file"
+            }
+            $offset = [BitConverter]::ToInt32($bytes, 0x3c)
+            if ($offset -lt 0 -or $offset + 6 -gt $bytes.Length -or
+                [BitConverter]::ToUInt32($bytes, $offset) -ne 0x00004550 -or
+                [BitConverter]::ToUInt16($bytes, $offset + 4) -ne 0x8664) {
+              throw "Not a valid Windows x64 DLL: $file"
+            }
+          }
+
       - name: Compile Windows installer EXE
         shell: pwsh
         run: |
