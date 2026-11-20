@@ -2,7 +2,7 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.2 · Build 5** (Windows 10/11 x64).
+**Preview v0.2.3 · Build 6** (Windows 10/11 x64).
 
 ## Features
 - Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker.
