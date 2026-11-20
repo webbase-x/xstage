@@ -147,7 +147,7 @@ public sealed class DownloadEngine
         return true;
     }
 
-    public DownloadJob Add(string url, string folder, int? parts = null, string videoQuality = "Best", string outputFormat = "mp4")
+    public DownloadJob Add(string url, string folder, int? parts = null, string videoQuality = "Best", string outputFormat = "mp4", bool separateCopy = false)
     {
         if (!TryParseUrl(url, out var uri) || uri is null)
             throw new ArgumentException("รองรับลิงก์ HTTP/HTTPS ที่ถูกต้องเท่านั้น");
@@ -164,12 +164,31 @@ public sealed class DownloadEngine
         {
             Url = uri.ToString(), Name = name, Folder = folder, Parts = selectedParts,
             Kind = video ? "Video" : "File", VideoQuality = video ? videoQuality : "Best",
-            OutputFormat = video ? outputFormat : "mp4"
+            OutputFormat = video ? outputFormat : "mp4",
+            IsRedownload = video && separateCopy
         };
         Jobs.Insert(0, job);
         Save();
         Start(job);
         return job;
+    }
+
+    /// <summary>
+    /// Enqueue an independent fresh video download using newly selected
+    /// settings. The source record and its original completed file remain
+    /// untouched even when quality/format are unchanged.
+    /// </summary>
+    public DownloadJob AddVideoAgain(DownloadJob source, string quality,
+        string format, string folder, int parts)
+    {
+        if (!Jobs.Contains(source) || source.Kind != "Video" ||
+            !SocialVideoDownloader.IsVideoUrl(source.Url))
+            throw new ArgumentException("เลือกรายการวิดีโอที่อยู่ในประวัติก่อน");
+        if (source.Status is "Running" or "Queued" || _active.ContainsKey(source.Id))
+            throw new InvalidOperationException("รายการเดิมกำลังทำงาน กรุณาหยุดให้เสร็จก่อนดาวน์โหลดใหม่");
+        if (string.IsNullOrWhiteSpace(folder))
+            throw new ArgumentException("กรุณาเลือกโฟลเดอร์สำหรับบันทึก");
+        return Add(source.Url, folder.Trim(), parts, quality, format, separateCopy: true);
     }
 
     public void Start(DownloadJob job)
