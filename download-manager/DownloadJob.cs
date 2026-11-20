@@ -11,6 +11,10 @@ public sealed class DownloadJob
     public string VideoQuality { get; set; } = "Best";
     // Requested output container; independent of video resolution. Defaults to MP4.
     public string OutputFormat { get; set; } = "mp4";
+    // Explicit new download from an existing video item. Give it a distinct
+    // filename so yt-dlp cannot reuse or overwrite the existing saved video.
+    public bool IsRedownload { get; set; }
+
     public double VideoPercent { get; set; }
     [JsonIgnore] public string VideoPhase = "";
     public string Folder { get; set; } = "";
