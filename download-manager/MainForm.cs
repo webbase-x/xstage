@@ -720,39 +720,57 @@ public sealed partial class MainForm : Form
         if (IsDisposed || _grid.IsDisposed) return;
         var jobs = _engine.Jobs.ToArray();
         var selectedId = Selected()?.Id;
-        if (_grid.Rows.Count != jobs.Length ||
-            jobs.Where((job, index) => index < _grid.Rows.Count &&
-                !Equals(_grid.Rows[index].Tag, job.Id)).Any())
+        var visible = jobs.Where(InSelectedCategory).ToList();
+        var listChanged = _grid.Rows.Count != visible.Count ||
+            visible.Where((job, index) => index < _grid.Rows.Count &&
+                !Equals(_grid.Rows[index].Tag, job.Id)).Any();
+        _visibleJobs = visible;
+        UpdateCategoryCounts(jobs);
+        if (listChanged)
         {
-            _grid.Rows.Clear();
-            foreach (var job in jobs)
+            _grid.SuspendLayout();
+            try
             {
-                var index = _grid.Rows.Add();
-                _grid.Rows[index].Tag = job.Id;
+                _grid.Rows.Clear();
+                foreach (var job in visible)
+                {
+                    var index = _grid.Rows.Add();
+                    _grid.Rows[index].Tag = job.Id;
+                }
+                _grid.ClearSelection();
+                if (selectedId is not null)
+                    foreach (DataGridViewRow row in _grid.Rows)
+                        if (Equals(row.Tag, selectedId))
+                        {
+                            row.Selected = true;
+                            break;
+                        }
             }
-            _grid.ClearSelection();
-            if (selectedId is not null)
-                foreach (DataGridViewRow row in _grid.Rows)
-                    if (Equals(row.Tag, selectedId)) { row.Selected = true; break; }
+            finally { _grid.ResumeLayout(true); }
         }
+
         double speedTotal = 0;
-        foreach (var (job, index) in jobs.Select((job, index) => (job, index)))
+        foreach (var job in jobs)
+        {
+            var current = Interlocked.Read(ref job.DownloadedBytes);
+            var diff = Math.Max(0L, current - job.PreviousBytes);
+            job.SpeedBytesPerSecond = job.Status == "Running"
+                ? diff / (_timer.Interval / 1000.0) : 0;
+            job.PreviousBytes = current;
+            speedTotal += job.SpeedBytesPerSecond;
+        }
+
+        foreach (var (job, index) in visible.Select((job, index) => (job, index)))
         {
             var row = _grid.Rows[index];
             var current = Interlocked.Read(ref job.DownloadedBytes);
-            var diff = Math.Max(0L, current - job.PreviousBytes);
-            job.SpeedBytesPerSecond = job.Status == "Running" ? diff / (_timer.Interval / 1000.0) : 0;
-            job.PreviousBytes = current;
-            speedTotal += job.SpeedBytesPerSecond;
             row.Cells["File"].Value = job.Status == "Completed" ? "✓  " + job.Name : job.Name;
             row.Cells["File"].Style.ForeColor = job.Status == "Completed"
-                ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
-            row.Cells["File"].Style.SelectionForeColor = job.Status == "Completed"
-                ? Color.FromArgb(16, 132, 81) : Color.FromArgb(24, 66, 116);
+                ? Color.FromArgb(119, 229, 169) : Color.FromArgb(229, 236, 246);
+            row.Cells["File"].Style.SelectionForeColor = Color.White;
             row.Cells["File"].Style.Font = job.Status == "Completed"
                 ? _finishedFileFont : _normalFileFont;
-            row.Cells["Status"].Style.ForeColor = job.Status == "Completed"
-                ? Color.FromArgb(16, 132, 81) : Color.FromArgb(31, 42, 60);
+            row.Cells["Queue"].Value = (Array.IndexOf(jobs, job) + 1).ToString("00");
             row.Cells["Size"].Value = job.TotalBytes < 0 ? "ไม่ทราบ" : FormatBytes(job.TotalBytes);
             row.Cells["Progress"].Value = ProgressPresentation.IsComplete(job) ||
                 job.Kind == "Video" || job.TotalBytes > 0
@@ -760,26 +778,52 @@ public sealed partial class MainForm : Form
                     : (current > 0 ? FormatBytes(current) : "—");
             row.Cells["Speed"].Value = job.Status == "Running"
                 ? FormatBytes((long)job.SpeedBytesPerSecond) + "/s" : "—";
-            row.Cells["Status"].ToolTipText = job.Status == "Failed" ? job.Error : "";
+            row.Cells["ETA"].Value = EtaLabel(job);
+            row.Cells["Added"].Value = job.CreatedAt.ToLocalTime().ToString("dd/MM/yy HH:mm");
+            row.Cells["Status"].ToolTipText = job.Status == "Failed" ? job.Error :
+                job.Kind == "Video" && job.Status == "Running" ? job.VideoPhase : "";
             row.Cells["File"].ToolTipText = job.Status == "Failed"
                 ? "คลิกเพื่อดูสาเหตุข้อผิดพลาด: " + job.Error
-                : job.Name;
+                : job.Name + "\n" + job.Url;
             row.Cells["Status"].Value = job.Status switch
             {
                 "Running" => job.Kind == "Video" && job.VideoPhase.Length > 0
-                    ? job.VideoPhase : "กำลังดาวน์โหลด", "Queued" => "รอคิว",
-                "Paused" => "หยุดชั่วคราว", "Completed" => "สำเร็จ",
-                "Failed" => "เกิดข้อผิดพลาด", _ => job.Status
+                    ? job.VideoPhase : "กำลังดาวน์โหลด",
+                "Queued" => "รอคิว",
+                "Paused" => "หยุดชั่วคราว",
+                "Completed" => "สำเร็จ",
+                "Failed" => "เกิดข้อผิดพลาด",
+                _ => job.Status
+            };
+            row.Cells["Status"].Style.ForeColor = job.Status switch
+            {
+                "Completed" => Color.FromArgb(124, 235, 173),
+                "Failed" => Color.FromArgb(255, 166, 166),
+                "Running" => Color.FromArgb(146, 205, 254),
+                _ => Color.FromArgb(215, 225, 238)
             };
             row.Cells["Parts"].Value = job.Kind == "Video"
-                ? "สูงสุด " + job.Parts + " ช่วง"
+                ? "สูงสุด " + Math.Min(job.Parts, 4) + " สตรีม"
                 : job.SegmentsUsed > 0
                     ? job.SegmentsUsed + " / " + job.Parts + " ส่วน"
                     : "ตั้งไว้ " + job.Parts + " ส่วน";
+            row.Cells["Description"].Value = job.Kind == "Video"
+                ? SocialVideoDownloader.Platform(job.Url) + " · " +
+                  job.OutputFormat.ToUpperInvariant() + " · " + job.VideoQuality
+                : CategoryOf(job) switch
+                {
+                    "music" => "เพลง / เสียง",
+                    "document" => "เอกสาร",
+                    "program" => "โปรแกรมติดตั้ง",
+                    "archive" => "ไฟล์บีบอัด",
+                    "video" => "ไฟล์วิดีโอ",
+                    _ => "ไฟล์ทั่วไป"
+                };
         }
         var active = jobs.Count(j => j.Status == "Running");
         var completed = jobs.Count(j => j.Status == "Completed");
-        _summary.Text = $"ดาวน์โหลด {active} รายการ  ·  สำเร็จ {completed} รายการ  ·  รวม {jobs.Length} รายการ  ·  ความเร็ว {FormatBytes((long)speedTotal)}/s";
+        _summary.Text = $"กำลังดาวน์โหลด {active}  ·  เสร็จแล้ว {completed}  ·  ทั้งหมด {jobs.Length} รายการ" +
+                        $"  ·  แสดง {visible.Count} รายการ  ·  ความเร็วรวม {FormatBytes((long)speedTotal)}/s";
         UpdateDetails();
         _engine.Save();
     }
@@ -803,7 +847,7 @@ public sealed partial class MainForm : Form
     {
         if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["Progress"].Index) return;
         e.PaintBackground(e.CellBounds, true);
-        var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
+        var job = VisibleJobAt(e.RowIndex);
         if (job is not null && (job.TotalBytes > 0 || job.Kind == "Video" ||
                                 ProgressPresentation.IsComplete(job)))
         {
@@ -853,7 +897,7 @@ public sealed partial class MainForm : Form
         }
         else
             TextRenderer.DrawText(e.Graphics, e.FormattedValue?.ToString() ?? "—",
-                _grid.Font, e.CellBounds, Color.FromArgb(91, 111, 135),
+                _grid.Font, e.CellBounds, Color.FromArgb(188, 198, 214),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         e.Handled = true;
     }
