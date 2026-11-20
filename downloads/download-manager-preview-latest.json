@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.19",
-  "build": 22,
+  "version": "0.2.20",
+  "build": 23,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.19-build22-win-x64-Setup.exe",
-  "sha256": "f37ca03ec0100a0df146ae19471adffec1f140d9a9902123e0596f731abb1222",
-  "size_bytes": 214661371,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.19-build22-preview/X-Stage-Download-Manager-v0.2.19-build22-win-x64-Setup.exe",
+  "file": "X-Stage-Download-Manager-v0.2.20-build23-win-x64-Setup.exe",
+  "sha256": "2872c5aacc08019c0a179fb347398d577ded7f9d2e98b69185750384af018fc5",
+  "size_bytes": 214644337,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.20-build23-preview/X-Stage-Download-Manager-v0.2.20-build23-win-x64-Setup.exe",
   "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, priority-aware queue, configurable per-host concurrent jobs and HTTP bandwidth cap, smoothed speed/ETA, friendly filename recovery, resilient per-chunk exponential backoff and HTTP Range fallback, SQLite WAL state recovery and safe JSON migration, sortable IDM-style download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
 }
