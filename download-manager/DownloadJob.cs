@@ -23,6 +23,8 @@ public sealed class DownloadJob
     // Persist the intent to recover an active transfer after app shutdown.
     // Explicit user Pause clears this; completed/failed jobs never auto-recover.
     public bool ResumeAfterRestart { get; set; }
+    // Only network-interrupted transfers, never user-paused transfers, may resume on link return.
+    public bool ResumeWhenNetworkReturns { get; set; }
     [JsonIgnore] public bool InterruptedOnStartup { get; set; }
     public string Error { get; set; } = "";
     public string CompletedPath { get; set; } = "";
