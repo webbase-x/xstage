@@ -81,6 +81,27 @@ try
         !videoArgs.Contains("--no-simulate") || !videoArgs.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
         !videoArgs.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
         throw new Exception("Video arguments must isolate config, enforce video quality and use bundled Deno.");
+    // Social downloads should expose a phase instead of staying at fake
+    // "0.0% downloading", and network retries must terminate predictably.
+    if (!videoArgs.Contains("--socket-timeout") ||
+        !videoArgs.Contains("--fragment-retries") ||
+        !videoArgs.Contains("--extractor-retries") ||
+        !videoArgs.Contains("--retry-sleep"))
+        throw new Exception("Bounded yt-dlp network retries and socket timeout missing.");
+    if (SocialVideoDownloader.DescribeOutputPhase("[youtube] Downloading webpage") !=
+            "กำลังอ่านข้อมูลวิดีโอจากเว็บไซต์" ||
+        SocialVideoDownloader.DescribeOutputPhase("[download] Destination: song.f137.mp4") !=
+            "กำลังรับข้อมูลวิดีโอ" ||
+        SocialVideoDownloader.DescribeOutputPhase("[Merger] Merging formats") !=
+            "กำลังรวม/แปลงไฟล์วิดีโอ" ||
+        SocialVideoDownloader.DescribeOutputPhase("plain unrelated text") is not null)
+        throw new Exception("Video phase detector misreported yt-dlp output.");
+    if (SocialVideoDownloader.IsStalled(TimeSpan.FromSeconds(30), false) ||
+        !SocialVideoDownloader.IsStalled(TimeSpan.FromSeconds(121), false) ||
+        SocialVideoDownloader.IsStalled(TimeSpan.FromMinutes(5), true) ||
+        !SocialVideoDownloader.IsStalled(TimeSpan.FromMinutes(16), true))
+        throw new Exception("Progress watchdog must distinguish network stalls and slow FFmpeg.");
+
     // Container selection is independent of resolution. MP4 is the default;
     // yt-dlp/FFmpeg must actually convert instead of renaming an MKV extension.
     if (video.OutputFormat != "mp4" || !videoArgs.Contains("--recode-video") ||
