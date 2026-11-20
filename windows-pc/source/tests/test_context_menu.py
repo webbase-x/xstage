@@ -1,10 +1,11 @@
 """Exercise menu routing and enabled states without a Windows display server."""
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from karaoke.context_menu import populate_context_menu
 from karaoke.stage_layout import overlay_layout
 from karaoke.performer import PlaybackApp
+from karaoke.playback import MidiPlayer
 
 class Var:
     def __init__(self): self.value = False
@@ -38,7 +39,9 @@ class ContextMenuTests(unittest.TestCase):
             'manage_songs add_folder add_files rebuild_library show_import_report song_details edit_song favorite_selected current_song_details choose_midi_output open_mixer '
             'open_midi_keyboard audio_settings play_pause next_song cancel_current_song stop apply_melody mark_loop_start mark_loop_end clear_loop '
             'show_queue browse_queue add_selected play_search_now import_queue export_queue set_stage_enabled '
-            'set_stage_fullscreen choose_stage_monitor attributes pin_transport dismiss_overlays minimize_main about_program close_app').split()
+            'set_stage_fullscreen choose_stage_monitor attributes pin_transport dismiss_overlays minimize_main about_program close_app '
+            'random_medley_window popular_medley_window start_continuous_medley stop_continuous_medley cancel_random_medley '
+            'check_program_update').split()
         for name in methods:
             self.assertTrue(hasattr(PlaybackApp, name), 'Unimplemented menu command: '+name)
             setattr(app, name, Mock())
@@ -48,6 +51,7 @@ class ContextMenuTests(unittest.TestCase):
         app.defer_menu_command = lambda callback: callback()
         app.scanning = False
         app.cancel_scan = Mock()
+        app.continuous_medley = SimpleNamespace(enabled=True)
         return app
 
     def test_category_order_and_action_routing(self):
@@ -99,6 +103,51 @@ class ContextMenuTests(unittest.TestCase):
         populate_context_menu(app,menu,Menu,screens)
         self.assertTrue(app.stage_enabled_var.get())
         self.assertEqual(menu.find('ระบบ 2')['menu'].find('จอร้องเต็ม')['state'],'normal')
+
+
+    def test_all_enabled_context_actions_dispatch_without_inert_buttons(self):
+        # Exercise every visible menu leaf including submenus and special
+        # repair/report/update actions. The Windows UI and devices are mocked;
+        # this checks wiring, not whether hardware playback succeeds.
+        app, menu = self.app(), Menu()
+        app.engine = MidiPlayer.__new__(MidiPlayer)
+        app.current_song = {'id': 1, 'kind': 'MIDI'}
+        app.song_queue.items = [SimpleNamespace(medley_session='session-1')]
+        app.search_visible = True
+        app.search_pending = False
+        app.search_result_revision = app.search_revision
+        app.stage = SimpleNamespace(winfo_exists=lambda: True)
+        populate_context_menu(app, menu, Menu, [(0, 0, 1920, 1080)])
+
+        def leaves(parent):
+            for item in parent.entries:
+                if item['type'] == 'cascade':
+                    yield from leaves(item['menu'])
+                elif item['type'] in ('command', 'check', 'radio'):
+                    yield item
+
+        visible = list(leaves(menu))
+        enabled = [entry for entry in visible if entry.get('state', 'normal') != 'disabled']
+        self.assertGreater(len(enabled), 35, 'Menu actions silently disappeared')
+        with patch('karaoke.dependency_ui.open_window') as repair, \
+             patch('karaoke.support_ui.open_window') as support, \
+             patch('karaoke.log_viewer.open_window') as logs:
+            for entry in enabled:
+                with self.subTest(menu=entry.get('label')):
+                    self.assertTrue(callable(entry.get('command')),
+                                    'Visible action has no callback: '+str(entry.get('label')))
+                    entry['command']()
+            repair.assert_called_once_with(app)
+            support.assert_called_once_with(app)
+            logs.assert_called_once_with(app)
+        for method in (
+            'random_medley_window', 'popular_medley_window',
+            'start_continuous_medley', 'stop_continuous_medley',
+            'cancel_random_medley', 'check_program_update',
+            'play_pause', 'next_song', 'mark_loop_start',
+            'audio_settings', 'manage_songs', 'close_app',
+        ):
+            self.assertTrue(getattr(app, method).called, method)
 
     def test_overlay_leaves_room_for_lyrics_at_supported_sizes(self):
         for width,height in [(800,500),(1024,600),(1280,720),(1920,1080),(3840,2160)]:
