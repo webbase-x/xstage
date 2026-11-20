@@ -29,12 +29,14 @@ class PcBrandingRegression(unittest.TestCase):
             self.assertIn('UsePreviousAppDir=no', installer)
             self.assertIn('PrivilegesRequired=admin', installer)
             self.assertIn('Uninstallable=yes', installer)
-            self.assertIn(r'DestDir: "{app}\\App\\_internal"', installer)
-            self.assertIn(r'DestDir: "{app}\\App"', installer)
+            self.assertIn(r'DestDir: "{app}"', installer)
+            self.assertIn(r'DestDir: "{app}"', installer)
             self.assertIn(r'{localappdata}\\X-Stage\\Karaoke PC\\Data', installer)
             # No blanket dist/* copy or scripts that create Source/ on users' PCs.
             self.assertNotIn(r'DestDir: "{tmp}\\xstage-', installer)
             self.assertNotIn('install_to_D.ps1', installer)
+            self.assertNotIn(r'DestDir: "{app}\App"', installer)
+            self.assertIn(r'Filename: "{app}\{#AppExe}"', installer)
             self.assertNotIn(r'DestDir: "{app}\\Source"', installer)
             self.assertNotIn(r'dist\\XStageKaraoke\\*"', installer)
         updater_path = REPO / 'windows-pc/Check-Update.ps1'
