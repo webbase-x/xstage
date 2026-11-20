@@ -223,7 +223,6 @@ public sealed class MainForm : Form
                 if (j.Status is "Paused" or "Failed") _engine.Start(j);
         }));
         toolbar.Controls.Add(MakeTool("Ⅱ  หยุดทั้งหมด", (_, _) => _engine.PauseAll()));
-        toolbar.Controls.Add(MakeTool("⌕  เปิดไฟล์ / โฟลเดอร์", (_, _) => OpenSelected()));
         toolbar.Controls.Add(MakeTool("⟳  ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true)));
         toolbar.Controls.Add(MakeTool("🌐  ดาวน์โหลดอัตโนมัติ", (_, _) => SetupBrowserIntegration()));
         toolbar.Controls.Add(MakeTool("✕  ลบรายการ", (_, _) =>
