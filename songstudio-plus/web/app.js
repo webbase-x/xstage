@@ -232,7 +232,7 @@
       const format=song.extension.toUpperCase();
       const ready=song.manual_status==="ready";
       const available=Boolean(song.version_id||song.draft_reason);
-      const timingLabel=song.manual_status==="review"?"รอการยืนยัน / แก้ไข":
+      const timingLabel=song.manual_status==="review"?"รอการยืนยัน · เลือกเพื่อยืนยันก่อนสร้าง":
         ready? song.timing_status:
         song.timing_status==="incomplete"?"เนื้อร้องบางส่วน · CUR ไม่ครบ":
         song.draft_reason?"เก็บเนื้อร้องแล้ว · รอ Timing":"ยังไม่พบเนื้อร้องพร้อมเวลา";
@@ -264,11 +264,40 @@
       select.append(option);
       const label=document.createElement("label");
       label.className="build-row";
+      const review=song.manual_status==="review";
+      const selectable=ready||review;
       const check=document.createElement("input");check.type="checkbox";
       check.checked=ready&&(state.allReadySelected?
         !state.excludedSongs.has(song.id):state.selectedSongs.has(song.id));
-      check.disabled=!ready;
-      check.addEventListener("change",()=>{
+      check.disabled=!selectable;
+      check.title=review?
+        "เลือกเพื่อยืนยันเวอร์ชันเนื้อร้องนี้ก่อนสร้างไฟล์":
+        selectable?"เลือกเพลงนี้":"เพลงนี้ยังไม่มีเนื้อร้อง/เวลา CUR ที่พร้อมสร้าง";
+      check.addEventListener("change",async()=>{
+        if(review&&check.checked){
+          check.checked=false;
+          const approved=await confirmTask("ยืนยันเพลงก่อนสร้างไฟล์",
+            "เพลงนี้มีเนื้อร้องและเวลา แต่เวอร์ชันปัจจุบันถูกแก้ไขหรือใช้เวลาประมาณ\n"+
+            "หากคุณได้ตรวจเนื้อร้องและการปาดสีแล้ว ให้กดยืนยันเพื่ออนุญาตสร้างไฟล์ X-Stage\n\n"+
+            String(song.title||song.original_code));
+          if(!approved)return;
+          try{
+            check.disabled=true;
+            await api("/api/manual/approve",{
+              song_id:song.id,version_id:song.version_id
+            });
+            if(state.allReadySelected){
+              state.readyTotal+=1;
+              state.excludedSongs.delete(song.id);
+            }else state.selectedSongs.add(song.id);
+            toast("ยืนยันและเลือกเพลงสำหรับสร้างไฟล์แล้ว");
+            await refreshSongs();
+          }catch(error){
+            check.disabled=false;
+            toast("ยืนยันเพลงไม่สำเร็จ: "+error.message,true);
+          }
+          return;
+        }
         if(state.allReadySelected){
           if(check.checked)state.excludedSongs.delete(song.id);
           else state.excludedSongs.add(song.id);
@@ -297,6 +326,16 @@
     $("build-prev").disabled=state.songOffset===0;
     $("library-next").disabled=!state.songHasNext;
     $("build-next").disabled=!state.songHasNext;
+    if(state.view==="build"){
+      const readyHere=state.songs.filter(song=>song.manual_status==="ready").length;
+      const reviewHere=state.songs.filter(song=>song.manual_status==="review").length;
+      const blockedHere=state.songs.length-readyHere-reviewHere;
+      text("build-feedback",
+        "หน้านี้: พร้อมสร้าง "+number(readyHere)+" เพลง"+
+        (reviewHere?" · รอยืนยัน "+number(reviewHere)+" เพลง (กด checkbox เพื่อยืนยัน)":"")+
+        (blockedHere?" · CUR/เนื้อร้องยังไม่ครบ "+number(blockedHere)+" เพลง":"")+
+        " · ระบบไม่สร้างเพลงที่ข้อมูลเวลาไม่ครบ");
+    }
   }
   function updateBuildSelection(){
     // Preserve selected song IDs when moving between pages.
@@ -2526,10 +2565,38 @@
         renderSongs();toast("เลือกเพลงที่พร้อมสร้างจากทุกหน้าแล้ว");
       }catch(error){toast(error.message,true);}
     });
-    $("build-page-all").addEventListener("click",()=>{
-      for(const song of state.songs)if(song.manual_status==="ready"){
+    $("build-page-all").addEventListener("click",async()=>{
+      const ready=state.songs.filter(song=>song.manual_status==="ready");
+      const review=state.songs.filter(song=>song.manual_status==="review");
+      for(const song of ready){
         if(state.allReadySelected)state.excludedSongs.delete(song.id);
         else state.selectedSongs.add(song.id);
+      }
+      if(review.length){
+        const approved=await confirmTask("ยืนยันเพลงที่รอการตรวจในหน้านี้",
+          "มี "+number(review.length)+" เพลงที่มีเนื้อร้องและเวลาแล้ว แต่ยังรอการยืนยัน\n"+
+          "หากคุณได้ตรวจเนื้อร้องและการปาดสีของเพลงเหล่านี้แล้ว ให้กดยืนยันเพื่ออนุญาตสร้างไฟล์");
+        if(approved){
+          let accepted=0;
+          for(const song of review){
+            try{
+              await api("/api/manual/approve",{
+                song_id:song.id,version_id:song.version_id
+              });
+              accepted+=1;
+              if(state.allReadySelected){
+                state.readyTotal+=1;
+                state.excludedSongs.delete(song.id);
+              }else state.selectedSongs.add(song.id);
+            }catch(error){
+              toast("ยืนยัน "+String(song.title||song.original_code)+" ไม่สำเร็จ: "+error.message,true);
+              break;
+            }
+          }
+          if(accepted)toast("ยืนยันและเลือกเพิ่ม "+number(accepted)+" เพลงแล้ว");
+          await refreshSongs();
+          return;
+        }
       }
       renderSongs();
     });

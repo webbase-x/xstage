@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.33
+# X-Stage Song Studio Pro — Technical Preview v0.1.34
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,14 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.34 — Build selection for reviewed lyrics
+
+- Fixes Menu 06 **สร้างไฟล์ X-Stage** when songs with complete timing were shown as unselectable only because their current lyric version still needed explicit review.
+- Songs with status `review` now have an active checkbox. Selecting one opens a confirmation explaining that the current lyrics/timing were edited or estimated; confirming records approval for that exact current Lyrics Version, then selects it for the build.
+- **เลือกทั้งหมดหน้านี้** handles review-status songs with one explicit confirmation and approves only the visible current versions.
+- Songs with missing lyrics or incomplete CUR remain blocked and cannot be built. The build panel now shows counts for ready, review, and truly blocked songs instead of silently disabling rows.
+- The build backend still re-validates approved IDs before producing any X-Stage file.
 
 ## v0.1.33 — Updater normalized-target repair
 

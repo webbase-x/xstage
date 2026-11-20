@@ -96,6 +96,16 @@ assert.ok(js.includes('function groupPageSize()')&&
           js.includes('state.groupLimit=groupPageSize()')&&
           js.includes('state.groupOffset+=state.groupLimit'),
  'Grouped lyric pages must size from available panel space and paginate with the same limit');
+assert.ok(js.includes('const review=song.manual_status==="review"')&&
+          js.includes('check.disabled=!selectable')&&
+          js.includes('await api("/api/manual/approve"'),
+ 'Build rows waiting for review must be selectable through explicit approval, not permanently disabled');
+assert.ok(js.includes('"build-page-all").addEventListener("click",async()=>')&&
+          js.includes('ยืนยันเพลงที่รอการตรวจในหน้านี้'),
+ 'Select-page action must handle review-status songs with an explicit approval prompt');
+assert.ok(js.includes('CUR/เนื้อร้องยังไม่ครบ')&&
+          js.includes('ระบบไม่สร้างเพลงที่ข้อมูลเวลาไม่ครบ'),
+ 'Build page must explain truly blocked rows instead of silently disabling every selection');
 assert.ok(js.includes('jobsRefreshing:false')&&js.includes('if(!state.ready||state.jobsRefreshing)return'),
  'Job polling must not overlap across repeated imports');
 assert.ok(js.includes('ui.post_job_refresh.error')&&!js.includes('}catch(error){setReady(false);}'),
