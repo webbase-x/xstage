@@ -1217,18 +1217,73 @@ def songs(workspace,query="",limit=80,offset=0):
         return [dict(x) for x in items]
 
 def groups(workspace,query,limit=100,offset=0):
+    """Find matching text in CURRENT timed lyrics only.
+
+    Scan the covering lyric-search index rather than the large lyric-lines
+    table. Fetch display text only for the few groups on the requested page.
+    Exact substring semantics and counts are preserved.
+    """
     init(workspace)
     q=norm(query)
     if not q or len(q)>100: return []
     with connect(workspace) as db:
-        return [dict(x) for x in db.execute("""SELECT l.normalized_text AS group_key,
-            min(l.text) AS text,count(*) AS lines,count(DISTINCT v.song_id) AS songs
-            FROM xstage_lyric_lines l
+        return [dict(x) for x in db.execute("""WITH ranked AS (
+            SELECT l.normalized_text AS group_key,
+              count(*) AS lines,count(DISTINCT v.song_id) AS songs
+            FROM xstage_lyric_lines l INDEXED BY xstage_lyric_search
             JOIN xstage_lyric_versions v ON v.id=l.version_id AND v.is_current=1
             WHERE instr(l.normalized_text,?)>0
             GROUP BY l.normalized_text
             ORDER BY lines DESC,l.normalized_text
-            LIMIT ? OFFSET ?""",(q,max(1,min(limit,500)),max(0,offset)))]
+            LIMIT ? OFFSET ?
+          )
+          SELECT ranked.group_key,
+            (SELECT min(t.text) FROM xstage_lyric_lines t
+              JOIN xstage_lyric_versions vt ON vt.id=t.version_id
+                 AND vt.is_current=1
+              WHERE t.normalized_text=ranked.group_key) AS text,
+            ranked.lines,ranked.songs
+          FROM ranked ORDER BY ranked.lines DESC,ranked.group_key""",
+          (q,max(1,min(int(limit),500)),max(0,int(offset))))]
+
+
+def search_context(workspace,query,limit=12):
+    """Search song metadata and untimed lyric drafts separately from groups.
+
+    Metadata and drafts are informational: neither result may be passed as a
+    bulk-replacement group key. No schema or additional large search index.
+    """
+    init(workspace)
+    q=norm(query)
+    if not q or len(q)>100:
+        return {"songs":[],"drafts":[],"more_songs":False,"more_drafts":False}
+    size=max(1,min(int(limit),40))
+    # Treat the query as a literal substring, never a LIKE wildcard.
+    term="%"+q.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%"
+    with connect(workspace) as db:
+        song_rows=[dict(x) for x in db.execute("""SELECT s.id,s.code,s.title,s.artist,
+                v.id IS NOT NULL AS has_current_lyrics,
+                d.song_id IS NOT NULL AS has_draft
+            FROM xstage_songs s
+            LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
+            LEFT JOIN xstage_lyric_drafts d ON d.song_id=s.id
+            WHERE s.title LIKE ? ESCAPE '\\'
+               OR s.artist LIKE ? ESCAPE '\\'
+               OR s.original_code LIKE ? ESCAPE '\\'
+            ORDER BY s.code DESC LIMIT ?""",
+            (term,term,term,size+1))]
+        # This covers the untimed NCN/LYR drafts that groups() deliberately
+        # excludes; search only a bounded result page, not lyric versions.
+        draft_rows=[dict(x) for x in db.execute("""SELECT s.id,s.code,
+                s.title,s.artist,d.reason AS draft_reason
+            FROM xstage_lyric_drafts d
+            JOIN xstage_songs s ON s.id=d.song_id
+            WHERE instr(lower(d.raw_text),?)>0
+            ORDER BY s.code DESC LIMIT ?""",(q,size+1))]
+        return {"songs":song_rows[:size],"drafts":draft_rows[:size],
+                "more_songs":len(song_rows)>size,
+                "more_drafts":len(draft_rows)>size}
+
 
 def chosen_rows(db,query,group_keys):
     q=norm(query)
