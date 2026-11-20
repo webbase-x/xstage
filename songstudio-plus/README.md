@@ -363,3 +363,11 @@ Menu 01 chooses folders using a queued Qt `QFileDialog` on the main GUI thread r
 - On HTTP 403/404/network failures, the interface displays the underlying reason in the job status/log and provides **ดาวน์โหลด EXE โดยตรง** to open the official GitHub Release as a manual fallback.
 - Repeated job polling no longer writes unchanged DOM text or forces identical job redraws. Navigation click animation, button hover movement and pulsing progress opacity are disabled to prevent Qt WebEngine flicker while preserving accessible keyboard-focus outlines.
 - Existing song SQLite and source media remain untouched by the updater. The Windows preview EXE is not code-signed.
+
+## v0.1.28 — Resolve false 'no verified EXE' and stuck update buttons
+
+- Root cause: the first `/api/update/check` correctly found a published release, but `/api/update/download` independently re-fetched transient Pages/raw metadata and could receive `available=false`. Downloads failed at **zero bytes** despite a verified GitHub EXE already existing.
+- The desktop engine now caches the server-verified release target and uses **exactly that version, Release URL, and SHA-256** for the update job; no second manifest request is made on download. Brief check failures may reuse the last successful verification within the same process.
+- Verification prefers the GitHub Releases API's actual uploaded EXE asset and its server-reported `sha256:` digest, falling back to the two official manifests only if the API fails. It does not advertise an unpublished preview from a stale manifest.
+- Failed downloads/installer attempts restore all update and banner buttons, show the real cause, and offer an official direct-EXE download. A 0-byte job displays 0%, not an invented progress percentage.
+- Safe resumed partial downloads, full SHA-256 checks, unchanged SQLite library, and direct update from any previous version are retained. The Windows Preview EXE remains unsigned.
