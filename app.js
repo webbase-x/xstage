@@ -2517,7 +2517,7 @@ function clearIdleStage(message){
   state.controller?.abort();
   state.controller=null;
   state.loading=false;
-  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
   player.pause();
   releaseNativePlaybackAudioFocus();
   player.removeAttribute('src');
@@ -2599,7 +2599,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     return;
   }
   const request=++state.requestId;
-  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
   state.loading=true;updateTransport();
