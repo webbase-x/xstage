@@ -770,8 +770,15 @@
                 toast("กำลังติดตั้งอัปเดตและเปิดทำงานต่อ");
               }catch(error){
                 state.updateBusy=false;
-                text("pro-update-status","ติดตั้งไม่สำเร็จ: "+error.message);
-                toast(error.message,true);
+                const reason=error?.message||String(error);
+                text("pro-update-status","ติดตั้งไม่สำเร็จ: "+reason);
+                text("pro-update-notice-text","ติดตั้งไม่สำเร็จ: "+reason+
+                  " · สามารถลองใหม่ได้ หรือใช้ดาวน์โหลด EXE โดยตรง");
+                const retry=Boolean(state.updateTarget?.newer);
+                $("pro-update-install").disabled=!retry;
+                $("pro-update-notice-install").disabled=!retry;
+                $("pro-update-quick").disabled=!retry;
+                toast(reason,true);
               }
             }else if(job.status==="failed"||job.status==="cancelled"){
               state.updateInstallIntent=false;state.updateBusy=false;
