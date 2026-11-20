@@ -320,6 +320,45 @@ public sealed class DownloadStateStore
         }
     }
 
+    // Only validated numeric performance settings reach the orchestrator.
+    public int ReadPerformanceSetting(string key, int fallback, int min, int max)
+    {
+        if (!new[] { "global_jobs", "host_jobs", "global_limit_kib" }.Contains(key))
+            throw new ArgumentException("Unknown performance setting", nameof(key));
+        lock (_gate)
+        {
+            using var db = Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText =
+                "SELECT value FROM xstage_download_settings WHERE key=$key";
+            cmd.Parameters.AddWithValue("$key", key);
+            var value = cmd.ExecuteScalar()?.ToString();
+            return int.TryParse(value, out var result) && result >= min && result <= max
+                ? result : fallback;
+        }
+    }
+
+    public void SavePerformanceSetting(string key, int value, int min, int max)
+    {
+        if (!new[] { "global_jobs", "host_jobs", "global_limit_kib" }.Contains(key))
+            throw new ArgumentException("Unknown performance setting", nameof(key));
+        if (value < min || value > max)
+            throw new ArgumentOutOfRangeException(nameof(value));
+        lock (_gate)
+        {
+            using var db = Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO xstage_download_settings(key,value)
+                VALUES($key,$value)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+                """;
+            cmd.Parameters.AddWithValue("$key", key);
+            cmd.Parameters.AddWithValue("$value", value.ToString());
+            cmd.ExecuteNonQuery();
+        }
+    }
+
     public (string Mode, long Jobs, long Chunks) Inspect()
     {
         lock (_gate)
