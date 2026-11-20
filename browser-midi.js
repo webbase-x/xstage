@@ -494,7 +494,7 @@ async function refreshFonts(auth){
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
     const sub=auth?.sub||'',rootId=auth?.rootId||'';
-    const choices=[new Option('เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)','')];
+    const choices=[new Option('เสียงสังเคราะห์พื้นฐาน (คุณภาพต่ำ — แนะนำ SoundFont)','')];
     if(!auth?.token||!rootId){
       if(sequence===fontRefreshSequence){selected='';fontCache=null;select.replaceChildren(...choices);}
       return;
@@ -524,8 +524,27 @@ async function refreshFonts(auth){
       let saved='';
       try{saved=localStorage.getItem(storageKey)||'';}catch{}
       select.replaceChildren(...choices);
-      select.value=choices.some(x=>x.value===saved)?saved:'';
+      const hinted=Number(scope.navigator?.deviceMemory||4);
+      const maxMB=(hinted<=2?64:hinted<=4?128:256)*1048576;
+      const eligible=choices.slice(1).filter(option=>
+        Number(option.dataset.size)>0&&Number(option.dataset.size)<=Math.min(MAX_FONT,maxMB));
+      // A selected GM bank sounds like actual instruments; the old
+      // no-SoundFont fallback used raw oscillators (8-bit game sound).
+      // Prefer the user's saved bank, then a complete-looking GM/GS bank.
+      const savedChoice=eligible.find(option=>option.value===saved);
+      const autoChoice=savedChoice||eligible.slice().sort((a,b)=>{
+        const quality=option=>/general.?midi|generaluser|fluidr3|timgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text)?1:0;
+        const diff=quality(b)-quality(a);
+        return diff||Number(a.dataset.size)-Number(b.dataset.size);
+      })[0];
+      select.value=autoChoice?.value||'';
       selected=select.value;
+      fontWarning=selected?'':choices.length>1
+        ?'ไม่มี SoundFont ที่เหมาะกับหน่วยความจำ · เลือกชุดเสียงขนาดเล็กเพื่อให้เสียงสมจริง'
+        :'ยังไม่มี SoundFont ในคลัง Google Drive · โหมดเสียงพื้นฐานเป็นเพียงเสียงสังเคราะห์ ไม่เหมือนเครื่องดนตรีจริง';
+      fontStatusChanged();
+      // Save automatic choice so subsequent sessions retain the same bank.
+      if(autoChoice){try{localStorage.setItem(storageKey,selected);}catch{}}
       select.onchange=()=>{
         selected=select.value;fontCache=null;fontLoadPromise=null;fontWarning='';fontStatusChanged();
         try{localStorage.setItem(storageKey,selected);}catch{}
@@ -552,6 +571,14 @@ async function refreshFonts(auth){
   fontRefreshPromise=pending;
   try{await pending;}
   finally{if(fontRefreshPromise===pending)fontRefreshPromise=null;}
+  // Start preload only after the scan Promise is cleared: selectedFont
+  // itself awaits that Promise, so preloading inside the scan deadlocks.
+  if(selected&&context?.token&&sequence===fontRefreshSequence)
+    void selectedFont(context.token).catch(error=>{
+      console.warn('SoundFont automatic preload:',error.message);
+      scope.dispatchEvent?.(new CustomEvent('xstage:font-memory-error',
+        {detail:{message:error.message}}));
+    });
 }
 async function selectedFont(token,signal){
   if(fontRefreshPromise)await fontRefreshPromise;
@@ -782,6 +809,6 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,unlockAudio,
   supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
-  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
+  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียงสังเคราะห์พื้นฐาน (ไม่มี SoundFont)',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);
