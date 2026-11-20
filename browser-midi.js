@@ -64,7 +64,7 @@ function parseMidi(source){
   // NCN CUR stores 24 positions per quarter note, not seconds. Retain
   // the exact MIDI tempo timeline for converting its positions later.
   const tempoMap=[{tick:0,seconds:0,tempo}];
-  const channels=Array.from({length:16},()=>({program:0,bank:0,volume:100,expression:127,notes:new Map(),sustain:false,held:[]}));
+  const channels=Array.from({length:16},()=>({program:0,bank:0,volume:100,expression:127,pan:64,notes:new Map(),sustain:false,held:[]}));
   const notes=[],lyricEvents=[];
   const endNote=(note,at)=>{if(!note)return;note.end=Math.max(note.start+.06,at);notes.push(note);};
   for(const e of events){
@@ -85,12 +85,18 @@ function parseMidi(source){
       if(id===0)c.bank=e.v;
       if(id===7)c.volume=e.v;
       if(id===11)c.expression=e.v;
+      if(id===10)c.pan=e.v;
       if(id===64){const down=e.v>=64;if(c.sustain&&!down){for(const n of c.held)endNote(n,clock);c.held=[];}c.sustain=down;}
       if(id===120||id===123){for(const q of c.notes.values())for(const n of q)endNote(n,clock);c.notes.clear();for(const n of c.held)endNote(n,clock);c.held=[];}
     }
     if(e.k===0x90&&e.v>0){
       const note={start:clock,end:clock+.25,key:id,velocity:e.v,channel:e.ch,
-        program:c.program,bank:e.ch===9?128:c.bank,level:c.volume*c.expression/(127*127)};
+        program:c.program,bank:e.ch===9?128:c.bank,
+        // Keep raw CC7 / CC11 and pan for the native-grade synth. Multiplying
+        // them into velocity before a SoundFont's own controller response
+        // weakens the attack and can double-attenuate the arrangement.
+        channelVolume:c.volume,channelExpression:c.expression,pan:c.pan,
+        level:c.volume*c.expression/(127*127)};
       if(!c.notes.has(id))c.notes.set(id,[]);c.notes.get(id).push(note);
     }
     if(e.k===0x80||(e.k===0x90&&e.v===0)){
