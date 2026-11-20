@@ -548,10 +548,13 @@ async function refreshFonts(auth){
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
       // Prefer the user's saved bank, then a complete-looking GM/GS bank.
       const savedChoice=eligible.find(option=>option.value===saved);
+      // Include common complete-GM bank names such as CT56MGM_V45.
+      // A larger GM SoundFont can sound fuller than the 6 MB starter bank,
+      // but never auto-select a collection that appears single-instrument.
       const gmCandidates=eligible.filter(option=>Number(option.dataset.size)<=48*1048576&&
-        /general.?midi|generaluser|fluidr3|timgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text));
+        /general.?midi|generaluser|fluidr3|timgm|mgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text));
       const autoChoice=savedChoice||gmCandidates.slice().sort((a,b)=>
-        Number(a.dataset.size)-Number(b.dataset.size))[0];
+        Number(b.dataset.size)-Number(a.dataset.size))[0];
       // Use the bundled-source GM reference rather than guessing that an
       // unrelated instrument-only SF2 can play a complete karaoke arrangement.
       select.value=autoChoice?.value||BUILTIN_GM_ID;
