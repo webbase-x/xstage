@@ -375,6 +375,18 @@ class Importer {
     this.dom.done?.addEventListener('click',()=>this.close());
     $('cloud-import-select-all')?.addEventListener('click',()=>this.selectEveryItem(true));
     $('cloud-import-select-none')?.addEventListener('click',()=>this.selectEveryItem(false));
+    this.expandedGroups=new Set();
+    this.groupPageSizes=new Map();
+    this.dom.selectionList?.addEventListener('click',event=>{
+      const trigger=event.target.closest?.('[data-import-toggle],[data-import-more]');
+      if(!trigger||this.running)return;
+      const key=trigger.dataset.importToggle||trigger.dataset.importMore;
+      if(trigger.dataset.importToggle){
+        if(this.expandedGroups.has(key))this.expandedGroups.delete(key);
+        else this.expandedGroups.add(key);
+      }else this.groupPageSizes.set(key,(this.groupPageSizes.get(key)||80)+80);
+      this.renderSelection();
+    });
     this.dom.selectionList?.addEventListener('change',event=>{
       const input=event.target;
       if(!input?.matches?.('input[data-import-group]'))return;
@@ -536,20 +548,63 @@ class Importer {
     this.dom.selection.hidden=!groups.length;
     const fragment=document.createDocumentFragment();
     for(const group of groups){
-      const label=document.createElement('label');
-      label.className='cloud-import-selection-item';
+      const wrapper=document.createElement('div');
+      wrapper.className='cloud-import-folder';
+      const row=document.createElement('div');
+      row.className='cloud-import-selection-item';
       const check=document.createElement('input');
       check.type='checkbox';check.dataset.importGroup=group.key;
+      check.setAttribute('aria-label','เลือกนำเข้าทั้งกลุ่ม '+group.label);
       const count=group.entries.filter(entry=>this.chosenItems.has(entry.key)).length;
       check.checked=count===group.entries.length;
       check.indeterminate=count>0&&count<group.entries.length;
       check.disabled=this.running;
-      const name=document.createElement('span');
-      name.textContent=group.label;
+      const toggle=document.createElement('button');
+      toggle.type='button';toggle.className='cloud-import-folder-toggle';
+      toggle.dataset.importToggle=group.key;
+      const expanded=this.expandedGroups.has(group.key);
+      toggle.setAttribute('aria-expanded',String(expanded));
+      toggle.textContent=(expanded?'▾ ':'▸ ')+group.label;
       const type=document.createElement('small');
       type.textContent=group.entries.length.toLocaleString('th-TH')+' รายการ · '+
         group.fileCount.toLocaleString('th-TH')+' ไฟล์ · '+this.importSize(group.bytes);
-      label.append(check,name,type);fragment.append(label);
+      row.append(check,toggle,type);
+      wrapper.append(row);
+      if(expanded){
+        const detail=document.createElement('div');
+        detail.className='cloud-import-folder-files';
+        // Only create visible rows. Large music folders may have 100,000+ files.
+        const pageSize=this.groupPageSizes.get(group.key)||80;
+        const records=[];
+        for(const entry of group.entries){
+          for(const data of this.importFileList(entry.item)){
+            records.push({file:data.file,relative:data.relative});
+            if(records.length>=pageSize+1)break;
+          }
+          if(records.length>=pageSize+1)break;
+        }
+        const visible=records.slice(0,pageSize);
+        for(const data of visible){
+          const fileRow=document.createElement('div');
+          fileRow.className='cloud-import-file-row';
+          const name=document.createElement('span');
+          name.textContent=data.relative.split(/[\\/]/).pop()||data.file.name;
+          name.title=data.relative;
+          const size=document.createElement('small');
+          size.textContent=this.importSize(data.file.size);
+          fileRow.append(name,size);
+          detail.append(fileRow);
+        }
+        if(group.fileCount>pageSize){
+          const more=document.createElement('button');
+          more.type='button';more.className='cloud-import-show-more';
+          more.dataset.importMore=group.key;
+          more.textContent='แสดงอีก '+Math.min(80,group.fileCount-pageSize).toLocaleString('th-TH')+' ไฟล์';
+          detail.append(more);
+        }
+        wrapper.append(detail);
+      }
+      fragment.append(wrapper);
     }
     this.dom.selectionList.replaceChildren(fragment);
     this.renderSelectionCount();
@@ -636,6 +691,8 @@ class Importer {
     this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
     this.groupCache=null;
+    this.expandedGroups.clear();
+    this.groupPageSizes.clear();
     this.chosenItems=new Set();
     this.renderSelection();
     this.videoEditor?.setPlan(this.plan,this.saved?.videoEdits);
