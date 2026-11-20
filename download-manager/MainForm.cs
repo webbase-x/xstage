@@ -550,26 +550,48 @@ public sealed class MainForm : Form
             }
             if (!UpdateChecker.IsNewer(release.Version, release.Build))
             {
-                _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.3 · Build 6 — ไม่มีรุ่นใหม่กว่า";
+                _updateStatus.Text = $"รุ่นที่ติดตั้ง v{UpdateChecker.CurrentVersion} · Build {UpdateChecker.CurrentBuild} — ไม่มีรุ่นใหม่กว่า";
                 if (manual) MessageBox.Show(this, "โปรแกรมเป็นรุ่นล่าสุด หรือใหม่กว่ารุ่นที่เผยแพร่แล้ว",
                     "ตรวจสอบอัปเดต", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            _updateStatus.Text = $"มีอัปเดต v{release.Version} · Build {release.Build} — กดตรวจสอบอัปเดตเพื่อดาวน์โหลด";
+
+            _updateStatus.Text = $"พบอัปเดต v{release.Version} · Build {release.Build}";
+            var activeCount = _engine.Jobs.Count(j => j.Status is "Running" or "Queued");
+            var activeNote = activeCount > 0
+                ? $"มีงานดาวน์โหลด {activeCount} รายการ ซึ่งจะหยุดชั่วคราวและเก็บไว้ให้เริ่มต่อหลังอัปเดต\n"
+                : "";
             if (MessageBox.Show(this,
                 $"พบ X-Stage Download Manager v{release.Version} Build {release.Build}\n" +
-                $"ขนาดไฟล์ประมาณ {release.Size / 1024.0 / 1024.0:0.0} MB\n" +
-                "เปิดลิงก์ติดตั้ง EXE จาก GitHub Releases หรือไม่?\n" +
-                "โปรแกรมจะไม่ติดตั้งทับหรือปิดงานดาวน์โหลดโดยอัตโนมัติ",
-                "พบอัปเดตใหม่", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                Process.Start(new ProcessStartInfo(release.Url) { UseShellExecute = true });
+                $"ขนาดไฟล์ประมาณ {release.Size / 1024.0 / 1024.0:0.0} MB\n\n" +
+                "ดาวน์โหลดอัปเดตภายในแอป ตรวจสอบ SHA-256 แล้วติดตั้งทันที\n" +
+                activeNote +
+                "แอปจะปิดและเปิดใหม่อัตโนมัติเมื่อการติดตั้งสำเร็จ ดำเนินการหรือไม่?",
+                "อัปเดต X-Stage", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                _updateStatus.Text = $"มีอัปเดต v{release.Version} · Build {release.Build} — กดตรวจสอบอัปเดตอีกครั้ง";
+                return;
+            }
+            var progress = new Progress<double>(percent =>
+            {
+                if (!IsDisposed)
+                    _updateStatus.Text = $"กำลังดาวน์โหลดอัปเดต v{release.Version} · {percent:0.0}%";
+            });
+            var installer = await SelfUpdater.DownloadVerifiedAsync(release, progress);
+            if (IsDisposed) return;
+            _updateStatus.Text = "ดาวน์โหลดครบและ SHA-256 ผ่าน กำลังปิดแอปเพื่อติดตั้ง...";
+            SelfUpdater.LaunchInstallerHelper(installer, release);
+            // The helper waits until this process exits before installing.
+            // FormClosing pauses all jobs and saves their resume information.
+            Close();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or
-                                     System.Text.Json.JsonException or IOException)
+                                     System.Text.Json.JsonException or IOException or
+                                     UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             if (IsDisposed) return;
-            _updateStatus.Text = "ตรวจสอบอัปเดตไม่ได้ (สามารถดาวน์โหลดไฟล์ต่อได้ตามปกติ)";
-            if (manual) MessageBox.Show(this, ex.Message, "ตรวจสอบอัปเดตไม่สำเร็จ",
+            _updateStatus.Text = "อัปเดตไม่สำเร็จ — แอปเดิมและงานดาวน์โหลดยังใช้ได้";
+            MessageBox.Show(this, ex.Message, "ติดตั้งอัปเดตไม่สำเร็จ",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally { _checkingUpdates = false; }
