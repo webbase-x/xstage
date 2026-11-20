@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.7",
-  "build": 10,
+  "version": "0.2.8",
+  "build": 11,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.7-build10-win-x64-Setup.exe",
-  "sha256": "c9dbf34fca1628048e181281c307133d6a8a2d723bee1fa7ff6ff0d4ebdba8c4",
-  "size_bytes": 213842643,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.7-build10-preview/X-Stage-Download-Manager-v0.2.7-build10-win-x64-Setup.exe",
-  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
+  "file": "X-Stage-Download-Manager-v0.2.8-build11-win-x64-Setup.exe",
+  "sha256": "93e1e8e73053aade3889ff3ee1574d50cec68b150cf591ad0bae830225005502",
+  "size_bytes": 213855393,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.8-build11-preview/X-Stage-Download-Manager-v0.2.8-build11-win-x64-Setup.exe",
+  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
 }
