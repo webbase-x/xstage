@@ -7,8 +7,8 @@
   <Nullable>enable</Nullable>
   <AssemblyName>XStageMirrorAndroidPC</AssemblyName>
   <RootNamespace>XStageMirrorAndroidPC</RootNamespace>
-  <Version>1.0.8</Version>
-  <FileVersion>1.0.8.1009</FileVersion>
+  <Version>1.0.9</Version>
+  <FileVersion>1.0.9.1010</FileVersion>
   <ApplicationTitle>X-Stage Mirror Android PC</ApplicationTitle>
   <PlatformTarget>x64</PlatformTarget>
    <ApplicationIcon>app.ico</ApplicationIcon>

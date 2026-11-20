@@ -26,20 +26,22 @@ internal sealed class MirrorAutoUpdateManager
     private readonly string _directory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "X-Stage", "Mirror Android PC", "updates");
+    private readonly Func<bool> _canUpgrade;
     private readonly Action<string> _status;
     private readonly Action _closeForInstall;
     private int _busy;
     private DateTimeOffset _nextCheck = DateTimeOffset.MinValue;
 
-    internal MirrorAutoUpdateManager(Action<string> status, Action closeForInstall)
+    internal MirrorAutoUpdateManager(Func<bool> canUpgrade, Action<string> status, Action closeForInstall)
     {
+        _canUpgrade = canUpgrade;
         _status = status;
         _closeForInstall = closeForInstall;
     }
 
     internal async Task CheckAsync()
     {
-        if (DateTimeOffset.UtcNow < _nextCheck ||
+        if (!_canUpgrade() || DateTimeOffset.UtcNow < _nextCheck ||
             Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
             return;
         _nextCheck = DateTimeOffset.UtcNow.Add(Interval);
@@ -64,11 +66,20 @@ internal sealed class MirrorAutoUpdateManager
             // Revalidate even an already-staged file, rather than trusting its name.
             if (!await MatchesHashAsync(verified, item.Sha256))
             {
-                await DownloadVerifiedAsync(client, item, partial);
+                await DownloadVerifiedAsync(client, item, partial, (percent, bytes) =>
+                    _status(percent is int p
+                        ? $"ดาวน์โหลดอัปเดต v{item.Version} Build {item.Build} · {p}%"
+                        : $"ดาวน์โหลดอัปเดต · {bytes / (1024 * 1024)} MB"));
                 File.Move(partial, verified, overwrite: true);
                 partial = null;
             }
-            _status("ตรวจสอบ SHA-256 ผ่านแล้ว · กำลังเริ่มติดตั้งรุ่นใหม่");
+            if (!_canUpgrade())
+            {
+                _nextCheck = DateTimeOffset.MinValue;
+                _status("ดาวน์โหลดอัปเดตแล้ว · รอ Windows ติดตั้งส่วนประกอบให้เสร็จ");
+                return;
+            }
+            _status("ตรวจสอบ SHA-256 ผ่านแล้ว · ติดตั้งรุ่นใหม่อัตโนมัติ");
 
             // The installer upgrades the same AppId and install folder. Windows
             // may display UAC. Never bypass OS permission or pretend it was granted.
@@ -169,7 +180,7 @@ internal sealed class MirrorAutoUpdateManager
         return actual.Equals(expected, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task DownloadVerifiedAsync(HttpClient client, Update update, string destination)
+    private static async Task DownloadVerifiedAsync(HttpClient client, Update update, string destination, Action<int?, long> onProgress)
     {
         using var response = await client.GetAsync(
             update.Url, HttpCompletionOption.ResponseHeadersRead);
@@ -189,6 +200,8 @@ internal sealed class MirrorAutoUpdateManager
             var buffer = new byte[128 * 1024];
             long transferred = 0;
             int bytesRead;
+            int lastPercent = -5;
+            long lastReportedBytes = 0;
             while ((bytesRead = await network.ReadAsync(buffer.AsMemory())) > 0)
             {
                 transferred += bytesRead;
@@ -196,6 +209,20 @@ internal sealed class MirrorAutoUpdateManager
                     throw new InvalidDataException("ไฟล์อัปเดตใหญ่เกินขีดจำกัด");
                 digest.AppendData(buffer, 0, bytesRead);
                 await output.WriteAsync(buffer.AsMemory(0, bytesRead));
+                if (response.Content.Headers.ContentLength is long total && total > 0)
+                {
+                    var percent = (int)Math.Clamp(transferred * 100L / total, 0L, 100L);
+                    if (percent >= lastPercent + 5 || percent == 100)
+                    {
+                        lastPercent = percent;
+                        onProgress(percent, transferred);
+                    }
+                }
+                else if (transferred - lastReportedBytes >= 5L * 1024 * 1024)
+                {
+                    lastReportedBytes = transferred;
+                    onProgress(null, transferred);
+                }
             }
             await output.FlushAsync();
             if (transferred < MinimumInstallerBytes)

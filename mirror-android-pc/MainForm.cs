@@ -25,11 +25,11 @@ public sealed class MainForm : Form
         AccessibleName = "X-Stage Mirror Android PC"
     };
     private readonly Label _title = MakeLabel("X-Stage Mirror PC", 55, true, Frost);
-    private readonly Label _number = MakeLabel("No." + ReceiverIdentity.Number.ToString("D4"), 92, true, Turquoise);
+    private readonly Label _pcName = MakeLabel(Environment.MachineName, 82, true, Turquoise);
     private readonly Label _version = MakeLabel("MIRROR ANDROID PC     " + VersionText, 15, false, Soft);
     private readonly Label _status = MakeLabel("กำลังเตรียมตัวรับ Miracast", 20, false, Frost);
     private readonly Label _network = MakeLabel(
-        "Windows PC: " + Environment.MachineName + "   ·   Android: Smart View / Screen Cast", 16, false, Soft);
+        "บน Android เปิด Smart View / Screen Cast แล้วเลือกชื่อเครื่องด้านบน", 16, false, Soft);
     private readonly Button _minimize = MakeWindowButton("—", "ย่อหน้าต่าง", Color.FromArgb(30, 54, 79));
     private readonly Button _closeButton = MakeWindowButton("×", "ปิดแอป", Color.FromArgb(57, 39, 55));
     private readonly System.Windows.Forms.Timer _poll = new() { Interval = 1200 };
@@ -54,13 +54,13 @@ public sealed class MainForm : Form
     private DateTime _repairStartedUtc;
     private string _repairMessage = "";
     private string _repairFailure = "";
-    private static readonly string DefaultDeviceHint = "Windows PC: " + Environment.MachineName +
-        "   ·   Android: Smart View / Screen Cast";
+    private const string DefaultDeviceHint =
+        "บน Android เปิด Smart View / Screen Cast แล้วเลือกชื่อเครื่องด้านบน";
     private string _lastLaunchError = "";
 
     public MainForm()
     {
-        Text = "X-Stage Mirror Android PC | " + ReceiverIdentity.DisplayName;
+        Text = "X-Stage Mirror Android PC | " + Environment.MachineName;
         FormBorderStyle = FormBorderStyle.None;
         WindowState = FormWindowState.Maximized;
         StartPosition = FormStartPosition.CenterScreen;
@@ -87,13 +87,14 @@ public sealed class MainForm : Form
         _status.AccessibleName = "สถานะตัวรับ Miracast กดเพื่อดูการวินิจฉัย";
         _status.Click += async (_, _) => { if (_launchRetries >= 3) await PrepareWindowsFeatureAsync(); else ShowDiagnostics(); };
 
-        Controls.AddRange([_logo, _title, _number, _version, _status, _network,
+        Controls.AddRange([_logo, _title, _pcName, _version, _status, _network,
             _minimize, _closeButton]);
         var menu = BuildContextMenu();
         ContextMenuStrip = menu;
         foreach (Control c in Controls) c.ContextMenuStrip = menu;
 
         _autoUpdates = new MirrorAutoUpdateManager(
+            () => !_closing && !_installingWindowsFeature,
             message =>
             {
                 if (_closing || IsDisposed || !IsHandleCreated) return;
@@ -103,7 +104,7 @@ public sealed class MainForm : Form
                     {
                         if (_closing || IsDisposed) return;
                         _updateNotice = message;
-                        _updateNoticeUntil = DateTime.UtcNow.AddSeconds(20);
+                        _updateNoticeUntil = DateTime.UtcNow.AddSeconds(75);
                         RenderStatus();
                     }));
                 }
@@ -121,7 +122,8 @@ public sealed class MainForm : Form
         Shown += (_, _) =>
         {
             LayoutWelcome();
-            _status.Text = "ขั้นตอน 1/4 · กำลังตรวจสอบ Windows และอุปกรณ์";
+            _status.Text = "กำลังตรวจสอบรุ่นล่าสุดและสภาพแวดล้อม Windows";
+            _ = _autoUpdates.CheckAsync();
             CheckLocalEnvironment();
             _poll.Start();
             if (WindowsPreparation.HasWirelessAdapter()) OpenReceiver();
@@ -131,8 +133,8 @@ public sealed class MainForm : Form
         {
             PollPreparation();
             CheckWindowsReceiverSession();
-            if (!_installingWindowsFeature && _connectProcessRunning && _wifiAvailable)
-                _ = _autoUpdates.CheckAsync();
+            // Check for releases even while Miracast is not yet available.
+            if (!_installingWindowsFeature) _ = _autoUpdates.CheckAsync();
         };
         FormClosing += (_, _) =>
         {
@@ -237,7 +239,7 @@ public sealed class MainForm : Form
         var statusTop = Math.Max(versionTop + versionHeight + 12, h * 0.79);
         var networkTop = Math.Max(statusTop + h * 0.058 + 8, h * 0.865);
         SetLabel(_title, Math.Clamp(w / 29f, 27, 62), titleTop, titleHeight);
-        SetLabel(_number, Math.Clamp(Math.Min(w / 13f, h / 5.6f), 44, 112),
+        SetLabel(_pcName, Math.Clamp(Math.Min(w / 15f, h / 6.5f), 28, 98),
             numberTop, numberHeight);
         SetLabel(_version, Math.Clamp(w / 96f, 11, 17), versionTop, versionHeight);
         SetLabel(_status, Math.Clamp(w / 71f, 12, 21), statusTop, h * 0.058);
@@ -249,7 +251,7 @@ public sealed class MainForm : Form
             {
                 var old = label.Font;
                 label.Font = new Font("Segoe UI", fontSize,
-                    label == _title || label == _number ? FontStyle.Bold : FontStyle.Regular);
+                    label == _title || label == _pcName ? FontStyle.Bold : FontStyle.Regular);
                 old.Dispose();
             }
             label.SetBounds(10, (int)top, Math.Max(0, ClientSize.Width - 20),
@@ -505,7 +507,7 @@ public sealed class MainForm : Form
         CheckWindowsReceiverSession();
         var text = new StringBuilder()
             .AppendLine("X-Stage Mirror Android PC  " + VersionText)
-            .AppendLine("หมายเลข X-Stage: No." + ReceiverIdentity.Number.ToString("D4"))
+            .AppendLine("ชื่อคอมพิวเตอร์ Windows: " + Environment.MachineName)
             .AppendLine("ชื่อที่ Android ต้องค้นหา: " + Environment.MachineName)
             .AppendLine("Windows: " + Environment.OSVersion.VersionString)
             .AppendLine("Wi-Fi: " + (_wifiAvailable ? "เปิดใช้งาน" : "ยังไม่พบอะแดปเตอร์ที่เปิดใช้งาน"))
@@ -518,7 +520,7 @@ public sealed class MainForm : Form
             .AppendLine("แสดงหน้าต่างรับภาพ: " + (_nativePresented ? "เปิดอยู่" : "ยังไม่ยืนยัน"))
             .AppendLine()
             .AppendLine("บน Android เปิด Smart View / Screen Cast และเลือกชื่อ Windows PC ข้างต้น")
-            .AppendLine("No.XXXX เป็นเลขประจำแอป X-Stage ไม่ใช่ชื่อ Miracast ที่โทรศัพท์ค้นหา")
+            .AppendLine("ชื่อกลางหน้าจอคือชื่อคอมพิวเตอร์ Windows ที่ Android ต้องค้นหา")
             .AppendLine("Windows Wireless Display เป็นผู้แสดงภาพและจัดการสิทธิ์เชื่อมต่อ")
             .AppendLine("เมื่อฝั่งส่งยกเลิก Windows จะล้างภาพของเซสชันเอง")
             .AppendLine("หากหน้าต่างตัวรับปิด X-Stage จะเรียกเปิดใหม่โดยอัตโนมัติ")

@@ -1,6 +1,12 @@
 # X-Stage Mirror Android PC
 
-Version 1.0.8 · Build 1009 · Windows 10/11 x64 · Preview
+Version 1.0.9 · Build 1010 · Windows 10/11 x64 · Preview
+
+## Build 1010 — Windows PC name in place of No./ID; automatic updates
+
+The large centered receiver label displays `Environment.MachineName` (the running Windows computer's actual name), not a random identifier. Android users should select this PC name in Smart View/Screen Cast. Only the Android PC numeric identity source is removed; the separate iOS PC app is unchanged.
+
+On startup the built-in updater checks the published latest preview immediately, even if Miracast is not yet ready; it checks again every 30 minutes. When a newer release is confirmed it downloads the Setup EXE with visible progress, verifies filename, release URL, PE format and SHA-256, and immediately starts silent per-user installation. If Windows prerequisite servicing is still running, it postpones installer execution and retries after servicing; UAC and OS security controls remain in force. Download failures leave the existing application usable.
 
 ## Build 1009 — reliable setup outcome and readiness
 
@@ -32,7 +38,7 @@ The welcome-screen version/build is taken from the compiled assembly.
 Windows Wireless Display launch is shown only as a requested action, not
 as a verified Miracast video connection. Hardware verification remains required.
 
-Miracast receiver launcher with the same full-screen welcome UX as X-Stage Mirror iOS PC: matching centered branding, large No.XXXX, gradient/ring background and window controls. F1 shows diagnostics; F5 reopens the Windows receiver; F6/F7 open Windows settings. A right-click menu provides these recovery actions without cluttering the welcome screen. The storefront icon, Windows EXE icon and welcome logo all use a distinctive green Android robot. A persistent X-Stage No.XXXX is shared with Mirror iOS PC; the real Windows hostname is displayed so Android senders can find the correct Miracast receiver.
+Miracast receiver launcher with the same full-screen welcome UX as X-Stage Mirror iOS PC: matching centered branding, large ชื่อคอมพิวเตอร์ Windows, gradient/ring background and window controls. F1 shows diagnostics; F5 reopens the Windows receiver; F6/F7 open Windows settings. A right-click menu provides these recovery actions without cluttering the welcome screen. The storefront icon, Windows EXE icon and welcome logo all use a distinctive green Android robot. A persistent X-Stage ชื่อคอมพิวเตอร์ Windows is shared with Mirror iOS PC; the real Windows hostname is displayed so Android senders can find the correct Miracast receiver.
 
 The app opens Windows Wireless Display automatically at startup. The native Windows receiver owns video and permissions. A running Connect process is not proof of a connected sender. The interface intentionally does not invent connected device names.
 
