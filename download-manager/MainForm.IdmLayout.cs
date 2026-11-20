@@ -16,6 +16,8 @@ public sealed partial class MainForm
     private bool _inputVisible;
     private string _categoryFilter = "all";
     private List<DownloadJob> _visibleJobs = new();
+    private string? _sortColumn;
+    private bool _sortDescending;
     private ToolStrip? _toolbar;
 
     private static readonly Color DarkTop = Color.FromArgb(23, 26, 34);
@@ -388,11 +390,12 @@ public sealed partial class MainForm
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = key, HeaderText = title, Width = width, MinimumWidth = minimum,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 DefaultCellStyle = new DataGridViewCellStyle { Padding = new Padding(5, 0, 4, 0) }
             });
         }
         Column("File", "ชื่อไฟล์", 345, 210);
+        Column("FileType", "ชนิดไฟล์", 104, 85);
         Column("Queue", "คิว", 57, 47);
         Column("Size", "ขนาด", 112);
         Column("Progress", "ความคืบหน้า", 154, 115);
@@ -402,6 +405,25 @@ public sealed partial class MainForm
         Column("Added", "วันที่ดาวน์โหลด", 137, 112);
         Column("Parts", "จำนวนส่วน", 115, 90);
         Column("Description", "คำอธิบาย", 157, 115);
+        _grid.ColumnHeaderMouseClick += (_, e) =>
+        {
+            if (e.ColumnIndex < 0) return;
+            var key = _grid.Columns[e.ColumnIndex].Name;
+            if (_sortColumn == key)
+                _sortDescending = !_sortDescending;
+            else
+            {
+                _sortColumn = key;
+                _sortDescending = false;
+            }
+
+            // Native WinForms sort arrow; no change to the persisted queue.
+            foreach (DataGridViewColumn column in _grid.Columns)
+                column.HeaderCell.SortGlyphDirection = SortOrder.None;
+            _grid.Columns[e.ColumnIndex].HeaderCell.SortGlyphDirection =
+                _sortDescending ? SortOrder.Descending : SortOrder.Ascending;
+            RefreshRows();
+        };
         _grid.CellPainting += PaintProgress;
         _grid.SelectionChanged += (_, _) => UpdateDetails();
         _grid.CellClick += (_, e) =>
