@@ -74,6 +74,53 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(core.interrupted_import(self.workspace)["status"],"interrupted")
         self.assertFalse(core.prepare_import_for_restart(self.workspace,prior["batch"]))
 
+    def test_long_running_studio_keeps_bounded_finished_job_history(self):
+        """Completed jobs are diagnostics, not an unlimited in-memory queue."""
+        with patch.object(core,"interrupted_import",return_value=None):
+            state=app.State(self.workspace)
+        with state.lock:
+            for index in range(70):
+                state.jobs[f"old-{index}"]={
+                    "id":f"old-{index}","status":"completed",
+                    "kind":"test","updated_at":time.time(),
+                    "progress":{"done":index},"result":{"message":"x"*200},
+                    "revision":0,
+                }
+        started=threading.Event()
+        done=threading.Event()
+        def operation(progress,cancel):
+            started.set()
+            done.wait(2)
+            return {"ok":True}
+        state.start_job("test",operation)
+        self.assertTrue(started.wait(2))
+        with state.lock:
+            self.assertEqual(len(state.jobs),41)
+            self.assertNotIn("old-0",state.jobs)
+            self.assertIn("old-69",state.jobs)
+            self.assertTrue(any(row["status"]=="running"
+                                for row in state.jobs.values()))
+        done.set()
+
+    def test_resumed_import_rate_excludes_previous_session_counts(self):
+        with patch.object(core,"interrupted_import",return_value=None):
+            state=app.State(self.workspace)
+        job={"started_at":time.monotonic()-1,
+             "updated_at":time.time(),"revision":0,
+             "progress":{}}
+        state.update(job,{"files_seen":80000},"resumed")
+        self.assertEqual(job["progress"]["files_per_second"],0)
+        time.sleep(.012)
+        state.update(job,{"files_seen":80002},"two files")
+        rate=job["progress"]["files_per_second"]
+        self.assertGreater(rate,0)
+        self.assertLess(rate,1000)
+        with state.lock:
+            state.jobs["fake-rate"]=job
+        visible=state.jobs_snapshot()[0]
+        self.assertNotIn("_rate_first_count",visible)
+        self.assertNotIn("_rate_first_at",visible)
+
     def test_update_requests_import_stop_then_restart_checkpoint(self):
         with patch.object(core,"interrupted_import",return_value=None):
             state=app.State(self.workspace)
