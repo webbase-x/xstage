@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.23
+# X-Stage Song Studio Pro — Technical Preview v0.1.24
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -327,3 +327,11 @@ Menu 01 chooses folders using a queued Qt `QFileDialog` on the main GUI thread r
 - Explicit cleanup keeps issue details for the latest four completed batches and removes outdated *completed-only* report rows. It never touches incomplete, cancelled or interrupted batches, original media, lyric revisions, song catalog or export history.
 - Explicit VACUUM optionally returns internal free pages to the filesystem. It is never automatic and requires at least twice the SQLite size in additional free disk space. For large libraries, close the app and make a verified SQLite backup before running cleanup or compaction.
 - The Windows v0.1.23 release pipeline packages the preview EXE together with SHA-256 evidence, and the publisher verifies both before changing the public release manifest.
+
+## v0.1.24 — Full SQLite storage audit and selective cleanup
+
+- In the Import screen, **วิเคราะห์ทุกตารางและดัชนี** calculates real table/index page sizes via SQLite `dbstat`, runs a bounded `PRAGMA quick_check(1)` and categorizes each table as essential, temporary, cache, derived or unknown. Unknown tables are reported but **never deleted**.
+- Import source paths and exact media SHA-256 registry are preserved. Completed import resume counters now disappear automatically; interrupted/cancelled checkpoints remain available. A successful lyric recovery no longer creates redundant per-song import logs.
+- User-initiated **ล้างประวัติงานเสร็จแล้ว** trims disposable import rows, completed-only resume records, orphan lyric scan caches, the old unused `xstage_lyric_source` index, and detailed findings from completed swipe audits older than the two most recent. Audit run summaries and *every human review* remain. All song/media/source, lyric text/cues/versions, drafts, exports, manual edit/undo history and incomplete import jobs remain.
+- Database filename size alone is not proof of duplicate songs: large `xstage_lyric_cues` and `xstage_lyric_search` indexes may be essential. Only an in-app table-space report from the user's actual SQLite identifies which data consume the space.
+- Explicit **คืนพื้นที่ไฟล์ SQLite** invokes guarded `VACUUM` separately with a disk-space precondition (at least 2 times database bytes free); cleanup alone frees pages internally but may not shrink the .sqlite3 file. Make a verified copy while the app is closed before applying maintenance to valuable databases.
