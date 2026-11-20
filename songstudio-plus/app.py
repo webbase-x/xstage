@@ -557,12 +557,15 @@ class Handler(BaseHTTPRequestHandler):
                             not isinstance(x,str) for x in excluded):
                         raise ValueError("รายการยกเว้นไม่ถูกต้อง")
                     ids=manual.approved_build_ids(self.state.workspace,excluded)
-                elif (not isinstance(ids,list) or not 1<=len(ids)<=5000 or
-                        any(not isinstance(x,str) for x in ids)):
-                    raise ValueError("เลือกเพลง 1–5,000 เพลงต่อชุด")
-                eligible=set(manual.approved_build_ids(self.state.workspace))
-                if any(song_id not in eligible for song_id in ids):
-                    raise ValueError("มีเพลงที่ยังไม่พร้อมสร้างหรือยังรอการยืนยัน กรุณาตรวจและปาดเนื้อร้องก่อน")
+                else:
+                    if (not isinstance(ids,list) or not 1<=len(ids)<=5000 or
+                            any(not isinstance(x,str) for x in ids)):
+                        raise ValueError("เลือกเพลง 1–5,000 เพลงต่อชุด")
+                    # Do not materialize the whole ready catalog for a handful
+                    # of selected songs. All-ready IDs are already SQL-approved.
+                    eligible=manual.approved_selected_ids(self.state.workspace,ids)
+                    if any(song_id not in eligible for song_id in ids):
+                        raise ValueError("มีเพลงที่ยังไม่พร้อมสร้างหรือยังรอการยืนยัน กรุณาตรวจและปาดเนื้อร้องก่อน")
                 # Explicit selections are de-duplicated. The all-ready mode
                 # is a catalog query, not a giant browser-side checkbox list.
                 ids=list(dict.fromkeys(ids))
