@@ -62,6 +62,117 @@ def snapshot(workspace):
     }
 
 
+# This is a source-code classification, not a claim about the size of a
+# particular user's library. The dbstat virtual table measures real pages.
+CATEGORIES = {
+    "xstage_migrations": ("keep", "schema migrations"),
+    "xstage_media": ("keep", "unique SHA-256 media registry"),
+    "xstage_media_sources": ("keep", "verified source paths for playback/export"),
+    "xstage_songs": ("keep", "song IDs, titles and artists"),
+    "xstage_import_batches": ("temporary", "import summaries; retain recent jobs"),
+    "xstage_import_items": ("temporary", "problem reports; retain recent failures"),
+    "xstage_import_resume_state": ("temporary", "checkpoint counters while interrupted"),
+    "xstage_import_file_checkpoints": ("temporary", "resume progress while unfinished"),
+    "xstage_lyric_scan_cache": ("cache", "avoid re-parsing unchanged sidecars"),
+    "xstage_lyric_drafts": ("keep", "untimed original lyric text"),
+    "xstage_lyric_versions": ("keep", "current and prior lyric versions for undo"),
+    "xstage_lyric_lines": ("keep", "lyric lines and timestamps"),
+    "xstage_lyric_cues": ("keep", "measured or labelled estimated sweep cues"),
+    "xstage_edit_batches": ("keep", "undo/edit history"),
+    "xstage_edit_changes": ("keep", "undo version relationships"),
+    "xstage_exports": ("keep", "output verification and incremental export"),
+    "xstage_swipe_audit_runs": ("keep", "audit summary history"),
+    "xstage_swipe_findings": ("derived", "only recent completed scan details needed"),
+    "xstage_swipe_reviews": ("keep", "manual listening decisions"),
+    "xstage_manual_reviews": ("keep", "manual timing approval history"),
+}
+
+
+def detailed_audit(workspace, progress=None, cancel=None):
+    """Read SQLite page usage by table AND index, including current WAL size.
+
+    Unlike filename size guesses, dbstat accounts for indexes/overflow pages.
+    Never modifies the database or original music files. Runs as a job because
+    a multi-gigabyte database may require a lengthy page scan.
+    """
+    core.init(workspace)
+    if progress:
+        progress({"processed": 0, "total": 2}, "ตรวจพื้นที่แต่ละตารางและดัชนี SQLite")
+    db = None
+    try:
+        with core.connect(workspace) as db:
+            if cancel:
+                db.set_progress_handler(lambda: int(cancel.is_set()), 20000)
+            objects = [dict(row) for row in db.execute(
+                """SELECT name,type,tbl_name FROM sqlite_master
+                   WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%'""")]
+            owners = {row["name"]: row["tbl_name"] for row in objects}
+            page_sizes = {}
+            dbstat_available = True
+            try:
+                for row in db.execute("""SELECT name,SUM(pgsize) AS bytes,
+                      COUNT(*) AS pages FROM dbstat GROUP BY name"""):
+                    page_sizes[row["name"]] = (int(row["bytes"] or 0),
+                                               int(row["pages"] or 0))
+            except sqlite3.OperationalError as e:
+                if "no such table" not in str(e).lower():
+                    raise
+                dbstat_available = False
+            if cancel and cancel.is_set():
+                raise InterruptedError("ยกเลิกการตรวจ SQLite")
+            if progress:
+                progress({"processed": 1, "total": 2}, "ตรวจความสอดคล้องโครงสร้างฐาน")
+            # Bounded quick_check is a structural check; do not mistake it for
+            # exhaustive audio/lyric correctness verification.
+            quick = db.execute("PRAGMA quick_check(1)").fetchone()[0]
+            db.set_progress_handler(None, 0)
+            totals = {}
+            for row in objects:
+                kind = row["type"]
+                name = row["name"]
+                owner = row["tbl_name"] if kind == "index" else name
+                if owner not in totals:
+                    category, purpose = CATEGORIES.get(
+                        owner, ("unknown", "unclassified existing SQLite object"))
+                    totals[owner] = {"table": owner, "category": category,
+                                     "purpose": purpose, "bytes": 0,
+                                     "table_bytes": 0, "index_bytes": 0,
+                                     "pages": 0, "indexes": []}
+                size, pages = page_sizes.get(name, (0, 0))
+                info = totals[owner]
+                info["bytes"] += size
+                info["pages"] += pages
+                if kind == "index":
+                    info["index_bytes"] += size
+                    info["indexes"].append({"name": name, "bytes": size})
+                else:
+                    info["table_bytes"] += size
+            # Include implicit sqlite_autoindex objects: unique constraints
+            # may occupy substantial space even though not in sqlite_master.
+            for name, (size, pages) in page_sizes.items():
+                if not name.startswith("sqlite_autoindex_"):
+                    continue
+                owner = name[len("sqlite_autoindex_"):].rsplit("_", 1)[0]
+                info = totals.get(owner)
+                if info:
+                    info["bytes"] += size
+                    info["index_bytes"] += size
+                    info["pages"] += pages
+                    info["indexes"].append({"name": name, "bytes": size})
+            rows = sorted(totals.values(), key=lambda x: x["bytes"], reverse=True)
+    except sqlite3.OperationalError as e:
+        if cancel and cancel.is_set():
+            raise InterruptedError("ยกเลิกการตรวจ SQLite") from e
+        raise
+    result = snapshot(workspace)
+    if progress:
+        progress({"processed": 2, "total": 2}, "ตรวจโครงสร้าง SQLite เสร็จ")
+    return {**result, "quick_check": quick, "dbstat_available": dbstat_available,
+            "table_space": rows, "unknown_tables": [
+                x["table"] for x in rows if x["category"] == "unknown"
+            ]}
+
+
 def cleanup_history(workspace, progress=None, cancel=None, retain_completed=RETAIN_COMPLETED):
     """Trim ONLY completed import audit rows in an atomic transaction.
 
