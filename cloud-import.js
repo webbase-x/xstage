@@ -499,11 +499,15 @@ class Importer {
     this.dom.start.textContent=this.completed?'นำเข้าเพิ่ม':'นำเข้ารายการที่เลือก';
     if(this.dom.done)this.dom.done.textContent=this.completed?'เสร็จแล้ว · ปิด':'ปิดหน้าต่าง';
     this.dom.start.disabled=this.running||this.lockPending||!selected;
+    this.dom.start.hidden=!!this.running;
     this.dom.pause.disabled=!this.running;
+    this.dom.pause.hidden=!this.running;
     this.dom.cancel.disabled=!this.running;
+    this.dom.cancel.hidden=true;
     this.dom.resume.disabled=this.running||this.lockPending||(!selected&&!this.saved);
     this.dom.pick.disabled=this.running;
     this.dom.scan.disabled=this.running||!this.selected;
+    this.dom.scan.hidden=true;
     this.updateOpen();
   }
   async open(){
