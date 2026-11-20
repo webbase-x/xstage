@@ -44,9 +44,8 @@ public static class DownloadRetryPolicy
         exception is HttpRequestException or IOException or TimeoutException;
 
     public static async Task DelayAsync(
-        int attempt, HttpResponseHeaders? headers, CancellationToken cancellation)
+        int attempt, TimeSpan? fromServer, CancellationToken cancellation)
     {
-        var fromServer = headers is null ? null : RetryAfter(headers);
         if (fromServer is TimeSpan wait && wait > TimeSpan.FromMinutes(2))
             throw new IOException("เว็บไซต์กำหนด Retry-After นานกว่า 2 นาที (" +
                 Math.Ceiling(wait.TotalMinutes) + " นาที) กรุณาเริ่มใหม่ภายหลัง");
