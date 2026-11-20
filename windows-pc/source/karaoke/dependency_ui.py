@@ -51,9 +51,18 @@ def open_window(app):
         # Save first; if saving fails, leave the running application untouched.
         try:
             app.save_settings();app.song_queue.save()
-            command=['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-WaitPid',str(os.getpid()),'-AppDirectory',str(app.home),'-DataDirectory',str(app.data_dir)]
-            if not getattr(sys,'frozen',False):command+=['-PythonExe',sys.executable]
-            subprocess.Popen(command,creationflags=subprocess.CREATE_NEW_CONSOLE,cwd=str(app.home))
+            import ctypes
+            arguments=['-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),
+                       '-WaitPid',str(os.getpid()),'-AppDirectory',str(app.home),
+                       '-DataDirectory',str(app.data_dir)]
+            if not getattr(sys,'frozen',False):arguments+=['-PythonExe',sys.executable]
+            # Repair writes under Program Files. Obtain Windows consent BEFORE
+            # shutting down the player; a declined UAC prompt leaves it running.
+            result=ctypes.windll.shell32.ShellExecuteW(
+                None,'runas','powershell.exe',subprocess.list2cmdline(arguments),
+                str(app.home),1)
+            if result <= 32:
+                raise OSError(f'Windows ไม่อนุญาตให้เปิดเครื่องมือซ่อม (รหัส {result})')
         except Exception as error:messagebox.showerror('เริ่มซ่อมไม่ได้',str(error),parent=window);return
         app.close_app()
     bar=ActionBar(window.footer);bar.pack(fill='x',padx=8,pady=8)
