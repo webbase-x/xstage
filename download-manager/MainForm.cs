@@ -768,27 +768,27 @@ public sealed class MainForm : Form
             }
             else
             {
-            var segments = job.SegmentDownloadedBytes;
-            var segmentCount = job.SegmentsUsed;
-            if (job.Kind != "Video" && segmentCount > 1 && job.TotalBytes > 0 &&
-                segments.Length == segmentCount && segmentCount <= 32)
-            {
-                for (int i = 0; i < segmentCount; i++)
+                var segments = job.SegmentDownloadedBytes;
+                var segmentCount = job.SegmentsUsed;
+                if (job.Kind != "Video" && segmentCount > 1 && job.TotalBytes > 0 &&
+                    segments.Length == segmentCount && segmentCount <= 32)
                 {
-                    long segmentSize = job.TotalBytes * (i + 1) / segmentCount -
-                                       job.TotalBytes * i / segmentCount;
-                    var partProgress = segmentSize <= 0 ? 0 :
-                        Math.Clamp(Interlocked.Read(ref segments[i]) / (double)segmentSize, 0, 1);
-                    var startX = rectangle.X + i * rectangle.Width / segmentCount;
-                    var endX = rectangle.X + (i + 1) * rectangle.Width / segmentCount;
-                    var width = Math.Max(1, endX - startX - (segmentCount > 1 ? 1 : 0));
-                    e.Graphics.FillRectangle(partProgress >= 1 ? complete : fg,
-                        startX, rectangle.Y, (int)Math.Round(width * partProgress), rectangle.Height);
+                    for (int i = 0; i < segmentCount; i++)
+                    {
+                        long segmentSize = job.TotalBytes * (i + 1) / segmentCount -
+                                           job.TotalBytes * i / segmentCount;
+                        var partProgress = segmentSize <= 0 ? 0 :
+                            Math.Clamp(Interlocked.Read(ref segments[i]) / (double)segmentSize, 0, 1);
+                        var startX = rectangle.X + i * rectangle.Width / segmentCount;
+                        var endX = rectangle.X + (i + 1) * rectangle.Width / segmentCount;
+                        var width = Math.Max(1, endX - startX - (segmentCount > 1 ? 1 : 0));
+                        e.Graphics.FillRectangle(partProgress >= 1 ? complete : fg,
+                            startX, rectangle.Y, (int)Math.Round(width * partProgress), rectangle.Height);
+                    }
                 }
-            }
-            else
-                e.Graphics.FillRectangle(fg, rectangle.X, rectangle.Y,
-                    (int)Math.Round(rectangle.Width * progress), rectangle.Height);
+                else
+                    e.Graphics.FillRectangle(fg, rectangle.X, rectangle.Y,
+                        (int)Math.Round(rectangle.Width * progress), rectangle.Height);
             }
             using var progressFont = new Font("Segoe UI", 8, FontStyle.Bold);
             TextRenderer.DrawText(e.Graphics, ProgressPresentation.PercentLabel(job),
