@@ -122,13 +122,13 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup ISCC.exe not found.' }
           & $compiler 'windows-pc/installer/XStageKaraoke.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed: $LASTEXITCODE" }
-          $setup = 'windows-pc/installer/output/X-Stage-Karaoke-PC-Windows-v1.0.79-build1079.exe'
+          $setup = 'windows-pc/installer/output/X-StageKaraoke.exe'
           if (-not (Test-Path $setup -PathType Leaf)) { throw 'Installer EXE was not produced.' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer EXE is unexpectedly small.' }
           python scripts/verify_songstudio_exe_icon.py $setup
           if ($LASTEXITCODE -ne 0) { throw 'Installer EXE missing native icon' }
           $hash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  X-Stage-Karaoke-PC-Windows-v1.0.79-build1079.exe" |
+          "$hash  X-StageKaraoke.exe" |
             Set-Content -Encoding ascii "$setup.sha256"
           Get-Item $setup | Select-Object FullName, Length
           Write-Host "Installer SHA256: $hash"
