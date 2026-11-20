@@ -623,7 +623,7 @@ function playRealtime(player,source,{signal,onStatus}={}){
     fail('เบราว์เซอร์ไม่รองรับการสร้างเสียง MIDI แบบเรียลไทม์');
   const song=parseMidi(source),Ctor=scope.AudioContext||scope.webkitAudioContext;
   const ctx=new Ctor(),master=ctx.createGain();
-  master.gain.value=.14;master.connect(ctx.destination);
+  master.gain.value=.55;master.connect(ctx.destination);
   const notes=song.notes.slice().sort((a,b)=>a.start-b.start);
   let cursor=0,disposed=false,timer=null,voices=[];
   const reset=()=>{
@@ -638,7 +638,7 @@ function playRealtime(player,source,{signal,onStatus}={}){
     if(disposed||signal?.aborted)return;
     if(player.paused||player.ended)return;
     const now=Number(player.currentTime)||0,rate=Math.max(.25,Number(player.playbackRate)||1);
-    master.gain.value=.14*Math.max(0,Math.min(1,Number(player.volume)||0));
+    master.gain.value=.55*(player.muted?0:Math.max(0,Math.min(1,Number(player.volume)||0)));
     const horizon=now+rate*.42;
     for(;cursor<notes.length&&notes[cursor].start<horizon;cursor++){
       const n=notes[cursor];
@@ -660,7 +660,9 @@ function playRealtime(player,source,{signal,onStatus}={}){
       voices.push(osc);
     }
   };
-  const play=()=>{if(disposed)return;ctx.resume().catch(()=>{});
+  const play=()=>{if(disposed)return;ctx.resume().catch(()=>{
+    onStatus?.('เบราว์เซอร์ยังไม่อนุญาตให้เปิดเสียง MIDI · กดปุ่มเล่นอีกครั้ง');
+  });
     reset();schedule();if(timer===null)timer=setInterval(schedule,90);};
   const pause=()=>{if(timer!==null){clearInterval(timer);timer=null;}reset();};
   const ended=()=>pause();
