@@ -11,7 +11,8 @@ internal static class Program
         // The installed app must exit so Inno Setup can replace its binary safely.
         if (args.Length > 0 && args[0] == "--apply-verified-update")
         {
-            Environment.ExitCode = SelfUpdater.ApplyUpdateInHelper(args);
+            ApplicationConfiguration.Initialize();
+            Application.Run(new UpdateTransitionForm(args));
             return;
         }
 
