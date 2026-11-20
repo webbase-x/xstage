@@ -371,3 +371,11 @@ Menu 01 chooses folders using a queued Qt `QFileDialog` on the main GUI thread r
 - Verification prefers the GitHub Releases API's actual uploaded EXE asset and its server-reported `sha256:` digest, falling back to the two official manifests only if the API fails. It does not advertise an unpublished preview from a stale manifest.
 - Failed downloads/installer attempts restore all update and banner buttons, show the real cause, and offer an official direct-EXE download. A 0-byte job displays 0%, not an invented progress percentage.
 - Safe resumed partial downloads, full SHA-256 checks, unchanged SQLite library, and direct update from any previous version are retained. The Windows Preview EXE remains unsigned.
+
+## v0.1.29 — Settings updates and clearer lyric search
+
+- **ตั้งค่า → อัปเดตโปรแกรม** now exposes the existing verified GitHub Release version check, latest-version install and direct EXE link. It mirrors update state and download progress. The old entry in Import remains available.
+- **แก้ไขเนื้อร้อง → ค้นหา** searches editable CURRENT timed lyric lines as before, but now also displays separate informational results for song titles, artists, original song codes and untimed LYR drafts. Metadata/drafts are NEVER selectable as bulk replacement targets.
+- To reduce large-database I/O, lyric-group queries scan the already-existing covering `xstage_lyric_search` index and only load display text for returned groups. No new FTS/trigram tables or expensive mass reindex migration.
+- The search view explicitly indicates pending work, no-match cases, and timeouts instead of claiming a failed query means there are no lyrics. Requests have a bounded 90-second timeout for large local SQLite libraries, and prior responses cannot overwrite a newer query.
+- Search still requires the exact phrase to be present in current lyric text for bulk editing. A title-only match (e.g. "karaoke" in a song name) can be viewed but cannot change lyric lines. All original song media and SQLite history are preserved.
