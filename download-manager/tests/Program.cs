@@ -611,6 +611,17 @@ try
         DownloadEngine.TryParseUrl("https://user:pass@example.com/file", out _))
         throw new Exception("Non-HTTP or credential URLs must be rejected.");
 
+    var queueJob = manager.Add(server.Url + "range/queue-test.bin", folder, 1);
+    manager.Pause(queueJob);
+    manager.SetJobQueue(queueJob, "ไฟล์เร่งด่วน");
+    if (!manager.GetQueueNames().Contains("ไฟล์เร่งด่วน") ||
+        new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == queueJob.Id).QueueName != "ไฟล์เร่งด่วน")
+        throw new Exception("Named queues must persist across SQLite reopen.");
+    var rejectedBlankQueue = false;
+    try { manager.SetJobQueue(queueJob, "  "); }
+    catch (ArgumentException) { rejectedBlankQueue = true; }
+    if (!rejectedBlankQueue) throw new Exception("Blank queue name must be rejected.");
+
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
     var job = manager.Add(server.Url + "range/test%20file.bin", folder);
