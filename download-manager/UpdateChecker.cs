@@ -9,8 +9,8 @@ public sealed record DownloadManagerRelease(string Version, int Build, string Fi
 
 public static class UpdateChecker
 {
-    public const string CurrentVersion = "0.2.8";
-    public const int CurrentBuild = 11;
+    public const string CurrentVersion = "0.2.9";
+    public const int CurrentBuild = 12;
     public const string FeedUrl = "https://webbase-x.github.io/xstage/downloads/download-manager-preview-latest.json";
 
     private static readonly HttpClient Client = new(new HttpClientHandler
@@ -57,7 +57,7 @@ public static class UpdateChecker
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, FeedUrl);
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
-        request.Headers.UserAgent.ParseAdd("XStageDownloadManager/0.2.8");
+        request.Headers.UserAgent.ParseAdd("XStageDownloadManager/0.2.9");
         using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellation);
