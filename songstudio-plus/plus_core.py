@@ -952,6 +952,8 @@ def import_folder(workspace,source,progress=None,cancel=None):
             try:
                 db.execute("DELETE FROM xstage_import_file_checkpoints WHERE batch_id=?",
                            (batch,))
+                db.execute("""DELETE FROM xstage_import_resume_state
+                    WHERE batch_id=? AND status='completed'""",(batch,))
                 db.execute("""DELETE FROM xstage_import_items WHERE batch_id=?
                     AND outcome NOT IN ('error','lyrics-error','timing-incomplete',
                     'partial-lyrics','untimed-lyrics','missing-lyr',
