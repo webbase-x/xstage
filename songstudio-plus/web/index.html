@@ -32,7 +32,7 @@
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
-      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.23 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
+      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.24 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
     </div>
   </aside>
   <main class="main">
@@ -103,7 +103,7 @@
           </article>
         </div>
         <section class="panel pro-update-panel" aria-labelledby="pro-update-title">
-          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.23</span></div>
+          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.24</span></div>
           <p class="field-hint" id="pro-update-status" aria-live="polite">ตรวจรุ่นใหม่จากหน้า X-Stage Apps และ SHA-256 ก่อนติดตั้ง · คลังเพลงและประวัติเนื้อร้องไม่ถูกลบ</p>
           <div class="toolbar">
             <button id="pro-update-check" class="quiet-btn" type="button">↻ ตรวจสอบอัปเดต</button>
@@ -116,10 +116,12 @@
           <p class="field-hint" id="db-health-summary" aria-live="polite">ตรวจพื้นที่ SQLite, ประวัติการนำเข้า และ Checkpoint โดยไม่แก้ไขไฟล์เพลงต้นฉบับ</p>
           <div class="toolbar">
             <button class="quiet-btn" id="db-health-check" type="button">ตรวจสอบ SQLite</button>
+            <button class="quiet-btn" id="db-detail-audit" type="button" disabled>วิเคราะห์ทุกตารางและดัชนี</button>
             <button class="quiet-btn" id="db-history-clean" type="button" disabled>ล้างประวัติงานเสร็จแล้ว</button>
             <button class="quiet-btn" id="db-compact" type="button" disabled>คืนพื้นที่ไฟล์ SQLite</button>
           </div>
-          <p class="field-hint">ล้างประวัติจะเก็บรายการผิดพลาดของ 4 งานล่าสุด และไม่แตะเพลง เนื้อร้อง หรือ Checkpoint ของงานค้าง ส่วนการคืนพื้นที่ใช้ VACUUM แยกต่างหาก ต้องมีพื้นที่ว่างอย่างน้อย 2 เท่าของฐาน และไม่ดำเนินการอัตโนมัติ</p>
+          <p class="field-hint">ล้างเฉพาะข้อมูลชั่วคราวของงานเสร็จแล้ว รายงานรายละเอียดการตรวจความเสี่ยงรอบเก่า (เหลือ 2 รอบล่าสุด) แคชไร้เจ้าของ และดัชนีที่ไม่มีการใช้งาน โดยไม่ลบเพลง เนื้อร้อง ประวัติแก้ไข ผลยืนยันของผู้ใช้ หรือ Checkpoint ของงานค้าง ส่วนการคืนพื้นที่ใช้ VACUUM แยกต่างหาก</p>
+          <pre class="field-hint" id="db-audit-detail" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:330px;overflow:auto">ยังไม่ได้วิเคราะห์ขนาดแต่ละตาราง</pre>
         </section>
         <section class="panel issues-panel" aria-labelledby="issues-title">
           <div class="panel-head">
