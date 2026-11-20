@@ -44,7 +44,7 @@ try
     // second startup must never re-import deleted history.
     var stateDir = Path.Combine(folder, "sqlite-state");
     Directory.CreateDirectory(stateDir);
-    var legacyPath = Path.Combine(stateDir, "downloads.json");
+    var legacyHistoryPath = Path.Combine(stateDir, "downloads.json");
     var legacyJob = new DownloadJob
     {
         Id = "legacy123", Url = server.Url + "range/legacy.bin",
@@ -55,13 +55,13 @@ try
     };
     var legacyData = System.Text.Json.JsonSerializer.Serialize(
         new[] { legacyJob }, new System.Text.Json.JsonSerializerOptions { IncludeFields = true });
-    File.WriteAllText(legacyPath, legacyData);
+    File.WriteAllText(legacyHistoryPath, legacyData);
     var store = new DownloadStateStore(stateDir);
-    var restored = store.LoadOrMigrate(legacyPath);
+    var restored = store.LoadOrMigrate(legacyHistoryPath);
     if (restored.Count != 1 || restored[0].Id != legacyJob.Id ||
         restored[0].Name != legacyJob.Name ||
         restored[0].DownloadedBytes != legacyJob.DownloadedBytes ||
-        !File.Exists(legacyPath) || File.ReadAllText(legacyPath) != legacyData)
+        !File.Exists(legacyHistoryPath) || File.ReadAllText(legacyHistoryPath) != legacyData)
         throw new Exception("Legacy JSON migration lost Thai filenames, offsets or original backup.");
     var segmentDir = Path.Combine(folder, ".xstage-downloads", legacyJob.Id);
     Directory.CreateDirectory(segmentDir);
@@ -85,7 +85,7 @@ try
     store.SaveDefaultParts(16);
     var anotherStore = new DownloadStateStore(stateDir);
     if (anotherStore.ReadDefaultParts(4) != 16 ||
-        anotherStore.LoadOrMigrate(legacyPath).Single().Id != legacyJob.Id)
+        anotherStore.LoadOrMigrate(legacyHistoryPath).Single().Id != legacyJob.Id)
         throw new Exception("SQLite reopening lost job state, settings or checkpoint data.");
 
     var failedTxn = false;
@@ -97,10 +97,10 @@ try
     {
         failedTxn = true;
     }
-    if (!failedTxn || anotherStore.LoadOrMigrate(legacyPath).Count != 1)
+    if (!failedTxn || anotherStore.LoadOrMigrate(legacyHistoryPath).Count != 1)
         throw new Exception("A failed SQLite transaction must preserve the prior committed job list.");
     anotherStore.SaveSnapshot(Array.Empty<DownloadJob>());
-    if (new DownloadStateStore(stateDir).LoadOrMigrate(legacyPath).Count != 0)
+    if (new DownloadStateStore(stateDir).LoadOrMigrate(legacyHistoryPath).Count != 0)
         throw new Exception("Migrated JSON must not resurrect a removed history item.");
 
     // Regression: a verified completed download must fill every pixel of its
