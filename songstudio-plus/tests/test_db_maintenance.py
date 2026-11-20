@@ -103,6 +103,14 @@ class MaintenanceTests(unittest.TestCase):
     def test_cleanup_completed_resume_cache_and_unused_index(self):
         core.import_folder(self.workspace,self.root)
         with core.connect(self.workspace) as db:
+            # Simulate a legacy DB whose finished import still has a resume
+            # state row; new imports remove completed state automatically.
+            batch=db.execute("""SELECT id,source_root FROM xstage_import_batches
+                WHERE status='completed' ORDER BY created_at DESC LIMIT 1""").fetchone()
+            db.execute("""INSERT INTO xstage_import_resume_state
+                (batch_id,source_root,counters_json,status,updated_at)
+                VALUES (?,?,?,'completed',?)""",
+                (batch["id"],batch["source_root"],"{}",core.now()))
             db.execute("""INSERT INTO xstage_lyric_scan_cache
                 (source_path,media_sha256,companion_stamp,outcome,last_scanned)
                 VALUES ('orphan://removed','sha','','no-lyrics',?)""",
