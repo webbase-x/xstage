@@ -469,7 +469,7 @@ const BUILTIN_GM_ID='builtin:TimGM6mb';
 const BUILTIN_GM_URL='https://raw.githubusercontent.com/craffel/pretty-midi/main/pretty_midi/TimGM6mb.sf2';
 const BUILTIN_GM_MAX_BYTES=8*1048576;
 let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
-let fontLoadPromise=null, fontWarning='';
+let fontLoadPromise=null, fontWarning='',builtinRetryAfter=0;
 function fontStatus(){
   return {loaded:!!fontCache,selectedId:selected,
     fileBytes:fontCache?.bytes.byteLength||0,
@@ -542,7 +542,7 @@ async function refreshFonts(auth){
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
       // Prefer the user's saved bank, then a complete-looking GM/GS bank.
       const savedChoice=eligible.find(option=>option.value===saved);
-      const gmCandidates=eligible.filter(option=>
+      const gmCandidates=eligible.filter(option=>Number(option.dataset.size)<=48*1048576&&
         /general.?midi|generaluser|fluidr3|timgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text));
       const autoChoice=savedChoice||gmCandidates.slice().sort((a,b)=>
         Number(a.dataset.size)-Number(b.dataset.size))[0];
@@ -596,6 +596,7 @@ async function selectedFont(token,signal){
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
   if(selected===BUILTIN_GM_ID){
     const id=BUILTIN_GM_ID,sub=context.sub;
+    if(Date.now()<builtinRetryAfter)return null;
     if(fontCache?.id===id&&fontCache.sub===sub)return fontCache.bytes;
     if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
       return fontLoadPromise.promise;
@@ -612,10 +613,12 @@ async function selectedFont(token,signal){
         if(selected!==id||context?.token!==token||context?.sub!==sub)
           throw new DOMException('เปลี่ยนบัญชีหรือชุดเสียง','AbortError');
         fontCache={id,sub,bytes,parsed,label:'TimGM6mb · General MIDI'};
+        builtinRetryAfter=0;
         fontWarning='';fontStatusChanged();
         return bytes;
       }catch(error){
         if(error?.name==='AbortError')throw error;
+        builtinRetryAfter=Date.now()+60000;
         fontWarning='โหลด GM SoundFont เริ่มต้นไม่สำเร็จ · เสียงอาจคล้ายเกม โปรดเลือก SoundFont จาก Google Drive: '+error.message;
         fontStatusChanged();
         return null;
