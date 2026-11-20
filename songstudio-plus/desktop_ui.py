@@ -80,6 +80,24 @@ def _destroy_taskbar_icons(handles):
     for handle in handles:
         user32.DestroyIcon(handle)
 
+def fit_zoom(view_width,view_height,max_zoom=1.20):
+    """Automatic Windows UI fit in Qt logical pixels (independent of DPI).
+
+    The former unconditional 120% Qt zoom made a maximized 1366x768 window
+    behave like an ~1138x640 CSS viewport. Tall editing tools then had their
+    bottom controls clipped by fixed-height panels. Fit the available
+    *client area* instead of assuming a 2K/4K monitor, and keep all page
+    chrome within the desktop window. Nested views may scroll when needed.
+    """
+    width=max(1,int(view_width))
+    height=max(1,int(view_height))
+    # Target enough logical CSS room for left navigation, two work panels,
+    # activity status and controls. Native Qt layout values are DIP, not
+    # physical pixels, so this also behaves on Windows HiDPI screens.
+    scale=min(float(max_zoom),width/1360.0,height/960.0)
+    return max(0.70,round(scale,2))
+
+
 def run_desktop(server,url,workspace,icon_path,state=None):
     port=validate_local(url)
     set_windows_identity()
@@ -132,30 +150,58 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             self.setWindowTitle("X-Stage Song Studio Pro · Windows")
             self.setWindowIcon(icon)
             self.resize(1360,850)
-            self.setMinimumSize(930,620)
+            # Respect Windows' available desktop work area (taskbar included).
+            # A fixed 930x620 minimum can itself exceed a small laptop screen.
+            geometry=app.primaryScreen().availableGeometry() if app.primaryScreen() else None
+            minimum_width=min(930,max(600,geometry.width()-40)) if geometry else 800
+            minimum_height=min(620,max(440,geometry.height()-40)) if geometry else 540
+            self.setMinimumSize(minimum_width,minimum_height)
             self.web=QWebEngineView(self)
             self.page=RestrictedPage(profile,self.web)
             self.web.setPage(self.page)
             self.setCentralWidget(self.web)
-            # Large Windows desktops (including 2K/4K monitors) otherwise
-            # render the original 14px web UI too small. Users can override
-            # the default with familiar Ctrl+Plus / Ctrl+Minus / Ctrl+0.
-            self.default_zoom=1.20
+            # Never force a 120% zoom on a 1366x768 laptop. Qt window size
+            # is measured in logical pixels, so this is safe with Windows DPI.
+            self.base_zoom=1.20
+            self._manual_zoom=False
+            self.default_zoom=fit_zoom(self.width(),self.height(),self.base_zoom)
             self.web.setZoomFactor(self.default_zoom)
             self.shortcuts=[]
             for key,callback in (
                 ("Ctrl++",lambda:self.change_zoom(+0.10)),
                 ("Ctrl+=",lambda:self.change_zoom(+0.10)),
                 ("Ctrl+-",lambda:self.change_zoom(-0.10)),
-                ("Ctrl+0",lambda:self.web.setZoomFactor(self.default_zoom)),
+                ("Ctrl+0",self.reset_zoom),
                 ("Ctrl+Shift+L",self.open_log),
             ):
                 shortcut=QShortcut(QKeySequence(key),self)
                 shortcut.activated.connect(callback)
                 self.shortcuts.append(shortcut)
+        def _fit_screen(self):
+            if self._manual_zoom:
+                return
+            width=self.web.width() or self.width()
+            height=self.web.height() or self.height()
+            desired=fit_zoom(width,height,self.base_zoom)
+            self.default_zoom=desired
+            if abs(self.web.zoomFactor()-desired)>=0.015:
+                self.web.setZoomFactor(desired)
+
+        def resizeEvent(self,event):
+            super().resizeEvent(event)
+            # Event may fire during QMainWindow construction before the view
+            # exists; never trigger a reload or rebuild the web contents.
+            if hasattr(self,"web"):
+                QTimer.singleShot(0,self._fit_screen)
+
+        def reset_zoom(self):
+            self._manual_zoom=False
+            self._fit_screen()
+
         def change_zoom(self,step):
+            self._manual_zoom=True
             self.web.setZoomFactor(
-                max(0.90,min(1.80,round(self.web.zoomFactor()+step,2))))
+                max(0.70,min(1.60,round(self.web.zoomFactor()+step,2))))
 
         def open_log(self):
             if state is None:return
@@ -249,6 +295,7 @@ def run_desktop(server,url,workspace,icon_path,state=None):
             exit_timer.start(250)
 
         window.showMaximized()
+        window._fit_screen()
         # Handle becomes available only after the native top-level HWND
         # exists; explicitly assign its taskbar and Alt-Tab images.
         native_icons=_apply_taskbar_icon(window,icon_file)
