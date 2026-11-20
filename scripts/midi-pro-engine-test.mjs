@@ -6,7 +6,7 @@ const source=fs.readFileSync(new URL('../midi-pro-engine.js',import.meta.url),'u
   .replace("import('./'+MODULE)","Promise.resolve(contextModule)");
 assert.ok(source.includes('spessasynth_processor.min.js'),'Professional synth must load locally');
 assert.ok(!source.includes('https://'),'Private MIDI playback must not fetch remote scripts');
-let received=[],stops=0,destroyed=0,modules=[];
+let received=[],stops=0,destroyed=0,modules=[],outputs=[],compressors=[];
 class Param{constructor(){this.value=0;}}
 class FakeNode{constructor(){this.gain=new Param();this.threshold=new Param();
   this.knee=new Param();this.ratio=new Param();this.attack=new Param();this.release=new Param();}
@@ -15,8 +15,8 @@ class FakeNode{constructor(){this.gain=new Param();this.threshold=new Param();
 class FakeAudioContext{
   constructor(){this.destination=new FakeNode();this.state='running';
     this.audioWorklet={addModule:async path=>{modules.push(path);}};}
-  createGain(){return new FakeNode();}
-  createDynamicsCompressor(){return new FakeNode();}
+  createGain(){const node=new FakeNode();outputs.push(node);return node;}
+  createDynamicsCompressor(){const node=new FakeNode();compressors.push(node);return node;}
   resume(){return Promise.resolve();}
   close(){return Promise.resolve();}
 }
@@ -36,7 +36,8 @@ class FakeSynth{
 let interval=null,disposed=false;
 const scope={AudioContext:FakeAudioContext,AudioWorkletNode:class {},
   XStageBrowserMidi:{parseMidi:()=>({duration:1.5,notes:[{
-    start:0,end:.5,key:60,channel:0,bank:0,program:0,velocity:100,level:1
+    start:0,end:.5,key:60,channel:0,bank:0,program:0,velocity:100,level:.31,
+    channelVolume:100,channelExpression:80,pan:48
   }]})}};
 const sandbox={window:scope,contextModule:{WorkletSynthesizer:FakeSynth},Uint8Array,
   ArrayBuffer,DOMException,Number,Math,Promise,console,setInterval:fn=>(interval=fn,1),
@@ -46,6 +47,10 @@ assert.equal(scope.XStageProMidi.available(),true);
 const ready=await scope.XStageProMidi.prepare(new Uint8Array([0]),
   new Uint8Array([1,2,3]));
 assert.ok(modules[0].includes('spessasynth_processor.min.js'));
+assert.ok(outputs.some(node=>node.gain.value>=.85),
+  'Professional MIDI master gain must not be attenuated to .52');
+assert.ok(compressors.some(node=>node.threshold.value>=-8&&node.ratio.value<=6),
+  'Professional MIDI compressor must retain dynamic impact');
 const listeners=new Map(),player={currentTime:0,paused:false,ended:false,muted:false,
   volume:1,playbackRate:1,addEventListener(k,fn){listeners.set(k,fn);},
   removeEventListener(k){listeners.delete(k);}};
@@ -53,6 +58,14 @@ const active=ready.attach(player,{getTranspose:()=>12,getProgram:()=>24});
 assert.equal(active.engine,'SpessaSynth');
 assert.ok(received.some(x=>x[0]==='on'&&x[2]===72));
 assert.ok(received.some(x=>x[0]==='program'&&x[2]===24));
+assert.ok(received.some(x=>x[0]==='on'&&x[3]===100),
+  'Velocity must remain unchanged, not multiplied by MIDI CC7/11');
+assert.ok(received.some(x=>x[0]==='cc'&&x[2]===7&&x[3]===100),
+  'MIDI channel volume must be applied as CC7');
+assert.ok(received.some(x=>x[0]==='cc'&&x[2]===11&&x[3]===80),
+  'MIDI expression must be applied as CC11');
+assert.ok(received.some(x=>x[0]==='cc'&&x[2]===10&&x[3]===48),
+  'MIDI pan must be preserved in stereo');
 player.currentTime=.5;interval();
 assert.ok(received.some(x=>x[0]==='off'));
 active.dispose();
