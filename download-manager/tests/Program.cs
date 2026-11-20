@@ -58,6 +58,16 @@ try
     foreach (var uri in videoHosts)
         if (!SocialVideoDownloader.IsVideoUrl(uri))
             throw new Exception("Social video domain not recognized: " + uri);
+    // Ordinary download links must NOT expose video-quality/container options.
+    if (SocialVideoDownloader.InputContainsVideo("") ||
+        SocialVideoDownloader.InputContainsVideo("https://example.com/file.zip") ||
+        SocialVideoDownloader.InputContainsVideo("https://example.com/manual.pdf") ||
+        SocialVideoDownloader.InputContainsVideo("https://cdn.example.org/video.mp4") ||
+        SocialVideoDownloader.InputContainsVideo("https://youtube.com.evil.example/watch?v=123") ||
+        !SocialVideoDownloader.InputContainsVideo("https://youtu.be/tF-PEdvMJ_o") ||
+        !SocialVideoDownloader.InputContainsVideo("https://example.com/file.zip\nhttps://www.youtube.com/watch?v=tF-PEdvMJ_o"))
+        throw new Exception("Video-only controls must follow the input URL category.");
+
     foreach (var uri in new[] {
         "https://youtube.com.attacker.invalid/video", "https://evil-tiktok.com/video",
         "https://facebook.com.evil.example/reel/1", "https://user:pass@youtube.com/watch?v=1",
