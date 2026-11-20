@@ -377,9 +377,13 @@ class Importer {
     $('cloud-import-select-none')?.addEventListener('click',()=>this.selectEveryItem(false));
     this.dom.selectionList?.addEventListener('change',event=>{
       const input=event.target;
-      if(!input?.matches?.('input[data-import-key]'))return;
-      if(input.checked)this.chosenItems.add(input.dataset.importKey);
-      else this.chosenItems.delete(input.dataset.importKey);
+      if(!input?.matches?.('input[data-import-group]'))return;
+      const group=this.importGroups().find(group=>group.key===input.dataset.importGroup);
+      if(!group)return;
+      for(const entry of group.entries){
+        if(input.checked)this.chosenItems.add(entry.key);
+        else this.chosenItems.delete(entry.key);
+      }
       this.renderSelectionCount();this.refreshButtons();
     });
     this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
@@ -458,6 +462,53 @@ class Importer {
       ...this.plan.fonts.map(item=>({item,label:item.file?.name||item.relative,type:'SoundFont'}))]
       .map((entry,index)=>({...entry,key:index+':'+this.itemKey(entry.item)}));
   }
+  importFileList(item){
+    const found=[];
+    const seen=new Set();
+    for(const value of [item.file,item.audio,item.video,item.midi,item.lyr,
+                        item.cur,item.lrc,item.json]){
+      const file=value?.file||value;
+      if(!file||typeof file.size!=='number'||!file.name)continue;
+      const key=String(value?.relative||file.webkitRelativePath||file.name)+'|'+file.size;
+      if(seen.has(key))continue;
+      seen.add(key);found.push({file,relative:String(value?.relative||file.webkitRelativePath||file.name)});
+    }
+    return found;
+  }
+  importGroups(){
+    const groups=new Map();
+    for(const entry of this.selectableItems()){
+      const files=this.importFileList(entry.item);
+      const relative=String(entry.item.relative||entry.item.midi?.relative||
+        entry.item.audio?.relative||files[0]?.relative||'').replace(/\\/g,'/');
+      // Only display a 0–9/A–Z directory when it really exists in the
+      // selected folder. Never invent empty alphabet buckets.
+      const folders=relative.split('/').slice(0,-1);
+      const actual=folders.find(folder=>/^[0-9A-Za-z]$/.test(folder));
+      const groupKey=entry.type==='SoundFont'?'soundfont':actual?'folder:'+actual.toUpperCase():'root';
+      if(!groups.has(groupKey))groups.set(groupKey,{
+        key:groupKey,label:groupKey==='soundfont'?'SoundFont':
+          actual?'โฟลเดอร์ '+actual.toUpperCase():'ไฟล์นอกโฟลเดอร์ 0–9 / A–Z',
+        entries:[],bytes:0,fileCount:0
+      });
+      const group=groups.get(groupKey);
+      group.entries.push(entry);
+      group.bytes+=files.reduce((sum,file)=>sum+file.file.size,0);
+      group.fileCount+=files.length;
+    }
+    return [...groups.values()].sort((a,b)=>{
+      const score=g=>g.key.startsWith('folder:')?0:g.key==='root'?1:2;
+      return score(a)-score(b)||a.label.localeCompare(b.label,'en',{numeric:true});
+    });
+  }
+  importSize(bytes){
+    if(!Number.isFinite(bytes)||bytes<0)return '0 B';
+    if(bytes<1024)return bytes+' B';
+    const units=['KB','MB','GB','TB'];
+    let n=bytes/1024,index=0;
+    while(n>=1024&&index<units.length-1){n/=1024;index++;}
+    return n.toLocaleString('th-TH',{maximumFractionDigits:1})+' '+units[index];
+  }
   selectEveryItem(checked){
     if(this.running)return;
     for(const entry of this.selectableItems()){
@@ -467,23 +518,35 @@ class Importer {
     this.renderSelection();this.refreshButtons();
   }
   renderSelectionCount(){
-    const items=this.selectableItems();
-    const count=items.filter(entry=>this.chosenItems.has(entry.key)).length;
-    if(this.dom.selectionCount)this.dom.selectionCount.textContent=count+' / '+items.length;
+    const groups=this.importGroups();
+    const selected=groups.filter(group=>
+      group.entries.every(entry=>this.chosenItems.has(entry.key)));
+    const songs=groups.reduce((n,group)=>n+group.entries.filter(entry=>this.chosenItems.has(entry.key)).length,0);
+    const size=groups.reduce((n,group)=>n+group.entries.reduce((sum,entry)=>
+      sum+(this.chosenItems.has(entry.key)?
+        this.importFileList(entry.item).reduce((x,f)=>x+f.file.size,0):0),0),0);
+    if(this.dom.selectionCount)this.dom.selectionCount.textContent=
+      selected.length+' / '+groups.length+' กลุ่ม · '+songs+' รายการ · '+this.importSize(size);
   }
   renderSelection(){
     if(!this.dom.selectionList)return;
-    const items=this.selectableItems();
-    this.dom.selection.hidden=!items.length;
+    const groups=this.importGroups();
+    this.dom.selection.hidden=!groups.length;
     const fragment=document.createDocumentFragment();
-    for(const entry of items){
+    for(const group of groups){
       const label=document.createElement('label');
       label.className='cloud-import-selection-item';
       const check=document.createElement('input');
-      check.type='checkbox';check.dataset.importKey=entry.key;
-      check.checked=this.chosenItems.has(entry.key);check.disabled=this.running;
-      const name=document.createElement('span');name.textContent=entry.label||'ไม่ระบุชื่อ';
-      const type=document.createElement('small');type.textContent=entry.type;
+      check.type='checkbox';check.dataset.importGroup=group.key;
+      const count=group.entries.filter(entry=>this.chosenItems.has(entry.key)).length;
+      check.checked=count===group.entries.length;
+      check.indeterminate=count>0&&count<group.entries.length;
+      check.disabled=this.running;
+      const name=document.createElement('span');
+      name.textContent=group.label;
+      const type=document.createElement('small');
+      type.textContent=group.entries.length.toLocaleString('th-TH')+' รายการ · '+
+        group.fileCount.toLocaleString('th-TH')+' ไฟล์ · '+this.importSize(group.bytes);
       label.append(check,name,type);fragment.append(label);
     }
     this.dom.selectionList.replaceChildren(fragment);
@@ -570,11 +633,12 @@ class Importer {
     this.selected=files;this.folderHandle=handle;
     this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
-    this.chosenItems=new Set(this.selectableItems().map(entry=>entry.key));
+    this.chosenItems=new Set();
     this.renderSelection();
     this.videoEditor?.setPlan(this.plan,this.saved?.videoEdits);
     const hasRelativePaths=files.some(entry=>String(entry.relative||'').includes('/'));
-    this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+
+    const totalBytes=files.reduce((sum,entry)=>sum+(entry.file||entry).size,0);
+    this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์ · '+this.importSize(totalBytes)+
       (handle?' (จำสิทธิ์โฟลเดอร์สำหรับทำต่อได้ถ้าเบราว์เซอร์อนุญาต)'
         :hasRelativePaths?' (เปิดใหม่ต้องเลือกโฟลเดอร์เดิมอีกครั้ง)'
         :' (เบราว์เซอร์ไม่ได้ส่งโครงสร้างโฟลเดอร์ · ตรวจสอบชุดเพลงให้ครบก่อนนำเข้า)');
