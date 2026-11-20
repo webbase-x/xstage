@@ -57,7 +57,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     onStatus('SpessaSynth + SoundFont พร้อมเล่น');
   }catch(error){dispose();throw error;}
   return {
-    attach(player,{getTranspose=()=>0,getProgram=()=>null,onStatus:notice=>(onStatus(notice))}={}){
+    attach(player,{getTranspose=()=>0,getProgram=()=>null}={}){
       const events=parsed.notes.flatMap(note=>[
         {time:note.start,on:true,note},{time:note.end,on:false,note}
       ]).sort((a,b)=>a.time-b.time||Number(a.on)-Number(b.on));
