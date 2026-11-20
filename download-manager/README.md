@@ -2,12 +2,12 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.3 · Build 6** (Windows 10/11 x64).
+**Preview v0.2.4 · Build 7** (Windows 10/11 x64).
 
 ## Features
 - Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker.
 - **Social video links:** YouTube, YouTube Shorts, TikTok, Facebook Reels/videos, Instagram Reels (publicly accessible posts only).
-- Choose the best available video+audio, 1080p, 720p or 480p, or extract MP3 audio. Available formats depend on the source.
+- Choose best video quality or 1080p/720p/480p separately from the output container: **MP4 (default)**, MKV, WEBM or MP3 (audio only). FFmpeg converts the actual media; renaming the extension is never used. Conversion may take longer and can fail for unsupported source codecs.
 - The installer bundles pinned official yt-dlp, FFmpeg/ffprobe and Deno executables, each checked against a release SHA-256 during Windows CI. No downloads or extra installation of tools are required after installing the one Setup EXE.
 - yt-dlp handles platform manifests, muxing separate video/audio with FFmpeg, and resumable fragments; the original HTTP Range engine handles ordinary file links as before.
 - For social streams, the 1–32 setting controls the maximum number of concurrent downloadable media fragments. It is **not** a guarantee of that many HTTP byte-range connections.
@@ -24,7 +24,7 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - The toolbar opens an explicit Open file / Open folder choice; incomplete/failed entries can still open their destination folder.
 - Per-segment progress bar shows actual bytes received in each HTTP range, not cosmetic stripes; social video downloads use unified progress.
 - Completed entries turn green. Click a finished filename to open its file or containing folder.
-- Startup checks and a **ตรวจสอบอัปเดต** button query the verified X-Stage release manifest. A newer version prompts before opening the canonical Setup EXE link; no silent installation.
+- Startup and manual update checks use the verified X-Stage Release manifest. After user approval, the app downloads the EXE itself, checks exact size and SHA-256, closes and installs in silent mode using a detached helper, then relaunches only after successful installation. Failed verification never runs the installer. Active transfers are paused and their resumable state is saved.
 - Optional Chrome/Edge connector is bundled in the installer, loaded and paired by the user; auto-capture is OFF by default. Context-menu handoff is available.
 - Self-contained Windows runtime packaged into **one Setup EXE** published through GitHub Releases; no Portable ZIP is offered.
 
@@ -33,7 +33,7 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - DRM/protected streams, login-only or private posts, age-gated/subscriber-only content, paywall bypass, or torrent protocol.
 - Live streaming capture and authenticated browser sessions.
 - Scheduled downloads and speed limits.
-- Browser cookies, login handling or application auto-update.
+- Browser cookies and login handling. Auto-install is user-approved rather than unattended.
 
 ## Build
 1. Install .NET 8 SDK and Python Pillow on Windows.
@@ -49,7 +49,7 @@ Select **จำนวนส่วน** in the third row (1, 2, 4, 8, 16 or 32). 
 
 ## Supported video use and limitations
 
-Paste a link to a video you own or are authorized to download. Select **วิดีโอ** quality; the app detects YouTube, TikTok, Facebook/Instagram Reels, while ordinary files still use the original segmented downloader. The app downloads one post at a time (no playlist or channel extraction) and writes the final video or MP3 into the chosen folder. The extractor output name uses the actual title and platform video ID. Pausing terminates yt-dlp and restarting continues saved fragments where the site supports it. Failed extraction may mean the content is private, requires sign-in, is DRM-protected, unavailable in the region, or the site's extractors have changed; no workaround for restricted media is provided.
+Paste a link to a video you own or are authorized to download. Select **วิดีโอ** quality and **รูปแบบไฟล์** independently (MP4 is initially selected); the app detects YouTube, TikTok, Facebook/Instagram Reels, while ordinary files still use the original segmented downloader. The app downloads one post at a time (no playlist or channel extraction) and writes the final video or MP3 into the chosen folder. The extractor output name uses the actual title and platform video ID. Pausing terminates yt-dlp and restarting continues saved fragments where the site supports it. Failed extraction may mean the content is private, requires sign-in, is DRM-protected, unavailable in the region, or the site's extractors have changed; no workaround for restricted media is provided.
 
 Platform layouts and extractors change, so the app cannot guarantee access to every public video. The offline CI tests cover URL classification, command security and original file downloads. A separate smoke test checks all bundled tools; end-to-end downloads from live platforms require follow-up testing on the user's PC.
 
@@ -69,6 +69,6 @@ For automatic handoff, the app probes anonymous direct-file access before acknow
 
 ## Update notifications
 
-On startup, X-Stage checks release metadata over HTTPS with a short timeout. **ตรวจสอบอัปเดต** repeats the check. A valid update must have a matching version/build, SHA-256, size and canonical GitHub Releases .exe URL. Builds alone do not count as published updates. An unavailable or outdated release feed does not interrupt downloads; installation is always user-confirmed.
+On startup, X-Stage checks release metadata over HTTPS with a short timeout. **ตรวจสอบอัปเดต** repeats the check. A valid update must have a matching version/build, SHA-256, size and canonical GitHub Releases .exe URL. After confirmation the app downloads the Setup EXE directly with progress, verifies SHA-256 and byte size, and starts a detached copy of the app to wait for shutdown. That helper installs silently and restarts the installed app only after successful installation and file-version validation. Failed checks leave the existing app running. No installer is launched from an unverified download. Existing download jobs are paused and saved before exit.
 
 **Publication note:** The Windows build publishes an Actions artifact containing only a Setup EXE. Publishing a direct .exe through GitHub Releases depends on repository token write permissions; the portal points only to an already verified release until a newer EXE has actually been published.
