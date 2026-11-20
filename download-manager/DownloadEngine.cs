@@ -168,6 +168,24 @@ public sealed class DownloadEngine
         _globalSpeed.Configure(globalLimitKib);
     }
 
+    public void SetJobQueue(DownloadJob job, string queueName)
+    {
+        if (!Jobs.Contains(job))
+            throw new ArgumentException("Unknown job.", nameof(job));
+        if (string.IsNullOrWhiteSpace(queueName) || queueName.Length > 64 ||
+            queueName.Any(char.IsControl))
+            throw new ArgumentException("Queue name must be 1–64 printable characters.", nameof(queueName));
+        job.QueueName = queueName.Trim();
+        Save();
+        if (LastStorageError.Length > 0) throw new IOException(LastStorageError);
+    }
+
+    public IReadOnlyList<string> GetQueueNames() => Jobs
+        .Select(j => string.IsNullOrWhiteSpace(j.QueueName) ? "ทั่วไป" : j.QueueName)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
+        .ToArray();
+
     public void SetJobPriority(DownloadJob job, int priority)
     {
         if (!Jobs.Contains(job) || priority is < 0 or > 2)
