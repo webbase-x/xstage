@@ -92,12 +92,14 @@ public static class DownloadTableSort
         List<DownloadJob> jobs, Func<DownloadJob, string> key,
         bool descending, string? unknown = null)
     {
-        var known = unknown is null ? jobs.AsEnumerable() :
-            jobs.OrderBy(j => string.Equals(key(j), unknown,
-                StringComparison.OrdinalIgnoreCase) ? 1 : 0);
+        // Missing types are last in both directions, even with descending sort.
         return (descending
-            ? known.OrderByDescending(key, StringComparer.CurrentCultureIgnoreCase)
-            : known.OrderBy(key, StringComparer.CurrentCultureIgnoreCase)).ToList();
+            ? jobs.OrderBy(j => unknown is not null &&
+                string.Equals(key(j), unknown, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenByDescending(key, StringComparer.CurrentCultureIgnoreCase)
+            : jobs.OrderBy(j => unknown is not null &&
+                string.Equals(key(j), unknown, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenBy(key, StringComparer.CurrentCultureIgnoreCase)).ToList();
     }
 
     private static List<DownloadJob> ByNumber(
