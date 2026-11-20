@@ -123,7 +123,7 @@ class BassSynth:
     @staticmethod
     def validate_dll(path):
         if not path.is_file():
-            raise OSError('ไม่พบ BASS x64 กรุณารัน Install-to-D.cmd เพื่อตรวจและซ่อมส่วนประกอบอัตโนมัติ')
+            raise OSError(f'ไม่พบ {path.name} (BASS x64) ที่ {path} กรุณาติดตั้ง X-Stage Karaoke PC รุ่นที่รวมระบบเสียงให้ครบถ้วนอีกครั้ง')
         try:
             with path.open('rb') as stream:
                 if stream.read(2) != b'MZ':
