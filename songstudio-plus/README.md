@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.24
+# X-Stage Song Studio Pro — Technical Preview v0.1.25
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -327,6 +327,14 @@ Menu 01 chooses folders using a queued Qt `QFileDialog` on the main GUI thread r
 - Explicit cleanup keeps issue details for the latest four completed batches and removes outdated *completed-only* report rows. It never touches incomplete, cancelled or interrupted batches, original media, lyric revisions, song catalog or export history.
 - Explicit VACUUM optionally returns internal free pages to the filesystem. It is never automatic and requires at least twice the SQLite size in additional free disk space. For large libraries, close the app and make a verified SQLite backup before running cleanup or compaction.
 - The Windows v0.1.23 release pipeline packages the preview EXE together with SHA-256 evidence, and the publisher verifies both before changing the public release manifest.
+
+## v0.1.25 — Responsive Windows dashboard without overlapping controls
+
+- The Import screen no longer squeezes all database, recovery, update and diagnostics controls into a fixed-height view; sections retain their natural height and become keyboard/wheel-scrollable without drawing a desktop scrollbar.
+- Responsive header actions wrap at narrower Windows widths and preserve the workspace buttons.
+- The sidebar menu can scroll internally when the window is too short, avoiding clipped menu items while preserving all eight workflows.
+- Verified Windows Preview must be rebuilt and published before already-installed versions can receive the UI fix.
+
 
 ## v0.1.24 — Full SQLite storage audit and selective cleanup
 
