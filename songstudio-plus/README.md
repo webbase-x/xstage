@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.11
+# X-Stage Song Studio Pro — Technical Preview v0.1.23
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -318,3 +318,12 @@ Menu 02 batch replacements now map corrected visible lyrics onto the ORIGINAL re
 ## v0.1.15 — Native Windows folder/file selection and action audits
 
 Menu 01 chooses folders using a queued Qt `QFileDialog` on the main GUI thread rather than creating `tkinter.Tk()` inside the loopback HTTP worker. Menu 03 uses the same native picker for `.lrc` files. Unicode/Thai paths are passed as Python Unicode strings without shell encoding; cancelling leaves the original input untouched. The UI also has explicit actions to open the source folder and SQLite workspace in Windows Explorer, validates missing drives/folders, and shows actionable errors. Browser-only mode (without the Qt shell) retains manual path input and tells the user why native dialogs are unavailable. Automated tests cover authenticated loopback picker/API access, all 79 visible button IDs, core action wiring, and Windows Qt's queued signal delivery from an HTTP worker to the GUI thread. Existing SQLite and audio/lyric files remain untouched.
+
+## v0.1.23 — SQLite import health and safe maintenance
+
+- The media registry continues to enforce UNIQUE SHA-256 and the lyric version registry keeps UNIQUE(song ID, lyric content SHA-256). Reimporting the same source does not create duplicate Song IDs or identical lyric versions.
+- A completed import discards only its now-unnecessary restart checkpoints and success records after persistent batch counters are committed. Cancelled/interrupted jobs still retain all checkpoints for safe resume. Every actionable error/incomplete-lyrics record remains available.
+- The Import view has a new SQLite inspection panel showing database/WAL bytes, free reusable pages, song/media/source/lyric counts, import report rows and resume jobs.
+- Explicit cleanup keeps issue details for the latest four completed batches and removes outdated *completed-only* report rows. It never touches incomplete, cancelled or interrupted batches, original media, lyric revisions, song catalog or export history.
+- Explicit VACUUM optionally returns internal free pages to the filesystem. It is never automatic and requires at least twice the SQLite size in additional free disk space. For large libraries, close the app and make a verified SQLite backup before running cleanup or compaction.
+- The Windows v0.1.23 release pipeline packages the preview EXE together with SHA-256 evidence, and the publisher verifies both before changing the public release manifest.
