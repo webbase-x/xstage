@@ -2002,18 +2002,18 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   const soundFontGeneration=state.xskSoundFontGeneration||0;
   const isXmid=!!getFileId(song?.xmid);
   const fileId=getFileId(isXmid?song?.xmid:song?.xsk);
-  if(!fileId)throw Error('ไม่พบไฟล์ XSK2 ในฐานเพลง');
+  if(!fileId)throw Error('ไม่พบไฟล์ XMID/XSK2 ในฐานเพลง');
   if(!(isXmid?window.XStageXmid:window.XStageXsk)?.openPackage || !window.XStageBrowserMidi)
-    throw Error('ตัวเล่น XSK2 หรือ MIDI ยังไม่พร้อม กรุณาอัปเดตเว็บ');
+    throw Error('ตัวเล่น XMID/XSK2 หรือ MIDI ยังไม่พร้อม กรุณาอัปเดตเว็บ');
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
-  onStatus('กำลังโหลด XSK2 และ SoundFont จาก Google Drive…');
+  onStatus('กำลังโหลด XMID/XSK2 และ SoundFont จาก Google Drive…');
   const [response,fontBytes]=await Promise.all([
     privateFile(fileId,token,{signal}),
     window.XStageBrowserMidi.selectedFont(token,signal)
   ]);
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
-  onStatus('กำลังตรวจและแยก XSK2 ในหน่วยความจำ…');
+  onStatus('กำลังตรวจและแยก XMID/XSK2 ในหน่วยความจำ…');
   const unpacked=await (isXmid?window.XStageXmid:window.XStageXsk).openPackage(packed);
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   // Never play a different song under a stale catalog title/code.
@@ -2138,7 +2138,7 @@ async function prepareQueuedSong(song,token,signal){
   if(getFileId(song.xsk)||getFileId(song.xmid)){
     // The pack and the uncompressed WAV both count against available space.
     const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
-    if(!Number((song.xmid||song.xsk).size)||Number(song.xsk.size)>maxPacked)return null;
+    if(!Number((song.xmid||song.xsk).size)||Number((song.xmid||song.xsk).size)>maxPacked)return null;
     const result=await prepareXskPlayback(song,token,signal,()=>{},true);
     if(!result||!monitor.canHold(result.blob.size,memoryResources()))return null;
     return {...result,bytes:result.blob.size};
