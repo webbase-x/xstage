@@ -67,9 +67,11 @@ public sealed partial class MainForm : Form
             CheckNetworkRecovery();
             RefreshRows();
         };
+        Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
         _timer.Start();
         FormClosing += (_, _) =>
         {
+            Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             _browserStop.Cancel();
             _timer.Stop();
             _engine.PauseAllForShutdown();
@@ -104,6 +106,15 @@ public sealed partial class MainForm : Form
             await CheckForUpdatesAsync(false);
         };
         RefreshRows();
+    }
+
+    // Windows may retain an apparently connected network adapter through
+    // sleep. Mark active work interrupted before suspend; resume on the
+    // UI timer only after networking is reported available again.
+    private void OnPowerModeChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == Microsoft.Win32.PowerModes.Suspend)
+            _engine.PauseForNetworkOutage();
     }
 
     private void CheckNetworkRecovery()
