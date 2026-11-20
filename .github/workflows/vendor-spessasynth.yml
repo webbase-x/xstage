@@ -1,0 +1,54 @@
+name: Vendor SpessaSynth MIDI AudioWorklet (pinned)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/vendor-spessasynth.yml"
+permissions:
+  contents: write
+concurrency:
+  group: xstage-vendor-spessasynth
+  cancel-in-progress: false
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Build pinned Apache-2.0 browser audio engine
+        run: |
+          set -euo pipefail
+          temp="$(mktemp -d)"
+          cd "$temp"
+          printf '{"private":true,"type":"module"}\n' > package.json
+          npm install --no-audit --no-fund spessasynth_lib@4.2.15 esbuild@0.25.12
+          test -s node_modules/spessasynth_lib/dist/index.js
+          test -s node_modules/spessasynth_lib/dist/spessasynth_processor.min.js
+          mkdir -p "$GITHUB_WORKSPACE/vendor/spessasynth"
+          ./node_modules/.bin/esbuild node_modules/spessasynth_lib/dist/index.js \
+            --bundle --format=esm --platform=browser --target=es2022 \
+            --outfile="$GITHUB_WORKSPACE/vendor/spessasynth/engine.mjs"
+          cp node_modules/spessasynth_lib/dist/spessasynth_processor.min.js \
+            "$GITHUB_WORKSPACE/vendor/spessasynth/spessasynth_processor.min.js"
+          cp node_modules/spessasynth_lib/LICENSE \
+            "$GITHUB_WORKSPACE/vendor/spessasynth/LICENSE-spessasynth.txt"
+          cp node_modules/spessasynth_core/LICENSE \
+            "$GITHUB_WORKSPACE/vendor/spessasynth/LICENSE-spessasynth-core.txt"
+          node -e "const f=require('fs');for(const p of ['engine.mjs','spessasynth_processor.min.js'])if(f.statSync('$GITHUB_WORKSPACE/vendor/spessasynth/'+p).size<40000)process.exit(1)"
+          node --check "$GITHUB_WORKSPACE/vendor/spessasynth/engine.mjs"
+      - name: Commit self-hosted engine after validation
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/spessasynth
+          if ! git diff --cached --quiet; then
+            git commit -m "vendor(karaoke): pinned SpessaSynth AudioWorklet engine [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
