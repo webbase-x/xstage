@@ -662,6 +662,25 @@ try
     if (!rejectedForeignJob)
         throw new Exception("Foreign job objects must not mutate persisted queues.");
 
+    // Renaming a queue changes every member in one persisted checkpoint and
+    // must reject accidental merges with a different existing queue.
+    manager.SetJobQueue(secondQueueJob, "คิวเอกสาร");
+    if (manager.RenameQueue(" คิวเอกสาร ", "คิวเอกสารใหม่") != 2 ||
+        queueJob.QueueName != "คิวเอกสารใหม่" ||
+        secondQueueJob.QueueName != "คิวเอกสารใหม่")
+        throw new Exception("Renaming a queue must update all its members.");
+    var reopenedRenamed = new DownloadEngine(isolatedEngineData);
+    if (reopenedRenamed.Jobs.Count(j => j.QueueName == "คิวเอกสารใหม่") != 2)
+        throw new Exception("Queue rename must survive SQLite reopen.");
+    manager.SetJobQueue(secondQueueJob, "คิวอื่น");
+    var rejectedMerge = false;
+    try { manager.RenameQueue("คิวเอกสารใหม่", "คิวอื่น"); }
+    catch (ArgumentException) { rejectedMerge = true; }
+    if (!rejectedMerge || queueJob.QueueName != "คิวเอกสารใหม่")
+        throw new Exception("Queue rename must not silently merge queues.");
+    if (manager.RenameQueue("คิวไม่มี", "คิวใหม่") != 0)
+        throw new Exception("Renaming a missing queue must not create one.");
+
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
     var job = manager.Add(server.Url + "range/test%20file.bin", folder);
