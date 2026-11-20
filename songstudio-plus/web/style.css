@@ -786,3 +786,93 @@ button.lyric-search-hit:hover{background:#24506b;border-color:#6dc3d1}
   .settings-update-panel .toolbar button{width:100%}
   .lyrics-search-context-results{max-height:105px}
 }
+
+/* v0.1.30: desktop viewport containment.
+   Qt auto-fits zoom to the physical work area. Prevent residual horizontal
+   overflow and preserve access to actions when a view is taller than the
+   actual client area. Scroll only INSIDE the active work view/panel, never the
+   application/window itself. */
+html,body{max-width:100%;overflow:hidden}
+.app,.main,.content,.view,.two-col,.panel,.topbar,
+.top-actions,.page-intro,.panel-head,.search-combo,
+.lyrics-layout,.manual-workspace,.preview-layout{min-width:0;max-width:100%}
+.app{width:100%;overflow:hidden}
+.topbar{width:100%;gap:8px}
+.topbar>.breadcrumb{min-width:0;overflow-wrap:anywhere}
+.topbar>.top-actions{min-width:0;max-width:100%;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.topbar .chip-soft{max-width:clamp(85px,15vw,220px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.update-notice{max-width:calc(100% - 28px);min-width:0}
+.update-notice-copy,.update-notice-actions{min-width:0;max-width:100%}
+.update-notice-copy strong,.update-notice-copy span{overflow-wrap:anywhere}
+.panel-head>*,.page-intro>*,.toolbar>*,.selection-summary,.notice{min-width:0;max-width:100%}
+.panel button,.panel input,.panel select,.panel textarea{max-width:100%}
+.panel .input-wrap{min-width:0;max-width:100%}
+.panel .input-wrap input{min-width:0}
+.panel .field-hint,.panel .notice p{overflow-wrap:anywhere}
+.settings-dialog{max-height:min(88dvh,920px);overflow-y:auto;overflow-x:hidden}
+.confirm-dialog{max-height:calc(100dvh - 28px);overflow-x:hidden;overflow-y:auto}
+@media(min-width:901px){
+  /* Global window remains fixed; active panels scroll only if needed. */
+  #view-lyrics.is-visible,
+  #view-build.is-visible,
+  #view-media.is-visible,
+  #view-library.is-visible,
+  #view-risks.is-visible{
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+    padding-bottom:8px;
+  }
+  #view-lyrics.is-visible::-webkit-scrollbar,
+  #view-build.is-visible::-webkit-scrollbar,
+  #view-media.is-visible::-webkit-scrollbar,
+  #view-library.is-visible::-webkit-scrollbar,
+  #view-risks.is-visible::-webkit-scrollbar{display:none}
+  #view-lyrics .lyrics-layout,
+  #view-build>.two-col{grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr)}
+  #view-lyrics .lyrics-layout>.panel,
+  #view-build>.two-col>.panel{min-width:0;min-height:0;max-width:100%}
+  #view-lyrics .lyrics-layout>.panel:last-child{
+    overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+    scrollbar-width:none;
+  }
+  #view-lyrics .lyrics-layout>.panel:last-child::-webkit-scrollbar{display:none}
+  #view-lyrics .group-list,
+  #view-build .build-list{overflow-y:auto!important;overflow-x:hidden;scrollbar-width:none}
+  #view-lyrics .group-list::-webkit-scrollbar,
+  #view-build .build-list::-webkit-scrollbar{display:none}
+}
+@media(min-width:901px) and (max-height:850px){
+  #view-lyrics .page-intro{margin-bottom:4px}
+  #view-lyrics .page-intro p{display:none}
+  #view-lyrics>.panel:first-of-type{padding:10px 13px}
+  #view-lyrics .lyrics-layout>.panel{padding:10px 13px}
+  #view-lyrics .lyrics-layout .notice{margin:7px 0;padding:9px 11px}
+  #view-lyrics .lyrics-layout textarea{min-height:62px}
+  #view-lyrics .lyrics-layout .field-label{margin:8px 0 5px}
+  #view-lyrics .lyrics-layout .selection-summary{margin-bottom:8px;padding:8px 10px}
+}
+@media(max-width:900px){
+  /* Compact Windows screens: don't clip stacked panels under fixed chrome. */
+  .app{width:100%;height:100dvh;min-height:0;overflow:hidden}
+  .sidebar{max-width:100%;overflow:hidden}
+  .side-nav{max-width:100%;overflow-x:auto;overflow-y:hidden}
+  .main{max-width:100%;min-height:0;overflow:hidden}
+  .content{flex:1;min-height:0;min-width:0;max-width:100%;overflow:hidden}
+  .view.is-visible:not(#view-manual){
+    min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;
+    overscroll-behavior:contain;scrollbar-width:none;padding-bottom:12px;
+  }
+  .view.is-visible:not(#view-manual)::-webkit-scrollbar{display:none}
+  #view-lyrics>.lyrics-layout,
+  #view-build>.two-col{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;flex:0 0 auto}
+  #view-lyrics>.lyrics-layout>.panel,
+  #view-build>.two-col>.panel{height:auto;min-height:0;max-height:none}
+  #view-lyrics .group-list,#view-build .build-list{
+    min-height:90px;max-height:clamp(120px,27dvh,240px);
+    overflow-y:auto!important;
+  }
+  .update-notice{max-width:calc(100% - 24px);flex-wrap:wrap}
+  .update-notice-actions{flex-wrap:wrap}
+}
