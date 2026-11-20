@@ -19,6 +19,7 @@ import threading
 import unicodedata
 import uuid
 from collections import defaultdict
+from itertools import groupby
 from contextlib import contextmanager
 from functools import lru_cache
 from datetime import datetime, timezone
@@ -994,16 +995,17 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                 WHERE v.song_id=s.id AND v.is_current=1
                   AND v.timing_status!='incomplete')
             ORDER BY s.code,x.last_seen DESC""").fetchall()
-        collected=defaultdict(list)
-        for entry in entries:
-            collected[entry["song_id"]].append(dict(entry))
-        totals["total"]=len(collected)
+        # Rows are already grouped by the unique song code. Do not copy an
+        # entire 100k-song source catalog into a second dict-of-lists.
+        totals["total"]=sum(1 for _ in groupby(entries,
+                             key=lambda row:row["song_id"]))
         db.execute("""INSERT INTO xstage_import_batches
             (id,source_root,created_at,status)
             VALUES (?,?,?,'running')""",
             (batch,"Registered media paths — lyrics recovery",now()))
         db.commit()
-        for song_id,paths in collected.items():
+        for song_id,source_rows in groupby(entries,key=lambda row:row["song_id"]):
+            paths=[dict(row) for row in source_rows]
             if cancel and cancel.is_set():
                 break
             event_path=None
