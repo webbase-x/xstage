@@ -8,6 +8,7 @@
 const MODULE='vendor/spessasynth/engine.mjs';
 const WORKLET='vendor/spessasynth/spessasynth_processor.min.js';
 let modulePromise=null;
+const registeredWorklets=new WeakMap();
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 function available(){
   return !!(scope.AudioContext||scope.webkitAudioContext)&&
@@ -41,7 +42,13 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     if(ownsContext)void ctx.close().catch(()=>{});
   };
   try{
-    await ctx.audioWorklet.addModule(WORKLET);
+    let loaded=registeredWorklets.get(ctx);
+    if(!loaded){
+      loaded=ctx.audioWorklet.addModule(WORKLET);
+      registeredWorklets.set(ctx,loaded);
+    }
+    try{await loaded;}
+    catch(error){registeredWorklets.delete(ctx);throw error;}
     if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
     synth=new WorkletSynthesizer(ctx);
     master=ctx.createGain();
