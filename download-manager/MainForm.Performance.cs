@@ -93,6 +93,61 @@ public sealed partial class MainForm
         }
     }
 
+    private void AssignJobQueue(DownloadJob job, string queueName)
+    {
+        try
+        {
+            _engine.SetJobQueue(job, queueName);
+            RefreshRows();
+            _details.Text = "ย้ายรายการไปยังคิว: " + job.QueueName;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or
+                                   Microsoft.Data.Sqlite.SqliteException)
+        {
+            MessageBox.Show(this, ex.Message, "จัดคิวไม่สำเร็จ",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void CreateJobQueue(DownloadJob job)
+    {
+        using var dialog = new Form
+        {
+            Text = "สร้างคิวดาวน์โหลด · X-Stage",
+            Width = 420, Height = 205,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = Color.White,
+            Font = new Font("Segoe UI", 10)
+        };
+        var label = new Label
+        {
+            Text = "ชื่อคิว (ไม่เกิน 64 ตัวอักษร)",
+            Left = 20, Top = 18, Width = 360, Height = 25
+        };
+        var name = new TextBox
+        {
+            Left = 20, Top = 48, Width = 360, MaxLength = 64,
+            Text = ""
+        };
+        var save = new Button
+        {
+            Text = "บันทึก", Left = 270, Top = 106, Width = 110,
+            Height = 34, DialogResult = DialogResult.OK
+        };
+        var cancel = new Button
+        {
+            Text = "ยกเลิก", Left = 155, Top = 106, Width = 105,
+            Height = 34, DialogResult = DialogResult.Cancel
+        };
+        dialog.Controls.AddRange(new Control[] { label, name, save, cancel });
+        dialog.AcceptButton = save;
+        dialog.CancelButton = cancel;
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        AssignJobQueue(job, name.Text);
+    }
+
     private void SetPriority(DownloadJob job, int priority)
     {
         try
