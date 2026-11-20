@@ -126,6 +126,21 @@ try
     if (!mp3Args.Contains("--audio-format") || !mp3Args.Contains("mp3"))
         throw new Exception("MP3 extraction args missing.");
 
+    // The requested machine-wide installation must not fall back into LocalAppData.
+    var expectedProgramFilesExe = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        "X-Stage", "Download Manager", "XStageDownloadManager.exe");
+    if (!string.Equals(SelfUpdater.InstalledProgramFilesExe, expectedProgramFilesExe,
+                       StringComparison.OrdinalIgnoreCase))
+        throw new Exception("Updater restart path must target the Program Files installation.");
+    var installerRecipe = File.ReadAllText(
+        Path.Combine("download-manager", "installer", "XStageDownloadManager.iss"));
+    if (!installerRecipe.Contains(@"DefaultDirName={autopf}\X-Stage\Download Manager") ||
+        !installerRecipe.Contains("PrivilegesRequired=admin") ||
+        !installerRecipe.Contains("UsePreviousAppDir=no") ||
+        !installerRecipe.Contains("DisableDirPage=yes"))
+        throw new Exception("Installer must request UAC and use Program Files, not a previous per-user directory.");
+
     // Update checks must compare semantic versions and ignore unsigned/unverified feeds.
     var filename = "X-Stage-Download-Manager-v0.2.6-build9-win-x64-Setup.exe";
     var json = System.Text.Json.JsonSerializer.Serialize(new
