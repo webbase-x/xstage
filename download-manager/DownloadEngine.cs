@@ -196,11 +196,14 @@ public sealed class DownloadEngine
             source.Any(char.IsControl) || string.IsNullOrWhiteSpace(target) ||
             target.Length > 64 || target.Any(char.IsControl))
             throw new ArgumentException("Queue names must be 1–64 printable characters.");
-        var affected = Jobs.Where(j => string.Equals(j.QueueName, source,
+        // Treat legacy blank queue names as the default queue shown in the UI.
+        static string EffectiveQueue(DownloadJob job) =>
+            string.IsNullOrWhiteSpace(job.QueueName) ? "ทั่วไป" : job.QueueName.Trim();
+        var affected = Jobs.Where(j => string.Equals(EffectiveQueue(j), source,
             StringComparison.OrdinalIgnoreCase)).ToArray();
         if (affected.Length == 0) return 0;
         if (Jobs.Any(j => !affected.Contains(j) &&
-            string.Equals(j.QueueName, target, StringComparison.OrdinalIgnoreCase)))
+            string.Equals(EffectiveQueue(j), target, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Destination queue already exists.", nameof(newName));
         var originals = affected.Select(j => j.QueueName).ToArray();
         for (var i = 0; i < affected.Length; i++) affected[i].QueueName = target;
