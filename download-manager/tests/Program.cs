@@ -11,6 +11,42 @@ var folder = Path.Combine(Path.GetTempPath(), "xstage-dm-test-" + Guid.NewGuid()
 Directory.CreateDirectory(folder);
 try
 {
+    // Regression: a verified completed download must fill every pixel of its
+    // progress bar even if its old per-segment data is stale or incomplete.
+    var completeFile = new DownloadJob
+    {
+        Kind = "File", Status = "Completed", TotalBytes = 1024,
+        DownloadedBytes = 1024, SegmentsUsed = 32,
+        SegmentDownloadedBytes = new long[32]
+    };
+    if (!ProgressPresentation.IsComplete(completeFile) ||
+        ProgressPresentation.FillFraction(completeFile) != 1.0 ||
+        ProgressPresentation.PercentLabel(completeFile) != "100.0%")
+        throw new Exception("Completed segmented file must be displayed as 100% solid green.");
+
+    var finalizingFile = new DownloadJob
+    {
+        Kind = "File", Status = "Running", TotalBytes = 1024,
+        DownloadedBytes = 1024
+    };
+    if (ProgressPresentation.IsComplete(finalizingFile) ||
+        ProgressPresentation.FillFraction(finalizingFile) >= 1.0 ||
+        ProgressPresentation.PercentLabel(finalizingFile) == "100.0%")
+        throw new Exception("Finalizing file must not show verified 100% too early.");
+
+    var finalizingVideo = new DownloadJob
+    {
+        Kind = "Video", Status = "Running", VideoPercent = 100
+    };
+    if (ProgressPresentation.IsComplete(finalizingVideo) ||
+        ProgressPresentation.PercentLabel(finalizingVideo) == "100.0%")
+        throw new Exception("Video fragment download at 100% is not a finished FFmpeg merge.");
+    finalizingVideo.Status = "Completed";
+    finalizingVideo.VideoPercent = 0; // stale yt-dlp reading
+    if (ProgressPresentation.FillFraction(finalizingVideo) != 1.0 ||
+        ProgressPresentation.PercentLabel(finalizingVideo) != "100.0%")
+        throw new Exception("Completed video must always display solid green 100%.");
+
     // Verify strict hostname matching; reject lookalike domains and file URLs.
     var videoHosts = new[]
     {
