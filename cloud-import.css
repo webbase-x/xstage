@@ -90,3 +90,13 @@
  .cloud-import-footer #cloud-import-start{flex:1 1 100%}
  .cloud-import-footer #cloud-import-done{flex:1}
 }
+
+/* Directory-level import choices with visible file counts and total bytes. */
+.cloud-import-selection-list{max-height:min(280px,38dvh)}
+.cloud-import-selection-item{grid-template-columns:23px minmax(110px,1fr) minmax(145px,auto);min-height:46px}
+.cloud-import-selection-item span{font-size:.9rem;font-weight:700}
+.cloud-import-selection-item small{text-align:right;font-size:.75rem;color:#b4d9e5}
+@media(max-width:540px){
+ .cloud-import-selection-item{grid-template-columns:22px minmax(0,1fr);gap:5px 9px}
+ .cloud-import-selection-item small{grid-column:2;text-align:left;font-size:.72rem}
+}
