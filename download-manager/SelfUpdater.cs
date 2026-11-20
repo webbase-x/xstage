@@ -123,6 +123,11 @@ public static class SelfUpdater
 
         Directory.CreateDirectory(UpdateFolder);
         var helper = Path.Combine(UpdateFolder, "xstage-update-helper-" + Guid.NewGuid().ToString("N") + ".exe");
+        // Wait for the helper's update window to be visible. The old app
+        // must not close until the next UI is already on-screen.
+        var readyEventName = "Local\\XStageDownloadReady_" + Guid.NewGuid().ToString("N");
+        using var readyEvent = new EventWaitHandle(
+            false, EventResetMode.ManualReset, readyEventName);
         File.Copy(appExe, helper);
         try
         {
@@ -135,10 +140,12 @@ public static class SelfUpdater
             foreach (var arg in new[] {
                 "--apply-verified-update", Environment.ProcessId.ToString(),
                 verifiedSetup, appExe, release.Sha256, release.Size.ToString(),
-                release.Version, release.Build.ToString()
+                release.Version, release.Build.ToString(), readyEventName
             }) info.ArgumentList.Add(arg);
             using var process = Process.Start(info);
             if (process is null) throw new IOException("ไม่สามารถเริ่มกระบวนการติดตั้งอัปเดต");
+            if (!readyEvent.WaitOne(TimeSpan.FromSeconds(12)))
+                throw new IOException("หน้าต่างอัปเดตใหม่ไม่พร้อม จึงเก็บแอปเดิมไว้ ไม่ปิดโปรแกรม");
         }
         catch
         {
@@ -183,9 +190,9 @@ public static class SelfUpdater
     }
 
     // Called by Program.Main *before* creating the primary application mutex.
-    public static int ApplyUpdateInHelper(string[] args)
+    public static int ApplyUpdateInHelper(string[] args, Action<string>? reportStatus = null)
     {
-        if (args.Length != 8 || !int.TryParse(args[1], out var oldPid) ||
+        if (args.Length != 9 || !int.TryParse(args[1], out var oldPid) ||
             !long.TryParse(args[5], out var size) || !int.TryParse(args[7], out var build))
             return 2;
         var setup = args[2];
@@ -208,6 +215,7 @@ public static class SelfUpdater
 
         try
         {
+            reportStatus?.Invoke("รอให้แอปรุ่นเก่าปิดก่อนติดตั้ง");
             var expectedName = $"X-Stage-Download-Manager-v{version}-build{build}-win-x64-Setup.exe";
             if (Path.GetFileName(setup) != expectedName ||
                 Path.GetFullPath(setup) != Path.Combine(UpdateFolder, expectedName) ||
@@ -224,6 +232,7 @@ public static class SelfUpdater
             }
             catch (ArgumentException) { /* The main process already exited. */ }
 
+            reportStatus?.Invoke("กำลังขอสิทธิ์ติดตั้งจาก Windows");
             // Program Files requires UAC. Prompt for elevation only after
             // SHA-256 verification and after the previous app has exited.
             // The helper remains at user integrity level and later relaunches
@@ -239,6 +248,7 @@ public static class SelfUpdater
                 install.ArgumentList.Add(arg);
             using var process = Process.Start(install) ??
                                 throw new IOException("เริ่มตัวติดตั้งไม่สำเร็จ");
+            reportStatus?.Invoke("กำลังติดตั้งและเตรียมเปิดแอปรุ่นใหม่");
             if (!process.WaitForExit(600000))
             {
                 WriteLog("Installer timeout; not claiming success or launching a second installer.");
@@ -246,18 +256,19 @@ public static class SelfUpdater
             }
             if (process.ExitCode != 0)
                 throw new IOException("ตัวติดตั้งคืนรหัสข้อผิดพลาด " + process.ExitCode);
+            reportStatus?.Invoke("ตรวจสอบไฟล์แอปรุ่นใหม่");
             if (!File.Exists(installedExe))
                 throw new IOException("ติดตั้งเสร็จ แต่ไม่พบแอปรุ่นใหม่");
             var installedVersion = FileVersionInfo.GetVersionInfo(installedExe).FileVersion;
             if (!string.Equals(installedVersion, version + "." + build, StringComparison.Ordinal))
                 throw new IOException("เวอร์ชันไฟล์หลังติดตั้งไม่ตรงกับรุ่นใหม่: " + installedVersion);
-            // The old per-user installer had a different installation scope.
-            // Once the new machine-wide EXE has been verified, remove only
-            // that known legacy installation, never downloads or user settings.
-            TryRemoveLegacyPerUserInstall(previousExe, WriteLog);
+            // Open the new version immediately after verification. Cleanup of
+            // the old per-user install must NEVER block the next UI opening.
+            reportStatus?.Invoke("กำลังเปิด X-Stage Download Manager รุ่นใหม่");
+            Process.Start(new ProcessStartInfo(installedExe) { UseShellExecute = true });
             WriteLog("SUCCESS v" + version + " Build " + build +
                      " in " + installedExe);
-            Process.Start(new ProcessStartInfo(installedExe) { UseShellExecute = true });
+            TryRemoveLegacyPerUserInstall(previousExe, WriteLog);
             try { File.Delete(setup); } catch (IOException) { }
             return 0;
         }
