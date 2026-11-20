@@ -2516,6 +2516,7 @@ function clearIdleStage(message){
   state.medleyUpcoming=null;
   releaseQueuePreload();
   if(midiKeyControl)midiKeyControl.hidden=true;
+  if($('midi-instrument-control'))$('midi-instrument-control').hidden=true;
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
   ui.stageCode.textContent='—';
@@ -2692,12 +2693,15 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     if(midiKeyControl)midiKeyControl.hidden=!liveMidiBytes;
+    if($('midi-instrument-control'))$('midi-instrument-control').hidden=!liveMidiBytes;
+    if($('midi-instrument'))$('midi-instrument').value='';
     if(midiKeyValue){midiKeyValue.value='0';$('midi-transpose-label').textContent='0';}
     if(liveMidiBytes){
       midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
       state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
         fontBytes:liveFontBytes,onStatus:setPlayStatus,
-        getTranspose:()=>Number(document.getElementById('midi-transpose')?.value||0)
+        getTranspose:()=>Number(document.getElementById('midi-transpose')?.value||0),
+        getProgram:()=>{const value=$('midi-instrument')?.value;return value===''?null:Number(value);}
       });
     }else{
       if(midiTransport.active)midiTransport.clear();
@@ -3731,6 +3735,9 @@ function setMidiKey(delta){
 }
 $('midi-key-down')?.addEventListener('click',()=>setMidiKey(-1));
 $('midi-key-up')?.addEventListener('click',()=>setMidiKey(1));
+$('midi-instrument')?.addEventListener('change',()=>{
+  if(state.liveMidiPlayback)nativePlayer.dispatchEvent(new Event('xstage-midi-transpose'));
+});
 ui.speed.addEventListener('change',()=>{player.playbackRate=Number(ui.speed.value);saveUiPrefs({speed:Number(ui.speed.value)});});
 ui.volume.addEventListener('input',()=>{player.volume=Number(ui.volume.value)/100;saveUiPrefs({volume:Number(ui.volume.value)});});
 ui.repeat.addEventListener('change',()=>{player.loop=ui.repeat.checked;saveUiPrefs({repeat:ui.repeat.checked});});
