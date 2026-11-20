@@ -41,7 +41,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.23",
+        self.diagnostic("state.ready",version="0.1.24",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -207,7 +207,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.23",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.24",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
@@ -410,6 +410,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/update/install":
                 result=updater.install_and_restart(self.state.workspace)
                 self.state.request_restart()
+            elif path=="/api/db/audit":
+                result=self.state.start_job("db-audit",lambda progress,cancel:
+                    dbmaint.detailed_audit(self.state.workspace,progress,cancel))
             elif path=="/api/db/cleanup":
                 result=self.state.start_job("db-clean",lambda progress,cancel:
                     dbmaint.cleanup_history(self.state.workspace,progress,cancel))
