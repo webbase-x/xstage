@@ -114,23 +114,23 @@ jobs:
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.22-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.23-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
-          if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.22-preview.exe")) { throw "EXE not produced" }
-          python scripts/verify_songstudio_exe_icon.py "dist/X-Stage-Song-Studio-Pro-v0.1.22-preview.exe"
+          if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe")) { throw "EXE not produced" }
+          python scripts/verify_songstudio_exe_icon.py "dist/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe"
           if ($LASTEXITCODE -ne 0) { throw "Song Studio EXE missing its branded Windows icon" }
       - name: Verify EXE hash and package preview
         shell: pwsh
         run: |
-          $exe="dist/X-Stage-Song-Studio-Pro-v0.1.22-preview.exe"
+          $exe="dist/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe"
           $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-          "X-Stage Song Studio Pro v0.1.22 Desktop Standalone Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
+          "X-Stage Song Studio Pro v0.1.23 Desktop Standalone Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           "Desktop Standalone using PySide6 QtWebEngine with local-only SQLite Engine. Checks verified updates immediately after engine connect, shows an in-app update notice with one-click install, and retains responsive API/SQLite safeguards. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
           Write-Host "EXE SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.22-Windows-Preview
-          path: dist/X-Stage-Song-Studio-Pro-v0.1.22-preview.exe
+          name: X-Stage-Song-Studio-Pro-v0.1.23-Windows-Preview
+          path: dist/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe
           retention-days: 14
           if-no-files-found: error
