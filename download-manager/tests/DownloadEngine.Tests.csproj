@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="../DownloadEngine.cs" Link="DownloadEngine.cs" />
     <Compile Include="../DownloadJob.cs" Link="DownloadJob.cs" />
+    <Compile Include="../ProgressPresentation.cs" Link="ProgressPresentation.cs" />
     <Compile Include="../SocialVideoDownloader.cs" Link="SocialVideoDownloader.cs" />
     <Compile Include="../UpdateChecker.cs" Link="UpdateChecker.cs" />
     <Compile Include="../SelfUpdater.cs" Link="SelfUpdater.cs" />
