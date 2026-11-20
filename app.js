@@ -18,7 +18,7 @@ const ui = {
 };
 const state = {
   token: '', tokenExpiresAt:0, accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
-  queue: [], history: [], current: null, lyrics: null, objectUrl: '',
+  queue: [], history: [], current: null, lyrics: null, objectUrl: '', liveMidiPlayback:null,
   requestId: 0, controller: null, authId: 0, loading: false,
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
@@ -2032,6 +2032,13 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
        estimatedWorkingBytes>(lowMemory?128:256)*1024*1024)
       return null; // The song remains playable on demand when its turn arrives.
   }
+  if(!fontBytes&&window.XStageBrowserMidi?.playRealtime){
+    if(prefetch)return null; // Fast MIDI needs no expensive whole-song pre-render.
+    const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
+    onStatus('MIDI พร้อมเล่นทันที · ใช้เสียงพื้นฐานแบบเรียลไทม์');
+    return {song,token,blob:window.XStageBrowserMidi.silentClock(parsed.duration),
+      lyrics:unpacked.document,liveMidi:midiBytes};
+  }
   onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ให้พร้อมเล่น…');
   const rendered=await window.XStageBrowserMidi.render(midiBytes,{
     fontBytes,signal,onStatus
@@ -2332,6 +2339,7 @@ function releaseFinishedMedia(){
   // Drop the completed/aborted track's media objects, but preserve its
   // identity in history until playSong starts the next one.
   try{player.pause();}catch{}
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
   if(state.objectUrl){
     URL.revokeObjectURL(state.objectUrl);
     state.objectUrl='';
@@ -2482,6 +2490,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     return;
   }
   const request=++state.requestId;
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
   state.loading=true;updateTransport();
@@ -2526,7 +2535,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       }
     }
     const readyPrepared=prepared||pendingPrepared;
-    let embeddedKaraokeLyrics=null;
+    let embeddedKaraokeLyrics=null,liveMidiBytes=null;
     const loadMedia=async()=>{
       if(!getFileId(song.midi))return privateFile(song.audio.fileId,token,
         {signal:controller.signal}).then(r=>r.blob());
@@ -2542,6 +2551,11 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
         embeddedKaraokeLyrics=window.XStageBrowserMidi.midiLyrics(parsed,song.code);
       }
+      if(!fontBytes&&window.XStageBrowserMidi.playRealtime){
+        const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
+        liveMidiBytes=midiBytes;
+        return window.XStageBrowserMidi.silentClock(parsed.duration);
+      }
       const rendered=await window.XStageBrowserMidi.render(midiBytes,{
         fontBytes,signal:controller.signal,
         onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
@@ -2553,12 +2567,13 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       // XSK2 prepared fully or in progress while queued: consume its
       // verified audio directly, without duplicating download/render.
       ({blob:audio,lyrics}=readyPrepared);
+      liveMidiBytes=readyPrepared.liveMidi||null;
     }else if(getFileId(song.xsk)||getFileId(song.xmid)){
       const ready=await boundedPlaybackTask(
         prepareXskPlayback(song,token,controller.signal,message=>{
           if(request===state.requestId)setPlayStatus(message);
         }),120,'โหลดหรือแยก XSK2 จาก Google Drive นานเกินไป',controller);
-      audio=ready.blob;lyrics=ready.lyrics;
+      audio=ready.blob;lyrics=ready.lyrics;liveMidiBytes=ready.liveMidi||null;
     }else{
       [audio,lyrics]=await boundedPlaybackTask(Promise.all([
         loadMedia(),
@@ -2586,6 +2601,9 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     player.src=url;
+    if(liveMidiBytes){
+      state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes);
+    }
     try{
       if('preservesPitch' in player)player.preservesPitch=true;
       if('mozPreservesPitch' in player)player.mozPreservesPitch=true;
