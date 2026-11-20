@@ -147,6 +147,41 @@ public static class SelfUpdater
         }
     }
 
+
+    private static void TryRemoveLegacyPerUserInstall(string previousExe, Action<string> log)
+    {
+        var oldRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "X-Stage", "Download Manager");
+        var expectedOldExe = Path.Combine(oldRoot, "XStageDownloadManager.exe");
+        if (!string.Equals(Path.GetFullPath(previousExe), Path.GetFullPath(expectedOldExe),
+                           StringComparison.OrdinalIgnoreCase))
+            return;
+        var uninstaller = Path.Combine(oldRoot, "unins000.exe");
+        if (!File.Exists(uninstaller)) return;
+        try
+        {
+            var start = new ProcessStartInfo(uninstaller)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = oldRoot
+            };
+            start.ArgumentList.Add("/VERYSILENT");
+            start.ArgumentList.Add("/SUPPRESSMSGBOXES");
+            start.ArgumentList.Add("/NORESTART");
+            using var uninstall = Process.Start(start);
+            if (uninstall is null || !uninstall.WaitForExit(60000) || uninstall.ExitCode != 0)
+                log("Legacy user installation could not be fully removed; the new Program Files installation is usable.");
+            else
+                log("Removed legacy per-user application only; user downloads and settings retained.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                   System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            log("Legacy per-user cleanup skipped: " + ex.Message);
+        }
+    }
+
     // Called by Program.Main *before* creating the primary application mutex.
     public static int ApplyUpdateInHelper(string[] args)
     {
@@ -216,7 +251,12 @@ public static class SelfUpdater
             var installedVersion = FileVersionInfo.GetVersionInfo(installedExe).FileVersion;
             if (!string.Equals(installedVersion, version + "." + build, StringComparison.Ordinal))
                 throw new IOException("เวอร์ชันไฟล์หลังติดตั้งไม่ตรงกับรุ่นใหม่: " + installedVersion);
-            WriteLog("SUCCESS v" + version + " Build " + build);
+            // The old per-user installer had a different installation scope.
+            // Once the new machine-wide EXE has been verified, remove only
+            // that known legacy installation, never downloads or user settings.
+            TryRemoveLegacyPerUserInstall(previousExe, WriteLog);
+            WriteLog("SUCCESS v" + version + " Build " + build +
+                     " in " + installedExe);
             Process.Start(new ProcessStartInfo(installedExe) { UseShellExecute = true });
             try { File.Delete(setup); } catch (IOException) { }
             return 0;
