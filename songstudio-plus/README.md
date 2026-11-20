@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.27
+# X-Stage Song Studio Pro — Technical Preview v0.1.31
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,24 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.31 — Windows Program Files installer
+
+Windows downloads are now an **Inno Setup EXE**, not a portable program.
+The stable desktop EXE installs to
+`C:\Program Files\X-Stage\Song Studio Pro\XStageSongStudioPro.exe`
+on typical Windows x64 systems. The installer requests Windows UAC, creates
+a Start Menu shortcut and uninstaller, and offers an optional desktop shortcut.
+This Preview installer is currently unsigned.
+
+The existing workspace, `DB/xstage_plus.sqlite3`, import checkpoints, original
+music files and logs stay outside Program Files in their original writable
+locations. Updating or uninstalling never deletes the user's database.
+
+New in-app updates verify the published **Setup EXE** and SHA-256, checkpoint
+ongoing imports, elevate the installer, and restart with the same workspace.
+Old portable v0.1.30 and earlier use the original incompatible EXE-only
+updater. They require a **one-time manual Setup download and installation**.
 
 ## v0.1.27 — Stability, throughput, and maintenance improvements
 

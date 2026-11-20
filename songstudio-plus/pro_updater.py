@@ -1,4 +1,4 @@
-"""Verified, Windows per-user self-updater for Song Studio Pro.
+"""Verified, Windows Program Files Setup updater for Song Studio Pro.
 
 Never trust a displayed filename, never execute a partial download. The
 published HTTPS release feed must supply a matching GitHub binary and SHA-256.
@@ -20,13 +20,13 @@ import sys
 import urllib.request
 from pathlib import Path
 
-VERSION="0.1.30"
+VERSION="0.1.31"
 MANIFEST_URL="https://webbase-x.github.io/xstage/downloads/song-studio-pro-latest.json"
 RAW_MANIFEST_URL="https://raw.githubusercontent.com/webbase-x/xstage/main/downloads/song-studio-pro-latest.json"
 RELEASE=re.compile(
     r"^https://github\.com/webbase-x/xstage/releases/download/"
     r"song-studio-pro-v(\d+\.\d+\.\d+)-preview/"
-    r"(X-Stage-Song-Studio-Pro-v\1-preview\.exe)$")
+    r"(X-Stage-Song-Studio-Pro-v\1-win-x64-Setup\.exe)$")
 MAX_FILE=600*1024*1024
 CHUNK=1024*1024
 DOWNLOAD_RETRIES=5
@@ -116,7 +116,7 @@ def _read_release_api():
         for asset in release.get("assets") or []:
             if not isinstance(asset,dict) or asset.get("state") not in (None,"uploaded"):
                 continue
-            expected="X-Stage-Song-Studio-Pro-v"+version+"-preview.exe"
+            expected="X-Stage-Song-Studio-Pro-v"+version+"-win-x64-Setup.exe"
             if asset.get("name")!=expected:
                 continue
             size=asset.get("size")
@@ -364,26 +364,29 @@ def _ps_string(value):
     return "'"+str(value).replace("'","''")+"'"
 
 def install_and_restart(workspace,old_pid=None):
-    """Start detached PowerShell helper that swaps EXE after current PID exits."""
+    """Install a verified Setup to Program Files and reopen the same workspace.
+
+    The detached helper waits for the application to close, verifies SHA-256,
+    asks Windows to elevate Inno Setup with UAC, then checks its exit code.
+    App binaries are never copied manually into the protected install folder.
+    """
     ready=ready_file(workspace)
-    if not ready:raise ValueError("ยังไม่มีไฟล์อัปเดตที่ตรวจสอบ SHA-256 สำเร็จ")
+    if not ready:
+        raise ValueError("ยังไม่มีตัวติดตั้งที่ตรวจสอบ SHA-256 สำเร็จ")
     if sys.platform!="win32" or not getattr(sys,"frozen",False):
-        raise ValueError("อัปเดตและเปิดใหม่อัตโนมัติใช้ได้จาก Windows EXE เท่านั้น")
+        raise ValueError("อัปเดตอัตโนมัติใช้ได้จากโปรแกรม Windows เท่านั้น")
     root=_staged_dir(workspace)
-    local=os.environ.get("LOCALAPPDATA")
-    if not local or not Path(local).is_dir():
-        raise ValueError("Windows ไม่พบ Local AppData ที่ปลอดภัยสำหรับติดตั้ง")
-    target=Path(local)/"Programs"/"X-Stage Song Studio Pro"/"X-Stage Song Studio Pro.exe"
-    target.parent.mkdir(parents=True,exist_ok=True)
+    program_files=os.environ.get("ProgramW6432") or os.environ.get("PROGRAMFILES")
+    if not program_files or not Path(program_files).is_dir():
+        raise ValueError("Windows ไม่พบ Program Files สำหรับติดตั้ง")
+    target=Path(program_files)/"X-Stage"/"Song Studio Pro"/"XStageSongStudioPro.exe"
     workspace=str(Path(workspace).resolve())
     pid=old_pid or os.getpid()
-    # Script never deletes the user's SQLite or media; it replaces only
-    # the version-managed EXE after the old process has exited.
     log=root/"last-update.log"
     script=root/"apply-update.ps1"
     content=f"""
 $ErrorActionPreference = 'Stop'
-$source = {_ps_string(ready['path'])}
+$setup = {_ps_string(ready['path'])}
 $dest = {_ps_string(str(target))}
 $workspace = {_ps_string(workspace)}
 $expected = {_ps_string(ready['sha256'])}
@@ -397,13 +400,23 @@ try {{
   if (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {{
     throw 'The old Song Studio Pro process is still running'
   }}
-  $found = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
-  if ($found -ne $expected) {{ throw 'Downloaded EXE SHA-256 mismatch' }}
-  Move-Item -LiteralPath $source -Destination $dest -Force
+  $found = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($found -ne $expected) {{ throw 'Downloaded Setup SHA-256 mismatch' }}
+  # Inno Setup owns protected Program Files writes, and the system owns UAC.
+  # /SILENT keeps an install progress window visible.
+  $process = Start-Process -FilePath $setup -ArgumentList @('/SILENT','/NORESTART','/CLOSEAPPLICATIONS') -Verb RunAs -PassThru -Wait
+  if ($process.ExitCode -ne 0) {{
+    throw ('Windows Setup exit code: ' + $process.ExitCode)
+  }}
+  if (-not (Test-Path -LiteralPath $dest -PathType Leaf)) {{
+    throw 'Installed EXE missing from Program Files'
+  }}
   Start-Process -FilePath $dest -ArgumentList @('--workspace',('"' + $workspace + '"'))
-  'Pro updated and started at ' + (Get-Date) | Out-File -LiteralPath $log -Encoding UTF8
+  ('Installed and relaunched from Program Files at ' + (Get-Date)) |
+    Out-File -LiteralPath $log -Encoding UTF8
 }} catch {{
-  $_.Exception.Message | Out-File -LiteralPath $log -Encoding UTF8
+  ('Setup failed: ' + $_.Exception.Message) |
+    Out-File -LiteralPath $log -Encoding UTF8
   exit 1
 }}
 """

@@ -33,15 +33,21 @@ assert.ok(html.includes('X-Stage Song Studio Pro'),'Pro card must use the new br
 assert.ok(source.includes('X-Stage Song Studio Pro'),'Desktop web shell brand must match');
 assert.ok(js.includes('manual-cue-token')&&js.includes('manual-advanced-times')&&
  js.includes('manualCueUndo'),'New cue editor must be connected');
-const proExeMatch=workflow.match(/--name "(X-Stage-Song-Studio-Pro-v[0-9]+[.][0-9]+[.][0-9]+-preview)"/);
-assert.ok(proExeMatch,'Windows Preview must build only the Pro EXE');
-const proExe=proExeMatch[1]+'.exe';
-assert.ok(workflow.includes('dist/'+proExe),
- 'Windows Preview must verify the same Pro EXE that it builds');
-assert.ok(workflow.includes('path: dist/'+proExe),
- 'Windows Preview must upload only the same Pro EXE as its artifact');
-assert.ok(!/--name "(?!X-Stage-Song-Studio-Pro-)[^"]+"/.test(workflow),
- 'Windows Preview must not build another Studio executable');
+const installer=read('songstudio-plus/installer/XStageSongStudioPro.iss');
+assert.ok(workflow.includes('--name "XStageSongStudioPro"'),
+ 'PyInstaller must build the same stable application payload for every release');
+assert.ok(workflow.includes('dist/XStageSongStudioPro.exe'),
+ 'Windows build must verify the native desktop payload');
+const setupExe='X-Stage-Song-Studio-Pro-v0.1.31-win-x64-Setup.exe';
+assert.ok(workflow.includes('path: songstudio-plus/installer/output/'+setupExe),
+ 'The published app must be an installer, not a portable EXE');
+assert.ok(installer.includes('DefaultDirName={autopf}\\X-Stage\\Song Studio Pro'),
+ '64-bit installer must place binaries in Program Files');
+assert.ok(installer.includes('PrivilegesRequired=admin')&&
+          installer.includes('ArchitecturesInstallIn64BitMode=x64'),
+ 'The installer must request Windows administrator permission');
+assert.ok(installer.includes('Source: "dist\\{#MyAppExe}"'),
+ 'The installer must bundle the stable application executable');
 assert.ok(!fs.existsSync(new URL('../songstudio-pc',import.meta.url)),
  'Retired native PC source must not be present on current branch');
 assert.ok(!fs.existsSync(new URL('../studio',import.meta.url)),

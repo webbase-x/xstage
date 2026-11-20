@@ -1,6 +1,14 @@
 name: X-Stage Song Studio Pro · Tests and Windows Preview
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "songstudio-plus/**"
+      - "scripts/test-songstudio-pro-timeline*.mjs"
+      - "scripts/test-songstudio-pro-actions.mjs"
+      - "scripts/test-songstudio-pro-portal.mjs"
+      - ".github/workflows/test-songstudio-pro.yml"
   push:
     branches: [main]
     paths:
@@ -88,11 +96,11 @@ jobs:
           print("PASS: eight-menu standalone app with manual lyric repair and pre-export preview")
           PY
 
-  windows-preview:
-    name: Build portable Windows EXE (preview only)
+  windows-installer:
+    name: Build Program Files Windows Setup (preview)
     needs: core-and-web
     runs-on: windows-2022
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -110,33 +118,44 @@ jobs:
         run: |
           node scripts/test-songstudio-pro-actions.mjs
           if ($LASTEXITCODE -ne 0) { throw "Desktop standalone contract failed" }
-      - name: Build standalone EXE with embedded web frontend
+      - name: Build stable-name desktop app payload
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "X-Stage-Song-Studio-Pro-v0.1.30-preview" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
-          if ($LASTEXITCODE -ne 0) { throw "PyInstaller returned failure" }
-          if (!(Test-Path "dist/X-Stage-Song-Studio-Pro-v0.1.30-preview.exe")) { throw "EXE not produced" }
-          python scripts/verify_songstudio_exe_icon.py "dist/X-Stage-Song-Studio-Pro-v0.1.30-preview.exe"
-          if ($LASTEXITCODE -ne 0) { throw "Song Studio EXE missing its branded Windows icon" }
-      - name: Verify EXE hash and package preview
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "XStageSongStudioPro" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+          if (!(Test-Path "dist/XStageSongStudioPro.exe")) { throw "App payload missing" }
+          python scripts/verify_songstudio_exe_icon.py "dist/XStageSongStudioPro.exe"
+          if ($LASTEXITCODE -ne 0) { throw "EXE icon verification failed" }
+      - name: Install Inno Setup and build Setup EXE
         shell: pwsh
         run: |
-          $exe="dist/X-Stage-Song-Studio-Pro-v0.1.30-preview.exe"
-          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-          "X-Stage Song Studio Pro v0.1.30 Desktop Standalone Preview" | Out-File "dist/README-Preview.txt" -Encoding UTF8
-          "SHA-256: $hash" | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
-          "Desktop Standalone using PySide6 QtWebEngine with local-only SQLite Engine. Checks verified updates immediately after engine connect, shows an in-app update notice with one-click install, and retains responsive API/SQLite safeguards. Binary not code-signed." | Out-File "dist/README-Preview.txt" -Encoding UTF8 -Append
-          Write-Host "EXE SHA-256 $hash"
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (!(Test-Path $compiler)) { $compiler = Join-Path $env:ProgramFiles 'Inno Setup 6/ISCC.exe' }
+          if (!(Test-Path $compiler)) { throw "ISCC.exe missing" }
+          & $compiler 'songstudio-plus/installer/XStageSongStudioPro.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          if (!(Test-Path "songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.31-win-x64-Setup.exe")) { throw "Setup EXE missing" }
+      - name: Verify Setup SHA-256 and create evidence
+        shell: pwsh
+        run: |
+          $setup="songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.31-win-x64-Setup.exe"
+          $hash=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "X-Stage Song Studio Pro v0.1.31 Windows x64 Program Files Setup" | Out-File "dist/README-Setup.txt" -Encoding UTF8
+          "SHA-256: $hash" | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
+          "Inno Setup (unsigned); requires Windows UAC, retains user SQLite workspace." | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
+          Write-Host "SETUP SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.30-Windows-Preview
-          path: dist/X-Stage-Song-Studio-Pro-v0.1.30-preview.exe
+          name: X-Stage-Song-Studio-Pro-v0.1.31-Windows-Setup
+          path: songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.31-win-x64-Setup.exe
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.30-Windows-Preview-Metadata
-          path: dist/README-Preview.txt
+          name: X-Stage-Song-Studio-Pro-v0.1.31-Windows-Setup-Metadata
+          path: dist/README-Setup.txt
           retention-days: 14
           if-no-files-found: error

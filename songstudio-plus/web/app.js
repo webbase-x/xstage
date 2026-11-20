@@ -670,7 +670,7 @@
   async function beginProUpdate(){
     if(state.updateBusy||!state.updateTarget?.newer)return;
     if(!await confirmTask("ติดตั้ง Song Studio Pro รุ่นใหม่",
-      "ดาวน์โหลด EXE จาก GitHub ตรวจ SHA-256 แล้วเปลี่ยนโปรแกรมทันที\n"+
+      "ดาวน์โหลดตัวติดตั้งจาก GitHub ตรวจ SHA-256 แล้วติดตั้งลง Program Files (Windows จะขอสิทธิ์ผู้ดูแลระบบ)\n"+
       "ถ้านำเข้าเพลงอยู่ จะหยุดหลังไฟล์ปัจจุบัน บันทึก Checkpoint แล้วเปิดรุ่นใหม่มาทำต่อ\n"+
       "ยืนยันให้ดาวน์โหลดและติดตั้งหรือไม่?"))return;
     state.updateBusy=true;
@@ -701,7 +701,7 @@
       const ready=await api("/api/update/ready");
       if(ready.ready&&ready.version===state.updateTarget.version){
         await api("/api/update/install",{});
-        text("pro-update-status","กำลังปิดโปรแกรมเก่า ติดตั้ง EXE และเปิดกลับมาทำต่อ...");
+        text("pro-update-status","กำลังปิดโปรแกรมและติดตั้งลง Program Files · โปรดยืนยัน UAC...");
         toast("ระบบกำลังเปิดโปรแกรมรุ่นใหม่");
       }else{
         state.updateInstallIntent=true;
@@ -912,7 +912,7 @@
                 const reason=error?.message||String(error);
                 text("pro-update-status","ติดตั้งไม่สำเร็จ: "+reason);
                 text("pro-update-notice-text","ติดตั้งไม่สำเร็จ: "+reason+
-                  " · สามารถลองใหม่ได้ หรือใช้ดาวน์โหลด EXE โดยตรง");
+                  " · สามารถลองใหม่ได้ หรือดาวน์โหลดตัวติดตั้งโดยตรง");
                 const retry=Boolean(state.updateTarget?.newer);
                 $("pro-update-install").disabled=!retry;
                 $("pro-update-notice-install").disabled=!retry;
@@ -924,7 +924,7 @@
               const problem=job.error||job.message||"ไม่ทราบสาเหตุ";
               text("pro-update-status","ดาวน์โหลดอัปเดตไม่สำเร็จ · "+problem);
               text("pro-update-notice-text","ดาวน์โหลดไม่สำเร็จ: "+problem+
-                " · กดอัปเดตอีกครั้ง หรือใช้ปุ่มดาวน์โหลด EXE โดยตรง");
+                " · กดอัปเดตอีกครั้ง หรือใช้ปุ่มดาวน์โหลดตัวติดตั้งโดยตรง");
               // Restore ALL update buttons: the old UI left the top banner
               // disabled forever after a failed background update job.
               const retry=Boolean(state.updateTarget?.newer);
