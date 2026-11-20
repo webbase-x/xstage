@@ -41,7 +41,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.26",
+        self.diagnostic("state.ready",version="0.1.27",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -226,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.26",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.27",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
