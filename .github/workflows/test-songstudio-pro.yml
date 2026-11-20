@@ -131,8 +131,12 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: X-Stage-Song-Studio-Pro-v0.1.23-Windows-Preview
-          path: |
-            dist/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe
-            dist/README-Preview.txt
+          path: dist/X-Stage-Song-Studio-Pro-v0.1.23-preview.exe
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v6
+        with:
+          name: X-Stage-Song-Studio-Pro-v0.1.23-Windows-Preview-Metadata
+          path: dist/README-Preview.txt
           retention-days: 14
           if-no-files-found: error
