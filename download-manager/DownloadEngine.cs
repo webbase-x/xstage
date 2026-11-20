@@ -21,25 +21,35 @@ public sealed class DownloadEngine
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, IncludeFields = true };
     private readonly string _index;
     private readonly string _settings;
+    private readonly DownloadStateStore _state;
+    private long _lastProgressSave;
+    public string LastStorageError { get; private set; } = "";
+    public string DatabasePath => _state.DatabasePath;
     public static readonly int[] AllowedParts = { 1, 2, 4, 8, 16, 32 };
     public int DefaultParts { get; private set; } = 4;
     public List<DownloadJob> Jobs { get; }
 
-    public DownloadEngine()
+    public DownloadEngine(string? dataDirectory = null)
     {
-        var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        var data = dataDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "X-Stage", "Download Manager");
         Directory.CreateDirectory(data);
         _index = Path.Combine(data, "downloads.json");
         _settings = Path.Combine(data, "settings.json");
+        _state = new DownloadStateStore(data);
+        // Keep both historical JSON files untouched as migration backups.
+        var legacyParts = DefaultParts;
         try
         {
             var configured = JsonSerializer.Deserialize<int>(File.ReadAllText(_settings));
-            if (AllowedParts.Contains(configured)) DefaultParts = configured;
+            if (AllowedParts.Contains(configured)) legacyParts = configured;
         }
         catch (IOException) { }
         catch (JsonException) { }
-        Jobs = Load();
+        DefaultParts = _state.ReadDefaultParts(legacyParts);
+        Jobs = _state.LoadOrMigrate(_index);
+        _state.SaveDefaultParts(DefaultParts);
         foreach (var job in Jobs)
         {
             if (job.Status is "Running" or "Queued") job.Status = "Paused";
@@ -68,36 +78,39 @@ public sealed class DownloadEngine
         Save();
     }
 
-    private List<DownloadJob> Load()
-    {
-        try
-        {
-            return File.Exists(_index)
-                ? JsonSerializer.Deserialize<List<DownloadJob>>(File.ReadAllText(_index), Json) ?? new()
-                : new();
-        }
-        catch
-        {
-            // Keep the broken original for recovery instead of deleting the user's download history.
-            try { File.Copy(_index, _index + ".damaged-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), true); }
-            catch { /* Best effort only. */ }
-            return new();
-        }
-    }
-
+    // Persist critical state changes immediately, and keep running transfers
+    // checkpointed separately on a bounded cadence. SQLite commits jobs and
+    // individual chunk byte positions atomically in WAL mode.
     public void Save()
     {
         lock (_saveLock)
         {
             try
             {
-                var tmp = _index + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(Jobs, Json));
-                File.Move(tmp, _index, true);
+                _state.SaveSnapshot(Jobs.ToArray());
+                Interlocked.Exchange(ref _lastProgressSave, Environment.TickCount64);
+                LastStorageError = "";
             }
-            catch (IOException) { /* Retry on next timer tick; downloads must keep running. */ }
-            catch (UnauthorizedAccessException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                       Microsoft.Data.Sqlite.SqliteException or InvalidDataException)
+            {
+                LastStorageError = "บันทึกสถานะ SQLite ไม่สำเร็จ: " + ex.Message;
+                try
+                {
+                    File.AppendAllText(Path.Combine(Path.GetDirectoryName(DatabasePath)!,
+                        "state-errors.log"), DateTimeOffset.Now.ToString("O") +
+                        " " + LastStorageError + Environment.NewLine);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
+    }
+
+    public void SaveProgressIfDue()
+    {
+        if (Environment.TickCount64 - Interlocked.Read(ref _lastProgressSave) >= 2000)
+            Save();
     }
 
     public static bool TryParseUrl(string text, out Uri? url)
@@ -113,7 +126,7 @@ public sealed class DownloadEngine
     {
         ValidateParts(parts);
         DefaultParts = parts;
-        File.WriteAllText(_settings, JsonSerializer.Serialize(parts));
+        _state.SaveDefaultParts(parts);
     }
 
     private static void ValidateParts(int parts)
