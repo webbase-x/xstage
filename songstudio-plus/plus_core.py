@@ -820,15 +820,19 @@ def import_folder(workspace,source,progress=None,cancel=None):
                 song_id=song["id"]
                 # The same path may be reused for a different song after
                 # replacement: keep the latest verified media relationship.
-                db.execute("""INSERT INTO xstage_media_sources
-                    (source_path,media_id,bytes,mtime_ns,verified_sha256,last_seen)
-                    VALUES (?,?,?,?,?,?)
-                    ON CONFLICT(source_path) DO UPDATE SET
-                    media_id=excluded.media_id,bytes=excluded.bytes,
-                    mtime_ns=excluded.mtime_ns,
-                    verified_sha256=excluded.verified_sha256,
-                    last_seen=excluded.last_seen""",
-                    (original_path,media["id"],before.st_size,before.st_mtime_ns,h,now()))
+                # A verified unchanged source must not be rewritten on every
+                # rescan. This avoids a full SQLite index/WAL update for each
+                # of hundreds of thousands of already-indexed media files.
+                if not cached:
+                    db.execute("""INSERT INTO xstage_media_sources
+                        (source_path,media_id,bytes,mtime_ns,verified_sha256,last_seen)
+                        VALUES (?,?,?,?,?,?)
+                        ON CONFLICT(source_path) DO UPDATE SET
+                        media_id=excluded.media_id,bytes=excluded.bytes,
+                        mtime_ns=excluded.mtime_ns,
+                        verified_sha256=excluded.verified_sha256,
+                        last_seen=excluded.last_seen""",
+                        (original_path,media["id"],before.st_size,before.st_mtime_ns,h,now()))
                 # Never SHA-256 the .LYR/.CUR/.LRC files. Their small
                 # stat-only stamp avoids re-parsing unchanged successful
                 # sources; new/changed companions are decoded and compared
@@ -909,10 +913,21 @@ def import_folder(workspace,source,progress=None,cancel=None):
                                 totals["draft_lyrics"]+=1
                             except (OSError,ValueError,UnicodeError):
                                 pass
-                db.execute("""INSERT OR REPLACE INTO xstage_import_items
-                 (batch_id,source_path,source_name,media_sha256,song_id,outcome,message,created_at)
-                 VALUES (?,?,?,?,?,?,?,?)""",
-                 (batch,original_path,path.name,h,song_id,outcome,message,now()))
+                # Successes are already reflected in the batch counters and
+                # resumable checkpoints; only issues need a row per source.
+                # Remove a resolved earlier issue when rechecking a file in
+                # the same batch after its companions have been repaired.
+                if outcome in ("lyrics-error","timing-incomplete","partial-lyrics",
+                               "untimed-lyrics","missing-lyr"):
+                    db.execute("""INSERT OR REPLACE INTO xstage_import_items
+                     (batch_id,source_path,source_name,media_sha256,song_id,
+                      outcome,message,created_at)
+                     VALUES (?,?,?,?,?,?,?,?)""",
+                     (batch,original_path,path.name,h,song_id,outcome,message,now()))
+                else:
+                    db.execute("""DELETE FROM xstage_import_items
+                         WHERE batch_id=? AND source_path=?""",
+                         (batch,original_path))
                 db.execute("RELEASE SAVEPOINT plus_media_item")
                 savepoint=False
             except (OSError,ValueError,TypeError,sqlite3.DatabaseError) as exc:
