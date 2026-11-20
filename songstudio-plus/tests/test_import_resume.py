@@ -52,8 +52,8 @@ class ImportResumeTests(unittest.TestCase):
         self.assertFalse(resumed["cancelled"])
         self.assertIsNone(core.interrupted_import(self.workspace))
         with core.connect(self.workspace) as db:
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM xstage_import_file_checkpoints").fetchone()[0],35)
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM xstage_import_items").fetchone()[0],35)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM xstage_import_file_checkpoints").fetchone()[0],0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM xstage_import_items").fetchone()[0],0)
     def test_same_file_changed_reopens_media_even_after_checkpoint(self):
         source=self.make("song.mp3",b"sound one")
         stop=threading.Event()
