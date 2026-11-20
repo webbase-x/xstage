@@ -518,6 +518,8 @@ public sealed partial class MainForm : Form
         }
         queues.DropDownItems.Add(new ToolStripSeparator());
         queues.DropDownItems.Add("สร้างคิวใหม่...", null, (_, _) => CreateJobQueue(job));
+        queues.DropDownItems.Add("เปลี่ยนชื่อคิวปัจจุบัน...", null,
+            (_, _) => RenameJobQueue(job));
         _completedMenu.Items.Add(queues);
         _completedMenu.Items.Add("จำกัดความเร็ว HTTP รายไฟล์...", null,
             (_, _) => ConfigureFileSpeed(job));
