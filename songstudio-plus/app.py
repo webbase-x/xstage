@@ -38,10 +38,14 @@ class State:
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
         self.native_picker=None
+        # A successful update check must be the single verified snapshot used
+        # by the subsequent download. Do not query CDN/Pages a SECOND time
+        # inside the worker; a transient "available=false" would abort at 0 B.
+        self._verified_update=None
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.27",
+        self.diagnostic("state.ready",version="0.1.28",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -68,6 +72,39 @@ class State:
                     stream.write(line+"\n")
         except Exception:
             pass
+
+    def check_latest_update(self):
+        try:
+            verified=updater.check()
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            with self.lock:
+                cached=dict(self._verified_update) if self._verified_update else None
+            if cached and cached.get("newer"):
+                self.diagnostic("update.check.cached",version=cached["version"],
+                                cause=str(exc)[:250])
+                return {**cached,"used_previous_verification":True}
+            raise
+        with self.lock:
+            cached=self._verified_update
+            if (cached and cached.get("newer") and
+                    updater.version_tuple(cached["version"])>
+                    updater.version_tuple(verified["version"])):
+                selected=dict(cached)
+            else:
+                self._verified_update=dict(verified)
+                selected=dict(verified)
+        self.diagnostic("update.check.verified",version=selected["version"],
+                        source=selected.get("feed","official-release"))
+        return selected
+
+    def download_target(self):
+        with self.lock:
+            target=dict(self._verified_update) if self._verified_update else None
+        if not target:
+            target=self.check_latest_update()
+        if not target.get("newer"):
+            raise ValueError("ใช้งาน Song Studio Pro รุ่นล่าสุดอยู่แล้ว")
+        return target
 
     def start_job(self,kind,operation):
         job_id=secrets.token_hex(10)
@@ -226,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.27",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.28",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
@@ -236,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/api/import/resume":
             self.send_json(200,{"resume":self.state.resume_info});return
         if path=="/api/update/check":
-            self.send_json(200,updater.check());return
+            self.send_json(200,self.state.check_latest_update());return
         if path=="/api/update/ready":
             ready=updater.ready_file(self.state.workspace)
             self.send_json(200,{"ready":bool(ready),
@@ -424,10 +461,15 @@ class Handler(BaseHTTPRequestHandler):
                 result=self.state.start_job("import",lambda progress,cancel:
                     core.import_folder(self.state.workspace,source,progress,cancel))
             elif path=="/api/update/download":
-                # Resolve the verified LATEST release at the moment of the
-                # click, not a version captured on application startup.
+                # Freeze the same release that /api/update/check verified;
+                # NEVER refetch a changing manifest after the user clicks.
+                target=self.state.download_target()
+                self.state.diagnostic("update.download.selected",
+                                      version=target["version"],
+                                      source=target.get("feed","verified"),
+                                      sha256=target["sha256"][:16])
                 result=self.state.start_job("update",lambda progress,cancel:
-                    updater.download(self.state.workspace,updater.check(),progress,cancel))
+                    updater.download(self.state.workspace,target,progress,cancel))
             elif path=="/api/update/install":
                 result=updater.install_and_restart(self.state.workspace)
                 self.state.request_restart()
