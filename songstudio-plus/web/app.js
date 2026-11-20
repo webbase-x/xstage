@@ -18,7 +18,7 @@
                  jobSignature:"",toastTimer:null,riskFilter:"structural",
                  riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
-                 songOffset:0,songHasNext:false,groupOffset:0,groupHasNext:false,
+                 songOffset:0,songHasNext:false,groupOffset:0,groupLimit:6,groupHasNext:false,
                  selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
                  lyricSearchRun:0,groupSearchRunning:false,lyricContextHits:0,
                  lyricContextFailed:false,
@@ -181,6 +181,23 @@
       " เพลง · เวลาประมาณ "+estimated+" เพลง · ตรวจรายการตามสาเหตุได้ด้านล่าง");
   }
   const visibleRows=()=>window.innerHeight<=680?4:window.innerHeight<=850?5:6;
+  function groupPageSize(){
+    const list=$("group-list");
+    const pager=$("groups-page-info")?.closest(".list-pagination");
+    const top=list?.getBoundingClientRect().top||0;
+    const pagerHeight=pager?.getBoundingClientRect().height||44;
+    let available=0;
+    if(window.innerWidth<=900){
+      available=Math.min(240,Math.max(120,window.innerHeight*.27));
+    }else if(top>0){
+      available=Math.min(480,Math.max(120,window.innerHeight-top-pagerHeight-28));
+    }
+    if(available<120)return visibleRows();
+    const compact=window.innerHeight<=850;
+    const rowHeight=compact?46:58;
+    const gap=compact?6:8;
+    return Math.max(2,Math.min(10,Math.floor((available+gap)/(rowHeight+gap))));
+  }
   async function refreshSongs(){
     if(!state.ready)return;
     const q=state.view==="library"?$("library-search").value.trim():"";
@@ -385,6 +402,8 @@
       state.lyricContextFailed=false;
       $("lyrics-search-context").hidden=true;
     }
+    state.groupLimit=groupPageSize();
+    if(!reset)state.groupOffset=Math.floor(state.groupOffset/state.groupLimit)*state.groupLimit;
     state.groups=[];
     state.groupHasNext=false;
     state.groupSearchRunning=Boolean(q);
@@ -416,7 +435,7 @@
         }):Promise.resolve();
     let failed=null;
     try{
-      const limit=visibleRows();
+      const limit=state.groupLimit;
       // A multi-gigabyte SQLite registry may need more than the generic 12s
       // UI request limit for an exact substring across all current lyrics.
       const data=await api("/api/groups?q="+encodeURIComponent(q)+
@@ -453,7 +472,11 @@
   }
   function renderGroups(){
     text("groups-count",number(state.groups.length)+" กลุ่มในหน้านี้");
-    text("groups-page-info","หน้า "+number(Math.floor(state.groupOffset/visibleRows())+1));
+    const limit=Math.max(1,state.groupLimit);
+    const page=Math.floor(state.groupOffset/limit)+1;
+    const start=state.groups.length?state.groupOffset+1:0;
+    const end=state.groupOffset+state.groups.length;
+    text("groups-page-info","หน้า "+number(page)+" · "+number(start)+"–"+number(end));
     $("groups-prev").disabled=state.groupOffset<=0;
     $("groups-next").disabled=!state.groupHasNext;
     const panel=$("group-list");panel.replaceChildren();
@@ -2459,6 +2482,19 @@
       renderGroups();
     });
     $("lyrics-replacement").addEventListener("input",updateSelectedGroups);
+    let groupResizeTimer=null;
+    window.addEventListener("resize",()=>{
+      clearTimeout(groupResizeTimer);
+      groupResizeTimer=setTimeout(()=>{
+        if(state.view!=="lyrics"||!state.ready||state.groupSearchRunning||
+           !$("lyrics-search").value.trim())return;
+        const next=groupPageSize();
+        if(next===state.groupLimit)return;
+        state.groupLimit=next;
+        state.groupOffset=Math.floor(state.groupOffset/next)*next;
+        void searchGroups(false);
+      },220);
+    });
     $("groups-all").addEventListener("click",()=>{
       for(const group of state.groups){
         state.selectedGroups.add(group.group_key);
@@ -2532,11 +2568,11 @@
       state.songOffset+=visibleRows();void refreshSongs();
     });
     $("groups-prev").addEventListener("click",()=>{
-      state.groupOffset=Math.max(0,state.groupOffset-visibleRows());
+      state.groupOffset=Math.max(0,state.groupOffset-state.groupLimit);
       void searchGroups(false);
     });
     $("groups-next").addEventListener("click",()=>{
-      state.groupOffset+=visibleRows();void searchGroups(false);
+      state.groupOffset+=state.groupLimit;void searchGroups(false);
     });
     $("library-find").addEventListener("click",()=>{
       state.songOffset=0;void refreshSongs();

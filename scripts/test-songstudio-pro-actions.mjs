@@ -89,6 +89,13 @@ assert.ok(desktop.includes('Ctrl+Shift+L')&&desktop.includes('web.core.check'),
  'Desktop shell must provide a native log shortcut and JS core health check');
 assert.ok(js.includes('__XSTAGE_CORE_BOUND__'),
  'Web UI must expose successful core button binding to the desktop wrapper');
+assert.ok(html.includes('list="lyrics-replacement-options"')&&
+          html.includes('<option value="X-Stage Karaoke">'),
+ 'Grouped lyric replacement must offer X-Stage Karaoke while retaining custom typing');
+assert.ok(js.includes('function groupPageSize()')&&
+          js.includes('state.groupLimit=groupPageSize()')&&
+          js.includes('state.groupOffset+=state.groupLimit'),
+ 'Grouped lyric pages must size from available panel space and paginate with the same limit');
 assert.ok(js.includes('jobsRefreshing:false')&&js.includes('if(!state.ready||state.jobsRefreshing)return'),
  'Job polling must not overlap across repeated imports');
 assert.ok(js.includes('ui.post_job_refresh.error')&&!js.includes('}catch(error){setReady(false);}'),
