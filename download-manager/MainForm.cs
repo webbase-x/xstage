@@ -23,7 +23,7 @@ public sealed class MainForm : Form
 
     public MainForm(string[] args)
     {
-        Text = "X-Stage Download Manager · v0.2.1 Build 4";
+        Text = "X-Stage Download Manager · v0.2.2 Build 5";
         MinimumSize = new Size(930, 650);
         Size = new Size(1220, 735);
         StartPosition = FormStartPosition.CenterScreen;
@@ -250,7 +250,7 @@ public sealed class MainForm : Form
         {
             if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index) return;
             var job = e.RowIndex < _engine.Jobs.Count ? _engine.Jobs[e.RowIndex] : null;
-            if (job is not null && job.Status == "Completed")
+            if (job is not null)
                 ShowCompletedMenu(job, _grid.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false));
         };
         _grid.CellMouseEnter += (_, e) =>
@@ -556,7 +556,8 @@ public sealed class MainForm : Form
     {
         var menu = new ContextMenuStrip();
         menu.Closed += (_, _) => menu.Dispose();
-        menu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job));
+        menu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
+            job.Status == "Completed" && File.Exists(job.CompletedPath);
         menu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
         menu.Show(_grid, new Point(cellBounds.Left + 12, cellBounds.Bottom));
         menu.AutoClose = true;
@@ -594,16 +595,25 @@ public sealed class MainForm : Form
     private void OpenSelected()
     {
         var job = Selected();
-        if (job is null) return;
-        var path = job.Status == "Completed" && File.Exists(job.CompletedPath)
-            ? job.CompletedPath : job.Folder;
-        try
+        if (job is null)
         {
-            if (File.Exists(path) || Directory.Exists(path))
-                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-            else MessageBox.Show(this, "ยังไม่พบไฟล์หรือโฟลเดอร์ปลายทาง", "X-Stage");
+            try
+            {
+                if (Directory.Exists(_folder.Text))
+                    Process.Start(new ProcessStartInfo(_folder.Text) { UseShellExecute = true });
+                else MessageBox.Show(this, "กรุณาเลือกโฟลเดอร์ปลายทางก่อน", "X-Stage");
+            }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "เปิดโฟลเดอร์ไม่สำเร็จ"); }
+            return;
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "เปิดไฟล์ไม่ได้"); }
+        // Do not silently launch a completed file: let the user choose.
+        // A failed/incomplete download can still open its destination folder.
+        var menu = new ContextMenuStrip();
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
+            job.Status == "Completed" && File.Exists(job.CompletedPath);
+        menu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
+        menu.Show(Cursor.Position);
     }
 
     private void RefreshRows()
