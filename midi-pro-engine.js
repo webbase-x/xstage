@@ -29,14 +29,16 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   ]);
   if(typeof WorkletSynthesizer!=='function')throw Error('ไฟล์ SpessaSynth ไม่สมบูรณ์');
   const Ctor=scope.AudioContext||scope.webkitAudioContext;
-  const ctx=new Ctor({latencyHint:'playback'});
+  const unlocked=scope.XStageBrowserMidi?.liveAudioContext?.();
+  const ownsContext=!unlocked;
+  const ctx=unlocked||new Ctor({latencyHint:'playback'});
   let synth=null,master=null,limiter=null,disposed=false;
   const dispose=()=>{
     if(disposed)return;disposed=true;
     try{synth?.stopAll(true);}catch{}
     try{synth?.destroy();}catch{}
     try{master?.disconnect();limiter?.disconnect();}catch{}
-    void ctx.close().catch(()=>{});
+    if(ownsContext)void ctx.close().catch(()=>{});
   };
   try{
     await ctx.audioWorklet.addModule(WORKLET);
