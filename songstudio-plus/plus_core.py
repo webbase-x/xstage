@@ -933,6 +933,21 @@ def import_folder(workspace,source,progress=None,cancel=None):
                 last_progress=time.monotonic()
         final_status="cancelled" if cancel and cancel.is_set() else "completed"
         store_resume(final_status)
+        if final_status=="completed":
+            # Only finished batches may discard resume checkpoints. The batch
+            # counters retain successes; issue rows remain inspectable.
+            try:
+                db.execute("DELETE FROM xstage_import_file_checkpoints WHERE batch_id=?",
+                           (batch,))
+                db.execute("""DELETE FROM xstage_import_items WHERE batch_id=?
+                    AND outcome NOT IN ('error','lyrics-error','timing-incomplete',
+                    'partial-lyrics','untimed-lyrics','missing-lyr',
+                    'skipped-ncn-incomplete')""",(batch,))
+                db.commit()
+            except sqlite3.DatabaseError:
+                # Never fail an already-committed import because housekeeping
+                # could not free its disposable log rows.
+                db.rollback()
         if progress:progress({**totals,"resumed_files":resumed_count,
                               "resume":resumed},final_status)
     return {"batch":batch,**totals,"resumed_files":resumed_count,
