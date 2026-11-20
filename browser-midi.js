@@ -616,6 +616,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const master=ctx.createGain();master.gain.value=.55;master.connect(ctx.destination);
   const notes=song.notes.slice().sort((a,b)=>a.start-b.start);
   let cursor=0,disposed=false,timer=null,voices=[],revision=0;
+  const regionCache=new Map();
   const stopVoices=()=>{
     for(const voice of voices){try{voice.stop();}catch{}try{voice.disconnect();}catch{}}
     voices=[];
@@ -641,7 +642,13 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
     const pitch=n.channel===9?n.key:Math.max(0,Math.min(127,n.key+shift));
     const override=getProgram(),program=n.channel===9?n.program:
       Number.isInteger(override)&&override>=0&&override<=127?override:n.program;
-    const regions=font?font.find(n.bank,program,pitch,n.velocity).slice(0,4):[null];
+    const regionKey=n.bank+':'+program+':'+pitch+':'+n.velocity;
+    let regions=[null];
+    if(font){
+      if(!regionCache.has(regionKey))regionCache.set(regionKey,
+        font.find(n.bank,program,pitch,n.velocity).slice(0,4));
+      regions=regionCache.get(regionKey);
+    }
     if(!regions.length)return; // Invalid presets never create incorrect notes.
     for(const region of regions){
       let buffer=null;
