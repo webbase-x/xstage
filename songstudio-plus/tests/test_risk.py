@@ -7,6 +7,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -25,6 +26,10 @@ class RiskAuditTests(unittest.TestCase):
         self.source=self.base/"source"
         self.source.mkdir()
         audit.init(self.workspace)
+
+    def test_initialized_risk_schema_does_not_reissue_ddl_on_ui_reads(self):
+        with patch.object(core,"connect",side_effect=AssertionError("redundant DDL")):
+            audit.init(self.workspace)
 
     def put(self,rel,data):
         path=self.source/rel
