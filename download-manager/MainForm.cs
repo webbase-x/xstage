@@ -794,7 +794,8 @@ public sealed partial class MainForm : Form
             row.Cells["Status"].Value = job.Status switch
             {
                 "Running" => job.Kind == "Video" && job.VideoPhase.Length > 0
-                    ? job.VideoPhase : "กำลังดาวน์โหลด",
+                    ? job.VideoPhase : job.TransferPhase.Length > 0
+                    ? job.TransferPhase : "กำลังดาวน์โหลด",
                 "Queued" => "รอคิว",
                 "Paused" => "หยุดชั่วคราว",
                 "Completed" => "สำเร็จ",
