@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.9",
-  "build": 12,
+  "version": "0.2.10",
+  "build": 13,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.9-build12-win-x64-Setup.exe",
-  "sha256": "b8e3fc455b38930274c2deb1b938091f7499f388797d0d508417e32dd5f1dd62",
-  "size_bytes": 213856786,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.9-build12-preview/X-Stage-Download-Manager-v0.2.9-build12-win-x64-Setup.exe",
-  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
+  "file": "X-Stage-Download-Manager-v0.2.10-build13-win-x64-Setup.exe",
+  "sha256": "60adc594ba4f84e78220967bf23e3ce7920f6ac239730f3ffed2cb3abe8d0566",
+  "size_bytes": 213867286,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.10-build13-preview/X-Stage-Download-Manager-v0.2.10-build13-win-x64-Setup.exe",
+  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, yt-dlp stall diagnostics, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
 }
