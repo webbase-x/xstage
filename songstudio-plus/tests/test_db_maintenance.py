@@ -127,7 +127,7 @@ class MaintenanceTests(unittest.TestCase):
     def test_cleanup_retains_latest_two_full_audits_and_manual_reviews(self):
         import risk_audit as risks
         (self.root/"track.lrc").write_text(
-            "[00:01.00]First lyric\\n[00:05.00]Second line\\n",
+            "[00:01.00]First lyric\n[00:05.00]Second line\n",
             encoding="utf-8")
         core.import_folder(self.workspace,self.root)
         risks.init(self.workspace)
