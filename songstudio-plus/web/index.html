@@ -32,7 +32,7 @@
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
-      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.28 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
+      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.29 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 คืนค่า</span></div>
     </div>
   </aside>
   <main class="main">
@@ -103,7 +103,7 @@
           </article>
         </div>
         <section class="panel pro-update-panel" aria-labelledby="pro-update-title">
-          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.28</span></div>
+          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.29</span></div>
           <p class="field-hint" id="pro-update-status" aria-live="polite">ตรวจรุ่นล่าสุดจาก GitHub และ SHA-256 · ข้ามรุ่นได้ในครั้งเดียว · คลังเพลงและประวัติเนื้อร้องไม่ถูกลบ</p>
           <div class="toolbar">
             <button id="pro-update-check" class="quiet-btn" type="button">↻ ตรวจสอบอัปเดต</button>
@@ -139,8 +139,13 @@
         <div class="page-intro"><div><h1 id="lyrics-title">แก้ไขเนื้อร้อง<span class="gradient-text">ทั้งกลุ่ม</span></h1><p>ค้นหาคำในทุกบรรทัด จัดกลุ่มข้อความที่เหมือนกัน แล้วแทนที่ได้หลายกลุ่มพร้อมกัน โดยเก็บการปาดสีแยกรายเพลง</p></div><span class="section-symbol">Aa</span></div>
         <article class="panel">
           <div class="panel-head"><div><span class="label-top">SEARCH ACROSS YOUR LIBRARY</span><h2>ค้นหาคำหรือวลี</h2></div><span class="count-pill">TIMING LOCK</span></div>
-          <div class="search-combo"><div class="input-wrap"><span class="search-icon">⌕</span><input id="lyrics-search" type="search" placeholder="เช่น Nick, โดย, รัก..." autocomplete="off"></div><button class="primary-btn" id="lyrics-find">ค้นหา</button></div>
-          <p class="field-hint">ระบบค้นหาบรรทัดที่มีคำนี้ แล้วแยกเป็นกลุ่มตามข้อความทั้งบรรทัด แม้มีเพียงหนึ่งเพลง</p>
+          <div class="search-combo"><div class="input-wrap"><span class="search-icon">⌕</span><input id="lyrics-search" type="search" maxlength="100" placeholder="คำในเนื้อร้อง / ชื่อเพลง / ศิลปิน / ข้อความ LYR เช่น karaoke" autocomplete="off"></div><button class="primary-btn" id="lyrics-find" type="button">ค้นหา</button></div>
+          <p class="field-hint" id="lyrics-search-feedback" aria-live="polite">ค้นในบรรทัดเนื้อร้องปัจจุบันเพื่อแทนที่ทั้งกลุ่ม และแสดงเพลงหรือ LYR ที่ยังไม่มีเวลาแยกต่างหาก</p>
+          <div id="lyrics-search-context" class="lyrics-search-context" hidden>
+            <strong id="lyrics-search-context-title">รายการเพลงหรือเนื้อร้องรอเวลาที่เกี่ยวข้อง</strong>
+            <div id="lyrics-search-context-results" class="lyrics-search-context-results"></div>
+            <small>ผลชื่อเพลง/ศิลปินและข้อความ LYR เป็นข้อมูลประกอบ ไม่ใช่กลุ่มที่อนุญาตให้แทนที่ข้อความโดยอัตโนมัติ</small>
+          </div>
         </article>
         <div class="two-col lyrics-layout">
           <article class="panel">
@@ -423,7 +428,18 @@
 <dialog id="settings-dialog" class="confirm-dialog settings-dialog">
   <div>
     <div class="modal-head"><div><span class="label-top">SYSTEM & DIAGNOSTICS</span><h2>ตั้งค่าและระบบ</h2></div><button id="settings-close" class="quiet-btn" type="button">✕ ปิด</button></div>
-    <p>เครื่องมือระดับโปรแกรมสำหรับตรวจสอบ Local Engine, ฐานข้อมูล, การเลือกไฟล์/โฟลเดอร์ และข้อผิดพลาดจากทุกเมนู</p>
+    <p>ตรวจสอบรุ่นล่าสุด ติดตั้งอัปเดต และดู Log การทำงานได้จากเมนูนี้</p>
+    <div class="panel settings-update-panel">
+      <div class="panel-head"><div><span class="label-top">UPDATE & VERSION</span><h3>อัปเดต X-Stage Song Studio Pro</h3></div></div>
+      <p id="settings-update-version" class="field-hint">กำลังอ่านเวอร์ชันโปรแกรม</p>
+      <p id="settings-update-status" class="field-hint" aria-live="polite">ตรวจรุ่นล่าสุดจาก GitHub Releases และ SHA-256</p>
+      <div class="toolbar">
+        <button id="settings-update-check" class="quiet-btn" type="button">↻ ตรวจสอบอัปเดต</button>
+        <button id="settings-update-install" class="primary-btn" type="button" disabled>อัปเดตเป็นรุ่นล่าสุด</button>
+        <button id="settings-update-direct" class="quiet-btn" type="button">ดาวน์โหลด EXE โดยตรง</button>
+      </div>
+      <p id="settings-update-progress" class="field-hint" aria-live="polite">ข้ามรุ่นได้โดยตรง · ตรวจ SHA-256 ก่อนติดตั้ง · ไม่ลบฐานข้อมูลเพลง</p>
+    </div>
     <div class="panel" style="padding:18px;margin-top:16px">
       <div class="panel-head" style="margin-bottom:10px"><div><span class="label-top">PROGRAM LOG</span><h3>Log วิเคราะห์ทั้งโปรแกรม</h3></div></div>
       <p class="field-hint">บันทึกเหตุการณ์ของ X-Stage Song Studio Pro ทั้งโปรแกรม ไม่จำกัดเฉพาะการนำเข้าเพลง เช่น การเริ่ม Local Engine, เปิด UI, เลือกโฟลเดอร์, งานนำเข้า และข้อผิดพลาดสำคัญ</p>
