@@ -704,9 +704,9 @@ public sealed partial class MainForm
     private static string EtaLabel(DownloadJob job)
     {
         if (job.Status != "Running" || job.TotalBytes <= 0 ||
-            job.SpeedBytesPerSecond < 1024) return "—";
+            job.SmoothedSpeedBytesPerSecond < 1024) return "—";
         var remain = Math.Max(0, job.TotalBytes - Interlocked.Read(ref job.DownloadedBytes));
-        var seconds = remain / job.SpeedBytesPerSecond;
+        var seconds = remain / job.SmoothedSpeedBytesPerSecond;
         if (seconds > 24 * 3600 * 100) return "—";
         var time = TimeSpan.FromSeconds(seconds);
         return time.TotalHours >= 1 ? $"{(int)time.TotalHours:0}:{time.Minutes:00}:{time.Seconds:00}"
