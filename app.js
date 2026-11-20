@@ -1993,6 +1993,7 @@ function chooseSearchSong(song){
     state.userPaused=false;
     state.resumeAfterInterruption=false;
     try{window.XStageResumeAudioGraph?.();}catch{}
+    try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
     void playSong(song);
   }else{
     addToQueue(song);
@@ -2578,6 +2579,7 @@ async function resumePlaybackFromSystem(){
   catch{state.resumeAfterInterruption=true;updateTransport();return false;}
 }
 function togglePlayback(){
+  try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
   if(state.loading)return;
   if(!player.src){
     if(state.queue.length)playNext();
