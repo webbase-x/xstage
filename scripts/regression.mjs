@@ -176,7 +176,7 @@ for(const id of ['mirror-ios-pc','mirror-android-pc']){
   }
 }
 assert.ok(read('mirror-ios-pc/ReceiverIdentity.cs').includes('RandomNumberGenerator.GetInt32(1000, 10000)'),'receiver number must be cryptographically randomized and persisted');
-assert.ok(read('mirror-android-pc/ReceiverIdentity.cs').includes('receiver-number.txt'),'both apps must share the same stored receiver number');
+assert.ok(read('mirror-android-pc/MainForm.cs').includes('MakeLabel(Environment.MachineName') && !read('mirror-android-pc/MainForm.cs').includes('ReceiverIdentity'),'Mirror Android PC must show its real Windows hostname, not a No./ID number');
 const mirrorPcRelease=JSON.parse(read('downloads/mirror-pc-preview-latest.json'));
 assert.equal(mirrorPcRelease.channel,'preview','Mirror PC preview channel must remain explicit');
 if(mirrorPcRelease.available){
