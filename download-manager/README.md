@@ -2,7 +2,7 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.10 · Build 13** (Windows 10/11 x64).
+**Preview v0.2.11 · Build 14** (Windows 10/11 x64).
 
 ## Features
 - Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker. Resolve the final file name from HTTP Content-Disposition (including UTF-8 filename*), original URL, response MIME type, or a verified file signature when the CDN uses an opaque UUID. Completed extensionless downloads from older builds are safely renamed on next startup only if the existing file type is unambiguous; never overwrite originals. The video quality and MP4/MKV/WEBM/MP3 rows appear only for supported social-media video links, and collapse completely for ordinary file URLs.
