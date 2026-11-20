@@ -229,6 +229,7 @@
               <button id="stage-tools-toggle" class="stage-tools-toggle" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เมนู" title="เมนู">☰ <span>เมนู</span></button>
             </div>
             <p id="play-status" class="play-status" role="status"></p>
+            <output id="xstage-midi-engine-status" class="xstage-midi-engine-status" role="status" hidden aria-live="polite"></output>
             <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-share-library">⇄ แชร์โฟลเดอร์เพลง</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button></nav>
           </div>
           <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><output id="xstage-queue-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">คิว · งบหน่วยความจำกำลังประเมิน</output><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
@@ -419,12 +420,12 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="xmid-browser.js?v=1122" defer></script>
   <script src="memory-budget.js?v=1119" defer></script>
   <script src="browser-midi.js?v=1140-pro-worklet" defer></script>
-  <script src="midi-pro-engine.js?v=1141-midi-drums" defer></script>
+  <script src="midi-pro-engine.js?v=1142-midi-preload" defer></script>
   <script src="video-metadata-editor.js?v=1119" defer></script>
   <script src="video-transcode.js?v=1119" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
   <script src="tv-refresh.js?v=1119" defer></script>
-  <script src="app.js?v=1140-pro-worklet" defer></script><script src="pc-extensions.js?v=1119" defer></script>
+  <script src="app.js?v=1142-midi-preload" defer></script><script src="pc-extensions.js?v=1119" defer></script>
   <script src="native-audio-meter.js?v=1119" defer></script>
   <script src="stage-controls.js?v=1119" defer></script>
   <script src="mobile-layout.js?v=1119" defer></script>
