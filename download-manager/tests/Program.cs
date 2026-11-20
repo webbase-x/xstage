@@ -75,6 +75,49 @@ try
         ProgressPresentation.PercentLabel(finalizingVideo) != "100.0%")
         throw new Exception("Completed video must always display solid green 100%.");
 
+    // Header sorting must use numeric/date data rather than display labels.
+    // The displayed order must not mutate the original queue or row IDs.
+    var sortDate = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var sortJobs = new[]
+    {
+        new DownloadJob { Id = "s1", Name = "large.zip", TotalBytes = 10_000_000,
+            Status = "Completed", CreatedAt = sortDate.AddMinutes(2) },
+        new DownloadJob { Id = "s2", Name = "small.exe", TotalBytes = 200,
+            Status = "Completed", CreatedAt = sortDate },
+        new DownloadJob { Id = "s3", Name = "unnamed", TotalBytes = -1,
+            Status = "Queued", CreatedAt = sortDate.AddMinutes(1) },
+        new DownloadJob { Id = "s4", Name = "video",
+            Kind = "Video", OutputFormat = "mp4", TotalBytes = 500,
+            Status = "Running", VideoPercent = 67, CreatedAt = sortDate.AddMinutes(3) }
+    };
+    static string JoinedIds(IEnumerable<DownloadJob> jobs) =>
+        string.Join(",", jobs.Select(job => job.Id));
+    if (DownloadTableSort.FileType(sortJobs[0]) != "ZIP" ||
+        DownloadTableSort.FileType(sortJobs[1]) != "EXE" ||
+        DownloadTableSort.FileType(sortJobs[2]) != "ไม่ทราบ" ||
+        DownloadTableSort.FileType(sortJobs[3]) != "MP4")
+        throw new Exception("File type column must show real extension or chosen social output.");
+    if (JoinedIds(DownloadTableSort.Sort(sortJobs, "Size", false, sortJobs)) != "s2,s4,s1,s3" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "Size", true, sortJobs)) != "s1,s4,s2,s3" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "FileType", false, sortJobs)) != "s2,s4,s1,s3" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "FileType", true, sortJobs)) != "s1,s4,s2,s3" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "Added", false, sortJobs)) != "s2,s3,s1,s4" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "Added", true, sortJobs)) != "s4,s1,s3,s2")
+        throw new Exception("Sort by bytes, file extension, and actual timestamp must handle both directions.");
+    var filteredQueue = new[] { sortJobs[3], sortJobs[1] };
+    if (JoinedIds(DownloadTableSort.Sort(filteredQueue, "Queue", false, sortJobs)) != "s2,s4" ||
+        JoinedIds(DownloadTableSort.Sort(filteredQueue, "Queue", true, sortJobs)) != "s4,s2" ||
+        JoinedIds(sortJobs) != "s1,s2,s3,s4")
+        throw new Exception("Sorting a filtered list must preserve original queue order and identity.");
+    // Ctrl+N and the toolbar use the same parser: clipboard URL is inserted
+    // into the editable field, not submitted to the download engine automatically.
+    if (MainForm.ExtractClipboardUrls("https://example.com/demo.zip") != "https://example.com/demo.zip" ||
+        MainForm.ExtractClipboardUrls("https://example.com/a.zip\nhttps://example.com/b.pdf")
+          != "https://example.com/a.zip" + Environment.NewLine + "https://example.com/b.pdf" ||
+        MainForm.ExtractClipboardUrls("password123") != "" ||
+        MainForm.ExtractClipboardUrls("file:///C:/secret.txt") != "")
+        throw new Exception("Add URL clipboard extraction must accept only HTTP/HTTPS URLs.");
+
     // Verify strict hostname matching; reject lookalike domains and file URLs.
     var videoHosts = new[]
     {
