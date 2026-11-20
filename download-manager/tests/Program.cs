@@ -58,6 +58,43 @@ try
     if (!unsafeReceiptRejected) throw new Exception("yt-dlp final path escaped the output folder.");
     File.Delete(receipt);
 
+    // Build 4 can leave a fully downloaded MKV with a false Failed status.
+    // A matching 11-character YouTube ID and the exact legacy error are
+    // required; no video bytes are downloaded again during reconciliation.
+    File.Delete(finished);
+    var mkv = Path.Combine(thaiFolder, "เพลงภาษาไทย [tF-PEdvMJ_o].mkv");
+    await File.WriteAllBytesAsync(mkv, new byte[] { 1, 2, 3, 4 });
+    var oldVideo = new DownloadJob
+    {
+        Url = "https://youtu.be/tF-PEdvMJ_o?si=yVXyalBQnGlDsmdc",
+        Folder = thaiFolder,
+        Kind = "Video",
+        Status = "Failed",
+        Error = "ไม่พบไฟล์วิดีโอในโฟลเดอร์ปลายทางที่เลือก",
+        VideoQuality = "Best"
+    };
+    if (SocialVideoDownloader.FindCompletedYouTubeOutput(oldVideo.Url, thaiFolder) != mkv ||
+        !SocialVideoDownloader.TryRecoverLegacyCompletedJob(oldVideo) ||
+        oldVideo.Status != "Completed" || oldVideo.Error.Length != 0 ||
+        oldVideo.CompletedPath != mkv || oldVideo.VideoPercent != 100 ||
+        oldVideo.Name != Path.GetFileName(mkv) || oldVideo.DownloadedBytes != 4)
+        throw new Exception("Downloaded MKV must reconcile with exact YouTube ID, no re-download.");
+    var unrelated = new DownloadJob
+    {
+        Url = oldVideo.Url, Folder = thaiFolder, Kind = "Video",
+        Status = "Failed", Error = "HTTP 403"
+    };
+    if (SocialVideoDownloader.TryRecoverLegacyCompletedJob(unrelated))
+        throw new Exception("Actual download failure must not be marked completed.");
+    var duplicateMkv = Path.Combine(thaiFolder, "ชื่ออีกชุด [tF-PEdvMJ_o].mp4");
+    await File.WriteAllBytesAsync(duplicateMkv, new byte[] { 8, 9 });
+    if (SocialVideoDownloader.FindCompletedYouTubeOutput(oldVideo.Url, thaiFolder) is not null)
+        throw new Exception("Ambiguous matching video IDs must not be auto-reconciled.");
+    File.Delete(duplicateMkv);
+    if (SocialVideoDownloader.FindCompletedYouTubeOutput(
+            "https://youtu.be/AAAAAAAAAAA", thaiFolder) is not null)
+        throw new Exception("Unrelated video IDs must not be auto-reconciled.");
+
     video.VideoQuality = "AudioMP3";
     var mp3Args = SocialVideoDownloader.BuildArguments(video, folder, folder);
     if (!mp3Args.Contains("--audio-format") || !mp3Args.Contains("mp3"))
