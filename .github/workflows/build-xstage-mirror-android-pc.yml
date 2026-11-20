@@ -89,7 +89,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
           & $compiler 'mirror-android-pc/installer/XStageMirrorAndroidPC.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
-          $name = 'X-Stage-Mirror-Android-PC-v1.0.3-build1004-win-x64-Setup.exe'
+          $name = 'X-Stage-Mirror-Android-PC-v1.0.4-build1005-win-x64-Setup.exe'
           $exe = "mirror-android-pc/installer/output/$name"
           if (-not (Test-Path $exe -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $exe).Length -lt 5000000) { throw 'Setup EXE unexpectedly small' }
@@ -103,7 +103,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $filename = 'X-Stage-Mirror-Android-PC-v1.0.3-build1004-win-x64-PORTABLE.zip'
+          $filename = 'X-Stage-Mirror-Android-PC-v1.0.4-build1005-win-x64-PORTABLE.zip'
           Compress-Archive -Path 'mirror-android-pc/out/*' -DestinationPath $filename -CompressionLevel Optimal -Force
           if ((Get-Item $filename).Length -lt 5000000) { throw 'Portable ZIP unexpectedly small' }
           $sha = (Get-FileHash $filename -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -115,9 +115,9 @@ jobs:
         with:
           name: X-Stage-Mirror-Android-PC-Windows-CANDIDATE
           path: |
-            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.3-build1004-win-x64-Setup.exe
-            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.3-build1004-win-x64-Setup.exe.sha256
-            X-Stage-Mirror-Android-PC-v1.0.3-build1004-win-x64-PORTABLE.zip
-            X-Stage-Mirror-Android-PC-v1.0.3-build1004-win-x64-PORTABLE.zip.sha256
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.4-build1005-win-x64-Setup.exe
+            mirror-android-pc/installer/output/X-Stage-Mirror-Android-PC-v1.0.4-build1005-win-x64-Setup.exe.sha256
+            X-Stage-Mirror-Android-PC-v1.0.4-build1005-win-x64-PORTABLE.zip
+            X-Stage-Mirror-Android-PC-v1.0.4-build1005-win-x64-PORTABLE.zip.sha256
           if-no-files-found: error
           retention-days: 30
