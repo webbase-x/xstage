@@ -379,3 +379,10 @@ Menu 01 chooses folders using a queued Qt `QFileDialog` on the main GUI thread r
 - To reduce large-database I/O, lyric-group queries scan the already-existing covering `xstage_lyric_search` index and only load display text for returned groups. No new FTS/trigram tables or expensive mass reindex migration.
 - The search view explicitly indicates pending work, no-match cases, and timeouts instead of claiming a failed query means there are no lyrics. Requests have a bounded 90-second timeout for large local SQLite libraries, and prior responses cannot overwrite a newer query.
 - Search still requires the exact phrase to be present in current lyric text for bulk editing. A title-only match (e.g. "karaoke" in a song name) can be viewed but cannot change lyric lines. All original song media and SQLite history are preserved.
+
+## v0.1.30 — Windows display auto-fit (no clipped controls)
+
+- The desktop launcher no longer forces Qt WebEngine to 120% at all sizes. It measures the available Windows *client-area logical pixels* (works with HiDPI scaling) and automatically selects a readable zoom that fits the current desktop window. For example, a maximized 1366×768 screen uses about 80% rather than 120%; large 4K screens can still use up to 120%.
+- Maximizing, restoring, or resizing recalculates the fit without reloading the web page or interrupting any SQLite import/job. Ctrl+Plus/Minus are intentional manual overrides; **Ctrl+0 restores automatic fit**. Small laptop taskbar work areas no longer inherit an oversized fixed minimum window.
+- Main window, toolbars, search fields, panels, dialogs, lyric-group editor and both import/other views are constrained to the actual screen width. Long panels and views scroll **inside** their workspace (scrollbar chrome stays hidden); buttons and results are not clipped at the bottom or outside the right edge.
+- No changes to media import, song registry, saved lyrics, SQLite revisions or user audit results. The preview EXE remains unsigned. Test coverage includes laptop 1366×768, compact window, Full HD, 4K, resize, and layout containment contracts.
