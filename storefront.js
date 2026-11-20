@@ -260,9 +260,9 @@
     }
     if(id==="karaoke-pc"){
       if(data.channel==="preview"){
-        const valid=data.available===true&&SHA256.test(data.sha256||"")&&/^X-Stage-Karaoke-PC-Windows-v\d+\.\d+\.\d+-build\d+\.exe$/.test(data.installer_file||"");
+        const valid=data.available===true&&SHA256.test(data.sha256||"")&&/^(?:X-StageKaraoke|X-Stage-Karaoke-PC-Windows-v\d+\.\d+\.\d+-build\d+)\.exe$/.test(data.installer_file||"");
         const sourceOk=data.download_url==="https://webbase-x.github.io/xstage/downloads/"+data.installer_file;
-        const url=valid&&sourceOk?sameOriginFile(data.installer_file,"downloads",/^X-Stage-Karaoke-PC-Windows-v\d+\.\d+\.\d+-build\d+\.exe$/):"";
+        const url=valid&&sourceOk?sameOriginFile(data.installer_file,"downloads",/^(?:X-StageKaraoke|X-Stage-Karaoke-PC-Windows-v\d+\.\d+\.\d+-build\d+)\.exe$/):"";
         return url?{available:true,url,status:"EXE v"+String(data.version||"ล่าสุด")+" · รุ่นทดลอง (ยังไม่ลงนาม)",kind:"download",version:String(data.version||""),preview:true}:
           {available:false,url:"",status:"ยังไม่มี EXE รุ่นทดลองที่ตรวจสอบได้",kind:"pending"};
       }
