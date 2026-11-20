@@ -16,7 +16,9 @@ public sealed class DownloadEngine
     }) { Timeout = Timeout.InfiniteTimeSpan };
 
     private readonly object _saveLock = new();
-    private readonly SemaphoreSlim _downloads = new(2, 2);
+    private readonly TransferSlotQueue _slots = new();
+    private readonly TransferRateGate _globalSpeed = new();
+    private readonly ConcurrentDictionary<string, TransferRateGate> _fileSpeed = new();
     private readonly ConcurrentDictionary<string, byte> _active = new();
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, IncludeFields = true };
     private readonly string _index;
@@ -28,6 +30,9 @@ public sealed class DownloadEngine
     public static readonly int[] AllowedParts = { 1, 2, 4, 8, 16, 32 };
     public int DefaultParts { get; private set; } = 4;
     public int MaxRetryCount { get; private set; } = DownloadRetryPolicy.DefaultAttempts;
+    public int MaxConcurrentJobs => _slots.MaxConcurrent;
+    public int MaxJobsPerHost => _slots.MaxPerHost;
+    public int GlobalLimitKib => _globalSpeed.LimitKibPerSecond;
     public List<DownloadJob> Jobs { get; }
 
     public DownloadEngine(string? dataDirectory = null)
@@ -50,6 +55,10 @@ public sealed class DownloadEngine
         catch (JsonException) { }
         DefaultParts = _state.ReadDefaultParts(legacyParts);
         MaxRetryCount = _state.ReadRetryLimit();
+        _slots.Configure(_state.ReadPerformanceSetting("global_jobs", 2, 1, 8),
+            _state.ReadPerformanceSetting("host_jobs", 2, 1, 8));
+        _globalSpeed.Configure(_state.ReadPerformanceSetting("global_limit_kib",
+            0, 0, 1_048_576));
         Jobs = _state.LoadOrMigrate(_index);
         _state.SaveDefaultParts(DefaultParts);
         foreach (var job in Jobs)
@@ -140,6 +149,52 @@ public sealed class DownloadEngine
         _state.SaveRetryLimit(attempts);
         MaxRetryCount = attempts;
     }
+
+    public void ConfigurePerformance(int concurrentJobs, int perHostJobs, int globalLimitKib)
+    {
+        if (concurrentJobs is < 1 or > 8 || perHostJobs is < 1 or > 8)
+            throw new ArgumentOutOfRangeException(nameof(concurrentJobs));
+        if (globalLimitKib != 0 && globalLimitKib is < 64 or > 1_048_576)
+            throw new ArgumentOutOfRangeException(nameof(globalLimitKib));
+        _state.SavePerformanceSetting("global_jobs", concurrentJobs, 1, 8);
+        _state.SavePerformanceSetting("host_jobs", perHostJobs, 1, 8);
+        _state.SavePerformanceSetting("global_limit_kib", globalLimitKib, 0, 1_048_576);
+        _slots.Configure(concurrentJobs, perHostJobs);
+        _globalSpeed.Configure(globalLimitKib);
+    }
+
+    public void SetJobPriority(DownloadJob job, int priority)
+    {
+        if (!Jobs.Contains(job) || priority is < 0 or > 2)
+            throw new ArgumentOutOfRangeException(nameof(priority));
+        job.Priority = priority;
+        _slots.Reprioritize(job.Id, priority);
+        Save();
+    }
+
+    public void SetFileSpeedLimit(DownloadJob job, int limitKib)
+    {
+        if (!Jobs.Contains(job) ||
+            (limitKib != 0 && limitKib is < 64 or > 1_048_576))
+            throw new ArgumentOutOfRangeException(nameof(limitKib));
+        job.FileSpeedLimitKib = limitKib;
+        _fileSpeed.GetOrAdd(job.Id, _ => new TransferRateGate()).Configure(limitKib);
+        Save();
+    }
+
+    private async Task LimitNetworkReadAsync(DownloadJob job, int bytes, CancellationToken ct)
+    {
+        await _globalSpeed.WaitForBytesAsync(bytes, ct);
+        if (job.FileSpeedLimitKib > 0)
+        {
+            var gate = _fileSpeed.GetOrAdd(job.Id,
+                _ => new TransferRateGate(job.FileSpeedLimitKib));
+            await gate.WaitForBytesAsync(bytes, ct);
+        }
+    }
+
+    private static int ReadBufferSize(DownloadJob job, int globalLimitKib) =>
+        globalLimitKib > 0 || job.FileSpeedLimitKib > 0 ? 8192 : 131072;
 
     private static void ValidateParts(int parts)
     {
@@ -260,11 +315,11 @@ public sealed class DownloadEngine
         Save();
         _ = Task.Run(async () =>
         {
-            var entered = false;
+            IDisposable? slot = null;
             try
             {
-                await _downloads.WaitAsync(cts.Token);
-                entered = true;
+                var host = new Uri(job.Url).Host;
+                slot = await _slots.EnterAsync(job.Id, host, job.Priority, cts.Token);
                 cts.Token.ThrowIfCancellationRequested();
                 job.Status = "Running";
                 await DownloadAsync(job, cts.Token);
@@ -283,7 +338,8 @@ public sealed class DownloadEngine
             }
             finally
             {
-                if (entered) _downloads.Release();
+                slot?.Dispose();
+                _fileSpeed.TryRemove(job.Id, out _);
                 _active.TryRemove(job.Id, out _);
                 if (ReferenceEquals(job.Cancellation, cts)) job.Cancellation = null;
                 cts.Dispose();
@@ -654,8 +710,12 @@ public sealed class DownloadEngine
                 var buffer = new byte[131072];
                 while (remaining > 0)
                 {
+                    var amount = (int)Math.Min(
+                        ReadBufferSize(job, GlobalLimitKib), remaining);
+                    await LimitNetworkReadAsync(job, amount, ct);
+                    idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
                     var read = await input.ReadAsync(
-                        buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), idle.Token);
+                        buffer.AsMemory(0, amount), idle.Token);
                     if (read == 0)
                         throw new EndOfStreamException("ข้อมูลช่วงดาวน์โหลดหยุดก่อนครบ");
                     await output.WriteAsync(buffer.AsMemory(0, read), ct);
@@ -728,9 +788,13 @@ public sealed class DownloadEngine
                     FileAccess.Write, FileShare.Read, 131072, FileOptions.Asynchronous);
                 await using var input = await res.Content.ReadAsStreamAsync(idle.Token);
                 var buffer = new byte[131072];
-                int read;
-                while ((read = await input.ReadAsync(buffer, idle.Token)) > 0)
+                while (true)
                 {
+                    var amount = ReadBufferSize(job, GlobalLimitKib);
+                    await LimitNetworkReadAsync(job, amount, ct);
+                    idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
+                    var read = await input.ReadAsync(buffer.AsMemory(0, amount), idle.Token);
+                    if (read == 0) break;
                     await output.WriteAsync(buffer.AsMemory(0, read), ct);
                     Interlocked.Add(ref job.DownloadedBytes, read);
                     idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
