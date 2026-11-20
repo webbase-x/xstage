@@ -362,12 +362,26 @@ async function loadCatalog(drive,root){
 class Importer {
   constructor(options){
     this.options=options;this.selected=null;this.plan=null;this.running=false;this.paused=false;this.stopRequested=false;
-    this.controller=null;this.folderHandle=null;this.saved=null;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
+    this.controller=null;this.folderHandle=null;this.saved=null;this.chosenItems=new Set();this.completed=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.dom={};
     for(const key of ['open','dialog','close','pick','input','scan','start','pause','resume','cancel',
       'allow-create',
       'source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
+    this.dom.selection=$('cloud-import-selection');
+    this.dom.selectionList=$('cloud-import-selection-list');
+    this.dom.selectionCount=$('cloud-import-selection-count');
+    this.dom.done=$('cloud-import-done');
+    this.dom.done?.addEventListener('click',()=>this.close());
+    $('cloud-import-select-all')?.addEventListener('click',()=>this.selectEveryItem(true));
+    $('cloud-import-select-none')?.addEventListener('click',()=>this.selectEveryItem(false));
+    this.dom.selectionList?.addEventListener('change',event=>{
+      const input=event.target;
+      if(!input?.matches?.('input[data-import-key]'))return;
+      if(input.checked)this.chosenItems.add(input.dataset.importKey);
+      else this.chosenItems.delete(input.dataset.importKey);
+      this.renderSelectionCount();this.refreshButtons();
+    });
     this.videoEditor=scope.XStageVideoEditor?.init(this)||null;
     this.dom.open?.addEventListener('click',()=>this.open());
     this.dom.gateOpen=$('cloud-import-open-gate');
@@ -432,11 +446,58 @@ class Importer {
       (this.plan.blocked.length>6?'\nและอีก '+(this.plan.blocked.length-6)+' ชุด':'');
     this.refreshButtons();
   }
+  itemKey(item){
+    return String(item.relative||item.key||item.file?.name||item.midi?.relative||
+      item.audio?.relative||item.code||'').normalize('NFC');
+  }
+  selectableItems(){
+    if(!this.plan)return [];
+    return [...this.plan.songs.map(item=>({item,label:item.code||item.audio?.file?.name||item.key,type:'เพลง'})),
+      ...this.plan.midis.map(item=>({item,label:item.code||item.midi?.file?.name||item.key,type:'MIDI/NCN'})),
+      ...this.plan.xsks.map(item=>({item,label:item.code||item.file?.name||item.key,type:item.kind})),
+      ...this.plan.fonts.map(item=>({item,label:item.file?.name||item.relative,type:'SoundFont'}))]
+      .map((entry,index)=>({...entry,key:index+':'+this.itemKey(entry.item)}));
+  }
+  selectEveryItem(checked){
+    if(this.running)return;
+    for(const entry of this.selectableItems()){
+      if(checked)this.chosenItems.add(entry.key);
+      else this.chosenItems.delete(entry.key);
+    }
+    this.renderSelection();this.refreshButtons();
+  }
+  renderSelectionCount(){
+    const items=this.selectableItems();
+    const count=items.filter(entry=>this.chosenItems.has(entry.key)).length;
+    if(this.dom.selectionCount)this.dom.selectionCount.textContent=count+' / '+items.length;
+  }
+  renderSelection(){
+    if(!this.dom.selectionList)return;
+    const items=this.selectableItems();
+    this.dom.selection.hidden=!items.length;
+    const fragment=document.createDocumentFragment();
+    for(const entry of items){
+      const label=document.createElement('label');
+      label.className='cloud-import-selection-item';
+      const check=document.createElement('input');
+      check.type='checkbox';check.dataset.importKey=entry.key;
+      check.checked=this.chosenItems.has(entry.key);check.disabled=this.running;
+      const name=document.createElement('span');name.textContent=entry.label||'ไม่ระบุชื่อ';
+      const type=document.createElement('small');type.textContent=entry.type;
+      label.append(check,name,type);fragment.append(label);
+    }
+    this.dom.selectionList.replaceChildren(fragment);
+    this.renderSelectionCount();
+  }
   refreshButtons(){
     const approvedVideos=this.videoEditor?.eligibleCount()||0;
     const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
-    const selected=!!this.plan&&(otherSongs+approvedVideos+this.plan.midis.length+
-      this.plan.xsks.length+this.plan.fonts.length)>0;
+    const selected=this.selectableItems().some(entry=>
+      this.chosenItems.has(entry.key)&&(!entry.item.video||this.videoEditor?.get(entry.item)));
+    for(const input of this.dom.selectionList?.querySelectorAll('input[type="checkbox"]')||[])
+      input.disabled=this.running;
+    this.dom.start.textContent=this.completed?'นำเข้าเพิ่ม':'นำเข้ารายการที่เลือก';
+    if(this.dom.done)this.dom.done.textContent=this.completed?'เสร็จแล้ว · ปิด':'ปิดหน้าต่าง';
     this.dom.start.disabled=this.running||this.lockPending||!selected;
     this.dom.pause.disabled=!this.running;
     this.dom.cancel.disabled=!this.running;
@@ -499,9 +560,12 @@ class Importer {
     return files;
   }
   async acceptFiles(files,handle){
+    this.completed=false;
     this.selected=files;this.folderHandle=handle;
     this.selectedSub=this.session()?.sub||'';
     this.plan=core.scan(files);
+    this.chosenItems=new Set(this.selectableItems().map(entry=>entry.key));
+    this.renderSelection();
     this.videoEditor?.setPlan(this.plan,this.saved?.videoEdits);
     const hasRelativePaths=files.some(entry=>String(entry.relative||'').includes('/'));
     this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์'+
@@ -597,6 +661,9 @@ class Importer {
   }
   async performStart(){
     if(this.running||!this.plan)return;
+    if(!this.selectableItems().some(entry=>this.chosenItems.has(entry.key))){
+      this.status('กรุณาเลือกรายการที่ต้องการนำเข้า');return;
+    }
     if(!this.plan.songs.length&&!this.plan.midis.length&&!this.plan.xsks.length&&!this.plan.fonts.length){
       this.status('ไม่มีไฟล์ที่พร้อมนำเข้า · กรุณาเลือกโฟลเดอร์ใหม่หรืออัปเดตหน้าเว็บ');
       return;
@@ -657,7 +724,9 @@ class Importer {
         ...this.plan.songs.filter(x=>!x.video||this.videoEditor?.get(x))
           .map(x=>({...x,isFont:false,isMidi:false})),
         ...this.plan.midis.map(x=>({...x,isFont:false,isMidi:true})),
-        ...this.plan.xsks.map(x=>({...x,isFont:false,isMidi:false,isXsk:true}))];
+        ...this.plan.xsks.map(x=>({...x,isFont:false,isMidi:false,isXsk:true}))].filter(item=>
+          this.chosenItems.has(this.selectableItems().find(entry=>
+            this.itemKey(entry.item)===this.itemKey(item))?.key));
       const pendingVideos=this.videoEditor?.pendingCount()||0;
       if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
         ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
@@ -1030,7 +1099,9 @@ class Importer {
       }
       await publish();
       await checkpoint(this.account,null);this.saved=null;
+      this.completed=true;
       this.progress(1,1);
+      this.refreshButtons();
       this.status('เสร็จสิ้น · เพลงใหม่ '+this.stats.newSongs+' · แก้เนื้อร้อง '+this.stats.updated+
         ' · ข้ามซ้ำ '+this.stats.duplicates+' · รหัสชน '+this.stats.conflicts+
         ' · SoundFont '+this.stats.fonts+' · ข้ามผิดพลาด '+this.stats.errors);
@@ -1043,7 +1114,7 @@ class Importer {
         this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length,
         error:aborted(error)?'paused':String(error.message||error)});
     }finally{
-      this.running=false;this.controller=null;this.refreshButtons();
+      this.running=false;this.controller=null;this.renderSelection();this.refreshButtons();
     }
   }
 }
