@@ -632,7 +632,7 @@ public sealed class DownloadEngine
             {
                 last = new IOException("Chunk ไม่มีข้อมูลใหม่เกิน 45 วินาที");
             }
-            catch (Exception ex) when (ex is IOException or HttpRequestException &&
+            catch (Exception ex) when ((ex is IOException or HttpRequestException) &&
                                        ex is not UnsafeHttpRangeException)
             {
                 last = ex;
