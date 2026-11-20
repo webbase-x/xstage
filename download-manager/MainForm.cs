@@ -504,6 +504,21 @@ public sealed partial class MainForm : Form
             priority.DropDownItems.Add(choice);
         }
         _completedMenu.Items.Add(priority);
+        var queues = new ToolStripMenuItem("จัดเข้าคิว");
+        foreach (var name in _engine.GetQueueNames())
+        {
+            var queueName = name;
+            var choice = new ToolStripMenuItem(queueName)
+            {
+                Checked = string.Equals(job.QueueName, queueName,
+                    StringComparison.OrdinalIgnoreCase)
+            };
+            choice.Click += (_, _) => AssignJobQueue(job, queueName);
+            queues.DropDownItems.Add(choice);
+        }
+        queues.DropDownItems.Add(new ToolStripSeparator());
+        queues.DropDownItems.Add("สร้างคิวใหม่...", null, (_, _) => CreateJobQueue(job));
+        _completedMenu.Items.Add(queues);
         _completedMenu.Items.Add("จำกัดความเร็ว HTTP รายไฟล์...", null,
             (_, _) => ConfigureFileSpeed(job));
 
