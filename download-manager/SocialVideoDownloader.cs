@@ -171,7 +171,17 @@ public static class SocialVideoDownloader
             throw new IOException("ดาวน์โหลดวิดีโอไม่สำเร็จ" +
                 (tail.Length > 0 ? ": " + (tail.Length > 320 ? tail[^320..] : tail) : " (รหัส " + process.ExitCode + ")"));
         }
-        var fullPath = VerifyCompletedPath(job.Folder, finalPath, receiptPath);
+        string fullPath;
+        try { fullPath = VerifyCompletedPath(job.Folder, finalPath, receiptPath); }
+        catch (IOException)
+        {
+            // When a UTF-8 path is damaged on Windows stdout, the correct
+            // yt-dlp output can still be recognized by its unique video ID.
+            // Only do this AFTER yt-dlp exits successfully.
+            fullPath = FindCompletedYouTubeOutput(job.Url, job.Folder, job.VideoQuality)
+                ?? throw;
+        }
+        job.Name = Path.GetFileName(fullPath);
         job.CompletedPath = fullPath;
         job.TotalBytes = new FileInfo(fullPath).Length;
         Interlocked.Exchange(ref job.DownloadedBytes, job.TotalBytes);
@@ -180,6 +190,72 @@ public static class SocialVideoDownloader
         try { Directory.Delete(work, true); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+
+    // Recover an already-completed file when old Builds incorrectly recorded a
+    // post-download path-check failure. yt-dlp's naming template always places
+    // [YouTubeId] immediately before the media extension. Never search loosely
+    // by title or choose arbitrarily among multiple matching files.
+    public static string? FindCompletedYouTubeOutput(string url, string folder, string quality = "Best")
+    {
+        if (!IsVideoUrl(url) || !Directory.Exists(folder)) return null;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+        var host = uri.IdnHost.TrimEnd('.').ToLowerInvariant();
+        if (!Matches(host, "youtube.com") && !Matches(host, "youtu.be") &&
+            !Matches(host, "youtube-nocookie.com")) return null;
+
+        string? id = null;
+        if (Matches(host, "youtu.be"))
+            id = uri.AbsolutePath.Trim('/').Split('/')[0];
+        else if (uri.AbsolutePath.StartsWith("/shorts/", StringComparison.OrdinalIgnoreCase) ||
+                 uri.AbsolutePath.StartsWith("/live/", StringComparison.OrdinalIgnoreCase))
+            id = uri.AbsolutePath.Trim('/').Split('/').Skip(1).FirstOrDefault();
+        else
+        {
+            foreach (var part in uri.Query.TrimStart('?').Split('&'))
+            {
+                var pair = part.Split('=', 2);
+                if (pair.Length == 2 && pair[0] == "v") { id = Uri.UnescapeDataString(pair[1]); break; }
+            }
+        }
+        if (id is null || id.Length != 11 ||
+            id.Any(ch => !char.IsAsciiLetterOrDigit(ch) && ch is not ('_' or '-')))
+            return null;
+
+        var allowed = quality == "AudioMP3"
+            ? new[] { ".mp3" }
+            : new[] { ".mkv", ".mp4", ".webm" };
+        var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
+            .Where(file =>
+                allowed.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase) &&
+                Path.GetFileNameWithoutExtension(file).EndsWith(" [" + id + "]", StringComparison.Ordinal) &&
+                new FileInfo(file).Length > 0)
+            .Take(2).ToArray();
+        return files.Length == 1 ? Path.GetFullPath(files[0]) : null;
+    }
+
+    // The exact legacy error was thrown only AFTER yt-dlp finished with exit 0.
+    // Repair that historical bookkeeping mistake without downloading again.
+    public static bool TryRecoverLegacyCompletedJob(DownloadJob job)
+    {
+        if (job.Kind != "Video" || job.Status != "Failed" ||
+            job.Error != "ไม่พบไฟล์วิดีโอในโฟลเดอร์ปลายทางที่เลือก")
+            return false;
+        string? recovered;
+        try { recovered = FindCompletedYouTubeOutput(job.Url, job.Folder, job.VideoQuality); }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+        if (recovered is null) return false;
+        job.CompletedPath = recovered;
+        job.Name = Path.GetFileName(recovered);
+        job.TotalBytes = new FileInfo(recovered).Length;
+        Interlocked.Exchange(ref job.DownloadedBytes, job.TotalBytes);
+        job.VideoPercent = 100;
+        job.VideoPhase = "สำเร็จ";
+        job.Error = "";
+        job.Status = "Completed";
+        return true;
     }
 
     // Never mark an unrelated pre-existing file as complete. Only trust the
