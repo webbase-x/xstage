@@ -9,6 +9,8 @@ public sealed class DownloadJob
     public string Name { get; set; } = "download";
     public string Kind { get; set; } = "File";
     public string VideoQuality { get; set; } = "Best";
+    // Requested output container; independent of video resolution. Defaults to MP4.
+    public string OutputFormat { get; set; } = "mp4";
     public double VideoPercent { get; set; }
     [JsonIgnore] public string VideoPhase = "";
     public string Folder { get; set; } = "";
