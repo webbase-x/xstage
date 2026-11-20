@@ -629,6 +629,21 @@ try
     try { manager.SetJobQueue(queueJob, "  "); }
     catch (ArgumentException) { rejectedBlankQueue = true; }
     if (!rejectedBlankQueue) throw new Exception("Blank queue name must be rejected.");
+    manager.SetJobQueue(queueJob, "  คิวเอกสาร  ");
+    if (queueJob.QueueName != "คิวเอกสาร" ||
+        new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == queueJob.Id).QueueName != "คิวเอกสาร")
+        throw new Exception("Queue names must be trimmed before durable SQLite persistence.");
+    var rejectedLongQueue = false;
+    try { manager.SetJobQueue(queueJob, new string('ก', 65)); }
+    catch (ArgumentException) { rejectedLongQueue = true; }
+    if (!rejectedLongQueue || queueJob.QueueName != "คิวเอกสาร")
+        throw new Exception("Invalid queue names must not mutate existing assignments.");
+    var rejectedControlQueue = false;
+    try { manager.SetJobQueue(queueJob, "queue\\ninvalid".Replace("\\n", "\n")); }
+    catch (ArgumentException) { rejectedControlQueue = true; }
+    if (!rejectedControlQueue || queueJob.QueueName != "คิวเอกสาร")
+        throw new Exception("Control characters must not mutate queue assignments.");
+
 
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
