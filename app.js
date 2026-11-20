@@ -1531,6 +1531,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   const oldToken = state.token;
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
   player.pause(); player.removeAttribute('src'); player.load();
   resetSongVideo();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
@@ -2032,7 +2033,7 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
        estimatedWorkingBytes>(lowMemory?128:256)*1024*1024)
       return null; // The song remains playable on demand when its turn arrives.
   }
-  if(!fontBytes&&window.XStageBrowserMidi?.playRealtime){
+  if(!fontBytes&&window.XStageBrowserMidi?.supportsRealtime?.()){
     if(prefetch)return null; // Fast MIDI needs no expensive whole-song pre-render.
     const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
     onStatus('MIDI พร้อมเล่นทันที · ใช้เสียงพื้นฐานแบบเรียลไทม์');
@@ -2143,6 +2144,8 @@ async function prepareQueuedSong(song,token,signal){
   const pressure=monitor.plan(memoryResources());
   if(pressure.heapPressure||pressure.nativePressure)return null;
   if(getFileId(song.xsk)||getFileId(song.xmid)){
+    if(window.XStageBrowserMidi?.supportsRealtime?.()&&
+       !window.XStageBrowserMidi.fontStatus?.().selectedId)return null;
     // The pack and the uncompressed WAV both count against available space.
     const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
     if(!Number((song.xmid||song.xsk).size)||Number((song.xmid||song.xsk).size)>maxPacked)return null;
@@ -2151,6 +2154,8 @@ async function prepareQueuedSong(song,token,signal){
     return {...result,bytes:result.blob.size};
   }
   if(getFileId(song.midi)){
+    if(window.XStageBrowserMidi?.supportsRealtime?.()&&
+       !window.XStageBrowserMidi.fontStatus?.().selectedId)return null;
     const sourceSize=Number(song.midi.size);
     if(!sourceSize||sourceSize>12*monitor.MiB||
        !monitor.canHold(sourceSize*2,memoryResources()))return null;
@@ -2412,6 +2417,7 @@ function clearIdleStage(message){
   state.controller?.abort();
   state.controller=null;
   state.loading=false;
+  state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
   player.pause();
   releaseNativePlaybackAudioFocus();
   player.removeAttribute('src');
@@ -2551,7 +2557,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
         embeddedKaraokeLyrics=window.XStageBrowserMidi.midiLyrics(parsed,song.code);
       }
-      if(!fontBytes&&window.XStageBrowserMidi.playRealtime){
+      if(!fontBytes&&window.XStageBrowserMidi.supportsRealtime?.()){
         const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
         liveMidiBytes=midiBytes;
         return window.XStageBrowserMidi.silentClock(parsed.duration);
@@ -3724,7 +3730,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen();}
 });
 window.addEventListener('pagehide',savePlaybackResumeState);
-window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
+window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.liveMidiPlayback?.dispose();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();scheduleLyricsDraw();setupNativeAndroidTvUi();setupAppUpdateWatcher();
 const xstageCloudImporter=window.XStageCloudImport?.init({
   // The browser importer obtains only an in-memory short-lived token and the
