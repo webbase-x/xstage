@@ -35,6 +35,29 @@ try
         !videoArgs.Contains("--no-simulate") || !videoArgs.Contains("deno:" + Path.Combine(folder, "tools", "deno.exe")) ||
         !videoArgs.Contains("bv*[height<=1080]+ba/b[height<=1080]"))
         throw new Exception("Video arguments must isolate config, enforce video quality and use bundled Deno.");
+    // Thai and other Unicode output names must be resolved from the exact
+    // post-download yt-dlp receipt instead of guessing from a corrupt console.
+    if (!videoArgs.Contains("--encoding") || !videoArgs.Contains("utf-8") ||
+        !videoArgs.Contains("--print-to-file"))
+        throw new Exception("yt-dlp must emit explicit UTF-8 output and a final-path receipt.");
+    var thaiFolder = Path.Combine(folder, "ดาวน์โหลด เพลงไทย");
+    Directory.CreateDirectory(thaiFolder);
+    var finished = Path.Combine(thaiFolder, "ชื่อเพลงภาษาไทย [tF-PEdvMJ_o].mp4");
+    await File.WriteAllBytesAsync(finished, new byte[] { 10, 20, 30 });
+    var receipt = Path.Combine(folder, "yt-dlp-final-path.txt");
+    await File.WriteAllTextAsync(receipt, finished + Environment.NewLine, new UTF8Encoding(false));
+    if (SocialVideoDownloader.VerifyCompletedPath(thaiFolder, "���-broken.mp4", receipt) != finished ||
+        SocialVideoDownloader.VerifyCompletedPath(thaiFolder, finished, null) != finished)
+        throw new Exception("Unicode output path could not be recovered safely.");
+    var outsider = Path.Combine(folder, "other.mp4");
+    await File.WriteAllBytesAsync(outsider, new byte[] { 40 });
+    await File.WriteAllTextAsync(receipt, outsider + Environment.NewLine, new UTF8Encoding(false));
+    var unsafeReceiptRejected = false;
+    try { SocialVideoDownloader.VerifyCompletedPath(thaiFolder, null, receipt); }
+    catch (IOException) { unsafeReceiptRejected = true; }
+    if (!unsafeReceiptRejected) throw new Exception("yt-dlp final path escaped the output folder.");
+    File.Delete(receipt);
+
     video.VideoQuality = "AudioMP3";
     var mp3Args = SocialVideoDownloader.BuildArguments(video, folder, folder);
     if (!mp3Args.Contains("--audio-format") || !mp3Args.Contains("mp3"))
