@@ -39,6 +39,36 @@ var folder = Path.Combine(Path.GetTempPath(), "xstage-dm-test-" + Guid.NewGuid()
 Directory.CreateDirectory(folder);
 try
 {
+    // Crash recovery must distinguish interrupted jobs from intentional pauses.
+    // Rejecting the consent prompt leaves bytes and user history untouched.
+    var recoveryFolder = Path.Combine(folder, "recovery-intent");
+    Directory.CreateDirectory(recoveryFolder);
+    var recoveryState = new DownloadStateStore(recoveryFolder);
+    recoveryState.SaveSnapshot(new[]
+    {
+        new DownloadJob { Id = "unexpected", Url = server.Url + "range/crash.bin",
+            Folder = folder, Status = "Running" },
+        new DownloadJob { Id = "shutdown", Url = server.Url + "range/shutdown.bin",
+            Folder = folder, Status = "Paused", ResumeAfterRestart = true },
+        new DownloadJob { Id = "user-paused", Url = server.Url + "range/user.bin",
+            Folder = folder, Status = "Paused" },
+        new DownloadJob { Id = "finished", Url = server.Url + "range/finished.bin",
+            Folder = folder, Status = "Completed" }
+    });
+    var recovered = new DownloadEngine(recoveryFolder);
+    if (recovered.InterruptedJobCount != 2 ||
+        recovered.Jobs.Single(j => j.Id == "user-paused").InterruptedOnStartup ||
+        recovered.Jobs.Single(j => j.Id == "finished").InterruptedOnStartup)
+        throw new Exception("Startup recovery incorrectly selected user-paused/completed jobs.");
+    recovered.RecoverInterruptedJobs(false);
+    if (recovered.InterruptedJobCount != 0 ||
+        recovered.Jobs.Any(j => j.Status == "Running" || j.Status == "Queued") ||
+        recovered.Jobs.Any(j => j.ResumeAfterRestart))
+        throw new Exception("Declining recovery must retain jobs paused with no implicit restart.");
+    var reopen = new DownloadEngine(recoveryFolder);
+    if (reopen.InterruptedJobCount != 0 || reopen.Jobs.Count != 4)
+        throw new Exception("Recovery consent and download history must persist across restarts.");
+
     // Scheduler: high-priority jobs overtake low priority without changing
     // persistence order; live reprioritization and cancellation release slots.
     var scheduler = new TransferSlotQueue(1, 1);
