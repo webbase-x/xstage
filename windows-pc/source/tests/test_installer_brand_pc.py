@@ -25,6 +25,9 @@ class PcBrandingRegression(unittest.TestCase):
             installer = installer_path.read_text(encoding='utf-8')
             self.assertIn('AppName=X-Stage Karaoke PC', installer)
             self.assertIn('OutputBaseFilename=X-Stage-Karaoke-PC-Windows-', installer)
+            self.assertIn(r'DefaultDirName={autopf}\X-Stage\Karaoke PC', installer)
+            self.assertIn('UsePreviousAppDir=no', installer)
+            self.assertIn('PrivilegesRequired=admin', installer)
         updater_path = REPO / 'windows-pc/Check-Update.ps1'
         if updater_path.is_file():
             updater = updater_path.read_text(encoding='utf-8-sig')
