@@ -1,5 +1,7 @@
 ﻿param([int]$WaitPid,[string]$AppDirectory,[string]$DataDirectory,[string]$PythonExe='')
 $ErrorActionPreference='Stop'
+$admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $admin) { throw 'การซ่อมไฟล์ใน Program Files ต้องได้รับสิทธิ์ผู้ดูแลระบบผ่าน Windows UAC ก่อน' }
 $logRoot=Join-Path $env:LOCALAPPDATA 'XStageKaraoke\Logs'
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 $log=Join-Path $logRoot ('repair-'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'.log')
@@ -29,13 +31,12 @@ try {
         Set-RepairStage 4 'Validating runtime'
         & $PythonExe (Join-Path $AppDirectory 'tools\check_dependencies.py') --home $AppDirectory --report (Join-Path $DataDirectory 'dependency-report.json')
         if ($LASTEXITCODE -ne 0) { throw 'Runtime check failed. See dependency-report.json.' }
-        Set-RepairStage 5 'Components ready; launching player' 'completed'
-        Start-Process -FilePath $PythonExe -WorkingDirectory $AppDirectory -ArgumentList @(('"'+(Join-Path $AppDirectory 'main.py')+'"'),'--data-dir',('"'+$DataDirectory+'"'))
+        Set-RepairStage 5 'Components repaired; reopen the player normally' 'completed'
     } else {
         Set-RepairStage 4 'Packaged runtime validated by setup'
-        Set-RepairStage 5 'Components ready; launching player' 'completed'
-        Start-Process -FilePath (Join-Path $AppDirectory 'XStageKaraoke.exe') -WorkingDirectory $AppDirectory -ArgumentList @('--data-dir',('"'+$DataDirectory+'"'))
+        Set-RepairStage 5 'Components repaired; reopen the player normally' 'completed'
     }
+    Write-Host 'ซ่อมเสร็จแล้ว ให้เปิด X-Stage Karaoke PC อีกครั้งจากทางลัดปกติ (ไม่เปิดโปรแกรมด้วยสิทธิ์ผู้ดูแลระบบ)' -ForegroundColor Green
 } catch {
     $failure=$_.Exception.Message
     try { Set-RepairStage $script:step $script:stage 'failed' $failure } catch { Write-Warning 'Could not save repair status.' }
