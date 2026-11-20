@@ -54,8 +54,8 @@
   <script src="./storefront.js?brand=18" defer></script>
   <script src="./portal-config.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js" defer></script>
-  <script src="./portal.js?version=2" defer></script>
-  <link rel="stylesheet" href="./portal.css?version=3">
+  <script src="./portal.js?version=4" defer></script>
+  <link rel="stylesheet" href="./portal.css?version=4">
 </head>
 <body>
   <a class="skip-link" href="#catalog">ข้ามไปยังรายการแอป</a>
@@ -82,6 +82,7 @@
           <div id="portal-profile-menu" class="portal-profile-menu" hidden>
             <strong id="portal-profile-name">สมาชิก X-Stage</strong>
             <span id="portal-profile-email"></span>
+            <button type="button" id="portal-open-account" class="portal-account-menu-open">บัญชีของฉัน · ประวัติดาวน์โหลด</button>
             <button type="button" id="portal-logout">ออกจากระบบ</button>
           </div>
         </div>
@@ -241,11 +242,7 @@
       <p id="catalog-empty" class="catalog-empty" hidden>ไม่พบแอปที่ตรงกับตัวกรอง ลองเปลี่ยนหมวดหมู่หรือแพลตฟอร์ม</p>
     </section>
 
-    <section class="portal-history section-wrap" id="portal-history" hidden>
-      <div class="section-heading"><div><span class="section-kicker">ACCOUNT HISTORY</span><h2>ประวัติการดาวน์โหลดของฉัน</h2><p>แสดงรายการกดดาวน์โหลดหลังเข้าสู่ระบบ ไม่ยืนยันว่าติดตั้งบนอุปกรณ์สำเร็จ</p></div></div>
-      <div class="portal-list" id="portal-history-list"></div>
-      <div class="portal-admin" id="portal-admin" hidden><h3>ข้อมูลผู้ดูแลระบบ</h3><p>ประวัติกิจกรรมที่ผู้ใช้ยินยอมให้บันทึก</p><div id="portal-admin-events" class="portal-list"></div></div>
-    </section>
+
     <section class="about-section section-wrap" id="about">
       <div class="about-card"><span class="section-kicker">ABOUT X-STAGE</span><h2>หนึ่งโครงการ<br>หลากหลายวิธีสร้างเวที</h2><p>X-Stage รวมเครื่องมือด้านคาราโอเกะและการเตรียมเพลงไว้ในระบบนิเวศเดียวกัน หน้านี้เป็นจุดเริ่มต้นสำหรับเลือกแอป ตรวจสอบสถานะเผยแพร่ และไปยังช่องทางที่เหมาะสม โดยไม่ต้องค้นหาลิงก์แยกหลายแห่ง</p><a href="#catalog">ดูแอปและไฟล์ติดตั้งสำหรับผู้ใช้ทั่วไป <span aria-hidden="true">↗</span></a></div>
     </section>
@@ -281,6 +278,85 @@
       <div id="portal-review-list" class="portal-list"></div>
     </section>
   </main>
+
+
+  <!-- Google-authenticated X-Stage account. Deliberately not a copy of Apple ID settings. -->
+  <div id="portal-account-screen" class="portal-account-screen" role="dialog"
+    aria-modal="true" aria-labelledby="portal-account-title" hidden>
+    <div class="portal-account-shell">
+      <div class="portal-account-topbar">
+        <button type="button" id="portal-account-back" class="portal-account-back" aria-label="ย้อนกลับ">‹</button>
+        <h1 id="portal-account-title">บัญชี X-Stage</h1>
+        <span class="portal-account-topbar-spacer" aria-hidden="true"></span>
+      </div>
+      <div class="portal-account-scroll">
+        <div id="portal-account-overview" class="portal-account-view">
+          <div class="portal-account-identity">
+            <span class="portal-account-large-avatar" aria-hidden="true">
+              <img id="portal-account-avatar" alt="" referrerpolicy="no-referrer" hidden>
+              <span id="portal-account-initials">X</span>
+            </span>
+            <h2 id="portal-account-full-name">สมาชิก X-Stage</h2>
+            <p id="portal-account-email"></p>
+            <span class="portal-account-provider">เชื่อมต่อด้วย Google</span>
+          </div>
+          <div class="portal-account-group" aria-label="ข้อมูลและกิจกรรม">
+            <button type="button" class="portal-account-row" data-account-view="personal">
+              <span class="portal-account-row-icon" aria-hidden="true">♙</span>
+              <span class="portal-account-row-copy"><strong>ข้อมูลส่วนตัว</strong><small>ชื่อ โปรไฟล์ และอีเมลที่เชื่อมต่อ</small></span>
+              <span class="portal-account-chevron" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="portal-account-row" data-account-view="history">
+              <span class="portal-account-row-icon" aria-hidden="true">↓</span>
+              <span class="portal-account-row-copy"><strong>ประวัติการดาวน์โหลดของฉัน</strong><small id="portal-download-summary">ดูรายการแอปและไฟล์ติดตั้งที่เคยกดดาวน์โหลด</small></span>
+              <span id="portal-download-count" class="portal-account-row-count" hidden></span>
+              <span class="portal-account-chevron" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="portal-account-row" data-account-view="reviews">
+              <span class="portal-account-row-icon" aria-hidden="true">★</span>
+              <span class="portal-account-row-copy"><strong>คะแนนและความคิดเห็นของฉัน</strong><small>รีวิวที่เคยให้กับแอป X-Stage</small></span>
+              <span class="portal-account-chevron" aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div class="portal-account-group" aria-label="ความปลอดภัยและความเป็นส่วนตัว">
+            <a class="portal-account-row" href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">
+              <span class="portal-account-row-icon" aria-hidden="true">◇</span>
+              <span class="portal-account-row-copy"><strong>ลงชื่อเข้าใช้และความปลอดภัย</strong><small>จัดการรหัสผ่านและความปลอดภัยที่บัญชี Google</small></span>
+              <span class="portal-account-chevron" aria-hidden="true">↗</span>
+            </a>
+            <a class="portal-account-row" href="./portal-privacy.html">
+              <span class="portal-account-row-icon" aria-hidden="true">♧</span>
+              <span class="portal-account-row-copy"><strong>ความเป็นส่วนตัว</strong><small>วิธีใช้และจัดเก็บข้อมูล X-Stage</small></span>
+              <span class="portal-account-chevron" aria-hidden="true">›</span>
+            </a>
+          </div>
+          <button type="button" id="portal-account-signout" class="portal-account-signout">ออกจากระบบ</button>
+          <p class="portal-account-footnote">X-Stage ใช้บัญชี Google สำหรับเข้าสู่ระบบ ไม่ใช่บัญชี Apple และไม่มีเมนูชำระเงินหรือจัดส่งสินค้า</p>
+        </div>
+        <section id="portal-account-personal" class="portal-account-view portal-account-detail" hidden aria-label="ข้อมูลส่วนตัว">
+          <h2>ข้อมูลส่วนตัว</h2>
+          <p class="portal-account-detail-intro">ข้อมูลโปรไฟล์ที่ได้รับจากบัญชี Google ซึ่งใช้เข้าสู่ระบบ X-Stage</p>
+          <div class="portal-account-group portal-account-fields">
+            <div class="portal-account-field"><span>ชื่อที่แสดง</span><strong id="portal-account-detail-name"></strong></div>
+            <div class="portal-account-field"><span>อีเมล</span><strong id="portal-account-detail-email"></strong></div>
+            <div class="portal-account-field"><span>วิธีเข้าสู่ระบบ</span><strong>Google</strong></div>
+          </div>
+          <a class="portal-account-external" href="https://myaccount.google.com/personal-info" target="_blank" rel="noopener noreferrer">จัดการข้อมูลบัญชี Google ↗</a>
+        </section>
+        <section id="portal-history" class="portal-history portal-account-view portal-account-detail" hidden aria-label="ประวัติการดาวน์โหลดของฉัน">
+          <h2>ประวัติการดาวน์โหลดของฉัน</h2>
+          <p class="portal-account-detail-intro">บันทึกการกดดาวน์โหลดและรายการที่คุณยืนยันการติดตั้งเอง ไม่สามารถตรวจสอบได้ว่าติดตั้งบนอุปกรณ์สำเร็จจริง</p>
+          <div class="portal-list" id="portal-history-list" aria-live="polite"></div>
+          <div class="portal-admin" id="portal-admin" hidden><h3>ข้อมูลผู้ดูแลระบบ</h3><p>ประวัติกิจกรรมที่ผู้ใช้ยินยอมให้บันทึก</p><div id="portal-admin-events" class="portal-list"></div></div>
+        </section>
+        <section id="portal-account-my-reviews" class="portal-account-view portal-account-detail" hidden aria-label="คะแนนและความคิดเห็นของฉัน">
+          <h2>คะแนนและความคิดเห็นของฉัน</h2>
+          <p class="portal-account-detail-intro">เลือกแอปเพื่อดู แก้ไข หรือลบรีวิวของคุณในหน้ารายละเอียดแอป</p>
+          <div id="portal-my-reviews-list" class="portal-list" aria-live="polite"></div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <footer class="site-footer">
     <div class="section-wrap footer-inner"><div class="footer-logo new-footer-logo"><img src="./assets/xstage-apps-logo.svg" alt="X-STAGE APPS" width="180" height="46"></div><span>สร้างสรรค์ทุกเวทีในแบบของคุณ</span><a href="./portal-privacy.html">ความเป็นส่วนตัว</a><a href="#catalog">แอปทั้งหมด ↗</a></div>
