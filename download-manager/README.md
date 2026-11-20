@@ -2,7 +2,7 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.15 · Build 18** (Windows 10/11 x64).
+**Preview v0.2.16 · Build 19** (Windows 10/11 x64).
 
 ## Features
 - **IDM-inspired desktop UI**: dark menu bar and icon+caption toolbar, compact expandable URL/quality form (Ctrl+N), category tree (active/queued/incomplete/completed and video/music/documents/programs/archive/other), transfer table with queue order, real file type (MP4/MKV/EXE/ZIP/PDF etc.), progress, speed, ETA, date, parts and description. Click any column header to sort by its real value, click again for descending order, with an arrow showing direction. Sort and filters keep row actions attached to the correct original job ID. **+ เพิ่ม URL** and Ctrl+N auto-fill the URL field when valid HTTP(S) links are already in the clipboard without starting the download or overriding existing input. Toolbar actions and per-file menu remain functional; filters map back to original job IDs and never act on an unrelated row. Columns scroll instead of overlapping at small widths.\n- Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker. Resolve the final file name from HTTP Content-Disposition (including UTF-8 filename*), original URL, response MIME type, or a verified file signature when the CDN uses an opaque UUID. Completed extensionless downloads from older builds are safely renamed on next startup only if the existing file type is unambiguous; never overwrite originals. The video quality and MP4/MKV/WEBM/MP3 rows appear only for supported social-media video links, and collapse completely for ordinary file URLs.
@@ -17,7 +17,7 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - The effective number of segments can be lower than the selected maximum for small files or servers without HTTP Range support.
 - Pause, resume and retry, including recovery after interruption when the server supports stable HTTP Range.
 - HTTP Range support is probed and checked for correctness instead of silently corrupting downloads.
-- History: %LOCALAPPDATA%/X-Stage/Download Manager/downloads.json
+- History and resumable job/chunk offsets: `%LOCALAPPDATA%/X-Stage/Download Manager/xstage_downloads.sqlite3` (SQLite WAL, atomic transactions; old `downloads.json` is read once and retained untouched as a migration backup). The default connection count is also persisted in SQLite. The engine checkpoints transfers every 2 seconds, writes status immediately, and reports persistence errors in the UI.
 - Partials: .xstage-downloads/[id]/ in the destination, removed upon completion.
 - Thai desktop interface showing progress, speed, size, status and errors.
 - UTF-8 console decoding and independent post-download path receipt for Thai/Unicode filenames.
