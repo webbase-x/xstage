@@ -138,6 +138,21 @@ jobs:
           & (Join-Path $tools 'ffmpeg.exe') -version
           if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg smoke test failed' }
           Write-Host 'Bundled verified video tools; no dependencies will be downloaded when the user installs.'
+      - name: Smoke-test playable MP4 with bundled FFmpeg and FFprobe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = (Resolve-Path 'download-manager/out/tools').Path
+          $ffmpeg = Join-Path $tools 'ffmpeg.exe'
+          $sample = Join-Path $env:RUNNER_TEMP 'xstage-synthetic-video.mkv'
+          & $ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=160x90:rate=15' -f lavfi -i 'sine=frequency=440:sample_rate=44100' -t 2 -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac $sample
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sample)) {
+            throw 'Could not generate synthetic audio/video for MP4 integrity regression'
+          }
+          dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release -- --media-smoke $sample $tools
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Bundled FFmpeg/FFprobe failed real MKV-to-MP4 validation test'
+          }
       - name: Validate and bundle optional Chrome/Edge extension
         shell: pwsh
         run: |
