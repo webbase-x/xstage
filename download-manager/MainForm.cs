@@ -687,6 +687,13 @@ public sealed class MainForm : Form
         _completedMenu.Items.Add("เปิดไฟล์", null, (_, _) => OpenCompletedFile(job)).Enabled =
             job.Status == "Completed" && File.Exists(job.CompletedPath);
         _completedMenu.Items.Add("เปิดโฟลเดอร์ที่บันทึก", null, (_, _) => OpenCompletedFolder(job));
+        if (job.Status == "Failed")
+        {
+            _completedMenu.Items.Insert(0, new ToolStripMenuItem(
+                "ดูสาเหตุข้อผิดพลาด", null, (_, _) => ShowJobError(job)));
+            if (job.Kind == "Video")
+                _completedMenu.Items.Add("เปิดบันทึกข้อผิดพลาดวิดีโอ", null, (_, _) => OpenVideoLog(job));
+        }
         _completedMenu.AutoClose = true;
     }
 
@@ -694,6 +701,42 @@ public sealed class MainForm : Form
     {
         PrepareCompletedMenu(job);
         _completedMenu.Show(_grid, new Point(cellBounds.Left + 12, cellBounds.Bottom));
+    }
+
+    private static string VideoLogPath(DownloadJob job) => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "X-Stage", "Download Manager", "logs", "video-" + job.Id + ".log");
+
+    private void ShowJobError(DownloadJob job)
+    {
+        var message = string.IsNullOrWhiteSpace(job.Error)
+            ? "ไม่มีรายละเอียดเพิ่มเติมจากเว็บไซต์ต้นทาง" : job.Error;
+        if (job.Kind == "Video")
+            message += "\n\nบันทึกสำหรับตรวจสอบ:\n" + VideoLogPath(job);
+        MessageBox.Show(this, message, "สาเหตุที่ดาวน์โหลดไม่สำเร็จ",
+            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+
+    private void OpenVideoLog(DownloadJob job)
+    {
+        try
+        {
+            var path = VideoLogPath(job);
+            if (!File.Exists(path))
+            {
+                MessageBox.Show(this, "ยังไม่พบบันทึกข้อผิดพลาดของรายการนี้",
+                    "บันทึกการดาวน์โหลด", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var info = new ProcessStartInfo("notepad.exe") { UseShellExecute = true };
+            info.ArgumentList.Add(path);
+            Process.Start(info);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                   System.ComponentModel.Win32Exception)
+        {
+            MessageBox.Show(this, ex.Message, "เปิดบันทึกไม่สำเร็จ");
+        }
     }
 
     private void OpenCompletedFile(DownloadJob job)
@@ -790,6 +833,10 @@ public sealed class MainForm : Form
                     : (current > 0 ? FormatBytes(current) : "—");
             row.Cells["Speed"].Value = job.Status == "Running"
                 ? FormatBytes((long)job.SpeedBytesPerSecond) + "/s" : "—";
+            row.Cells["Status"].ToolTipText = job.Status == "Failed" ? job.Error : "";
+            row.Cells["File"].ToolTipText = job.Status == "Failed"
+                ? "คลิกเพื่อดูสาเหตุข้อผิดพลาด: " + job.Error
+                : job.Name;
             row.Cells["Status"].Value = job.Status switch
             {
                 "Running" => job.Kind == "Video" && job.VideoPhase.Length > 0
