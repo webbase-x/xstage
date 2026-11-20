@@ -11,12 +11,12 @@ AppName=X-Stage Karaoke PC
 AppVersion={#AppVersion}
 AppVerName=X-Stage Karaoke PC v{#AppVersion} (Build {#BuildNumber})
 AppPublisher=X-Stage Karaoke PC
-DefaultDirName={autopf}\X-Stage Karaoke PC
+DefaultDirName={autopf}\X-Stage
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 Uninstallable=no
 CreateUninstallRegKey=no
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 OutputDir=output
 OutputBaseFilename=X-Stage-Karaoke-PC-Windows-v{#AppVersion}-build{#BuildNumber}
 Compression=lzma2/ultra64
@@ -52,7 +52,7 @@ begin
   if not FileExists(ScriptPath) then
     RaiseException('Installer package is incomplete: install_to_D.ps1 is missing.');
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" -CloseRunning -RunSetup';
+  Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" -Destination "' + ExpandConstant('{app}') + '" -CloseRunning -RunSetup';
   if not Exec(PowerShell, Params, '', SW_SHOW, ewWaitUntilTerminated, ExitCode) then
     RaiseException('Cannot start the X-Stage installation process.');
   if ExitCode <> 0 then
