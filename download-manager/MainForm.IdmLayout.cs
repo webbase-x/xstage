@@ -425,6 +425,14 @@ public sealed partial class MainForm
                 _sortDescending ? SortOrder.Descending : SortOrder.Ascending;
             RefreshRows();
         };
+        _grid.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.F2) return;
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            var job = Selected();
+            if (job is not null) RenameCompletedJob(job);
+        };
         _grid.CellPainting += PaintProgress;
         _grid.SelectionChanged += (_, _) => UpdateDetails();
         _grid.CellClick += (_, e) =>
