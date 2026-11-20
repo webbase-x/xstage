@@ -226,9 +226,16 @@ public sealed class DownloadEngine
     {
         if (!Jobs.Contains(job) || priority is < 0 or > 2)
             throw new ArgumentOutOfRangeException(nameof(priority));
+        var previous = job.Priority;
         job.Priority = priority;
         _slots.Reprioritize(job.Id, priority);
         Save();
+        if (LastStorageError.Length > 0)
+        {
+            job.Priority = previous;
+            _slots.Reprioritize(job.Id, previous);
+            throw new IOException(LastStorageError);
+        }
     }
 
     public void SetFileSpeedLimit(DownloadJob job, int limitKib)
