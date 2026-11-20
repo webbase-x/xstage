@@ -2640,6 +2640,25 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
   const token=state.token;
   state.loading=true;updateTransport();
   setPlayStatus('กำลังเตรียมเพลง: '+(song.title||song.code||'ไม่ระบุชื่อ')+' · กำลังโหลดจาก Google Drive…');
+  // Preload only public synth assets, in parallel with private Drive loading.
+  // A browser cannot execute a downloaded BASSMIDI DLL. The local AudioWorklet
+  // is the appropriate platform-safe equivalent; files use the browser cache.
+  const isMidiSong=!!(getFileId(song?.midi)||getFileId(song?.xmid)||getFileId(song?.xsk));
+  if(isMidiSong&&window.XStageProMidi?.available?.()){
+    const engineLabel=$('xstage-midi-engine-status');
+    if(engineLabel){engineLabel.hidden=false;engineLabel.textContent='กำลังเตรียมเครื่องเสียง MIDI…';}
+    void window.XStageProMidi.preload({
+      onStatus:message=>{
+        if(request===state.requestId&&!state.liveMidiPlayback&&engineLabel)
+          engineLabel.textContent=message;
+      }
+    }).catch(error=>{
+      if(request===state.requestId&&!state.liveMidiPlayback&&engineLabel){
+        engineLabel.textContent='เครื่องเสียงคุณภาพสูงไม่พร้อม · ตัวเล่นสำรองยังใช้งานได้';
+      }
+      console.warn('Local MIDI engine preloading:',error?.message||error);
+    });
+  }
   // Keep the title visible while the potentially slow MIDI renderer works.
   ui.nowPlaying.textContent=song.title||song.code||'กำลังเตรียมเพลง';
   ui.nowArtist.textContent=song.artist||'';
