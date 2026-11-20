@@ -106,6 +106,8 @@ public sealed partial class MainForm : Form
         // Shrink the entire panel: no empty video-property rows for ZIP,
         // documents, ordinary HTTP links, or direct-file video links.
         entry.Height = showVideo ? 268 : 166;
+        if (_workspaceRoot is not null)
+            _workspaceRoot.RowStyles[2].Height = _inputVisible ? entry.Height : 0;
         entry.ResumeLayout(true);
     }
 
