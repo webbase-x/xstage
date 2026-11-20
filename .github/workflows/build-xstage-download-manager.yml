@@ -207,6 +207,51 @@ jobs:
           if ($actual -cne $hash) { throw "Published checksum mismatch: $actual vs $hash" }
           Write-Host "VERIFIED PUBLIC EXE $file SHA-256 $hash ($size bytes)"
           Write-Host "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$file"
+      - name: Update public download manifest only after release checksum verification
+        if: github.ref == 'refs/heads/main' && steps.release.outcome == 'success'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '0.2.2'
+          $build = 5
+          $name = "X-Stage-Download-Manager-v$version-build$build-win-x64-Setup.exe"
+          $tag = "xstage-download-manager-v$version-build$build-preview"
+          $setup = "download-manager/installer/output/$name"
+          if (-not (Test-Path $setup -PathType Leaf)) { throw 'Verified installer missing' }
+          $sha = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+          $size = (Get-Item $setup).Length
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$name"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch latest portal branch' }
+          git reset --hard origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Could not update portal branch' }
+          $manifest = [ordered]@{
+            name = 'X-Stage Download Manager'
+            version = $version
+            build = $build
+            channel = 'preview'
+            available = $true
+            file = $name
+            sha256 = $sha
+            size_bytes = $size
+            download_url = $url
+            note = 'Verified Windows Setup EXE with Unicode-path fix, open file/folder choices and bundled yt-dlp/FFmpeg/Deno. Unsigned preview.'
+          }
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content 'downloads/download-manager-preview-latest.json' -Encoding utf8
+          git add -- downloads/download-manager-preview-latest.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m 'release(download-manager): verified v0.2.2 Build 5 EXE feed [skip ci]'
+            if ($LASTEXITCODE -ne 0) { throw 'Could not commit verified EXE manifest' }
+            git pull --rebase origin main
+            if ($LASTEXITCODE -ne 0) { throw 'Could not rebase verified EXE manifest' }
+            git push origin HEAD:main
+            if ($LASTEXITCODE -ne 0) { throw 'Verified EXE published but portal feed push failed' }
+          }
+          Write-Host "PUBLIC PORTAL UPDATED: $url SHA256 $sha"
+
       - name: Report GitHub Releases publication denial without mislabeling CI artifact
         if: github.ref == 'refs/heads/main' && steps.release.outcome == 'failure'
         shell: pwsh
