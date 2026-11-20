@@ -41,7 +41,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.25",
+        self.diagnostic("state.ready",version="0.1.26",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -102,7 +102,9 @@ class State:
                 with self.lock:
                     job["status"]="cancelled" if job["cancel"].is_set() else "failed"
                     job["error"]=str(e)[:1200]
-                    job["message"]="ยกเลิกและคืนค่าแล้ว" if job["cancel"].is_set() else "ดำเนินการไม่สำเร็จ"
+                    job["message"]=("ยกเลิกและคืนค่าแล้ว" if job["cancel"].is_set()
+                       else ("ดาวน์โหลด/ตรวจ SHA-256 ไม่สำเร็จ: "+str(e)[:320]
+                             if kind=="update" else "ดำเนินการไม่สำเร็จ: "+str(e)[:320]))
                     job["updated_at"]=time.time()
                     job["revision"]=int(job.get("revision",0))+1
                 self.diagnostic("job.error",kind=kind,job=job_id,
@@ -207,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.25",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.26",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
@@ -405,6 +407,8 @@ class Handler(BaseHTTPRequestHandler):
                 result=self.state.start_job("import",lambda progress,cancel:
                     core.import_folder(self.state.workspace,source,progress,cancel))
             elif path=="/api/update/download":
+                # Resolve the verified LATEST release at the moment of the
+                # click, not a version captured on application startup.
                 result=self.state.start_job("update",lambda progress,cancel:
                     updater.download(self.state.workspace,updater.check(),progress,cancel))
             elif path=="/api/update/install":

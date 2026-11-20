@@ -37,7 +37,11 @@
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
-  function text(id,value){const node=$(id);if(node)node.textContent=value;}
+  function text(id,value){
+    const node=$(id);
+    const next=String(value??"");
+    if(node&&node.textContent!==next)node.textContent=next;
+  }
   function toast(message,error=false){
     const node=$("toast");
     node.textContent=String(message||"");
@@ -78,6 +82,9 @@
   }
   function view(name){
     if(!labels[name])return;
+    // Re-clicking the active navigation item should never tear down and
+    // repaint its page, losing focus and appearing to flash.
+    if(state.view===name&&$("view-"+name)?.classList.contains("is-visible"))return;
     if(state.view==="manual"&&name!=="manual")void manualStop();
     if(state.view==="preview"&&name!=="preview"){
       void stopPreviewPlayback();
@@ -548,6 +555,16 @@
     $("pro-update-notice").hidden=false;
     text("pro-update-notice-text","กำลังเตรียมอัปเดต · โปรแกรมจะตรวจ SHA-256 ก่อนติดตั้ง");
     try{
+      // A release may have been published since startup. Re-check when
+      // clicked and jump directly to the newest verified version.
+      const latest=await api("/api/update/check",undefined,30000);
+      state.updateTarget=latest;
+      if(!latest.newer){
+        state.updateBusy=false;
+        text("pro-update-status","ใช้งานรุ่นล่าสุด v"+latest.current_version+" อยู่แล้ว");
+        return;
+      }
+      text("pro-update-status","ตรวจพบรุ่นล่าสุด v"+latest.version+" · อัปเดตข้ามรุ่นได้ทันที");
       const ready=await api("/api/update/ready");
       if(ready.ready&&ready.version===state.updateTarget.version){
         await api("/api/update/install",{});
@@ -591,6 +608,11 @@
       const jobs=result.jobs||[];
       const job=jobs.find(x=>x.status==="running")||jobs[0];
       state.activeJob=jobs.find(x=>x.status==="running")?.id||null;
+      const paintKey=job?
+        job.id+":"+job.status+":"+String(job.revision??0)+":"+String(state.activeJob):
+        "no-jobs";
+      if(state.jobPaintKey===paintKey)return;
+      state.jobPaintKey=paintKey;
       if(job){
         state.lastJobPaint=Date.now();
         state.lastJobRevision=Number(job.revision??state.lastJobRevision);
@@ -604,13 +626,6 @@
       $("db-detail-audit").disabled=!state.ready||Boolean(state.activeJob);
       $("db-history-clean").disabled=!state.ready||Boolean(state.activeJob);
       $("db-compact").disabled=!state.ready||Boolean(state.activeJob);
-      if(!state.activeJob&&job&&job.kind==="import"&&
-          ["completed","failed","cancelled"].includes(job.status)){
-        void diagnostic("ui.import.idle",{
-          status:job.status,job:job.id,
-          nextImportEnabled:!$("import-start").disabled
-        });
-      }
       if(!job)return;
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
@@ -622,7 +637,9 @@
           job.kind==="db-compact"?"คืนพื้นที่ไฟล์ฐานข้อมูล SQLite":
           job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":
            job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อจาก SQLite":"สร้างไฟล์ X-Stage Pro");
-      text("activity-subtitle",job.message||"");
+      text("activity-subtitle",job.status==="failed"?
+        (job.error||job.message||"ดำเนินการไม่สำเร็จ"):
+        (job.message||""));
       const p=job.progress||{};
       if(job.kind==="lyrics-edit"){
         state.lyricsEditJob=job.id;
@@ -714,7 +731,8 @@
       const downloaded=(job.kind==="update"||job.kind==="lyrics-edit")&&p.total>0;
       progressBar.classList.toggle("indeterminate",job.status==="running"&&!downloaded);
       progressBar.style.width=job.status==="completed"?"100%":
-        downloaded?Math.min(100,100*(p.done||0)/p.total).toFixed(1)+"%":"0%";
+        downloaded?Math.min(100,100*(p.done||p.downloaded_bytes||0)/p.total).toFixed(1)+"%":
+        job.status==="running"?"35%":"0%";
       const signature=job.id+":"+job.status;
       if(state.jobSignature!==signature){
         state.jobSignature=signature;
@@ -2236,6 +2254,13 @@
     });
     $("refresh-summary").addEventListener("click",()=>void refreshSummary());
     $("pro-update-check").addEventListener("click",()=>void checkProUpdate());
+    $("pro-update-direct").addEventListener("click",()=>{
+      // The native Qt shell opens external HTTPS navigation in the user's
+      // regular browser. This is the emergency path if an older updater fails.
+      const latest=state.updateTarget?.url;
+      location.href=latest&&latest.startsWith("https://github.com/webbase-x/xstage/releases/download/")?
+        latest:"https://github.com/webbase-x/xstage/releases";
+    });
     $("pro-update-install").addEventListener("click",()=>void beginProUpdate());
     $("pro-update-quick").addEventListener("click",()=>void beginProUpdate());
     $("pro-update-notice-install").addEventListener("click",()=>void beginProUpdate());
