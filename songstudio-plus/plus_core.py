@@ -1117,12 +1117,16 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                         totals["skipped_ncn"]+=1
                     elif outcome=="lyrics-error":
                         totals["failures"]+=1
-                db.execute("""INSERT OR REPLACE INTO xstage_import_items
-                   (batch_id,source_path,source_name,media_sha256,song_id,
-                    outcome,message,created_at) VALUES (?,?,?,?,?,?,?,?)""",
-                   (batch,str(event_path or paths[0]["source_path"] or ("unresolved://"+song_id)),
-                    Path(event_path).name if event_path else "",
-                    paths[0]["sha256"],song_id,outcome,note,now()))
+                # Keep actionable recovery problems, not every successful
+                # lyric reconstruction: batch counters already track success.
+                if outcome in ("lyrics-error","partial-lyrics","untimed-lyrics",
+                               "skipped-ncn-incomplete","missing-source","changed-source"):
+                    db.execute("""INSERT OR REPLACE INTO xstage_import_items
+                       (batch_id,source_path,source_name,media_sha256,song_id,
+                        outcome,message,created_at) VALUES (?,?,?,?,?,?,?,?)""",
+                       (batch,str(event_path or paths[0]["source_path"] or ("unresolved://"+song_id)),
+                        Path(event_path).name if event_path else "",
+                        paths[0]["sha256"],song_id,outcome,note,now()))
                 db.execute("RELEASE SAVEPOINT lyrics_recovery")
             except (OSError,ValueError,TypeError,sqlite3.DatabaseError) as err:
                 db.execute("ROLLBACK TO SAVEPOINT lyrics_recovery")
@@ -1188,7 +1192,8 @@ def import_issues(workspace, limit=80):
                    FROM xstage_import_items i
                    JOIN xstage_import_batches b ON b.id=i.batch_id
                    WHERE i.outcome IN ('error','lyrics-error','timing-incomplete',
-                                       'partial-lyrics','untimed-lyrics','missing-lyr','skipped-ncn-incomplete')
+                                       'partial-lyrics','untimed-lyrics','missing-lyr','skipped-ncn-incomplete',
+                                       'missing-source','changed-source')
                    ORDER BY i.id DESC LIMIT ?""",
                    (max(1,min(int(limit),250)),)).fetchall()
         return [dict(row) for row in rows]
