@@ -17,6 +17,12 @@ public static class SelfUpdater
         AllowAutoRedirect = true
     }) { Timeout = Timeout.InfiniteTimeSpan };
 
+    // Match the 64-bit Inno Setup {autopf} destination. Do not run the
+    // obsolete per-user EXE after migrating to an all-users installation.
+    public static string InstalledProgramFilesExe => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        "X-Stage", "Download Manager", "XStageDownloadManager.exe");
+
     private static string UpdateFolder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "X-Stage", "Download Manager", "updates");
@@ -148,7 +154,8 @@ public static class SelfUpdater
             !long.TryParse(args[5], out var size) || !int.TryParse(args[7], out var build))
             return 2;
         var setup = args[2];
-        var installedExe = args[3];
+        var previousExe = args[3];
+        var installedExe = InstalledProgramFilesExe;
         var sha = args[4];
         var version = args[6];
         var log = Path.Combine(UpdateFolder, "last-update.log");
@@ -182,10 +189,14 @@ public static class SelfUpdater
             }
             catch (ArgumentException) { /* The main process already exited. */ }
 
+            // Program Files requires UAC. Prompt for elevation only after
+            // SHA-256 verification and after the previous app has exited.
+            // The helper remains at user integrity level and later relaunches
+            // the installed app without administrator privileges.
             var install = new ProcessStartInfo(setup)
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = "runas",
                 WorkingDirectory = UpdateFolder
             };
             foreach (var arg in new[] { "/VERYSILENT", "/SUPPRESSMSGBOXES",
@@ -213,11 +224,14 @@ public static class SelfUpdater
         catch (Exception ex)
         {
             WriteLog("FAILED " + ex.Message);
-            // Restore the existing UI if the update failed and the old app remains.
+            // Recover from cancellation or installation failure. Always
+            // prefer the verified Program Files app; fall back to the old
+            // installed EXE only if migration has not completed.
             try
             {
-                if (File.Exists(installedExe))
-                    Process.Start(new ProcessStartInfo(installedExe) { UseShellExecute = true });
+                var reopen = File.Exists(installedExe) ? installedExe : previousExe;
+                if (File.Exists(reopen))
+                    Process.Start(new ProcessStartInfo(reopen) { UseShellExecute = true });
             }
             catch (Exception) { }
             return 1;
