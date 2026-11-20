@@ -20,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-VERSION="0.1.32"
+VERSION="0.1.33"
 MANIFEST_URL="https://webbase-x.github.io/xstage/downloads/song-studio-pro-latest.json"
 RAW_MANIFEST_URL="https://raw.githubusercontent.com/webbase-x/xstage/main/downloads/song-studio-pro-latest.json"
 RELEASE=re.compile(
@@ -60,6 +60,30 @@ def validate(data):
         raise ValueError("ไม่มี SHA-256 ที่ใช้ยืนยันโปรแกรม")
     return {"version":version,"url":url,"sha256":digest,
             "filename":match.group(2)}
+
+
+def _validate_download_target(data):
+    """Re-verify either a raw manifest or our normalized verified snapshot.
+
+    check() intentionally returns the compact internal shape
+    {version,url,sha256,filename,...}. download() must not feed that compact
+    shape back into validate(), because validate() expects public-manifest
+    fields such as name/available/download_url. Reconstruct the strict public
+    shape and run the same URL/SHA checks again.
+    """
+    if "download_url" in data or "available" in data or "name" in data:
+        return validate(data)
+    target=validate({
+        "name":"X-Stage Song Studio Pro",
+        "available":True,
+        "version":data.get("version"),
+        "download_url":data.get("url"),
+        "sha256":data.get("sha256"),
+    })
+    supplied=str(data.get("filename") or "")
+    if supplied and supplied!=target["filename"]:
+        raise ValueError("ชื่อไฟล์อัปเดตไม่ตรงกับ Release ที่ยืนยันแล้ว")
+    return target
 
 
 def _read_feed(url):
@@ -208,7 +232,7 @@ def download(workspace,info,progress=None,cancel=None):
     A partial is NEVER executed. Retries preserve verified source identity via
     .partial.json, validate HTTP Range responses, and hash all final bytes.
     """
-    target=validate(info)
+    target=_validate_download_target(info)
     if version_tuple(target["version"])<=version_tuple(VERSION):
         raise ValueError("ยังไม่มีรุ่นใหม่กว่าโปรแกรมที่ใช้อยู่")
     if sys.platform!="win32" or not getattr(sys,"frozen",False):
