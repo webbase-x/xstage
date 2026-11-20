@@ -426,3 +426,13 @@ html{scroll-padding-top:calc(96px + var(--xstage-status-safe-top))}
 @media(max-width:370px){
   .new-wordmark img{width:min(150px,40vw)}
 }
+
+
+/* Use each application's own artwork on every public EXE / APK link. */
+.binary-download-icon{
+  width:23px;height:23px;min-width:23px;object-fit:contain;
+  display:inline-block;vertical-align:middle;flex:none;border-radius:5px;
+  background:rgba(255,255,255,.14);
+}
+.app-card .app-card-download,.detail-action{gap:9px}
+@media(max-width:445px){.binary-download-icon{width:20px;height:20px;min-width:20px}}
