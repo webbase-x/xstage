@@ -12,6 +12,8 @@ public sealed class MainForm : Form
     private readonly ComboBox _parts = new();
     private readonly ComboBox _videoQuality = new();
     private readonly ComboBox _outputFormat = new();
+    private TableLayoutPanel? _inputLayout;
+    private Control[] _videoOptionControls = Array.Empty<Control>();
     private readonly DataGridView _grid = new();
     private readonly ContextMenuStrip _completedMenu = new();
     private readonly Label _summary = new();
@@ -55,7 +57,9 @@ public sealed class MainForm : Form
         _outputFormat.SelectedIndex = 0;
         _outputFormat.SelectedIndexChanged += (_, _) => _videoQuality.Enabled = _outputFormat.SelectedIndex != 3;
         _folder.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        _url.TextChanged += (_, _) => UpdateVideoOptionVisibility();
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
+        UpdateVideoOptionVisibility();
         _timer.Tick += (_, _) => RefreshRows();
         _timer.Start();
         FormClosing += (_, _) =>
@@ -200,6 +204,9 @@ public sealed class MainForm : Form
             Text = "MP4 แนะนำ", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(17, 128, 90), Font = new Font("Segoe UI", 8, FontStyle.Bold)
         }, 2, 4);
+        _inputLayout = entry;
+        _videoOptionControls = entry.Controls.Cast<Control>()
+            .Where(control => entry.GetPositionFromControl(control).Row >= 3).ToArray();
         Controls.Add(entry);
 
         var toolbar = new FlowLayoutPanel
@@ -309,6 +316,28 @@ public sealed class MainForm : Form
         _updateStatus.Text = "รุ่นที่ติดตั้ง v0.2.6 · Build 9";
         footer.Controls.Add(_updateStatus, 0, 2);
         Controls.Add(footer);
+    }
+
+    private void UpdateVideoOptionVisibility()
+    {
+        var entry = _inputLayout;
+        if (entry is null) return;
+        bool showVideo = SocialVideoDownloader.InputContainsVideo(_url.Text);
+        if (_videoOptionControls.Length > 0 &&
+            _videoOptionControls.All(control => control.Visible == showVideo))
+            return;
+        entry.SuspendLayout();
+        foreach (var control in _videoOptionControls) control.Visible = showVideo;
+        for (int row = 0; row < 5; row++)
+        {
+            var style = entry.RowStyles[row];
+            style.SizeType = row < 3 || showVideo ? SizeType.Percent : SizeType.Absolute;
+            style.Height = row >= 3 && !showVideo ? 0 : showVideo ? 20 : 100f / 3f;
+        }
+        // Shrink the entire panel: no empty video-property rows for ZIP,
+        // documents, ordinary HTTP links, or direct-file video links.
+        entry.Height = showVideo ? 268 : 166;
+        entry.ResumeLayout(true);
     }
 
     private static Label MakeLabel(string value) => new()
