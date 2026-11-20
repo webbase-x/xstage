@@ -25,6 +25,7 @@ public sealed partial class MainForm : Form
     private readonly CancellationTokenSource _browserStop = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 800 };
     private bool _networkAvailable = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
+    private volatile bool _sleeping;
 
     public MainForm(string[] args)
     {
@@ -114,7 +115,14 @@ public sealed partial class MainForm : Form
     private void OnPowerModeChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e)
     {
         if (e.Mode == Microsoft.Win32.PowerModes.Suspend)
+        {
+            _sleeping = true;
             _engine.PauseForNetworkOutage();
+        }
+        else if (e.Mode == Microsoft.Win32.PowerModes.Resume)
+        {
+            _sleeping = false;
+        }
     }
 
     private void CheckNetworkRecovery()
@@ -123,7 +131,7 @@ public sealed partial class MainForm : Form
         if (_networkAvailable && !available)
             _engine.PauseForNetworkOutage();
         _networkAvailable = available;
-        if (available) _engine.TryResumeNetworkInterrupted();
+        if (available && !_sleeping) _engine.TryResumeNetworkInterrupted();
     }
 
     private void UpdateVideoOptionVisibility()
