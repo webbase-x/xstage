@@ -52,6 +52,11 @@ public static class SocialVideoDownloader
         {
             "--ignore-config", "--no-plugin-dirs", "--no-playlist", "--no-simulate", "--no-mtime", "--newline", "--no-colors",
             "--continue", "--windows-filenames", "--encoding", "utf-8",
+            // Bound network retry time rather than waiting indefinitely.
+            "--socket-timeout", "20", "--retries", "3",
+            "--fragment-retries", "3", "--extractor-retries", "2",
+            "--retry-sleep", "http:linear=1:4:1",
+            "--retry-sleep", "fragment:linear=1:4:1",
             "--paths", "home:" + job.Folder,
             "--paths", "temp:" + work,
             "-o", "%(title).150B [%(id)s].%(ext)s",
@@ -82,6 +87,37 @@ public static class SocialVideoDownloader
         return args;
     }
 
+    // Describe real yt-dlp work even before the first downloaded byte.
+    public static string? DescribeOutputPhase(string line)
+    {
+        if (line.Contains("[Merger]", StringComparison.Ordinal) ||
+            line.Contains("[ExtractAudio]", StringComparison.Ordinal) ||
+            line.Contains("[VideoRemuxer]", StringComparison.Ordinal) ||
+            line.Contains("[VideoConvertor]", StringComparison.Ordinal) ||
+            line.Contains("[Fixup", StringComparison.Ordinal) ||
+            line.Contains("[ffmpeg]", StringComparison.OrdinalIgnoreCase))
+            return "กำลังรวม/แปลงไฟล์วิดีโอ";
+        if (line.Contains("Downloading webpage", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("Extracting URL", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("Downloading player", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("Downloading API", StringComparison.OrdinalIgnoreCase))
+            return "กำลังอ่านข้อมูลวิดีโอจากเว็บไซต์";
+        if (line.Contains("Downloading m3u8", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("Downloading MPD", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("Downloading format", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("Downloading 1 format", StringComparison.OrdinalIgnoreCase))
+            return "กำลังเชื่อมต่อสตรีมวิดีโอ";
+        if (line.StartsWith("[download] Destination:", StringComparison.Ordinal) ||
+            line.Contains("Total fragments:", StringComparison.OrdinalIgnoreCase))
+            return "กำลังรับข้อมูลวิดีโอ";
+        return null;
+    }
+
+    // Transcoding is more expensive than waiting for a CDN to deliver bytes.
+    public static bool IsStalled(TimeSpan noByteProgress, bool postProcessing)
+        => postProcessing ? noByteProgress >= TimeSpan.FromMinutes(15)
+                          : noByteProgress >= TimeSpan.FromMinutes(2);
+
     public static async Task DownloadAsync(DownloadJob job, string work, CancellationToken ct)
     {
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
@@ -97,7 +133,7 @@ public static class SocialVideoDownloader
         var receiptPath = Path.Combine(work, "xstage-completed-path.txt");
         // Never treat an earlier attempt's receipt as a successful download.
         if (File.Exists(receiptPath)) File.Delete(receiptPath);
-        job.VideoPhase = "กำลังอ่านข้อมูลวิดีโอ";
+        job.VideoPhase = "กำลังค้นหาข้อมูลวิดีโอ";
         job.VideoPercent = 0;
         job.SegmentsUsed = 0; // -N sets a maximum fragment concurrency, not a guaranteed number of HTTP byte ranges
 
@@ -127,6 +163,31 @@ public static class SocialVideoDownloader
 
         string? finalPath = null;
         var errors = new Queue<string>();
+        var started = Stopwatch.GetTimestamp();
+        long lastByteTick = started;
+        long lastOutputTick = started;
+        long previousReportedBytes = 0;
+        int postProcessing = 0;
+        string? watchdogError = null;
+        var logDir = Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData),
+            "X-Stage", "Download Manager", "logs");
+        Directory.CreateDirectory(logDir);
+        var logFile = Path.Combine(logDir, "video-" + job.Id + ".log");
+        var recentLines = new Queue<string>();
+        void RecordLine(string line)
+        {
+            Interlocked.Exchange(ref lastOutputTick, Stopwatch.GetTimestamp());
+            // Avoid persisting signed CDN URL query tokens in diagnostics.
+            var safe = System.Text.RegularExpressions.Regex.Replace(
+                line, @"https?://[^\s]+", "[url]",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            lock (recentLines)
+            {
+                recentLines.Enqueue(safe.Length > 600 ? safe[..600] : safe);
+                while (recentLines.Count > 80) recentLines.Dequeue();
+            }
+        }
         async Task ReadLinesAsync(StreamReader reader, Action<string> processLine)
         {
             try
@@ -139,11 +200,22 @@ public static class SocialVideoDownloader
         }
         void OnStdout(string line)
         {
+            RecordLine(line);
+            var phase = DescribeOutputPhase(line);
+            if (phase is not null)
+            {
+                job.VideoPhase = phase;
+                if (phase == "กำลังรวม/แปลงไฟล์วิดีโอ")
+                {
+                    Interlocked.Exchange(ref postProcessing, 1);
+                    Interlocked.Exchange(ref lastByteTick, Stopwatch.GetTimestamp());
+                }
+            }
             if (line.StartsWith("xstage-title:", StringComparison.Ordinal))
             {
                 var title = line["xstage-title:".Length..].Trim();
                 if (title.Length > 0) job.Name = title.Length > 160 ? title[..160] : title;
-                job.VideoPhase = "กำลังดาวน์โหลดวิดีโอ";
+                job.VideoPhase = "กำลังเตรียมรับวิดีโอ";
             }
             else if (line.StartsWith("xstage-path:", StringComparison.Ordinal))
                 finalPath = line["xstage-path:".Length..].TrimEnd('\r', '\n');
@@ -155,33 +227,94 @@ public static class SocialVideoDownloader
                         CultureInfo.InvariantCulture, out var percent))
                     job.VideoPercent = Math.Clamp(percent, 0, 100);
                 if (progress.Length > 1 && long.TryParse(progress[1], out var bytes))
-                    Interlocked.Exchange(ref job.DownloadedBytes, Math.Max(0, bytes));
+                {
+                    bytes = Math.Max(0, bytes);
+                    if (bytes != Interlocked.Read(ref previousReportedBytes))
+                    {
+                        Interlocked.Exchange(ref previousReportedBytes, bytes);
+                        Interlocked.Exchange(ref lastByteTick, Stopwatch.GetTimestamp());
+                    }
+                    Interlocked.Exchange(ref job.DownloadedBytes, bytes);
+                    if (bytes > 0) job.VideoPhase = "กำลังดาวน์โหลดวิดีโอ";
+                }
                 if (progress.Length > 2 && long.TryParse(progress[2], out var total))
                     job.TotalBytes = total;
                 else if (progress.Length > 3 && long.TryParse(progress[3], out var estimate))
                     job.TotalBytes = estimate;
             }
-            else if (line.Contains("[Merger]", StringComparison.Ordinal) ||
-                     line.Contains("[ExtractAudio]", StringComparison.Ordinal) ||
-                     line.Contains("[VideoRemuxer]", StringComparison.Ordinal))
-                job.VideoPhase = "กำลังรวมภาพและเสียง";
+
         }
         void OnStderr(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return;
+            RecordLine(line);
             errors.Enqueue(line.Trim());
             while (errors.Count > 12) errors.Dequeue();
         }
 
-        await Task.WhenAll(ReadLinesAsync(process.StandardOutput, OnStdout),
-                           ReadLinesAsync(process.StandardError, OnStderr),
-                           process.WaitForExitAsync());
+        using var watchStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var watchdog = Task.Run(async () =>
+        {
+            try
+            {
+                while (!process.HasExited)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), watchStop.Token);
+                    var now = Stopwatch.GetTimestamp();
+                    var idleBytes = Stopwatch.GetElapsedTime(Interlocked.Read(ref lastByteTick), now);
+                    if (!IsStalled(idleBytes, Volatile.Read(ref postProcessing) != 0))
+                    {
+                        if (Interlocked.Read(ref previousReportedBytes) == 0 &&
+                            Volatile.Read(ref postProcessing) == 0)
+                        {
+                            var seconds = (int)Stopwatch.GetElapsedTime(started, now).TotalSeconds;
+                            if (seconds >= 8)
+                                job.VideoPhase = "กำลังเชื่อมต่อวิดีโอ (" + seconds + " วินาที)";
+                        }
+                        continue;
+                    }
+                    var noOutput = Stopwatch.GetElapsedTime(Interlocked.Read(ref lastOutputTick), now);
+                    watchdogError = Volatile.Read(ref postProcessing) != 0
+                        ? "ขั้นตอนรวม/แปลงวิดีโอไม่มีความคืบหน้านานเกิน 15 นาที"
+                        : "ไม่ได้รับข้อมูลวิดีโอใหม่เกิน 2 นาที" +
+                          (noOutput.TotalSeconds >= 60 ? " (โปรแกรมวิดีโอไม่มีการตอบกลับ)" : "");
+                    job.VideoPhase = "วิดีโอไม่ตอบสนอง — หยุดงานที่ค้าง";
+                    try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                    catch (InvalidOperationException) { }
+                    catch (System.ComponentModel.Win32Exception) { }
+                    break;
+                }
+            }
+            catch (OperationCanceledException) { }
+        });
+        try
+        {
+            await Task.WhenAll(ReadLinesAsync(process.StandardOutput, OnStdout),
+                               ReadLinesAsync(process.StandardError, OnStderr),
+                               process.WaitForExitAsync());
+        }
+        finally
+        {
+            watchStop.Cancel();
+            await watchdog;
+            try
+            {
+                string[] recorded;
+                lock (recentLines) recorded = recentLines.ToArray();
+                File.WriteAllLines(logFile, recorded, Encoding.UTF8);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
         ct.ThrowIfCancellationRequested();
+        if (watchdogError is not null)
+            throw new IOException(watchdogError + " · ตรวจสอบบันทึก: " + logFile);
         if (process.ExitCode != 0)
         {
             var tail = string.Join(" | ", errors);
             throw new IOException("ดาวน์โหลดวิดีโอไม่สำเร็จ" +
-                (tail.Length > 0 ? ": " + (tail.Length > 320 ? tail[^320..] : tail) : " (รหัส " + process.ExitCode + ")"));
+                (tail.Length > 0 ? ": " + (tail.Length > 320 ? tail[^320..] : tail) : " (รหัส " + process.ExitCode + ")") +
+                " · บันทึก: " + logFile);
         }
         string fullPath;
         try { fullPath = VerifyCompletedPath(job.Folder, finalPath, receiptPath); }
