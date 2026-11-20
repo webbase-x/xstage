@@ -108,7 +108,7 @@ public static class MediaIntegrity
         {
             using var document = JsonDocument.Parse(stdout);
             var root = document.RootElement;
-            var video = "", audio = "";
+            string video = "", audio = "";
             if (root.TryGetProperty("streams", out var streams))
                 foreach (var stream in streams.EnumerateArray())
                 {
