@@ -72,7 +72,7 @@ public sealed partial class MainForm
             item.DropDownItems.AddRange(children);
             return item;
         }
-        var newUrl = Action("＋ เพิ่ม URL (Ctrl+N)", (_, _) => ShowInputPanel(true));
+        var newUrl = Action("＋ เพิ่ม URL (Ctrl+N)", (_, _) => ShowAddUrlFromClipboard());
         newUrl.ShortcutKeys = Keys.Control | Keys.N;
         menu.Items.Add(Menu("งาน",
             newUrl,
@@ -138,7 +138,7 @@ public sealed partial class MainForm
             bar.Items.Add(item);
         }
         Button("เพิ่ม URL", "＋", Color.FromArgb(89, 204, 176),
-            (_, _) => ShowInputPanel(true), "เปิดช่องวางลิงก์และเลือกที่บันทึก");
+            (_, _) => ShowAddUrlFromClipboard(), "เปิดช่องเพิ่ม URL และเติมลิงก์จากคลิปบอร์ดอัตโนมัติ");
         Button("เริ่ม / ต่อ", "▶", Color.FromArgb(140, 193, 255),
             (_, _) => SelectedAction(_engine.Start), "เริ่มรายการที่เลือกหรือดาวน์โหลดต่อ");
         Button("หยุด", "■", Color.FromArgb(255, 149, 151),
@@ -455,6 +455,47 @@ public sealed partial class MainForm
         footer.Controls.Add(_details, 0, 1);
         footer.Controls.Add(_updateStatus, 0, 2);
         return footer;
+    }
+
+    // Accept only standalone valid HTTP/HTTPS download URLs. Never paste
+    // arbitrary clipboard text (passwords, file paths, or unrelated notes).
+    // Supports multiple copied links; does not trigger the download itself.
+    internal static string ExtractClipboardUrls(string? clipboard)
+    {
+        if (string.IsNullOrWhiteSpace(clipboard)) return "";
+        var parts = clipboard.Split(
+            new[] { '\r', '\n', ' ', '\t' },
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0 || parts.Length > 200 ||
+            parts.Any(part => !DownloadEngine.TryParseUrl(part, out _)))
+            return "";
+        return string.Join(Environment.NewLine, parts);
+    }
+
+    private void ShowAddUrlFromClipboard()
+    {
+        ShowInputPanel(true);
+        // Preserve a link already typed/pasted by the user.
+        if (!string.IsNullOrWhiteSpace(_url.Text)) return;
+        try
+        {
+            if (Clipboard.ContainsText())
+            {
+                var copiedLinks = ExtractClipboardUrls(Clipboard.GetText());
+                if (copiedLinks.Length > 0)
+                {
+                    _url.Text = copiedLinks;
+                    _url.SelectionStart = _url.TextLength;
+                    _url.SelectionLength = 0;
+                }
+            }
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Another app may temporarily lock the Windows clipboard.
+            // Leave the editable URL field open for manual paste.
+        }
+        _url.Focus();
     }
 
     private void ShowInputPanel(bool visible, bool focusFolder = false)
