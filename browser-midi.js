@@ -851,6 +851,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   return {dispose,duration:song.duration};
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,unlockAudio,
+  liveAudioContext:()=>sharedLiveContext?.state!=='closed'?sharedLiveContext:null,
   supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
   reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียงสังเคราะห์พื้นฐาน (ไม่มี SoundFont)',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
