@@ -623,7 +623,23 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   sharedLiveContext=ctx;
   const font=fontBytes?(fontCache?.bytes===fontBytes&&fontCache.parsed?
     fontCache.parsed:parseFont(fontBytes)):null;
-  const master=ctx.createGain();master.gain.value=.55;master.connect(ctx.destination);
+  // The PC BASSMIDI backend starts fonts at -6 dB and limits polyphony.
+  // Web Audio summing has no built-in clipping guard; keep headroom and use
+  // a single final dynamics limiter, never boost every note independently.
+  const master=ctx.createGain();
+  const limiter=typeof ctx.createDynamicsCompressor==='function'
+    ?ctx.createDynamicsCompressor():null;
+  if(limiter){
+    limiter.threshold.value=-18;
+    limiter.knee.value=12;
+    limiter.ratio.value=12;
+    limiter.attack.value=.003;
+    limiter.release.value=.16;
+    master.connect(limiter);limiter.connect(ctx.destination);
+  }else master.connect(ctx.destination);
+  const MASTER_GAIN=.18;
+  const MAX_VOICES=96;
+  master.gain.value=MASTER_GAIN;
   const notes=song.notes.slice().sort((a,b)=>a.start-b.start);
   let cursor=0,disposed=false,timer=null,voices=[],revision=0;
   const regionCache=new Map();
@@ -674,12 +690,20 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
       if(disposed||signal?.aborted||generation!==revision||
          player.paused||ctx.currentTime>start+duration)return;
       const gain=ctx.createGain();
-      const amp=Math.max(.0001,Math.pow(n.velocity/127,1.5)*
-        Math.max(.05,Number(n.level)||0)*.32/regions.length);
-      gain.gain.setValueAtTime(.00001,Math.max(start,ctx.currentTime+.002));
-      gain.gain.linearRampToValueAtTime(amp,Math.max(start,ctx.currentTime+.002)+.012);
-      gain.gain.setValueAtTime(amp,Math.max(start,ctx.currentTime+.002)+Math.max(.02,duration-.04));
-      gain.gain.exponentialRampToValueAtTime(.00001,Math.max(start,ctx.currentTime+.002)+duration+.06);
+      // MIDI CC7/CC11 and SF2 attenuation are multiplicative; the number
+      // of layers must never multiply the total level above a single voice.
+      const attenuation=region?Math.max(0,Number(region.get(48))||0):0;
+      const amp=Math.max(.00001,Math.pow(n.velocity/127,1.65)*
+        Math.max(0,Math.min(1,Number(n.level)||0))*
+        Math.pow(10,-attenuation/200)*.20/regions.length);
+      const onset=Math.max(start,ctx.currentTime+.003);
+      const attack=Math.min(.014,duration*.25);
+      const release=Math.min(.09,Math.max(.025,duration*.25));
+      const held=Math.max(onset+attack,onset+duration-release);
+      gain.gain.setValueAtTime(.00001,onset);
+      gain.gain.linearRampToValueAtTime(amp,onset+attack);
+      gain.gain.setValueAtTime(amp,held);
+      gain.gain.exponentialRampToValueAtTime(.00001,onset+duration);
       gain.connect(master);
       let src;
       if(buffer){
@@ -698,15 +722,21 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
         src.type=n.channel===9?'square':program>=80?'sawtooth':program>=40?'triangle':'sine';
         src.frequency.value=440*Math.pow(2,(pitch-69)/12);
       }
+      // Preserve rhythm over unlimited polyphony: retire oldest voices
+      // before allocating another active oscillator/sample source.
+      while(voices.length>=MAX_VOICES){
+        const oldest=voices.shift();
+        try{oldest.stop();}catch{}
+        try{oldest.disconnect();}catch{}
+      }
       src.connect(gain);register(src,gain);
-      const at=Math.max(start,ctx.currentTime+.003);
-      src.start(at);src.stop(at+duration+.07);
+      src.start(onset);src.stop(onset+duration+.015);
     }
   };
   const schedule=()=>{
     if(disposed||signal?.aborted||player.paused||player.ended)return;
     const now=Number(player.currentTime)||0,rate=Math.max(.25,Number(player.playbackRate)||1);
-    master.gain.value=.55*(player.muted?0:Math.max(0,Math.min(1,Number(player.volume)||0)));
+    master.gain.value=MASTER_GAIN*(player.muted?0:Math.max(0,Math.min(1,Number(player.volume)||0)));
     const horizon=now+rate*(font?.9:.42),current=revision;
     for(;cursor<notes.length&&notes[cursor].start<horizon;cursor++){
       const n=notes[cursor];if(n.start<now-.08)continue;
@@ -726,7 +756,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const dispose=()=>{
     if(disposed)return;disposed=true;pause();
     for(const [event,fn] of listeners)player.removeEventListener(event,fn);
-    try{master.disconnect();}catch{}
+    try{master.disconnect();limiter?.disconnect();}catch{}
   };
   signal?.addEventListener('abort',dispose,{once:true});
   if(!player.paused)play();
