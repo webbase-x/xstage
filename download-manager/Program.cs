@@ -7,6 +7,14 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Run the copied single-file updater before taking the GUI instance lock.
+        // The installed app must exit so Inno Setup can replace its binary safely.
+        if (args.Length > 0 && args[0] == "--apply-verified-update")
+        {
+            Environment.ExitCode = SelfUpdater.ApplyUpdateInHelper(args);
+            return;
+        }
+
         // Chromium invokes the registered native host with its origin as an
         // argument and communicates only via binary-framed JSON on stdin/out.
         if (args.Contains("--native-host") ||
