@@ -173,7 +173,7 @@ try
 
     if (!SocialVideoDownloader.TryParseProgress(
             "[download] xstage-progress: \\x1b[0;94m 37.5%\\x1b[0m|3000|8000|NA".Replace(
-                "\\x1b", "\\u001b"),
+                "\\x1b", ((char)27).ToString()),
             out var ansiPercent, out _, out _) ||
         ansiPercent != 37.5)
         throw new Exception("Video progress parser should ignore terminal color codes.");
