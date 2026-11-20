@@ -45,7 +45,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.32",
+        self.diagnostic("state.ready",version="0.1.33",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()

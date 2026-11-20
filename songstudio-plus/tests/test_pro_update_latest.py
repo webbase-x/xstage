@@ -82,13 +82,13 @@ class LatestUpdateTests(unittest.TestCase):
         self.assertEqual(release["sha256"],item["sha256"])
 
     def test_unavailable_manifests_fall_back_to_verified_github_release(self):
-        release=updater.validate(manifest("0.1.33"))
+        release=updater.validate(manifest("0.1.34"))
         release["feed"]="api.github.com"
         with patch.object(updater,"_read_feed",side_effect=
                           ValueError("ยังไม่มีไฟล์ Song Studio Pro ที่ยืนยันแล้ว")), \
              patch.object(updater,"_read_release_api",return_value=release):
             result=updater.check()
-        self.assertEqual(result["version"],"0.1.33")
+        self.assertEqual(result["version"],"0.1.34")
         self.assertTrue(result["newer"])
 
     def test_manifest_newer_than_uploaded_release_is_not_advertised(self):
@@ -116,6 +116,22 @@ class LatestUpdateTests(unittest.TestCase):
             fallback=state.check_latest_update()
             self.assertTrue(fallback["used_previous_verification"])
             self.assertEqual(state.download_target()["version"],"0.1.99")
+
+    def test_download_accepts_normalized_verified_snapshot_from_check(self):
+        content=b"MZ"+b"n"*(2*1024*1024)
+        raw=manifest("0.1.99",content)
+        normalized=updater.validate(raw)
+        normalized.update({"current_version":updater.VERSION,"newer":True,
+                           "feed":"api.github.com"})
+        with patch.object(updater.sys,"platform","win32"), \
+             patch.object(updater.sys,"frozen",True,create=True), \
+             patch.object(updater.urllib.request,"urlopen",
+                          side_effect=lambda req,timeout=None:Response(content)), \
+             patch.object(updater.time,"sleep",return_value=None):
+            result=updater.download(self.workspace,normalized,None,None)
+        self.assertEqual(result["version"],"0.1.99")
+        self.assertEqual(Path(result["path"]).read_bytes(),content)
+        self.assertEqual(updater.ready_file(self.workspace)["sha256"],raw["sha256"])
 
     def test_resumes_interrupted_github_asset_and_hashes_entire_file(self):
         content=b"MZ"+b"x"*(2*1024*1024)

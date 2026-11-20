@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.32
+# X-Stage Song Studio Pro — Technical Preview v0.1.33
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,14 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.33 — Updater normalized-target repair
+
+- Fixes the auto-update failure **“ยังไม่มีไฟล์ Song Studio Pro ที่ยืนยันแล้ว”** that could occur after a release had already been verified.
+- Root cause: the update checker returned a normalized verified snapshot (`version/url/sha256/filename`), but the downloader incorrectly passed that internal snapshot back into the public-manifest validator, which expects `name/available/download_url`.
+- The downloader now reconstructs the strict manifest shape, re-runs the same official Release URL and SHA-256 checks, and also rejects a mismatched supplied filename.
+- A regression test downloads from the exact normalized object returned by the checker so this bootstrap path cannot silently break again.
+- **Important for v0.1.31/v0.1.32:** those already-installed builds contain the bootstrap bug, so their automatic-install button cannot repair itself. Install v0.1.33 Setup once manually; automatic updates from v0.1.33 onward use the repaired path.
 
 ## v0.1.32 — Responsive grouped lyrics editor
 
