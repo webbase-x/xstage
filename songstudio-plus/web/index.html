@@ -32,7 +32,7 @@
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
-      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.31 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 พอดีจออัตโนมัติ</span></div>
+      <div class="side-version">X-Stage Song Studio Pro <span>v0.1.32 · Preview</span><span class="zoom-hint">Ctrl + / − ปรับขนาดหน้าจอ · Ctrl + 0 พอดีจออัตโนมัติ</span></div>
     </div>
   </aside>
   <main class="main">
@@ -103,7 +103,7 @@
           </article>
         </div>
         <section class="panel pro-update-panel" aria-labelledby="pro-update-title">
-          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.31</span></div>
+          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.32</span></div>
           <p class="field-hint" id="pro-update-status" aria-live="polite">ตรวจรุ่นล่าสุดจาก GitHub และ SHA-256 · ข้ามรุ่นได้ในครั้งเดียว · คลังเพลงและประวัติเนื้อร้องไม่ถูกลบ</p>
           <div class="toolbar">
             <button id="pro-update-check" class="quiet-btn" type="button">↻ ตรวจสอบอัปเดต</button>
@@ -158,7 +158,11 @@
             <div class="panel-head"><div><span class="label-top">BATCH REPLACE</span><h2>แทนที่ข้อความทั้งบรรทัด</h2></div></div>
             <div class="selection-summary" id="selected-summary">ยังไม่ได้เลือกกลุ่มข้อความ</div>
             <label class="field-label" for="lyrics-replacement">ข้อความใหม่สำหรับทุกกลุ่มที่เลือก</label>
-            <textarea id="lyrics-replacement" rows="3" maxlength="400" placeholder="เช่น X-Stage Karaoke"></textarea>
+            <div class="replacement-choice">
+              <input id="lyrics-replacement" list="lyrics-replacement-options" maxlength="400" autocomplete="off" placeholder="เลือก X-Stage Karaoke หรือพิมพ์ข้อความเอง">
+              <datalist id="lyrics-replacement-options"><option value="X-Stage Karaoke"></option></datalist>
+            </div>
+            <p class="field-hint replacement-hint">เลือก “X-Stage Karaoke” จากรายการ หรือพิมพ์ข้อความอื่นเองได้</p>
             <div class="notice"><span>⌁</span><p>ใช้เวลา CUR เดิมเสมอ: <strong>ข้อความใหม่สั้นกว่าจุดเวลา</strong> เติม <code>&gt;</code> ในช่องปาดที่เหลือโดยไม่แสดงในเนื้อร้อง · <strong>ข้อความใหม่ยาวกว่า</strong> จัดหลายตัวอักษรให้ปาดควบในเวลาจุดเดิม · หาก CUR หายหรือเวลาเสียหายจึงส่งไปเมนู 05 เพื่อจับเวลาใหม่ และทุกการจัดจังหวะต้องฟังตรวจ</p></div>
             <button class="primary-btn full" id="lyrics-apply" type="button" disabled>ตรวจสอบและแทนที่ทั้งกลุ่ม <span>↗</span></button>
             <div class="toolbar"><button class="quiet-btn" id="lyrics-cancel" type="button" hidden>ยกเลิกและคืนค่าทั้งชุด</button><button class="quiet-btn" id="lyrics-undo" type="button" disabled>↶ ย้อนคืนการแก้ไขล่าสุด</button></div>

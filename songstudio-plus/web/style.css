@@ -876,3 +876,22 @@ html,body{max-width:100%;overflow:hidden}
   .update-notice{max-width:calc(100% - 24px);flex-wrap:wrap}
   .update-notice-actions{flex-wrap:wrap}
 }
+
+
+/* v0.1.32: responsive grouped-lyrics pagination and replacement preset. */
+#view-lyrics .group-row .group-text strong{
+  display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+#view-lyrics .replacement-choice{width:100%;min-width:0}
+#view-lyrics .replacement-choice input{
+  width:100%;min-width:0;min-height:48px;border:1px solid #384763;
+  border-radius:12px;background:#0b1427;color:var(--text);padding:11px 14px
+}
+#view-lyrics .replacement-choice input:focus{
+  border-color:#69c1cf;box-shadow:0 0 0 3px #65e1cf12
+}
+#view-lyrics .replacement-hint{margin:5px 0 8px}
+@media(min-width:901px) and (max-height:850px){
+  #view-lyrics .replacement-choice input{min-height:38px;padding:7px 10px}
+  #view-lyrics .replacement-hint{margin:3px 0 5px;line-height:1.35}
+}

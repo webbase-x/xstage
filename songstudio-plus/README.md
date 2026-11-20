@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.31
+# X-Stage Song Studio Pro — Technical Preview v0.1.32
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,13 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.32 — Responsive grouped lyrics editor
+
+- “กลุ่มข้อความที่พบ” now calculates the page size from the real visible panel area instead of a fixed 4/5/6 rows.
+- Page navigation uses that exact dynamic size, keeps selected groups across pages, and shows the visible range on each page.
+- “ข้อความใหม่สำหรับทุกกลุ่มที่เลือก” is now a compact editable choice field with **X-Stage Karaoke** as a suggested option; users can still type any custom replacement.
+- Group text is kept to one visual line with ellipsis so page sizing remains stable; the full replacement behavior and CUR timing rules are unchanged.
 
 ## v0.1.31 — Windows Program Files installer
 
