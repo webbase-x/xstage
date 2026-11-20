@@ -54,7 +54,10 @@ class PlusTests(unittest.TestCase):
         desktop=(root/"desktop_ui.py").read_text(encoding="utf-8")
         css=(root/"web"/"style.css").read_text(encoding="utf-8")
         html=(root/"web"/"index.html").read_text(encoding="utf-8")
-        self.assertIn("self.default_zoom=1.20",desktop)
+        self.assertIn("self.base_zoom=1.20",desktop)
+        self.assertIn("fit_zoom(self.width(),self.height()",desktop)
+        self.assertIn("def resizeEvent(self,event):",desktop)
+        self.assertIn("def reset_zoom(self):",desktop)
         self.assertIn("self.web.setZoomFactor(self.default_zoom)",desktop)
         for shortcut in ("Ctrl++","Ctrl+-","Ctrl+0"):
             self.assertIn(shortcut,desktop)
