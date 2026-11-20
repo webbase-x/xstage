@@ -4,6 +4,34 @@ using System.Security.Cryptography;
 using System.Text;
 using XStageDownloadManager;
 
+// Real FFmpeg/FFprobe integration: invoked after pinned tools are downloaded
+// in GitHub Actions. Synthetic video only, never a copyrighted user clip.
+if (args.Length >= 3 && args[0] == "--media-smoke")
+{
+    var input = args[1];
+    var tools = args[2];
+    var work = Path.Combine(Path.GetTempPath(), "xstage-media-smoke-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(work);
+    try
+    {
+        var source = await MediaIntegrity.VerifyAsync(input,
+            Path.Combine(tools, "ffprobe.exe"), false, CancellationToken.None);
+        if (!source.HasVideo || !source.HasAudio)
+            throw new Exception("Synthetic media source must have both video and audio.");
+        var converted = await MediaIntegrity.FinishMp4Async(input, work, work, tools,
+            CancellationToken.None);
+        var output = await MediaIntegrity.VerifyAsync(converted,
+            Path.Combine(tools, "ffprobe.exe"), false, CancellationToken.None);
+        if (!output.HasVideo || !output.HasAudio ||
+            output.VideoCodec != "h264" || output.AudioCodec != "aac" ||
+            !MediaIntegrity.HasCompleteMp4Boxes(converted))
+            throw new Exception("Real-world FFmpeg MP4 conversion/validation failed.");
+        Console.WriteLine("PASS: synthetic MKV -> verified H264/AAC MP4 with moov and nonzero duration.");
+    }
+    finally { Directory.Delete(work, true); }
+    return;
+}
+
 var bytes = new byte[9 * 1024 * 1024];
 for (int i = 0; i < bytes.Length; i++) bytes[i] = (byte)(i % 251);
 using var server = new FileServer(bytes);
@@ -123,16 +151,19 @@ try
 
     // Container selection is independent of resolution. MP4 is the default;
     // yt-dlp/FFmpeg must actually convert instead of renaming an MKV extension.
-    if (video.OutputFormat != "mp4" || !videoArgs.Contains("--recode-video") ||
-        !videoArgs.Contains("mp4") || !videoArgs.Contains("--merge-output-format"))
-        throw new Exception("MP4 output must be the default and perform actual FFmpeg conversion.");
+    if (video.OutputFormat != "mp4" || videoArgs.Contains("--recode-video") ||
+        !videoArgs.Contains("--merge-output-format") ||
+        !videoArgs.Contains("mkv"))
+        throw new Exception("MP4 must use verified MKV-first workflow, never direct yt-dlp recode.");
     foreach (var outputFormat in new[] { "mkv", "webm", "mp4" })
     {
         video.OutputFormat = outputFormat;
         var containerArgs = SocialVideoDownloader.BuildArguments(video, folder, folder).ToArray();
-        var pos = Array.IndexOf(containerArgs, "--recode-video");
-        if (pos < 0 || pos + 1 >= containerArgs.Length || containerArgs[pos + 1] != outputFormat)
-            throw new Exception("Requested video container not sent to FFmpeg: " + outputFormat);
+        var pos = Array.IndexOf(containerArgs, "--merge-output-format");
+        if (pos < 0 || pos + 1 >= containerArgs.Length || containerArgs[pos + 1] != "mkv")
+            throw new Exception("Download must retain MKV as intermediate: " + outputFormat);
+        if (containerArgs.Contains("--recode-video") != (outputFormat == "webm"))
+            throw new Exception("Only WEBM should use yt-dlp recode; MP4 needs verified finalization.");
     }
     video.OutputFormat = "mp3";
     var audioOutputArgs = SocialVideoDownloader.BuildArguments(video, folder, folder);
@@ -146,6 +177,27 @@ try
     catch (ArgumentException) { unsupportedFormatRejected = true; }
     if (!unsupportedFormatRejected) throw new Exception("Unknown output extension must be rejected.");
     video.OutputFormat = "mp4";
+
+    // Regression for the user's actual 6.1 MB corrupt MP4: ftyp + mdat,
+    // moov absent. It MUST never become a green 100% completed download.
+    var brokenMp4 = Path.Combine(folder, "regression-incomplete-moov.mp4");
+    await File.WriteAllBytesAsync(brokenMp4, new byte[] {
+        0,0,0,16, (byte)'f',(byte)'t',(byte)'y',(byte)'p',
+        (byte)'i',(byte)'s',(byte)'o',(byte)'m', 0,0,0,0,
+        0,0,0,0, (byte)'m',(byte)'d',(byte)'a',(byte)'t',
+        1,2,3,4,5,6,7,8
+    });
+    if (MediaIntegrity.HasCompleteMp4Boxes(brokenMp4))
+        throw new Exception("ftyp + mdat without moov must fail validation.");
+    var validBoxes = Path.Combine(folder, "regression-valid-boxes.mp4");
+    await File.WriteAllBytesAsync(validBoxes, new byte[] {
+        0,0,0,16, (byte)'f',(byte)'t',(byte)'y',(byte)'p',
+        (byte)'i',(byte)'s',(byte)'o',(byte)'m', 0,0,0,0,
+        0,0,0,8, (byte)'m',(byte)'o',(byte)'o',(byte)'v',
+        0,0,0,8, (byte)'m',(byte)'d',(byte)'a',(byte)'t'
+    });
+    if (!MediaIntegrity.HasCompleteMp4Boxes(validBoxes))
+        throw new Exception("Complete top-level MP4 box structure should be recognized.");
 
     // Thai and other Unicode output names must be resolved from the exact
     // post-download yt-dlp receipt instead of guessing from a corrupt console.
