@@ -14,11 +14,19 @@
   const profileName=$("portal-profile-name"), profileEmail=$("portal-profile-email");
   const avatarImage=$("portal-avatar-image"), avatarFallback=$("portal-avatar-fallback");
   const historySection=$("portal-history"), historyList=$("portal-history-list");
+  const accountScreen=$("portal-account-screen"), accountBack=$("portal-account-back");
+  const accountViews={overview:$("portal-account-overview"),personal:$("portal-account-personal"),
+    history:historySection,reviews:$("portal-account-my-reviews")};
+  const accountAvatar=$("portal-account-avatar"), accountInitials=$("portal-account-initials");
+  const accountFullName=$("portal-account-full-name"), accountEmail=$("portal-account-email");
+  const downloadCount=$("portal-download-count"), downloadSummary=$("portal-download-summary");
+  const myReviewsList=$("portal-my-reviews-list");
   const reviewForm=$("portal-review-form"), reviewStatus=$("portal-reviews-status");
   const reviewList=$("portal-review-list"), reviewSummary=$("portal-rating-summary");
   const adminPanel=$("portal-admin"), adminEvents=$("portal-admin-events");
   const appIds=()=>Array.from(document.querySelectorAll(".app-card[data-app]")).map(c=>c.dataset.app);
   let client=null,user=null,isAdmin=false,activeApp=null,latestReviews=[],backendReady=false;
+  let accountView="overview",accountLastFocus=null;
   const safeText=value=>String(value==null?"":value);
   function message(node,value){if(node)node.textContent=value;}
   function currentApp(){const id=new URLSearchParams(location.search).get("app");return id&&appIds().includes(id)?id:null;}
@@ -37,6 +45,48 @@
   }
   function showInfo(parent,value){parent.appendChild(element("p","portal-muted",value));}
   function canUsePortal(){return client!==null;}
+  function appMeta(appId){
+    const card=Array.from(document.querySelectorAll(".app-card[data-app]")).find(c=>c.dataset.app===appId);
+    return {name:card?.querySelector(".app-text h3")?.textContent?.trim()||appId,
+      icon:card?.querySelector(".app-art img")?.getAttribute("src")||""};
+  }
+  function accountAppIcon(appId){
+    const meta=appMeta(appId);
+    const wrap=element("span","portal-account-app-icon");
+    if(meta.icon){
+      const image=element("img");image.src=meta.icon;image.alt="";image.loading="lazy";
+      wrap.appendChild(image);
+    }else wrap.textContent="↓";
+    return wrap;
+  }
+  function closeAccountScreen(){
+    if(!accountScreen||accountScreen.hidden)return;
+    accountScreen.hidden=true;
+    document.body.classList.remove("portal-account-open");
+    if(accountLastFocus?.isConnected)accountLastFocus.focus();
+    accountLastFocus=null;
+  }
+  function setAccountView(view){
+    if(!Object.hasOwn(accountViews,view))view="overview";
+    accountView=view;
+    Object.entries(accountViews).forEach(([key,node])=>{if(node)node.hidden=key!==view;});
+    const headings={overview:"บัญชี X-Stage",personal:"ข้อมูลส่วนตัว",
+      history:"ประวัติการดาวน์โหลด",reviews:"คะแนนและความคิดเห็น"};
+    message($("portal-account-title"),headings[view]);
+    accountBack.setAttribute("aria-label",view==="overview"?"ปิดหน้าบัญชี":"กลับไปหน้าบัญชี");
+    $("portal-account-scroll")?.scrollTo({top:0,behavior:"instant"});
+    if(view==="history")void loadHistory();
+    if(view==="reviews")void loadMyReviews();
+  }
+  function openAccountScreen(view="overview"){
+    if(!user)return;
+    accountLastFocus=document.activeElement;
+    closeProfileMenu();
+    accountScreen.hidden=false;
+    document.body.classList.add("portal-account-open");
+    setAccountView(view);
+    accountBack.focus();
+  }
   function displayName(account){
     const google=account?.identities?.find(identity=>identity.provider==="google")?.identity_data;
     return safeText(account?.user_metadata?.full_name || account?.user_metadata?.name ||
@@ -79,11 +129,22 @@
       profileName.textContent=name;
       profileEmail.textContent=safeText(user.email||"");
       profileToggle.setAttribute("aria-label","โปรไฟล์ Google ของ "+name+" · เปิดเมนูบัญชี");
+      message(accountFullName,name);
+      message(accountEmail,user.email||"");
+      message($("portal-account-detail-name"),name);
+      message($("portal-account-detail-email"),user.email||"");
+      message(accountInitials,initials(name));
       avatarFallback.textContent=initials(name);
       avatarFallback.hidden=false;
       avatarImage.hidden=true;
       const photo=googleAvatarUrl(user);
+      accountAvatar.hidden=true;
+      accountInitials.hidden=false;
       if(photo){
+        if(accountAvatar.getAttribute("src")!==photo)accountAvatar.src=photo;
+        if(accountAvatar.complete&&accountAvatar.naturalWidth>0){
+          accountAvatar.hidden=false;accountInitials.hidden=true;
+        }
         if(avatarImage.src!==photo)avatarImage.src=photo;
         // Show the fallback until the image has loaded successfully.
         if(avatarImage.complete&&avatarImage.naturalWidth>0){
@@ -92,15 +153,19 @@
         }
       }else{
         avatarImage.removeAttribute("src");
+        accountAvatar.removeAttribute("src");
       }
     }else{
+      accountAvatar.removeAttribute("src");
+      accountAvatar.hidden=true;
+      accountInitials.hidden=false;
       avatarImage.removeAttribute("src");
       avatarImage.hidden=true;
       avatarFallback.hidden=false;
       profileEmail.textContent="";
       userLabel.textContent="สมาชิก X-Stage";
     }
-    historySection.hidden=!user;
+    if(!user)closeAccountScreen();
     reviewForm.hidden=!user||!activeApp||!canUsePortal();
   }
   avatarImage?.addEventListener("load",()=>{
@@ -112,6 +177,25 @@
     avatarImage.hidden=true;
     avatarFallback.hidden=false;
   });
+  accountAvatar?.addEventListener("load",()=>{
+    if(!user||accountAvatar.src!==googleAvatarUrl(user))return;
+    accountAvatar.hidden=false;
+    accountInitials.hidden=true;
+  });
+  accountAvatar?.addEventListener("error",()=>{
+    accountAvatar.hidden=true;
+    accountInitials.hidden=false;
+  });
+  $("portal-open-account")?.addEventListener("click",()=>openAccountScreen());
+  accountBack?.addEventListener("click",()=>{
+    if(accountView!=="overview"){setAccountView("overview");accountBack.focus();}
+    else closeAccountScreen();
+  });
+  document.querySelectorAll("[data-account-view]").forEach(button=>
+    button.addEventListener("click",()=>setAccountView(button.dataset.accountView)));
+  accountScreen?.addEventListener("click",event=>{
+    if(event.target===accountScreen)closeAccountScreen();
+  });
   profileToggle?.addEventListener("click",()=>{
     if(!user)return;
     const opening=profileMenu.hidden;
@@ -122,6 +206,22 @@
     if(!profile.contains(event.target))closeProfileMenu();
   });
   document.addEventListener("keydown",event=>{
+    if(accountScreen&&!accountScreen.hidden){
+      if(event.key==="Escape"){
+        event.preventDefault();
+        if(accountView!=="overview")setAccountView("overview");
+        else closeAccountScreen();
+      }else if(event.key==="Tab"){
+        const candidates=Array.from(accountScreen.querySelectorAll(
+          'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled])'))
+          .filter(node=>!node.closest("[hidden]")&&node.getClientRects().length);
+        const first=candidates[0],last=candidates[candidates.length-1];
+        if(!first)return;
+        if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+        else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+      }
+      return;
+    }
     if(event.key==="Escape"&&!profileMenu.hidden){
       closeProfileMenu();
       profileToggle.focus();
@@ -145,36 +245,91 @@
   }
   async function loadHistory(){
     if(!user||!client)return;
+    const uid=user.id;
     historyList.replaceChildren();
-    const response=await client.from("xstage_download_events")
-      .select("id,app_id,event_type,app_version,created_at")
-      .eq("user_id",user.id).order("created_at",{ascending:false}).limit(100);
-    if(response.error){showInfo(historyList,"อ่านประวัติไม่ได้: "+response.error.message);return;}
-    if(!response.data?.length){showInfo(historyList,"ยังไม่มีประวัติการดาวน์โหลด");return;}
-    for(const item of response.data){
-      const line=element("div","portal-event");
-      const label=item.event_type==="installation_confirmed"?"ยืนยันการติดตั้งแล้ว":
-        item.event_type==="download_clicked"?"กดดาวน์โหลด":"เปิดรายละเอียด";
-      line.appendChild(element("span","",item.app_id+" · "+label+" · "+dateLabel(item.created_at)));
+    showInfo(historyList,"กำลังโหลดประวัติ…");
+    const {data,error,count}=await client.from("xstage_download_events")
+      .select("id,app_id,event_type,app_version,created_at",{count:"exact"})
+      .eq("user_id",uid).order("created_at",{ascending:false}).limit(100);
+    if(user?.id!==uid)return;
+    historyList.replaceChildren();
+    if(error){
+      message(downloadSummary,"ไม่สามารถอ่านประวัติได้");
+      downloadCount.hidden=true;
+      showInfo(historyList,"อ่านประวัติไม่ได้: "+error.message);
+      return;
+    }
+    const total=Number.isInteger(count)?count:(data?.length||0);
+    message(downloadSummary,total?total+" กิจกรรมที่บันทึกไว้":"ยังไม่มีรายการดาวน์โหลด");
+    downloadCount.textContent=total.toLocaleString("th-TH");
+    downloadCount.hidden=!total;
+    if(!data?.length){showInfo(historyList,"ยังไม่มีประวัติการดาวน์โหลด · เลือกแอปแล้วกดดาวน์โหลดเพื่อเริ่มบันทึก");return;}
+    for(const item of data){
+      const meta=appMeta(item.app_id);
+      const line=element("article","portal-event portal-download-event");
+      line.appendChild(accountAppIcon(item.app_id));
+      const details=element("div","portal-download-meta");
+      details.appendChild(element("strong","",meta.name));
+      details.appendChild(element("span","portal-muted",dateLabel(item.created_at)+
+        (item.app_version?" · รุ่น "+item.app_version:"")));
+      const confirmed=item.event_type==="installation_confirmed";
+      details.appendChild(element("span","portal-download-state"+(confirmed?" is-confirmed":""),
+        confirmed?"✓ ผู้ใช้ยืนยันว่าติดตั้งแล้ว":"↓ กดดาวน์โหลด"));
+      line.appendChild(details);
       if(item.event_type==="download_clicked"){
-        const confirm=element("button","portal-small-button","ยืนยันว่าติดตั้งแล้ว");
+        const confirm=element("button","portal-small-button","ยืนยันการติดตั้ง");
         confirm.type="button";
+        confirm.setAttribute("aria-label","ยืนยันว่าติดตั้ง "+meta.name+" แล้ว");
         confirm.addEventListener("click",async()=>{
-          await saveEvent(item.app_id,"installation_confirmed",item.app_version||null);
-          await loadHistory();
+          confirm.disabled=true;
+          const ok=await saveEvent(item.app_id,"installation_confirmed",item.app_version||null);
+          if(ok)await loadHistory();else{
+            confirm.disabled=false;
+            window.alert("บันทึกการยืนยันการติดตั้งไม่สำเร็จ");
+          }
         });
         line.appendChild(confirm);
       }
       historyList.appendChild(line);
     }
-    const clear=element("button","portal-small-button portal-danger","ลบประวัติของฉัน");
+    if(total>data.length)showInfo(historyList,"แสดง 100 กิจกรรมล่าสุดจากทั้งหมด "+total+" กิจกรรม");
+    const clear=element("button","portal-small-button portal-danger portal-clear-history","ลบประวัติทั้งหมดของฉัน");
     clear.type="button";
     clear.addEventListener("click",async()=>{
-      if(!window.confirm("ลบประวัติการดาวน์โหลดและการติดตั้งของบัญชีนี้ทั้งหมด?"))return;
-      const {error}=await client.from("xstage_download_events").delete().eq("user_id",user.id);
-      if(error)window.alert(error.message);else await loadHistory();
+      if(!window.confirm("ลบประวัติการกดดาวน์โหลดและการยืนยันติดตั้งทั้งหมดของบัญชีนี้?"))return;
+      clear.disabled=true;
+      const {error}=await client.from("xstage_download_events").delete().eq("user_id",uid);
+      if(error){window.alert(error.message);clear.disabled=false;}
+      else await loadHistory();
     });
     historyList.appendChild(clear);
+  }
+  async function loadMyReviews(){
+    if(!user||!client)return;
+    const uid=user.id;
+    myReviewsList.replaceChildren();
+    showInfo(myReviewsList,"กำลังโหลดความคิดเห็น…");
+    const {data,error}=await client.from("xstage_reviews")
+      .select("app_id,rating,comment,updated_at").eq("user_id",uid)
+      .order("updated_at",{ascending:false}).limit(100);
+    if(user?.id!==uid)return;
+    myReviewsList.replaceChildren();
+    if(error){showInfo(myReviewsList,"อ่านความคิดเห็นไม่ได้: "+error.message);return;}
+    if(!data?.length){showInfo(myReviewsList,"ยังไม่มีรีวิว · คุณสามารถให้คะแนนได้จากหน้ารายละเอียดแต่ละแอป");return;}
+    for(const item of data){
+      const meta=appMeta(item.app_id);
+      const link=element("a","portal-event portal-my-review");
+      link.href="?app="+encodeURIComponent(item.app_id);
+      link.appendChild(accountAppIcon(item.app_id));
+      const body=element("div","portal-download-meta");
+      body.appendChild(element("strong","",meta.name));
+      body.appendChild(element("span","portal-stars","★".repeat(item.rating)+"☆".repeat(5-item.rating)));
+      if(item.comment)body.appendChild(element("span","portal-review-excerpt",item.comment));
+      body.appendChild(element("span","portal-muted",dateLabel(item.updated_at)));
+      link.appendChild(body);
+      link.appendChild(element("span","portal-account-chevron","›"));
+      myReviewsList.appendChild(link);
+    }
   }
   async function saveEvent(appId,eventType,version){
     if(!client||!user||!appIds().includes(appId))return;
@@ -184,6 +339,7 @@
       client_platform:navigator.userAgent.includes("XStageAppsPortal/")?"android-portal":"web"
     });
     if(error)console.warn("X-Stage history unavailable:",error.message);
+    return !error;
   }
   function reviewRow(item){
     const row=element("article","portal-review-item");
@@ -300,7 +456,16 @@
   }
   window.XStagePortal={completeNativeOAuth};
   login?.addEventListener("click",signIn);
-  logout?.addEventListener("click",async()=>{if(client)await client.auth.signOut();user=null;await loadSession();});
+  async function signOut(){
+    closeAccountScreen();
+    closeProfileMenu();
+    if(client)await client.auth.signOut();
+    user=null;
+    refreshAccount();
+    await loadSession();
+  }
+  logout?.addEventListener("click",signOut);
+  $("portal-account-signout")?.addEventListener("click",signOut);
   reviewForm?.addEventListener("submit",async event=>{
     event.preventDefault();
     if(!user||!client||!activeApp)return;
