@@ -352,7 +352,7 @@
         <video id="cloud-import-video-preview" controls playsinline preload="metadata" hidden aria-label="ดูตัวอย่างวิดีโอเพื่อตรวจเนื้อร้องและเวลา"></video>
         <p id="cloud-import-video-hint" class="cloud-import-video-hint" aria-live="polite"></p>
       </section>
-      <p class="cloud-import-note">รองรับไฟล์ XSK2 ไม่เข้ารหัสจาก Song Studio PC โดยตรง ไม่ต้องใช้ไฟล์กุญแจหรือรหัสผ่าน · XSK1 รุ่นเก่าต้องสร้างใหม่เป็น XSK2</p>
+      <p class="cloud-import-note">รองรับ XMID จาก Song Studio Pro และ XSK2 จาก Song Studio PC โดยตรง ไม่ต้องใช้ไฟล์กุญแจหรือรหัสผ่าน · XSK1 รุ่นเก่าต้องสร้างใหม่เป็น XSK2</p>
       <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageSong ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
       <div class="cloud-import-progress">
         <progress id="cloud-import-progress" value="0" max="100"></progress>
@@ -393,6 +393,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="https://accounts.google.com/gsi/client" defer></script>
   <script src="cloud-import-core.js?v=1119" defer></script>
   <script src="xsk-browser.js?v=1119" defer></script>
+  <script src="xmid-browser.js?v=1121" defer></script>
   <script src="memory-budget.js?v=1119" defer></script>
   <script src="browser-midi.js?v=1119" defer></script>
   <script src="video-metadata-editor.js?v=1119" defer></script>
