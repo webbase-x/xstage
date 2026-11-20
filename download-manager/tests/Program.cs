@@ -52,11 +52,13 @@ try
             Folder = folder, Status = "Paused", ResumeAfterRestart = true },
         new DownloadJob { Id = "user-paused", Url = server.Url + "range/user.bin",
             Folder = folder, Status = "Paused" },
+        new DownloadJob { Id = "network", Url = server.Url + "range/network.bin",
+            Folder = folder, Status = "Paused", ResumeWhenNetworkReturns = true },
         new DownloadJob { Id = "finished", Url = server.Url + "range/finished.bin",
             Folder = folder, Status = "Completed" }
     });
     var recovered = new DownloadEngine(recoveryFolder);
-    if (recovered.InterruptedJobCount != 2 ||
+    if (recovered.InterruptedJobCount != 3 ||
         recovered.Jobs.Single(j => j.Id == "user-paused").InterruptedOnStartup ||
         recovered.Jobs.Single(j => j.Id == "finished").InterruptedOnStartup)
         throw new Exception("Startup recovery incorrectly selected user-paused/completed jobs.");
@@ -66,8 +68,29 @@ try
         recovered.Jobs.Any(j => j.ResumeAfterRestart))
         throw new Exception("Declining recovery must retain jobs paused with no implicit restart.");
     var reopen = new DownloadEngine(recoveryFolder);
-    if (reopen.InterruptedJobCount != 0 || reopen.Jobs.Count != 4)
+    if (reopen.InterruptedJobCount != 0 || reopen.Jobs.Count != 5)
         throw new Exception("Recovery consent and download history must persist across restarts.");
+
+    // The UI must preserve the recovery prompt across repeated crashes before consent.
+    recoveryState.SaveSnapshot(new[]
+    {
+        new DownloadJob { Id = "crash-before-consent", Url = server.Url + "range/retry.bin",
+            Folder = folder, Status = "Running" }
+    });
+    var firstBoot = new DownloadEngine(recoveryFolder);
+    if (firstBoot.InterruptedJobCount != 1)
+        throw new Exception("First launch must offer recovery for interrupted transfer.");
+    var secondBoot = new DownloadEngine(recoveryFolder);
+    if (secondBoot.InterruptedJobCount != 1)
+        throw new Exception("Restart before recovery consent must not erase recovery intent.");
+    secondBoot.RecoverInterruptedJobs(false);
+    var pausedFromNetwork = secondBoot.Jobs.Single();
+    pausedFromNetwork.ResumeWhenNetworkReturns = true;
+    secondBoot.Save();
+    secondBoot.Pause(pausedFromNetwork);
+    secondBoot.TryResumeNetworkInterrupted();
+    if (pausedFromNetwork.Status != "Paused" || pausedFromNetwork.ResumeWhenNetworkReturns)
+        throw new Exception("Explicit Pause must cancel network auto-resume.");
 
     // Scheduler: high-priority jobs overtake low priority without changing
     // persistence order; live reprioritization and cancellation release slots.
