@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Pro",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "channel": "preview",
   "available": true,
   "windows_artifact_build": true,
@@ -9,9 +9,9 @@
   "player_compatible": false,
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Verified Song Studio Pro v0.1.28 Preview: update directly to the newest verified EXE, automatic retry and resume for interrupted GitHub downloads, visible network/SHA failures, stable button rendering, plus SQLite maintenance. EXE is unsigned.",
-  "file": "X-Stage-Song-Studio-Pro-v0.1.28-preview.exe",
-  "sha256": "664435f75d9814fdb3423762449369b31f82f53f61dded8281644cf4aaf05196",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.28-preview/X-Stage-Song-Studio-Pro-v0.1.28-preview.exe",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.28-preview"
+  "status": "Verified Song Studio Pro v0.1.29 Preview: updater controls added to Settings; indexed current lyric text search with separate title/artist and untimed LYR discovery; accurate search progress and no-match status; preserves SQLite songs, cues and edit history. EXE unsigned.",
+  "file": "X-Stage-Song-Studio-Pro-v0.1.29-preview.exe",
+  "sha256": "ecf7e2656da4cb8d3e564c2db69331541397ed1547734c9a7fec3a04cac46c0b",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.29-preview/X-Stage-Song-Studio-Pro-v0.1.29-preview.exe",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.29-preview"
 }
