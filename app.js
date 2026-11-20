@@ -2464,7 +2464,12 @@ async function resumePlaybackFromSystem(){
 }
 function togglePlayback(){
   if(state.loading)return;
-  if(!player.src){if(state.queue.length)playNext();else if(state.shown.length)playSong(state.shown[state.selectedIndex]);return;}
+  if(!player.src){
+    if(state.queue.length)playNext();
+    else if(state.shown.length)playSong(state.shown[state.selectedIndex]);
+    else setPlayStatus('ยังไม่มีเพลงที่เลือก · ค้นหาชื่อเพลงหรือรหัสเพลง แล้วกด Enter เพื่อเริ่มเล่น');
+    return;
+  }
   if(player.paused)resumePlaybackFromSystem();
   else{state.userPaused=true;state.resumeAfterInterruption=false;player.pause();}
 }
@@ -2479,7 +2484,19 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
   const request=++state.requestId;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
-  state.loading=true;updateTransport();setPlayStatus('กำลังโหลดเสียงและเนื้อร้องจาก Google Drive…');
+  state.loading=true;updateTransport();
+  setPlayStatus('กำลังเตรียมเพลง: '+(song.title||song.code||'ไม่ระบุชื่อ')+' · กำลังโหลดจาก Google Drive…');
+  // Keep the title visible while the potentially slow MIDI renderer works.
+  ui.nowPlaying.textContent=song.title||song.code||'กำลังเตรียมเพลง';
+  ui.nowArtist.textContent=song.artist||'';
+  const startedAt=Date.now();
+  const loadingNotice=setInterval(()=>{
+    if(request!==state.requestId||!state.loading)return;
+    const elapsed=Math.floor((Date.now()-startedAt)/1000);
+    if(elapsed>=15 && elapsed%5===0)
+      setPlayStatus('กำลังเตรียม '+(song.title||song.code)+
+        ' · '+elapsed+' วินาที · MIDI/XMID ต้องสังเคราะห์เสียงก่อนเล่น · กดหยุดเพื่อยกเลิกได้');
+  },1000);
   publishPlaybackStatus('loading',song,'กำลังเตรียมไฟล์เพลงจาก Google Drive');
   try {
     const cached=state.queuePreparedCache.get(song);
@@ -2616,7 +2633,10 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       updateTransport();
     }
   }catch(e){if(request!==state.requestId || e.name==='AbortError')return;const message=e.message||'ไม่สามารถเล่นเพลงได้';setPlayStatus(message);publishPlaybackStatus('error',song,message);state.loading=false;updateTransport();}
-  finally{if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}}
+  finally{
+    clearInterval(loadingNotice);
+    if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}
+  }
 }
 function updateTransport(){
   ui.stage.classList.toggle('loading',!!state.loading);
