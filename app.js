@@ -2308,6 +2308,14 @@ function scheduleQueuePreload(){
   if(state.queuePreparedCache.size>=quota)return;
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(next,state.token);},350);
 }
+function setMidiEngineStatus(engine){
+  const label=$('xstage-midi-engine-status');
+  if(!label)return;
+  label.hidden=!engine;
+  label.textContent=engine?.engine==='SpessaSynth'
+    ?'เครื่องเสียง: SpessaSynth · SoundFont'
+    :engine?'เครื่องเสียง: Web Audio สำรอง':'';
+}
 window.addEventListener('xstage:soundfont-change',()=>{
   // Keep the playing song and its transport clock. Switch the active synth
   // after the newly selected SoundFont has loaded; stale requests are ignored.
@@ -2319,15 +2327,41 @@ window.addEventListener('xstage:soundfont-change',()=>{
     void (async()=>{
       try{
         const fontBytes=await window.XStageBrowserMidi.selectedFont(token);
-        if(generation!==state.xskSoundFontGeneration||token!==state.token||
-           source!==state.liveMidiSource||!midiTransport.active)return;
-        state.liveMidiPlayback?.dispose();
-        state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,source,{
+        const isCurrent=()=>generation===state.xskSoundFontGeneration&&
+          token===state.token&&source===state.liveMidiSource&&midiTransport.active;
+        if(!isCurrent())return;
+        const options={
           fontBytes,onStatus:setPlayStatus,
           getTranspose:()=>Number($('midi-transpose')?.value||0),
           getProgram:()=>{const value=$('midi-instrument')?.value;
             return value===''?null:Number(value);}
-        });
+        };
+        let highQuality=null;
+        if(fontBytes&&window.XStageProMidi?.available?.()){
+          try{
+            highQuality=await window.XStageProMidi.prepare(source,fontBytes,{
+              onStatus:message=>{if(isCurrent())setPlayStatus(message);}
+            });
+          }catch(error){
+            console.warn('Professional SoundFont engine unavailable:',error);
+          }
+        }
+        if(!isCurrent()){highQuality?.dispose();return;}
+        let nextEngine=null;
+        try{
+          nextEngine=highQuality
+            ?highQuality.attach(player,options)
+            :window.XStageBrowserMidi.playRealtime(player,source,options);
+        }catch(error){
+          highQuality?.dispose();
+          if(!highQuality)throw error;
+          nextEngine=window.XStageBrowserMidi.playRealtime(player,source,options);
+        }
+        const previous=state.liveMidiPlayback;
+        state.liveMidiPlayback=nextEngine;
+        previous?.dispose();
+        setMidiEngineStatus(nextEngine);
+        setPlayStatus('เปลี่ยน SoundFont สำเร็จ · '+(nextEngine.engine||'Web Audio สำรอง'));
       }catch(error){setPlayStatus('เปลี่ยน SoundFont ไม่สำเร็จ: '+error.message);}
     })();
   }
@@ -2746,6 +2780,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         state.liveMidiPlayback=professional
           ?professional.attach(player,midiOptions)
           :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,midiOptions);
+        setMidiEngineStatus(state.liveMidiPlayback);
       }catch(error){
         professional?.dispose();
         if(!professional)throw error;
@@ -2753,8 +2788,10 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         setPlayStatus('เริ่มตัวเล่นคุณภาพสูงไม่สำเร็จ · เปลี่ยนไปใช้ MIDI สำรอง');
         state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(
           player,liveMidiBytes,midiOptions);
+        setMidiEngineStatus(state.liveMidiPlayback);
       }
     }else{
+      setMidiEngineStatus(null);
       if(midiTransport.active)midiTransport.clear();
       player.src=url;
     }
