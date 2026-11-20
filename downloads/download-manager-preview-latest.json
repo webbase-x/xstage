@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.16",
-  "build": 19,
+  "version": "0.2.17",
+  "build": 20,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.16-build19-win-x64-Setup.exe",
-  "sha256": "0d34598a092a3d99fc2bf479dee901b9cf3fe5475c6c34548751424650e19265",
-  "size_bytes": 214633977,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.16-build19-preview/X-Stage-Download-Manager-v0.2.16-build19-win-x64-Setup.exe",
-  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, durable SQLite WAL state recovery and safe JSON migration, sortable IDM-style download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
+  "file": "X-Stage-Download-Manager-v0.2.17-build20-win-x64-Setup.exe",
+  "sha256": "8094e2577b7720e45b87b7dddd29753d7f434caa2462443a7e449d9959173e2d",
+  "size_bytes": 214646778,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.17-build20-preview/X-Stage-Download-Manager-v0.2.17-build20-win-x64-Setup.exe",
+  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, resilient per-chunk exponential backoff and HTTP Range fallback, SQLite WAL state recovery and safe JSON migration, sortable IDM-style download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
 }
