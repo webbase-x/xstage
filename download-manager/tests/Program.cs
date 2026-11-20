@@ -39,6 +39,63 @@ var folder = Path.Combine(Path.GetTempPath(), "xstage-dm-test-" + Guid.NewGuid()
 Directory.CreateDirectory(folder);
 try
 {
+    // Scheduler: high-priority jobs overtake low priority without changing
+    // persistence order; live reprioritization and cancellation release slots.
+    var scheduler = new TransferSlotQueue(1, 1);
+    using (var blocker = await scheduler.EnterAsync("block", "example.test", 1, CancellationToken.None))
+    {
+        var lowTask = scheduler.EnterAsync("low", "example.test", 2, CancellationToken.None);
+        var highTask = scheduler.EnterAsync("high", "example.test", 0, CancellationToken.None);
+        if (scheduler.ActiveCount != 1 || scheduler.WaitingCount != 2)
+            throw new Exception("Transfer slot queue must enforce global concurrency.");
+        blocker.Dispose();
+        using var high = await highTask.WaitAsync(TimeSpan.FromSeconds(3));
+        if (lowTask.IsCompleted)
+            throw new Exception("High-priority job must run before waiting low-priority job.");
+        high.Dispose();
+        using var low = await lowTask.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+    scheduler.Configure(2, 1);
+    using (var slotA = await scheduler.EnterAsync("one", "first.test", 1, CancellationToken.None))
+    {
+        var sameHost = scheduler.EnterAsync("two", "first.test", 1, CancellationToken.None);
+        using var otherHost =
+            await scheduler.EnterAsync("three", "other.test", 1, CancellationToken.None);
+        if (sameHost.IsCompleted || scheduler.ActiveCount != 2)
+            throw new Exception("Per-host limit must allow another domain without oversubscription.");
+        slotA.Dispose();
+        using var second = await sameHost.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+    scheduler.Configure(1, 1);
+    using (var slot = await scheduler.EnterAsync("hold", "sample.test", 1, CancellationToken.None))
+    {
+        using var stopped = new CancellationTokenSource();
+        var canceled = scheduler.EnterAsync("cancel-me", "sample.test", 1, stopped.Token);
+        stopped.Cancel();
+        try
+        {
+            await canceled;
+            throw new Exception("A canceled pending download must not acquire a slot.");
+        }
+        catch (OperationCanceledException) { }
+        if (scheduler.WaitingCount != 0)
+            throw new Exception("Canceled queue entries must be removed promptly.");
+    }
+    var limit = new TransferRateGate(128);
+    var gateClock = System.Diagnostics.Stopwatch.StartNew();
+    await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
+    if (gateClock.ElapsedMilliseconds < 300)
+        throw new Exception("Rate gate failed to enforce a measurable bandwidth limit.");
+    limit.Configure(0);
+    gateClock.Restart();
+    await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
+    if (gateClock.ElapsedMilliseconds > 150)
+        throw new Exception("Unlimited rate setting must not delay transfers.");
+    if (TransferRateMath.Smooth(1000, 0, true) is <= 0 or >= 1000 ||
+        TransferRateMath.Smooth(1000, 2000, true) is <= 1000 or >= 2000 ||
+        TransferRateMath.Smooth(1000, 0, false) != 0)
+        throw new Exception("Download speed smoothing must decay and reset correctly.");
+
     // Retry policy is selective. Auth and missing resources must not be
     // retried; rate limits and network failures should have bounded backoff.
     if (!DownloadRetryPolicy.IsTransientStatus(HttpStatusCode.RequestTimeout) ||
@@ -115,6 +172,17 @@ try
     anotherStore.SaveSnapshot(Array.Empty<DownloadJob>());
     if (new DownloadStateStore(stateDir).LoadOrMigrate(legacyHistoryPath).Count != 0)
         throw new Exception("Migrated JSON must not resurrect a removed history item.");
+
+    store.SavePerformanceSetting("global_jobs", 3, 1, 8);
+    store.SavePerformanceSetting("host_jobs", 2, 1, 8);
+    store.SavePerformanceSetting("global_limit_kib", 256, 0, 1_048_576);
+    if (new DownloadStateStore(stateDir)
+        .ReadPerformanceSetting("global_jobs", 2, 1, 8) != 3 ||
+        new DownloadStateStore(stateDir)
+        .ReadPerformanceSetting("host_jobs", 2, 1, 8) != 2 ||
+        new DownloadStateStore(stateDir)
+        .ReadPerformanceSetting("global_limit_kib", 0, 0, 1_048_576) != 256)
+        throw new Exception("Performance limits must persist in SQLite.");
 
     // Regression: a verified completed download must fill every pixel of its
     // progress bar even if its old per-segment data is stale or incomplete.
@@ -678,6 +746,13 @@ try
         !await BrowserCaptureProbe.IsUnauthenticatedFileAsync(server.Url + "plain/test-file.bin") ||
         await BrowserCaptureProbe.IsUnauthenticatedFileAsync("https://www.youtube.com/watch?v=123"))
         throw new Exception("Browser capture must probe accessible direct files without cookies.");
+    manager.ConfigurePerformance(3, 2, 256);
+    var reloadedPerf = new DownloadEngine(isolatedEngineData);
+    if (reloadedPerf.MaxConcurrentJobs != 3 ||
+        reloadedPerf.MaxJobsPerHost != 2 ||
+        reloadedPerf.GlobalLimitKib != 256)
+        throw new Exception("Engine must restore global concurrency and bandwidth settings.");
+    manager.ConfigurePerformance(2, 2, 0); // Restore normal high-speed transfer tests.
     manager.SetRetryLimit(7);
     if (new DownloadEngine(isolatedEngineData).MaxRetryCount != 7)
         throw new Exception("User-configured retry limit must persist in SQLite.");
