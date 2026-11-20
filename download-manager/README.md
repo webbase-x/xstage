@@ -2,10 +2,10 @@
 
 Independent, original .NET 8 Windows download manager inspired by the *features* (not copied code/assets) of Internet Download Manager.
 
-**Preview v0.2.6 · Build 9** (Windows 10/11 x64).
+**Preview v0.2.7 · Build 10** (Windows 10/11 x64).
 
 ## Features
-- Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker.
+- Manual HTTP/HTTPS URL entry, multiline paste, download-folder picker. The video quality and MP4/MKV/WEBM/MP3 rows appear only for supported social-media video links, and collapse completely for ordinary file URLs.
 - **Social video links:** YouTube, YouTube Shorts, TikTok, Facebook Reels/videos, Instagram Reels (publicly accessible posts only).
 - Choose best video quality or 1080p/720p/480p separately from the output container: **MP4 (default)**, MKV, WEBM or MP3 (audio only). FFmpeg converts the actual media; renaming the extension is never used. Conversion may take longer and can fail for unsupported source codecs.
 - The installer bundles pinned official yt-dlp, FFmpeg/ffprobe and Deno executables, each checked against a release SHA-256 during Windows CI. No downloads or extra installation of tools are required after installing the one Setup EXE.
@@ -24,8 +24,8 @@ Independent, original .NET 8 Windows download manager inspired by the *features*
 - The toolbar opens an explicit Open file / Open folder choice; incomplete/failed entries can still open their destination folder.
 - Per-segment progress bar shows actual bytes received in each HTTP range, not cosmetic stripes; social video downloads use unified progress.
 - Completed entries show a continuous full-width solid green 100.0% progress bar regardless of stale HTTP segment measurements; non-finalized jobs are capped at displayed 99.9% until final verification/FFmpeg merge finishes. Click a finished filename to open its file or containing folder.
-- Startup and manual update checks use the verified X-Stage Release manifest. After user approval, the app downloads the EXE itself, checks exact size and SHA-256, closes and installs in silent mode using a detached helper, then relaunches only after successful installation. Failed verification never runs the installer. Active transfers are paused and their resumable state is saved.
-- Optional Chrome/Edge connector is bundled in the installer, loaded and paired by the user; auto-capture is OFF by default. Context-menu handoff is available.
+- Startup and manual update checks use the verified X-Stage Release manifest. After user approval, the app downloads the EXE itself and validates size and SHA-256. The old app stays visible until the separate update window is on screen, counts down 3 seconds, and closes for Windows to replace the EXE. The update window remains visible while installing and relaunches the new app immediately after verified success, before optional legacy cleanup. Active transfers are paused and their resumable state is saved.
+- Optional **ดาวน์โหลดอัตโนมัติ** Chrome/Edge connector is bundled in the installer, loaded and paired by the user; auto-capture is OFF by default. Context-menu handoff is available.
 - Self-contained Windows runtime packaged into **one Setup EXE** published through GitHub Releases; no Portable ZIP is offered. The x64 application now installs in `C:\\Program Files\\X-Stage\\Download Manager` (Inno `{autopf}`), requires Windows administrator permission at install/update, and always relaunches the Program Files executable after successful migration. A legacy per-user installation is uninstalled only after the new executable passes verification. Download history and preferences remain in `%LOCALAPPDATA%` rather than Program Files. The Setup EXE is currently unsigned, so Windows may show an unknown-publisher UAC prompt.
 
 ## Not included yet
