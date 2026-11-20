@@ -379,7 +379,7 @@ class Importer {
     this.groupPageSizes=new Map();
     this.dom.selectionList?.addEventListener('click',event=>{
       const trigger=event.target.closest?.('[data-import-toggle],[data-import-more]');
-      if(!trigger||this.running)return;
+      if(!trigger)return;
       const key=trigger.dataset.importToggle||trigger.dataset.importMore;
       if(trigger.dataset.importToggle){
         if(this.expandedGroups.has(key))this.expandedGroups.delete(key);
