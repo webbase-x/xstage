@@ -11,6 +11,13 @@ public static class SocialVideoDownloader
     public static readonly string[] AllowedQualities = { "Best", "1080", "720", "480", "AudioMP3" };
     public static readonly string[] AllowedOutputFormats = { "mp4", "mkv", "webm", "mp3" };
 
+    // Video-only controls are meaningful for supported social streams,
+    // not for regular HTTP files (including direct .mp4 links).
+    public static bool InputContainsVideo(string input) =>
+        input.Split(new[] { '\r', '\n', ' ', '\t' },
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Take(200).Any(IsVideoUrl);
+
     public static bool IsVideoUrl(string url)
     {
         if (!DownloadEngine.TryParseUrl(url, out var parsed) || parsed is null) return false;
