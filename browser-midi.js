@@ -607,82 +607,108 @@ async function selectedFont(token,signal){
 }
 // Fast native-clock MIDI playback: no whole-song OfflineAudioContext/WAV render.
 // Used only with the built-in synthesizer; selected SoundFonts retain full rendering.
-function silentClock(duration){
-  const rate=8000,frames=Math.ceil((duration+.1)*rate);
-  const buf=new ArrayBuffer(44+frames*2),v=new DataView(buf);
-  const w=(p,t)=>{for(let i=0;i<t.length;i++)v.setUint8(p+i,t.charCodeAt(i));};
-  w(0,'RIFF');v.setUint32(4,36+frames*2,true);w(8,'WAVE');w(12,'fmt ');
-  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
-  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);
-  v.setUint16(32,2,true);v.setUint16(34,16,true);
-  w(36,'data');v.setUint32(40,frames*2,true);
-  return new Blob([buf],{type:'audio/wav'});
-}
-function playRealtime(player,source,{signal,onStatus}={}){
-  if(typeof AudioContext==='undefined'&&typeof webkitAudioContext==='undefined')
-    fail('เบราว์เซอร์ไม่รองรับการสร้างเสียง MIDI แบบเรียลไทม์');
-  const song=parseMidi(source),Ctor=scope.AudioContext||scope.webkitAudioContext;
-  const ctx=new Ctor(),master=ctx.createGain();
-  master.gain.value=.55;master.connect(ctx.destination);
+function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose=()=>0}={}){
+  const Ctor=scope.AudioContext||scope.webkitAudioContext;
+  if(!Ctor)fail('เบราว์เซอร์ไม่รองรับ Web Audio MIDI Synthesizer');
+  const song=parseMidi(source),ctx=new Ctor();
+  const font=fontBytes?(fontCache?.bytes===fontBytes&&fontCache.parsed?
+    fontCache.parsed:parseFont(fontBytes)):null;
+  const master=ctx.createGain();master.gain.value=.55;master.connect(ctx.destination);
   const notes=song.notes.slice().sort((a,b)=>a.start-b.start);
-  let cursor=0,disposed=false,timer=null,voices=[];
-  const reset=()=>{
+  let cursor=0,disposed=false,timer=null,voices=[],revision=0;
+  const stopVoices=()=>{
     for(const voice of voices){try{voice.stop();}catch{}try{voice.disconnect();}catch{}}
     voices=[];
+  };
+  const reset=()=>{
+    revision++;stopVoices();
     const at=Number(player.currentTime)||0;
     let lo=0,hi=notes.length;
     while(lo<hi){const mid=(lo+hi)>>1;if(notes[mid].start<at-.04)lo=mid+1;else hi=mid;}
     cursor=lo;
   };
-  const schedule=()=>{
-    if(disposed||signal?.aborted)return;
-    if(player.paused||player.ended)return;
-    const now=Number(player.currentTime)||0,rate=Math.max(.25,Number(player.playbackRate)||1);
-    master.gain.value=.55*(player.muted?0:Math.max(0,Math.min(1,Number(player.volume)||0)));
-    const horizon=now+rate*.42;
-    for(;cursor<notes.length&&notes[cursor].start<horizon;cursor++){
-      const n=notes[cursor];
-      if(n.start<now-.08)continue;
-      const start=ctx.currentTime+Math.max(.01,(n.start-now)/rate);
-      const duration=Math.max(.05,(n.end-n.start)/rate);
-      const osc=ctx.createOscillator(),gain=ctx.createGain();
-      const pitch=n.key;
-      osc.type=n.channel===9?'square':n.program>=80?'sawtooth':n.program>=40?'triangle':'sine';
-      osc.frequency.setValueAtTime(440*Math.pow(2,(pitch-69)/12),start);
-      const vol=Math.min(.42,Math.pow(n.velocity/127,1.5)*Math.max(.1,n.level)*.28);
-      gain.gain.setValueAtTime(.00001,start);
-      gain.gain.linearRampToValueAtTime(Math.max(.0001,vol),start+.015);
-      gain.gain.setValueAtTime(Math.max(.0001,vol),start+Math.max(.02,duration-.07));
-      gain.gain.exponentialRampToValueAtTime(.00001,start+duration);
-      osc.connect(gain);gain.connect(master);osc.start(start);osc.stop(start+duration+.01);
-      osc.onended=()=>{try{osc.disconnect();gain.disconnect();}catch{}
-        voices=voices.filter(x=>x!==osc);};
-      voices.push(osc);
+  const register=(src,gain)=>{
+    voices.push(src);
+    src.onended=()=>{
+      try{src.disconnect();gain.disconnect();}catch{}
+      const at=voices.indexOf(src);if(at>=0)voices.splice(at,1);
+    };
+  };
+  const scheduleNote=async(n,now,rate,generation)=>{
+    const start=ctx.currentTime+Math.max(.015,(n.start-now)/rate);
+    const duration=Math.max(.055,(n.end-n.start)/rate);
+    const shift=Math.max(-12,Math.min(12,Math.trunc(Number(getTranspose())||0)));
+    const pitch=n.channel===9?n.key:Math.max(0,Math.min(127,n.key+shift));
+    const regions=font?font.find(n.bank,n.program,pitch,n.velocity).slice(0,4):[null];
+    if(!regions.length)return; // Invalid presets never create incorrect notes.
+    for(const region of regions){
+      let buffer=null;
+      if(region){
+        try{buffer=await sampleBuffer(font,region.get(53),ctx);}
+        catch(error){onStatus?.('SoundFont มีตัวอย่างเสียงที่ถอดรหัสไม่ได้: '+error.message);continue;}
+      }
+      if(disposed||signal?.aborted||generation!==revision||
+         player.paused||ctx.currentTime>start+duration)return;
+      const gain=ctx.createGain();
+      const amp=Math.max(.0001,Math.pow(n.velocity/127,1.5)*
+        Math.max(.05,Number(n.level)||0)*.32/regions.length);
+      gain.gain.setValueAtTime(.00001,Math.max(start,ctx.currentTime+.002));
+      gain.gain.linearRampToValueAtTime(amp,Math.max(start,ctx.currentTime+.002)+.012);
+      gain.gain.setValueAtTime(amp,Math.max(start,ctx.currentTime+.002)+Math.max(.02,duration-.04));
+      gain.gain.exponentialRampToValueAtTime(.00001,Math.max(start,ctx.currentTime+.002)+duration+.06);
+      gain.connect(master);
+      let src;
+      if(buffer){
+        const sample=font.samples[region.get(53)];
+        src=ctx.createBufferSource();src.buffer=buffer;
+        const base=region.has(58)?region.get(58):sample.pitch;
+        const coarse=region.has(51)?(region.get(51)<<16>>16):0;
+        const fine=region.has(52)?(region.get(52)<<16>>16):0;
+        src.playbackRate.value=Math.pow(2,(pitch-base+coarse+(fine+sample.correct)/100)/12);
+        if((region.get(54)||0)&1&&sample.loopEnd>sample.loopStart+8){
+          src.loop=true;src.loopStart=(sample.loopStart-sample.start)/sample.rate;
+          src.loopEnd=(sample.loopEnd-sample.start)/sample.rate;
+        }
+      }else{
+        src=ctx.createOscillator();
+        src.type=n.channel===9?'square':n.program>=80?'sawtooth':n.program>=40?'triangle':'sine';
+        src.frequency.value=440*Math.pow(2,(pitch-69)/12);
+      }
+      src.connect(gain);register(src,gain);
+      const at=Math.max(start,ctx.currentTime+.003);
+      src.start(at);src.stop(at+duration+.07);
     }
   };
-  const play=()=>{if(disposed)return;ctx.resume().catch(()=>{
-    onStatus?.('เบราว์เซอร์ยังไม่อนุญาตให้เปิดเสียง MIDI · กดปุ่มเล่นอีกครั้ง');
-  });
-    reset();schedule();if(timer===null)timer=setInterval(schedule,90);};
+  const schedule=()=>{
+    if(disposed||signal?.aborted||player.paused||player.ended)return;
+    const now=Number(player.currentTime)||0,rate=Math.max(.25,Number(player.playbackRate)||1);
+    master.gain.value=.55*(player.muted?0:Math.max(0,Math.min(1,Number(player.volume)||0)));
+    const horizon=now+rate*(font?.9:.42),current=revision;
+    for(;cursor<notes.length&&notes[cursor].start<horizon;cursor++){
+      const n=notes[cursor];if(n.start<now-.08)continue;
+      void scheduleNote(n,now,rate,current);
+    }
+  };
+  const play=()=>{
+    if(disposed)return;
+    ctx.resume().catch(()=>onStatus?.('กด ▶ อีกครั้งเพื่ออนุญาตเสียง MIDI'));
+    reset();schedule();if(timer===null)timer=setInterval(schedule,80);
+  };
   const pause=()=>{if(timer!==null){clearInterval(timer);timer=null;}reset();};
-  const ended=()=>pause();
   const seek=()=>{pause();if(!player.paused)play();};
-  player.addEventListener('play',play);
-  player.addEventListener('pause',pause);
-  player.addEventListener('ended',ended);
-  player.addEventListener('seeking',seek);
-  player.addEventListener('ratechange',seek);
+  const listeners=[['play',play],['pause',pause],['ended',pause],
+    ['seeking',seek],['ratechange',seek],['xstage-midi-transpose',seek]];
+  for(const [event,fn] of listeners)player.addEventListener(event,fn);
   const dispose=()=>{
     if(disposed)return;disposed=true;pause();
-    for(const [event,listener] of [['play',play],['pause',pause],['ended',ended],
-      ['seeking',seek],['ratechange',seek]])player.removeEventListener(event,listener);
+    for(const [event,fn] of listeners)player.removeEventListener(event,fn);
     ctx.close().catch(()=>{});
   };
   signal?.addEventListener('abort',dispose,{once:true});
-  onStatus?.('พร้อมเล่น MIDI แบบเรียลไทม์');
+  onStatus?.(font?'SoundFont พร้อมสังเคราะห์ MIDI แบบเรียลไทม์':'MIDI พร้อมเล่นโดยไม่แปลงเป็น WAV');
   return {dispose,duration:song.duration};
 }
-scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,silentClock,playRealtime,
+scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,
   supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
   reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียง MIDI พื้นฐานในเว็บ',''));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
