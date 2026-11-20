@@ -2,7 +2,7 @@
 ; Build/testing/source files stay in CI and are never distributed to end users.
 #define AppVersion "1.0.79"
 #define BuildNumber "1079"
-#define AppExe "XStageKaraoke.exe"
+#define AppExe "X-StageKaraoke.exe"
 
 [Setup]
 AppId={{7E9EA7F6-09A9-47E1-A580-AFA1B260D08A}
@@ -10,7 +10,7 @@ AppName=X-Stage Karaoke PC
 AppVersion={#AppVersion}
 AppVerName=X-Stage Karaoke PC v{#AppVersion} (Build {#BuildNumber})
 AppPublisher=X-Stage
-DefaultDirName={autopf}\X-Stage\XStageKaraoke
+DefaultDirName={autopf}\X-Stage\Karaoke
 UsePreviousAppDir=no
 DisableDirPage=yes
 DefaultGroupName=X-Stage
@@ -39,7 +39,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "{localappdata}\X-Stage\Karaoke PC\Data"
 
 [Files]
-Source: "..\source\dist\XStageKaraoke\XStageKaraoke.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\source\dist\XStageKaraoke\XStageKaraoke.exe"; DestDir: "{app}"; DestName: "{#AppExe}"; Flags: ignoreversion
 Source: "..\source\dist\XStageKaraoke\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
