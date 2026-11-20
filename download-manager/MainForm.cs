@@ -11,6 +11,7 @@ public sealed class MainForm : Form
     private readonly TextBox _folder = new();
     private readonly ComboBox _parts = new();
     private readonly ComboBox _videoQuality = new();
+    private readonly ComboBox _outputFormat = new();
     private readonly DataGridView _grid = new();
     private readonly ContextMenuStrip _completedMenu = new();
     private readonly Label _summary = new();
@@ -26,7 +27,7 @@ public sealed class MainForm : Form
     {
         Text = "X-Stage Download Manager · v0.2.3 Build 6";
         MinimumSize = new Size(930, 650);
-        Size = new Size(1220, 735);
+        Size = new Size(1220, 785);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(244, 246, 250);
         ForeColor = Color.FromArgb(23, 34, 55);
@@ -47,9 +48,12 @@ public sealed class MainForm : Form
         };
         _videoQuality.Items.AddRange(new object[]
         {
-            "ดีที่สุด (ภาพและเสียง)", "1080p", "720p", "480p", "MP3 (เสียงอย่างเดียว)"
+            "ดีที่สุด (ภาพและเสียง)", "1080p", "720p", "480p"
         });
         _videoQuality.SelectedIndex = 0;
+        _outputFormat.Items.AddRange(new object[] { "MP4 (แนะนำ)", "MKV", "WEBM", "MP3 (เฉพาะเสียง)" });
+        _outputFormat.SelectedIndex = 0;
+        _outputFormat.SelectedIndexChanged += (_, _) => _videoQuality.Enabled = _outputFormat.SelectedIndex != 3;
         _folder.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
         _timer.Tick += (_, _) => RefreshRows();
@@ -70,7 +74,7 @@ public sealed class MainForm : Form
             {
                 try
                 {
-                    _engine.Add(args[1], _folder.Text, _engine.DefaultParts, SelectedQuality());
+                    _engine.Add(args[1], _folder.Text, _engine.DefaultParts, SelectedQuality(), SelectedOutputFormat());
                     _url.Clear();
                     RefreshRows();
                 }
@@ -111,14 +115,14 @@ public sealed class MainForm : Form
 
         var entry = new TableLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 214, Padding = new Padding(20, 11, 20, 9),
-            BackColor = Color.White, ColumnCount = 4, RowCount = 4
+            Dock = DockStyle.Top, Height = 268, Padding = new Padding(20, 11, 20, 9),
+            BackColor = Color.White, ColumnCount = 4, RowCount = 5
         };
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
         entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 133));
-        for (int i = 0; i < 4; i++) entry.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+        for (int i = 0; i < 5; i++) entry.RowStyles.Add(new RowStyle(SizeType.Percent, 20));
         entry.Controls.Add(MakeLabel("ลิงก์ / วิดีโอ"), 0, 0);
         entry.Controls.Add(MakeLabel("บันทึกที่"), 0, 1);
         SetupText(_url, "วางลิงก์ YouTube, TikTok, Facebook Reels หรือ URL ไฟล์ทั่วไป");
@@ -172,7 +176,7 @@ public sealed class MainForm : Form
         _videoQuality.DropDownStyle = ComboBoxStyle.DropDownList;
         _videoQuality.Margin = new Padding(3, 8, 6, 7);
         _videoQuality.Font = new Font("Segoe UI", 11);
-        _videoQuality.AccessibleName = "เลือกระดับคุณภาพวิดีโอหรือเสียง MP3";
+        _videoQuality.AccessibleName = "เลือกระดับคุณภาพวิดีโอ";
         entry.Controls.Add(_videoQuality, 1, 3);
         entry.Controls.Add(new Label
         {
@@ -184,6 +188,18 @@ public sealed class MainForm : Form
             Text = "YT · TikTok · FB", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(54, 76, 111), Font = new Font("Segoe UI", 8, FontStyle.Bold)
         }, 3, 3);
+        entry.Controls.Add(MakeLabel("รูปแบบไฟล์"), 0, 4);
+        _outputFormat.Dock = DockStyle.Fill;
+        _outputFormat.DropDownStyle = ComboBoxStyle.DropDownList;
+        _outputFormat.Margin = new Padding(3, 8, 6, 7);
+        _outputFormat.Font = new Font("Segoe UI", 11);
+        _outputFormat.AccessibleName = "เลือกรูปแบบไฟล์ปลายทาง ค่าเริ่มต้น MP4";
+        entry.Controls.Add(_outputFormat, 1, 4);
+        entry.Controls.Add(new Label
+        {
+            Text = "MP4 แนะนำ", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(17, 128, 90), Font = new Font("Segoe UI", 8, FontStyle.Bold)
+        }, 2, 4);
         Controls.Add(entry);
 
         var toolbar = new FlowLayoutPanel
@@ -354,7 +370,7 @@ public sealed class MainForm : Form
         var invalid = new List<string>();
         foreach (var url in urls)
         {
-            try { _engine.Add(url, _folder.Text.Trim(), int.Parse((string)_parts.SelectedItem!), SelectedQuality()); }
+            try { _engine.Add(url, _folder.Text.Trim(), int.Parse((string)_parts.SelectedItem!), SelectedQuality(), SelectedOutputFormat()); }
             catch (Exception ex) { invalid.Add(url + ": " + ex.Message); }
         }
         _url.Clear();
@@ -367,7 +383,12 @@ public sealed class MainForm : Form
 
     private string SelectedQuality() => _videoQuality.SelectedIndex switch
     {
-        1 => "1080", 2 => "720", 3 => "480", 4 => "AudioMP3", _ => "Best"
+        1 => "1080", 2 => "720", 3 => "480", _ => "Best"
+    };
+
+    private string SelectedOutputFormat() => _outputFormat.SelectedIndex switch
+    {
+        1 => "mkv", 2 => "webm", 3 => "mp3", _ => "mp4"
     };
 
     private void ApplyPartsToSelected()
@@ -692,13 +713,13 @@ public sealed class MainForm : Form
         var job = Selected();
         if (job is null)
         {
-            _details.Text = "วางลิงก์ YouTube / TikTok / Facebook Reels · เลือกคุณภาพหรือ MP3 · รองรับไฟล์ทั่วไปเช่นเดิม";
+            _details.Text = "วางลิงก์ YouTube / TikTok / Facebook Reels · เลือกคุณภาพและรูปแบบไฟล์ (MP4 เริ่มต้น)";
             return;
         }
         _details.Text = job.Status == "Failed"
             ? $"ข้อผิดพลาด: {job.Error}   ·   กด เริ่ม / ต่อ เพื่อลองอีกครั้ง"
             : job.Kind == "Video"
-                ? $"{SocialVideoDownloader.Platform(job.Url)} · คุณภาพ {job.VideoQuality} · {job.Url} · บันทึกที่ {job.Folder}"
+                ? $"{SocialVideoDownloader.Platform(job.Url)} · คุณภาพ {job.VideoQuality} · ไฟล์ {job.OutputFormat.ToUpperInvariant()} · {job.Url} · บันทึกที่ {job.Folder}"
                 : $"{job.Url}   ·   บันทึกที่ {job.Folder}";
     }
 
