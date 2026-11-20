@@ -54,7 +54,7 @@ public sealed class MainForm : Form
     private DateTime _repairStartedUtc;
     private string _repairMessage = "";
     private string _repairFailure = "";
-    private const string DefaultDeviceHint = "Windows PC: " + Environment.MachineName +
+    private static readonly string DefaultDeviceHint = "Windows PC: " + Environment.MachineName +
         "   ·   Android: Smart View / Screen Cast";
     private string _lastLaunchError = "";
 
