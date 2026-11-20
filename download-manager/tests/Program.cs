@@ -426,7 +426,7 @@ sealed class FileServer : IDisposable
                 var contentType = path.StartsWith("/plain/mimeopaqueuuid")
                     ? "application/pdf" : "application/octet-stream";
                 var attachment = path.StartsWith("/range/5aef5bed-")
-                    ? "Content-Disposition: attachment; filename=\\\"X-Stage-Song-Studio-Pro-v0.1.22-preview.exe\\\"\r\n"
+                    ? "Content-Disposition: attachment; filename=\"X-Stage-Song-Studio-Pro-v0.1.22-preview.exe\"\r\n"
                     : path.StartsWith("/range/thaifileuuid")
                         ? "Content-Disposition: attachment; filename*=UTF-8''%E0%B8%97%E0%B8%94%E0%B8%AA%E0%B8%AD%E0%B8%9A.pdf\r\n"
                         : "";
