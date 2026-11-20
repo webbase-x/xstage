@@ -225,7 +225,7 @@ public sealed class MainForm : Form
         toolbar.Controls.Add(MakeTool("Ⅱ  หยุดทั้งหมด", (_, _) => _engine.PauseAll()));
         toolbar.Controls.Add(MakeTool("⌕  เปิดไฟล์ / โฟลเดอร์", (_, _) => OpenSelected()));
         toolbar.Controls.Add(MakeTool("⟳  ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true)));
-        toolbar.Controls.Add(MakeTool("🌐  เชื่อม Chrome / Edge", (_, _) => SetupBrowserIntegration()));
+        toolbar.Controls.Add(MakeTool("🌐  รับดาวน์โหลดจากเบราว์เซอร์", (_, _) => SetupBrowserIntegration()));
         toolbar.Controls.Add(MakeTool("✕  ลบรายการ", (_, _) =>
         {
             var job = Selected();
@@ -509,36 +509,37 @@ public sealed class MainForm : Form
         if (!Directory.Exists(extensionFolder))
         {
             MessageBox.Show(this, "ไม่พบชุดส่วนขยายเบราว์เซอร์ กรุณาติดตั้ง X-Stage Download Manager รุ่นเต็ม",
-                "เชื่อมต่อเบราว์เซอร์", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                "รับดาวน์โหลดจากเบราว์เซอร์", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
         using var dialog = new Form
         {
-            Text = "เชื่อม Chrome / Microsoft Edge", Width = 590, Height = 310,
+            Text = "ตั้งค่ารับลิงก์ดาวน์โหลดจาก Chrome / Edge", Width = 590, Height = 340,
             StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false, BackColor = Color.White
         };
         var instructions = new Label
         {
-            Left = 20, Top = 15, Width = 540, Height = 113,
-            Text = "1. เปิด chrome://extensions หรือ edge://extensions\n" +
+            Left = 20, Top = 15, Width = 540, Height = 140,
+            Text = "รับลิงก์ดาวน์โหลดจาก Chrome หรือ Edge เข้ามาใน X-Stage โดยตรง\n" +
+                   "1. เปิด chrome://extensions หรือ edge://extensions\n" +
                    "2. เปิดโหมดผู้พัฒนา (Developer mode) แล้วกด Load unpacked\n" +
                    "3. เลือกโฟลเดอร์ส่วนขยายของ X-Stage ด้านล่าง\n" +
-                   "4. คัดลอก Extension ID (อักษร a–p 32 ตัว) มาวางในช่อง แล้วกดเชื่อมต่อ",
+                   "4. คัดลอก Extension ID (อักษร a–p 32 ตัว) มาวาง แล้วกดบันทึก",
             Font = new Font("Segoe UI", 10), ForeColor = Color.FromArgb(35, 55, 83)
         };
-        var openFolder = new Button { Left = 20, Top = 131, Width = 260, Height = 36,
+        var openFolder = new Button { Left = 20, Top = 155, Width = 260, Height = 36,
             Text = "เปิดโฟลเดอร์ส่วนขยาย", BackColor = Color.FromArgb(231, 239, 250) };
         openFolder.Click += (_, _) =>
             Process.Start(new ProcessStartInfo(extensionFolder) { UseShellExecute = true });
         var copyFolder = new Button { Left = 292, Top = 131, Width = 265, Height = 36,
             Text = "คัดลอกตำแหน่งโฟลเดอร์", BackColor = Color.FromArgb(231, 239, 250) };
         copyFolder.Click += (_, _) => Clipboard.SetText(extensionFolder);
-        var id = new TextBox { Left = 20, Top = 186, Width = 385, Font = new Font("Segoe UI", 11),
+        var id = new TextBox { Left = 20, Top = 214, Width = 385, Font = new Font("Segoe UI", 11),
             PlaceholderText = "วาง Extension ID จากหน้าเบราว์เซอร์" };
-        var register = new Button { Left = 417, Top = 183, Width = 140, Height = 35,
-            Text = "เชื่อมต่อ", DialogResult = DialogResult.OK,
+        var register = new Button { Left = 417, Top = 211, Width = 140, Height = 35,
+            Text = "บันทึกการเชื่อมต่อ", DialogResult = DialogResult.OK,
             BackColor = Color.FromArgb(0, 111, 221), ForeColor = Color.White };
         dialog.Controls.AddRange(new Control[] { instructions, openFolder, copyFolder, id, register });
         dialog.AcceptButton = register;
@@ -547,14 +548,14 @@ public sealed class MainForm : Form
         {
             BrowserIntegration.Register(id.Text);
             MessageBox.Show(this,
-                "ลงทะเบียนส่วนขยาย Chrome / Edge สำเร็จ\n" +
+                "พร้อมรับลิงก์ดาวน์โหลดจาก Chrome / Edge\n" +
                 "ในส่วนขยาย ให้เปิดการรับดาวน์โหลดอัตโนมัติเฉพาะเมื่อต้องการใช้งาน\n" +
                 "ส่วนขยายจะไม่ยกเลิกงานในเบราว์เซอร์หากแอปไม่รับงาน",
                 "พร้อมใช้งาน", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            MessageBox.Show(this, ex.Message, "เชื่อมต่อไม่สำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, ex.Message, "ตั้งค่ารับลิงก์ไม่สำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
