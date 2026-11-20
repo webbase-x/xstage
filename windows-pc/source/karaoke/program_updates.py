@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 
 FEED = 'https://webbase-x.github.io/xstage/downloads/windows-pc-latest.json'
 DOWNLOADS = 'https://webbase-x.github.io/xstage/downloads/'
-FILE_PATTERN = re.compile(r'X-Stage-Karaoke-PC-Windows-v[0-9.]+-build[0-9]+\.(?:exe|msi)\Z')
+FILE_PATTERN = re.compile(r'(?:X-StageKaraoke\.exe|X-Stage-Karaoke-PC-Windows-v[0-9.]+-build[0-9]+\.(?:exe|msi))\Z')
 HEX_PATTERN = re.compile(r'[0-9a-fA-F]{64}\Z')
 MAX_INSTALLER_BYTES = 300 * 1024 * 1024
 
