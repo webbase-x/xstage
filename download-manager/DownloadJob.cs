@@ -20,6 +20,10 @@ public sealed class DownloadJob
     [JsonIgnore] public string TransferPhase = "";
     public string Folder { get; set; } = "";
     public string Status { get; set; } = "Queued";
+    // Persist the intent to recover an active transfer after app shutdown.
+    // Explicit user Pause clears this; completed/failed jobs never auto-recover.
+    public bool ResumeAfterRestart { get; set; }
+    [JsonIgnore] public bool InterruptedOnStartup { get; set; }
     public string Error { get; set; } = "";
     public string CompletedPath { get; set; } = "";
     public long TotalBytes { get; set; } = -1;
