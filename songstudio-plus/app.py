@@ -79,12 +79,18 @@ class State:
         with self.lock:
             running=[x for x in self.jobs.values() if x["status"]=="running"]
             if running and kind=="update" and all(x["kind"]!="update" for x in running):
-                # Downloading a verified EXE touches UPDATES only, not SQLite:
-                # let import continue while it downloads. The install action
-                # requests a safe stop after the current imported file.
+                # Update downloads touch UPDATES, not SQLite. Installation
+                # requests a checkpoint before closing the old program.
                 pass
             elif running:
                 raise ValueError("มีงานกำลังทำอยู่ กรุณารอให้เสร็จก่อนเริ่มงานถัดไป")
+            # Keep active work and only the latest finished jobs. A studio
+            # that stays open for weeks must not retain unbounded job/results
+            # (including large error summaries) in memory.
+            finished=[key for key,item in self.jobs.items()
+                      if item["status"]!="running"]
+            for key in finished[:-40]:
+                del self.jobs[key]
             self.jobs[job_id]=job
         def runner():
             try:
@@ -115,9 +121,19 @@ class State:
     def update(self,job,summary,message):
         with self.lock:
             summary=dict(summary)
-            elapsed=max(time.monotonic()-job["started_at"],0.001)
+            # Resumed imports already contain counters from earlier sessions.
+            # Subtract the first reported counter so throughput reflects only
+            # work done in THIS process, never a fictitious 80k files/second.
+            moment=time.monotonic()
             items=summary.get("files_seen",summary.get("done",0))
-            summary["files_per_second"]=round(items/elapsed,1)
+            if not isinstance(items,(int,float)):
+                items=0
+            if "_rate_first_count" not in job:
+                job["_rate_first_count"]=items
+                job["_rate_first_at"]=moment
+            elapsed=max(moment-job["_rate_first_at"],0.001)
+            summary["files_per_second"]=round(
+                max(0,items-job["_rate_first_count"])/elapsed,1)
             job["progress"]=summary
             job["message"]=str(message)[:240]
             job["updated_at"]=time.time()
@@ -128,7 +144,8 @@ class State:
         with self.lock:
             rows=[]
             for job in list(self.jobs.values())[-10:][::-1]:
-                item={k:v for k,v in job.items() if k not in ("cancel","started_at")}
+                item={k:v for k,v in job.items() if k not in (
+                    "cancel","started_at","_rate_first_count","_rate_first_at")}
                 item["progress_age"]=round(max(0.0,now_epoch-float(job.get("updated_at",now_epoch))),3)
                 rows.append(item)
             return rows
