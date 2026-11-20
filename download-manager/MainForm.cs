@@ -481,7 +481,7 @@ public sealed class MainForm : Form
                         {
                             try
                             {
-                                _engine.Add(url, _folder.Text, _engine.DefaultParts, SelectedQuality());
+                                _engine.Add(url, _folder.Text, _engine.DefaultParts, SelectedQuality(), SelectedOutputFormat());
                                 RefreshRows();
                                 completion.TrySetResult(true);
                             }
