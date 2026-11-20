@@ -24,6 +24,7 @@ public sealed partial class MainForm : Form
     private readonly Font _normalFileFont = new("Segoe UI", 10, FontStyle.Regular);
     private readonly CancellationTokenSource _browserStop = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 800 };
+    private bool _networkAvailable = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
 
     public MainForm(string[] args)
     {
@@ -61,7 +62,11 @@ public sealed partial class MainForm : Form
         _url.Text = args.FirstOrDefault(a => DownloadEngine.TryParseUrl(a, out _)) ?? "";
         UpdateVideoOptionVisibility();
         if (_url.Text.Length > 0) ShowInputPanel(true);
-        _timer.Tick += (_, _) => RefreshRows();
+        _timer.Tick += (_, _) =>
+        {
+            CheckNetworkRecovery();
+            RefreshRows();
+        };
         _timer.Start();
         FormClosing += (_, _) =>
         {
@@ -99,6 +104,15 @@ public sealed partial class MainForm : Form
             await CheckForUpdatesAsync(false);
         };
         RefreshRows();
+    }
+
+    private void CheckNetworkRecovery()
+    {
+        var available = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
+        if (_networkAvailable && !available)
+            _engine.PauseForNetworkOutage();
+        _networkAvailable = available;
+        if (available) _engine.TryResumeNetworkInterrupted();
     }
 
     private void UpdateVideoOptionVisibility()
