@@ -20,6 +20,7 @@
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
                  songOffset:0,songHasNext:false,groupOffset:0,groupHasNext:false,
                  selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
+                 lyricSearchRun:0,groupSearchRunning:false,lyricContextHits:0,
                  lyricTimed:[],lyricDraft:[],lyricOffset:0,lyricShowDraft:false,
                  previewOffset:0,previewSongs:[],previewHasNext:false,
                  previewSelected:null,previewPlaying:false,previewHeard:false,
@@ -332,24 +333,117 @@
       $("lyrics-dialog").showModal();
     }catch(error){toast(error.message,true);}
   }
+  function renderLyricContext(result){
+    const results=$("lyrics-search-context-results");
+    const box=$("lyrics-search-context");
+    results.replaceChildren();
+    const rows=new Map();
+    for(const item of result.songs||[]){
+      rows.set(item.id,{...item,source:["ชื่อเพลง / ศิลปิน / รหัส"]});
+    }
+    for(const item of result.drafts||[]){
+      const current=rows.get(item.id);
+      if(current){
+        current.source.push("ข้อความ LYR รอเวลา");
+        current.has_draft=true;
+      }else{
+        rows.set(item.id,{...item,has_draft:true,source:["ข้อความ LYR รอเวลา"]});
+      }
+    }
+    state.lyricContextHits=rows.size;
+    box.hidden=!rows.size;
+    text("lyrics-search-context-title",
+      "พบในชื่อเพลง/ศิลปิน "+number((result.songs||[]).length)+
+      " · พบใน LYR รอเวลา "+number((result.drafts||[]).length)+
+      ((result.more_songs||result.more_drafts)?" · มีผลเพิ่มเติม":""));
+    for(const item of rows.values()){
+      const canOpen=Boolean(item.has_current_lyrics||item.has_draft);
+      const line=document.createElement(canOpen?"button":"div");
+      line.className="lyric-search-hit";
+      if(canOpen){
+        line.type="button";
+        line.addEventListener("click",()=>void openLyrics({id:item.id,title:item.title||String(item.code)}));
+      }
+      const title=document.createElement("strong");
+      title.textContent=String(item.code).padStart(8,"0")+" · "+(item.title||"ไม่ระบุชื่อเพลง");
+      const note=document.createElement("small");
+      note.textContent=(item.artist||"ไม่ระบุศิลปิน")+" · "+item.source.join(" + ")+
+        (canOpen?" · กดดูเนื้อร้อง":" · ยังไม่มีเนื้อร้อง");
+      line.append(title,note);results.append(line);
+    }
+  }
   async function searchGroups(reset=true){
     if(!state.ready)return;
     const q=$("lyrics-search").value.trim();
+    const requestId=++state.lyricSearchRun;
     if(reset){
       state.groupOffset=0;
       state.selectedGroups.clear();
       state.selectedGroupInfo.clear();
+      state.lyricContextHits=0;
+      $("lyrics-search-context").hidden=true;
     }
     state.groups=[];
-    if(!q){text("groups-count","0 กลุ่ม");renderGroups();return;}
+    state.groupHasNext=false;
+    state.groupSearchRunning=Boolean(q);
+    renderGroups();
+    if(!q){
+      text("lyrics-search-feedback","พิมพ์คำค้นแล้วกดค้นหา · ระบบแยกเนื้อร้องที่แก้ไขได้กับข้อมูลชื่อเพลง/LYR");
+      return;
+    }
+    if(q.length>100){
+      state.groupSearchRunning=false;renderGroups();
+      text("lyrics-search-feedback","คำค้นยาวเกิน 100 ตัวอักษร กรุณาย่อให้สั้นลง");
+      return;
+    }
+    text("lyrics-search-feedback","กำลังค้นหา “"+q+
+      "” ในเนื้อร้องปัจจุบันและตรวจชื่อเพลง/LYR · คลังขนาดใหญ่อาจใช้เวลาสักครู่");
+    $("lyrics-find").disabled=true;
+    const contextTask=reset?
+      api("/api/lyrics/search-context?q="+encodeURIComponent(q)+"&limit=12",undefined,45000)
+        .then(data=>{
+          if(requestId!==state.lyricSearchRun)return;
+          renderLyricContext(data);
+        })
+        .catch(error=>{
+          if(requestId!==state.lyricSearchRun)return;
+          text("lyrics-search-context-title","ค้นชื่อเพลงและข้อความ LYR ไม่สำเร็จ: "+error.message);
+          $("lyrics-search-context").hidden=false;
+        }):Promise.resolve();
+    let failed=null;
     try{
       const limit=visibleRows();
+      // A multi-gigabyte SQLite registry may need more than the generic 12s
+      // UI request limit for an exact substring across all current lyrics.
       const data=await api("/api/groups?q="+encodeURIComponent(q)+
-        "&limit="+(limit+1)+"&offset="+state.groupOffset);
+        "&limit="+(limit+1)+"&offset="+state.groupOffset,undefined,90000);
+      if(requestId!==state.lyricSearchRun)return;
       state.groupHasNext=(data.rows||[]).length>limit;
       state.groups=(data.rows||[]).slice(0,limit);
-      renderGroups();
-    }catch(error){toast(error.message,true);}
+    }catch(error){
+      if(requestId!==state.lyricSearchRun)return;
+      failed=error;
+      toast("ค้นเนื้อร้องไม่สำเร็จ: "+error.message,true);
+    }finally{
+      await contextTask;
+      if(requestId===state.lyricSearchRun){
+        state.groupSearchRunning=false;
+        $("lyrics-find").disabled=false;
+        renderGroups();
+        if(failed){
+          text("lyrics-search-feedback","การค้นบรรทัดเนื้อร้องไม่สำเร็จ: "+failed.message+
+            " · ไม่ใช่ผลยืนยันว่าไม่มีข้อความใน SQLite");
+        }else{
+          const count=state.groups.length;
+          text("lyrics-search-feedback",
+            count?"พบบรรทัดเนื้อร้องที่ตรงคำค้น "+number(count)+
+              " กลุ่มในหน้านี้ · เลือกกลุ่มเพื่อแทนที่ได้":
+            state.lyricContextHits?
+              "ไม่พบ “"+q+"” ในบรรทัดเนื้อร้องปัจจุบัน แต่พบในชื่อเพลง/ศิลปินหรือ LYR รอเวลา · เลือกดูรายละเอียดด้านบน":
+              "ไม่พบ “"+q+"” ในเนื้อร้องเวอร์ชันปัจจุบันหรือชื่อเพลง/LYR ที่ค้น · ลองใช้คำบางส่วนหรือค้นในเมนูคลังเพลง");
+        }
+      }
+    }
   }
   function renderGroups(){
     text("groups-count",number(state.groups.length)+" กลุ่มในหน้านี้");
@@ -359,8 +453,11 @@
     const panel=$("group-list");panel.replaceChildren();
     if(!state.groups.length){
       const empty=document.createElement("p");empty.className="empty-small";
-      empty.textContent=$("lyrics-search").value.trim()?
-        "ไม่พบกลุ่มข้อความที่ตรงคำค้น":"ค้นคำเพื่อแสดงกลุ่มบรรทัด";
+      empty.textContent=state.groupSearchRunning?
+        "กำลังค้นใน SQLite · ยังไม่สรุปว่าไม่พบคำค้น":
+        $("lyrics-search").value.trim()?
+        "ไม่พบบรรทัดเนื้อร้องปัจจุบันที่ตรงคำค้น · ตรวจผลชื่อเพลง/LYR ด้านบน":
+        "ค้นคำเพื่อแสดงกลุ่มบรรทัด";
       panel.append(empty);
     }
     for(const entry of state.groups){
@@ -2310,7 +2407,14 @@
       if(event.key==="Enter")void searchGroups();
     });
     $("lyrics-search").addEventListener("input",()=>{
-      state.groups=[];state.selectedGroups.clear();renderGroups();
+      ++state.lyricSearchRun;
+      state.groupSearchRunning=false;
+      state.groups=[];state.groupHasNext=false;state.selectedGroups.clear();
+      state.selectedGroupInfo.clear();state.lyricContextHits=0;
+      $("lyrics-search-context").hidden=true;
+      $("lyrics-find").disabled=!state.ready;
+      text("lyrics-search-feedback","คำค้นเปลี่ยนแล้ว · กดค้นหาเพื่ออ่านผลใหม่จาก SQLite");
+      renderGroups();
     });
     $("lyrics-replacement").addEventListener("input",updateSelectedGroups);
     $("groups-all").addEventListener("click",()=>{
