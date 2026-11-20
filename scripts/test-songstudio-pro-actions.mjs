@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const root=new URL('../',import.meta.url);
 const read=path=>fs.readFileSync(new URL(path,root),'utf8');
 const html=read('songstudio-plus/web/index.html');
+const stylesheet=read('songstudio-plus/web/style.css');
 const js=read('songstudio-plus/web/app.js');
 const timeline=read('songstudio-plus/web/timeline-ui.js');
 const server=read('songstudio-plus/app.py');
@@ -118,4 +119,17 @@ assert.ok(js.indexOf('bind();') < js.indexOf('new globalThis.XStageCueTimelineUI
 assert.ok(js.includes('timeline.init.failed'),
  'Optional timeline failure must be logged without killing the core UI');
 assert.ok(!js.includes('state.ready=true;'), 'Do not fake engine state');
+const importLayout=stylesheet.slice(stylesheet.lastIndexOf(
+  '/* Song Studio Pro: responsive, non-overlapping window'));
+assert.ok(importLayout.includes('#view-import.is-visible{')&&
+          importLayout.includes('overflow-y:auto')&&
+          importLayout.includes('scrollbar-width:none'),
+ 'Import controls must remain reachable when the Windows window is short');
+assert.ok(importLayout.includes('#view-import>.two-col{')&&
+          importLayout.includes('flex:0 0 auto')&&
+          importLayout.includes('height:auto'),
+ 'Dynamic SQLite/import panels must not be squeezed into fixed-height tracks');
+assert.ok(importLayout.includes('.top-actions{')&&
+          importLayout.includes('flex-wrap:wrap'),
+ 'Windows toolbar must wrap instead of overlapping when resized');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');
