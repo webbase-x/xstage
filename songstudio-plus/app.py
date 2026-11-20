@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import plus_core as core
+import db_maintenance as dbmaint
 import risk_audit as risks
 import preview_player as preview
 import manual_editor as manual
@@ -40,7 +41,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.22",
+        self.diagnostic("state.ready",version="0.1.23",
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -206,11 +207,13 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.22",
+            self.send_json(200,{"token":self.state.token,"version":"0.1.23",
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":
             self.send_json(200,core.stats(self.state.workspace));return
+        if path=="/api/db/health":
+            self.send_json(200,dbmaint.snapshot(self.state.workspace));return
         if path=="/api/import/resume":
             self.send_json(200,{"resume":self.state.resume_info});return
         if path=="/api/update/check":
@@ -407,6 +410,12 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/update/install":
                 result=updater.install_and_restart(self.state.workspace)
                 self.state.request_restart()
+            elif path=="/api/db/cleanup":
+                result=self.state.start_job("db-clean",lambda progress,cancel:
+                    dbmaint.cleanup_history(self.state.workspace,progress,cancel))
+            elif path=="/api/db/compact":
+                result=self.state.start_job("db-compact",lambda progress,cancel:
+                    dbmaint.compact_database(self.state.workspace,progress,cancel))
             elif path=="/api/recover-lyrics":
                 result=self.state.start_job("recover",lambda progress,cancel:
                     core.recover_existing_lyrics(self.state.workspace,progress,cancel))
