@@ -39,6 +39,70 @@ var folder = Path.Combine(Path.GetTempPath(), "xstage-dm-test-" + Guid.NewGuid()
 Directory.CreateDirectory(folder);
 try
 {
+    // SQLite migration and crash recovery: imported legacy JSON must remain
+    // untouched, every job/chunk checkpoint must commit atomically, and a
+    // second startup must never re-import deleted history.
+    var stateDir = Path.Combine(folder, "sqlite-state");
+    Directory.CreateDirectory(stateDir);
+    var legacyPath = Path.Combine(stateDir, "downloads.json");
+    var legacyJob = new DownloadJob
+    {
+        Id = "legacy123", Url = server.Url + "range/legacy.bin",
+        Name = "ประวัติไทย.zip", Folder = folder, Kind = "File",
+        Status = "Running", TotalBytes = 1048576, DownloadedBytes = 13579,
+        SupportsRanges = true, SegmentsUsed = 4, Parts = 4,
+        ETag = "\"legacy-strong-tag\"", CreatedAt = DateTimeOffset.UtcNow
+    };
+    var legacyData = System.Text.Json.JsonSerializer.Serialize(
+        new[] { legacyJob }, new System.Text.Json.JsonSerializerOptions { IncludeFields = true });
+    File.WriteAllText(legacyPath, legacyData);
+    var store = new DownloadStateStore(stateDir);
+    var restored = store.LoadOrMigrate(legacyPath);
+    if (restored.Count != 1 || restored[0].Id != legacyJob.Id ||
+        restored[0].Name != legacyJob.Name ||
+        restored[0].DownloadedBytes != legacyJob.DownloadedBytes ||
+        !File.Exists(legacyPath) || File.ReadAllText(legacyPath) != legacyData)
+        throw new Exception("Legacy JSON migration lost Thai filenames, offsets or original backup.");
+    var segmentDir = Path.Combine(folder, ".xstage-downloads", legacyJob.Id);
+    Directory.CreateDirectory(segmentDir);
+    File.WriteAllBytes(Path.Combine(segmentDir, "00.part"), new byte[32768]);
+    store.SaveSnapshot(restored);
+    var info = store.Inspect();
+    if (info.Mode != "wal" || info.Jobs != 1 || info.Chunks != 4)
+        throw new Exception("SQLite WAL migration must checkpoint every partial segment.");
+    using (var db = new Microsoft.Data.Sqlite.SqliteConnection(
+               "Data Source=" + store.DatabasePath))
+    {
+        db.Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = """
+            SELECT downloaded_bytes FROM xstage_download_chunks
+            WHERE job_id='legacy123' AND chunk_index=0;
+            """;
+        if (Convert.ToInt64(cmd.ExecuteScalar()) != 32768L)
+            throw new Exception("Chunk offsets must reflect durable physical .part bytes.");
+    }
+    store.SaveDefaultParts(16);
+    var anotherStore = new DownloadStateStore(stateDir);
+    if (anotherStore.ReadDefaultParts(4) != 16 ||
+        anotherStore.LoadOrMigrate(legacyPath).Single().Id != legacyJob.Id)
+        throw new Exception("SQLite reopening lost job state, settings or checkpoint data.");
+
+    var failedTxn = false;
+    try
+    {
+        anotherStore.SaveSnapshot(new[] { restored[0], restored[0] });
+    }
+    catch (Microsoft.Data.Sqlite.SqliteException)
+    {
+        failedTxn = true;
+    }
+    if (!failedTxn || anotherStore.LoadOrMigrate(legacyPath).Count != 1)
+        throw new Exception("A failed SQLite transaction must preserve the prior committed job list.");
+    anotherStore.SaveSnapshot(Array.Empty<DownloadJob>());
+    if (new DownloadStateStore(stateDir).LoadOrMigrate(legacyPath).Count != 0)
+        throw new Exception("Migrated JSON must not resurrect a removed history item.");
+
     // Regression: a verified completed download must fill every pixel of its
     // progress bar even if its old per-segment data is stale or incomplete.
     var completeFile = new DownloadJob
@@ -405,7 +469,8 @@ try
         !BrowserIntegration.BuildNativeHostManifest(@"C:\Test\XStageDownloadManager.exe", new[] { sampleId })
             .Contains("chrome-extension://" + sampleId + "/", StringComparison.Ordinal))
         throw new Exception("Native Chrome/Edge extension IDs and allowed origins failed.");
-    var manager = new DownloadEngine();
+    var isolatedEngineData = Path.Combine(folder, "isolated-engine");
+    var manager = new DownloadEngine(isolatedEngineData);
     if (DownloadEngine.TryParseUrl("file:///C:/Windows/system.ini", out _) ||
         DownloadEngine.TryParseUrl("ftp://localhost/file", out _) ||
         DownloadEngine.TryParseUrl("https://user:pass@example.com/file", out _))
@@ -542,7 +607,7 @@ try
         throw new Exception("Existing output must not be overwritten");
     if (!manager.Remove(job) || !File.Exists(job.CompletedPath))
         throw new Exception("Removing history must not delete completed files");
-    if (new DownloadEngine().DefaultParts != 8)
+    if (new DownloadEngine(isolatedEngineData).DefaultParts != 8)
         throw new Exception("Default segment count must persist across restarts.");
     Console.WriteLine("PASS: HTTP Range segments, verified EXE update resume, dropped-stream retry, SHA-256 verification, HTTP 200 fallback, settings persistence and safe removal.");
 }
