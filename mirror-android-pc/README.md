@@ -1,6 +1,14 @@
 # X-Stage Mirror Android PC
 
-Version 1.0.5 · Build 1006 · Windows 10/11 x64 · Preview
+Version 1.0.6 · Build 1007 · Windows 10/11 x64 · Preview
+
+## Build 1007 — automatic Windows prerequisites with visible stages
+
+The receiver now starts checking the wireless adapter automatically. Missing network adapter or three failed receiver-window launches automatically starts an elevated copy of the included EXE to check/install the Microsoft Wireless Display Feature on Demand. UAC permission, Windows Update connectivity, possible reboot and Windows policies cannot be bypassed.
+
+If Windows detects no wireless adapter, only device-applicable `Net` class drivers are searched, downloaded and installed through Microsoft Windows Update Agent, never an arbitrary web driver. Existing working adapters and display drivers are left untouched. If hardware is missing, the OEM has not published a compatible driver, wireless is disabled, or Windows policy blocks the action, the UI explains the failure instead of claiming full readiness.
+
+The UI shows stage 1/4 through 4/4, current activity, elapsed time and either explicit error/reboot status or a real native receiver window. Readiness is not evidence of an Android stream connected. Incoming picture cleanup on sender disconnect remains owned by the native Windows receiver.
 
 ## Build 1006 — native Windows receiver hand-off
 

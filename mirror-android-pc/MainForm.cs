@@ -49,6 +49,13 @@ public sealed class MainForm : Form
     private int _launchRetries;
     private DateTime _lastLaunchUtc = DateTime.MinValue;
     private bool _installingWindowsFeature;
+    private bool _autoRepairAttempted;
+    private Process? _repairProcess;
+    private DateTime _repairStartedUtc;
+    private string _repairMessage = "";
+    private string _repairFailure = "";
+    private const string DefaultDeviceHint = "Windows PC: " + Environment.MachineName +
+        "   ·   Android: Smart View / Screen Cast";
     private string _lastLaunchError = "";
 
     public MainForm()
@@ -114,14 +121,16 @@ public sealed class MainForm : Form
         Shown += (_, _) =>
         {
             LayoutWelcome();
+            _status.Text = "ขั้นตอน 1/4 · กำลังตรวจสอบ Windows และอุปกรณ์";
             CheckLocalEnvironment();
-            OpenReceiver();
-            CheckWindowsReceiverSession();
             _poll.Start();
+            if (WindowsPreparation.HasWirelessAdapter()) OpenReceiver();
+            else _ = PrepareWindowsFeatureAsync();
             _ = _autoUpdates.CheckAsync();
         };
         _poll.Tick += (_, _) =>
         {
+            PollPreparation();
             CheckWindowsReceiverSession();
             _ = _autoUpdates.CheckAsync();
         };
@@ -310,6 +319,8 @@ public sealed class MainForm : Form
             if (_launchRetries < 3 &&
                 DateTime.UtcNow - _lastLaunchUtc > TimeSpan.FromSeconds(12))
                 OpenReceiver();
+            else if (_launchRetries >= 3 && !_autoRepairAttempted)
+                _ = PrepareWindowsFeatureAsync();
         }
         UpdateReceiverStatus();
     }
@@ -317,7 +328,9 @@ public sealed class MainForm : Form
     private void UpdateReceiverStatus()
     {
         if (_connectProcessRunning)
-            _receiverStatus = "ตัวรับ Windows เปิดอยู่ · เลือกชื่อ PC จาก Android เพื่อส่งภาพ";
+            _receiverStatus = _wifiAvailable
+                ? "พร้อมรับภาพ · เลือก " + Environment.MachineName + " จาก Android"
+                : "เปิดตัวรับแล้ว แต่ยังไม่พบ Wi-Fi ที่พร้อมใช้งาน";
         else if (!_wifiAvailable)
             _receiverStatus = "ไม่พบ Wi-Fi ที่เปิดใช้งาน · กด F1 เพื่อตรวจสอบ";
         else if (_launchRetries >= 3)
@@ -332,7 +345,9 @@ public sealed class MainForm : Form
     private void RenderStatus()
     {
         var updating = _updateNotice is not null && DateTime.UtcNow < _updateNoticeUntil;
-        var message = _installingWindowsFeature ? "Windows กำลังจัดเตรียม Wireless Display…"
+        var message = _installingWindowsFeature
+            ? "กำลังจัดเตรียมระบบ · " + _repairMessage
+            : !string.IsNullOrEmpty(_repairFailure) ? _repairFailure
             : updating ? _updateNotice! : _receiverStatus;
         if (_status.Text != message) _status.Text = message;
         var foreground = _connectProcessRunning || updating || _installingWindowsFeature;
@@ -380,56 +395,104 @@ public sealed class MainForm : Form
         UpdateReceiverStatus();
     }
 
-    private async Task PrepareWindowsFeatureAsync()
+    private Task PrepareWindowsFeatureAsync()
     {
-        if (_closing || _installingWindowsFeature) return;
-        if (MessageBox.Show(this,
-            "ต้องใช้ Windows Wireless Display และไดรเวอร์ Wi-Fi Direct/Miracast\n\n" +
-            "อนุญาตให้ Windows ติดตั้งฟีเจอร์ Wireless Display หรือไม่?\n" +
-            "อาจต้องยืนยัน UAC และเชื่อมต่อ Windows Update",
-            "จัดเตรียมตัวรับ Windows", MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (_closing || IsDisposed || _installingWindowsFeature) return Task.CompletedTask;
+        _autoRepairAttempted = true;
+        _repairFailure = "";
+        _repairMessage = "ขั้นตอน 1/4 · รออนุญาตสิทธิ์ Windows";
         _installingWindowsFeature = true;
+        _repairStartedUtc = DateTime.UtcNow;
+        _network.Text = "Windows อาจขออนุญาต UAC เพื่อดาวน์โหลดส่วนประกอบที่ขาด";
         RenderStatus();
         try
         {
-            var dism = Path.Combine(Environment.GetFolderPath(
-                Environment.SpecialFolder.Windows), "System32", "dism.exe");
-            using var process = Process.Start(new ProcessStartInfo(dism,
-                "/Online /Add-Capability /CapabilityName:App.WirelessDisplay.Connect~~~~0.0.1.0 /NoRestart")
-                { UseShellExecute = true, Verb = "runas" })
-                ?? throw new InvalidOperationException("Windows ไม่เริ่มติดตั้งฟีเจอร์");
-            await process.WaitForExitAsync();
-            if (_closing || IsDisposed) return;
-            if (process.ExitCode != 0 && process.ExitCode != 3010)
-                throw new InvalidOperationException("Windows ติดตั้งไม่สำเร็จ: รหัส " + process.ExitCode);
-            if (process.ExitCode == 3010)
-                MessageBox.Show(this, "Windows ต้องรีสตาร์ตก่อนใช้งาน Wireless Display",
-                    "X-Stage Mirror Android PC", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Directory.CreateDirectory(Path.GetDirectoryName(WindowsPreparation.ProgressFile)!);
+            if (File.Exists(WindowsPreparation.ProgressFile))
+                File.Delete(WindowsPreparation.ProgressFile);
+            var start = new ProcessStartInfo(Application.ExecutablePath)
+            {
+                UseShellExecute = true,
+                Verb = "runas"
+            };
+            start.ArgumentList.Add("--prepare-windows");
+            start.ArgumentList.Add(WindowsPreparation.ProgressFile);
+            _repairProcess = Process.Start(start)
+                ?? throw new InvalidOperationException("Windows ไม่เริ่มขั้นตอนติดตั้ง");
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            FinishPreparation(false, "ต้องอนุญาต UAC เพื่อจัดเตรียม Windows");
+        }
+        catch (Exception ex)
+        {
+            FinishPreparation(false, "เตรียมระบบไม่สำเร็จ: " + ex.Message);
+        }
+        return Task.CompletedTask;
+    }
+
+    private void PollPreparation()
+    {
+        if (!_installingWindowsFeature || IsDisposed || _closing) return;
+        var state = WindowsPreparation.ReadState();
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            var split = state.IndexOf('|');
+            if (split > 0)
+            {
+                var stage = state[..split];
+                var detail = state[(split + 1)..].Trim();
+                _repairMessage = stage is "RESTART" or "ERROR" or "DONE"
+                    ? detail : "ขั้นตอน " + stage + " · " + detail;
+                if (stage == "RESTART" || stage == "ERROR")
+                {
+                    FinishPreparation(false, _repairMessage);
+                    return;
+                }
+            }
+        }
+        var passed = DateTime.UtcNow - _repairStartedUtc;
+        _network.Text = "กำลังดำเนินการ " + ((int)passed.TotalMinutes).ToString("D2") +
+            ":" + passed.Seconds.ToString("D2") +
+            " · Windows Update อาจต้องใช้อินเทอร์เน็ต";
+        RenderStatus();
+        if (_repairProcess is null) return;
+        try
+        {
+            if (!_repairProcess.HasExited) return;
+            var successful = _repairProcess.ExitCode == 0 &&
+                state?.StartsWith("DONE|", StringComparison.Ordinal) == true;
+            FinishPreparation(successful, successful
+                ? "ตรวจส่วนประกอบสำเร็จ กำลังเปิดตัวรับ"
+                : _repairMessage.Length > 0 ? _repairMessage : "Windows เตรียมระบบไม่สำเร็จ");
+        }
+        catch (InvalidOperationException ex)
+        {
+            FinishPreparation(false, "ตรวจผลการติดตั้งไม่ได้: " + ex.Message);
+        }
+    }
+
+    private void FinishPreparation(bool successful, string result)
+    {
+        _repairProcess?.Dispose();
+        _repairProcess = null;
+        _installingWindowsFeature = false;
+        _network.Text = DefaultDeviceHint;
+        if (successful)
+        {
+            _repairFailure = "";
             _launchRetries = 0;
             _lastLaunchUtc = DateTime.MinValue;
             _launchRequested = false;
             CheckLocalEnvironment();
+            OpenReceiver();
         }
-        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        else
         {
-            _lastLaunchError = "Windows ไม่ได้รับอนุญาตให้ติดตั้ง (UAC)";
-        }
-        catch (Exception ex)
-        {
-            _lastLaunchError = ex.Message;
-            MessageBox.Show(this, "จัดเตรียม Wireless Display ไม่สำเร็จ:\n" + ex.Message +
-                "\nอาจต้องเปิด Windows Update หรืออัปเดตไดรเวอร์จากผู้ผลิต",
-                "X-Stage Mirror Android PC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-        finally
-        {
-            _installingWindowsFeature = false;
-            if (!_closing && !IsDisposed)
-            {
-                OpenReceiver();
-                UpdateReceiverStatus();
-            }
+            _launchRetries = 3;
+            _repairFailure = result + " · คลิกสถานะเพื่อลองใหม่";
+            _status.Text = _repairFailure;
+            _status.ForeColor = Warning;
         }
     }
 
@@ -457,6 +520,7 @@ public sealed class MainForm : Form
             .AppendLine("โปรเซส Connect: " + (_connectProcessRunning ? "กำลังทำงาน" : "ยังไม่พบ"))
             .AppendLine("หน้าต่างตัวรับ: " + _receiverWindow)
             .AppendLine("คำสั่งเปิดตัวรับ: " + (string.IsNullOrEmpty(_lastLaunchError) ? "ไม่มีข้อผิดพลาดที่บันทึก" : _lastLaunchError))
+            .AppendLine("เตรียมระบบ: " + (_installingWindowsFeature ? _repairMessage : _repairFailure))
             .AppendLine("แสดงหน้าต่างรับภาพ: " + (_nativePresented ? "เปิดอยู่" : "ยังไม่ยืนยัน"))
             .AppendLine()
             .AppendLine("บน Android เปิด Smart View / Screen Cast และเลือกชื่อ Windows PC ข้างต้น")
