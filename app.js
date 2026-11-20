@@ -546,7 +546,87 @@ function readActiveAuth(){
 }
 function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
-const player = ui.player;
+// MIDI owns its own transport clock. The DOM audio element remains the event
+// surface for lyrics, queue, media controls and existing non-MIDI tracks.
+const nativePlayer=ui.player;
+const midiTransport={
+  active:false,position:0,duration:0,paused:true,ended:false,
+  volume:1,rate:1,loop:false,startedAt:0,interval:null,
+  emit(name){nativePlayer.dispatchEvent(new Event(name));},
+  time(){
+    return this.paused?this.position:Math.min(this.duration,
+      this.position+(performance.now()-this.startedAt)/1000*this.rate);
+  },
+  tick(){
+    if(!this.active||this.paused)return;
+    const now=this.time();
+    if(now>=this.duration){
+      this.position=this.duration;this.paused=true;this.ended=true;
+      clearInterval(this.interval);this.interval=null;
+      this.emit('timeupdate');this.emit('ended');
+    }else this.emit('timeupdate');
+  },
+  play(){
+    if(this.ended){this.position=0;this.ended=false;}
+    if(!this.paused)return Promise.resolve();
+    this.paused=false;this.startedAt=performance.now();this.emit('play');
+    this.interval=setInterval(()=>this.tick(),100);
+    this.emit('playing');return Promise.resolve();
+  },
+  pause(){
+    if(this.paused)return;
+    this.position=this.time();this.paused=true;
+    clearInterval(this.interval);this.interval=null;this.emit('pause');
+  },
+  seek(value){
+    this.position=Math.max(0,Math.min(this.duration,Number(value)||0));
+    this.startedAt=performance.now();this.ended=false;
+    this.emit('seeking');this.emit('seeked');this.emit('timeupdate');
+  },
+  clear(){
+    this.pause();this.active=false;this.position=0;this.duration=0;
+    this.ended=false;clearInterval(this.interval);this.interval=null;
+  },
+  begin(duration){
+    nativePlayer.pause();nativePlayer.removeAttribute('src');
+    this.clear();this.active=true;this.duration=duration;this.paused=true;
+    this.emit('loadedmetadata');this.emit('durationchange');
+  }
+};
+const player=new Proxy(nativePlayer,{
+  get(target,prop){
+    if(midiTransport.active){
+      if(prop==='src')return 'midi:live';
+      if(prop==='currentTime')return midiTransport.time();
+      if(prop==='duration')return midiTransport.duration;
+      if(prop==='paused')return midiTransport.paused;
+      if(prop==='ended')return midiTransport.ended;
+      if(prop==='readyState')return 4;
+      if(prop==='volume')return midiTransport.volume;
+      if(prop==='playbackRate')return midiTransport.rate;
+      if(prop==='loop')return midiTransport.loop;
+      if(prop==='play')return ()=>midiTransport.play();
+      if(prop==='pause')return ()=>midiTransport.pause();
+      if(prop==='load')return ()=>{};
+      if(prop==='removeAttribute')return name=>{
+        if(name==='src'){midiTransport.clear();target.removeAttribute('src');}
+        else target.removeAttribute(name);
+      };
+    }
+    const value=Reflect.get(target,prop,target);
+    return typeof value==='function'?value.bind(target):value;
+  },
+  set(target,prop,value){
+    if(midiTransport.active){
+      if(prop==='currentTime'){midiTransport.seek(value);return true;}
+      if(prop==='volume'){midiTransport.volume=Math.max(0,Math.min(1,Number(value)||0));return true;}
+      if(prop==='playbackRate'){midiTransport.position=midiTransport.time();midiTransport.rate=Number(value)||1;midiTransport.startedAt=performance.now();midiTransport.emit('ratechange');return true;}
+      if(prop==='loop'){midiTransport.loop=!!value;return true;}
+    }
+    return Reflect.set(target,prop,value,target);
+  }
+});
+
 const karaokeVideo = document.getElementById('karaoke-video');
 const videoLyricsToggle=document.getElementById('video-lyrics-toggle');
 const videoOriginalToggle=document.getElementById('video-original-toggle');
@@ -2038,8 +2118,7 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
     if(prefetch)return null; // Fast MIDI needs no expensive whole-song pre-render.
     const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
     onStatus('MIDI พร้อมเล่นทันที · ใช้เสียงพื้นฐานแบบเรียลไทม์');
-    return {song,token,blob:window.XStageBrowserMidi.silentClock(parsed.duration),
-      lyrics:unpacked.document,liveMidi:midiBytes};
+    return {song,token,blob:null,lyrics:unpacked.document,liveMidi:midiBytes};
   }
   onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ให้พร้อมเล่น…');
   const rendered=await window.XStageBrowserMidi.render(midiBytes,{
@@ -2562,7 +2641,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       if(!fontBytes&&window.XStageBrowserMidi.supportsRealtime?.()){
         const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
         liveMidiBytes=midiBytes;
-        return window.XStageBrowserMidi.silentClock(parsed.duration);
+        return null;
       }
       const rendered=await window.XStageBrowserMidi.render(midiBytes,{
         fontBytes,signal:controller.signal,
@@ -2594,11 +2673,11 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token){controller.abort();return;}
     if (!audio.size)throw Error('ไฟล์เสียงว่างเปล่า');
-    const url=URL.createObjectURL(audio);
+    const url=liveMidiBytes?'':URL.createObjectURL(audio);
     if (remember && state.current)state.history.push(state.current);
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
     state.objectUrl=url;state.current=song;state.lyrics=lyrics;
-    state.activeBlobBytes=audio.size||0;trimQueueCache();
+    state.activeBlobBytes=audio?.size||0;trimQueueCache();
     resetSongVideo();
     preferOriginalVideo=true;
     if(getFileId(song.video))void loadSongVideo(song,request,token,controller.signal);
@@ -2608,10 +2687,10 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     ui.stageCode.textContent=song.code||'—';
     if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
-    player.src=url;
     if(liveMidiBytes){
+      midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
       state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{onStatus:setPlayStatus});
-    }
+    }else player.src=url;
     try{
       if('preservesPitch' in player)player.preservesPitch=true;
       if('mozPreservesPitch' in player)player.mozPreservesPitch=true;
