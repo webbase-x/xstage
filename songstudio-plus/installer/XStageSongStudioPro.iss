@@ -1,7 +1,7 @@
 ; X-Stage Song Studio Pro Windows x64 Setup.
 ; No writable SQLite, logs or song workspaces are installed to Program Files.
 #define MyAppName "X-Stage Song Studio Pro"
-#define MyAppVersion "0.1.33"
+#define MyAppVersion "0.1.34"
 #define MyAppExe "XStageSongStudioPro.exe"
 
 [Setup]
