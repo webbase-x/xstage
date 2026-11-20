@@ -587,6 +587,24 @@
       toast(error.message,true);
     }finally{button.disabled=false;}
   }
+  function syncSettingsUpdate(){
+    text("settings-update-version",
+      "เวอร์ชันที่ใช้ "+(state.updateTarget?.current_version||
+      $("pro-update-version")?.textContent||"กำลังตรวจสอบ")+
+      (state.updateTarget?.newer?" · รุ่นล่าสุด "+state.updateTarget.version:
+       state.updateTarget?" · เป็นรุ่นล่าสุดแล้ว":""));
+    text("settings-update-status",
+      $("pro-update-status")?.textContent||"ตรวจสอบรุ่นล่าสุดจาก GitHub Releases");
+    $("settings-update-check").disabled=!state.ready||state.updateBusy;
+    $("settings-update-install").disabled=!state.ready||
+      state.updateBusy||!state.updateTarget?.newer;
+  }
+  function openLatestExe(){
+    const latest=state.updateTarget?.url;
+    location.href=latest&&latest.startsWith(
+      "https://github.com/webbase-x/xstage/releases/download/")?
+      latest:"https://github.com/webbase-x/xstage/releases";
+  }
   function renderProUpdateNotice(result,ready={}){
     const available=Boolean(result?.newer);
     const quick=$("pro-update-quick");
@@ -615,6 +633,7 @@
     if(!state.ready)return;
     const button=$("pro-update-check");
     button.disabled=true;
+    $("settings-update-check").disabled=true;
     if(!silent)text("pro-update-status","กำลังตรวจอัปเดตที่เผยแพร่และยืนยัน SHA-256...");
     try{
       const result=await api("/api/update/check");
@@ -637,7 +656,10 @@
       text("pro-update-status","ยังตรวจอัปเดตไม่ได้: "+error.message+
         " · โปรแกรมปัจจุบันยังใช้งานได้");
       if(!silent)toast(error.message,true);
-    }finally{button.disabled=false;}
+    }finally{
+      button.disabled=false;
+      syncSettingsUpdate();
+    }
   }
   async function beginProUpdate(){
     if(state.updateBusy||!state.updateTarget?.newer)return;
@@ -646,6 +668,8 @@
       "ถ้านำเข้าเพลงอยู่ จะหยุดหลังไฟล์ปัจจุบัน บันทึก Checkpoint แล้วเปิดรุ่นใหม่มาทำต่อ\n"+
       "ยืนยันให้ดาวน์โหลดและติดตั้งหรือไม่?"))return;
     state.updateBusy=true;
+    syncSettingsUpdate();
+    text("settings-update-progress","กำลังเตรียมดาวน์โหลดและตรวจ SHA-256 ของรุ่นล่าสุด");
     $("pro-update-install").disabled=true;
     $("pro-update-notice-install").disabled=true;
     $("pro-update-quick").disabled=true;
@@ -664,6 +688,7 @@
         $("pro-update-quick").disabled=true;
         $("pro-update-quick").hidden=true;
         $("pro-update-notice").hidden=true;
+        syncSettingsUpdate();
         return;
       }
       text("pro-update-status","ตรวจพบรุ่นล่าสุด v"+latest.version+" · อัปเดตข้ามรุ่นได้ทันที");
@@ -688,6 +713,8 @@
       text("pro-update-status","อัปเดตไม่สำเร็จ · "+error.message);
       text("pro-update-notice-text","อัปเดตไม่สำเร็จ · "+error.message);
       toast(error.message,true);
+    }finally{
+      syncSettingsUpdate();
     }
   }
   async function startJob(kind,payload){
@@ -743,6 +770,15 @@
         (job.error||job.message||"ดำเนินการไม่สำเร็จ"):
         (job.message||""));
       const p=job.progress||{};
+      if(job.kind==="update"){
+        text("settings-update-progress",job.status==="running"?
+          "ดาวน์โหลดแล้ว "+number(Math.floor(Number(p.downloaded_bytes||0)/1048576))+
+          " MB"+(p.total?" / "+number(Math.floor(Number(p.total)/1048576))+" MB":"")+
+          " · กำลังตรวจ SHA-256 ก่อนติดตั้ง":
+          job.status==="failed"?"อัปเดตไม่สำเร็จ: "+(job.error||job.message):
+          job.status==="completed"?"ดาวน์โหลดและตรวจไฟล์ผ่าน · กำลังติดตั้ง":
+          "สถานะ: "+job.status);
+      }
       if(job.kind==="lyrics-edit"){
         state.lyricsEditJob=job.id;
         state.lyricsEditActive=job.status==="running";
@@ -891,6 +927,7 @@
               $("pro-update-quick").disabled=!retry;
               $("pro-update-quick").hidden=!retry;
             }
+            syncSettingsUpdate();
           }
         }
       }
@@ -2133,9 +2170,13 @@
     });
     $("source-open").addEventListener("click",()=>void openLocalFolder("source"));
     $("settings-open").addEventListener("click",()=>{
+      syncSettingsUpdate();
       $("settings-dialog").showModal();
       void diagnostic("ui.settings.open");
     });
+    $("settings-update-check").addEventListener("click",()=>void checkProUpdate());
+    $("settings-update-install").addEventListener("click",()=>void beginProUpdate());
+    $("settings-update-direct").addEventListener("click",openLatestExe);
     $("settings-close").addEventListener("click",()=>$("settings-dialog").close());
     $("settings-dialog").addEventListener("cancel",event=>{
       event.preventDefault();$("settings-dialog").close();
@@ -2372,13 +2413,7 @@
     });
     $("refresh-summary").addEventListener("click",()=>void refreshSummary());
     $("pro-update-check").addEventListener("click",()=>void checkProUpdate());
-    $("pro-update-direct").addEventListener("click",()=>{
-      // The native Qt shell opens external HTTPS navigation in the user's
-      // regular browser. This is the emergency path if an older updater fails.
-      const latest=state.updateTarget?.url;
-      location.href=latest&&latest.startsWith("https://github.com/webbase-x/xstage/releases/download/")?
-        latest:"https://github.com/webbase-x/xstage/releases";
-    });
+    $("pro-update-direct").addEventListener("click",openLatestExe);
     $("pro-update-install").addEventListener("click",()=>void beginProUpdate());
     $("pro-update-quick").addEventListener("click",()=>void beginProUpdate());
     $("pro-update-notice-install").addEventListener("click",()=>void beginProUpdate());
