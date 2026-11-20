@@ -19,7 +19,7 @@ def check_cancel(cancelled):
 def available_parts(path,inspector=None):
     inspector=inspector or Inspector();path=Path(path)
     parts={'media':path}
-    if path.suffix.lower() in MIDI_EXT- {'.emk', '.xsk'}:
+    if path.suffix.lower() in MIDI_EXT- {'.emk', '.xsk', '.xmid'}:
         for role,file in zip(('lyrics','cursor'),inspector.ncn_pair(path)):
             if file.is_file():parts[role]=file
     for ext in ('.lrc','.json','.snf'):
@@ -40,7 +40,7 @@ def assess(path,record=None,cancelled=None,inspector=None,probe=None,crosscheck_
             return result('invalid','ไม่พบไฟล์เพลง')
         file_size=path.stat().st_size
         if file_size==0:return result('invalid','ไฟล์เพลงว่าง')
-        if path.suffix.lower() in MIDI_EXT - {'.xsk'} and file_size>64*1024*1024:return result('review','MIDI/EMK ใหญ่เกินขอบเขตตัวตรวจ')
+        if path.suffix.lower() in MIDI_EXT - {'.xsk', '.xmid'} and file_size>64*1024*1024:return result('review','MIDI/EMK ใหญ่เกินขอบเขตตัวตรวจ')
         inspector.capture_for_quality=True
         try:parsed,warnings=inspector.inspect(path);capsule=getattr(inspector,'last_quality',None)
         finally:inspector.capture_for_quality=False
