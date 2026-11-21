@@ -13,6 +13,9 @@ UINT = ctypes.c_uint32
 BOOL = ctypes.c_int
 PTR = ctypes.c_void_p
 BASS_ASIO_FORMAT_FLOAT = 19
+# Keep driver-owned callback userdata alive if a broken ASIO driver refuses Free.
+# This is a deliberate fail-closed quarantine, not a successful shutdown.
+_failed_free_hosts = []
 
 
 class AsioOutput:
@@ -102,13 +105,24 @@ class AsioOutput:
         # A failed BASS_ASIO_Free must be visible, not silently treated as
         # success: the caller can retry closure before releasing this bridge.
         if self.initialized:
-            self._check(self.dll.BASS_ASIO_SetDevice(self.device), 'เลือก ASIO device ก่อนปิด')
             try:
-                self.dll.BASS_ASIO_Stop()
-            finally:
-                self._check(self.dll.BASS_ASIO_Free(), 'ปิด ASIO driver')
-                self.initialized = False
-                self.started = False
+                self._check(self.dll.BASS_ASIO_SetDevice(self.device), 'เลือก ASIO device ก่อนปิด')
+                try:
+                    self.dll.BASS_ASIO_Stop()
+                finally:
+                    self._check(self.dll.BASS_ASIO_Free(), 'ปิด ASIO driver')
+            except BaseException:
+                # A driver may still hold the native function pointer/user
+                # buffer. Never allow GC to unload it after a failed Free.
+                if not any(host is self for host in _failed_free_hosts):
+                    _failed_free_hosts.append(self)
+                raise
+            self.initialized = False
+            self.started = False
+            for index, host in enumerate(_failed_free_hosts):
+                if host is self:
+                    del _failed_free_hosts[index]
+                    break
         if self.bridge is not None:
             self.bridge.close()
             self.bridge = None
