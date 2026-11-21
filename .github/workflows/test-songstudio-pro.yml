@@ -7,6 +7,7 @@ on:
       - "songstudio-plus/**"
       - "scripts/test-songstudio-pro-timeline*.mjs"
       - "scripts/test-songstudio-pro-actions.mjs"
+      - "scripts/test_songstudio_pro_exe_smoke.py"
       - "scripts/test-songstudio-pro-portal.mjs"
       - ".github/workflows/test-songstudio-pro.yml"
   push:
@@ -127,6 +128,20 @@ jobs:
           if (!(Test-Path "dist/XStageSongStudioPro.exe")) { throw "App payload missing" }
           python scripts/verify_songstudio_exe_icon.py "dist/XStageSongStudioPro.exe"
           if ($LASTEXITCODE -ne 0) { throw "EXE icon verification failed" }
+      - name: Smoke-test the actual Windows EXE and embedded Qt WebView
+        shell: pwsh
+        run: |
+          python scripts/test_songstudio_pro_exe_smoke.py "dist/XStageSongStudioPro.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Packaged EXE Qt WebView smoke test failed" }
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: X-Stage-Song-Studio-Pro-EXE-Smoke-Evidence
+          path: |
+            dist/pro-exe-smoke/exe-smoke-result.json
+            dist/pro-exe-smoke/LOGS/song-studio-pro.log
+          retention-days: 14
+          if-no-files-found: warn
       - name: Install Inno Setup and build Setup EXE
         shell: pwsh
         run: |
