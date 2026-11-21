@@ -2938,7 +2938,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     if(midiKeyControl)midiKeyControl.hidden=!liveMidiBytes;
     if($('midi-instrument'))$('midi-instrument').value='';
-    if(midiKeyValue){midiKeyValue.value='0';$('midi-transpose-label').textContent='0';}
+    if(midiKeyValue){midiKeyValue.value='0';syncMidiKeyButtons();}
     if(liveMidiBytes){
       const midiOptions={
         fontBytes:liveFontBytes,onStatus:setPlayStatus,
@@ -4025,15 +4025,39 @@ function playPrevious(){const old=state.history.pop();renderQueue();if(old)playS
 ui.previous.addEventListener('click',playPrevious);
 ui.next.addEventListener('click',playNext);
 const midiKeyControl=$('midi-transpose-control'),midiKeyValue=$('midi-transpose');
-function setMidiKey(delta){
-  if(!state.liveMidiPlayback||!midiKeyValue)return;
-  const value=Math.max(-12,Math.min(12,Number(midiKeyValue.value||0)+delta));
+function syncMidiKeyButtons(){
+  if(!midiKeyValue)return;
+  const raw=Number(midiKeyValue.value);
+  const value=Math.max(-12,Math.min(12,Number.isFinite(raw)?Math.trunc(raw):0));
   midiKeyValue.value=String(value);
-  $('midi-transpose-label').textContent=value>0?'+'+value:String(value);
-  nativePlayer.dispatchEvent(new Event('xstage-midi-transpose'));
+  const label=$('midi-transpose-label');
+  if(label)label.textContent=value>0?'+'+value:String(value);
+  const down=$('midi-key-down'),up=$('midi-key-up');
+  if(down)down.disabled=value<=-12;
+  if(up)up.disabled=value>=12;
 }
-$('midi-key-down')?.addEventListener('click',()=>setMidiKey(-1));
-$('midi-key-up')?.addEventListener('click',()=>setMidiKey(1));
+function setMidiKey(delta){
+  // The value remains editable while the song/synth swaps playback engines.
+  // In particular, -12 must never lock the PLUS control.
+  if(!midiKeyValue||midiKeyControl?.hidden)return;
+  const before=Math.max(-12,Math.min(12,Number(midiKeyValue.value)||0));
+  const value=Math.max(-12,Math.min(12,before+delta));
+  if(value===before){syncMidiKeyButtons();return;}
+  midiKeyValue.value=String(value);
+  syncMidiKeyButtons();
+  try{
+    nativePlayer.dispatchEvent(new Event('xstage-midi-transpose'));
+  }catch(error){
+    console.warn('MIDI transpose engine notification:',error);
+  }
+}
+$('midi-key-down')?.addEventListener('click',event=>{
+  event.preventDefault();event.stopPropagation();setMidiKey(-1);
+});
+$('midi-key-up')?.addEventListener('click',event=>{
+  event.preventDefault();event.stopPropagation();setMidiKey(1);
+});
+syncMidiKeyButtons();
 $('midi-instrument')?.addEventListener('change',()=>{
   if(state.liveMidiPlayback)nativePlayer.dispatchEvent(new Event('xstage-midi-transpose'));
 });
