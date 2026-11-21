@@ -4701,3 +4701,80 @@ html body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-panel .tv-song-m
     min-width:51px;max-width:70px;padding:4px 5px!important;font-size:.68rem
   }
 }
+
+/* 1.15.9 — Transpose controls live immediately below the song-key value.
+   Keep both buttons reachable on desktop and on small touch devices. */
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar .song-key-stack{
+  display:flex!important;flex:0 0 auto;flex-direction:column;
+  align-items:center;justify-content:center;align-self:center;
+  gap:3px;min-width:94px;max-width:116px;
+  position:relative;z-index:2
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar .song-key-stack #toolbar-song-key{
+  display:flex!important;align-items:center;justify-content:center;
+  min-height:22px!important;height:24px!important;
+  width:100%;max-width:100%!important;padding:2px 6px!important;
+  font-size:clamp(.7rem,1vw,.88rem);line-height:1.12
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control{
+  display:flex!important;align-items:center;justify-content:center;
+  gap:3px;width:100%;height:29px;min-height:29px;
+  max-width:none!important;
+  background:none;border:0;padding:0;margin:0;
+  font-variant-numeric:tabular-nums;touch-action:manipulation;
+  pointer-events:auto
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-control[hidden]{
+  display:none!important
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control button{
+  flex:0 0 30px;width:30px;min-width:30px!important;
+  height:29px;min-height:29px!important;padding:0!important;
+  display:grid;place-items:center;
+  border:1px solid #4b9bb4;border-radius:8px;
+  background:#103b59;color:#f1fcff;
+  font:800 1.05rem/1 system-ui;cursor:pointer;
+  touch-action:manipulation;pointer-events:auto
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control button:disabled{
+  opacity:.4;cursor:not-allowed
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control button:focus-visible{
+  outline:2px solid #77f5d4;outline-offset:2px
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-label{
+  flex:1 1 auto;min-width:24px;text-align:center;
+  font-size:.75rem;font-weight:900;color:#e4fff6;white-space:nowrap
+}
+/* Compact header: expand the header only while a MIDI song is loaded.
+   Update --xs-top so drop-down menu and piano do not overlap the controls. */
+@media(max-width:760px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar .song-key-stack{
+    grid-column:3!important;grid-row:1!important;
+    min-width:90px;max-width:94px;width:94px
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar:has(#midi-transpose-control:not([hidden])){
+    height:64px!important;min-height:64px!important;
+    grid-template-rows:64px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage:has(#midi-transpose-control:not([hidden])){
+    --xs-top:calc(var(--xs-toolbar-offset,10dvh) + 70px)
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control{
+    height:29px;min-height:29px
+  }
+}
+@media(max-width:350px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar .song-key-stack{
+    min-width:80px;max-width:82px;width:82px
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control{
+    gap:2px
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control button{
+    flex-basis:26px;width:26px;min-width:26px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-label{
+    min-width:22px
+  }
+}
