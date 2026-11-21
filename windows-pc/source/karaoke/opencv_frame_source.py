@@ -18,6 +18,7 @@ class OpenCVFrameSource:
         self.cv2 = None
         self.fps = 0.0
         self.last_index = None
+        self.last_frame = None
 
     def open(self):
         if self.capture is not None:
@@ -58,7 +59,7 @@ class OpenCVFrameSource:
                     self.capture.set(self.cv2.CAP_PROP_POS_MSEC, float(seconds) * 1000)
                     self.last_index = index
                 else:
-                    return None  # Do not decode/repaint the same timed frame.
+                    return self.last_frame  # Keep the stage populated while MCI is paused.
         success, bgr = self.capture.read()
         if not success or bgr is None:
             return None
@@ -67,11 +68,14 @@ class OpenCVFrameSource:
         if getattr(bgr, "ndim", 0) != 3 or bgr.shape[2] != 3:
             raise ValueError("Decoder did not return a BGR24 image")
         height, width = bgr.shape[:2]
-        return VideoFrame(width, height, bgr[:, :, ::-1].tobytes())
+        frame = VideoFrame(width, height, bgr[:, :, ::-1].tobytes())
+        self.last_frame = frame
+        return frame
 
     def close(self):
         capture, self.capture = self.capture, None
         self.last_index = None
+        self.last_frame = None
         if capture is not None:
             capture.release()
 
