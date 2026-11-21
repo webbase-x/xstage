@@ -304,3 +304,8 @@
 
 - [`03c39585`](https://github.com/webbase-x/xstage/commit/03c395851fada4ad89014a7d398e5a34c9ae461e) routes channel EQ/tone and per-note drum tone to selected synthesizer bus. [`b9d746ff`](https://github.com/webbase-x/xstage/commit/b9d746ff2bc29ad06c88b0d9fb50dd67b9c36cd6) enables opt-in `multi_bus.enabled` selection in the main MIDI playback path; legacy stereo remains the default.
 - **PENDING-QA**: Settings schema/persistence and GUI controls for this opt-in are not yet established; device routing, channel reset semantics, drum-key note-offs and ASIO require consolidated regression and physical verification. No PASS/stable release claim.
+
+## 2026-11-21 — P1 Multi-Out settings UI (PENDING-QA / DEFERRED-HARDWARE)
+
+- [`0c66e0e2`](https://github.com/webbase-x/xstage/commit/0c66e0e2493d7d8c47d89decb3022f43f7e7dbc6) adds Tk Multi-Out routing dialog for enabling buses, assigning 16 MIDI channels and optional BASS device IDs; [`a9c15499`](https://github.com/webbase-x/xstage/commit/a9c154997de6afc09595316a7c6291c7dc27406f) wires it into Settings and persistence; [`f2a26873`](https://github.com/webbase-x/xstage/commit/f2a26873cf5431a79dfc94cc81d2b08caee2718f) adjusts dialog action placement.
+- **PENDING-QA:** no runtime/GUI/device tests performed at user's request. ASIO backend, real multi-output hardware matrix, and complete drum-key routing UI remain outstanding; no stable release claim.
