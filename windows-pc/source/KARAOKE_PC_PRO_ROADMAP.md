@@ -320,3 +320,8 @@
 - [510a2818](https://github.com/webbase-x/xstage/commit/510a2818569867225a1cff5914c981339da7f9b2) broadcasts MIDI channel 10 controller/program/pitch state to every bus hosting overridden drum keys, while retaining per-note routing. This addresses loss of drum kit/volume state and incomplete all-notes-off on redirected percussion.
 - [daf7ad43](https://github.com/webbase-x/xstage/commit/daf7ad43daca45d57c21e54da4d8e536a007a433) adds independent regression cases for broadcast deduplication, note-on/note-off and state messages. [fff43647](https://github.com/webbase-x/xstage/commit/fff43647d2b136acde3ca71104438dff04332934) constrains channel selectors to active bus count when routing count changes.
 - **PENDING-QA:** New regressions not yet executed; run full Windows suite and integration gate after remaining independent implementation. Physical ASIO and multi-output tests **DEFERRED-HARDWARE**. Existing P0 checklist evidence does not validate these new commits; do not publish Stable.
+
+## 2026-11-21 — P1.3 ASIO PCM staging (PENDING-QA)
+
+- [`58b05875`](https://github.com/webbase-x/xstage/commit/58b05875680ba4f7043816a56e2dbf7d34cb6c81) adds bounded stereo float32 PCM staging with overflow and underrun accounting, deterministic silence and a native-buffer copy helper. [`b97b5cb4`](https://github.com/webbase-x/xstage/commit/b97b5cb4fa249afe86255815092f393419722d75) adds offline contract tests (not executed in this turn).
+- **PENDING-QA**: no ASIO callback or native ASIO initialization exists yet; a real-time callback must be implemented in native code rather than calling Python from the ASIO audio thread. Hardware validation remains deferred. No ASIO playback or stable release claim.
