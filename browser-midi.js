@@ -551,23 +551,23 @@ async function refreshFonts(auth){
     }
     try{
       const categories=await listFolder(rootId,auth.token);
-      const audio=categories.find(x=>x.name==='AUDIO'&&x.mimeType==='application/vnd.google-apps.folder');
-      if(audio){
-        const files=await listFolder(audio.id,auth.token);
-        for(const f of files.filter(x=>/\.sf[23]$/i.test(x.name)&&
-          x.mimeType!=='application/vnd.google-apps.folder'))
-          {const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
-           option.dataset.size=String(Number(f.size)||0);choices.push(option);}
-      }else{
-        // Old library still readable; new uploads always use flat AUDIO.
-        const old=categories.find(x=>x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
-        if(old){
-          for(const dir of (await listFolder(old.id,auth.token)).filter(x=>
-            x.mimeType==='application/vnd.google-apps.folder'&&['SF2','SF3'].includes(x.name.toUpperCase())))
-            for(const f of (await listFolder(dir.id,auth.token)).filter(x=>/\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder'))
-              {const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
-               option.dataset.size=String(Number(f.size)||0);choices.push(option);}
-        }
+      const soundFolders=categories.filter(x=>
+        x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
+      if(soundFolders.length>1)fail('พบ SOUNDFONT ซ้ำใน XStageKaraoke');
+      if(soundFolders.length){
+        const formatDirs=(await listFolder(soundFolders[0].id,auth.token)).filter(x=>
+          x.mimeType==='application/vnd.google-apps.folder'&&
+          ['SF2','SF3'].includes(x.name.toUpperCase()));
+        for(const format of ['SF2','SF3'])
+          if(formatDirs.filter(dir=>dir.name.toUpperCase()===format).length>1)
+            fail('พบ '+format+' ซ้ำใน SOUNDFONT');
+        for(const dir of formatDirs)
+          for(const f of (await listFolder(dir.id,auth.token)).filter(x=>
+            /\\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder')){
+            const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
+            option.dataset.size=String(Number(f.size)||0);
+            choices.push(option);
+          }
       }
       if(sequence!==fontRefreshSequence)return;
       const storageKey='xstage-font-pref:'+sub+':'+rootId;
