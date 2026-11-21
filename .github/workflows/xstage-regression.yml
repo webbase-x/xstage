@@ -25,6 +25,7 @@ on:
       - "scripts/regression.mjs"
       - "scripts/karaoke-responsive-search-test.mjs"
       - "scripts/midi-keyboard-ui-test.mjs"
+      - "scripts/midi-transpose-toolbar-test.mjs"
       - ".github/workflows/xstage-regression.yml"
   pull_request:
     paths:
@@ -49,6 +50,7 @@ on:
       - "scripts/regression.mjs"
       - "scripts/karaoke-responsive-search-test.mjs"
       - "scripts/midi-keyboard-ui-test.mjs"
+      - "scripts/midi-transpose-toolbar-test.mjs"
       - ".github/workflows/xstage-regression.yml"
   workflow_dispatch:
 
