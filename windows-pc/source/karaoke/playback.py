@@ -112,6 +112,9 @@ class MidiPlayer:
         self.scheduler_error = None
         self.solo = set()
         self.drum_muted = set()
+        # Sparse tone overrides; None preserves every controller in the song.
+        self.channel_tone = [None] * 16
+        self.drum_tone = {}
         self.pan = [None] * 16
         self.program = [None] * 16
         self.loop_start = self.loop_end = None
@@ -181,7 +184,29 @@ class MidiPlayer:
             data = bytes([data[0], 10, self.pan[channel]])
         if status == 0xC0 and self.program[channel] is not None:
             data = bytes([data[0], self.program[channel]])
+        # Saved channel tone overrides song CC 74/71 without affecting other
+        # controllers, pitch, time or the lyrics scheduler.
+        tone = self.channel_tone[channel]
+        if status == 0xB0 and len(data) == 3 and tone is not None:
+            if data[1] in (71, 74):
+                data = bytes([data[0], data[1],
+                              tone['resonance' if data[1] == 71 else 'cutoff']])
         self._output_send(data)
+        if status == 0xB0 and len(data) == 3 and data[1] == 121:
+            # MIDI reset overrides filter state; restore the active overrides.
+            self._restore_tones(channel)
+
+    def _restore_tones(self, only_channel=None):
+        if not hasattr(self.output, 'set_channel_tone'):
+            return
+        channels = range(16) if only_channel is None else (only_channel,)
+        for channel in channels:
+            tone = self.channel_tone[channel]
+            if tone is not None:
+                self.output.set_channel_tone(channel, **tone)
+        if only_channel is None or only_channel == 9:
+            for note, tone in self.drum_tone.items():
+                self.output.set_drum_tone(note, **tone)
 
     def _reset_state(self):
         self._output_reset()
@@ -193,6 +218,7 @@ class MidiPlayer:
             self._output_send(bytes([0xC0 | channel, 0]))
             self._output_send(bytes([0xE0 | channel, 0, 64]))
             self._output_send(bytes([0xB0 | channel, 7, self._channel_level(channel)]))
+        self._restore_tones()
 
     def play(self):
         if not self.song:
@@ -275,6 +301,30 @@ class MidiPlayer:
         self.drum_muted.add(note) if muted else self.drum_muted.discard(note)
         self._output_send(bytes([0xB9, 120, 0]))
 
+    def set_channel_tone(self, channel, cutoff=64, resonance=64):
+        """Live SoundFont filter on one MIDI channel; external MIDI is unsupported."""
+        from .instrument_tone import value
+        if type(channel) is not int or not 0 <= channel < 16:
+            raise ValueError('หมายเลขช่อง MIDI ไม่ถูกต้อง')
+        new = {'cutoff': value(cutoff, 'Cutoff'),
+               'resonance': value(resonance, 'Resonance')}
+        if not hasattr(self.output, 'set_channel_tone'):
+            raise OSError('ต้องเลือก SoundFont (BASSMIDI) เพื่อปรับโทนรายเครื่องดนตรี')
+        self.output.set_channel_tone(channel, **new)
+        self.channel_tone[channel] = new
+
+    def set_drum_tone(self, note, cutoff=64, resonance=64, level=127):
+        """Live drum-key filter/level without changing drum note timing."""
+        from .instrument_tone import value
+        note = value(note, 'หมายเลขกลอง')
+        new = {'cutoff': value(cutoff, 'Cutoff'),
+               'resonance': value(resonance, 'Resonance'),
+               'level': value(level, 'Level')}
+        if not hasattr(self.output, 'set_drum_tone'):
+            raise OSError('ต้องเลือก SoundFont (BASSMIDI) เพื่อปรับโทนกลอง')
+        self.output.set_drum_tone(note, **new)
+        self.drum_tone[note] = new
+
     def set_loop(self, start=None, end=None):
         if start is None or end is None:
             self.loop_start = self.loop_end = None
@@ -316,7 +366,8 @@ def _synchronized(method):
 
 
 for _name in ('load', 'play', 'pause', 'stop', 'seek', 'set_speed', 'set_key', 'set_volume',
-              'set_channel', 'set_pan', 'set_program', 'set_solo', 'set_drum_muted', 'set_loop', 'pump'):
+              'set_channel', 'set_pan', 'set_program', 'set_solo', 'set_drum_muted',
+              'set_channel_tone', 'set_drum_tone', 'set_loop', 'pump'):
     setattr(MidiPlayer, _name, _synchronized(getattr(MidiPlayer, _name)))
 
 
