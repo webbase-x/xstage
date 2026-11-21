@@ -26,15 +26,15 @@
 | P0.4 | GUI & queue safety | Windows UI open/close, search, hotkeys, queue, mixer lifecycle and no stalling/flicker | DEFERRED-HARDWARE | [run 44879694855](https://github.com/webbase-x/xstage/actions/runs/44879694855): Windows build, required isolated Tk GUI regression, installer smoke and provenance steps SUCCESS. Physical display flicker/responsiveness remain unverified; user approved deferral. |
 | P0.5 | Playback & live audio | Real Windows MIDI/NCN/EMK-legacy, SoundFont, MP3/video, transitions and ≥30-minute audio device soak | PENDING-QA / DEFERRED-HARDWARE | P0.5.1 source audit: `karaoke/bass.py` constructor, offline song reset, close; `karaoke/audio_device.py` reference-counted acquire/release. Added guarded BASS cleanup `5e6de970` and injected FX teardown regression `ffe512b0`; Added initialization-error preservation `ec3548bd` and regression `dca3c5df`; Multi-channel EQ teardown fix `80a509d5` and regression `5a2b08e2` added; Windows CI verification pending; physical audio remains BLOCKED-HARDWARE. |
 | P0.6 | Data & release safety | Backup/restore, corrupted files, fail-closed deletes, recovery; no unintended stable publish | IN PROGRESS | Verify safe migrations and explicit stable gate |
-| P1.1 | Multi-Out | Audio-bus graph and interfaces without breaking current stereo engine | NOT STARTED | |
-| P1.2 | Multi-Out | Assign GM MIDI channels and drum keys to independent 4/8/16 output buses | NOT STARTED | |
-| P1.3 | ASIO | Low-latency Windows ASIO backend with recoverable fallback | NOT STARTED | |
+| P1.1 | Multi-Out | Audio-bus graph and interfaces without breaking current stereo engine | CODE EXISTS / PENDING-QA | |
+| P1.2 | Multi-Out | Assign GM MIDI channels and drum keys to independent 4/8/16 output buses | CODE EXISTS / PENDING-QA | |
+| P1.3 | ASIO | Low-latency Windows ASIO backend with recoverable fallback | CODE EXISTS / PENDING-QA | |
 | P1.4 | Multi-Out QA | Multiple real interfaces, routing/latency/dropout and mixer verification | NOT STARTED | |
 | P2.1 | Mixer | Bus meters, pan, gain, mute/solo and routing-preserving UI | NOT STARTED | |
-| P2.2 | Dynamics | Measured per-song loudness compensation and a safe peak limiter | NOT STARTED | |
+| P2.2 | Dynamics | Measured per-song loudness compensation and a safe peak limiter | PARTIAL / PENDING-QA | |
 | P2.3 | Mixer QA | Presets, gain structure, latency and clipping tests | NOT STARTED | |
-| P3.1 | Medley | Bounded next-song preload independent of UI frame rate | NOT STARTED | |
-| P3.2 | Medley | Musical beat/bar-aligned fades and drum-fill handoff | NOT STARTED | |
+| P3.1 | Medley | Bounded next-song preload independent of UI frame rate | CODE EXISTS / PENDING-QA | |
+| P3.2 | Medley | Musical beat/bar-aligned fades and drum-fill handoff | CODE EXISTS / PENDING-QA | |
 | P3.3 | Medley QA | No unplanned dead air; unsupported-format fallback and cancellation tests | NOT STARTED | |
 | P4.1 | VST3 | Optional isolated VST3 host with plugin-crash recovery | NOT STARTED | |
 | P4.2 | Instruments | Per-instrument bank/program SoundFont + optional plugin mapping | NOT STARTED | |
