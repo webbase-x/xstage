@@ -18,6 +18,7 @@ Web and Android players do not yet decode the new binary format.
   popups guard pending asynchronous requests and reject duplicate opens.
 - Fixed CI's stale reference to the song metadata context removed from the
   group lyric editor. This does not alter workspace SQLite or source media.
+- Windows CI also opens the packaged HTML in an offscreen Qt WebEngine and exercises repeated settings-clicks, persistent modal rendering and separate issue/risk/lyric dialog lifecycles.
 
 ## v0.1.37 — Remove song metadata results in group lyric editor
 

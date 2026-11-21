@@ -119,6 +119,8 @@ jobs:
         run: |
           node scripts/test-songstudio-pro-actions.mjs
           if ($LASTEXITCODE -ne 0) { throw "Desktop standalone contract failed" }
+          python scripts/test_songstudio_pro_popup_smoke.py
+          if ($LASTEXITCODE -ne 0) { throw "Qt WebEngine popup smoke failed" }
       - name: Build stable-name desktop app payload
         shell: pwsh
         run: |
