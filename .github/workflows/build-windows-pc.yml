@@ -89,6 +89,14 @@ jobs:
             throw 'Distinct Karaoke PC Windows icon was not created'
           }
 
+      - name: Compile native ASIO PCM bridge (Windows x64)
+        shell: cmd
+        run: |
+          call "%ProgramFiles%\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File windows-pc/source/tools/Build-AsioBridge.ps1 -OutputDirectory windows-pc/source/native/x64
+          if errorlevel 1 exit /b 1
+
       - name: Build Windows app and run full regression tests
         shell: pwsh
         run: |
