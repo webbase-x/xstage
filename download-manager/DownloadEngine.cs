@@ -291,7 +291,19 @@ public sealed class DownloadEngine
         if (!Jobs.Contains(job)) return false;
         if (job.Parts == parts) return true;
         var work = WorkDir(job);
-        if (Directory.Exists(work)) Directory.Delete(work, true);
+        // Refuse to discard resumable chunks when durable state is unavailable.
+        // Keep the previous settings and partial files intact on SQLite failure.
+        var previousParts = job.Parts;
+        var previousSegments = job.SegmentsUsed;
+        var previousSegmentBytes = job.SegmentDownloadedBytes;
+        var previousTotal = job.TotalBytes;
+        var previousRanges = job.SupportsRanges;
+        var previousTag = job.ETag;
+        var previousModified = job.LastModified;
+        var previousDownloaded = job.DownloadedBytes;
+        var previousPrevious = job.PreviousBytes;
+        var previousError = job.Error;
+        var previousStatus = job.Status;
         job.Parts = parts;
         job.SegmentsUsed = 0;
         job.SegmentDownloadedBytes = Array.Empty<long>();
@@ -303,7 +315,24 @@ public sealed class DownloadEngine
         job.PreviousBytes = 0;
         job.Error = "";
         job.Status = "Paused";
-        Save();
+        var saveError = Save();
+        if (saveError.Length > 0)
+        {
+            job.Parts = previousParts;
+            job.SegmentsUsed = previousSegments;
+            job.SegmentDownloadedBytes = previousSegmentBytes;
+            job.TotalBytes = previousTotal;
+            job.SupportsRanges = previousRanges;
+            job.ETag = previousTag;
+            job.LastModified = previousModified;
+            job.DownloadedBytes = previousDownloaded;
+            job.PreviousBytes = previousPrevious;
+            job.Error = previousError;
+            job.Status = previousStatus;
+            throw new IOException(saveError);
+        }
+        // Delete old geometry only after SQLite has accepted the new state.
+        if (Directory.Exists(work)) Directory.Delete(work, true);
         return true;
     }
 
