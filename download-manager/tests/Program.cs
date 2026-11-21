@@ -237,6 +237,33 @@ try
     }
     catch (ArgumentOutOfRangeException) { }
 
+    // Verify scheduler backpressure at each supported boundary (1/8/32).
+    // A blocked waiter must not start early; cancellation must not leak capacity.
+    foreach (var capacity in new[] { 1, 8, 32 })
+    {
+        var queue = new TransferSlotQueue(capacity, capacity);
+        var active = new List<IDisposable>();
+        for (var i = 0; i < capacity; i++)
+            active.Add(await queue.EnterAsync("range-" + capacity + "-" + i,
+                "range.test", 1, CancellationToken.None));
+        using (var cancellation = new CancellationTokenSource())
+        {
+            var blocked = queue.EnterAsync("blocked-" + capacity,
+                "range.test", 1, cancellation.Token);
+            if (blocked.IsCompleted || queue.ActiveCount != capacity || queue.WaitingCount != 1)
+                throw new Exception("Backpressure failed at " + capacity + " concurrent ranges.");
+            cancellation.Cancel();
+            try { using var unexpected = await blocked.WaitAsync(TimeSpan.FromSeconds(3));
+                throw new Exception("Canceled range waiter acquired a slot."); }
+            catch (OperationCanceledException) { }
+            if (queue.WaitingCount != 0 || queue.ActiveCount != capacity)
+                throw new Exception("Canceled range waiter leaked scheduler capacity.");
+        }
+        foreach (var lease in active) lease.Dispose();
+        if (queue.ActiveCount != 0 || queue.WaitingCount != 0)
+            throw new Exception("Range backpressure leaked leases at " + capacity + ".");
+    }
+
     // Backpressure under 32 contending transfers: only eight may run, and
     // canceled waiters must not consume slots when active transfers finish.
     var saturated = new TransferSlotQueue(8, 8);
