@@ -74,6 +74,13 @@ XSTAGE_API uint32_t xstage_pcm_pop(XStagePcmBridge* q, float* stereo,
     return copied;
 }
 
+XSTAGE_API uint32_t xstage_pcm_available(const XStagePcmBridge* q) noexcept {
+    if (!q) return 0;
+    const uint64_t write = q->write.load(std::memory_order_acquire);
+    const uint64_t read = q->read.load(std::memory_order_acquire);
+    return static_cast<uint32_t>(write - read);
+}
+
 XSTAGE_API uint64_t xstage_pcm_underruns(const XStagePcmBridge* q) noexcept {
     return q ? q->underruns.load(std::memory_order_relaxed) : 0;
 }
