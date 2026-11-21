@@ -4449,3 +4449,90 @@ body.xstage-ui-v2 .stage #tv-refresh-window{position:absolute!important;top:clam
 body.xstage-ui-v2 .stage #tv-refresh-window[hidden]{display:none!important}
 body.xstage-ui-v2 .stage #tv-refresh-window:not([hidden]){display:flex!important;align-items:center;justify-content:center;gap:7px;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
 body.xstage-ui-v2 .stage #tv-refresh-window:focus-visible{outline:3px solid #aef3ff;outline-offset:3px}
+
+
+/* iPhone / Android / small-tablet search: exact viewport-fit without
+   device-specific pixel offsets. Keep the voice button inside the search bar. */
+@media (max-width:760px){
+  :root{
+    /* svh remains stable when Safari shows/hides its browser chrome. */
+    --xs-toolbar-offset:max(calc(env(safe-area-inset-top) + 10px), 10svh);
+  }
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    box-sizing:border-box!important;
+    inset-inline:0!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    padding-left:max(12px,env(safe-area-inset-left))!important;
+    padding-right:max(12px,env(safe-area-inset-right))!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    overflow:visible!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot{
+    position:relative!important;
+    grid-column:1!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    margin:0!important;
+    box-sizing:border-box!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock,
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock:not(.pc-expanded),
+  body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+    box-sizing:border-box!important;
+    left:0!important;right:0!important;
+    width:100%!important;min-width:0!important;max-width:100%!important;
+    margin:0!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-box{
+    box-sizing:border-box!important;
+    display:flex!important;
+    align-items:center!important;
+    width:100%!important;min-width:0!important;max-width:100%!important;
+    margin:0!important;
+    padding-left:clamp(7px,2.5vw,12px)!important;
+    padding-right:clamp(5px,2vw,10px)!important;
+    gap:clamp(4px,1.6vw,9px)!important;
+    overflow:hidden;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot #search{
+    display:block!important;
+    flex:1 1 0!important;
+    width:0!important;min-width:0!important;max-width:100%!important;
+    box-sizing:border-box!important;
+    font-size:16px!important; /* Prevent Safari auto-zoom on focus. */
+    text-overflow:ellipsis;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-icon,
+  body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button{
+    flex-shrink:0!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button{
+    box-sizing:border-box!important;
+    margin-right:0!important;
+  }
+}
+@media (max-width:350px){
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    padding-left:max(8px,env(safe-area-inset-left))!important;
+    padding-right:max(8px,env(safe-area-inset-right))!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-box{
+    padding-left:6px!important;padding-right:4px!important;gap:3px!important;
+  }
+  body.xstage-ui-v2 .stage .stage-search-slot .search-icon{font-size:1.05rem!important}
+  body.xstage-ui-v2 .stage .stage-search-slot .voice-search-button{
+    width:32px!important;min-width:32px!important;
+    height:32px!important;min-height:32px!important;
+    flex-basis:32px!important;
+  }
+}
+@media (orientation:landscape) and (max-height:540px) and (pointer:coarse){
+  /* Leave the iPhone notch and landscape home-indicator corners clear. */
+  body.xstage-ui-v2 .stage .stage-toolbar{
+    padding-left:max(12px,env(safe-area-inset-left))!important;
+    padding-right:max(12px,env(safe-area-inset-right))!important;
+  }
+}
