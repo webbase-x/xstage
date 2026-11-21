@@ -164,13 +164,20 @@ jobs:
           $report = Join-Path $env:RUNNER_TEMP 'xstage-installed-dependencies.json'
           $log = Join-Path $env:RUNNER_TEMP 'xstage-installer-smoke.log'
           try {
-            $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
-                           ('/DIR="' + $probe + '"'), ('/LOG="' + $log + '"'))
+            # Keep quotes intact for the custom path containing spaces and Thai text.
+            $arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $probe + '" /LOG="' + $log + '"'
             $install = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
             if ($install.ExitCode -ne 0) { throw "Inno Setup silent install failed: $($install.ExitCode)" }
             $exe = Join-Path $probe 'XStageKaraoke.exe'
             if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
-              throw 'Installed XStageKaraoke.exe is missing'
+              Write-Host "Expected install directory: $probe"
+              if (Test-Path -LiteralPath $probe) {
+                Get-ChildItem -LiteralPath $probe -Force | Select-Object FullName, Length | Format-Table | Out-String | Write-Host
+              }
+              if (Test-Path -LiteralPath $log) {
+                Get-Content -LiteralPath $log -Tail 100 | ForEach-Object { Write-Host $_ }
+              }
+              throw 'Installed XStageKaraoke.exe is missing from requested directory'
             }
             foreach ($name in @('bass.dll', 'bassmidi.dll', 'bass_fx.dll')) {
               $dll = Join-Path (Join-Path $probe 'native/x64') $name
