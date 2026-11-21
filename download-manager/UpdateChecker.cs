@@ -57,7 +57,7 @@ public static class UpdateChecker
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, FeedUrl);
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
-        request.Headers.UserAgent.ParseAdd("XStageDownloadManager/0.2.20");
+        request.Headers.UserAgent.ParseAdd($"XStageDownloadManager/{CurrentVersion}");
         using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellation);
