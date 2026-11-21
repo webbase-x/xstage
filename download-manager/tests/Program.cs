@@ -165,6 +165,20 @@ try
         slotA.Dispose();
         using var second = await sameHost.WaitAsync(TimeSpan.FromSeconds(3));
     }
+    // Whitespace and casing must not bypass the per-host connection cap.
+    var normalizedHosts = new TransferSlotQueue(2, 1);
+    using (var firstHost = await normalizedHosts.EnterAsync("host-a", " Example.TEST ", 1, CancellationToken.None))
+    {
+        var sameHost = normalizedHosts.EnterAsync("host-b", "example.test", 1, CancellationToken.None);
+        using var otherHost = await normalizedHosts.EnterAsync("host-c", "different.test", 1, CancellationToken.None);
+        if (sameHost.IsCompleted || normalizedHosts.ActiveCount != 2)
+            throw new Exception("Equivalent host names bypassed the per-host transfer limit.");
+        firstHost.Dispose();
+        using var resumed = await sameHost.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+    if (normalizedHosts.ActiveCount != 0 || normalizedHosts.WaitingCount != 0)
+        throw new Exception("Normalized host slots were not released.");
+
     scheduler.Configure(1, 1);
     using (var slot = await scheduler.EnterAsync("hold", "sample.test", 1, CancellationToken.None))
     {
