@@ -4632,3 +4632,72 @@ body.xstage-ui-v2 .stage .stage-toolbar .song-key-toolbar{
 body.xstage-ui-v2 .stage .transport-right-actions #stage-tools-toggle[hidden]{
   display:none!important
 }
+
+/* 1.15.7 — One upper hamburger + song-key label on all screen sizes.
+   Supersedes legacy responsive rules that hid them on mobile devices. */
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-right-actions #stage-tools-toggle{
+  display:none!important
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-keyboard-control,
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-keyboard-toggle,
+html body.xstage-ui-v2 .stage .stage-toolbar #toggle-keyboard{
+  display:none!important
+}
+html body.xstage-ui-v2 .stage .mobile-stage-menu #midi-keyboard-toggle[hidden]{
+  display:none!important
+}
+html body.xstage-ui-v2 .stage .mobile-stage-menu #midi-keyboard-toggle:not([hidden]){
+  display:flex!important;width:100%!important;min-height:38px;
+  align-items:center;justify-content:flex-start
+}
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #toolbar-song-key{
+  display:inline-flex!important;align-items:center;justify-content:center;
+  flex:0 0 auto;min-width:65px;max-width:116px;min-height:40px;
+  padding:6px 9px!important;box-sizing:border-box!important;
+  border-radius:10px;border:1px solid #62c8b4;
+  background:#0c3f47;color:#c4ffee;font-weight:850;
+  font-size:clamp(.72rem,1.1vw,.93rem);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+/* The player no longer repeats the song key on compact screens. */
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-panel .tv-song-meta{
+  display:none!important
+}
+@media(max-width:760px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar{
+    display:grid!important;
+    grid-template-columns:40px minmax(0,1fr) auto!important;
+    grid-template-rows:42px!important;
+    column-gap:6px!important;align-items:center!important;
+    padding-left:max(8px,env(safe-area-inset-left))!important;
+    padding-right:max(8px,env(safe-area-inset-right))!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #mobile-menu-toggle{
+    display:inline-flex!important;grid-column:1!important;grid-row:1!important;
+    width:40px!important;min-width:40px!important;max-width:40px!important;
+    height:40px!important;min-height:40px!important;padding:0!important;
+    align-items:center;justify-content:center
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar .stage-search-slot{
+    grid-column:2!important;grid-row:1!important;
+    width:100%!important;min-width:0!important;max-width:100%!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #toolbar-song-key{
+    display:inline-flex!important;grid-column:3!important;grid-row:1!important;
+    min-width:54px;max-width:85px;min-height:38px;
+    height:38px!important;padding:4px 7px!important;font-size:.72rem
+  }
+}
+@media(max-width:350px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar{
+    grid-template-columns:36px minmax(0,1fr) auto!important;column-gap:4px!important;
+    padding-left:max(6px,env(safe-area-inset-left))!important;
+    padding-right:max(6px,env(safe-area-inset-right))!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #mobile-menu-toggle{
+    width:36px!important;min-width:36px!important;max-width:36px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #toolbar-song-key{
+    min-width:51px;max-width:70px;padding:4px 5px!important;font-size:.68rem
+  }
+}
