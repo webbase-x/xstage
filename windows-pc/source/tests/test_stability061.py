@@ -69,6 +69,28 @@ class Manifest061Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d);(p/'release-manifest.json').write_text('{"version":"0.6.1","version":"0.6.0","algorithm":"sha256","files":{}}')
             with self.assertRaisesRegex(ValueError,'Duplicate manifest key'):verify_manifest(p)
+    def test_rejects_unlisted_release_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d);(p/'XStageKaraoke.exe').write_bytes(b'fixture')
+            manifest=make_manifest(p,'0.6.1')
+            (p/'release-manifest.json').write_text(json.dumps(manifest))
+            self.assertEqual(verify_manifest(p)['version'],'0.6.1')
+            (p/'unlisted.exe').write_bytes(b'unapproved executable')
+            with self.assertRaisesRegex(ValueError,'Unlisted release file'):verify_manifest(p)
+            (p/'unlisted.exe').unlink()
+            folder=p/'nested';folder.mkdir()
+            (folder/'injected.txt').write_text('unknown file')
+            with self.assertRaisesRegex(ValueError,'Unlisted release file'):verify_manifest(p)
+
+    def test_nested_file_named_manifest_is_not_silently_excluded(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d);(p/'XStageKaraoke.exe').write_bytes(b'fixture')
+            sub=p/'meta';sub.mkdir();(sub/'release-manifest.json').write_bytes(b'nested')
+            manifest=make_manifest(p,'0.6.1')
+            self.assertIn('meta/release-manifest.json',manifest['files'])
+            (p/'release-manifest.json').write_text(json.dumps(manifest))
+            self.assertEqual(verify_manifest(p)['version'],'0.6.1')
+
     def test_rejects_case_collisions_on_windows(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d);(p/'XStageKaraoke.exe').write_bytes(b'fixture');(p/'A.txt').write_bytes(b'same')
