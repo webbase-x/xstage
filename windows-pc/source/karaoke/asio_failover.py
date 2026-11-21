@@ -136,6 +136,14 @@ class FailoverMidiOutput:
     def set_channel_eq(self, channel, *args, **kwargs):
         return self._effect('set_channel_eq', channel, channel, *args, **kwargs)
 
+    def diagnostics(self):
+        if self.active is self.primary:
+            gather = getattr(self.primary, 'diagnostics', None)
+            result = gather() if gather is not None else {'backend': 'ASIO'}
+        else:
+            result = {'backend': 'BASS-FALLBACK'}
+        return dict(result, fallback_reason=self.reason)
+
     def close(self):
         if self._closed:
             return
