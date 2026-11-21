@@ -144,12 +144,26 @@ def validate_sqlite_sidecars(data, names):
 
 def rollback(data,safety,existed,replaced=FILES):
     validate_sqlite_sidecars(data, replaced)
+    # Validate every destination before any rollback mutation. This also
+    # protects files that did not exist in the original snapshot.
+    for name in replaced:
+        target = data/name
+        if (target.is_symlink() or getattr(target, 'is_junction', lambda: False)()
+                or (target.exists() and not target.is_file())):
+            raise ValueError('ไฟล์ปลายทางย้อนคืนไม่ปลอดภัย: ' + name)
     for name in replaced:
         target=data/name
         if name.endswith('.sqlite3'):
+            validate_sqlite_sidecars(data, (name,))
             for suffix in ('-wal','-shm'):(data/(name+suffix)).unlink(missing_ok=True)
-        if name in existed:replace_file(safety/name,target)
-        else:target.unlink(missing_ok=True)
+        if name in existed:
+            replace_file(safety/name,target)
+        else:
+            # A link inserted after preflight must not be removed silently.
+            if (target.is_symlink() or getattr(target, 'is_junction', lambda: False)()
+                    or (target.exists() and not target.is_file())):
+                raise ValueError('ไฟล์ปลายทางย้อนคืนไม่ปลอดภัย: ' + name)
+            target.unlink(missing_ok=True)
 
 
 def apply_pending(data):
