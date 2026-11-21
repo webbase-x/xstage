@@ -208,7 +208,7 @@ class CatalogWindow:
         close_button = ttk.Button(actions, text='ปิด', command=self.hide)
         for button in (self.update_button, self.verify_button, self.clear_button, self.report_button, self.repair_reports_button, close_button):
             button.pack(side='left')
-        self.action_buttons = (self.pick_button, self.songs_button, self.update_button,
+        self.action_buttons = (self.update_button,
                                self.clear_button, self.verify_button, self.mode_select,
                                self.shutdown_check, self.repair_reports_button)
         self._set_button_state()
@@ -246,10 +246,14 @@ class CatalogWindow:
         if folder:
             self.source = Path(folder)
             self.source_text.set(str(self.source))
+            if self._active or self.app.scanning:
+                self.status.set('เลือกโฟลเดอร์ใหม่แล้ว · จะใช้ในการสร้างรายการครั้งถัดไป (งานปัจจุบันยังใช้โฟลเดอร์เดิม)')
 
     def _use_managed(self):
         self.source = Path(self.app.managed_catalog_root())
         self.source_text.set(str(self.source))
+        if self._active or self.app.scanning:
+            self.status.set('เลือก Songs แล้ว · จะใช้ในการสร้างรายการครั้งถัดไป (งานปัจจุบันยังใช้โฟลเดอร์เดิม)')
 
     def _copy_choice(self, source, managed):
         """Compatibility entry point: v0.9.43 always references original files."""
