@@ -510,8 +510,9 @@ public sealed partial class MainForm : Form
             var queueName = name;
             var choice = new ToolStripMenuItem(queueName)
             {
-                Checked = string.Equals(job.QueueName, queueName,
-                    StringComparison.OrdinalIgnoreCase)
+                Checked = string.Equals(
+                    string.IsNullOrWhiteSpace(job.QueueName) ? "ทั่วไป" : job.QueueName.Trim(),
+                    queueName, StringComparison.OrdinalIgnoreCase)
             };
             choice.Click += (_, _) => AssignJobQueue(job, queueName);
             queues.DropDownItems.Add(choice);
