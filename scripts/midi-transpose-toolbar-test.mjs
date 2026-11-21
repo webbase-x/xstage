@@ -85,8 +85,7 @@ const browserDocument={createElement:()=>({
   className:'',
   append(node){node.parentNode=this;if(node===oldKeyControls)activeStack=this;}
 })};
-new Function('document','
-,stageUi.slice(migrationStart,migrationEnd))(
+new Function('document',String.fromCharCode(36),stageUi.slice(migrationStart,migrationEnd))(
   browserDocument,id=>id==='toolbar-song-key'?oldKey:id==='midi-transpose-control'?oldKeyControls:null);
 assert.ok(activeStack&&oldKeyControls.parentNode===activeStack,
   'The existing clicked input must move under the top key intact');
