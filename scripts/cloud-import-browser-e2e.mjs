@@ -341,9 +341,10 @@ try{
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('หยุดงานแล้ว'),null,{timeout:30000});
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>{const item=document.getElementById('cloud-import-open');return item&&!item.hidden;});
-  await page.click('#mobile-menu-toggle');
-  await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
-  await page.click('#cloud-import-open');
+  // The floating mobile menu is intentionally hidden at desktop viewport
+  // widths. Trigger the same existing import button handler directly.
+  await page.evaluate(()=>document.getElementById('cloud-import-open').click());
+  await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.waitForFunction(()=>!document.getElementById('cloud-import-resume').disabled);
   const chooserPromise=page.waitForEvent('filechooser');
   await page.click('#cloud-import-resume');
