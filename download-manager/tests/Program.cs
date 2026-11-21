@@ -645,6 +645,16 @@ try
         throw new Exception("Control characters must not mutate queue assignments.");
 
 
+    // File speed caps must persist without altering the job's queue or priority.
+    manager.SetFileSpeedLimit(queueJob, 256);
+    var reopenedSpeed = new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == queueJob.Id);
+    if (queueJob.FileSpeedLimitKib != 256 || reopenedSpeed.FileSpeedLimitKib != 256 ||
+        reopenedSpeed.QueueName != queueJob.QueueName)
+        throw new Exception("Per-file speed cap must survive SQLite reopen without changing queue.");
+    manager.SetFileSpeedLimit(queueJob, 0);
+    if (new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == queueJob.Id).FileSpeedLimitKib != 0)
+        throw new Exception("Removing a per-file speed cap must persist.");
+
     // Priority updates must persist across SQLite reopen without changing queue membership.
     var previousQueueName = queueJob.QueueName;
     manager.SetJobPriority(queueJob, 2);
