@@ -145,8 +145,10 @@ public sealed class DownloadEngine
     public void SetDefaultParts(int parts)
     {
         ValidateParts(parts);
-        DefaultParts = parts;
+        // Persist first: a failed SQLite write must not silently change the
+        // in-memory default for subsequent downloads.
         _state.SaveDefaultParts(parts);
+        DefaultParts = parts;
     }
 
     public void SetRetryLimit(int attempts)
