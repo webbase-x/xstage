@@ -4,7 +4,7 @@
  * Catalog metadata can be cached locally per verified Google account; media remain private/transient. */
 'use strict';
 const cfg = window.XSTAGE_CONFIG || {};
-const driveLayout=window.XSTAGE_DRIVE_LAYOUT||{root:'XStageKaraoke',db:'DB',legacyRoot:'XStageSong'};
+const driveLayout=window.XSTAGE_DRIVE_LAYOUT||{root:'XStageKaraoke',db:'DB'};
 const $ = id => document.getElementById(id);
 const ui = {
   status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'), catalogProgress:$('catalog-progress'), catalogProgressValue:$('catalog-progress-value'),
@@ -1372,11 +1372,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   ui.resultCount.textContent='กำลังเปิดฐานเพลง';
   showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังตรวจฐานเพลงในเครื่อง…',6);
 
-  // Use the last selected library's verified cache first. Legacy account-only
-  // cache remains a migration fallback until the first root-specific save.
+  // On a fresh library contract, NEVER display stale XStageSong catalogs
+  // from an account-only/legacy root cache before confirming XStageKaraoke.
   const preferredRootId=readPreferredLibraryRoot(account.sub);
-  let instant=await loadLatestCachedCatalog(account.sub,preferredRootId);
-  if(!instant&&!preferredRootId)instant=await loadLatestCachedCatalog(account.sub);
+  let instant=null;
   if(authId!==state.authId)return;
   if(!applyInstantCatalog(instant)){
     showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง '+driveLayout.root+'…',12);
@@ -1384,11 +1383,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   }
 
   try{
-    // A read-only legacy fallback keeps pre-migration songs playable.
-    const found=await driveList("(name='"+driveLayout.root+"' or name='"+driveLayout.legacyRoot+
-      "') and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
-    const canonical=found.filter(file=>file.name===driveLayout.root);
-    const roots=canonical.length?canonical:found.filter(file=>file.name===driveLayout.legacyRoot);
+    const roots=await driveList("name='"+driveLayout.root+
+      "' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
@@ -1442,18 +1438,12 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    // Canonical DB/current.json. Read old LYRICS/TEXT pointer until
-    // the matching Drive folders have been physically migrated.
-    const dbDirs=await driveList(`'${root.id}' in parents and (name='DB' or name='LYRICS' or name='TEXT') and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
-    for(const name of ['DB','LYRICS','TEXT'])
-      if(dbDirs.filter(dir=>dir.name===name).length>1)
-        throw Error('พบโฟลเดอร์ '+name+' ซ้ำใน '+driveLayout.root);
-    const dbPointers=(await Promise.all(dbDirs.map(dir=>
-      driveList(`'${dir.id}' in parents and name='current.json' and trashed=false`,token)))).flat();
-    const rootPointers=await driveList(`'${root.id}' in parents and name='current.json' and trashed=false`,token);
-    if(dbPointers.length+rootPointers.length>1)
-      throw Error('พบ current.json หลายตำแหน่งในคลัง · ต้องตรวจฐานก่อนใช้งาน');
-    const pointers=dbPointers.length?dbPointers:rootPointers;
+    // Only the new XStageKaraoke/DB/current.json is authoritative.
+    const dbDirs=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
+    if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+driveLayout.root);
+    const pointers=dbDirs.length
+      ?await driveList(`'${dbDirs[0].id}' in parents and name='current.json' and trashed=false`,token)
+      :[];
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
     if(!pointers.length){
       // A newly created XStageKaraoke may contain only empty category folders or
