@@ -11,7 +11,7 @@
     console.error("[XSTAGE] unhandledrejection",reason);
   });
   const $ = id => document.getElementById(id);
-  const state = {token:null,ready:false,view:"import",groups:[],selectedGroups:new Set(),
+  const state = {token:null,ready:false,currentVersion:null,view:"import",groups:[],selectedGroups:new Set(),
                  songs:[],selectedSongs:new Set(),allReadySelected:false,excludedSongs:new Set(),
                  readyTotal:0,latestEdit:null,lyricsEditJob:null,
                  lyricsEditActive:false,activeJob:null,
@@ -766,9 +766,19 @@
       toast(error.message,true);
     }finally{button.disabled=false;}
   }
+  function showRunningVersion(session){
+    // Read the running executable's canonical /api/session version, not
+    // a hard-coded HTML or the version of an available GitHub release.
+    const version=String(session?.version||"").trim();
+    state.currentVersion=version||null;
+    text("sidebar-current-version",version?"v"+version+" · Preview":"ไม่ทราบเวอร์ชัน");
+    text("pro-update-version",version?"v"+version:"ไม่ทราบเวอร์ชัน");
+    text("settings-update-version",version?"เวอร์ชันที่ใช้ "+version:"กำลังตรวจสอบเวอร์ชัน");
+  }
   function syncSettingsUpdate(){
     text("settings-update-version",
-      "เวอร์ชันที่ใช้ "+(state.updateTarget?.current_version||
+      "เวอร์ชันที่ใช้ "+(state.currentVersion||
+      state.updateTarget?.current_version||
       $("pro-update-version")?.textContent||"กำลังตรวจสอบ")+
       (state.updateTarget?.newer?" · รุ่นล่าสุด "+state.updateTarget.version:
        state.updateTarget?" · เป็นรุ่นล่าสุดแล้ว":""));
@@ -2869,6 +2879,7 @@
     try{
       const session=await api("/api/session");
       state.token=session.token;
+      showRunningVersion(session);
       setReady(true);
       text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
       void diagnostic("ui.session.ready",{version:session.version});
@@ -2903,6 +2914,7 @@
           const session=await api("/api/session");
           if(!session?.token)return;
           state.token=session.token;
+          showRunningVersion(session);
           setReady(true);
           text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
           void checkProUpdate(true);
