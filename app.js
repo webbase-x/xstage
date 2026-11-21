@@ -171,7 +171,6 @@ function setupAppUpdateWatcher(){
   const {action}=appUpdateElements();
   action?.addEventListener('click',()=>{if(state.updateAvailable)void performAppUpdateReload();});
   $('desktop-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
-  $('mobile-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
   // An older native APK might finish loading the WebView before its deferred
   // JS update callback exists. Recheck once after hosted scripts initialize.
   if(androidTvNativeBridgeReady()){
@@ -2219,7 +2218,10 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
     throw Error('ตัวเล่น XMID/XSK2 หรือ MIDI ยังไม่พร้อม กรุณาอัปเดตเว็บ');
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังโหลด XMID/XSK2 และ SoundFont จาก Google Drive…');
-  const fontTask=getStartupSoundFont(token,signal);
+  // Queued tracks reuse the selected in-session SoundFont at play time.
+  // Do not duplicate a large SF2/SF3 bank during speculative prefetch.
+  const fontTask=prefetch?Promise.resolve({bytes:null,pending:null}):
+    getStartupSoundFont(token,signal);
   const response=await privateFile(fileId,token,{signal});
   const {bytes:fontBytes,pending:lateFont}=await fontTask;
   const packed=await response.blob();
@@ -2233,7 +2235,7 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
      String(song.artist||'')!==String(unpacked.document.artist||''))
     throw Error('XSK2 ภายในไฟล์ไม่ตรงกับชื่อเพลง/ศิลปินใน DB · กรุณานำเข้าอีกครั้ง');
   const midiBytes=new Uint8Array(await unpacked.midi.arrayBuffer());
-  if(prefetch){
+  if(prefetch&&!window.XStageBrowserMidi?.supportsRealtime?.()){
     // OfflineAudioContext uses floating-point PCM before encoding to WAV.
     // Bound duration before rendering to protect low-RAM Android WebViews.
     const duration=Number(window.XStageBrowserMidi.parseMidi(midiBytes).duration);
@@ -2244,11 +2246,12 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
       return null; // The song remains playable on demand when its turn arrives.
   }
   if(window.XStageBrowserMidi?.supportsRealtime?.()){
-    if(prefetch)return null; // Live playback needs no offline pre-render.
     window.XStageBrowserMidi.parseMidi(midiBytes);
-    onStatus('MIDI/SoundFont พร้อมเล่นแบบเรียลไทม์');
+    onStatus(prefetch?'เพลง MIDI ถัดไปเตรียมข้อมูลพร้อมแล้ว':
+      'MIDI/SoundFont พร้อมเล่นแบบเรียลไทม์');
     return {song,token,blob:null,lyrics:unpacked.document,
-      liveMidi:midiBytes,liveFont:fontBytes,lateFont};
+      liveMidi:midiBytes,liveFont:fontBytes,lateFont,
+      bytes:prefetch?midiBytes.byteLength:0};
   }
   onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ด้วย SoundFont…');
   const verifiedBank=await ensureMidiInstrumentBank(fontBytes,lateFont,token,
@@ -2356,28 +2359,35 @@ async function prepareQueuedSong(song,token,signal){
   const pressure=monitor.plan(memoryResources());
   if(pressure.heapPressure||pressure.nativePressure)return null;
   if(getFileId(song.xsk)||getFileId(song.xmid)){
-    if(window.XStageBrowserMidi?.supportsRealtime?.())return null;
-    // The pack and the uncompressed WAV both count against available space.
+    // The pack and the uncompressed bytes count against available space.
     const maxPacked=Math.max(0,monitor.plan(memoryResources()).remaining*.45);
     if(!Number((song.xmid||song.xsk).size)||Number((song.xmid||song.xsk).size)>maxPacked)return null;
     const result=await prepareXskPlayback(song,token,signal,()=>{},true);
-    if(!result||!monitor.canHold(result.blob.size,memoryResources()))return null;
-    return {...result,bytes:result.blob.size};
+    const size=Number(result?.bytes||result?.blob?.size||0);
+    if(!size||!monitor.canHold(size,memoryResources()))return null;
+    return {...result,bytes:size};
   }
   if(getFileId(song.midi)){
-    if(window.XStageBrowserMidi?.supportsRealtime?.())return null;
+    const isLive=!!window.XStageBrowserMidi?.supportsRealtime?.();
     const sourceSize=Number(song.midi.size);
     if(!sourceSize||sourceSize>12*monitor.MiB||
        !monitor.canHold(sourceSize*2,memoryResources()))return null;
     const [source,fontBytes,lyrics]=await Promise.all([
       privateFile(song.midi.fileId,token,{signal}),
-      window.XStageBrowserMidi?.selectedFont(token,signal),
+      isLive?null:window.XStageBrowserMidi?.selectedFont(token,signal),
       getFileId(song.lyrics)?privateJson(song.lyrics.fileId,token,{signal}):null
     ]);
     if(!window.XStageBrowserMidi)throw Error('ยังไม่พบตัวเรนเดอร์ MIDI');
     const bytes=new Uint8Array(await source.arrayBuffer());
     if(signal.aborted)throw new DOMException('Aborted','AbortError');
     const parsed=window.XStageBrowserMidi.parseMidi(bytes);
+    if(isLive){
+      const timedLyrics=lyrics||(song.sourceFormat==='KAR'
+        ?window.XStageBrowserMidi.midiLyrics(parsed,song.code):null);
+      if(timedLyrics?.schemaVersion!==1||!Array.isArray(timedLyrics.lines))return null;
+      return {song,token,blob:null,lyrics:timedLyrics,liveMidi:bytes,
+        liveFont:null,lateFont:null,bytes:bytes.byteLength};
+    }
     const wavBytes=Math.ceil((parsed.duration+.5)*32000*4+44);
     const workingBytes=wavBytes*2;
     if(!monitor.canHold(workingBytes,memoryResources()))return null;
@@ -2841,7 +2851,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       try{
         const result=await boundedPlaybackTask(pending.promise,120,
           'เตรียมเพลงที่อยู่ในคิวนานเกินไป',controller);
-        if(result?.song===song&&result.token===token&&result.blob?.size&&
+        if(result?.song===song&&result.token===token&&
+           (result.blob?.size||result.liveMidi?.byteLength)&&
            result.lyrics?.schemaVersion===1)pendingPrepared=result;
       }catch(error){
         if(controller.signal.aborted)throw error;
@@ -2908,6 +2919,12 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if (request!==state.requestId||token!==state.token){controller.abort();return;}
     if(!liveMidiBytes&&!audio?.size)throw Error('ไฟล์เสียง/MIDI ว่างเปล่า');
     if(liveMidiBytes){
+      if(!liveFontBytes&&!lateFontPromise){
+        // Preloaded MIDI contains only verified song bytes and lyrics.
+        // The SoundFont remains shared and loads from its session cache.
+        const startup=await getStartupSoundFont(token,controller.signal);
+        liveFontBytes=startup.bytes;lateFontPromise=startup.pending;
+      }
       // First play used to skip the SoundFont after a 1–2 s loading budget,
       // so its oscillator notes sounded like an 8-bit game. Resolve the
       // pending bank BEFORE we start the first MIDI transport and emit audio.
