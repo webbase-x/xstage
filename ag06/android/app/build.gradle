@@ -1,0 +1,40 @@
+plugins { id 'com.android.application' }
+
+def signingPath=System.getenv('XSTAGE_KEYSTORE_PATH')
+def signingReady=signingPath && System.getenv('XSTAGE_KEYSTORE_PASSWORD') && System.getenv('XSTAGE_KEY_ALIAS') && System.getenv('XSTAGE_KEY_PASSWORD') && file(signingPath).exists()
+
+android {
+    namespace 'com.webbasex.ag06studio'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.webbasex.ag06studio'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+    }
+    signingConfigs {
+        if (signingReady) {
+            release {
+                storeFile file(signingPath)
+                storePassword System.getenv('XSTAGE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('XSTAGE_KEY_ALIAS')
+                keyPassword System.getenv('XSTAGE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (signingReady) signingConfig signingConfigs.release
+        }
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-preview'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
