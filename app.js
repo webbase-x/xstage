@@ -637,8 +637,8 @@ const midiTransport={
     }else{
       // Skip MIDI's confirmed empty end only when the successor is already
       // prepared. Otherwise let the song finish and use the SF2 handoff.
-      const successorReady=state.queue.length
-        ?state.queuePreparedCache.has(state.queue[0])
+      const successorReady=state.queue?.length
+        ?state.queuePreparedCache?.has(state.queue[0])
         :state.medley&&state.medleyCache?.song===state.medleyUpcoming;
       if(!this.loop&&this.handoffAt>0&&now>=this.handoffAt&&successorReady){
         this.finish();return;
