@@ -46,6 +46,12 @@ jobs:
           fi
 
   windows-build-and-installer:
+    # Only this build job can request short-lived OIDC signing credentials.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: inspect-windows-source
     if: needs.inspect-windows-source.outputs.ready == 'true' && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     runs-on: windows-latest
@@ -219,6 +225,35 @@ jobs:
               if ($remove.ExitCode -ne 0) { Write-Warning "Temporary test installation uninstall returned $($remove.ExitCode)" }
             }
           }
+
+      # This does not Authenticode-sign the EXE. It signs provenance bound
+      # to the exact installer and the internal package SHA-256 manifest.
+      - name: Attest installer and release manifest with Sigstore
+        id: attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            windows-pc/installer/output/X-StageKaraoke.exe
+            windows-pc/source/dist/XStageKaraoke/release-manifest.json
+
+      - name: Verify signed provenance for both build outputs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = '${{ github.repository }}'
+          $workflow = "$repo/.github/workflows/build-windows-pc.yml"
+          foreach ($subject in @(
+            'windows-pc/installer/output/X-StageKaraoke.exe',
+            'windows-pc/source/dist/XStageKaraoke/release-manifest.json'
+          )) {
+            gh attestation verify $subject --repo $repo --signer-workflow $workflow
+            if ($LASTEXITCODE -ne 0) {
+              throw "Signed provenance check failed for $subject"
+            }
+          }
+          Write-Host 'Verified signed build provenance for installer and release-manifest.json'
 
       - name: Upload Windows installer candidate and test logs
         if: success()
