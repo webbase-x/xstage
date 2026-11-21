@@ -161,3 +161,19 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual(json.loads(outside.read_text(encoding='utf-8'))['title'],'external')
         self.assertEqual(self.title(),'ปัจจุบัน')
 
+
+    def test_snapshot_failure_removes_safety_folder_and_preserves_live_data(self):
+        restore.stage_restore(self.source,self.data)
+        original=restore.copy_database
+        def fail_snapshot(source,target):
+            if 'restore-safety-' in str(target):
+                Path(target).write_bytes(b'partial snapshot')
+                raise OSError('snapshot disk full')
+            return original(source,target)
+        with patch.object(restore,'copy_database',side_effect=fail_snapshot):
+            with self.assertRaisesRegex(OSError,'snapshot disk full'):
+                restore.apply_pending(self.data)
+        self.assertEqual(self.title(),'ปัจจุบัน')
+        self.assertFalse(list(self.data.glob('restore-safety-*')))
+        self.assertTrue((self.data/'restore-pending').exists())
+
