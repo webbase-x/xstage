@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1152-midi-top-keyboard">
-  <link rel="stylesheet" href="xstage-ux.css?v=1158-key-toolbar-release">
+  <link rel="stylesheet" href="xstage-ux.css?v=1159-transpose-below-key">
   <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -88,7 +88,15 @@
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
       </aside></div>
-            <output id="toolbar-song-key" class="song-key-toolbar" aria-label="คีย์เพลงปัจจุบัน" aria-live="polite">คีย์ —</output>
+            <div class="song-key-stack" role="group" aria-label="คีย์เพลงและปรับระดับคีย์">
+              <output id="toolbar-song-key" class="song-key-toolbar" aria-label="คีย์เพลงปัจจุบัน" aria-live="polite">คีย์ —</output>
+              <div id="midi-transpose-control" class="song-key-transpose" hidden aria-label="เพิ่มหรือลดระดับคีย์เพลง MIDI">
+                <button type="button" id="midi-key-down" aria-label="ลดคีย์ 1 ครึ่งเสียง" title="ลดคีย์ 1 ครึ่งเสียง">−</button>
+                <output id="midi-transpose-label" aria-live="polite" aria-label="จำนวนครึ่งเสียงที่ปรับ">0</output>
+                <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์ 1 ครึ่งเสียง" title="เพิ่มคีย์ 1 ครึ่งเสียง">+</button>
+                <input id="midi-transpose" type="hidden" value="0">
+              </div>
+            </div>
             <!-- Keep the original handler available to the menu and mobile remote. -->
             <button id="toggle-keyboard" type="button" hidden aria-controls="virtual-keyboard" aria-expanded="false" aria-label="เปิดแป้นพิมพ์ค้นหา">แป้นพิมพ์</button>
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
@@ -246,7 +254,7 @@
               <div class="transport-right">
                 <label class="volume-control"><span aria-hidden="true">◖))</span><span class="sr-only">ระดับเสียง</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="ระดับเสียง"></label>
                 <span id="stage-volume-value" class="transport-volume-value">80%</span>
-                <label class="speed-control" id="midi-transpose-control" hidden>คีย์ MIDI <button type="button" id="midi-key-down" aria-label="ลดคีย์หนึ่งครึ่งเสียง">−</button> <output id="midi-transpose-label">0</output> <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์หนึ่งครึ่งเสียง">+</button><input id="midi-transpose" type="hidden" value="0"></label>
+                
                 <label class="speed-control">ความเร็ว <select id="speed" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
                 <label class="repeat-control"><input id="repeat" type="checkbox"> วนเพลง</label>
               </div>
@@ -453,7 +461,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="video-transcode.js?v=1120" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
   <script src="tv-refresh.js?v=1120" defer></script>
-  <script src="app.js?v=1157-top-song-key-single-menu" defer></script><script src="pc-extensions.js?v=1120" defer></script>
+  <script src="app.js?v=1159-transpose-below-key" defer></script><script src="pc-extensions.js?v=1120" defer></script>
   <script src="midi-keyboard-ui.js?v=1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1120" defer></script>
   <script src="stage-controls.js?v=1120" defer></script>
