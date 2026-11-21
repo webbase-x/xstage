@@ -99,9 +99,16 @@ class Decks:
         if future and not future.cancel():
             def dispose(done):
                 try:
-                    for engine in done.result():
-                        if engine:engine.close()
-                except BaseException:pass
+                    engines = done.result()
+                except BaseException:
+                    return  # Failed builds own their partial-resource cleanup.
+                for engine in engines:
+                    if engine is not None:
+                        try:
+                            engine.close()
+                        except Exception:
+                            # Still close the remaining preloaded deck.
+                            pass
             future.add_done_callback(dispose)
     def prepare(self,app,opts):
         full_song = opts.get('full_song', False)
