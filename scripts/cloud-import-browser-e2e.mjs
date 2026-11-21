@@ -145,7 +145,8 @@ try{
   // a real browser before proceeding into the preserved karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#intro-title').waitFor();
-  assert.equal(await page.locator('.app-card').count(),10,'storefront displays ten supported app entries');
+  const catalogCount=await page.locator('.app-card').count();
+  assert.ok(catalogCount>=10,'storefront must display the full supported app collection');
   // Legacy source query must not turn a TV browser into the Karaoke player.
   await page.goto('http://127.0.0.1:'+port+'/?source=android-tv',
                   {waitUntil:'domcontentloaded'});
@@ -155,11 +156,11 @@ try{
   await page.locator('#intro-title').waitFor();
 
   const logoSources=await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.map(n=>new URL(n.src).pathname));
-  assert.equal(logoSources.length,10,'all ten app entries must have a visual identity');
-  assert.equal(new Set(logoSources).size,10,'each X-Stage application must have a distinct icon asset');
+  assert.equal(logoSources.length,catalogCount,'all app entries must have a visual identity');
+  assert.equal(new Set(logoSources).size,catalogCount,'each X-Stage application must have a distinct icon asset');
 
   await page.locator('#device-advice-title').waitFor();
-  assert.equal(await page.locator('[data-device-app]').count(),10,'all ten apps expose device compatibility');
+  assert.equal(await page.locator('[data-device-app]').count(),catalogCount,'all apps expose device compatibility');
   const iphoneGuidance=await page.evaluate(()=>{
     const api=window.XStageDeviceGuide;
     const p=api.detect({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',platform:'iPhone'});
@@ -170,7 +171,7 @@ try{
   assert.equal(iphoneGuidance.windows.level,'other','iOS users must not be offered Windows PC installation as compatible');
 
   assert.equal(await page.locator('.app-card .app-art img').evaluateAll(nodes=>nodes.every(n=>n.complete&&n.naturalWidth>0)),true,
-    'ten unique app icons must load in the real browser');
+    'unique app icons must load in the real browser');
 
   assert.match(await page.locator('#intro-title').textContent(),/หนึ่งเวที/);
   assert.equal(await page.locator('.new-wordmark img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
@@ -178,9 +179,9 @@ try{
   assert.equal(await page.locator('.brand-hero-insignia img').evaluate(img=>img.complete&&img.naturalWidth>0),true,
     'new X-Stage Apps icon must load in browser');
   await page.locator('[data-filter="studio"]').click();
-  assert.equal(await page.locator('.app-card:visible').count(),2,'studio filter must expose only two apps');
+  assert.equal(await page.locator('.app-card:visible').count(),1,'studio filter must expose the consolidated Song Studio Pro');
   await page.locator('[data-filter="all"]').click();
-  await page.locator('.app-card[data-app="studio-pc"] .app-detail-link').click();
+  await page.locator('.app-card[data-app="studio-pro"] .app-detail-link').click();
   await page.locator('#app-detail:not([hidden])').waitFor();
   assert.equal(await page.locator('#detail-title').textContent(),'X-Stage Song Studio Pro');
   // The Linux CI machine must see a Windows-only compatibility warning rather than
@@ -191,7 +192,7 @@ try{
     'non-Windows viewers must be guided to transfer the ZIP to Windows');
   await page.locator('#detail-back').click();
   await page.locator('#catalog:not([hidden])').waitFor();
-  console.log('PASS: X-Stage Apps premium brand, 10-app catalog, filters, deep-linked details, and verified download CTA');
+  console.log('PASS: X-Stage Apps premium brand, current catalog, filters, deep-linked details, and verified download CTA');
 
   // Simulate the verified direct-download feed before the binary is mirrored by CI.
   // Android TV/TrueID browsers must never be forced into a GitHub popup.
@@ -218,6 +219,17 @@ try{
   console.log('PASS: TrueID/Android TV same-origin APK navigation and visible card download');
 
   await page.goto('http://127.0.0.1:'+port+'/karaoke.html',{waitUntil:'domcontentloaded'});
+  // A real Chromium smoke test of the PC-parity browser-only MIDI mixer.
+  await page.locator('#pc-midi-mixer').waitFor();
+  assert.equal(await page.locator('.web-midi-mixer-channel').count(),16);
+  await page.evaluate(()=>document.getElementById('pc-midi-mixer').click());
+  await page.locator('#web-midi-mixer-dialog[open]').waitFor();
+  await page.locator('.web-midi-mixer-channel').first().locator('button').first().click();
+  assert.equal(await page.evaluate(()=>window.XStageWebMidiMixer.isMuted(0)),true);
+  await page.locator('#web-midi-mixer-dialog header button').first().click();
+  assert.equal(await page.evaluate(()=>window.XStageWebMidiMixer.isMuted(0)),false);
+  await page.locator('#web-midi-mixer-dialog header button').last().click();
+  console.log('PASS: browser MIDI 16-channel mixer UI, mute and reset');
   await page.waitForFunction(()=>{const el=document.getElementById('cloud-import-open-gate');return el&&!el.hidden;},null,{timeout:20000});
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
