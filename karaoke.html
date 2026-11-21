@@ -22,7 +22,7 @@
   if(window.XStageAndroid&&typeof window.XStageAndroid.requestGoogleLogin==='function')
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
-  <link rel="stylesheet" href="style.css?v=1143-midi-browser-engine">
+  <link rel="stylesheet" href="style.css?v=1149-midi-piano">
   <link rel="stylesheet" href="xstage-ux.css?v=1119-tvrefresh1">
   <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
 <script id="xstage-official-logo-loader">(function(){
@@ -150,6 +150,44 @@
           <div class="stage-label"><span class="on-air-dot"></span><span>NOW PLAYING</span><span id="stage-code" class="stage-code">—</span></div>
           <div id="stage-idle" class="stage-idle"><span class="stage-idle-icon" aria-hidden="true">♪</span><strong>พร้อมร้องเพลง</strong><span>ค้นหาเพลงและกด Enter เพื่อเริ่มเล่น</span></div>
           <canvas id="lyrics" aria-label="เนื้อร้องคาราโอเกะแสดงแบบไฮไลต์ตามเวลา" width="1200" height="300"></canvas>
+          <section id="midi-keyboard-panel" class="midi-piano-panel" role="region" aria-label="คีย์บอร์ดดนตรี MIDI แบบ X-Stage Karaoke PC" tabindex="-1" hidden>
+            <div class="midi-piano-toolbar">
+              <strong class="midi-piano-title">🎹 MIDI KEYBOARD <small>แบบ X-Stage Karaoke PC</small></strong>
+              <label>ช่อง MIDI <select id="midi-keyboard-channel" aria-label="แสดงโน้ตของช่อง MIDI"><option value="all">ทั้งหมด</option></select></label>
+              <label>เครื่องดนตรี <select id="midi-instrument" aria-label="เลือกเครื่องดนตรีแทนค่าตามเพลง MIDI">
+                <option value="">ตามเพลง MIDI</option>
+                <option value="0">Piano</option>
+                <option value="1">Bright Piano</option>
+                <option value="4">Electric Piano</option>
+                <option value="6">Harpsichord</option>
+                <option value="11">Vibraphone</option>
+                <option value="16">Organ</option>
+                <option value="21">Accordion</option>
+                <option value="24">Nylon Guitar</option>
+                <option value="25">Steel Guitar</option>
+                <option value="27">Electric Guitar</option>
+                <option value="32">Bass</option>
+                <option value="40">Violin</option>
+                <option value="42">Cello</option>
+                <option value="48">Strings</option>
+                <option value="56">Trumpet</option>
+                <option value="65">Saxophone</option>
+                <option value="73">Flute</option>
+                <option value="80">Synth Lead</option>
+              </select></label>
+              <label>คีย์ <select id="midi-keyboard-range" aria-label="จำนวนคีย์บอร์ดที่แสดง">
+                <option value="auto">อัตโนมัติ</option><option value="61">61 คีย์</option><option value="128">128 คีย์</option>
+              </select></label>
+              <button type="button" id="midi-keyboard-oct-down" title="เลื่อนคีย์บอร์ดลงหนึ่งอ็อกเทฟ">−Oct</button>
+              <button type="button" id="midi-keyboard-oct-up" title="เลื่อนคีย์บอร์ดขึ้นหนึ่งอ็อกเทฟ">+Oct</button>
+              <output id="midi-keyboard-notes" class="midi-piano-notes" aria-label="โน้ต MIDI ที่กำลังเล่น">—</output>
+              <button type="button" id="midi-keyboard-close" class="midi-piano-close" aria-label="ปิดคีย์บอร์ด MIDI">✕</button>
+            </div>
+            <div id="midi-piano-scroll" class="midi-piano-scroll" tabindex="0" aria-label="แป้นเปียโน MIDI เลื่อนซ้ายขวาได้">
+              <div id="midi-piano-keys" class="midi-piano-keys"></div>
+            </div>
+            <p id="midi-piano-info" class="midi-piano-info" role="status">แสดงโน้ตตามเพลง MIDI · เลือกเครื่องดนตรีเพื่อเปลี่ยนเสียงเพลง · แตะคีย์เพื่อทดลองเสียงเมื่อ SoundFont พร้อม</p>
+          </section>
           <section id="virtual-keyboard" class="virtual-keyboard" hidden aria-label="แป้นพิมพ์บนหน้าจอ">
             <div class="virtual-key-head"><strong id="virtual-language">ภาษาไทย</strong><button id="virtual-close" type="button">ซ่อนแป้นพิมพ์ ✕</button></div>
             <div id="virtual-keys" class="virtual-keys"></div>
@@ -206,20 +244,13 @@
                 <label class="volume-control"><span aria-hidden="true">◖))</span><span class="sr-only">ระดับเสียง</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="ระดับเสียง"></label>
                 <span id="stage-volume-value" class="transport-volume-value">80%</span>
                 <label class="speed-control" id="midi-transpose-control" hidden>คีย์ MIDI <button type="button" id="midi-key-down" aria-label="ลดคีย์หนึ่งครึ่งเสียง">−</button> <output id="midi-transpose-label">0</output> <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์หนึ่งครึ่งเสียง">+</button><input id="midi-transpose" type="hidden" value="0"></label>
-                <label class="speed-control" id="midi-instrument-control" hidden>เครื่องดนตรี
-                  <select id="midi-instrument" aria-label="เครื่องดนตรี MIDI">
-                    <option value="">ตามเพลง MIDI</option>
-                    <option value="0">Piano</option>
-                    <option value="24">Guitar</option>
-                    <option value="32">Bass</option>
-                    <option value="40">Violin</option>
-                    <option value="48">Strings</option>
-                    <option value="56">Trumpet</option>
-                    <option value="73">Flute</option>
-                    <option value="80">Synth Lead</option>
-                    <option value="88">Synth Pad</option>
-                  </select>
-                </label>
+                <div class="midi-instrument-control" id="midi-instrument-control" hidden>
+                  <span>เครื่องดนตรี</span>
+                  <button type="button" id="midi-keyboard-toggle" class="midi-instrument-trigger"
+                    aria-expanded="false" aria-controls="midi-keyboard-panel" title="เปิดคีย์บอร์ด MIDI แบบ X-Stage Karaoke PC">
+                    <span aria-hidden="true">🎹</span> <span id="midi-instrument-label">ตามเพลง MIDI</span> <span aria-hidden="true">▾</span>
+                  </button>
+                </div>
                 <label class="speed-control">ความเร็ว <select id="speed" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
                 <label class="repeat-control"><input id="repeat" type="checkbox"> วนเพลง</label>
               </div>
@@ -426,7 +457,8 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="video-transcode.js?v=1119" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
   <script src="tv-refresh.js?v=1119" defer></script>
-  <script src="app.js?v=1149-fast-midi-start" defer></script><script src="pc-extensions.js?v=1119" defer></script>
+  <script src="app.js?v=1149-midi-piano" defer></script><script src="pc-extensions.js?v=1119" defer></script>
+  <script src="midi-keyboard-ui.js?v=1149-midi-piano" defer></script>
   <script src="native-audio-meter.js?v=1119" defer></script>
   <script src="stage-controls.js?v=1119" defer></script>
   <script src="mobile-layout.js?v=1119" defer></script>
