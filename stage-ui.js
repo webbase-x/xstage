@@ -21,6 +21,27 @@
     const ctxFullscreen=document.querySelector('#xstage-context-menu [data-cmd="fullscreen"]');if(ctxFullscreen)ctxFullscreen.hidden=true;
   }
   const shuffle=$('stage-shuffle');
+  // Recovery for older published HTML: some cached releases still place
+  // "คีย์ MIDI − 0 +" inside the bottom transport. Move the SAME nodes,
+  // preserving app.js click handlers, below the top song-key output.
+  (function migrateLegacyTransposeToSongKey(){
+    const key=$('toolbar-song-key'),transpose=$('midi-transpose-control');
+    if(!key||!transpose)return;
+    let stack=key.closest('.song-key-stack');
+    if(!stack){
+      stack=document.createElement('div');
+      stack.className='song-key-stack';
+      key.parentNode.insertBefore(stack,key);
+      stack.append(key);
+    }
+    if(transpose.parentNode!==stack)stack.append(transpose);
+    transpose.classList.remove('speed-control');
+    transpose.classList.add('song-key-transpose');
+    for(const node of transpose.childNodes){
+      if(node.nodeType===3&&node.textContent.includes('คีย์ MIDI'))
+        node.textContent=node.textContent.replace(/คีย์ MIDI/g,'');
+    }
+  })();
   if(!stage||!queueDock||!queueBtn||!volume||!repeat)return;
   // Keep speed and repeat beside the player. Utility commands live in one canonical menu.
 
