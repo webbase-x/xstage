@@ -21,13 +21,14 @@
     const ctxFullscreen=document.querySelector('#xstage-context-menu [data-cmd="fullscreen"]');if(ctxFullscreen)ctxFullscreen.hidden=true;
   }
   const shuffle=$('stage-shuffle');
-  // Move existing key/transpose nodes to Song Status even when the HTML
-  // shell is stale. Moving nodes (rather than cloning) preserves MIDI button
-  // listeners, current transpose value, and the live SoundFont engine.
-  (function migrateSongKeyToStatus(){
+  // Keep only the song-key text beside the title. Relocate the SAME live
+  // transpose controls beside the search field before the clock, even when
+  // a cached HTML shell still contains the older Song Status layout.
+  (function migrateSongKeyToToolbar(){
     const info=document.querySelector('.transport-song-info');
+    const toolbar=document.querySelector('.stage .stage-toolbar');
     const key=$('toolbar-song-key'),transpose=$('midi-transpose-control');
-    if(!info||!key||!transpose)return;
+    if(!info||!toolbar||!key||!transpose)return;
     let detail=info.querySelector('.transport-song-detail');
     if(!detail){
       detail=document.createElement('div');
@@ -50,14 +51,26 @@
       key.parentNode.insertBefore(stack,key);
       stack.append(key);
     }
-    if(transpose.parentNode!==stack)stack.append(transpose);
     if(stack.parentNode!==detail)detail.append(stack);
     transpose.classList.remove('speed-control');
-    transpose.classList.add('song-key-transpose');
-    for(const node of transpose.childNodes){
+    transpose.classList.add('song-key-transpose','toolbar-key-transpose');
+    for(const node of [...transpose.childNodes]){
       if(node.nodeType===3&&node.textContent.includes('คีย์ MIDI'))
         node.textContent=node.textContent.replace(/คีย์ MIDI/g,'');
     }
+    if(!transpose.querySelector('.toolbar-transpose-title')){
+      const label=document.createElement('span');
+      label.className='toolbar-transpose-title';
+      label.textContent='คีย์';
+      label.setAttribute('aria-hidden','true');
+      transpose.insertBefore(label,transpose.firstChild);
+    }
+    // Move (never clone) so the original MIDI +/- event handlers and current
+    // pitch shift survive the layout migration and account changes.
+    const clock=$('mobile-stage-clock');
+    if(transpose.parentNode!==toolbar||clock&&
+       transpose.compareDocumentPosition(clock)&Node.DOCUMENT_POSITION_PRECEDING)
+      toolbar.insertBefore(transpose,clock||null);
   })();
   if(!stage||!queueDock||!queueBtn||!volume||!repeat)return;
   // Keep speed and repeat beside the player. Utility commands live in one canonical menu.
