@@ -755,9 +755,16 @@ assert.ok(releaseMatch,'config release metadata must exist');
 assert.equal(version.version,releaseMatch[1],'version.json version must match config');
 assert.equal(Number(version.build),Number(releaseMatch[2]),'version.json build must match config');
 assert.equal(pkg.version,version.version,'package version must match release');
-const localBuildRefs=[...index.matchAll(/\?v=(\d+)/g)].map(m=>Number(m[1]));
-assert.ok(localBuildRefs.length>0,'index must version local assets');
-assert.ok(localBuildRefs.every(v=>v===Number(version.build)),'all index asset versions must match release build');
+const localAssetVersions=[...index.matchAll(/(?:src|href)="([^"]+)\?v=(\d+)(?:-[\w-]+)?"/g)]
+  .map(match=>({asset:match[1],build:Number(match[2])}));
+assert.ok(localAssetVersions.length>0,'karaoke page must version its local assets');
+assert.ok(localAssetVersions.every(item=>item.build>=Number(version.build)),
+  'asset cache versions must not fall behind the published release build');
+// Individual scripts intentionally get newer cache keys when a hotfix ships
+// without changing the whole product release/version.json.
+for(const asset of ['app.js','browser-midi.js','midi-pro-engine.js','ios-midi-audio.js'])
+  assert.ok(localAssetVersions.some(item=>item.asset===asset),
+    'iPhone MIDI playback asset must be versioned: '+asset);
 
 // Shared update contract: unavailable is not the same as latest, and APK installs require integrity metadata.
 assert.ok(app.includes("else setStatus('ตรวจสอบเวอร์ชันไม่สำเร็จ"),'web update must report offline or metadata failures');
