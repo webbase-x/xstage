@@ -556,9 +556,38 @@ function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_K
 function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
 // MIDI owns its own transport clock. The DOM audio element remains the event
 // surface for lyrics, queue, media controls and existing non-MIDI tracks.
+// Cue only a verified silent MIDI tail; never cut an audible note or a
+// time-coded lyric. The next song must already be fully prepared.
+function midiTailHandoffCue(parsed,lyrics){
+  const duration=Number(parsed?.duration);
+  if(!Number.isFinite(duration)||duration<10||
+     !Array.isArray(parsed?.notes)||!parsed.notes.length)return 0;
+  let lastNote=0,lastLyric=0;
+  for(const note of parsed.notes){
+    const end=Number(note?.end);
+    if(Number.isFinite(end))lastNote=Math.max(lastNote,end);
+  }
+  for(const line of Array.isArray(lyrics?.lines)?lyrics.lines:[]){
+    for(const value of [line?.startTime,line?.endTime]){
+      const time=Number(value);
+      if(Number.isFinite(time)&&time>=0)lastLyric=Math.max(lastLyric,time);
+    }
+    for(const word of Array.isArray(line?.words)?line.words:[]){
+      for(const value of [word?.startTime,word?.endTime]){
+        const time=Number(value);
+        if(Number.isFinite(time)&&time>=0)lastLyric=Math.max(lastLyric,time);
+      }
+    }
+  }
+  const lastContent=Math.max(lastNote,lastLyric);
+  // Allow the tail/reverb to ring for one second. Ignore short gaps:
+  // they are often a deliberate pause in the arrangement.
+  return lastContent>0&&duration-lastContent>=2.5
+    ?Math.min(duration-.25,lastContent+1):0;
+}
 const nativePlayer=ui.player;
 const midiTransport={
-  active:false,position:0,duration:0,paused:true,ended:false,seeking:false,audioSeekUntil:0,
+  active:false,position:0,duration:0,handoffAt:0,paused:true,ended:false,seeking:false,audioSeekUntil:0,
   volume:1,rate:1,loop:false,startedAt:0,interval:null,
   emit(name){nativePlayer.dispatchEvent(new Event(name));},
   time(){
@@ -605,7 +634,17 @@ const midiTransport={
     if(now>=this.duration){
       if(this.loop){this.seek(0);return;}
       this.finish();
-    }else this.emit('timeupdate');
+    }else{
+      // Skip MIDI's confirmed empty end only when the successor is already
+      // prepared. Otherwise let the song finish and use the SF2 handoff.
+      const successorReady=state.queue.length
+        ?state.queuePreparedCache.has(state.queue[0])
+        :state.medley&&state.medleyCache?.song===state.medleyUpcoming;
+      if(!this.loop&&this.handoffAt>0&&now>=this.handoffAt&&successorReady){
+        this.finish();return;
+      }
+      this.emit('timeupdate');
+    }
   },
   play(){
     if(this.ended){this.position=0;this.ended=false;}
@@ -629,12 +668,13 @@ const midiTransport={
     this.emit('timeupdate');
   },
   clear(){
-    this.pause();this.active=false;this.position=0;this.duration=0;
+    this.pause();this.active=false;this.position=0;this.duration=0;this.handoffAt=0;
     this.ended=false;this.seeking=false;this.audioSeekUntil=0;clearInterval(this.interval);this.interval=null;
   },
-  begin(duration){
+  begin(duration,handoffAt=0){
     nativePlayer.pause();nativePlayer.removeAttribute('src');
-    this.clear();this.active=true;this.duration=duration;this.paused=true;
+    this.clear();this.active=true;this.duration=duration;
+    this.handoffAt=Math.max(0,Math.min(duration-.25,Number(handoffAt)||0));this.paused=true;
     this.emit('loadedmetadata');this.emit('durationchange');
   }
 };
@@ -2409,21 +2449,45 @@ async function prepareQueuedSong(song,token,signal){
     if(timedLyrics?.schemaVersion!==1||!Array.isArray(timedLyrics.lines))return null;
     return {song,token,blob:rendered.audio,lyrics:timedLyrics,bytes:rendered.audio.size};
   }
-  // Ordinary MP3/M4A/WAV/video + JSON: do not read an oversized file just
-  // because it is next in the queue. Small files are fetched whole.
+  // Ordinary MP3/M4A/WAV/video + JSON: permit unknown catalog sizes,
+  // but stream into a strict speculative RAM cap. Never pull an unlimited
+  // Drive response into memory just because it is next in the queue.
   if(!getFileId(song.audio)||!getFileId(song.lyrics))return null;
   const size=Number(song.audio.size);
-  if(!size||!monitor.canHold(size*1.15,memoryResources()))return null;
+  const limit=Math.max(0,Math.floor(monitor.plan(memoryResources()).remaining*.72));
+  if(!(limit>0)||(size>0&&(size>limit||
+     !monitor.canHold(size*1.15,memoryResources()))))return null;
   const [response,lyrics]=await Promise.all([
     privateFile(song.audio.fileId,token,{signal}),
     privateJson(song.lyrics.fileId,token,{signal})
   ]);
   const reported=Number(response.headers?.get?.('Content-Length')||0);
-  if(reported&&!monitor.canHold(reported,memoryResources())){
+  if(reported&&(reported>limit||!monitor.canHold(reported*1.15,memoryResources()))){
     await response.body?.cancel?.();return null;
   }
-  const blob=await response.blob();
-  if(signal.aborted||!monitor.canHold(blob.size,memoryResources())||
+  // Stream only as far as the memory budget permits. This also covers old
+  // song catalogs that do not include Drive file sizes.
+  const reader=response.body?.getReader?.();
+  let blob=null;
+  if(reader){
+    const chunks=[];let received=0;
+    try{
+      while(true){
+        const part=await reader.read();
+        if(part.done)break;
+        if(signal.aborted)throw new DOMException('ยกเลิก','AbortError');
+        received+=part.value.byteLength;
+        if(received>limit){await reader.cancel();return null;}
+        chunks.push(part.value);
+      }
+      blob=new Blob(chunks,{type:response.headers?.get?.('Content-Type')||''});
+    }finally{reader.releaseLock?.();}
+  }else if(size>0||reported>0){
+    // Non-streaming WebView: only fetch when a catalog/header gives a bound.
+    blob=await response.blob();
+  }
+  if(!blob||signal.aborted||blob.size>limit||
+     !monitor.canHold(blob.size,memoryResources())||
      lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines))return null;
   // If the original video is separate, it will be loaded on demand at play;
   // never keep a second high-resolution video file in the speculative cache.
@@ -2446,7 +2510,7 @@ function scheduleQueuePreload(){
   state.medleyPrefetch=null;state.medleyCache=null;
   state.medleyUpcoming=null;
   if(state.loading){
-    state.queuePreloadTimer=setTimeout(scheduleQueuePreload,1200);
+    state.queuePreloadTimer=setTimeout(scheduleQueuePreload,250);
     return;
   }
   const monitor=window.XStageMemory;
@@ -2464,7 +2528,9 @@ function scheduleQueuePreload(){
     !state.queuePreloadSkipped.has(song));
   if(!next)return;
   if(state.queuePreparedCache.size>=quota)return;
-  state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(next,state.token);},350);
+  // Start the next requested track's download on the next event-loop turn.
+  // Do not delay a warm queue behind the random-medley scheduler.
+  state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(next,state.token);},0);
 }
 function setMidiEngineStatus(engine){
   const label=$('xstage-midi-engine-status');
@@ -3064,7 +3130,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         return;
       }
       state.liveMidiSource=liveMidiBytes;
-      midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
+      const parsedLiveMidi=window.XStageBrowserMidi.parseMidi(liveMidiBytes);
+      midiTransport.begin(parsedLiveMidi.duration,midiTailHandoffCue(parsedLiveMidi,lyrics));
       try{
         state.liveMidiPlayback=professional
           ?attachProfessionalMidiEngine(professional,midiOptions)
@@ -4240,6 +4307,7 @@ player.addEventListener('timeupdate',()=>{
 // actually audible; keep it alive while Drive/Worklet prepares a queued song.
 player.addEventListener('playing',()=>{
   stopSoundFontFill();
+  if(state.queue.length)scheduleQueuePreload();
   // The successor is selected once playback is underway, so even long
   // private Drive downloads can complete before a medley handoff.
   if(state.medley&&!state.queue.length)prefetchMedleyNext();
