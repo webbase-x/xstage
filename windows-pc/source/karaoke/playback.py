@@ -115,6 +115,7 @@ class MidiPlayer:
         # Sparse tone overrides; None preserves every controller in the song.
         self.channel_tone = [None] * 16
         self.drum_tone = {}
+        self.channel_eq = [None] * 16
         self.pan = [None] * 16
         self.program = [None] * 16
         self.loop_start = self.loop_end = None
@@ -325,6 +326,17 @@ class MidiPlayer:
         self.output.set_drum_tone(note, **new)
         self.drum_tone[note] = new
 
+    def set_channel_eq(self, channel, state):
+        """Set a real BASS FX processor on one MIDI channel dry mix."""
+        from .graphic_eq import validate
+        if type(channel) is not int or not 0 <= channel < 16:
+            raise ValueError('หมายเลขช่อง MIDI ไม่ถูกต้อง')
+        if not hasattr(self.output, 'set_channel_eq'):
+            raise OSError('Graphic EQ รายเครื่องดนตรีต้องใช้ BASSMIDI + SoundFont')
+        safe = validate(state)
+        self.output.set_channel_eq(channel, safe)
+        self.channel_eq[channel] = safe
+
     def set_loop(self, start=None, end=None):
         if start is None or end is None:
             self.loop_start = self.loop_end = None
@@ -367,7 +379,7 @@ def _synchronized(method):
 
 for _name in ('load', 'play', 'pause', 'stop', 'seek', 'set_speed', 'set_key', 'set_volume',
               'set_channel', 'set_pan', 'set_program', 'set_solo', 'set_drum_muted',
-              'set_channel_tone', 'set_drum_tone', 'set_loop', 'pump'):
+              'set_channel_tone', 'set_drum_tone', 'set_channel_eq', 'set_loop', 'pump'):
     setattr(MidiPlayer, _name, _synchronized(getattr(MidiPlayer, _name)))
 
 
