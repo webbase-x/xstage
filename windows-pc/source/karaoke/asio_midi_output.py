@@ -67,9 +67,20 @@ class AsioMidiOutput:
             self._error = exc
             self._stop.set()
 
-    def send(self, data):
-        if self._error:
+    def check_health(self):
+        if self._error is not None:
             raise OSError('ASIO PCM producer หยุดทำงาน') from self._error
+        if self._stop.is_set() or self._worker is None or not self._worker.is_alive():
+            raise OSError('ASIO PCM producer ไม่ทำงาน')
+        if self.output is None:
+            raise OSError('ASIO output ถูกปิด')
+        check = getattr(self.output, 'check_health', None)
+        if check is not None:
+            check()
+        return True
+
+    def send(self, data):
+        self.check_health()
         return self.synth.send(data)
 
     def reset(self):
