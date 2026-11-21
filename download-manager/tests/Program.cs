@@ -318,6 +318,33 @@ try
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
     if (gateClock.ElapsedMilliseconds < 300)
         throw new Exception("Rate gate failed to enforce a measurable bandwidth limit.");
+    // The global and per-file caps are independent constraints, not serial
+    // delays. Two equal 128 KiB/s caps must allow a 64 KiB read in roughly
+    // 0.5s rather than erroneously delaying it for roughly 1s.
+    var combinedGlobal = new TransferRateGate(128);
+    var combinedFile = new TransferRateGate(128);
+    gateClock.Restart();
+    await TransferRateLimiter.WaitAsync(combinedGlobal, combinedFile,
+        64 * 1024, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3));
+    if (gateClock.ElapsedMilliseconds < 300 || gateClock.ElapsedMilliseconds > 850)
+        throw new Exception("Combined HTTP caps must use the slower budget, not add both delays.");
+    // Cancellation must cancel both concurrent reservations, leaving no
+    // stale multi-second tail that would block the next download.
+    var combinedCancelGlobal = new TransferRateGate(64);
+    var combinedCancelFile = new TransferRateGate(64);
+    using (var stopCombined = new CancellationTokenSource())
+    {
+        var abandoned = TransferRateLimiter.WaitAsync(combinedCancelGlobal,
+            combinedCancelFile, 256 * 1024, stopCombined.Token);
+        stopCombined.Cancel();
+        try { await abandoned; throw new Exception("Combined rate reservation must cancel."); }
+        catch (OperationCanceledException) { }
+    }
+    gateClock.Restart();
+    await TransferRateLimiter.WaitAsync(combinedCancelGlobal, combinedCancelFile,
+        8 * 1024, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+    if (gateClock.ElapsedMilliseconds > 1200)
+        throw new Exception("Canceled combined bandwidth cap stalled a new transfer.");
     // A canceled final bandwidth reservation must not stall the next job.
     var cancelGate = new TransferRateGate(64);
     using (var stopGate = new CancellationTokenSource())
