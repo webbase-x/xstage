@@ -1,6 +1,7 @@
 """Experimental BASSMIDI decode -> native FIFO -> BASSASIO output.
 
-Explicit opt-in only. The producer renders PCM on a worker thread; the ASIO
+Explicit opt-in only. Default PCM target is ~40 ms at 48 kHz; the ASIO
+hardware/driver latency is additional. The producer renders on a worker; ASIO
 callback remains native and never invokes Python. Not a verified release path.
 """
 import threading
@@ -12,7 +13,7 @@ from .asio_output import AsioOutput
 class AsioMidiOutput:
     def __init__(self, native, *, device, channel=0, settings=None,
                  synth_factory=BassSynth, output_factory=AsioOutput,
-                 chunk_frames=480, target_frames=4800):
+                 chunk_frames=240, target_frames=1920):
         if type(chunk_frames) is not int or not 1 <= chunk_frames <= 4800:
             raise ValueError('ASIO chunk_frames ไม่ถูกต้อง')
         if type(target_frames) is not int or target_frames < chunk_frames:
