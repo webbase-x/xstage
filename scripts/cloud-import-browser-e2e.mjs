@@ -196,6 +196,10 @@ try{
 
   // Simulate the verified direct-download feed before the binary is mirrored by CI.
   // Android TV/TrueID browsers must never be forced into a GitHub popup.
+  // The production Mirror TV channel can already be available. Force its
+  // unavailability only in this isolated browser test so the test actually
+  // exercises the preview direct-download fallback, not the stable APK URL.
+  await page.route('**/mirror-tv/latest.json',route=>route.fulfill({status:404,body:''}));
   const mirrorFeed=JSON.parse(fs.readFileSync(path.join(root,'mirror-tv/test-latest.json'),'utf8'));
   const mirrorName=mirrorFeed.file;
   await page.route('**/mirror-tv/test-latest.json',route=>route.fulfill({
@@ -216,6 +220,7 @@ try{
   const quick=page.locator('[data-download-app="mirror-tv"]');
   assert.equal(await quick.getAttribute('hidden'),null,'Mirror TV card must display a direct APK action');
   await page.unroute('**/mirror-tv/test-latest.json');
+  await page.unroute('**/mirror-tv/latest.json');
   console.log('PASS: TrueID/Android TV same-origin APK navigation and visible card download');
 
   await page.goto('http://127.0.0.1:'+port+'/karaoke.html',{waitUntil:'domcontentloaded'});
