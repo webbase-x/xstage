@@ -31,7 +31,10 @@ class AsioMidiOutput:
                                             daemon=True)
             self._worker.start()
         except BaseException:
-            self.close()
+            try:
+                self.close()
+            except Exception:
+                pass
             raise
 
     def _produce(self):
@@ -40,10 +43,7 @@ class AsioMidiOutput:
                 bridge = self.output.bridge
                 # Producer never calls the native callback. Maintain a bounded
                 # lead rather than rendering unlimited MIDI ahead of the clock.
-                if hasattr(bridge, 'buffered_frames'):
-                    buffered = bridge.buffered_frames()
-                else:
-                    buffered = self._target  # no occupancy API: avoid busy spin
+                buffered = bridge.buffered_frames()
                 if buffered >= self._target:
                     self._stop.wait(.002)
                     continue
@@ -64,6 +64,10 @@ class AsioMidiOutput:
         return self.synth.send(data)
 
     def reset(self):
+        # Reset MIDI state; do not clear the SPSC FIFO from a third thread.
+        # Previously rendered audio may remain for up to the configured lead.
+        if self._error:
+            raise OSError('ASIO PCM producer หยุดทำงาน') from self._error
         return self.synth.reset()
 
     def set_channel_tone(self, *args, **kwargs):
