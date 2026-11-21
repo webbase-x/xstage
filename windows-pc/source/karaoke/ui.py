@@ -968,7 +968,25 @@ class KaraokeApp(tk.Tk):
                 output = None
                 if not prepared and self.settings.get('synth_backend') == 'bass':
                     from .bass import BassSynth
-                    output = BassSynth(self.home / 'native' / 'x64', settings=self.settings)
+                    routing = self.settings.get('multi_bus')
+                    if isinstance(routing, dict) and routing.get('enabled') is True:
+                        from .audio_bus import performance_plan
+                        from .multi_bus_synth import MultiBusSynth
+                        count = routing.get('bus_count', 2)
+                        channels = routing.get('channels', {})
+                        drums = routing.get('drum_keys', {})
+                        devices = routing.get('devices', {})
+                        if not all(isinstance(rows, dict) for rows in (channels, drums, devices)):
+                            raise ValueError('การตั้งค่า Multi-Out ไม่ถูกต้อง')
+                        channel_map = {int(k): v for k, v in channels.items()} if channels else None
+                        drum_map = {int(k): v for k, v in drums.items()}
+                        device_map = {int(k): v for k, v in devices.items()}
+                        plan = performance_plan(count, channel_map, drum_map)
+                        output = MultiBusSynth(
+                            self.home / 'native' / 'x64', plan=plan,
+                            devices=device_map, settings=self.settings)
+                    else:
+                        output = BassSynth(self.home / 'native' / 'x64', settings=self.settings)
                 new_engine = prepared[0] if prepared else MidiPlayer(output=output, device=int(self.settings.get("midi_device", -1)))
                 phase = 'file'
                 if not prepared:new_engine.load(path)
