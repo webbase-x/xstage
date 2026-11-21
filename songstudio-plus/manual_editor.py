@@ -470,6 +470,35 @@ def annotate_rows(workspace,rows):
     return out
 
 
+def build_catalog(workspace, status="ready", offset=0, limit=40, query=""):
+    """Bounded, status-filtered XMID/X-Media catalog for infinite scrolling.
+
+    Readiness is computed from the current lyric version and explicit
+    approval, never from client-side state or a stale downloaded page.
+    """
+    if status not in ("ready", "attention"):
+        raise ValueError("สถานะกลุ่มเพลงไม่ถูกต้อง")
+    init(workspace)
+    offset=max(0,int(offset))
+    limit=max(1,min(int(limit),80))
+    term="%"+str(query).strip()[:100].replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%"
+    expr=_status_expr()
+    sql="""SELECT s.id,s.code,s.title,s.artist,s.original_code,
+       m.extension,v.id AS version_id,v.timing_status,
+       d.reason AS draft_reason,e.output_path,
+       COALESCE(r.decision,'') AS manual_decision,
+       """+expr+""" AS manual_status """+BASE+"""
+       WHERE (s.title LIKE ? ESCAPE '\\' OR s.artist LIKE ? ESCAPE '\\'
+           OR s.original_code LIKE ? ESCAPE '\\')
+       AND ("""+expr+""") """+("='ready'" if status=="ready" else "!='ready'")+"""
+       ORDER BY s.code DESC LIMIT ? OFFSET ?"""
+    with core.connect(workspace) as db:
+        rows=[dict(row) for row in db.execute(
+            sql,(term,term,term,limit+1,offset))]
+    return {"rows":rows[:limit],"has_more":len(rows)>limit,
+            "offset":offset+len(rows[:limit])}
+
+
 def ready_count(workspace):
     """Return a count without transferring a giant catalog to the browser."""
     init(workspace)
