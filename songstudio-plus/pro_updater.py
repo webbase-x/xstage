@@ -20,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-VERSION="0.1.35"
+VERSION="0.1.36"
 MANIFEST_URL="https://webbase-x.github.io/xstage/downloads/song-studio-pro-latest.json"
 RAW_MANIFEST_URL="https://raw.githubusercontent.com/webbase-x/xstage/main/downloads/song-studio-pro-latest.json"
 RELEASE=re.compile(
@@ -415,6 +415,7 @@ $dest = {_ps_string(str(target))}
 $workspace = {_ps_string(workspace)}
 $expected = {_ps_string(ready['sha256'])}
 $log = {_ps_string(str(log))}
+$setupLog = {_ps_string(str(root/"last-setup.log"))}
 $pidToWait = {int(pid)}
 try {{
   for($n = 0; $n -lt 180; $n++) {{
@@ -422,13 +423,19 @@ try {{
     Start-Sleep -Milliseconds 500
   }}
   if (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {{
-    throw 'The old Song Studio Pro process is still running'
+    throw 'Song Studio Pro is still running. Close the application before updating.'
+  }}
+  # Other open instances can keep the installation files in use even when
+  # the process which requested this update has exited.
+  $other = @(Get-Process -Name 'XStageSongStudioPro' -ErrorAction SilentlyContinue)
+  if ($other.Count -gt 0) {{
+    throw 'Another Song Studio Pro window is open. Close all instances and retry.'
   }}
   $found = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($found -ne $expected) {{ throw 'Downloaded Setup SHA-256 mismatch' }}
   # Inno Setup owns protected Program Files writes, and the system owns UAC.
   # /SILENT keeps an install progress window visible.
-  $process = Start-Process -FilePath $setup -ArgumentList @('/SILENT','/NORESTART','/CLOSEAPPLICATIONS') -Verb RunAs -PassThru -Wait
+  $process = Start-Process -FilePath $setup -ArgumentList @('/SILENT','/NORESTART','/CLOSEAPPLICATIONS',('/LOG="' + $setupLog + '"')) -Verb RunAs -PassThru -Wait
   if ($process.ExitCode -ne 0) {{
     throw ('Windows Setup exit code: ' + $process.ExitCode)
   }}
@@ -439,8 +446,20 @@ try {{
   ('Installed and relaunched from Program Files at ' + (Get-Date)) |
     Out-File -LiteralPath $log -Encoding UTF8
 }} catch {{
-  ('Setup failed: ' + $_.Exception.Message) |
+  $reason = 'Update failed: ' + $_.Exception.Message
+  ($reason + [Environment]::NewLine + 'Installer log: ' + $setupLog) |
     Out-File -LiteralPath $log -Encoding UTF8
+  # This helper outlives the app: show the real failure until dismissed
+  # instead of flashing a dialog and silently disappearing.
+  try {{
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show(
+      ($reason + [Environment]::NewLine + [Environment]::NewLine +
+       'Diagnostic log: ' + $log),
+      'X-Stage Song Studio Pro - Update',
+      [System.Windows.Forms.MessageBoxButtons]::OK,
+      [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+  }} catch {{ }}
   exit 1
 }}
 """

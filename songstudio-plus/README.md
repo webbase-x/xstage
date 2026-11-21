@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.35
+# X-Stage Song Studio Pro — Technical Preview v0.1.36
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,23 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.36 — Stable popup UX and safe XMID updating
+
+- Notifications: repeated events do not flash or reset the same message,
+  errors remain visible with a Close button, and confirmation dialogs refuse
+  overlapping user clicks. All other native dialogs guard repeated showModal.
+- Verified GitHub updates: temporary feed failures no longer remove an
+  already-visible update notice. The detached Windows installer waits for the
+  app to close, rejects still-open instances, writes an Inno Setup log and
+  displays a persistent Windows error message when setup fails.
+- Continuous SQLite searches with scroll-triggered bounded pages and visible
+  row virtualization replace grouped-lyrics page buttons.
+- XMID/X-Media export tabs separate unconverted, converted and needs-repair
+  songs, lazy-load the lists and exclude already-converted items from the
+  build queue. Source media, SQLite and original lyric revisions stay intact.
+- The public v0.1.35 installer remains current until v0.1.36 Windows CI
+  produces a verified Setup with SHA-256 proof.
 
 ## v0.1.35 — Observable imports and release consistency
 

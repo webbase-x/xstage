@@ -152,25 +152,25 @@ jobs:
           if (!(Test-Path $compiler)) { throw "ISCC.exe missing" }
           & $compiler 'songstudio-plus/installer/XStageSongStudioPro.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
-          if (!(Test-Path "songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.35-win-x64-Setup.exe")) { throw "Setup EXE missing" }
+          if (!(Test-Path "songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.36-win-x64-Setup.exe")) { throw "Setup EXE missing" }
       - name: Verify Setup SHA-256 and create evidence
         shell: pwsh
         run: |
-          $setup="songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.35-win-x64-Setup.exe"
+          $setup="songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.36-win-x64-Setup.exe"
           $hash=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-          "X-Stage Song Studio Pro v0.1.35 Windows x64 Program Files Setup" | Out-File "dist/README-Setup.txt" -Encoding UTF8
+          "X-Stage Song Studio Pro v0.1.36 Windows x64 Program Files Setup" | Out-File "dist/README-Setup.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
           "Inno Setup (unsigned); requires Windows UAC, retains user SQLite workspace." | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
           Write-Host "SETUP SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.35-Windows-Setup
-          path: songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.35-win-x64-Setup.exe
+          name: X-Stage-Song-Studio-Pro-v0.1.36-Windows-Setup
+          path: songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.36-win-x64-Setup.exe
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.35-Windows-Setup-Metadata
+          name: X-Stage-Song-Studio-Pro-v0.1.36-Windows-Setup-Metadata
           path: dist/README-Setup.txt
           retention-days: 14
           if-no-files-found: error

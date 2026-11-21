@@ -42,10 +42,19 @@ class ImportObservabilityTests(unittest.TestCase):
                 encoding="utf-8").splitlines())
             self.assertEqual(after, before, "progress log must be throttled")
 
+    def test_updater_reports_detached_installer_failures(self):
+        from inspect import getsource
+        code=getsource(updater.install_and_restart)
+        self.assertIn("Get-Process -Name 'XStageSongStudioPro'",code)
+        self.assertIn("last-setup.log",code)
+        self.assertIn("System.Windows.Forms.MessageBox",code)
+        self.assertIn("Out-File -LiteralPath $log",code)
+        self.assertIn("/CLOSEAPPLICATIONS",code)
+
     def test_session_is_canonical_updater_version(self):
         from inspect import getsource
         self.assertIn('"version":updater.VERSION', getsource(app.Handler.handle_get))
-        self.assertEqual(updater.VERSION, "0.1.35")
+        self.assertEqual(updater.VERSION, "0.1.36")
 
 
 if __name__ == "__main__":
