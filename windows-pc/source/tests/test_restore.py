@@ -130,3 +130,34 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(),original)
         self.assertFalse((self.data/'settings.json.restore-tmp').exists())
 
+
+    def test_pending_restore_symlink_is_rejected(self):
+        external=self.root/'external-pending'
+        external.mkdir()
+        pending=self.data/'restore-pending'
+        try:
+            pending.symlink_to(external, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest('filesystem cannot create directory symlinks')
+        with self.assertRaisesRegex(ValueError,'ลิงก์'):
+            restore.apply_pending(self.data)
+        with self.assertRaisesRegex(ValueError,'ลิงก์'):
+            restore.stage_restore(self.source,self.data)
+        self.assertTrue(external.is_dir())
+        self.assertEqual(self.title(),'ปัจจุบัน')
+
+    def test_live_data_symlink_is_rejected_before_restore(self):
+        outside=self.root/'external-settings.json'
+        write_json(outside,{'title':'external'})
+        current=self.data/'settings.json'
+        current.unlink()
+        try:
+            current.symlink_to(outside)
+        except (OSError, NotImplementedError):
+            self.skipTest('filesystem cannot create file symlinks')
+        restore.stage_restore(self.source,self.data)
+        with self.assertRaisesRegex(ValueError,'ลิงก์'):
+            restore.apply_pending(self.data)
+        self.assertEqual(json.loads(outside.read_text(encoding='utf-8'))['title'],'external')
+        self.assertEqual(self.title(),'ปัจจุบัน')
+
