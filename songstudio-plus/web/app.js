@@ -38,6 +38,8 @@
                  updateTarget:null,updateInstallIntent:false,updateBusy:false,updateNoticeDismissed:false,updateNoticeShown:false,jobsRefreshing:false,lastJobRevision:-1,lastJobPaint:0};
   let manualTimeline=null;
   let confirmationPending=false;
+  let lyricDialogLoading=false;
+  let issuesDialogLoading=false;
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
@@ -73,8 +75,22 @@
   function showStableModal(id){
     const modal=$(id);
     if(!modal||modal.open)return false;
-    modal.showModal();
-    return true;
+    // Never stack unrelated native WebEngine top-layers. Repeated clicks
+    // during an async operation must not create a competing dialog.
+    const active=document.querySelector("dialog[open]");
+    if(active&&active!==modal){
+      void diagnostic("ui.dialog.blocked",{requested:id,active:active.id});
+      return false;
+    }
+    try{
+      modal.showModal();
+      void diagnostic("ui.dialog.open",{id});
+      return true;
+    }catch(error){
+      void diagnostic("ui.dialog.open.error",{id,error:String(error)});
+      toast("เปิดหน้าต่างไม่สำเร็จ: "+String(error),true);
+      return false;
+    }
   }
   async function api(path,payload,timeoutMs=12000){
     const options={cache:"no-store",headers:{}};
@@ -511,6 +527,8 @@
       "ดูบรรทัดพร้อมเวลา":"ดูข้อความ LYR ทั้งหมด";
   }
   async function openLyrics(song){
+    if(lyricDialogLoading||$("lyrics-dialog").open)return;
+    lyricDialogLoading=true;
     try{
       const data=await api("/api/lyrics?song_id="+encodeURIComponent(song.id));
       text("lyrics-modal-title",song.title+" · "+data.version.timing_status);
@@ -523,6 +541,7 @@
       renderLyricPage();
       showStableModal("lyrics-dialog");
     }catch(error){toast(error.message,true);}
+    finally{lyricDialogLoading=false;}
   }
   async function searchGroups(){
     if(!state.ready)return;
@@ -1245,6 +1264,8 @@
     $("issues-next").disabled=offset+size>=state.issueRows.length;
   }
   async function loadImportIssues(){
+    if(issuesDialogLoading||$("issues-dialog").open)return;
+    issuesDialogLoading=true;
     try{
       const result=await api("/api/import-issues");
       state.issueRows=result.rows||[];
@@ -1252,6 +1273,7 @@
       renderIssuePage();
       showStableModal("issues-dialog");
     }catch(error){toast(error.message,true);}
+    finally{issuesDialogLoading=false;}
   }
   const riskCategories={
     structural:"พบหลักฐานผิดปกติ",unverified:"เวลาโดยประมาณ",

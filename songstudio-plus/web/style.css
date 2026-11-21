@@ -1153,5 +1153,12 @@ body{font-size:var(--studio-ui-text);line-height:1.45}
 }
 #confirm-dialog::backdrop,#settings-dialog::backdrop,
 #issues-dialog::backdrop,#risk-dialog::backdrop,#lyrics-dialog::backdrop{
-  animation:none!important;transition:none!important
+  animation:none!important;transition:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  background:rgba(3,7,18,.87)!important
 }
+/* QtWebEngine sometimes repaints full-screen blurred surfaces every
+   1.2s job-status refresh; these overlays must stay on one stable layer. */
+.topbar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+dialog[open]{opacity:1!important;filter:none!important}
+

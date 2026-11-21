@@ -218,16 +218,17 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(plus.groups(self.workspace,"karaoke"),[],
                          "Untimed draft content is not an editable timed group")
 
-    def test_settings_exposes_real_update_actions_and_distinct_search_results(self):
+    def test_settings_exposes_real_update_actions_and_lyric_groups(self):
         root=Path(__file__).resolve().parents[1]
         html=(root/"web"/"index.html").read_text(encoding="utf-8")
         js=(root/"web"/"app.js").read_text(encoding="utf-8")
         for control in ("settings-update-check","settings-update-install",
-                        "settings-update-direct","lyrics-search-context",
-                        "lyrics-search-context-results","lyrics-search-feedback"):
+                        "settings-update-direct","lyrics-search-feedback",
+                        "group-list","groups-scroll-status"):
             self.assertIn('id="'+control+'"',html)
             self.assertIn('"'+control+'"',js)
-        self.assertIn('api("/api/lyrics/search-context',js)
+        self.assertNotIn('id="lyrics-search-context"',html)
+        self.assertNotIn('api("/api/lyrics/search-context',js)
         self.assertIn('api("/api/groups',js)
         self.assertIn('syncSettingsUpdate()',js)
 

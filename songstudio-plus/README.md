@@ -9,6 +9,16 @@ the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
 
+## v0.1.37 — Popup stability and group lyric editor
+
+- Windows-native folder and LRC pickers use the real desktop parent HWND
+  instead of showing/activating a transparent TopMost phantom window, and
+  serialize simultaneous picker requests.
+- Qt WebEngine dialogs now disable backdrop blur; lyric and import-issue
+  popups guard pending asynchronous requests and reject duplicate opens.
+- Fixed CI's stale reference to the song metadata context removed from the
+  group lyric editor. This does not alter workspace SQLite or source media.
+
 ## v0.1.37 — Remove song metadata results in group lyric editor
 
 - Removed the entire song/artist/untimed-LYR metadata result panel from

@@ -11,22 +11,51 @@ import os
 import subprocess
 import sys
 import time
+import threading
 from pathlib import Path
+
+_PICKER_LOCK=threading.Lock()
 
 _SCRIPT=r"""
 Add-Type -AssemblyName System.Windows.Forms
 [System.Windows.Forms.Application]::EnableVisualStyles()
 $kind=$env:XSTAGE_PICKER_KIND
 $current=$env:XSTAGE_PICKER_CURRENT
-$owner=New-Object System.Windows.Forms.Form
-$owner.ShowInTaskbar=$false
-$owner.TopMost=$true
-$owner.Opacity=0
-$owner.Width=1
-$owner.Height=1
-$owner.StartPosition='CenterScreen'
-$null=$owner.Show()
-$owner.Activate()
+# Resolve the actual application HWND. A hidden, TopMost owner that is first
+# shown and activated flashes and steals focus in Qt WebEngine on Windows.
+# Reuse the real main window instead; if unavailable, keep the fallback owner
+# INVISIBLE (do not call Show or Activate).
+Add-Type -TypeDefinition @'
+using System;
+using System.Windows.Forms;
+using System.Runtime.InteropServices;
+public sealed class XStagePickerOwner : IWin32Window {
+    public IntPtr Handle {get; private set;}
+    public XStagePickerOwner(IntPtr handle) {Handle=handle;}
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+}
+'@ -ReferencedAssemblies @('System.Windows.Forms')
+$parentHandle=[IntPtr]::Zero
+try {
+    $parentProcess=Get-Process -Id ([int]$env:XSTAGE_PICKER_PARENT_PID) -ErrorAction SilentlyContinue
+    if ($null -ne $parentProcess) {$parentHandle=$parentProcess.MainWindowHandle}
+} catch {}
+if ($parentHandle -eq [IntPtr]::Zero) {
+    $parentHandle=[XStagePickerOwner]::GetForegroundWindow()
+}
+$fallback=$null
+if ($parentHandle -ne [IntPtr]::Zero) {
+    $owner=[XStagePickerOwner]::new($parentHandle)
+} else {
+    $fallback=New-Object System.Windows.Forms.Form
+    $fallback.ShowInTaskbar=$false
+    $fallback.Opacity=0
+    $fallback.Width=1
+    $fallback.Height=1
+    $null=$fallback.Handle
+    $owner=$fallback
+}
+try {
 if ($kind -eq 'folder') {
     $dlg=New-Object System.Windows.Forms.FolderBrowserDialog
     $dlg.Description='เลือกโฟลเดอร์เพลงต้นฉบับ'
@@ -53,7 +82,7 @@ elseif ($kind -eq 'lrc') {
             $dlg.InitialDirectory=[System.IO.Path]::GetDirectoryName($current)
         }
     }
-    $result=$dlg.ShowDialog()
+    $result=$dlg.ShowDialog($owner)
     if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
         [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
         [Console]::Write($dlg.FileName)
@@ -62,11 +91,11 @@ elseif ($kind -eq 'lrc') {
 }
 else {
     [Console]::Error.Write('invalid picker kind')
-    $owner.Dispose()
     exit 2
 }
-$owner.Close()
-$owner.Dispose()
+} finally {
+    if ($null -ne $fallback) {$fallback.Dispose()}
+}
 """
 
 def pick(kind,current="",log=None):
@@ -78,19 +107,26 @@ def pick(kind,current="",log=None):
     env=os.environ.copy()
     env["XSTAGE_PICKER_KIND"]=kind
     env["XSTAGE_PICKER_CURRENT"]=current
+    env["XSTAGE_PICKER_PARENT_PID"]=str(os.getpid())
     started=time.monotonic()
     if log:
         log("picker.launch",kind=kind,current=current)
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0)
+    if not _PICKER_LOCK.acquire(blocking=False):
+        if log: log("picker.busy",kind=kind)
+        raise RuntimeError("หน้าต่างเลือกไฟล์หรือโฟลเดอร์ยังเปิดอยู่")
     try:
-        run=subprocess.run(
-            ["powershell.exe","-NoProfile","-STA","-NonInteractive",
-             "-ExecutionPolicy","Bypass","-Command",_SCRIPT],
-            env=env,capture_output=True,text=True,encoding="utf-8",
-            errors="replace",timeout=300,creationflags=flags,check=False)
-    except subprocess.TimeoutExpired as exc:
-        if log: log("picker.timeout",kind=kind,elapsed=round(time.monotonic()-started,3))
-        raise TimeoutError("หน้าต่างเลือกโฟลเดอร์ไม่ตอบสนองภายใน 5 นาที") from exc
+        try:
+            run=subprocess.run(
+                ["powershell.exe","-NoProfile","-STA","-NonInteractive",
+                 "-ExecutionPolicy","Bypass","-Command",_SCRIPT],
+                env=env,capture_output=True,text=True,encoding="utf-8",
+                errors="replace",timeout=300,creationflags=flags,check=False)
+        except subprocess.TimeoutExpired as exc:
+            if log: log("picker.timeout",kind=kind,elapsed=round(time.monotonic()-started,3))
+            raise TimeoutError("หน้าต่างเลือกโฟลเดอร์ไม่ตอบสนองภายใน 5 นาที") from exc
+    finally:
+        _PICKER_LOCK.release()
     if run.returncode!=0:
         error=(run.stderr or run.stdout or "Windows Picker failed").strip()
         if log: log("picker.error",kind=kind,code=run.returncode,
