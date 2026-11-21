@@ -1001,6 +1001,8 @@ try
     if (!Directory.Exists(oldWorkDir) ||
         !Directory.EnumerateFiles(oldWorkDir, "*.part").Any())
         throw new Exception("Repartition regression requires existing resumable chunk files.");
+    // A previous sampling baseline must not survive a new segment geometry.
+    job.PreviousBytes = 12345;
     if (!manager.SetJobParts(job, 16))
         throw new Exception("Paused download must accept a new segment count.");
     if (Directory.Exists(oldWorkDir) &&
@@ -1010,6 +1012,8 @@ try
     if (reopenedParts.Parts != 16 || reopenedParts.DownloadedBytes != 0 ||
         reopenedParts.SegmentsUsed != 0)
         throw new Exception("Repartition must persist new geometry before download resumes.");
+    if (reopenedParts.PreviousBytes != 0 || job.PreviousBytes != 0)
+        throw new Exception("Repartition must reset the persisted speed sampling baseline.");
     if (reopenedParts.Status != "Paused" ||
         reopenedParts.SegmentDownloadedBytes.Any(value => value != 0))
         throw new Exception("Repartition must persist a paused, zero-progress checkpoint.");
