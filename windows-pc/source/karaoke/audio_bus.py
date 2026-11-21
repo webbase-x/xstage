@@ -159,5 +159,15 @@ class MidiBusDispatcher:
         channel = status & 0x0F
         note = message[1] if kind in (0x80, 0x90, 0xA0) else None
         bus = self.plan.resolve(channel, note).output_bus
-        self.sinks[bus](message)
+        # Percussion overrides create additional independent synth streams.
+        # Controller/program/pitch messages must reach every stream hosting
+        # this MIDI channel, or redirected drum notes lose kit/volume/pedal
+        # state and can remain sounding after an all-notes-off command.
+        if channel == 9 and note is None:
+            destinations = {bus}
+            destinations.update(route.output_bus for route in self.plan.drum_keys)
+            for target in sorted(destinations):
+                self.sinks[target](message)
+        else:
+            self.sinks[bus](message)
         return bus
