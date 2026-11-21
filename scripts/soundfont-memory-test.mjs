@@ -18,7 +18,7 @@ vm.runInNewContext(midi,ctx);
 const info=ctx.XStageBrowserMidi.fontStatus();
 assert.equal(info.loaded,false);
 assert.equal(info.fileBytes,0);
-assert.equal(ctx.XStageMemory.plan().queueLimit,2);
+assert.equal(ctx.XStageMemory.plan().queueLimit,1);
 assert.ok(midi.includes("fontCache?.bytes===fontBytes&&fontCache.parsed"),
   'Selected SF2/SF3 must be parsed only once and reused for later songs');
 assert.ok(midi.includes('warmRealtimeSamples')&&
