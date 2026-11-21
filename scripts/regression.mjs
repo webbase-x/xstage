@@ -845,8 +845,10 @@ assert.ok(app.includes("พบ current.json หลายรายการ · �
 
 // WEB/APK use the same HTML5 stage. Video must be optional, muted and
 // synchronized to the authoritative audio clock, never cover karaoke lyrics.
-assert.ok(index.includes('browser-midi.js?v='+version.build),
-          'Bundled MIDI renderer must load without a third-party installation');
+assert.match(index,/<script src="browser-midi\.js\?v=\d+(?:-[^"]+)?" defer><\/script>/,
+          'Bundled MIDI fallback must be versioned and available without installation');
+assert.match(index,/<script src="midi-pro-engine\.js\?v=\d+(?:-[^"]+)?" defer><\/script>/,
+          'AudioWorklet MIDI engine must have a versioned local entry point');
 assert.ok(index.includes('id="xstage-soundfont-select"'),
           'SoundFont selector must be present in the stage menu');
 assert.ok(app.includes("window.XStageBrowserMidi.render(midiBytes"),
