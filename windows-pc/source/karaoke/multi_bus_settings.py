@@ -28,13 +28,16 @@ def edit_multi_bus(parent, settings, save):
     if not isinstance(channels, dict):
         channels = {}
     selectors = []
+    channel_boxes = []
     for ch in range(16):
         row, col = 3 + ch % 8, (ch // 8) * 2
         ttk.Label(frame, text=f'CH {ch+1:02}').grid(row=row, column=col, sticky='w', padx=(0, 8))
         variable = tk.StringVar(value=str(channels.get(str(ch), 0)))
-        ttk.Combobox(frame, textvariable=variable, values=tuple(str(n) for n in range(16)),
-                     state='readonly', width=4).grid(row=row, column=col+1, padx=(0, 18))
+        selector = ttk.Combobox(frame, textvariable=variable, values=tuple(str(n) for n in range(16)),
+                                state='readonly', width=4)
+        selector.grid(row=row, column=col+1, padx=(0, 18))
         selectors.append(variable)
+        channel_boxes.append(selector)
     ttk.Label(frame, text='บัส → BASS Device ID (ว่าง = ค่าเริ่มต้น)').grid(
         row=11, column=0, columnspan=3, sticky='w', pady=(12, 4))
     devices = current.get('devices', {})
@@ -48,9 +51,17 @@ def edit_multi_bus(parent, settings, save):
     device_frame = ttk.Frame(frame)
     device_frame.grid(row=12, column=0, columnspan=4, sticky='w')
     def redraw(*_):
+        n = int(count.get())
+        for variable, selector in zip(selectors, channel_boxes):
+            selector.configure(values=tuple(str(bus) for bus in range(n)))
+            try:
+                if int(variable.get()) >= n:
+                    variable.set('0')
+            except ValueError:
+                variable.set('0')
         for child in device_frame.winfo_children():
             child.destroy()
-        for bus in range(int(count.get())):
+        for bus in range(n):
             ttk.Label(device_frame, text=f'Bus {bus}').grid(row=bus//4, column=(bus%4)*2)
             ttk.Entry(device_frame, textvariable=device_vars[bus], width=5).grid(
                 row=bus//4, column=(bus%4)*2+1, padx=(4, 10))
