@@ -763,7 +763,12 @@ public sealed class DownloadEngine
         {
             if (job.SupportsRanges && job.TotalBytes > 0)
             {
-                int count = SegmentCount(job.TotalBytes, job.Parts);
+                // Merge exactly the persisted byte-boundary geometry used by
+                // the Range workers. The configured Parts may differ after a
+                // restart; merging by that preference can silently corrupt ZIPs.
+                int count = job.SegmentsUsed;
+                if (count < 1 || count > 32)
+                    throw new InvalidDataException("ไม่พบจำนวนส่วนดาวน์โหลดที่ยืนยันแล้ว");
                 for (int i = 0; i < count; i++)
                 {
                     ct.ThrowIfCancellationRequested();
