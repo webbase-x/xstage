@@ -164,6 +164,23 @@ try
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
     if (gateClock.ElapsedMilliseconds < 300)
         throw new Exception("Rate gate failed to enforce a measurable bandwidth limit.");
+    // A canceled final bandwidth reservation must not stall the next job.
+    var cancelGate = new TransferRateGate(64);
+    using (var stopGate = new CancellationTokenSource())
+    {
+        var waiting = cancelGate.WaitForBytesAsync(256 * 1024, stopGate.Token);
+        stopGate.Cancel();
+        try
+        {
+            await waiting;
+            throw new Exception("Canceled rate reservation must throw.");
+        }
+        catch (OperationCanceledException) { }
+    }
+    gateClock.Restart();
+    await cancelGate.WaitForBytesAsync(8 * 1024, CancellationToken.None);
+    if (gateClock.ElapsedMilliseconds > 1200)
+        throw new Exception("Canceled bandwidth reservation stalled a subsequent transfer.");
     limit.Configure(0);
     gateClock.Restart();
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
