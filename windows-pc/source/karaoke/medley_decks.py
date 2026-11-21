@@ -209,6 +209,10 @@ class Decks:
                     player.close()
                 except Exception:
                     pass
+                if name == 'tail':
+                    # The incoming deck may still be at zero gain at the
+                    # beginning of a crossfade. Restore its full volume.
+                    active.set_volume(base)
                 if name == 'rhythm':
                     target, self.rhythm_target = self.rhythm_target, None
                     if target is not None:
