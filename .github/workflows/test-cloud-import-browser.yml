@@ -58,7 +58,7 @@ jobs:
           node --check cloud-import.js
       - name: Prepare headless Chromium on CI only
         run: |
-          npm install --no-save --ignore-scripts playwright@1.56.0
+          npm install --no-save --ignore-scripts playwright@1.56.0 sql.js@1.13.0
           npx playwright install --with-deps chromium
       - name: Install test-only FFmpeg to generate a real AVI fixture
         run: |

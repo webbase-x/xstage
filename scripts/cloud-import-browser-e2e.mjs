@@ -8,6 +8,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import initSqlJs from 'sql.js';
 import {execFileSync} from 'node:child_process';
 import {chromium} from 'playwright';
 
@@ -278,13 +279,22 @@ try{
   const pointer=[...records.values()].find(x=>x.name==='current.json');
   assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,4);
   assert.ok([...records.values()].some(x=>x.name.endsWith('.mp4')));
-  const published=[...records.values()].filter(x=>x.name.startsWith('catalog-'));
-  assert.ok(published.some(x=>x.data.toString('utf8').includes('embedded-video')),
-    'Standalone video must publish metadata without invented timed lyrics');
-  const publishedRows=published.flatMap(x=>{
-    const v=JSON.parse(x.data.toString('utf8'));
-    return v.songs||v.upserts||[];
+  // Song rows are now stored only in real SQLite3 snapshots/deltas.
+  // The small current.json is an atomic pointer, not a song database.
+  const published=[...records.values()].filter(x=>x.name.endsWith('.sqlite3'));
+  assert.ok(published.some(x=>x.name.startsWith('songs-')),'SQLite3 song snapshot must exist');
+  assert.ok(published.every(x=>x.data.subarray(0,16).toString('latin1')==='SQLite format 3\\0'),
+    'All published catalogs must contain SQLite3 bytes, not renamed JSON');
+  const SQL=await initSqlJs();
+  const publishedRows=published.flatMap(file=>{
+    const database=new SQL.Database(new Uint8Array(file.data));
+    try{
+      const rows=database.exec('SELECT payload FROM songs');
+      return (rows[0]?.values||[]).map(item=>JSON.parse(item[0]));
+    }finally{database.close();}
   });
+  assert.ok(publishedRows.some(x=>x.lyricsMode==='embedded-video'),
+    'Standalone video must publish metadata without invented timed lyrics');
   const videoRow=publishedRows.find(x=>x.code==='V400');
   assert.ok(videoRow&&videoRow.title==='วิดีโอทดสอบ'&&
     videoRow.artist==='นักร้องตัวอย่าง','Artist/title metadata must be published');
