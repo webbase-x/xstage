@@ -172,7 +172,13 @@ def apply_pending(data):
         shutil.rmtree(safety,ignore_errors=True)
         raise
     state=dict(status='applying',safety=safety.name,existed=existed,replaced=replaced)
-    write_json(pending/'state.json',state)
+    try:
+        write_json(pending/'state.json',state)
+    except BaseException:
+        # The live files have not been touched yet. Keep the original
+        # prepared journal and remove the unused safety snapshot.
+        shutil.rmtree(safety,ignore_errors=True)
+        raise
     try:
         for name in replaced:
             if name.endswith('.sqlite3'):
