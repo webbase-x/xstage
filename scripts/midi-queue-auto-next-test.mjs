@@ -35,7 +35,12 @@ class Seq{
       removeEvent:(type,id)=>this.handlers.delete(type+':'+id)
     };
   }
-  loadNewSongList(){}
+  loadNewSongList(){
+    queueMicrotask(()=>{
+      for(const [id,callback] of this.handlers)
+        if(id.startsWith('songChange:'))callback({midiData:{duration:60}});
+    });
+  }
   play(){calls.push('play');this.paused=false;}
   pause(){calls.push('pause');this.paused=true;}
   signalEnd(){
@@ -54,6 +59,7 @@ const scope={
 const context={
   window:scope,contextModule:{WorkletSynthesizer:Synth,Sequencer:Seq},
   Uint8Array,ArrayBuffer,DOMException,Number,Math,Promise,console,
+  setTimeout,clearTimeout,queueMicrotask,
   fetch:async()=>({ok:true,headers:{get:()=>null},
     arrayBuffer:async()=>Uint8Array.of(1,2,3).buffer}),
   setInterval:fn=>{timer=fn;return 1;},
@@ -105,5 +111,5 @@ await Promise.resolve();
 assert.equal(completed,1,'Repeat must not consume queued songs');
 assert.equal(seekTo,0,'Repeat restarts the MIDI timeline');
 repeating.dispose();
-assert.equal(timer,null,'AudioWorklet MIDI sequencing requires no main thread note timer');
+assert.equal(timer,null,'The short SoundFont edge-gap timer must stop when playback is disposed');
 console.log('PASS: MIDI songEnded advances once, manual pause does not skip, repeat and engine disposal');
