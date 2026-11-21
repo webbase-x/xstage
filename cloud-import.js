@@ -1042,10 +1042,10 @@ class Importer {
               const sourcePart=async(source,role,extension)=>{
                 const hash=await core.hashBlob(source.file,()=>this.check());
                 const sourceName=base+'-'+hash.slice(0,16)+'.'+extension;
-                return uploadMedia(source.file,code,['MIDI','NCN',role,bucket],
+                return uploadMedia(source.file,code,[driveLayout.songs,'MIDI','NCN',role,bucket],
                   sourceName,'application/octet-stream',hash);
               };
-              const nativeMidi=media.path?.startsWith('MIDI/NCN/SONG/')
+              const nativeMidi=media.path?.startsWith(driveLayout.songs+'/MIDI/NCN/SONG/')
                 ? media : await sourcePart(item.midi,'SONG',core.ext(midiFile.name));
               const sourceLyrics=await sourcePart(item.lyr,'LYR','lyr');
               const sourceCursor=await sourcePart(item.cur,'CUR','cur');
