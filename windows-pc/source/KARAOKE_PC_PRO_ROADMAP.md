@@ -2,7 +2,7 @@
 
 **Project:** `webbase-x/xstage` — keep the existing `windows-pc/source/` application and user data.  
 **Last audited:** 2026-11-21 (Asia/Bangkok).  
-**Current phase:** **P0 (blocked from progression until every P0 gate passes).**  
+**Current phase:** **P0.6 development (P0.4/P0.5 verification deferred; not accepted).**  
 **Tracking:** 27 acceptance items in 7 sequential phases. Each item requires test evidence; absence of Windows hardware evidence is **NOT PASS**.  
 **Safety:** Do not break existing SQLite, queue, history, SoundFont settings, lyrics, medley, or user song directories. Avoid unverified auto-delete and do not advertise a production update from a preview-only build.
 
@@ -16,7 +16,7 @@
 - Previous failing tests `test_component_repair_requires_windows_consent_before_exit` and `test_mixer_follows_new_engine_and_cancels_poll_on_close` have fixes in main; rerun them as part of the next Windows gate.
 - **Known limitation:** GitHub-hosted tests do not prove long-duration playback, actual analog audio outputs, USB interface/driver operation, or a user's Windows machine.
 
-## Acceptance checklist — complete one item and its tests before moving on
+## Acceptance checklist — implement in sequence; defer unavailable test results without claiming PASS
 
 | ID | Phase | Acceptance condition | Status | Evidence / next action |
 |---|---|---|---|---|
@@ -24,8 +24,8 @@
 | P0.2 | EXE and integrity | Native 64-bit BASS DLLs, icon, executable, SHA-256 and signed package manifest verified | **PASS** | [run 44877165196](https://github.com/webbase-x/xstage/actions/runs/44877165196), commit `6b33cedc2939e3f579b431f982df804e079ef30b`: 1,042 tests, 0 failures/errors, 78 skipped; package completeness + native x64 BASS + icon + SHA-256 PASS; signed Sigstore provenance [attestation 70463681](https://github.com/webbase-x/xstage/attestations/70463681) for setup EXE and release-manifest.json independently verified. **Not an Authenticode-signed production EXE.** |
 | P0.3 | Real installer smoke | Silent install to Thai/space path; installed EXE dependency preflight; clean uninstall | **PASS** | [run 44877690650](https://github.com/webbase-x/xstage/actions/runs/44877690650), commit `3c8ee7a6781ab38ba91ff6fbf17a106c3117c1be`: silent install + installed dependency preflight + silent uninstall return code + no remaining installed files + CI user-Data sentinel preserved PASS, 1,042 tests / 0 fail / 0 error / 78 skipped. Signed attestation [70464622](https://github.com/webbase-x/xstage/attestations/70464622). |
 | P0.4 | GUI & queue safety | Windows UI open/close, search, hotkeys, queue, mixer lifecycle and no stalling/flicker | DEFERRED-HARDWARE | [run 44879694855](https://github.com/webbase-x/xstage/actions/runs/44879694855): Windows build, required isolated Tk GUI regression, installer smoke and provenance steps SUCCESS. Physical display flicker/responsiveness remain unverified; user approved deferral. |
-| P0.5 | Playback & live audio | Real Windows MIDI/NCN/EMK-legacy, SoundFont, MP3/video, transitions and ≥30-minute audio device soak | IN PROGRESS | P0.5.1 source audit: `karaoke/bass.py` constructor, offline song reset, close; `karaoke/audio_device.py` reference-counted acquire/release. Added guarded BASS cleanup `5e6de970` and injected FX teardown regression `ffe512b0`; Added initialization-error preservation `ec3548bd` and regression `dca3c5df`; Multi-channel EQ teardown fix `80a509d5` and regression `5a2b08e2` added; Windows CI verification pending; physical audio remains BLOCKED-HARDWARE. |
-| P0.6 | Data & release safety | Backup/restore, corrupted files, fail-closed deletes, recovery; no unintended stable publish | OPEN | Verify safe migrations and explicit stable gate |
+| P0.5 | Playback & live audio | Real Windows MIDI/NCN/EMK-legacy, SoundFont, MP3/video, transitions and ≥30-minute audio device soak | PENDING-QA / DEFERRED-HARDWARE | P0.5.1 source audit: `karaoke/bass.py` constructor, offline song reset, close; `karaoke/audio_device.py` reference-counted acquire/release. Added guarded BASS cleanup `5e6de970` and injected FX teardown regression `ffe512b0`; Added initialization-error preservation `ec3548bd` and regression `dca3c5df`; Multi-channel EQ teardown fix `80a509d5` and regression `5a2b08e2` added; Windows CI verification pending; physical audio remains BLOCKED-HARDWARE. |
+| P0.6 | Data & release safety | Backup/restore, corrupted files, fail-closed deletes, recovery; no unintended stable publish | IN PROGRESS | Verify safe migrations and explicit stable gate |
 | P1.1 | Multi-Out | Audio-bus graph and interfaces without breaking current stereo engine | NOT STARTED | |
 | P1.2 | Multi-Out | Assign GM MIDI channels and drum keys to independent 4/8/16 output buses | NOT STARTED | |
 | P1.3 | ASIO | Low-latency Windows ASIO backend with recoverable fallback | NOT STARTED | |
@@ -53,11 +53,11 @@
 ## Rules for every hourly development iteration
 
 1. Read current `main`, workflow runs, relevant code/tests and this file; avoid concurrent-work conflicts.
-2. Select only the first unfinished acceptance ID within the current phase, except the explicitly authorized P0.4 deferral to P0.5. Make the smallest safe code/test fix, or collect concrete missing evidence.
-3. Run unit/regression checks and GitHub Actions on the exact source revision. If an error occurs, **fix and re-run**; do not mark PASS on source-only inspection.
-4. On a blocking requirement (e.g. no real hardware or unavailable credentials), mark `BLOCKED-HARDWARE`/`BLOCKED-ACCESS`, document reproducible checks, and remain in the same phase. Never fabricate device QA.
-5. Record dated commit SHA, CI run URL, tests run/passed/failed/errors/skipped, any artifacts, and exact remaining count. Do not mutate Release/installer availability flags without verified evidence.
-6. Continue to the next task **only after the current task passes**, except the explicitly authorized P0.4 deferral to P0.5; advance to P1 only when **all 6 P0 items pass**.
+2. Implement the first unfinished engineering task, preserving existing code and user data. A test-only blocker must not stop implementation of the next independent task.
+3. Add automated regression coverage and request/check CI when available. If test execution or results are unavailable, record `PENDING-QA` with exact commit and intended tests, then **continue to the next engineering task without waiting**. When results become available, report PASS/FAIL and repair failures; never silently upgrade to PASS.
+4. For physical Windows devices, long audio soaks or unavailable credentials, record `DEFERRED-HARDWARE`/`BLOCKED-ACCESS` and continue non-hardware work. Do not fabricate QA.
+5. Record dated commit SHA, available CI run URL and observed test counts. Never mark a test PASS from code inspection; never alter stable release/installer availability without verified evidence.
+6. Continue P0.6 and subsequent engineering phases even while P0.4/P0.5 QA remains pending. Stable release and final acceptance **remain blocked** until mandatory gates actually pass.
 
 ## 2026-11-21 13:14 Asia/Bangkok — P0.1 investigation\n\n- Windows [run 44872566462](https://github.com/webbase-x/xstage/actions/runs/44872566462) passed source inspection, Windows regression, native x64 BASS validation, icon verification and installer compilation; **failed** in silent installation smoke because the expected installed `XStageKaraoke.exe` was not found in the requested Thai/space path. Installer SHA-256: `e6bf9eabb012e59ce0cfee13a90b243035a20e5d33d69080b9d4563176a011be`. This SHA belongs to a failed candidate and must not be advertised as a release.\n- Workflow change `deb9e859b05c8d6a1ffcefaa0e503f69ca5aa2c7` makes `/DIR` and `/LOG` explicit single-string arguments and prints install directory contents plus Inno log on failure. This is a **diagnostic/fix candidate**, not proof of success.\n- **P0.1 remains OPEN** until rerun of complete Windows CI and installer smoke succeeds; **27/27 remain**. No physical hardware or production EXE verification.\n\n## 2026-11-21 13:36 Asia/Bangkok — P0.1 accepted; next P0.2
 
@@ -225,3 +225,9 @@
 - [`928d710f`](https://github.com/webbase-x/xstage/commit/928d710fbadf59a36b7441a3f3dad6ce299576ad), [`4044cf5d`](https://github.com/webbase-x/xstage/commit/4044cf5d944899073568c38efe4f689cfffb42c3): MIDI preload and auxiliary rhythm constructors now release the BASS synth if MidiPlayer construction raises; regression [`09834552`](https://github.com/webbase-x/xstage/commit/09834552f9da47e580024f64a7dadbcf2fc16ff9).
 - [`bdeebc3c`](https://github.com/webbase-x/xstage/commit/bdeebc3c109e770c6bfa9dc50ea3f3be3ae3ac8d): optional drum-fill analysis/inspection failures no longer abort next-song preload; regression [`3738bf13`](https://github.com/webbase-x/xstage/commit/3738bf13c85a47e9e79893554b69dbf451f40ecd).
 - **Gate status: IN PROGRESS, NOT PASS.** No successful automated test run on these commits has been observed; local git checkout cannot reach github.com (DNS). MIDI/NCN/EMK-legacy/video coverage still requires independent verification. User explicitly deferred real-machine and audio soak tests; those remain DEFERRED-HARDWARE, not PASS. Do not advance P0.6 or publish stable on unverified evidence.
+
+## 2026-11-21 — User-authorized nonblocking QA policy
+
+- User explicitly authorized continuing to subsequent engineering tasks whenever test results are pending, reporting the actual results later and fixing failures then. This supersedes the previous stop-on-every-gate sequencing rule **for development only**.
+- P0.4 physical GUI and P0.5 physical audio remain DEFERRED-HARDWARE; P0.5 latest automated tests PENDING-QA. Neither is PASS.
+- Start P0.6 now. Preserve release safety: no stable EXE claim or release flag until required tests pass. Track outstanding verification as technical debt and revisit on CI results.
