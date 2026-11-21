@@ -445,3 +445,10 @@ The user requested batched coding without physical QA. **This is a coding update
 - Fix `3b0a9b8223bca725fdcfc9ef1804653530e712e5`: `rollback()` preflights **all** target paths before mutating any, including files absent from the original snapshot; checks SQLite journals again per database before unlinking. Reject directories/symlinks/junctions rather than deleting unexpected paths.
 - Regression `b3cffe6e3ae07ea5c421249b0c48dc41bbcd4ea4`: directory, symlink-to-external sentinel, and no partial rollback when later target is unsafe.
 - **PENDING-QA:** Windows regression + installer CI for these commits; verify symlink test behavior on Windows runners and rerun full suite. No local Windows/hardware evidence. **DEFERRED-HARDWARE:** physical audio and long-duration soak. No stable release.
+
+## 2026-11-22 05:17 Asia/Bangkok — P0.6 rollback source preflight
+
+- Code commit `9db2faeeee2e277ecbe2d67ac7befd7aae1c7325`: preflight every safety snapshot source in `rollback()` before modifying any live file. Previously a missing or linked later source could fail after earlier files were already restored, producing a partial rollback.
+- Regression commit `c966ccc9c5cc9de8efba9fd1a685f4e6b788190a`: verify missing later source and linked later source both reject without changing earlier live settings; external linked target remains untouched.
+- **PENDING-QA:** run `python -m unittest discover -s tests -p 'test_restore_rollback_source_preflight.py'` from `windows-pc/source`, then full Windows regression, installer smoke and integrity checks on this commit. Do not mark PASS until exact CI SHA and test evidence are available.
+- **DEFERRED-HARDWARE:** physical audio interfaces, long-duration playback, multi-monitor and remote device matrix remain unverified. No stable publication authorized.
