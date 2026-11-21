@@ -48,7 +48,6 @@ def populate_context_menu(app, menu, factory, screens):
     command(system, 'ตรวจระบบเสียง…', app.audio_diagnostics_window)
     command(system, 'ความสามารถที่รองรับ', app.capabilities)
     command(system, 'ตรวจสอบอัปเดต…', lambda: app.check_program_update(True))
-    menu.add_separator()
 
     options = submenu(menu, 'ตัวเลือก')
     command(options, 'ตัวอักษร / สีเนื้อร้อง…', app.stage_settings)
