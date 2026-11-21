@@ -23,6 +23,19 @@ vm.runInNewContext(read('cloud-import.js'),ctx,{filename:'cloud-import.js'});
 assert.ok(ctx.XStageCloudImport?.Drive&&ctx.XStageCloudImport.loadCatalog);
 const {Drive,loadCatalog}=ctx.XStageCloudImport;
 assert.equal((await loadCatalog({listChildren:async()=>[]},'root')).rows.size,0);
+// Legacy catalog pointers at the root are unsafe in the new layout. Reject
+// them rather than mistaking them for DB/current.json duplicates.
+await assert.rejects(loadCatalog({
+  listChildren:async()=>[{name:'current.json',mimeType:'application/json',id:'fake1234'}]
+},'root'),/โครงสร้าง XStageKaraoke/);
+// Only duplicate pointers *inside* the unique DB directory use the more
+// specific duplicate-current.json diagnostic.
+await assert.rejects(loadCatalog({
+  listChildren:async()=>[
+    {name:'DB',mimeType:'application/vnd.google-apps.folder',id:'newdb123'},
+    {name:'DB',mimeType:'application/vnd.google-apps.folder',id:'newdb456'}
+  ]
+},'root'),/โฟลเดอร์ DB ซ้ำ/);
 await assert.rejects(loadCatalog({
   listChildren:async id=>id==='root'
     ?[{name:'DB',mimeType:'application/vnd.google-apps.folder',id:'newdb123'}]
