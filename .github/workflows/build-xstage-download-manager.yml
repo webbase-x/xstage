@@ -203,7 +203,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup 6 missing' }
           & $compiler download-manager/installer/XStageDownloadManager.iss
           if ($LASTEXITCODE -ne 0) { throw 'Setup build failed' }
-          $setup = 'download-manager/installer/output/X-Stage-Download-Manager-v0.2.20-build23-win-x64-Setup.exe'
+          $setup = "download-manager/installer/output/${{ steps.version.outputs.file }}"
           if (-not (Test-Path $setup -PathType Leaf)) { throw 'Setup EXE missing' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer suspiciously small' }
           python scripts/verify_songstudio_exe_icon.py $setup
@@ -214,21 +214,26 @@ jobs:
       - name: Upload Windows installer EXE only
         uses: actions/upload-artifact@v7
         with:
-          name: X-Stage-Download-Manager-v0.2.20-build23-Windows-EXE-ONLY
-          path: download-manager/installer/output/X-Stage-Download-Manager-v0.2.20-build23-win-x64-Setup.exe
+          name: ${{ steps.version.outputs.artifact }}
+          path: download-manager/installer/output/${{ steps.version.outputs.file }}
           if-no-files-found: error
           retention-days: 30
+      - name: Report CI-only candidate build
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'release(download-manager):')
+        shell: pwsh
+        run: |
+          "CI verified v${{ steps.version.outputs.version }} Build ${{ steps.version.outputs.build }} source and installer artifact. This push is development-only and did NOT publish or replace the immutable GitHub Release." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
       - name: Publish verified EXE-only GitHub prerelease
         id: release
-        continue-on-error: true
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release(download-manager):'))
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.XSTAGE_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'xstage-download-manager-v0.2.20-build23-preview'
-          $file = 'X-Stage-Download-Manager-v0.2.20-build23-win-x64-Setup.exe'
+          $tag = '${{ steps.version.outputs.tag }}'
+          $file = '${{ steps.version.outputs.file }}'
           $setup = "download-manager/installer/output/$file"
           $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
           $size = (Get-Item $setup).Length
@@ -238,7 +243,7 @@ jobs:
             throw 'Release tag already exists: bump the application version before republishing.'
           }
           $notes = "Windows 10/11 x64 Preview. Installer EXE only, installs to Program Files with UAC admin approval. In-app verified downloader, silent update and restart, priority and per-site download slots, HTTP speed controls and EWMA telemetry, readable artifact filenames and safe rename, resumable per-chunk retry, HTTP Range-to-single fallback, SQLite WAL persistent jobs/chunks and JSON migration, sortable IDM-style table and file type column, clipboard URL auto-paste, icon toolbar and category tree, video redownload with selectable quality/container and safe separate filenames, MP4 moov integrity checks and real FFmpeg conversion, yt-dlp error diagnostics and capped video streams, phase tracking and network stall watchdog, simplified toolbar, CDN filename and extension repair, resumable verified EXE download (with retries), video-only controls and visible updater handoff/countdown. MP4 default, MKV/WEBM/MP3 output options. Bundled yt-dlp, Deno and FFmpeg; no DRM or private content bypass. SHA-256: $hash. Size: $size bytes. Unsigned preview; Windows will ask for user approval."
-          gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v0.2.20 Build 23 (Windows Preview)' --notes $notes --prerelease
+          gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v${{ steps.version.outputs.version }} Build ${{ steps.version.outputs.build }} (Windows Preview)' --notes $notes --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publish failed' }
           # Download published asset and compare bytes, not just release metadata.
           $verifyDir = Join-Path $env:RUNNER_TEMP 'xstage-release-verify'
@@ -256,8 +261,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = '0.2.20'
-          $build = 23
+          $version = '${{ steps.version.outputs.version }}'
+          $build = [int]'${{ steps.version.outputs.build }}'
           $name = "X-Stage-Download-Manager-v$version-build$build-win-x64-Setup.exe"
           $tag = "xstage-download-manager-v$version-build$build-preview"
           $setup = "download-manager/installer/output/$name"
@@ -287,7 +292,7 @@ jobs:
           git add -- downloads/download-manager-preview-latest.json
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m 'release(download-manager): verified v0.2.20 Build 23 EXE feed [skip ci]'
+            git commit -m "release(download-manager): verified v$version Build $build EXE feed [skip ci]"
             if ($LASTEXITCODE -ne 0) { throw 'Could not commit verified EXE manifest' }
             git pull --rebase origin main
             if ($LASTEXITCODE -ne 0) { throw 'Could not rebase verified EXE manifest' }
@@ -297,7 +302,7 @@ jobs:
           Write-Host "PUBLIC PORTAL UPDATED: $url SHA256 $sha"
 
       - name: Report GitHub Releases publication denial without mislabeling CI artifact
-        if: github.ref == 'refs/heads/main' && steps.release.outcome == 'failure'
+        if: failure() && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release(download-manager):'))
         shell: pwsh
         run: |
           Write-Warning "Setup EXE was built and uploaded only as a GitHub Actions artifact. GitHub Releases publishing was denied or failed."
