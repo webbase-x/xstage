@@ -178,6 +178,37 @@ try
     if (resizing.ActiveCount != 0 || resizing.WaitingCount != 0)
         throw new Exception("Repeated lease disposal must not leak scheduler slots.");
 
+    // Backpressure under 32 contending transfers: only eight may run, and
+    // canceled waiters must not consume slots when active transfers finish.
+    var saturated = new TransferSlotQueue(8, 8);
+    var leases = new List<IDisposable>();
+    for (var i = 0; i < 8; i++)
+        leases.Add(await saturated.EnterAsync("active-" + i, "bulk.test", 1, CancellationToken.None));
+    using (var stopWaiting = new CancellationTokenSource())
+    {
+        var waiting = Enumerable.Range(0, 24)
+            .Select(i => saturated.EnterAsync("waiting-" + i, "bulk.test", 1, stopWaiting.Token))
+            .ToArray();
+        if (saturated.ActiveCount != 8 || saturated.WaitingCount != 24 ||
+            waiting.Any(task => task.IsCompleted))
+            throw new Exception("32-transfer contention exceeded the configured eight slots.");
+        stopWaiting.Cancel();
+        foreach (var task in waiting)
+        {
+            try
+            {
+                using var unexpected = await task.WaitAsync(TimeSpan.FromSeconds(3));
+                throw new Exception("Canceled waiter unexpectedly acquired a slot.");
+            }
+            catch (OperationCanceledException) { }
+        }
+        if (saturated.WaitingCount != 0 || saturated.ActiveCount != 8)
+            throw new Exception("Canceled backpressure waiters leaked scheduler capacity.");
+    }
+    foreach (var lease in leases) lease.Dispose();
+    if (saturated.ActiveCount != 0 || saturated.WaitingCount != 0)
+        throw new Exception("32-transfer backpressure did not release all slots.");
+
     var limit = new TransferRateGate(128);
     var gateClock = System.Diagnostics.Stopwatch.StartNew();
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
