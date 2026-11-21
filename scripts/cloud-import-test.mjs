@@ -45,20 +45,20 @@ const media=core.scan([
 assert.deepEqual(Array.from(media.songs,x=>x.kind).sort(),['MP4','OGG','WAV'],
   'Native browser-audio and video containers must scan with timed lyrics');
 assert.equal(media.songs.find(x=>x.kind==='MP4').video.kind,'mp4');
-// User-approved XStageSong contract: pair only within a format directory.
+// New XStageKaraoke/SONGS contract: pair only within a format directory.
 // KAR and XSK remain standalone, and NCN is MID+LYR+CUR.
 const agreed=core.scan([
-  {file:fake('00001.mid'),relative:'XStageSong/MIDI/MID/SONG/0/00001.mid'},
-  {file:fake('00001.json',160),relative:'XStageSong/MIDI/MID/LYRICS/0/00001.json'},
-  {file:fake('00002.mp3'),relative:'XStageSong/AUDIO/MP3/SONG/0/00002.mp3'},
-  {file:fake('00002.json',160),relative:'XStageSong/AUDIO/MP3/LYRICS/0/00002.json'},
-  {file:fake('00003.mp4'),relative:'XStageSong/VIDEO/MP4/SONG/0/00003.mp4'},
-  {file:fake('00003.json',160),relative:'XStageSong/VIDEO/MP4/LYRICS/0/00003.json'},
-  {file:fake('00004.kar'),relative:'XStageSong/MIDI/KAR/0/00004.kar'},
-  {file:fake('00005.xsk',1000),relative:'XStageSong/MIDI/XSK/0/00005.xsk'},
-  {file:fake('00006.mid'),relative:'XStageSong/MIDI/NCN/SONG/0/00006.mid'},
-  {file:fake('00006.lyr',160),relative:'XStageSong/MIDI/NCN/LYR/0/00006.lyr'},
-  {file:fake('00006.cur',160),relative:'XStageSong/MIDI/NCN/CUR/0/00006.cur'}
+  {file:fake('00001.mid'),relative:'XStageKaraoke/SONGS/MIDI/MID/SONG/0/00001.mid'},
+  {file:fake('00001.json',160),relative:'XStageKaraoke/SONGS/MIDI/MID/LYRICS/0/00001.json'},
+  {file:fake('00002.mp3'),relative:'XStageKaraoke/SONGS/AUDIO/MP3/SONG/0/00002.mp3'},
+  {file:fake('00002.json',160),relative:'XStageKaraoke/SONGS/AUDIO/MP3/LYRICS/0/00002.json'},
+  {file:fake('00003.mp4'),relative:'XStageKaraoke/SONGS/VIDEO/MP4/SONG/0/00003.mp4'},
+  {file:fake('00003.json',160),relative:'XStageKaraoke/SONGS/VIDEO/MP4/LYRICS/0/00003.json'},
+  {file:fake('00004.kar'),relative:'XStageKaraoke/SONGS/MIDI/KAR/0/00004.kar'},
+  {file:fake('00005.xsk',1000),relative:'XStageKaraoke/SONGS/MIDI/XSK/0/00005.xsk'},
+  {file:fake('00006.mid'),relative:'XStageKaraoke/SONGS/MIDI/NCN/SONG/0/00006.mid'},
+  {file:fake('00006.lyr',160),relative:'XStageKaraoke/SONGS/MIDI/NCN/LYR/0/00006.lyr'},
+  {file:fake('00006.cur',160),relative:'XStageKaraoke/SONGS/MIDI/NCN/CUR/0/00006.cur'}
 ]);
 assert.equal(agreed.songs.length,2,'MP3 and MP4 must pair with own JSON');
 assert.equal(agreed.midis.length,3,'MID, KAR and NCN must import from distinct folders');
@@ -106,8 +106,8 @@ const corruptFile=new Blob([corrupt]);corruptFile.name='Corrupt.sf3';
 assert.equal(await core.validFont(corruptFile),false,'SoundFont missing INFO LIST must fail');
 
 const xskScan=core.scan([
-  {file:fake('00001.xsk',19255),relative:'XStageSong/MIDI/XSK/0/00001.xsk'},
-  {file:fake('XStageSong-access.xskkey',260),relative:'XStageSong-access.xskkey'}
+  {file:fake('00001.xsk',19255),relative:'XStageKaraoke/SONGS/MIDI/XSK/0/00001.xsk'},
+  {file:fake('XStageKaraoke-access.xskkey',260),relative:'XStageKaraoke-access.xskkey'}
 ]);
 assert.equal(xskScan.xsks.length,1,'XSK is a first-class import candidate');
 assert.equal(xskScan.blocked.length,1,'Legacy XSK key file is ignored and never uploaded');

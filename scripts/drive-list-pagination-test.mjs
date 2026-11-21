@@ -18,7 +18,7 @@ function fixture(pages,{failedStatus=0}={}){
       const parsed=new URL(url);
       assert.equal(parsed.origin,'https://www.googleapis.com');
       assert.equal(parsed.pathname,'/drive/v3/files');
-      assert.equal(parsed.searchParams.get('q'),"name='XStageSong'");
+      assert.equal(parsed.searchParams.get('q'),"name='XStageKaraoke'");
       assert.equal(parsed.searchParams.get('pageSize'),'1000');
       assert.match(parsed.searchParams.get('fields'),/nextPageToken/);
       assert.equal(opts.headers.Authorization,'Bearer test-access-token');
@@ -32,7 +32,7 @@ function fixture(pages,{failedStatus=0}={}){
     },
     driveError:(status)=>new Error('Google Drive HTTP '+status)
   });
-  return {list:()=>list("name='XStageSong'",'test-access-token'),requests};
+  return {list:()=>list("name='XStageKaraoke'",'test-access-token'),requests};
 }
 const first=Array.from({length:1000},(_,i)=>({id:'file'+i}));
 const after=[{id:'file1000'},{id:'file1001'}];

@@ -74,3 +74,6 @@ Do not treat this description as proof that every end-to-end device build,
 Google Drive initialization, source NCN extraction path and database migration
 has passed verification. GitHub Actions and Windows/Android device validation
 are required before declaring full platform parity.
+
+---
+> **Historical reference only**. New online libraries must use `XStageKaraoke/{SONGS,DB,SOUNDFONT}` and never automatically read or migrate `XStageSong`.

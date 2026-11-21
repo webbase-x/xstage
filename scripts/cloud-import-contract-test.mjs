@@ -24,8 +24,10 @@ assert.ok(ctx.XStageCloudImport?.Drive&&ctx.XStageCloudImport.loadCatalog);
 const {Drive,loadCatalog}=ctx.XStageCloudImport;
 assert.equal((await loadCatalog({listChildren:async()=>[]},'root')).rows.size,0);
 await assert.rejects(loadCatalog({
-  listChildren:async()=>[{name:'current.json',mimeType:'application/json',id:'fake1234'},
-                        {name:'current.json',mimeType:'application/json',id:'fake5678'}]
+  listChildren:async id=>id==='root'
+    ?[{name:'DB',mimeType:'application/vnd.google-apps.folder',id:'newdb123'}]
+    :[{name:'current.json',mimeType:'application/json',id:'fake1234'},
+      {name:'current.json',mimeType:'application/json',id:'fake5678'}]
 },'root'),/current.json ซ้ำ/);
 const uploaded=new Map(),children=new Map(),sessions=new Map();
 let serial=0,sessionNumber=0,putRequests=0;
@@ -90,9 +92,9 @@ ctx.fetch=async(raw,options={})=>{
   throw Error('Unmocked Drive API call: '+method+' '+url.href);
 };
 const drive=new Drive(()=> 'token_TEST',()=>{});
-const root=await drive.folder('root','XStageSong');
+const root=await drive.folder('root','XStageKaraoke');
 assert.ok(root.startsWith('item'));
-const target=await drive.ensurePath(root,['AUDIO','MP3','Songs','1']);
+const target=await drive.ensurePath(root,['SONGS','AUDIO','MP3','SONG','1']);
 const payload=new Blob([Buffer.alloc(9*1024*1024+117,0x42)],{type:'audio/mpeg'});
 const digest=createHash('md5').update(Buffer.alloc(9*1024*1024+117,0x42)).digest('hex');
 const snapshots=[];

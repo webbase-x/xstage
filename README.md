@@ -203,3 +203,7 @@
 * **ขีดจำกัด:** MIDI 12 MiB/ความยาวไม่เกิน 15 นาที; SF2/SF3 ไม่เกิน 256 MiB; เรนเดอร์ทั้งเพลงเป็น WAV ภายในหน่วยความจำก่อนเล่น (อาจช้าบนมือถือและไฟล์ใหญ่) ไม่รองรับ EMK/AVI/WMV/VOB/FLV/MKV ที่ต้องถอดรหัสเฉพาะ และไม่ใช่เครื่องเล่น MIDI ระดับ BASSMIDI/FluidSynth ที่จำลองทุก controller/effect ได้ครบ
 * **ความปลอดภัย:** MD5 ตรวจไฟล์เมื่อส่งขึ้น Drive, คู่รหัสไม่ตรงถูกข้าม, ชุดไม่สมบูรณ์ไม่เผยแพร่เข้า DB, เขียน `current.json` หลังอัปโหลดและตรวจ catalog สำเร็จเท่านั้น; token Google มีอายุตาม OAuth เดิม
 * **การตรวจ:** `npm test` เพิ่มสคริปต์ `scripts/browser-midi-test.mjs` สำหรับ parser, NCN cursor และ WAV contract; ต้องทดสอบเล่น/อัปโหลดจริงบน Chrome, Safari iOS, Android TV และ SoundFont ตัวอย่างก่อนประกาศว่าครบทุกอุปกรณ์
+
+## New Google Drive destination (November 2026)
+
+Only `XStageKaraoke` is used for new private Drive imports. `SONGS/MIDI`, `SONGS/AUDIO`, `SONGS/VIDEO` and `SONGS/LYRICS` hold songs and timed text. `DB/current.json` is the atomic catalog pointer and `DB/catalog-*.json` are immutable bases/deltas. SoundFonts go under `SOUNDFONT/SF2` or `SOUNDFONT/SF3`. `BACKUP`, `CACHE` and `LOGS` are available for future data. Existing `XStageSong` and Song Studio Pro's local `XStageSongPlus` workspace are not read, moved, deleted or migrated by the online player; the user imports songs fresh. The catalog stores verified Google Drive file IDs, not guessed paths.
