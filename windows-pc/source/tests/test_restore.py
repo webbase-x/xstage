@@ -66,3 +66,17 @@ class RestoreTests(unittest.TestCase):
         write_json(self.source/'queue.json',[])
         (self.source/'songs.sqlite3').write_bytes(b'not a database')
         with self.assertRaises(sqlite3.Error):restore.validate_backup(self.source)
+
+    def test_linked_backup_file_is_rejected_without_staging(self):
+        outside = self.root/'outside.json'
+        write_json(outside, {'title':'external'})
+        (self.source/'settings.json').unlink()
+        try:
+            (self.source/'settings.json').symlink_to(outside)
+        except (OSError, NotImplementedError):
+            self.skipTest('filesystem cannot create symlinks')
+        with self.assertRaisesRegex(ValueError, 'ลิงก์'):
+            restore.stage_restore(self.source, self.data)
+        self.assertFalse((self.data/'restore-pending').exists())
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+
