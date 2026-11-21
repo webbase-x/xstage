@@ -170,6 +170,7 @@ public sealed class TransferRateGate
     private readonly object _mutex = new();
     private double _nextDueMs;
     private int _limitKib;
+    private long _configurationVersion;
     public int LimitKibPerSecond => Volatile.Read(ref _limitKib);
 
     public TransferRateGate(int limitKib = 0) => Configure(limitKib);
@@ -182,15 +183,19 @@ public sealed class TransferRateGate
         lock (_mutex)
         {
             _nextDueMs = Environment.TickCount64;
+            _configurationVersion++;
             Volatile.Write(ref _limitKib, limitKib);
         }
     }
 
     public Task WaitForBytesAsync(int bytes, CancellationToken cancellation)
     {
+        cancellation.ThrowIfCancellationRequested();
         if (bytes <= 0 || LimitKibPerSecond == 0)
             return Task.CompletedTask;
         double delay;
+        double reservedUntil;
+        long version;
         lock (_mutex)
         {
             var limit = _limitKib;
@@ -198,12 +203,14 @@ public sealed class TransferRateGate
             var now = Environment.TickCount64;
             var start = Math.Max(now, _nextDueMs);
             _nextDueMs = start + bytes * 1000.0 / (limit * 1024.0);
-            delay = Math.Max(0, _nextDueMs - now);
+            reservedUntil = _nextDueMs;
+            version = _configurationVersion;
+            delay = Math.Max(0, reservedUntil - now);
         }
-        return WaitReservedAsync(delay, _nextDueMs, cancellation);
+        return WaitReservedAsync(delay, reservedUntil, version, cancellation);
     }
 
-    private async Task WaitReservedAsync(double delay, double reservedUntil, CancellationToken cancellation)
+    private async Task WaitReservedAsync(double delay, double reservedUntil, long version, CancellationToken cancellation)
     {
         try
         {
@@ -215,7 +222,7 @@ public sealed class TransferRateGate
             // refunded safely because later readers may already be queued.
             lock (_mutex)
             {
-                if (_nextDueMs == reservedUntil)
+                if (_configurationVersion == version && _nextDueMs == reservedUntil)
                     _nextDueMs = Environment.TickCount64;
             }
             throw;
