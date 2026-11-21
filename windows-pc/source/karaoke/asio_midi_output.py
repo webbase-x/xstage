@@ -109,6 +109,20 @@ class AsioMidiOutput:
     def set_channel_eq(self, *args, **kwargs):
         return self.synth.set_channel_eq(*args, **kwargs)
 
+    def diagnostics(self):
+        bridge = getattr(self.output, 'bridge', None)
+        counters = (bridge.counters() if bridge is not None and
+                    hasattr(bridge, 'counters') else {})
+        return {
+            'backend': 'ASIO',
+            'worker_alive': bool(self._worker and self._worker.is_alive()),
+            'worker_error': str(self._error) if self._error else '',
+            **counters,
+            'limiter_enabled': self._limiter is not None,
+            'limiter_input_peak': self._limiter.input_peak if self._limiter else 0,
+            'limiter_output_peak': self._limiter.output_peak if self._limiter else 0,
+        }
+
     def close(self):
         self._stop.set()
         if self._worker is not None:
