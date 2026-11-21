@@ -209,6 +209,26 @@ try
     if (saturated.ActiveCount != 0 || saturated.WaitingCount != 0)
         throw new Exception("32-transfer backpressure did not release all slots.");
 
+    // Canceling the last reservation must preserve the earlier reader's debt.
+    var sharedGate = new TransferRateGate(64);
+    using (var earlierStop = new CancellationTokenSource())
+    using (var tailStop = new CancellationTokenSource())
+    using (var nextStop = new CancellationTokenSource())
+    {
+        var earlier = sharedGate.WaitForBytesAsync(256 * 1024, earlierStop.Token);
+        var tail = sharedGate.WaitForBytesAsync(256 * 1024, tailStop.Token);
+        tailStop.Cancel();
+        try { await tail; throw new Exception("Tail must cancel."); }
+        catch (OperationCanceledException) { }
+        var next = sharedGate.WaitForBytesAsync(8 * 1024, nextStop.Token);
+        var quick = Task.Delay(500);
+        if (await Task.WhenAny(next, quick) == next)
+            throw new Exception("Tail cancellation erased an earlier bandwidth reservation.");
+        nextStop.Cancel();
+        earlierStop.Cancel();
+        try { await next; } catch (OperationCanceledException) { }
+        try { await earlier; } catch (OperationCanceledException) { }
+    }
     var limit = new TransferRateGate(128);
     var gateClock = System.Diagnostics.Stopwatch.StartNew();
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
