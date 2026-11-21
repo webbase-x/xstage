@@ -63,4 +63,34 @@ elems['midi-transpose-control'].hidden=true;
 click('midi-key-down');
 assert.equal(elems['midi-transpose'].value,'11','Hidden control must not change key');
 assert.ok(sent>=36,'Every successful transpose notifies the live engine');
-console.log('PASS: transpose moved under song key; -12 to +12 reversible; synth errors isolated; mobile layout and duplicate controls verified');
+// A tab running an older cached HTML can be upgraded without dropping its
+// already-attached player click handlers: physically move the same control.
+const stageUi=read('stage-ui.js');
+const migrationStart=stageUi.indexOf('  (function migrateLegacyTransposeToSongKey(){');
+const migrationEnd=stageUi.indexOf('  })();',migrationStart)+'  })();'.length;
+assert.ok(migrationStart>=0&&migrationEnd>migrationStart,
+  'Legacy lower transport must have a DOM migration path');
+const topToolbar={insertBefore(node){this.child=node;node.parentNode=this;}};
+const bottomTransport={};
+const oldKey={parentNode:topToolbar,closest:()=>null};
+let activeStack=null;
+const oldKeyControls={
+  parentNode:bottomTransport,childNodes:[{nodeType:3,textContent:'คีย์ MIDI '},{nodeType:1,textContent:'−'}],
+  classList:{
+    names:new Set(['speed-control']),
+    remove(x){this.names.delete(x);},add(x){this.names.add(x);}
+  }
+};
+const browserDocument={createElement:()=>({
+  className:'',
+  append(node){node.parentNode=this;if(node===oldKeyControls)activeStack=this;}
+})};
+new Function('document','
+,stageUi.slice(migrationStart,migrationEnd))(
+  browserDocument,id=>id==='toolbar-song-key'?oldKey:id==='midi-transpose-control'?oldKeyControls:null);
+assert.ok(activeStack&&oldKeyControls.parentNode===activeStack,
+  'The existing clicked input must move under the top key intact');
+assert.equal(oldKeyControls.childNodes[0].textContent,' ',
+  'The legacy MIDI heading must be removed');
+assert.ok(oldKeyControls.classList.names.has('song-key-transpose'));
+console.log('PASS: transpose beneath song key; -12/+12 reversible; cached HTML migrated without replacing buttons');
