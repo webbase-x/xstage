@@ -20,7 +20,7 @@
 
 | ID | Phase | Acceptance condition | Status | Evidence / next action |
 |---|---|---|---|---|
-| P0.1 | Build and tests | Re-run full Windows regression on the latest P0 source/workflow; **0 fail, 0 errors** and review skips | OPEN | [run 44872566462](https://github.com/webbase-x/xstage/actions/runs/44872566462): regression step PASS, installer smoke FAIL; full summary needs recheck on fixed CI |
+| P0.1 | Build and tests | Re-run full Windows regression on the latest P0 source/workflow; **0 fail, 0 errors** and review skips | **PASS** | [run 44876022780](https://github.com/webbase-x/xstage/actions/runs/44876022780), commit `eb6bd7f92750483073bd592f0d38e923a4b3ad2d`: **1,040 tests, 0 failures, 0 errors, 78 skipped**; Windows build, installer, installed dependency smoke, and artifact upload all PASS; reviewed 78 skips |
 | P0.2 | EXE and integrity | Native 64-bit BASS DLLs, icon, executable, SHA-256 and signed package manifest verified | OPEN | Previous candidate passes; re-verify new build |
 | P0.3 | Real installer smoke | Silent install to Thai/space path; installed EXE dependency preflight; clean uninstall | OPEN | New CI step not yet evidenced |
 | P0.4 | GUI & queue safety | Windows UI open/close, search, hotkeys, queue, mixer lifecycle and no stalling/flicker | OPEN | Add GUI smoke evidence and review failures |
@@ -48,7 +48,7 @@
 | P6.3 | Release | Verified release/signing/update with rollback and stable acceptance | NOT STARTED | |
 | P6.4 | Handoff | Operator docs, installer repair, published checksums and final acceptance report | NOT STARTED | |
 
-**Current outstanding:** **27 of 27** checklist items, including **6 P0** gates. Prior candidate test success provides evidence but **does not automatically close an item** on newer code/workflow.
+**Current outstanding:** **26 of 27** checklist items, including **5 P0** gates. **P0.1 PASS; P0.2 is the next item.** Prior candidate test success provides evidence but **does not automatically close an item** on newer code/workflow.
 
 ## Rules for every hourly development iteration
 
@@ -59,7 +59,15 @@
 5. Record dated commit SHA, CI run URL, tests run/passed/failed/errors/skipped, any artifacts, and exact remaining count. Do not mutate Release/installer availability flags without verified evidence.
 6. Continue to the next task **only after the current task passes**; advance to P1 only when **all 6 P0 items pass**.
 
-## 2026-11-21 13:14 Asia/Bangkok — P0.1 investigation\n\n- Windows [run 44872566462](https://github.com/webbase-x/xstage/actions/runs/44872566462) passed source inspection, Windows regression, native x64 BASS validation, icon verification and installer compilation; **failed** in silent installation smoke because the expected installed `XStageKaraoke.exe` was not found in the requested Thai/space path. Installer SHA-256: `e6bf9eabb012e59ce0cfee13a90b243035a20e5d33d69080b9d4563176a011be`. This SHA belongs to a failed candidate and must not be advertised as a release.\n- Workflow change `deb9e859b05c8d6a1ffcefaa0e503f69ca5aa2c7` makes `/DIR` and `/LOG` explicit single-string arguments and prints install directory contents plus Inno log on failure. This is a **diagnostic/fix candidate**, not proof of success.\n- **P0.1 remains OPEN** until rerun of complete Windows CI and installer smoke succeeds; **27/27 remain**. No physical hardware or production EXE verification.\n\n## Hourly report format
+## 2026-11-21 13:14 Asia/Bangkok — P0.1 investigation\n\n- Windows [run 44872566462](https://github.com/webbase-x/xstage/actions/runs/44872566462) passed source inspection, Windows regression, native x64 BASS validation, icon verification and installer compilation; **failed** in silent installation smoke because the expected installed `XStageKaraoke.exe` was not found in the requested Thai/space path. Installer SHA-256: `e6bf9eabb012e59ce0cfee13a90b243035a20e5d33d69080b9d4563176a011be`. This SHA belongs to a failed candidate and must not be advertised as a release.\n- Workflow change `deb9e859b05c8d6a1ffcefaa0e503f69ca5aa2c7` makes `/DIR` and `/LOG` explicit single-string arguments and prints install directory contents plus Inno log on failure. This is a **diagnostic/fix candidate**, not proof of success.\n- **P0.1 remains OPEN** until rerun of complete Windows CI and installer smoke succeeds; **27/27 remain**. No physical hardware or production EXE verification.\n\n## 2026-11-21 13:36 Asia/Bangkok — P0.1 accepted; next P0.2
+
+- **Root cause fixed:** Inno Setup's AppExe is `X-StageKaraoke.exe` while PyInstaller's input is `XStageKaraoke.exe`. The Windows installer smoke was checking the wrong installed filename. Workflow correction: commit [eb6bd7f9](https://github.com/webbase-x/xstage/commit/eb6bd7f92750483073bd592f0d38e923a4b3ad2d).
+- **Exact Windows CI:** [run 44876022780](https://github.com/webbase-x/xstage/actions/runs/44876022780) **SUCCESS**. Full regression 1,040 tests; **0 failed, 0 errors, 78 skipped**, 119.401 seconds; release manifest and bundled BASS x64 validation PASS; Inno Setup installer compiled; silent install to a Thai/space-containing path and installed EXE native dependency preflight PASS; candidate artifact upload PASS.
+- **78 skips reviewed:** 54 retired v0.9.41 behavior tests (replacement suites exist), 20 display-required GUI tests, 4 platform/opt-in native checks. These do not count as Windows physical device or live GUI certification.
+- **Candidate-only installer SHA-256:** `f656c91e7d5387188b8f38aa692b39f8e647d0b623099d1d35982178ae490fa9`; Actions artifact ID `14696072242`. Do **not** publish as a signed/stable release without P0.2–P0.6 evidence.
+- **Decision:** **P0.1 PASS**. Remaining **26/27 total, 5/6 in P0**. Next P0.2 is separate acceptance for native runtime/icon/hash/signature manifest; P0.3 still requires explicit uninstall cleanup evidence. P0.5 requires real audio hardware.
+
+## Hourly report format
 
 - **Working on:** `P?.?` + one-line objective
 - **Changed:** exact file paths, Git commit SHA and/or CI run
