@@ -2138,8 +2138,10 @@ function setStageVisualScale(value){
 // A late bank can upgrade the running synth without restarting its clock.
 const FAST_FONT_BUDGET_MS=/iPad|iPhone|iPod/.test(navigator.userAgent||'')?1100:2200;
 async function getStartupSoundFont(token,signal){
-  if(!window.XStageBrowserMidi?.fontStatus?.().selectedId)
-    return {bytes:null,pending:null};
+  // selectedFont waits for refreshFonts. A blank selectedId here can mean
+  // "the GM bank list has not loaded yet", NOT that the user chose 8-bit.
+  // Skipping that promise caused the first song to use oscillators while
+  // the next song sounded correct after refresh finished.
   const task=Promise.resolve().then(()=>
     window.XStageBrowserMidi.selectedFont(token,signal));
   // Handle a rejected fetch even when its result arrives after the deadline.
@@ -2154,6 +2156,50 @@ async function getStartupSoundFont(token,signal){
       new Promise(resolve=>{timeout=setTimeout(()=>resolve({ready:false}),FAST_FONT_BUDGET_MS);})
     ]);
     return result.ready?{bytes:result.bytes,pending:null}:{bytes:null,pending:safe};
+  }finally{clearTimeout(timeout);}
+}
+// Do not start a MIDI song with chip-style oscillators while its selected
+// instrument bank is still downloading. A first play may take longer;
+// subsequent songs reuse the validated SoundFont in memory.
+async function ensureMidiInstrumentBank(fontBytes,pending,token,controller){
+  let bank=fontBytes;
+  if(!bank){
+    setPlayStatus('กำลังเตรียมเสียงเครื่องดนตรีจริงสำหรับเพลงแรก…');
+    const task=pending||window.XStageBrowserMidi.selectedFont(token,controller.signal);
+    bank=await boundedPlaybackTask(Promise.resolve(task),45,
+      'โหลด SoundFont ไม่ทัน กรุณาตรวจการเชื่อมต่อแล้วลองอีกครั้ง',controller);
+  }
+  if(!bank&&window.XStageBrowserMidi.fontStatus()?.selectedId){
+    const detail=window.XStageBrowserMidi.fontStatus()?.warning||'';
+    throw Error('โหลด SoundFont ไม่สำเร็จ จึงไม่เริ่มเพลงด้วยเสียง 8-bit'+
+      (detail?' · '+detail:' · โปรดตรวจชุดเสียงที่เลือกในเมนู'));
+  }
+  return bank;
+}
+
+// Prefer the real MIDI sequencer. When it cannot initialize, the existing
+// Web Audio fallback must still receive the loaded SF2 sample bank.
+async function prepareFirstMidiSynth(source,bank,options){
+  if(!bank||!window.XStageProMidi?.available?.())return null;
+  const task=window.XStageProMidi.prepare(source,bank,options);
+  let timeout;
+  try{
+    const outcome=await Promise.race([
+      task.then(engine=>({engine}),error=>({error})),
+      new Promise(resolve=>{timeout=setTimeout(()=>resolve({expired:true}),25000);})
+    ]);
+    if(outcome.expired){
+      // A delayed worklet must never attach to a song that has fallen back.
+      void task.then(engine=>engine?.dispose()).catch(()=>{});
+      console.warn('SpessaSynth initialization timed out; using the real SoundFont sampler');
+      return null;
+    }
+    if(outcome.error){
+      if(outcome.error?.name==='AbortError')throw outcome.error;
+      console.warn('SpessaSynth unavailable; using the real SoundFont sampler:',outcome.error);
+      return null;
+    }
+    return outcome.engine||null;
   }finally{clearTimeout(timeout);}
 }
 async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=false){
@@ -2196,9 +2242,11 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
     return {song,token,blob:null,lyrics:unpacked.document,
       liveMidi:midiBytes,liveFont:fontBytes,lateFont};
   }
-  onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ให้พร้อมเล่น…');
+  onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ด้วย SoundFont…');
+  const verifiedBank=await ensureMidiInstrumentBank(fontBytes,lateFont,token,
+    {signal,abort(){ /* XSK's outer controller owns cancellation. */ }});
   const rendered=await window.XStageBrowserMidi.render(midiBytes,{
-    fontBytes,signal,onStatus
+    fontBytes:verifiedBank,signal,onStatus
   });
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   if(soundFontGeneration!==(state.xskSoundFontGeneration||0))
@@ -2817,8 +2865,9 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         liveMidiBytes=midiBytes;liveFontBytes=fontBytes;
         return null;
       }
+      const verifiedBank=await ensureMidiInstrumentBank(fontBytes,lateFont,token,controller);
       const rendered=await window.XStageBrowserMidi.render(midiBytes,{
-        fontBytes,signal:controller.signal,
+        fontBytes:verifiedBank,signal:controller.signal,
         onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
       });
       return rendered.audio;
@@ -2851,6 +2900,16 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if (lyrics?.schemaVersion !== 1 || !Array.isArray(lyrics.lines)) throw Error('ไฟล์ Lyrics JSON ไม่รองรับ');
     if (request!==state.requestId||token!==state.token){controller.abort();return;}
     if(!liveMidiBytes&&!audio?.size)throw Error('ไฟล์เสียง/MIDI ว่างเปล่า');
+    if(liveMidiBytes){
+      // First play used to skip the SoundFont after a 1–2 s loading budget,
+      // so its oscillator notes sounded like an 8-bit game. Resolve the
+      // pending bank BEFORE we start the first MIDI transport and emit audio.
+      liveFontBytes=await ensureMidiInstrumentBank(
+        liveFontBytes,lateFontPromise,token,controller);
+      lateFontPromise=null;
+      if(controller.signal.aborted||request!==state.requestId||
+         token!==state.token)return;
+    }
     const url=liveMidiBytes?'':URL.createObjectURL(audio);
     if (remember && state.current)state.history.push(state.current);
     player.pause();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
@@ -2879,53 +2938,14 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         signal:controller.signal,
         onStatus:message=>{if(request===state.requestId&&!state.liveMidiPlayback)setPlayStatus(message);}
       };
-      // Keep the synthesizer and selected GM bank high quality when ready,
-      // but don't hold the Play button for a large sound-bank load on iPhone.
-      const startupFontId=window.XStageBrowserMidi?.fontStatus?.().selectedId;
-      const isStillPlaying=()=>request===state.requestId&&
-        token===state.token&&!controller.signal.aborted&&
-        startupFontId===window.XStageBrowserMidi?.fontStatus?.().selectedId&&
-        state.current===song&&state.liveMidiSource===liveMidiBytes;
-      const upgradeWhenReady=async prepared=>{
-        let professional=null;
-        try{professional=await prepared;}catch(error){
-          if(!controller.signal.aborted)console.warn('MIDI upgrade:',error?.message||error);
-          return;
-        }
-        if(!professional)return;
-        if(!isStillPlaying()){professional.dispose();return;}
-        let updated;
-        try{updated=attachProfessionalMidiEngine(professional,midiOptions);}
-        catch(error){professional.dispose();console.warn('MIDI upgrade attach:',error);return;}
-        const previous=state.liveMidiPlayback;
-        state.liveMidiPlayback=updated;
-        setMidiEngineStatus(updated);
-        previous?.dispose();
-        if(isStillPlaying())setPlayStatus('เสียง SoundFont คุณภาพสูงพร้อมแล้ว · เล่นต่อจากตำแหน่งเดิม');
-      };
-      const prepareProfessional=font=>{
-        if(!font||!window.XStageProMidi?.available?.())return null;
-        return window.XStageProMidi.prepare(liveMidiBytes,font,professionalOptions);
-      };
-      let professional=null,lateEngine=null;
-      const preparation=prepareProfessional(liveFontBytes);
-      if(preparation){
-        let timer=null;
-        try{
-          const fast=await Promise.race([
-            preparation.then(engine=>({ready:true,engine})).catch(error=>({ready:true,error})),
-            new Promise(resolve=>{timer=setTimeout(()=>resolve({ready:false}),
-              /iPad|iPhone|iPod/.test(navigator.userAgent||'')?1700:2800);})
-          ]);
-          if(fast.ready){
-            if(fast.error)console.warn('SpessaSynth startup:',fast.error);
-            else professional=fast.engine;
-          }else lateEngine=preparation;
-        }finally{clearTimeout(timer);}
-      }
-      if(controller.signal.aborted||request!==state.requestId){
+      // Keep the first notes silent until the real GM/GS sample bank and
+      // synthesizer are ready. This prevents first-play 8-bit audio.
+      setPlayStatus('กำลังเปิดเครื่องเสียง MIDI ด้วย SoundFont…');
+      const professional=await prepareFirstMidiSynth(
+        liveMidiBytes,liveFontBytes,professionalOptions);
+      if(controller.signal.aborted||request!==state.requestId||
+         token!==state.token){
         professional?.dispose();
-        if(lateEngine)void lateEngine.then(engine=>engine?.dispose()).catch(()=>{});
         return;
       }
       state.liveMidiSource=liveMidiBytes;
@@ -2933,16 +2953,14 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       try{
         state.liveMidiPlayback=professional
           ?attachProfessionalMidiEngine(professional,midiOptions)
-          :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
-             ...midiOptions,fontBytes:null // Do not parse a huge SF2 on UI thread.
-           });
+          :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,midiOptions);
         setMidiEngineStatus(state.liveMidiPlayback);
       }catch(error){
         professional?.dispose();
         if(!professional)throw error;
         console.warn('Professional MIDI start:',error);
         state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(
-          player,liveMidiBytes,{...midiOptions,fontBytes:null});
+          player,liveMidiBytes,midiOptions);
         setMidiEngineStatus(state.liveMidiPlayback);
       }
       window.XStageMIDIPiano?.setSong({
@@ -2952,18 +2970,6 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         previewNote:(note,on)=>!!state.liveMidiPlayback?.previewNote?.(
           note,on,$('midi-instrument')?.value||'')
       });
-      if(lateEngine)void upgradeWhenReady(lateEngine);
-      // When the bank is still downloading, keep the song playing; upgrade
-      // only the current song and keep its MIDI position and lyrics clock.
-      if(lateFontPromise){
-        void lateFontPromise.then(bytes=>{
-          if(!bytes||!isStillPlaying())return;
-          const pending=prepareProfessional(bytes);
-          if(pending)void upgradeWhenReady(pending);
-        }).catch(error=>{
-          if(!controller.signal.aborted)console.warn('Deferred SoundFont:',error);
-        });
-      }
     }else{
       window.XStageMIDIPiano?.setSong({bytes:null});
       setMidiEngineStatus(null);
@@ -3021,7 +3027,11 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if(request!==state.requestId||e.name==='AbortError')return;
     // A failed automatic queue handoff must not keep a silent iPhone
     // MediaStream playing without an active synthesizer.
-    if(!state.liveMidiPlayback)window.XStageIOSMidiAudio?.release?.();
+    if(!state.liveMidiPlayback){
+      window.XStageIOSMidiAudio?.release?.();
+      if(midiTransport.active)midiTransport.clear();
+      if($('midi-keyboard-control'))$('midi-keyboard-control').hidden=true;
+    }
     const message=e.message||'ไม่สามารถเล่นเพลงได้';
     setPlayStatus(message);publishPlaybackStatus('error',song,message);
     state.loading=false;updateTransport();
