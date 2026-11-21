@@ -180,6 +180,7 @@ class KaraokeApp(tk.Tk):
         menu.add_cascade(label="ตั้งค่า", menu=settings_menu)
         settings_menu.add_command(label="Multi-Out · MIDI Routing", command=self.open_multi_bus_settings)
         settings_menu.add_command(label="ASIO Output · ทดลองใช้", command=self.open_asio_settings)
+        settings_menu.add_command(label="สถานะระบบเสียง", command=self.show_audio_diagnostics)
         settings_menu.add_command(label="นโยบายความเป็นส่วนตัวของ X-Stage Karaoke PC", command=self.open_privacy_policy)
         outer = ttk.Frame(self, padding=(24, 18))
         outer.pack(fill="both", expand=True)
@@ -1414,6 +1415,27 @@ class KaraokeApp(tk.Tk):
     def show_error(self, error):
         self.status_var.set(str(error).splitlines()[0])
         messagebox.showerror("X-Stage Karaoke PC", str(error), parent=self)
+
+    def show_audio_diagnostics(self):
+        output = getattr(getattr(self, 'engine', None), 'output', None)
+        if output is None:
+            detail = 'ไม่มี MIDI Output ที่กำลังใช้งาน'
+        else:
+            gather = getattr(output, 'diagnostics', None)
+            try:
+                data = gather() if callable(gather) else {'backend': type(output).__name__}
+                labels = {
+                    'backend': 'ระบบเสียง', 'worker_alive': 'เธรด PCM ทำงาน',
+                    'worker_error': 'ข้อผิดพลาด PCM', 'buffered_frames': 'เฟรมรอเล่น',
+                    'underrun_frames': 'เฟรมเสียงขาด', 'overrun_frames': 'เฟรมบัฟเฟอร์เต็ม',
+                    'limiter_enabled': 'Peak Limiter', 'limiter_input_peak': 'พีคก่อน Limiter',
+                    'limiter_output_peak': 'พีคหลัง Limiter',
+                    'fallback_reason': 'เหตุผลที่ใช้ BASS สำรอง',
+                }
+                detail = '\\n'.join(f'{labels.get(key,key)}: {value}' for key, value in data.items())
+            except Exception as exc:
+                detail = 'อ่านสถานะระบบเสียงไม่สำเร็จ: ' + str(exc)
+        messagebox.showinfo('สถานะระบบเสียง · X-Stage', detail, parent=self)
 
     def open_asio_settings(self):
         from .asio_settings import edit_asio_output
