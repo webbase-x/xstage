@@ -58,3 +58,66 @@ def plan_from_mapping(bus_count: int, mapping) -> AudioBusPlan:
     if set(mapping) != set(range(16)):
         raise ValueError("ต้องกำหนดเส้นทาง MIDI ครบ 16 ช่อง")
     return AudioBusPlan(bus_count, tuple(AudioBusRoute(ch, mapping[ch]) for ch in range(16)))
+
+
+@dataclass(frozen=True)
+class DrumKeyRoute:
+    """Route a percussion note on MIDI channel 10 (zero-based channel 9)."""
+
+    note: int
+    output_bus: int
+
+
+@dataclass(frozen=True)
+class ResolvedAudioRoute:
+    midi_channel: int
+    output_bus: int
+    drum_note: int = -1
+
+
+@dataclass(frozen=True)
+class PerformanceBusPlan:
+    """Channel routes plus optional per-note percussion overrides."""
+
+    channels: AudioBusPlan
+    drum_keys: Tuple[DrumKeyRoute, ...] = ()
+
+    def __post_init__(self):
+        if not isinstance(self.channels, AudioBusPlan):
+            raise ValueError("ต้องกำหนดแผนเส้นทางเสียง MIDI")
+        seen = set()
+        for route in self.drum_keys:
+            if not isinstance(route, DrumKeyRoute):
+                raise ValueError("เส้นทางเสียงกลองไม่ถูกต้อง")
+            if (type(route.note) is not int or not 0 <= route.note <= 127
+                    or route.note in seen):
+                raise ValueError("หมายเลขโน้ตกลองไม่ถูกต้องหรือซ้ำกัน")
+            if (type(route.output_bus) is not int
+                    or not 0 <= route.output_bus < self.channels.bus_count):
+                raise ValueError("ช่องเสียงกลองปลายทางไม่ถูกต้อง")
+            seen.add(route.note)
+
+    def resolve(self, channel: int, note: int = None) -> ResolvedAudioRoute:
+        """Apply note overrides only to percussion, never melodic channels."""
+        bus = self.channels.bus_for_channel(channel)
+        if channel == 9 and note is not None:
+            if type(note) is not int or not 0 <= note <= 127:
+                raise ValueError("หมายเลขโน้ตกลองต้องอยู่ระหว่าง 0–127")
+            for route in self.drum_keys:
+                if route.note == note:
+                    return ResolvedAudioRoute(channel, route.output_bus, note)
+        return ResolvedAudioRoute(channel, bus, note if channel == 9 and note is not None else -1)
+
+
+def performance_plan(bus_count: int = 2, channel_mapping=None, drum_mapping=None):
+    """Create a safe routing snapshot; no live engine mutation or I/O."""
+    if channel_mapping is None:
+        channel_mapping = {ch: 0 for ch in range(16)}
+    if drum_mapping is None:
+        drum_mapping = {}
+    if not isinstance(drum_mapping, dict):
+        raise ValueError("การกำหนดเสียงกลองต้องเป็น dictionary")
+    channels = plan_from_mapping(bus_count, channel_mapping)
+    return PerformanceBusPlan(channels, tuple(
+        DrumKeyRoute(note, bus) for note, bus in drum_mapping.items()
+    ))
