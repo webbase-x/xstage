@@ -89,10 +89,18 @@
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
       </aside></div>
 
+            <div id="midi-transpose-control" class="song-key-transpose toolbar-key-transpose" hidden role="group" aria-label="ปรับคีย์เพลง MIDI">
+              <span class="toolbar-transpose-title" aria-hidden="true">คีย์</span>
+              <button type="button" id="midi-key-down" aria-label="ลดคีย์ 1 ครึ่งเสียง" title="ลดคีย์ 1 ครึ่งเสียง">−</button>
+              <output id="midi-transpose-label" aria-live="polite" aria-label="จำนวนครึ่งเสียงที่ปรับ">0</output>
+              <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์ 1 ครึ่งเสียง" title="เพิ่มคีย์ 1 ครึ่งเสียง">+</button>
+              <input id="midi-transpose" type="hidden" value="0">
+            </div>
+
             <!-- Keep the original handler available to the menu and mobile remote. -->
             <button id="toggle-keyboard" type="button" hidden aria-controls="virtual-keyboard" aria-expanded="false" aria-label="เปิดแป้นพิมพ์ค้นหา">แป้นพิมพ์</button>
-            <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
+            <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
           </header>
           <div id="xstage-context-menu" class="xstage-context-menu" hidden role="menu" aria-label="เมนูคลิกขวา X-Stage">
             <button type="button" data-cmd="find">ค้นหาเพลง</button>
@@ -228,15 +236,10 @@
                     <strong id="now-playing">ยังไม่ได้เลือกเพลง</strong>
                     <small id="now-artist">X-Stage Karaoke Online</small>
                   </div>
-                  <div class="song-key-stack" role="group" aria-label="คีย์เพลงและปรับระดับคีย์">
-                                <output id="toolbar-song-key" class="song-key-toolbar" aria-label="คีย์เพลงปัจจุบัน" aria-live="polite">คีย์ —</output>
-                                <div id="midi-transpose-control" class="song-key-transpose" hidden aria-label="เพิ่มหรือลดระดับคีย์เพลง MIDI">
-                                  <button type="button" id="midi-key-down" aria-label="ลดคีย์ 1 ครึ่งเสียง" title="ลดคีย์ 1 ครึ่งเสียง">−</button>
-                                  <output id="midi-transpose-label" aria-live="polite" aria-label="จำนวนครึ่งเสียงที่ปรับ">0</output>
-                                  <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์ 1 ครึ่งเสียง" title="เพิ่มคีย์ 1 ครึ่งเสียง">+</button>
-                                  <input id="midi-transpose" type="hidden" value="0">
-                                </div>
-                              </div>
+                    <div class="song-key-stack" role="group" aria-label="คีย์เพลงปัจจุบัน">
+                      <span id="toolbar-song-key" class="song-key-toolbar" aria-live="polite">คีย์ —</span>
+                    </div>
+                  </div>
                 </div>
                 <div class="tv-song-meta"><span id="tv-song-key">คีย์ —</span></div>
                 <div class="timeline">
