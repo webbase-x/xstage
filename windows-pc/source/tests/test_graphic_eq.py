@@ -32,6 +32,20 @@ class GraphicTests(unittest.TestCase):
         self.assertAlmostEqual(records[18].bandwidth,1/3,places=6);self.assertEqual(records[18].gain,6)
         self.assertEqual(records[-2].channel,0);self.assertEqual(records[-3].channel,0)
         p.close();self.assertEqual(dll.BASS_ChannelRemoveFX.call_count,33)
+    def test_midi_channel_fx_inherits_48000_without_unsupported_attribute_call(self):
+        dll=NS()
+        for name in ('ChannelSetFX','FXSetParameters','ChannelRemoveFX','ChannelGetAttribute'):
+            setattr(dll,'BASS_'+name,Mock(return_value=1))
+        dll.BASS_ChannelSetFX.side_effect=range(1,34)
+        channel=NS(dll=dll,fx=object(),stream=91)
+        processor=Processor(channel,graphic=True,rate_override=48000)
+        try:
+            self.assertEqual(processor.rate,48000)
+            self.assertEqual(len(processor.handles),33)
+            dll.BASS_ChannelGetAttribute.assert_not_called()
+        finally:
+            processor.close()
+
     def test_rack_fits_work_area(self):
         for area in [(0,0,800,600),(1920,0,3840,1080)]:
             w,h,x,y=rack_size(area);self.assertLessEqual(x+w,area[2]);self.assertLessEqual(y+h,area[3]);self.assertGreaterEqual(x,area[0])
