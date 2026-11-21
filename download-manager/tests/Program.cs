@@ -613,11 +613,26 @@ try
 
     var queueUi = File.ReadAllText(Path.Combine("download-manager", "MainForm.cs"));
     var queueDialog = File.ReadAllText(Path.Combine("download-manager", "MainForm.Performance.cs"));
+    var engineSource = File.ReadAllText(Path.Combine("download-manager", "DownloadEngine.cs"));
+    var buildWorkflow = File.ReadAllText(Path.Combine(".github", "workflows",
+        "build-xstage-download-manager.yml"));
     if (!queueUi.Contains("CreateJobQueue(job)") ||
         !queueUi.Contains("AssignJobQueue(job, queueName)") ||
+        !queueUi.Contains("string.IsNullOrWhiteSpace(job.QueueName) ? \"ทั่วไป\" : job.QueueName.Trim()") ||
         !queueDialog.Contains("_engine.SetJobQueue(job, queueName)") ||
         !queueDialog.Contains("MaxLength = 64"))
-        throw new Exception("Named queue context menu and durable assignment UI missing.");
+        throw new Exception("Named queue context menu and canonical durable assignment UI missing.");
+    if (!engineSource.Contains("public string Save()") ||
+        engineSource.Contains("Save();\n        if (LastStorageError.Length > 0)") ||
+        engineSource.Contains("Save();\r\n        if (LastStorageError.Length > 0)"))
+        throw new Exception("Mutable settings must use the result of their exact SQLite save attempt.");
+    if (!buildWorkflow.Contains("Report CI-only candidate build") ||
+        !buildWorkflow.Contains("startsWith(github.event.head_commit.message, 'release(download-manager):')") ||
+        !buildWorkflow.Contains("actions/checkout@v7") ||
+        !buildWorkflow.Contains("actions/setup-dotnet@v6") ||
+        !buildWorkflow.Contains("actions/setup-python@v7") ||
+        !buildWorkflow.Contains("actions/upload-artifact@v7"))
+        throw new Exception("Download Manager CI/release gate or current Node 24-compatible Actions regressed.");
 
     var queueJob = manager.Add(server.Url + "range/queue-test.bin", folder, 1);
     manager.Pause(queueJob);
