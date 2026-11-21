@@ -30,8 +30,8 @@ assert.match(storefrontCss,/--xstage-status-safe-top:env\(safe-area-inset-top,0p
 assert.match(storefrontCss,/\.site-header\{top:var\(--xstage-status-safe-top\);z-index:70\}/,'sticky header must remain below Dynamic Island while scrolling');
 assert.match(storefrontCss,/\.site-header \.header-launch\{display:none\}/,'mobile header must not be overcrowded by duplicate Karaoke button');
 assert.match(css,/\.portal-account #portal-user\{display:none\}/,'mobile Google profile must remain compact');
-assert.match(html,/storefront\.css\?brand=7/,'updated storefront CSS must bypass old browser cache');
-assert.match(html,/portal\.css\?version=3/,'updated profile CSS must bypass old browser cache');
+assert.match(html,/storefront\.css\?brand=(?:[9]|[1-9][0-9]+)/,'updated storefront CSS must bypass old browser cache');
+assert.match(html,/portal\.css\?version=[4-9][0-9]*/,'updated profile CSS must bypass old browser cache');
 assert.match(html,/id="portal-review-form"/,'review form missing');
 assert.match(html,/id="portal-history-list"/,'user history missing');
 assert.match(html,/portal-privacy\.html/,'privacy document missing');
