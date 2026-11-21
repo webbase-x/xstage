@@ -42,6 +42,20 @@ class MultiBusSynth:
     def send(self, data):
         return self.dispatcher.dispatch(bytes(data))
 
+    def set_channel_tone(self, channel, **tone):
+        bus = self.plan.channels.bus_for_channel(channel)
+        self.synths[bus].set_channel_tone(channel, **tone)
+
+    def set_channel_eq(self, channel, state):
+        bus = self.plan.channels.bus_for_channel(channel)
+        self.synths[bus].set_channel_eq(channel, state)
+
+    def set_drum_tone(self, note, **tone):
+        # A percussion key can have its own bus; do not apply its filter
+        # to a different output stream.
+        bus = self.plan.resolve(9, note).output_bus
+        self.synths[bus].set_drum_tone(note, **tone)
+
     def reset(self):
         first = None
         for synth in self.synths.values():
