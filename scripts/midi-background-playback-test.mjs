@@ -88,7 +88,7 @@ const prepared=await scope.XStageProMidi.prepare(midi,Uint8Array.of(1,2,3));
 assert.equal(Sequencer.instance.handlers.has('songChange:xstage-midi-initial-song-ready'),false,
   'The first-song readiness listener must be cleaned up after worklet notification');
 assert.ok(source.includes("await new Promise((resolve,reject)=>{") &&
-  source.includes("sequencer.eventHandler?.addEvent?.('songChange',id"),
+  source.includes("sequencer.eventHandler.addEvent('songChange',id"),
   'A first MIDI must not start before AudioWorklet reports songChange');
 const listeners=new Map();
 const player={
