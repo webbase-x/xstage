@@ -1,0 +1,30 @@
+name: Karaoke Online song status and intro UI
+
+on:
+  push:
+    paths:
+      - "app.js"
+      - "karaoke.html"
+      - "stage-ui.js"
+      - "xstage-ux.css"
+      - "scripts/karaoke-status-intro-test.mjs"
+      - ".github/workflows/test-karaoke-status-intro.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  intro-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check browser script syntax
+        run: |
+          node --check app.js
+          node --check stage-ui.js
+      - name: Verify song metadata intro, real-key update and mobile layout
+        run: node scripts/karaoke-status-intro-test.mjs
