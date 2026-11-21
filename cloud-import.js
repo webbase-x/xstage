@@ -6,6 +6,7 @@
 (function(scope){
 'use strict';
 const core=scope.XStageImportCore;
+const driveLayout=scope.XSTAGE_DRIVE_LAYOUT||{root:'XStageKaraoke',songs:'SONGS',db:'DB',soundfont:'SOUNDFONT'};
 if(!core)throw Error('Cloud Import: format validation module missing');
 const $=id=>document.getElementById(id);
 const MIME_FOLDER='application/vnd.google-apps.folder';
@@ -28,28 +29,28 @@ function safeName(value){
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function aborted(error){return error?.name==='AbortError'||String(error?.message||'').includes('หยุดงาน');}
 function encode(document){return new Blob([JSON.stringify(document)],{type:'application/json'});}
-// Shared XStageSong taxonomy. Catalog file IDs remain authoritative, so
-// historical flat AUDIO/LYRICS v4 entries stay playable without migration.
+// Fresh XStageKaraoke layout. Catalogs refer to real Drive File IDs;
+// never read, copy, or migrate the separate XStageSong library.
 function pathFor(code,kind,role,name){
   const suffix=core.ext(name),id=String(code||'').toUpperCase();
   const bucket=/^[0-9A-Z]/.test(id)?id[0]:'_';
   const video=['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(suffix);
-  if(suffix==='sf2'||suffix==='sf3')return ['SOUNDFONT',suffix.toUpperCase(),name];
-  if(suffix==='xsk'||suffix==='xmid')return ['MIDI',suffix.toUpperCase(),bucket,name];
-  if(suffix==='kar')return ['MIDI','KAR',bucket,name];
+  if(suffix==='sf2'||suffix==='sf3')return [driveLayout.soundfont,suffix.toUpperCase(),name];
+  if(suffix==='xsk'||suffix==='xmid')return [driveLayout.songs,'MIDI',suffix.toUpperCase(),bucket,name];
+  if(suffix==='kar')return [driveLayout.songs,'MIDI','KAR',bucket,name];
   if(suffix==='mid'||suffix==='midi')
-    return ['MIDI','MID','SONG',bucket,name];
+    return [driveLayout.songs,'MIDI','MID','SONG',bucket,name];
   if(suffix==='json'||kind==='json'){
-    if(role==='NCN')return ['MIDI','NCN','LYRICS',bucket,name];
-    if(role==='MID')return ['MIDI','MID','LYRICS',bucket,name];
+    if(role==='NCN')return [driveLayout.songs,'MIDI','NCN','LYRICS',bucket,name];
+    if(role==='MID')return [driveLayout.songs,'MIDI','MID','LYRICS',bucket,name];
     if(video||['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(String(role).toLowerCase()))
-      return ['VIDEO',String(role).toUpperCase(),'LYRICS',bucket,name];
+      return [driveLayout.songs,'VIDEO',String(role).toUpperCase(),'LYRICS',bucket,name];
     if(role&&role!=='KAR'&&role!=='XSK')
-      return ['AUDIO',String(role).toUpperCase(),'LYRICS',bucket,name];
-    return ['LYRICS',bucket,name]; // legacy isolated JSON path
+      return [driveLayout.songs,'AUDIO',String(role).toUpperCase(),'LYRICS',bucket,name];
+    return [driveLayout.songs,'LYRICS',bucket,name]; // legacy isolated JSON path
   }
-  if(video)return ['VIDEO',suffix.toUpperCase(),'SONG',bucket,name];
-  return ['AUDIO',suffix.toUpperCase(),'SONG',bucket,name];
+  if(video)return [driveLayout.songs,'VIDEO',suffix.toUpperCase(),'SONG',bucket,name];
+  return [driveLayout.songs,'AUDIO',suffix.toUpperCase(),'SONG',bucket,name];
 }
 
 async function db(){
@@ -84,7 +85,7 @@ class Drive {
     this.assertLive();
     if(!response.ok){
       if(response.status===401)fail('Google Login หมดอายุ กรุณาล็อกอินใหม่แล้วกดทำต่อ');
-      if(response.status===403)fail('ไม่มีสิทธิ์เขียน/อ่าน XStageSong ใน Google Drive นี้ · ตรวจบัญชีและ drive.file');
+      if(response.status===403)fail('ไม่มีสิทธิ์เขียน/อ่าน XStageKaraoke ใน Google Drive นี้ · ตรวจบัญชีและ drive.file');
       if(response.status===429||response.status>=500)fail('Google Drive ให้ลองใหม่ภายหลัง (HTTP '+response.status+')');
       fail('Google Drive ไม่สำเร็จ (HTTP '+response.status+')');
     }
@@ -311,29 +312,23 @@ class Drive {
 }
 async function loadCatalog(drive,root){
   const children=await drive.listChildren(root);
-  const lyricDirs=children.filter(x=>['LYRICS','TEXT'].includes(x.name)&&x.mimeType===MIME_FOLDER);
-  if(lyricDirs.filter(x=>x.name==='LYRICS').length>1||
-     lyricDirs.filter(x=>x.name==='TEXT').length>1)
-    fail('พบโฟลเดอร์ LYRICS/TEXT ซ้ำบน Drive');
-  const lyricChildSets=await Promise.all(lyricDirs.map(x=>drive.listChildren(x.id)));
-  const lyricChildren=lyricChildSets.flat();
-  const modern=lyricChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
-  const old=children.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
-  if(modern.length&&old.length)fail('พบ current.json ทั้งใน LYRICS และรากคลัง');
-  const pointers=modern.length?modern:old;
-  if(pointers.length>1)fail('พบ current.json ซ้ำ · หยุดเพื่อไม่ให้ DB เสีย');
+  const dbDirs=children.filter(x=>x.name===driveLayout.db&&x.mimeType===MIME_FOLDER);
+  if(dbDirs.length>1)fail('พบโฟลเดอร์ DB ซ้ำใน XStageKaraoke');
+  if(!dbDirs.length){
+    const unexpected=children.filter(x=>!['SONGS','SOUNDFONT','BACKUP','CACHE','LOGS'].includes(x.name));
+    if(unexpected.length)fail('โครงสร้าง XStageKaraoke ไม่ตรงรูปแบบใหม่ · ตรวจ DB ก่อนนำเข้า');
+    return {pointerFile:null,pointer:null,rows:new Map()};
+  }
+  const dbChildren=await drive.listChildren(dbDirs[0].id);
+  const pointers=dbChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
+  if(pointers.length>1)fail('พบ current.json ซ้ำใน DB · หยุดเพื่อไม่ให้ฐานเสีย');
   if(!pointers.length){
-    const marker=lyricChildren.find(x=>x.name==='.xstage-songstudio-staging.json')||
-      children.find(x=>x.name==='.xstage-songstudio-staging.json');
-    const unknown=children.filter(x=>!['SOUNDFONT','AUDIO','LYRICS','TEXT','VIDEO','MIDI','DB',
-      '.xstage-songstudio-staging.json'].includes(x.name));
-    if(unknown.length)fail('พบไฟล์ใน XStageSong แต่ไม่มี current.json · ต้องตรวจคลังเดิมก่อน');
-    if(!marker&&children.some(x=>!['AUDIO','LYRICS','SOUNDFONT'].includes(x.name)))
-      fail('XStageSong ยังไม่มี current.json หรือหลักฐานนำเข้าที่ปลอดภัย · ไม่เริ่มทับ');
-    if(!marker&&lyricChildren.length)
-      fail('พบข้อมูล LYRICS เดิมที่ยังไม่มี current.json · หยุดตรวจคลังเดิม');
-    if(marker){
-      const data=await drive.getJson(marker.id);
+    const markers=dbChildren.filter(x=>x.name==='.xstage-songstudio-staging.json');
+    const unexpected=dbChildren.filter(x=>x.name!=='.xstage-songstudio-staging.json');
+    if(unexpected.length)fail('พบข้อมูล DB แต่ไม่มี current.json · หยุดตรวจคลังใหม่ก่อน');
+    if(markers.length>1)fail('พบไฟล์ staging ซ้ำใน DB');
+    if(markers.length){
+      const data=await drive.getJson(markers[0].id);
       if(data.format!=='xstage-songstudio-upload-staging-v1')
         fail('ตัวระบุการนำเข้าครั้งก่อนบน Drive ไม่ถูกต้อง');
     }
@@ -346,7 +341,7 @@ async function loadCatalog(drive,root){
     fail('current.json ไม่ตรงสัญญาฐานเพลง X-Stage Online');
   const base=await drive.getJson(pointer.catalogFileId);
   if(base.schemaVersion!==1||!Array.isArray(base.songs))
-    fail('Catalog หลักของ XStageSong ไม่ถูกต้อง');
+    fail('Catalog หลักของ XStageKaraoke ไม่ถูกต้อง');
   const rows=new Map();
   for(const x of base.songs){if(!x||typeof x.webSongId!=='string')fail('เพลงใน Catalog หลักไม่ถูกต้อง');rows.set(x.webSongId,x);}
   for(const fileId of pointer.deltaFileIds){
@@ -826,24 +821,27 @@ class Importer {
         fail('ยังไม่โหลดตัวอ่าน XSK2 ของเบราว์เซอร์');
       if(this.plan.xsks.some(x=>x.kind==='XMID')&&!scope.XStageXmid)
         fail('ยังไม่โหลดตัวอ่าน XMID ของเบราว์เซอร์');
-      this.status('กำลังตรวจคลัง XStageSong และ current.json บน Google Drive…');
-      const rootQuery="'root' in parents and name='XStageSong' and mimeType='"+MIME_FOLDER+"' and trashed=false";
+      this.status('กำลังตรวจ XStageKaraoke/DB/current.json บน Google Drive…');
+      const rootQuery="'root' in parents and name='"+driveLayout.root+"' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
-      if(roots.length>1)fail('พบ XStageSong มากกว่าหนึ่งโฟลเดอร์ · หยุดป้องกันฐานแยก');
+      if(roots.length>1)fail('พบ XStageKaraoke มากกว่าหนึ่งโฟลเดอร์ · หยุดป้องกันฐานแยก');
       let rootId;
       if(roots.length){
         if(roots[0].ownedByMe===false)fail('ไม่สามารถนำเข้าไปยังโฟลเดอร์ที่ไม่ได้เป็นเจ้าของโดยไม่ได้อนุญาต');
         rootId=roots[0].id;
       }else{
         if(!this.dom['allow-create'].checked)
-          fail('ไม่พบ XStageSong ที่บัญชีนี้เข้าถึงได้ · ให้ยืนยันการสร้างคลังใหม่ก่อน (หากมีคลังเดิมที่มองไม่เห็นอย่าเพิ่งสร้าง)');
-        rootId=await drive.folder('root','XStageSong');
+          fail('ไม่พบ XStageKaraoke · กรุณาอนุญาตสร้างคลังใหม่ก่อนนำเข้า');
+        rootId=await drive.folder('root',driveLayout.root);
       }
       let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
+      // Create only missing directories in the NEW root, never migrate old files.
+      for(const folder of ['SONGS','DB','SOUNDFONT','BACKUP','CACHE','LOGS'])
+        await drive.folder(rootId,folder);
       if(pointer && pointer.layoutVersion!==4)
-        fail('พบคลังเก่าที่ใช้โครงสร้างอื่น · เพื่อไม่ให้ข้อมูลสูญหาย กรุณาสำรองและยืนยันการย้ายคลังก่อนอัปโหลดแบบ AUDIO/LYRICS');
+        fail('ฐานเพลงใน XStageKaraoke มีรูปแบบที่ไม่รองรับ · หยุดเพื่อไม่เขียนทับ');
       if(!pointerFile){
-        const textRoot=await drive.ensurePath(rootId,['LYRICS']);
+        const textRoot=await drive.ensurePath(rootId,['DB']);
         const textFiles=await drive.listChildren(textRoot);
         const rootFiles=await drive.listChildren(rootId);
         if(!textFiles.some(x=>x.name==='.xstage-songstudio-staging.json')&&
@@ -895,7 +893,7 @@ class Importer {
         const generation=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
           .map(x=>x.toString(16).padStart(2,'0')).join('');
         let catalogId,deltaIds;
-        const dbRoot=await drive.ensurePath(rootId,['LYRICS']);
+        const dbRoot=await drive.ensurePath(rootId,['DB']);
         const pushJson=async(name,value)=>{
           const blob=encode(value),digest=await core.hashBlob(blob,()=>this.check());
           const item=await drive.upload(dbRoot,blob,name,'application/json',digest);
@@ -916,14 +914,14 @@ class Importer {
         // Verify the pointer generation again. Never blindly overwrite a PC
         // publish performed while the browser was uploading a long batch.
         const currentRoot=pointer?.layoutVersion===4
-           ? await drive.ensurePath(rootId,['LYRICS']) : rootId;
+           ? await drive.ensurePath(rootId,['DB']) : rootId;
          const pointers=(await drive.listChildren(currentRoot)).filter(x=>x.name==='current.json');
         if(pointerFile){
           const current=await drive.getJson(pointerFile.id);
           if(current.generation!==pointer.generation)
             fail('มีการอัปเดตฐานเพลงจากอีกอุปกรณ์ระหว่างงาน · หยุดเพื่อไม่เขียนทับ');
         }else{
-          const textRoot=await drive.ensurePath(rootId,['LYRICS']);
+          const textRoot=await drive.ensurePath(rootId,['DB']);
            const again=await drive.list("'"+driveId(textRoot)+"' in parents and name='current.json' and trashed=false");
           if(again.length)fail('พบ current.json ใหม่จากอีกอุปกรณ์ · ยกเลิกเพื่อป้องกันฐานซ้ำ');
         }
@@ -931,7 +929,7 @@ class Importer {
         if(pointerFile){
           await drive.updatePointer(pointerFile.id,blob,hash);
         }else{
-          const textRoot=await drive.ensurePath(rootId,['LYRICS']);
+          const textRoot=await drive.ensurePath(rootId,['DB']);
            const item=await drive.upload(textRoot,blob,'current.json','application/json',hash);
           pointerFile={id:item.id,name:'current.json'};
         }
@@ -1021,7 +1019,7 @@ class Importer {
             if(!media){
               const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
               const midiFolder=item.kind==='NCN'
-                ? ['MIDI','NCN','SONG',pathFor(code,'midi','',name)[3]]
+                ? [driveLayout.songs,'MIDI','NCN','SONG',pathFor(code,'midi','',name)[4]]
                 : pathFor(code,'midi','',name).slice(0,-1);
               media=await uploadMedia(midiFile,code,midiFolder,name,
                 'audio/midi',midiHash,0,.75);
@@ -1040,7 +1038,7 @@ class Importer {
             // separately verified timed JSON used for all player platforms.
             let ncnSource=same?.ncnSource||null;
             if(item.kind==='NCN'&&item.lyr&&item.cur&&!ncnSource){
-              const bucket=pathFor(code,'midi','',code+'.mid')[3];
+              const bucket=pathFor(code,'midi','',code+'.mid')[4];
               const sourcePart=async(source,role,extension)=>{
                 const hash=await core.hashBlob(source.file,()=>this.check());
                 const sourceName=base+'-'+hash.slice(0,16)+'.'+extension;
