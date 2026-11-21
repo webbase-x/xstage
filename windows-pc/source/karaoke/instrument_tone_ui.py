@@ -73,7 +73,7 @@ class ToneWindow(DialogWindow):
         return [note for note, _ in DRUM_NOTES], [f'{name} (MIDI {note})' for note, name in DRUM_NOTES]
 
     def switch(self):
-        self.cancel_pending()
+        self.flush_pending()
         self.kind = self.mode.get()
         indices, labels = self.selections()
         self.target.configure(values=labels)
@@ -83,7 +83,7 @@ class ToneWindow(DialogWindow):
         self.load()
 
     def select(self, event=None):
-        self.cancel_pending()
+        self.flush_pending()
         indices, _ = self.selections()
         position = self.target.current()
         if 0 <= position < len(indices):
@@ -118,6 +118,11 @@ class ToneWindow(DialogWindow):
         if self.pending is not None:
             self.after_cancel(self.pending)
             self.pending = None
+
+    def flush_pending(self):
+        if self.pending is not None:
+            self.cancel_pending()
+            self.apply_live()
 
     def queue_change(self):
         if self.updating:
@@ -159,9 +164,26 @@ class ToneWindow(DialogWindow):
 
     def restore(self):
         self.cancel_pending()
-        self.preset = normalized(self.app.settings.get('midi_tone', {}))
+        old = self.preset
+        saved = normalized(self.app.settings.get('midi_tone', {}))
+        self.preset = saved
+        engine = getattr(self.app, 'engine', None)
+        if isinstance(engine, MidiPlayer) and hasattr(engine.output, 'set_channel_tone'):
+            # Undo unsaved changes on EVERY edited item, including items removed
+            # from the saved preset, before reloading the current controls.
+            for group, defaults in (('channels', CHANNEL_DEFAULT),
+                                    ('drums', DRUM_DEFAULT)):
+                for key in set(old[group]) | set(saved[group]):
+                    state = saved[group].get(key, defaults)
+                    try:
+                        if group == 'channels':
+                            engine.set_channel_tone(int(key), **state)
+                        else:
+                            engine.set_drum_tone(int(key), **state)
+                    except (OSError, ValueError) as error:
+                        self.app.show_error(error)
+                        break
         self.load()
-        self.apply_live()
 
     def save(self):
         self.cancel_pending()
