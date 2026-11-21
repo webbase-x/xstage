@@ -65,8 +65,10 @@ public static class DownloadFileNaming
                 name = name[..160].TrimEnd('.', ' ');
         }
         var stem = Path.GetFileNameWithoutExtension(name).ToUpperInvariant();
-        if (new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3",
-                    "LPT1", "LPT2", "LPT3" }.Contains(stem))
+        if ((stem is "CON" or "PRN" or "AUX" or "NUL" or "CONIN$" or "CONOUT$" ||
+            (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) ||
+                                  stem.StartsWith("LPT", StringComparison.Ordinal)) &&
+             stem[3] is >= '1' and <= '9')))
             name = "_" + name;
         return name;
     }
