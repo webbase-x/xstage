@@ -1040,3 +1040,79 @@ html,body{max-width:100%;overflow:hidden}
 #view-import #activity-heartbeat{min-height:1.5em;margin:8px 0 0;color:#a1c6d5}
 #view-import #activity-heartbeat.progress-waiting{color:#efc88c}
 #view-import #activity-open-log{white-space:nowrap}
+
+/* Responsive typography: keep Thai labels readable and fit the available panel.
+   Scale UI text inside its own controls; never shrink the entire desktop to
+   make a tall page fit. Existing work views provide internal scrolling. */
+:root{
+  --studio-ui-text:clamp(13px,0.74vw + 6px,15px);
+  --studio-ui-small:clamp(12px,0.55vw + 6px,13px);
+  --studio-ui-button:clamp(12px,0.65vw + 6px,14px);
+}
+body{font-size:var(--studio-ui-text);line-height:1.45}
+.nav-link,.nav-link>span:last-child,.brand-copy,.engine-indicator>div{
+  min-width:0;overflow-wrap:anywhere;
+}
+.nav-link>span:last-child{
+  font-size:clamp(12px,0.72vw + 5px,14px)!important;
+  line-height:1.35!important;
+}
+.engine-indicator strong,.engine-indicator small{
+  max-width:100%;overflow-wrap:anywhere;line-height:1.35;
+}
+.breadcrumb strong{font-size:var(--studio-ui-button)!important}
+.panel-head,.modal-head,.page-intro,.update-notice{min-width:0}
+.panel-head,.modal-head{flex-wrap:wrap}
+.panel-head>*,
+.page-intro>*,
+.update-notice-copy,
+.update-notice-actions{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.panel-head h2,.modal-head h2{font-size:clamp(15px,1vw + 5px,19px);line-height:1.35}
+.panel h3,.settings-dialog h3{font-size:clamp(14px,.8vw + 5px,17px);line-height:1.4}
+.page-intro h1{font-size:clamp(24px,2.5vw,39px);line-height:1.22;overflow-wrap:anywhere}
+.panel .field-hint,
+.settings-dialog .field-hint,
+.panel .notice,
+.panel .selection-summary,
+#activity-subtitle,
+#progress-detail,
+#activity-heartbeat{font-size:var(--studio-ui-small);line-height:1.55;overflow-wrap:anywhere}
+.panel :is(button,input,select,textarea),
+.top-actions button,.settings-dialog button,.confirm-dialog button{
+  min-width:0;max-width:100%;
+  font-size:var(--studio-ui-button);
+  line-height:1.4;
+}
+.toolbar,.folder-actions,.dialog-actions,.update-notice-actions{
+  flex-wrap:wrap;min-width:0;max-width:100%;
+}
+.toolbar button,.folder-actions button,.dialog-actions button{
+  min-width:0;max-width:100%;
+  white-space:normal;overflow-wrap:anywhere;
+}
+.input-wrap{min-width:0;max-width:100%}
+.input-wrap input{min-width:0;flex:1 1 auto}
+.stat{min-width:0}
+.stat>span{line-height:1.45;overflow-wrap:anywhere}
+.stat strong{font-variant-numeric:tabular-nums;max-width:100%;overflow-wrap:anywhere}
+.panel .progress-numbers{flex-wrap:wrap;gap:8px}
+.panel .progress-numbers>span{min-width:0;max-width:100%;overflow-wrap:anywhere}
+@media(max-width:1200px){
+  .panel{padding:clamp(13px,1.7vw,21px)}
+  .content{padding-inline:clamp(12px,2vw,26px)}
+  .topbar{gap:8px}
+  .topbar .top-actions{flex-wrap:wrap;gap:7px}
+}
+@media(max-width:900px){
+  .nav-link{min-height:42px;padding:9px}
+  .nav-link>span:last-child{font-size:13px!important}
+  .panel-head h2,.modal-head h2{font-size:16px}
+  .page-intro h1{font-size:clamp(22px,4vw,32px)}
+  .update-notice{flex-wrap:wrap}
+}
+@media(max-width:600px){
+  .topbar .top-actions button{font-size:12px;padding:8px 10px}
+  .panel .toolbar button{flex:1 1 120px}
+  .input-wrap{padding-inline:9px}
+  .page-intro h1{font-size:clamp(21px,5vw,27px)}
+}
