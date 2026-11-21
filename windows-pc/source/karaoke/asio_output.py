@@ -65,7 +65,10 @@ class AsioOutput:
             self._check(dll.BASS_ASIO_Start(0, 0), 'เริ่ม ASIO')
             self.started = True
         except BaseException:
-            self.close()
+            try:
+                self.close()
+            except Exception:
+                pass
             raise
 
     def _check(self, value, action):
@@ -83,9 +86,11 @@ class AsioOutput:
             try:
                 self.dll.BASS_ASIO_Stop()
             finally:
-                self.dll.BASS_ASIO_Free()
-                self.initialized = False
-                self.started = False
+                try:
+                    self.dll.BASS_ASIO_Free()
+                finally:
+                    self.initialized = False
+                    self.started = False
         if self.bridge is not None:
             self.bridge.close()
             self.bridge = None
