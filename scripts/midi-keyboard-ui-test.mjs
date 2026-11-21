@@ -6,7 +6,11 @@ const ui=read('midi-keyboard-ui.js'),html=read('karaoke.html'),
   app=read('app.js'),engine=read('midi-pro-engine.js'),pc=read('windows-pc/source/karaoke/keyboard_controls.py');
 assert.ok(html.includes('id="midi-keyboard-panel"'),'The PC-style piano panel must exist');
 assert.ok(html.includes('id="midi-keyboard-toggle"')&&html.includes('aria-controls="midi-keyboard-panel"'),
-  'Instrument selector must open accessible piano controls');
+  'Top toolbar must expose an accessible MIDI piano');
+assert.ok(html.includes('id="midi-keyboard-control"')&&!html.includes('id="midi-instrument-control"'),
+  'Instrument button is removed from bottom transport and moved to the top');
+assert.ok(app.includes("$('midi-keyboard-control').hidden=!liveMidiBytes"),
+  'Top keyboard control follows MIDI/XMID playing state');
 assert.ok(html.includes('midi-keyboard-ui.js?v='),'Piano module must be cache-busted');
 const pcPrograms=[...pc.matchAll(/\('([^']+)',(\d+)\)/g)]
   .filter(m=>Number(m[2])<=127).map(m=>({name:m[1],program:Number(m[2])}));
@@ -45,12 +49,13 @@ class El{
   setPointerCapture(){}
   emit(type,event={}){this.listeners.get(type)?.(event);}
 }
-const ids=['midi-keyboard-panel','midi-keyboard-toggle','midi-keyboard-close',
+const ids=['midi-keyboard-panel','midi-keyboard-control','midi-keyboard-toggle','midi-keyboard-close',
   'midi-keyboard-range','midi-keyboard-channel','midi-instrument','midi-piano-keys',
   'midi-piano-scroll','midi-keyboard-notes','midi-piano-info','midi-instrument-label',
   'midi-keyboard-oct-down','midi-keyboard-oct-up'];
 const elements=Object.fromEntries(ids.map(id=>[id,new El(id)]));
 elements['midi-keyboard-panel'].hidden=true;
+elements['midi-keyboard-control'].hidden=true;
 elements['midi-keyboard-range'].value='61';
 elements['midi-keyboard-channel'].value='all';
 const document={
@@ -75,8 +80,12 @@ browser.XStageMIDIPiano.setSong({
   getCurrentTime:()=>1.5,isPlaying:()=>true,
   previewNote:(note,on)=>{preview.push([note,on]);return true;}
 });
+assert.equal(elements['midi-keyboard-panel'].hidden,false,'Piano opens automatically for MIDI songs');
+assert.equal(elements['midi-keyboard-control'].hidden,false,'MIDI button is visible in the top toolbar');
 elements['midi-keyboard-toggle'].emit('click');
-assert.equal(elements['midi-keyboard-panel'].hidden,false);
+assert.equal(elements['midi-keyboard-panel'].hidden,true,'The top button collapses the piano');
+elements['midi-keyboard-toggle'].emit('click');
+assert.equal(elements['midi-keyboard-panel'].hidden,false,'The top button restores the piano');
 assert.equal(elements['midi-keyboard-toggle'].attributes['aria-expanded'],'true');
 const pianoKeys=()=>elements['midi-piano-keys'].children[0].children;
 assert.equal(pianoKeys().length,61,'PC compact piano must show exactly 61 keys');
@@ -104,4 +113,5 @@ assert.equal(elements['midi-instrument-label'].textContent,'Nylon Guitar');
 elements['midi-keyboard-close'].emit('click');
 assert.equal(elements['midi-keyboard-panel'].hidden,true);
 browser.XStageMIDIPiano.setSong({bytes:null});
-console.log('PASS: PC instrument parity, accessible piano panel, 61/128 keys, octave, channels, MIDI note highlighting and touch audition');
+assert.equal(elements['midi-keyboard-control'].hidden,true,'Top MIDI control hides for non-MIDI playback');
+console.log('PASS: top MIDI keyboard, no bottom instrument, PC instrument parity, 61/128 keys, channels, note highlighting, preview and cleanup');
