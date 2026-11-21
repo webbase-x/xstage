@@ -13,6 +13,26 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_outgoing_crossfade_gain_failure_restores_incoming_volume(self):
+        decks = Decks()
+        tail = Mock()
+        tail.playing = True
+        tail.set_volume.side_effect = OSError('old audio deck lost')
+        active = Mock()
+        active.playing = True
+        app = NS(engine=active, system_volume=1.0)
+        decks.tail = tail
+        decks.fade = 1.0
+        decks.stamp = 10.0
+        try:
+            decks.update(app, 10.2)
+            self.assertIsNone(decks.tail)
+            tail.close.assert_called_once()
+            active.set_volume.assert_called_with(1.0)
+            self.assertTrue(active.playing)
+        finally:
+            decks.close()
+
     def test_rhythm_volume_failure_restores_drums_and_preserves_song(self):
         decks = Decks()
         rhythm = Mock()
