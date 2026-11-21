@@ -121,3 +121,43 @@ def performance_plan(bus_count: int = 2, channel_mapping=None, drum_mapping=None
     return PerformanceBusPlan(channels, tuple(
         DrumKeyRoute(note, bus) for note, bus in drum_mapping.items()
     ))
+
+
+class MidiBusDispatcher:
+    """Send complete MIDI messages to configured bus sinks.
+
+    Sinks are injected callables keyed by bus number. This layer never opens
+    devices and does not change the existing stereo engine by default.
+    """
+
+    def __init__(self, plan: PerformanceBusPlan, sinks):
+        if not isinstance(plan, PerformanceBusPlan):
+            raise ValueError("แผนการส่งเสียงไม่ถูกต้อง")
+        if not isinstance(sinks, dict) or set(sinks) != set(range(plan.channels.bus_count)):
+            raise ValueError("ต้องกำหนดปลายทางเสียงให้ครบทุกบัส")
+        if any(not callable(sink) for sink in sinks.values()):
+            raise ValueError("ปลายทางเสียงต้องรับข้อความ MIDI ได้")
+        self.plan = plan
+        self.sinks = dict(sinks)
+
+    def dispatch(self, message: bytes) -> int:
+        """Route channel voice MIDI; return destination bus.
+
+        Note-off and velocity-zero note-on use the same drum-note mapping as
+        note-on, so a drum voice cannot be stranded on another output bus.
+        System messages are intentionally rejected rather than misrouted.
+        """
+        if not isinstance(message, bytes) or not message:
+            raise ValueError("ข้อความ MIDI ไม่ถูกต้อง")
+        status = message[0]
+        if not 0x80 <= status <= 0xEF:
+            raise ValueError("รองรับเฉพาะข้อความ MIDI Channel Voice")
+        kind = status & 0xF0
+        required = 2 if kind in (0xC0, 0xD0) else 3
+        if len(message) != required or any(byte > 127 for byte in message[1:]):
+            raise ValueError("ความยาวหรือข้อมูลข้อความ MIDI ไม่ถูกต้อง")
+        channel = status & 0x0F
+        note = message[1] if kind in (0x80, 0x90, 0xA0) else None
+        bus = self.plan.resolve(channel, note).output_bus
+        self.sinks[bus](message)
+        return bus
