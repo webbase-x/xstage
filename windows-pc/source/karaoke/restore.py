@@ -1,5 +1,7 @@
 """Validate and stage backups; apply only before the application opens its data."""
 import json
+import os
+import tempfile
 import shutil
 import sqlite3
 import uuid
@@ -98,18 +100,33 @@ def stage_restore(folder,data):
 
 
 def replace_file(source,target):
-    temp=target.with_name(target.name+'.restore-tmp')
-    # A prior interrupted copy must not be reused. Always replace from the
-    # validated source and remove an incomplete staging file on copy failure.
+    """Atomically replace a regular file without following stale temp links."""
+    source, target = Path(source), Path(target)
+    if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
+            or not source.is_file()):
+        raise ValueError('ไฟล์ต้นทางกู้คืนไม่ปลอดภัย: ' + source.name)
+    if (target.is_symlink() or getattr(target, 'is_junction', lambda: False)()
+            or (target.exists() and not target.is_file())):
+        raise ValueError('ไฟล์ปลายทางกู้คืนไม่ปลอดภัย: ' + target.name)
+    temp = None
     try:
-        shutil.copyfile(source,temp)
+        # Exclusive random creation avoids a predictable .restore-tmp symlink
+        # redirecting the copy outside the application's data directory.
+        with tempfile.NamedTemporaryFile(
+                dir=target.parent, prefix=target.name + '.restore-',
+                suffix='.tmp', delete=False) as output:
+            temp = Path(output.name)
+            with source.open('rb') as input_file:
+                shutil.copyfileobj(input_file, output)
+            output.flush()
+            os.fsync(output.fileno())
+        if (target.is_symlink() or getattr(target, 'is_junction', lambda: False)()
+                or (target.exists() and not target.is_file())):
+            raise ValueError('ไฟล์ปลายทางกู้คืนเปลี่ยนเป็นลิงก์หรือโฟลเดอร์')
         temp.replace(target)
-    except BaseException:
-        try:
+    finally:
+        if temp is not None:
             temp.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
 
 
 def rollback(data,safety,existed,replaced=FILES):
