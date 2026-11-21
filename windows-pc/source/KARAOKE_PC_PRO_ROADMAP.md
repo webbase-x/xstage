@@ -391,3 +391,10 @@ The user requested batched coding without physical QA. **This is a coding update
 - [21a78242](https://github.com/webbase-x/xstage/commit/21a782426dbced583eeb378931221b7c6c48cd19) keeps the ASIO callback owner pinned if a broken driver refuses shutdown, to avoid releasing memory potentially still referenced by the driver; [9f80d44e](https://github.com/webbase-x/xstage/commit/9f80d44eec3d075c71d6f49ab35008802ca0fd35) adds the deferred regression case.
 - [087447b2](https://github.com/webbase-x/xstage/commit/087447b21f39fce0a976e3ae6cf1596c9322ce86) reapplies channel tone/EQ before re-triggering surviving notes during ASIO→BASS fallback.
 - **No acceptance upgrade:** Windows build result, hardware playback, and complete P0–P6 acceptance are not verified in this coding batch. Read [DEFERRED_QA_CHECKLIST_TH.md](DEFERRED_QA_CHECKLIST_TH.md) before any production release.
+
+
+## 2026-11-21 19:18 Asia/Bangkok — P0.6 expected-error diagnostics regression
+
+- Verified [Windows CI run 44902275380](https://github.com/webbase-x/xstage/actions/runs/44902275380) on `62785b721d25f2dd3d6170bec963f786a6fab50c`: **SUCCESS**, 1,119 tests / 0 failures / 0 errors / 80 skipped; isolated native Windows Tk GUI: 17 passed / 0 failed / 1 retired. Log review showed no `##[error]` or `##[warning]` annotations for the previously expected recovery/ASIO exceptions or Node.js 20 upload action.
+- Added [ASIO diagnostic regression `ad69513c`](https://github.com/webbase-x/xstage/commit/ad69513cee4da5398e5bbf064a6f4e68d7490349): the simulated failed UI notification must still use BASS, emit exactly one WARNING, and never attach traceback `exc_info`. This prevents expected exceptions being misreported as CI failures without hiding the fallback condition.
+- **PENDING-QA** for commit `ad69513c`: rerun full Windows regression and installer/GUI smoke via [CI run 44903241363](https://github.com/webbase-x/xstage/actions/runs/44903241363). No physical audio, multi-device, or soak test was performed; those remain **DEFERRED-HARDWARE**. P0.6 and remaining P1–P6 release gates are **not accepted** based on this narrow diagnostic test.
