@@ -2014,6 +2014,7 @@ function chooseSearchSong(song){
   if(!playbackHasActiveIntent()){
     state.userPaused=false;
     state.resumeAfterInterruption=false;
+    try{window.XStageIOSMidiAudio?.activate?.();}catch{}
     try{window.XStageResumeAudioGraph?.();}catch{}
     try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
     void playSong(song);
@@ -2626,6 +2627,7 @@ function restartCurrentSong(){
   updateTransport();
 }
 async function resumePlaybackFromSystem(){
+  try{window.XStageIOSMidiAudio?.activate?.();}catch{}
   if(state.loading)return false;
   if(!player.src){if(state.queue.length){playNext();return true;}return false;}
   if(!requestNativePlaybackAudioFocus())return false;
@@ -2637,6 +2639,7 @@ async function resumePlaybackFromSystem(){
   catch{state.resumeAfterInterruption=true;updateTransport();return false;}
 }
 function togglePlayback(){
+  try{window.XStageIOSMidiAudio?.activate?.();}catch{}
   try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
   if(state.loading)return;
   if(!player.src){
@@ -2651,7 +2654,10 @@ function togglePlayback(){
 
 async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt=0,autoplay=true}={}) {
   // Capture the user gesture before asynchronous Drive/SF2 downloads.
-  if(autoplay)try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
+  if(autoplay){
+    try{window.XStageIOSMidiAudio?.activate?.();}catch{}
+    try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
+  }
   state.userStopped=false;
   if (!state.token) {setStatus('กรุณาเข้าสู่ระบบ Google ก่อนเล่นเพลง','error');return;}
   if (!playable(song)) {
