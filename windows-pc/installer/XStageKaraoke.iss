@@ -36,7 +36,14 @@ Name: "thai"; MessagesFile: "compiler:Languages\Thai.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Dirs]
-Name: "{localappdata}\X-Stage\Karaoke PC\Data"
+; User data is not an installer payload and must survive upgrades/uninstalls.
+Name: "{app}\data"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{app}\Songs"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{app}\Songs\MIDI"; Flags: uninsneveruninstall
+Name: "{app}\Songs\MIDI\NCN"; Flags: uninsneveruninstall
+Name: "{app}\Songs\MIDI\EMK"; Flags: uninsneveruninstall
+Name: "{app}\Songs\MP3"; Flags: uninsneveruninstall
+Name: "{app}\Songs\VIDEO"; Flags: uninsneveruninstall
 
 [Files]
 Source: "..\source\dist\XStageKaraoke\XStageKaraoke.exe"; DestDir: "{app}"; DestName: "{#AppExe}"; Flags: ignoreversion
@@ -59,11 +66,11 @@ Source: "..\source\dist\XStageKaraoke\tools\Install-EqualizerAPO.ps1"; DestDir: 
 Source: "..\source\dist\XStageKaraoke\tools\Installer-Safety.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"
-Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
+Name: "{autodesktop}\X-Stage Karaoke PC"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "สร้างทางลัดบน Desktop"; GroupDescription: "ทางลัดเพิ่มเติม:"
 
 [Run]
-Filename: "{app}\{#AppExe}"; Parameters: "--data-dir ""{localappdata}\X-Stage\Karaoke PC\Data"""; Description: "เปิด X-Stage Karaoke PC"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Description: "เปิด X-Stage Karaoke PC"; Flags: nowait postinstall skipifsilent
