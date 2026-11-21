@@ -167,7 +167,7 @@ class ChannelEQNativeTests(unittest.TestCase):
             self.assertEqual(synth.dll.BASS_StreamFree.call_args_list, [call(44)])
             self.assertEqual(synth.midi.BASS_MIDI_FontFree.call_args_list, [call(11), call(12)])
             release.assert_called_once_with(synth.dll, ('test', False))
-            synth.dll_directory is None or self.fail('DLL directory not cleared')
+            self.assertIsNone(synth.dll_directory)
             self.assertEqual(synth.fonts, [])
             self.assertEqual(synth.stream, 0)
             self.assertFalse(synth.initialized)
