@@ -193,3 +193,14 @@ class RestoreTests(unittest.TestCase):
         state=json.loads((self.data/'restore-pending'/'state.json').read_text(encoding='utf-8'))
         self.assertEqual(state['status'],'prepared')
 
+
+    def test_malformed_restore_state_is_rejected_without_live_changes(self):
+        pending=self.data/'restore-pending'
+        pending.mkdir()
+        for state in ([], None, 'applying', {'status':'unknown'}):
+            write_json(pending/'state.json',state)
+            with self.subTest(state=state):
+                with self.assertRaisesRegex(ValueError,'สถานะกู้คืน'):
+                    restore.apply_pending(self.data)
+                self.assertEqual(self.title(),'ปัจจุบัน')
+
