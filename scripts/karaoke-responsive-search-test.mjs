@@ -34,4 +34,17 @@ for(const [viewport,leftSafe,rightSafe] of [
   const searchWidth=viewport-insetLeft-insetRight;
   assert.ok(searchWidth>0&&searchWidth<=viewport,'Search must fit '+viewport+'px viewport');
 }
-console.log('PASS: responsive iPhone search widths, Safe Areas, landscape and voice search');
+const ui=get('stage-ui.js'),app=get('app.js');
+assert.match(html,/id="toolbar-song-key"[^>]*>คีย์ —<\/output>/,
+  'Song key must replace the redundant search keyboard at the top');
+assert.match(html,/id="toggle-keyboard"[^>]*hidden/,
+  'Search keyboard handler stays connected to the menu and remote');
+assert.match(app,/setSongKeyDisplay\(musicalKey\)/,
+  'Song selection updates both key labels');
+assert.match(ui,/lowerMenuTrigger\.hidden=upperVisible/,
+  'Lower menu must be hidden when upper menu is visible');
+assert.match(ui,/getClientRects\(\)\.length>0/,
+  'Menu placement follows actual responsive CSS visibility');
+assert.match(css,/#stage-tools-toggle\[hidden\]/,
+  'Hidden menu must override stronger transport styles');
+console.log('PASS: responsive iPhone search, song key and single visible hamburger');
