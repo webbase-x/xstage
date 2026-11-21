@@ -150,19 +150,27 @@ def apply_pending(data):
         shutil.rmtree(pending);return None
     if state['status']!='prepared':raise ValueError('สถานะกู้คืนไม่ถูกต้อง')
     info=validate_backup(pending)
-    safety=data/('restore-safety-'+uuid.uuid4().hex);safety.mkdir()
-    existed=[]
     replaced=FILES+tuple(name for name in OPTIONAL_FILES if (pending/name).is_file())
+    # Validate all live inputs before allocating a safety directory. A failed
+    # snapshot must not leave an orphan directory or a half-written journal.
     for name in replaced:
         source=data/name
         if source.is_symlink() or getattr(source,'is_junction',lambda:False)():
             raise ValueError('ไฟล์ข้อมูลปัจจุบันเป็นลิงก์ที่ไม่ปลอดภัย: '+name)
-        if source.exists():
-            if not source.is_file():
-                raise ValueError('ไฟล์ข้อมูลปัจจุบันไม่ถูกต้อง: '+name)
-            if name.endswith('.sqlite3'):copy_database(source,safety/name)
-            else:shutil.copyfile(source,safety/name)
-            existed.append(name)
+        if source.exists() and not source.is_file():
+            raise ValueError('ไฟล์ข้อมูลปัจจุบันไม่ถูกต้อง: '+name)
+    safety=data/('restore-safety-'+uuid.uuid4().hex);safety.mkdir()
+    existed=[]
+    try:
+        for name in replaced:
+            source=data/name
+            if source.exists():
+                if name.endswith('.sqlite3'):copy_database(source,safety/name)
+                else:shutil.copyfile(source,safety/name)
+                existed.append(name)
+    except BaseException:
+        shutil.rmtree(safety,ignore_errors=True)
+        raise
     state=dict(status='applying',safety=safety.name,existed=existed,replaced=replaced)
     write_json(pending/'state.json',state)
     try:
