@@ -990,6 +990,9 @@ try
     if (job.Parts != 8) throw new Exception("New job must inherit default segment count.");
     if (manager.SetJobParts(job, 16)) throw new Exception("Active downloads must not be resegmented.");
     await WaitFor(() => job.Status == "Running" && Interlocked.Read(ref job.DownloadedBytes) >= 65536);
+    var activeCheckpoint = new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == job.Id);
+    if (activeCheckpoint.SegmentsUsed != 8)
+        throw new Exception("Active Range transfer must persist its byte-boundary geometry before writing chunks.");
     manager.Pause(job);
     await WaitFor(() => job.Status == "Paused" && job.Cancellation is null);
     if (Interlocked.Read(ref job.DownloadedBytes) <= 0)
