@@ -38,9 +38,13 @@ const ui=get('stage-ui.js'),app=get('app.js');
 const topHeader=html.split('<header class="mobile-stage-header stage-toolbar"')[1]?.split('</header>')[0]||'';
 const songStatus=html.split('<div class="transport-song-info">')[1]?.split('<div class="timeline">')[0]||'';
 assert.doesNotMatch(topHeader,/id="toolbar-song-key"/,
-  'Song key must not occupy the upper search toolbar');
-assert.match(songStatus,/id="toolbar-song-key"[^>]*>คีย์ —<\/output>/,
-  'Current key must appear with Song Status on every screen');
+  'Song-key text stays inside Song Status');
+assert.match(topHeader,/id="midi-transpose-control"/,
+  'MIDI transpose buttons belong after the upper search field');
+assert.ok(topHeader.indexOf('id="midi-transpose-control"')<topHeader.indexOf('id="mobile-stage-clock"'),
+  'Transpose comes immediately before the toolbar clock');
+assert.match(songStatus,/id="toolbar-song-key"[^>]*>คีย์ —<\/span>/,
+  'Current musical key must appear as text with Song Status on every screen');
 assert.match(html,/id="toggle-keyboard"[^>]*hidden/,
   'Search keyboard handler stays connected to the menu and remote');
 assert.match(app,/setSongKeyDisplay\(musicalKey\)/,
@@ -62,7 +66,9 @@ assert.ok(finalStyles,'Final responsive CSS overrides must exist');
 assert.match(finalStyles,/#mobile-menu-toggle\{[\s\S]*?display:inline-flex!important/,
   'The upper hamburger must appear on phone widths');
 assert.match(css,/\.transport-song-info \.song-key-stack\{[\s\S]*?display:flex!important/,
-  'Song-key controls belong within the transport Song Status');
+  'Only the key text should remain in Song Status');
+assert.match(css,/\.stage-toolbar #midi-transpose-control\{[\s\S]*?display:inline-flex!important/,
+  'Transpose controls must occupy a compact slot after search');
 assert.match(finalStyles,/#stage-tools-toggle\{\s*display:none!important/,
   'The bottom hamburger must be removed when the top menu exists');
 console.log('PASS: mobile search, actual top MIDI key replacement, one top menu');
