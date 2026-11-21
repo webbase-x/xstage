@@ -21,12 +21,28 @@
     const ctxFullscreen=document.querySelector('#xstage-context-menu [data-cmd="fullscreen"]');if(ctxFullscreen)ctxFullscreen.hidden=true;
   }
   const shuffle=$('stage-shuffle');
-  // Recovery for older published HTML: some cached releases still place
-  // "คีย์ MIDI − 0 +" inside the bottom transport. Move the SAME nodes,
-  // preserving app.js click handlers, below the top song-key output.
-  (function migrateLegacyTransposeToSongKey(){
+  // Move existing key/transpose nodes to Song Status even when the HTML
+  // shell is stale. Moving nodes (rather than cloning) preserves MIDI button
+  // listeners, current transpose value, and the live SoundFont engine.
+  (function migrateSongKeyToStatus(){
+    const info=document.querySelector('.transport-song-info');
     const key=$('toolbar-song-key'),transpose=$('midi-transpose-control');
-    if(!key||!transpose)return;
+    if(!info||!key||!transpose)return;
+    let detail=info.querySelector('.transport-song-detail');
+    if(!detail){
+      detail=document.createElement('div');
+      detail.className='transport-song-detail';
+      const copy=document.createElement('div');
+      copy.className='transport-song-copy';
+      for(const id of ['now-playing','now-artist']){
+        const item=$(id);
+        if(item)copy.append(item);
+      }
+      const caption=info.querySelector('.transport-now-caption');
+      if(caption)copy.insertBefore(caption,copy.firstChild);
+      detail.append(copy);
+      info.insertBefore(detail,info.firstChild);
+    }
     let stack=key.closest('.song-key-stack');
     if(!stack){
       stack=document.createElement('div');
@@ -35,6 +51,7 @@
       stack.append(key);
     }
     if(transpose.parentNode!==stack)stack.append(transpose);
+    if(stack.parentNode!==detail)detail.append(stack);
     transpose.classList.remove('speed-control');
     transpose.classList.add('song-key-transpose');
     for(const node of transpose.childNodes){
