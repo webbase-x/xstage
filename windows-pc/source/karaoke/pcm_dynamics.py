@@ -13,7 +13,7 @@ class StereoPeakLimiter:
     def __init__(self, ceiling=0.98, release_step=0.02):
         if not isinstance(ceiling, (int, float)) or not math.isfinite(ceiling) or not 0 < ceiling < 1:
             raise ValueError('Limiter ceiling ต้องอยู่ระหว่าง 0 และ 1')
-        if not isinstance(release_step, (int, float)) or not 0 < release_step <= 1:
+        if not isinstance(release_step, (int, float)) or not math.isfinite(release_step) or not 0 < release_step <= 1:
             raise ValueError('Limiter release ไม่ถูกต้อง')
         self.ceiling = float(ceiling)
         self.release_step = float(release_step)
