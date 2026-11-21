@@ -32,6 +32,7 @@ class NativePcmBridge:
             'xstage_pcm_pop': ([PTR, PTR, UINT], UINT),
             'xstage_pcm_underruns': ([PTR], U64),
             'xstage_pcm_overruns': ([PTR], U64),
+            'xstage_pcm_available': ([PTR], UINT),
             'xstage_asio_callback': ([ctypes.c_int, UINT, PTR, UINT, PTR], UINT),
         }
         for name, (args, result) in signatures.items():
@@ -57,6 +58,11 @@ class NativePcmBridge:
             return 0
         buffer = ctypes.create_string_buffer(data)
         return self.dll.xstage_pcm_push(self.handle, ctypes.cast(buffer, PTR), len(data) // 8)
+
+    def buffered_frames(self):
+        if not self.handle:
+            return 0
+        return self.dll.xstage_pcm_available(self.handle)
 
     def close(self):
         if self.handle:
