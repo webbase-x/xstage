@@ -73,8 +73,14 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
             rhythm.set_loop(0,pattern[1]);rhythm.set_volume(0)
         return engine,rhythm
     except BaseException:
-        if engine:engine.close()
-        if rhythm:rhythm.close()
+        # Keep the preload failure as the root cause and release both decks,
+        # even if closing one of them raises during partial construction.
+        for deck in (rhythm, engine):
+            if deck is not None:
+                try:
+                    deck.close()
+                except Exception:
+                    pass
         raise
 
 def preparation_key(app,item,path):
