@@ -665,6 +665,19 @@ const player=new Proxy(nativePlayer,{
   }
 });
 
+// Only the currently attached MIDI synthesizer may complete a song. A
+// delayed end event from a replaced SoundFont must never skip the next item.
+function attachProfessionalMidiEngine(prepared,options){
+  let active=null;
+  const onEnded=()=>{
+    if(state.liveMidiPlayback!==active||!midiTransport.active||
+       midiTransport.paused||state.loading||state.userStopped||state.userPaused)return;
+    midiTransport.finish();
+  };
+  active=prepared.attach(player,{...options,onEnded});
+  return active;
+}
+
 const karaokeVideo = document.getElementById('karaoke-video');
 const videoLyricsToggle=document.getElementById('video-lyrics-toggle');
 const videoOriginalToggle=document.getElementById('video-original-toggle');
@@ -2411,7 +2424,7 @@ window.addEventListener('xstage:soundfont-change',()=>{
         let nextEngine=null;
         try{
           nextEngine=highQuality
-            ?highQuality.attach(player,options)
+            ?attachProfessionalMidiEngine(highQuality,options)
             :window.XStageBrowserMidi.playRealtime(player,source,options);
         }catch(error){
           highQuality?.dispose();
@@ -2880,7 +2893,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         if(!professional)return;
         if(!isStillPlaying()){professional.dispose();return;}
         let updated;
-        try{updated=professional.attach(player,midiOptions);}
+        try{updated=attachProfessionalMidiEngine(professional,midiOptions);}
         catch(error){professional.dispose();console.warn('MIDI upgrade attach:',error);return;}
         const previous=state.liveMidiPlayback;
         state.liveMidiPlayback=updated;
@@ -2917,7 +2930,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
       try{
         state.liveMidiPlayback=professional
-          ?professional.attach(player,midiOptions)
+          ?attachProfessionalMidiEngine(professional,midiOptions)
           :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
              ...midiOptions,fontBytes:null // Do not parse a huge SF2 on UI thread.
            });
