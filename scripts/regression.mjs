@@ -613,7 +613,8 @@ assert.ok(css.includes("/* 1.0.44: karaoke-scale search input and five-result pr
 assert.ok(css.includes("font-size:clamp(1.28rem,2.15vw,1.85rem)!important"),'desktop typed search text must remain prominently sized');
 assert.ok(css.includes("font-size:clamp(1.12rem,1.8vw,1.5rem)!important"),'desktop song-title results must remain prominently sized');
 assert.ok(app.includes("renderSongs();\n    updateTransport();\n    if(!state.token)"),'Enter must refresh current search results before choosing a song');
-assert.match(app,/if\(!player\.src\)\{if\(state\.queue\.length\)playNext\(\);else if\(state\.shown\.length\)playSong\(state\.shown\[state\.selectedIndex\]\)/);
+assert.match(app,/if\(!player\.src\)\s*\{\s*if\(state\.queue\.length\)playNext\(\);\s*else if\(state\.shown\.length\)playSong\(state\.shown\[state\.selectedIndex\]\)/,
+  'Play on idle should use queue first, then the selected search result');
 assert.ok(app.includes("ui.elapsed.textContent=hasLoadedSong?timeLabel(player.currentTime):'--:--'"),'idle player must not look stuck at 00:00');
 assert.ok(index.includes('<span class="transport-now-caption">สถานะเพลง</span>'),'idle player caption must not claim that audio is already playing');
 assert.ok(!index.includes('id="mobile-home-toggle">⌂'),'drawer should use explicit text labels instead of icon-only prefixes');
