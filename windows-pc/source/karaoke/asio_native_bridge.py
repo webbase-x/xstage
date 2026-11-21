@@ -64,6 +64,15 @@ class NativePcmBridge:
             return 0
         return self.dll.xstage_pcm_available(self.handle)
 
+    def counters(self):
+        if not self.handle:
+            return {'buffered_frames': 0, 'underrun_frames': 0, 'overrun_frames': 0}
+        return {
+            'buffered_frames': self.buffered_frames(),
+            'underrun_frames': self.dll.xstage_pcm_underruns(self.handle),
+            'overrun_frames': self.dll.xstage_pcm_overruns(self.handle),
+        }
+
     def close(self):
         if self.handle:
             self.dll.xstage_pcm_destroy(self.handle)
