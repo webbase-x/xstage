@@ -237,9 +237,11 @@ try
     }
     catch (ArgumentOutOfRangeException) { }
 
-    // Verify scheduler backpressure at each supported boundary (1/8/32).
+    // Verify scheduler backpressure at supported job-slot boundaries (1/8).
+    // The 32-range case is tested separately as 32 contending transfers with
+    // eight active slots; range segment count is not job concurrency.
     // A blocked waiter must not start early; cancellation must not leak capacity.
-    foreach (var capacity in new[] { 1, 8, 32 })
+    foreach (var capacity in new[] { 1, 8 })
     {
         var queue = new TransferSlotQueue(capacity, capacity);
         var active = new List<IDisposable>();
