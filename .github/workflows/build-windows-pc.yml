@@ -112,7 +112,8 @@ jobs:
             foreach ($file in @('dist/XStageKaraoke/XStageKaraoke.exe',
                                'dist/XStageKaraoke/install_to_D.ps1',
                                'dist/XStageKaraoke/tools/Installer-Safety.ps1',
-                               'dist/XStageKaraoke/release-manifest.json')) {
+                               'dist/XStageKaraoke/release-manifest.json',
+                               'dist/XStageKaraoke/native/x64/xstage_asio_pcm.dll')) {
               if (-not (Test-Path $file -PathType Leaf)) { throw "Build incomplete: $file" }
             }
             & ((Get-Command python).Source) ../../scripts/verify_songstudio_exe_icon.py dist/XStageKaraoke/XStageKaraoke.exe
