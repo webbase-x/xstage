@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.34
+# X-Stage Song Studio Pro — Technical Preview v0.1.35
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,24 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.35 — Observable imports and release consistency
+
+- The running import view now displays the age of the **last real progress report**
+  while separately confirming that the Local Engine responds. Long periods
+  without a progress callback are not misrepresented as new files completed:
+  large SHA-256 reads or SQLite stalls require investigation, not fake percentages.
+- A direct **เปิด Log งานนี้** action is available beside the active import,
+  without opening Settings. The local diagnostic log records sampled actual
+  import counters roughly every 20 seconds and still records start/finish/errors.
+- Correct the session API version (previously left at 0.1.30) to the one
+  canonical desktop/updater version. Keep the installer, UI, tests and Windows
+  artifact names on v0.1.35.
+- Preserve existing Song IDs, lyric versions, import checkpoints, source media
+  and the SQLite workspace. No automatic cleanup/migration of user data.
+- The v0.1.34 public manifest stays in force until the **Windows Setup is built,
+  smoke-tested and SHA-256 verified** by the publishing workflow. This is still
+  an unsigned Preview and X-media player support is separate work.
 
 ## v0.1.34 — Build selection for reviewed lyrics
 

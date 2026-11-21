@@ -20,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-VERSION="0.1.34"
+VERSION="0.1.35"
 MANIFEST_URL="https://webbase-x.github.io/xstage/downloads/song-studio-pro-latest.json"
 RAW_MANIFEST_URL="https://raw.githubusercontent.com/webbase-x/xstage/main/downloads/song-studio-pro-latest.json"
 RELEASE=re.compile(

@@ -805,8 +805,13 @@
       const jobs=result.jobs||[];
       const job=jobs.find(x=>x.status==="running")||jobs[0];
       state.activeJob=jobs.find(x=>x.status==="running")?.id||null;
+      // Even if a large file has not yielded another progress callback,
+      // keep the last-progress age readable without repainting every poll.
+      const activityAgeBucket=job?.status==="running"?
+        Math.floor(Math.max(0,Number(job.progress_age||0))/5):0;
       const paintKey=job?
-        job.id+":"+job.status+":"+String(job.revision??0)+":"+String(state.activeJob):
+        job.id+":"+job.status+":"+String(job.revision??0)+":"+
+        String(state.activeJob)+":"+activityAgeBucket:
         "no-jobs";
       if(state.jobPaintKey===paintKey)return;
       state.jobPaintKey=paintKey;
@@ -823,7 +828,20 @@
       $("db-detail-audit").disabled=!state.ready||Boolean(state.activeJob);
       $("db-history-clean").disabled=!state.ready||Boolean(state.activeJob);
       $("db-compact").disabled=!state.ready||Boolean(state.activeJob);
-      if(!job)return;
+      if(!job){
+        text("activity-heartbeat","");
+        return;
+      }
+      const sinceProgress=Math.max(0,Math.floor(Number(job.progress_age||0)));
+      text("activity-heartbeat",job.status==="running"?
+        (sinceProgress>=15?
+          "Local Engine ตอบกลับแล้ว · ไม่มีรายงานความคืบหน้าใหม่ "+
+          number(sinceProgress)+" วินาที · อาจกำลังตรวจไฟล์ใหญ่หรือรอ SQLite":
+          "Local Engine ตอบกลับแล้ว · รับความคืบหน้าล่าสุด "+
+          number(sinceProgress)+" วินาทีที่แล้ว"):
+        "งานจบแล้ว · ดูบันทึก Log ได้โดยไม่ต้องเริ่มนำเข้าใหม่");
+      $("activity-heartbeat").classList.toggle("progress-waiting",
+        job.status==="running"&&sinceProgress>=30);
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
       text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
@@ -2249,12 +2267,14 @@
     $("settings-dialog").addEventListener("cancel",event=>{
       event.preventDefault();$("settings-dialog").close();
     });
-    $("diagnostic-open-log").addEventListener("click",async()=>{
-      try{
-        await api("/api/open-log",{});
-        toast("เปิด Log วิเคราะห์แล้ว");
-      }catch(error){toast("เปิด Log ไม่สำเร็จ: "+error.message,true);}
-    });
+    for(const control of ["diagnostic-open-log","activity-open-log"]){
+      $(control).addEventListener("click",async()=>{
+        try{
+          await api("/api/open-log",{});
+          toast("เปิด Log วิเคราะห์แล้ว");
+        }catch(error){toast("เปิด Log ไม่สำเร็จ: "+error.message,true);}
+      });
+    }
     $("workspace-open").addEventListener("click",()=>void openLocalFolder("workspace"));
     $("lrc-browse").addEventListener("click",()=>void openPicker("lrc","media-lrc"));
     for(const button of document.querySelectorAll("[data-view]"))

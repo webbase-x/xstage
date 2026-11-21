@@ -85,7 +85,8 @@
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <div class="progress-numbers"><span id="progress-detail">ยังไม่มีงาน</span><span id="progress-count">—</span></div>
             <p id="import-resume-status" class="field-hint" aria-live="polite"></p>
-            <div class="toolbar"><button type="button" class="quiet-btn" id="refresh-summary">↻ รีเฟรช</button><button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดหลังไฟล์ปัจจุบัน</button></div>
+            <p id="activity-heartbeat" class="field-hint" role="status" aria-live="polite"></p>
+            <div class="toolbar"><button type="button" class="quiet-btn" id="refresh-summary">↻ รีเฟรช</button><button type="button" class="quiet-btn" id="activity-open-log">เปิด Log งานนี้</button><button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดหลังไฟล์ปัจจุบัน</button></div>
             <p id="summary-refreshed" class="field-hint" aria-live="polite"></p>
           </article>
         </div>
@@ -93,7 +94,7 @@
           <summary>อัปเดตและเครื่องมือเพิ่มเติม</summary>
           <div class="import-advanced-content">
             <section class="panel pro-update-panel" aria-labelledby="pro-update-title">
-              <div class="panel-head"><h2 id="pro-update-title">อัปเดตโปรแกรม</h2><span class="count-pill" id="pro-update-version">v0.1.34</span></div>
+              <div class="panel-head"><h2 id="pro-update-title">อัปเดตโปรแกรม</h2><span class="count-pill" id="pro-update-version">v0.1.35</span></div>
               <p class="field-hint" id="pro-update-status" aria-live="polite"></p>
               <div class="toolbar">
                 <button id="pro-update-check" class="quiet-btn" type="button">ตรวจสอบอัปเดต</button>

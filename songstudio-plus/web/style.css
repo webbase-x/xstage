@@ -1035,3 +1035,8 @@ html,body{max-width:100%;overflow:hidden}
   #view-import .input-wrap{padding:0 9px;gap:7px}
   #view-import .browse-btn{font-size:11px;padding:8px}
 }
+
+/* v0.1.35: show observable import progress without fabricating a percentage. */
+#view-import #activity-heartbeat{min-height:1.5em;margin:8px 0 0;color:#a1c6d5}
+#view-import #activity-heartbeat.progress-waiting{color:#efc88c}
+#view-import #activity-open-log{white-space:nowrap}

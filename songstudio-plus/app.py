@@ -45,7 +45,7 @@ class State:
         self._log_lock=threading.RLock()
         self.log_path=self.workspace/"LOGS"/"song-studio-pro.log"
         self.log_path.parent.mkdir(parents=True,exist_ok=True)
-        self.diagnostic("state.ready",version="0.1.34",
+        self.diagnostic("state.ready",version=updater.VERSION,
                         platform=sys.platform,frozen=bool(getattr(sys,"frozen",False)),
                         workspace=str(self.workspace))
         self.exit_requested=threading.Event()
@@ -175,6 +175,20 @@ class State:
             job["message"]=str(message)[:240]
             job["updated_at"]=time.time()
             job["revision"]=int(job.get("revision",0))+1
+            # Persist occasional factual import progress to the local log,
+            # but never write on every source file or SQLite transaction.
+            log_progress=(job.get("kind")=="import" and
+                          moment-job.get("_progress_logged_at",-1e9)>=20)
+            if log_progress:
+                job["_progress_logged_at"]=moment
+        if log_progress:
+            self.diagnostic("job.progress",kind="import",job=job.get("id"),
+                            files_seen=summary.get("files_seen",0),
+                            files_new=summary.get("files_new",0),
+                            media_duplicates=summary.get("media_duplicates",0),
+                            resumed_files=summary.get("resumed_files",0),
+                            failures=summary.get("failures",0),
+                            source=str(message)[:180])
 
     def jobs_snapshot(self):
         now_epoch=time.time()
@@ -182,7 +196,7 @@ class State:
             rows=[]
             for job in list(self.jobs.values())[-10:][::-1]:
                 item={k:v for k,v in job.items() if k not in (
-                    "cancel","started_at","_rate_first_count","_rate_first_at")}
+                    "cancel","started_at","_rate_first_count","_rate_first_at","_progress_logged_at")}
                 item["progress_age"]=round(max(0.0,now_epoch-float(job.get("updated_at",now_epoch))),3)
                 rows.append(item)
             return rows
@@ -263,7 +277,7 @@ class Handler(BaseHTTPRequestHandler):
         path=url.path
         q=urllib.parse.parse_qs(url.query)
         if path=="/api/session":
-            self.send_json(200,{"token":self.state.token,"version":"0.1.30",
+            self.send_json(200,{"token":self.state.token,"version":updater.VERSION,
                                 "workspace":str(self.state.workspace)})
             return
         if path=="/api/status":

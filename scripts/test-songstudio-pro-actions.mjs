@@ -149,4 +149,14 @@ assert.ok(importLayout.includes('#view-import>.two-col{')&&
 assert.ok(importLayout.includes('.top-actions{')&&
           importLayout.includes('flex-wrap:wrap'),
  'Windows toolbar must wrap instead of overlapping when resized');
+assert.ok(source.includes('id="activity-heartbeat"')&&
+          source.includes('id="activity-open-log"')&&
+          js.includes('const activityAgeBucket=')&&
+          js.includes('Number(job.progress_age||0)'),
+  'Running imports must visibly report the age of their last real progress');
+assert.ok(js.includes('["diagnostic-open-log","activity-open-log"]')&&
+          server.includes('"job.progress"')&&
+          server.includes('version=updater.VERSION')&&
+          server.includes('"version":updater.VERSION'),
+  'Import log and active app version must be reliable and directly accessible');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');
