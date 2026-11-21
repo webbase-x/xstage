@@ -129,6 +129,30 @@ class ChannelEQNativeTests(unittest.TestCase):
         synth._load_fx_library.assert_not_called()
         synth.midi.BASS_MIDI_StreamGetChannel.assert_not_called()
 
+    def test_close_releases_all_resources_after_fx_failure(self):
+        synth = self.fake()
+        synth.fonts = [11, 12]
+        synth.initialized = True
+        synth._device_key = ('test', False)
+        synth.dll_directory = NS(close=Mock())
+        synth.midi.BASS_MIDI_FontFree = Mock(return_value=1)
+        synth._channel_processors[3] = (77, NS(close=Mock(side_effect=OSError('FX teardown failed'))))
+        with patch('karaoke.audio_device.release') as release:
+            with self.assertRaisesRegex(OSError, 'FX teardown failed'):
+                synth.close()
+            synth.dll.BASS_StreamFree.assert_any_call(77)
+            synth.dll.BASS_StreamFree.assert_any_call(44)
+            self.assertEqual(synth.midi.BASS_MIDI_FontFree.call_args_list, [call(11), call(12)])
+            release.assert_called_once_with(synth.dll, ('test', False))
+            self.assertEqual(synth.stream, 0)
+            self.assertEqual(synth.fonts, [])
+            self.assertFalse(synth.initialized)
+            self.assertIsNone(synth.dll_directory)
+            self.assertEqual(synth._channel_processors, {})
+            synth.close()
+            release.assert_called_once()
+
+
 
 if __name__ == '__main__':
     unittest.main()
