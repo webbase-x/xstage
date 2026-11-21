@@ -115,7 +115,35 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         if(String.fromCharCode(...bytes.subarray(0,4))==='MThd'){
           sequencer=new Sequencer(synth);
           const binary=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
-          sequencer.loadNewSongList([{binary,fileName:'X-Stage.mid'}]);
+          // SpessaSynth loadNewSongList() is asynchronous. It sets
+          // isLoading=true and later signals songChange *after* the worklet
+          // parses MIDI and preloads its instruments. Starting playback
+          // before songChange can lose the first GM patches or notes.
+          await new Promise((resolve,reject)=>{
+            const id='xstage-midi-initial-song-ready';
+            let settled=false,timeout=null;
+            const cleanup=()=>{
+              clearTimeout(timeout);
+              sequencer?.eventHandler?.removeEvent?.('songChange',id);
+              signal?.removeEventListener?.('abort',abort);
+            };
+            const done=error=>{
+              if(settled)return;
+              settled=true;cleanup();
+              if(error)reject(error);else resolve();
+            };
+            const abort=()=>done(new DOMException('ยกเลิก','AbortError'));
+            sequencer.eventHandler?.addEvent?.('songChange',id,()=>{
+              done();
+            });
+            signal?.addEventListener?.('abort',abort,{once:true});
+            timeout=setTimeout(()=>done(Error('เครื่องเสียง MIDI ยังโหลดเพลงแรกไม่เสร็จ')),15000);
+            if(signal?.aborted){abort();return;}
+            try{
+              sequencer.loadNewSongList([{binary,fileName:'X-Stage.mid'}]);
+            }catch(error){done(error);}
+          });
+          if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
           sequencer.loopCount=0;
         }
       }catch(error){
