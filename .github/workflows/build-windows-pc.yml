@@ -113,6 +113,74 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Release manifest integrity check failed.' }
           } finally { Pop-Location }
 
+      - name: Run required Windows Tk GUI regression in isolated processes
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Push-Location windows-pc/source
+          try {
+            $python = (Resolve-Path '.build-venv/Scripts/python.exe').Path
+            # DISPLAY is an explicit test opt-in, not a screen simulation.
+            # Prove Tk can create/map a real native window before enabling it.
+            & $python -c "import tkinter as tk; r=tk.Tk(); r.geometry('320x200'); r.update(); assert r.winfo_ismapped(), 'Tk window did not map'; assert r.tk.call('tk','windowingsystem') == 'win32'; r.destroy(); print('Native Win32 Tk GUI probe passed')"
+            if ($LASTEXITCODE -ne 0) { throw 'Native Tk GUI unavailable on this Windows runner' }
+            $env:DISPLAY = 'xstage-native-win32-test-opt-in'
+            $env:PYTHONDONTWRITEBYTECODE = '1'
+            $env:PYTHONPATH = (Join-Path (Get-Location).Path 'tests') + ';' + (Get-Location).Path
+            @'
+          import os, pathlib, subprocess, sys, unittest
+          # Run each GUI test in a fresh process to isolate Tk thread destruction,
+          # and to fail rather than hang indefinitely on unresolved modal dialogs.
+          classes = [
+              "test_auditfix073.DetailGui073Tests",
+              "test_eq_interaction.RackIntegrationTests",
+              "test_history070.HistoryRecoveryGuiTests",
+              "test_quality090.QualityGuiTests",
+              "test_recovery_ui060.RecoveryUiTests",
+              "test_song_workspace79.WorkspaceGuiTests",
+              "test_soundfont80.SoundfontGui80Tests",
+              "test_soundfont81.SoundfontGui81Tests",
+          ]
+          retired = {
+              "test_quality090.QualityGuiTests.test_scan_review_cancel_delete_and_restore",
+          }
+          tests = []
+          for name in classes:
+              suite = unittest.defaultTestLoader.loadTestsFromName(name)
+              for child in suite:
+                  for test in child:
+                      tests.append(test.id())
+          failures = []
+          completed = 0
+          for test in tests:
+              if test in retired:
+                  print("Retired scenario; replacement coverage is in P0 regression:", test, flush=True)
+                  continue
+              print("GUI TEST:", test, flush=True)
+              try:
+                  proc = subprocess.run([sys.executable, "-m", "unittest", "-v", test],
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        text=True, encoding="utf-8", errors="replace", timeout=90,
+                                        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+                  print(proc.stdout, flush=True)
+                  if proc.returncode or "OK (skipped=" in proc.stdout or "Ran 0 tests" in proc.stdout:
+                      failures.append(test)
+                  else:
+                      completed += 1
+              except subprocess.TimeoutExpired:
+                  print("GUI test timed out:", test, flush=True)
+                  failures.append(test)
+          print(f"GUI SUMMARY: {completed} passed; {len(failures)} failed; {len(retired)} retired", flush=True)
+          if failures:
+              print("FAILED GUI TESTS:", "\n".join(failures), flush=True)
+              raise SystemExit(1)
+          if completed != len(tests) - len(retired) or completed < 15:
+              raise SystemExit("Required GUI coverage incomplete")
+          '@ | & $python -
+            if ($LASTEXITCODE -ne 0) { throw 'Windows GUI regression failed' }
+          } finally { Pop-Location }
+
       - name: Install Inno Setup compiler
         shell: pwsh
         run: |
