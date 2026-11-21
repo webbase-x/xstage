@@ -1,0 +1,30 @@
+{
+  "name": "xstage-ag06-studio-desktop",
+  "productName": "X-Stage AG06 Studio",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.cjs",
+  "description": "First-generation Yamaha AG06 recording and software DSP studio",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "35.1.5",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "com.webbasex.ag06studio",
+    "productName": "X-Stage AG06 Studio",
+    "files": ["main.cjs", "package.json"],
+    "extraResources": [
+      {
+        "from": "../",
+        "to": "ag06-web",
+        "filter": ["index.html", "app.js", "audio-engine.js", "presets.js", "style.css", "icon.svg"]
+      }
+    ],
+    "win": {"target": "portable", "artifactName": "X-Stage-AG06-Studio-v${version}-Windows.exe"},
+    "directories": {"output": "dist"}
+  }
+}
