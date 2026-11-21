@@ -91,8 +91,9 @@ assert.equal(await gate.prepareFirstMidiSynth(Uint8Array.of(1),bank,{}),null,
 
 assert.ok(source.includes('liveFontBytes=await ensureMidiInstrumentBank('),
   'The first song must wait for its SoundFont instead of playing oscillators');
-assert.ok(source.includes('const professional=await prepareFirstMidiSynth('),
-  'Initial playback must await the professional synth before emitting notes');
+assert.ok(source.includes('professional=await prepareFirstMidiSynth(')&&
+  source.includes('handoff.prepareNextMidi('),
+  'Playback must reuse a warm SoundFont on handoff and otherwise await SpessaSynth before notes');
 assert.ok(source.includes('await window.XStageBrowserMidi.warmRealtimeSamples('),
   'First playback must decode its early SF2 samples before starting the transport');
 assert.ok(source.includes('playRealtime(player,liveMidiBytes,midiOptions)'),
