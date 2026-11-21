@@ -151,6 +151,14 @@ def rollback(data,safety,existed,replaced=FILES):
         if (target.is_symlink() or getattr(target, 'is_junction', lambda: False)()
                 or (target.exists() and not target.is_file())):
             raise ValueError('ไฟล์ปลายทางย้อนคืนไม่ปลอดภัย: ' + name)
+    # Preflight every rollback source too: a later missing/linked safety file
+    # must not leave earlier live files already rolled back.
+    for name in replaced:
+        if name in existed:
+            source = safety/name
+            if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
+                    or not source.is_file()):
+                raise ValueError('ไฟล์สำรองเพื่อย้อนคืนไม่ปลอดภัย: ' + name)
     for name in replaced:
         target=data/name
         if name.endswith('.sqlite3'):
