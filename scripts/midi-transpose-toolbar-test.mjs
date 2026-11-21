@@ -4,23 +4,30 @@ import fs from 'node:fs';
 const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const html=read('karaoke.html'),css=read('xstage-ux.css'),app=read('app.js');
 const header=html.split('<header class="mobile-stage-header stage-toolbar"')[1]?.split('</header>')[0]||'';
-const transport=html.split('<div class="transport-right">')[1]?.split('<div class="transport-right-actions">')[0]||'';
-assert.match(header,/<output id="toolbar-song-key"/,'Song key stays in the upper toolbar');
-assert.match(header,/<div id="midi-transpose-control"[^>]*hidden/,'Transpose controls start hidden');
-assert.match(header,/<button type="button" id="midi-key-down"/);
-assert.match(header,/<output id="midi-transpose-label"/);
-assert.match(header,/<button type="button" id="midi-key-up"/);
-assert.ok(header.indexOf('id="toolbar-song-key"')<header.indexOf('id="midi-transpose-control"'),
-  'Minus, value, plus must appear immediately BELOW the song key');
-assert.ok(!transport.includes('midi-transpose-control'),
-  'The old bottom transpose control must be removed');
-assert.ok(!header.includes('คีย์ MIDI'),'The redundant MIDI key heading must not appear');
+const status=html.split('<div class="transport-song-info">')[1]?.split('<div class="timeline">')[0]||'';
+const transportRight=html.split('<div class="transport-right">')[1]?.split('<div class="transport-right-actions">')[0]||'';
+assert.doesNotMatch(header,/id="toolbar-song-key"|id="midi-transpose-control"/,
+  'Song key and MIDI buttons must not occupy search toolbar');
+assert.match(status,/<span class="transport-now-caption">สถานะเพลง<\/span>/);
+assert.match(status,/<output id="toolbar-song-key"/,
+  'Song key must appear in Song Status');
+assert.match(status,/<div id="midi-transpose-control"[^>]*hidden/,
+  'Transpose controls start hidden inside Song Status');
+assert.match(status,/<button type="button" id="midi-key-down"/);
+assert.match(status,/<output id="midi-transpose-label"/);
+assert.match(status,/<button type="button" id="midi-key-up"/);
+assert.ok(status.indexOf('id="toolbar-song-key"')<status.indexOf('id="midi-transpose-control"'),
+  'Minus, value, plus stay below the Song Status key');
+assert.ok(!transportRight.includes('midi-transpose-control'),
+  'No duplicate key controls in volume/tempo area');
+assert.ok(!status.includes('คีย์ MIDI'),'The redundant MIDI heading must be removed');
 assert.equal((html.match(/id="midi-key-up"/g)||[]).length,1);
 assert.equal((html.match(/id="midi-key-down"/g)||[]).length,1);
 assert.match(css,/#midi-transpose-control\[hidden\]\{\s*display:none!important/);
-assert.match(css,/\.stage-toolbar:has\(#midi-transpose-control:not\(\[hidden\]\)\)/,
-  'Compact toolbar must expand to fit both song key and transpose');
-assert.match(css,/\.song-key-stack\{/,'Song key and buttons share one vertical group');
+assert.match(css,/\.transport-song-info \.transport-song-detail\{/,
+  'Song Status title, artist and key share a compact flexible row');
+assert.match(css,/\.transport-song-info \.song-key-stack\{/,
+  'The vertical key and MIDI buttons are styled inside status');
 
 const start=app.indexOf("const midiKeyControl=$('midi-transpose-control')");
 const end=app.indexOf("$('midi-instrument')?.addEventListener",start);
@@ -63,33 +70,12 @@ elems['midi-transpose-control'].hidden=true;
 click('midi-key-down');
 assert.equal(elems['midi-transpose'].value,'11','Hidden control must not change key');
 assert.ok(sent>=36,'Every successful transpose notifies the live engine');
-// A tab running an older cached HTML can be upgraded without dropping its
-// already-attached player click handlers: physically move the same control.
+// Earlier cached HTML may still have key controls in the top toolbar or
+// volume controls below. The script must relocate the original DOM nodes.
 const stageUi=read('stage-ui.js');
-const migrationStart=stageUi.indexOf('  (function migrateLegacyTransposeToSongKey(){');
-const migrationEnd=stageUi.indexOf('  })();',migrationStart)+'  })();'.length;
-assert.ok(migrationStart>=0&&migrationEnd>migrationStart,
-  'Legacy lower transport must have a DOM migration path');
-const topToolbar={insertBefore(node){this.child=node;node.parentNode=this;}};
-const bottomTransport={};
-const oldKey={parentNode:topToolbar,closest:()=>null};
-let activeStack=null;
-const oldKeyControls={
-  parentNode:bottomTransport,childNodes:[{nodeType:3,textContent:'คีย์ MIDI '},{nodeType:1,textContent:'−'}],
-  classList:{
-    names:new Set(['speed-control']),
-    remove(x){this.names.delete(x);},add(x){this.names.add(x);}
-  }
-};
-const browserDocument={createElement:()=>({
-  className:'',
-  append(node){node.parentNode=this;if(node===oldKeyControls)activeStack=this;}
-})};
-new Function('document',String.fromCharCode(36),stageUi.slice(migrationStart,migrationEnd))(
-  browserDocument,id=>id==='toolbar-song-key'?oldKey:id==='midi-transpose-control'?oldKeyControls:null);
-assert.ok(activeStack&&oldKeyControls.parentNode===activeStack,
-  'The existing clicked input must move under the top key intact');
-assert.equal(oldKeyControls.childNodes[0].textContent,' ',
-  'The legacy MIDI heading must be removed');
-assert.ok(oldKeyControls.classList.names.has('song-key-transpose'));
-console.log('PASS: transpose beneath song key; -12/+12 reversible; cached HTML migrated without replacing buttons');
+assert.match(stageUi,/function migrateSongKeyToStatus\(\)/);
+assert.match(stageUi,/info\.insertBefore\(detail,info\.firstChild\)/);
+assert.match(stageUi,/if\(stack\.parentNode!==detail\)detail\.append\(stack\)/);
+assert.match(stageUi,/if\(transpose\.parentNode!==stack\)stack\.append\(transpose\)/);
+assert.match(stageUi,/transpose\.classList\.remove\('speed-control'\)/);
+console.log('PASS: song key moved into Song Status; MIDI -12/+12 remains reversible; cached toolbar DOM relocates');
