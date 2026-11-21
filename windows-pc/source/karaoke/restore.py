@@ -118,7 +118,10 @@ def apply_pending(data):
         replaced=state.get('replaced',FILES)
         allowed=set(FILES+OPTIONAL_FILES)
         if (not isinstance(existed,list) or not isinstance(replaced,(list,tuple))
-                or len(set(replaced))!=len(replaced) or any(name not in allowed for name in replaced)
+                or any(not isinstance(name,str) for name in replaced)
+                or any(not isinstance(name,str) for name in existed)
+                or len(set(replaced))!=len(replaced) or len(set(existed))!=len(existed)
+                or any(name not in allowed for name in replaced)
                 or any(name not in replaced for name in existed)):
             raise ValueError('รายการไฟล์กู้คืนค้างไม่ถูกต้อง')
         for name in existed:
