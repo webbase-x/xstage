@@ -2576,9 +2576,11 @@ function playNext(){
   if(preparedQueued)state.queuePrepared=null;
   if(pendingQueued)state.queuePreload=null;
   state.queuePreloadSkipped.clear();
+  const song=queued||(state.medley?nextMedleyCandidate():null);
+  const nextIsMidi=!!song&&!!(getFileId(song.midi)||getFileId(song.xmid)||getFileId(song.xsk));
+  window.XStageIOSMidiAudio?.keepPlayingBetweenSongs?.(nextIsMidi);
   releaseFinishedMedia();
   scheduleQueuePreload();
-  const song=queued||(state.medley?nextMedleyCandidate():null);
   if(!queued)state.medleyUpcoming=null;
   state.userStopped=false;
   if(state.medleyCache&&state.medleyCache.song!==song)state.medleyCache=null;
@@ -2965,6 +2967,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     }else{
       window.XStageMIDIPiano?.setSong({bytes:null});
       setMidiEngineStatus(null);
+      window.XStageIOSMidiAudio?.release?.();
       if(midiTransport.active)midiTransport.clear();
       player.src=url;
     }
@@ -3014,7 +3017,15 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       setPlayStatus('เพลงพร้อมเล่นต่อจากตำแหน่งเดิม');
       updateTransport();
     }
-  }catch(e){if(request!==state.requestId || e.name==='AbortError')return;const message=e.message||'ไม่สามารถเล่นเพลงได้';setPlayStatus(message);publishPlaybackStatus('error',song,message);state.loading=false;updateTransport();}
+  }catch(e){
+    if(request!==state.requestId||e.name==='AbortError')return;
+    // A failed automatic queue handoff must not keep a silent iPhone
+    // MediaStream playing without an active synthesizer.
+    if(!state.liveMidiPlayback)window.XStageIOSMidiAudio?.release?.();
+    const message=e.message||'ไม่สามารถเล่นเพลงได้';
+    setPlayStatus(message);publishPlaybackStatus('error',song,message);
+    state.loading=false;updateTransport();
+  }
   finally{
     clearInterval(loadingNotice);
     if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}
