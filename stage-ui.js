@@ -51,7 +51,17 @@
       key.parentNode.insertBefore(stack,key);
       stack.append(key);
     }
-    if(stack.parentNode!==detail)detail.append(stack);
+    // Keep the single live key label immediately after the song title,
+    // not in a detached right-hand column. Older cached shells migrate too.
+    let titleRow=detail.querySelector('.transport-song-title');
+    if(!titleRow){
+      titleRow=document.createElement('div');
+      titleRow.className='transport-song-title';
+      const songTitle=$('now-playing');
+      if(songTitle){songTitle.parentNode?.insertBefore(titleRow,songTitle);titleRow.append(songTitle);}
+      else detail.querySelector('.transport-song-copy')?.append(titleRow);
+    }
+    if(stack.parentNode!==titleRow)titleRow.append(stack);
     transpose.classList.remove('speed-control');
     transpose.classList.add('song-key-transpose','toolbar-key-transpose');
     for(const node of [...transpose.childNodes]){

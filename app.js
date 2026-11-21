@@ -16,17 +16,37 @@ const ui = {
   seek: $('seek'), elapsed: $('elapsed'), duration: $('duration'), speed: $('speed'), volume: $('volume'),
   repeat: $('repeat'), fullscreen: $('fullscreen'), lyrics: $('lyrics')
 };
-function setSongKeyDisplay(key=''){
-  const label='คีย์ '+(String(key||'').trim()||'—');
+function transposeSongKey(key,semitones=0){
+  const original=String(key||'').trim();
+  const match=/^([A-Ga-g])([#♯b♭]?)(m|min)?$/i.exec(original);
+  const shift=Math.trunc(Number(semitones)||0);
+  if(!match||!shift)return original;
+  const chromatic={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+  const root=match[1].toUpperCase();
+  const accidental=match[2]==='#'||match[2]==='♯'?1:
+    match[2]==='b'||match[2]==='♭'?-1:0;
+  const index=((chromatic[root]+accidental+shift)%12+12)%12;
+  const sharps=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const flats=['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
+  const preferFlat=match[2]==='b'||match[2]==='♭';
+  return (preferFlat?flats:sharps)[index]+(match[3]||'');
+}
+function setSongKeyDisplay(key){
+  if(key!==undefined)state.originalSongKey=String(key||'').trim();
+  else if(!state.current)state.originalSongKey='';
+  const shift=state.liveMidiSource?Number($('midi-transpose')?.value||0):0;
+  const actual=transposeSongKey(state.originalSongKey,shift);
+  const label='คีย์ '+(actual||'—');
   if(ui.songKey)ui.songKey.textContent=label;
   if(ui.toolbarSongKey){
     ui.toolbarSongKey.textContent=label;
-    ui.toolbarSongKey.title=String(key||'').trim()?'คีย์เพลง: '+key:'ยังไม่มีข้อมูลคีย์เพลง';
+    ui.toolbarSongKey.title=actual?'คีย์เพลง: '+actual:'ยังไม่มีข้อมูลคีย์เพลง';
   }
 }
 const state = {
   token: '', tokenExpiresAt:0, accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
-  queue: [], history: [], current: null, lyrics: null, objectUrl: '', liveMidiPlayback:null, liveMidiSource:null,
+  queue: [], history: [], current: null, lyrics: null, preparingSong:null, originalSongKey:'',
+  objectUrl: '', liveMidiPlayback:null, liveMidiSource:null,
   requestId: 0, controller: null, authId: 0, loading: false,
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
@@ -2946,7 +2966,11 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
   state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
-  state.loading=true;updateTransport();
+  state.loading=true;
+  state.preparingSong=song;
+  updateTransport();
+  // Paint metadata right away while private audio/SoundFont is still loading.
+  scheduleLyricsDraw();
   setPlayStatus('กำลังเตรียมเพลง: '+(song.title||song.code||'ไม่ระบุชื่อ')+' · กำลังโหลดจาก Google Drive…');
   // Preload only public synth assets, in parallel with private Drive loading.
   // A browser cannot execute a downloaded BASSMIDI DLL. The local AudioWorklet
@@ -3240,7 +3264,10 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
   }
   finally{
     clearInterval(loadingNotice);
-    if(request===state.requestId){state.loading=false;state.controller=null;updateTransport();}
+    if(request===state.requestId){
+      state.loading=false;state.preparingSong=null;state.controller=null;
+      updateTransport();scheduleLyricsDraw();
+    }
   }
 }
 function updateTransport(){
@@ -3576,9 +3603,10 @@ function drawLyrics(){
   try {
     const {w,h}=resizeCanvas();
     if(w&&h){pen.clearRect(0,0,w,h);
-      if(state.lyrics?.lines?.length && state.current){
-        const when=Math.max(0,player.currentTime+(Number(state.lyrics.audioOffsetMs)||0)/1000);
-        const lines=state.lyrics.lines;
+      const visibleSong=state.loading?state.preparingSong:state.current;
+      if(visibleSong){
+        const when=Math.max(0,player.currentTime+(Number(state.lyrics?.audioOffsetMs)||0)/1000);
+        const lines=state.loading?[]:(Array.isArray(state.lyrics?.lines)?state.lyrics.lines:[]);
         let idx=-1;
         for(let i=0;i<lines.length;i++){if(Number(lines[i].startTime)<=when)idx=i;else break;}
         const fontSize=Math.min(76,w*.062,h*.14);
@@ -3649,7 +3677,15 @@ function drawLyrics(){
             }
           }
         }
-        if(idx<0){drawLine(String(lines[0].text||''),Math.min(h*.72,currentY),lyricWidth,lyricFont,'#bfe2ef',null,lyricCenter);}
+        if(idx<0){
+          // Intro/selection card replaces premature first-line lyrics. It
+          // clears as soon as the first real timed lyric begins; no overlap
+          // with the syllable wipe or any subsequent lyric frame.
+          drawLine(String(visibleSong.title||visibleSong.code||'ไม่ระบุชื่อเพลง'),
+            Math.min(h*.72,currentY),lyricWidth,lyricFont,'#ecf7ff',null,lyricCenter);
+          if(visibleSong.artist)drawLine(String(visibleSong.artist),
+            nextY,lyricWidth,lyricFont*.76,'#aee9ed',null,lyricCenter);
+        }
         else{
           const current=lines[idx];
            // Match measurement font to the rendered line before evaluating
@@ -3837,7 +3873,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1129';
+    script.src='./assets/vendor/qrcode.min.js?v=1130';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -4220,6 +4256,7 @@ function syncMidiKeyButtons(){
   const down=$('midi-key-down'),up=$('midi-key-up');
   if(down)down.disabled=value<=-12;
   if(up)up.disabled=value>=12;
+  setSongKeyDisplay();
 }
 function setMidiKey(delta){
   // The value remains editable while the song/synth swaps playback engines.
