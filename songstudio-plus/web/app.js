@@ -19,6 +19,8 @@
                  riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
                  songOffset:0,songHasNext:false,groupOffset:0,groupLimit:32,groupHasNext:false,
+                  buildTab:"ready",buildRows:[],buildOffset:0,buildHasNext:false,buildLoading:false,
+                  buildError:null,buildRun:0,buildRenderKey:"",
                  selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
                  lyricSearchRun:0,groupSearchRunning:false,groupLoading:false,groupLoadError:null,
                   groupRenderStart:-1,groupRenderEnd:-1,groupRenderTotal:-1,lyricContextHits:0,
@@ -190,6 +192,7 @@
   }
   async function refreshSongs(){
     if(!state.ready)return;
+    if(state.view==="build"){await refreshBuildSongs(true);return;}
     const q=state.view==="library"?$("library-search").value.trim():"";
     const pageSize=visibleRows();
     const inMedia=state.view==="media";
@@ -326,6 +329,124 @@
         (blockedHere?" · CUR/เนื้อร้องยังไม่ครบ "+number(blockedHere)+" เพลง":"")+
         " · ระบบไม่สร้างเพลงที่ข้อมูลเวลาไม่ครบ");
     }
+  }
+  // Virtual XMID catalog: only loaded rows are cached; only visible rows get DOM.
+  const BUILD_CHUNK=36,BUILD_ROW_HEIGHT=72;
+  async function refreshBuildSongs(reset=true){
+    if(!state.ready)return;
+    if(reset){
+      state.buildRun++;state.buildRows=[];state.buildOffset=0;
+      state.buildHasNext=true;state.buildLoading=false;state.buildError=null;
+      state.buildRenderKey="";$("build-list").scrollTop=0;
+    }
+    for(const [kind,id] of [["ready","build-tab-ready"],["attention","build-tab-attention"]]){
+      $(id).classList.toggle("active",state.buildTab===kind);
+      $(id).setAttribute("aria-pressed",String(state.buildTab===kind));
+    }
+    renderBuildRows();
+    if(reset)await loadMoreBuildSongs(state.buildRun);
+  }
+  async function loadMoreBuildSongs(run=state.buildRun){
+    if(state.view!=="build"||state.buildLoading||!state.buildHasNext)return;
+    const status=state.buildTab;
+    state.buildLoading=true;state.buildError=null;renderBuildStatus();
+    try{
+      const data=await api("/api/build/catalog?status="+status+
+        "&offset="+state.buildOffset+"&limit="+BUILD_CHUNK,undefined,45000);
+      if(run!==state.buildRun||status!==state.buildTab)return;
+      const rows=data.rows||[];
+      state.buildRows.push(...rows);
+      state.buildOffset+=rows.length;
+      state.buildHasNext=Boolean(data.has_more);
+    }catch(error){
+      if(run!==state.buildRun)return;
+      state.buildError=error.message;
+    }finally{
+      if(run!==state.buildRun)return;
+      state.buildLoading=false;
+      renderBuildRows(true);
+      const panel=$("build-list");
+      if(!state.buildError&&state.buildHasNext&&panel.scrollHeight<=panel.clientHeight+BUILD_ROW_HEIGHT)
+        requestAnimationFrame(()=>void loadMoreBuildSongs(run));
+    }
+  }
+  function renderBuildStatus(){
+    text("build-page-info",(state.buildTab==="ready"?"พร้อมแปลง":"ต้องปรับปรุง")+
+      " · "+number(state.buildRows.length)+" รายการ");
+    text("build-scroll-status",state.buildLoading?"กำลังอ่าน SQLite…":
+      state.buildError?"โหลดต่อไม่สำเร็จ: "+state.buildError:
+      state.buildHasNext?"เลื่อนลงใกล้ท้ายรายการเพื่อโหลดเพิ่ม":"แสดงรายการครบแล้ว");
+    $("build-retry").hidden=!state.buildError;
+  }
+  function renderBuildRows(force=false){
+    renderBuildStatus();
+    const panel=$("build-list"),total=state.buildRows.length;
+    const begin=Math.min(total,Math.max(0,Math.floor(panel.scrollTop/BUILD_ROW_HEIGHT)-8));
+    const count=Math.ceil((panel.clientHeight||430)/BUILD_ROW_HEIGHT)+18;
+    const end=Math.min(total,begin+count);
+    const key=begin+":"+end+":"+total+":"+state.buildTab;
+    if(!force&&state.buildRenderKey===key){updateBuildSelection();return;}
+    state.buildRenderKey=key;
+    const frag=document.createDocumentFragment();
+    if(!total){
+      const message=document.createElement("p");message.className="empty-small";
+      message.textContent=state.buildLoading?"กำลังโหลดรายการ…":"ไม่มีเพลงในสถานะนี้";
+      frag.append(message);
+    }else{
+      const spacer=document.createElement("div");spacer.className="build-spacer";
+      spacer.style.height=(begin*BUILD_ROW_HEIGHT)+"px";frag.append(spacer);
+      for(const song of state.buildRows.slice(begin,end)){
+        const ready=song.manual_status==="ready",review=song.manual_status==="review";
+        const row=document.createElement("label");row.className="build-row";
+        const check=document.createElement("input");check.type="checkbox";
+        check.disabled=!(ready||review);
+        check.checked=ready&&(state.allReadySelected?
+          !state.excludedSongs.has(song.id):state.selectedSongs.has(song.id));
+        check.title=review?"ตรวจแล้วเลือกเพื่อยืนยันพร้อมแปลง":
+          ready?"เลือกสร้างไฟล์":"ต้องแก้เนื้อร้องและ Timing ก่อน";
+        check.addEventListener("change",async()=>{
+          if(review&&check.checked){
+            check.checked=false;
+            if(!await confirmTask("ยืนยันพร้อมแปลง",
+              "โปรดยืนยันว่าได้ตรวจเนื้อร้องและเวลาปาดสีแล้ว: "+
+              (song.title||song.original_code)))return;
+            check.disabled=true;
+            try{
+              await api("/api/manual/approve",{
+                song_id:song.id,version_id:song.version_id
+              });
+              if(state.allReadySelected){
+                state.readyTotal++;state.excludedSongs.delete(song.id);
+              }else state.selectedSongs.add(song.id);
+              state.buildTab="ready";
+              toast("ยืนยันแล้ว · ย้ายไปหน้าพร้อมแปลง");
+              await refreshBuildSongs(true);
+            }catch(error){
+              check.disabled=false;toast("ยืนยันไม่สำเร็จ: "+error.message,true);
+            }
+            return;
+          }
+          if(state.allReadySelected){
+            if(check.checked)state.excludedSongs.delete(song.id);
+            else state.excludedSongs.add(song.id);
+          }else if(check.checked)state.selectedSongs.add(song.id);
+          else state.selectedSongs.delete(song.id);
+          updateBuildSelection();
+        });
+        const name=document.createElement("div");name.className="song-text";
+        name.textContent=song.title||song.original_code;
+        const detail=document.createElement("small");
+        detail.textContent=String(song.code).padStart(8,"0")+" · "+
+          String(song.extension||"").toUpperCase()+" · "+
+          (ready?"พร้อมแปลง":review?"รอยืนยัน":
+            song.manual_status==="incomplete"?"CUR ไม่ครบ":"รอเนื้อร้อง/Timing");
+        name.append(detail);row.append(check,name);frag.append(row);
+      }
+      const spacerEnd=document.createElement("div");spacerEnd.className="build-spacer";
+      spacerEnd.style.height=(Math.max(0,total-end)*BUILD_ROW_HEIGHT)+"px";
+      frag.append(spacerEnd);
+    }
+    panel.replaceChildren(frag);updateBuildSelection();
   }
   function updateBuildSelection(){
     // Preserve selected song IDs when moving between pages.
