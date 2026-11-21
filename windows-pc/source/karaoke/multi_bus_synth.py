@@ -33,7 +33,10 @@ class MultiBusSynth:
             self.dispatcher = MidiBusDispatcher(
                 plan, {bus: synth.send for bus, synth in self.synths.items()})
         except BaseException:
-            self.close()
+            try:
+                self.close()
+            except Exception:
+                pass
             raise
 
     def send(self, data):
