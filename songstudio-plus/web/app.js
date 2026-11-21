@@ -38,6 +38,7 @@
                  manualLayout:{menu:false,queue:false,stage:false,focus:false},
                  updateTarget:null,updateInstallIntent:false,updateBusy:false,updateNoticeDismissed:false,updateNoticeShown:false,jobsRefreshing:false,lastJobRevision:-1,lastJobPaint:0};
   let manualTimeline=null;
+  let confirmationPending=false;
   const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
@@ -47,13 +48,34 @@
     const next=String(value??"");
     if(node&&node.textContent!==next)node.textContent=next;
   }
+  function dismissToast(){
+    clearTimeout(state.toastTimer);
+    state.toastTimer=null;
+    $("toast").classList.remove("show");
+  }
   function toast(message,error=false){
     const node=$("toast");
-    node.textContent=String(message||"");
-    node.classList.toggle("error",error);
-    node.classList.add("show");
+    const next=String(message||"");
+    // Keep a diagnostic failure readable until explicitly dismissed. Repeated
+    // background status events must not flash the toast or replace the error.
+    if(!error&&node.classList.contains("show")&&node.classList.contains("error"))
+      return;
+    if(node.classList.contains("show")&&
+       node.classList.contains("error")===Boolean(error)&&
+       $("toast-message").textContent===next)return;
     clearTimeout(state.toastTimer);
-    state.toastTimer=setTimeout(()=>node.classList.remove("show"),4600);
+    state.toastTimer=null;
+    text("toast-message",next);
+    node.classList.toggle("error",Boolean(error));
+    node.setAttribute("role",error?"alert":"status");
+    node.classList.add("show");
+    if(!error)state.toastTimer=setTimeout(dismissToast,8000);
+  }
+  function showStableModal(id){
+    const modal=$(id);
+    if(!modal||modal.open)return false;
+    modal.showModal();
+    return true;
   }
   async function api(path,payload,timeoutMs=12000){
     const options={cache:"no-store",headers:{}};
@@ -500,7 +522,7 @@
       state.lyricShowDraft=state.lyricTimed.length===0;
       state.lyricOffset=0;
       renderLyricPage();
-      $("lyrics-dialog").showModal();
+      showStableModal("lyrics-dialog");
     }catch(error){toast(error.message,true);}
   }
   function renderLyricContext(result){
@@ -691,11 +713,27 @@
     $("lyrics-undo").disabled=state.lyricsEditActive||!state.latestEdit;
   }
   async function confirmTask(title,message){
-    const modal=$("confirm-dialog");text("confirm-title",title);text("confirm-text",message);
-    modal.showModal();
+    const modal=$("confirm-dialog");
+    // Multiple click events can race before the user answers. Never reopen
+    // or attach additional close listeners to the same native dialog.
+    if(confirmationPending||modal.open)return false;
+    confirmationPending=true;
+    modal.returnValue="cancel"; // Escape must not reuse an old "yes".
+    text("confirm-title",title);
+    text("confirm-text",message);
     return await new Promise(resolve=>{
-      const callback=()=>{modal.removeEventListener("close",callback);resolve(modal.returnValue==="yes");};
-      modal.addEventListener("close",callback);
+      const finish=()=>{
+        confirmationPending=false;
+        resolve(modal.returnValue==="yes");
+      };
+      modal.addEventListener("close",finish,{once:true});
+      try{modal.showModal();}
+      catch(error){
+        modal.removeEventListener("close",finish);
+        confirmationPending=false;
+        void diagnostic("ui.confirm.open.error",{error:String(error)});
+        resolve(false);
+      }
     });
   }
   async function applyLyrics(){
@@ -806,8 +844,10 @@
     const install=$("pro-update-notice-install");
     quick.hidden=!available;
     if(!available){
-      notice.hidden=true;
-      install.disabled=true;
+      if(!state.updateBusy){
+        notice.hidden=true;
+        install.disabled=true;
+      }
       return;
     }
     quick.textContent="↑ อัปเดต v"+result.version;
@@ -817,7 +857,9 @@
       ready.ready&&ready.version===result.version?
         "ดาวน์โหลดและตรวจ SHA-256 แล้ว · พร้อมติดตั้งและเปิดใหม่":
         "มีรุ่นใหม่กว่าที่ใช้อยู่ · กดอัปเดตเพื่อดาวน์โหลด ตรวจ SHA-256 ติดตั้ง และเปิดใหม่");
-    if(!state.updateNoticeDismissed)notice.hidden=false;
+    if(!state.updateNoticeDismissed&&!state.updateBusy){
+      if(notice.hidden)notice.hidden=false;
+    }
     if(!state.updateNoticeShown){
       state.updateNoticeShown=true;
       toast("พบ X-Stage Song Studio Pro v"+result.version+" · พร้อมอัปเดต");
@@ -843,12 +885,18 @@
       $("pro-update-install").disabled=!available||state.updateBusy;
       renderProUpdateNotice(result,ready);
     }catch(error){
-      state.updateTarget=null;
-      $("pro-update-install").disabled=true;
-      $("pro-update-quick").hidden=true;
-      $("pro-update-notice").hidden=true;
+      // Network errors do not revoke a release already verified this session.
+      // Do not make its visible notice blink off between retries.
+      const known=Boolean(state.updateTarget?.newer);
+      if(!known){
+        state.updateTarget=null;
+        $("pro-update-install").disabled=true;
+        $("pro-update-quick").hidden=true;
+        if(!state.updateBusy)$("pro-update-notice").hidden=true;
+      }
       text("pro-update-status","ยังตรวจอัปเดตไม่ได้: "+error.message+
-        " · โปรแกรมปัจจุบันยังใช้งานได้");
+        (known?" · ข้อมูลรุ่นล่าสุดที่ตรวจได้ยังคงแสดงอยู่":
+          " · โปรแกรมปัจจุบันยังใช้งานได้"));
       if(!silent)toast(error.message,true);
     }finally{
       button.disabled=false;
@@ -1245,7 +1293,7 @@
       state.issueRows=result.rows||[];
       state.issueOffset=0;
       renderIssuePage();
-      $("issues-dialog").showModal();
+      showStableModal("issues-dialog");
     }catch(error){toast(error.message,true);}
   }
   const riskCategories={
@@ -1385,7 +1433,7 @@
       " · ผลการฟัง: "+(reviewNames[item.review_status]||"ยังไม่ได้ทดลองฟัง"));
     $("risk-review-note").value="";
     renderRiskEvidence();
-    $("risk-dialog").showModal();
+    showStableModal("risk-dialog");
   }
   function renderRiskEvidence(){
     const item=state.riskSelected;
@@ -2362,6 +2410,10 @@
   }
 
   function bind(){
+    $("toast-dismiss").addEventListener("click",dismissToast);
+    $("confirm-dialog").addEventListener("cancel",()=>{
+      $("confirm-dialog").returnValue="cancel";
+    });
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
     // Windows Explorer's "Copy as path" wraps paths in quotes; accept those too.
     const sourceField=$("source-folder");
@@ -2386,9 +2438,9 @@
     });
     $("source-open").addEventListener("click",()=>void openLocalFolder("source"));
     $("settings-open").addEventListener("click",()=>{
+      if($("settings-dialog").open)return;
       syncSettingsUpdate();
-      $("settings-dialog").showModal();
-      void diagnostic("ui.settings.open");
+      if(showStableModal("settings-dialog"))void diagnostic("ui.settings.open");
     });
     $("settings-update-check").addEventListener("click",()=>void checkProUpdate());
     $("settings-update-install").addEventListener("click",()=>void beginProUpdate());
