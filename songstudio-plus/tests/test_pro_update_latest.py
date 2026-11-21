@@ -82,13 +82,13 @@ class LatestUpdateTests(unittest.TestCase):
         self.assertEqual(release["sha256"],item["sha256"])
 
     def test_unavailable_manifests_fall_back_to_verified_github_release(self):
-        release=updater.validate(manifest("0.1.35"))
+        release=updater.validate(manifest("0.1.36"))
         release["feed"]="api.github.com"
         with patch.object(updater,"_read_feed",side_effect=
                           ValueError("ยังไม่มีไฟล์ Song Studio Pro ที่ยืนยันแล้ว")), \
              patch.object(updater,"_read_release_api",return_value=release):
             result=updater.check()
-        self.assertEqual(result["version"],"0.1.35")
+        self.assertEqual(result["version"],"0.1.36")
         self.assertTrue(result["newer"])
 
     def test_manifest_newer_than_uploaded_release_is_not_advertised(self):
