@@ -107,9 +107,25 @@ def apply_pending(data):
     if not pending.exists():return None
     state=parse_json((pending/'state.json').read_text(encoding='utf-8'))
     if state['status']=='applying':
-        safety=data/state['safety']
-        if safety.parent!=data or not safety.name.startswith('restore-safety-'):raise ValueError('ข้อมูลกู้คืนค้างไม่ถูกต้อง')
-        rollback(data,safety,state['existed'],state.get('replaced',FILES))
+        safety_name=state.get('safety')
+        if (not isinstance(safety_name,str) or not safety_name.startswith('restore-safety-')
+                or Path(safety_name).name!=safety_name):
+            raise ValueError('ข้อมูลกู้คืนค้างไม่ถูกต้อง')
+        safety=data/safety_name
+        if safety.is_symlink() or getattr(safety,'is_junction',lambda:False)() or not safety.is_dir():
+            raise ValueError('โฟลเดอร์สำรองเพื่อย้อนคืนไม่ปลอดภัย')
+        existed=state.get('existed')
+        replaced=state.get('replaced',FILES)
+        allowed=set(FILES+OPTIONAL_FILES)
+        if (not isinstance(existed,list) or not isinstance(replaced,(list,tuple))
+                or len(set(replaced))!=len(replaced) or any(name not in allowed for name in replaced)
+                or any(name not in replaced for name in existed)):
+            raise ValueError('รายการไฟล์กู้คืนค้างไม่ถูกต้อง')
+        for name in existed:
+            source=safety/name
+            if not source.is_file() or source.is_symlink() or getattr(source,'is_junction',lambda:False)():
+                raise ValueError('ไฟล์สำรองเพื่อย้อนคืนไม่ปลอดภัย: '+name)
+        rollback(data,safety,existed,replaced)
         pending.rename(data/('restore-interrupted-'+uuid.uuid4().hex))
         raise ValueError('กู้คืนครั้งก่อนถูกขัดจังหวะ คืนข้อมูลเดิมแล้ว กรุณาเลือกชุดสำรองใหม่')
     if state['status']=='complete':
