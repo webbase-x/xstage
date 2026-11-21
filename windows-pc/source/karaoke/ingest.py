@@ -139,7 +139,8 @@ class Inspector:
                           if ext == '.xmid' else [])
                           for line in xsk_doc['lines']], int(xsk_doc.get('audioOffsetMs') or 0))
                 record['format'] = 'XMID' if ext == '.xmid' else 'XSK'
-                metadata({'title': xsk_doc.get('title'), 'artist': xsk_doc.get('artist'),
+                metadata({'code': xsk_doc.get('code') or xsk_doc.get('songId'),
+                          'title': xsk_doc.get('title'), 'artist': xsk_doc.get('artist'),
                           'first_lyric': ' '.join(line['text'] for line in xsk_doc['lines'][:8])[:512]})
             if ext not in ('.emk', '.xsk', '.xmid'):
                 lyr, cur = self.ncn_pair(path)
