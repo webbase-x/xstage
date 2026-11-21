@@ -2169,10 +2169,10 @@ async function ensureMidiInstrumentBank(fontBytes,pending,token,controller){
     bank=await boundedPlaybackTask(Promise.resolve(task),45,
       'โหลด SoundFont ไม่ทัน กรุณาตรวจการเชื่อมต่อแล้วลองอีกครั้ง',controller);
   }
-  if(!bank&&window.XStageBrowserMidi.fontStatus()?.selectedId){
+  if(!bank){
     const detail=window.XStageBrowserMidi.fontStatus()?.warning||'';
-    throw Error('โหลด SoundFont ไม่สำเร็จ จึงไม่เริ่มเพลงด้วยเสียง 8-bit'+
-      (detail?' · '+detail:' · โปรดตรวจชุดเสียงที่เลือกในเมนู'));
+    throw Error('SoundFont ยังไม่พร้อม จึงไม่เริ่มเพลงด้วยเสียง 8-bit'+
+      (detail?' · '+detail:' · โปรดเลือกชุดเสียง GM/GS และตรวจการเชื่อมต่อ'));
   }
   return bank;
 }
@@ -2943,6 +2943,13 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       setPlayStatus('กำลังเปิดเครื่องเสียง MIDI ด้วย SoundFont…');
       const professional=await prepareFirstMidiSynth(
         liveMidiBytes,liveFontBytes,professionalOptions);
+      if(!professional){
+        // Prime cold SF2 sample buffers before the first audible MIDI note.
+        setPlayStatus('กำลังเตรียมตัวอย่างเสียงเครื่องดนตรีก่อนเริ่มเพลง…');
+        await window.XStageBrowserMidi.warmRealtimeSamples(liveMidiBytes,
+          liveFontBytes,{signal:controller.signal,
+            onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}});
+      }
       if(controller.signal.aborted||request!==state.requestId||
          token!==state.token){
         professional?.dispose();
