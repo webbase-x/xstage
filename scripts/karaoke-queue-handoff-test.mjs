@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const transportBegin=app.indexOf('const nativePlayer=ui.player;');
 const transportEnd=app.indexOf('const karaokeVideo =',transportBegin);
-const queueBegin=app.indexOf('function releaseFinishedMedia(){');
+const queueBegin=app.indexOf('function stopSoundFontFill(){');
 const queueEnd=app.indexOf('// Release the finished media and lyrics, not merely the transport label.',queueBegin);
 assert.ok(transportBegin>0&&transportEnd>transportBegin);
 assert.ok(queueBegin>0&&queueEnd>queueBegin);
