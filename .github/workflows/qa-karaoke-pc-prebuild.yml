@@ -1,0 +1,122 @@
+name: X-Stage Karaoke PC Pre-EXE Full Functional QA (NO BUILD)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [qa/pc-prebuild-all-functions-20261122]
+    paths:
+      - 'scripts/test_karaoke_pc_prebuild.py'
+      - '.github/workflows/qa-karaoke-pc-prebuild.yml'
+      - 'windows-pc/source/**'
+
+permissions:
+  contents: read
+
+jobs:
+  all-menu-dispatch:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install the EXE locked dependencies
+        run: python -m pip install --only-binary=:all: -r windows-pc/source/requirements-build.lock.txt
+      - name: Validate all menu states and button callback wiring
+        run: python -u scripts/test_karaoke_pc_prebuild.py
+
+  complete-function-regression:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install the EXE locked dependencies
+        run: python -m pip install --only-binary=:all: -r windows-pc/source/requirements-build.lock.txt
+      - name: Run entire existing regression suite, no EXE build
+        shell: pwsh
+        run: |
+          $env:PYTHONUTF8 = '1'
+          $env:PYTHONIOENCODING = 'utf-8:backslashreplace'
+          python windows-pc/source/tools/run_build_tests.py
+          if ($LASTEXITCODE -ne 0) { throw 'Full regression failed; EXE release BLOCKED' }
+      - name: Upload all test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: karaoke-preexe-regression
+          path: |
+            windows-pc/source/build-tests.log
+            windows-pc/source/build-tests-summary.json
+          if-no-files-found: warn
+
+  win32-chroma-stage:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install decoder and GUI dependencies for simulation
+        run: |
+          python -m pip install --only-binary=:all: -r windows-pc/source/requirements-build.lock.txt
+          python -m pip install --only-binary=:all: opencv-python-headless==4.14.0.94
+          python -m pip check
+      - name: Simulate actual Windows Tk canvas with ten encoded moving video frames
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = (Join-Path $PWD 'windows-pc/source')
+          @'
+          import tkinter as tk, tempfile, pathlib
+          import cv2, numpy as np
+          from karaoke.opencv_frame_source import OpenCVFrameSource, MCIChromaPreview
+          from karaoke.chroma_video_renderer import VideoFrame
+          from types import SimpleNamespace
+          root=tk.Tk()
+          root.title("X-Stage test stage")
+          root.geometry("400x300")
+          canvas=tk.Canvas(root,width=320,height=240,bg="black")
+          canvas.pack()
+          root.update()
+          assert root.tk.call("tk","windowingsystem") == "win32"
+          assert root.winfo_ismapped()
+          with tempfile.TemporaryDirectory() as folder:
+              path=str(pathlib.Path(folder)/"motion.avi")
+              writer=cv2.VideoWriter(path,cv2.VideoWriter_fourcc(*"MJPG"),10,(320,240))
+              assert writer.isOpened()
+              try:
+                  for n in range(10):
+                      frame=np.zeros((240,320,3),dtype=np.uint8)
+                      frame[:]=(0,255,0)
+                      cv2.rectangle(frame,(n*20+10,50),(n*20+40,100),(0,0,255),-1)
+                      writer.write(frame)
+              finally:
+                  writer.release()
+              clock=SimpleNamespace(opened=True,has_video=True,position=0.)
+              backing=VideoFrame(320,240,bytes((10,20,30))*320*240)
+              with OpenCVFrameSource(path).open() as decoder:
+                  view=MCIChromaPreview(clock,decoder,backing)
+                  for n in range(10):
+                      clock.position=n/10
+                      assert view.paint_tk(canvas), f"frame {n} failed"
+                      root.update()
+                  assert canvas.find_withtag("chroma-video")
+                  clock.opened=False
+                  assert view.paint_tk(canvas) is False
+          root.destroy()
+          print("PASS: Win32 Tk stage 10 moving frames + MCI stop")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Tk chroma GUI failure' }
+      - name: Test actual encoded video decoding and RGB24 fallback
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = (Join-Path $PWD 'windows-pc/source')
+          python -m unittest discover -s windows-pc/source/tests -p "test_chroma_real_decoder_integration.py" -v
+          if ($LASTEXITCODE -ne 0) { throw 'Real decoder regression failed' }
