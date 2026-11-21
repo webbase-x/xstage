@@ -2198,7 +2198,9 @@ async function getStartupSoundFont(token,signal){
   // Skipping that promise caused the first song to use oscillators while
   // the next song sounded correct after refresh finished.
   const task=Promise.resolve().then(()=>
-    window.XStageBrowserMidi.selectedFont(token,signal));
+    window.XStageBrowserMidi.prefersCompactGm?.()
+      ?window.XStageBrowserMidi.fastGmFont(token,signal)
+      :window.XStageBrowserMidi.selectedFont(token,signal));
   // Handle a rejected fetch even when its result arrives after the deadline.
   const safe=task.catch(error=>{
     if(error?.name!=='AbortError')console.warn('SoundFont unavailable:',error);
@@ -2221,8 +2223,21 @@ async function ensureMidiInstrumentBank(fontBytes,pending,token,controller){
   if(!bank){
     setPlayStatus('กำลังเตรียมเสียงเครื่องดนตรีจริงสำหรับเพลงแรก…');
     const task=pending||window.XStageBrowserMidi.selectedFont(token,controller.signal);
-    bank=await boundedPlaybackTask(Promise.resolve(task),45,
-      'โหลด SoundFont ไม่ทัน กรุณาตรวจการเชื่อมต่อแล้วลองอีกครั้ง',controller);
+    // Give the selected bank 12 seconds, not 45. Never start with
+    // oscillator-only 8-bit sound: use a compact sampled GM bank instead.
+    let timer;
+    const outcome=await Promise.race([
+      Promise.resolve(task).then(value=>({value}),error=>({error})),
+      new Promise(resolve=>{timer=setTimeout(()=>resolve({expired:true}),12000);})
+    ]).finally(()=>clearTimeout(timer));
+    if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
+    bank=outcome.value||null;
+    if(!bank&&window.XStageBrowserMidi.fastGmFont){
+      setPlayStatus('ชุดเสียงที่เลือกยังไม่พร้อม · ใช้ GM 6 MB เพื่อเริ่มเพลง…');
+      bank=await boundedPlaybackTask(
+        window.XStageBrowserMidi.fastGmFont(token,controller.signal),18,
+        'โหลด GM 6 MB ไม่สำเร็จ · ตรวจอินเทอร์เน็ตแล้วลองใหม่',controller);
+    }
   }
   if(!bank){
     const detail=window.XStageBrowserMidi.fontStatus()?.warning||'';
@@ -3137,6 +3152,10 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
           ?attachProfessionalMidiEngine(professional,midiOptions)
           :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,midiOptions);
         setMidiEngineStatus(state.liveMidiPlayback);
+        if(window.XStageBrowserMidi.isFastGmBytes?.(liveFontBytes)){
+          const engine=$('xstage-midi-engine-status');
+          if(engine){engine.hidden=false;engine.textContent+=' · GM 6 MB (โหลดเร็ว)';}
+        }
       }catch(error){
         professional?.dispose();
         if(!professional)throw error;

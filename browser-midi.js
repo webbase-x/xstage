@@ -506,6 +506,9 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
 const BUILTIN_GM_ID='builtin:TimGM6mb';
 const BUILTIN_GM_URL='https://raw.githubusercontent.com/craffel/pretty-midi/main/pretty_midi/TimGM6mb.sf2';
 const BUILTIN_GM_MAX_BYTES=8*1048576;
+// Large PC-sized SF2 banks must never delay the first audible web MIDI note.
+const FAST_START_FONT_MAX_BYTES=48*1048576;
+let quickGmPromise=null,quickGmBytes=null;
 let context=null,selected=BUILTIN_GM_ID,fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 let fontLoadPromise=null, fontWarning='',builtinRetryAfter=0;
 function fontStatus(){
@@ -579,18 +582,26 @@ async function refreshFonts(auth){
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
       // Prefer the user's saved bank, then a complete-looking GM/GS bank.
       const savedChoice=eligible.find(option=>option.value===saved);
+      const savedTooLarge=!!savedChoice&&
+        Number(savedChoice.dataset.size)>FAST_START_FONT_MAX_BYTES;
       // Include common complete-GM bank names such as CT56MGM_V45.
       // A larger GM SoundFont can sound fuller than the 6 MB starter bank,
       // but never auto-select a collection that appears single-instrument.
       const gmCandidates=eligible.filter(option=>Number(option.dataset.size)<=48*1048576&&
         /general.?midi|generaluser|fluidr3|timgm|mgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text));
-      const autoChoice=savedChoice||gmCandidates.slice().sort((a,b)=>
-        Number(b.dataset.size)-Number(a.dataset.size))[0];
+      // Never auto-download a saved 243 MB bank on page open.
+      // Preserve the user's saved choice for explicit use in the menu.
+      const autoChoice=savedTooLarge?null:savedChoice||
+        gmCandidates.slice().sort((a,b)=>
+          Number(b.dataset.size)-Number(a.dataset.size))[0];
       // Use the bundled-source GM reference rather than guessing that an
       // unrelated instrument-only SF2 can play a complete karaoke arrangement.
       select.value=autoChoice?.value||BUILTIN_GM_ID;
       selected=select.value;
-      fontWarning='';
+      fontWarning=savedTooLarge
+        ?'SoundFont เดิม '+Math.round(Number(savedChoice.dataset.size)/1048576)+
+          ' MB ใหญ่เกินไปสำหรับเริ่มเพลงทันที · ใช้ GM 6 MB ก่อน'
+        :'';
       fontStatusChanged();
       // Save automatic choice so subsequent sessions retain the same bank.
       if(autoChoice){try{localStorage.setItem(storageKey,selected);}catch{}}
@@ -622,12 +633,47 @@ async function refreshFonts(auth){
   finally{if(fontRefreshPromise===pending)fontRefreshPromise=null;}
   // Start preload only after the scan Promise is cleared: selectedFont
   // itself awaits that Promise, so preloading inside the scan deadlocks.
-  if(selected&&context?.token&&sequence===fontRefreshSequence)
+  if(selected&&context?.token&&sequence===fontRefreshSequence&&
+     !prefersCompactGm())
     void selectedFont(context.token).catch(error=>{
       console.warn('SoundFont automatic preload:',error.message);
       scope.dispatchEvent?.(new CustomEvent('xstage:font-memory-error',
         {detail:{message:error.message}}));
     });
+}
+// Only cold oversized banks fall back. If a large bank has already loaded,
+// keep using it without downgrading the chosen instrument sounds.
+function prefersCompactGm(){
+  if(selected===BUILTIN_GM_ID)return false;
+  const size=Number($('xstage-soundfont-select')?.selectedOptions?.[0]?.dataset?.size||0);
+  return size>FAST_START_FONT_MAX_BYTES&&
+    !(fontCache?.id===selected&&fontCache?.sub===context?.sub);
+}
+async function fastGmFont(token,signal){
+  if(selected===BUILTIN_GM_ID)return selectedFont(token,signal);
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน');
+  if(!quickGmPromise){
+    quickGmPromise=(async()=>{
+      // Public GM only. Never include a Drive OAuth token in this request.
+      const response=await fetch(BUILTIN_GM_URL,{cache:'force-cache'});
+      if(!response.ok)fail('GM 6 MB โหลดไม่ได้ HTTP '+response.status);
+      if(Number(response.headers.get('Content-Length')||0)>BUILTIN_GM_MAX_BYTES)
+        fail('GM 6 MB ขนาดไม่ถูกต้อง');
+      const bytes=new Uint8Array(await response.arrayBuffer());
+      if(bytes.byteLength<100000||bytes.byteLength>BUILTIN_GM_MAX_BYTES)
+        fail('GM 6 MB ไม่ครบ');
+      validateFontContainer(bytes);
+      quickGmBytes=bytes;
+      return bytes;
+    })().catch(error=>{quickGmPromise=null;throw error;});
+  }
+  const bytes=await quickGmPromise;
+  if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+  if(context?.token!==token)fail('บัญชี Google เปลี่ยน');
+  fontWarning='SoundFont ที่เลือกยังโหลดไม่ครบ · เพลงนี้ใช้ GM 6 MB เพื่อเล่นได้ก่อน';
+  fontStatusChanged();
+  return bytes;
 }
 async function selectedFont(token,signal){
   if(fontRefreshPromise)await fontRefreshPromise;
@@ -939,6 +985,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   return {dispose,duration:song.duration};
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,warmRealtimeSamples,unlockAudio,
+  prefersCompactGm,fastGmFont,isFastGmBytes:bytes=>!!bytes&&bytes===quickGmBytes,
   liveAudioContext:()=>sharedLiveContext?.state!=='closed'?sharedLiveContext:null,
   supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
   reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected=BUILTIN_GM_ID;fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID));}};

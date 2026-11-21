@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const midi=fs.readFileSync(new URL('../browser-midi.js',import.meta.url),'utf8');
+const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const html=fs.readFileSync(new URL('../karaoke.html',import.meta.url),'utf8');
+assert.ok(midi.includes('const FAST_START_FONT_MAX_BYTES=48*1048576'));
+assert.ok(midi.includes('const autoChoice=savedTooLarge?null'));
+assert.ok(midi.includes('!prefersCompactGm()'));
+assert.ok(midi.includes('async function fastGmFont(token,signal)'));
+assert.ok(midi.includes("fetch(BUILTIN_GM_URL,{cache:'force-cache'})"));
+assert.ok(app.includes('XStageBrowserMidi.prefersCompactGm?.()'));
+assert.ok(app.includes('window.XStageBrowserMidi.fastGmFont(token,controller.signal)'));
+assert.ok(app.includes('},12000);'));
+assert.ok(html.includes('browser-midi.js?v=1128-fast-gm-start'));
+assert.ok(html.includes('app.js?v=1128-fast-gm-start'));
+console.log('PASS: saved 243 MB bank cannot auto-block first MIDI; sampled GM fast fallback available');

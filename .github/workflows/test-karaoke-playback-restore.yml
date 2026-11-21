@@ -24,8 +24,9 @@ jobs:
           node --check app.js
           node --check browser-midi.js
           node --check midi-pro-engine.js
-      - name: Test playback engines and first song
+      - name: Test playback engines and 243MB SoundFont fallback
         run: |
+          node scripts/karaoke-fast-soundfont-test.mjs
           node scripts/browser-midi-test.mjs
           node scripts/midi-pro-engine-test.mjs
           node scripts/midi-startup-budget-test.mjs
