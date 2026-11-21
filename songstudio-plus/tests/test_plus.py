@@ -71,6 +71,38 @@ class PlusTests(unittest.TestCase):
         self.assertIn('id="recover-lyrics"',html)
         self.assertIn('id="stat-with-text"',html)
 
+    def test_build_catalog_filters_ready_and_review_with_incremental_offsets(self):
+        import manual_editor as manual
+        ready=self.put("NCN_A.mp3",b"MUSIC-READY"*500)
+        self.lrc(ready,"[00:01.00]พร้อมสร้าง\\n[00:05.00]ต่อไป\\n")
+        review=self.put("REVIEW.mp3",b"MUSIC-REVIEW"*500)
+        self.lrc(review,"[00:01.00]รอตรวจ\\n[00:05.00]ต่อไป\\n")
+        missing=self.put("MISSING.mp3",b"MUSIC-NO-LYR"*500)
+        plus.import_folder(self.workspace,self.src)
+        # LRC creates an estimated version, requiring manual approval.
+        rows=plus.songs(self.workspace)
+        review_song=next(r for r in rows if r["title"]=="REVIEW")
+        ready_song=next(r for r in rows if r["title"]=="NCN_A")
+        self.assertTrue(manual.approve(
+            self.workspace,ready_song["id"],ready_song["version_id"])["approved"])
+        first=manual.build_catalog(self.workspace,"attention",0,1)
+        second=manual.build_catalog(self.workspace,"attention",first["offset"],1)
+        self.assertEqual(len(first["rows"]),1)
+        self.assertTrue(first["has_more"])
+        self.assertEqual(len(second["rows"]),1)
+        self.assertNotEqual(first["rows"][0]["id"],second["rows"][0]["id"])
+        self.assertEqual({x["manual_status"] for x in first["rows"]+second["rows"]},
+                         {"review","missing"})
+        self.assertEqual([r["id"] for r in manual.build_catalog(
+            self.workspace,"ready")["rows"]],[ready_song["id"]])
+        manual.approve(self.workspace,review_song["id"],review_song["version_id"])
+        remaining=manual.build_catalog(self.workspace,"attention")["rows"]
+        self.assertEqual([r["manual_status"] for r in remaining],["missing"])
+        self.assertEqual(len(manual.build_catalog(self.workspace,"ready")["rows"]),2)
+        with self.assertRaises(ValueError):
+            manual.build_catalog(self.workspace,"invalid")
+
+
     def test_schema_all_tables_prefixed_and_separate_from_legacy(self):
         with plus.connect(self.workspace) as db:
             names=[row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
