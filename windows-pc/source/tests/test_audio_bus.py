@@ -1,7 +1,7 @@
 """P1 bus-routing contract tests (hardware-independent)."""
 import unittest
 
-from karaoke.audio_bus import AudioBusPlan, AudioBusRoute, plan_from_mapping, stereo_plan, performance_plan, DrumKeyRoute, PerformanceBusPlan
+from karaoke.audio_bus import AudioBusPlan, AudioBusRoute, plan_from_mapping, stereo_plan, performance_plan, DrumKeyRoute, PerformanceBusPlan, MidiBusDispatcher
 
 
 class AudioBusPlanTests(unittest.TestCase):
@@ -64,6 +64,35 @@ class PercussionRoutingTests(unittest.TestCase):
             PerformanceBusPlan(stereo_plan(), (DrumKeyRoute(36, 1), DrumKeyRoute(36, 0)))
         with self.assertRaises(ValueError):
             performance_plan().resolve(9, -1)
+
+
+class MidiBusDispatcherTests(unittest.TestCase):
+    def test_drum_note_on_off_and_velocity_zero_share_bus(self):
+        sent = {bus: [] for bus in range(4)}
+        plan = performance_plan(4, {ch: 0 for ch in range(16)}, {36: 2})
+        dispatcher = MidiBusDispatcher(plan, {bus: sent[bus].append for bus in sent})
+        for message in (bytes([0x99, 36, 100]), bytes([0x89, 36, 0]),
+                        bytes([0x99, 36, 0])):
+            self.assertEqual(dispatcher.dispatch(message), 2)
+        self.assertEqual(len(sent[2]), 3)
+        self.assertEqual(dispatcher.dispatch(bytes([0x90, 36, 100])), 0)
+
+    def test_program_change_and_control_change_route_by_channel(self):
+        sent = {bus: [] for bus in range(4)}
+        plan = performance_plan(4, {ch: ch % 4 for ch in range(16)})
+        dispatcher = MidiBusDispatcher(plan, {bus: sent[bus].append for bus in sent})
+        self.assertEqual(dispatcher.dispatch(bytes([0xC3, 5])), 3)
+        self.assertEqual(dispatcher.dispatch(bytes([0xB2, 7, 100])), 2)
+
+    def test_rejects_malformed_messages_and_incomplete_sinks(self):
+        plan = performance_plan(4)
+        with self.assertRaises(ValueError):
+            MidiBusDispatcher(plan, {0: lambda _: None})
+        dispatcher = MidiBusDispatcher(plan, {bus: lambda _: None for bus in range(4)})
+        for message in (b'', bytes([0xF0, 1]), bytes([0x90, 60]),
+                        bytes([0xC0, 1, 2]), bytes([0x90, 128, 10])):
+            with self.subTest(message=message), self.assertRaises(ValueError):
+                dispatcher.dispatch(message)
 
 
 if __name__ == '__main__':
