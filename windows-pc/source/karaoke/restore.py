@@ -121,6 +121,8 @@ def apply_pending(data):
     if not pending.exists():return None
     if not pending.is_dir():raise ValueError('โฟลเดอร์กู้คืนค้างไม่ถูกต้อง')
     state=parse_json((pending/'state.json').read_text(encoding='utf-8'))
+    if not isinstance(state,dict) or state.get('status') not in ('prepared','applying','complete'):
+        raise ValueError('สถานะกู้คืนไม่ถูกต้อง')
     if state['status']=='applying':
         safety_name=state.get('safety')
         if (not isinstance(safety_name,str) or not safety_name.startswith('restore-safety-')
