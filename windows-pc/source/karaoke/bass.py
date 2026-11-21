@@ -356,18 +356,34 @@ class BassSynth:
             return bytes(output)[:size]
 
     def close(self):
+        # Best-effort teardown: a failing FX processor must not strand the
+        # MIDI stream, SoundFonts or the shared audio-device reference.
         with self.lock:
-            self._release_channel_eq()
+            first_error = None
+
+            def cleanup(operation):
+                nonlocal first_error
+                try:
+                    operation()
+                except Exception as exc:
+                    if first_error is None:
+                        first_error = exc
+
+            cleanup(self._release_channel_eq)
             if self.stream:
-                self.dll.BASS_StreamFree(self.stream)
+                stream = self.stream
                 self.stream = 0
+                cleanup(lambda: self.dll.BASS_StreamFree(stream))
             for handle in self.fonts:
-                self.midi.BASS_MIDI_FontFree(handle)
+                cleanup(lambda handle=handle: self.midi.BASS_MIDI_FontFree(handle))
             self.fonts.clear()
             if self.initialized:
-                from .audio_device import release
-                release(self.dll, self._device_key)
                 self.initialized = False
+                from .audio_device import release
+                cleanup(lambda: release(self.dll, self._device_key))
             if self.dll_directory is not None:
-                self.dll_directory.close()
+                directory = self.dll_directory
                 self.dll_directory = None
+                cleanup(directory.close)
+            if first_error is not None:
+                raise first_error
