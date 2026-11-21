@@ -182,6 +182,12 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         const change=()=>{applyKey();applyProgram();};
         const visibility=()=>{
           if(stopped||scope.document?.hidden||player.paused)return;
+          if(ctx.state==='suspended'){
+            // Some mobile browsers suspend WebAudio while backgrounded.
+            // Recover only for a song that the user did not pause.
+            void ctx.resume().catch(()=>onStatus(
+              'เบราว์เซอร์พักเสียงขณะสลับแอป · กด ▶ เพื่อเล่นต่อ'));
+          }
           // Reconcile the lyric/player clock with the actual audio thread
           // when a backgrounded tab is shown again.
           const actual=Number(sequencer.currentTime);
@@ -195,6 +201,8 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           ['seeking',seek],['ratechange',rate],['xstage-midi-transpose',change]];
         for(const [name,fn] of listeners)player.addEventListener(name,fn);
         scope.document?.addEventListener?.('visibilitychange',visibility);
+        scope.addEventListener?.('focus',visibility);
+        scope.addEventListener?.('pageshow',visibility);
         if(!player.paused)play();
         return {
           engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
@@ -203,6 +211,8 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
             if(stopped)return;stopped=true;pause();
             for(const [name,fn] of listeners)player.removeEventListener(name,fn);
             scope.document?.removeEventListener?.('visibilitychange',visibility);
+            scope.removeEventListener?.('focus',visibility);
+            scope.removeEventListener?.('pageshow',visibility);
             dispose();
           }
         };
