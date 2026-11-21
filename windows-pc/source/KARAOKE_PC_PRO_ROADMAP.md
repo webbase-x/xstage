@@ -231,3 +231,8 @@
 - User explicitly authorized continuing to subsequent engineering tasks whenever test results are pending, reporting the actual results later and fixing failures then. This supersedes the previous stop-on-every-gate sequencing rule **for development only**.
 - P0.4 physical GUI and P0.5 physical audio remain DEFERRED-HARDWARE; P0.5 latest automated tests PENDING-QA. Neither is PASS.
 - Start P0.6 now. Preserve release safety: no stable EXE claim or release flag until required tests pass. Track outstanding verification as technical debt and revisit on CI results.
+
+## 2026-11-21 — P0.6 restore safety implementation (QA pending)
+
+- [`a78e1653`](https://github.com/webbase-x/xstage/commit/a78e16534c7cb822a8ca2abbabdd9d661873e7fd) rejects symlink/junction inputs among required and optional restore backup files before reading or staging; [`b357de45`](https://github.com/webbase-x/xstage/commit/b357de4576ba127aee2aeb3e95a82d6d5a185770) adds regression that external symlink content cannot be restored and current data stays intact.
+- Automated test result **PENDING-QA** (not PASS). Continue P0.6 data/release-safety work while waiting; revisit exact commits when CI evidence is available. Physical tests remain DEFERRED-HARDWARE. Do not advertise a stable EXE.
