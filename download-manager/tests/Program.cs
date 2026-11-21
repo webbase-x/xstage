@@ -250,6 +250,31 @@ try
         try { await next; } catch (OperationCanceledException) { }
         try { await earlier; } catch (OperationCanceledException) { }
     }
+    // A queued job canceled while another host owns all slots must never
+    // consume capacity when that host finishes. Check both slot and host counts.
+    var cancelledBehindHost = new TransferSlotQueue(1, 1);
+    using (var busy = await cancelledBehindHost.EnterAsync("busy", "busy.test", 1, CancellationToken.None))
+    {
+        using var cancelledToken = new CancellationTokenSource();
+        var abandoned = cancelledBehindHost.EnterAsync("abandoned", "waiting.test", 0, cancelledToken.Token);
+        var survivor = cancelledBehindHost.EnterAsync("survivor", "waiting.test", 2, CancellationToken.None);
+        cancelledToken.Cancel();
+        try
+        {
+            await abandoned;
+            throw new Exception("Canceled priority waiter unexpectedly acquired a slot.");
+        }
+        catch (OperationCanceledException) { }
+        if (cancelledBehindHost.WaitingCount != 1 || survivor.IsCompleted)
+            throw new Exception("Canceling a waiting transfer changed active capacity.");
+        busy.Dispose();
+        using var resumed = await survivor.WaitAsync(TimeSpan.FromSeconds(3));
+        if (cancelledBehindHost.ActiveCount != 1)
+            throw new Exception("Surviving queued transfer failed to acquire released capacity.");
+    }
+    if (cancelledBehindHost.ActiveCount != 0 || cancelledBehindHost.WaitingCount != 0)
+        throw new Exception("Canceling queued transfers leaked active or waiting slots.");
+
     var limit = new TransferRateGate(128);
     var gateClock = System.Diagnostics.Stopwatch.StartNew();
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
