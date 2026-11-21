@@ -517,8 +517,10 @@ assert.ok(app.includes("window.XStageAndroidUpdateAvailable=(version,build)=>"),
 assert.ok(app.includes("android-tv-update-now')?.addEventListener('click'")&&app.includes("installAvailableUpdate"),'native APK upgrades must require the explicit Update Now button');
 assert.ok(!app.includes("button?.click();"),'a new release notification must never auto-tap the installer button');
 
-assert.ok(index.includes('id="desktop-update-version"')&&index.includes('id="mobile-update-version"'),'version update controls must be available on desktop and compact/mobile UI');
-assert.ok(app.includes('triggerImmediateVersionUpdate'),'all version-update controls must share the immediate update path');
+assert.ok(index.includes('id="desktop-update-version"')&&!index.includes('id="mobile-update-version"'),
+  'The redundant update item must be absent from the menu while desktop update and automatic notices remain');
+assert.ok(app.includes('triggerImmediateVersionUpdate')&&app.includes('renderAppUpdateNotice()'),
+  'Desktop manual update and screen notification must remain available');
 assert.ok(app.includes("action.textContent='อัปเดตตอนนี้'")&&app.includes('action.disabled=false'),'web update notice must always expose an active update-now button');
 assert.ok(!app.includes("action.textContent=playbackBusyForUpdate()?'อัปเดตเมื่อจบ':'อัปเดตตอนนี้'"),'web updates must not wait for playback to finish');
 assert.ok(androidUpdate.includes('CHECK_INTERVAL_MS = 60L * 1000L'),'native update checks must refresh promptly');
