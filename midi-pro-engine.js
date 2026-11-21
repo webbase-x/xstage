@@ -171,6 +171,23 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       const previewChannel=Array.from({length:16},(_,i)=>15-i)
         .find(ch=>ch!==9&&!usedChannels.has(ch));
       const previewHeld=new Set();
+      // Channel system parameters survive sequencer MIDI CC messages, unlike
+      // muting with CC7. The browser mixer never alters the preview channel.
+      const applyMixer=()=>{
+        const mixer=scope.XStageWebMidiMixer;
+        if(!mixer)return;
+        for(let ch=0;ch<16;ch++){
+          if(ch===previewChannel)continue;
+          try{
+            const channel=synth.midiChannels?.[ch];
+            channel?.setSystemParameter?.('isMuted',!!mixer.isMuted(ch));
+            channel?.setSystemParameter?.('gain',mixer.getGain(ch));
+          }catch(error){console.warn('MIDI channel mixer:',error);}
+        }
+      };
+      const detachMixer=()=>scope.removeEventListener?.('xstage-midi-mixerchange',applyMixer);
+      scope.addEventListener?.('xstage-midi-mixerchange',applyMixer);
+      applyMixer();
       let previewProgram=null;
       const previewNote=(pitch,on,programOverride=null)=>{
         if(disposed||previewChannel===undefined||
@@ -340,7 +357,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         const play=()=>{
           if(stopped||started)return;
           started=true;completionDelivered=false;
-          updateVolume();applyKey();applyProgram();
+          updateVolume();applyKey();applyProgram();applyMixer();
           sequencer.playbackRate=clamp(Number(player.playbackRate)||1,.25,2);
           sequencer.currentTime=clamp(Number(player.currentTime)||0,0,parsed.duration);
           scope.XStageIOSMidiAudio?.activate();
@@ -386,6 +403,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         if(!player.paused)play();
         let fullyReleased=false;
         const detachPlayback=()=>{
+          detachMixer();
           try{sequencer.eventHandler?.removeEvent?.('songEnded',finishListenerId);}catch{}
           for(const [name,fn] of listeners)player.removeEventListener(name,fn);
           scope.document?.removeEventListener?.('visibilitychange',visibility);
@@ -565,7 +583,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       return {
         dispose(){
           if(disposed)return;
-          pause();
+          pause();detachMixer();
           for(const [name,fn] of listeners)player.removeEventListener(name,fn);
           releasePreview();dispose();
         },

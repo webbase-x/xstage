@@ -1,0 +1,24 @@
+/* X-Stage MIDI mixer is an optional tool, never an overlay on the stage. */
+.web-midi-mixer-dialog{
+  color:#eaf5ff;background:#0c1c31;border:1px solid #3e7593;border-radius:14px;
+  width:min(640px,calc(100vw - 20px));max-height:min(85dvh,780px);padding:15px;
+  box-shadow:0 22px 80px #000a;
+}
+.web-midi-mixer-dialog::backdrop{background:#020813bd}
+.web-midi-mixer-dialog header{display:flex;align-items:center;gap:10px}
+.web-midi-mixer-dialog header strong{flex:1;font-size:.94rem;letter-spacing:.02em}
+.web-midi-mixer-dialog button{color:#eaf5ff;background:#18354d;border:1px solid #456e85;border-radius:8px;padding:7px 10px;cursor:pointer}
+.web-midi-mixer-dialog button:focus-visible,.web-midi-mixer-dialog input:focus-visible{outline:2px solid #6ee2ee;outline-offset:2px}
+.web-midi-mixer-dialog p{font-size:.78rem;line-height:1.5;color:#bcd4e4;margin:10px 0}
+.web-midi-mixer-channels{display:grid;gap:5px;max-height:min(65dvh,610px);overflow:auto;padding-right:3px}
+.web-midi-mixer-channel{display:grid;grid-template-columns:minmax(76px,1fr) 36px 36px minmax(85px,2fr) 45px;gap:7px;align-items:center;border:1px solid #26455d;border-radius:8px;padding:6px;background:#122840}
+.web-midi-channel-name,.web-midi-mixer-channel output{font-size:.76rem;font-variant-numeric:tabular-nums}
+.web-midi-mixer-channel input{width:100%;min-width:0;accent-color:#46d5c2}
+.web-midi-mixer-channel button{font-weight:800;padding:6px 0}
+.web-midi-mixer-channel button.active{background:#146d78;color:#fff;border-color:#45dada}
+.web-midi-mixer-channel button[aria-pressed="true"]:first-of-type{background:#8c3c3c;border-color:#ed9a9a}
+@media(max-width:430px){
+ .web-midi-mixer-dialog{padding:9px}
+ .web-midi-mixer-channel{grid-template-columns:minmax(58px,1fr) 30px 30px minmax(65px,1.5fr) 36px;gap:4px;padding:4px}
+ .web-midi-channel-name,.web-midi-mixer-channel output{font-size:.68rem}
+}
