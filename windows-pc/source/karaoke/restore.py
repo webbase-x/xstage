@@ -123,11 +123,17 @@ def rollback(data,safety,existed,replaced=FILES):
 
 def apply_pending(data):
     data=Path(data);pending=data/'restore-pending'
+    if data.is_symlink() or getattr(data,'is_junction',lambda:False)():
+        raise ValueError('โฟลเดอร์ข้อมูลปลายทางเป็นลิงก์ที่ไม่ปลอดภัย')
     if pending.is_symlink() or getattr(pending,'is_junction',lambda:False)():
         raise ValueError('โฟลเดอร์กู้คืนค้างเป็นลิงก์ที่ไม่ปลอดภัย')
     if not pending.exists():return None
     if not pending.is_dir():raise ValueError('โฟลเดอร์กู้คืนค้างไม่ถูกต้อง')
-    state=parse_json((pending/'state.json').read_text(encoding='utf-8'))
+    state_file=pending/'state.json'
+    if (state_file.is_symlink() or getattr(state_file,'is_junction',lambda:False)()
+            or not state_file.is_file()):
+        raise ValueError('ไฟล์สถานะกู้คืนไม่ปลอดภัยหรือไม่ครบ')
+    state=parse_json(state_file.read_text(encoding='utf-8'))
     if not isinstance(state,dict) or state.get('status') not in ('prepared','applying','complete'):
         raise ValueError('สถานะกู้คืนไม่ถูกต้อง')
     if state['status']=='applying':
