@@ -56,7 +56,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   // is registered. Earlier asynchronous prewarming overlaps the Drive load.
   await preload({onStatus});
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
-  const [{WorkletSynthesizer,Sequencer},parsed]=await Promise.all([
+  let [{WorkletSynthesizer,Sequencer},parsed]=await Promise.all([
     load(),Promise.resolve(scope.XStageBrowserMidi.parseMidi(source))
   ]);
   if(typeof WorkletSynthesizer!=='function')throw Error('ไฟล์ SpessaSynth ไม่สมบูรณ์');
@@ -74,6 +74,34 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     try{master?.disconnect();tone?.disconnect();limiter?.disconnect();}catch{}
     if(ownsContext)void ctx.close().catch(()=>{});
   };
+  // SpessaSynth loads sequencer files in its AudioWorklet asynchronously.
+  // Wait for the exact songChange acknowledgement both on first playback and
+  // when reusing a warm synth for the next MIDI. Never reload the SoundFont.
+  async function loadSequencerSong(binary,loadSignal=signal,
+    id='xstage-midi-initial-song-ready'){
+    if(typeof sequencer?.eventHandler?.addEvent!=='function')
+      throw Error('SpessaSynth ยังไม่รองรับสัญญาณพร้อมของ Sequencer');
+    await new Promise((resolve,reject)=>{
+      let settled=false,timeout=null;
+      const cleanup=()=>{
+        clearTimeout(timeout);
+        sequencer?.eventHandler?.removeEvent?.('songChange',id);
+        loadSignal?.removeEventListener?.('abort',abort);
+      };
+      const done=error=>{
+        if(settled)return;
+        settled=true;cleanup();
+        if(error)reject(error);else resolve();
+      };
+      const abort=()=>done(new DOMException('ยกเลิก','AbortError'));
+      sequencer.eventHandler.addEvent('songChange',id,()=>done());
+      loadSignal?.addEventListener?.('abort',abort,{once:true});
+      timeout=setTimeout(()=>done(Error('เครื่องเสียง MIDI ยังเตรียมเพลงใหม่ไม่เสร็จ')),15000);
+      if(loadSignal?.aborted){abort();return;}
+      try{sequencer.loadNewSongList([{binary,fileName:'X-Stage.mid'}]);}
+      catch(error){done(error);}
+    });
+  }
   try{
     let loaded=registeredWorklets.get(ctx);
     if(!loaded){
@@ -119,32 +147,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           // isLoading=true and later signals songChange *after* the worklet
           // parses MIDI and preloads its instruments. Starting playback
           // before songChange can lose the first GM patches or notes.
-          if(typeof sequencer.eventHandler?.addEvent!=='function')
-            throw Error('SpessaSynth ยังไม่รองรับสัญญาณพร้อมของ Sequencer');
-          await new Promise((resolve,reject)=>{
-            const id='xstage-midi-initial-song-ready';
-            let settled=false,timeout=null;
-            const cleanup=()=>{
-              clearTimeout(timeout);
-              sequencer?.eventHandler?.removeEvent?.('songChange',id);
-              signal?.removeEventListener?.('abort',abort);
-            };
-            const done=error=>{
-              if(settled)return;
-              settled=true;cleanup();
-              if(error)reject(error);else resolve();
-            };
-            const abort=()=>done(new DOMException('ยกเลิก','AbortError'));
-            sequencer.eventHandler?.addEvent?.('songChange',id,()=>{
-              done();
-            });
-            signal?.addEventListener?.('abort',abort,{once:true});
-            timeout=setTimeout(()=>done(Error('เครื่องเสียง MIDI ยังโหลดเพลงแรกไม่เสร็จ')),15000);
-            if(signal?.aborted){abort();return;}
-            try{
-              sequencer.loadNewSongList([{binary,fileName:'X-Stage.mid'}]);
-            }catch(error){done(error);}
-          });
+          await loadSequencerSong(binary,signal);
           if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
           sequencer.loopCount=0;
         }
@@ -159,7 +162,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       ?'SpessaSynth Sequencer · เล่น MIDI ต่อได้ขณะสลับแท็บ'
       :'SpessaSynth · ใช้โหมด MIDI สำรอง');
   }catch(error){dispose();throw error;}
-  return {
+  const preparedEngine={
     attach(player,{getTranspose=()=>0,getProgram=()=>null,onEnded=()=>{}}={}){
       // The PC keyboard previews notes on an independent voice. In the Web
       // synth, reserve an unused MIDI channel so touching piano keys cannot
@@ -395,6 +398,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         };
         const beginTransitionFill=()=>{
           if(disposed||stopped||fullyReleased)return null;
+          let transferred=false;
           stopped=true;started=false;
           stopGapFill();
           detachPlayback();
@@ -421,7 +425,46 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           bridgeTimer=setInterval(tick,75);
           bridgeDeadline=setTimeout(releaseEngine,16000);
           tick();
-          return {stop:releaseEngine};
+          const prepareNextMidi=async(nextSource,bank,{signal:nextSignal=null}={})=>{
+            if(fullyReleased||disposed||transferred)
+              throw Error('ตัวสังเคราะห์เสียงสำหรับส่งต่อเพลงไม่พร้อม');
+            if(!nextSource?.byteLength||!bank?.byteLength)
+              return null;
+            // Only reuse exactly the same SoundFont bytes. A changed SF bank
+            // requires a fresh engine; playing the wrong instruments is worse
+            // than a bounded, audible bridge.
+            const sameBank=bank===fontBytes||
+              bank.buffer===fontBytes.buffer&&
+              bank.byteOffset===fontBytes.byteOffset&&
+              bank.byteLength===fontBytes.byteLength;
+            if(!sameBank)return null;
+            const midi=nextSource instanceof Uint8Array?nextSource:
+              new Uint8Array(nextSource);
+            if(String.fromCharCode(...midi.subarray(0,4))!=='MThd')return null;
+            const newParsed=scope.XStageBrowserMidi.parseMidi(midi);
+            const binary=midi.buffer.slice(midi.byteOffset,
+              midi.byteOffset+midi.byteLength);
+            // Transition drums use the already-running synth while the
+            // sequencer parses the next song in the audio thread.
+            await loadSequencerSong(binary,nextSignal,'xstage-midi-handoff-song-ready');
+            if(nextSignal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+            if(fullyReleased||disposed)throw Error('ยกเลิกการส่งต่อ SoundFont แล้ว');
+            parsed=newParsed;
+            sequencer.loopCount=0;
+            transferred=true;
+            return preparedEngine;
+          };
+          return {
+            prepareNextMidi,
+            stop(){
+              if(!transferred){releaseEngine();return;}
+              // Transferred synth now belongs to the new song. Stop only
+              // the outgoing transition rhythm, never destroy the bank.
+              stopBridgeTimer();
+              for(const timer of noteOffTimers)clearTimeout(timer);
+              noteOffTimers.clear();
+            }
+          };
         };
         return {
           engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
@@ -525,6 +568,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     },
     dispose
   };
+  return preparedEngine;
 }
 scope.XStageProMidi={available,preload,prepare};
 })(typeof window!=='undefined'?window:globalThis);
