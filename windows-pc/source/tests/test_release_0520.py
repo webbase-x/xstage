@@ -113,7 +113,11 @@ class ReleaseTests(unittest.TestCase):
         widgets=[];window=Mock();window.after.return_value='timer1'
         def widget(*args,**kw):
             w=Mock();w.options=kw;widgets.append(w);return w
-        app=NS(engine=first,current_song={'title':'first'},settings={},save_settings=Mock(),status_var=Var())
+        # A mock app must expose newly-added EQ window commands as well as
+        # legacy mixer actions. Check the buttons instead of weakening mixer QA.
+        app=NS(engine=first,current_song={'title':'first'},settings={},
+               save_settings=Mock(),status_var=Var(),
+               instrument_tone_window=Mock(),instrument_channel_eq_window=Mock())
         with ExitStack() as stack:
             stack.enter_context(patch('karaoke.classic.DialogWindow',return_value=window))
             stack.enter_context(patch('karaoke.classic.WinMidi.devices',return_value=[]))
@@ -123,6 +127,12 @@ class ReleaseTests(unittest.TestCase):
             for name in ['StringVar','DoubleVar','IntVar','BooleanVar']:
                 stack.enter_context(patch('karaoke.classic.tk.'+name,Var))
             ClassicApp.open_mixer(app)
+            tone=next(w for w in widgets if w.options.get('text')=='ปรับโทนเครื่องดนตรี / กลอง')
+            tone.options['command']()
+            app.instrument_tone_window.assert_called_once_with()
+            channel_eq=next(w for w in widgets if w.options.get('text')=='EQ 31 ย่าน / ช่อง MIDI')
+            channel_eq.options['command']()
+            app.instrument_channel_eq_window.assert_called_once_with()
             poll=window.after.call_args.args[1]
             scale=next(w for w in widgets if 'from_' in w.options and w.options.get('to')==100)
             app.engine=second;app.current_song={'title':'second'}
