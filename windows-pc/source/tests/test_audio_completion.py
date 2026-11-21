@@ -33,6 +33,31 @@ class PcmTests(unittest.TestCase):
         self.assertEqual([c.args[1] for c in d.BASS_ChannelSetAttribute.call_args_list],[0x10001,0x10000,2])
         p.seek(200);d.BASS_ChannelSetPosition.assert_called_with(22,480000,0)
         p.close();p.close();d.BASS_StreamFree.assert_called_once_with(22);d.BASS_Free.assert_called_once()
+    def test_pcm_close_releases_stream_and_device_after_router_failure(self):
+        p,d,_=player()
+        p.load('song.mp3')
+        router=Mock()
+        router.close.side_effect=OSError('router cleanup failed')
+        p.router=router
+        with self.assertRaisesRegex(OSError,'router cleanup failed'):
+            p.close()
+        d.BASS_StreamFree.assert_called_once_with(22)
+        d.BASS_Free.assert_called_once()
+        self.assertEqual(p.stream,0)
+        self.assertFalse(p.initialized)
+        p.close()
+        d.BASS_StreamFree.assert_called_once()
+
+    def test_pcm_close_preserves_first_error_after_stream_failure(self):
+        p,d,_=player()
+        p.load('song.wav')
+        d.BASS_StreamFree.side_effect=OSError('stream free failed')
+        with self.assertRaisesRegex(OSError,'stream free failed'):
+            p.close()
+        d.BASS_Free.assert_called_once()
+        self.assertFalse(p.initialized)
+        self.assertEqual(p.stream,0)
+
     def test_load_failure_frees_owned_source(self):
         p,d,f=player();f.BASS_FX_TempoCreate.return_value=0
         with self.assertRaises(OSError):p.load('a.wav')
