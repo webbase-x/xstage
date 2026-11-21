@@ -1116,3 +1116,46 @@ body{font-size:var(--studio-ui-text);line-height:1.45}
   .input-wrap{padding-inline:9px}
   .page-intro h1{font-size:clamp(21px,5vw,27px)}
 }
+
+/* v0.1.36: continuous scroll and bounded DOM virtualization for large catalogs. */
+#view-lyrics .group-list,#view-build .build-list{
+  overflow-y:auto!important;overflow-x:hidden!important;
+  overscroll-behavior:contain;scrollbar-width:thin!important;
+  scrollbar-color:#5f779c #111d31;scrollbar-gutter:stable;
+  display:block!important;min-height:160px;
+}
+#view-lyrics .group-list::-webkit-scrollbar,#view-build .build-list::-webkit-scrollbar{
+  display:block!important;width:10px
+}
+#view-lyrics .group-list::-webkit-scrollbar-thumb,#view-build .build-list::-webkit-scrollbar-thumb{
+  background:#5f779c;border-radius:7px
+}
+#view-lyrics .group-row{height:72px;min-height:72px;max-height:72px;
+  display:flex;align-items:center;margin:0!important;padding:8px 12px;overflow:hidden}
+#view-lyrics .group-row .group-text strong{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+#view-lyrics .group-spacer,#view-build .build-spacer{display:block!important;
+  min-height:0!important;max-height:none!important;flex:0 0 auto!important;
+  margin:0!important;padding:0!important;border:0!important}
+#view-build .build-row{height:72px;min-height:72px;max-height:72px;
+  display:flex;align-items:center;padding:8px 12px;overflow:hidden;margin:0!important}
+#view-build .build-list{display:block!important}
+#view-build .song-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scroll-load-footer{display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  padding-top:9px;color:#a6c2d6;font-size:12px;line-height:1.4}
+.scroll-load-footer button{margin-left:auto}
+.build-status-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  margin:0 0 10px}
+.build-status-tabs button{min-width:0;white-space:normal;min-height:40px;
+  font-size:13px!important;font-weight:650}
+.build-status-tabs button.active,.build-status-tabs button[aria-pressed="true"]{
+  background:#244f60;color:#dbfff5;border-color:#62b9ba
+}
+#view-build .build-list{flex:1 1 auto;min-height:180px;max-height:none}
+#view-lyrics .group-list{flex:1 1 auto;max-height:none}
+@media(max-width:900px){
+  #view-lyrics .group-list,#view-build .build-list{
+    min-height:180px;max-height:clamp(200px,38dvh,440px)!important
+  }
+}
