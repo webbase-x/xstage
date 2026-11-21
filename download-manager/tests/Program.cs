@@ -159,6 +159,25 @@ try
         if (scheduler.WaitingCount != 0)
             throw new Exception("Canceled queue entries must be removed promptly.");
     }
+    // Reducing limits must not revoke active leases or dispatch queued work
+    // until capacity is genuinely available. Increasing limits should wake it.
+    var resizing = new TransferSlotQueue(2, 2);
+    using (var first = await resizing.EnterAsync("resize-a", "one.test", 1, CancellationToken.None))
+    using (var second = await resizing.EnterAsync("resize-b", "two.test", 1, CancellationToken.None))
+    {
+        resizing.Configure(1, 1);
+        var pending = resizing.EnterAsync("resize-c", "three.test", 1, CancellationToken.None);
+        first.Dispose();
+        if (pending.IsCompleted || resizing.ActiveCount != 1)
+            throw new Exception("Reduced concurrency must not oversubscribe active leases.");
+        resizing.Configure(2, 1);
+        using var promoted = await pending.WaitAsync(TimeSpan.FromSeconds(3));
+        if (resizing.ActiveCount != 2)
+            throw new Exception("Increasing concurrency must dispatch a waiting host.");
+    }
+    if (resizing.ActiveCount != 0 || resizing.WaitingCount != 0)
+        throw new Exception("Repeated lease disposal must not leak scheduler slots.");
+
     var limit = new TransferRateGate(128);
     var gateClock = System.Diagnostics.Stopwatch.StartNew();
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
