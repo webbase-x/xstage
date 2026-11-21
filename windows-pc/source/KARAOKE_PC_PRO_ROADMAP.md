@@ -252,3 +252,9 @@
 
 - [`83dff647`](https://github.com/webbase-x/xstage/commit/83dff647eddc2c0d0f3cf7c8c3c16cd0903c9196) refuses symlink/junction `restore-pending` at staging/startup, and refuses linked/non-file current-data inputs before snapshotting for rollback. Regression [`318994e0`](https://github.com/webbase-x/xstage/commit/318994e0c0cef1860185a15ec4d5dbe15bd9f9c2) checks external targets remain unchanged.
 - CI execution not verified yet: **PENDING-QA, not PASS**. Continue implementation on independent tasks under user-approved nonblocking policy. Physical QA deferred; stable release still blocked.
+
+## 2026-11-21 — P0.6 safety snapshot failure cleanup (PENDING-QA)
+
+- [`ed452c80`](https://github.com/webbase-x/xstage/commit/ed452c80a0c4979f5c8d44f1e13cf4e21a171d5c) validates all live backup inputs before creating safety directory; if snapshot fails, removes partial safety folder before any live-file replacement or applying-journal write.
+- Regression [`1dfddb36`](https://github.com/webbase-x/xstage/commit/1dfddb363a83925dc75f45c8e89bbe6b8a08ba35) injects snapshot disk-full failure and asserts live song database unchanged, no orphan safety folder and pending restore retained.
+- Automated results **PENDING-QA**. Development may continue, but P0.6 is not PASS and Stable remains blocked.
