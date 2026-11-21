@@ -39,8 +39,21 @@ class Sequencer{
   constructor(){
     this.currentTime=0;this.playbackRate=1;this.loopCount=0;
     this.paused=true;Sequencer.instance=this;
+    this.handlers=new Map();
+    this.eventHandler={
+      addEvent:(name,id,callback)=>this.handlers.set(name+':'+id,callback),
+      removeEvent:(name,id)=>this.handlers.delete(name+':'+id)
+    };
   }
-  loadNewSongList(files){this.files=files;messages.push(['load']);}
+  loadNewSongList(files){
+    this.files=files;messages.push(['load']);
+    // Real SpessaSynth parses the MIDI asynchronously in its AudioWorklet.
+    queueMicrotask(()=>{
+      for(const [id,cb] of this.handlers){
+        if(id.startsWith('songChange:'))cb({midiData:{duration:180}});
+      }
+    });
+  }
   play(){this.paused=false;messages.push(['play']);}
   pause(){this.paused=true;messages.push(['pause']);}
 }
@@ -60,6 +73,7 @@ const scope={
 const sandbox={
   window:scope,contextModule:{WorkletSynthesizer:Synth,Sequencer},
   Uint8Array,ArrayBuffer,DOMException,console,Promise,Number,Math,
+  setTimeout,clearTimeout,queueMicrotask,
   fetch:async ()=>{
     assetRequests++;
     return {ok:true,status:200,headers:{get:()=>null},
@@ -71,6 +85,8 @@ const sandbox={
 vm.runInNewContext(source,sandbox,{filename:'midi-pro-engine.js'});
 const midi=new Uint8Array(32);midi.set([77,84,104,100],0); // MThd
 const prepared=await scope.XStageProMidi.prepare(midi,Uint8Array.of(1,2,3));
+assert.equal(Sequencer.instance.handlers.has('songChange:xstage-midi-initial-song-ready'),false,
+  'The first-song readiness listener must be cleaned up after worklet notification');
 const listeners=new Map();
 const player={
   paused:false,ended:false,currentTime:0,volume:1,muted:false,
