@@ -13,6 +13,21 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_preload_build_closes_both_decks_when_rhythm_setup_fails(self):
+        from pathlib import Path
+        from karaoke.medley_decks import build
+        engine = Mock()
+        rhythm = Mock()
+        engine.close.side_effect = OSError('engine close failed')
+        rhythm.set_loop.side_effect = ValueError('rhythm setup failed')
+        with patch('karaoke.bass.BassSynth'), \
+             patch('karaoke.playback.MidiPlayer', side_effect=[engine, rhythm]):
+            with self.assertRaisesRegex(ValueError, 'rhythm setup failed'):
+                build(Path('native'), {}, Path('queued.mid'), 0, 100,
+                      False, (Mock(), 2.0))
+        rhythm.close.assert_called_once()
+        engine.close.assert_called_once()
+
     def test_fill_needs_explicit_metadata_and_exact_downbeat(self):
         song = MidiSong([], 8, Lyrics(), explicit_tempo=True, explicit_meter=True)
         fill = drum_fill(song, TrimBounds(1.65, 8, 8, 2), speed=1.25)
