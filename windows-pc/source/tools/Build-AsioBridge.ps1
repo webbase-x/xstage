@@ -8,6 +8,6 @@ $OutputDirectory = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $output = Join-Path $OutputDirectory 'xstage_asio_pcm.dll'
 $compiler = Get-Command cl.exe -ErrorAction SilentlyContinue
 if (-not $compiler) { throw 'MSVC cl.exe not found. Run from x64 Native Tools Command Prompt for VS.' }
-& $compiler.Source /nologo /std:c++17 /EHsc /O2 /LD /W4 /link /OUT:$output $source
+& $compiler.Source /nologo /std:c++17 /EHsc /O2 /LD /W4 $source /link /OUT:$output
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output)) { throw 'ASIO PCM bridge DLL compilation failed' }
 Write-Host "Built: $output"
