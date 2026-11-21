@@ -42,7 +42,7 @@ class FontEx(ctypes.Structure):
 
 
 class BassSynth:
-    def __init__(self, native: Path, soundfont: Path | None = None, *, settings=None, decode=False, bindings=None):
+    def __init__(self, native: Path, soundfont: Path | None = None, *, settings=None, decode=False, bindings=None, device_id=None):
         if ctypes.sizeof(ctypes.c_void_p) != 8:
             raise OSError('BASS backend นี้ต้องใช้ Python/โปรแกรม x64')
         self.options = normalize_audio(settings if settings is not None else
@@ -87,7 +87,7 @@ class BassSynth:
             self._bind()
             # Device 0 is BASS's no-sound device for offline decoding.
             from .audio_device import acquire
-            self._device_key, self.device = acquire(self.dll, decode)
+            self._device_key, self.device = acquire(self.dll, decode, device_id=device_id)
             self.initialized = True
             self.device = self.dll.BASS_GetDevice()
             if not decode:
