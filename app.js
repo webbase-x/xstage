@@ -575,14 +575,28 @@ const midiTransport={
     return Math.min(this.duration,
       this.position+(performance.now()-this.startedAt)/1000*this.rate);
   },
+  finish(){
+    // A single natural completion must release the old MIDI engine and
+    // advance the queue once, even if both the sequencer and timer notice it.
+    if(!this.active||this.ended||this.paused)return false;
+    if(this.loop){this.seek(0);return false;}
+    this.position=this.duration;this.paused=true;this.ended=true;
+    clearInterval(this.interval);this.interval=null;
+    this.emit('timeupdate');this.emit('ended');
+    return true;
+  },
   tick(){
     if(!this.active||this.paused)return;
+    // Native AudioWorklet time may stop just short of the parsed MIDI end.
+    // A completed sequencer is authoritative, regardless of rounded time.
+    if(state.liveMidiPlayback?.scheduler==='audio-worklet'&&
+       state.liveMidiPlayback?.finished?.()===true){
+      this.finish();return;
+    }
     const now=this.time();
     if(now>=this.duration){
       if(this.loop){this.seek(0);return;}
-      this.position=this.duration;this.paused=true;this.ended=true;
-      clearInterval(this.interval);this.interval=null;
-      this.emit('timeupdate');this.emit('ended');
+      this.finish();
     }else this.emit('timeupdate');
   },
   play(){
@@ -2526,11 +2540,15 @@ function releaseFinishedMedia(){
   // identity in history until playSong starts the next one.
   try{player.pause();}catch{}
   state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
+  // MIDI uses a synthetic transport source rather than an object URL.
+  // Clear it even when state.objectUrl is empty; otherwise the next queue
+  // item still sees the previous track as the active player.
+  if(midiTransport.active)midiTransport.clear();
   if(state.objectUrl){
     URL.revokeObjectURL(state.objectUrl);
     state.objectUrl='';
-    player.removeAttribute('src');
   }
+  nativePlayer.removeAttribute('src');
   resetSongVideo();
   state.activeBlobBytes=0;state.activeVideoBytes=0;
   trimQueueCache();
