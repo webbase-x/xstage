@@ -50,6 +50,23 @@ function setup({ios=true,allowPlay=true,bridge=true}={}){
   assert.ok(fake.calls.includes('disconnect-stream'));
 }
 {
+  const fake=setup();
+  // The iPhone tap must prime exactly one media element BEFORE the async
+  // song/SoundFont download. Attaching the synth later must reuse it.
+  await fake.ios.prime(fake.ctx);
+  assert.equal(fake.navigator.audioSession.type,'playback');
+  const before=fake.calls.filter(x=>x==='append').length;
+  const out=fake.ios.attach(fake.ctx,fake.sourceNode);
+  await out.start();
+  assert.equal(fake.calls.filter(x=>x==='append').length,before,
+    'The primed iPhone media output must be reused for MIDI playback');
+  assert.equal(fake.calls.filter(x=>x==='connect-direct').length,0,
+    'Successful media relay must not double the audio output');
+  out.dispose();
+  fake.ios.release();
+  assert.equal(fake.audio.srcObject,null,'iPhone media track must be released on stop');
+}
+{
   const fake=setup({allowPlay:false});
   const out=fake.ios.attach(fake.ctx,fake.sourceNode);
   assert.equal(await out.start(),true,'Autoplay failure should not silence the app');
