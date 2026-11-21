@@ -52,6 +52,11 @@ test("Android bridge grants audio only to trusted web origin and bounds saved au
   const native=read("android/app/src/main/java/com/webbasex/ag06studio/MainActivity.java");
   assert.match(native,/RESOURCE_AUDIO_CAPTURE/);
   assert.match(native,/TRUSTED_ORIGIN/);
+  assert.match(native,/WebViewAssetLoader/);
+  assert.match(native,/appassets\.androidplatform\.net/);
+  const gradle=read("android/app/build.gradle");
+  assert.match(gradle,/copyAg06Frontend/);
+  assert.match(gradle,/signingConfigs\.testPreview/);
   assert.match(native,/MAX_DATA_URL_CHARS/);
   assert.match(native,/Music|DIRECTORY_MUSIC/);
   assert.doesNotMatch(native,/READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE/);
