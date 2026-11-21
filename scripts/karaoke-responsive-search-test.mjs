@@ -35,8 +35,12 @@ for(const [viewport,leftSafe,rightSafe] of [
   assert.ok(searchWidth>0&&searchWidth<=viewport,'Search must fit '+viewport+'px viewport');
 }
 const ui=get('stage-ui.js'),app=get('app.js');
-assert.match(html,/id="toolbar-song-key"[^>]*>คีย์ —<\/output>/,
-  'Song key must replace the redundant search keyboard at the top');
+const topHeader=html.split('<header class="mobile-stage-header stage-toolbar"')[1]?.split('</header>')[0]||'';
+const songStatus=html.split('<div class="transport-song-info">')[1]?.split('<div class="timeline">')[0]||'';
+assert.doesNotMatch(topHeader,/id="toolbar-song-key"/,
+  'Song key must not occupy the upper search toolbar');
+assert.match(songStatus,/id="toolbar-song-key"[^>]*>คีย์ —<\/output>/,
+  'Current key must appear with Song Status on every screen');
 assert.match(html,/id="toggle-keyboard"[^>]*hidden/,
   'Search keyboard handler stays connected to the menu and remote');
 assert.match(app,/setSongKeyDisplay\(musicalKey\)/,
@@ -57,8 +61,8 @@ const finalStyles=css.split('/* 1.15.7 — One upper hamburger')[1];
 assert.ok(finalStyles,'Final responsive CSS overrides must exist');
 assert.match(finalStyles,/#mobile-menu-toggle\{[\s\S]*?display:inline-flex!important/,
   'The upper hamburger must appear on phone widths');
-assert.match(finalStyles,/#toolbar-song-key\{[\s\S]*?display:inline-flex!important/,
-  'The song-key badge must appear on phone widths');
+assert.match(css,/\.transport-song-info \.song-key-stack\{[\s\S]*?display:flex!important/,
+  'Song-key controls belong within the transport Song Status');
 assert.match(finalStyles,/#stage-tools-toggle\{\s*display:none!important/,
   'The bottom hamburger must be removed when the top menu exists');
 console.log('PASS: mobile search, actual top MIDI key replacement, one top menu');
