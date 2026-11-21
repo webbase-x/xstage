@@ -245,7 +245,7 @@ public static class DownloadFileNaming
         var stem = Path.GetFileNameWithoutExtension(clean);
         var extension = Path.GetExtension(clean);
         var result = Path.Combine(directory, clean);
-        for (int n = 1; File.Exists(result); n++)
+        for (int n = 1; File.Exists(result) || Directory.Exists(result); n++)
             result = Path.Combine(directory, stem + " (" + n + ")" + extension);
         return result;
     }
