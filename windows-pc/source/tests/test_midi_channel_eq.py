@@ -153,6 +153,26 @@ class ChannelEQNativeTests(unittest.TestCase):
             release.assert_called_once()
 
 
+    def test_close_continues_after_stream_and_font_cleanup_errors(self):
+        synth = self.fake()
+        synth.fonts = [11, 12]
+        synth.initialized = True
+        synth._device_key = ('test', False)
+        synth.dll_directory = NS(close=Mock())
+        synth.midi.BASS_MIDI_FontFree = Mock(side_effect=[OSError('font failed'), 1])
+        synth.dll.BASS_StreamFree.side_effect = OSError('stream failed')
+        with patch('karaoke.audio_device.release') as release:
+            with self.assertRaisesRegex(OSError, 'stream failed'):
+                synth.close()
+            self.assertEqual(synth.dll.BASS_StreamFree.call_args_list, [call(44)])
+            self.assertEqual(synth.midi.BASS_MIDI_FontFree.call_args_list, [call(11), call(12)])
+            release.assert_called_once_with(synth.dll, ('test', False))
+            synth.dll_directory is None or self.fail('DLL directory not cleared')
+            self.assertEqual(synth.fonts, [])
+            self.assertEqual(synth.stream, 0)
+            self.assertFalse(synth.initialized)
+
+
 
 if __name__ == '__main__':
     unittest.main()
