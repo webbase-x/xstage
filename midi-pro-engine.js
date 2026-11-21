@@ -56,7 +56,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   // is registered. Earlier asynchronous prewarming overlaps the Drive load.
   await preload({onStatus});
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
-  const [{WorkletSynthesizer},parsed]=await Promise.all([
+  const [{WorkletSynthesizer,Sequencer},parsed]=await Promise.all([
     load(),Promise.resolve(scope.XStageBrowserMidi.parseMidi(source))
   ]);
   if(typeof WorkletSynthesizer!=='function')throw Error('ไฟล์ SpessaSynth ไม่สมบูรณ์');
@@ -64,9 +64,10 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   const unlocked=scope.XStageBrowserMidi?.liveAudioContext?.();
   const ownsContext=!unlocked;
   const ctx=unlocked||new Ctor({latencyHint:'playback'});
-  let synth=null,master=null,tone=null,limiter=null,disposed=false;
+  let synth=null,sequencer=null,master=null,tone=null,limiter=null,disposed=false;
   const dispose=()=>{
     if(disposed)return;disposed=true;
+    try{sequencer?.pause();}catch{}
     try{synth?.stopAll(true);}catch{}
     try{synth?.destroy();}catch{}
     try{master?.disconnect();tone?.disconnect();limiter?.disconnect();}catch{}
@@ -104,10 +105,108 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     await synth.soundBankManager.addSoundBank(bank,'X-Stage GM');
     await synth.isReady;
     if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
-    onStatus('SpessaSynth · เสียง GM เต็มรูปแบบ พร้อมเล่น');
+    // SpessaSynth's native sequencer runs MIDI events in the synthesis
+    // thread: hidden-tab setInterval throttling cannot starve note delivery.
+    if(typeof Sequencer==='function'&&source?.byteLength){
+      try{
+        const bytes=source instanceof Uint8Array?source:new Uint8Array(source);
+        if(String.fromCharCode(...bytes.subarray(0,4))==='MThd'){
+          sequencer=new Sequencer(synth);
+          const binary=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
+          sequencer.loadNewSongList([{binary,fileName:'X-Stage.mid'}]);
+          sequencer.loopCount=0;
+        }
+      }catch(error){
+        console.warn('AudioWorklet MIDI sequencer unavailable:',error);
+        try{sequencer?.pause();}catch{}
+        sequencer=null;
+      }
+    }
+    onStatus(sequencer
+      ?'SpessaSynth Sequencer · เล่น MIDI ต่อได้ขณะสลับแท็บ'
+      :'SpessaSynth · ใช้โหมด MIDI สำรอง');
   }catch(error){dispose();throw error;}
   return {
     attach(player,{getTranspose=()=>0,getProgram=()=>null}={}){
+      // Prefer audio-thread sequencing. No UI-thread note scheduler runs in
+      // this mode. A clock event loop in the app is for lyrics only.
+      if(sequencer){
+        let stopped=false,started=false;
+        let shiftApplied=null,programApplied=null;
+        const updateVolume=()=>{
+          master.gain.value=(player.muted?0:clamp(Number(player.volume)||0,0,1))*.92;
+        };
+        const applyKey=()=>{
+          const shift=clamp(Math.trunc(Number(getTranspose())||0),-12,12);
+          if(shift===shiftApplied)return;
+          for(let ch=0;ch<16;ch++){
+            if(ch===9)continue; // Do not shift GM percussion note mappings.
+            try{synth.midiChannels?.[ch]?.setSystemParameter?.('keyShift',shift);}
+            catch(error){onStatus('การปรับคีย์ไม่รองรับในเครื่องเสียงนี้');}
+          }
+          shiftApplied=shift;
+        };
+        const applyProgram=()=>{
+          const program=getProgram();
+          if(program===programApplied)return;
+          for(let ch=0;ch<16;ch++){
+            if(ch===9)continue;
+            const channel=synth.midiChannels?.[ch];
+            try{
+              if(program===null||program===undefined||program===''){
+                channel?.setSystemParameter?.('presetLock',false);
+              }else{
+                channel?.setSystemParameter?.('presetLock',false);
+                synth.programChange(ch,clamp(Number(program),0,127));
+                channel?.setSystemParameter?.('presetLock',true);
+              }
+            }catch(error){onStatus('เปลี่ยนเครื่องดนตรีไม่สำเร็จ');}
+          }
+          programApplied=program;
+        };
+        const play=()=>{
+          if(stopped||started)return;
+          started=true;
+          updateVolume();applyKey();applyProgram();
+          sequencer.playbackRate=clamp(Number(player.playbackRate)||1,.25,2);
+          sequencer.currentTime=clamp(Number(player.currentTime)||0,0,parsed.duration);
+          void ctx.resume().catch(()=>onStatus('ต้องอนุญาตเล่นเสียงเบื้องหลัง'));
+          sequencer.play();
+        };
+        const pause=()=>{started=false;sequencer.pause();};
+        const seek=()=>{
+          if(stopped)return;
+          sequencer.currentTime=clamp(Number(player.currentTime)||0,0,parsed.duration);
+        };
+        const rate=()=>{sequencer.playbackRate=clamp(Number(player.playbackRate)||1,.25,2);};
+        const change=()=>{applyKey();applyProgram();};
+        const visibility=()=>{
+          if(stopped||scope.document?.hidden||player.paused)return;
+          // Reconcile the lyric/player clock with the actual audio thread
+          // when a backgrounded tab is shown again.
+          const actual=Number(sequencer.currentTime);
+          if(Number.isFinite(actual)&&actual>=0&&
+             Math.abs(actual-Number(player.currentTime))>.45){
+            player.currentTime=Math.min(actual,parsed.duration);
+          }
+          updateVolume();
+        };
+        const listeners=[['play',play],['pause',pause],['ended',pause],
+          ['seeking',seek],['ratechange',rate],['xstage-midi-transpose',change]];
+        for(const [name,fn] of listeners)player.addEventListener(name,fn);
+        scope.document?.addEventListener?.('visibilitychange',visibility);
+        if(!player.paused)play();
+        return {
+          engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
+          dispose(){
+            if(stopped)return;stopped=true;pause();
+            for(const [name,fn] of listeners)player.removeEventListener(name,fn);
+            scope.document?.removeEventListener?.('visibilitychange',visibility);
+            dispose();
+          }
+        };
+      }
+      // Compatibility mode for browsers/SMFs that cannot initialize Sequencer.
       const events=parsed.notes.flatMap(note=>[
         {time:note.start,on:true,note},{time:note.end,on:false,note}
       ]).sort((a,b)=>a.time-b.time||Number(a.on)-Number(b.on));
