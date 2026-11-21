@@ -13,6 +13,31 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_stop_tail_closes_both_decks_even_if_first_fails(self):
+        decks = Decks()
+        first, second = Mock(), Mock()
+        first.close.side_effect = OSError('tail close failed')
+        decks.tail, decks.rhythm = first, second
+        try:
+            with self.assertRaisesRegex(OSError, 'tail close failed'):
+                decks.stop_tail()
+            first.close.assert_called_once()
+            second.close.assert_called_once()
+            self.assertIsNone(decks.tail)
+            self.assertIsNone(decks.rhythm)
+        finally:
+            decks.close()
+
+    def test_close_shuts_down_preload_pool_after_tail_failure(self):
+        decks = Decks()
+        decks.tail = Mock()
+        decks.tail.close.side_effect = OSError('tail failed')
+        pool = decks.pool
+        with self.assertRaisesRegex(OSError, 'tail failed'):
+            decks.close()
+        self.assertTrue(pool._shutdown)
+        self.assertIsNone(decks.tail)
+
     def test_discard_closes_both_preloaded_decks_if_first_close_fails(self):
         first = Mock()
         second = Mock()
