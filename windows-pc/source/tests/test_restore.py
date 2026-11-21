@@ -103,3 +103,16 @@ class RestoreTests(unittest.TestCase):
             restore.apply_pending(self.data)
         self.assertEqual(self.title(), 'ปัจจุบัน')
 
+
+    def test_interrupted_restore_rejects_non_string_journal_entries(self):
+        pending=self.data/'restore-pending'
+        pending.mkdir()
+        safety=self.data/'restore-safety-test'
+        safety.mkdir()
+        write_json(pending/'state.json', {
+            'status':'applying', 'safety':safety.name,
+            'existed':[], 'replaced':[['settings.json']]})
+        with self.assertRaisesRegex(ValueError, 'รายการไฟล์'):
+            restore.apply_pending(self.data)
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+
