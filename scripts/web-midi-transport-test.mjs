@@ -18,10 +18,11 @@ const original={
   dispatchEvent(evt){for(const fn of listeners.get(evt.type)||[])fn(evt);return true;}
 };
 let now=1000,job=null,ended=0;
-const run=new Function('ui','performance','setInterval','clearInterval','Event',
+const state={liveMidiPlayback:null};
+const run=new Function('ui','performance','setInterval','clearInterval','Event','state',
   app.slice(start,end)+'\nreturn {player,midiTransport};');
 const {player,midiTransport}=run({player:original},{now:()=>now},
-  fn=>{job=fn;return 1;},()=>{job=null;},Event);
+  fn=>{job=fn;return 1;},()=>{job=null;},Event,state);
 player.addEventListener('ended',()=>{ended++;});
 midiTransport.begin(120);
 assert.equal(player.src,'midi:live');
@@ -43,4 +44,16 @@ assert.equal(ended,1,'MIDI clock must end at song duration');
 player.src='blob:next-track';
 assert.equal(midiTransport.active,false,'Native audio tracks clear MIDI transport');
 assert.equal(player.src,'blob:next-track');
-console.log('PASS: MIDI live clock, seek, tempo, pause, end and audio handoff');
+// When the browser pauses UI timers, the audible audio sequencer remains
+// authoritative. Wall time must not accidentally skip the song.
+midiTransport.begin(120);
+state.liveMidiPlayback={scheduler:'audio-worklet',currentTime:()=>15};
+await player.play();now+=400000;
+assert.equal(player.currentTime,15,'Audio-thread time must win over throttled tab wall time');
+job();
+assert.equal(player.ended,false,'Background timer throttling must not finish audible MIDI prematurely');
+state.liveMidiPlayback.currentTime=()=>40;
+assert.equal(player.currentTime,40,'Lyrics transport catches up with the audio sequencer');
+player.pause();
+assert.equal(player.currentTime,40);
+console.log('PASS: MIDI clock, background audio time, seek, tempo and native audio handoff');
