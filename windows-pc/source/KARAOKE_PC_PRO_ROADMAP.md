@@ -146,3 +146,9 @@
 
 - [`d5c5e1dd`](https://github.com/webbase-x/xstage/commit/d5c5e1ddbe77c7fbc56afecb3683518e3c5f5709) adds a 100-song offline batch mock regression in `tests/test_soundfont.py`: one SoundFont initialization, 101 MIDI streams, 100 stream frees during transitions, final stream/font/device free at shutdown.
 - This is a resource-handle lifecycle assertion, **not** a Windows RAM measurement or 30-minute live-audio soak. Test execution and CI remain unverified; P0.5 IN PROGRESS, P0.4 deferred, 24/27 outstanding.
+
+## 2026-11-21 — P0.5 medley preload partial-build teardown
+
+- [`092168ec`](https://github.com/webbase-x/xstage/commit/092168ec4619a66710b63451a6da3dd8c686e59e) makes `medley_decks.build()` release both rhythm and main decks on failure even when one close raises, preserving original setup exception.
+- [`628f697a`](https://github.com/webbase-x/xstage/commit/628f697a63d15eb33e3d07c0be90ec00ede054c9) adds injected failure regression to `tests/test_full_song_medley.py`.
+- Source and tests committed; **test execution, Windows CI and real-time gapless audio remain unverified**. P0.5 IN PROGRESS; 24/27 remaining. Next validate tests on Windows, then measure preload/transition gap and 30-minute audio soak.
