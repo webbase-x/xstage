@@ -208,6 +208,73 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         let stopped=false,started=false,completionPending=false,completionDelivered=false;
         let shiftApplied=null,programApplied=null;
         const finishListenerId='xstage-midi-natural-finish';
+        // Soft, bounded percussion played through the SAME GM/GS SoundFont
+        // (not an oscillator) during genuine silent MIDI edges or handoffs.
+        // This keeps the outgoing synth alive only until the new track begins,
+        // preventing repeated SF2 downloads or an endless waiting loop.
+        const tempoMap=parsed.tempoMap||[];
+        const firstNote=Math.min(...parsed.notes.map(note=>note.start));
+        const finalNote=Math.max(...parsed.notes.map(note=>note.end));
+        const beatAt=time=>{
+          let tempo=500000;
+          for(const point of tempoMap){
+            if(point.seconds>time)break;
+            if(point.tempo>=10000&&point.tempo<=10000000)tempo=point.tempo;
+          }
+          return clamp(tempo/1000000,.28,1.15);
+        };
+        const introBeat=beatAt(0),bridgeBeat=beatAt(parsed.duration);
+        const noteOffTimers=new Set();
+        let gapTimer=null,lastGapBeat=-1,bridgeTimer=null,bridgeDeadline=null;
+        const drum=(note,velocity)=>{
+          if(disposed||typeof synth.noteOn!=='function')return;
+          try{
+            synth.noteOn(9,note,velocity);
+            const timer=setTimeout(()=>{
+              noteOffTimers.delete(timer);
+              if(!disposed)try{synth.noteOff(9,note);}catch{}
+            },95);
+            noteOffTimers.add(timer);
+          }catch(error){console.warn('SF2 transition rhythm:',error);}
+        };
+        const beat=(index,quiet=false)=>{
+          if(player.muted)return;
+          // Minimal rhythm that does not invent pitched notes or overwrite
+          // song channels. The GM bank itself supplies the acoustic samples.
+          drum(42,quiet?30:42);
+          if(index%4===0)drum(36,quiet?29:38);
+          else if(index%4===2)drum(38,quiet?25:34);
+        };
+        const stopGapFill=()=>{
+          if(gapTimer!==null){clearInterval(gapTimer);gapTimer=null;}
+          lastGapBeat=-1;
+        };
+        const gapTick=()=>{
+          if(stopped||disposed||player.paused)return;
+          const t=Number(sequencer.currentTime)||0;
+          // Never layer the beat under the actual MIDI arrangement.
+          const leading=firstNote>1.35&&t<firstNote-.12;
+          const trailing=parsed.duration-finalNote>0.85&&
+            t>finalNote+.08&&t<parsed.duration-.08;
+          if(!leading&&!trailing){lastGapBeat=-1;return;}
+          const seconds=leading?introBeat:bridgeBeat;
+          const beatIndex=Math.floor(t/seconds);
+          if(beatIndex===lastGapBeat)return;
+          lastGapBeat=beatIndex;
+          beat(beatIndex,true);
+        };
+        const stopBridgeTimer=()=>{
+          if(bridgeTimer!==null){clearInterval(bridgeTimer);bridgeTimer=null;}
+          if(bridgeDeadline!==null){clearTimeout(bridgeDeadline);bridgeDeadline=null;}
+        };
+        const clearDrums=()=>{
+          stopGapFill();stopBridgeTimer();
+          for(const timer of noteOffTimers)clearTimeout(timer);
+          noteOffTimers.clear();
+          if(!disposed)for(const n of [36,38,42]){
+            try{synth.noteOff(9,n);}catch{}
+          }
+        };
         const naturalEnd=()=>{
           if(stopped||!started||player.paused||completionPending||completionDelivered)return;
           completionPending=true;completionDelivered=true;
@@ -269,8 +336,12 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           void ctx.resume().catch(()=>onStatus('ต้องอนุญาตเล่นเสียงเบื้องหลัง'));
           void mediaOutput?.start().catch(()=>{});
           sequencer.play();
+          if(gapTimer===null)gapTimer=setInterval(gapTick,90);
+          gapTick();
         };
-        const pause=()=>{started=false;sequencer.pause();mediaOutput?.pause();};
+        const pause=()=>{
+          started=false;stopGapFill();sequencer.pause();mediaOutput?.pause();
+        };
         const seek=()=>{
           if(stopped)return;
           sequencer.currentTime=clamp(Number(player.currentTime)||0,0,parsed.duration);
@@ -302,19 +373,57 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         scope.addEventListener?.('focus',visibility);
         scope.addEventListener?.('pageshow',visibility);
         if(!player.paused)play();
+        let fullyReleased=false;
+        const detachPlayback=()=>{
+          try{sequencer.eventHandler?.removeEvent?.('songEnded',finishListenerId);}catch{}
+          for(const [name,fn] of listeners)player.removeEventListener(name,fn);
+          scope.document?.removeEventListener?.('visibilitychange',visibility);
+          scope.removeEventListener?.('focus',visibility);
+          scope.removeEventListener?.('pageshow',visibility);
+        };
+        const releaseEngine=()=>{
+          if(fullyReleased)return;
+          fullyReleased=true;stopped=true;
+          clearDrums();stopGapFill();releasePreview();
+          try{sequencer.pause();}catch{}
+          detachPlayback();dispose();
+        };
+        const beginTransitionFill=()=>{
+          if(disposed||stopped||fullyReleased)return null;
+          stopped=true;started=false;
+          stopGapFill();
+          detachPlayback();
+          releasePreview();
+          try{sequencer.pause();}catch{}
+          try{
+            scope.XStageIOSMidiAudio?.activate?.();
+            void ctx.resume().catch(()=>{});
+            void mediaOutput?.resume?.();
+          }catch{}
+          let last=-1;
+          const start=Date.now();
+          const tick=()=>{
+            if(fullyReleased||disposed)return;
+            const elapsed=(Date.now()-start)/1000;
+            const index=Math.floor(elapsed/bridgeBeat);
+            if(index!==last){
+              last=index;
+              beat(index);
+            }
+          };
+          // A failed/no-network next song must never leave SoundFont
+          // playback or an AudioContext running indefinitely.
+          bridgeTimer=setInterval(tick,75);
+          bridgeDeadline=setTimeout(releaseEngine,16000);
+          tick();
+          return {stop:releaseEngine};
+        };
         return {
           engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
+          beginTransitionFill,
           currentTime:()=>Number(sequencer.currentTime),
           finished:()=>!!sequencer.isFinished,previewNote,
-          dispose(){
-            if(stopped)return;stopped=true;pause();releasePreview();
-            try{sequencer.eventHandler?.removeEvent?.('songEnded',finishListenerId);}catch{}
-            for(const [name,fn] of listeners)player.removeEventListener(name,fn);
-            scope.document?.removeEventListener?.('visibilitychange',visibility);
-            scope.removeEventListener?.('focus',visibility);
-            scope.removeEventListener?.('pageshow',visibility);
-            dispose();
-          }
+          dispose(){releaseEngine();}
         };
       }
       // Compatibility mode for browsers/SMFs that cannot initialize Sequencer.
