@@ -72,6 +72,11 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
                             except Exception:
                                 pass
         if pattern and isinstance(engine,MidiPlayer):
+            # A queued full-song fill may already own a rhythm deck.
+            # Release it before replacing it with the crossfade pattern.
+            if rhythm is not None:
+                previous, rhythm = rhythm, None
+                previous.close()
             rhythm=MidiPlayer(output=BassSynth(native,settings=settings))
             rhythm.song,rhythm.duration=pattern[0],pattern[0].duration
             rhythm.times=[e.at for e in rhythm.song.events];rhythm.seek(0)
