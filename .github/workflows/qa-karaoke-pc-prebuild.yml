@@ -6,6 +6,7 @@ on:
     branches: [qa/pc-prebuild-all-functions-20261122]
     paths:
       - 'scripts/test_karaoke_pc_prebuild.py'
+      - 'scripts/test_karaoke_pc_gui_prebuild.py'
       - '.github/workflows/qa-karaoke-pc-prebuild.yml'
       - 'windows-pc/source/**'
 
@@ -122,3 +123,30 @@ jobs:
           $env:PYTHONPATH = (Join-Path $PWD 'windows-pc/source')
           python -m unittest discover -s windows-pc/source/tests -p "test_chroma_real_decoder_integration.py" -v
           if ($LASTEXITCODE -ne 0) { throw 'Real decoder regression failed' }
+
+  native-all-dialogs:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install locked pre-EXE dependencies
+        run: |
+          python -m pip install --only-binary=:all: -r windows-pc/source/requirements-build.lock.txt
+      - name: Test native Win32 menus/dialogs in isolated processes
+        shell: pwsh
+        run: |
+          $env:PYTHONUTF8 = '1'
+          $env:PYTHONIOENCODING = 'utf-8:backslashreplace'
+          python -u scripts/test_karaoke_pc_gui_prebuild.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native Win32 UI test gate failed; do not package EXE' }
+      - name: Upload isolated native Tk test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: karaoke-preexe-native-gui
+          path: prebuild-gui-results.json
+          if-no-files-found: warn
