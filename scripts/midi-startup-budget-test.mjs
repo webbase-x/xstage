@@ -93,6 +93,8 @@ assert.ok(source.includes('liveFontBytes=await ensureMidiInstrumentBank('),
   'The first song must wait for its SoundFont instead of playing oscillators');
 assert.ok(source.includes('const professional=await prepareFirstMidiSynth('),
   'Initial playback must await the professional synth before emitting notes');
+assert.ok(source.includes('await window.XStageBrowserMidi.warmRealtimeSamples('),
+  'First playback must decode its early SF2 samples before starting the transport');
 assert.ok(source.includes('playRealtime(player,liveMidiBytes,midiOptions)'),
   'The compatibility synthesizer must receive the real SoundFont');
 assert.ok(!source.includes('...midiOptions,fontBytes:null'),
