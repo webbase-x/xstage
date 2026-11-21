@@ -243,9 +243,17 @@ public sealed class DownloadEngine
         if (!Jobs.Contains(job) ||
             (limitKib != 0 && limitKib is < 64 or > 1_048_576))
             throw new ArgumentOutOfRangeException(nameof(limitKib));
+        var previous = job.FileSpeedLimitKib;
         job.FileSpeedLimitKib = limitKib;
-        _fileSpeed.GetOrAdd(job.Id, _ => new TransferRateGate()).Configure(limitKib);
+        var gate = _fileSpeed.GetOrAdd(job.Id, _ => new TransferRateGate());
+        gate.Configure(limitKib);
         Save();
+        if (LastStorageError.Length > 0)
+        {
+            job.FileSpeedLimitKib = previous;
+            gate.Configure(previous);
+            throw new IOException(LastStorageError);
+        }
     }
 
     private async Task LimitNetworkReadAsync(DownloadJob job, int bytes, CancellationToken ct)
