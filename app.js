@@ -35,7 +35,7 @@ const state = {
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
   queuePreparedCache:new Map(),queuePreloadSkipped:new Set(),
-  transitionFill:null,
+  transitionFill:null,medleyPreloadFailedSong:null,medleyPreloadRetryAt:0,
   activeBlobBytes:0,activeVideoBytes:0,
   playbackRestoreAttempted:false,
   awaitingSharedLibrary:false,
@@ -2118,6 +2118,7 @@ function setMedleyMode(enabled){
   if(!state.medley){
     state.medleyPrefetch?.controller?.abort();
     state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
+    state.medleyPreloadFailedSong=null;state.medleyPreloadRetryAt=0;
     player.volume=Number(ui.volume.value)/100;
   }
   setPlayStatus(state.medley
@@ -2578,6 +2579,10 @@ function prefetchMedleyNext(){
      !state.current||player.paused||state.userStopped||state.userPaused)return;
   const song=nextMedleyCandidate(),token=state.token;
   if(!song)return;
+  // Pressure, offline and corrupt-file failures must not trigger a new
+  // private Drive request on every 100 ms playback tick.
+  if(state.medleyPreloadFailedSong===song&&
+     Date.now()<state.medleyPreloadRetryAt)return;
   if(state.medleyCache?.song===song&&state.medleyCache?.token===token)return;
   if(state.medleyPrefetch?.song===song&&state.medleyPrefetch?.token===token)return;
   state.medleyPrefetch?.controller?.abort();
@@ -2593,11 +2598,18 @@ function prefetchMedleyNext(){
     if(result&&(result.blob?.size||result.liveMidi?.byteLength)&&
        result.lyrics?.schemaVersion===1){
       state.medleyCache=result;
+      state.medleyPreloadFailedSong=null;state.medleyPreloadRetryAt=0;
       updateMemoryIndicators();
+    }else{
+      state.medleyPreloadFailedSong=song;
+      state.medleyPreloadRetryAt=Date.now()+30000;
     }
   }).catch(error=>{
-    if(error?.name!=='AbortError')
+    if(error?.name!=='AbortError'){
+      state.medleyPreloadFailedSong=song;
+      state.medleyPreloadRetryAt=Date.now()+30000;
       console.warn('X-Stage medley prefetch:',error?.message||error);
+    }
   }).finally(()=>{
     if(state.medleyPrefetch===task)state.medleyPrefetch=null;
   });
@@ -2613,6 +2625,7 @@ function addToQueue(song) {
   // Requested songs take priority over speculative shuffled medley tracks.
   state.medleyPrefetch?.controller?.abort();
   state.medleyPrefetch=null;state.medleyCache=null;state.medleyUpcoming=null;
+  state.medleyPreloadFailedSong=null;state.medleyPreloadRetryAt=0;
   state.queue.push(song);renderQueue();scheduleQueuePreload();
   setPlayStatus(`เพิ่มเข้าคิว: ${song.title||song.code}`);
 }
