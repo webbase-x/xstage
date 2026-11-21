@@ -52,6 +52,19 @@ class AsioHostTests(unittest.TestCase):
         self.assertEqual(len(dll.BASS_ASIO_Free.calls), 1)
         self.assertTrue(Bridge.instances[-1].closed)
 
+    def test_failed_driver_free_keeps_callback_buffer_alive(self):
+        dll = Bindings()
+        host = AsioOutput('unused', device=0, bindings=dll, bridge_factory=Bridge)
+        owned = host.bridge
+        dll.BASS_ASIO_Free.value = 0
+        with self.assertRaises(OSError):
+            host.close()
+        self.assertFalse(owned.closed)
+        self.assertTrue(host.initialized)
+        dll.BASS_ASIO_Free.value = 1
+        host.close()
+        self.assertTrue(owned.closed)
+
     def test_rejects_odd_stereo_channel(self):
         with self.assertRaises(ValueError):
             AsioOutput('unused', device=0, channel=1, bindings=Bindings(),
