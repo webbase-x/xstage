@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.36
+# X-Stage Song Studio Pro — Technical Preview v0.1.37
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,18 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.37 — Remove song metadata results in group lyric editor
+
+- Removed the entire song/artist/untimed-LYR metadata result panel from
+  the **Batch Lyrics Editor**, including its counts, card grid and old
+  secondary API request. The editor now shows only matching current
+  lyric groups for batch editing, with bounded on-scroll loading.
+- This removes only the presentation and its unused client search call;
+  the SQLite songs, titles, artists, drafts, lyrics and existing file
+  exports are not modified or deleted.
+- This release has a distinct Windows Setup version so older bundled Qt
+  WebViews can receive the change through the verified auto-updater.
 
 ## v0.1.36 — Stable popup UX and safe XMID updating
 

@@ -23,8 +23,7 @@
                   buildError:null,buildRun:0,buildRenderKey:"",
                  selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
                  lyricSearchRun:0,groupSearchRunning:false,groupLoading:false,groupLoadError:null,
-                  groupRenderStart:-1,groupRenderEnd:-1,groupRenderTotal:-1,lyricContextHits:0,
-                 lyricContextFailed:false,
+                  groupRenderStart:-1,groupRenderEnd:-1,groupRenderTotal:-1,
                  lyricTimed:[],lyricDraft:[],lyricOffset:0,lyricShowDraft:false,
                  previewOffset:0,previewSongs:[],previewHasNext:false,
                  previewSelected:null,previewPlaying:false,previewHeard:false,
@@ -525,44 +524,6 @@
       showStableModal("lyrics-dialog");
     }catch(error){toast(error.message,true);}
   }
-  function renderLyricContext(result){
-    const results=$("lyrics-search-context-results");
-    const box=$("lyrics-search-context");
-    results.replaceChildren();
-    const rows=new Map();
-    for(const item of result.songs||[]){
-      rows.set(item.id,{...item,source:["ชื่อเพลง / ศิลปิน / รหัส"]});
-    }
-    for(const item of result.drafts||[]){
-      const current=rows.get(item.id);
-      if(current){
-        current.source.push("ข้อความ LYR รอเวลา");
-        current.has_draft=true;
-      }else{
-        rows.set(item.id,{...item,has_draft:true,source:["ข้อความ LYR รอเวลา"]});
-      }
-    }
-    state.lyricContextHits=rows.size;
-    box.hidden=!rows.size;
-    // The counts/truncation summary is noisy in the lyrics editor.
-    // Keep related song/LYR search results accessible without the summary line.
-    text("lyrics-search-context-title","รายการเพลงและ LYR ที่เกี่ยวข้อง");
-    for(const item of rows.values()){
-      const canOpen=Boolean(item.has_current_lyrics||item.has_draft);
-      const line=document.createElement(canOpen?"button":"div");
-      line.className="lyric-search-hit";
-      if(canOpen){
-        line.type="button";
-        line.addEventListener("click",()=>void openLyrics({id:item.id,title:item.title||String(item.code)}));
-      }
-      const title=document.createElement("strong");
-      title.textContent=String(item.code).padStart(8,"0")+" · "+(item.title||"ไม่ระบุชื่อเพลง");
-      const note=document.createElement("small");
-      note.textContent=(item.artist||"ไม่ระบุศิลปิน")+" · "+item.source.join(" + ")+
-        (canOpen?" · กดดูเนื้อร้อง":" · ยังไม่มีเนื้อร้อง");
-      line.append(title,note);results.append(line);
-    }
-  }
   async function searchGroups(){
     if(!state.ready)return;
     const q=$("lyrics-search").value.trim();
@@ -571,9 +532,7 @@
     state.groupLoading=false;state.groupSearchRunning=false;state.groupLoadError=null;
     state.groupRenderStart=-1;state.groupRenderEnd=-1;state.groupRenderTotal=-1;
     state.selectedGroups.clear();state.selectedGroupInfo.clear();
-    state.lyricContextHits=0;state.lyricContextFailed=false;
     $("group-list").scrollTop=0;
-    $("lyrics-search-context").hidden=true;
     renderGroups();
     if(!q){
       text("lyrics-search-feedback","กรอกคำค้นแล้วกดค้นหา · ผลจะแสดงเป็นรายการเลื่อนต่อเนื่อง");
@@ -583,17 +542,6 @@
       text("lyrics-search-feedback","คำค้นยาวเกิน 100 ตัวอักษร");
       return;
     }
-    // Metadata lookup runs separately, so it cannot block lyric-group results.
-    void api("/api/lyrics/search-context?q="+encodeURIComponent(q)+"&limit=12",
-      undefined,45000).then(data=>{
-      if(run===state.lyricSearchRun)renderLyricContext(data);
-    }).catch(error=>{
-      if(run!==state.lyricSearchRun)return;
-      state.lyricContextFailed=true;
-      $("lyrics-search-context-results").replaceChildren();
-      text("lyrics-search-context-title","ค้นชื่อเพลง/LYR ไม่สำเร็จ: "+error.message);
-      $("lyrics-search-context").hidden=false;
-    });
     await loadMoreGroups(run);
   }
   async function loadMoreGroups(run=state.lyricSearchRun){
@@ -625,7 +573,7 @@
         "โหลดผลค้นหาต่อไม่สำเร็จ: "+state.groupLoadError+" · ลองอีกครั้งได้":
         state.groups.length?
           "โหลดแล้ว "+number(state.groups.length)+" กลุ่ม · เลื่อนลงเพื่อโหลดเพิ่ม":
-          "ไม่พบกลุ่มเนื้อร้องปัจจุบันที่ตรงคำค้น · ตรวจชื่อเพลง/LYR ด้านบน");
+          "ไม่พบกลุ่มบรรทัดเนื้อร้องที่ตรงคำค้น");
       const node=$("group-list");
       if(!state.groupLoadError&&state.groupHasNext&&
         node.scrollHeight<=node.clientHeight+GROUP_ROW_HEIGHT){
@@ -2715,9 +2663,7 @@
       state.groupSearchRunning=false;
       state.groups=[];state.groupHasNext=false;state.groupLoading=false;
       state.groupLoadError=null;state.groupOffset=0;state.selectedGroups.clear();
-      state.selectedGroupInfo.clear();state.lyricContextHits=0;
-      state.lyricContextFailed=false;
-      $("lyrics-search-context").hidden=true;
+      state.selectedGroupInfo.clear();
       $("lyrics-find").disabled=!state.ready;
       text("lyrics-search-feedback","คำค้นเปลี่ยนแล้ว · กดค้นหาเพื่ออ่านผลใหม่จาก SQLite");
       renderGroups();
