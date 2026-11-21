@@ -158,6 +158,13 @@ def apply_pending(data):
             source=safety/name
             if not source.is_file() or source.is_symlink() or getattr(source,'is_junction',lambda:False)():
                 raise ValueError('ไฟล์สำรองเพื่อย้อนคืนไม่ปลอดภัย: '+name)
+        # A crash can leave the live target replaced by a link before restart.
+        # Never follow it while rolling back; require operator intervention.
+        for name in replaced:
+            target=data/name
+            if (target.is_symlink() or getattr(target,'is_junction',lambda:False)()
+                    or (target.exists() and not target.is_file())):
+                raise ValueError('ไฟล์ปลายทางย้อนคืนไม่ปลอดภัย: '+name)
         rollback(data,safety,existed,replaced)
         pending.rename(data/('restore-interrupted-'+uuid.uuid4().hex))
         raise ValueError('กู้คืนครั้งก่อนถูกขัดจังหวะ คืนข้อมูลเดิมแล้ว กรุณาเลือกชุดสำรองใหม่')
