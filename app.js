@@ -2116,6 +2116,7 @@ function setMedleyMode(enabled){
     ui.repeat.dispatchEvent(new Event('change',{bubbles:true}));
   }
   if(!state.medley){
+    state.medleyPrefetch?.controller?.abort();
     state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
     player.volume=Number(ui.volume.value)/100;
   }
@@ -2124,15 +2125,20 @@ function setMedleyMode(enabled){
     :'ปิดเมดเลย์สุ่มเพลง');
   window.dispatchEvent(new CustomEvent('xstage:medleychange',
     {detail:{enabled:state.medley}}));
-  // Clicking the enabled mode starts a shuffled track immediately.
-  // Queue requests are preserved and take priority after the current track.
+  // Enabling medley during a song must NOT cut off the singer; prepare its
+  // successor now and hand over at the natural end. Start a random track
+  // only when the stage was idle.
   if(state.medley&&state.token){
-    state.userStopped=false;
-    const song=randomMedleySong();
-    if(song){
-      state.medleyUpcoming=null;
-      playSong(song);
-    }else setPlayStatus('ไม่มีเพลงที่พร้อมเล่นในคลัง');
+    if(state.current){
+      if(!player.paused)prefetchMedleyNext();
+    }else if(state.queue.length){
+      playNext();
+    }else{
+      state.userStopped=false;
+      const song=randomMedleySong();
+      if(song){state.medleyUpcoming=null;playSong(song);}
+      else setPlayStatus('ไม่มีเพลงที่พร้อมเล่นในคลัง');
+    }
   }
   return state.medley;
 }
@@ -2422,10 +2428,19 @@ async function prepareQueuedSong(song,token,signal){
 function scheduleQueuePreload(){
   clearTimeout(state.queuePreloadTimer);
   trimQueueCache();
-  if(!state.token||!state.queue.length){
-    if(!state.queue.length)releaseQueuePreload();
+  if(!state.token)return;
+  if(!state.queue.length){
+    if(state.queuePreload||state.queuePreparedCache.size)releaseQueuePreload();
+    // One next song is prepared for medley too, even when the queue is empty.
+    // Never begin a speculative download while the stage is paused or idle.
+    if(state.medley&&!state.loading&&!state.userStopped&&!state.userPaused&&
+       state.current&&!player.paused)prefetchMedleyNext();
     return;
   }
+  // A requested song in the queue always supersedes random medley preload.
+  state.medleyPrefetch?.controller?.abort();
+  state.medleyPrefetch=null;state.medleyCache=null;
+  state.medleyUpcoming=null;
   if(state.loading){
     state.queuePreloadTimer=setTimeout(scheduleQueuePreload,1200);
     return;
@@ -2552,40 +2567,51 @@ async function preloadFirstQueueSong(song,token){
       state.queuePreloadTimer=setTimeout(scheduleQueuePreload,500);
   }
 }
+// Medley and manually queued songs share the SAME verified one-song
+// preloader. No MIDI/XSK/XMID formats are silently skipped, no second
+// SoundFont download is started, and a queue request always wins.
 function prefetchMedleyNext(){
-  if(!state.medley||!state.token||state.loading)return;
+  if(!state.medley||!state.token||state.queue.length||state.loading||
+     !state.current||player.paused||state.userStopped||state.userPaused)return;
   const song=nextMedleyCandidate(),token=state.token;
-  if(!song||song.midi||song.xsk||song.xmid||state.medleyCache?.song===song||
-     state.medleyPrefetch?.song===song)return;
-  const policy=window.XStageMemory;
-  if(!policy||!Number(song.audio?.size)||
-     !policy.canHold(Number(song.audio.size)*1.15,memoryResources()))return;
+  if(!song)return;
+  if(state.medleyCache?.song===song&&state.medleyCache?.token===token)return;
+  if(state.medleyPrefetch?.song===song&&state.medleyPrefetch?.token===token)return;
   state.medleyPrefetch?.controller?.abort();
-  const task={song,token,controller:new AbortController()};state.medleyPrefetch=task;
-  Promise.all([privateFile(song.audio.fileId,token,{signal:task.controller.signal}),
-    privateJson(song.lyrics.fileId,token,{signal:task.controller.signal})])
-    .then(async ([response,lyrics])=>{
-      const blob=await response.blob();
-      if(state.medleyPrefetch!==task||!state.medley||state.token!==token||
-          nextMedleyCandidate()!==song)return;
-      if(!blob.size||lyrics?.schemaVersion!==1||!Array.isArray(lyrics.lines)||
-         !window.XStageMemory.canHold(blob.size,memoryResources()))return;
-      state.medleyCache={song,blob,lyrics};
+  state.medleyCache=null;
+  const controller=new AbortController();
+  const task={song,token,controller,promise:null};
+  state.medleyPrefetch=task;
+  task.promise=prepareQueuedSong(song,token,controller.signal);
+  void task.promise.then(result=>{
+    if(controller.signal.aborted||state.medleyPrefetch!==task||
+       !state.medley||state.queue.length||state.token!==token||
+       nextMedleyCandidate()!==song)return;
+    if(result&&(result.blob?.size||result.liveMidi?.byteLength)&&
+       result.lyrics?.schemaVersion===1){
+      state.medleyCache=result;
       updateMemoryIndicators();
-    })
-    .catch(()=>{/* Playback falls back to loading the next song normally. */})
-    .finally(()=>{if(state.medleyPrefetch===task)state.medleyPrefetch=null;});
+    }
+  }).catch(error=>{
+    if(error?.name!=='AbortError')
+      console.warn('X-Stage medley prefetch:',error?.message||error);
+  }).finally(()=>{
+    if(state.medleyPrefetch===task)state.medleyPrefetch=null;
+  });
 }
 function medleyTick(){
-  if(!state.medley||state.loading||player.paused)return;
-  const duration=player.duration;
-  if(!Number.isFinite(duration)||duration<=0)return;
-  // Keep the entire track; start the next random/queued song on the ended event.
-  if(duration-player.currentTime<=25)prefetchMedleyNext();
+  if(!state.medley||state.loading||player.paused||state.queue.length)return;
+  // Start preparing early, not only within 25 seconds of the end. Even a
+  // large private file can arrive before the transition if RAM permits.
+  prefetchMedleyNext();
 }
 function addToQueue(song) {
-  if (!playable(song)) return;
-  state.queue.push(song);renderQueue();scheduleQueuePreload();setPlayStatus(`เพิ่มเข้าคิว: ${song.title||song.code}`);
+  if(!playable(song))return;
+  // Requested songs take priority over speculative shuffled medley tracks.
+  state.medleyPrefetch?.controller?.abort();
+  state.medleyPrefetch=null;state.medleyCache=null;state.medleyUpcoming=null;
+  state.queue.push(song);renderQueue();scheduleQueuePreload();
+  setPlayStatus(`เพิ่มเข้าคิว: ${song.title||song.code}`);
 }
 function renderQueue() {
   scheduleQueuePreload();
@@ -2649,6 +2675,9 @@ function playNext(){
   if(pendingQueued)state.queuePreload=null;
   state.queuePreloadSkipped.clear();
   const song=queued||(state.medley?nextMedleyCandidate():null);
+  const pendingMedley=!queued&&song&&state.medleyPrefetch?.song===song
+    ?state.medleyPrefetch:null;
+  if(pendingMedley)state.medleyPrefetch=null;
   const nextIsMidi=!!song&&!!(getFileId(song.midi)||getFileId(song.xmid)||getFileId(song.xsk));
   window.XStageIOSMidiAudio?.keepPlayingBetweenSongs?.(nextIsMidi);
   stopSoundFontFill();
@@ -2675,7 +2704,7 @@ function playNext(){
       state.medleyRecent.push(song);
       if(state.medleyRecent.length>MEDLEY_RECENT_LIMIT)state.medleyRecent.shift();
     }
-    playSong(song,{preloaded:preparedQueued,pending:pendingQueued});
+    playSong(song,{preloaded:preparedQueued,pending:pendingQueued||pendingMedley});
   }else{
     clearIdleStage('จบเพลงแล้ว · ไม่มีเพลงรอในคิว');
   }
@@ -2857,7 +2886,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     const cached=state.queuePreparedCache.get(song);
     const prepared=(preloaded?.song===song&&preloaded.token===token?preloaded
       :cached?.token===token?cached
-      :state.medleyCache?.song===song&&state.token===token?state.medleyCache:null);
+      :state.medleyCache?.song===song&&state.medleyCache.token===token
+        ?state.medleyCache:null);
     if(prepared){
       state.queuePreparedCache.delete(song);
       if(state.queuePrepared===prepared)state.queuePrepared=null;
@@ -2989,7 +3019,21 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       // Keep the first notes silent until the real GM/GS sample bank and
       // synthesizer are ready. This prevents first-play 8-bit audio.
       setPlayStatus('กำลังเปิดเครื่องเสียง MIDI ด้วย SoundFont…');
-      const professional=await prepareFirstMidiSynth(
+      // The previous MIDI handoff owns a loaded SpessaSynth/GM bank and
+      // continues a bounded rhythm. Reuse that SAME Worklet for MIDI->MIDI
+      // rather than allocating another 200+ MB SoundFont and going silent.
+      let professional=null;
+      const handoff=state.transitionFill;
+      if(handoff?.prepareNextMidi){
+        try{
+          professional=await handoff.prepareNextMidi(
+            liveMidiBytes,liveFontBytes,{signal:controller.signal});
+        }catch(error){
+          if(error?.name==='AbortError')throw error;
+          console.warn('Warm GM medley handoff unavailable:',error);
+        }
+      }
+      if(!professional)professional=await prepareFirstMidiSynth(
         liveMidiBytes,liveFontBytes,professionalOptions);
       if(!professional){
         // Prime cold SF2 sample buffers before the first audible MIDI note.
@@ -4178,7 +4222,12 @@ player.addEventListener('timeupdate',()=>{
 });
 // Release any between-song SF2 rhythm only once the NEXT transport is
 // actually audible; keep it alive while Drive/Worklet prepares a queued song.
-player.addEventListener('playing',stopSoundFontFill);
+player.addEventListener('playing',()=>{
+  stopSoundFontFill();
+  // The successor is selected once playback is underway, so even long
+  // private Drive downloads can complete before a medley handoff.
+  if(state.medley&&!state.queue.length)prefetchMedleyNext();
+});
 player.addEventListener('loadedmetadata',updateTransport);
 player.addEventListener('durationchange',updateTransport);
 player.addEventListener('play',()=>{state.userPaused=false;state.resumeAfterInterruption=false;syncSongVideo();updateTransport();});
