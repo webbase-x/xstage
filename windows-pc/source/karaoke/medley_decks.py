@@ -76,7 +76,12 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
             # Release it before replacing it with the crossfade pattern.
             if rhythm is not None:
                 previous, rhythm = rhythm, None
-                previous.close()
+                try:
+                    previous.close()
+                except Exception:
+                    # An optional fill must not block preparation of the
+                    # required next-song crossfade rhythm deck.
+                    pass
             rhythm=MidiPlayer(output=BassSynth(native,settings=settings))
             rhythm.song,rhythm.duration=pattern[0],pattern[0].duration
             rhythm.times=[e.at for e in rhythm.song.events];rhythm.seek(0)
