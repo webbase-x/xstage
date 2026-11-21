@@ -1370,8 +1370,29 @@ class KaraokeApp(tk.Tk):
         else:
             state = ("พร้อมร้องเพลง" if not self.current_song else "♪  " + self.current_song["title"],
                      "เพิ่มเพลงเข้าคิว แล้วกดเล่น" if not self.current_song else "เพลงนี้ไม่มีเนื้อร้องแบบจับเวลา", "", title)
+        # Timeline is opt-in: the existing two-line playback presentation stays
+        # unchanged unless a valid 3/4-line preference is explicitly selected.
+        requested = self.settings.get("lyric_lines", 2)
+        if type(requested) is not int or requested not in (2, 3, 4):
+            requested = 2
+        if self.engine and self.lyrics.lines and requested > 2:
+            try:
+                self.preview.show_timeline(self.lyrics, self.engine.position,
+                                           offset_ms=offset, line_count=requested, title=title)
+                if self.stage_canvas and self.stage_canvas.winfo_exists():
+                    self.stage_canvas.show_timeline(self.lyrics, self.engine.position,
+                                                    offset_ms=offset, line_count=requested, title=title)
+                return
+            except (ValueError, AttributeError):
+                logging.debug("Timeline viewport unavailable; use legacy lyrics", exc_info=True)
+        if getattr(self.preview, "extra_lines", ()):
+            self.preview.extra_lines = ()
+            self.preview.redraw()
         self.preview.show(*state)
         if self.stage_canvas and self.stage_canvas.winfo_exists():
+            if getattr(self.stage_canvas, "extra_lines", ()):
+                self.stage_canvas.extra_lines = ()
+                self.stage_canvas.redraw()
             self.stage_canvas.show(*state)
 
     def tick(self):
