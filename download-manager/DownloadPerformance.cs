@@ -281,3 +281,34 @@ public static class TransferSegmentGeometry
         return (size / count) * index + (size % count) * index / count;
     }
 }
+
+/// <summary>
+/// Conservative segment recommendation for a *new* HTTP transfer only.
+/// Never repartition existing partial files: their persisted byte boundaries
+/// must remain stable across resume, even when throughput changes.
+/// </summary>
+public static class AdaptiveSegmentPlanner
+{
+    public static int Recommend(int requestedParts, long contentLength,
+        double measuredBytesPerSecond, bool hasPersistedSegments)
+    {
+        if (!DownloadEngine.AllowedParts.Contains(requestedParts))
+            throw new ArgumentOutOfRangeException(nameof(requestedParts));
+        if (hasPersistedSegments || contentLength <= 0 ||
+            !double.IsFinite(measuredBytesPerSecond) || measuredBytesPerSecond <= 0)
+            return requestedParts;
+        // At least 1 MiB per range; avoid excess requests on small objects.
+        var sizeCap = contentLength < 2L * 1024 * 1024 ? 1 :
+            contentLength < 8L * 1024 * 1024 ? 2 :
+            contentLength < 32L * 1024 * 1024 ? 4 :
+            contentLength < 128L * 1024 * 1024 ? 8 :
+            contentLength < 512L * 1024 * 1024 ? 16 : 32;
+        // Do not increase parallelism on slow links.
+        var speedCap = measuredBytesPerSecond < 256 * 1024 ? 1 :
+            measuredBytesPerSecond < 1024 * 1024 ? 2 :
+            measuredBytesPerSecond < 4 * 1024 * 1024 ? 4 :
+            measuredBytesPerSecond < 12 * 1024 * 1024 ? 8 :
+            measuredBytesPerSecond < 32 * 1024 * 1024 ? 16 : 32;
+        return Math.Min(requestedParts, Math.Min(sizeCap, speedCap));
+    }
+}
