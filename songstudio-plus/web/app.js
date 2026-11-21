@@ -18,9 +18,10 @@
                  jobSignature:"",toastTimer:null,riskFilter:"structural",
                  riskOffset:0,riskLimit:5,riskTotal:0,riskRows:[],
                  riskHistory:[],riskSelected:null,riskEvidenceIndex:0,
-                 songOffset:0,songHasNext:false,groupOffset:0,groupLimit:6,groupHasNext:false,
+                 songOffset:0,songHasNext:false,groupOffset:0,groupLimit:32,groupHasNext:false,
                  selectedGroupInfo:new Map(),issueRows:[],issueOffset:0,
-                 lyricSearchRun:0,groupSearchRunning:false,lyricContextHits:0,
+                 lyricSearchRun:0,groupSearchRunning:false,groupLoading:false,groupLoadError:null,
+                  groupRenderStart:-1,groupRenderEnd:-1,groupRenderTotal:-1,lyricContextHits:0,
                  lyricContextFailed:false,
                  lyricTimed:[],lyricDraft:[],lyricOffset:0,lyricShowDraft:false,
                  previewOffset:0,previewSongs:[],previewHasNext:false,
@@ -181,22 +182,11 @@
       " เพลง · เวลาประมาณ "+estimated+" เพลง · ตรวจรายการตามสาเหตุได้ด้านล่าง");
   }
   const visibleRows=()=>window.innerHeight<=680?4:window.innerHeight<=850?5:6;
-  function groupPageSize(){
-    const list=$("group-list");
-    const pager=$("groups-page-info")?.closest(".list-pagination");
-    const top=list?.getBoundingClientRect().top||0;
-    const pagerHeight=pager?.getBoundingClientRect().height||44;
-    let available=0;
-    if(window.innerWidth<=900){
-      available=Math.min(240,Math.max(120,window.innerHeight*.27));
-    }else if(top>0){
-      available=Math.min(480,Math.max(120,window.innerHeight-top-pagerHeight-28));
-    }
-    if(available<120)return visibleRows();
-    const compact=window.innerHeight<=850;
-    const rowHeight=compact?46:58;
-    const gap=compact?6:8;
-    return Math.max(2,Math.min(10,Math.floor((available+gap)/(rowHeight+gap))));
+  // One scroll surface; bounded SQLite batches and virtual DOM rows.
+  const GROUP_BATCH=32, GROUP_ROW_HEIGHT=72;
+  function groupNearBottom(){
+    const node=$("group-list");
+    return node.scrollHeight-node.scrollTop-node.clientHeight<450;
   }
   async function refreshSongs(){
     if(!state.ready)return;
@@ -429,129 +419,142 @@
       line.append(title,note);results.append(line);
     }
   }
-  async function searchGroups(reset=true){
+  async function searchGroups(){
     if(!state.ready)return;
     const q=$("lyrics-search").value.trim();
-    const requestId=++state.lyricSearchRun;
-    if(reset){
-      state.groupOffset=0;
-      state.selectedGroups.clear();
-      state.selectedGroupInfo.clear();
-      state.lyricContextHits=0;
-      state.lyricContextFailed=false;
-      $("lyrics-search-context").hidden=true;
-    }
-    state.groupLimit=groupPageSize();
-    if(!reset)state.groupOffset=Math.floor(state.groupOffset/state.groupLimit)*state.groupLimit;
-    state.groups=[];
-    state.groupHasNext=false;
-    state.groupSearchRunning=Boolean(q);
+    const run=++state.lyricSearchRun;
+    state.groups=[];state.groupOffset=0;state.groupHasNext=Boolean(q);
+    state.groupLoading=false;state.groupSearchRunning=false;state.groupLoadError=null;
+    state.groupRenderStart=-1;state.groupRenderEnd=-1;state.groupRenderTotal=-1;
+    state.selectedGroups.clear();state.selectedGroupInfo.clear();
+    state.lyricContextHits=0;state.lyricContextFailed=false;
+    $("group-list").scrollTop=0;
+    $("lyrics-search-context").hidden=true;
     renderGroups();
     if(!q){
-      text("lyrics-search-feedback","พิมพ์คำค้นแล้วกดค้นหา · ระบบแยกเนื้อร้องที่แก้ไขได้กับข้อมูลชื่อเพลง/LYR");
+      text("lyrics-search-feedback","กรอกคำค้นแล้วกดค้นหา · ผลจะแสดงเป็นรายการเลื่อนต่อเนื่อง");
       return;
     }
     if(q.length>100){
-      state.groupSearchRunning=false;renderGroups();
-      text("lyrics-search-feedback","คำค้นยาวเกิน 100 ตัวอักษร กรุณาย่อให้สั้นลง");
+      text("lyrics-search-feedback","คำค้นยาวเกิน 100 ตัวอักษร");
       return;
     }
-    text("lyrics-search-feedback","กำลังค้นหา “"+q+
-      "” ในเนื้อร้องปัจจุบันและตรวจชื่อเพลง/LYR · คลังขนาดใหญ่อาจใช้เวลาสักครู่");
+    // Metadata lookup runs separately, so it cannot block lyric-group results.
+    void api("/api/lyrics/search-context?q="+encodeURIComponent(q)+"&limit=12",
+      undefined,45000).then(data=>{
+      if(run===state.lyricSearchRun)renderLyricContext(data);
+    }).catch(error=>{
+      if(run!==state.lyricSearchRun)return;
+      state.lyricContextFailed=true;
+      $("lyrics-search-context-results").replaceChildren();
+      text("lyrics-search-context-title","ค้นชื่อเพลง/LYR ไม่สำเร็จ: "+error.message);
+      $("lyrics-search-context").hidden=false;
+    });
+    await loadMoreGroups(run);
+  }
+  async function loadMoreGroups(run=state.lyricSearchRun){
+    if(!state.ready||state.groupLoading||!state.groupHasNext)return;
+    const q=$("lyrics-search").value.trim();
+    if(!q||q.length>100)return;
+    const offset=state.groupOffset;
+    state.groupLoading=true;state.groupLoadError=null;state.groupSearchRunning=true;
     $("lyrics-find").disabled=true;
-    const contextTask=reset?
-      api("/api/lyrics/search-context?q="+encodeURIComponent(q)+"&limit=12",undefined,45000)
-        .then(data=>{
-          if(requestId!==state.lyricSearchRun)return;
-          renderLyricContext(data);
-        })
-        .catch(error=>{
-          if(requestId!==state.lyricSearchRun)return;
-          state.lyricContextFailed=true;
-          $("lyrics-search-context-results").replaceChildren();
-          text("lyrics-search-context-title","ค้นชื่อเพลงและข้อความ LYR ไม่สำเร็จ: "+error.message);
-          $("lyrics-search-context").hidden=false;
-        }):Promise.resolve();
-    let failed=null;
+    renderGroupStatus();
     try{
-      const limit=state.groupLimit;
-      // A multi-gigabyte SQLite registry may need more than the generic 12s
-      // UI request limit for an exact substring across all current lyrics.
       const data=await api("/api/groups?q="+encodeURIComponent(q)+
-        "&limit="+(limit+1)+"&offset="+state.groupOffset,undefined,90000);
-      if(requestId!==state.lyricSearchRun)return;
-      state.groupHasNext=(data.rows||[]).length>limit;
-      state.groups=(data.rows||[]).slice(0,limit);
+        "&limit="+(GROUP_BATCH+1)+"&offset="+offset,undefined,90000);
+      if(run!==state.lyricSearchRun)return;
+      const entries=(data.rows||[]).slice(0,GROUP_BATCH);
+      state.groups.push(...entries);
+      state.groupOffset+=entries.length;
+      state.groupHasNext=(data.rows||[]).length>GROUP_BATCH;
     }catch(error){
-      if(requestId!==state.lyricSearchRun)return;
-      failed=error;
-      toast("ค้นเนื้อร้องไม่สำเร็จ: "+error.message,true);
+      if(run!==state.lyricSearchRun)return;
+      state.groupLoadError=error.message;
+      toast("โหลดผลค้นหาไม่สำเร็จ: "+error.message,true);
     }finally{
-      await contextTask;
-      if(requestId===state.lyricSearchRun){
-        state.groupSearchRunning=false;
-        $("lyrics-find").disabled=false;
-        renderGroups();
-        if(failed){
-          text("lyrics-search-feedback","การค้นบรรทัดเนื้อร้องไม่สำเร็จ: "+failed.message+
-            " · ไม่ใช่ผลยืนยันว่าไม่มีข้อความใน SQLite");
-        }else{
-          const count=state.groups.length;
-          text("lyrics-search-feedback",
-            count?"พบบรรทัดเนื้อร้องที่ตรงคำค้น "+number(count)+
-              " กลุ่มในหน้านี้ · เลือกกลุ่มเพื่อแทนที่ได้":
-            state.lyricContextHits?
-              "ไม่พบ “"+q+"” ในบรรทัดเนื้อร้องปัจจุบัน แต่พบในชื่อเพลง/ศิลปินหรือ LYR รอเวลา · เลือกดูรายละเอียดด้านบน":
-            state.lyricContextFailed?
-              "ไม่พบในเนื้อร้องปัจจุบัน แต่ยังตรวจชื่อเพลง/LYR ไม่สำเร็จ · โปรดลองค้นอีกครั้ง":
-              "ไม่พบ “"+q+"” ในเนื้อร้องเวอร์ชันปัจจุบันหรือชื่อเพลง/LYR ที่ค้น · ลองใช้คำบางส่วนหรือค้นในเมนูคลังเพลง");
-        }
+      if(run!==state.lyricSearchRun)return;
+      state.groupLoading=false;state.groupSearchRunning=false;
+      $("lyrics-find").disabled=false;
+      renderGroups();
+      text("lyrics-search-feedback",state.groupLoadError?
+        "โหลดผลค้นหาต่อไม่สำเร็จ: "+state.groupLoadError+" · ลองอีกครั้งได้":
+        state.groups.length?
+          "โหลดแล้ว "+number(state.groups.length)+" กลุ่ม · เลื่อนลงเพื่อโหลดเพิ่ม":
+          "ไม่พบกลุ่มเนื้อร้องปัจจุบันที่ตรงคำค้น · ตรวจชื่อเพลง/LYR ด้านบน");
+      const node=$("group-list");
+      if(!state.groupLoadError&&state.groupHasNext&&
+        node.scrollHeight<=node.clientHeight+GROUP_ROW_HEIGHT){
+        requestAnimationFrame(()=>void loadMoreGroups(run));
       }
     }
   }
+  function renderGroupStatus(){
+    text("groups-count",number(state.groups.length)+" กลุ่มที่โหลดแล้ว");
+    text("groups-scroll-status",state.groupLoading?"กำลังโหลดรายการถัดไป…":
+      state.groupLoadError?"โหลดต่อไม่สำเร็จ: "+state.groupLoadError:
+      state.groupHasNext?"เลื่อนลงเพื่อโหลดรายการเพิ่มเติม":
+      state.groups.length?"แสดงผลครบแล้ว":"ยังไม่มีรายการ");
+    $("groups-retry").hidden=!state.groupLoadError;
+  }
   function renderGroups(){
-    text("groups-count",number(state.groups.length)+" กลุ่มในหน้านี้");
-    const limit=Math.max(1,state.groupLimit);
-    const page=Math.floor(state.groupOffset/limit)+1;
-    const start=state.groups.length?state.groupOffset+1:0;
-    const end=state.groupOffset+state.groups.length;
-    text("groups-page-info","หน้า "+number(page)+" · "+number(start)+"–"+number(end));
-    $("groups-prev").disabled=state.groupOffset<=0;
-    $("groups-next").disabled=!state.groupHasNext;
-    const panel=$("group-list");panel.replaceChildren();
-    if(!state.groups.length){
+    renderGroupStatus();
+    state.groupRenderStart=-1;
+    renderGroupWindow();
+    updateSelectedGroups();
+  }
+  function renderGroupWindow(){
+    const panel=$("group-list"),total=state.groups.length;
+    const visible=Math.ceil((panel.clientHeight||400)/GROUP_ROW_HEIGHT)+18;
+    const start=Math.max(0,Math.floor(panel.scrollTop/GROUP_ROW_HEIGHT)-9);
+    const begin=Math.min(start,total);
+    const end=Math.min(total,begin+visible);
+    if(begin===state.groupRenderStart&&end===state.groupRenderEnd&&
+        total===state.groupRenderTotal)return;
+    state.groupRenderStart=begin;state.groupRenderEnd=end;state.groupRenderTotal=total;
+    const fragment=document.createDocumentFragment();
+    if(!total){
       const empty=document.createElement("p");empty.className="empty-small";
       empty.textContent=state.groupSearchRunning?
-        "กำลังค้นใน SQLite · ยังไม่สรุปว่าไม่พบคำค้น":
+        "กำลังค้นใน SQLite …":
         $("lyrics-search").value.trim()?
-        "ไม่พบบรรทัดเนื้อร้องปัจจุบันที่ตรงคำค้น · ตรวจผลชื่อเพลง/LYR ด้านบน":
-        "ค้นคำเพื่อแสดงกลุ่มบรรทัด";
-      panel.append(empty);
+          "ไม่พบบรรทัดที่ตรงคำค้น · ดูผลชื่อเพลง/LYR ด้านบน":
+          "ค้นคำเพื่อแสดงกลุ่มบรรทัด";
+      fragment.append(empty);
+    }else{
+      const spacer=document.createElement("div");
+      spacer.className="group-spacer";spacer.style.height=(begin*GROUP_ROW_HEIGHT)+"px";
+      fragment.append(spacer);
+      for(const entry of state.groups.slice(begin,end)){
+        const label=document.createElement("label");label.className="group-row";
+        const checkbox=document.createElement("input");checkbox.type="checkbox";
+        checkbox.checked=state.selectedGroups.has(entry.group_key);
+        checkbox.addEventListener("change",()=>{
+          if(checkbox.checked){
+            state.selectedGroups.add(entry.group_key);
+            state.selectedGroupInfo.set(entry.group_key,entry);
+          }else{
+            state.selectedGroups.delete(entry.group_key);
+            state.selectedGroupInfo.delete(entry.group_key);
+          }
+          updateSelectedGroups();
+        });
+        const middle=document.createElement("div");middle.className="group-text";
+        const full=document.createElement("strong");full.textContent=entry.text;
+        full.title=entry.text;
+        const small=document.createElement("small");
+        small.textContent=number(entry.songs)+" เพลง · "+number(entry.lines)+" บรรทัด";
+        middle.append(full,small);
+        const count=document.createElement("span");count.className="amount";
+        count.textContent=number(entry.lines)+" บรรทัด";
+        label.append(checkbox,middle,count);fragment.append(label);
+      }
+      const tail=document.createElement("div");
+      tail.className="group-spacer";
+      tail.style.height=(Math.max(0,total-end)*GROUP_ROW_HEIGHT)+"px";
+      fragment.append(tail);
     }
-    for(const entry of state.groups){
-      const label=document.createElement("label");label.className="group-row";
-      const checkbox=document.createElement("input");checkbox.type="checkbox";
-      checkbox.checked=state.selectedGroups.has(entry.group_key);
-      checkbox.addEventListener("change",()=>{
-        if(checkbox.checked){
-          state.selectedGroups.add(entry.group_key);
-          state.selectedGroupInfo.set(entry.group_key,entry);
-        }else{
-          state.selectedGroups.delete(entry.group_key);
-          state.selectedGroupInfo.delete(entry.group_key);
-        }
-        updateSelectedGroups();
-      });
-      const middle=document.createElement("div");middle.className="group-text";
-      const full=document.createElement("strong");full.textContent=entry.text;
-      const small=document.createElement("small");
-      small.textContent=number(entry.songs)+" เพลง · "+number(entry.lines)+" บรรทัด";
-      middle.append(full,small);
-      const count=document.createElement("span");count.className="amount";
-      count.textContent=number(entry.lines)+" บรรทัด";
-      label.append(checkbox,middle,count);panel.append(label);
-    }
-    updateSelectedGroups();
+    panel.replaceChildren(fragment);
   }
   function updateSelectedGroups(){
     const chosen=Array.from(state.selectedGroupInfo.values());
@@ -2532,7 +2535,8 @@
     $("lyrics-search").addEventListener("input",()=>{
       ++state.lyricSearchRun;
       state.groupSearchRunning=false;
-      state.groups=[];state.groupHasNext=false;state.selectedGroups.clear();
+      state.groups=[];state.groupHasNext=false;state.groupLoading=false;
+      state.groupLoadError=null;state.groupOffset=0;state.selectedGroups.clear();
       state.selectedGroupInfo.clear();state.lyricContextHits=0;
       state.lyricContextFailed=false;
       $("lyrics-search-context").hidden=true;
@@ -2541,18 +2545,15 @@
       renderGroups();
     });
     $("lyrics-replacement").addEventListener("input",updateSelectedGroups);
-    let groupResizeTimer=null;
+    $("group-list").addEventListener("scroll",()=>{
+      if(state.view!=="lyrics")return;
+      renderGroupWindow();
+      if(groupNearBottom()&&!state.groupLoading&&state.groupHasNext)
+        void loadMoreGroups();
+    },{passive:true});
+    $("groups-retry").addEventListener("click",()=>void loadMoreGroups());
     window.addEventListener("resize",()=>{
-      clearTimeout(groupResizeTimer);
-      groupResizeTimer=setTimeout(()=>{
-        if(state.view!=="lyrics"||!state.ready||state.groupSearchRunning||
-           !$("lyrics-search").value.trim())return;
-        const next=groupPageSize();
-        if(next===state.groupLimit)return;
-        state.groupLimit=next;
-        state.groupOffset=Math.floor(state.groupOffset/next)*next;
-        void searchGroups(false);
-      },220);
+      if(state.view==="lyrics")renderGroupWindow();
     });
     $("groups-all").addEventListener("click",()=>{
       for(const group of state.groups){
@@ -2653,13 +2654,6 @@
     });
     $("build-next").addEventListener("click",()=>{
       state.songOffset+=visibleRows();void refreshSongs();
-    });
-    $("groups-prev").addEventListener("click",()=>{
-      state.groupOffset=Math.max(0,state.groupOffset-state.groupLimit);
-      void searchGroups(false);
-    });
-    $("groups-next").addEventListener("click",()=>{
-      state.groupOffset+=state.groupLimit;void searchGroups(false);
     });
     $("library-find").addEventListener("click",()=>{
       state.songOffset=0;void refreshSongs();
