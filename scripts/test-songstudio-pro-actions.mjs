@@ -179,4 +179,10 @@ assert.ok(html.includes('id="toast-dismiss"')&&
 assert.ok(js.includes('const known=Boolean(state.updateTarget?.newer)')&&
   stylesheet.includes('#toast.show{opacity:1;visibility:visible;pointer-events:auto}'),
  'Transient update errors must not flash away existing notices');
+assert.ok(!js.includes('พบในชื่อเพลง/ศิลปิน')&&
+  !js.includes(' · พบใน LYR รอเวลา ')&&
+  !js.includes(' · มีผลเพิ่มเติม')&&
+  js.includes('รายการเพลงและ LYR ที่เกี่ยวข้อง')&&
+  js.includes('results.append(line)'),
+  'Hide metadata search count summary without removing related song/LYR results');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');
