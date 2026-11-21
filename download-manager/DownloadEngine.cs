@@ -810,9 +810,15 @@ public sealed class DownloadEngine
     {
         // Never re-partition an existing resumable transfer. Throughput-driven
         // selection applies only before the first segment is created.
+        // Only use a real observed throughput sample. A fresh job has no
+        // sample and retains the user's configured part count. Persisted Range
+        // geometry is never adapted: changing it would corrupt resume bytes.
+        var recommendedParts = AdaptiveSegmentPlanner.Recommend(
+            job.Parts, job.TotalBytes, job.SmoothedSpeedBytesPerSecond,
+            job.SegmentsUsed > 0);
         var count = job.SegmentsUsed > 0
             ? SegmentCount(job.TotalBytes, job.SegmentsUsed)
-            : SegmentCount(job.TotalBytes, job.Parts);
+            : SegmentCount(job.TotalBytes, recommendedParts);
         // Save the actual geometry with the job so resumption never reuses a segment
         // written for different byte boundaries. Older jobs default to zero (unknown).
         // A zero/unknown geometry cannot validate pre-existing chunks. This
