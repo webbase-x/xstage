@@ -809,8 +809,14 @@ assert.equal(windowsSourceManifest.status,'SOURCE_IMPORTED_NOT_A_WINDOWS_RELEASE
   'Windows manifest must distinguish imported source from an unverified installer');
 const proRelease=JSON.parse(read('downloads/song-studio-pro-latest.json'));
 assert.equal(proRelease.name,'X-Stage Song Studio Pro','only Pro release feed may be advertised');
-assert.equal(proRelease.version,'0.1.11');
-assert.equal(proRelease.available,false,'Windows Pro EXE must not be advertised without a verified downloadable artifact');
+assert.match(proRelease.version,/^\d+\.\d+\.\d+$/,'Song Studio Pro version must be valid');
+if(proRelease.available){
+  assert.match(proRelease.sha256||'',/^[0-9a-f]{64}$/,'Published Pro preview must have a SHA-256 digest');
+  assert.match(proRelease.download_url||'',/^https:\/\/github\.com\/webbase-x\/xstage\/releases\/download\//,
+    'Available Pro preview must link to the published GitHub release');
+  assert.equal(proRelease.code_signed,false,'Unsigned Pro preview must not claim a signature');
+}else assert.equal(proRelease.download_url??null,null,
+  'Unavailable Pro preview must not advertise a stale download');
 assert.ok(storefrontScript.includes('song-studio-pro-latest.json'));
 assert.ok(windowsUpdateHelper.includes('Get-FileHash')&&windowsUpdateHelper.includes('Start-Process'),'Windows updater must verify a downloaded installer before launching it');
 
