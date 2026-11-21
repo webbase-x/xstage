@@ -417,3 +417,9 @@ The user requested batched coding without physical QA. **This is a coding update
 - `25b1223891423ed3d315e3877073da089625d607`: replace predictable `*.restore-tmp` copy target with exclusive random temporary file, flush/fsync and atomic rename; reject source/target links and unexpected directories.
 - `1219ba50be45237d531d49d68cf16714b4adec98`: regression tests for stale temporary symlink, unsafe target symlink and successful cleanup.
 - **PENDING-QA**: run Windows regression and installer smoke on these commits; physical storage/Windows reparse-point behavior **DEFERRED-HARDWARE**. No stable release authorized.
+
+## 2026-11-22 01:11 Asia/Bangkok — Windows regression failure triage
+
+- Reviewed failed Windows candidate [run 44928598764](https://github.com/webbase-x/xstage/actions/runs/44928598764): 1,137 tests, **3 failures**, 0 errors, 80 skipped. Two `test_context_menu` assertions expected six top-level child menus and the old first-four labels, but the six-category navigation intentionally adds one cascade. Updated expectations in [`1c086f8a`](https://github.com/webbase-x/xstage/commit/1c086f8a9443712119d4c31a19ce952b8b48f147).
+- The third failure, `test_restore.RestoreTests.test_failed_restore_copy_removes_incomplete_staging_file`, patched obsolete `shutil.copyfile` while `replace_file` now streams with `shutil.copyfileobj` into an exclusive randomized temp. Updated fault injection to raise after a partial write and verify no `*.restore-*.tmp` leak in [`60d6f704`](https://github.com/webbase-x/xstage/commit/60d6f7049bb433cdbe753276347d25bfb5dcd884).
+- **PENDING-QA:** full Windows regression + installer smoke on both corrections; no PASS claim until exact CI evidence. **DEFERRED-HARDWARE:** physical output, display and soak. P0–P6 remain incomplete and Stable is blocked.
