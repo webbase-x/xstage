@@ -5,7 +5,7 @@ import unittest
 
 
 class XmidCatalogCodeTests(unittest.TestCase):
-    def test_embedded_code_and_song_id_fallback(self):
+    def test_embedded_code_not_internal_song_id(self):
         source = Path(__file__).resolve().parents[1] / 'karaoke' / 'ingest.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))
         calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
@@ -18,7 +18,7 @@ class XmidCatalogCodeTests(unittest.TestCase):
         self.assertTrue(xmids, 'XMID metadata must populate code for search/index')
         code_expr = next(v for k, v in zip(xmids[0].args[0].keys, xmids[0].args[0].values)
                          if isinstance(k, ast.Constant) and k.value == 'code')
-        self.assertIn('songId', ast.unparse(code_expr))
+        self.assertNotIn('songId', ast.unparse(code_expr))
         self.assertIn('code', ast.unparse(code_expr))
 
 
