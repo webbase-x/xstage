@@ -117,6 +117,29 @@ try
     if (pausedFromNetwork.Status != "Paused" || pausedFromNetwork.ResumeWhenNetworkReturns)
         throw new Exception("Explicit Pause must cancel network auto-resume.");
 
+    // Simulated SQLite write failure: no orphaned transfer may start and no
+    // unpersisted job may remain visible in the in-memory queue.
+    var rejectedFolder = Path.Combine(folder, "rejected-new-job");
+    var rejectedEngine = new DownloadEngine(rejectedFolder);
+    using (var db = new Microsoft.Data.Sqlite.SqliteConnection(
+        "Data Source=" + rejectedEngine.DatabasePath))
+    {
+        db.Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "CREATE TRIGGER reject_new_job BEFORE INSERT ON xstage_download_jobs BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;";
+        cmd.ExecuteNonQuery();
+    }
+    var originalCount = rejectedEngine.Jobs.Count;
+    try
+    {
+        rejectedEngine.Add(server.Url + "range/must-not-start.bin", folder);
+        throw new Exception("An unpersisted download was allowed to start.");
+    }
+    catch (IOException) { }
+    if (rejectedEngine.Jobs.Count != originalCount ||
+        rejectedEngine.Jobs.Any(j => j.Url.Contains("must-not-start.bin")))
+        throw new Exception("Failed SQLite insert left a phantom download job.");
+
     // Scheduler: high-priority jobs overtake low priority without changing
     // persistence order; live reprioritization and cancellation release slots.
     var scheduler = new TransferSlotQueue(1, 1);
