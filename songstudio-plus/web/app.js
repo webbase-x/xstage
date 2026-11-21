@@ -544,10 +544,9 @@
     }
     state.lyricContextHits=rows.size;
     box.hidden=!rows.size;
-    text("lyrics-search-context-title",
-      "พบในชื่อเพลง/ศิลปิน "+number((result.songs||[]).length)+
-      " · พบใน LYR รอเวลา "+number((result.drafts||[]).length)+
-      ((result.more_songs||result.more_drafts)?" · มีผลเพิ่มเติม":""));
+    // The counts/truncation summary is noisy in the lyrics editor.
+    // Keep related song/LYR search results accessible without the summary line.
+    text("lyrics-search-context-title","รายการเพลงและ LYR ที่เกี่ยวข้อง");
     for(const item of rows.values()){
       const canOpen=Boolean(item.has_current_lyrics||item.has_draft);
       const line=document.createElement(canOpen?"button":"div");
