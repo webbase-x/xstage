@@ -66,6 +66,17 @@ inFlight(prepared);
 await Promise.resolve();await Promise.resolve();
 assert.equal(state.medleyCache,null,'An aborted request must not resurrect stale audio');
 assert.equal(downloads,2,'Never exceed one speculative song at a time');
+// A failed speculative request cannot be retried on every lyric/time tick.
+state.queue=[];state.medleyUpcoming=next;state.medleyCache=null;
+sandbox.prepareQueuedSong=async()=>{downloads++;return null;};
+sandbox.prefetchMedleyNext();
+await Promise.resolve();await Promise.resolve();
+assert.ok(state.medleyPreloadRetryAt>Date.now(),
+  'A failed/oversized medley track must have a bounded retry backoff');
+const failedDownloads=downloads;
+for(let i=0;i<50;i++)sandbox.medleyTick();
+assert.equal(downloads,failedDownloads,
+  'Playback ticks must not hammer Drive after a failed preload');
 assert.ok(app.includes('pending:pendingQueued||pendingMedley'),
   'An in-flight medley download is promoted when its song is selected');
 assert.ok(app.includes('handoff.prepareNextMidi('),
