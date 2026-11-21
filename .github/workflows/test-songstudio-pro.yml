@@ -8,6 +8,7 @@ on:
       - "scripts/test-songstudio-pro-timeline*.mjs"
       - "scripts/test-songstudio-pro-actions.mjs"
       - "scripts/test_songstudio_pro_exe_smoke.py"
+      - "scripts/test_songstudio_pro_popup_smoke.py"
       - "scripts/test-songstudio-pro-portal.mjs"
       - ".github/workflows/test-songstudio-pro.yml"
   push:
@@ -18,6 +19,7 @@ on:
       - "scripts/test-songstudio-pro-actions.mjs"
       - "scripts/test-songstudio-pro-portal.mjs"
       - "scripts/test-songstudio-pro-native-picker.py"
+      - "scripts/test_songstudio_pro_popup_smoke.py"
       - ".github/workflows/test-songstudio-pro.yml"
   workflow_dispatch:
 
