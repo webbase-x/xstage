@@ -81,16 +81,16 @@ class AsioOutput:
         return self.bridge.push(pcm)
 
     def close(self):
-        # Stop callbacks before freeing user-data referenced by ASIOPROC.
+        # Never destroy callback user-data while the driver might still call it.
+        # A failed BASS_ASIO_Free must be visible, not silently treated as
+        # success: the caller can retry closure before releasing this bridge.
         if self.initialized:
             try:
                 self.dll.BASS_ASIO_Stop()
             finally:
-                try:
-                    self.dll.BASS_ASIO_Free()
-                finally:
-                    self.initialized = False
-                    self.started = False
+                self._check(self.dll.BASS_ASIO_Free(), 'ปิด ASIO driver')
+                self.initialized = False
+                self.started = False
         if self.bridge is not None:
             self.bridge.close()
             self.bridge = None
