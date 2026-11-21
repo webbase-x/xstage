@@ -57,11 +57,11 @@ vm.runInNewContext(memory,sandbox);
 sandbox.window.XStageMemory=sandbox.XStageMemory||sandbox.window.XStageMemory;
 const monitor=sandbox.window.XStageMemory;
 assert.ok(monitor,'Memory policy should load');
-assert.equal(monitor.plan().queueLimit,2);
+assert.equal(monitor.plan().queueLimit,1);
 // Hard cap is universal, even when desktop reports abundant RAM.
 for(const ram of [1,2,4,8,16]){
   sandbox.navigator.deviceMemory=ram;
-  assert.equal(monitor.plan().queueLimit,2,'At most two NEXT songs on '+ram+' GiB device');
+  assert.equal(monitor.plan().queueLimit,1,'At most one NEXT song on '+ram+' GiB device');
 }
 sandbox.navigator.deviceMemory=2;
 assert.equal(monitor.canHold(1024,{}),true);
@@ -82,12 +82,23 @@ assert.ok(downloads.includes('v1')&&downloads.includes('a1')&&downloads.includes
   'ordinary queued audio/video/MIDI must use their source media');
 assert.equal(preparedXsk,1,'XSK queue must delegate to verified XSK preparation');
 assert.equal(renders,1,'MIDI queue renders once; mocked XSK has its own preparation path');
+// Live MIDI must prefetch its actual MIDI data, NOT ignore the next queued
+// song or allocate another SoundFont on the speculative path.
+sandbox.window.XStageBrowserMidi.supportsRealtime=()=>true;
+sandbox.window.XStageBrowserMidi.midiLyrics=()=>lyrics;
+const beforeRender=renders;
+const live=await sandbox.prepareQueuedSong(midi,'t',controller.signal);
+assert.ok(live.liveMidi?.byteLength>0&&live.blob===null,
+  'Queue preloads live MIDI bytes without creating a WAV');
+assert.equal(live.lyrics,lyrics,'Queue preloads lyrics alongside MIDI');
+assert.equal(renders,beforeRender,'Live MIDI prefetch must not offline-render audio');
+assert.equal(live.liveFont,null,'Queue must not duplicate a large GM SoundFont');
 assert.equal(sandbox.window.XStageMemory.plan({fontBytes:3*1048576,queuedBytes:100*1048576}).level,'high');
 state.queuePreparedCache.set(audio,{song:audio,token:'t',blob:file,bytes:1024});
 state.queuePreparedCache.set(video,{song:video,token:'t',blob:file,bytes:1024});
 state.queuePreparedCache.set(midi,{song:midi,token:'t',blob:file,bytes:1024});
 sandbox.trimQueueCache();
-assert.ok(state.queuePreparedCache.size<=2,'Queue can keep at most two prepared songs on low RAM');
+assert.ok(state.queuePreparedCache.size<=1,'Queue can keep only one prepared song on any device');
 assert.ok(indicators['xstage-font-memory'].textContent.includes('SF ใน RAM'));
 assert.ok(indicators['xstage-queue-memory'].textContent.includes('งบเตรียม'));
 sandbox.performance.memory.usedJSHeapSize=990;
