@@ -554,7 +554,14 @@ const midiTransport={
   volume:1,rate:1,loop:false,startedAt:0,interval:null,
   emit(name){nativePlayer.dispatchEvent(new Event(name));},
   time(){
-    return this.paused?this.position:Math.min(this.duration,
+    if(this.paused)return this.position;
+    // Follow the audible sequencer clock, not a wall clock that keeps
+    // advancing when a mobile OS temporarily suspends WebAudio.
+    const audioTime=state.liveMidiPlayback?.scheduler==='audio-worklet'
+      ?Number(state.liveMidiPlayback.currentTime?.()):NaN;
+    if(Number.isFinite(audioTime)&&audioTime>=0)
+      return Math.max(0,Math.min(this.duration,audioTime));
+    return Math.min(this.duration,
       this.position+(performance.now()-this.startedAt)/1000*this.rate);
   },
   tick(){
