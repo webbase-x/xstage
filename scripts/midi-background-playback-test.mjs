@@ -103,7 +103,8 @@ const live=prepared.attach(player,{
 });
 assert.equal(live.engine,'SpessaSynth');
 assert.equal(live.scheduler,'audio-worklet');
-assert.equal(schedulerTimers,0,'Audio-thread note sequencing must never use JS timers');
+assert.equal(schedulerTimers,1,
+  'The MIDI worklet remains the song sequencer; one JS timer drives only soft edge-gap percussion');
 assert.equal(Sequencer.instance.paused,false);
 assert.equal(Sequencer.instance.files.length,1);
 assert.equal(Sequencer.instance.files[0].fileName,'X-Stage.mid');
@@ -118,7 +119,7 @@ page.hidden=true;
 visibility.get('visibilitychange')();
 assert.equal(Sequencer.instance.paused,false,
   'Switching tabs must not pause the MIDI sequencer');
-assert.equal(schedulerTimers,0);
+assert.equal(schedulerTimers,1,'Background tab must not start a second song-note scheduler');
 
 // Restore UI clock from the audible audio sequencer.
 Sequencer.instance.currentTime=42;
