@@ -23,7 +23,7 @@ class AsioStartupNoticeSafetyTests(unittest.TestCase):
                 asio_factory=asio_factory)
         self.assertEqual(len(captured.records), 1)
         self.assertEqual(captured.records[0].levelname, 'WARNING')
-        self.assertIsNone(captured.records[0].exc_info)
+        self.assertFalse(captured.records[0].exc_info)
         self.assertIn('Unable to surface ASIO', captured.records[0].getMessage())
         self.assertIs(output, created[0])
         self.assertEqual(len(created), 1)
