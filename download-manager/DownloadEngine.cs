@@ -713,7 +713,15 @@ public sealed class DownloadEngine
             || (job.LastModified.HasValue && probe.LastModified.HasValue && job.LastModified != probe.LastModified)
             || (job.SupportsRanges && !probe.Ranges)
             || (partialExists && !(strongTagMatches || dateMatches));
-        if (sourceChanged && Directory.Exists(work)) Directory.Delete(work, true);
+        if (sourceChanged)
+        {
+            if (Directory.Exists(work)) Directory.Delete(work, true);
+            // Source identity changed: previously persisted byte boundaries
+            // must not constrain the fresh transfer.
+            job.SegmentsUsed = 0;
+            job.SegmentDownloadedBytes = Array.Empty<long>();
+            Interlocked.Exchange(ref job.DownloadedBytes, 0);
+        }
         Directory.CreateDirectory(work);
         job.TotalBytes = probe.Total;
         job.SupportsRanges = probe.Ranges;
