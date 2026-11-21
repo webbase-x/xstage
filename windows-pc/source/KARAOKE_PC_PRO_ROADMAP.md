@@ -258,3 +258,8 @@
 - [`ed452c80`](https://github.com/webbase-x/xstage/commit/ed452c80a0c4979f5c8d44f1e13cf4e21a171d5c) validates all live backup inputs before creating safety directory; if snapshot fails, removes partial safety folder before any live-file replacement or applying-journal write.
 - Regression [`1dfddb36`](https://github.com/webbase-x/xstage/commit/1dfddb363a83925dc75f45c8e89bbe6b8a08ba35) injects snapshot disk-full failure and asserts live song database unchanged, no orphan safety folder and pending restore retained.
 - Automated results **PENDING-QA**. Development may continue, but P0.6 is not PASS and Stable remains blocked.
+
+## 2026-11-21 — P0.6 applying journal persistence failure (PENDING-QA)
+
+- [`6a05bd02`](https://github.com/webbase-x/xstage/commit/6a05bd02a9057433ee50a0dcc98f510bef30b04c) removes unused restore-safety snapshot if persisting the applying journal fails before live-file replacement. Regression [`b1d8c059`](https://github.com/webbase-x/xstage/commit/b1d8c05965c563bbf665d493a0afeb59a8f63f3f) injects journal disk-full and checks original song data, prepared state and absence of safety orphans.
+- Test execution/results PENDING-QA, not PASS. Continue engineering without blocking on test latency; stable release still gated on verified results.
