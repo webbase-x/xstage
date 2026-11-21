@@ -23,8 +23,8 @@
 | P0.1 | Build and tests | Re-run full Windows regression on the latest P0 source/workflow; **0 fail, 0 errors** and review skips | **PASS** | [run 44876022780](https://github.com/webbase-x/xstage/actions/runs/44876022780), commit `eb6bd7f92750483073bd592f0d38e923a4b3ad2d`: **1,040 tests, 0 failures, 0 errors, 78 skipped**; Windows build, installer, installed dependency smoke, and artifact upload all PASS; reviewed 78 skips |
 | P0.2 | EXE and integrity | Native 64-bit BASS DLLs, icon, executable, SHA-256 and signed package manifest verified | **PASS** | [run 44877165196](https://github.com/webbase-x/xstage/actions/runs/44877165196), commit `6b33cedc2939e3f579b431f982df804e079ef30b`: 1,042 tests, 0 failures/errors, 78 skipped; package completeness + native x64 BASS + icon + SHA-256 PASS; signed Sigstore provenance [attestation 70463681](https://github.com/webbase-x/xstage/attestations/70463681) for setup EXE and release-manifest.json independently verified. **Not an Authenticode-signed production EXE.** |
 | P0.3 | Real installer smoke | Silent install to Thai/space path; installed EXE dependency preflight; clean uninstall | **PASS** | [run 44877690650](https://github.com/webbase-x/xstage/actions/runs/44877690650), commit `3c8ee7a6781ab38ba91ff6fbf17a106c3117c1be`: silent install + installed dependency preflight + silent uninstall return code + no remaining installed files + CI user-Data sentinel preserved PASS, 1,042 tests / 0 fail / 0 error / 78 skipped. Signed attestation [70464622](https://github.com/webbase-x/xstage/attestations/70464622). |
-| P0.4 | GUI & queue safety | Windows UI open/close, search, hotkeys, queue, mixer lifecycle and no stalling/flicker | IN PROGRESS | [run 44879046667](https://github.com/webbase-x/xstage/actions/runs/44879046667): 1,043 regression tests, 0 fail/error, 79 skipped; native Tk probe and first 4 GUI tests passed, then parent logger CP1252 UnicodeEncodeError halted suite. UTF-8 correction `5d9c533a94c595cd9a479290c0d66b5507916926`; [run 44879694855](https://github.com/webbase-x/xstage/actions/runs/44879694855) pending. Full GUI gate and display checks remain required. |
-| P0.5 | Playback & live audio | Real Windows MIDI/NCN/EMK-legacy, SoundFont, MP3/video, transitions and ≥30-minute audio device soak | BLOCKED-HARDWARE | Requires actual Windows speakers/audio interface and playback observation |
+| P0.4 | GUI & queue safety | Windows UI open/close, search, hotkeys, queue, mixer lifecycle and no stalling/flicker | DEFERRED-HARDWARE | [run 44879694855](https://github.com/webbase-x/xstage/actions/runs/44879694855): Windows build, required isolated Tk GUI regression, installer smoke and provenance steps SUCCESS. Physical display flicker/responsiveness remain unverified; user approved deferral. |
+| P0.5 | Playback & live audio | Real Windows MIDI/NCN/EMK-legacy, SoundFont, MP3/video, transitions and ≥30-minute audio device soak | IN PROGRESS | Audit existing playback/native tests first; physical audio acceptance remains BLOCKED-HARDWARE. |
 | P0.6 | Data & release safety | Backup/restore, corrupted files, fail-closed deletes, recovery; no unintended stable publish | OPEN | Verify safe migrations and explicit stable gate |
 | P1.1 | Multi-Out | Audio-bus graph and interfaces without breaking current stereo engine | NOT STARTED | |
 | P1.2 | Multi-Out | Assign GM MIDI channels and drum keys to independent 4/8/16 output buses | NOT STARTED | |
@@ -48,16 +48,16 @@
 | P6.3 | Release | Verified release/signing/update with rollback and stable acceptance | NOT STARTED | |
 | P6.4 | Handoff | Operator docs, installer repair, published checksums and final acceptance report | NOT STARTED | |
 
-**Current outstanding:** **24 of 27** checklist items, including **3 P0** gates. **P0.1, P0.2, P0.3 PASS; P0.4 is the next item.** Prior candidate test success provides evidence but **does not automatically close an item** on newer code/workflow.
+**Current outstanding:** **24 of 27** checklist items, including **3 P0** gates. **P0.1, P0.2, P0.3 PASS; P0.4 deferred by user; P0.5 active.** Prior candidate test success provides evidence but **does not automatically close an item** on newer code/workflow.
 
 ## Rules for every hourly development iteration
 
 1. Read current `main`, workflow runs, relevant code/tests and this file; avoid concurrent-work conflicts.
-2. Select only the first unfinished acceptance ID within the current phase. Make the smallest safe code/test fix, or collect concrete missing evidence.
+2. Select only the first unfinished acceptance ID within the current phase, except the explicitly authorized P0.4 deferral to P0.5. Make the smallest safe code/test fix, or collect concrete missing evidence.
 3. Run unit/regression checks and GitHub Actions on the exact source revision. If an error occurs, **fix and re-run**; do not mark PASS on source-only inspection.
 4. On a blocking requirement (e.g. no real hardware or unavailable credentials), mark `BLOCKED-HARDWARE`/`BLOCKED-ACCESS`, document reproducible checks, and remain in the same phase. Never fabricate device QA.
 5. Record dated commit SHA, CI run URL, tests run/passed/failed/errors/skipped, any artifacts, and exact remaining count. Do not mutate Release/installer availability flags without verified evidence.
-6. Continue to the next task **only after the current task passes**; advance to P1 only when **all 6 P0 items pass**.
+6. Continue to the next task **only after the current task passes**, except the explicitly authorized P0.4 deferral to P0.5; advance to P1 only when **all 6 P0 items pass**.
 
 ## 2026-11-21 13:14 Asia/Bangkok — P0.1 investigation\n\n- Windows [run 44872566462](https://github.com/webbase-x/xstage/actions/runs/44872566462) passed source inspection, Windows regression, native x64 BASS validation, icon verification and installer compilation; **failed** in silent installation smoke because the expected installed `XStageKaraoke.exe` was not found in the requested Thai/space path. Installer SHA-256: `e6bf9eabb012e59ce0cfee13a90b243035a20e5d33d69080b9d4563176a011be`. This SHA belongs to a failed candidate and must not be advertised as a release.\n- Workflow change `deb9e859b05c8d6a1ffcefaa0e503f69ca5aa2c7` makes `/DIR` and `/LOG` explicit single-string arguments and prints install directory contents plus Inno log on failure. This is a **diagnostic/fix candidate**, not proof of success.\n- **P0.1 remains OPEN** until rerun of complete Windows CI and installer smoke succeeds; **27/27 remain**. No physical hardware or production EXE verification.\n\n## 2026-11-21 13:36 Asia/Bangkok — P0.1 accepted; next P0.2
 
@@ -106,3 +106,10 @@
 - **Decision:** PASS / FAIL / BLOCKED
 - **Remaining:** P0 6−accepted, total 27−accepted (explicitly show count)
 - **Next:** stay on same item if not PASS; otherwise first remaining item in phase
+
+## 2026-11-21 — User-authorized P0.4 deferral / P0.5 active
+
+- Audited main `71d0dbda9c3942299cfab36e0d055344b59551c3`; [run 44879694855](https://github.com/webbase-x/xstage/actions/runs/44879694855) job steps confirm full regression, isolated native Tk GUI regression, installer smoke and provenance success. Earlier reported regression count: 1,043 / 0 failures / 0 errors / 79 skipped; count not independently re-read from logs in this audit.
+- P0.4 remains NOT PASS. User explicitly authorized moving to P0.5 and combining physical Windows checks later. All P0 gates must pass before P1.
+- P0.5 work order: MIDI/BASSMIDI lifecycle; SoundFont and memory; MIDI/NCN/EMK-legacy/MP3/video; next-song preload; transition/dead-air checks; >=30 minute physical audio soak. Reuse existing implementations/tests; no claim of physical audio or display acceptance.
+- Remaining 24/27 total, 3/6 P0. No application code or Download Manager changes in this decision commit.
