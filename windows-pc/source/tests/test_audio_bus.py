@@ -1,7 +1,7 @@
 """P1 bus-routing contract tests (hardware-independent)."""
 import unittest
 
-from karaoke.audio_bus import AudioBusPlan, AudioBusRoute, plan_from_mapping, stereo_plan
+from karaoke.audio_bus import AudioBusPlan, AudioBusRoute, plan_from_mapping, stereo_plan, performance_plan, DrumKeyRoute, PerformanceBusPlan
 
 
 class AudioBusPlanTests(unittest.TestCase):
@@ -33,6 +33,37 @@ class AudioBusPlanTests(unittest.TestCase):
         plan = stereo_plan()
         with self.assertRaises(AttributeError):
             plan.bus_count = 16
+
+
+
+
+class PercussionRoutingTests(unittest.TestCase):
+    def test_drum_key_override_does_not_change_melodic_channels(self):
+        plan = performance_plan(8, {ch: ch % 8 for ch in range(16)}, {36: 6, 38: 7})
+        self.assertEqual(plan.resolve(9, 36).output_bus, 6)
+        self.assertEqual(plan.resolve(9, 38).output_bus, 7)
+        self.assertEqual(plan.resolve(9, 42).output_bus, 1)
+        self.assertEqual(plan.resolve(0, 36).output_bus, 0)
+        self.assertEqual(plan.resolve(9).output_bus, 1)
+
+    def test_default_preserves_stereo_primary_bus(self):
+        plan = performance_plan()
+        self.assertEqual(plan.resolve(9, 36).output_bus, 0)
+        self.assertEqual(plan.resolve(15, 60).output_bus, 0)
+
+    def test_rejects_invalid_or_duplicate_drum_notes(self):
+        with self.assertRaises(ValueError):
+            performance_plan(4, drum_mapping={128: 1})
+        with self.assertRaises(ValueError):
+            performance_plan(4, drum_mapping={36: 4})
+        with self.assertRaises(ValueError):
+            performance_plan(4, drum_mapping={36: True})
+        with self.assertRaises(ValueError):
+            performance_plan(4, drum_mapping=[(36, 1)])
+        with self.assertRaises(ValueError):
+            PerformanceBusPlan(stereo_plan(), (DrumKeyRoute(36, 1), DrumKeyRoute(36, 0)))
+        with self.assertRaises(ValueError):
+            performance_plan().resolve(9, -1)
 
 
 if __name__ == '__main__':
