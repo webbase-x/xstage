@@ -56,4 +56,18 @@ state.liveMidiPlayback.currentTime=()=>40;
 assert.equal(player.currentTime,40,'Lyrics transport catches up with the audio sequencer');
 player.pause();
 assert.equal(player.currentTime,40);
-console.log('PASS: MIDI clock, background audio time, seek, tempo and native audio handoff');
+// SpessaSynth may finish before its main-thread time reaches the duration.
+// The authoritative worklet completion must still dispatch ended exactly once.
+midiTransport.begin(120);
+state.liveMidiPlayback={scheduler:'audio-worklet',
+  currentTime:()=>119.7,finished:()=>false};
+await player.play();
+job();
+assert.equal(ended,1,'A near-end but still-playing MIDI may not skip the queue');
+state.liveMidiPlayback.finished=()=>true;
+job();
+assert.equal(ended,2,'SpessaSynth finished status must trigger an ended event');
+assert.equal(player.ended,true);
+assert.equal(midiTransport.finish(),false,'Repeated end notifications must be ignored');
+assert.equal(ended,2,'A song cannot advance two queue entries');
+console.log('PASS: MIDI clock, worklet natural end, once-only transition, seek and background time');
