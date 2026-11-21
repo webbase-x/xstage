@@ -261,6 +261,13 @@ class ClassicApp(KaraokeApp):
                         program = int(values.get('program',-1))
                         self.engine.set_program(channel, None if program<0 else program)
                         self.engine.set_solo(channel, bool(values.get('solo',False)))
+            # SoundFont-specific tone by MIDI channel and drum key.
+            # Windows MIDI is deliberately not advertised as an EQ backend.
+            try:
+                from .instrument_tone import apply_to_player
+                apply_to_player(self.engine, self.settings.get('midi_tone', {}))
+            except (OSError, ValueError) as error:
+                self.status_var.set('ยังไม่ใช้โทนเสียงแยก: ' + str(error))
             self.engine.enable_scheduler()
             if self.engine.lyric_warning:
                 self.status_var.set('เล่น MIDI ได้ แต่เนื้อร้องยังไม่ผ่านการตรวจ: ' + self.engine.lyric_warning)
@@ -705,6 +712,10 @@ class ClassicApp(KaraokeApp):
                 self.show_error(error)
         ttk.Button(window.content, text='บันทึก', command=save, style='Accent.TButton').grid(row=7, column=1, padx=14, pady=16, sticky='e')
 
+    def instrument_tone_window(self):
+        from .instrument_tone_ui import open_window
+        return open_window(self)
+
     def open_mixer(self):
         engine = self.engine if isinstance(self.engine, MidiPlayer) else None
         window = DialogWindow(self)
@@ -720,6 +731,7 @@ class ClassicApp(KaraokeApp):
             if engine:
                 engine.seek(engine.position)
         ttk.Button(top, text='หยุดเสียงค้าง', command=panic).pack(side='right')
+        ttk.Button(top, text='ปรับโทนเครื่องดนตรี / กลอง', command=self.instrument_tone_window).pack(side='right', padx=8)
         devices = WinMidi.devices()
         device = ttk.Combobox(top, values=[name for _, name in devices], state='readonly', width=32)
         device.pack(side='right', padx=8)
