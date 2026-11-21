@@ -2287,7 +2287,7 @@ function cacheMemoryBytes(){
 }
 function memoryResources(extraBytes=0){
   return {fontBytes:fontMemoryBytes(),
-    queuedBytes:cacheMemoryBytes()+Number(state.medleyCache?.blob?.size||0),
+    queuedBytes:cacheMemoryBytes()+Number(state.medleyCache?.bytes||state.medleyCache?.blob?.size||0),
     activeBytes:state.activeBlobBytes+state.activeVideoBytes,extraBytes};
 }
 function updateMemoryIndicators(){
@@ -2297,8 +2297,11 @@ function updateMemoryIndicators(){
   const queueEl=document.getElementById('xstage-queue-memory');
   if(queueEl){
     queueEl.dataset.level=report.level;
+    const waiting=state.queuePreload||state.medleyPrefetch;
+    const preparedCount=state.queuePreparedCache.size+(state.medleyCache?1:0);
     queueEl.textContent=report.text+
-      ' · '+state.queuePreparedCache.size+' เพลงรอพร้อม (ประมาณการ)';
+      ' · '+preparedCount+' เพลงถัดไปพร้อม'+
+      (waiting?' · กำลังเตรียม 1 เพลง':'');
     queueEl.title=report.note;
   }
   const fontEl=document.getElementById('xstage-font-memory');
