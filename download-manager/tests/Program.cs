@@ -133,6 +133,27 @@ try
         high.Dispose();
         using var low = await lowTask.WaitAsync(TimeSpan.FromSeconds(3));
     }
+    // Reprioritizing a waiting transfer must take effect immediately without
+    // changing the persisted queue order or preempting an active transfer.
+    var priorityQueue = new TransferSlotQueue(1, 1);
+    using (var running = await priorityQueue.EnterAsync("running", "priority.test", 1, CancellationToken.None))
+    {
+        var older = priorityQueue.EnterAsync("older", "priority.test", 1, CancellationToken.None);
+        var promoted = priorityQueue.EnterAsync("promoted", "priority.test", 2, CancellationToken.None);
+        priorityQueue.Reprioritize("promoted", 0);
+        if (older.IsCompleted || promoted.IsCompleted)
+            throw new Exception("Reprioritization must not preempt the running transfer.");
+        running.Dispose();
+        using (var first = await promoted.WaitAsync(TimeSpan.FromSeconds(3)))
+        {
+            if (older.IsCompleted)
+                throw new Exception("Live priority change did not reorder pending dispatch.");
+        }
+        using var last = await older.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+    if (priorityQueue.ActiveCount != 0 || priorityQueue.WaitingCount != 0)
+        throw new Exception("Reprioritized transfers leaked scheduler slots.");
+
     scheduler.Configure(2, 1);
     using (var slotA = await scheduler.EnterAsync("one", "first.test", 1, CancellationToken.None))
     {
