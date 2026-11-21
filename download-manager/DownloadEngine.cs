@@ -97,7 +97,7 @@ public sealed class DownloadEngine
     // Persist critical state changes immediately, and keep running transfers
     // checkpointed separately on a bounded cadence. SQLite commits jobs and
     // individual chunk byte positions atomically in WAL mode.
-    public void Save()
+    public string Save()
     {
         lock (_saveLock)
         {
@@ -106,19 +106,22 @@ public sealed class DownloadEngine
                 _state.SaveSnapshot(Jobs.ToArray());
                 Interlocked.Exchange(ref _lastProgressSave, Environment.TickCount64);
                 LastStorageError = "";
+                return "";
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
                                        Microsoft.Data.Sqlite.SqliteException or InvalidDataException)
             {
-                LastStorageError = "บันทึกสถานะ SQLite ไม่สำเร็จ: " + ex.Message;
+                var error = "บันทึกสถานะ SQLite ไม่สำเร็จ: " + ex.Message;
+                LastStorageError = error;
                 try
                 {
                     File.AppendAllText(Path.Combine(Path.GetDirectoryName(DatabasePath)!,
                         "state-errors.log"), DateTimeOffset.Now.ToString("O") +
-                        " " + LastStorageError + Environment.NewLine);
+                        " " + error + Environment.NewLine);
                 }
                 catch (IOException) { }
                 catch (UnauthorizedAccessException) { }
+                return error;
             }
         }
     }
@@ -178,11 +181,11 @@ public sealed class DownloadEngine
             throw new ArgumentException("Queue name must be 1–64 printable characters.", nameof(queueName));
         var previous = job.QueueName;
         job.QueueName = normalized;
-        Save();
-        if (LastStorageError.Length > 0)
+        var storageError = Save();
+        if (storageError.Length > 0)
         {
             job.QueueName = previous;
-            throw new IOException(LastStorageError);
+            throw new IOException(storageError);
         }
     }
 
@@ -207,11 +210,11 @@ public sealed class DownloadEngine
             throw new ArgumentException("Destination queue already exists.", nameof(newName));
         var originals = affected.Select(j => j.QueueName).ToArray();
         for (var i = 0; i < affected.Length; i++) affected[i].QueueName = target;
-        Save();
-        if (LastStorageError.Length > 0)
+        var storageError = Save();
+        if (storageError.Length > 0)
         {
             for (var i = 0; i < affected.Length; i++) affected[i].QueueName = originals[i];
-            throw new IOException(LastStorageError);
+            throw new IOException(storageError);
         }
         return affected.Length;
     }
@@ -229,12 +232,12 @@ public sealed class DownloadEngine
         var previous = job.Priority;
         job.Priority = priority;
         _slots.Reprioritize(job.Id, priority);
-        Save();
-        if (LastStorageError.Length > 0)
+        var storageError = Save();
+        if (storageError.Length > 0)
         {
             job.Priority = previous;
             _slots.Reprioritize(job.Id, previous);
-            throw new IOException(LastStorageError);
+            throw new IOException(storageError);
         }
     }
 
@@ -247,12 +250,12 @@ public sealed class DownloadEngine
         job.FileSpeedLimitKib = limitKib;
         var gate = _fileSpeed.GetOrAdd(job.Id, _ => new TransferRateGate());
         gate.Configure(limitKib);
-        Save();
-        if (LastStorageError.Length > 0)
+        var storageError = Save();
+        if (storageError.Length > 0)
         {
             job.FileSpeedLimitKib = previous;
             gate.Configure(previous);
-            throw new IOException(LastStorageError);
+            throw new IOException(storageError);
         }
     }
 
@@ -459,14 +462,14 @@ public sealed class DownloadEngine
         File.Move(oldPath, destination);
         job.Name = Path.GetFileName(destination);
         job.CompletedPath = destination;
-        Save();
-        if (LastStorageError.Length > 0)
+        var storageError = Save();
+        if (storageError.Length > 0)
         {
             job.Name = originalName;
             job.CompletedPath = oldPath;
             try { File.Move(destination, oldPath); }
             catch (IOException) { }
-            throw new IOException("บันทึกชื่อไฟล์ในฐานข้อมูลไม่สำเร็จ: " + LastStorageError);
+            throw new IOException("บันทึกชื่อไฟล์ในฐานข้อมูลไม่สำเร็จ: " + storageError);
         }
         return destination;
     }
