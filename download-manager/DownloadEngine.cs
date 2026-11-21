@@ -262,15 +262,12 @@ public sealed class DownloadEngine
         }
     }
 
-    private async Task LimitNetworkReadAsync(DownloadJob job, int bytes, CancellationToken ct)
+    private Task LimitNetworkReadAsync(DownloadJob job, int bytes, CancellationToken ct)
     {
-        await _globalSpeed.WaitForBytesAsync(bytes, ct);
-        if (job.FileSpeedLimitKib > 0)
-        {
-            var gate = _fileSpeed.GetOrAdd(job.Id,
-                _ => new TransferRateGate(job.FileSpeedLimitKib));
-            await gate.WaitForBytesAsync(bytes, ct);
-        }
+        var fileGate = job.FileSpeedLimitKib > 0
+            ? _fileSpeed.GetOrAdd(job.Id, _ => new TransferRateGate(job.FileSpeedLimitKib))
+            : null;
+        return TransferRateLimiter.WaitAsync(_globalSpeed, fileGate, bytes, ct);
     }
 
     private static int ReadBufferSize(DownloadJob job, int globalLimitKib) =>
