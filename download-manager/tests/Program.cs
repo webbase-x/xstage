@@ -918,6 +918,16 @@ try
         throw new Exception("One-part HTTP Range download produced incorrect bytes or segment count: " +
                             singlePart.Error);
 
+    // Exercise eight fresh HTTP Range requests independently of the
+    // repartition/resume test; verify the merged bytes before completion.
+    var eightParts = manager.Add(server.Url + "range/eight-connections.bin", folder, 8);
+    await WaitFor(() => eightParts.Status is "Completed" or "Failed");
+    if (eightParts.Status != "Completed" || eightParts.Parts != 8 ||
+        eightParts.SegmentsUsed != 8 ||
+        !bytes.SequenceEqual(await File.ReadAllBytesAsync(eightParts.CompletedPath)))
+        throw new Exception("Eight-connection HTTP Range transfer failed byte integrity: " +
+                            eightParts.Error);
+
     var maxParts = manager.Add(server.Url + "range/32-connections.bin", folder, 32);
     await WaitFor(() => maxParts.Status is "Completed" or "Failed");
     if (maxParts.Status != "Completed") throw new Exception("32-connection download failed: " + maxParts.Error);
