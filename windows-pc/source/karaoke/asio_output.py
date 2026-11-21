@@ -30,10 +30,13 @@ class AsioOutput:
             path = Path(native) / 'bassasio.dll'
             if not path.is_file():
                 raise OSError('ไม่พบ bassasio.dll')
+            from .bass import BassSynth
+            BassSynth.validate_dll(path)
             dll = ctypes.WinDLL(str(path))
         else:
             dll = bindings
         signatures = {
+            'BASS_ASIO_GetVersion': ([], UINT),
             'BASS_ASIO_Init': ([UINT, UINT], BOOL),
             'BASS_ASIO_Free': ([], BOOL),
             'BASS_ASIO_ChannelEnable': ([BOOL, UINT, PTR, PTR], BOOL),
@@ -49,6 +52,8 @@ class AsioOutput:
         for name, (args, result) in signatures.items():
             fn = getattr(dll, name)
             fn.argtypes, fn.restype = args, result
+        if dll.BASS_ASIO_GetVersion() >> 16 != 0x104:
+            raise OSError('bassasio.dll ต้องใช้ BASSASIO 1.4')
         self.dll = dll
         self.device = device
         self.bridge = None
