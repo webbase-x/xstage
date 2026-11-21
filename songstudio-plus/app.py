@@ -318,6 +318,11 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/api/manual/detail":
             self.send_json(200,manual.detail(
                 self.state.workspace,q.get("song_id",[""])[0]));return
+        if path=="/api/build/catalog":
+            self.send_json(200,manual.build_catalog(self.state.workspace,
+                q.get("status",["ready"])[0],
+                q.get("offset",[0])[0],q.get("limit",[40])[0],
+                q.get("q",[""])[0]));return
         if path=="/api/build/eligible":
             self.send_json(200,{"ready_total":manual.ready_count(
                 self.state.workspace)});return
