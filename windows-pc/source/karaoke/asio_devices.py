@@ -1,4 +1,4 @@
-"""Read-only ASIO driver discovery via official BASSASIO 2.4 ABI.
+"""Read-only ASIO driver discovery via official BASSASIO 1.4 ABI.
 
 Discovery does not initialize ASIO, change the default output, or promise that
 a device is usable. ASIO PCM callbacks and output bridging are separate work.
@@ -44,8 +44,8 @@ def discover_asio(native, *, bindings=None):
     get_version.argtypes = []
     get_version.restype = UINT
     version = get_version()
-    if version >> 16 != 0x204:
-        raise OSError('bassasio.dll ต้องเป็น BASSASIO 2.4')
+    if version >> 16 != 0x104:
+        raise OSError('bassasio.dll ต้องเป็น BASSASIO 1.4')
     get_info = dll.BASS_ASIO_GetDeviceInfo
     get_info.argtypes = [UINT, ctypes.POINTER(BASS_ASIO_DEVICEINFO)]
     get_info.restype = BOOL
