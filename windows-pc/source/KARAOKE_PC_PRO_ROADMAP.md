@@ -284,3 +284,8 @@
 
 - [`8acef6b0`](https://github.com/webbase-x/xstage/commit/8acef6b04ba3f41f3cc99f94f0d2fafa136c2578) adds optional explicit native BASS device IDs to the reference-counted device manager while preserving the existing default and offline decode behavior. [`8c9e13ca`](https://github.com/webbase-x/xstage/commit/8c9e13ca1ac1bcf27ae132c3396bb7a459285b6f) adds contract tests for separate device ownership, reentrant acquisition and invalid selection.
 - **PENDING-QA:** native bus-to-device renderer and ASIO are still not connected; test results deferred to consolidated verification as requested. No stable release.
+
+## 2026-11-21 — P1 explicit device wiring to MIDI synth (PENDING-QA)
+
+- [`f663b89f`](https://github.com/webbase-x/xstage/commit/f663b89fe91275e5ae1b500fcb4bcb268eb2b032) forwards an optional selected output device ID through `BassSynth` to reference-counted BASS acquisition; [`9c052d9a`](https://github.com/webbase-x/xstage/commit/9c052d9a0af0f236d12f8f5b77b969342ed76566) adds a native-API mock regression confirming the selected device is initialized.
+- **P1.1/P1.2 still IN PROGRESS**: this is device selection for a synthesizer, not multi-bus stream splitting, 4/8/16 channel audio rendering or ASIO. Consolidated test evidence pending. Stable release remains gated.
