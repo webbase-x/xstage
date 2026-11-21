@@ -5,6 +5,8 @@ const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const ui=read('midi-keyboard-ui.js'),html=read('karaoke.html'),
   app=read('app.js'),engine=read('midi-pro-engine.js'),pc=read('windows-pc/source/karaoke/keyboard_controls.py');
 assert.ok(html.includes('id="midi-keyboard-panel"'),'The PC-style piano panel must exist');
+assert.ok(html.includes('midi-piano-title">🎹 MIDI KEYBOARD</strong>')&&
+  !html.includes('แบบ X-Stage Karaoke PC ·'),'The redundant keyboard subtitle is removed');
 assert.ok(html.includes('id="midi-keyboard-toggle"')&&html.includes('aria-controls="midi-keyboard-panel"'),
   'The single menu must expose an accessible MIDI piano');
 assert.ok(!html.includes('id="midi-keyboard-control"')&&!html.includes('id="midi-instrument-control"'),
@@ -51,7 +53,7 @@ class El{
 }
 const ids=['midi-keyboard-panel','midi-keyboard-toggle','midi-keyboard-close',
   'midi-keyboard-range','midi-keyboard-channel','midi-instrument','midi-piano-keys',
-  'midi-piano-scroll','midi-keyboard-notes','midi-piano-info','midi-instrument-label',
+  'midi-piano-scroll','midi-keyboard-notes','midi-piano-info',
   'midi-keyboard-oct-down','midi-keyboard-oct-up'];
 const elements=Object.fromEntries(ids.map(id=>[id,new El(id)]));
 elements['midi-keyboard-panel'].hidden=true;
@@ -109,7 +111,7 @@ assert.deepEqual(preview.slice(-2),[[60,true],[60,false]],
   'Touch notes must trigger SoundFont noteOn and noteOff');
 elements['midi-instrument'].selectedOptions=[{textContent:'Nylon Guitar'}];
 elements['midi-instrument'].emit('change');
-assert.equal(elements['midi-instrument-label'].textContent,'Nylon Guitar');
+assert.equal(elements['midi-instrument-label'],undefined,'Do not render a duplicate instrument label');
 elements['midi-keyboard-close'].emit('click');
 assert.equal(elements['midi-keyboard-panel'].hidden,true);
 browser.XStageMIDIPiano.setSong({bytes:null});
