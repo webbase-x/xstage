@@ -268,6 +268,11 @@ class ClassicApp(KaraokeApp):
                 apply_to_player(self.engine, self.settings.get('midi_tone', {}))
             except (OSError, ValueError) as error:
                 self.status_var.set('ยังไม่ใช้โทนเสียงแยก: ' + str(error))
+            try:
+                from .midi_channel_eq import apply_to_player as apply_channel_eq
+                apply_channel_eq(self.engine, self.settings.get('midi_channel_eq', {}))
+            except (OSError, ValueError) as error:
+                self.status_var.set('ยังไม่ใช้ EQ รายช่อง MIDI: ' + str(error))
             self.engine.enable_scheduler()
             if self.engine.lyric_warning:
                 self.status_var.set('เล่น MIDI ได้ แต่เนื้อร้องยังไม่ผ่านการตรวจ: ' + self.engine.lyric_warning)
@@ -716,6 +721,10 @@ class ClassicApp(KaraokeApp):
         from .instrument_tone_ui import open_window
         return open_window(self)
 
+    def instrument_channel_eq_window(self):
+        from .midi_channel_eq_ui import open_window
+        return open_window(self)
+
     def open_mixer(self):
         engine = self.engine if isinstance(self.engine, MidiPlayer) else None
         window = DialogWindow(self)
@@ -732,6 +741,7 @@ class ClassicApp(KaraokeApp):
                 engine.seek(engine.position)
         ttk.Button(top, text='หยุดเสียงค้าง', command=panic).pack(side='right')
         ttk.Button(top, text='ปรับโทนเครื่องดนตรี / กลอง', command=self.instrument_tone_window).pack(side='right', padx=8)
+        ttk.Button(top, text='EQ 31 ย่าน / ช่อง MIDI', command=self.instrument_channel_eq_window).pack(side='right', padx=8)
         devices = WinMidi.devices()
         device = ttk.Combobox(top, values=[name for _, name in devices], state='readonly', width=32)
         device.pack(side='right', padx=8)
