@@ -4795,3 +4795,145 @@ html body.xstage-ui-v2 .stage .transport-song-info .tv-song-meta{
     min-width:20px
   }
 }
+
+
+/* 1.16.2 — Song key is plain Song Status text. The *single* MIDI transpose
+   control occupies the top stage row: search → -/value/+ → clock.
+   No pitch-control cloning, horizontal overflow, or second song-key badge. */
+html body.xstage-ui-v2 .stage .transport-song-info .song-key-stack{
+  flex:0 0 auto!important;min-width:0!important;max-width:125px!important;
+  width:auto!important;align-items:flex-end!important;gap:0!important
+}
+html body.xstage-ui-v2 .stage .transport-song-info .song-key-stack #toolbar-song-key{
+  display:inline!important;width:auto!important;height:auto!important;
+  min-height:0!important;max-width:100%!important;
+  padding:0!important;border:0!important;border-radius:0!important;
+  background:transparent!important;box-shadow:none!important;
+  color:#c4ffee!important;font-size:clamp(.78rem,1.15vw,.97rem)!important;
+  font-weight:800!important;line-height:1.3!important;text-align:right;
+  white-space:nowrap;text-overflow:ellipsis;overflow:hidden
+}
+html body.xstage-ui-v2 .stage .stage-toolbar{
+  gap:clamp(4px,.7vw,9px)!important;min-width:0!important;
+  box-sizing:border-box!important
+}
+html body.xstage-ui-v2 .stage .stage-toolbar .stage-search-slot{
+  flex:1 1 0!important;min-width:0!important;max-width:none!important
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-control{
+  display:inline-flex!important;align-items:center;justify-content:center;
+  flex:0 0 auto;min-height:40px;height:42px;max-width:100%;
+  gap:3px;padding:3px 5px;margin:0;
+  border:1px solid #4d9fb4;border-radius:11px;
+  background:rgba(8,34,61,.92);box-sizing:border-box;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+  pointer-events:auto!important;touch-action:manipulation
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-control[hidden]{
+  display:none!important
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-control .toolbar-transpose-title{
+  display:inline;flex:0 0 auto;margin:0 2px;
+  color:#beece7;font-size:.74rem;font-weight:800
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-control button{
+  display:grid!important;place-items:center!important;flex:0 0 32px!important;
+  width:32px!important;min-width:32px!important;height:34px!important;
+  min-height:34px!important;margin:0!important;padding:0!important;
+  border:1px solid #61b2c3!important;border-radius:8px;
+  background:#13455d!important;color:#f8ffff!important;
+  font:800 1.16rem/1 system-ui;cursor:pointer;
+  touch-action:manipulation;pointer-events:auto
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-control button:disabled{
+  opacity:.45!important;cursor:not-allowed
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-control button:focus-visible{
+  outline:2px solid #72f5d7;outline-offset:2px
+}
+html body.xstage-ui-v2 .stage .stage-toolbar #midi-transpose-label{
+  flex:0 0 25px!important;min-width:25px!important;text-align:center;
+  font-weight:900;color:#f4fffc;font-size:.81rem
+}
+/* Only one toolbar time display is needed on the web. The second stage
+   clock was already hidden elsewhere; keep its screen-reader twin intact. */
+html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #mobile-stage-clock{
+  display:inline-flex!important;align-items:center;justify-content:center;
+  flex:0 0 auto;min-width:0;white-space:nowrap
+}
+@media(max-width:760px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar{
+    display:grid!important;
+    grid-template-columns:40px minmax(0,1fr) 90px 72px!important;
+    grid-template-rows:42px!important;
+    align-items:center!important;
+    column-gap:4px!important;
+    padding-left:max(8px,env(safe-area-inset-left))!important;
+    padding-right:max(8px,env(safe-area-inset-right))!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #mobile-menu-toggle{
+    grid-column:1!important;grid-row:1!important;min-width:0!important;
+    width:40px!important;max-width:40px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar .stage-search-slot{
+    grid-column:2!important;grid-row:1!important;
+    min-width:0!important;width:100%!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control{
+    grid-column:3!important;grid-row:1!important;
+    width:90px!important;height:40px!important;min-height:40px!important;
+    padding:2px!important;gap:1px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control .toolbar-transpose-title{
+    display:none!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control button{
+    flex-basis:28px!important;width:28px!important;min-width:28px!important;
+    height:32px!important;min-height:32px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-label{
+    flex-basis:24px!important;min-width:24px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #mobile-stage-clock{
+    grid-column:4!important;grid-row:1!important;
+    width:72px!important;min-width:72px!important;max-width:72px!important;
+    height:40px!important;min-height:40px!important;
+    padding:2px!important;font-size:.7rem!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #fullscreen{
+    display:none!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar:has(#midi-transpose-control[hidden]){
+    grid-template-columns:40px minmax(0,1fr) 72px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar:has(#midi-transpose-control[hidden]) #mobile-stage-clock{
+    grid-column:3!important
+  }
+}
+@media(max-width:390px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar{
+    grid-template-columns:36px minmax(0,1fr) 84px 60px!important;
+    padding-left:max(6px,env(safe-area-inset-left))!important;
+    padding-right:max(6px,env(safe-area-inset-right))!important;
+    column-gap:3px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #mobile-menu-toggle{
+    width:36px!important;max-width:36px!important;min-width:0!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control{
+    width:84px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-control button{
+    flex-basis:26px!important;width:26px!important;min-width:26px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #midi-transpose-label{
+    flex-basis:23px!important;min-width:23px!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar #mobile-stage-clock{
+    width:60px!important;min-width:60px!important;max-width:60px!important;
+    font-size:.62rem!important
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-toolbar:has(#midi-transpose-control[hidden]){
+    grid-template-columns:36px minmax(0,1fr) 60px!important
+  }
+}
