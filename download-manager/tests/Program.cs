@@ -994,8 +994,19 @@ try
     await WaitFor(() => job.Status == "Paused" && job.Cancellation is null);
     if (Interlocked.Read(ref job.DownloadedBytes) <= 0)
         throw new Exception("Test must leave partial downloaded bytes");
+    var oldWorkDir = Path.Combine(job.Folder, ".xstage-downloads", job.Id);
+    if (!Directory.Exists(oldWorkDir) ||
+        !Directory.EnumerateFiles(oldWorkDir, "*.part").Any())
+        throw new Exception("Repartition regression requires existing resumable chunk files.");
     if (!manager.SetJobParts(job, 16))
         throw new Exception("Paused download must accept a new segment count.");
+    if (Directory.Exists(oldWorkDir) &&
+        Directory.EnumerateFiles(oldWorkDir, "*.part").Any())
+        throw new Exception("Successful repartition retained chunks with obsolete boundaries.");
+    var reopenedParts = new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == job.Id);
+    if (reopenedParts.Parts != 16 || reopenedParts.DownloadedBytes != 0 ||
+        reopenedParts.SegmentsUsed != 0)
+        throw new Exception("Repartition must persist new geometry before download resumes.");
     if (job.Parts != 16 || job.SegmentsUsed != 0 || Interlocked.Read(ref job.DownloadedBytes) != 0)
         throw new Exception("Repartition must reset temporary pieces and progress.");
     manager.Start(job);
