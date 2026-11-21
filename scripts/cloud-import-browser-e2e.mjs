@@ -283,7 +283,7 @@ try{
   // The small current.json is an atomic pointer, not a song database.
   const published=[...records.values()].filter(x=>x.name.endsWith('.sqlite3'));
   assert.ok(published.some(x=>x.name.startsWith('songs-')),'SQLite3 song snapshot must exist');
-  assert.ok(published.every(x=>x.data.subarray(0,16).toString('latin1')==='SQLite format 3\\0'),
+  assert.ok(published.every(x=>x.data.subarray(0,16).toString('latin1')==='SQLite format 3\0'),
     'All published catalogs must contain SQLite3 bytes, not renamed JSON');
   const SQL=await initSqlJs();
   const publishedRows=published.flatMap(file=>{
