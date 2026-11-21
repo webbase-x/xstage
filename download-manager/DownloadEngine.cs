@@ -846,6 +846,13 @@ public sealed class DownloadEngine
             Array.Clear(job.SegmentDownloadedBytes);
         }
         Interlocked.Exchange(ref job.DownloadedBytes, existingTotal);
+        // Commit the exact byte-boundary geometry before any Range worker writes
+        // a chunk. Otherwise a crash can leave valid-looking partial files
+        // alongside an unknown (zero) geometry in SQLite.
+        var checkpointError = Save();
+        if (checkpointError.Length > 0)
+            throw new IOException("ไม่สามารถบันทึกขอบเขตการดาวน์โหลดก่อนเริ่มเขียนไฟล์: " +
+                checkpointError);
         var tasks = Enumerable.Range(0, count).Select(i =>
         {
             var begin = TransferSegmentGeometry.Boundary(job.TotalBytes, i, count);
