@@ -42,6 +42,7 @@ class AsioOutput:
             'BASS_ASIO_ChannelSetRate': ([BOOL, UINT, ctypes.c_double], BOOL),
             'BASS_ASIO_Start': ([UINT, UINT], BOOL),
             'BASS_ASIO_IsStarted': ([], BOOL),
+            'BASS_ASIO_SetDevice': ([ctypes.c_int], BOOL),
             'BASS_ASIO_Stop': ([], BOOL),
             'BASS_ASIO_ErrorGetCode': ([], ctypes.c_int),
         }
@@ -49,6 +50,7 @@ class AsioOutput:
             fn = getattr(dll, name)
             fn.argtypes, fn.restype = args, result
         self.dll = dll
+        self.device = device
         self.bridge = None
         self.started = False
         self.initialized = False
@@ -78,7 +80,10 @@ class AsioOutput:
 
     def check_health(self):
         """Detect ASIO engines which stopped unexpectedly between MIDI events."""
-        if not self.started or not self.dll.BASS_ASIO_IsStarted():
+        if not self.started:
+            raise OSError('ASIO output ถูกปิด')
+        self._check(self.dll.BASS_ASIO_SetDevice(self.device), 'เลือก ASIO device')
+        if not self.dll.BASS_ASIO_IsStarted():
             raise OSError('ASIO driver หยุดทำงานระหว่างเล่น')
         return True
 
@@ -92,6 +97,7 @@ class AsioOutput:
         # A failed BASS_ASIO_Free must be visible, not silently treated as
         # success: the caller can retry closure before releasing this bridge.
         if self.initialized:
+            self._check(self.dll.BASS_ASIO_SetDevice(self.device), 'เลือก ASIO device ก่อนปิด')
             try:
                 self.dll.BASS_ASIO_Stop()
             finally:
