@@ -42,6 +42,12 @@ function parseMidi(source){
         if(type===0x51&&len===3){
           const tempo=(b[cursor]<<16)|(b[cursor+1]<<8)|b[cursor+2];
           if(tempo>=10000&&tempo<=10000000)events.push({tick,kind:'tempo',value:tempo,track});
+        }else if(type===0x59&&len===2){
+          // Standard MIDI key signature: signed sharps/flats (-7..7),
+          // followed by 0=major or 1=minor.
+          const sf=(b[cursor]<<24)>>24,minor=b[cursor+1];
+          if(sf>=-7&&sf<=7&&(minor===0||minor===1))
+            events.push({tick,kind:'keySignature',sf,minor,track});
         }else if((type===0x05||type===0x01||type===0x03)&&len&&len<4096){
           events.push({tick,kind:'text',value:text(b.subarray(cursor,cursor+len)),meta:type,track});
         }
@@ -66,6 +72,13 @@ function parseMidi(source){
   const tempoMap=[{tick:0,seconds:0,tempo}];
   const channels=Array.from({length:16},()=>({program:0,bank:0,volume:100,expression:127,pan:64,notes:new Map(),sustain:false,held:[]}));
   const notes=[],lyricEvents=[];
+  let keySignature='';
+  const keyNames={
+    majorSharp:['C','G','D','A','E','B','F♯','C♯'],
+    majorFlat:['C','F','B♭','E♭','A♭','D♭','G♭','C♭'],
+    minorSharp:['Am','Em','Bm','F♯m','C♯m','G♯m','D♯m','A♯m'],
+    minorFlat:['Am','Dm','Gm','Cm','Fm','B♭m','E♭m','A♭m']
+  };
   const endNote=(note,at)=>{if(!note)return;note.end=Math.max(note.start+.06,at);notes.push(note);};
   for(const e of events){
     clock+=(e.tick-prev)*tempo/(division*1000000);prev=e.tick;
@@ -76,6 +89,12 @@ function parseMidi(source){
       const point={tick:e.tick,seconds:clock,tempo};
       if(latest.tick===e.tick)tempoMap[tempoMap.length-1]=point;
       else tempoMap.push(point);
+      continue;
+    }
+    if(e.kind==='keySignature'){
+      if(!keySignature)keySignature=keyNames[
+        e.minor?(e.sf<0?'minorFlat':'minorSharp'):(e.sf<0?'majorFlat':'majorSharp')
+      ][Math.abs(e.sf)];
       continue;
     }
     if(e.kind==='text'){if(e.meta===5||e.meta===1)lyricEvents.push({time:clock,text:e.value,meta:e.meta,track:e.track});continue;}
@@ -111,7 +130,7 @@ function parseMidi(source){
   if(!notes.length)fail('MIDI ไม่มีโน้ตที่เล่นได้');
   const duration=Math.max(clock,...notes.map(x=>x.end))+1;
   if(duration>MAX_SECONDS)fail('MIDI ยาวเกิน 15 นาทีสำหรับตัวเรนเดอร์บนเว็บ');
-  return {notes,duration,lyricEvents,division,tempoMap};
+  return {notes,duration,lyricEvents,division,tempoMap,keySignature};
 }
 function midiLyrics(parsed,code){
   let title='',artist='';const pieces=[];
