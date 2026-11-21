@@ -128,6 +128,30 @@ class SoundFontTests(unittest.TestCase):
             self.assertEqual(dll.BASS_StreamFree.call_args_list[-1],call(52))
             self.assertEqual(midi.BASS_MIDI_FontFree.call_count,1)
 
+    def test_offline_many_song_changes_reuse_soundfont_without_handle_growth(self):
+        # Device-free regression for large batch exports: only MIDI streams
+        # rotate between songs; SoundFont handles must not accumulate.
+        with tempfile.TemporaryDirectory() as folder:
+            font = make_font(Path(folder) / 'long-batch.sf2')
+            dll, midi = self.fake_api()
+            midi.BASS_MIDI_FontInit.side_effect = [101]
+            midi.BASS_MIDI_StreamCreate.side_effect = list(range(50, 151))
+            synth = BassSynth(Path(folder), settings={'soundfont': str(font)},
+                              decode=True, bindings=(dll, midi))
+            try:
+                for _ in range(100):
+                    synth.start_offline_song()
+                self.assertEqual(midi.BASS_MIDI_FontInit.call_count, 1)
+                self.assertEqual(midi.BASS_MIDI_StreamCreate.call_count, 101)
+                self.assertEqual(midi.BASS_MIDI_StreamSetFonts.call_count, 101)
+                self.assertEqual(dll.BASS_StreamFree.call_count, 100)
+                midi.BASS_MIDI_FontFree.assert_not_called()
+            finally:
+                synth.close()
+            self.assertEqual(dll.BASS_StreamFree.call_count, 101)
+            midi.BASS_MIDI_FontFree.assert_called_once_with(101)
+            dll.BASS_Free.assert_called_once()
+
     def test_instrument_mapping_reaches_native_stream_before_play(self):
         with tempfile.TemporaryDirectory() as folder:
             paths = [make_font(Path(folder)/f'{i}.sf2') for i in (1, 2)]
