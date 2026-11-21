@@ -344,11 +344,10 @@
         <div class="two-col">
           <article class="panel">
             <div class="panel-head"><div><span class="label-top">CHOOSE SONGS</span><h2>เลือกเพลงสำหรับสร้างไฟล์</h2></div><span class="count-pill" id="build-count">0 เพลง</span></div>
-            <div class="build-status-tabs" role="group" aria-label="สถานะเพลงที่จะสร้างไฟล์"><button type="button" id="build-tab-ready" class="quiet-btn active" aria-pressed="true">พร้อมแปลง</button><button type="button" id="build-tab-attention" class="quiet-btn" aria-pressed="false">ต้องปรับปรุง</button></div>
-            <div class="toolbar"><button class="quiet-btn" id="build-all" type="button">เลือกทั้งหมด (ทุกหน้า)</button><button class="quiet-btn" id="build-page-all" type="button">เลือกทั้งหมดหน้านี้</button><button class="quiet-btn" id="build-clear" type="button">ยกเลิกทั้งหมด</button><button class="quiet-btn" id="build-page-clear" type="button">ยกเลิกหน้านี้</button></div>
+            <div class="build-status-tabs" role="group" aria-label="สถานะเพลงที่จะสร้างไฟล์"><button type="button" id="build-tab-ready" class="quiet-btn active" aria-pressed="true">ยังไม่แปลง · พร้อม</button><button type="button" id="build-tab-converted" class="quiet-btn" aria-pressed="false">แปลงแล้ว</button><button type="button" id="build-tab-attention" class="quiet-btn" aria-pressed="false">ต้องปรับปรุง</button></div>
+            <div class="toolbar"><button class="quiet-btn" id="build-all" type="button">เลือกที่ยังไม่แปลงทั้งหมด</button><button class="quiet-btn" id="build-page-all" type="button">เลือกทั้งหมดหน้านี้</button><button class="quiet-btn" id="build-clear" type="button">ยกเลิกทั้งหมด</button><button class="quiet-btn" id="build-page-clear" type="button">ยกเลิกหน้านี้</button></div>
             <div class="build-list" id="build-list" role="region" aria-label="รายการเพลง เลื่อนเพื่อโหลดเพิ่มเติม" tabindex="0"><p class="empty-small">ยังไม่มีเพลงในคลัง</p></div>
             <div class="scroll-load-footer"><span id="build-page-info" aria-live="polite">กำลังเตรียมรายการ</span><span id="build-scroll-status" role="status">เลื่อนเพื่อโหลดเพิ่มเติม</span><button type="button" id="build-retry" class="quiet-btn" hidden>ลองโหลดเพิ่ม</button></div>
-            <div hidden><button id="build-prev" type="button"></button><button id="build-next" type="button"></button></div>
           </article>
           <article class="panel">
             <div class="panel-head"><div><span class="label-top">EXPORT ENGINE</span><h2>สร้างไฟล์พร้อมเนื้อร้อง</h2></div></div>
@@ -356,7 +355,7 @@
             <div class="build-art"><span>X<span class="spark">✦</span></span><p>Embedded Lyrics<br>&amp; Timing</p></div>
             <div class="notice"><span>◈</span><p>รุ่นนี้สร้างไฟล์ X-Stage Plus แบบไบนารีที่มีสื่อและเนื้อร้องในตัว พร้อมตัวตรวจความถูกต้องของไฟล์ การเล่นพร้อมเสียงจริงต้องใช้ Player ที่รองรับรูปแบบใหม่นี้</p></div>
             <button class="primary-btn full" id="build-start" type="button" disabled>สร้างไฟล์ที่เลือก <span>↗</span></button>
-            <p class="field-hint" id="build-feedback">เพลงเนื้อร้องสมบูรณ์จากต้นฉบับพร้อมสร้างได้ ไม่ต้องปาดใหม่ ส่วนเพลงที่แก้เองหรือเวลาประมาณต้องยืนยันก่อนสร้าง</p>
+            <p class="field-hint" id="build-feedback">แสดงเพลงที่ยังไม่แปลงและแปลงแล้วแยกกัน · ข้ามเพลงที่แปลงแล้วโดยไม่สร้างซ้ำ · เพลงต้องปรับปรุงต้องตรวจหรือยืนยันก่อน</p>
           </article>
         </div>
       </section>
