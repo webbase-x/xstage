@@ -508,7 +508,7 @@
     if(event.target.closest?.('a[href^="?app="],#detail-back'))setTimeout(updateRoute,0);
   });
   if(!configured||!window.supabase?.createClient){
-    message(reviewStatus,"ฐานข้อมูล X-Stage ยังไม่ได้เปิดใช้งาน · ดูแอปและดาวน์โหลดได้โดยไม่ต้องเข้าสู่ระบบ");
+    message(reviewStatus,"ฐานข้อมูล X-Stage ยังไม่ได้เปิดใช้งาน · ดูรายละเอียดแอปได้โดยไม่ต้องเข้าสู่ระบบ");
     login.disabled=true;login.title="รอการตั้งค่า Google Login";
     return;
   }
