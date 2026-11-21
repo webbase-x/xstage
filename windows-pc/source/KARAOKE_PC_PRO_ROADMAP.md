@@ -192,3 +192,9 @@
 - [`8fcb9bd2`](https://github.com/webbase-x/xstage/commit/8fcb9bd2180464539891ed6830cc1102b9cc8115) corrects two preload regression tests: `MidiPlayer` patch must remain a type for `isinstance`, and rhythm song must expose real iterable MIDI events. Previously committed tests could fail with TypeError before reaching their intended failure branch.
 - [`2f0124cc`](https://github.com/webbase-x/xstage/commit/2f0124ccbdc6ffb311be9aaf838ca3c64bb91601) fixes rhythm-deck ownership when full-song fill and crossfade pattern are both requested; release superseded fill before replacing it, avoiding leaked native stream.
 - No test execution or Windows CI result available for these commits; physical playback and >=30-minute soak explicitly **DEFERRED-HARDWARE**, not PASS. P0.5 **IN PROGRESS**; 24/27 checklist items outstanding. Next: check MIDI/NCN/EMK/video loaders, transitions and CI, then P0.6 only after P0.5 acceptance.
+
+## 2026-11-21 — P0.5 secondary medley fallback errors
+
+- [`0d181a7a`](https://github.com/webbase-x/xstage/commit/0d181a7a63eb6edfd7580605c3faa0a4b4d637b1) isolates cleanup failure when replacing an optional preloaded fill with a crossfade rhythm deck.
+- [`839b9123`](https://github.com/webbase-x/xstage/commit/839b912373bd32cf46aea5dce5f452502d5acc3d) prevents a second exception from `pause()` from breaking the optional fill failure fallback.
+- These commits are **not validated by test execution**. P0.5 remains IN PROGRESS; real hardware and soak testing DEFERRED at user request. Do not assert completion or release readiness.
