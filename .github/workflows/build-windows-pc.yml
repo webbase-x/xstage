@@ -101,6 +101,8 @@ jobs:
 
       - name: Build Windows app and run full regression tests
         shell: pwsh
+        env:
+          XSTAGE_REQUIRE_ASIO_NATIVE: '1'
         run: |
           $ErrorActionPreference = 'Stop'
           Push-Location windows-pc/source
