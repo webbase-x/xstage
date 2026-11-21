@@ -8,7 +8,7 @@ const driveLayout=window.XSTAGE_DRIVE_LAYOUT||{root:'XStageKaraoke',db:'DB'};
 const $ = id => document.getElementById(id);
 const ui = {
   status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'), catalogProgress:$('catalog-progress'), catalogProgressValue:$('catalog-progress-value'),
-  account: $('account'), libraryState: $('library-state'), songTotal: $('song-total'), resultCount: $('result-count'), searchRefine:$('search-refine-hint'),
+  account: $('account'), libraryState: $('library-state'), libraryDriveLink:$('library-drive-link'), songTotal: $('song-total'), resultCount: $('result-count'), searchRefine:$('search-refine-hint'),
   librarySelect:$('library-select'),librarySwitcher:$('library-switcher'),
   search: $('search'), voiceSearch:$('voice-search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
@@ -433,7 +433,7 @@ function libraryLabel(root){
   const base=root?.ownedByMe?'คลังของฉัน':owner?'แชร์โดย '+owner:'คลังที่แชร์ให้ฉัน';
   const duplicate=state.availableLibraries.filter(x=>
     String(x.name||driveLayout.root)===String(root?.name||driveLayout.root)).length>1;
-  if(!duplicate)return base;
+  if(!duplicate)return (root?.name||driveLayout.root)+' · '+base;
   let created='';
   try{
     if(root.createdTime&&!Number.isNaN(Date.parse(root.createdTime)))
@@ -1414,6 +1414,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       // Do not erase the user's browser cache permanently: their library may
       // reappear after a Google Drive permission grant or restored ownership.
       state.libraryRootId='';
+      if(ui.libraryDriveLink)ui.libraryDriveLink.hidden=true;
       state.catalogPointerId='';
       state.catalogGeneration='';
       state.manifest=null;
@@ -1452,6 +1453,11 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     state.libraryRootCanShare=!!root.capabilities?.canShare;
     state.libraryRootOwnerEmail=String(root.owners?.[0]?.emailAddress||'');
     savePreferredLibraryRoot(account.sub,root.id);
+    if(ui.libraryDriveLink){
+      ui.libraryDriveLink.href='https://drive.google.com/drive/folders/'+encodeURIComponent(String(root.id));
+      ui.libraryDriveLink.title='เปิด '+driveLayout.root+' ที่เป็นแหล่งเพลงจริง';
+      ui.libraryDriveLink.hidden=false;
+    }
     renderLibrarySelector([...ownedRoots,...sharedRoots],root.id);
     window.dispatchEvent(new CustomEvent('xstage:librarychange',{detail:{
       accountSub:account.sub,rootId:String(root.id),label:libraryLabel(root),ownedByMe:!!root.ownedByMe
@@ -1761,6 +1767,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';state.availableLibraries=[];
   if(ui.librarySelect)ui.librarySelect.replaceChildren();
   if(ui.librarySwitcher)ui.librarySwitcher.hidden=true;
+  if(ui.libraryDriveLink)ui.libraryDriveLink.hidden=true;
   state.awaitingSharedLibrary=false;
   const sharedGate=$('gate-shared-library');if(sharedGate)sharedGate.hidden=true;
   releaseQueuePreload();
@@ -3896,7 +3903,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1133';
+    script.src='./assets/vendor/qrcode.min.js?v=1134';
     script.async=true;
     let done=false;
     const finish=error=>{
