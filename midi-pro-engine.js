@@ -129,7 +129,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       :'SpessaSynth · ใช้โหมด MIDI สำรอง');
   }catch(error){dispose();throw error;}
   return {
-    attach(player,{getTranspose=()=>0,getProgram=()=>null}={}){
+    attach(player,{getTranspose=()=>0,getProgram=()=>null,onEnded=()=>{}}={}){
       // The PC keyboard previews notes on an independent voice. In the Web
       // synth, reserve an unused MIDI channel so touching piano keys cannot
       // change an instrument or suppress notes of the playing song.
@@ -174,8 +174,28 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       // Prefer audio-thread sequencing. No UI-thread note scheduler runs in
       // this mode. A clock event loop in the app is for lyrics only.
       if(sequencer){
-        let stopped=false,started=false;
+        let stopped=false,started=false,completionPending=false;
         let shiftApplied=null,programApplied=null;
+        const finishListenerId='xstage-midi-natural-finish';
+        const naturalEnd=()=>{
+          if(stopped||!started||player.paused||completionPending)return;
+          completionPending=true;
+          // Avoid destroying an AudioWorklet inside its own event dispatch.
+          void Promise.resolve().then(()=>{
+            completionPending=false;
+            if(stopped||!started||player.paused)return;
+            if(player.loop){
+              sequencer.currentTime=0;
+              player.currentTime=0;
+              sequencer.play();
+              return;
+            }
+            onEnded();
+          });
+        };
+        try{sequencer.eventHandler?.addEvent?.('songEnded',finishListenerId,naturalEnd);}
+        catch(error){console.warn('MIDI end-of-song callback unavailable:',error);}
+
         const updateVolume=()=>{
           master.gain.value=(player.muted?0:clamp(Number(player.volume)||0,0,1))*.92;
         };
@@ -252,9 +272,11 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         if(!player.paused)play();
         return {
           engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
-          currentTime:()=>Number(sequencer.currentTime),previewNote,
+          currentTime:()=>Number(sequencer.currentTime),
+          finished:()=>!!sequencer.isFinished,previewNote,
           dispose(){
             if(stopped)return;stopped=true;pause();releasePreview();
+            try{sequencer.eventHandler?.removeEvent?.('songEnded',finishListenerId);}catch{}
             for(const [name,fn] of listeners)player.removeEventListener(name,fn);
             scope.document?.removeEventListener?.('visibilitychange',visibility);
             scope.removeEventListener?.('focus',visibility);
