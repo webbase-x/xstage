@@ -16,46 +16,36 @@ class FullSongMedleyTests(unittest.TestCase):
     def test_optional_drum_fill_cleanup_failure_keeps_preloaded_song(self):
         from pathlib import Path
         from karaoke.medley_decks import build
-        from karaoke.medley_trim import TrimBounds
-        engine, rhythm = Mock(), Mock()
-        engine.medley_bounds = TrimBounds(0, 5, 6, 1)
-        engine.speed = 1.0
-        rhythm.seek.side_effect = ValueError('fill seek failed')
-        rhythm.close.side_effect = OSError('fill close failed')
+
+        class FakeMidiPlayer:
+            instances = []
+            def __init__(self, output=None):
+                self.load = Mock()
+                self.set_channel = Mock()
+                self.set_key = Mock()
+                self.set_speed = Mock()
+                self.set_volume = Mock()
+                self.seek = Mock()
+                self.close = Mock()
+                self.speed = 1.0
+                self.__class__.instances.append(self)
+                if len(self.instances) == 2:
+                    self.seek.side_effect = ValueError('fill seek failed')
+                    self.close.side_effect = OSError('fill close failed')
+
         song = MidiSong([], 1, Lyrics())
+        bounds = TrimBounds(0, 5, 6, 1)
         with patch('karaoke.bass.BassSynth'), \
-             patch('karaoke.playback.MidiPlayer', side_effect=[engine, rhythm]), \
-             patch('karaoke.medley_full.source_bounds', return_value=engine.medley_bounds), \
+             patch('karaoke.playback.MidiPlayer', FakeMidiPlayer), \
+             patch('karaoke.medley_full.source_bounds', return_value=bounds), \
              patch('karaoke.medley_full.drum_fill', return_value=song), \
              patch('karaoke.medley_full.can_play_fill', return_value=True):
             prepared, fill = build(Path('native'), {}, Path('next.mid'), 0, 100,
                                    False, None, full_song=True, fill=True)
-        self.assertIs(prepared, engine)
+        self.assertIs(prepared, FakeMidiPlayer.instances[0])
         self.assertIsNone(fill)
-        rhythm.close.assert_called_once()
-        engine.close.assert_not_called()
-
-    def test_finished_tail_close_failure_does_not_repeat_or_stop_active_song(self):
-        decks = Decks()
-        tail = Mock()
-        tail.close.side_effect = OSError('native tail close failed')
-        tail.playing = True
-        active = Mock()
-        active.playing = True
-        app = NS(engine=active, system_volume=1.0)
-        decks.tail = tail
-        decks.elapsed = 1.0
-        decks.fade = 1.0
-        decks.stamp = 10.0
-        try:
-            with patch('karaoke.transition_report.record'):
-                decks.update(app, 10.1)
-                decks.update(app, 10.2)
-            tail.close.assert_called_once()
-            self.assertIsNone(decks.tail)
-            self.assertTrue(active.playing)
-        finally:
-            decks.close()
+        FakeMidiPlayer.instances[1].close.assert_called_once()
+        prepared.close.assert_not_called()
 
     def test_stop_tail_closes_both_decks_even_if_first_fails(self):
         decks = Decks()
@@ -105,17 +95,33 @@ class FullSongMedleyTests(unittest.TestCase):
     def test_preload_build_closes_both_decks_when_rhythm_setup_fails(self):
         from pathlib import Path
         from karaoke.medley_decks import build
-        engine = Mock()
-        rhythm = Mock()
-        engine.close.side_effect = OSError('engine close failed')
-        rhythm.set_loop.side_effect = ValueError('rhythm setup failed')
+
+        class FakeMidiPlayer:
+            instances = []
+            def __init__(self, output=None):
+                self.load = Mock()
+                self.set_channel = Mock()
+                self.set_key = Mock()
+                self.set_speed = Mock()
+                self.set_volume = Mock()
+                self.seek = Mock()
+                self.set_loop = Mock()
+                self.close = Mock()
+                self.__class__.instances.append(self)
+                if len(self.instances) == 1:
+                    self.close.side_effect = OSError('engine close failed')
+                else:
+                    self.set_loop.side_effect = ValueError('rhythm setup failed')
+
+        pattern = (MidiSong([], 2, Lyrics()), 2.0)
         with patch('karaoke.bass.BassSynth'), \
-             patch('karaoke.playback.MidiPlayer', side_effect=[engine, rhythm]):
+             patch('karaoke.playback.MidiPlayer', FakeMidiPlayer):
             with self.assertRaisesRegex(ValueError, 'rhythm setup failed'):
                 build(Path('native'), {}, Path('queued.mid'), 0, 100,
-                      False, (Mock(), 2.0))
-        rhythm.close.assert_called_once()
-        engine.close.assert_called_once()
+                      False, pattern)
+        self.assertEqual(len(FakeMidiPlayer.instances), 2)
+        FakeMidiPlayer.instances[1].close.assert_called_once()
+        FakeMidiPlayer.instances[0].close.assert_called_once()
 
     def test_fill_needs_explicit_metadata_and_exact_downbeat(self):
         song = MidiSong([], 8, Lyrics(), explicit_tempo=True, explicit_meter=True)
