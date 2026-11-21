@@ -153,6 +153,23 @@ class ChannelEQNativeTests(unittest.TestCase):
             release.assert_called_once()
 
 
+    def test_close_releases_other_eq_channels_after_first_processor_fails(self):
+        synth = self.fake()
+        synth.fonts = []
+        synth.initialized = False
+        synth.dll_directory = None
+        first = Mock()
+        first.close.side_effect = OSError('first EQ failed')
+        second = Mock()
+        synth._channel_processors = {1: (71, first), 2: (72, second)}
+        with self.assertRaisesRegex(OSError, 'first EQ failed'):
+            synth.close()
+        first.close.assert_called_once()
+        second.close.assert_called_once()
+        self.assertEqual(synth.dll.BASS_StreamFree.call_args_list,
+                         [call(71), call(72), call(44)])
+        self.assertEqual(synth._channel_processors, {})
+
     def test_close_continues_after_stream_and_font_cleanup_errors(self):
         synth = self.fake()
         synth.fonts = [11, 12]
