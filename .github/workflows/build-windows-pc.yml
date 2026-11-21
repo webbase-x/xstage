@@ -8,6 +8,8 @@ on:
     types:
       - completed
   push:
+    branches:
+      - main
     paths:
       - 'windows-pc/source/**'
       - 'scripts/build_karaoke_pc_icon.py'
