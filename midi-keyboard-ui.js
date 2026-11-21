@@ -7,6 +7,7 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const panel=$('midi-keyboard-panel'),trigger=$('midi-keyboard-toggle');
+const control=$('midi-keyboard-control');
 if(!panel||!trigger)return;
 const close=$('midi-keyboard-close'),range=$('midi-keyboard-range');
 const channel=$('midi-keyboard-channel'),instrument=$('midi-instrument');
@@ -19,7 +20,7 @@ const noteName=n=>names[n%12]+Math.floor(n/12-1);
 let source=null,parsed=null,getTime=()=>0,getPlaying=()=>false,preview=()=>false;
 let events=[],position=0,lastTime=-1,active=new Map(),rendered=new Map();
 let start=36,raf=0,previousFrame=0,heldPointers=new Map(),heldKeyboard=new Map();
-let resizeObserver=null;
+let resizeObserver=null,userDismissed=false;
 for(let ch=1;ch<=16;ch++){
   const option=document.createElement('option');
   option.value=String(ch-1);option.textContent='ช่อง '+ch;
@@ -34,12 +35,12 @@ function releaseAll(){
   for(const value of heldKeyboard.values())release(value);
   heldPointers.clear();heldKeyboard.clear();
 }
-function toggle(open){
+function toggle(open,{focus=false}={}){
   if(!source&&open)return;
   panel.hidden=!open;trigger.setAttribute('aria-expanded',String(open));
   if(open){
     ensureEvents();redraw();
-    panel.focus({preventScroll:true});
+    if(focus)panel.focus({preventScroll:true});
     updateNotes();frame();
   }else{
     if(raf){cancelAnimationFrame(raf);raf=0;}
@@ -158,8 +159,14 @@ function up(owner,sourceMap){
   sourceMap.delete(owner);
   release(note);
 }
-trigger.addEventListener('click',()=>toggle(panel.hidden));
-close.addEventListener('click',()=>toggle(false));
+trigger.addEventListener('click',()=>{
+  const open=panel.hidden;
+  userDismissed=!open;
+  toggle(open,{focus:open});
+});
+close.addEventListener('click',()=>{
+  userDismissed=true;toggle(false);trigger.focus({preventScroll:true});
+});
 range.addEventListener('change',redraw);
 channel.addEventListener('change',updateNotes);
 $('midi-keyboard-oct-down').addEventListener('click',()=>{
@@ -211,8 +218,18 @@ function setSong({bytes=null,getCurrentTime=null,isPlaying=null,previewNote=null
   getTime=typeof getCurrentTime==='function'?getCurrentTime:()=>0;
   getPlaying=typeof isPlaying==='function'?isPlaying:()=>false;
   preview=typeof previewNote==='function'?previewNote:()=>false;
-  if(!bytes){toggle(false);label.textContent='ตามเพลง MIDI';return;}
-  if(!panel.hidden){ensureEvents();drawKeys();}
+  if(!bytes){
+    toggle(false);
+    if(control)control.hidden=true;
+    label.textContent='ตามเพลง MIDI';
+    return;
+  }
+  if(control)control.hidden=false;
+  label.textContent=instrument.selectedOptions[0]?.textContent||'ตามเพลง MIDI';
+  // A newly loaded MIDI opens the top PC-style piano automatically unless
+  // the listener explicitly closed it; changing songs preserves that choice.
+  if(!userDismissed)toggle(true);
+  else if(!panel.hidden){ensureEvents();drawKeys();}
 }
 scope.XStageMIDIPiano={setSong,close:()=>toggle(false)};
 })(typeof window!=='undefined'?window:globalThis);
