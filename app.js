@@ -2729,7 +2729,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     const elapsed=Math.floor((Date.now()-startedAt)/1000);
     if(elapsed>=15 && elapsed%5===0)
       setPlayStatus('กำลังเตรียม '+(song.title||song.code)+
-        ' · '+elapsed+' วินาที · MIDI/XMID ต้องสังเคราะห์เสียงก่อนเล่น · กดหยุดเพื่อยกเลิกได้');
+        ' · '+elapsed+' วินาที · กำลังรับไฟล์เพลงหรือเตรียมเครื่องเสียง · กดหยุดเพื่อยกเลิกได้');
   },1000);
   publishPlaybackStatus('loading',song,'กำลังเตรียมไฟล์เพลงจาก Google Drive');
   try {
@@ -2839,37 +2839,85 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         getTranspose:()=>Number(document.getElementById('midi-transpose')?.value||0),
         getProgram:()=>{const value=$('midi-instrument')?.value;return value===''?null:Number(value);}
       };
-      let professional=null;
-      if(liveFontBytes&&window.XStageProMidi?.available?.()){
-        try{
-          professional=await window.XStageProMidi.prepare(liveMidiBytes,liveFontBytes,{
-            signal:controller.signal,
-            onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
-          });
-        }catch(error){
-          if(controller.signal.aborted)throw error;
-          console.warn('SpessaSynth unavailable, using built-in MIDI engine:',error);
-          setPlayStatus('ตัวเล่น MIDI คุณภาพสูงยังไม่พร้อม · ใช้ SoundFont ผ่านตัวเล่นสำรอง');
+      const professionalOptions={
+        signal:controller.signal,
+        onStatus:message=>{if(request===state.requestId&&!state.liveMidiPlayback)setPlayStatus(message);}
+      };
+      // Keep the synthesizer and selected GM bank high quality when ready,
+      // but don't hold the Play button for a large sound-bank load on iPhone.
+      const isStillPlaying=()=>request===state.requestId&&
+        token===state.token&&!controller.signal.aborted&&
+        state.current===song&&state.liveMidiSource===liveMidiBytes;
+      const upgradeWhenReady=async prepared=>{
+        let professional=null;
+        try{professional=await prepared;}catch(error){
+          if(!controller.signal.aborted)console.warn('MIDI upgrade:',error?.message||error);
+          return;
         }
+        if(!professional)return;
+        if(!isStillPlaying()){professional.dispose();return;}
+        let updated;
+        try{updated=professional.attach(player,midiOptions);}
+        catch(error){professional.dispose();console.warn('MIDI upgrade attach:',error);return;}
+        const previous=state.liveMidiPlayback;
+        state.liveMidiPlayback=updated;
+        setMidiEngineStatus(updated);
+        previous?.dispose();
+        if(isStillPlaying())setPlayStatus('เสียง SoundFont คุณภาพสูงพร้อมแล้ว · เล่นต่อจากตำแหน่งเดิม');
+      };
+      const prepareProfessional=font=>{
+        if(!font||!window.XStageProMidi?.available?.())return null;
+        return window.XStageProMidi.prepare(liveMidiBytes,font,professionalOptions);
+      };
+      let professional=null,lateEngine=null;
+      const preparation=prepareProfessional(liveFontBytes);
+      if(preparation){
+        let timer=null;
+        try{
+          const fast=await Promise.race([
+            preparation.then(engine=>({ready:true,engine})).catch(error=>({ready:true,error})),
+            new Promise(resolve=>{timer=setTimeout(()=>resolve({ready:false}),
+              /iPad|iPhone|iPod/.test(navigator.userAgent||'')?1700:2800);})
+          ]);
+          if(fast.ready){
+            if(fast.error)console.warn('SpessaSynth startup:',fast.error);
+            else professional=fast.engine;
+          }else lateEngine=preparation;
+        }finally{clearTimeout(timer);}
       }
       if(controller.signal.aborted||request!==state.requestId){
-        professional?.dispose();return;
+        professional?.dispose();
+        if(lateEngine)void lateEngine.then(engine=>engine?.dispose()).catch(()=>{});
+        return;
       }
       state.liveMidiSource=liveMidiBytes;
       midiTransport.begin(window.XStageBrowserMidi.parseMidi(liveMidiBytes).duration);
       try{
         state.liveMidiPlayback=professional
           ?professional.attach(player,midiOptions)
-          :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,midiOptions);
+          :window.XStageBrowserMidi.playRealtime(player,liveMidiBytes,{
+             ...midiOptions,fontBytes:null // Do not parse a huge SF2 on UI thread.
+           });
         setMidiEngineStatus(state.liveMidiPlayback);
       }catch(error){
         professional?.dispose();
         if(!professional)throw error;
-        console.warn('Professional MIDI start failed:',error);
-        setPlayStatus('เริ่มตัวเล่นคุณภาพสูงไม่สำเร็จ · เปลี่ยนไปใช้ MIDI สำรอง');
+        console.warn('Professional MIDI start:',error);
         state.liveMidiPlayback=window.XStageBrowserMidi.playRealtime(
-          player,liveMidiBytes,midiOptions);
+          player,liveMidiBytes,{...midiOptions,fontBytes:null});
         setMidiEngineStatus(state.liveMidiPlayback);
+      }
+      if(lateEngine)void upgradeWhenReady(lateEngine);
+      // When the bank is still downloading, keep the song playing; upgrade
+      // only the current song and keep its MIDI position and lyrics clock.
+      if(lateFontPromise){
+        void lateFontPromise.then(bytes=>{
+          if(!bytes||!isStillPlaying())return;
+          const pending=prepareProfessional(bytes);
+          if(pending)void upgradeWhenReady(pending);
+        }).catch(error=>{
+          if(!controller.signal.aborted)console.warn('Deferred SoundFont:',error);
+        });
       }
     }else{
       setMidiEngineStatus(null);
