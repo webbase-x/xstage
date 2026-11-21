@@ -316,9 +316,7 @@
     text("library-page-info",label);
     text("build-page-info",label);
     $("library-prev").disabled=state.songOffset===0;
-    $("build-prev").disabled=state.songOffset===0;
     $("library-next").disabled=!state.songHasNext;
-    $("build-next").disabled=!state.songHasNext;
     if(state.view==="build"){
       const readyHere=state.songs.filter(song=>song.manual_status==="ready").length;
       const reviewHere=state.songs.filter(song=>song.manual_status==="review").length;
@@ -339,7 +337,7 @@
       state.buildHasNext=true;state.buildLoading=false;state.buildError=null;
       state.buildRenderKey="";$("build-list").scrollTop=0;
     }
-    for(const [kind,id] of [["ready","build-tab-ready"],["attention","build-tab-attention"]]){
+    for(const [kind,id] of [["ready","build-tab-ready"],["converted","build-tab-converted"],["attention","build-tab-attention"]]){
       $(id).classList.toggle("active",state.buildTab===kind);
       $(id).setAttribute("aria-pressed",String(state.buildTab===kind));
     }
@@ -371,7 +369,7 @@
     }
   }
   function renderBuildStatus(){
-    text("build-page-info",(state.buildTab==="ready"?"พร้อมแปลง":"ต้องปรับปรุง")+
+    text("build-page-info",({ready:"ยังไม่แปลง · พร้อม",converted:"แปลงแล้ว",attention:"ต้องปรับปรุง"}[state.buildTab])+
       " · "+number(state.buildRows.length)+" รายการ");
     text("build-scroll-status",state.buildLoading?"กำลังอ่าน SQLite…":
       state.buildError?"โหลดต่อไม่สำเร็จ: "+state.buildError:
@@ -396,14 +394,17 @@
       const spacer=document.createElement("div");spacer.className="build-spacer";
       spacer.style.height=(begin*BUILD_ROW_HEIGHT)+"px";frag.append(spacer);
       for(const song of state.buildRows.slice(begin,end)){
-        const ready=song.manual_status==="ready",review=song.manual_status==="review";
+        const ready=song.manual_status==="ready"&&state.buildTab==="ready";
+        const review=song.manual_status==="review"&&state.buildTab==="attention";
+        const converted=state.buildTab==="converted";
         const row=document.createElement("label");row.className="build-row";
         const check=document.createElement("input");check.type="checkbox";
-        check.disabled=!(ready||review);
+        check.disabled=converted||!(ready||review);
         check.checked=ready&&(state.allReadySelected?
           !state.excludedSongs.has(song.id):state.selectedSongs.has(song.id));
-        check.title=review?"ตรวจแล้วเลือกเพื่อยืนยันพร้อมแปลง":
-          ready?"เลือกสร้างไฟล์":"ต้องแก้เนื้อร้องและ Timing ก่อน";
+        check.title=converted?"แปลงแล้ว · ไม่สร้างซ้ำ":
+          review?"ตรวจแล้วเลือกเพื่อยืนยันพร้อมแปลง":
+          ready?"ยังไม่แปลง · เลือกเพื่อสร้างไฟล์":"ต้องแก้เนื้อร้องและ Timing ก่อน";
         check.addEventListener("change",async()=>{
           if(review&&check.checked){
             check.checked=false;
@@ -438,7 +439,8 @@
         const detail=document.createElement("small");
         detail.textContent=String(song.code).padStart(8,"0")+" · "+
           String(song.extension||"").toUpperCase()+" · "+
-          (ready?"พร้อมแปลง":review?"รอยืนยัน":
+          (converted?"แปลงแล้ว ✓ · ไม่สร้างซ้ำ":ready?"ยังไม่แปลง":
+            review?"รอยืนยันก่อนแปลง":
             song.manual_status==="incomplete"?"CUR ไม่ครบ":"รอเนื้อร้อง/Timing");
         name.append(detail);row.append(check,name);frag.append(row);
       }
@@ -454,7 +456,7 @@
       Math.max(0,state.readyTotal-state.excludedSongs.size):state.selectedSongs.size;
     text("build-count",number(count)+" เพลง"+
       (state.allReadySelected?" (ทั้งคลัง)":""));
-    $("build-start").disabled=!state.ready||count===0||Boolean(state.activeJob);
+    $("build-start").disabled=!state.ready||state.buildTab!=="ready"||count===0||Boolean(state.activeJob);
   }
   function renderLyricPage(){
     const entries=state.lyricShowDraft?state.lyricDraft:state.lyricTimed;
@@ -1087,6 +1089,10 @@
         if(job.status==="completed"||job.status==="failed"||job.status==="cancelled"){
           try{
             await refreshStatus();
+             if(job.kind==="build"&&job.status==="completed"){
+               state.allReadySelected=false;state.readyTotal=0;
+               state.selectedSongs.clear();state.excludedSongs.clear();
+             }
             if(state.view==="risks")await loadRisks();
             else if(state.view!=="import")await refreshSongs();
           }catch(error){
@@ -2699,17 +2705,34 @@
     });
     $("lyrics-undo").addEventListener("click",()=>void undoLyrics());
     $("media-attach").addEventListener("click",()=>void attachLrc());
+    for(const [tab,id] of [["ready","build-tab-ready"],["converted","build-tab-converted"],["attention","build-tab-attention"]]){
+      $(id).addEventListener("click",()=>{
+        if(state.buildTab===tab)return;
+        state.buildTab=tab;void refreshBuildSongs(true);
+      });
+    }
+    $("build-list").addEventListener("scroll",()=>{
+      if(state.view!=="build")return;
+      renderBuildRows();
+      const node=$("build-list");
+      if(node.scrollHeight-node.scrollTop-node.clientHeight<470&&
+          !state.buildLoading&&state.buildHasNext)void loadMoreBuildSongs();
+    },{passive:true});
+    $("build-retry").addEventListener("click",()=>void loadMoreBuildSongs());
     $("build-all").addEventListener("click",async()=>{
       try{
         const result=await api("/api/build/eligible");
         state.allReadySelected=true;state.readyTotal=result.ready_total||0;
         state.excludedSongs.clear();state.selectedSongs.clear();
-        renderSongs();toast("เลือกเพลงที่พร้อมสร้างจากทุกหน้าแล้ว");
+        state.buildTab="ready";
+        await refreshBuildSongs(true);
+        toast("เลือกเฉพาะเพลงที่ยังไม่แปลงจากทุกหน้าแล้ว");
       }catch(error){toast(error.message,true);}
     });
     $("build-page-all").addEventListener("click",async()=>{
-      const ready=state.songs.filter(song=>song.manual_status==="ready");
-      const review=state.songs.filter(song=>song.manual_status==="review");
+      if(state.buildTab==="converted")return toast("เพลงที่แปลงแล้วไม่ต้องเลือกซ้ำ",true);
+      const ready=state.buildRows.filter(song=>song.manual_status==="ready"&&state.buildTab==="ready");
+      const review=state.buildRows.filter(song=>song.manual_status==="review"&&state.buildTab==="attention");
       for(const song of ready){
         if(state.allReadySelected)state.excludedSongs.delete(song.id);
         else state.selectedSongs.add(song.id);
@@ -2736,25 +2759,27 @@
             }
           }
           if(accepted)toast("ยืนยันและเลือกเพิ่ม "+number(accepted)+" เพลงแล้ว");
-          await refreshSongs();
+          state.buildTab="ready";
+          await refreshBuildSongs(true);
           return;
         }
       }
-      renderSongs();
+      renderBuildRows(true);
     });
     $("build-clear").addEventListener("click",()=>{
       state.allReadySelected=false;state.readyTotal=0;
-      state.excludedSongs.clear();state.selectedSongs.clear();renderSongs();
+      state.excludedSongs.clear();state.selectedSongs.clear();renderBuildRows(true);
     });
     $("build-page-clear").addEventListener("click",()=>{
-      for(const song of state.songs){
-        if(state.allReadySelected&&song.manual_status==="ready")
+      for(const song of state.buildRows){
+        if(state.allReadySelected&&state.buildTab==="ready"&&song.manual_status==="ready")
           state.excludedSongs.add(song.id);
         else state.selectedSongs.delete(song.id);
       }
-      renderSongs();
+      renderBuildRows(true);
     });
     $("build-start").addEventListener("click",()=>{
+      if(state.buildTab!=="ready")return toast("เลือกเพลงจากหมวดยังไม่แปลงเท่านั้น",true);
       const count=state.allReadySelected?
         state.readyTotal-state.excludedSongs.size:state.selectedSongs.size;
       if(count<=0)return;
@@ -2767,13 +2792,6 @@
       void refreshSongs();
     });
     $("library-next").addEventListener("click",()=>{
-      state.songOffset+=visibleRows();void refreshSongs();
-    });
-    $("build-prev").addEventListener("click",()=>{
-      state.songOffset=Math.max(0,state.songOffset-visibleRows());
-      void refreshSongs();
-    });
-    $("build-next").addEventListener("click",()=>{
       state.songOffset+=visibleRows();void refreshSongs();
     });
     $("library-find").addEventListener("click",()=>{
