@@ -81,6 +81,38 @@ assert.equal(prepared.blob.size,wav.size);
 assert.ok(downloads.includes('v1')&&downloads.includes('a1')&&downloads.includes('m1'),
   'ordinary queued audio/video/MIDI must use their source media');
 assert.equal(preparedXsk,1,'XSK queue must delegate to verified XSK preparation');
+
+ // Old catalogs may omit file size. A bounded stream still allows one next
+ // track to be fully ready without fetching an unbounded private Drive file.
+const originalPrivateFile=sandbox.privateFile;
+let streamCanceled=0;
+const unknown={...audio,code:'005',audio:{fileId:'unknown-audio'}};
+const streamResponse=()=>({
+  headers:{get:()=>null},
+  body:{getReader(){
+    let sent=false;
+    return {
+      async read(){
+        if(sent)return {done:true};
+        sent=true;return {done:false,value:Uint8Array.of(1,2,3,4)};
+      },
+      async cancel(){streamCanceled++;},
+      releaseLock(){}
+    };
+  }}
+});
+sandbox.privateFile=async id=>id==='unknown-audio'?streamResponse():originalPrivateFile(id);
+const unknownPrepared=await sandbox.prepareQueuedSong(unknown,'t',controller.signal);
+assert.equal(unknownPrepared?.blob?.size,4,
+  'Unknown-size private audio can be preloaded using a bounded stream');
+const originalPlan=monitor.plan;
+monitor.plan=(...args)=>({...originalPlan(...args),remaining:2});
+const oversized=await sandbox.prepareQueuedSong(unknown,'t',controller.signal);
+assert.equal(oversized,null,'Speculative stream exceeding the RAM cap is rejected');
+assert.equal(streamCanceled,1,'Over-budget private media stream is canceled immediately');
+monitor.plan=originalPlan;
+sandbox.privateFile=originalPrivateFile;
+
 assert.equal(renders,1,'MIDI queue renders once; mocked XSK has its own preparation path');
 // Live MIDI must prefetch its actual MIDI data, NOT ignore the next queued
 // song or allocate another SoundFont on the speculative path.
