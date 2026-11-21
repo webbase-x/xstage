@@ -438,3 +438,10 @@ The user requested batched coding without physical QA. **This is a coding update
 - Commit 9e7e22b3: reject symlink/junction/non-regular SQLite -wal/-shm sidecars before restore allocation and interrupted rollback, rather than unlinking unsafe paths. This preserves user data on suspicious files.
 - Commit 115de64d: regression cases for regular sidecars, directory sidecars and symlink sidecars (Windows symlink privilege conditional).
 - **PENDING-QA:** Run focused test_restore_sqlite_sidecar_safety.py, complete restore regression, Windows integration/installer CI on the new commit. Physical playback and audio-device soak remain **DEFERRED-HARDWARE**. No Stable publication authorized.
+
+## 2026-11-22 04:12 Asia/Bangkok — P0.6 rollback target preflight
+
+- Baseline main `e350b1e1b392f9176e4da1cffc8edef6477f4545`; Windows candidate [run 44945044873](https://github.com/webbase-x/xstage/actions/runs/44945044873) completed SUCCESS at that commit (does not certify subsequent changes).
+- Fix `3b0a9b8223bca725fdcfc9ef1804653530e712e5`: `rollback()` preflights **all** target paths before mutating any, including files absent from the original snapshot; checks SQLite journals again per database before unlinking. Reject directories/symlinks/junctions rather than deleting unexpected paths.
+- Regression `b3cffe6e3ae07ea5c421249b0c48dc41bbcd4ea4`: directory, symlink-to-external sentinel, and no partial rollback when later target is unsafe.
+- **PENDING-QA:** Windows regression + installer CI for these commits; verify symlink test behavior on Windows runners and rerun full suite. No local Windows/hardware evidence. **DEFERRED-HARDWARE:** physical audio and long-duration soak. No stable release.
