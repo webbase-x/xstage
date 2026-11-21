@@ -3,6 +3,7 @@ altgraph==0.17.5
 cffi==2.1.1
 colorama==0.4.6
 numpy==2.5.4
+opencv-python-headless==4.14.0.94
 packaging==26.3
 pefile==2024.8.26
 pillow==13.0.0
