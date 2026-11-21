@@ -200,7 +200,26 @@ public sealed class TransferRateGate
             _nextDueMs = start + bytes * 1000.0 / (limit * 1024.0);
             delay = Math.Max(0, _nextDueMs - now);
         }
-        return Task.Delay(TimeSpan.FromMilliseconds(delay), cancellation);
+        return WaitReservedAsync(delay, _nextDueMs, cancellation);
+    }
+
+    private async Task WaitReservedAsync(double delay, double reservedUntil, CancellationToken cancellation)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(delay), cancellation).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            // Refund only the last reservation. Earlier reservations cannot be
+            // refunded safely because later readers may already be queued.
+            lock (_mutex)
+            {
+                if (_nextDueMs == reservedUntil)
+                    _nextDueMs = Environment.TickCount64;
+            }
+            throw;
+        }
     }
 }
 
