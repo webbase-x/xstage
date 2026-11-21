@@ -42,8 +42,8 @@ Name: "{app}\Songs"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\Songs\MIDI"; Flags: uninsneveruninstall
 Name: "{app}\Songs\MIDI\NCN"; Flags: uninsneveruninstall
 Name: "{app}\Songs\MIDI\XMID"; Flags: uninsneveruninstall
-Name: "{app}\Songs\MIDI\EMK"; Flags: uninsneveruninstall
 Name: "{app}\Songs\MP3"; Flags: uninsneveruninstall
+Name: "{app}\Songs\M4A"; Flags: uninsneveruninstall
 Name: "{app}\Songs\VIDEO"; Flags: uninsneveruninstall
 
 [Files]
