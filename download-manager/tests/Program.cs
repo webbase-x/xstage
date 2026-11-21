@@ -1030,6 +1030,10 @@ try
     if (job.Status != "Completed") throw new Exception("Range resume failed: " + job.Error);
     if (!job.SupportsRanges) throw new Exception("HTTP Range was not detected");
     if (job.SegmentsUsed != 16) throw new Exception("Requested 16 ranges must be used for a sufficiently large file.");
+    // The final archive must be assembled from the same persisted Range
+    // geometry, not from a changed UI/default preference.
+    if (new FileInfo(job.CompletedPath).Length != bytes.Length)
+        throw new Exception("Merged Range output has incorrect archive length.");
     if (!bytes.SequenceEqual(await File.ReadAllBytesAsync(job.CompletedPath)))
         throw new Exception("Range resume produced incorrect bytes");
 
