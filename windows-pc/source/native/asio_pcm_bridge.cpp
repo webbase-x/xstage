@@ -96,8 +96,10 @@ XSTAGE_API DWORD CALLBACK xstage_asio_callback(BOOL input, DWORD channel,
                                                void* buffer, DWORD length,
                                                void* user) noexcept {
     (void)channel;
-    if (!buffer || input || (length % 8) != 0 || !user) {
-        if (buffer && length) std::memset(buffer, 0, length);
+    // Input ASIO buffers belong to the driver: never overwrite captured data.
+    if (input || !buffer) return 0;
+    if ((length % 8) != 0 || !user) {
+        if (length) std::memset(buffer, 0, length);
         return 0;
     }
     auto* queue = static_cast<XStagePcmBridge*>(user);
