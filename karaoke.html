@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1152-midi-top-keyboard">
-  <link rel="stylesheet" href="xstage-ux.css?v=1156-song-key-single-menu">
+  <link rel="stylesheet" href="xstage-ux.css?v=1157-top-song-key-single-menu">
   <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -88,11 +88,6 @@
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
       </aside></div>
-            <div id="midi-keyboard-control" class="midi-keyboard-top-control" hidden>
-              <button type="button" id="midi-keyboard-toggle" class="toolbar-button midi-keyboard-top-toggle"
-                aria-controls="midi-keyboard-panel" aria-expanded="false"
-                aria-label="เปิดหรือซ่อนคีย์บอร์ดดนตรี MIDI" title="คีย์บอร์ด MIDI แบบ X-Stage Karaoke PC">🎹 <span>คีย์บอร์ด MIDI</span></button>
-            </div>
             <output id="toolbar-song-key" class="song-key-toolbar" aria-label="คีย์เพลงปัจจุบัน" aria-live="polite">คีย์ —</output>
             <!-- Keep the original handler available to the menu and mobile remote. -->
             <button id="toggle-keyboard" type="button" hidden aria-controls="virtual-keyboard" aria-expanded="false" aria-label="เปิดแป้นพิมพ์ค้นหา">แป้นพิมพ์</button>
@@ -143,6 +138,7 @@
                 <button type="button" id="mobile-clear-cache">เคลียร์แคช (คงล็อกอิน Google)</button>
               </div>
             </details>
+            <button type="button" id="midi-keyboard-toggle" hidden aria-controls="midi-keyboard-panel" aria-expanded="false">🎹 คีย์บอร์ด MIDI</button>
             <button type="button" id="mobile-keyboard-toggle">แป้นพิมพ์บนจอ</button>
             <button type="button" id="toggle-remote" class="menu-direct" aria-controls="remote-pair-panel" aria-expanded="false">รีโมทมือถือ QR</button>
             <button type="button" id="remote-request-toggle" aria-controls="remote-request-panel" aria-expanded="false">เพลงจากมือถือ <span id="remote-request-count">0</span></button>
@@ -457,8 +453,8 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="video-transcode.js?v=1119" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
   <script src="tv-refresh.js?v=1119" defer></script>
-  <script src="app.js?v=1156-song-key-single-menu" defer></script><script src="pc-extensions.js?v=1119" defer></script>
-  <script src="midi-keyboard-ui.js?v=1152-midi-top-keyboard" defer></script>
+  <script src="app.js?v=1157-top-song-key-single-menu" defer></script><script src="pc-extensions.js?v=1119" defer></script>
+  <script src="midi-keyboard-ui.js?v=1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1119" defer></script>
   <script src="stage-controls.js?v=1119" defer></script>
   <script src="mobile-layout.js?v=1119" defer></script>
