@@ -68,9 +68,8 @@
     // Move (never clone) so the original MIDI +/- event handlers and current
     // pitch shift survive the layout migration and account changes.
     const clock=$('mobile-stage-clock');
-    if(transpose.parentNode!==toolbar||clock&&
-       transpose.compareDocumentPosition(clock)&Node.DOCUMENT_POSITION_PRECEDING)
-      toolbar.insertBefore(transpose,clock||null);
+    // insertBefore also reorders a legacy control without replacing it.
+    toolbar.insertBefore(transpose,clock||null);
   })();
   if(!stage||!queueDock||!queueBtn||!volume||!repeat)return;
   // Keep speed and repeat beside the player. Utility commands live in one canonical menu.
