@@ -1,11 +1,13 @@
 """Regression for live import observability and version reporting."""
 import json
+import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app
 import plus_core as core
 import pro_updater as updater
