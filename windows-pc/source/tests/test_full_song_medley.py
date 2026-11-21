@@ -13,6 +13,26 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_discard_closes_both_preloaded_decks_if_first_close_fails(self):
+        first = Mock()
+        second = Mock()
+        first.close.side_effect = OSError('first deck cleanup failed')
+        future = Future()
+        future.set_result((first, second))
+        decks = Decks()
+        try:
+            decks.future = future
+            decks.key = ('queued',)
+            decks.item = object()
+            decks.discard()
+            first.close.assert_called_once()
+            second.close.assert_called_once()
+            self.assertIsNone(decks.future)
+            self.assertIsNone(decks.key)
+            self.assertIsNone(decks.item)
+        finally:
+            decks.close()
+
     def test_preload_build_closes_both_decks_when_rhythm_setup_fails(self):
         from pathlib import Path
         from karaoke.medley_decks import build
